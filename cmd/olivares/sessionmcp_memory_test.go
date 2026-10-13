@@ -215,56 +215,97 @@ func TestSessionMemoryToolsStayInTheSessionWorkspace(t *testing.T) {
 
 // A node that does not run a module answers its routes module_not_enabled, so its
 // session MCP offers no tool on them: here knowledge, skills and sourcescope.
+// Fresh defaults include skills, so test the disabled profile explicitly and
+// keep a positive check that the standard profile offers its assignment tool.
 func TestSessionToolsSkipModulesTheNodeDoesNotRun(t *testing.T) {
-	eng, _, adminToken, tenantID := bootWithModuleProfile(t, standardModuleSelection())
-	ctx := t.Context()
-	admin, err := eng.authr.Authenticate(ctx, adminToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tenant, err := model.ParseTenantID(tenantID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var workspace model.Workspace
-	if err := eng.store.View(ctx, tenant, func(sc store.Scope) (err error) {
-		workspace, err = sc.DefaultWorkspace(ctx)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	issuer := auth.NewSessionCredentials(eng.authr, func(context.Context, auth.SessionScope) error { return nil })
-	bearer, err := issuer.Mint(ctx, admin, auth.SessionScope{TenantID: tenant, WorkspaceID: workspace.ID, FolderRef: "fixture",
-		SessionRef: "osn_" + model.NewID().String(), RunRef: model.NewID().String(), Fence: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := &sessionMCPHandler{authr: issuer, issuedSessionOnly: true, admits: eng.admits(), configurer: turnlessConfigurer{eng}}
-	r := httptest.NewRequest(http.MethodPost, "/session/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Authorization", "Bearer "+bearer)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	var out struct {
-		Result struct {
-			Tools []struct {
-				Name string `json:"name"`
-			} `json:"tools"`
-		} `json:"result"`
-	}
-	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &out) != nil {
-		t.Fatalf("tools/list = %d %s", w.Code, w.Body.String())
-	}
-	var names []string
-	for _, tool := range out.Result.Tools {
-		names = append(names, tool.Name)
-	}
-	for _, absent := range []string{"olivares_memory_list", "olivares_memory_add", "olivares_skill_assign", "olivares_connector_add"} {
-		if slices.Contains(names, absent) {
-			t.Errorf("tools/list offers %s on a node without its module: %v", absent, names)
-		}
-	}
-	if !slices.Contains(names, "olivares_folder_add") {
-		t.Errorf("tools/list lacks olivares_folder_add, whose sessions module always runs: %v", names)
+	for _, tc := range []struct {
+		name     string
+		selected []string
+		skills   bool
+	}{
+		{"without optional modules", []string{}, false},
+		{"fresh installation", standardModuleSelection(), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			eng, _, adminToken, tenantID := bootWithModuleProfile(t, tc.selected)
+			ctx := t.Context()
+			admin, err := eng.authr.Authenticate(ctx, adminToken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tenant, err := model.ParseTenantID(tenantID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var workspace model.Workspace
+			if err := eng.store.View(ctx, tenant, func(sc store.Scope) (err error) {
+				workspace, err = sc.DefaultWorkspace(ctx)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			issuer := auth.NewSessionCredentials(eng.authr, func(context.Context, auth.SessionScope) error { return nil })
+			bearer, err := issuer.Mint(ctx, admin, auth.SessionScope{TenantID: tenant, WorkspaceID: workspace.ID, FolderRef: "fixture",
+				SessionRef: "osn_" + model.NewID().String(), RunRef: model.NewID().String(), Fence: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			h := &sessionMCPHandler{authr: issuer, issuedSessionOnly: true, admits: eng.admits(), configurer: turnlessConfigurer{eng}}
+			r := httptest.NewRequest(http.MethodPost, "/session/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Authorization", "Bearer "+bearer)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			var out struct {
+				Result struct {
+					Tools []struct {
+						Name        string `json:"name"`
+						InputSchema struct {
+							Properties map[string]any `json:"properties"`
+						} `json:"inputSchema"`
+					} `json:"tools"`
+				} `json:"result"`
+			}
+			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+				t.Fatalf("tools/list = %d %s", w.Code, w.Body.String())
+			}
+			// A session never approves content its tool acts on at load: the field is
+			// not in the tool's input, so the engine refuses it as an unknown argument.
+			for _, tool := range out.Result.Tools {
+				if _, offered := tool.InputSchema.Properties["approve_active_content"]; tool.Name == "olivares_skill_assign" && offered {
+					t.Errorf("olivares_skill_assign lets a session approve active content: %v", tool.InputSchema.Properties)
+				}
+			}
+			var names []string
+			for _, tool := range out.Result.Tools {
+				names = append(names, tool.Name)
+			}
+			for _, absent := range []string{"olivares_memory_list", "olivares_memory_add", "olivares_connector_add"} {
+				if slices.Contains(names, absent) {
+					t.Errorf("tools/list offers %s on a node without its module: %v", absent, names)
+				}
+			}
+			if !slices.Contains(names, "olivares_folder_add") {
+				t.Errorf("tools/list lacks olivares_folder_add, whose sessions module always runs: %v", names)
+			}
+			if got := slices.Contains(names, "olivares_skill_assign"); got != tc.skills {
+				t.Errorf("tools/list offers olivares_skill_assign = %v, want %v: %v", got, tc.skills, names)
+			}
+			if !tc.skills {
+				r := httptest.NewRequest(http.MethodPost, "/session/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"olivares_skill_assign","arguments":{}}}`))
+				r.Header.Set("Content-Type", "application/json")
+				r.Header.Set("Authorization", "Bearer "+bearer)
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, r)
+				var refused struct {
+					Error struct {
+						Code int `json:"code"`
+					} `json:"error"`
+				}
+				if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &refused) != nil || refused.Error.Code != -32602 {
+					t.Fatalf("tools/call accepted a disabled skill tool: HTTP %d %s", w.Code, w.Body.String())
+				}
+			}
+		})
 	}
 }

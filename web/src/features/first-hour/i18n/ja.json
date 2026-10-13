@@ -74,6 +74,7 @@
     "folder": "フォルダー",
     "folderHint": "このサーバー上のフォルダーです。空のままにすると新しいフォルダーで開始します。",
     "folderNew": "このセッション用の新しいフォルダー",
+    "folderTyped": "別のフォルダー…",
     "folderChange": "フォルダーを変更",
     "readingFolder": "前回のセッションのフォルダーを読み込んでいます…",
     "prompt": "最初のメッセージ (任意)",
@@ -102,7 +103,8 @@
     "openProviders": "プロバイダーを開く",
     "profile": "プロファイル",
     "profileNotSignedIn": "未サインイン",
-    "profileNeedsKey": "キーが必要"
+    "profileNeedsKey": "キーが必要",
+    "foldersUnreadable": "登録済みのフォルダーを読み込めませんでした。このサーバー上のフォルダーのパスを入力してください。"
   },
   "lists": {
     "runsTruncated": "最近のセッション：{{count}} 件読み込み済み。ほかにもあります。",

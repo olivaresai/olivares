@@ -16,6 +16,21 @@ ROOT = Path(__file__).resolve().parent.parent
 OSV = json.loads((ROOT / "scripts/testdata/govulncheck-cilium-osv.json").read_text())
 MODULE = "github.com/cilium/cilium"
 PACKAGES = [MODULE + "/api/v1/" + name for name in ("flow", "observer", "relay")]
+# The reviewed false-positive scope, as it stood in .govulncheck-allow.yaml until it expired
+# (2026-10-10, #1531). A fixture, so the scope rules stay tested after the live entry is gone.
+ALLOW = """allow:
+  - id: GO-2026-6596
+    kind: false-positive
+    scan: ./connectors
+    module: github.com/cilium/cilium
+    version: v1.20.2
+    packages: github.com/cilium/cilium/api/v1/flow,github.com/cilium/cilium/api/v1/observer,github.com/cilium/cilium/api/v1/relay
+    # SHA-256 of the govulncheck OSV object's sorted, compact JSON, not HTTP bytes.
+    osv-sha256: eafdceb9be67f66c3590e101074d5e6aa67382f6ca435dbbbd841fb7c95b1d5b
+    reason: Generated Hubble APIs do not reconcile Gateway routes; the unreviewed OSV custom-range fallback marks every package, including unaffected v1.20.2. https://github.com/cilium/cilium/security/advisories/GHSA-w7c2-w76w-5hmj
+    added: 2026-10-03
+    expires: 2026-10-10
+"""
 
 
 class Gate(unittest.TestCase):
@@ -28,7 +43,7 @@ class Gate(unittest.TestCase):
         (self.root / "bin").mkdir()
         (self.root / "tmp").mkdir()
         shutil.copyfile(ROOT / "scripts/govulncheck-gate.sh", self.root / "scripts/govulncheck-gate.sh")
-        self.allow = (ROOT / ".govulncheck-allow.yaml").read_text()
+        self.allow = ALLOW
         (self.root / ".olivares-public-export").touch()
         self.scan = "./connectors"
         self.today = "2026-10-03"

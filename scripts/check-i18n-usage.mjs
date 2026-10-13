@@ -64,6 +64,7 @@ function keyPaths(value, prefix = '', out = new Map()) {
 function namespaceForFeature(enPath) {
   const featureDir = path.dirname(path.dirname(enPath))
   const candidates = [
+    path.join(path.dirname(enPath), 'index.ts'),
     path.join(featureDir, 'i18n', 'index.ts'),
     path.join(featureDir, 'index.ts'),
   ]
@@ -84,9 +85,15 @@ function loadResources() {
       keyPaths(JSON.parse(fs.readFileSync(file, 'utf8'))),
     )
   }
-  for (const file of walk(FEATURES, (p) =>
-    p.endsWith(`${path.sep}i18n${path.sep}en.json`),
-  )) {
+  for (const file of walk(FEATURES, (p) => {
+    if (!p.endsWith(`${path.sep}en.json`)) return false
+    if (path.basename(path.dirname(p)) === 'i18n') return true
+    const registration = path.join(path.dirname(p), 'index.ts')
+    if (!fs.existsSync(registration)) return false
+    const source = fs.readFileSync(registration, 'utf8')
+    return /import\s+en\s+from\s+(['"])\.\/en\.json\1/.test(source) &&
+      /registerTranslations\(\s*(['"])[^'"]+\1\s*,\s*\{\s*en(?:\s*[,}])/.test(source)
+  })) {
     const namespace = namespaceForFeature(file)
     // registerTranslations deep-merges bundles into an existing namespace.
     // Edition extensions contribute keys alongside the shared feature catalog.

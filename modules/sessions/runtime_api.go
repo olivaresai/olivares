@@ -62,6 +62,13 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("GET", "/runs/{ref}/diff/file", permRunRead, runEntity, m.handleRunWorktreeDiffFile)
 	// The ports the session's own processes listen on (preview.go).
 	reg.HandleEntity("GET", "/runs/{ref}/preview", permRunRead, runEntity, m.handleRunPreviewPorts)
+	// The summary a handoff to another tool would start from (session_handoff.go):
+	// generated, read-only, for the person to review.
+	reg.HandleEntity("GET", "/runs/{ref}/handoff", permRunRead, runEntity, m.handleHandoffPreview)
+	// What the session's tool is doing, from the transcript it keeps (session_activity.go):
+	// its agents, background tasks, changed files, task list and context. Read-only.
+	reg.HandleEntity("GET", "/runs/{ref}/activity", permRunRead, runEntity, m.handleRunActivity)
+	reg.HandleEntity("GET", "/runs/{ref}/activity/agents/{agent}", permRunRead, runEntity, m.handleRunAgentTranscript)
 	// Readers may learn a denied action as 403. Foreign, unreadable and absent
 	// runs retain the same concealed 404.
 	runEntity.DeniedReadPermission = permRunRead
@@ -69,10 +76,19 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("POST", "/runs/{ref}/git/unstage", permRunWrite, runEntity, m.handleRunGit)
 	reg.HandleEntity("POST", "/runs/{ref}/git/commit", permRunWrite, runEntity, m.handleRunGit)
 	reg.HandleEntity("POST", "/runs/{ref}/git/branch", permRunWrite, runEntity, m.handleRunGit)
+	// The commands, skills and agents the session's tool reports (tool_commands.go). A GET
+	// that asks the tool through the session's stdin, as an interrupt does: write.
+	reg.HandleEntity("GET", "/runs/{ref}/commands", permRunWrite, runEntity, m.handleRunCommands)
 	reg.HandleEntity("POST", "/runs/{ref}/input", permRunWrite, runEntity, m.handleRunInput)
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
 	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
 	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
+	// Rebinds a stopped session to another profile of its tool, carrying the tool's
+	// own conversation state (session_move.go). It starts nothing.
+	reg.HandleEntity("POST", "/runs/{ref}/move", permRunWrite, runEntity, m.handleMoveRun)
+	// Starts a NEW session in another profile, linked to this one, from a reviewed
+	// summary and the attached transcript (session_handoff.go).
+	reg.HandleEntity("POST", "/runs/{ref}/handoff", permRunWrite, runEntity, m.handleHandoffRun)
 	reg.HandleEntity("PUT", "/runs/{ref}/peers", permRunWrite, runEntity, m.handleSetRunPeers)
 	// A browser preview sends the person's requests into the session's app.
 	reg.HandleEntity("POST", "/runs/{ref}/preview", permRunWrite, runEntity, m.handleOpenRunPreview)
@@ -528,6 +544,53 @@ func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.
 	writeJSON(w, http.StatusOK, dto)
 }
 
+func (m *Module) handleMoveRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	var body moveRunRequest
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	dto, err := m.moveRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ProviderProfileRef,
+		mc.Principal.Actor(), mc.Principal.ActorKind())
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
+}
+
+func (m *Module) handleHandoffPreview(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	ref := chi.URLParam(r, "ref")
+	dto, err := m.previewHandoff(r.Context(), mc.Tenant, ref)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	// The preview returns text of the stored conversation, which the attach stream
+	// also does and records; it is recorded the same way.
+	m.auditRunRead(r, mc, ref, "sessions.run.handoff_preview")
+	writeJSON(w, http.StatusOK, dto)
+}
+
+func (m *Module) handleHandoffRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	var body handoffRunRequest
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	dto, err := m.handoffRun(r.Context(), mc, chi.URLParam(r, "ref"), body)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	// A launch the gate sent to a human is accepted, not started: the same answer a
+	// create gives, with the same pointer to the approval.
+	if dto.State == stateWaitingApproval {
+		w.Header().Set("Location", "/v1/m/governance/approvals/"+dto.ApprovalRef)
+		writeJSON(w, http.StatusAccepted, dto)
+		return
+	}
+	writeJSON(w, http.StatusCreated, dto)
+}
+
 func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	// The body is optional and as forgiving as the endpoint always was: the route has
 	// taken any body and ignored it, so a body that does not parse, or carries other
@@ -691,17 +754,26 @@ func writeSSE(rc *http.ResponseController, w http.ResponseWriter, event string, 
 // read of operated I/O). Best-effort: a failed audit logs but never denies the
 // attach (RBAC already gated it) — mirroring the observe stream-open audit.
 func (m *Module) auditAttach(r *http.Request, mc api.ModuleContext, ref string) {
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	m.auditRunRead(r, mc, ref, "sessions.run.attach")
+}
+
+// auditRunRead is that record for any privileged read of a run's operated content:
+// the attach stream, and the handoff preview, which returns the stored conversation.
+func (m *Module) auditRunRead(r *http.Request, mc api.ModuleContext, ref, action string) {
+	if err := m.appendRunReadAudit(r, mc, ref, action); err != nil {
+		m.debugf("sessions: run read audit failed", "action", action, "err", err)
+	}
+}
+
+func (m *Module) appendRunReadAudit(r *http.Request, mc api.ModuleContext, ref, action string) error {
+	return mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		_, e := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor: mc.Principal.Actor(), ActorKind: mc.Principal.ActorKind(),
-			Action: "sessions.run.attach", TargetKind: runKind,
+			Action: action, TargetKind: runKind,
 			Meta: map[string]any{"run_ref": ref},
 		})
 		return e
 	})
-	if err != nil {
-		m.debugf("sessions: run-attach audit failed", "err", err)
-	}
 }
 
 // parseFromSeq reads the ?from=<seq> attach cursor (default 0 = from the start of

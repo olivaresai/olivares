@@ -202,6 +202,11 @@ func releaseArchivePath(raw string) (string, error) {
 	return raw, nil
 }
 func releaseArchiveMember(driver, name string) bool {
+	if strings.HasPrefix(driver, "declared-") {
+		program := declaredProgram(driver)
+		return name == "bin" || name == "bin/"+program || name == "lib" || name == "lib/"+program || strings.HasPrefix(name, "lib/"+program+"/")
+	}
+
 	if driver == DriverGemini {
 		return name == "bin" || name == "bin/gemini" || name == "lib" || name == "lib/gemini" || strings.HasPrefix(name, "lib/gemini/")
 	}

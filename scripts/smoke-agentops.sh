@@ -165,9 +165,9 @@ curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
 TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jget token)"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
-  -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' | jget tenant_id)"
-[ -n "$TENANT" ] || fail "could not create the production tenant"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+[ -n "$TENANT" ] || fail "could not resolve the setup organization"
 
 export OLIVARES_SERVER_URL="$BASE" OLIVARES_TOKEN="$TOKEN" OLIVARES_TENANT="$TENANT"
 olv() { "$BIN" agent "$@"; }   # the real operator CLI (thin HTTP client)

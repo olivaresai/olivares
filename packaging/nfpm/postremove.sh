@@ -238,6 +238,34 @@ else
   fi
 fi
 
+# dpkg has removed the packaged source by postrm; the installed policy remains
+# available for unloading. Upgrade/unwind calls keep it for the configured engine.
+case "$1" in
+  remove|purge|disappear)
+    apparmor_profile=/etc/apparmor.d/usr.bin.olivares
+    if [ -e "$apparmor_profile" ] || [ -L "$apparmor_profile" ]; then
+      if [ ! -f "$apparmor_profile" ] || [ -L "$apparmor_profile" ]; then
+        refuse apparmor-profile-unsafe "$apparmor_profile must be a regular file, not a link"
+      fi
+      if [ -d /sys/kernel/security/apparmor ]; then
+        [ -r /sys/kernel/security/apparmor/profiles ] ||
+          refuse apparmor-state-unreadable "cannot read the loaded AppArmor profiles"
+        apparmor_loaded=0
+        grep -q '^olivares-engine ' /sys/kernel/security/apparmor/profiles || apparmor_loaded=$?
+        case "$apparmor_loaded" in
+          0)
+            command -v apparmor_parser >/dev/null 2>&1 ||
+              refuse apparmor-parser-missing "install apparmor, then retry the package removal"
+            apparmor_parser -R "$apparmor_profile" ||
+              refuse apparmor-unload-failed "cannot unload $apparmor_profile; repair AppArmor and retry the package removal" ;;
+          1) ;;
+          *) refuse apparmor-state-unreadable "cannot read the loaded AppArmor profiles" ;;
+        esac
+      fi
+      rm -f "$apparmor_profile" || refuse apparmor-remove-failed "cannot remove $apparmor_profile"
+    fi ;;
+esac
+
 if [ "$action" = abort-upgrade ]; then
   rm -f /run/olivares.pkg-upgrade-state
 fi

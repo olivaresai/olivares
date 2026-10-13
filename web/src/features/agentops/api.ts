@@ -17,6 +17,7 @@ import {
   type HostToolObservation,
 } from './host-tools'
 import type {
+  ActivityAgentTranscriptDTO,
   AdoptAccountRequest,
   CreateAccountRequest,
   CreateBindingRequest,
@@ -27,6 +28,8 @@ import type {
   FileListResponse,
   FileReadResponse,
   PatchProfileRequest,
+  ProfileModelCatalogDTO,
+  ProfilePreviewDTO,
   ProviderAccountDTO,
   ProviderAccountMetadataPatch,
   ProviderBindingDTO,
@@ -35,13 +38,18 @@ import type {
   ResolvedProfileDTO,
   RunChangedFileDTO,
   RunChangesDTO,
+  RunCommandsDTO,
   RunGitStatusDTO,
   RunGitAction,
   RunGitRequest,
   RunWorktreeDiffDTO,
   RunWorktreeDiffFileDTO,
+  RunActivityDTO,
   RunDTO,
   RunEventDTO,
+  HandoffPreviewDTO,
+  HandoffRunRequest,
+  HandoffRunResult,
   ToolReadinessDTO,
   WorkspaceDTO,
   WriteResponse,
@@ -273,6 +281,11 @@ export const agentOpsApi = {
       `${RUNS}/${ref(r)}/preview`,
       { port },
     ),
+  /** The commands, skills and agents the session's tool reports (the "/" menu). */
+  commands: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunCommandsDTO>(`${RUNS}/${ref(r)}/commands`, {
+      signal: opts?.signal,
+    }),
   /** The files the session changed in its folder since it started (read-only). */
   changes: (r: string, opts?: { signal?: AbortSignal }) =>
     http.get<RunChangesDTO>(`${RUNS}/${ref(r)}/changes`, {
@@ -321,6 +334,32 @@ export const agentOpsApi = {
         : { work_lease_fence: workLeaseFence },
     ),
   resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
+  /** Rebinds a stopped session to another profile of its tool, carrying the tool's own
+   * conversation state. Starts nothing; the next resume is the ordinary one. */
+  move: (r: string, profileRef: string) =>
+    http.post<RunDTO>(`${RUNS}/${ref(r)}/move`, {
+      provider_profile_ref: profileRef,
+    }),
+  /** What the session's tool is doing, read from its own transcript: agents, background
+   * tasks, changed files, its task list and its context. Read-only. */
+  activity: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunActivityDTO>(`${RUNS}/${ref(r)}/activity`, {
+      signal: opts?.signal,
+    }),
+  /** One subagent's transcript, in plain turns. */
+  activityAgent: (r: string, agent: string, opts?: { signal?: AbortSignal }) =>
+    http.get<ActivityAgentTranscriptDTO>(
+      `${RUNS}/${ref(r)}/activity/agents/${encodeURIComponent(agent)}`,
+      { signal: opts?.signal },
+    ),
+  /** The summary a handoff would start from: generated, read-only, for review. */
+  handoffPreview: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<HandoffPreviewDTO>(`${RUNS}/${ref(r)}/handoff`, {
+      signal: opts?.signal,
+    }),
+  /** Starts a new session in another profile, linked to this one. */
+  handoff: (r: string, body: HandoffRunRequest) =>
+    http.post<HandoffRunResult>(`${RUNS}/${ref(r)}/handoff`, body),
   // discardWorktree is the person's confirmation to remove the session's worktree and
   // branch although its work is not merged; without it no body is sent.
   cleanup: (r: string, discardWorktree = false) =>
@@ -357,6 +396,26 @@ export const agentOpsApi = {
   toolsReadiness: (opts?: { signal?: AbortSignal }) =>
     http.get<{ tools: ToolReadinessDTO[] }>(`${PROFILES}/readiness`, {
       signal: opts?.signal,
+    }),
+  /** The models and effort levels one profile's tool or bound provider reports now
+   * (cached by the engine for two minutes). It sends no prompt and returns no credential;
+   * `refresh` bypasses the cache. */
+  profileModels: (
+    profileRef: string,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal'> & { refresh?: boolean },
+  ) =>
+    http.get<ProfileModelCatalogDTO>(`${PROFILES}/${ref(profileRef)}/models`, {
+      tenant: opts?.tenant,
+      signal: opts?.signal,
+      ...(opts?.refresh ? { query: { refresh: true } } : {}),
+    }),
+  previewProfile: (
+    driver: string,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal'>,
+  ) =>
+    http.get<ProfilePreviewDTO>(`${PROFILES}/resolve`, {
+      ...opts,
+      query: { driver },
     }),
   resolveProfile: (
     driver: string,
@@ -577,6 +636,10 @@ export const agentOpsKeys = {
     ['agentops', tenant, 'run', r] as const,
   runChanges: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'changes'] as const,
+  runActivity: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'activity'] as const,
+  runCommands: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'commands'] as const,
   runPreviewPorts: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'preview'] as const,
   runWorktreeDiff: (tenant: string | null, r: string) =>
@@ -609,6 +672,9 @@ export const agentOpsKeys = {
       : (['agentops', tenant, 'b', epoch, 'profiles', params] as const),
   profile: (tenant: string | null, epoch: number, r: string) =>
     ['agentops', tenant, 'b', epoch, 'profile', r] as const,
+  /** One profile's live model catalog, under the authority boundary like the profile. */
+  profileModels: (tenant: string | null, epoch: number, r: string) =>
+    ['agentops', tenant, 'b', epoch, 'profile', r, 'models'] as const,
   /**
    * Point readiness of ONE selected tuple. Extends `profile(t, e, r)` so
    * invalidating that profile drops the observation; the selection object keeps

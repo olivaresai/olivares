@@ -6,6 +6,10 @@ description: >-
   掲載します。コンソール自身のルート一覧から生成されています。
 ---
 
+:::note[エディション]
+ディレクトリソース（LDAP、Okta/Entra、エージェント・ワークロード IdP）と管理対象アイデンティティのライフサイクルには Business/Enterprise アドオンが必要です。一般的なソース取り込み、リソースカタログ、セキュリティ検出結果、Access Map、アイデンティティインベントリ、単一 IdP の SSO、受信 SCIM のユーザー・グループ、ローカルロールとバインディング、ポリシーと承認は Community でも利用できます。有料コンソールパネルと CLI コマンドは表示されず、その公開 API ルートは HTTP `501` を返します。モジュールを有効にしても Business 実装は追加されません。
+:::
+
 このページはコンソールの地図です。アプリケーションがマウントする**すべてのルート**を、
 選抜でも、誰かが覚えていて文書化したものだけでもなく、principal が開くために必要な
 権限と詳細情報の参照先とともに列挙します。
@@ -61,7 +65,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-コンソールは **83 ルート**を公開します。以下の表に、必要な権限と、製品内
+コンソールは **75 ルート**を公開します。以下の表に、必要な権限と、製品内
 ヘルプリンクが開くリファレンスページとともに、すべて掲載されています。
 
 ### ホーム
@@ -125,9 +129,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | アラート | `/alerting` | findings を宛先へルーティングし、配信を確認 | `notify:route:read` | [reference/modules/xv-notify](/ja/reference/modules/xv-notify/) |
-| オートメーション | `/automations` | 3 つすべての自動化レールとトリガーカタログ | `orchestration:schedule:read` | [reference/modules/iv-orchestration](/ja/reference/modules/iv-orchestration/) |
 | Webhook とイベント | `/eventing` | アウトバウンド Webhook サブスクリプション、配信ログ、デッドレターキュー。 | `eventing:subscription:read` | [reference/modules/eventing](/ja/reference/modules/eventing/) |
-| オーケストレーション | `/orchestration` | エージェント間の連携とスケジュール | `orchestration:graph:read` | [reference/modules/iv-orchestration](/ja/reference/modules/iv-orchestration/) |
 
 ### セキュリティとアイデンティティ
 
@@ -140,8 +142,6 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 推論プロキシ | `/inference-proxy` | プロキシゲート、エグレス DLP ルール、デバイス承認 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ja/reference/modules/inferenceproxy/) |
 | キルスイッチ | `/killswitch` | 緊急停止、二重統制による復旧、guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ja/how-to/cookbook/kill-switch-drill/) |
 | 権限 | `/permissions` | アイデンティティ、ロール、承認 | `governance:identity:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
-| レッドチーム | `/red-team` | エージェントに対する敵対的テスト | `redteam:target:read` | [reference/modules/xviii-redteam](/ja/reference/modules/xviii-redteam/) |
-| データレジデンシー | `/residency` | 各組織をリージョンへ固定、または未固定のままにする | `system:admin` | [reference/modules/xiii-compliance](/ja/reference/modules/xiii-compliance/) |
 | ルーチンポリシー | `/routine-policies` | Claude Code ルーチンの頻度下限、同時実行上限、承認要件、cron allowlist。 | `governance:routine:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | セキュリティ | `/security` | ガードレール、フォレンジック、異常 | `security:finding:read` | [reference/modules/ix-security](/ja/reference/modules/ix-security/) |
 
@@ -162,14 +162,11 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | コンプライアンス | `/compliance` | フレームワーク、コントロール、証跡 | `compliance:framework:read` | [reference/modules/xiii-compliance](/ja/reference/modules/xiii-compliance/) |
 | ダッシュボード | `/dashboards` | 経営指標とレポート | any signed-in user | [reference/modules/xxi-executive-dashboards](/ja/reference/modules/xxi-executive-dashboards/) |
 | 評価 | `/evals` | 品質、評価、リグレッション | `evals:run:read` | [reference/modules/xii-evals](/ja/reference/modules/xii-evals/) |
-| コストと FinOps | `/finops` | トークンコスト、予算、支出 | `finops:spend:read` | [reference/modules/xi-finops](/ja/reference/modules/xi-finops/) |
 | 健全性と SLA | `/health` | エージェントと MCP の稼働時間および SLA | `health:status:read` | [reference/modules/xxii-health](/ja/reference/modules/xxii-health/) |
 | オブザーバビリティ | `/observability` | 標準別の取り込み健全性とトレースのドリルダウン | `health:status:read` | [reference/modules/observability](/ja/reference/modules/observability/) |
-| Posture エクスポート | `/posture-export` | コントロールタワー向けにグランドトゥルース posture をエクスポート | `posture:export:read` | [reference/modules/posture-export](/ja/reference/modules/posture-export/) |
 | 記録 | `/recordings` | 特権セッションの記録とリプレイ | `recording:session:admin` | [reference/modules/recording](/ja/reference/modules/recording/) |
-| レポート | `/reporting` | ガバナンスレポートの生成とダウンロード | `reporting:report:read` | [reference/modules/reporting](/ja/reference/modules/reporting/) |
 | セッションビューアー | `/session-viewer/$id`（ディープリンクのみ） | 記録一覧の行から開く、1 つの記録済みセッションの完全なタイムライン。サイドバーには表示されない。 | `recording:session:admin` | [reference/modules/recording](/ja/reference/modules/recording/) |
-| チームコスト | `/team-costs` | チーム別に帰属した支出。プロジェクト別、モデル別の内訳へ展開可能。 | `finops:spend:read` | [reference/modules/xi-finops](/ja/reference/modules/xi-finops/) |
+| 予算 | `/stored-budgets` | 保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。 | `finops:budget:read` | [reference/modules/xi-finops](/ja/reference/modules/xi-finops/) |
 
 ### システムと設定
 
@@ -181,7 +178,6 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | ソースの差分 | `/console/sources/diff` | 接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します | `system:admin` | [reference/console](/ja/reference/console/) |
 | ログ | `/logs` | レベルやモジュールで絞り込み、検索、一時停止ができるエンジンのライブログストリーム。 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | セットアップウィザード | `/onboarding` | 段階的なデプロイメント設定 | `system:admin` | [start/quickstart](/ja/start/quickstart/) |
-| テナント | `/tenants` | テナントのサービスを停止または復旧 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 
 ### ログイン、セットアップ、アカウント
 

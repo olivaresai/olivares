@@ -106,14 +106,20 @@ func (m *Module) Permissions() []auth.Permission {
 	return []auth.Permission{permRead, permWrite, permAdmin, permAssign}
 }
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
+	reg.Handle("GET", "/builtins", permRead, m.listBuiltins)
 	reg.Handle("GET", "/packs", permRead, m.listPacks)
 	reg.Handle("POST", "/packs", permWrite, m.installPack)
 	ref := api.EntityRef{Kind: PackKind, IDParam: "id", ConcealDeniedAsNotFound: true}
 	reg.HandleEntity("GET", "/packs/{id}", permRead, ref, m.getPack)
 	reg.HandleEntity("POST", "/packs/{id}/revisions", permWrite, ref, m.installPack)
+	// The diff returns file text, which the catalog read does not: it is the
+	// publisher's review of what an update or a new pin delivers.
+	reg.HandleEntity("GET", "/packs/{id}/diff", permWrite, ref, m.diffPack)
+	reg.HandleEntity("POST", "/packs/{id}/update", permWrite, ref, m.updatePack)
 	reg.HandleEntity("DELETE", "/packs/{id}", permAdmin, ref, m.retirePack)
 	reg.HandleEntity("GET", "/packs/{id}/assignments", permRead, ref, m.listPackAssignments)
 	reg.Handle("GET", "/assignments", permRead, m.listAssignments)
+	reg.Handle("GET", "/selection", permRead, m.getSelection)
 	{
 		reg := reg
 		if _, ok := m.opts.Targets.(AssignmentAuthority); !ok {
@@ -156,6 +162,7 @@ type Source struct {
 	Kind                string `json:"kind"`
 	Origin              string `json:"origin,omitempty"`
 	RequestedRef        string `json:"requested_ref,omitempty"`
+	Subdir              string `json:"subdir,omitempty"`
 	ResolvedCommit      string `json:"resolved_commit,omitempty"`
 	RegistrationVersion int64  `json:"registration_version,omitempty"`
 	SourceDigest        string `json:"source_digest"`
@@ -170,8 +177,11 @@ type Revision struct {
 	Manifest       []FileEntry `json:"manifest"`
 	Members        []Member    `json:"members"`
 	Validator      string      `json:"validator"`
-	CreatedBy      string      `json:"created_by"`
-	CreatedAt      string      `json:"created_at"`
+	// ActiveRules is the version of the active-content rules Members were derived
+	// under; absent on a revision published before there was one.
+	ActiveRules int    `json:"active_rules,omitempty"`
+	CreatedBy   string `json:"created_by"`
+	CreatedAt   string `json:"created_at"`
 }
 type InstallResult struct {
 	State    string   `json:"state"`
@@ -210,6 +220,9 @@ func revisionDTO(row model.Record) (Revision, error) {
 	rev.PackID = row.String("pack_id")
 	rev.CreatedAt = row.String(model.ColCreatedAt)
 	rev.CreatedBy = row.String("created_by")
+	for i := range rev.Members {
+		rev.Members[i].Active = rev.Members[i].ActiveContent()
+	}
 	return rev, nil
 }
 func query(r *http.Request) (model.Query, error) {
@@ -349,7 +362,19 @@ func respond(w http.ResponseWriter, status int, value any) {
 	}
 	api.WriteJSON(w, status, value, "application/json")
 }
+
+// WriteOperationError preserves the catalog error contract for composed operations.
+func WriteOperationError(w http.ResponseWriter, err error) { respondError(w, err) }
+
+// OperationErrorStatus reports the same status used by the public catalog routes.
+func OperationErrorStatus(err error) int { status, _, _ := operationError(err); return status }
+
 func respondError(w http.ResponseWriter, err error) {
+	status, code, message := operationError(err)
+	respond(w, status, map[string]any{"error": map[string]string{"code": code, "message": api.RequestBodyErrorMessage(err, message)}})
+}
+
+func operationError(err error) (int, string, string) {
 	status, code, message := http.StatusServiceUnavailable, "skills_unavailable", "Skills could not complete this operation. Retry after checking the service."
 	var refusal *ImportError
 	switch {
@@ -357,7 +382,7 @@ func respondError(w http.ResponseWriter, err error) {
 		status, code, message = http.StatusBadRequest, refusal.Code, refusal.Message
 		if code == "source_unavailable" || code == "target_authority_unavailable" || code == "usage_authority_unavailable" {
 			status = http.StatusServiceUnavailable
-		} else if code == "pack_in_use" {
+		} else if code == "pack_in_use" || code == "up_to_date" {
 			status = http.StatusConflict
 		}
 	case errors.Is(err, store.ErrNotFound):
@@ -369,7 +394,7 @@ func respondError(w http.ResponseWriter, err error) {
 	case errors.Is(err, errInvalidRequest):
 		status, code, message = http.StatusBadRequest, "invalid_request", "The skills request is invalid."
 	}
-	respond(w, status, map[string]any{"error": map[string]string{"code": code, "message": api.RequestBodyErrorMessage(err, message)}})
+	return status, code, message
 }
 
 // retirePack retires an unreferenced skills pack at the expected version while
@@ -437,6 +462,9 @@ type importPlan struct {
 	name        string
 	fingerprint string
 	read        func() (*ValidatedPack, Source, error)
+	// expectLatest, when set, is the revision the pack must still have as its
+	// latest when the new one is published: an update decided against it.
+	expectLatest string
 }
 
 func (m *Module) readImport(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) (importPlan, error) {
@@ -486,7 +514,7 @@ func (m *Module) readImport(w http.ResponseWriter, r *http.Request, mc api.Modul
 				if req.Source.ExpectedDigest != "" && req.Source.ExpectedDigest != pack.SourceDigest {
 					return nil, Source{}, refuse("source_changed", "source digest")
 				}
-				return pack, Source{Kind: "git", Origin: req.Source.URL, RequestedRef: req.Source.Ref, ResolvedCommit: commit, SourceDigest: pack.SourceDigest}, nil
+				return pack, Source{Kind: "git", Origin: req.Source.URL, RequestedRef: req.Source.Ref, Subdir: req.Source.Subdir, ResolvedCommit: commit, SourceDigest: pack.SourceDigest}, nil
 			}
 		case "builtin":
 			if req.Source.URL != "" || req.Source.Subdir != "" || req.Source.WorkspaceRef != "" || req.Source.Directory != "" || req.Source.Ref == "" {
@@ -586,29 +614,42 @@ func (m *Module) installPack(w http.ResponseWriter, r *http.Request, mc api.Modu
 		respondError(w, errInvalidRequest)
 		return
 	}
-	requestDigest := digest([]byte(chi.URLParam(r, "id") + "\x00" + plan.fingerprint))
-	keyHash := digest([]byte(mc.Principal.Actor() + "\x00" + chi.URLParam(r, "id") + "\x00" + key))
-	var result InstallResult
-	replay := false
+	result, replay, err := m.publishImport(ctx, mc, chi.URLParam(r, "id"), key, plan)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	status := http.StatusCreated
+	if replay {
+		status = http.StatusOK
+	}
+	respond(w, status, result)
+}
+
+// publishImport is the common audited publisher for HTTP imports and bundled packs.
+func (m *Module) publishImport(ctx context.Context, mc api.ModuleContext, id, key string, plan importPlan) (result InstallResult, replay bool, err error) {
+	return m.publishImportWithActor(ctx, mc, id, key, plan, mc.Principal.Actor())
+}
+
+func (m *Module) publishImportWithActor(ctx context.Context, mc api.ModuleContext, id, key string, plan importPlan, receiptActor string) (result InstallResult, replay bool, err error) {
+	requestDigest := digest([]byte(id + "\x00" + plan.fingerprint))
+	keyHash := digest([]byte(receiptActor + "\x00" + id + "\x00" + key))
 	err = mc.Data.View(ctx, func(sc store.Scope) error {
 		var e error
 		result, replay, e = findReceipt(ctx, sc, keyHash, requestDigest)
 		return e
 	})
 	if err != nil {
-		respondError(w, err)
-		return
+		return result, false, err
 	}
 	if replay {
-		respond(w, http.StatusOK, result)
-		return
+		return result, true, nil
 	}
 	pack, source, err := plan.read()
 	if err != nil {
-		respondError(w, err)
-		return
+		return result, false, err
 	}
-	packID := model.ID(chi.URLParam(r, "id"))
+	packID := model.ID(id)
 	newPack := packID.IsZero()
 	if newPack {
 		packID = model.NewID()
@@ -619,16 +660,13 @@ func (m *Module) installPack(w http.ResponseWriter, r *http.Request, mc api.Modu
 	for _, entry := range pack.Manifest {
 		body, ok := pack.File(entry.Path)
 		if !ok || int64(len(body)) != entry.Size || digest(body) != entry.Digest {
-			respondError(w, refuse("source_changed", "manifest"))
-			return
+			return result, false, refuse("source_changed", "manifest")
 		}
 		if err := tree.entry(entry.Path, false); err != nil {
-			respondError(w, err)
-			return
+			return result, false, err
 		}
 		if err := tree.file(entry.Path, body, os.FileMode(entry.Mode)); err != nil {
-			respondError(w, err)
-			return
+			return result, false, err
 		}
 	}
 	verified, err := tree.validate(pack.SourceDigest)
@@ -636,13 +674,11 @@ func (m *Module) installPack(w http.ResponseWriter, r *http.Request, mc api.Modu
 		if err == nil {
 			err = refuse("source_changed", "manifest")
 		}
-		respondError(w, err)
-		return
+		return result, false, err
 	}
 	remove, err := m.stageArtifact(mc.Tenant, revisionID, verified)
 	if err != nil {
-		respondError(w, err)
-		return
+		return result, false, err
 	}
 	committed := false
 	defer func() {
@@ -670,11 +706,11 @@ func (m *Module) installPack(w http.ResponseWriter, r *http.Request, mc api.Modu
 		}
 		var row model.Record
 		if newPack {
-			row, err = packs.CreateWithID(ctx, packID, model.Record{"name": name, "state": "enabled", "latest_revision_id": revisionID.String(), "latest_revision": int64(1), "created_by": mc.Principal.Actor()})
+			row, err = packs.CreateWithID(ctx, packID, model.Record{"name": plan.name, "state": "enabled", "latest_revision_id": revisionID.String(), "latest_revision": int64(1), "created_by": mc.Principal.Actor()})
 		} else {
 			row, err = packs.Get(ctx, packID)
 			if err == nil {
-				if row.String("state") != "enabled" {
+				if row.String("state") != "enabled" || plan.expectLatest != "" && row.String("latest_revision_id") != plan.expectLatest {
 					return store.ErrConflict
 				}
 				row["latest_revision_id"] = revisionID.String()
@@ -685,7 +721,7 @@ func (m *Module) installPack(w http.ResponseWriter, r *http.Request, mc api.Modu
 		if err != nil {
 			return err
 		}
-		rev := Revision{PackID: packID.String(), Number: row.Int("latest_revision"), Source: source, ManifestDigest: verified.ManifestDigest, Manifest: verified.Manifest, Members: verified.Members, Validator: ValidatorVersion}
+		rev := Revision{PackID: packID.String(), Number: row.Int("latest_revision"), Source: source, ManifestDigest: verified.ManifestDigest, Manifest: verified.Manifest, Members: verified.Members, Validator: ValidatorVersion, ActiveRules: activeRules}
 		payload, err := json.Marshal(rev)
 		if err != nil {
 			return err
@@ -717,16 +753,15 @@ func (m *Module) installPack(w http.ResponseWriter, r *http.Request, mc api.Modu
 		if errors.Is(err, store.ErrCommitOutcomeUnknown) {
 			committed = true
 		} // retain exact bytes for idempotent read-back
-		respondError(w, err)
-		return
+		return result, false, err
 	}
 	if replay {
-		respond(w, http.StatusOK, result)
-		return
+		return result, true, nil
 	}
 	committed = true
-	respond(w, http.StatusCreated, result)
+	return result, false, nil
 }
+
 func findReceipt(ctx context.Context, sc store.Scope, keyHash, requestDigest string) (InstallResult, bool, error) {
 	var result InstallResult
 	receipts, err := sc.Ext(receiptKind)

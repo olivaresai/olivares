@@ -81,20 +81,50 @@ type MCPGatewayProbe struct {
 // EgressHosts confines a command server's network to these HTTPS hosts (host or
 // host:port); empty keeps the network of the launch the command runs next to.
 type MCPGatewayServerInput struct {
-	Name          string                 `json:"name"`
-	Transport     string                 `json:"transport"`
-	URL           string                 `json:"url"`
-	Command       string                 `json:"command,omitempty"`
-	Args          []string               `json:"args,omitempty"`
-	Env           map[string]string      `json:"env,omitempty"`
-	EnvSecretRefs map[string]string      `json:"env_secret_refs,omitempty"`
-	CredentialRef string                 `json:"credential_ref,omitempty"`
-	EgressCIDRs   []string               `json:"egress_cidrs"`
-	EgressHosts   []string               `json:"egress_hosts,omitempty"`
-	Trust         MCPGatewayTrust        `json:"trust"`
-	AllowedTools  []MCPGatewayToolPolicy `json:"allowed_tools"`
-	Enabled       bool                   `json:"enabled"`
+	Name          string            `json:"name"`
+	Transport     string            `json:"transport"`
+	URL           string            `json:"url"`
+	Command       string            `json:"command,omitempty"`
+	Args          []string          `json:"args,omitempty"`
+	Env           map[string]string `json:"env,omitempty"`
+	EnvSecretRefs map[string]string `json:"env_secret_refs,omitempty"`
+	CredentialRef string            `json:"credential_ref,omitempty"`
+	EgressCIDRs   []string          `json:"egress_cidrs"`
+	EgressHosts   []string          `json:"egress_hosts,omitempty"`
+	// Targets assigns the server to nodes of the skills assignment tree; a session
+	// sees it when one of them is a target of its run. Empty means every session
+	// of the tenant. A write that omits the field keeps the stored assignment.
+	Targets []MCPGatewayTarget `json:"targets,omitempty"`
+	// Pin runs a local server from one tool installed through a catalog
+	// declaration; the engine fills its command and executable digest from the
+	// verified install, and a launch whose executable differs refuses to start.
+	// A write that omits it keeps the stored pin unless it changes the command.
+	Pin          *MCPGatewayPin         `json:"pin,omitempty"`
+	Trust        MCPGatewayTrust        `json:"trust"`
+	AllowedTools []MCPGatewayToolPolicy `json:"allowed_tools"`
+	Enabled      bool                   `json:"enabled"`
 }
+
+// MCPGatewayTarget names a stored node of the skills assignment tree, in the
+// skills module's own shape: workspace, folder, template, agent_group, agent
+// or session, by its stored identifier.
+type MCPGatewayTarget struct {
+	Kind string `json:"target_kind"`
+	ID   string `json:"target_id"`
+}
+
+// MCPGatewayPin is a catalog-declared tool at an exact version and the SHA-256
+// of its installed executable (olivares tool install --from).
+type MCPGatewayPin struct {
+	Program string `json:"program"`
+	Version string `json:"version"`
+	SHA256  string `json:"sha256,omitempty"`
+}
+
+var mcpPinProgram = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+var mcpPinVersion = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$`)
+
+var mcpTargetKinds = map[string]bool{"workspace": true, "folder": true, "template": true, "agent_group": true, "agent": true, "session": true}
 
 type MCPGatewayServer struct {
 	MCPGatewayServerInput
@@ -204,7 +234,7 @@ func mcpGatewaySnapshot(cfg MCPGatewayConfig, version int64) MCPGatewaySnapshot 
 // mutate reads the CAS version and publishes config plus semantic audit atomically.
 // Repository.Update checks the same version at the SQL write, so a competing
 // writer after this read cannot overwrite the winner.
-func (s *MCPGatewayStore) mutate(ctx context.Context, actor Principal, tenant model.TenantID, version int64, action, id string, change func(*MCPGatewayConfig) error) (MCPGatewaySnapshot, error) {
+func (s *MCPGatewayStore) mutate(ctx context.Context, actor Principal, tenant model.TenantID, version int64, action, id string, change func(*MCPGatewayConfig) error, extra ...map[string]any) (MCPGatewaySnapshot, error) {
 	row, cfg, err := s.load(ctx, tenant)
 	if err != nil {
 		return MCPGatewaySnapshot{}, err
@@ -233,9 +263,12 @@ func (s *MCPGatewayStore) mutate(ctx context.Context, actor Principal, tenant mo
 		if err != nil {
 			return err
 		}
+		meta := map[string]any{"tenant_id": tenant.String(), "server_id": id, "version": row.Version}
+		for _, more := range extra {
+			maps.Copy(meta, more)
+		}
 		event, err := as.Audit().Append(ctx, model.AuditDraft{Actor: actor.Actor(), ActorKind: actor.ActorKind(), Action: action,
-			TargetKind: "core.source_def", TargetID: row.ID,
-			Meta: map[string]any{"tenant_id": tenant.String(), "server_id": id, "version": row.Version}})
+			TargetKind: "core.source_def", TargetID: row.ID, Meta: meta})
 		if err == nil && event.Seq == 0 {
 			return ErrMCPGatewayUnavailable
 		}
@@ -266,7 +299,17 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 	if create {
 		action = "mcp_gateway.server.create"
 	}
+	// An assignment change is a change of who can use the server, a pin change
+	// of what code it runs: the ledger names the new targets (an empty list
+	// meaning every session of the tenant), the previous ones and the new pin.
+	assignment := map[string]any{}
 	return s.mutate(ctx, actor, tenant, version, action, id, func(cfg *MCPGatewayConfig) error {
+		if create && len(in.Targets) > 0 {
+			assignment["targets"] = in.Targets
+		}
+		if create && in.Pin != nil {
+			assignment["pin"] = in.Pin
+		}
 		if create {
 			if len(cfg.Servers) >= 32 {
 				return fmt.Errorf("%w: at most 32 servers", ErrMCPGatewayInvalid)
@@ -282,12 +325,33 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			if old.ID != id {
 				continue
 			}
+			// Clients that do not know assignments (an older console form) keep
+			// them; only an explicit list, even empty, changes them.
+			// A new command is the administrator's own choice of code: it does not
+			// inherit the pin of the old one, and so it unpins the server.
+			if in.Pin == nil && in.Command == old.Command {
+				in.Pin = old.Pin
+				if err := validateMCPGatewayServer(in); err != nil {
+					return err
+				}
+			}
+			if (old.Pin == nil) != (in.Pin == nil) || old.Pin != nil && *old.Pin != *in.Pin {
+				assignment["pin"] = in.Pin
+			}
+			if in.Targets == nil {
+				in.Targets = old.Targets
+			} else if !slices.Equal(old.Targets, in.Targets) {
+				assignment["targets"], assignment["targets_before"] = slices.Clone(in.Targets), slices.Clone(old.Targets)
+			}
+			if len(in.Targets) == 0 {
+				in.Targets = nil
+			}
 			// Changing destination, credentials or address grants withdraws the
 			// connection observation. A new destination cannot inherit approval.
 			changed := old.Transport != in.Transport || old.URL != in.URL || old.Command != in.Command ||
 				!slices.Equal(old.Args, in.Args) || !maps.Equal(old.Env, in.Env) ||
 				!maps.Equal(old.EnvSecretRefs, in.EnvSecretRefs) || old.CredentialRef != in.CredentialRef || !slices.Equal(old.EgressCIDRs, in.EgressCIDRs) ||
-				!slices.Equal(old.EgressHosts, in.EgressHosts)
+				!slices.Equal(old.EgressHosts, in.EgressHosts) || (old.Pin == nil) != (in.Pin == nil) || old.Pin != nil && *old.Pin != *in.Pin
 			if changed {
 				old.Probe = MCPGatewayProbe{State: "never_tested", Tools: []MCPGatewayTool{}}
 			}
@@ -321,7 +385,7 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			return nil
 		}
 		return store.ErrNotFound
-	})
+	}, assignment)
 }
 
 func (s *MCPGatewayStore) DeleteServer(ctx context.Context, actor Principal, tenant model.TenantID, version int64, id string) (MCPGatewaySnapshot, error) {
@@ -379,7 +443,7 @@ func mcpRunnerEnvName(name string) bool {
 func (in MCPGatewayServerInput) WithDefaults() MCPGatewayServerInput {
 	if in.Transport == "" {
 		in.Transport = "streamable_http"
-		if in.Command != "" {
+		if in.Command != "" || in.Pin != nil {
 			in.Transport = "stdio"
 		}
 	}
@@ -454,6 +518,20 @@ func validateMCPGatewayServer(in MCPGatewayServerInput) error {
 		if err != nil || network.String() != cidr {
 			return bad("address grants must be canonical CIDRs")
 		}
+	}
+	if pin := in.Pin; pin != nil && (in.Transport != "stdio" || !mcpPinProgram.MatchString(pin.Program) || !mcpPinVersion.MatchString(pin.Version) || strings.Contains(pin.Version, "..") || len(pin.SHA256) != 64 || strings.Trim(pin.SHA256, "0123456789abcdef") != "") {
+		return bad("pin a local server to an installed catalog tool: program, version and its executable sha256")
+	}
+	if len(in.Targets) > 32 {
+		return bad("at most 32 targets")
+	}
+	targets := map[MCPGatewayTarget]bool{}
+	for _, target := range in.Targets {
+		id, err := model.ParseID(target.ID)
+		if !mcpTargetKinds[target.Kind] || err != nil || id.IsZero() || id.String() != target.ID || targets[target] {
+			return bad("targets must be unique workspace, folder, template, agent_group, agent or session identifiers")
+		}
+		targets[target] = true
 	}
 	if len(in.AllowedTools) > 128 {
 		return bad("at most 128 tool policies")

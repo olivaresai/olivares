@@ -32,7 +32,8 @@ func credentialRefusedReason(status int) string {
 
 // beginCredentialRefusal reports whether this turn has not been interrupted for a
 // refused credential yet, and which turn that is; endCredentialRefusal clears it
-// when the turn ends and counts the ended turn.
+// when the turn ends, counts the ended turn and closes the turn's output
+// (noteClaudeOutput).
 func (lr *liveRun) beginCredentialRefusal() (uint64, bool) {
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
@@ -47,6 +48,7 @@ func (lr *liveRun) endCredentialRefusal() {
 	lr.mu.Lock()
 	lr.credentialRefused = false
 	lr.claudeTurnsEnded++
+	lr.claudeOutputOpen = false
 	lr.mu.Unlock()
 }
 

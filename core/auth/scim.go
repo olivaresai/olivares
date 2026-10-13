@@ -185,7 +185,9 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 		return model.User{}, err
 	}
 	var out model.User
+	var left bool
 	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		left = false
 		if err := prepareUserAuthorityWrite(ctx, as, id); err != nil {
 			return err
 		}
@@ -201,9 +203,10 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 			return err
 		}
 		if !in.Active {
-			if _, err := a.scopedOffboard(ctx, as, actor, id, tenant, "scim.deactivate"); err != nil {
+			if _, err := a.scopedOffboard(ctx, as, actor, id, tenant, scimDeactivateCause); err != nil {
 				return err
 			}
+			left = true
 			out = u
 			out.Status = model.StatusInactive // this tenant's view of the resource
 			return nil
@@ -240,6 +243,9 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 		}
 		return auditAct(ctx, as, actor, "scim.user.update", "core.user", id)
 	})
+	if err == nil && left {
+		a.recordSCIMLeaver(ctx, actor, tenant, id, scimDeactivateCause)
+	}
 	return out, err
 }
 
@@ -249,7 +255,9 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 // memberships it has left. An account that is not a member of tenant, read
 // inside the transaction, is a no-op. It is idempotent.
 func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal, tenant model.TenantID, id model.ID) error {
-	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+	var left bool
+	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		left = false
 		// Serialize the membership read before claiming any User authority.
 		// An absent resource (including a departed or unknown User) is a no-op:
 		// nothing is written, not even a retirement record.
@@ -263,9 +271,16 @@ func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal
 		}
 		// A member leaves by the scoped offboard, under the same lock: it declares
 		// the account's H before its first write.
-		_, err := a.scopedOffboard(ctx, as, actor, id, tenant, "scim.deprovision")
-		return err
+		if _, err := a.scopedOffboard(ctx, as, actor, id, tenant, scimDeprovisionCause); err != nil {
+			return err
+		}
+		left = true
+		return nil
 	})
+	if err == nil && left {
+		a.recordSCIMLeaver(ctx, actor, tenant, id, scimDeprovisionCause)
+	}
+	return err
 }
 
 // Compound callbacks declare their complete H set before their first G write

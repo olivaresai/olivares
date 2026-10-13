@@ -187,32 +187,23 @@ func (m *Module) configureGitRead(ctx, runCtx context.Context, tenant model.Tena
 
 // writeGitReadFile writes the credential in git's credential format, mode 0600.
 func writeGitReadFile(dir, token string) (string, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	file, err := os.CreateTemp(dir, "git-credential-*")
-	if err != nil {
-		return "", err
-	}
-	path := file.Name()
-	_, werr := file.WriteString("username=" + gitReadUsername + "\npassword=" + token + "\n")
-	if err := errors.Join(werr, file.Close()); err != nil {
-		_ = os.Remove(path)
-		return "", err
-	}
-	return path, nil
+	return writeRunFile(dir, "git-credential-*", "username="+gitReadUsername+"\npassword="+token+"\n")
 }
 
-// outputRedactor withholds the run's vault secret values and its repository
-// read token from the output the plane stores and streams: the token, and the
-// Basic authorization git sends with it (visible in git's curl traces).
+// outputRedactor withholds the run's vault secret values, its repository read
+// token and its package registry tokens from the output the plane stores and
+// streams: the read token, and the Basic authorization git sends with it
+// (visible in git's curl traces).
 func (p CreateRunParams) outputRedactor() *secretRedactor {
-	if p.gitReadToken == "" {
-		return newSecretRedactor(p.SecretEnv, p.secretEnvValues)
+	refs, values := slices.Clone(p.SecretEnv), slices.Clone(p.secretEnvValues)
+	if p.gitReadToken != "" {
+		basic := base64.StdEncoding.EncodeToString([]byte(gitReadUsername + ":" + p.gitReadToken))
+		refs = append(refs, SecretEnvRef{Env: gitReadRedactName, Secret: gitReadMark})
+		values = append(values, EnvVar{Name: gitReadRedactName, Value: p.gitReadToken}, EnvVar{Name: gitReadRedactName, Value: basic})
 	}
-	refs := append(slices.Clone(p.SecretEnv), SecretEnvRef{Env: gitReadRedactName, Secret: gitReadMark})
-	basic := base64.StdEncoding.EncodeToString([]byte(gitReadUsername + ":" + p.gitReadToken))
-	values := append(slices.Clone(p.secretEnvValues),
-		EnvVar{Name: gitReadRedactName, Value: p.gitReadToken}, EnvVar{Name: gitReadRedactName, Value: basic})
+	for _, token := range p.registryTokens {
+		refs = append(refs, SecretEnvRef{Env: token.Name, Secret: token.Name})
+		values = append(values, token)
+	}
 	return newSecretRedactor(refs, values)
 }

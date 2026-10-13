@@ -229,14 +229,7 @@ func catalogOptions(t *testing.T, opts skills.Options) catalogHarness {
 		t.Fatalf("login: %d %s", login.Code, login.Body.String())
 	}
 	h.token = session.Token
-	org := h.request("POST", "/v1/system/orgs", map[string]string{"name": "Engineering", "slug": "engineering"}, "")
-	var created struct {
-		Tenant model.TenantID `json:"tenant_id"`
-	}
-	if err := json.Unmarshal(org.Body.Bytes(), &created); err != nil || org.Code != http.StatusCreated || created.Tenant == "" {
-		t.Fatalf("organization: %d %s", org.Code, org.Body.String())
-	}
-	h.tenant = created.Tenant
+	h.tenant = h.seedOrg(t, "Engineering", "engineering")
 	return h
 }
 
@@ -442,15 +435,8 @@ func TestSkillsCatalogGitRetryReturnsRecordedResultWithoutRefetch(t *testing.T) 
 func TestSkillsCatalogTenantIsolationAndPublisherPermission(t *testing.T) {
 	h := catalog(t)
 	pack := h.install(t, "isolated", "fixture")
-	org := h.request("POST", "/v1/system/orgs", map[string]string{"name": "Other", "slug": "other"}, "")
-	var created struct {
-		Tenant model.TenantID `json:"tenant_id"`
-	}
-	if err := json.Unmarshal(org.Body.Bytes(), &created); err != nil || org.Code != http.StatusCreated {
-		t.Fatalf("other org: %d %s", org.Code, org.Body.String())
-	}
 	other := h
-	other.tenant = created.Tenant
+	other.tenant = h.seedOrg(t, "Other", "other")
 	hidden := other.request("GET", "/v1/m/skills/packs/"+pack.Pack.ID, nil, "")
 	if hidden.Code != http.StatusNotFound {
 		t.Fatalf("cross-tenant pack: %d %s", hidden.Code, hidden.Body.String())
@@ -476,4 +462,29 @@ func TestSkillsCatalogTenantIsolationAndPublisherPermission(t *testing.T) {
 	if published.Code != http.StatusForbidden {
 		t.Fatalf("viewer published: %d %s", published.Code, published.Body.String())
 	}
+	// A reader sees the catalog, not the text of a revision's files, and cannot make the
+	// engine read a source again.
+	if read := viewer.request("GET", "/v1/m/skills/packs/"+pack.Pack.ID, nil, ""); read.Code != http.StatusOK {
+		t.Fatalf("viewer read: %d %s", read.Code, read.Body.String())
+	}
+	if diff := viewer.request("GET", "/v1/m/skills/packs/"+pack.Pack.ID+"/diff", nil, ""); diff.Code != http.StatusForbidden && diff.Code != http.StatusNotFound {
+		t.Fatalf("viewer diff: %d %s", diff.Code, diff.Body.String())
+	}
+	if check := viewer.request("POST", "/v1/m/skills/packs/"+pack.Pack.ID+"/update", map[string]any{}, ""); check.Code != http.StatusForbidden && check.Code != http.StatusNotFound {
+		t.Fatalf("viewer update check: %d %s", check.Code, check.Body.String())
+	}
+}
+
+func (h catalogHarness) seedOrg(t *testing.T, name, slug string) model.TenantID {
+	t.Helper()
+	ctx := context.Background()
+	var org model.Org
+	if err := h.store.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: name, Slug: slug, Status: model.StatusActive})
+		return err
+	}); err != nil {
+		t.Fatalf("seed organization %s: %v", slug, err)
+	}
+	return org.TenantID
 }

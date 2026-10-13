@@ -124,24 +124,18 @@ describe('las claves de caché nombran al inquilino', () => {
   })
 
   /**
-   * ⛔ Y EL CONTROL POSITIVO DEL BARRIDO, que es lo que faltaba y lo descubrió un mutante: si el
-   * recorrido de ficheros devuelve la lista VACÍA —una raíz mal resuelta, un filtro que lo excluye
-   * todo, un `slice` de más—, la casilla de arriba sale VERDE sobre un árbol lleno de infracciones.
-   * Un vigía que no ha demostrado que MIRA no falla: certifica.
-   *
-   * Se ancla en un hecho real y estable del árbol: `finops-view.tsx` escribe una clave literal que
-   * SÍ lleva el inquilino. Tiene que estar entre los ficheros recorridos, el detector tiene que
-   * verla, y tiene que dejarla pasar. Si alguien la convierte a fábrica algún día, esta casilla se
-   * pone roja y se cambia el ancla — que es justo lo contrario de enterarse por un silencio.
+   * Positive sweep control: the Audit screen must be visited, its tenant-scoped literal
+   * must be present, and the detector must accept it. An empty or misdirected sweep cannot
+   * pass silently. If this read moves to a factory, update the anchor to another real read.
    */
   it('el barrido alcanza el árbol de verdad', () => {
     const fs = ficheros(RAIZ)
     expect(fs.length).toBeGreaterThan(300)
 
-    const ancla = fs.find((f) => f.endsWith('finops/finops-view.tsx'))
+    const ancla = fs.find((f) => f.endsWith('audit/audit-view.tsx'))
     expect(ancla).toBeDefined()
     const src = readFileSync(ancla as string, 'utf8')
-    expect(src).toContain("queryKey: ['finops', tenant, 'value', 'summary']")
+    expect(src).toContain("queryKey: ['audit', activeTenant, scope, 'head']")
     expect(clavesSinInquilino(src)).toEqual([])
   })
 

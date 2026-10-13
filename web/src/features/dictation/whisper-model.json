@@ -4,11 +4,13 @@
   "files": {
     "config.json": {
       "sha256": "46aeea0a406afbeb563fc8e59ca10609203df4299af6a83f73752fef369efd2d",
-      "size": 2243
+      "size": 2243,
+      "gzipSha256": "83a7eb9bad31c93a445d25edeaa03465948a4c8876a6ad01cda47a0522e19b3b"
     },
     "generation_config.json": {
       "sha256": "f5c67e5a4f7102f8cb4d058bc95da276bbc19eeec997267c3bb0f25ef68facd1",
-      "size": 3772
+      "size": 3772,
+      "gzipSha256": "5cebe9388c1db48071ccd2600aa04e793f0613a34a3d1b41120b22f772abcd7c"
     },
     "preprocessor_config.json": {
       "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
@@ -16,7 +18,8 @@
     },
     "tokenizer.json": {
       "sha256": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
-      "size": 2480466
+      "size": 2480466,
+      "gzipSha256": "67295789c17bd260efe3687b668ed24238aa603f2b872a20378ad9561b9fd225"
     },
     "tokenizer_config.json": {
       "sha256": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",

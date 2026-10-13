@@ -5,21 +5,9 @@
 # Reviewed 2026-10-03; reassess if another caller uses the vulnerable operation.
 # No fixed upstream versions exist. Unlisted blocking advisories still fail.
 allow:
-  - id: GHSA-86w9-cpqp-85rv
-    expires: 2026-11-02
-    reason: >-
-      Backstage's development server verifies only its newly generated local
-      certificate; it supplies no attacker key or signature to node-forge.
-      https://github.com/advisories/GHSA-86w9-cpqp-85rv
   - id: GHSA-ch52-4w7c-c8xp
     expires: 2026-11-02
     reason: >-
       Astro's static build never evaluates max-stale; Yarn publishing provenance
       is opt-in and supplies no cache path, so make-fetch-happen bypasses caching.
       https://github.com/advisories/GHSA-ch52-4w7c-c8xp
-  - id: GHSA-vfj7-8cjw-p6xm
-    expires: 2026-11-02
-    reason: >-
-      Backstage's development proxy uses picomatch's own parser for configured
-      patterns; incoming pathnames never reach braces' recursive AST walkers.
-      https://github.com/advisories/GHSA-vfj7-8cjw-p6xm

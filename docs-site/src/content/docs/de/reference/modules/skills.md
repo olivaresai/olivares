@@ -15,6 +15,21 @@ editiert. Was ein Ziel (ein Agent, eine Gruppe, ein Workspace) nutzen darf, ist 
 **Zuweisung**, die eine Pack-Revision pinnt, und jeder Pin wird ins Audit-Ledger
 geschrieben (`skills.assignment.pin`).
 
+
+**Bei neuen Installationen standardmäßig aktiviert** bleibt Skills optional und benötigt kein anderes Modul. Upgrades behalten die gespeicherte Modulauswahl bei. Unter **Skills** (`/skills`) können Sie integrierte Pakete installieren und optional einem Arbeitsbereich zuweisen oder **Aus Git** wählen. Die CLI verwendet denselben unveränderlichen, per Digest geprüften Import:
+
+```sh
+olivares skills ls --builtin
+olivares skills install --builtin ecc-security
+olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
+olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills update <pack-id>                       # read the recorded source again and review the diff
+olivares skills update <pack-id> --apply --expected-digest <digest>
+olivares skills pin <pack-id> [--revision <older-revision-id>]
+olivares skills enable tdd-workflow code-review --folder <folder-ref>
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
+```
+
 ## Was es liefert
 
 - **Der Katalog.** Installierte Packs unter `/v1/m/skills/packs`, jede unveränderliche
@@ -26,9 +41,7 @@ geschrieben (`skills.assignment.pin`).
   wie ein hochgeladenes Archiv validiert. Nichts davon läuft bei der Installation.
 - **Die Zuweisungen.** `GET/POST /v1/m/skills/assignments` und
   `PUT/DELETE /v1/m/skills/assignments/{id}` pinnen eine Revision an ein Ziel, im
-  Scope des aktiven Workspace. Zwei zugewiesene Skills mit gleichem Namen und
-  unterschiedlichem Inhalt werden vor Sitzungsstart verweigert, damit ein Launch
-  deterministisch ist.
+  Scope des aktiven Workspace. Zwei Ziele derselben Art, die unter einem Skill-Namen unterschiedlichen Inhalt pinnen, werden vor Sitzungsstart verweigert; ein engeres Ziel (Ordner, Vorlage, Agent, Sitzung) ersetzt den gleichnamigen Skill eines weiteren Ziels, sodass ein Projekt ein generisches Pack überschreibt, ohne es zu ändern.
 - **Git-Import.** Ein operator-scoped Importer kann ein Skill-Pack aus einer
   Git-Quelle unter einer gepinnten Policy holen; der Import landet als weitere
   immutable Revision im Katalog, nicht als Live-Checkout, den das Engine liest.

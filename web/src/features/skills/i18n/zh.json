@@ -10,7 +10,7 @@
     "retired": "已停用",
     "search": "搜索技能包",
     "emptyTitle": "尚未安装技能包",
-    "emptyDescription": "使用 olivares skills install 安装技能包后，它会出现在这里以供分配。",
+    "emptyDescription": "在上方选择内置技能包或从 Git 安装，然后打开技能包管理分配。",
     "truncated": "显示前 {{n}} 个技能包",
     "truncatedHint": "使用 olivares skills ls --cursor 列出其余技能包。"
   },
@@ -18,14 +18,16 @@
     "skills": "此技能包中的技能",
     "revisions": "修订",
     "revision": "修订 {{n}}",
-    "revisionLine": "修订 {{n}}，来源 {{source}}"
+    "revisionLine": "修订 {{n}}，来源 {{source}}",
+    "activeContent": "加载时即生效：{{items}}"
   },
   "kind": {
     "workspace": "部门",
     "agent_group": "智能体组",
     "agent": "智能体",
     "template": "模板",
-    "session": "会话"
+    "session": "会话",
+    "folder": "文件夹"
   },
   "uses": {
     "title": "已分配到",
@@ -36,7 +38,13 @@
     "confirmDescription": "{{target}} 的新会话将不再获得这些技能。已记录的对话保留其快照。",
     "truncated": "显示前 {{n}} 个分配",
     "truncatedHint": "使用 olivares skills assignments --pack 加 --cursor 列出其余分配。",
-    "unassignFrom": "取消分配给 {{target}}"
+    "unassignFrom": "取消分配给 {{target}}",
+    "useLatest": "使用最新版",
+    "useLatestFor": "使用最新版: {{target}}",
+    "moved": "分配已移至最新修订",
+    "approveTitle": "批准加载时即生效的技能？",
+    "approveDescription": "最新修订会为 {{target}} 分配其工具无需询问就会执行的技能：{{skills}}。请在审阅后再批准。",
+    "approve": "批准并使用最新版"
   },
   "assign": {
     "title": "分配",
@@ -47,6 +55,51 @@
     "noTargets": "没有你可读取的此类目标。",
     "submit": "分配",
     "done": "已分配技能包",
-    "directoryFailed": "无法加载目标。关闭并重新打开技能包以重试。"
+    "directoryFailed": "无法加载目标。关闭并重新打开技能包以重试。",
+    "approve": "我已审阅这些技能，并批准其工具在加载时对它们执行操作：{{skills}}"
+  },
+  "install": {
+    "title": "安装技能包",
+    "workspace": "工作区",
+    "workspaceHint": "仅安装到目录，或同时将该修订分配给工作区。",
+    "catalogOnly": "仅目录",
+    "assigned": "技能包已安装并分配",
+    "done": "技能包已安装",
+    "assignmentFailed": "技能包已安装，但工作区分配失败：{{reason}}",
+    "failed": "安装失败：{{reason}}",
+    "unavailable": "服务不可用",
+    "retryAssignment": "重试分配",
+    "retry": "重试安装",
+    "builtins": "内置技能包",
+    "loading": "正在加载内置技能包…",
+    "pack": "安装 {{name}}",
+    "inCatalog": "已在目录中",
+    "submit": "安装",
+    "git": "从 Git 安装",
+    "gitURL": "Git URL",
+    "ref": "Git 引用",
+    "subdir": "子目录",
+    "gitSubmit": "从 Git 安装",
+    "name": "技能包名称",
+    "nameHint": "可选，默认为仓库名称。从同一仓库安装其他技能包时请选择不同名称。",
+    "held": "技能包已安装。其中含有加载时即生效的技能，因此未自动分配：请审阅后在该技能包的面板中分配。"
+  },
+  "update": {
+    "title": "更新",
+    "check": "检查更新",
+    "checking": "正在检查…",
+    "current": "已是修订 {{n}} 的最新状态。",
+    "availableToast": "有可用更新",
+    "available": "在修订 {{n}} 之上有可用更新。",
+    "summary": "新增 {{added}}，更改 {{changed}}，删除 {{removed}}；{{files}} 个文件有差异。",
+    "change": {
+      "added": "新增",
+      "changed": "更改",
+      "removed": "删除"
+    },
+    "acts": "{{skill}} 现在会在加载时生效：{{items}}。分配它需要你的批准。",
+    "pinsKeep": "现有分配会保留其修订，直到你用“使用最新版”逐个移动。",
+    "apply": "应用此更新",
+    "applied": "更新已发布为修订 {{n}}"
   }
 }

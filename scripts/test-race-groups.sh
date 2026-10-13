@@ -33,6 +33,43 @@ stage; run check
 if [ "$(rc)" = 0 ] && grep -q 'CLEAN' "${TMP}/out"; then ok "the live partition covers the entire workspace"
 else bad "the live partition should be CLEAN (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
+# The public workflow reads the same spec, but runs on the export's file set.
+# Use the curator's manifest, never a second list of private modules.
+# export-closure: hub-only scripts/export-public.sh — the curator exists only in the development tree
+if [ -f "${ROOT}/scripts/export-public.sh" ]; then
+  bash "${ROOT}/scripts/export-public.sh" --manifest > "${TMP}/manifest"
+  python3 - "${ROOT}" "${TMP}/public" "${TMP}/manifest" <<'PY'
+import json, shutil, subprocess, sys
+from pathlib import Path
+
+root, public, manifest = map(Path, sys.argv[1:])
+for name in manifest.read_text().splitlines():
+    target = public / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(root / name, target)
+# Like the export, retain only workspace members present in its file set.
+# Let Go parse and edit its own format.
+work = json.loads(subprocess.check_output(['go', 'work', 'edit', '-json'], cwd=public))
+drop = ['-dropuse=' + item['DiskPath'] for item in work['Use']
+        if not (public / item['DiskPath']).is_dir()]
+if drop:
+    subprocess.run(['go', 'work', 'edit', *drop], cwd=public, check=True)
+PY
+  public_rc=0
+  OLIVARES_RACE_GROUPS="${TMP}/public/scripts/race-groups.json" \
+    bash "${TMP}/public/scripts/race-groups.sh" check \
+    > "${TMP}/public-out" 2> "${TMP}/public-err" || public_rc=$?
+  if [ "${public_rc}" = 0 ] && grep -q 'CLEAN' "${TMP}/public-out"; then
+    ok "the public export partition covers the curator's complete file set"
+  else
+    bad "public export partition (rc=${public_rc}: $(head -1 "${TMP}/public-err"))"
+  fi
+elif [ -f "${ROOT}/.olivares-public-export" ]; then
+  echo "SKIP export comparison: curation tooling is absent from the public tree"
+else
+  bad "cannot compare the public partition: source curation tooling is missing"
+fi
+
 # (b) ⛔ EL CASO QUE PIDE EL ENCARGO: un paquete fuera de todos los grupos es rojo.
 #     Se retira el grupo de connectors entero — 178 paquetes quedan sin dueño.
 stage
@@ -342,6 +379,13 @@ run split
 if [ "$(rc)" = 0 ] && ! grep -q '^github.com/olivaresai/olivares/core/auth$' "${TMP}/out"; then
   ok "mutant (core-hot without shards) leaves core/auth out of split"
 else bad "split ignores a group's shards (rc=$(rc))"; fi
+
+# (pr-ci) The union check must run on the pull request that adds a test. It ran only after the
+#     merge until 2026-10-13, so tests added by two pull requests reached main in no shard and
+#     the next public race-full failed. Removing the step has to turn this bench red.
+if grep -qE '^[[:space:]]+run: task lint:race-groups$' "${ROOT}/.github/workflows/pr-ci.yml"; then
+  ok "pr-ci runs the race-groups union check on every pull request"
+else bad "pr-ci does not run task lint:race-groups: a new test could reach main in no race shard"; fi
 
 echo "race-groups selftest: ${pass} passed, ${fail} failed"
 [ "${fail}" -eq 0 ]

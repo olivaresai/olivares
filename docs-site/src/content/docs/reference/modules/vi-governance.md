@@ -6,6 +6,10 @@ description: >-
   approval gate with an append-only decision trail. The root of governed actuation.
 ---
 
+:::note[Edition]
+Directory roster sources (LDAP, Okta/Entra and agent/workload IdPs) and managed identity lifecycle require the Business/Enterprise add-ons. Community keeps generic source ingestion, the resource catalog, security findings, the access map, the identity inventory, single-IdP SSO, inbound SCIM users/groups, local roles and bindings, policies and approvals. Community hides the paid console panels and CLI commands; their published API routes return HTTP `501`. Selecting a module does not add its Business implementation.
+:::
+
 Module VI is the **governance plane over the engine's existing authorization model** —
 it does **not** re-implement the enforcer or the identity connectors, it consumes them.
 It binds five subsystems behind one bounded context (identity and its governance): a

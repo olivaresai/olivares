@@ -105,6 +105,23 @@ put "$d" 0006_dodo_fulfillment.sql "$FRAGMENTS_A"
 put "$d" 0013_dodo_cohort_barrier.sql "$FRAGMENTS_B"
 run "$d" 1 "RENUMBERING does not fix it: the table is still created twice"
 
+# A later file that DROPs and re-CREATEs the table is the SQLite rebuild of one definition, not a
+# second one. Re-creating it WITHOUT the drop is still the collision above.
+d=$(mkdir_d)
+put "$d" 0001_ops.sql 'CREATE TABLE ops (id TEXT PRIMARY KEY, kind TEXT CHECK (kind IN ('"'"'a'"'"')));'
+put "$d" 0002_ops_widen.sql 'CREATE TABLE ops_rows AS SELECT * FROM ops; DROP TABLE ops; CREATE TABLE ops (id TEXT PRIMARY KEY, kind TEXT CHECK (kind IN ('"'"'a'"'"', '"'"'b'"'"'))); INSERT INTO ops SELECT * FROM ops_rows; DROP TABLE ops_rows;'
+run "$d" 0 "a DROP then CREATE rebuild of one table is not a second definition"
+d=$(mkdir_d)
+put "$d" 0001_ops.sql 'CREATE TABLE ops (id TEXT PRIMARY KEY);'
+put "$d" 0002_ops_again.sql 'CREATE TABLE ops (id TEXT PRIMARY KEY, extra TEXT); DROP TABLE ops;'
+run "$d" 1 "a CREATE before the DROP is still a second definition"
+d=$(mkdir_d)
+put "$d" 0001_ops.sql 'CREATE TABLE ops (id TEXT PRIMARY KEY);'
+put "$d" 0002_ops_again.sql '-- DROP TABLE ops was considered
+/* DROP TABLE ops; */
+CREATE TABLE ops (id TEXT PRIMARY KEY, extra TEXT);'
+run "$d" 1 "a DROP that is only in a comment does not make a second CREATE a rebuild"
+
 # The prefix clash alone, with no shared object, is still worth a finding: readdir order is
 # unspecified, so which one runs first is not decided by anything a human wrote.
 d=$(mkdir_d)

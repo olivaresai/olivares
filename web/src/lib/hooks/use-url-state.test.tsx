@@ -187,6 +187,63 @@ describe('useUrlState external URL changes', () => {
     act(() => result.current[1]({ q: 'x' }))
     expect(navigateMock).toHaveBeenCalledTimes(1)
   })
+
+  it('writes the URL once when one gesture patches the same value twice', () => {
+    // Radix Tabs 1.1.22 focuses the trigger inside its mousedown handler, so its focus
+    // handler selects the still-unselected tab and the mousedown handler selects it
+    // again: the owner's setter runs twice with the same value before any re-render.
+    // The second navigate is a redundant router load, never a second user intent.
+    const { result } = renderHook(() => useUrlState(['q']))
+    act(() => {
+      result.current[1]({ q: 'deny' })
+      result.current[1]({ q: 'deny' })
+    })
+    expect(result.current[0]).toEqual({ q: 'deny' })
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('writes a place once on a push call site, with push semantics', () => {
+    const { result } = renderHook(() =>
+      useUrlState(['session'], { history: 'push' }),
+    )
+    act(() => {
+      result.current[1]({ session: 'live:abc' })
+      result.current[1]({ session: 'live:abc' })
+    })
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    expect(navigateMock.mock.calls[0][0].replace).toBe(false)
+  })
+
+  it('does not write a value the URL already holds', () => {
+    // Re-selecting the selected tab: Radix calls onValueChange on mousedown even when
+    // the tab is already selected. The URL says it already; there is nothing to write.
+    seedLocation('/audit?q=deny')
+    const { result } = renderHook(() => useUrlState(['q']))
+    act(() => result.current[1]({ q: 'deny' }))
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('does not write a patch that names no owned key', () => {
+    // Pins the other half of the same guard: `{}` or foreign keys change no owned
+    // state, so they no longer send the router an empty search patch.
+    const { result } = renderHook(() => useUrlState(['q']))
+    act(() => result.current[1]({ tab: 'x' } as never))
+    act(() => result.current[1]({}))
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('still writes a value the URL no longer holds after an outside navigation', () => {
+    // Non-firing direction of the case above: skipping a repeat must be judged against
+    // what the URL holds NOW, not against the last thing this hook wrote.
+    const { result } = renderHook(() => useUrlState(['q']))
+    act(() => result.current[1]({ q: 'deny' }))
+    act(() => setSearchStr('?q=other'))
+    act(() => result.current[1]({ q: 'deny' }))
+    expect(navigateMock).toHaveBeenCalledTimes(2)
+    expect(
+      applyNavigate(navigateMock.mock.calls[1][0], { q: 'other' }),
+    ).toEqual({ q: 'deny' })
+  })
 })
 
 describe('useValidatedUrlState', () => {

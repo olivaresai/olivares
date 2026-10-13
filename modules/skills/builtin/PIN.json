@@ -31,6 +31,15 @@
       "exclude": {
         "skills/engineering/pr": "metadata holds a mapping; the importer's portable-v1 validator accepts string values only"
       }
+    },
+    "olivares": {
+      "repository": "https://github.com/olivaresai/olivares",
+      "commit": "bundled-wiki-v1",
+      "license": "AGPL-3.0-only",
+      "license_file": "LICENSE",
+      "select": {
+        "olivares-wiki": "modules/skills/builtin"
+      }
     }
   },
   "packs": [
@@ -263,6 +272,16 @@
       "tar_sha256": "fb61639959e6440d4d7334eee3f5a5356907598c90b2fbf61ea5723cb5252c0b",
       "skills": 7,
       "files": 21
+    },
+    {
+      "id": "olivares-wiki",
+      "source": "olivares",
+      "description": "Workspace wiki: ingest, query, and lint.",
+      "file": "olivares-wiki.tar.gz",
+      "sha256": "a767a72ba04baf9a693be26b444f75173031d47a58fab0dd64f79f68adc721dd",
+      "tar_sha256": "37ef510f1ca4cdf0fa8dc885a173a5b978c75bbc391fcd2dcf52007a25d13e7c",
+      "skills": 1,
+      "files": 3
     }
   ],
   "data": [

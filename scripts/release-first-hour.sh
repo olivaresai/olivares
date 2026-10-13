@@ -44,12 +44,17 @@ unset OLIVARES_IMAGE COMPOSE_FILE COMPOSE_PROFILES
 image=docker.io/olivaresai/olivares:$version
 latest=docker.io/olivaresai/olivares:latest
 owned_tags=()
+browser=$project-browser
+browser_created=false
 declare -A previous=()
 compose=(docker compose -p "$project" -f deploy/compose/docker-compose.yml
   -f deploy/compose/docker-compose.first-hour.ci.yml)
 cleanup() {
   local rc=$?
   trap - EXIT
+  if [[ $browser_created == true ]]; then
+    docker rm --force "$browser" >/dev/null || rc=1
+  fi
   # Capture the entire engine lifetime before down, including failures after
   # startup. Raw logs and browser credentials never enter the upload directory.
   if ! "${compose[@]}" logs --no-color --timestamps olivares > "$work/engine.log" 2>&1; then
@@ -194,5 +199,30 @@ services:
 YAML
 compose+=(-f "$work/provider.yml")
 "${compose[@]}" up -d provider-stub
-# The browser must not inherit the daemon-lock descriptor: an orphan would keep the next run out.
-pnpm --dir web exec playwright test --config playwright.release.config.ts first-hour.spec.ts --workers=1 9>&-
+# Chromium must not see link/address changes from neighboring jobs on the runner host.
+# Share only the engine's network namespace; the locked harness and its evidence stay
+# separate from the engine's filesystem. The image supplies Chromium and its libraries.
+browser_image=mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+harness_version=$(node -p 'require("./web/node_modules/@playwright/test/package.json").version')
+[[ $browser_image == "mcr.microsoft.com/playwright:v$harness_version-noble@"* ]] || {
+  echo 'FAIL: Playwright image version differs from the locked harness' >&2
+  exit 1
+}
+docker create --name "$browser" --network "container:$cid" --init \
+  --user "$(id -u):$(id -g)" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --shm-size 256m \
+  --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+  --volume "$root/web:/harness:ro" --workdir /harness \
+  --volume "$work:/run/first-hour" --volume "$FIRST_HOUR_ARTIFACTS:/artifacts" \
+  --env HOME=/tmp --env PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+  --env PLAYWRIGHT_BASE_URL=https://127.0.0.1:8443 \
+  --env PLAYWRIGHT_SETUP_TOKEN_FILE=/run/first-hour/setup-token \
+  --env "PLAYWRIGHT_RELEASE_VERSION=$version" \
+  --env FIRST_HOUR_SECRETS_FILE=/run/first-hour/browser-secrets.json \
+  --env FIRST_HOUR_ARTIFACTS=/artifacts \
+  "$browser_image" node node_modules/@playwright/test/cli.js test \
+  --config playwright.release.config.ts first-hour.spec.ts --workers=1 >/dev/null
+browser_created=true
+# Preserve the browser's exit code; cleanup also stops it after an interrupted attach.
+# The browser must not inherit the daemon-lock descriptor.
+docker start --attach "$browser" 9>&-

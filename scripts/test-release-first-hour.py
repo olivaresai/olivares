@@ -47,7 +47,28 @@ elif name == 'pnpm':
     pathlib.Path(os.environ['RUNNER_TEMP'], 'base-url').write_text(os.environ['PLAYWRIGHT_BASE_URL'])
     if case == 'browser': sys.exit(7)
 elif name == 'docker':
-    if args[0] == 'build':
+    if args[0] == 'create':
+        assert args[args.index('--name') + 1] == 'first-hour-123-1-browser'
+        assert args[args.index('--network') + 1] == 'container:container'
+        assert '--privileged' not in args and '--ipc=host' not in args
+    elif args[0] == 'start':
+        assert args == ['start', '--attach', 'first-hour-123-1-browser']
+        creates = [json.loads(line) for line in pathlib.Path(os.environ['RUNNER_TEMP'], 'calls.jsonl').read_text().splitlines()
+                   if json.loads(line)[:2] == ['docker', 'create']]
+        envs = dict(arg.split('=', 1) for i, arg in enumerate(creates[0]) if i and creates[0][i-1] == '--env')
+        pathlib.Path(os.environ['RUNNER_TEMP'], 'browser-ran').touch()
+        pathlib.Path(os.environ['RUNNER_TEMP'], 'base-url').write_text(envs['PLAYWRIGHT_BASE_URL'])
+        assert envs['PLAYWRIGHT_SETUP_TOKEN_FILE'] == '/run/first-hour/setup-token'
+        assert envs['FIRST_HOUR_SECRETS_FILE'] == '/run/first-hour/browser-secrets.json'
+        assert envs['FIRST_HOUR_ARTIFACTS'] == '/artifacts'
+        if case == 'browser': sys.exit(7)
+        if case == 'browser-interrupted':
+            import signal
+            os.kill(os.getppid(), signal.SIGTERM)
+            sys.exit(143)
+    elif args[0] == 'rm' and case == 'browser-rm':
+        sys.exit('browser cleanup failed')
+    elif args[0] == 'build':
         assert pathlib.Path(args[-1], 'olivares').read_bytes() == binary
         assert pathlib.Path(args[-1], '.license-notices/NOTICE-community').read_text() == 'generated notice'
     elif args[0] == 'pull' and case == 'pull':
@@ -127,6 +148,9 @@ class ReleaseFirstHourTest(unittest.TestCase):
             shutil.copy(ROOT / name, root / name)
         for name in ['LICENSES', 'packaging/container']:
             shutil.copytree(ROOT / name, root / name)
+        package = root / 'web/node_modules/@playwright/test/package.json'
+        package.parent.mkdir(parents=True)
+        package.write_text(json.dumps({'version': '1.62.0' if case == 'browser-version' else '1.63.0'}))
         (root / 'RELEASE-VERSION').write_text(candidate + '\n')
         bindir = root / 'bin'
         bindir.mkdir()
@@ -160,7 +184,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
                                     env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
             self.assertIn(message, result.stderr)
-            self.assertEqual((root / 'browser-ran').exists(), expected == 0 or case in ['browser', 'logs', 'rm-busy'])
+            self.assertEqual((root / 'browser-ran').exists(), expected == 0 or case in ['browser', 'logs', 'rm-busy', 'browser-rm', 'browser-interrupted'])
             self.assertEqual(list(root.glob('first-hour.*')), [])
             artifacts = root / 'first-hour-artifacts-candidate'
             if case != 'logs' and not case.startswith('releases-'):
@@ -170,7 +194,7 @@ class ReleaseFirstHourTest(unittest.TestCase):
                 self.assertNotIn('test-only-bearer', log)
                 if (root / 'browser-ran').exists():
                     self.assertIn('late engine warning: provider request stalled', log)
-            if expected and case not in ['copy', 'detect', 'browser', 'logs', 'setup-banner', 'pull', 'port-public', 'dirty', 'rm-busy', 'config-public', 'bind-all'] and not case.startswith('releases-'):
+            if expected and case not in ['copy', 'detect', 'browser', 'logs', 'setup-banner', 'pull', 'port-public', 'dirty', 'rm-busy', 'config-public', 'bind-all', 'browser-version', 'browser-rm', 'browser-interrupted'] and not case.startswith('releases-'):
                 self.assertIn('O1 J1-release-container: FAIL', result.stdout)
                 self.assertIn('O7 J7-release-container: FAIL', result.stdout)
             image = 'docker.io/olivaresai/olivares:'
@@ -186,6 +210,12 @@ class ReleaseFirstHourTest(unittest.TestCase):
             downs = [i for i, call in enumerate(calls) if call[:2] == ['docker', 'compose'] and 'down' in call]
             if removals:
                 self.assertTrue(downs and max(downs) < removals[0])
+            if (root / 'browser-ran').exists():
+                browser_rm = calls.index(['docker', 'rm', '--force', 'first-hour-123-1-browser'])
+                log_capture = next(i for i, call in enumerate(calls)
+                                   if 'logs' in call and '--timestamps' in call)
+                self.assertLess(browser_rm, log_capture, 'stop Chromium before reading its secrets')
+                self.assertLess(browser_rm, min(downs), 'stop Chromium before the engine namespace')
             if not expected:
                 # Every Compose call layers the run-private names and ports over the README file.
                 layers = '-f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.first-hour.ci.yml'
@@ -193,8 +223,8 @@ class ReleaseFirstHourTest(unittest.TestCase):
                 self.assertTrue(compose_calls)
                 for call in compose_calls:
                     self.assertIn(layers, ' '.join(call))
-                # The journey reaches the console on the port Compose reported, never a fixed one.
-                self.assertEqual((root / 'base-url').read_text(), 'https://127.0.0.1:49153')
+                # Host publication remains checked, while Chromium uses the engine's loopback.
+                self.assertEqual((root / 'base-url').read_text(), 'https://127.0.0.1:8443')
                 self.assertTrue(any(call[-3:] == ['port', 'olivares', '8443'] for call in compose_calls))
                 if case == 'foreign-tags':
                     # A tag another workload owned goes back to its image, after the removal.
@@ -214,6 +244,34 @@ class ReleaseFirstHourTest(unittest.TestCase):
 
     def test_runs_on_a_shared_self_hosted_daemon(self) -> None:
         self.run_case('', 0, RUNNER_ENVIRONMENT='self-hosted')
+
+    def test_browser_shares_the_engine_network_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, env = self.prepare(tmp, '')
+            result = subprocess.run(['bash', str(root / 'scripts/release-first-hour.sh')],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
+            browsers = [call for call in calls if call[:2] == ['docker', 'create']]
+            self.assertEqual(len(browsers), 1, 'Chromium must run outside the runner host network')
+            browser = browsers[0]
+            self.assertEqual(browser[browser.index('--network') + 1], 'container:container')
+            self.assertIn('--read-only', browser)
+            self.assertEqual(browser[browser.index('--cap-drop') + 1], 'ALL')
+            self.assertEqual((root / 'base-url').read_text(), 'https://127.0.0.1:8443')
+            self.assertFalse(any(call[0] == 'pnpm' for call in calls), 'no host browser fallback')
+            self.assertIn('--workers=1', browser)
+            self.assertEqual(len([call for call in calls if call[:2] == ['docker', 'start']]), 1)
+            self.assertIn(['docker', 'rm', '--force', 'first-hour-123-1-browser'], calls)
+
+    def test_browser_image_must_match_the_locked_harness(self) -> None:
+        self.run_case('browser-version', 1, message='Playwright image version differs')
+
+    def test_browser_cleanup_failure_fails_qualification(self) -> None:
+        self.run_case('browser-rm', 1, message='browser cleanup failed')
+
+    def test_interrupted_attach_stops_browser_before_sanitizing_logs(self) -> None:
+        self.run_case('browser-interrupted', 143)
 
     def test_refuses_outside_github_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

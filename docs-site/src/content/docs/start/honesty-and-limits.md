@@ -43,7 +43,7 @@ cover something, the page says so rather than implying it does.
   in several SIEM formats.
 - **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
   [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
-  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.1<!-- /release -->**, not yet published.
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.2<!-- /release -->**, not yet published.
 
 ## Open core — what is open vs commercial
 

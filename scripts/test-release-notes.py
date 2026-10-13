@@ -59,6 +59,43 @@ class ReleaseNotes(unittest.TestCase):
                                                  env=dict(os.environ, RUNNER_TEMP=tmp, RELEASE_TAG='99.100'))
                         self.assertNotEqual(missing.returncode, 0)
 
+    def test_pr_lint_refuses_a_release_version_without_its_dated_section_first(self) -> None:
+        source = (ROOT / '.github/workflows/pr-ci.yml').read_text()
+        step = re.search(r'      - name: the release version has its dated CHANGELOG section\n'
+                         r'        run: (.+)\n', source)
+        self.assertIsNotNone(step, 'pr-lint does not check RELEASE-VERSION against CHANGELOG.md')
+        self.assertLess(step.start(), source.index('      - name: DCO required and attribution'),
+                        'the release check must run before the other pr-lint steps')
+        block = source[step.start():].split('\n      - ', 1)[0]
+        self.assertEqual(block.count('\n'), 1, 'a key after name and run can stop the step failing the job')
+        with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
+            work = Path(tmp) / 'checkout'
+            (work / 'scripts').mkdir(parents=True)
+            (work / 'scripts/render-release-notes.py').write_bytes(
+                (ROOT / 'scripts/render-release-notes.py').read_bytes())
+            published = '## [Unreleased]\n\nNot shipped.\n\n## [0.1] - 2026-10-10\n\nPublished.\n'
+            cut = '## [Unreleased]\n\n## [0.2] - 2026-10-13\n\nCut.\n\n## [0.1] - 2026-10-10\n\nPublished.\n'
+            next_cut = '## [Unreleased]\n\n## [0.3] - 2026-10-20\n\nCut.\n\n' + cut.split('\n\n', 1)[1]
+            # The step must follow RELEASE-VERSION: 0.3 over the 0.2 cut is as red as 0.2 over 0.1.
+            for version, changelog, ok in (('0.2', published, False), ('0.2', cut, True),
+                                           ('0.3', cut, False), ('0.3', next_cut, True)):
+                (work / 'RELEASE-VERSION').write_text('# Next release\n' + version + '\n')
+                (work / 'CHANGELOG.md').write_text(changelog)
+                result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', step[1]], cwd=work,
+                                        capture_output=True, text=True)
+                with self.subTest(version=version, cut=ok):
+                    self.assertEqual(result.returncode == 0, ok, result.stderr)
+                    if not ok:
+                        self.assertIn('release notes:', result.stderr)
+
+    def test_the_checked_in_release_version_has_its_dated_section(self) -> None:
+        tag = next(line for line in (ROOT / 'RELEASE-VERSION').read_text().splitlines()
+                   if line and not line.startswith('#'))
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/render-release-notes.py'), tag],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.startswith('## [' + tag + '] - '))
+
     def render(self, source: str, tag: str = '26.1001', *args: str) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR')) as tmp:
             changelog = Path(tmp) / 'CHANGELOG.md'
@@ -97,6 +134,7 @@ class ReleaseNotes(unittest.TestCase):
             ('## [26.1001]\n\nA\n', '26.1001'),
             ('## [26.1001] - 2026-02-30\n\nA\n', '26.1001'),
             ('## [26.1001] - 2026-10-04\n\n', '26.1001'),
+            ('## [v26.1001] - 2026-10-04\n\nA\n', '26.1001'),
         ]
         for source, tag in cases:
             with self.subTest(source=source, tag=tag):

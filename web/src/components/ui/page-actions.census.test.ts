@@ -24,6 +24,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { NO_VERB_EXTENSIONS } from '@/features/extensions'
 
 const SRC = resolve(__dirname, '../..')
 
@@ -33,6 +34,7 @@ const SRC = resolve(__dirname, '../..')
  * the report's decision table, in the tree, where it cannot drift from the code.
  */
 const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
+  ...NO_VERB_EXTENSIONS,
   {
     dir: 'features/access-map',
     why: 'a computed reachability graph; the engine offers no create',

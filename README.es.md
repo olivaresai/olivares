@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
+[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -22,8 +22,29 @@ Tus desarrolladores trabajan con Claude Code y Codex. Los agentes llaman a servi
 Olivares AI reúne las respuestas en un solo lugar. Se conecta a los agentes y herramientas que ya usas, muestra qué hace cada uno, aplica tus reglas antes de ejecutar una acción y mantiene un registro firmado de todo. Es un único programa que se ejecuta en tus propios servidores, y el producto completo es gratuito y de código abierto.
 
 <div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
-<br><sub><b>El mapa de acceso</b> — lo que cada agente lee y escribe, y la escritura que nadie autorizó.</sub>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
+  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="La pantalla Cockpit de la consola de Olivares AI">
+</picture>
+<br><sub><b>Cockpit</b> — qué hace ahora cada agente, las aprobaciones que te esperan y los límites de uso de cada cuenta.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
+  <img src=".github/assets/console-session-light.webp" width="840" alt="La pantalla Sesión de la consola de Olivares AI">
+</picture>
+<br><sub><b>Sesión</b> — la conversación junto a su plan, agentes, tareas en segundo plano, archivos cambiados y límites de uso.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
+  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="La pantalla Sesiones en paralelo de la consola de Olivares AI">
+</picture>
+<br><sub><b>Sesiones en paralelo</b> — seis agentes trabajando a la vez, cada uno en su propia rama, con su última salida, su coste y su límite de uso.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
+  <img src=".github/assets/console-access-map-light.webp" width="840" alt="La pantalla Mapa de acceso de la consola de Olivares AI">
+</picture>
+<br><sub><b>Mapa de acceso</b> — qué lee y escribe cada agente, comparado con lo que se le concedió.</sub>
 </div>
 
 ## Qué hace
@@ -56,7 +77,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.1 \
+  docker.io/olivaresai/olivares:0.2 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->

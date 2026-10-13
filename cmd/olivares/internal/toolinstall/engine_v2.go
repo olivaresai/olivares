@@ -23,7 +23,7 @@ func (e *Engine) PlanV2(ctx context.Context, req RequestV2) (*PlanV2, error) {
 	if err := validateRequestV2(req); err != nil {
 		return nil, err
 	}
-	p, err := e.v2Provider(req.Driver)
+	p, err := e.requestV2Provider(req)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	if err := validateRequestV2(req); err != nil {
 		return nil, nil, err
 	}
-	p, err := e.v2Provider(req.Driver)
+	p, err := e.requestV2Provider(req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,6 +59,14 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	fmt.Fprintf(progress, "selected %s %s %s verification %s\n", plan.Selection.Driver, plan.Selection.Version, plan.Selection.VendorPlatform, plan.Selection.Verification.Kind)
 	if approved != nil && approved.Digest != plan.Digest {
 		return nil, plan, refuse(KindPlanChanged, "the approved plan (digest %s) no longer matches what resolves (digest %s); the selection changed, so a new plan must be reviewed", short(approved.Digest), short(plan.Digest))
+	}
+	if declared, ok := p.(*declaredProvider); ok {
+		if approved == nil {
+			return nil, plan, refuse(KindInvalidRequest, "an approved plan is required for a declared tool")
+		}
+		if err := declared.prepare(ctx, plan); err != nil {
+			return nil, plan, err
+		}
 	}
 	root, err := openRoot(req.DestRoot, true)
 	if err != nil {
@@ -167,7 +175,7 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	if err := p.VerifyPayload(ctx, access, inv, policy); err != nil {
 		return nil, plan, err
 	}
-	if releaseArchiveLayoutID(plan.Selection.Layout.ID) {
+	if releaseArchiveLayoutID(plan.Selection.Layout.ID) || plan.Selection.Tool != nil {
 		if err := applyReleaseArchiveModes(root, staging, inv); err != nil {
 			return nil, plan, err
 		}
@@ -193,6 +201,7 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	}
 	rec := &ReceiptV2{
 		Schema:           ReceiptSchemaV2,
+		Tool:             plan.Selection.Tool,
 		Driver:           plan.Selection.Driver,
 		Version:          plan.Selection.Version,
 		VendorPlatform:   plan.Selection.VendorPlatform,
@@ -263,6 +272,11 @@ func (e *Engine) revalidateV2(ctx context.Context, root *os.Root, p PackageProvi
 			return nil, refuse(KindDamaged, "archive receipt differs from the approved official checksum")
 		}
 		if err := verifyReleaseArchiveReceipt(ctx, root, relRelease, rec); err != nil {
+			return nil, err
+		}
+	}
+	if rec.VerificationKind == VerificationCatalogSHA256 {
+		if err := verifyDeclaredReceipt(ctx, root, relRelease, rec); err != nil {
 			return nil, err
 		}
 	}

@@ -36,4 +36,7 @@
 // — as the "where secrets live" half of the unified inventory; the keys/secrets are
 // resources on the edges. It imports only the SDK, the Apache identitysource helper
 // and the standard library — never the engine (/core).
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package gcpkms

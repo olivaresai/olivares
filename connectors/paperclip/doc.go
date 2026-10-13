@@ -51,4 +51,7 @@
 // The connector imports only the SDK, connectors/identitysource and
 // connectors/internal, never the engine (/core). Paperclip code is not copied: the
 // API shapes are read from its public routes.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package paperclip

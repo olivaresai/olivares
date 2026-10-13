@@ -178,6 +178,46 @@ check "it runs the boundary check, vets the package and then the identity leg" "
 	"task lint:boundary,go vet ./core,task lint:commit-identity"
 check "a failing boundary check refuses the push" "$(PRE_PUSH_TEST_TASK_RC=1 push origin "$gochange" "$zero")" 1
 
+# Migration history is immutable against the merge base with main (#1909). The gate is the
+# pushed tree's own script, and it picks that baseline itself: the hook sets none, because the
+# newest commit the remote holds may be this branch's own earlier push of a migration that is
+# still editable. Here a stub records the base it is handed and answers PRE_PUSH_TEST_MIG_RC.
+git switch -qc migrationsStub "$base"
+printf '#!/bin/sh\n# SPDX-FileCopyrightText: 2026 Olivares.AI\n# SPDX-License-Identifier: AGPL-3.0-only\n' >scripts/check-migrations.sh
+printf 'printf "migrations base=%%s\\n" "$OLIVARES_MIGRATION_BASE" >>"$PRE_PUSH_TEST_CALLS"\n' >>scripts/check-migrations.sh
+printf 'exit "${PRE_PUSH_TEST_MIG_RC:-0}"\n' >>scripts/check-migrations.sh
+stub="$(commit stub)"
+check "a push without Go or migration changes does not run the migration gate" \
+	"$(push origin "$stub" "$zero")/$(calls)" "0/task lint:commit-identity"
+printf "${gohdr}package core\n\nvar B = A() + 4\n" >core/b.go
+migrations="$(commit migrations)"
+check "a Go change runs the gate and leaves its baseline to it" \
+	"$(push origin "$migrations" "$zero")/$(calls)" \
+	"0/task lint:boundary,migrations base=,go vet ./core,task lint:commit-identity"
+check "a red migration verdict refuses the push" "$(PRE_PUSH_TEST_MIG_RC=1 push origin "$migrations" "$zero")" 1
+# modules/*/migrations/<dialect>/NNNN_*.sql is the layout of nearly every migration. This push
+# carries no Go change, so the gate is the only leg that can run.
+git switch -qc migrationsSql "$stub"
+mkdir -p modules/x/migrations/sqlite
+printf -- '-- SPDX-FileCopyrightText: 2026 Olivares.AI\n-- SPDX-License-Identifier: AGPL-3.0-only\nCREATE TABLE x (id TEXT);\n' \
+	>modules/x/migrations/sqlite/0001_x.sql
+sql="$(commit sql)"
+check "a migration file alone runs the gate" "$(push origin "$sql" "$zero")/$(calls)" \
+	"0/migrations base=,task lint:commit-identity"
+# A tree without the gate says so; silence would read as a pass.
+check "a Go change in a tree without the gate is reported, not graded" \
+	"$(push origin "$gochange" "$zero")/$(grep -c 'migration hashes NOT CHECKED' "$WORK/out")" "0/1"
+
+# A change to the release export, its scrubber or its exporter runs the offline export tests.
+git switch -qc exportChange "$base"
+mkdir -p scripts/release
+good scripts/release/export-release.sh
+exportchange="$(commit export)"
+check "a release export change passes" "$(push origin "$exportchange" "$zero")" 0
+check "it runs the export tests and then the identity leg" "$(calls)" \
+	"task lint:export-release,task lint:commit-identity"
+check "a failing export test refuses the push" "$(PRE_PUSH_TEST_TASK_RC=1 push origin "$exportchange" "$zero")" 1
+
 # A deletion alone can break what used the deleted code.
 git switch -qc deleteOnly "$base"
 git rm -q core/a.go

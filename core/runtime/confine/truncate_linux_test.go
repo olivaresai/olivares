@@ -194,7 +194,7 @@ func TestReadOnlyABITruncateProcess(t *testing.T) {
 func execWithoutTruncate(p Policy, argv []string) error {
 	runtime.LockOSThread()
 	acc := accessFor(3)
-	attr := unix.LandlockRulesetAttr{Access_fs: acc.handled}
+	attr := unix.LandlockRulesetAttr{Handled_access_fs: acc.handled}
 	fd, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0)
 	if errno != 0 {
 		return errno

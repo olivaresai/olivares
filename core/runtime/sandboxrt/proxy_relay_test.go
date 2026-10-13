@@ -10,9 +10,36 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestProxySocketFixturesWithLongTMPDIR(t *testing.T) {
+	base := filepath.Join(t.TempDir(), strings.Repeat("long", 30))
+	if err := os.Mkdir(base, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", base)
+	t.Run("authorized-target", TestGVisorProxySocketReachesOnlyAuthorizedTargetWithoutNIC)
+	t.Run("active-connections", TestProxyRelayClosesActiveConnections)
+}
+
+// Unix socket paths must fit sun_path even when the runner's TMPDIR is long.
+// Only the small socket fixtures use /tmp; other test files remain in TMPDIR.
+func shortProxySocketDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "uds-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Error(err)
+		}
+	})
+	return dir
+}
 
 func TestProxyRelayClosesActiveConnections(t *testing.T) {
 	upstream, err := net.Listen("tcp", "127.0.0.1:0")
@@ -22,7 +49,7 @@ func TestProxyRelayClosesActiveConnections(t *testing.T) {
 	defer upstream.Close()
 	accepted := make(chan net.Conn, 1)
 	go func() { c, _ := upstream.Accept(); accepted <- c }()
-	path := filepath.Join(t.TempDir(), "proxy.sock")
+	path := filepath.Join(shortProxySocketDir(t), "proxy.sock")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	closeRelay, err := startProxyRelay(ctx, path, upstream.Addr().String())

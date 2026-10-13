@@ -706,8 +706,12 @@ func TestGrokRuntimeInterruptCancelsTheTurnAndTheSameChildTakesANewOne(t *testin
 	if after.code != http.StatusOK {
 		t.Fatalf("interrupt = %d %s", after.code, after.raw)
 	}
-	if after.body["state"] != stateRunning {
-		t.Fatalf("interrupt is NOT terminal; state = %v", after.body["state"])
+	// Not terminal: the process keeps running. The derived state is running while the
+	// turn winds down and idle once the prompt's result has ended it (the session then
+	// waits for input), and the fixture can answer the cancel before this reply is built.
+	if after.body["process_state"] != stateRunning ||
+		(after.body["state"] != stateRunning && after.body["state"] != stateIdle) {
+		t.Fatalf("interrupt is NOT terminal; state = %v process_state = %v", after.body["state"], after.body["process_state"])
 	}
 	if !processRunning(pid) {
 		t.Fatal("interrupt must leave the owned process alive")

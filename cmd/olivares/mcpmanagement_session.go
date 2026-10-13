@@ -17,7 +17,9 @@ import (
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/skills"
 )
 
 type managedSessionServer struct {
@@ -69,7 +71,17 @@ func (m *mcpManagement) serveManagedSession(w http.ResponseWriter, r *http.Reque
 			break
 		}
 	}
-	if row == nil {
+	assigned := false
+	if row != nil {
+		assigned, err = m.assignedToSession(r.Context(), tenant, p)(*row)
+	}
+	if err != nil {
+		m.mu.RUnlock()
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	// A server assigned elsewhere is absent for this session, like an unknown one.
+	if !assigned {
 		m.mu.RUnlock()
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -84,7 +96,7 @@ func (m *mcpManagement) serveManagedSession(w http.ResponseWriter, r *http.Reque
 	defer stop()
 	switch request.Method {
 	case "initialize":
-		sessionRPCResult(w, request.ID, map[string]any{"protocolVersion": sessionMCPRevision, "serverInfo": map[string]any{"name": row.Name, "version": "26.10"}, "capabilities": map[string]any{"tools": map[string]any{}}, "instructions": "Tools use this exact session's policy, approval and audit. Local commands run on the engine node with the session runner and folder. Process confinement is reported by that runner; no additional network sandbox is supplied by MCP."})
+		sessionRPCResult(w, request.ID, map[string]any{"protocolVersion": sessionMCPRevision, "serverInfo": map[string]any{"name": row.Name, "version": "26.10"}, "capabilities": map[string]any{"tools": map[string]any{}}, "instructions": "Tools use this exact session's policy, approval and audit. Local commands run on the engine node with the session runner and folder. Each tool reports its process confinement and network in olivares.ai/confinement; a server with egress hosts reaches only those hosts."})
 	case "ping":
 		sessionRPCResult(w, request.ID, map[string]any{})
 	case "tools/list":
@@ -119,6 +131,43 @@ func (m *mcpManagement) serveManagedSession(w http.ResponseWriter, r *http.Reque
 		entry.server.CallTool(w, r.WithContext(callCtx), mcpc.SessionToolIdentity{Subject: p.SessionIdentity, ClientID: companion.LaunchID.String(), Scopes: []string{"tools:call"}}, request.ID, request.Params)
 	default:
 		sessionRPCError(w, request.ID, -32601, "Method not supported by session tools")
+	}
+}
+
+// assignedToSession reports whether a roster server serves this session: one
+// without targets serves every session of the tenant, one with targets only a
+// run whose skills assignment tree (workspace, folder, template, agent groups,
+// agent, session) holds one of them. The tree is read once, on first need.
+func (m *mcpManagement) assignedToSession(ctx context.Context, tenant model.TenantID, p auth.Principal) func(auth.MCPGatewayServer) (bool, error) {
+	var tree map[auth.MCPGatewayTarget]bool
+	return func(row auth.MCPGatewayServer) (bool, error) {
+		if len(row.Targets) == 0 {
+			return true, nil
+		}
+		if tree == nil {
+			if m.eng == nil || m.eng.sessionsMod == nil || m.eng.store == nil || p.SessionRunRef == "" {
+				return false, auth.ErrMCPGatewayUnavailable
+			}
+			var stored []skills.StoredTarget
+			err := m.eng.store.View(ctx, tenant, func(sc store.Scope) error {
+				var err error
+				stored, err = m.eng.sessionsMod.RunAssignmentTargets(ctx, sc, p.SessionRunRef)
+				return err
+			})
+			if err != nil {
+				return false, err
+			}
+			tree = map[auth.MCPGatewayTarget]bool{}
+			for _, target := range stored {
+				tree[auth.MCPGatewayTarget{Kind: target.Kind, ID: target.ID}] = true
+			}
+		}
+		for _, target := range row.Targets {
+			if tree[target] {
+				return true, nil
+			}
+		}
+		return false, nil
 	}
 }
 
@@ -162,6 +211,9 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 		spec.Program, spec.Args = row.Command, row.Args
 		spec.Env = env
 		if err := m.confineLocalServer(&spec, row.EgressHosts...); err != nil {
+			return nil, newManagedStdioFailure("process_start", err, patterns)
+		}
+		if err := checkPinnedProgram(spec.Program, row.Pin); err != nil {
 			return nil, newManagedStdioFailure("process_start", err, patterns)
 		}
 		client, err := launchManagedStdio(lifetime, companion.Runner, spec, patterns)

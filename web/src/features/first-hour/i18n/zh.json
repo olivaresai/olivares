@@ -74,6 +74,7 @@
     "folder": "文件夹",
     "folderHint": "此服务器上的一个文件夹。留空则在新文件夹中开始。",
     "folderNew": "为此会话新建的文件夹",
+    "folderTyped": "其他文件夹…",
     "folderChange": "更改文件夹",
     "readingFolder": "正在读取上次会话的文件夹…",
     "prompt": "第一条消息（可选）",
@@ -102,7 +103,8 @@
     "openProviders": "打开提供方",
     "profile": "配置文件",
     "profileNotSignedIn": "未登录",
-    "profileNeedsKey": "需要密钥"
+    "profileNeedsKey": "需要密钥",
+    "foldersUnreadable": "无法读取已登记的文件夹。请输入此服务器上某个文件夹的路径。"
   },
   "lists": {
     "runsTruncated": "最近会话：已加载 {{count}} 个；还有更多。",

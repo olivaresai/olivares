@@ -83,6 +83,9 @@
     "activeUsers": "Cuentas de usuario activas",
     "noUserLimit": "self-hosted: sin límite",
     "expires": "Caduca",
+    "paidThrough": "Pagada hasta",
+    "leaseUntil": "Periodo provisional hasta",
+    "leaseNote": "Periodo provisional (ventana de reembolso). Renuévalo antes de esta fecha para seguir válida hasta la fecha pagada.",
     "issued": "Emitida",
     "sourceLabel": "Origen",
     "sources": {

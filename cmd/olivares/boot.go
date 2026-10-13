@@ -38,6 +38,7 @@ import (
 	"github.com/olivaresai/olivares/core/suspension"
 	"github.com/olivaresai/olivares/core/updatecheck"
 	"github.com/olivaresai/olivares/core/webaddr"
+	"github.com/olivaresai/olivares/modules/catalog"
 	"github.com/olivaresai/olivares/modules/gitpublish"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/knowledge"
@@ -764,6 +765,11 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	if err := b.openStore(ctx); err != nil {
 		return nil, err
 	}
+	if b.cfg.ServeMode {
+		if err := editionIdentityStartup(ctx, b.sessionRuntimeRecoveryStore); err != nil {
+			return nil, err
+		}
+	}
 	if err := b.bindIdentityAndLeadership(ctx); err != nil {
 		return nil, err
 	}
@@ -798,6 +804,7 @@ type bootState struct {
 	logBroker                   *api.LogBroker
 	webAuthn                    webAuthnPlan
 	storeIsRemote               bool
+	executionEnvRef             string
 	quickstartFresh             *postgresInit
 	eng                         store.Engine
 	dsn                         string
@@ -860,6 +867,7 @@ type bootState struct {
 	secretResolver              *secret.Resolver
 	settings                    *productSettings
 	tracingSettings             *tracingSettingsService
+	editionRecovery             *ownedEditionRecovery
 	editionResources            []io.Closer
 	sourceStore                 *auth.SourceStore
 	connectorDir                string
@@ -1479,6 +1487,11 @@ func (b *bootState) buildRuntime(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("load sources operator config: %w", err)
 	}
+	if !b.cfg.NoIngest {
+		if err := validateIdentitySourcesConfig(b.srcCfg); err != nil {
+			return err
+		}
+	}
 
 	// Construct the module set through buildModules in wire.go. Register the
 	// modules with the runtime before opening the store so rt.RegisterSchema
@@ -1718,6 +1731,18 @@ func (b *bootState) openStore(ctx context.Context) (err error) {
 }
 
 func (b *bootState) bindIdentityAndLeadership(ctx context.Context) (err error) {
+	// Resolve this node's persistent identity once, before any promotion can
+	// name its legacy provider profiles. Sources reuse it when they are bound
+	// later. An unavailable identity keeps profiled launches deny-closed.
+	b.executionEnvRef, err = resolveExecutionEnvironmentRef(b.cfg.DataDir, !b.cfg.ReadOnly || !b.storeIsRemote, osGetenv, b.log)
+	if err != nil {
+		_ = b.st.Close()
+		return err
+	}
+	if b.set.sessions != nil {
+		b.set.sessions.UseExecutionEnvironmentRef(b.executionEnvRef)
+	}
+
 	// Bind module data and the two private runtime credential issuers before the
 	// first leadership acquisition. OnPromote must recover every durable runtime
 	// handle before IsLeader becomes visible; wiring these after Leader.Run would
@@ -1935,6 +1960,26 @@ func (b *bootState) bindIdentityAndLeadership(ctx context.Context) (err error) {
 			return fmt.Errorf("ha: could not publish the initial standby role label (a stale leader label from a previous incarnation would misroute traffic): %w", err)
 		}
 	}
+	// Register ownership before construction: a failed constructor or later binder
+	// may return partially opened resources, and every subsequent boot failure
+	// must release them. The successful engine inherits this same resource list.
+	b.cleanup = append(b.cleanup, func() {
+		if !b.bootOK {
+			_ = closeEditionResources(b.editionResources, b.st.Leader(), b.log)
+		}
+	})
+	if b.cfg.ServeMode && thisEdition.promotionRecovery != nil {
+		recovery, err := thisEdition.promotionRecovery(ctx,
+			editionConfigFrom(b.cfg, b.eng, b.dsn), b.set.all, b.st, b.log)
+		if recovery != nil {
+			b.editionRecovery = &ownedEditionRecovery{recovery: recovery}
+			b.editionResources = append(b.editionResources, b.editionRecovery)
+		}
+		if err != nil {
+			_ = b.st.Close()
+			return fmt.Errorf("construct edition promotion recovery: %w", err)
+		}
+	}
 	// The naming of legacy provider profiles outlives a promotion, so it runs on a
 	// context the engine owns: Close cancels it, as does a boot that fails.
 	adoptCtx, adoptStop := context.WithCancel(context.Background())
@@ -2033,6 +2078,11 @@ func (b *bootState) bindIdentityAndLeadership(ctx context.Context) (err error) {
 		// false), so advertising the label here could route client traffic to a pod
 		// whose promotion later fails. The resync loop publishes it the moment
 		// IsLeader() flips, which is the same predicate the request gates use.
+		if b.editionRecovery != nil {
+			if err := b.editionRecovery.Recover(ctx); err != nil {
+				return fmt.Errorf("edition promotion recovery: %w", err)
+			}
+		}
 		return nil
 	}
 	if b.cfg.pdpPromotionRegistered != nil {
@@ -2153,6 +2203,7 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 		b.set.skills.UseTargets(skillsTargetAuthority{principals: b.authr, st: b.st, authz: b.authz, sessions: b.set.sessions}, b.set.sessions.RefuseReferencedSkillsPack)
 	}
 	if b.running.skills != nil && b.running.sessions != nil {
+		b.set.sessions.UseWikiSkills(b.ensureWikiSkills)
 		if err := b.set.sessions.UseSessionSkills(sessionSkillsSource{st: b.st, sessions: b.set.sessions, catalog: b.set.skills}, filepath.Join(b.cfg.DataDir, "session-skill-homes")); err != nil {
 			return err
 		}
@@ -2323,27 +2374,24 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 	// Live edition ports are bound only after the real Store, sessions data and
 	// request authorizer and secret resolver exist, before api.New mounts routes.
 	if thisEdition.bindModuleDependencies != nil {
-		b.editionResources, err = thisEdition.bindModuleDependencies(ctx, editionConfigFrom(b.cfg, b.eng, b.dsn), b.set.all,
+		var resources []io.Closer
+		resources, err = thisEdition.bindModuleDependencies(ctx, editionConfigFrom(b.cfg, b.eng, b.dsn), b.set.all,
 			EditionDependencies{
-				modules: &b.set,
-				Store:   b.st, Sessions: b.set.sessions, RuntimeLaunches: b.set.sessions,
+				modules:           &b.set,
+				PromotionRecovery: b.editionRecovery.state(),
+				Store:             b.st, Sessions: b.set.sessions, RuntimeLaunches: b.set.sessions,
 				Rows: api.NewReadRowAuthorizationPort(b.authz, b.authr), Mutations: b.authz,
 				Principals: b.authr, Governance: b.set.gov, Secrets: b.secretResolver,
 				Authenticator: b.authr, FederationService: b.fedSvc, SecretStore: b.secretStore,
 				RequestRestart: restartRequester(b.cfg.Restart), ProductSettings: b.settings,
 				RegisterJobNotRunning: b.notRunning.register,
 			}, b.log)
+		b.editionResources = append(b.editionResources, resources...)
 		if err != nil {
 			_ = b.st.Close()
 			return fmt.Errorf("bind edition module dependencies: %w", err)
 		}
 	}
-	b.cleanup = append(b.cleanup, func() {
-		if !b.bootOK {
-			closeEditionResources(b.editionResources, b.log)
-		}
-	})
-
 	return nil
 }
 
@@ -2368,23 +2416,12 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 		}
 	})
 	b.sourceReconcilerSvc = newSourceReconciler(b.rt, b.sourceStore, b.secretResolver, b.secretStore, b.connectorDir, b.srcCfg.ConnectorTrust, b.log)
-	// B1: this node's persistent execution-environment identity, resolved from
-	// node-local state (or the explicit override) — never from the license, a
-	// region, a tenant or a shared database row. Reconciled sources are registered
-	// with it so their events carry the applied roster snapshot; the sessions
-	// module launches only profiles that name it and validates bindings through the
-	// narrow port below. Unavailable ⇒ new launches are deny-closed. Historical
-	// legacy reads and stops remain available without inventing a profile.
-	executionEnvRef, envErr := resolveExecutionEnvironmentRef(b.cfg.DataDir, !b.cfg.ReadOnly || !b.storeIsRemote, osGetenv, b.log)
-	if envErr != nil {
-		_ = b.st.Close()
-		return envErr
-	}
-	if executionEnvRef != "" {
-		b.sourceReconcilerSvc.useEnvironmentRef(executionEnvRef)
+	// Sources share the identity already bound before the first promotion;
+	// binding them must not re-resolve it or rewrite the live sessions module.
+	if b.executionEnvRef != "" {
+		b.sourceReconcilerSvc.useEnvironmentRef(b.executionEnvRef)
 	}
 	if b.set.sessions != nil {
-		b.set.sessions.UseExecutionEnvironmentRef(executionEnvRef)
 		// Where this node keeps the provider account homes it creates. The module
 		// holds no data directory and may import nothing from here, so the root is
 		// resolved once and handed over; a deployment that keeps the homes outside
@@ -2406,7 +2443,7 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 			}
 		}
 		b.set.sessionDependencies.ProviderSources = &providerSourceResolver{
-			store: b.sourceStore, sr: b.sourceReconcilerSvc, authz: b.authz, env: executionEnvRef,
+			store: b.sourceStore, sr: b.sourceReconcilerSvc, authz: b.authz, env: b.executionEnvRef,
 		}
 		// The provider-record plane. The VAULT is wired only when the engine has
 		// a sealer — with none, registering a provider is refused with the wiring
@@ -2678,6 +2715,8 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("agent tools API: %w", err)
 	}
+	b.bindCatalogToolInstaller()
+	b.agentTools.SetSessions(b.set.sessions)
 	// The tools' logins, status reads, probes, install probes and Ollama run confined like a session child (#1114, #1430).
 	b.agentTools.SetChildCommand(confinedToolCommand(b.cfg.DataDir))
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
@@ -3457,7 +3496,7 @@ func (e *engine) Close() error {
 		e.communicationPump.stop()
 	}
 	_ = e.rt.Stop(stopCtx)
-	closeEditionResources(e.editionResources, slog.Default())
+	editionErr := closeEditionResources(e.editionResources, e.store.Leader(), slog.Default())
 	// Close the boot-owned bus AFTER the runtime stopped every subscriber (the
 	// runtime never closes an injected bus). On the NATS bridge this also
 	// flushes the node's last outbound publishes.
@@ -3485,7 +3524,7 @@ func (e *engine) Close() error {
 	if e.wifBroker != nil {
 		_ = e.wifBroker.Close()
 	}
-	return e.store.Close()
+	return errors.Join(editionErr, e.store.Close())
 }
 
 // legacyDataDirName is the RELATIVE directory the engine defaulted to before.
@@ -3625,4 +3664,25 @@ func sessionPreviewHandler(m *sessions.Module) http.Handler {
 		return nil
 	}
 	return http.HandlerFunc(m.ServePreviewHTTP)
+}
+
+// Catalog approval is tenant-scoped, while host installation and its audit stay
+// behind the system administrator door. A disabled Catalog refuses at every read.
+func (b *bootState) bindCatalogToolInstaller() {
+	for _, module := range b.set.all {
+		if curated, ok := module.(*catalog.Module); ok {
+			b.agentTools.SetToolDeclarationResolver(func(ctx context.Context, mc api.ModuleContext, tenant model.TenantID, source, version string) (*catalog.ToolDeclaration, error) {
+				if !mc.Principal.Superadmin || b.rt == nil {
+					return nil, catalog.ErrToolUnadmitted
+				}
+				for _, status := range b.rt.Status() {
+					if status.Type == sdk.TypeModule && status.Name == catalog.Name && status.Status == runtime.StatusRunning {
+						mc.Tenant, mc.Data = tenant, api.NewScopedData(b.st, tenant)
+						return curated.ResolveToolDeclaration(ctx, mc, source, version)
+					}
+				}
+				return nil, catalog.ErrToolUnadmitted
+			})
+		}
+	}
 }

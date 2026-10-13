@@ -4,6 +4,19 @@
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 
+/**
+ * The model a session names, in ONE order for every surface: the run's (what the launch
+ * asked for), else the one its provider reported, else the observed row's. The observed
+ * row's `model_ref` is the model of the LAST cost sample, so a session that took a side
+ * call on another model would otherwise be named after that call.
+ */
+export function sessionModelRef(
+  run: RunDTO | null | undefined,
+  live: LiveDTO | null | undefined,
+): string | undefined {
+  return run?.model_ref || run?.usage_model_ref || live?.model_ref || undefined
+}
+
 /** This session's usage: tokens always, the cost only when one was reported. */
 export interface SessionUsage {
   input: number

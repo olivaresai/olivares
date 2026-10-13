@@ -83,7 +83,8 @@ for token in (
     "debian:stable-slim@sha256:04634311a8d5fc442b6eb06d792293c4f3e2268652ca7634e00ce8ef5cc0a28a",
     fedora_44,
     "alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
-    'wrangler@4.100.0', "OLIVARES_REPO_SIGNING_KEY",
+    'npm ci --prefix docs-site --ignore-scripts', 'node scripts/check-wrangler-pin.mjs',
+    "OLIVARES_REPO_SIGNING_KEY",
     "OLIVARES_REPO_SIGNING_PASSPHRASE", "CLOUDFLARE_API_TOKEN",
     "EXPECTED_REVIEWER_ID: '106011039'", ".reviewer.id == $reviewer_id",
     "custom_branch_policies == true",
@@ -105,6 +106,9 @@ expected_images = {
 assert len(images) == 6 and set(images) == expected_images
 assert all(images.count(image) == 2 for image in expected_images)
 assert "pull_request:" not in workflow and "push:" not in workflow
+assert "npm install --global wrangler" not in workflow
+assert (workflow.index("npm ci --prefix docs-site --ignore-scripts") < workflow.index("node scripts/check-wrangler-pin.mjs")
+        < workflow.index("docs-site/node_modules/.bin/wrangler") < workflow.index("--mode stage --apply"))
 assert "continue-on-error" not in workflow
 assert workflow.index("--mode stage --apply") < workflow.index("clean apt client verifies staged HTTPS repository")
 assert workflow.index("clean APK client verifies staged HTTPS repository") < workflow.index("--mode promote --apply")
@@ -143,7 +147,7 @@ for token in ("publish_rpm()", "check_tool_identity \"$image_id\"", "--init --rm
     assert token in s3_driver, token
 
 for token in (
-    "DRY-RUN", "OLIVARES_PACKAGE_PUBLISH_APPROVED", "4.100.0",
+    "DRY-RUN", "OLIVARES_PACKAGE_PUBLISH_APPROVED", "docs-site/package.json", "want pinned $wrangler_pin",
     "olivares-packages | olivares-packages-sandbox", "staging/$staging_id",
     "families=(apt rpm apk)", 'for family in "${families[@]}"', '"$evidence_dir/$family.ok"',
     "root_files", "content_files",

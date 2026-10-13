@@ -31,12 +31,11 @@ func pyPathExpr(path string, params map[string]string) string {
 // pyPathParams keeps working keyword calls intact and aliases only names that
 // collide with the method's receiver, transport arguments or typed parameters.
 func pyPathParams(op Operation) map[string]string {
-	reserved := map[string]bool{"self": true, "tenant": true, "query": true}
+	reserved := map[string]bool{"self": true, "tenant": true, "query": true, "headers": true}
 	if op.HasBody {
 		reserved["body"] = true
 	}
 	if op.sessionsCommunicationTyped() {
-		reserved["headers"] = true
 		for _, p := range op.Parameters {
 			reserved[paramIdent(p.Name)] = true
 		}
@@ -96,7 +95,7 @@ func emitPython(doc *Document) []byte {
 				args = append(args, "body=None")
 			}
 		}
-		args = append(args, "*", "tenant=None", "**query")
+		args = append(args, "*", "tenant=None", "headers=None", "**query")
 		fmt.Fprintf(&b, "\n    def %s(%s):\n", op.pyName(), strings.Join(args, ", "))
 		fmt.Fprintf(&b, "        \"\"\"%s %s — %s", op.Method, op.Path, sentence(op.Summary))
 		if op.Stability != "" {
@@ -109,7 +108,7 @@ func emitPython(doc *Document) []byte {
 		// The route template (op.Path) travels alongside the concrete path so
 		// the core dedups deprecation signals per ENDPOINT, not per resource.
 		if op.RawBody {
-			fmt.Fprintf(&b, "        return self._do_raw(%q, %q, %s, query=query, tenant=tenant)\n",
+			fmt.Fprintf(&b, "        return self._do_raw(%q, %q, %s, query=query, headers=headers, tenant=tenant)\n",
 				op.Method, op.Path, pyPathExpr(op.Path, params))
 			continue
 		}
@@ -130,7 +129,7 @@ func emitPython(doc *Document) []byte {
 				bodyArg = fmt.Sprintf("body=body, raw_request_content_type=%q, ", op.RequestContentType)
 			}
 		}
-		fmt.Fprintf(&b, "        return self.%s(%q, %q, %s, %squery=query, tenant=tenant)\n",
+		fmt.Fprintf(&b, "        return self.%s(%q, %q, %s, %squery=query, headers=headers, tenant=tenant)\n",
 			jsonSeam, op.Method, op.Path, pyPathExpr(op.Path, params), bodyArg)
 	}
 	return []byte(b.String())

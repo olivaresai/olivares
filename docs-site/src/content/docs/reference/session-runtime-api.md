@@ -33,8 +33,8 @@ Existing enforcement on the module routes:
 
 | Permission | Routes |
 |---|---|
-| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `GET /runs/{ref}/events`, `GET /runs/{ref}/attach` |
-| `sessions:run:write` | `POST /runs`, `POST /runs/{ref}/input`, `POST /runs/{ref}/interrupt`, `POST /runs/{ref}/stop`, `POST /runs/{ref}/resume` |
+| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}` |
+| `sessions:run:write` | `POST /runs`, `POST /runs/{ref}/input`, `POST /runs/{ref}/interrupt`, `POST /runs/{ref}/stop`, `POST /runs/{ref}/resume`, `POST /runs/{ref}/move`, `POST /runs/{ref}/handoff` |
 | `sessions:run:admin` | `POST /runs/{ref}/cleanup`, `DELETE /runs/{ref}` |
 
 A viewer can list. Create, input and stop require write. The authorizer on the
@@ -54,8 +54,72 @@ Base: `/v1/m/sessions`. Authenticate. Send `X-Olivares-Tenant`.
 | `POST` | `/runs/{ref}/stop` | SIGTERM then SIGKILL of the process group. Observed exit status on the row |
 | `POST` | `/runs/{ref}/resume` | New process generation. Exact stored conversation. No silent new-conversation fallback |
 | `POST` | `/runs/{ref}/interrupt` | Cancel the active turn. The process stays |
+| `POST` | `/runs/{ref}/move` | Body `{provider_profile_ref}`. Rebinds a stopped or failed Claude Code session to another profile of the same tool and carries its conversation. Starts nothing. 200 run |
+| `GET` | `/runs/{ref}/handoff` | The summary a handoff would start from: `summary`, `source_driver`, `turns`, `transcript_bytes`. Read-only, recorded in the audit ledger. A running session answers 409 |
+| `POST` | `/runs/{ref}/handoff` | Body `{provider_profile_ref, summary?, name?}`. Starts a new session in that profile, linked to this one. 201 run plus `summary_state` (and `first_turn` when it is not `delivered`); 202 while the launch waits for approval |
+| `GET` | `/runs/{ref}/activity` | What a Claude Code session's tool is doing, read from its own transcript on each request: `agents`, `tasks` (background shell commands, monitors, workflows, wakeups), `files` (path, `added`, `removed`, `created`), `todos`, `skills`, `mcp_servers`, `model`, `context_tokens`, `compactions`, and `transcript` (`read`, `pending` before the tool wrote it, `missing` when it should be there). Agents and tasks are `running`, `completed`, `failed`, `stopped` or `scheduled`. Read-only; recorded in the audit ledger once per reader and session every 15 minutes. Another tool answers 422; a session given vault secrets or a repository credential answers 409 |
+| `GET` | `/runs/{ref}/activity/agents/{agent}` | One subagent's transcript in plain turns (`role`, `text`). Read-only, recorded in the audit ledger. 404 for an unknown agent |
 | `GET` | `/runs/{ref}/diff` | A worktree session's branch against where it began: `branch`, `base`, `head` and the changed `files` (`path`, `status`). 404 without a worktree |
 | `GET` | `/runs/{ref}/diff/file?path=` | One path's text at `base` and at `head` (`original`, `modified`, at most the smaller of the workspace's `max_read_bytes` and 64 KiB each) |
+
+### Moving a session and handing it off
+
+A session continues in another account in one of two ways, and the console and
+`olivares session move` / `olivares session handoff` offer both. Only Claude Code
+sessions have a stored conversation the engine reads, so only they can do either.
+
+`POST /runs/{ref}/move` keeps the same session. It needs a `stopped` or `failed`
+session whose conversation is in its account home, and a target profile of the
+same tool that a launch under it would accept (active, this node's environment,
+an authorized source). The engine copies that one conversation, the transcript
+and its subagent and tool-result files, to the target home, never a login, a
+setting or another conversation, and rebinds the run row, the live row and the
+ledger in one transaction. The run keeps its `run_ref` and its provider
+conversation id; the ledger gains a `moved` event whose detail names both
+profiles by reference and counts the files carried, and a failed session keeps
+its `reason`. The source home is only read. A refusal writes nothing and removes
+what the move made:
+
+- 409 for a running session, a session given vault secrets or a repository
+  credential (what it printed cannot be proven free of them), a row whose home
+  its profile does not own, a conversation id already bound to another session
+  under the target, a target that holds a different version of the conversation,
+  a target of another tool, or a file that changed while it was carried
+  (retry);
+- 422 for a link, a second name for a file, or a special file inside the
+  conversation, and for another tool's session.
+
+A copy of the same conversation left on the target by an earlier move is
+replaced by the newer one. Nothing starts: the next `POST /runs/{ref}/resume` is
+the ordinary one, so the target profile's policy, budgets and approvals apply to
+it. A session that has no conversation yet moves with nothing to carry and
+starts again on the target.
+
+`GET /runs/{ref}/handoff` and `POST /runs/{ref}/handoff` continue in another
+tool, where no native resume exists. Both need a `stopped` or `failed` session.
+The preview is generated from the stored conversation without a model, so the
+person can review and edit it, and each read of it is recorded in the audit
+ledger as `sessions.run.handoff_preview`. The POST starts a new session in the
+chosen profile, in the same workspace and under the same template, whose first
+turn is the reviewed `summary` (generated when absent) and the path of the
+transcript, written under the target profile's configuration home under a name
+of its own. The transcript carries messages in full up to 256 KiB each, tool
+calls and results shortened, and says how many records it could not read. The
+new run reports `handoff_of`, and the original's ledger gains a `handed_off`
+event. The answer carries `summary_state`:
+
+| `summary_state` | Meaning |
+|---|---|
+| `delivered` | The first turn reached the new session. |
+| `not_delivered` | It did not cross. `first_turn` holds the text to send. |
+| `unknown` | It was attempted and the outcome was not confirmed; check before sending `first_turn` again. |
+| `waits_for_approval` | The launch is held for a human (202); no first turn is sent automatically. |
+
+`first_turn` is present only when the state is not `delivered`, because it names
+the attachment's path. The source conversation is refused with 409 when its
+session was given vault secrets or a repository credential, because a handoff
+sends it to another provider, and with 422 above 256 MiB or when it holds one
+record larger than 32 MiB.
 
 ### Worktree option
 

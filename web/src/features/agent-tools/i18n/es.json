@@ -39,7 +39,8 @@
     "sigstore-cosign": "Resumen del paquete y firmas del editor verificados.",
     "none-origin-only": "Origen HTTPS oficial; sin firma del editor.",
     "github-release-sha256": "SHA-256 fijado desde los metadatos oficiales; sin firma del editor.",
-    "unknown": "Sin verificar"
+    "unknown": "Sin verificar",
+    "catalog-sha256": "SHA-256 fijado en el Catálogo"
   },
   "probe": "Consultar versión",
   "probeName": "Consultar versión en {{path}}",
@@ -167,5 +168,56 @@
     "notNow": "Ahora no",
     "close": "Cerrar",
     "keyNeedsAccess": "Elegir una clave requiere permiso para cambiar perfiles."
+  },
+  "from": {
+    "title": "Instalar desde una URL",
+    "source": "URL de Git o de la versión publicada",
+    "version": "Versión fijada",
+    "review": "Revisar instalación",
+    "hint": "Admite primero la herramienta en el Catálogo. Su versión fijada y su SHA-256 se verifican antes de instalarla.",
+    "tenant": "Selecciona una organización para usar sus herramientas admitidas."
+  },
+  "versions": {
+    "title": "Versiones de sesión",
+    "hint": "Elige la versión que usarán las sesiones nuevas y reanudadas en este espacio. La selección del agente tiene prioridad.",
+    "workspace": "Espacio de trabajo",
+    "chooseWorkspace": "Elige un espacio de trabajo",
+    "version": "Versión de sesión",
+    "default": "Versión instalada más reciente",
+    "unavailable": "{{version}} (no instalada)",
+    "save": "Guardar versión",
+    "saved": "Versión de sesión guardada.",
+    "chooseOrganization": "Elige una organización para seleccionar una versión del espacio.",
+    "failed": "No se pudieron leer las versiones.",
+    "removeName": "Eliminar {{name}} {{version}}",
+    "removeHint": "Primero detén las sesiones en ejecución. Un espacio fijado a esta versión no podrá iniciar sesiones hasta que la reinstales o borres la selección.",
+    "removed": "Versión eliminada.",
+    "confirmRemoval": "Confirmar eliminación",
+    "confirmPin": "Confirmar versión",
+    "pinHint": "Las sesiones nuevas y reanudadas usarán {{name}}: {{version}}.",
+    "loading": "Cargando espacios y versiones guardadas…"
+  },
+  "installed": {
+    "title": "Instalado aquí",
+    "workspace": "Lo que recibe una sesión nueva en {{name}}.",
+    "reading": "Leyendo…",
+    "readFailed": "No se pudo leer: {{message}}",
+    "tools": "Herramientas de IA",
+    "packages": "Programas y registros",
+    "skills": "Skills",
+    "mcp": "Servidores MCP",
+    "none": "Ninguno",
+    "olivaresTools": "Herramientas de sesión de Olivares",
+    "mcpDrivers": "Para sesiones de {{tools}}.",
+    "noWorkspace": "No hay un espacio de trabajo por defecto que leer.",
+    "skillsOff": "El módulo de skills está desactivado: las sesiones no reciben ninguna.",
+    "notReadable": "Tu rol no puede leer las skills.",
+    "skillsHint": "Una sesión vinculada a una carpeta, plantilla o agente recibe también las skills fijadas allí.",
+    "workspacesTruncated": "La lista de espacios de trabajo se cortó antes del espacio por defecto: elige uno en el selector de espacios de trabajo.",
+    "toolsHint": "Una versión de sesión guardada en los detalles de instalación de una herramienta sustituye a esta para ese espacio de trabajo registrado o agente.",
+    "profilesNotReadable": "Tu rol no puede leer los perfiles de proveedor.",
+    "packagesHint": "Los declara el perfil de proveedor que usa la nueva sesión de cada herramienta ({{profiles}}). Una herramienta sin perfil recibe uno nuevo que no declara ninguno.",
+    "packagesNoProfile": "Vienen del perfil de proveedor con el que se ejecutan las sesiones de cada herramienta. Aún no existe ninguno, y uno nuevo no declara ninguno.",
+    "packagesRefused": "No se lista nada porque aún no puede iniciarse ninguna sesión en: {{tools}}."
   }
 }

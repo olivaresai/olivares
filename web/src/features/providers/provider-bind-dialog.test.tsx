@@ -93,6 +93,32 @@ it('rechecks profile state before changing a binding', async () => {
   expect(api.patchProfile).not.toHaveBeenCalled()
 })
 
+it('offers a profile that is an account by its account name, never its reference', async () => {
+  api.listProfiles.mockResolvedValue({
+    items: [
+      {
+        profile_ref: 'pp_account',
+        driver: 'codex',
+        account_name: 'codex-b',
+        state: 'active',
+        local_environment: true,
+        operable: true,
+        environment_ref: 'env1',
+      },
+    ],
+    has_more: false,
+  })
+  show()
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('combobox'))
+  expect(
+    await screen.findByRole('option', { name: /^codex-b/ }),
+  ).toBeInTheDocument()
+  expect(
+    screen.queryByRole('option', { name: /pp_account/ }),
+  ).not.toBeInTheDocument()
+})
+
 // HU-R33: the console offered a local Ollama endpoint to Codex only, while OpenCode is the
 // local default and the engine binds both (recordServesDriver).
 it('offers an OpenCode profile for a local endpoint, and still a Codex one', async () => {

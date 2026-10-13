@@ -172,7 +172,8 @@ type Principal struct {
 	// sessionOrigin is installed only by the in-process session issuer.
 	sessionOrigin *sessionPrincipalOrigin
 	// evidence carries private, tenant-bound provenance installed only by
-	// ResolvePrincipalScope. AuthorizeEvidence consumes it to attest a candidate
+	// ResolvePrincipalScope or, for an engine system principal,
+	// ResolveSystemScope. AuthorizeEvidence consumes it to attest a candidate
 	// positive core decision, but product routes and readiness remain OFF until
 	// the later K3 composition cut.
 	evidence principalEvidenceProvenance

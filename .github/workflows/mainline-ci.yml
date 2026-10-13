@@ -54,13 +54,17 @@ jobs:
   # The journal set below must stay a SUBSET of paths no gated job consumes; design/ at
   # large is NOT listed on purpose (lint-commerce reads an internal design note (not shipped)).
   classify:
-    # ROUTE, with the guard pr-ci.yml and installer-matrix.yml already use. A push to main
+    # ROUTE, with the guard pr-ci.yml uses. A push to main
     # starts this workflow in every repository that carries it; classify is selected only in
-    # the public repository, or where the preprod release profile is set. Anywhere else it is
+    # the public repository, or where the preprod release profile or the development opt-in below is set. Anywhere else it is
     # skipped, on a push and on a dispatch alike, and every job that needs it is skipped with
     # it, race-hot included, because its always() still reads classify's verdict. The secrets
     # job does not need classify and keeps running on every push.
-    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    #
+    # A repository that sets OLIVARES_DEV_CI to 'true' (the opt-in pr-ci.yml reads) is selected
+    # as well. Without it a development repository ran this workflow as one job, `secrets`, and
+    # reported success with the functional shards skipped.
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
     # CI_RUNNER_LIGHT FIRST (2026-08-01). This job gates every other one through
     # `needs`, so a run cannot start while it queues — and measured today, it was
     # queueing: the three Hetzner runners busy=true, 19 jobs waiting, and srv17
@@ -5267,8 +5271,9 @@ jobs:
             exit 0
           fi
           echo "PyYAML missing on $RUNNER_NAME — installing"
-          python3 -m pip install --quiet --disable-pip-version-check --user pyyaml \
-            || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages pyyaml \
+          # Hash-pinned: pip refuses any file whose sha256 is not in the requirements file.
+          python3 -m pip install --quiet --disable-pip-version-check --user --require-hashes -r .github/requirements-pyyaml.txt \
+            || python3 -m pip install --quiet --disable-pip-version-check --break-system-packages --require-hashes -r .github/requirements-pyyaml.txt \
             || { echo "::error::could not install PyYAML on $RUNNER_NAME"; exit 1; }
           python3 -c 'import yaml; print("PyYAML after installation:", yaml.__version__)' \
             || { echo "::error::pip reported success but yaml STILL cannot be imported on $RUNNER_NAME"; exit 1; }

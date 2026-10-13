@@ -100,48 +100,6 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 	return nil
 }
 
-// Snapshot exposes the vaults / Managed HSMs seen in the export as secret_store
-// NHIs. With no configured path it returns an empty graph.
-func (s *Source) Snapshot(_ context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceAzureKeyVault, CapturedAt: s.clock().UTC()}
-	if s.path == "" {
-		return g, nil
-	}
-	files, err := s.listFiles()
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	stores := map[string]store{}
-	for _, f := range files {
-		recs, err := readRecords(f)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		for _, rec := range recs {
-			if st, ok := storeFromResourceID(rec.resourceID()); ok {
-				stores[st.ref()] = st
-			}
-		}
-	}
-	refs := make([]string, 0, len(stores))
-	for ref := range stores {
-		refs = append(refs, ref)
-	}
-	sort.Strings(refs)
-	for _, ref := range refs {
-		st := stores[ref]
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         ref,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        identitysource.KindSecretStore,
-			DisplayName: st.displayName(),
-			Source:      identitysource.SourceAzureKeyVault,
-			Attributes:  map[string]string{"provider": "azure", "service": st.service, "name": st.name},
-		})
-	}
-	return g, nil
-}
-
 // buildEdge maps one AuditEvent record to an edge, or ok=false for a non-AuditEvent
 // category, an operation naming no governed object (Authentication), no caller, or
 // an unparseable timestamp.
@@ -223,11 +181,4 @@ func readRecords(path string) ([]record, error) {
 		return nil, err
 	}
 	return recordsFromBytes(data), nil
-}
-
-func (s *Source) clock() time.Time {
-	if s.now != nil {
-		return s.now()
-	}
-	return time.Now()
 }

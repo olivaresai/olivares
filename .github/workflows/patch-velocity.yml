@@ -29,7 +29,7 @@ permissions:
 env:
   GOVULNCHECK_VERSION: "v1.3.0"
   IMAGE_REF: ghcr.io/olivaresai/olivares:latest
-  BASE_IMAGE: node:24-trixie-slim
+  CRANE_VERSION: "v0.22.1"
 
 jobs:
   rescan:
@@ -65,25 +65,34 @@ jobs:
           tail -40 govuln.txt >> "$GITHUB_STEP_SUMMARY" || true
 
       # --- agent runtime base digest drift -----------------------------------------
+      # A failure here (the gate refused the base, or crane could not answer) must not stop the
+      # rescan: the scanners below still run, and the remediation issue reports the failure.
       - name: base image digest drift
         id: base
+        continue-on-error: true
         run: |
           set -euo pipefail
-          go install github.com/google/go-containerregistry/cmd/crane@latest
-          pinned="$(sed -nE 's/^FROM node:24-trixie-slim@(sha256:[0-9a-f]{64})$/\1/p' Dockerfile.release)"
-          test -n "$pinned"
-          current="$(crane digest "${BASE_IMAGE}")"
-          echo "pinned=$pinned"  >> "$GITHUB_OUTPUT"
-          echo "current=$current" >> "$GITHUB_OUTPUT"
+          go install "github.com/google/go-containerregistry/cmd/crane@${CRANE_VERSION}"
+          # Dockerfile.release is the one source of the base image and its pin; the gate also
+          # refuses a base that is not one digest-pinned Node LTS line shared with Dockerfile.
+          base_line="$(bash scripts/check-runtime-base.sh)"
+          read -r base pinned <<<"$base_line"
+          current="$(crane digest "$base")"
+          [[ "$current" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::crane digest $base answered '$current'"; exit 1; }
+          { echo "base=$base"; echo "pinned=$pinned"; echo "current=$current"; } >> "$GITHUB_OUTPUT"
           if [ "$pinned" != "$current" ]; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
             echo "::warning::agent runtime base drifted: pinned $pinned != current $current (Dependabot should PR the bump)"
           else
             echo "drift=false" >> "$GITHUB_OUTPUT"
           fi
-          { echo "### Base image"; echo "- pinned:  \`$pinned\`"; echo "- current: \`$current\`"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### Base image \`$base\`"; echo "- pinned:  \`$pinned\`"; echo "- current: \`$current\`"; } >> "$GITHUB_STEP_SUMMARY"
 
       # --- rebuild the image from the (patched) base, then scan it --------------
+      # Both scanners report only findings that have a fix (grype only-fixed, trivy
+      # ignore-unfixed): an OS package with no fix in the base distribution is not work a
+      # rebuild can do, and on Debian 13 those were 143 of 145 findings. The full
+      # package list stays in the refreshed SBOM and VEX below.
       - name: rebuild image from source
         run: |
           docker build \
@@ -98,11 +107,12 @@ jobs:
         with:
           image: olivares:rescan
           fail-build: false
+          only-fixed: true
           output-format: sarif
           severity-cutoff: high
 
       - name: upload grype SARIF
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}
           category: grype
@@ -114,6 +124,7 @@ jobs:
           format: sarif
           output: trivy.sarif
           severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: "0"
 
       # The scanners above are deliberately NON-BLOCKING as scanners (SARIF is the
@@ -148,12 +159,12 @@ jobs:
             else
               echo "found=false" >>"$GITHUB_OUTPUT"
             fi
-            echo "detail=grype=$g trivy=$t findings at/above HIGH" >>"$GITHUB_OUTPUT"
+            echo "detail=grype=$g trivy=$t fixable findings at/above HIGH" >>"$GITHUB_OUTPUT"
             ;;
           esac
 
       - name: upload trivy SARIF
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: trivy.sarif
           category: trivy
@@ -195,7 +206,7 @@ jobs:
 
       # --- alert: open/update a tracking issue if anything needs a patch release -
       - name: open remediation issue on findings
-        if: vars.CI_NIGHTLIES == 'true' && (steps.govuln.outputs.found == 'true' || steps.base.outputs.drift == 'true' || steps.scanners.outputs.found != 'false')
+        if: vars.CI_NIGHTLIES == 'true' && (steps.govuln.outputs.found == 'true' || steps.base.outcome != 'success' || steps.base.outputs.drift == 'true' || steps.scanners.outputs.found != 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -205,8 +216,8 @@ jobs:
           Automated patch-velocity scan found work (SECURITY.md remediation targets apply):
 
           - govulncheck reachable vulns: \`${{ steps.govuln.outputs.found }}\`
-          - image scanners (grype + trivy) at/above HIGH: \`${{ steps.scanners.outputs.found }}\` — ${{ steps.scanners.outputs.detail }}
-          - agent runtime base drift: \`${{ steps.base.outputs.drift }}\` (pinned \`${{ steps.base.outputs.pinned }}\` vs current \`${{ steps.base.outputs.current }}\`)
+          - image scanners (grype + trivy), fixable at/above HIGH: \`${{ steps.scanners.outputs.found }}\` — ${{ steps.scanners.outputs.detail }}
+          - agent runtime base check: \`${{ steps.base.outcome }}\`, drift: \`${{ steps.base.outputs.drift }}\` (pinned \`${{ steps.base.outputs.pinned }}\` vs current \`${{ steps.base.outputs.current }}\`)
 
           Next step (human): cut a patch tag \`vX.Y.Z\` to rebuild + re-sign + republish via release.yml. Refreshed SBOM/VEX are attached to this workflow run.
           See the run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

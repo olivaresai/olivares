@@ -54,6 +54,10 @@ import type {
 
 const BASE = '/v1/m/governance'
 
+/** Rows per page of the identity and group lists: the server's default page, named so the
+ *  ceiling is explicit. The console walks `cursor` for the rest. */
+const LIST_PAGE = 100
+
 export interface ListParams {
   cursor?: string
   limit?: number
@@ -63,14 +67,14 @@ export const governanceApi = {
   // --- identities & groups ---------------------------------------------------
   listIdentities: (params?: ListParams & { source?: string; kind?: string }) =>
     http.get<ListResponse<IdentityDTO>>(`${BASE}/identities`, {
-      query: { ...params },
+      query: { limit: LIST_PAGE, ...params },
     }),
   listGroups: (params?: ListParams & { source?: string; kind?: string }) =>
     http.get<ListResponse<GroupDTO>>(`${BASE}/groups`, {
-      query: { ...params },
+      query: { limit: LIST_PAGE, ...params },
     }),
   listGroupMembers: (ref: string, params?: { transitive?: boolean }) =>
-    http.get<ListResponse<MemberDTO>>(
+    http.get<ListResponse<MemberDTO> & { truncated?: boolean }>(
       `${BASE}/groups/${encodeURIComponent(ref)}/members`,
       { query: { ...params } },
     ),

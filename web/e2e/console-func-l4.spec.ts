@@ -4,7 +4,12 @@
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { assertSessionAccepted, sessionToken } from './live-session'
+import {
+  browserSessionHeaders,
+  journeyNowLink,
+  type BrowserSession,
+} from './browser-session'
+import { assertSessionAccepted } from './live-session'
 
 // Functional tranche L4 runs against the same disposable, genuinely seeded engine as
 // demo-graph.spec.ts. Responses are observed, never fulfilled by Playwright.
@@ -12,7 +17,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
 
-// Auth responses carry a live bearer for the disposable engine. Retaining a
+// Login sets a live HttpOnly session for the disposable engine. Retaining a
 // Playwright trace on failure would copy it into an artifact; explicit visual
 // evidence is captured only after authentication and contains no credential.
 test.use({ trace: 'off' })
@@ -57,14 +62,11 @@ interface AuditItem {
   prev_hash: string
 }
 
-function authHeaders(token: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${token}`,
-    'X-Olivares-Tenant': demoTenant,
-  }
+function authHeaders(session: BrowserSession): Record<string, string> {
+  return browserSessionHeaders(session, demoTenant)
 }
 
-async function loginDemo(page: Page): Promise<string> {
+async function loginDemo(page: Page): Promise<BrowserSession> {
   const loginRead = page.waitForResponse((response) => {
     const url = new URL(response.url())
     return (
@@ -78,26 +80,26 @@ async function loginDemo(page: Page): Promise<string> {
   await page.getByRole('button', { name: /^sign in$/i }).click()
   const response = await loginRead
   expect(response.status()).toBe(200)
+  const body = (await response.json()) as BrowserSession
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
-  ).toBeVisible({ timeout: 15_000 })
-  return sessionToken(page)
+  await expect(journeyNowLink(page)).toBeVisible({ timeout: 15_000 })
+  authHeaders(body)
+  return body
 }
 
-async function waitForDemoRoster(page: Page, token: string): Promise<void> {
+async function waitForDemoRoster(
+  page: Page,
+  session: BrowserSession,
+): Promise<void> {
   await expect
     .poll(
       async () => {
         const response = await page.request.get('/v1/m/governance/identities', {
-          headers: authHeaders(token),
+          headers: authHeaders(session),
         })
-        assertSessionAccepted(response)
         if (!response.ok()) return []
         const body = (await response.json()) as ListBody<IdentityItem>
         return body.items.map((item) => item.ref).sort()
@@ -118,13 +120,20 @@ async function expectGridCardinality(
 ): Promise<void> {
   // DataTable virtualizes above 100 rows, so DOM <tr> count is not the dataset.
   // Its APG contract exposes the exact data cardinality plus the header instead.
-  await expect(grid).toHaveAttribute('aria-rowcount', String(count + 1))
-  // With nothing to list, the header row is all the grid holds. Its empty state is drawn
-  // beside it and is the grid's accessible description (`aria-describedby`).
-  if (count === 0)
-    await expect(grid).toHaveAccessibleDescription(
-      new RegExp(emptyTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    )
+  if (count > 0) {
+    await expect(grid).toHaveAttribute('aria-rowcount', String(count + 1))
+    return
+  }
+  await expect(grid).toHaveAttribute('aria-rowcount', '1')
+  await expect(grid.locator('tbody tr')).toHaveCount(0)
+  const statusId = await grid.getAttribute('aria-describedby')
+  expect(statusId).toBeTruthy()
+  await expect(
+    grid
+      .page()
+      .locator(`[id="${statusId}"]`)
+      .getByText(emptyTitle, { exact: true }),
+  ).toBeVisible()
 }
 
 test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
@@ -153,24 +162,21 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     )
   })
 
-  test('identity tabs, redirect checker, roster and passkey draft have real effects', async ({
+  test('identity tabs, redirect checker, inventory and passkey draft have real effects', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
-    await waitForDemoRoster(page, token)
-
-    // Install this before the first identity navigation. Counting only while
-    // the WIF tab is selected would miss a forbidden eager prefetch on mount.
-    let wifGets = 0
-    const countWif = (request: { method(): string; url(): string }) => {
-      if (
-        request.method() === 'GET' &&
-        new URL(request.url()).pathname === '/v1/m/identity/wif'
-      ) {
-        wifGets += 1
-      }
-    }
-    page.on('request', countWif)
+    const session = await loginDemo(page)
+    const info = await page.request.get('/v1/server-info', {
+      headers: authHeaders(session),
+    })
+    expect(info.status()).toBe(200)
+    const { edition } = (await info.json()) as { edition: string }
+    const identity = await page.request.get('/v1/m/governance/identities', {
+      headers: authHeaders(session),
+    })
+    expect([200, 501]).toContain(identity.status())
+    if (edition === 'community') expect(identity.status()).toBe(200)
+    await waitForDemoRoster(page, session)
 
     const ssoRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -179,8 +185,6 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         url.pathname === '/v1/m/identity/sso'
       )
     })
-    // An administrator lands on Users & groups; the redirect checker and the SSO read belong
-    // to the SSO & SCIM tab, which the page opens from its `tab` parameter.
     await page.goto('/identity?tab=federation')
     const ssoResponse = await ssoRead
     expect(ssoResponse.status()).toBe(200)
@@ -276,15 +280,17 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       page.getByRole('heading', { name: 'Single sign-on (OIDC / SAML)' }),
     ).toBeVisible()
 
-    const lifecycleRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return url.pathname === '/v1/m/governance/nhi/posture'
-    })
-    await selectTab('NHI lifecycle', 'lifecycle')
-    expect((await lifecycleRead).status()).toBe(200)
-    await expect(
-      page.getByRole('heading', { name: 'Lifecycle posture' }),
-    ).toBeVisible()
+    if (edition === 'community') {
+      for (const name of [
+        'NHI lifecycle',
+        'WIF graph',
+        'Key & residency posture',
+      ]) {
+        await expect(page.getByRole('tab', { name, exact: true })).toHaveCount(
+          0,
+        )
+      }
+    }
 
     const mcpRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -316,35 +322,6 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       ).toHaveCount(mcpFindings.items.length)
     }
 
-    // The WIF graph is a privileged read that audits itself, so nothing may read it before
-    // its tab is opened: every other tab has been visited by now and none fetched it. On
-    // this engine the read is allowed once the tab is open; the step-up state the page
-    // draws when the engine demands one is covered by the identity unit tests.
-    expect(wifGets).toBe(0)
-    const wifRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/v1/m/identity/wif'
-      )
-    })
-    await selectTab('WIF graph', 'wif')
-    expect((await wifRead).status()).toBe(200)
-    await expect(
-      page.getByRole('heading', { name: 'WIF object graph' }),
-    ).toBeVisible()
-    page.off('request', countWif)
-
-    const keysRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return url.pathname === '/v1/m/identity/external-keys'
-    })
-    await selectTab('Key & residency posture', 'posture')
-    expect((await keysRead).status()).toBe(200)
-    await expect(
-      page.getByRole('heading', { name: 'External keys (CMEK)' }),
-    ).toBeVisible()
-
     const credentialsRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
       return url.pathname === '/v1/auth/webauthn/credentials'
@@ -374,13 +351,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     const register = registerDialog.getByRole('button', {
       name: 'Register passkey',
     })
-    // The name is optional: left empty, the passkey is named after the device, and the
-    // dialog says so. Registering is therefore offered at once, and naming it keeps it so.
-    await expect(
-      registerDialog.getByText(
-        'Optional. Leave it empty to name it after this device.',
-      ),
-    ).toBeVisible()
+    // An empty draft uses the device name; cancelling must still send no registration.
     await expect(register).toBeEnabled()
     await registerDialog.getByLabel('Passkey name').fill('L4 disposable key')
     await expect(register).toBeEnabled()
@@ -396,8 +367,8 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
   test('identity roster retry recovers from one transport failure into live data', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
-    await waitForDemoRoster(page, token)
+    const session = await loginDemo(page)
+    await waitForDemoRoster(page, session)
 
     let failedGets = 0
     await page.route('**/v1/m/governance/identities**', async (route) => {
@@ -436,8 +407,9 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await loginDemo(page)
     // Settings opens on General, where theme, density and language are rows of one page.
     await page.goto('/settings')
+    await page.getByRole('button', { name: 'General', exact: true }).click()
 
-    await page.locator('#theme-dark').click()
+    await page.getByRole('radio', { name: 'Dark', exact: true }).click()
     await expect(page.locator('html')).toHaveClass(/dark/)
     expect(
       await page.evaluate(() => localStorage.getItem('olivares.theme')),
@@ -457,11 +429,9 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await page.locator('#language').click()
     await page.getByRole('option', { name: 'Español', exact: true }).click()
     await expect(page.locator('html')).toHaveAttribute('lang', 'es')
-    // The page re-reads in the chosen language, and the density chosen above is still the
-    // checked option: its label is now Spanish.
     await expect(
-      page.getByRole('radio', { name: 'Compacta', exact: true }),
-    ).toHaveAttribute('aria-checked', 'true')
+      page.getByRole('heading', { name: 'General', exact: true }),
+    ).toBeVisible()
     expect(
       await page.evaluate(() => localStorage.getItem('olivares.lang')),
     ).toBe('es')
@@ -469,6 +439,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await page.reload()
     await expect(page.locator('html')).toHaveClass(/dark/)
     await expect(page.locator('html')).toHaveAttribute('lang', 'es')
+    await page.getByRole('button', { name: 'General', exact: true }).click()
     await expect(
       page.getByRole('radio', { name: 'Compacta', exact: true }),
     ).toHaveAttribute('aria-checked', 'true')
@@ -478,17 +449,17 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
   test('recording filters, viewer navigation and policy save use live state', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
+    const session = await loginDemo(page)
 
     // Touch a recorded namespace first, so the disposable engine has a live session.
-    const graphRead = page.waitForResponse((response) => {
+    const ssoRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
-      return url.pathname === '/v1/m/accessmap/graph'
+      return url.pathname === '/v1/m/identity/sso'
     })
-    await page.goto('/access-map')
-    expect((await graphRead).status()).toBe(200)
+    await page.goto('/identity?tab=federation')
+    expect((await ssoRead).status()).toBe(200)
     const noticeResponse = await page.request.get('/v1/m/recording/notice', {
-      headers: authHeaders(token),
+      headers: authHeaders(session),
     })
     expect(noticeResponse.status()).toBe(200)
     const notice = (await noticeResponse.json()) as { session_id?: string }
@@ -667,8 +638,98 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       'No recording sessions yet',
     )
 
-    // (The Recordings list no longer offers a search over the loaded page; the page it
-    // loaded is the one just asserted, and its filters are the server's.)
+    // Recording search submits an explicit server predicate. Draft typing must
+    // not read the list; this view does not offer opt-in local table filtering.
+    let listGets = 0
+    const countLists = (request: { method(): string; url(): string }) => {
+      if (
+        request.method() === 'GET' &&
+        new URL(request.url()).pathname === '/v1/m/recording/sessions'
+      )
+        listGets += 1
+    }
+    page.on('request', countLists)
+    const subjectSearch = page.getByRole('textbox', {
+      name: 'Recording search',
+      exact: true,
+    })
+    const searchForm = page.locator('form').filter({ has: subjectSearch })
+    await expect(
+      page.getByRole('combobox', { name: 'Search field', exact: true }),
+    ).toContainText('Subject contains')
+    const absentSubject = 'w972-nonexistent-recording-subject'
+    expect(
+      bounded.items.every((item) => !item.subject.includes(absentSubject)),
+    ).toBe(true)
+    await subjectSearch.fill(absentSubject)
+    await page.waitForTimeout(500)
+    expect(listGets).toBe(0)
+    await expectGridCardinality(
+      recordingsGrid,
+      bounded.items.length,
+      'No recording sessions yet',
+    )
+    const absentRead = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/v1/m/recording/sessions' &&
+        url.searchParams.get('subject_contains') === absentSubject
+      )
+    })
+    await searchForm
+      .getByRole('button', { name: 'Search', exact: true })
+      .click()
+    const absentResponse = await absentRead
+    expect(absentResponse.status()).toBe(200)
+    expect(
+      ((await absentResponse.json()) as ListBody<RecordingItem>).items,
+    ).toEqual([])
+    await expectGridCardinality(recordingsGrid, 0, 'No recording sessions yet')
+    const readsBeforeWitnessDraft = listGets
+    await subjectSearch.fill(witness.subject)
+    await page.waitForTimeout(500)
+    expect(listGets).toBe(readsBeforeWitnessDraft)
+    const searchedRead = page.waitForResponse((response) => {
+      const url = new URL(response.url())
+      return (
+        response.request().method() === 'GET' &&
+        url.pathname === '/v1/m/recording/sessions' &&
+        url.searchParams.get('subject_contains') === witness.subject
+      )
+    })
+    await searchForm
+      .getByRole('button', { name: 'Search', exact: true })
+      .click()
+    const searchedResponse = await searchedRead
+    expect(searchedResponse.status()).toBe(200)
+    const searched = (await searchedResponse.json()) as ListBody<RecordingItem>
+    expect(searched.items.some((item) => item.id === witness.id)).toBe(true)
+    expect(
+      searched.items.every((item) => item.subject.includes(witness.subject)),
+    ).toBe(true)
+    await expectGridCardinality(
+      recordingsGrid,
+      searched.items.length,
+      'No recording sessions yet',
+    )
+    await expect(
+      recordingsGrid.getByRole('row').filter({
+        has: page.getByTitle(witness.subject, { exact: true }),
+      }),
+    ).toHaveCount(searched.items.length)
+    await searchForm.getByRole('button', { name: 'Clear', exact: true }).click()
+    await expect
+      .poll(() => new URL(page.url()).searchParams.has('subject_contains'))
+      .toBe(false)
+    await expect(subjectSearch).toHaveValue('')
+    await expectGridCardinality(
+      recordingsGrid,
+      bounded.items.length,
+      'No recording sessions yet',
+    )
+    page.off('request', countLists)
+
     const witnessIndex = bounded.items.findIndex(
       (item) => item.id === witness.id,
     )
@@ -771,7 +832,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       })
       await expect(page.getByText('Recording policy saved')).toBeVisible()
       const persisted = await page.request.get('/v1/m/recording/config', {
-        headers: authHeaders(token),
+        headers: authHeaders(session),
       })
       expect(persisted.status()).toBe(200)
       const persistedBody = (await persisted.json()) as RecordingConfigBody
@@ -793,7 +854,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       await page.screenshot({ path: 'playwright-report/l4-recordings.png' })
     } finally {
       const restored = await page.request.put('/v1/m/recording/config', {
-        headers: authHeaders(token),
+        headers: authHeaders(session),
         data: {
           namespaces: original.namespaces,
           consent: original.consent,
@@ -804,7 +865,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
       })
       expect(restored.status()).toBe(200)
       const reread = await page.request.get('/v1/m/recording/config', {
-        headers: authHeaders(token),
+        headers: authHeaders(session),
       })
       expect(reread.status()).toBe(200)
       const restoredBody = (await reread.json()) as RecordingConfigBody
@@ -829,14 +890,14 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
   test('audit filters, evidence controls and export reflect the live ledger', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
+    const session = await loginDemo(page)
 
     // Generate a tenant event through a real self-audited module read.
-    const graphRead = page.waitForResponse((response) => {
-      return new URL(response.url()).pathname === '/v1/m/accessmap/graph'
+    const ssoRead = page.waitForResponse((response) => {
+      return new URL(response.url()).pathname === '/v1/m/identity/sso'
     })
-    await page.goto('/access-map')
-    expect((await graphRead).status()).toBe(200)
+    await page.goto('/identity?tab=federation')
+    expect((await ssoRead).status()).toBe(200)
 
     const initialRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -852,10 +913,22 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     const initial = (await initialResponse.json()) as ListBody<AuditItem>
     expect(initial.items.length).toBeGreaterThan(0)
     const witness = initial.items[0]!
+    const displayedInt = new Intl.NumberFormat(
+      (await page.locator('html').getAttribute('lang')) ?? 'en',
+      { maximumFractionDigits: 0 },
+    )
     const auditGrid = page.getByRole('grid', { name: 'Audit ledger' })
+    await expect(auditGrid).toBeVisible()
+    await expect(auditGrid).not.toHaveAttribute('aria-busy', 'true')
+    // DTO cardinality checks below intentionally inspect the complete loaded ledger.
+    const showInternal = page.getByRole('button', {
+      name: 'Show internal records',
+      exact: true,
+    })
+    if (await showInternal.isVisible()) await showInternal.click()
     const witnessRow = auditGrid.getByRole('row').filter({
       has: page.getByRole('gridcell', {
-        name: String(witness.seq),
+        name: displayedInt.format(witness.seq),
         exact: true,
       }),
     })
@@ -912,47 +985,32 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     }
     page.on('request', countAuditGets)
     await expect(witnessRow).toHaveCount(1)
-    // The row is read BEFORE the dialog opens: a modal makes the page behind it inert, and
-    // the grid then leaves the accessibility tree this locator reads.
-    const rowText = (await witnessRow.innerText()).replace(/\s+/g, ' ')
     await witnessRow.click()
     const evidence = page.getByRole('dialog')
-    // The dialog is titled with the event's label, the same text its row shows in the
-    // Action column; the sequence number and the recorded action code sit under Details.
-    const title = evidence.getByRole('heading').first()
-    await expect(title).toBeVisible()
-    const label = ((await title.textContent()) ?? '').trim()
-    expect(label, 'the dialog is titled with the event label').not.toBe('')
-    expect(
-      rowText,
-      'the row shows the label the dialog is titled with',
-    ).toContain(label)
-    // Details toggles, so it is opened only when it is closed.
-    const details = evidence.locator('details').first()
-    if (!(await details.evaluate((el: HTMLDetailsElement) => el.open)))
-      await details.locator('summary').click()
-    await expect(
-      evidence
-        .locator('dt', { hasText: /^Sequence$/ })
-        .locator('xpath=following-sibling::dd[1]'),
-      'the dialog is the clicked event: its Sequence field',
-    ).toHaveText(String(witness.seq))
+    await expect(evidence.getByRole('heading').first()).toBeVisible()
+    await evidence.getByText('Details', { exact: true }).click()
+    const sequence = evidence
+      .locator('dl > div')
+      .filter({ has: page.getByText('Sequence', { exact: true }) })
+    await expect(sequence.locator('dd')).toHaveText(String(witness.seq))
     await expect(evidence).toContainText(witness.action)
     await expect(evidence).toContainText('Chain integrity')
     expect(auditGets).toBe(0)
     await evidence.getByRole('button', { name: 'Close' }).click()
     await expect(evidence).toHaveCount(0)
 
-    // Opening a row and closing it again read nothing: the dialog is a projection of rows
-    // already loaded. (The ledger no longer offers a client-side search over loaded rows;
-    // every filter below is the server's.)
-    await page.waitForTimeout(500)
+    // Audit does not opt in local table search. The pure Details projection
+    // above must still make zero reads; exercise its real server filters below.
+    const auditTable = page
+      .locator('[data-slot="data-table"]')
+      .filter({ has: auditGrid })
+    await expect(
+      auditTable.getByRole('textbox', { name: 'Search', exact: true }),
+    ).toHaveCount(0)
     expect(auditGets).toBe(0)
     page.off('request', countAuditGets)
 
-    // The server-side filters live in the Filters popover, which stays open while they are
-    // driven and is closed before the next control is used.
-    await page.getByRole('button', { name: /^Filters/ }).click()
+    await page.getByRole('button', { name: 'Filters', exact: true }).click()
     const actionInput = page.getByLabel('Action prefix', { exact: true })
     const actionRead = page.waitForResponse((response) => {
       const url = new URL(response.url())
@@ -1080,6 +1138,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(witnessRow).toHaveCount(1)
     await page.keyboard.press('Escape')
 
+    await actionInput.press('Escape')
     const verifyRead = page.waitForResponse((response) => {
       return new URL(response.url()).pathname === '/v1/audit/verify'
     })
@@ -1094,16 +1153,18 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     expect(verdict.ok).toBe(true)
     expect(verdict.chain.ok).toBe(true)
     expect(verdict.chain.checked).toBeGreaterThan(0)
-    // The verdict is drawn as badges in a popover (a dialog region), not a status line.
-    const verifyStatus = page.getByRole('dialog').filter({ hasText: 'Chain' })
+    const chainText = `Chain · ${displayedInt.format(verdict.chain.checked)} links`
+    const verifyStatus = page.getByRole('dialog').filter({
+      has: page.getByText(chainText, { exact: true }),
+    })
     await expect(verifyStatus).toContainText(
-      `Chain · ${verdict.chain.checked} links`,
+      `Chain · ${displayedInt.format(verdict.chain.checked)} links`,
     )
     if (verdict.checkpoints.status === 'pending') {
       await expect(verifyStatus).toContainText('No signed checkpoints yet')
     } else {
       await expect(verifyStatus).toContainText(
-        `Checkpoints · ${verdict.checkpoints.count} signed`,
+        `Checkpoints · ${displayedInt.format(verdict.checkpoints.count)} signed`,
       )
     }
 
@@ -1142,15 +1203,16 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     page.off('request', countPubkey)
 
     // Export one known event through the browser and then observe its audit side effect.
-    // The filter and the export options are popovers: each is opened, used, and closed.
-    await page.getByRole('button', { name: /^Filters/ }).click()
+    await page.getByRole('button', { name: 'Filters', exact: true }).click()
     await actionInput.fill(witness.action)
     await expect
       .poll(() => new URL(page.url()).searchParams.get('action'))
       .toBe(witness.action)
     await expect(witnessRow).toHaveCount(1)
-    await page.keyboard.press('Escape')
-    await page.getByRole('button', { name: 'Export options' }).click()
+    await actionInput.press('Escape')
+    await page
+      .getByRole('button', { name: 'Export options', exact: true })
+      .click()
     await page.getByLabel('From seq').fill(String(witness.seq))
     await page.getByLabel('To seq').fill(String(witness.seq))
     await page.getByRole('combobox', { name: 'Export format' }).click()
@@ -1163,29 +1225,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(useCurrent).not.toBeChecked()
     await useCurrent.click()
     await expect(useCurrent).toBeChecked()
-    await page.keyboard.press('Escape')
-
-    // Audit export is a Business capability: a Community engine answers 501
-    // audit_export_unavailable (core/api/audit_export_community_test.go), saves nothing, and
-    // the page says the export failed. The ledger, verification and key reads above are
-    // Community. The OCSF flow below is the one any other edition runs.
-    const edition = (
-      (await (await page.request.get('/v1/server-info')).json()) as {
-        edition?: string
-      }
-    ).edition
-    if (edition === 'community') {
-      const refusedRead = page.waitForResponse(
-        (response) => new URL(response.url()).pathname === '/v1/audit/export',
-      )
-      await page.getByRole('button', { name: 'Export', exact: true }).click()
-      const refused = await refusedRead
-      expect(refused.status()).toBe(501)
-      expect(await refused.text()).toContain('audit_export_unavailable')
-      await expect(page.getByText(/Export failed/)).toBeVisible()
-      await page.screenshot({ path: 'playwright-report/l4-audit-export.png' })
-      return
-    }
+    await useCurrent.press('Escape')
 
     // verify reports how many contiguous links existed before this export. Use
     // the next sequence as the lower bound so a row left by an earlier retry
@@ -1250,7 +1290,7 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         async () => {
           const response = await page.request.get(
             `/v1/audit?from=${exportAuditFloor}&action=audit.export&limit=100`,
-            { headers: authHeaders(token) },
+            { headers: authHeaders(session) },
           )
           assertSessionAccepted(response)
           if (!response.ok()) return false

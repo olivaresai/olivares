@@ -10,7 +10,7 @@
     "retired": "Retiré",
     "search": "Rechercher des paquets",
     "emptyTitle": "Aucun paquet de skills installé",
-    "emptyDescription": "Installez un paquet avec olivares skills install ; il apparaît ensuite ici pour être attribué.",
+    "emptyDescription": "Choisissez un pack intégré ou installez depuis Git ci-dessus, puis ouvrez le pack pour gérer ses affectations.",
     "truncated": "Affichage des {{n}} premiers paquets",
     "truncatedHint": "Utilisez olivares skills ls --cursor pour lister la suite."
   },
@@ -18,14 +18,16 @@
     "skills": "Skills de ce paquet",
     "revisions": "Révisions",
     "revision": "révision {{n}}",
-    "revisionLine": "Révision {{n}} depuis {{source}}"
+    "revisionLine": "Révision {{n}} depuis {{source}}",
+    "activeContent": "agit au chargement : {{items}}"
   },
   "kind": {
     "workspace": "Département",
     "agent_group": "Groupe d'agents",
     "agent": "Agent",
     "template": "Modèle",
-    "session": "Session"
+    "session": "Session",
+    "folder": "Dossier"
   },
   "uses": {
     "title": "Attribué à",
@@ -36,7 +38,13 @@
     "confirmDescription": "Les nouvelles sessions de {{target}} ne reçoivent plus ces skills. Les conversations enregistrées conservent leur instantané.",
     "truncated": "Affichage des {{n}} premières attributions",
     "truncatedHint": "Utilisez olivares skills assignments --pack avec --cursor pour lister la suite.",
-    "unassignFrom": "Retirer l’attribution à {{target}}"
+    "unassignFrom": "Retirer l’attribution à {{target}}",
+    "useLatest": "Utiliser la dernière",
+    "useLatestFor": "Utiliser la dernière : {{target}}",
+    "moved": "Affectation déplacée vers la dernière révision",
+    "approveTitle": "Approuver des skills qui agissent au chargement ?",
+    "approveDescription": "La dernière révision affecte à {{target}} des skills sur lesquelles leur outil agit sans demander : {{skills}}. Approuvez-les seulement après les avoir examinées.",
+    "approve": "Approuver et utiliser la dernière"
   },
   "assign": {
     "title": "Attribuer",
@@ -47,6 +55,51 @@
     "noTargets": "Aucune cible de ce type que vous pouvez lire.",
     "submit": "Attribuer",
     "done": "Paquet de skills attribué",
-    "directoryFailed": "Les cibles n’ont pas pu être chargées. Fermez puis rouvrez le paquet pour réessayer."
+    "directoryFailed": "Les cibles n’ont pas pu être chargées. Fermez puis rouvrez le paquet pour réessayer.",
+    "approve": "J’ai examiné ces skills et j’approuve que leur outil agisse dessus au chargement : {{skills}}"
+  },
+  "install": {
+    "title": "Installer un pack de skills",
+    "workspace": "Espace de travail",
+    "workspaceHint": "Installez dans le catalogue ou affectez aussi la révision à un espace de travail.",
+    "catalogOnly": "Catalogue uniquement",
+    "assigned": "Pack installé et affecté",
+    "done": "Pack installé",
+    "assignmentFailed": "Pack installé ; échec de l’affectation : {{reason}}",
+    "failed": "Échec de l’installation : {{reason}}",
+    "unavailable": "Service indisponible",
+    "retryAssignment": "Réessayer l’affectation",
+    "retry": "Réessayer l’installation",
+    "builtins": "Packs intégrés",
+    "loading": "Chargement des packs intégrés…",
+    "pack": "Installer {{name}}",
+    "inCatalog": "Dans le catalogue",
+    "submit": "Installer",
+    "git": "Depuis Git",
+    "gitURL": "URL Git",
+    "ref": "Référence Git",
+    "subdir": "Sous-répertoire",
+    "gitSubmit": "Installer depuis Git",
+    "name": "Nom du pack",
+    "nameHint": "Facultatif ; utilise le nom du dépôt par défaut. Choisissez un nom distinct pour un autre pack du même dépôt.",
+    "held": "Pack installé. Il contient des skills qui agissent au chargement, il n’a donc pas été affecté : examinez-le puis affectez-le depuis sa fiche."
+  },
+  "update": {
+    "title": "Mises à jour",
+    "check": "Rechercher une mise à jour",
+    "checking": "Vérification…",
+    "current": "À jour à la révision {{n}}.",
+    "availableToast": "Une mise à jour est disponible",
+    "available": "Une mise à jour est disponible au-dessus de la révision {{n}}.",
+    "summary": "{{added}} ajoutées, {{changed}} modifiées, {{removed}} supprimées ; {{files}} fichiers diffèrent.",
+    "change": {
+      "added": "ajoutée",
+      "changed": "modifiée",
+      "removed": "supprimée"
+    },
+    "acts": "{{skill}} agit désormais au chargement : {{items}}. L’affecter demande votre approbation.",
+    "pinsKeep": "Les affectations existantes gardent leur révision tant que vous ne déplacez pas chacune avec « Utiliser la dernière ».",
+    "apply": "Appliquer cette mise à jour",
+    "applied": "Mise à jour publiée en révision {{n}}"
   }
 }

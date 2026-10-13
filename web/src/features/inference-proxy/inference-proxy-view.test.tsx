@@ -150,6 +150,19 @@ describe('el aviso de recorte de reglas DLP', () => {
   })
 })
 
+describe('the empty DLP rule list', () => {
+  // The seeded secret deny is not a stored rule, so the list is empty while the
+  // gate still blocks secrets in prompts. The screen has to say so.
+  it('says secrets in prompts are blocked by default', async () => {
+    api.listDLPRules.mockResolvedValue({ items: [], has_more: false })
+    wrap(<InferenceProxyView />)
+    expect(await screen.findByText('No DLP rules')).toBeVisible()
+    expect(
+      screen.getByText(/secrets in prompts are denied by default/i),
+    ).toBeVisible()
+  })
+})
+
 describe('InferenceProxyView', () => {
   it('forbids without the config read permission', () => {
     authState.can = () => false

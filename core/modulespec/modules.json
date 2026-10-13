@@ -87,7 +87,7 @@
     "constructor": "skills.New(skills.Options{})",
     "edition": "community",
     "kind": "catalog",
-    "standard": false,
+    "standard": true,
     "requires": [],
     "selectable": true,
     "published_26100": false,

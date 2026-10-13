@@ -166,6 +166,7 @@ func (a skillsTargetAuthority) AssignmentTargetRefs() map[string]api.EntityRef {
 		"workspace":   {CoreKind: api.CoreKindWorkspace, BodyIDField: "target_id", ResourceKind: "workspace", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsWorkspaceRead},
 		"agent_group": {CoreKind: api.CoreKindAgentGroup, BodyIDField: "target_id", ResourceKind: "agent_group", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsAgentRead},
 		"agent":       {CoreKind: api.CoreKindAgent, BodyIDField: "target_id", ResourceKind: "agent", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsAgentRead},
+		"folder":      {Kind: "sessions.workspace", BodyIDField: "target_id", LookupColumn: "workspace_ref", ConcealDeniedAsNotFound: true},
 		"template":    {Kind: "sessions.template", BodyIDField: "target_id", ConcealDeniedAsNotFound: true},
 		"session":     {Kind: "sessions.run", BodyIDField: "target_id", LookupColumn: "run_ref", WorkspaceColumn: "authz_workspace_id", ConcealDeniedAsNotFound: true},
 	}
@@ -214,7 +215,7 @@ func (a skillsTargetAuthority) PrepareSkillsTarget(ctx context.Context, mc api.M
 	}
 	fact, epoch, err := a.loadTargetFact(ctx, bounded, tenant, p, t)
 	if err != nil {
-		if write && errors.Is(err, store.ErrNotFound) && (t.Kind == "agent" || t.Kind == "agent_group") && mc.Resource.Kind == "skills:assignment" && mc.Resource.ID != "" {
+		if write && errors.Is(err, store.ErrNotFound) && (t.Kind == "folder" || t.Kind == "agent" || t.Kind == "agent_group") && mc.Resource.Kind == "skills:assignment" && mc.Resource.ID != "" {
 			prepared := skillsPreparedTarget{tenant: tenant, actor: p.Actor(), target: skills.StoredTarget{Target: t}, write: true, orphan: true, principal: p, assignmentRequest: assignmentRequest, assignmentAuthority: assignmentAuthority}
 			preparedCtx, release, prepareErr := prepared.requestContext(ctx)
 			if prepareErr != nil {
@@ -321,6 +322,9 @@ func (a skillsTargetAuthority) loadTargetFact(ctx, bounded context.Context, tena
 func targetWritePermission(t skills.Target, read auth.Permission, write bool) auth.Permission {
 	if !write {
 		return read
+	}
+	if t.Kind == "folder" {
+		return "sessions:workspace:admin"
 	}
 	if t.Kind == "workspace" {
 		return skillsWorkspaceWrite
@@ -593,6 +597,9 @@ func (a skillsTargetAuthority) targetFact(ctx context.Context, sc store.Scope, t
 			return skillsTargetFact{}, err
 		}
 		permission, stored.Version, stored.WorkspaceID, resourceID = row.Permission, row.Version, row.WorkspaceID, row.ID.String()
+		if t.Kind == "folder" {
+			entity = "sessions.workspace"
+		}
 	}
 	resource := auth.ResourceFor(permission)
 	if entity != "" {

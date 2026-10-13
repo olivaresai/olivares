@@ -39,7 +39,8 @@
     "sigstore-cosign": "Package digest and publisher signatures verified.",
     "none-origin-only": "Official HTTPS origin; no publisher signature.",
     "github-release-sha256": "Pinned SHA-256 from the official release metadata; no publisher signature.",
-    "unknown": "Unverified"
+    "unknown": "Unverified",
+    "catalog-sha256": "Catalog-pinned SHA-256"
   },
   "probe": "Probe version",
   "probeName": "Probe version at {{path}}",
@@ -167,5 +168,56 @@
     "notNow": "Not now",
     "close": "Close",
     "keyNeedsAccess": "Choosing a key needs permission to change profiles."
+  },
+  "from": {
+    "title": "Install from a URL",
+    "source": "Git or release URL",
+    "version": "Pinned version",
+    "review": "Review installation",
+    "hint": "Admit the tool in Catalog first. Its pinned version and SHA-256 digest are verified before installation.",
+    "tenant": "Select an organization to use its admitted tools."
+  },
+  "versions": {
+    "title": "Session versions",
+    "hint": "Choose the version new and resumed sessions use in this workspace. Agent selections take precedence.",
+    "workspace": "Workspace",
+    "chooseWorkspace": "Choose a workspace",
+    "version": "Session version",
+    "default": "Newest installed version",
+    "unavailable": "{{version}} (not installed)",
+    "save": "Save version",
+    "saved": "Session version saved.",
+    "chooseOrganization": "Choose an organization to select a workspace version.",
+    "failed": "Tool versions could not be read.",
+    "removeName": "Remove {{name}} {{version}}",
+    "removeHint": "Running sessions must stop first. A workspace pinned to this version cannot start until you install it again or clear its selection.",
+    "removed": "Tool version removed.",
+    "confirmRemoval": "Confirm removal",
+    "confirmPin": "Confirm version",
+    "pinHint": "New and resumed sessions will use {{name}}: {{version}}.",
+    "loading": "Loading workspaces and saved versions…"
+  },
+  "installed": {
+    "title": "Installed here",
+    "workspace": "What a new session in {{name}} receives.",
+    "reading": "Reading…",
+    "readFailed": "Could not read it: {{message}}",
+    "tools": "AI tools",
+    "packages": "Programs and registries",
+    "skills": "Skills",
+    "mcp": "MCP servers",
+    "none": "None",
+    "olivaresTools": "Olivares session tools",
+    "mcpDrivers": "For {{tools}} sessions.",
+    "noWorkspace": "No default workspace to read.",
+    "skillsOff": "The skills module is off: sessions receive none.",
+    "notReadable": "Your role cannot read skills.",
+    "skillsHint": "A session bound to a folder, template or agent also receives the skills pinned there.",
+    "workspacesTruncated": "The workspace list stopped before the default workspace: choose one in the workspace switcher.",
+    "toolsHint": "A session version saved in a tool's Install details replaces this for that registered workspace or agent.",
+    "profilesNotReadable": "Your role cannot read provider profiles.",
+    "packagesHint": "Declared by the provider profile each tool's new session uses ({{profiles}}). A tool without one gets a new profile that declares none.",
+    "packagesNoProfile": "These come from the provider profile each tool's sessions run under. None exists yet, and a new one declares none.",
+    "packagesRefused": "Not listed because no session can start yet: {{tools}}."
   }
 }

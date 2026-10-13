@@ -1217,17 +1217,7 @@ func exerciseCommunicationMessagingFreshHTTP(t *testing.T, estate communicationH
 	loginBody = communicationHTTPTestDecode[struct {
 		Token string `json:"token"`
 	}](t, login)
-	createdOrg := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-		loginBody.Token, "", map[string]any{"name": "K3 HTTP", "slug": "k3-http"}, nil)
-	if createdOrg.status != http.StatusCreated {
-		t.Fatalf("create tenant = %d: %s", createdOrg.status, createdOrg.raw)
-	}
-	var org struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}
-	org = communicationHTTPTestDecode[struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}](t, createdOrg)
+	org := createOrganizationFixture(t, eng.store, "K3 HTTP", "k3-http")
 	owner := createCommunicationHTTPTestUser(
 		t, eng, loginBody.Token, org.TenantID, "owner@k3-http.test", auth.RoleOwner,
 	)
@@ -1240,14 +1230,7 @@ func exerciseCommunicationMessagingFreshHTTP(t *testing.T, estate communicationH
 	third := createCommunicationHTTPTestUser(
 		t, eng, loginBody.Token, org.TenantID, "third@k3-http.test", auth.RoleEditor,
 	)
-	otherOrg := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-		loginBody.Token, "", map[string]any{"name": "Other", "slug": "k3-http-other"}, nil)
-	if otherOrg.status != http.StatusCreated {
-		t.Fatalf("create other tenant = %d: %s", otherOrg.status, otherOrg.raw)
-	}
-	other := communicationHTTPTestDecode[struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}](t, otherOrg)
+	other := createOrganizationFixture(t, eng.store, "Other", "k3-http-other")
 
 	// The production boot reloads the governance PDP for every durable tenant.
 	// Reopen the brand-new estate before activating its K3 traffic, exactly as a
@@ -2114,8 +2097,8 @@ func exerciseCommunicationHTTPAgent(
 		t.Fatalf("set agent sponsor external identity = %d: %s", scimUpdate.status, scimUpdate.raw)
 	}
 	// This is directory-source materialization, not a communication fixture: the
-	// roster row is written through the typed Store API and then every lifecycle,
-	// agent, credential, channel and message action below uses authenticated
+	// identity and lifecycle rows are written through the typed Store API; every
+	// core agent, credential, channel and message action below uses authenticated
 	// product operations. No communication row or credential is seeded.
 	if err := eng.store.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 		_, err := sc.Identities().Create(context.Background(), model.Identity{
@@ -2129,14 +2112,6 @@ func exerciseCommunicationHTTPAgent(
 	}
 
 	agentRef := "agent:k3-http-standalone"
-	registered := communicationHTTPTestRequest(t, eng, http.MethodPost,
-		"/v1/m/governance/agents", owner.token, tenant, map[string]any{
-			"identity_ref": agentRef, "source": "test-roster",
-			"sponsor_ref": sponsorRef, "criticality": "medium",
-		}, nil)
-	if registered.status != http.StatusCreated {
-		t.Fatalf("register agent lifecycle = %d: %s", registered.status, registered.raw)
-	}
 	createdAgent := communicationHTTPTestRequest(t, eng, http.MethodPost,
 		"/v1/agents", owner.token, tenant, map[string]any{
 			"name": "K3 standalone agent", "kind": "api", "external_id": agentRef,
@@ -2148,20 +2123,9 @@ func exerciseCommunicationHTTPAgent(
 	createdAgentBody := communicationHTTPTestDecode[struct {
 		ID model.ID `json:"id"`
 	}](t, createdAgent)
-	bound := communicationHTTPTestRequest(t, eng, http.MethodPost,
-		"/v1/m/governance/agents/"+createdAgentBody.ID.String()+"/identity",
-		owner.token, tenant, map[string]any{"identity_ref": agentRef}, nil)
-	if bound.status != http.StatusOK {
-		t.Fatalf("bind agent identity = %d: %s", bound.status, bound.raw)
-	}
-	boundBody := communicationHTTPTestDecode[struct {
-		IdentityID model.ID `json:"identity_id"`
-	}](t, bound)
-	if boundBody.IdentityID.IsZero() {
-		t.Fatal("bound agent identity is empty")
-	}
+	identityID := seedCommunicationAgentIdentity(t, eng, tenant, createdAgentBody.ID, owner.id, agentRef, sponsorRef)
 	agent := communicationHTTPTestAgent{
-		identityID: boundBody.IdentityID,
+		identityID: identityID,
 		externalID: agentRef,
 		token:      exchangeCommunicationHTTPTestAgentToken(t, eng, owner.token, agentRef),
 	}

@@ -120,22 +120,14 @@ func bootWorkLaunchAuthorityEstate(
 		t.Fatalf("login = %d: %s", code, raw)
 	}
 	adminToken, _ := login["token"].(string)
-	code, org, raw := doDemoViewJSON(t, handler, http.MethodPost, "/v1/system/orgs", adminToken, "",
-		map[string]any{"name": "work launch authority", "slug": "work-launch-authority"})
-	if code != http.StatusCreated {
-		t.Fatalf("create tenant = %d: %s", code, raw)
-	}
-	tenantID, _ := org["tenant_id"].(string)
-	if tenantID == "" {
-		t.Fatalf("created tenant has no id: %s", raw)
-	}
+	tenantID := createOrganizationFixture(t, eng.store, "work launch authority", "work-launch-authority").TenantID
 	// Use the real login's current, credential-bound principal. A bare agent
 	// label cannot mint the engine-managed hook credential for a work launch.
 	launcher, err := eng.authr.Authenticate(t.Context(), adminToken)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return workLaunchAuthorityEstate{eng: eng, tenant: model.TenantID(tenantID), marker: marker,
+	return workLaunchAuthorityEstate{eng: eng, tenant: tenantID, marker: marker,
 		launcher: launcher}
 }
 

@@ -223,6 +223,57 @@ describe('LicenseTab', () => {
     expect(await screen.findByText(/has expired/i)).toBeInTheDocument()
   })
 
+  it('names the paid term and the provisional lease apart, and never labels the lease "Expires"', async () => {
+    // A purchase in its refund window: expires_at is the 72 h lease, paid_through the annual term.
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      expires_at: '2026-10-15T12:00:00Z',
+      paid_through: '2027-10-12T12:00:00Z',
+      lease_until: '2026-10-15T12:00:00Z',
+    })
+    wrap(<LicenseTab />)
+    expect(await screen.findByText('Paid through')).toBeInTheDocument()
+    expect(screen.getByText(/10\/12\/2027/)).toBeInTheDocument()
+    expect(screen.getByText('Lease until')).toBeInTheDocument()
+    expect(screen.getByText(/10\/15\/2026/)).toBeInTheDocument()
+    expect(screen.getByText(/Renew before this date/)).toBeInTheDocument()
+    expect(screen.queryByText('Expires')).not.toBeInTheDocument()
+  })
+
+  it('does not claim a paid term for an expired licence: its lease end stays the one "Expires" date', async () => {
+    // The lease ended unrenewed (a refund looks the same): paid_through is still in the signed
+    // credential, but nothing a buyer can rely on any more.
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      status: 'expired',
+      expires_at: '2026-10-15T12:00:00Z',
+      paid_through: '2027-10-12T12:00:00Z',
+      lease_until: '2026-10-15T12:00:00Z',
+    })
+    wrap(<LicenseTab />)
+    expect(await screen.findByText('Expires')).toBeInTheDocument()
+    expect(screen.getByText(/10\/15\/2026/)).toBeInTheDocument()
+    expect(screen.queryByText('Paid through')).not.toBeInTheDocument()
+    expect(screen.queryByText('Lease until')).not.toBeInTheDocument()
+    expect(screen.getByText(/has expired/i)).toBeInTheDocument()
+  })
+
+  it('shows only the paid term once the lease is gone, and keeps "Expires" for a flat license', async () => {
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      paid_through: '2027-10-12T12:00:00Z',
+    })
+    const { unmount } = wrap(<LicenseTab />)
+    expect(await screen.findByText('Paid through')).toBeInTheDocument()
+    expect(screen.queryByText('Lease until')).not.toBeInTheDocument()
+    unmount()
+
+    api.getLicense.mockResolvedValue(validLicense) // expires_at only
+    wrap(<LicenseTab />)
+    expect(await screen.findByText('Expires')).toBeInTheDocument()
+    expect(screen.queryByText('Paid through')).not.toBeInTheDocument()
+  })
+
   it('disables install and explains when managed out-of-band', async () => {
     api.getLicense.mockResolvedValue({
       ...validLicense,

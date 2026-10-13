@@ -75,8 +75,6 @@
     "session-viewer": "セッションビューア",
     "backups": "バックアップ",
     "logs": "ログ",
-    "residency": "データレジデンシー",
-    "tenants": "テナント",
     "inferenceProxy": "推論プロキシ",
     "alerting": "アラート",
     "agentcoreExport": "AgentCore エクスポート",
@@ -146,8 +144,6 @@
     "audit": "改ざん検知可能な証拠台帳",
     "workspaceDashboard": "ワークスペースのエージェント、セッション、リソース、アクティビティ",
     "settings": "ワークスペースとアカウントの設定",
-    "residency": "各組織をリージョンに固定するか、未固定のままにします",
-    "tenants": "テナントのサービスを停止または再開する",
     "inferenceProxy": "プロキシゲート、エグレス DLP ルール、デバイス承認",
     "alerting": "検出結果を宛先にルーティングし配信を確認",
     "reporting": "ガバナンスレポートを生成・ダウンロード",
@@ -331,13 +327,32 @@
     "turnPlaceholder": "文を送信…",
     "turnAria": "セッションのターン",
     "attachedWaiting": "対応が必要",
-    "advanced": "詳細",
+    "rawLine": "生の行",
     "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
     "wirePlaceholder": "NDJSON 行を stdin に送信…",
     "wireAria": "セッション入力行",
     "turnFailed": "セッションはこのターンを受け付けられませんでした。",
     "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。",
-    "messagePlaceholder": "{{title}} にメッセージ…"
+    "messagePlaceholder": "{{title}} にメッセージ…",
+    "slashLabel": "コマンドとスキル",
+    "slashOption": "{{name}}、{{n}}件中{{i}}件目",
+    "slashNoMatch": "「{{query}}」に一致するコマンドはありません。",
+    "slash": {
+      "loading": "ツールのコマンドを読み込んでいます…",
+      "failed": "ツールのコマンドを読み取れませんでした。",
+      "unreported": "このツールは、このセッションのコマンドを報告しませんでした。",
+      "stale": "ツールのコマンドを更新できませんでした。この一覧は古い可能性があります。",
+      "agent": "エージェント",
+      "source": {
+        "built-in": "組み込み",
+        "user": "ユーザー",
+        "project": "プロジェクト",
+        "plugin": "プラグイン"
+      }
+    },
+    "modelAria": "このセッションのモデルと Effort: {{value}}",
+    "sessionKeeps": "このセッションは {{value}} のままです。別のモデルや Effort を使うには新しいセッションを開始します。",
+    "startWithChoice": "この選択で新しいセッションを開始"
   },
   "shell": {
     "journeysLabel": "作業の流れ",

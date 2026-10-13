@@ -245,49 +245,6 @@ func TestUsersCreateGrantsTheFirstMembershipInTheSameRequest(t *testing.T) {
 	}
 }
 
-func TestTenantsCreateAndListReachTheSystemOrgRoutes(t *testing.T) {
-	prepareBootstrapCLITest(t)
-	var created map[string]any
-	srv := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == orgsPath:
-			_ = json.NewDecoder(r.Body).Decode(&created)
-			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "org-1", "tenant_id": "t_acme", "name": "Acme GmbH", "slug": "acme",
-				"status": "active", "created_at": "2026-08-16T10:00:00Z",
-			})
-		case r.Method == http.MethodGet && r.URL.Path == orgsPath:
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{{
-				"id": "org-1", "tenant_id": "t_acme", "name": "Acme GmbH", "slug": "acme",
-				"status": "active", "created_at": "2026-08-16T10:00:00Z",
-			}}})
-		default:
-			http.NotFound(w, r)
-		}
-	})
-
-	out, _, err := execRoot(t, "tenants", "create", "--server", srv.URL, "--token", "olvk_su",
-		"--name", "Acme GmbH", "--slug", "acme")
-	if err != nil {
-		t.Fatalf("tenants create: %v", err)
-	}
-	if created["name"] != "Acme GmbH" || created["slug"] != "acme" {
-		t.Fatalf("create body = %#v", created)
-	}
-	if !strings.Contains(out, "t_acme") {
-		t.Fatalf("the new tenant id is not in the output — a script cannot continue:\n%s", out)
-	}
-
-	list, _, err := execRoot(t, "tenants", "ls", "--server", srv.URL, "--token", "olvk_su")
-	if err != nil {
-		t.Fatalf("tenants ls: %v", err)
-	}
-	if !strings.Contains(list, "t_acme") || !strings.Contains(list, "TENANT ID") {
-		t.Fatalf("tenants ls did not render the roster:\n%s", list)
-	}
-}
-
 func TestMembersGrantCarriesTheTenantInBodyAndHeader(t *testing.T) {
 	prepareBootstrapCLITest(t)
 	var body map[string]any
@@ -439,7 +396,6 @@ func TestFirstRunFamiliesRefuseWithoutACredentialBeforeOpeningAConnection(t *tes
 		{"tokens", []string{"tokens", "ls"}},
 		{"users", []string{"users", "ls"}},
 		{"members", []string{"members", "ls", "--tenant", "t_acme"}},
-		{"tenants", []string{"tenants", "ls"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			prepareBootstrapCLITest(t)
@@ -484,9 +440,7 @@ func TestFirstRunFamiliesMapAServerRefusalToTheAuthExitCode(t *testing.T) {
 	}{
 		{"tokens forbidden", []string{"tokens", "ls"}, http.StatusForbidden, exitcode.Auth},
 		{"users unauthorized", []string{"users", "ls"}, http.StatusUnauthorized, exitcode.Auth},
-		{"tenants forbidden", []string{"tenants", "ls"}, http.StatusForbidden, exitcode.Auth},
 		{"members forbidden", []string{"members", "ls", "--tenant", "t_a"}, http.StatusForbidden, exitcode.Auth},
-		{"tenants not found", []string{"tenants", "ls"}, http.StatusNotFound, exitcode.NotFound},
 		{"tokens server error", []string{"tokens", "ls"}, http.StatusInternalServerError, exitcode.Server},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -514,27 +468,6 @@ func TestFirstRunFamiliesMapAServerRefusalToTheAuthExitCode(t *testing.T) {
 // these routes an operator cannot act on from the generic message. Three
 // first-run-adjacent routes are AAL3-gated and unreachable from any CLI
 // credential; the reply must say so rather than read as "you lack a role".
-func TestStepUpRefusalNamesTheCeremonyInsteadOfABare403(t *testing.T) {
-	prepareBootstrapCLITest(t)
-	srv := newCountingServer(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = io.WriteString(w, `{"error":"auth: step-up required: this action requires a verified hardware authenticator (AAL3)"}`)
-	})
-	_, _, err := execRoot(t, "tenants", "set-status", "t_acme", "--status", "suspended", "--yes",
-		"--server", srv.URL, "--token", "olvk_su")
-	if err == nil {
-		t.Fatal("a step-up refusal must fail the command")
-	}
-	if got := exitcode.From(err); got != exitcode.Auth {
-		t.Fatalf("exit code = %d, want %d", got, exitcode.Auth)
-	}
-	for _, want := range []string{"AAL3", "console"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("the step-up refusal does not mention %q: %v", want, err)
-		}
-	}
-}
-
 // TestAuthBootstrapNamesTheSetupTokenWhenTheEngineRefusesIt: POST /v1/setup
 // answers its plain 403 for a mistyped token and for one already used (setup is
 // complete), deliberately alike (core/api/handlers_auth.go). The console says
@@ -625,9 +558,7 @@ func TestDestructiveFirstRunVerbsRefuseUnattendedConsent(t *testing.T) {
 		args []string
 	}{
 		{"tokens revoke", []string{"tokens", "revoke", "tok-1"}},
-		{"tenants rm", []string{"tenants", "rm", "t_acme"}},
 		{"invites revoke", []string{"members", "invites", "revoke", "inv-1", "--tenant", "t_a"}},
-		{"tenants suspend", []string{"tenants", "set-status", "t_acme", "--status", "suspended"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			prepareBootstrapCLITest(t)

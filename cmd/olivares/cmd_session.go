@@ -74,6 +74,8 @@ func newSessionCmd() *cobra.Command {
 		newSessionPeersCmd(),
 		newSessionLifecycleCmd("stop", "Stop a session", "/stop", "Stopped"),
 		newSessionLifecycleCmd("resume", "Resume a stopped session", "/resume", "Resumed"),
+		newSessionMoveCmd(),
+		newSessionHandoffCmd(),
 		newSessionInterruptCmd(),
 		newSessionRemoveCmd(),
 		newSessionEventsCmd(),
@@ -84,8 +86,11 @@ func newSessionCmd() *cobra.Command {
 // --- start -------------------------------------------------------------------
 
 func newSessionStartCmd() *cobra.Command {
+	return newSessionStartCmdWithConfig(&agentClientConfig{}, nil)
+}
+
+func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string]any) *cobra.Command {
 	var (
-		cfg                           agentClientConfig
 		tool, name, profile, template string
 		account                       string
 		model, effort, permission     string
@@ -166,7 +171,12 @@ func newSessionStartCmd() *cobra.Command {
 					return err
 				}
 			}
-			ws, err := cfg.folderWorkspace(ctx, root, dlp)
+			var ws map[string]any
+			if registered != nil && str(*registered, "workspace_ref") != "" {
+				ws = *registered
+			} else {
+				ws, err = cfg.folderWorkspace(ctx, root, dlp)
+			}
 			if err != nil {
 				return err
 			}
@@ -1018,13 +1028,17 @@ func newSessionListCmd() *cobra.Command {
 
 func newSessionShowCmd() *cobra.Command {
 	var cfg agentClientConfig
+	var activity bool
 	cmd := &cobra.Command{
 		Use:     "show <session>",
 		Aliases: []string{"get"},
 		Short:   "Show one session",
 		Long: "show prints one session's details: name, state, tool, folder, start time, cost so far\n" +
-			"and its id. Use it to check a session before you send to it, stop it or remove it.",
-		Example:           "  olivares session show my-app\n  olivares session show my-app -o json",
+			"and its id. Use it to check a session before you send to it, stop it or remove it.\n\n" +
+			"With --activity it prints what the session's tool is doing instead, as the console's side\n" +
+			"panel shows it: the agents it spawned, its background tasks, the files it changed, its own\n" +
+			"task list and its context. It is read from the tool's own transcript (Claude Code).",
+		Example:           "  olivares session show my-app\n  olivares session show my-app -o json\n  olivares session show my-app --activity -o json",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeSessions,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1035,6 +1049,15 @@ func newSessionShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if activity {
+				raw, err := cfg.fetchSessionActivity(cmd.Context(), run)
+				if err != nil {
+					return err
+				}
+				return renderOut(cmd, func(w io.Writer) error {
+					return printSessionActivity(w, raw, str(run, "workspace_path"))
+				}, raw)
+			}
 			return renderOut(cmd, func(w io.Writer) error {
 				printSessionFields(w, run)
 				return nil
@@ -1042,6 +1065,7 @@ func newSessionShowCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
+	cmd.Flags().BoolVar(&activity, "activity", false, "print what the session's tool is doing: agents, background tasks, files, task list, context")
 	return cmd
 }
 

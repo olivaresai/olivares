@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/connectors/awskms"
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -97,44 +96,5 @@ func TestNoSecretValueLeaks(t *testing.T) {
 	}
 	if len(sink.edges) == 0 {
 		t.Fatal("expected edges")
-	}
-}
-
-// TestSnapshotInventory checks the secret_store inventory: the KMS and
-// Secrets Manager custodians seen in the export converge as secret_store NHIs.
-func TestSnapshotInventory(t *testing.T) {
-	s := open(t)
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if g.Source != identitysource.SourceAWSKMS {
-		t.Errorf("graph source = %q", g.Source)
-	}
-	got := map[string]identitysource.Identity{}
-	for _, id := range g.Identities {
-		if id.Type != identitysource.PrincipalNHI || id.Kind != identitysource.KindSecretStore {
-			t.Errorf("store NHI has wrong type/kind: %+v", id)
-		}
-		got[id.Ref] = id
-	}
-	for _, want := range []string{
-		"aws.kms:111122223333:us-west-2",
-		"aws.secretsmanager:111122223333:us-west-2",
-	} {
-		if _, ok := got[want]; !ok {
-			t.Errorf("missing store NHI %q in %v", want, got)
-		}
-	}
-}
-
-func TestOfflineEmptyGraph(t *testing.T) {
-	s := awskms.New() // not opened => no path
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(g.Identities) != 0 {
-		t.Fatalf("offline graph not empty: %+v", g)
 	}
 }

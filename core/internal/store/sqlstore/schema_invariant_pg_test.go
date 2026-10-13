@@ -11,26 +11,23 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	osexec "os/exec"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
+	"github.com/olivaresai/olivares/core/internal/pgtest"
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// This file is the server-gated half of the trigger-boundary proof: it runs
-// wherever a PostgreSQL DSN is configured — locally (the dev container carries a
-// live PostgreSQL; export OLIVARES_TEST_POSTGRES_SUPERUSER_DSN and
-// OLIVARES_TEST_POSTGRES_DSN, see CONTRIBUTING.md) and in CI. Without the DSN it
-// skips OUTSIDE CI only; inside CI a missing fixture FAILS (see
-// requirePostgresSuperuserDSN), because a skipped regression is not evidence. The
-// pure policy matrix runs everywhere — see schema_invariant_policy_test.go.
-// (An earlier revision of this header claimed the container had no PostgreSQL and
-// labeled all of this CI-only/UNVERIFIED LOCALLY. That was false — the server was
-// here and nobody ran pg_isready — and it is exactly how a red PostgreSQL leg hid
-// behind a green check. Do not reintroduce that claim without running the leg.)
+// This file is the server-gated half of the trigger-boundary proof. It uses the
+// shared pgtest fixture policy: unconfigured module jobs skip explicitly, while
+// incomplete fixtures and unreachable required servers fail. The dedicated
+// PostgreSQL job configures the fixtures and declares the server required.
+// The pure policy matrix runs everywhere — see schema_invariant_policy_test.go.
 //
 // What only a real server can settle — and no pure-Go test can — is not
 // one claim but six:
@@ -50,35 +47,60 @@ import (
 // Each test provisions its own database and role from the superuser DSN, so it is
 // re-runnable without cleanup and cannot collide with a sibling test.
 
-// requirePostgresSuperuserDSN returns the superuser DSN, or ends the test.
-//
-// The distinction it draws is the whole point. OUTSIDE CI a missing DSN means "no
-// PostgreSQL is CONFIGURED here" — a legitimate skip on a machine without one, but
-// note the dev container DOES carry a live server (CONTRIBUTING.md has the DSNs).
-// INSIDE CI it means the fixture the workflow promises has gone missing, and a test
-// that skips there is not evidence of anything while still reporting green. That is
-// how a PostgreSQL regression can sit in the suite for months and never once run.
-//
-// Every job that runs ordinary Go tests over this package declares a postgres:16
-// service and this variable: mainline-ci's control-plane (:62-81) and race-hot
-// (:239-254), and the weekly race-full sweep (race-full.yml:44-59, :112-114). No other
-// job does — fuzz runs with -run '^$', provider-ci runs in a different module, and
-// e2e-claude selects by -run — so a hard failure here cannot fire spuriously. If such a
-// job is ever added, this failure is the correct outcome: it forces a decision instead
-// of silently dropping coverage.
+// requirePostgresSuperuserDSN uses the same fixture gate as the rest of the suite.
+// CI alone does not promise a PostgreSQL service: main-suite has separate module
+// and PostgreSQL jobs. The latter declares pgtest.EnvRequired through
+// scripts/ci-postgres-service.sh so an unreachable fixture cannot become a skip.
 func requirePostgresSuperuserDSN(t *testing.T, what string) string {
 	t.Helper()
-	dsn := os.Getenv("OLIVARES_TEST_POSTGRES_SUPERUSER_DSN")
-	if dsn != "" {
-		return dsn
+	if !pgtest.Available(t) {
+		t.Skipf("set %s and %s to run %s", pgtest.EnvSuperuserDSN, pgtest.EnvAppDSN, what)
 	}
-	if os.Getenv("CI") != "" {
-		t.Fatalf("OLIVARES_TEST_POSTGRES_SUPERUSER_DSN is unset in CI, so %s did not run. "+
-			"A skipped PostgreSQL regression is not coverage: restore the postgres service "+
-			"and this variable for this job, or move the test out of it deliberately", what)
+	return os.Getenv(pgtest.EnvSuperuserDSN)
+}
+
+func TestPostgresSchemaInvariantsFixtureGate(t *testing.T) {
+	for _, test := range []string{
+		"TestPostgresTriggerDefinitionBindsTriggerAndFunction",
+		"TestPostgresTriggerEnableStateMatrix",
+		"TestPostgresOpenAcceptsTwoRequiredHomonyms",
+		"TestPostgresOpenRefusesAGuardMissingFromItsTable",
+	} {
+		t.Run(test, func(t *testing.T) {
+			for _, tc := range []struct {
+				name        string
+				env         []string
+				wantFailure bool
+				want        string
+			}{
+				{"unconfigured", nil, false, "--- SKIP: " + test},
+				{"app_only", []string{pgtest.EnvAppDSN + "=postgres://fixture@127.0.0.1:1/fixture"}, true, pgtest.EnvSuperuserDSN + " is not"},
+				{"admin_only", []string{pgtest.EnvAdminDSN + "=postgres://fixture@127.0.0.1:1/fixture"}, true, pgtest.EnvSuperuserDSN + " is not"},
+				{"required_unreachable", []string{
+					pgtest.EnvSuperuserDSN + "=postgres://fixture@127.0.0.1:1/fixture",
+					pgtest.EnvAppDSN + "=postgres://olivares_app:fixture@127.0.0.1:1/fixture",
+					pgtest.EnvRequired + "=1",
+				}, true, "UNVERIFIED: " + pgtest.EnvRequired},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+					defer cancel()
+					cmd := osexec.CommandContext(ctx, os.Args[0], "-test.run=^"+test+"$", "-test.v")
+					for _, entry := range os.Environ() {
+						if !strings.HasPrefix(entry, "OLIVARES_TEST_POSTGRES_") && !strings.HasPrefix(entry, "OLIVARES_TEST_PG_") && !strings.HasPrefix(entry, "CI=") {
+							cmd.Env = append(cmd.Env, entry)
+						}
+					}
+					cmd.Env = append(cmd.Env, "CI=1")
+					cmd.Env = append(cmd.Env, tc.env...)
+					output, err := cmd.CombinedOutput()
+					if (err != nil) != tc.wantFailure || !strings.Contains(string(output), tc.want) {
+						t.Fatalf("want failure=%t and %q, got %v\n%s", tc.wantFailure, tc.want, err, output)
+					}
+				})
+			}
+		})
 	}
-	t.Skipf("set OLIVARES_TEST_POSTGRES_SUPERUSER_DSN to run %s (the dev container has a live PostgreSQL; see CONTRIBUTING.md)", what)
-	return ""
 }
 
 // pgTestDB gives a test its own database through pgtest and returns a pool

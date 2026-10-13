@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
+[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -22,8 +22,29 @@
 Olivares AI собирает ответы в одном месте. Он подключается к агентам и инструментам, которыми вы уже пользуетесь, показывает действия каждого, применяет ваши правила перед выполнением операции и сохраняет подписанную запись обо всём. Это одна программа на ваших собственных серверах. Полный продукт бесплатен и имеет открытый исходный код.
 
 <div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
-<br><sub><b>Карта доступа</b> — что каждый агент читает и записывает, и та запись, которую никто не разрешал.</sub>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
+  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Экран «Кокпит» консоли Olivares AI">
+</picture>
+<br><sub><b>Кокпит</b> — что сейчас делает каждый агент, какие одобрения ждут вас и лимиты использования каждой учётной записи.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
+  <img src=".github/assets/console-session-light.webp" width="840" alt="Экран «Сессия» консоли Olivares AI">
+</picture>
+<br><sub><b>Сессия</b> — разговор рядом с планом, агентами, фоновыми задачами, изменёнными файлами и лимитами использования.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
+  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Экран «Параллельные сессии» консоли Olivares AI">
+</picture>
+<br><sub><b>Параллельные сессии</b> — шесть агентов работают рядом, каждый в своей ветке, с последним выводом, стоимостью и лимитом использования.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
+  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Экран «Карта доступа» консоли Olivares AI">
+</picture>
+<br><sub><b>Карта доступа</b> — что каждый агент читает и записывает, в сравнении с тем, что ему разрешено.</sub>
 </div>
 
 ## Что оно делает
@@ -56,7 +77,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.1 \
+  docker.io/olivaresai/olivares:0.2 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->

@@ -88,6 +88,8 @@ changes, over the commits the remote does not have yet, in under two minutes:
 - SPDX headers of the changed files (`scripts/check-spdx.sh --files`);
 - no generated console output in the push (`scripts/check-web-bundle-freshness.sh`);
 - the license boundary (`task lint:boundary`) when Go code or modules changed;
+- migration immutability (`scripts/check-migrations.sh`, against the merge base with
+  `origin/main`) when Go code or a migration file changed;
 - `go vet` on the touched packages and their tests (`scripts/changed-go-packages.sh`);
 - the commit identity of the pushed commits (`task lint:commit-identity`), a hub-only leg
   that answers NOT APPLICABLE in the public tree.

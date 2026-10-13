@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -321,8 +322,10 @@ func TestResolve_HTTPShape(t *testing.T) {
 		t.Fatalf("own login carries a provider: %s", r.raw)
 	}
 	if r := h.do("GET", "/v1/m/sessions/provider-profiles/resolve?driver=claude", admin, tenantHdr(tenant)); r.code != http.StatusOK ||
-		r.body["reason"] != "own_login" || r.body["profile"] != nil || r.body["created"] != nil {
-		t.Fatalf("preview = %d %s, want the reason only", r.code, r.raw)
+		r.body["reason"] != "own_login" || r.body["created"] != nil {
+		t.Fatalf("preview = %d %s, want the reason and no created", r.code, r.raw)
+	} else if got, _ := r.body["profile"].(map[string]any); got["profile_ref"] != prof["profile_ref"] {
+		t.Fatalf("preview profile = %v, want the one the resolve made (%v)", r.body["profile"], prof["profile_ref"])
 	}
 	stub.mu.Lock()
 	stub.signedIn["claude"] = false
@@ -539,5 +542,58 @@ func TestResolve_UnreadableSignInCarriesAStableCode(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// AI tools > Installed here lists what a new session receives: the preview names the
+// profile a launch would reuse, with the programs and registries it declares, and
+// still writes nothing. Before a profile exists it names none: the launch creates one
+// that declares neither.
+func TestResolve_PreviewNamesTheProfileALaunchReuses(t *testing.T) {
+	m, tenant, stub := resolveHarness(t)
+	ctx := context.Background()
+	stub.signedIn["claude"] = true
+	if got, err := m.PreviewProfile(ctx, tenant, "claude"); err != nil || got.Profile.Ref != "" {
+		t.Fatalf("preview before any profile = %+v %v, want none", got, err)
+	}
+	// A read: not even the own-login folder the launch makes is created.
+	if _, cfg, _ := m.OwnToolLoginHomes(tenant, "claude"); cfg == "" {
+		t.Fatal("no own-login folder for claude")
+	} else if _, err := os.Stat(cfg); !os.IsNotExist(err) {
+		t.Fatalf("the preview created %s (%v)", cfg, err)
+	}
+	resolved, err := m.ResolveProfile(ctx, tenant, "claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	programs := []string{"jq"}
+	regs := []SessionRegistry{{Kind: "npm", URL: "https://npm.acme.example/", Scope: "@acme"}}
+	if _, err := m.PatchProfile(ctx, tenant, resolved.Profile.Ref, ProfilePatch{
+		SessionPrograms: &programs, SessionRegistries: &regs, MayUseSecretEnv: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := m.PreviewProfile(ctx, tenant, "claude")
+	if err != nil || got.Profile.Ref != resolved.Profile.Ref || got.Created ||
+		!slices.Equal(got.Profile.SessionPrograms, programs) || !slices.Equal(got.Profile.SessionRegistries, regs) {
+		t.Fatalf("preview = %+v %v, want profile %s with its programs and registries", got.Profile, err, resolved.Profile.Ref)
+	}
+	if all, _, err := m.ListProfiles(ctx, tenant, ProfileActive, model.Query{Limit: 50}); err != nil || len(all) != 1 {
+		t.Fatalf("profiles after the previews = %d (%v), want 1", len(all), err)
+	}
+	// A node with no execution environment has no profile to reuse: the preview still
+	// answers (the launch refuses with its own error), and readiness does not read it.
+	m.UseExecutionEnvironmentRef("")
+	if got, err := m.PreviewProfile(ctx, tenant, "claude"); err != nil || got.Reason != ResolveOwnLogin || got.Profile.Ref != "" {
+		t.Fatalf("preview without an environment = %+v %v, want the reason and no profile", got, err)
+	}
+	ready, err := m.ToolsReadiness(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range ready {
+		if tool.Driver == "claude" && (!tool.Ready || tool.Reason != ResolveOwnLogin) {
+			t.Fatalf("claude readiness without an environment = %+v, want ready on its own login", tool)
+		}
 	}
 }

@@ -43,7 +43,7 @@ func TestCommunityBuildAnswers501ForDepartments(t *testing.T) {
 	}
 	do("POST", "/v1/setup", "", "", map[string]any{"token": setup, "email": "root@departments.test", "password": "departments-root-password"}, 201)
 	root := do("POST", "/v1/auth/login", "", "", map[string]any{"email": "root@departments.test", "password": "departments-root-password"}, 200)["token"].(string)
-	tenant := do("POST", "/v1/system/orgs", root, "", map[string]any{"name": "departments", "slug": "departments"}, 201)["tenant_id"].(string)
+	tenant := createOrganizationFixture(t, eng.store, "departments", "departments").TenantID.String()
 	sales := do("POST", "/v1/workspaces", root, tenant, map[string]any{"name": "Sales", "slug": "sales"}, 201)["id"].(string)
 	emea := do("POST", "/v1/workspaces", root, tenant, map[string]any{"name": "EMEA", "slug": "emea"}, 201)["id"].(string)
 	group := func(name string) string {

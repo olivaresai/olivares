@@ -72,7 +72,7 @@ type editionPorts struct {
 	groupMapper editionPort[auth.GroupMapper]
 	// nil never enforces: a stored require_sso / CIDR posture is inert dead data.
 	loginPolicy func(getenv func(string) string, fed *auth.FederationService, log *slog.Logger) auth.LoginPolicy
-	// nil pushes no CAEP event; the open receiver (core/auth/caep_events.go) is unaffected.
+	// nil pushes no CAEP event; the receiver is separately wired by the Identity & Scale edition seam.
 	caepTransmitter func(getenv func(string) string, log *slog.Logger) (caepTransmitter, error)
 	// nil makes "conjur" an unknown source kind.
 	inProcSource func(kind string) (sdk.SourceConnector, bool)
@@ -174,6 +174,9 @@ type editionPorts struct {
 	moduleRegistrars func(EditionConfig) []api.Module
 	// nil opens no extra port.
 	agentServers editionPort[[]editionAuxServer]
+	// nil adds no promotion recovery. Constructed once per serving boot before
+	// OnPromote/Run; a non-nil result is boot-owned even when construction fails.
+	promotionRecovery func(context.Context, EditionConfig, []api.Module, store.Store, *slog.Logger) (EditionPromotionRecovery, error)
 	// nil: there are no private read resources to bind or close.
 	bindModuleDependencies func(context.Context, EditionConfig, []api.Module, EditionDependencies, *slog.Logger) ([]io.Closer, error)
 }

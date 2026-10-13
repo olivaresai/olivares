@@ -12,11 +12,9 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/residency"
 )
 
 type infraFixedClock struct{ now time.Time }
@@ -100,66 +98,6 @@ func TestConsoleKeyCustodyDefaultsToEmptyList(t *testing.T) {
 	keys, ok := r.body["keys"].([]any)
 	if r.code != http.StatusOK || !ok || len(keys) != 0 {
 		t.Fatalf("default key inventory = %d %s, want {keys:[]}", r.code, r.raw)
-	}
-}
-
-func TestResidencyRegistryAndSetOrgRegion(t *testing.T) {
-	reg, err := residency.NewRegistry("eu", []string{"us", "eu"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	h := newHarnessOpts(t, func(o *api.Options) { o.Residency = reg })
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-
-	registry := h.do(http.MethodGet, "/v1/system/residency", admin, nil, nil)
-	if registry.code != http.StatusOK {
-		t.Fatalf("GET residency = %d %s", registry.code, registry.raw)
-	}
-	regions := registry.body["regions"].([]any)
-	if registry.body["home_region"] != "eu" || registry.body["enforces"] != true ||
-		len(regions) != 2 || regions[0] != "eu" || regions[1] != "us" {
-		t.Fatalf("residency registry = %s", registry.raw)
-	}
-
-	// RBAC is evaluated before assurance: a tenant admin remains forbidden even
-	// after elevation because the write is system/superadmin-only.
-	member := h.mkMember(admin, "tenant-admin@acme.io", "tenantadmin1", auth.RoleAdmin, tenant)
-	// Members are added before the passkey step-up is required: adding a person asks
-	// for the same step-up (HU-28).
-	h.requirePasskeyStepUp()
-	h.elevate(member)
-	if denied := h.do(http.MethodPut, "/v1/system/orgs/"+tenant.String()+"/region", member,
-		map[string]any{"data_region": "eu"}, tenantHdr(tenant)); denied.code != http.StatusForbidden ||
-		errCode(denied.body) == "step_up_required" {
-		t.Fatalf("tenant admin set region = %d %s, want RBAC 403", denied.code, denied.raw)
-	}
-
-	if stepUp := h.do(http.MethodPut, "/v1/system/orgs/"+tenant.String()+"/region", admin,
-		map[string]any{"data_region": "eu"}, nil); stepUp.code != http.StatusForbidden ||
-		errCode(stepUp.body) != "step_up_required" {
-		t.Fatalf("AAL1 set region = %d %s, want 403 step_up_required", stepUp.code, stepUp.raw)
-	}
-	h.elevate(admin)
-
-	system := h.do(http.MethodPut, "/v1/system/orgs/"+model.SystemTenantID.String()+"/region", admin,
-		map[string]any{"data_region": "eu"}, nil)
-	if system.code != http.StatusBadRequest {
-		t.Fatalf("system-tenant set region = %d %s, want 400", system.code, system.raw)
-	}
-
-	unknown := h.do(http.MethodPut, "/v1/system/orgs/"+tenant.String()+"/region", admin,
-		map[string]any{"data_region": "moon"}, nil)
-	if unknown.code != http.StatusBadRequest ||
-		!strings.Contains(unknown.raw, `unknown region \"moon\"`) ||
-		!strings.Contains(unknown.raw, "known regions: eu, us") {
-		t.Fatalf("unknown region = %d %s, want known-region diagnostic", unknown.code, unknown.raw)
-	}
-
-	ok := h.do(http.MethodPut, "/v1/system/orgs/"+tenant.String()+"/region", admin,
-		map[string]any{"data_region": "EU"}, nil)
-	if ok.code != http.StatusOK || ok.body["tenant_id"] != tenant.String() || ok.body["data_region"] != "eu" {
-		t.Fatalf("set region = %d %s", ok.code, ok.raw)
 	}
 }
 

@@ -7,6 +7,10 @@ description: >-
   gouvernierter Aktuierung.
 ---
 
+:::note[Edition]
+Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs) sowie der Lebenszyklus verwalteter Identitäten benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, eingehendes SCIM für Benutzer/Gruppen, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
+:::
+
 Modul VI ist die **Governance-Plane über dem bestehenden Autorisierungsmodell der
 Engine** — es implementiert den Enforcer oder die Identitäts-Connectors **nicht** neu,
 es konsumiert sie. Es bindet fünf Subsysteme hinter einem Bounded Context (Identität

@@ -282,6 +282,7 @@
     "matchActionHint": "Leer = passt auf jede Aktion.",
     "matchSubjectKind": "Gegenstandsart abgleichen",
     "matchSubjectKindHint": "Leer = passt auf jede Gegenstandsart.",
+    "needsBusiness": "Eine Risikostufe unter den Standard der Aktion zu senken erfordert Business. Schalten Sie diese Richtlinie aus, um sie gespeichert zu lassen.",
     "create": "Richtlinie erstellen",
     "save": "Änderungen speichern",
     "confirmCreateBody": "Eine aktivierte ABAC-Richtlinie schränkt den Zugriff sofort weiter ein; eine aktivierte Genehmigungsrichtlinie beginnt, für passende Aktionen menschliche Genehmigungen zu verlangen. Wird sofort wirksam.",
@@ -315,15 +316,6 @@
     "principalTypeNhi": "NHI",
     "principalTypeUnknown": "Unbekannt"
   },
-  "resync": {
-    "title": "Die Identitätsliste neu abgleichen?",
-    "body": "Sie gleicht jede Identität und Gruppe für diesen Mandanten aus den konfigurierten Verzeichnisquellen ab. Wird im Prüfpfad festgehalten.",
-    "confirm": "Neu abgleichen",
-    "done": "Liste abgeglichen",
-    "result": "Quellen {{sources}} · Identitäten {{identities}} · Gruppen {{collections}} · Mitgliedschaften {{memberships}}.",
-    "partial": "{{failed}} Quelle(n) haben NICHT geantwortet und wurden übersprungen: {{providers}}. Die obigen Zahlen decken nur die antwortenden ab.",
-    "noProviders": "Für diesen Mandanten sind keine Identitätsanbieter konfiguriert — es wurde nichts abgeglichen."
-  },
   "groups": {
     "title": "Gruppen",
     "caption": "Abgeglichene Sammlungen (Gruppen, Rollen, Richtlinien), gespiegelt aus einer Verzeichnisquelle.",
@@ -348,7 +340,8 @@
     "kindIdentity": "Identität",
     "kindCollection": "Sammlung",
     "empty": "Keine Mitglieder",
-    "emptyHint": "Hier werden die Subjekte aufgeführt, die zu dieser Gruppe gehören. Fügen Sie ein Mitglied hinzu, um zu beginnen."
+    "emptyHint": "Hier werden die Subjekte aufgeführt, die zu dieser Gruppe gehören. Fügen Sie ein Mitglied hinzu, um zu beginnen.",
+    "truncated": "Einige verschachtelte Gruppen liegen tiefer als die Durchlaufgrenze; Mitglieder unterhalb dieser Tiefe werden nicht aufgeführt."
   },
   "bindings": {
     "title": "Agent-Bindungen",
@@ -594,12 +587,12 @@
       "description": "Binden Sie einen Agenten an eine vorhandene oder neu ausgestellte NHI, damit seine Aktionen dieser Identität in der Zugriffskarte zugeordnet werden."
     },
     "group": {
-      "title": "Noch keine Verzeichnisgruppen abgeglichen",
-      "description": "Konfigurieren Sie eine Verzeichnisquelle und gleichen Sie deren Gruppen, Rollen, Richtlinien und Mitgliedschaften erneut ab."
+      "title": "Noch keine Gruppen",
+      "description": "Gruppen erscheinen hier, sobald eine Verzeichnisquelle sie meldet."
     },
     "identity": {
-      "title": "Noch keine Identitäten abgeglichen",
-      "description": "Konfigurieren Sie eine Verzeichnisquelle und gleichen Sie deren menschliche und nicht-menschliche Identitäten für diesen Mandanten erneut ab."
+      "title": "Noch keine Identitäten",
+      "description": "Identitäten erscheinen hier, sobald Agenten auf Ressourcen zugreifen oder Sie einen Agenten an eine Identität binden."
     },
     "policies": {
       "title": "Noch keine Regeln",
@@ -666,45 +659,6 @@
     "pageTitle": "AgentCore-Export",
     "emptyAction": "Ersten Plan berechnen"
   },
-  "registerAgent": {
-    "action": "Agent registrieren",
-    "title": "Agenten-Identität registrieren",
-    "body": "Legt eine kontrollierte Lifecycle-Zeile an — oder stuft eine bestehende Identität hoch.",
-    "identityRef": "Agenten-Identität",
-    "identityRefHint": "Die Identitätsreferenz im Verzeichnis.",
-    "sponsorRef": "Sponsor",
-    "sponsorRefHint": "Pflichtfeld. Muss eine MENSCHLICHE Identität sein, die bereits im Verzeichnis steht — alles andere lehnt die Engine ab.",
-    "source": "Quelle",
-    "criticality": "Kritikalität",
-    "noCriticality": "Nicht gesetzt",
-    "submit": "Registrieren",
-    "created": "Agenten-Identität registriert",
-    "promoted": "Bestehende Identität zum Agenten hochgestuft",
-    "crit": {
-      "low": "Niedrig",
-      "medium": "Mittel",
-      "high": "Hoch",
-      "critical": "Kritisch"
-    }
-  },
-  "emerging": {
-    "tab": "Aufkommende Standards",
-    "title": "Aufkommende Standards für Agenten-Identität",
-    "description": "Ein „Design-toward“-Register: was wir verfolgen, wo es andocken würde und warum es nicht implementiert ist.",
-    "noAccess": "Sie haben keinen Zugriff auf das Identitätsregister.",
-    "noAccessHint": "Dieses Panel verfolgt die Standards, an denen sich die Plattform ausrichtet. Bitten Sie eine Administratorin um die Leseberechtigung für die Identitätsregistrierung.",
-    "empty": "Nichts verfolgt",
-    "emptyHint": "Standards, an denen sich die Plattform ausrichtet, erscheinen hier mit ihrem Status. Es wird noch keiner verfolgt.",
-    "verifiedAt": "Revisionen im {{month}} gegen Primärquellen geprüft. Sie ändern sich — als Datum verstehen, nicht als Zusage.",
-    "spec": "Spezifikation",
-    "revision": "Revision",
-    "seam": "Würde andocken bei",
-    "authority": "Primärquelle",
-    "status": {
-      "draft": "Entwurf — nicht fest verdrahten",
-      "stable": "Stabil — eine Schnittstelle darf darauf zielen"
-    }
-  },
   "preview": {
     "title": "Was ausgeführt wird",
     "session": "Sitzung",
@@ -726,5 +680,8 @@
     "member": "Ein Mitglied",
     "apiToken": "Ein API-Token",
     "requestSummary": "Anfrage"
+  },
+  "list": {
+    "loadedOnly": "Die Suche umfasst nur die bisher geladenen Zeilen; weitere Zeilen lassen sich nachladen."
   }
 }

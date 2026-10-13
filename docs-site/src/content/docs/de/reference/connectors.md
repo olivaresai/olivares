@@ -102,8 +102,8 @@ ehrlich, statt gesund zu erscheinen).
 | `claude-api` | Claude Admin-API Kostenproben + Governance-Posture-Findings | In-process; ein No-op offline (kein Admin-Key) |
 | `claude-compliance` | Claude Compliance Activity-Feed-Evidence → Findings | GET-only per Konstruktion; No-op offline |
 | `claude-config` | Statischer Claude-Config-Baum (Subagents / Skills / Plugins) → **declared-capability**-Kanten | Nur Metadaten — eine Capability-Oberfläche, kein beobachteter Zugriff |
-| `claude-console` | Claude-Org-IAM → SSO/SCIM-Posture-Findings (Identitäts-Roster + Quelle) | |
-| `claude-wif` | Anthropic Non-Human-Identity / Workload-Identity-Roster + permitted-scope-Kanten | Modelliert vom Operator deklarierte Föderation; markiert Static-Key-Footguns |
+| `claude-console` | Claude-Org-IAM → SSO/SCIM-Posture-Findings (Identitäts-Roster + Quelle) | Business: Identity & Scale;  |
+| `claude-wif` | Anthropic Non-Human-Identity / Workload-Identity-Roster + permitted-scope-Kanten | Business: Identity & Scale; Modelliert vom Operator deklarierte Föderation; markiert Static-Key-Footguns |
 | `claude-managed-agents` | Inventar verwalteter Claude-Agents + Thread-Events (Webhook-Empfänger + GET-Poller) | Streaming-Quelle (`poll_seconds: 0`); offline ein No-op |
 | `claude-projects` | Inventar von Claude Organization Projects (Mitgliedschaft / API-Keys) + vom Operator deklarierte Projekt-Policy | Read-only Admin API; offline ein No-op |
 | `claude-apps-gateway` | Claude-Apps-Gateway-Posture, deklarierte Modell-Grants und Audit-Event-Ingest → Topologie + Findings | Liest eine vorhandene `gateway.yaml` und optionalen JSONL-Audit-Export |

@@ -19,7 +19,11 @@ vi.mock('./extensions', async () => {
     { id: 'team-costs', path: '/team-costs', heading: 'Team costs' },
   ]
   return {
+    LAUNCH_IDENTITY_EXTENSION: undefined,
     PANEL_EXTENSIONS: {
+      identityTabs: [],
+      governanceTabs: [],
+      executiveRiskCards: [],
       capabilitiesTabs: [],
       complianceTabs: [],
       reportingCards: [],

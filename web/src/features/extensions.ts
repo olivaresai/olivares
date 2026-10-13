@@ -2,18 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
+import type { LaunchIdentityExtension } from './agentops/launch-identity'
 import type { PanelExtensions } from './panels'
 import type { FeatureView } from './registry'
 
 /** Build-time composition seam. The default console carries no extensions. */
 export const FEATURE_EXTENSIONS: readonly FeatureView[] = Object.freeze([])
 
+export const LAUNCH_IDENTITY_EXTENSION: LaunchIdentityExtension | undefined =
+  undefined
+/** Reviewed header absences for additional features, consumed by the action census. */
+export const NO_VERB_EXTENSIONS: ReadonlyArray<{ dir: string; why: string }> =
+  Object.freeze([])
+
 /** Default-empty panels inside public pages (./panels). */
 export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({
+  identityTabs: Object.freeze([]),
+  governanceTabs: Object.freeze([]),
+  executiveRiskCards: Object.freeze([]),
   identityLoginCards: Object.freeze([]),
   identityStepUpMethods: Object.freeze([]),
   sessionPanels: Object.freeze([]),
-  governanceTabs: Object.freeze([]),
   capabilitiesTabs: Object.freeze([]),
   complianceTabs: Object.freeze([]),
   reportingCards: Object.freeze([]),
@@ -22,11 +31,7 @@ export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({
 })
 
 /** Independent route and heading witnesses consumed by console qualification. */
-export const EXTENSION_ROUTES: readonly {
-  id: string
-  path: string
-  heading: string
-}[] = Object.freeze([])
+export { EXTENSION_ROUTES } from './extension-routes'
 
 /** A build-time public page. Its requests still enforce their own server policy. */
 export interface AnonymousFeatureView {

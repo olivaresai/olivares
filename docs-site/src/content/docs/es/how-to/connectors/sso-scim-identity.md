@@ -9,6 +9,10 @@ sidebar:
   order: 8
 ---
 
+:::note[Edición]
+Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas) y el ciclo de vida de identidades gestionadas requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, SCIM entrante de usuarios/grupos, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
+:::
+
 La identidad es la dependencia dura bajo todo el mapa de accesos: la auditoría
 nativa atribuye un acceso a una **credencial**, y solo un roster de identidad
 puede ligar esa credencial a un **agente o persona**. Esta página conecta las
@@ -70,7 +74,7 @@ El control plane es un proveedor de servicio SCIM 2.0 (RFC 7644) estándar en:
   silenciosa. Los miembros desconocidos de un grupo enviado se omiten **y se
   auditan**, no se inventan.
 
-## 3. Fuentes de roster: LDAP, Okta, Entra ID
+## 3. Fuentes de roster: LDAP, Okta, Entra ID — Business/Enterprise
 
 Las fuentes de roster alimentan el inventario de identidad del módulo VI y —este
 es el punto— dan al módulo III los bindings que elevan la atribución:

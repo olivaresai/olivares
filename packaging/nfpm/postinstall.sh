@@ -451,6 +451,24 @@ if ! { rm -f "$contract_marker" &&
   refuse marker-write-failed "cannot write $contract_marker"
 fi
 
+# Keep AppArmor 4 syntax out of older hosts' profile directories. The deb ships
+# it as data and activates it only where the kernel exposes the userns restriction.
+# Load before any start/restart: an already running engine acquires it on exec.
+if [ "$format" = deb ] && [ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+  apparmor_profile=/etc/apparmor.d/usr.bin.olivares
+  if [ -e "$apparmor_profile" ] || [ -L "$apparmor_profile" ]; then
+    if [ ! -f "$apparmor_profile" ] || [ -L "$apparmor_profile" ]; then
+      refuse apparmor-profile-unsafe "$apparmor_profile must be a regular file, not a link"
+    fi
+  fi
+  command -v apparmor_parser >/dev/null 2>&1 ||
+    refuse apparmor-parser-missing "install apparmor, then retry the package configuration"
+  install -m 0644 /usr/share/olivares/apparmor/usr.bin.olivares "$apparmor_profile" ||
+    refuse apparmor-install-failed "cannot install $apparmor_profile"
+  apparmor_parser -r -W -T "$apparmor_profile" ||
+    refuse apparmor-load-failed "cannot load $apparmor_profile; repair AppArmor and retry the package configuration"
+fi
+
 upgrade_stamp=/run/olivares.pkg-upgrade-was-active
 upgrade_state=/run/olivares.pkg-upgrade-state
 deconfigured=/run/olivares.pkg-deconfigured

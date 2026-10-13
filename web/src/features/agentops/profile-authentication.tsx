@@ -25,7 +25,7 @@ export interface ProfileAuthenticationValue {
   provider: string
 }
 const selectClass =
-  'h-9 w-full min-w-0 rounded-md border border-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'h-9 w-full min-w-0 rounded-md border border-ctl-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** The active records this driver can run on, by the engine's one rule (recordServesDriver
  * in providers/kinds.ts); every active record for `null`. The server revalidates record

@@ -33,3 +33,22 @@ func TestCLIHelpCompleteness(t *testing.T) {
 	}
 	walk(root)
 }
+
+func TestToolLifecycleHelp(t *testing.T) {
+	for _, tc := range []struct {
+		verb string
+		want []string
+	}{
+		{"rm", []string{"Remove an installed tool version", "Examples:", "olivares tool rm codex --version 0.134.0"}},
+		{"pin", []string{"Select an installed version", "Examples:", "olivares tool pin codex --workspace default --version 0.134.0", "olivares tool pin codex --agent my-agent --version 0.134.0", "olivares tool pin codex --workspace default --clear"}},
+	} {
+		t.Run(tc.verb, func(t *testing.T) {
+			help := helpFor(t, "tool", tc.verb)
+			for _, want := range tc.want {
+				if !strings.Contains(help, want) {
+					t.Errorf("help missing %q:\n%s", want, help)
+				}
+			}
+		})
+	}
+}

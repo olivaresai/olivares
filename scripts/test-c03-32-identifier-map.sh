@@ -83,6 +83,48 @@ else
 fi
 
 stage
+python3 - "$TMP/tree/commercial/license-worker/wrangler.jsonc" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+raw = p.read_text(encoding="utf-8")
+key = '"PRODUCT_MAP": "'
+start = raw.index(key, raw.index('"production": {'))
+j = start + len('"PRODUCT_MAP": ')
+value, end = json.JSONDecoder().raw_decode(raw, j)
+pmap = json.loads(value)
+pmap["products"]["adn_0NlE8BNY8EcWeGIFn69JG"] = {"edition": "Business", "plan": "regulated-m", "maxUsers": 0,
+                                                 "term": "subscription", "profile": "online"}
+p.write_text(raw[:j] + json.dumps(json.dumps(pmap, separators=(",", ":"))) + raw[end:], encoding="utf-8")
+PY
+run
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'adn_0NlE8BNY8EcWeGIFn69JG (regulated-m) is sold on its own' "$TMP/err"; then
+	ok "firing: an add-on sold on its own again is FAIL"
+else
+	bad "an add-on back in PRODUCT_MAP should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+stage
+python3 - "$TMP/tree/commercial/license-worker/wrangler.jsonc" <<'PY'
+import json, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+raw = p.read_text(encoding="utf-8")
+start = raw.index('"DODO_CATALOG": "', raw.index('"production": {'))
+j = start + len('"DODO_CATALOG": ')
+value, end = json.JSONDecoder().raw_decode(raw, j)
+catalog = json.loads(value)
+catalog["included_addons"].remove("adn_0NlE8BNY8EcWeGIFn69JG")
+p.write_text(raw[:j] + json.dumps(json.dumps(catalog, separators=(",", ":"))) + raw[end:], encoding="utf-8")
+PY
+run
+if [ "$(cat "$TMP/rc")" = 1 ] && grep -q 'included_addons does not list adn_0NlE8BNY8EcWeGIFn69JG' "$TMP/err"; then
+	ok "firing: an add-on no longer included in Business is FAIL"
+else
+	bad "an add-on missing from included_addons should FAIL 1 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
+fi
+
+stage
 python3 - "$TMP/tree/design/c03-32-identifier-map.json" <<'PY'
 import json, sys
 from pathlib import Path

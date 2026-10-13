@@ -34,7 +34,7 @@ export function StatusDot({
         'forced-colors:[background-color:CanvasText] forced-colors:[forced-color-adjust:none]',
         DOT[tone],
         working &&
-          'animate-pulse [animation-duration:2s] motion-reduce:animate-none [[data-motion=reduce]_&]:animate-none',
+          'animate-pulse-live [animation-duration:2s] motion-reduce:animate-none [[data-motion=reduce]_&]:animate-none',
         className,
       )}
     />

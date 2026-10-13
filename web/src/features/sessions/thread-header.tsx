@@ -4,8 +4,8 @@
 //
 // THE HEAD OF A THREAD: ONE 48 px LINE.
 //
-// The state as a dot, the session's name, the folder it works in, the tool and the model,
-// what it has spent; on the right the lifecycle controls as icons (Interrupt only while a
+// The state as a dot, the session's name, the folder it works in, the tool, the model and
+// its effort, what it has spent; on the right the lifecycle controls as icons (Interrupt only while a
 // turn runs, Stop), the Context toggle and a `⋯` menu with the rest (Full controls, Copy
 // reference, In a terminal, and the pin). It used to be a 280 px block that said the state
 // five times.
@@ -43,7 +43,7 @@ import { IconTip } from './icon-tip'
 import { RunActions } from './run-actions'
 import { StateDot } from './session-state-dot'
 import { SessionMeter } from './session-meter'
-import { sessionUsage } from './session-usage'
+import { sessionModelRef, sessionUsage } from './session-usage'
 import type { LiveDTO } from './types'
 import './i18n'
 
@@ -126,8 +126,8 @@ export function ThreadHeader({
   const folder = runFolder(run)
   const driver = run?.provider_driver || live?.provider || live?.engine
   const tool = driver ? toolName(driver) : null
-  const model = run?.model_ref || run?.usage_model_ref || live?.model_ref
-  const toolModel = [tool, model].filter(Boolean).join(' · ')
+  const model = sessionModelRef(run, live)
+  const toolModel = [tool, model, run?.effort].filter(Boolean).join(' · ')
   const usage = sessionUsage(run, live)
 
   return (

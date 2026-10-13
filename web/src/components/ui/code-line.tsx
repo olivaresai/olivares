@@ -101,7 +101,7 @@ export function CodeLine({
 
   if (inline) {
     return (
-      <div
+      <span
         data-slot="code-line"
         data-inline="true"
         className={cn(
@@ -115,7 +115,7 @@ export function CodeLine({
         </code>
         {button}
         {status}
-      </div>
+      </span>
     )
   }
 

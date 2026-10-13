@@ -9,6 +9,12 @@ export interface InstalledTool {
   reason?: string
   executable: string
 }
+export interface ToolVersionPin {
+  driver: string
+  version: string
+  workspace_ref?: string
+  agent_ref?: string
+}
 export interface ToolJob {
   id: string
   driver: string
@@ -21,6 +27,8 @@ export interface ToolJob {
 export interface ToolInventory {
   drivers: string[]
   verification_levels?: Record<string, string>
+  /** The executable a new session of each tool runs (the launch resolver); absent, none. */
+  launch_programs?: Record<string, string>
   inventory: { installed: InstalledTool[]; leftovers: unknown[] }
   read_only: boolean
   jobs: ToolJob[]
@@ -101,6 +109,19 @@ type Options = Pick<RequestOptions, 'signal' | 'dispatchGuard'>
 export const agentToolsKeys = { all: ['agent-tools'] as const }
 
 export const agentToolsApi = {
+  pins: (tenantId: string, signal?: AbortSignal) =>
+    http.get<{ pins: ToolVersionPin[] }>(`${ROOT}/pins`, {
+      query: { tenant_id: tenantId },
+      signal,
+    }),
+  pin: (tenantId: string, body: ToolVersionPin, opts?: Options) =>
+    http.put<{ ok: boolean }>(
+      `${ROOT}/pins`,
+      { ...body, tenant_id: tenantId },
+      opts,
+    ),
+  remove: (driver: string, version: string, opts?: Options) =>
+    http.delete<{ ok: boolean }>(`${ROOT}/releases`, { driver, version }, opts),
   inventory: (signal?: AbortSignal) =>
     http.get<ToolInventory>(`${ROOT}/inventory`, { signal }),
   detect: (
@@ -119,10 +140,11 @@ export const agentToolsApi = {
     version: string,
     signal?: AbortSignal,
     opts?: Options,
+    from?: string,
   ) =>
     http.post<ToolPlan>(
       `${ROOT}/plans`,
-      { driver, version },
+      from ? { from, version } : { driver, version },
       { ...opts, signal: signal ?? opts?.signal },
     ),
   install: (body: InstallRequest, opts?: Options) =>

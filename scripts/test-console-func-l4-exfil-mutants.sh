@@ -196,8 +196,8 @@ run_mutant agent-cluster "$DETAIL" \
 	$'            {(!selection.cluster || selection.kind === \'agent\') &&\n              ((selection.role === \'origin\' && selection.kind === \'agent\') ||' \
 	"$AGENT_CLUSTER_MSG"
 run_mutant url-state "$URL_STATE" \
-	'    const next = readSearch(keysRef.current, searchStr)' \
-	'    const next = readSearch(keysRef.current)' \
+	'    () => readSearch(ownedKeys, searchStr),' \
+	'    () => readSearch(ownedKeys),' \
 	"$URL_STATE_MSG"
 
 restore_all || cannot 'cannot restore before the final control'

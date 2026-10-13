@@ -34,6 +34,7 @@ func (e *consentEstate) createRetirementWorkflow(tenant model.TenantID, name str
 
 func TestWorkflowObligationInAnotherTenantDoesNotBlockRetirement(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "the other-tenant workflow case requires retirement to complete in the target tenant")
 		subject := e.retirementSubjectIn(e.tT, "workflow-other-tenant")
 		e.seedMembership(subject.id, e.tB, "viewer")
 		steps := participantSteps(t, "work owner", subject.id, subject.id)

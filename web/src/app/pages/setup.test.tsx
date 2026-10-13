@@ -333,6 +333,14 @@ describe('SetupPage', () => {
     expect(shown.textContent).toMatch(/--install-directory-inventory/)
     expect(shown.textContent).toMatch(/--admin-role/)
     expect(shown.textContent).toMatch(/NOSUPERUSER BYPASSRLS/)
+    // Both commands read as commands, with no backtick left on the screen (#1844).
+    expect(shown.textContent).not.toContain('`')
+    expect(
+      [...shown.querySelectorAll('code')].map((c) => c.textContent),
+    ).toEqual([
+      'olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory',
+      'olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>',
+    ])
     expect(screen.queryByText(/Something went wrong/i)).toBeNull()
   })
 
@@ -344,12 +352,16 @@ describe('SetupPage', () => {
   it('says where the setup token is on every install path', async () => {
     render(<SetupPage />, { wrapper: Wrapper })
     const field = await screen.findByLabelText(/setup token/i)
-    const hint = document.getElementById(
-      field.getAttribute('aria-describedby')!.split(' ')[0],
-    )!.textContent!
-    expect(hint).toMatch(/`docker logs`/)
-    expect(hint).toMatch(/`journalctl -u olivares`/)
-    expect(hint).toMatch(/`olivares first-boot --new-token`/)
+    const hintId = field.getAttribute('aria-describedby')!.split(' ')[0]
+    const hint = document.getElementById(hintId)!.textContent!
+    // The commands read as commands, not as text between backticks (#1844).
+    expect(hint).not.toContain('`')
+    const codes = [...document.getElementById(hintId)!.querySelectorAll('code')]
+    expect(codes.map((c) => c.textContent)).toEqual([
+      'docker logs',
+      'journalctl -u olivares',
+      'olivares first-boot --new-token',
+    ])
     expect(screen.queryByText(/not written to the log/i)).toBeNull()
     expect(screen.queryByText(/terminal where Olivares started/i)).toBeNull()
   })
@@ -369,8 +381,13 @@ describe('SetupPage', () => {
       screen.getByRole('button', { name: /create administrator/i }),
     )
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(
-      /`olivares first-boot --new-token`/,
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(
+      /run olivares first-boot --new-token where/,
+    )
+    expect(alert.textContent).not.toContain('`')
+    expect(alert.querySelector('code')!.textContent).toBe(
+      'olivares first-boot --new-token',
     )
   })
 
@@ -438,10 +455,12 @@ describe('SetupPage', () => {
       screen.getByRole('button', { name: /create administrator/i }),
     )
 
-    const shown = (await screen.findByRole('alert')).textContent
+    const alert = await screen.findByRole('alert')
+    const shown = alert.textContent
     expect(shown).toMatch(/cannot read its setup token file/)
-    expect(shown).toMatch(
-      /`olivares first-boot --data-dir <data directory> --new-token`/,
+    expect(shown).not.toContain('`')
+    expect(alert.querySelector('code')!.textContent).toBe(
+      'olivares first-boot --data-dir <data directory> --new-token',
     )
     expect(shown).not.toMatch(/Something went wrong/i)
   })

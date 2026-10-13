@@ -21,7 +21,7 @@ import (
 
 // TestWorkValidationHintsAreEnglish pins the exact hint a caller reads in `evidence_ref` when
 // validate, plan or apply rejects a work command. The hints reach the REST API, the CLI text
-// output and `-o json`, so they are user-facing text and US English (olivares-dev #506).
+// output and `-o json`, so they are user-facing text and US English.
 func TestWorkValidationHintsAreEnglish(t *testing.T) {
 	t.Parallel()
 

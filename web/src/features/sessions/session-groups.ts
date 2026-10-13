@@ -22,7 +22,11 @@
 //    asking to be logged in are both work FOR A PERSON; a session that went quiet
 //    within tolerance is not. Collapsing the two would make the group the operator is
 //    supposed to trust the one they learn to ignore.
-import { isLiveRun, runWantsAPerson, type UnifiedSession } from './provenance'
+import {
+  isWorkingRun,
+  runWantsAPerson,
+  type UnifiedSession,
+} from './provenance'
 import { pinnedAddress } from './session-pins'
 
 /**
@@ -51,7 +55,9 @@ export function groupOf(s: UnifiedSession): WorkGroupId {
     return 'attention'
   // A launched session's state is its run's: the observed row keeps its last signal
   // after a Stop, and read "Running" in the composer after a reload (EU, Business 06).
-  if (s.runs.length > 0) return s.runs.some(isLiveRun) ? 'active' : 'settled'
+  // A run waiting for input (`idle`) is alive but not working, like an observed row quiet
+  // within tolerance: it is settled.
+  if (s.runs.length > 0) return s.runs.some(isWorkingRun) ? 'active' : 'settled'
   if (s.live?.cc_state === 'active') return 'active'
   return 'settled'
 }

@@ -7,13 +7,20 @@ import { describe, expect, it } from 'vitest'
 import sessions from '@/features/sessions/i18n/en.json'
 import nav from '@/lib/i18n/locales/en/nav.json'
 
-const E2E = join(__dirname, '..', 'e2e')
+const WEB = join(__dirname, '..')
+const E2E = join(WEB, 'e2e')
 
 /** A spec with its whitespace collapsed: the formatter wraps a long selector across lines, and a
  * selector is the same selector however it is wrapped. */
-function spec(name: string): string {
-  return readFileSync(join(E2E, name), 'utf8').replace(/\s+/g, ' ')
+function spec(name: string, dir = E2E): string {
+  return readFileSync(join(dir, name), 'utf8').replace(/\s+/g, ' ')
 }
+
+/** Every browser spec directory (e2e, e2e-release, e2e-visual...), not only the demo one:
+ * a spec outside `e2e/` signs in to the same console (#1520). */
+const SPEC_DIRS = readdirSync(WEB, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && /^e2e(-|$)/.test(entry.name))
+  .map((entry) => entry.name)
 
 /** The nav catalogue read the other way round: the address a name is reached at. */
 const NAV_NAME_BY_SEGMENT = nav.items as Record<string, string>
@@ -132,10 +139,18 @@ describe('live end-to-end specs name what the console paints', () => {
   })
 
   it('the overview link is read inside the Journeys navigation, never at page level', () => {
+    expect(SPEC_DIRS).toEqual(expect.arrayContaining(['e2e', 'e2e-release']))
     const loose: string[] = []
-    for (const file of readdirSync(E2E)) {
-      if (!file.endsWith('.spec.ts')) continue
-      loose.push(...overviewLinksOutsideJourneys(file, spec(file)))
+    for (const dir of SPEC_DIRS) {
+      for (const file of readdirSync(join(WEB, dir))) {
+        if (!file.endsWith('.spec.ts')) continue
+        loose.push(
+          ...overviewLinksOutsideJourneys(
+            `${dir}/${file}`,
+            spec(file, join(WEB, dir)),
+          ),
+        )
+      }
     }
     expect(loose).toEqual([])
   })

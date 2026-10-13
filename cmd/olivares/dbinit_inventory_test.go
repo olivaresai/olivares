@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -72,34 +73,37 @@ func TestDBInitInventoryFirstStartChild(t *testing.T) {
 		t.Fatalf("audit checkpoints after db init: %v", err)
 	}
 
-	// The console's organization list (a system administrator's GET /v1/system/orgs)
-	// answers from the same inventory: 200 with the setup org, not 501.
+	// Setup's organization must enter the same durable inventory used by jobs.
 	tok, _, err := eng.setupTok.Ensure()
 	if err != nil {
 		t.Fatal(err)
 	}
 	const orgName = "Olivares Inventory Fixture"
-	if code, _, raw := doDemoViewJSON(t, h, http.MethodPost, "/v1/setup", "", "", map[string]any{
+	code, setup, raw := doDemoViewJSON(t, h, http.MethodPost, "/v1/setup", "", "", map[string]any{
 		"token": tok, "email": "root@x.io", "password": "supersecret1", "organization": orgName,
-	}); code != http.StatusCreated {
+	})
+	if code != http.StatusCreated {
 		t.Fatalf("setup = %d: %s", code, raw)
 	}
-	code, login, raw := doDemoViewJSON(t, h, http.MethodPost, "/v1/auth/login", "", "", map[string]any{"email": "root@x.io", "password": "supersecret1"})
-	if code != http.StatusOK {
-		t.Fatalf("login = %d: %s", code, raw)
+	setupOrg, _ := setup["organization"].(map[string]any)
+	setupTenant, _ := setupOrg["tenant_id"].(string)
+	if setupTenant == "" {
+		t.Fatalf("setup returned no organization tenant_id: %s", raw)
 	}
-	admin, _ := login["token"].(string)
-	code, orgs, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/system/orgs", admin, "", nil)
-	if code != http.StatusOK {
-		t.Fatalf("GET /v1/system/orgs after db init = %d %s, want 200", code, raw)
+	var orgs []model.Org
+	if err := eng.store.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		orgs, err = sys.ListOrgs(ctx)
+		return err
+	}); err != nil {
+		t.Fatalf("list tenant inventory after db init: %v", err)
 	}
-	items, _ := orgs["items"].([]any)
-	for _, item := range items {
-		if org, _ := item.(map[string]any); org["name"] == orgName {
+	for _, org := range orgs {
+		if org.Name == orgName && org.TenantID.String() == setupTenant {
 			return
 		}
 	}
-	t.Fatalf("GET /v1/system/orgs after db init does not list the setup org: %s", raw)
+	t.Fatalf("tenant inventory after db init does not list setup organization %s: %v", setupTenant, orgs)
 }
 
 // The install-only mode says what installing the inventory changes for the jobs

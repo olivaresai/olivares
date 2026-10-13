@@ -188,6 +188,7 @@
       "attributed": "attributed",
       "approximate": "approximate"
     },
-    "analyse": "Analyse attack paths (audited)"
+    "analyse": "Analyse attack paths (audited)",
+    "truncated": "The engine capped this analysis, so the paths shown are not the whole answer."
   }
 }

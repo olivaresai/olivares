@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDE PANE HAS TABS: Context, Changes, Files, then whatever a build registers.
+// THE SIDE PANE HAS TABS: Context, Activity (Claude Code), Changes, Files, then whatever a
+// build registers.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
@@ -37,6 +38,7 @@ const ops = vi.hoisted(() => ({
   runChanges: vi.fn(),
   gitStatus: vi.fn(),
   previewPorts: vi.fn(),
+  activity: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -430,15 +432,70 @@ describe('the side pane tabs', () => {
     })
   })
 
-  it('ignores a registrant that takes the id of Context, Changes, Files or Preview', async () => {
-    registered.panels = ['context', 'changes', 'files', 'preview'].map(
-      (id) => ({
-        id,
-        labelKey: 'sessions:context.tabFiles',
-        icon: GitBranch,
-        Component: () => <p>takeover</p>,
-      }),
+  it('offers Activity, after Context, for a Claude Code session and reads it only once opened', async () => {
+    const user = userEvent.setup()
+    const onPanel = vi.fn()
+    ops.activity.mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      context_tokens: 1200,
+      compactions: [],
+      agents: [],
+      tasks: [],
+      files: [],
+      todos: [],
+      skills: [],
+      mcp_servers: [],
+    })
+    const claudeRun = resolution([{ ...RUN, provider_driver: 'claude' }])
+    const view = renderPane({ resolution: claudeRun, onPanel })
+    await screen.findByTestId('session-context')
+    expect(tabs()).toEqual([
+      'Context',
+      'Activity',
+      'Changes',
+      'Files',
+      'Preview',
+    ])
+    expect(ops.activity).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('radio', { name: 'Activity' }))
+    expect(onPanel).toHaveBeenLastCalledWith('activity')
+    // The address holds the tab in front.
+    view.rerender(
+      <SessionContextPane
+        resolution={claudeRun}
+        evidence="checks"
+        onExpandEvidence={() => {}}
+        onPanel={onPanel}
+        panel="activity"
+      />,
     )
+    expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
+    expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+  })
+
+  it('offers no Activity for another tool, whose record is not read that way yet', async () => {
+    renderPane({
+      resolution: resolution([{ ...RUN, provider_driver: 'codex' }]),
+    })
+    await screen.findByTestId('session-context')
+    expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])
+    expect(ops.activity).not.toHaveBeenCalled()
+  })
+
+  it('ignores a registrant that takes the id of Context, Activity, Changes, Files or Preview', async () => {
+    registered.panels = [
+      'context',
+      'activity',
+      'changes',
+      'files',
+      'preview',
+    ].map((id) => ({
+      id,
+      labelKey: 'sessions:context.tabFiles',
+      icon: GitBranch,
+      Component: () => <p>takeover</p>,
+    }))
     renderPane()
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])

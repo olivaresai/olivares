@@ -284,6 +284,7 @@
     "matchActionHint": "Vide = correspond à toute action.",
     "matchSubjectKind": "Type de sujet à faire correspondre",
     "matchSubjectKindHint": "Vide = correspond à tout type de sujet.",
+    "needsBusiness": "Abaisser le niveau de risque sous la valeur par défaut de l'action nécessite Business. Désactivez cette politique pour la conserver enregistrée.",
     "create": "Créer la politique",
     "save": "Enregistrer les modifications",
     "confirmCreateBody": "Une politique ABAC activée restreint davantage l’accès immédiatement ; une politique d’approbation activée commence à exiger des approbations humaines pour les actions correspondantes. Prend effet immédiatement.",
@@ -317,15 +318,6 @@
     "principalTypeNhi": "NHI",
     "principalTypeUnknown": "Inconnu"
   },
-  "resync": {
-    "title": "Resynchroniser le registre d’identités ?",
-    "body": "Il réconcilie chaque identité et groupe de ce locataire à partir des sources d’annuaire configurées. Consigné dans la piste d’audit.",
-    "confirm": "Resynchroniser",
-    "done": "Registre réconcilié",
-    "result": "Sources {{sources}} · identités {{identities}} · groupes {{collections}} · adhésions {{memberships}}.",
-    "partial": "{{failed}} source(s) n'ont PAS répondu et ont été ignorées : {{providers}}. Les chiffres ci-dessus ne couvrent que celles qui ont répondu.",
-    "noProviders": "Aucun fournisseur d’identité n’est configuré pour ce locataire — rien n’a été réconcilié."
-  },
   "groups": {
     "title": "Groupes",
     "caption": "Collections réconciliées (groupes, rôles, politiques) reflétées depuis une source d’annuaire.",
@@ -350,7 +342,8 @@
     "kindIdentity": "Identité",
     "kindCollection": "Collection",
     "empty": "Aucun membre",
-    "emptyHint": "Les sujets qui appartiennent à ce groupe sont listés ici. Ajoutez un membre pour commencer."
+    "emptyHint": "Les sujets qui appartiennent à ce groupe sont listés ici. Ajoutez un membre pour commencer.",
+    "truncated": "Certains groupes imbriqués dépassent la limite de parcours ; les membres au-delà de cette profondeur ne sont pas listés."
   },
   "bindings": {
     "title": "Liaisons d’agents",
@@ -597,12 +590,12 @@
       "description": "Liez un agent à une NHI existante ou nouvellement émise afin d’attribuer ses actions à cette identité dans la carte des accès."
     },
     "group": {
-      "title": "Aucun groupe d’annuaire réconcilié",
-      "description": "Une fois une source d’annuaire configurée, resynchronisez le registre pour réconcilier les groupes, rôles, politiques et appartenances de ce locataire."
+      "title": "Aucun groupe pour l’instant",
+      "description": "Les groupes apparaissent ici lorsqu’une source d’annuaire les signale."
     },
     "identity": {
-      "title": "Aucune identité réconciliée",
-      "description": "Une fois une source d’annuaire configurée, resynchronisez le registre pour réconcilier les identités humaines et non humaines de ce locataire."
+      "title": "Aucune identité pour l’instant",
+      "description": "Les identités apparaissent ici lorsque des agents accèdent à des ressources ou lorsque vous associez un agent à une identité."
     },
     "policies": {
       "title": "Aucune règle pour l'instant",
@@ -669,45 +662,6 @@
     "pageTitle": "Export AgentCore",
     "emptyAction": "Calculer le premier plan"
   },
-  "registerAgent": {
-    "action": "Enregistrer un agent",
-    "title": "Enregistrer une identité d'agent",
-    "body": "Crée une ligne de cycle de vie encadrée — ou promeut une identité déjà existante.",
-    "identityRef": "Identité de l'agent",
-    "identityRefHint": "La référence de l'identité dans le registre.",
-    "sponsorRef": "Parrain",
-    "sponsorRefHint": "Obligatoire. Doit être une identité HUMAINE déjà présente dans le registre — le moteur refuse toute autre.",
-    "source": "Source",
-    "criticality": "Criticité",
-    "noCriticality": "Non définie",
-    "submit": "Enregistrer",
-    "created": "Identité d'agent enregistrée",
-    "promoted": "Identité existante promue en agent",
-    "crit": {
-      "low": "Faible",
-      "medium": "Moyenne",
-      "high": "Élevée",
-      "critical": "Critique"
-    }
-  },
-  "emerging": {
-    "tab": "Standards émergents",
-    "title": "Standards émergents d'identité d'agent",
-    "description": "Un registre « design-toward » : ce que nous suivons, où cela se brancherait et pourquoi ce n’est pas implémenté.",
-    "noAccess": "Vous n'avez pas accès au registre des identités.",
-    "noAccessHint": "Ce panneau suit les normes vers lesquelles la plateforme s’aligne. Demandez à un administrateur la permission de lecture du registre d’identité.",
-    "empty": "Rien de suivi",
-    "emptyHint": "Les normes vers lesquelles la plateforme s’aligne apparaissent ici avec leur statut. Aucune n’est encore suivie.",
-    "verifiedAt": "Révisions vérifiées auprès des sources primaires en {{month}}. Elles bougent : à lire comme une date, pas comme une garantie.",
-    "spec": "Spécification",
-    "revision": "Révision",
-    "seam": "Se brancherait à",
-    "authority": "Source primaire",
-    "status": {
-      "draft": "Brouillon — ne pas coder en dur",
-      "stable": "Stable — une couture peut le viser"
-    }
-  },
   "preview": {
     "title": "Ce qui sera exécuté",
     "session": "Session",
@@ -729,5 +683,8 @@
     "member": "Un membre",
     "apiToken": "Un jeton API",
     "requestSummary": "Demande"
+  },
+  "list": {
+    "loadedOnly": "La recherche ne couvre que les lignes déjà chargées ; chargez-en davantage pour continuer."
   }
 }

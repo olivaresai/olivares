@@ -217,15 +217,11 @@ func fenceWriters(collector string) []fenceWriter {
 					"event_types": []string{"finding.reported"}, "role": "viewer",
 				}
 			})},
-		{name: "an agent the account sponsors", kind: "governance.nhi_lifecycle", column: "sponsor_ref",
-			prepare: admin("POST", "/v1/m/governance/agents", func(s fenceSubject) map[string]any {
-				return map[string]any{"identity_ref": "fence-agent-" + s.id.String(), "sponsor_ref": s.externalID}
-			})},
 	}
 	if editionPortsForBuild().name == "community" {
 		writers = writers[2:]
 	}
-	return append(writers, append(editionOrchestrationFenceWriters(), businessSpendCapFenceWriters()...)...)
+	return append(writers, append(editionFenceWriters(), append(editionOrchestrationFenceWriters(), businessSpendCapFenceWriters()...)...)...)
 }
 
 // fenceMember provisions the account a fenced writer names on the consent

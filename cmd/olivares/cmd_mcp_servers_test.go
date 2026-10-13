@@ -339,6 +339,78 @@ func TestMCPEnableNeverSaysOnWhenNoToolIsAllowed(t *testing.T) {
 	}
 }
 
+// TestMCPAddConfinesALocalServerToItsEgressHosts: --egress-host is the CLI's way
+// to the roster's egress_hosts, which the console and API already set. A remote
+// server is reached at its URL only, so the flag is refused there before any write.
+func TestMCPAddConfinesALocalServerToItsEgressHosts(t *testing.T) {
+	f := newFakeMCPRoster(t)
+	_, errb, err := execSessionCLI(t, nil, mcpArgs(f.URL, "add", "fetch", "--no-test",
+		"--egress-host", "registry.npmjs.org", "--egress-host", "mirror.test:8443", "--", "npx", "-y", "server-fetch")...)
+	if err != nil {
+		t.Fatalf("mcp add: %v\n%s", err, errb)
+	}
+	if got := toStrings(f.servers[0]["egress_hosts"]); strings.Join(got, ",") != "registry.npmjs.org,mirror.test:8443" {
+		t.Fatalf("egress_hosts = %v", f.servers[0]["egress_hosts"])
+	}
+	writes := len(f.bodies)
+	_, _, err = execSessionCLI(t, nil, mcpArgs(f.URL, "add", "docs", "--egress-host", "example.com", "https://mcp.example.com/mcp")...)
+	if exitcode.From(err) != exitcode.Usage || !strings.Contains(err.Error(), "--egress-host is for a local server") {
+		t.Fatalf("remote --egress-host: err = %v, want usage", err)
+	}
+	if len(f.bodies) != writes {
+		t.Fatal("a refused --egress-host reached the engine")
+	}
+}
+
+// TestMCPAssignNamesOneTargetAndSendsTheWholeList: assign and unassign take exactly
+// one target flag, write the full list (an empty one too, since the engine keeps
+// the stored targets of a write that omits them) and refuse an unknown target.
+func TestMCPAssignNamesOneTargetAndSendsTheWholeList(t *testing.T) {
+	f := newFakeMCPRoster(t)
+	f.servers = []map[string]any{{"id": "srv-files", "name": "files", "enabled": false, "command": "npx"}}
+	ws, agent := "0b4d6c1e-0000-4000-8000-000000000001", "0b4d6c1e-0000-4000-8000-000000000002"
+	for _, args := range [][]string{{"files"}, {"files", "--workspace", ws, "--agent", agent}} {
+		if _, _, err := execSessionCLI(t, nil, mcpArgs(f.URL, "assign", args...)...); exitcode.From(err) != exitcode.Usage {
+			t.Fatalf("assign %v: err = %v, want usage", args, err)
+		}
+	}
+	if len(f.bodies) != 0 {
+		t.Fatal("a refused assign reached the engine")
+	}
+	for _, args := range [][]string{{"assign", "files", "--workspace", ws}, {"assign", "files", "--agent", agent}, {"assign", "files", "--agent", agent}} {
+		if _, errb, err := execSessionCLI(t, nil, mcpArgs(f.URL, args[0], args[1:]...)...); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, errb)
+		}
+	}
+	targets := func() string {
+		var out []string
+		for _, item := range f.servers[0]["targets"].([]any) {
+			target := item.(map[string]any)
+			out = append(out, target["target_kind"].(string)+":"+target["target_id"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	if got := targets(); got != "workspace:"+ws+",agent:"+agent {
+		t.Fatalf("targets = %s", got)
+	}
+	_, _, err := execSessionCLI(t, nil, mcpArgs(f.URL, "unassign", "files", "--folder", ws)...)
+	if exitcode.From(err) != exitcode.NotFound {
+		t.Fatalf("unassign of an unknown target: err = %v, want not found", err)
+	}
+	for _, flag := range []string{"--workspace", "--agent"} {
+		id := ws
+		if flag == "--agent" {
+			id = agent
+		}
+		if _, errb, err := execSessionCLI(t, nil, mcpArgs(f.URL, "unassign", "files", flag, id)...); err != nil {
+			t.Fatalf("unassign %s: %v\n%s", flag, err, errb)
+		}
+	}
+	if list, ok := f.servers[0]["targets"].([]any); !ok || len(list) != 0 {
+		t.Fatalf("the last unassign did not send an empty list: %#v", f.servers[0]["targets"])
+	}
+}
+
 func TestMCPAddRefusesSomethingThatIsNeitherACommandNorAURL(t *testing.T) {
 	f := newFakeMCPRoster(t)
 	_, _, err := execSessionCLI(t, nil, mcpArgs(f.URL, "add", "x", "http://plain.example.com")...)

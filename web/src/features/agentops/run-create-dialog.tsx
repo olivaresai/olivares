@@ -29,7 +29,6 @@ import { DisabledReason } from '@/components/ui/disabled-reason'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { ModelAvailabilityPicker } from '@/features/models/availability-picker'
 import {
   Select,
   SelectContent,
@@ -46,7 +45,9 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { launchSession } from './session-launch'
 import { profileOwnedEnvNames } from './provider-contract'
-import { toolName } from './tool-names'
+import { SESSION_TOOLS, toolName } from './tool-names'
+import { useReadyTools } from '@/features/first-hour/first-hour'
+import { useReuseProfile } from '@/features/first-hour/session-profiles'
 import { useAuthBoundary } from './auth-boundary'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { LaunchIdentityFields, useLaunchIdentities } from './launch-identity'
@@ -68,23 +69,23 @@ import {
 } from './launch-readiness'
 import {
   CRITICAL_PERMISSION_MODES,
-  EFFORT_LEVELS,
   PERMISSION_MODES,
   type CreateRunRequest,
   type PermissionMode,
+  profileName,
   type RunDTO,
   type Transport,
 } from './types'
+import { ModelEffortFields } from './model-effort-picker'
 import './i18n'
 
 const NONE = '__none__'
-const DEFAULT_EFFORT = '__default__'
 
 /**
- * RunCreateDialog — the advanced launch: the profile and a first message up front, and
- * the visual equivalent of the CLI launch (identity / name / transport / permission mode /
- * effort / model / workspace / template / env) under Advanced options, each on today's
- * default. The governance posture is explicit BEFORE launch: a
+ * RunCreateDialog — the full launch: the profile, a first message, the model and its
+ * effort up front, and the visual equivalent of the CLI launch (identity / name /
+ * transport / permission mode / workspace / template / env) under Advanced options, each
+ * on today's default. The governance posture is explicit BEFORE launch: a
  * privileged permission mode (or a read-write classified workspace) warns that the launch
  * needs human approval and is recorded. A Start that cannot act says beside it what is
  * missing, and the backend's honest denial (402/403/429 — budget cap, pending approval) is
@@ -95,6 +96,10 @@ export function RunCreateDialog({
   onOpenChange,
   initialTemplateId,
   initialWorktreeFrom,
+  initialDriver,
+  initialProfileRef,
+  initialModel,
+  initialEffort,
   onCloseAutoFocus,
 }: {
   open: boolean
@@ -105,6 +110,14 @@ export function RunCreateDialog({
   /** Open with a new worktree chosen, starting at this commit id or branch (the work a
    * handoff names). The person still picks the workspace whose repository holds it. */
   initialWorktreeFrom?: string
+  /** The tool the New session form had chosen: the default profile is the one the engine
+   * would reuse for it. Without one, the first ready tool, as the form opens. */
+  initialDriver?: string
+  /** Open on a profile, a model and an effort already chosen: what a session's message
+   * bar hands over when the person wants those for a new session. */
+  initialProfileRef?: string
+  initialModel?: string
+  initialEffort?: string
   /** Where focus goes on close, for an opener that is gone by then (the New session
    * form hands over to this dialog and unmounts its own button). */
   onCloseAutoFocus?: (event: Event) => void
@@ -128,8 +141,13 @@ export function RunCreateDialog({
   const [transport, setTransport] = useState<Transport>('stream-json')
   const [permissionMode, setPermissionMode] =
     useState<PermissionMode>('default')
-  const [effort, setEffort] = useState<string>(DEFAULT_EFFORT)
-  const [model, setModel] = useState('')
+  // The model and effort belong to the profile they were chosen for: another profile (or
+  // none) shows and sends none of them. Derived below, once the profile is known.
+  const [modelPick, setModelPick] = useState({
+    profile: initialProfileRef ?? NONE,
+    model: initialModel ?? '',
+    effort: initialEffort ?? '',
+  })
   const [workspaceRef, setWorkspaceRef] = useState<string>(NONE)
   const [worktree, setWorktree] = useState(!!initialWorktreeFrom)
   const [envAllow, setEnvAllow] = useState('')
@@ -137,7 +155,9 @@ export function RunCreateDialog({
     initialTemplateId ?? NONE,
   )
   // The profile the operator picked; NONE until they pick one (see profileRef below).
-  const [chosenProfile, setChosenProfile] = useState<string>(NONE)
+  const [chosenProfile, setChosenProfile] = useState<string>(
+    initialProfileRef ?? NONE,
+  )
   const [agentRef, setAgentRef] = useState('')
   const identities = useLaunchIdentities(open && agentRef !== '')
   const captureOwner = useStepUpOwner()
@@ -203,12 +223,31 @@ export function RunCreateDialog({
   )
   // Defaults follow what exists: the only active profile of the
   // current boundary's list is the one a session can run on, so it is the choice until
-  // the operator picks another. With several, none is chosen and Start says so. Only the
+  // the operator picks another. With several, the default is the profile the New session
+  // form shows: the engine's reuse profile for the form's own tool (the first ready one),
+  // the same read. When the list does not hold it, or the tool runs on a key (no profile
+  // before its first launch), none is chosen and Start says so. The default is taken
+  // once, as a choice, so a later refetch never moves it under the person. Only the
   // reference still leaves the browser, and the engine still validates it.
   // A choice the list no longer holds (retired, revoked) is no choice.
   const chosen = profiles.some((p) => p.profile_ref === chosenProfile)
     ? chosenProfile
     : NONE
+  const needsDefault =
+    open && canReadProfiles && chosen === NONE && profiles.length > 1
+  const { ready: readyTools, boundKey } = useReadyTools(needsDefault)
+  const formTool =
+    SESSION_TOOLS.find((tool) => tool === initialDriver) ??
+    readyTools[0] ??
+    SESSION_TOOLS[0]
+  const reuse = useReuseProfile(
+    formTool,
+    needsDefault && readyTools.includes(formTool) && !boundKey(formTool),
+  )
+  const reused = profiles.find(
+    (p) => p.profile_ref === reuse.data?.profile?.profile_ref,
+  )?.profile_ref
+  if (needsDefault && reused) setChosenProfile(reused)
   const profileRef =
     chosen !== NONE
       ? chosen
@@ -216,6 +255,8 @@ export function RunCreateDialog({
         ? profiles[0].profile_ref
         : NONE
   const selectedProfile = profiles.find((p) => p.profile_ref === profileRef)
+  const model = modelPick.profile === profileRef ? modelPick.model : ''
+  const effort = modelPick.profile === profileRef ? modelPick.effort : ''
   const requiresAgent =
     selectedProfile?.session_work_grant?.role === 'orchestrator'
   const agentReady =
@@ -276,7 +317,7 @@ export function RunCreateDialog({
       templatesApi.apply(templateId, {
         transport,
         permission_mode: permissionMode,
-        effort: effort === DEFAULT_EFFORT ? undefined : effort,
+        effort: effort || undefined,
         model: model.trim() || undefined,
         workspace_ref: workspaceRef === NONE ? undefined : workspaceRef,
       }),
@@ -404,8 +445,7 @@ export function RunCreateDialog({
     setName('')
     setTransport('stream-json')
     setPermissionMode('default')
-    setEffort(DEFAULT_EFFORT)
-    setModel('')
+    setModelPick({ profile: NONE, model: '', effort: '' })
     setWorkspaceRef(NONE)
     setWorktree(false)
     setEnvAllow('')
@@ -419,7 +459,7 @@ export function RunCreateDialog({
     name,
     transport,
     permission_mode: permissionMode,
-    effort: effort === DEFAULT_EFFORT ? '' : effort,
+    effort,
     model,
     workspace_ref: workspaceRef === NONE ? '' : workspaceRef,
     isolation: 'native',
@@ -595,7 +635,7 @@ export function RunCreateDialog({
                         title={p.profile_ref}
                       >
                         <ProviderAccent accent={p.accent} />
-                        {p.display_name || p.profile_ref} · {p.driver}
+                        {profileName(p) ?? p.profile_ref} · {p.driver}
                         {!p.operable && ` — ${t('create.profileNotOperable')}`}
                       </SelectItem>
                     ))}
@@ -615,6 +655,18 @@ export function RunCreateDialog({
             </Field>
 
             {identityUpFront && identityFields}
+
+            {/* THE MOST COMMON LAUNCH CHOICE, IN FRONT: no Advanced step to reach it. */}
+            <ModelEffortFields
+              profileRef={profileRef === NONE ? '' : profileRef}
+              driver={selectedProfile?.driver ?? ''}
+              model={model}
+              effort={effort}
+              onChange={(next) =>
+                setModelPick({ profile: profileRef, ...next })
+              }
+              enabled={open}
+            />
 
             <div>
               <Button
@@ -677,35 +729,6 @@ export function RunCreateDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  </Field>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label={t('create.effort')}>
-                    <Select value={effort} onValueChange={setEffort}>
-                      <SelectTrigger aria-label={t('create.effort')}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={DEFAULT_EFFORT}>
-                          {t('create.effortDefault')}
-                        </SelectItem>
-                        {EFFORT_LEVELS.map((e) => (
-                          <SelectItem key={e} value={e}>
-                            {t(`effort.${e}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field label={t('create.model')}>
-                    <ModelAvailabilityPicker
-                      profile={selectedProfile}
-                      value={model}
-                      onChange={setModel}
-                      enabled={open}
-                    />
                   </Field>
                 </div>
 

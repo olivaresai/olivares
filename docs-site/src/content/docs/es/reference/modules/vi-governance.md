@@ -7,6 +7,10 @@ description: >-
   la actuación gobernada.
 ---
 
+:::note[Edición]
+Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas) y el ciclo de vida de identidades gestionadas requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, SCIM entrante de usuarios/grupos, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
+:::
+
 El módulo VI es el **plano de gobernanza sobre el modelo de autorización existente
 del motor** — **no** reimplementa el enforcer ni los connectors de identidad, los
 consume. Vincula cinco subsistemas tras un único contexto acotado (la identidad y

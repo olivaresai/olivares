@@ -29,7 +29,7 @@ import (
 // from or written to a keyring.
 type NativeOpenPGPVerifier struct{}
 
-func (NativeOpenPGPVerifier) Describe() string { return "openpgp/go-x-crypto" }
+func (NativeOpenPGPVerifier) Describe() string { return "openpgp/protonmail-go-crypto" }
 
 func (NativeOpenPGPVerifier) Verify(ctx context.Context, key []byte, wantFingerprint string, signature, data []byte) (SignatureReport, error) {
 	if err := ctx.Err(); err != nil {

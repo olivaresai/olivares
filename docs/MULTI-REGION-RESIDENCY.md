@@ -91,7 +91,11 @@ The reserved **system tenant** and the **Auth/System** paths pass through (the l
 auth/provisioning partition every instance holds for itself). In single-region mode the
 guard is not installed at all. The API maps the error to **403 `residency_violation`**.
 
-### 4. Provisioning & re-pin — the org API
+### 4. Provisioning & re-pin — the Enterprise org API
+
+Organization management is Enterprise. Community setup creates one organization;
+the organization-management routes return 501. Stored organizations, residency pins
+and tenant isolation remain intact, and Community still exports stored data.
 
 - `POST /v1/system/orgs` accepts an optional `data_region`, validated against the
   registry (known region; the home region on a region-scoped instance) before the

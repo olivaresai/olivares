@@ -15,12 +15,11 @@ jobs:
     timeout-minutes: 5
     steps:
       # The workflow itself also comes from the trusted base via pull_request_target.
-      # Never check out or execute the PR head in this job.
+      # Default checkout = base branch under pull_request_target; never the PR head.
       # Both the program and record come from the base, never from the PR.
       # A contributor cannot record their own signature or replace the checker.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - name: Require a recorded CLA or maintainer exemption
         env:

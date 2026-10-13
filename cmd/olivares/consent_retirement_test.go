@@ -81,6 +81,7 @@ func (e *consentEstate) tryLogin(email, password string) (string, int) {
 // pending across a pump restart and completes on a later pass.
 func TestRetirementSurvivesRestartAndRetries(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "the restart case requires the retry to complete before readmission")
 		const email = "restarted@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		e.scimDelete(e.tT, user)
@@ -255,6 +256,7 @@ func (e *consentEstate) rowsNamingSubject(w fenceWriter, s fenceSubject) int {
 // nothing.
 func TestABlockedRetirementBacksOffAndWritesNothingUntilItChanges(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "blocked-record backoff requires a published blocked verdict")
 		ctx := context.Background()
 		p := e.pump()
 		steps := 0
@@ -354,6 +356,7 @@ func TestABlockedRetirementBacksOffAndWritesNothingUntilItChanges(t *testing.T) 
 // authenticator, and runs a pass once the process is the active writer.
 func TestTheRetirementPumpRunsOnlyWhileActiveAndWakesOnAnOffboard(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "the wakeup case requires the active pump to complete retirement")
 		user := e.onboard(e.tT, "leader@consent.test", "viewer")
 		p := e.pump()
 		var active atomic.Bool

@@ -11,9 +11,8 @@
 # GoReleaser's prebuilt binary. See deploy/compose/docker-compose.yml for startup.
 
 # ---- web stage: build the React/Vite UI into the Go embed dir -----------------
-# Pin the digest in production; the tag is a readable default (matches the project
-# convention, see connectors/ebpf/deploy/*.yaml).
-FROM node:26-bookworm-slim AS web
+# Pinned by digest; Dependabot's docker entry keeps the digest current.
+FROM node:26-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS web
 WORKDIR /src
 # Node.js stopped bundling corepack in version 25, so this stage installs a pinned
 # corepack and enables its pnpm shims only; corepack then runs the pnpm that
@@ -27,7 +26,9 @@ COPY web/ ./web/
 RUN cd web && pnpm run build
 
 # ---- go stage: compile the single static binary with the UI embedded ----------
-FROM golang:1.27.0-bookworm AS build
+# Dependabot ignores golang (see .github/dependabot.yml), so a toolchain bump moves this tag
+# and its digest together; with both present, docker pulls the digest.
+FROM golang:1.26.9-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
 # The full source comes in BEFORE `go mod download`. The go command reads go.work
@@ -59,7 +60,7 @@ RUN VERSION_LDFLAGS="$(sh scripts/build-ldflags.sh "${VERSION}" "${COMMIT}")" &&
 # ---- final stage: non-root agent runtime ----------------------------------
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:25-trixie-slim@sha256:aabbe39553d15ede8a97cc60c9e1a97034ff772afcf696ea42b94e7f5f2ec71b
+FROM node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get upgrade -y \

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"net/url"
 	"strconv"
-	"time"
 )
 
 // Per-operation maxResults caps — VERIFIED 2026-06-11 from the botocore service
@@ -27,54 +26,6 @@ const (
 type identityListRequest struct {
 	MaxResults int    `json:"maxResults"`
 	NextToken  string `json:"nextToken,omitempty"`
-}
-
-// workloadIdentityItem is one ListWorkloadIdentities item. VERIFIED 2026-06-11
-// (API reference + botocore model): the item carries ONLY name and
-// workloadIdentityArn — the developer guide's createdBy/createdAt list columns
-// are STALE doc and DO NOT EXIST on the wire. Timestamps require the
-// per-identity GetWorkloadIdentity call (detail mode).
-type workloadIdentityItem struct {
-	Name                string `json:"name"`
-	WorkloadIdentityArn string `json:"workloadIdentityArn"`
-}
-
-type listWorkloadIdentitiesResponse struct {
-	WorkloadIdentities []workloadIdentityItem `json:"workloadIdentities"`
-	NextToken          string                 `json:"nextToken"`
-}
-
-// getWorkloadIdentityRequest selects one workload identity by name.
-type getWorkloadIdentityRequest struct {
-	Name string `json:"name"`
-}
-
-// getWorkloadIdentityResponse is the per-identity detail. createdTime and
-// lastUpdatedTime are EPOCH SECONDS on the wire (VERIFIED 2026-06-11); the
-// connector renders them RFC3339 UTC. The response's
-// allowedResourceOauth2ReturnUrls list is deliberately not read (not
-// governance metadata).
-type getWorkloadIdentityResponse struct {
-	Name                string  `json:"name"`
-	WorkloadIdentityArn string  `json:"workloadIdentityArn"`
-	CreatedTime         float64 `json:"createdTime"`
-	LastUpdatedTime     float64 `json:"lastUpdatedTime"`
-}
-
-// oauth2ProviderItem is one ListOauth2CredentialProviders item. The ARN lives
-// in the "acps" namespace (arn:aws:acps:...:token-vault/...), not
-// bedrock-agentcore. The item never carries the client secret — only the vault
-// location metadata, which this connector does not read either.
-type oauth2ProviderItem struct {
-	Name                     string  `json:"name"`
-	CredentialProviderArn    string  `json:"credentialProviderArn"`
-	CredentialProviderVendor string  `json:"credentialProviderVendor"`
-	CreatedTime              float64 `json:"createdTime"`
-}
-
-type listOauth2ProvidersResponse struct {
-	CredentialProviders []oauth2ProviderItem `json:"credentialProviders"`
-	NextToken           string               `json:"nextToken"`
 }
 
 // apiKeyProviderItem is one ListApiKeyCredentialProviders item (same acps ARN
@@ -148,63 +99,6 @@ func (d policyDefinition) kind() string {
 	default:
 		return ""
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Paginated list helpers (every loop is bounded by max_pages and honors ctx).
-// ---------------------------------------------------------------------------
-
-// listWorkloadIdentities pages POST /identities/ListWorkloadIdentities via the
-// nextToken in the JSON body (cap 20 per page).
-func (s *Source) listWorkloadIdentities(ctx context.Context, c *client) ([]workloadIdentityItem, error) {
-	var out []workloadIdentityItem
-	token := ""
-	for i := 0; i < s.maxPages; i++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		var resp listWorkloadIdentitiesResponse
-		if err := c.postJSON(ctx, "ListWorkloadIdentities",
-			identityListRequest{MaxResults: pageSizeIdentities, NextToken: token}, &resp); err != nil {
-			return nil, err
-		}
-		out = append(out, resp.WorkloadIdentities...)
-		if resp.NextToken == "" {
-			break
-		}
-		token = resp.NextToken
-	}
-	return out, nil
-}
-
-// getWorkloadIdentity resolves one identity by name (detail mode only).
-func (s *Source) getWorkloadIdentity(ctx context.Context, c *client, name string) (getWorkloadIdentityResponse, error) {
-	var resp getWorkloadIdentityResponse
-	err := c.postJSON(ctx, "GetWorkloadIdentity", getWorkloadIdentityRequest{Name: name}, &resp)
-	return resp, err
-}
-
-// listOauth2Providers pages POST /identities/ListOauth2CredentialProviders
-// (cap 20 per page).
-func (s *Source) listOauth2Providers(ctx context.Context, c *client) ([]oauth2ProviderItem, error) {
-	var out []oauth2ProviderItem
-	token := ""
-	for i := 0; i < s.maxPages; i++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		var resp listOauth2ProvidersResponse
-		if err := c.postJSON(ctx, "ListOauth2CredentialProviders",
-			identityListRequest{MaxResults: pageSizeIdentities, NextToken: token}, &resp); err != nil {
-			return nil, err
-		}
-		out = append(out, resp.CredentialProviders...)
-		if resp.NextToken == "" {
-			break
-		}
-		token = resp.NextToken
-	}
-	return out, nil
 }
 
 // listAPIKeyProviders pages POST /identities/ListApiKeyCredentialProviders
@@ -480,32 +374,4 @@ func (s *Source) getCedarPolicyContent(p policyItem) string {
 		return ""
 	}
 	return body.Statement
-}
-
-// ---------------------------------------------------------------------------
-// Mapping helpers
-// ---------------------------------------------------------------------------
-
-// epochToRFC3339 renders an epoch-seconds wire timestamp as RFC3339 UTC, or ""
-// for the zero value so pruneAttrs drops it.
-func epochToRFC3339(sec float64) string {
-	if sec <= 0 {
-		return ""
-	}
-	return time.Unix(int64(sec), 0).UTC().Format(time.RFC3339)
-}
-
-// pruneAttrs drops empty values so the attribute map carries only present
-// metadata, and returns nil when nothing remains (diff-stable snapshots — the
-// claude-wif convention, copied locally per the connector-boundary rule).
-func pruneAttrs(m map[string]string) map[string]string {
-	for k, v := range m {
-		if v == "" {
-			delete(m, k)
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
 }

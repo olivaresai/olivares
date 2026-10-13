@@ -11,7 +11,7 @@ import (
 
 // These are compatibility snapshots, not another source for new module policy.
 func TestModuleSpecPreservesPublishedSelectionsAndRetirementOrder(t *testing.T) {
-	if got, want := standardModuleSelection(), []string{"capabilities", "claude-policy", "consoleviews", "eventing", "identity", "liveingest"}; !slices.Equal(got, want) {
+	if got, want := standardModuleSelection(), []string{"capabilities", "claude-policy", "consoleviews", "eventing", "identity", "liveingest", "skills"}; !slices.Equal(got, want) {
 		t.Fatalf("standard selection = %v, want %v", got, want)
 	}
 	if got, want := published26100ModuleSelection(), []string{

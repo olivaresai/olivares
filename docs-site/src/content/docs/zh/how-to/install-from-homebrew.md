@@ -6,7 +6,7 @@ description: >-
 draft: false
 ---
 
-下一个版本是 <!-- release -->`0.1`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->。
+下一个版本是 <!-- release -->`0.2`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->。
 
 这是 `INSTALL.md` 称为推荐的 macOS 路径。它通过 Homebrew cask 安装已签名的
 `olivares` 二进制文件，并清除 Gatekeeper 隔离。它不是 Linux 软件包路径

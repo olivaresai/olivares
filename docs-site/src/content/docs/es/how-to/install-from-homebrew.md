@@ -6,7 +6,7 @@ description: >-
 draft: false
 ---
 
-La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+La próxima release es <!-- release -->`0.2`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
 
 Esta es la vía macOS que `INSTALL.md` nombra como recomendada. Instala el
 binario `olivares` firmado mediante el cask de Homebrew y limpia la

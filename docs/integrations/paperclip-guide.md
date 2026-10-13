@@ -73,7 +73,7 @@ module data and the audit ledger included. Paperclip puts it in the agent's envi
 agent process is not confined, so any Paperclip agent, including a prompt-injected one, can read
 that organization. Limit the reach in one of two ways:
 
-- Bind the token to a dedicated organization for Paperclip agents
+- In Enterprise, bind the token to a dedicated organization for Paperclip agents
   (`olivares tenants create --name paperclip`, then `tokens issue --tenant <id>`). Proxy calls
   then run in that organization, so add `--tenant <id>` to every command of steps 3, 4 and 6.
   Without it they write to and read your own organization, and Paperclip calls get neither the

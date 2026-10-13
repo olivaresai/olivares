@@ -50,14 +50,10 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 	}
 	root := s.login("root@x.io", "supersecret1")
 	s.stepUp(root)
-	code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("org = %d %s", code, raw)
-	}
-	s.tenant = model.TenantID(out["tenant_id"].(string))
+	s.tenant = s.seedOrg("acme")
 	admin, viewer := s.member(root, "admin"), s.member(root, "viewer")
 	s.stepUp(admin)
-	code, out, raw = s.do("POST", "/v1/m/gitpublish/targets", admin, map[string]any{
+	code, out, raw := s.do("POST", "/v1/m/gitpublish/targets", admin, map[string]any{
 		"workspace_id": model.NewID().String(), "credential_binding_id": "cb1", "repository_binding_id": "rb1", "push_prefix": "olivares/", "merge_bases": []string{"main"},
 	}, s.tenant)
 	if code != http.StatusCreated {
@@ -145,11 +141,7 @@ func TestProductionIntentAdmissionWithoutRequestDeadline(t *testing.T) {
 		}
 	})
 	t.Run("wrong tenant", func(t *testing.T) {
-		code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "other", "slug": "other"}, "")
-		if code != http.StatusCreated {
-			t.Fatalf("other org = %d %s", code, raw)
-		}
-		other := model.TenantID(out["tenant_id"].(string))
+		other := s.seedOrg("other")
 		for _, path := range append(readPaths, "targets/"+target) {
 			code, _, raw := s.do("GET", base+path, root, nil, other)
 			if code != http.StatusNotFound {
@@ -281,11 +273,7 @@ func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 	// Adding a person asks for the deployment's step-up: the
 	// administrator who adds the members steps up; the members under test do not.
 	s.stepUp(root)
-	code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("org = %d %s", code, raw)
-	}
-	s.tenant = model.TenantID(out["tenant_id"].(string))
+	s.tenant = s.seedOrg("acme")
 	admin := s.member(root, "admin")
 	viewer := s.member(root, "viewer")
 
@@ -319,7 +307,7 @@ func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 		t.Fatal("a refused request reached the host")
 	}
 	// The exact admin session publishes through the production authority.
-	code, out, raw = s.do("POST", base+"/pushes", admin, push, s.tenant)
+	code, out, raw := s.do("POST", base+"/pushes", admin, push, s.tenant)
 	if code != http.StatusOK || out["state"] != StateApplied {
 		t.Fatalf("admin push = %d %s", code, raw)
 	}
@@ -342,4 +330,19 @@ func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 	if s.host.mints != s.host.releases {
 		t.Fatalf("mints = %d releases = %d", s.host.mints, s.host.releases)
 	}
+}
+
+// seedOrg creates isolation data without depending on edition-specific management routes.
+func (s *server) seedOrg(slug string) model.TenantID {
+	s.t.Helper()
+	ctx := context.Background()
+	var org model.Org
+	if err := s.st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+		return err
+	}); err != nil {
+		s.t.Fatalf("seed organization %s: %v", slug, err)
+	}
+	return org.TenantID
 }

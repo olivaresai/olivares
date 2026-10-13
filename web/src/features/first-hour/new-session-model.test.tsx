@@ -6,15 +6,21 @@
 // saved default and the models its last test found, and sends a model only when the user
 // picks one; the engine resolves the default itself.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, renderHook, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const auth = vi.hoisted(() => ({ providers: true }))
+const auth = vi.hoisted(() => ({ providers: true, profiles: true }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
-    can: (p: string) => p !== 'sessions:provider:read' || auth.providers,
+    activeTenant: 'tnt-a',
+    can: (p: string) =>
+      p === 'sessions:provider:read'
+        ? auth.providers
+        : p === 'sessions:profile:read'
+          ? auth.profiles
+          : true,
     isSuperadmin: true,
   }),
 }))
@@ -36,15 +42,19 @@ vi.mock('./api', async (orig) => ({
   },
 }))
 
-import { agentOpsApi } from '@/features/agentops/api'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { firstHourKeys } from './api'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { ProviderRecordDTO } from '@/features/providers/types'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
 import { StartSessionForm } from './first-hour'
 import { readinessOf } from './readiness.fixture'
 
-function wrap(ui: ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function wrap(
+  ui: ReactNode,
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
 }
 
@@ -92,6 +102,7 @@ beforeEach(() => {
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
   auth.providers = true
+  auth.profiles = true
   useTenantStore.setState({ activeTenant: 'tnt-a' })
 })
 
@@ -248,11 +259,269 @@ describe('the model in the New session dialog', () => {
     expect(launch.launchSession).not.toHaveBeenCalled()
   })
 
-  it("offers no model choice on the tool's own login", async () => {
+  it("offers no key model list on the tool's own login: its models are the tool's own catalog", async () => {
     given(key())
     wrap(<StartSessionForm />)
     await screen.findByRole('radio', { name: 'Claude Code' })
     expect(screen.queryByRole('combobox', { name: 'Model' })).toBeNull()
+    expect(await screen.findByRole('button', { name: 'Model' })).toBeVisible()
+  })
+
+  // #1779: model and effort were two "advanced" steps away; the person looking for them
+  // opened the raw stdin line instead. They are on the form itself, from the tool's own list.
+  it("chooses the own-login tool's model and effort on the form, with More options closed", async () => {
+    const user = userEvent.setup()
+    given(key())
+    vi.spyOn(agentOpsApi, 'previewProfile').mockResolvedValue({
+      reason: 'own_login',
+      profile: {
+        profile_ref: 'ppf_claude',
+        driver: 'claude',
+        environment_ref: 'xenv_1',
+        state: 'active',
+        local_environment: true,
+        operable: true,
+      },
+    })
+    const models = vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+      profile_ref: 'ppf_claude',
+      driver: 'claude',
+      state: 'fresh',
+      default_model: '',
+      free_text: true,
+      checked_at: '2026-10-12T10:00:00Z',
+      refresh_interval_seconds: 120,
+      models: [
+        {
+          id: 'opus-5-5',
+          display_name: 'Claude Opus 5.5',
+          is_default: true,
+          effort_levels: ['low', 'medium', 'high'],
+        },
+        {
+          id: 'haiku-5-5',
+          display_name: 'Claude Haiku 5.5',
+          effort_levels: ['low', 'high'],
+        },
+      ],
+    })
+    wrap(<StartSessionForm />)
+    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    expect(
+      screen.getByRole('button', { name: 'More options' }),
+    ).toHaveAttribute('aria-expanded', 'false')
+    await user.click(await screen.findByRole('button', { name: 'Model' }))
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+      driver: 'claude',
+      model: 'haiku-5-5',
+      effort: 'high',
+    })
+    expect(models).toHaveBeenCalledWith(
+      'ppf_claude',
+      expect.objectContaining({ tenant: 'tnt-a' }),
+    )
+  })
+
+  // #1779 (srv17): the advanced launch opened on "Select a profile" while this form already
+  // showed the sign-in it would use. It opens on the same sign-in, model and effort.
+  it('hands the advanced launch the sign-in, model and effort the form shows', async () => {
+    const user = userEvent.setup()
+    given(key())
+    vi.spyOn(agentOpsApi, 'previewProfile').mockResolvedValue({
+      reason: 'own_login',
+      profile: {
+        profile_ref: 'ppf_claude',
+        driver: 'claude',
+        environment_ref: 'xenv_1',
+        state: 'active',
+        local_environment: true,
+        operable: true,
+      },
+    })
+    vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+      profile_ref: 'ppf_claude',
+      driver: 'claude',
+      state: 'fresh',
+      default_model: '',
+      free_text: true,
+      checked_at: '2026-10-12T10:00:00Z',
+      refresh_interval_seconds: 120,
+      models: [
+        {
+          id: 'haiku-5-5',
+          display_name: 'Claude Haiku 5.5',
+          effort_levels: ['low', 'high'],
+        },
+      ],
+    })
+    const onAdvanced = vi.fn()
+    wrap(<StartSessionForm onAdvanced={onAdvanced} />)
+    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await user.click(await screen.findByRole('button', { name: 'Model' }))
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Advanced launch options' }),
+    )
+    expect(onAdvanced).toHaveBeenCalledWith({
+      driver: 'claude',
+      profileRef: 'ppf_claude',
+      model: 'haiku-5-5',
+      effort: 'high',
+    })
+  })
+
+  it('hands the advanced launch only the tool for a tool on a key: it has no profile before its first launch', async () => {
+    const user = userEvent.setup()
+    given(key())
+    const onAdvanced = vi.fn()
+    wrap(<StartSessionForm onAdvanced={onAdvanced} />)
+    await chooseCodex(user)
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Advanced launch options' }),
+    )
+    expect(onAdvanced).toHaveBeenCalledWith({ driver: 'codex' })
+  })
+
+  it.each(['key-backed', 'not-ready'] as const)(
+    'hands over only the driver despite a cached reuse profile for a %s tool',
+    async (state) => {
+      const user = userEvent.setup()
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      const boundary = renderHook(useAuthBoundary, {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        ),
+      })
+      const { tenant, epoch } = boundary.result.current
+      boundary.unmount()
+      const reuseKey = [
+        ...agentOpsKeys.boundaryScope(tenant, epoch),
+        'reuse-profile',
+        'codex',
+      ]
+      qc.setQueryData(reuseKey, {
+        reason: 'own_login',
+        profile: { profile_ref: 'ppf_codex', driver: 'codex', state: 'active' },
+      })
+      const readiness = readinessOf({
+        claude: 'own_login',
+        ...(state === 'key-backed'
+          ? { codex: { provider: source(key()) } }
+          : {}),
+      })
+      qc.setQueryData(firstHourKeys.readiness(tenant), readiness)
+      vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readiness)
+      vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+        items: [],
+        has_more: false,
+      })
+      const preview = vi
+        .spyOn(agentOpsApi, 'previewProfile')
+        .mockResolvedValue({ reason: 'own_login' })
+      const models = vi.spyOn(agentOpsApi, 'profileModels')
+      const onAdvanced = vi.fn()
+      wrap(<StartSessionForm onAdvanced={onAdvanced} />, qc)
+      await chooseCodex(user)
+      await user.click(screen.getByRole('button', { name: 'More options' }))
+      await user.click(
+        await screen.findByRole('button', { name: 'Advanced launch options' }),
+      )
+      expect(onAdvanced).toHaveBeenCalledExactlyOnceWith({ driver: 'codex' })
+      expect(preview).not.toHaveBeenCalledWith('codex', expect.anything())
+      expect(models).not.toHaveBeenCalled()
+      expect(qc.getQueryData(reuseKey)).toMatchObject({
+        profile: { profile_ref: 'ppf_codex' },
+      })
+    },
+  )
+
+  it('sends no model and no effort when both are left on the tool default', async () => {
+    const user = userEvent.setup()
+    given(key())
+    vi.spyOn(agentOpsApi, 'previewProfile').mockResolvedValue({
+      reason: 'own_login',
+      profile: {
+        profile_ref: 'ppf_claude',
+        driver: 'claude',
+        environment_ref: 'xenv_1',
+        state: 'active',
+        local_environment: true,
+        operable: true,
+      },
+    })
+    vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+      profile_ref: 'ppf_claude',
+      driver: 'claude',
+      state: 'fresh',
+      default_model: '',
+      free_text: true,
+      checked_at: '2026-10-12T10:00:00Z',
+      refresh_interval_seconds: 120,
+      models: [{ id: 'opus-5-5', is_default: true }],
+    })
+    wrap(<StartSessionForm />)
+    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    const quick = launch.launchSession.mock.calls[0][0].quick
+    expect(quick).not.toHaveProperty('model')
+    expect(quick).not.toHaveProperty('effort')
+  })
+
+  it('asks for no profile and no catalog without the right to read profiles', async () => {
+    auth.profiles = false
+    given(key())
+    const preview = vi.spyOn(agentOpsApi, 'previewProfile')
+    const models = vi.spyOn(agentOpsApi, 'profileModels')
+    wrap(<StartSessionForm />)
+    await screen.findByRole('radio', { name: 'Claude Code' })
+    expect(await screen.findByRole('button', { name: 'Model' })).toBeVisible()
+    expect(preview).not.toHaveBeenCalled()
+    expect(models).not.toHaveBeenCalled()
+  })
+
+  it("drops the effort when the key's model goes back to a default that names none", async () => {
+    const user = userEvent.setup()
+    given(key({ default_model: null }))
+    wrap(<StartSessionForm />)
+    await chooseCodex(user)
+    await user.click(await screen.findByRole('combobox', { name: 'Model' }))
+    await user.click(await screen.findByRole('option', { name: 'gpt-a' }))
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(screen.getByRole('combobox', { name: 'Model' }))
+    await user.click(
+      await screen.findByRole('option', { name: 'Codex default' }),
+    )
+    expect(screen.getByLabelText('Effort')).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    expect(launch.launchSession.mock.calls[0][0].quick).not.toHaveProperty(
+      'effort',
+    )
+  })
+
+  it('offers the effort of the key model once one is chosen, and none before', async () => {
+    const user = userEvent.setup()
+    given(key({ default_model: null }), { model_required: true })
+    wrap(<StartSessionForm />)
+    await chooseCodex(user)
+    await screen.findByRole('combobox', { name: 'Model' })
+    expect(screen.getByLabelText('Effort')).toBeDisabled()
+    await user.click(screen.getByRole('combobox', { name: 'Model' }))
+    await user.click(await screen.findByRole('option', { name: 'gpt-a' }))
+    expect(screen.getByLabelText('Effort')).toBeEnabled()
   })
 
   // ARCH.C3: the key's models come with the engine's answer, so a person who may start

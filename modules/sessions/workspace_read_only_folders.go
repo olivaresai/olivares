@@ -75,14 +75,44 @@ func decodeWorkspaceReadOnlyFolders(rec model.Record) ([]string, error) {
 	return out, nil
 }
 
-func (m *Module) patchWorkspaceReadOnlyFolders(ctx context.Context, tenant model.TenantID, ref string, paths []string, actor, actorKind string) (workspaceDTO, error) {
-	folders, err := m.normalizeWorkspaceReadOnlyFolders(paths)
-	if err != nil {
-		return workspaceDTO{}, err
+// workspaceSettingChange is one validated PATCH setting: the column and value to
+// store, and the bytes its configure event commits to.
+type workspaceSettingChange struct {
+	column, value string
+	committed     []byte
+}
+
+// patchWorkspace changes the settings that are not nil, in one transaction. Each is
+// validated like registration validates it and seals its own configure event, whose
+// hash commits to the new value, so a refused request changes and records nothing.
+// The DLP event also names the new and the previous mode: a downgrade must be
+// readable in the ledger.
+func (m *Module) patchWorkspace(ctx context.Context, tenant model.TenantID, ref string, folders *[]string, dlpMode *string, actor, actorKind string) (workspaceDTO, error) {
+	var changes []workspaceSettingChange
+	if folders != nil {
+		canonical, err := m.normalizeWorkspaceReadOnlyFolders(*folders)
+		if err != nil {
+			return workspaceDTO{}, err
+		}
+		raw, err := json.Marshal(canonical)
+		if err != nil {
+			return workspaceDTO{}, err
+		}
+		changes = append(changes, workspaceSettingChange{colWsReadOnlyFolders, string(raw), raw})
 	}
-	raw, _ := json.Marshal(folders)
+	if dlpMode != nil {
+		mode, err := normalizeDLPMode(*dlpMode)
+		if err != nil {
+			return workspaceDTO{}, err
+		}
+		raw, err := json.Marshal(map[string]string{colWsDLPMode: mode})
+		if err != nil {
+			return workspaceDTO{}, err
+		}
+		changes = append(changes, workspaceSettingChange{colWsDLPMode, mode, raw})
+	}
 	var out workspaceDTO
-	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(workspaceKind)
 		if err != nil {
 			return err
@@ -91,16 +121,25 @@ func (m *Module) patchWorkspaceReadOnlyFolders(ctx context.Context, tenant model
 		if err != nil {
 			return err
 		}
-		rec[colWsReadOnlyFolders] = string(raw)
+		previousDLPMode := rec.String(colWsDLPMode)
+		for _, change := range changes {
+			rec[change.column] = change.value
+		}
 		updated, err := repo.Update(ctx, rec)
 		if err != nil {
 			return err
 		}
-		if err := appendWorkspaceAudit(ctx, sc, wsMutationInput{
-			workspaceID: model.ID(rec.String(model.ColID)), workspaceRef: ref, op: "configure",
-			path: rec.String(colWsRootPath), contentHash: sha256Hex(raw), actor: actor, actorKind: actorKind,
-		}); err != nil {
-			return err
+		for _, change := range changes {
+			event := wsMutationInput{
+				workspaceID: model.ID(rec.String(model.ColID)), workspaceRef: ref, op: "configure",
+				path: rec.String(colWsRootPath), contentHash: sha256Hex(change.committed), actor: actor, actorKind: actorKind,
+			}
+			if change.column == colWsDLPMode {
+				event.meta = map[string]any{colWsDLPMode: change.value, "previous_" + colWsDLPMode: previousDLPMode}
+			}
+			if err := appendWorkspaceAudit(ctx, sc, event); err != nil {
+				return err
+			}
 		}
 		out, err = toWorkspaceDTO(updated)
 		return err

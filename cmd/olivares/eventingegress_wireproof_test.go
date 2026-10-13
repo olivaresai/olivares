@@ -105,21 +105,12 @@ func TestBootEnforcesEgressDestinationsOnAFreshInstall(t *testing.T) {
 		t.Fatalf("login token: %v %s", err, body)
 	}
 
-	code, body = do("POST", "/v1/system/orgs", login.Token, map[string]any{"slug": "acme", "name": "Acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("create org: %d %s", code, body)
-	}
-	var org struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal([]byte(body), &org); err != nil || org.ID == "" {
-		t.Fatalf("org id: %v %s", err, body)
-	}
+	tenant := createOrganizationFixture(t, eng.store, "Acme", "acme").TenantID.String()
 
 	code, body = do("POST", "/v1/m/eventing/subscriptions", login.Token, map[string]any{
 		"name": "siem", "endpoint": "https://collector.example.com/hooks",
 		"event_types": []string{"finding.reported"}, "role": "viewer",
-	}, org.ID)
+	}, tenant)
 	if code != http.StatusBadRequest {
 		t.Fatalf("authoring a destination on an enforced install with no policy returned %d (%s); want 400 — the control is not wired to the binary",
 			code, body)
@@ -129,7 +120,7 @@ func TestBootEnforcesEgressDestinationsOnAFreshInstall(t *testing.T) {
 	}
 
 	// 3. The status surface reports the disposition, so an operator can see WHY.
-	code, body = do("GET", "/v1/m/eventing/egress-policy", login.Token, nil, org.ID)
+	code, body = do("GET", "/v1/m/eventing/egress-policy", login.Token, nil, tenant)
 	if code != http.StatusOK {
 		t.Fatalf("egress-policy status: %d %s", code, body)
 	}

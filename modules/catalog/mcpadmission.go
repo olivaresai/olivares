@@ -416,6 +416,9 @@ func (m *Module) handleAdmitMCPEntry(w http.ResponseWriter, r *http.Request, mc 
 		return
 	}
 	if len(in.Bundle) == 0 {
+		if m.admitDeclaredTool(w, r, mc) {
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, errorBody("bundle (a Sigstore attestation bundle) is required"))
 		return
 	}
@@ -444,6 +447,17 @@ func (m *Module) handleAdmitMCPEntry(w http.ResponseWriter, r *http.Request, mc 
 		policy, _, err := loadMCPAdmissionPolicy(r, sc)
 		if err != nil {
 			return err
+		}
+		tool, err := parseToolDeclaration(parseSpec(entry.String(colSpec)))
+		if err != nil {
+			return err
+		}
+		if tool != nil {
+			if in.ExpectedDigest != "" && strings.TrimPrefix(in.ExpectedDigest, "sha256:") != tool.SHA256 {
+				badInput = "expected_digest must match tool_install.sha256"
+				return nil
+			}
+			in.ExpectedDigest = tool.SHA256
 		}
 		verdict, verr := modelsign.VerifyAttestation(in.Bundle, policy.trustPolicy(), effectivePredicates(policy, in.PredicateTypes), in.ExpectedDigest)
 		if errors.Is(verr, modelsign.ErrMalformedBundle) {

@@ -158,13 +158,20 @@ def build(pin: dict) -> tuple[dict, dict]:
     packs, data, archives = [], [], {}
     for source_id, source in pin['sources'].items():
         source = dict(source, id=source_id)
-        files = fetch(source['repository'], source['commit'], source.get('exclude', {}))
+        if source_id == 'olivares':
+            # Product-authored bytes are reviewed in this repository; their archive
+            # digest, rather than an upstream Git commit, pins the bundled version.
+            files = {str(p.relative_to(ROOT)): (p.read_bytes(), 0o644)
+                     for p in (DATA / 'olivares-wiki').rglob('*') if p.is_file()}
+            files[source['license_file']] = ((ROOT / source['license_file']).read_bytes(), 0o644)
+        else:
+            files = fetch(source['repository'], source['commit'], source.get('exclude', {}))
         if source_id == 'ecc':
             groups = ecc_groups(files)
             plain = [('ecc-agents', 'Agent definitions (data).', subtree(files, 'agents')),
                      ('ecc-rules', 'Rules (data).', subtree(files, 'rules'))]
         else:
-            groups = [(pack_id, f'Upstream {path}.', subtree(files, path)) for pack_id, path in source['select'].items()]
+            groups = [(pack_id, ('Workspace wiki: ingest, query, and lint.' if source_id == 'olivares' else f'Upstream {path}.'), subtree(files, path)) for pack_id, path in source['select'].items()]
             plain = []
         # Agents and rules are not skills: pinned and vendored under data/, not embedded.
         for into, items, folder in ((packs, groups, ''), (data, plain, 'data/')):

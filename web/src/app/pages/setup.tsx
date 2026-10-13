@@ -11,6 +11,7 @@ import { isEngineEmail } from '@/lib/email'
 import { AuthShell } from '@/components/layout/auth-shell'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -148,7 +149,7 @@ export function SetupPage() {
           <Field
             label={t('setup.token')}
             htmlFor="token"
-            description={t('setup.tokenHint')}
+            description={withInlineCommands(t('setup.tokenHint'))}
             error={
               form.formState.errors.token
                 ? t('common:validation.required')
@@ -201,7 +202,7 @@ export function SetupPage() {
 
           {submitError && (
             <p className="text-body text-danger" role="alert">
-              {submitError}
+              {withInlineCommands(submitError)}
             </p>
           )}
 

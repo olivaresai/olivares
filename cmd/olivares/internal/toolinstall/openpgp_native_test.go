@@ -9,9 +9,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"golang.org/x/crypto/openpgp" //nolint:staticcheck
+	"github.com/ProtonMail/go-crypto/openpgp"
 )
 
 // Claude Code 2.1.286's manifest and its detached signature, as published on
@@ -31,7 +32,7 @@ func TestNativeOpenPGPVerifiesTheOfficialClaudeManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("official manifest: %v", err)
 	}
-	if rep.PrimaryFingerprint != ClaudeReleaseKeyFingerprint || rep.Verifier != "openpgp/go-x-crypto" || rep.Created.IsZero() {
+	if rep.PrimaryFingerprint != ClaudeReleaseKeyFingerprint || rep.Verifier != "openpgp/protonmail-go-crypto" || rep.Created.IsZero() {
 		t.Fatalf("report = %+v", rep)
 	}
 	tampered := append(bytes.Clone(data), ' ')
@@ -68,8 +69,9 @@ func TestNativeOpenPGPRefusesASignatureByAnotherKey(t *testing.T) {
 	if err := openpgp.ArmoredDetachSign(&sig, other, bytes.NewReader(data), nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (NativeOpenPGPVerifier{}).Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, sig.Bytes(), data); KindOf(err) != KindSignatureInvalid {
-		t.Fatalf("other key = %v, want signature invalid", err)
+	_, err = (NativeOpenPGPVerifier{}).Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, sig.Bytes(), data)
+	if KindOf(err) != KindSignatureInvalid || !strings.Contains(err.Error(), "not the pinned release key") {
+		t.Fatalf("other key = %v, want signature invalid: not the pinned release key", err)
 	}
 }
 

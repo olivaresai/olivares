@@ -22,10 +22,9 @@
 // `unknown` is the default when edge metadata is missing (`:330`). It means the attribution
 // is unknown, so it appears as a warning rather than a neutral state.
 //
-// The estate summary is deliberately omitted. Measured on 2026-08-20, `out.EscalationPaths`
-// and `out.ExfilRoutes` had no assignments in `handleAttackPathSummary`; the calculating
-// functions were used only by per-agent handlers. Displaying zero exfiltration routes would
-// publish a value nobody computed. Escalated to the `access-map` owner.
+// The estate summary is not shown here: no screen asks for it. The engine now computes its
+// escalation and exfil counts from the same analyses as the per-subject routes, so a summary
+// view can be added without a caveat when one is designed.
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -35,8 +34,8 @@ import { useAuth } from '@/lib/auth/context'
 import { accessMapApi, accessMapKeys } from './api'
 import type { AttackPath, AttackPathKind } from './types'
 
-/** `unknown` NO es neutro: es el valor por defecto de un borde sin metadato. Va en
- *  `warning`, no en `outline`, para que no se lea como «sin novedad». */
+/** `unknown` is NOT neutral: it is the default for an edge without metadata. It uses
+ *  `warning`, not `outline`, so it does not read as "nothing to report". */
 const ATTRIBUTION_VARIANT: Record<string, 'success' | 'warning' | 'info'> = {
   firm: 'success',
   approximate: 'info',
@@ -169,6 +168,9 @@ function Analysis({
   // array did not say "zero paths"; rendering the empty state would turn a broken
   // contract into a reassuring result.
   const paths = attackPathsFrom(query.data, kind)
+  // The engine sets `truncated` when a read or path cap cut the analysis: what is listed is
+  // a subset, and an empty list may not be the whole answer either.
+  const truncated = isRecord(query.data) && query.data.truncated === true
 
   return (
     <section aria-labelledby={`attack-${kind}`}>
@@ -192,6 +194,11 @@ function Analysis({
           ))}
         </ul>
       )}
+      {query.isSuccess && paths !== null && truncated ? (
+        <p role="status" className="text-warning text-caption">
+          {t('attackPaths.truncated')}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -204,12 +211,12 @@ export function AttackPathsPanel({
   subject: AttackSubject | null
 }) {
   const { t } = useTranslation('accessMap')
-  // ⛔ NO SE CONSULTA AL SELECCIONAR, Y ESO NO ES PEREZA: cada análisis SELLA UNA
-  //    FILA DE AUDITORÍA en el motor —`sc.Audit().Append` dentro de la propia función,
-  //    no del handler (`attackpath.go:151,248`)—. Colgarlos del clic en un nodo escribiría
-  //    DOS entradas para un agente o UNA para un recurso cada vez que se mira, y el libro
-  //    dejaría de distinguir «un operador investigó» de «alguien pasó el ratón por el
-  //    grafo». Una lectura privilegiada y auto-auditada se PIDE.
+  // ⛔ NOT QUERIED ON SELECTION, AND THAT IS NOT LAZINESS: each analysis SEALS AN AUDIT
+  //    ROW in the engine (`sc.Audit().Append` inside the function itself, not the
+  //    handler: `attackpath.go:151,248`). Hanging them on a node click would write TWO
+  //    entries for an agent or ONE for a resource every time someone looks, and the ledger
+  //    could no longer tell "an operator investigated" from "someone moved the pointer
+  //    over the graph". A privileged, self-audited read is ASKED for.
   const [asked, setAsked] = useState(false)
   if (!subject) {
     // Without a subject there is no valid query. The engine's 400 must never be

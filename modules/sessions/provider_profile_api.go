@@ -68,6 +68,7 @@ func (m *Module) providerProfileRoutes(reg api.RouteRegistrar) {
 	// HC1: the official CLI candidates observed for the same profile, under the same
 	// read permission. Advisory codes only (host_tools.go).
 	reg.Handle("GET", "/provider-profiles/{ref}/host-tools", permProfileRead, m.handleProfileHostTools)
+	reg.Handle("GET", "/provider-profiles/{ref}/models", permProfileRead, m.handleProfileModelCatalog)
 	reg.Handle("GET", "/provider-source-bindings", permProfileBindingRead, m.handleListBindings)
 	reg.Handle("POST", "/provider-source-bindings", permProfileBindingWrite, m.handleCreateBinding)
 	reg.Handle("GET", "/provider-source-bindings/{ref}", permProfileBindingRead, m.handleGetBinding)
@@ -135,9 +136,13 @@ type providerProfileDTO struct {
 	// SessionPermissionMode is the declared permission mode ("" = none declared).
 	SessionPermissionMode string            `json:"session_permission_mode,omitempty"`
 	SessionWorkGrant      *SessionWorkGrant `json:"session_work_grant,omitempty"`
-	CreatedAt             string            `json:"created_at,omitempty"`
-	UpdatedAt             string            `json:"updated_at,omitempty"`
-	RetiredAt             string            `json:"retired_at,omitempty"`
+	// SessionPrograms and SessionRegistries are the declared programs and package
+	// registries (provider_profile_packages.go): names and URLs, never a token.
+	SessionPrograms   []string          `json:"session_programs,omitempty"`
+	SessionRegistries []SessionRegistry `json:"session_registries,omitempty"`
+	CreatedAt         string            `json:"created_at,omitempty"`
+	UpdatedAt         string            `json:"updated_at,omitempty"`
+	RetiredAt         string            `json:"retired_at,omitempty"`
 }
 
 // providerProfileConfigurationDTO is the authorized configuration read: the
@@ -172,6 +177,10 @@ type createProfileRequest struct {
 	// SessionPermissionMode declares the permission mode those sessions run under.
 	SessionPermissionMode string          `json:"session_permission_mode"`
 	SessionWorkGrant      json.RawMessage `json:"session_work_grant"`
+	// SessionPrograms and SessionRegistries declare the installed programs and
+	// the package registries sessions under this profile get.
+	SessionPrograms   []string          `json:"session_programs"`
+	SessionRegistries []SessionRegistry `json:"session_registries"`
 }
 
 // patchProfileRequest is the only post-creation mutation: a label and/or an
@@ -194,6 +203,10 @@ type patchProfileRequest struct {
 	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
 	SessionPermissionMode *string         `json:"session_permission_mode"`
 	SessionWorkGrant      json.RawMessage `json:"session_work_grant"`
+	// SessionPrograms and SessionRegistries re-declare them; `[]` withdraws the
+	// declaration and a missing or null field leaves it unchanged.
+	SessionPrograms   *[]string          `json:"session_programs"`
+	SessionRegistries *[]SessionRegistry `json:"session_registries"`
 }
 
 type providerBindingDTO struct {
@@ -227,6 +240,8 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 		SessionToolsDeclared:  p.SessionToolsDeclared,
 		SessionPermissionMode: p.SessionPermissionMode,
 		SessionWorkGrant:      grant,
+		SessionPrograms:       p.SessionPrograms,
+		SessionRegistries:     p.SessionRegistries,
 		LocalEnvironment:      local,
 		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome),
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
@@ -274,6 +289,9 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 		SessionToolsDeclared:  body.SessionTools != nil,
 		SessionPermissionMode: body.SessionPermissionMode,
 		SessionWorkGrant:      body.SessionWorkGrant, WorkGrantActor: mc.Principal,
+		SessionPrograms:   body.SessionPrograms,
+		SessionRegistries: body.SessionRegistries,
+		MayUseSecretEnv:   len(body.SessionPrograms)+len(body.SessionRegistries) > 0 && m.mayUseSecretEnv(r.Context(), mc),
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -307,12 +325,14 @@ func resolveSourceOf(rec *ProviderRecord) *resolveProviderSource {
 	return &resolveProviderSource{ProviderRef: rec.Ref, Kind: rec.Kind, DisplayName: rec.DisplayName, DefaultModel: rec.DefaultModel, Models: rec.Models}
 }
 
-// resolvePreviewResponse is the same answer before a session starts: why, and
-// for a key which record. No profile is read or made.
+// resolvePreviewResponse is the same answer before a session starts: why, for a
+// key which record, and the profile the session would reuse with what it declares
+// (absent when the launch would create one). No profile is made.
 type resolvePreviewResponse struct {
 	Reason        string                 `json:"reason"`
 	Provider      *resolveProviderSource `json:"provider,omitempty"`
 	ModelRequired bool                   `json:"model_required,omitempty"`
+	Profile       *providerProfileDTO    `json:"profile,omitempty"`
 }
 
 // handlePreviewProfile answers what a new session of a driver would run on, without creating anything: the tool's own login when it is signed in, otherwise the key or local model from Providers that the resolve rule picks, or the sentence that says what to add.
@@ -323,8 +343,15 @@ func (m *Module) handlePreviewProfile(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	terms, _ := m.LaunchTermsFor(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("driver"))))
-	writeJSON(w, http.StatusOK, resolvePreviewResponse{Reason: got.Reason, Provider: resolveSourceOf(got.Provider),
-		ModelRequired: got.Provider != nil && terms.BoundModelRequired})
+	out := resolvePreviewResponse{Reason: got.Reason, Provider: resolveSourceOf(got.Provider),
+		ModelRequired: got.Provider != nil && terms.BoundModelRequired}
+	// The profile it would reuse, with the programs and registries it declares
+	// (AI tools > Installed here); absent when the launch would create one.
+	if got.Profile.Ref != "" {
+		dto := m.toProfileDTO(got.Profile)
+		out.Profile = &dto
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // toolReadinessDTO is one tool in the readiness answer: ready with what it runs on, or
@@ -396,9 +423,10 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	if body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
-		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil && len(body.SessionWorkGrant) == 0 {
+		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil && len(body.SessionWorkGrant) == 0 &&
+		body.SessionPrograms == nil && body.SessionRegistries == nil {
 		writeJSON(w, http.StatusBadRequest, errorBody(
-			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode and/or session_work_grant"))
+			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs and/or session_registries"))
 		return
 	}
 	if body.State != nil {
@@ -418,6 +446,9 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 		SessionTools:          body.SessionTools,
 		SessionPermissionMode: body.SessionPermissionMode,
 		SessionWorkGrant:      body.SessionWorkGrant, WorkGrantActor: mc.Principal,
+		SessionPrograms:   body.SessionPrograms,
+		SessionRegistries: body.SessionRegistries,
+		MayUseSecretEnv:   (body.SessionPrograms != nil || body.SessionRegistries != nil) && m.mayUseSecretEnv(r.Context(), mc),
 	})
 	if err != nil {
 		writeRunErr(w, err)

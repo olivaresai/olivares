@@ -176,15 +176,4 @@ func TestDetailViewsPrintTheFieldsTheyDecode(t *testing.T) {
 		t.Errorf("permission-groups get with no description = %q, want %q", got, "-")
 	}
 
-	const nhiPath = "/v1/m/governance/nhi/svc-1"
-	if got := governanceLine(t, nhiPath, `{"identity_ref":"svc-1","max_age_seconds":86400}`,
-		"max age:", "nhi", "get", "svc-1"); got != "86400s" {
-		t.Errorf("nhi get max age = %q, want the decoded bound", got)
-	}
-	// Zero is NOT a bound of zero: it means none was set, and rendering "0s" would assert a
-	// policy nobody configured.
-	if got := governanceLine(t, nhiPath, `{"identity_ref":"svc-1"}`,
-		"max age:", "nhi", "get", "svc-1"); got != "-" {
-		t.Errorf("nhi get with no bound = %q, want %q", got, "-")
-	}
 }

@@ -17,7 +17,7 @@ package api
 //
 // The classes are exactly the ones the 2026-10-06 census classified
 // (docs/openapi-route-classification.md holds the full census, including the
-// Business rows registered in olivares-enterprise, which this repository
+// Business rows registered in the private distribution, which this repository
 // cannot see):
 //
 //   - protocol: the route implements an external protocol whose own

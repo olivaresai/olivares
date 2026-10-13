@@ -12,7 +12,9 @@
 #   docker build -f Dockerfile.ebpf-source -t ghcr.io/olivaresai/ebpf-source:dev .
 # Pin to a sha256 DIGEST (not a tag) in production deploy manifests.
 
-FROM golang:1.27.0-bookworm AS build
+# Dependabot ignores golang (see .github/dependabot.yml), so a toolchain bump moves this tag
+# and its digest together; with both present, docker pulls the digest.
+FROM golang:1.26.9-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
 # The full source comes in BEFORE `go mod download`. The go command reads go.work
@@ -27,7 +29,7 @@ ARG SOURCE_DATE_EPOCH=0
 RUN go build -trimpath -ldflags "-s -w -buildid=" \
       -o /out/ebpf-source ./connectors/ebpf/cmd/ebpf-source
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 LABEL org.opencontainers.image.title="olivares-ebpf-source" \
       org.opencontainers.image.description="Olivares AI eBPF/Tetragon backstop connector (zero kernel capabilities)" \
       org.opencontainers.image.licenses="Apache-2.0" \

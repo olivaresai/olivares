@@ -129,6 +129,9 @@ func (m *mcpManagement) PutServer(ctx context.Context, p auth.Principal, tenant 
 		return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayFileOwned
 	}
 	in = in.WithDefaults()
+	if err := m.pinDeclaredTool(ctx, tenant, id, &in); err != nil {
+		return auth.MCPGatewaySnapshot{}, err
+	}
 	references := slices.Collect(maps.Values(in.EnvSecretRefs))
 	if in.CredentialRef != "" {
 		references = append(references, in.CredentialRef)

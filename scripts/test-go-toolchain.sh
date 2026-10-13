@@ -118,6 +118,37 @@ run "$d" 0 "the clean verdict names how many modules were outside" "1 module(s) 
 d=$(mk allinside "$WK"); mod "$d" a 1.26.5; mod "$d" b 1.26.5
 run "$d" 0 "zero modules outside the workspace is CLEAN, not COULD NOT LOOK" "0 module(s) outside"
 
+# ── RULE 3b: workspace modules the vulnerability gate scans ALONE ──────────────────────────────
+# #1531: cloud/control-plane is in go.work, so rule 3 skipped it, and rule 2 only stops a go line
+# ABOVE the workspace. The gate scans it with GOWORK=off, where its own `go 1.26.6` decides, so on a
+# host with native go1.26.8 the gate graded the 1.26.8 stdlib (11 called vulns) while CI, with
+# setup-go on go1.26.9, stayed green. The list comes from the gate's own STANDALONE_MODULES line.
+gate() { mkdir -p "$1/scripts"; printf '%s\n' "$2" > "$1/scripts/govulncheck-gate.sh"; }
+
+d=$(mk alone_below "$WK"); mod "$d" a 1.26.4; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="a"'
+run "$d" 1 "a workspace module the gate scans alone, below the workspace, is caught" "a/go.mod asks for go 1.26.4"
+
+d=$(mk alone_unlisted "$WK"); mod "$d" a 1.26.4; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="b"'
+run "$d" 0 "the same module NOT scanned alone keeps the workspace's toolchain and is clean" "1 workspace module(s) the vulnerability gate scans alone"
+
+d=$(mk alone_equal "$WK"); mod "$d" a 1.26.5; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="a"'
+run "$d" 0 "a module scanned alone at the workspace's go is clean, and counted" "1 workspace module(s) the vulnerability gate scans alone"
+
+# The public export carries the gate but not cloud/: an absent listed module is the gate's call, not this one's.
+d=$(mk alone_absent "$WK"); mod "$d" a 1.26.5; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="cloud/cp"'
+run "$d" 0 "a listed module absent from the tree is not counted" "0 workspace module(s) the vulnerability gate scans alone"
+
+d=$(mk alone_unreadable "$WK"); mod "$d" a 1.26.4; mod "$d" b 1.26.5; gate "$d" 'for extra in a; do'
+run "$d" 2 "a gate with no STANDALONE_MODULES line is COULD NOT LOOK" "scans with GOWORK=off are UNKNOWN"
+
+# Review of #1531: two spellings that used to read CLEAN without looking.
+d=$(mk alone_dotslash "$WK"); mod "$d" a 1.26.4; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="./a"'
+run "$d" 1 "a ./-prefixed list entry is still the module it names" "a/go.mod asks for go 1.26.4"
+
+d=$(mk alone_crlf "$WK"); mod "$d" a 1.26.5; mod "$d" b 1.26.5; gate "$d" 'STANDALONE_MODULES="a"'
+printf 'module example.com/a\r\n\r\ngo 1.26.4\r\n' > "$d/a/go.mod"
+run "$d" 2 "a CRLF go line is COULD NOT LOOK, not a version that passes" "cannot compare go versions"
+
 # ── RULE 4: the toolchain the BUILDERS use ─────────────────────────────────────────────────────
 # Every case above passes with rule 4 present or absent, which is exactly how the real defect got
 # in: rules 1-3 read go.mod files and were CLEAN on 2026-08-15 while four Dockerfiles, the

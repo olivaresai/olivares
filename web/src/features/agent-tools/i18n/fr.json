@@ -39,7 +39,8 @@
     "sigstore-cosign": "Empreinte du paquet et signatures de l’éditeur vérifiées.",
     "none-origin-only": "Origine HTTPS officielle ; aucune signature de l’éditeur.",
     "github-release-sha256": "SHA-256 fixé depuis les métadonnées officielles ; aucune signature de l’éditeur.",
-    "unknown": "Non vérifié"
+    "unknown": "Non vérifié",
+    "catalog-sha256": "SHA-256 fixé dans le Catalogue"
   },
   "probe": "Vérifier la version",
   "probeName": "Vérifier la version à {{path}}",
@@ -167,5 +168,56 @@
     "notNow": "Plus tard",
     "close": "Fermer",
     "keyNeedsAccess": "Choisir une clé demande l'autorisation de modifier les profils."
+  },
+  "from": {
+    "title": "Installer depuis une URL",
+    "source": "URL Git ou de publication",
+    "version": "Version fixée",
+    "review": "Vérifier l’installation",
+    "hint": "Admettez d’abord l’outil dans le Catalogue. Sa version fixée et son empreinte SHA-256 sont vérifiées avant l’installation.",
+    "tenant": "Sélectionnez une organisation pour utiliser ses outils admis."
+  },
+  "versions": {
+    "title": "Versions des sessions",
+    "hint": "Choisissez la version des nouvelles sessions et des sessions reprises dans cet espace. Le choix de l’agent est prioritaire.",
+    "workspace": "Espace de travail",
+    "chooseWorkspace": "Choisir un espace de travail",
+    "version": "Version des sessions",
+    "default": "Dernière version installée",
+    "unavailable": "{{version}} (non installée)",
+    "save": "Enregistrer la version",
+    "saved": "Version des sessions enregistrée.",
+    "chooseOrganization": "Choisissez une organisation pour sélectionner une version.",
+    "failed": "Impossible de lire les versions.",
+    "removeName": "Supprimer {{name}} {{version}}",
+    "removeHint": "Arrêtez d’abord les sessions en cours. Un espace fixé sur cette version ne pourra lancer de session avant sa réinstallation ou l’effacement de son choix.",
+    "removed": "Version supprimée.",
+    "confirmRemoval": "Confirmer la suppression",
+    "confirmPin": "Confirmer la version",
+    "pinHint": "Les nouvelles sessions et les sessions reprises utiliseront {{name}} : {{version}}.",
+    "loading": "Chargement des espaces et des versions enregistrées…"
+  },
+  "installed": {
+    "title": "Installé ici",
+    "workspace": "Ce que reçoit une nouvelle session dans {{name}}.",
+    "reading": "Lecture…",
+    "readFailed": "Lecture impossible : {{message}}",
+    "tools": "Outils d’IA",
+    "packages": "Programmes et registres",
+    "skills": "Skills",
+    "mcp": "Serveurs MCP",
+    "none": "Aucun",
+    "olivaresTools": "Outils de session Olivares",
+    "mcpDrivers": "Pour les sessions {{tools}}.",
+    "noWorkspace": "Aucun espace de travail par défaut à lire.",
+    "skillsOff": "Le module skills est désactivé : les sessions n’en reçoivent aucune.",
+    "notReadable": "Votre rôle ne peut pas lire les skills.",
+    "skillsHint": "Une session liée à un dossier, un modèle ou un agent reçoit aussi les skills épinglées à cet endroit.",
+    "workspacesTruncated": "La liste des espaces de travail s’est arrêtée avant l’espace par défaut : choisissez-en un dans le sélecteur d’espaces de travail.",
+    "toolsHint": "Une version de session enregistrée dans les détails d’installation d’un outil remplace celle-ci pour cet espace de travail enregistré ou cet agent.",
+    "profilesNotReadable": "Votre rôle ne peut pas lire les profils de fournisseur.",
+    "packagesHint": "Déclarés par le profil de fournisseur qu'utilise la nouvelle session de chaque outil ({{profiles}}). Un outil sans profil en reçoit un nouveau qui n'en déclare aucun.",
+    "packagesNoProfile": "Ils viennent du profil de fournisseur sous lequel s'exécutent les sessions de chaque outil. Aucun n'existe encore, et un nouveau n'en déclare aucun.",
+    "packagesRefused": "Rien n'est listé, car aucune session ne peut encore démarrer sur : {{tools}}."
   }
 }

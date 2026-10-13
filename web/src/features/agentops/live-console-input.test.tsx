@@ -407,7 +407,8 @@ describe('LiveConsole send contract', () => {
 
   it('keeps the NDJSON wording only under the advanced disclosure', async () => {
     wrap(claudeRun)
-    expect(screen.getByText(/Advanced/i)).toBeInTheDocument()
+    expect(screen.getByText('Raw line')).toBeInTheDocument()
+    expect(screen.queryByText(/Advanced/i)).toBeNull()
     const wire = screen.getByRole('textbox', { name: 'Session input line' })
     expect(wire).toHaveAttribute('placeholder', 'Send an NDJSON line to stdin…')
   })
@@ -687,5 +688,23 @@ describe('LiveConsole — the advanced line Send says why', () => {
         'Sending… Wait for the session to accept it.',
       ),
     )
+  })
+})
+
+describe('LiveConsole — the raw line is a developer tool', () => {
+  it('is not shown by a production console, which keeps the sentence field', () => {
+    vi.stubEnv('DEV', false)
+    try {
+      wrap(claudeRun)
+      expect(
+        screen.queryByRole('textbox', { name: 'Session input line' }),
+      ).toBeNull()
+      expect(screen.queryByText('Raw line')).toBeNull()
+      expect(
+        screen.getByRole('textbox', { name: 'Session turn' }),
+      ).toBeVisible()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })

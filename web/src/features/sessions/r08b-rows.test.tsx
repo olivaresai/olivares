@@ -113,6 +113,22 @@ describe('08b real rows: five sessions, fifteen live rows (HU-R24)', () => {
     expect(now.liveNow).toBe(5)
     expect(now.liveIdle).toBe(4)
   })
+
+  it('a launched session whose run waits for input is counted idle, not working (#1785)', () => {
+    // The observed half still says active (its last event is recent); the run decides,
+    // as it does for a stopped run, so the tile and the list name the same state.
+    const runs = r08bRuns.map((r, i) => (i === 0 ? { ...r, state: 'idle' } : r))
+    const now = deriveUsage(
+      undefined,
+      liveForTiles(
+        { items: r08bLive, has_more: false },
+        mergeSessions(r08bLive, runs),
+      ),
+    )
+    expect(now.liveNow).toBe(5)
+    expect(now.liveIdle).toBe(1)
+    expect(now.liveActive).toBe(4)
+  })
 })
 
 describe('the open session reads its echo rows (HU-R24: Last turns 0)', () => {

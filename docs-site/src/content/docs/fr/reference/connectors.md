@@ -110,8 +110,8 @@ dev l'omet et le boot le signale honnêtement plutôt que d'avoir l'air sain).
 | `claude-api` | Échantillons de coût de l'Admin API Claude + findings de posture de gouvernance | In-process ; no-op hors ligne (pas de clé admin) |
 | `claude-compliance` | Preuves du flux d'activité Compliance de Claude → findings | GET-only par construction ; no-op hors ligne |
 | `claude-config` | Arbre de configuration Claude statique (subagents / Skills / plugins) → arêtes de **capacité déclarée** | Métadonnées uniquement — une surface de capacité, pas un accès observé |
-| `claude-console` | IAM de l'organisation Claude → findings de posture SSO/SCIM (roster d'identités + source) | |
-| `claude-wif` | Roster d'identités non-humaines / workload-identity Anthropic + arêtes de scope permis | Modélise la fédération déclarée par l'opérateur ; signale les pièges des clés statiques |
+| `claude-console` | IAM de l'organisation Claude → findings de posture SSO/SCIM (roster d'identités + source) | Business: Identity & Scale;  |
+| `claude-wif` | Roster d'identités non-humaines / workload-identity Anthropic + arêtes de scope permis | Business: Identity & Scale; Modélise la fédération déclarée par l'opérateur ; signale les pièges des clés statiques |
 | `claude-managed-agents` | Inventaire des managed agents Claude + événements de threads (récepteur webhook + pollers GET) | Source en streaming (`poll_seconds: 0`) ; hors ligne, c'est un no-op |
 | `claude-projects` | Inventaire des Projects de Claude Organization (appartenance / clés API) + politique de projet déclarée par l'opérateur | Admin API en lecture seule ; no-op hors ligne |
 | `claude-apps-gateway` | Posture d'apps-gateway Claude, octrois de modèles déclarés et ingest d'événements d'audit → topologie + findings | Lit un `gateway.yaml` existant et un export d'audit JSONL facultatif |

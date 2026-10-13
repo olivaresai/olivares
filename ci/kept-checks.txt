@@ -119,6 +119,7 @@ lint:portal-brand
 lint:pr-ci-regime
 lint:pr-ci-regime:selftest
 lint:pr-suite-shards:selftest
+lint:private-suite-guard:selftest
 lint:program-anchors
 lint:program-anchors:selftest
 lint:public-prose:selftest

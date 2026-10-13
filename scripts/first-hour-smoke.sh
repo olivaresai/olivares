@@ -87,7 +87,7 @@ START="$(date +%s)"
 # ---------------------------------------------------------------------------
 # 1. Fresh local install: serve (headless; quickstart is TLS and blocks).
 # ---------------------------------------------------------------------------
-note "fresh install: serve --insecure, one-time setup, login, create tenant"
+note "fresh install: serve --insecure, one-time setup, login, use the setup organization"
 TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
 "$BIN" serve --insecure \
   --listen "127.0.0.1:$PORT" --grpc-listen "127.0.0.1:$GRPC_PORT" \
@@ -109,14 +109,12 @@ SETUP_TOKEN="${SETUP_TOKENS%%$'\n'*}"
 printf '{"token":"%s","email":"admin@local","password":"correct-horse-battery-staple"}' "$SETUP_TOKEN" \
   | curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' --data-binary @- >/dev/null \
   || fail "setup failed"
-TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+TOKEN="$(python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])' <<<"$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
+  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}')")"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
-  -H 'Content-Type: application/json' -d '{"name":"First hour","slug":"first-hour"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
-[ -n "$TENANT" ] || fail "could not create the first-hour tenant"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+[ -n "$TENANT" ] || fail "could not resolve the setup organization"
 note "tenant: $TENANT"
 
 # The first-hour docs describe the deployment's actual default, not a mandatory
@@ -201,9 +199,8 @@ PID=$!
 wait_health || { cat "$WORK/boot2.log" >&2; fail "engine never came back after restart"; }
 grep -q "governed Claude Code hooks PEP mounted" "$WORK/boot2.log" \
   || { cat "$WORK/boot2.log" >&2; fail "the hooks PEP was not mounted"; }
-TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+TOKEN="$(python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])' <<<"$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
+  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}')")"
 [ -n "$TOKEN" ] || fail "re-login returned no token"
 
 # ---------------------------------------------------------------------------

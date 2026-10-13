@@ -14,6 +14,9 @@ import './i18n'
 const { api, auth, toast } = vi.hoisted(() => ({
   api: {
     inventory: vi.fn(),
+    pins: vi.fn().mockResolvedValue({ pins: [] }),
+    pin: vi.fn().mockResolvedValue({ ok: true }),
+    remove: vi.fn().mockResolvedValue({ ok: true }),
     providers: vi.fn(),
     plan: vi.fn(),
     install: vi.fn(),
@@ -201,6 +204,11 @@ it('keeps tool actions available while provider details refresh and fetches the 
 beforeEach(() => {
   vi.clearAllMocks()
   auth.isSuperadmin = true
+  api.pins.mockResolvedValue({ pins: [] })
+  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   useTenantStore.setState({ activeTenant: 't1' })
   signIn.status.mockImplementation((driver: string) =>
     Promise.resolve({ driver, installed: true, signed_in: true }),
@@ -825,4 +833,88 @@ it('lists a tool a login snapshot names even when the inventory does not', async
       name: 'Gemini CLI',
     }),
   ).toBeInTheDocument()
+})
+
+it('reviews a catalog-admitted tool from its source URL through the existing plan', async () => {
+  const user = userEvent.setup()
+  api.inventory.mockResolvedValue({
+    drivers: [],
+    inventory: { installed: [], leftovers: [] },
+    read_only: false,
+    jobs: [],
+  })
+  api.plan.mockResolvedValue({
+    driver: 'declared-fixture-mcp',
+    version: '1.0.0',
+    digest: 'fixture-digest',
+    verification: 'catalog-sha256',
+    executable: '/tools/fixture-mcp',
+  })
+  mount()
+  await user.click(await screen.findByText('Install from a URL'))
+  await user.type(
+    await screen.findByLabelText('Git or release URL'),
+    'https://tools.example/fixture.tar.gz',
+  )
+  await user.type(screen.getByLabelText('Pinned version'), '1.0.0')
+  await user.click(screen.getByRole('button', { name: 'Review installation' }))
+  await waitFor(() =>
+    expect(api.plan).toHaveBeenCalledWith(
+      '',
+      '1.0.0',
+      undefined,
+      undefined,
+      'https://tools.example/fixture.tar.gz',
+    ),
+  )
+  expect(await screen.findByText(/Catalog-pinned SHA-256/)).toBeInTheDocument()
+  expect(api.install).not.toHaveBeenCalled()
+  await user.click(
+    screen.getByRole('button', { name: /install approved version/i }),
+  )
+  await waitFor(() =>
+    expect(api.install).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan_digest: 'fixture-digest',
+        request_id: expect.any(String),
+      }),
+      expect.any(Object),
+    ),
+  )
+  expect(await screen.findByText(/installation complete/i)).toBeInTheDocument()
+  expect(api.job).toHaveBeenCalled()
+})
+
+it('keeps a removed tool reachable when its workspace still has a stored pin', async () => {
+  useTenantStore.setState({ activeTenant: 'tenant-a' })
+  api.pins.mockResolvedValue({
+    pins: [{ driver: 'codex', workspace_ref: 'folder-a', version: '0.1' }],
+  })
+  api.inventory.mockResolvedValue({
+    drivers: ['codex'],
+    inventory: { installed: [], leftovers: [] },
+    jobs: [],
+    read_only: false,
+  })
+  api.providers.mockResolvedValue({ providers: [], refreshing: false })
+  vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
+    items: [{ workspace_ref: 'folder-a', name: 'Research' }],
+    has_more: false,
+  } as Awaited<ReturnType<typeof agentOpsApi.listWorkspaces>>)
+  const user = userEvent.setup()
+  mount()
+  await openDetails(user, 'Codex')
+  await screen.findByRole('option', { name: 'Research' })
+  await user.selectOptions(screen.getByLabelText('Workspace'), 'folder-a')
+  expect(screen.getByLabelText('Session version')).toHaveValue('0.1')
+  await user.selectOptions(screen.getByLabelText('Session version'), '')
+  await user.click(screen.getByRole('button', { name: 'Save version' }))
+  await user.click(screen.getByRole('button', { name: 'Confirm version' }))
+  await waitFor(() =>
+    expect(api.pin).toHaveBeenCalledWith(
+      'tenant-a',
+      { driver: 'codex', workspace_ref: 'folder-a', version: '' },
+      expect.any(Object),
+    ),
+  )
 })

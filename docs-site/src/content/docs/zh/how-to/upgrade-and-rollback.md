@@ -45,7 +45,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.1
+olivares upgrade --check --current-version 0.2
 ```
 <!-- /release -->
 

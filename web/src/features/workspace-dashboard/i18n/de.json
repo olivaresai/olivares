@@ -33,5 +33,15 @@
     "loading": "Inhalt des Arbeitsbereichs wird gelesen…",
     "empty": "Dieser Arbeitsbereich enthält noch nichts.",
     "unavailable": "Der Inhalt des Arbeitsbereichs ist nicht verfügbar."
+  },
+  "sessionFolders": {
+    "title": "Sitzungsordner",
+    "intro": "Ordner auf diesem Server, in denen Sitzungen arbeiten. Sie sind von Arbeitsbereichen getrennt.",
+    "manage": "Ordner verwalten",
+    "folder": "Ordner",
+    "empty": "Noch keine Sitzungsordner. Ein Ordner erscheint hier, sobald eine Sitzung darin startet.",
+    "loading": "Sitzungsordner werden gelesen …",
+    "unavailable": "Sitzungsordner sind nicht verfügbar.",
+    "truncationHint": "Öffnen Sie Sitzungen, um alle Ordner zu sehen."
   }
 }

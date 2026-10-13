@@ -622,9 +622,12 @@ func TestADelegationHandleFailsOnceItsSessionIsExcluded(t *testing.T) {
 			}
 		}
 
-		if err := a.dispatchCAEPAction(ctx, actor, tT, CAEPSetConfig{}, CAEPEventEnvelope{
-			Action: CAEPSessionRevoke, SubjectUserID: p.CredID.String(),
-		}, v); err != nil {
+		if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+			if err := prepareUserAuthorityWrite(ctx, as, v); err != nil {
+				return err
+			}
+			return excludeSession(ctx, as, actor, v, p.CredID, tT)
+		}); err != nil {
 			t.Fatalf("the tenant's session revocation: %v", err)
 		}
 		if _, err := revalidate(tT); !errors.Is(err, ErrDelegationInvalid) {

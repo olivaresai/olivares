@@ -3,13 +3,6 @@
 
 package foundryagents
 
-import (
-	"bytes"
-	"encoding/json"
-	"strconv"
-	"time"
-)
-
 // This file holds the ARM and Foundry Agent Service JSON wire shapes the
 // connector reads. Only fields mapped into the roster or posture are present.
 // Microsoft is migrating the REST reference to ai.azure.com and the learn REST
@@ -77,74 +70,4 @@ type agentDeployment struct {
 		DeploymentType string   `json:"deploymentType"`
 		Protocols      []string `json:"protocols"`
 	} `json:"properties"`
-}
-
-type agentPage struct {
-	Data    []dataPlaneAgent `json:"data"`
-	Value   []dataPlaneAgent `json:"value"`
-	HasMore bool             `json:"has_more"`
-	LastID  string           `json:"last_id"`
-}
-
-func (p agentPage) items() []dataPlaneAgent {
-	if len(p.Data) > 0 {
-		return p.Data
-	}
-	return p.Value
-}
-
-type dataPlaneAgent struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	State    string `json:"state"`
-	Versions struct {
-		Latest agentVersion `json:"latest"`
-	} `json:"versions"`
-}
-
-type agentVersion struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Version   string          `json:"version"`
-	CreatedAt json.RawMessage `json:"created_at"`
-	Status    string          `json:"status"`
-	Draft     bool            `json:"draft"`
-	// definition.instructions and definition.tools are intentionally absent:
-	// Foundry embeds the system prompt and tool payloads there, and this
-	// connector must never decode or emit them.
-	Definition agentDefinition `json:"definition"`
-}
-
-type agentDefinition struct {
-	Kind  string `json:"kind"`
-	Model string `json:"model"`
-}
-
-func (v agentVersion) createdAt() string {
-	raw := bytes.TrimSpace(v.CreatedAt)
-	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
-		return ""
-	}
-	var n int64
-	if raw[0] == '"' {
-		var s string
-		if err := json.Unmarshal(raw, &s); err != nil {
-			return string(raw)
-		}
-		if s == "" {
-			return ""
-		}
-		parsed, err := strconv.ParseInt(s, 10, 64)
-		if err != nil {
-			return s
-		}
-		n = parsed
-	} else {
-		parsed, err := strconv.ParseInt(string(raw), 10, 64)
-		if err != nil {
-			return string(raw)
-		}
-		n = parsed
-	}
-	return time.Unix(n, 0).UTC().Format(time.RFC3339)
 }

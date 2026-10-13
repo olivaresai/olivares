@@ -5,7 +5,6 @@ package foundryagents
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -144,74 +143,6 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 // Close releases resources; the connector holds no long-lived connection.
 func (s *Source) Close(context.Context) error { return nil }
 
-// Snapshot reads ARM inventory and, when enabled, the Foundry Agent Service
-// inventory. Offline it returns an empty graph with Source/CapturedAt set.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceFoundry, CapturedAt: s.clock().UTC()}
-	if s.offline() {
-		return g, nil
-	}
-
-	client, err := s.armClient(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	inv, err := s.readARM(ctx, client)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, acct := range inv {
-		for _, proj := range acct.Projects {
-			g.Collections = append(g.Collections, projectCollection(acct.Account, proj.Project))
-			for _, app := range proj.Applications {
-				if app.Application.ID == "" {
-					continue
-				}
-				g.Identities = append(g.Identities, appIdentity(app.Application, app.Deployments))
-				g.Memberships = append(g.Memberships, identitysource.Membership{
-					MemberRef:     app.Application.ID,
-					MemberKind:    identitysource.MemberIdentity,
-					CollectionRef: app.ProjectRef,
-					Source:        identitysource.SourceFoundry,
-				})
-			}
-		}
-	}
-
-	if !s.dataPlaneEnabled {
-		return g, nil
-	}
-	tok, err := s.dataPlaneToken(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, acct := range inv {
-		for _, proj := range acct.Projects {
-			agents, ok, err := s.listProjectAgents(ctx, acct.Account, proj.Project, tok)
-			if err != nil {
-				return identitysource.Graph{}, err
-			}
-			if !ok {
-				continue
-			}
-			for _, a := range agents {
-				if a.ID == "" {
-					continue
-				}
-				ref := agentRef(acct.Account.Name, proj.Project.Name, a.ID)
-				g.Identities = append(g.Identities, agentIdentity(acct.Account.Name, proj.Project.Name, ref, a))
-				g.Memberships = append(g.Memberships, identitysource.Membership{
-					MemberRef:     ref,
-					MemberKind:    identitysource.MemberIdentity,
-					CollectionRef: proj.Project.ID,
-					Source:        identitysource.SourceFoundry,
-				})
-			}
-		}
-	}
-	return g, nil
-}
-
 type accountInventory struct {
 	Account  account
 	Projects []projectInventory
@@ -320,98 +251,6 @@ func collectARMPages[T any](ctx context.Context, client *httpx.Client, path stri
 	return out, nil
 }
 
-func (s *Source) listProjectAgents(ctx context.Context, acct account, p project, tok string) ([]dataPlaneAgent, bool, error) {
-	base := s.dataPlaneBase
-	if base == "" {
-		base = dataPlaneBase(acct.Name)
-	}
-	client := s.dataPlaneClient(base, tok)
-	path := "/api/projects/" + url.PathEscape(p.Name) + "/agents"
-	q := url.Values{"api-version": {defaultDataPlaneAPIVersion}}
-	var out []dataPlaneAgent
-	for page := 0; page < s.maxPages; page++ {
-		if err := ctx.Err(); err != nil {
-			return nil, false, err
-		}
-		var resp agentPage
-		if err := client.GetJSON(ctx, path, q, &resp); err != nil {
-			var se *httpx.StatusError
-			if errors.As(err, &se) && (se.Status == http.StatusForbidden || se.Status == http.StatusNotFound) {
-				return nil, false, nil
-			}
-			return nil, false, err
-		}
-		out = append(out, resp.items()...)
-		if !resp.HasMore || resp.LastID == "" {
-			break
-		}
-		q = url.Values{"api-version": {defaultDataPlaneAPIVersion}, "after": {resp.LastID}}
-	}
-	return out, true, nil
-}
-
-func projectCollection(acct account, p project) identitysource.Collection {
-	return identitysource.Collection{
-		Ref:         p.ID,
-		Kind:        identitysource.KindGroup,
-		DisplayName: p.Name,
-		Source:      identitysource.SourceFoundry,
-		Attributes: pruneAttrs(map[string]string{
-			"object":  objectFoundryProject,
-			"account": acct.Name,
-		}),
-	}
-}
-
-func appIdentity(app application, deployments []agentDeployment) identitysource.Identity {
-	return identitysource.Identity{
-		Ref:         app.ID,
-		Type:        identitysource.PrincipalNHI,
-		Kind:        kindFoundryAgentApplication,
-		DisplayName: applicationLabel(app),
-		Source:      identitysource.SourceFoundry,
-		Disabled:    !app.Properties.IsEnabled,
-		Attributes: pruneAttrs(map[string]string{
-			"provisioning_state":           app.Properties.ProvisioningState,
-			"base_url":                     app.Properties.BaseURL,
-			"agents":                       appAgentNames(app.Properties.Agents),
-			"entra_blueprint_client_id":    app.Properties.AgentIdentityBlueprint.ClientID,
-			"entra_blueprint_principal_id": app.Properties.AgentIdentityBlueprint.PrincipalID,
-			"entra_instance_client_id":     app.Properties.DefaultInstanceIdentity.ClientID,
-			"entra_instance_principal_id":  app.Properties.DefaultInstanceIdentity.PrincipalID,
-			"deployment_states":            deploymentStates(deployments),
-			"deployment_types":             deploymentTypes(deployments),
-			"object":                       objectFoundryAgentApplication,
-		}),
-	}
-}
-
-func agentIdentity(accountName, projectName, ref string, a dataPlaneAgent) identitysource.Identity {
-	latest := a.Versions.Latest
-	attrs := map[string]string{
-		"account":         accountName,
-		"project":         projectName,
-		"version":         latest.Version,
-		"created_at":      latest.createdAt(),
-		"status":          latest.Status,
-		"definition_kind": latest.Definition.Kind,
-		"model":           latest.Definition.Model,
-		"object":          objectFoundryAgent,
-	}
-	if latest.Draft {
-		attrs["draft"] = "true"
-	}
-	return identitysource.Identity{
-		Ref:         ref,
-		Type:        identitysource.PrincipalNHI,
-		Kind:        kindFoundryAgent,
-		DisplayName: a.Name,
-		Source:      identitysource.SourceFoundry,
-		Disabled:    strings.EqualFold(a.State, "disabled"),
-		Attributes:  pruneAttrs(attrs),
-	}
-}
-
 func (s *Source) accountKindEnabled(kind string) bool {
 	k := strings.ToLower(strings.TrimSpace(kind))
 	for _, want := range defaultAccountKinds {
@@ -422,16 +261,6 @@ func (s *Source) accountKindEnabled(kind string) bool {
 	return false
 }
 
-// agentRef is composite because Foundry agent ids are not verified globally
-// unique across accounts and projects.
-func agentRef(accountName, projectName, agentID string) string {
-	return accountName + "/" + projectName + "/" + agentID
-}
-
-func dataPlaneBase(accountName string) string {
-	return strings.TrimRight(strings.Replace(defaultDataPlaneAccountBaseFmt, "%s", accountName, 1), "/")
-}
-
 func applicationLabel(app application) string {
 	if app.Properties.DisplayName != "" {
 		return app.Properties.DisplayName
@@ -440,40 +269,6 @@ func applicationLabel(app application) string {
 		return app.Name
 	}
 	return resourceName(app.ID)
-}
-
-func appAgentNames(rows []appAgentRef) string {
-	out := make([]string, 0, len(rows))
-	for _, r := range rows {
-		if r.AgentName != "" {
-			out = append(out, r.AgentName)
-		}
-	}
-	return strings.Join(out, ",")
-}
-
-func deploymentStates(rows []agentDeployment) string {
-	out := make([]string, 0, len(rows))
-	for _, r := range rows {
-		if r.Properties.State != "" {
-			out = append(out, r.Properties.State)
-		}
-	}
-	return strings.Join(out, ",")
-}
-
-func deploymentTypes(rows []agentDeployment) string {
-	out := make([]string, 0, len(rows))
-	seen := map[string]bool{}
-	for _, r := range rows {
-		v := r.Properties.DeploymentType
-		if v == "" || seen[v] {
-			continue
-		}
-		seen[v] = true
-		out = append(out, v)
-	}
-	return strings.Join(out, ",")
 }
 
 func resourceGroupFromID(id string) string {
@@ -510,16 +305,4 @@ func (s *Source) clock() time.Time {
 		return s.now()
 	}
 	return time.Now()
-}
-
-func pruneAttrs(m map[string]string) map[string]string {
-	for k, v := range m {
-		if v == "" {
-			delete(m, k)
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
 }

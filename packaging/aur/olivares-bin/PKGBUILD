@@ -11,7 +11,7 @@
 
 pkgname=olivares-bin
 # release
-pkgver=0.1
+pkgver=0.2
 # /release
 pkgrel=1
 pkgdesc='Open, self-hosted AI governance control plane (release binary)'

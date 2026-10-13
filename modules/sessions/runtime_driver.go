@@ -1136,7 +1136,13 @@ func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text stri
 	if acpEchoDriver(lr.driver) {
 		prompt = lr.acpEcho.queue(lr.session.ConversationID(), text)
 	}
+	// The input starts the next turn before the provider names it, so the run is not
+	// waiting any more; an input refused before any byte moved leaves it waiting.
+	waiting := lr.setDriverTurnEnded(false)
 	attempted, err := lr.session.Input(ctx, text)
+	if !attempted {
+		lr.setDriverTurnEnded(waiting)
+	}
 	if prompt != nil {
 		// Published only when the driver accepted it (acp_prompt_echo.go).
 		lr.acpEcho.decide(prompt, attempted && err == nil)

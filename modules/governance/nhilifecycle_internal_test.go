@@ -36,90 +36,6 @@ func (c *intClock) Now() model.Timestamp {
 
 var intBase = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
 
-// --- staleness state machine (recomputeStaleness) ----------------------------
-
-func TestRecomputeStalenessStateMachine(t *testing.T) {
-	clk := &intClock{t: intBase}
-	m := New(WithClock(clk))
-	now := clk.Now()
-
-	// Fresh HIGH credential → ok, no enforcement.
-	rec := newLifecycleRecord("nhi:1", "vault", "")
-	rec[colNHICriticality] = string(RiskTierHigh)
-	rec[colNHIRotatedAt] = model.NewTimestamp(intBase.Add(-10 * 24 * time.Hour)).String()
-	changed, fs := m.recomputeStaleness(rec, now)
-	if rec[colNHIStaleStatus] != staleOK || len(fs) != 0 {
-		t.Fatalf("fresh should be ok with no findings, got %v %+v", rec[colNHIStaleStatus], fs)
-	}
-	_ = changed
-
-	// Stale HIGH (100d, window 90d) → alert + a stale finding; block_after set 30d out.
-	rec = newLifecycleRecord("nhi:2", "vault", "")
-	rec[colNHICriticality] = string(RiskTierHigh)
-	rec[colNHIRotatedAt] = model.NewTimestamp(intBase.Add(-100 * 24 * time.Hour)).String()
-	_, fs = m.recomputeStaleness(rec, now)
-	if rec[colNHIEnforce] != enforceAlert || !hasKind(fs, "nhi_credential_stale") {
-		t.Fatalf("stale HIGH should alert, got enforce=%v fs=%+v", rec[colNHIEnforce], fs)
-	}
-	if rec[colNHIBlockAfter] == nil {
-		t.Fatalf("expected a block_after deadline")
-	}
-
-	// CRITICAL stale → immediate block (no grace).
-	rec = newLifecycleRecord("nhi:3", "vault", "")
-	rec[colNHICriticality] = string(RiskTierCritical)
-	rec[colNHIRotatedAt] = model.NewTimestamp(intBase.Add(-40 * 24 * time.Hour)).String()
-	_, fs = m.recomputeStaleness(rec, now)
-	if rec[colNHIEnforce] != enforceBlocked || !hasKind(fs, "nhi_credential_blocked") {
-		t.Fatalf("CRITICAL stale should block immediately, got %v", rec[colNHIEnforce])
-	}
-
-	// Already-stale HIGH past its 30-day deadline → escalate alert → block.
-	rec = newLifecycleRecord("nhi:4", "vault", "")
-	rec[colNHICriticality] = string(RiskTierHigh)
-	rec[colNHIRotatedAt] = model.NewTimestamp(intBase.Add(-100 * 24 * time.Hour)).String()
-	rec[colNHIStaleStatus] = staleStale
-	rec[colNHIEnforce] = enforceAlert
-	rec[colNHIBlockAfter] = model.NewTimestamp(intBase.Add(-time.Hour)).String() // deadline passed
-	_, fs = m.recomputeStaleness(rec, now)
-	if rec[colNHIEnforce] != enforceBlocked || !hasKind(fs, "nhi_credential_blocked") {
-		t.Fatalf("stale past 30d should escalate to block, got %v", rec[colNHIEnforce])
-	}
-
-	// Unknown rotation recency → unknown + a coverage finding, never a silent fresh.
-	rec = newLifecycleRecord("nhi:5", "vault", "")
-	_, fs = m.recomputeStaleness(rec, now)
-	if rec[colNHIStaleStatus] != staleUnknown || !hasKind(fs, "nhi_rotation_unknown") {
-		t.Fatalf("unknown rotated_at should be unknown coverage, got %v", rec[colNHIStaleStatus])
-	}
-
-	// A credential reclassified to CRITICAL while ALREADY stale must block on the
-	// next sweep, not wait out the non-critical grace window it inherited.
-	rec = newLifecycleRecord("nhi:7", "vault", "")
-	rec[colNHICriticality] = string(RiskTierCritical) // operator just raised it
-	rec[colNHIRotatedAt] = model.NewTimestamp(intBase.Add(-100 * 24 * time.Hour)).String()
-	rec[colNHIStaleStatus] = staleStale
-	rec[colNHIEnforce] = enforceAlert                                                     // it went stale while non-critical
-	rec[colNHIBlockAfter] = model.NewTimestamp(intBase.Add(20 * 24 * time.Hour)).String() // deadline still 20d away
-	_, fs = m.recomputeStaleness(rec, now)
-	if rec[colNHIEnforce] != enforceBlocked || !hasKind(fs, "nhi_credential_blocked") {
-		t.Fatalf("reclassify-to-CRITICAL while stale must block immediately, got %v", rec[colNHIEnforce])
-	}
-
-	// A staleness block clears when the credential is freshly rotated (but never an
-	// offboard block).
-	rec = newLifecycleRecord("nhi:6", "vault", "")
-	rec[colNHICriticality] = string(RiskTierHigh)
-	rec[colNHIRotatedAt] = model.NewTimestamp(intBase.Add(-1 * 24 * time.Hour)).String()
-	rec[colNHIStaleStatus] = staleStale
-	rec[colNHIEnforce] = enforceBlocked
-	rec[colNHIEnforceWhy] = "stale credential (escalated to block after 30 days)"
-	_, fs = m.recomputeStaleness(rec, now)
-	if rec[colNHIEnforce] != enforceMonitor {
-		t.Fatalf("fresh rotation should clear a staleness block, got %v", rec[colNHIEnforce])
-	}
-}
-
 func hasKind(fs []pendingNHIFinding, kind string) bool {
 	for _, f := range fs {
 		if f.kind == kind {
@@ -143,12 +59,15 @@ func (h *capturingHost) Publish(_ context.Context, e event.Event) error {
 	h.events = append(h.events, e)
 	return nil
 }
+
 func (h *capturingHost) Subscribe([]event.Type, event.Handler) (func(), error) {
 	return func() {}, nil
 }
+
 func (h *capturingHost) Logger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
+
 func (h *capturingHost) Config() sdk.Config { return sdk.Config{} }
 
 func TestOnLifecycleSignalBlocksAndOrphans(t *testing.T) {

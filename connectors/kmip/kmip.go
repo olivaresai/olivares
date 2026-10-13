@@ -115,25 +115,6 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 // Close releases resources; this connector holds none between runs.
 func (s *Source) Close(context.Context) error { return nil }
 
-// Snapshot exposes the KMIP server as a secret_store NHI. It performs
-// no key-object enumeration (that is Gather's custody edges); the inventory of WHERE
-// keys live is the server itself.
-func (s *Source) Snapshot(_ context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceKMIP, CapturedAt: s.clock().UTC()}
-	if s.endpoint == "" {
-		return g, nil
-	}
-	g.Identities = append(g.Identities, identitysource.Identity{
-		Ref:         s.serverRef(),
-		Type:        identitysource.PrincipalNHI,
-		Kind:        identitysource.KindSecretStore,
-		DisplayName: "KMIP server " + s.endpoint,
-		Source:      identitysource.SourceKMIP,
-		Attributes:  map[string]string{"provider": "kmip", "endpoint": s.endpoint},
-	})
-	return g, nil
-}
-
 // Gather discovers the server's key objects (Locate) and reads each object's
 // non-secret attributes (GetAttributes), emitting one custody edge per object. It
 // NEVER issues Get/Create/Destroy.

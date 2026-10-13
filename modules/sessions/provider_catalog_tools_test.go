@@ -16,15 +16,17 @@ import (
 )
 
 type catalogToolPeer struct {
-	t          *testing.T
-	signed     bool
-	methods    []string
-	specs      []LaunchSpec
-	procs      []*catalogPeerProcess
-	grokOutput string
-	grokExit   int
-	modelIDs   []string
-	statusExit int
+	t            *testing.T
+	signed       bool
+	methods      []string
+	specs        []LaunchSpec
+	procs        []*catalogPeerProcess
+	grokOutput   string
+	grokExit     int
+	modelIDs     []string
+	statusExit   int
+	claudeModels []map[string]any
+	codexModels  []map[string]any
 }
 type catalogPeerProcess struct {
 	*fakeProc
@@ -52,6 +54,12 @@ func (p *catalogPeerProcess) Send(_ context.Context, line []byte) error {
 		for _, id := range ids {
 			models = append(models, map[string]string{"value": id})
 		}
+		if p.peer.claudeModels != nil {
+			response = map[string]any{"type": "control_response", "response": map[string]any{"request_id": request["request_id"], "subtype": "success", "response": map[string]any{"models": p.peer.claudeModels}}}
+			raw, _ := json.Marshal(response)
+			p.out <- OutputFrame{Stream: streamStdout, Data: raw}
+			return nil
+		}
 		response = map[string]any{"type": "control_response", "response": map[string]any{"request_id": request["request_id"], "subtype": "success", "response": map[string]any{"models": models}}}
 	} else {
 		p.peer.methods = append(p.peer.methods, method)
@@ -72,7 +80,9 @@ func (p *catalogPeerProcess) Send(_ context.Context, line []byte) error {
 			if params["includeHidden"] != false {
 				p.peer.t.Error("hidden models requested")
 			}
-			if p.peer.modelIDs != nil {
+			if p.peer.codexModels != nil {
+				result = map[string]any{"data": p.peer.codexModels, "nextCursor": nil}
+			} else if p.peer.modelIDs != nil {
 				models := []map[string]any{}
 				for _, id := range p.peer.modelIDs {
 					models = append(models, map[string]any{"model": id, "hidden": false})
@@ -301,5 +311,16 @@ func TestAutomaticToolCatalogUsesAccountHomesWithoutTurns(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The `* ... (default)` line is the only default marker `grok models` prints.
+func TestParseGrokModelCatalogDefaultMarker(t *testing.T) {
+	out, err := parseGrokModelCatalog("You are logged in with grok.com.\n\nDefault model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)\n  - grok-4.5\n")
+	if err != nil || len(out) != 2 {
+		t.Fatalf("parse: %+v %v", out, err)
+	}
+	if out[0].ID != "grok-4.6" || out[0].IsDefault == nil || !*out[0].IsDefault || out[1].ID != "grok-4.5" || out[1].IsDefault == nil || *out[1].IsDefault {
+		t.Fatalf("default marker: %+v", out)
 	}
 }

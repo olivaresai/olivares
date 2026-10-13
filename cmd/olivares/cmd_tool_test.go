@@ -481,3 +481,16 @@ func TestToolListFindsWhatTheEnginesResolverFinds(t *testing.T) {
 		t.Fatalf("tool ls =\n%s", out)
 	}
 }
+
+func TestToolInstallFromURLUsesTheSamePlanAndJob(t *testing.T) {
+	f := newFakeToolEngine(t)
+	_, errb, err := execSessionCLI(t, nil, append([]string{"tool", "install", "--from", "https://tools.example/fixture.tar.gz", "--version", "1.0.0"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("install from: %v\n%s", err, errb)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.planRequest["from"] != "https://tools.example/fixture.tar.gz" || f.planRequest["version"] != "1.0.0" {
+		t.Fatalf("plan request: %v", f.planRequest)
+	}
+}

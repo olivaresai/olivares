@@ -196,7 +196,7 @@ CRV_STAMP=0
 export CRV_STAMP
 
 python3 - <<'PY'
-import bisect, collections, fnmatch, glob, io, os, re, shutil, stat, subprocess, sys, tempfile, time, warnings
+import bisect, collections, fnmatch, glob, io, json, os, re, shutil, stat, subprocess, sys, tempfile, time, warnings
 
 SELFTEST = os.environ.get("CRV_SELFTEST") == "1"
 
@@ -771,6 +771,8 @@ NOT_RELEASES = (
     ("the Helm release that made OCI the default", None, r"\bOCI-default since \x00v3\.8\.0\x01"),
     ("the Docker AppArmor policy's provenance tag", None,
      r"(?:\bmoby/moby[ \t]+|https://github\.com/moby/moby/blob/)\x00"),
+    ("an AppArmor policy's ABI", ("deploy/apparmor/*.conf", "packaging/apparmor/*.conf"),
+     r"^[ \t]*abi[ \t]+<abi/\x00[0-9]+\.[0-9]+\x01>,[ \t]*(?:#.*)?$"),
     ("the FedRAMP module-selection policy's version", None, r"Module[ _]Selection[ _]\x00"),
     ("an API document's own version", None, r"info\.version`?[ \t]*[(（]?`?\x00"),
     ("the version an XML or HTML document declares", None,
@@ -1818,14 +1820,49 @@ def uncut(path, number, body, form):
             malformed(path, number, "a release mark cuts a version in two; mark the whole version")
 
 
+# Tool declarations and install commands pin the source tool, not the engine. Recognize only
+# their version value, with a static external HTTPS source and no trailing command flags;
+# ambiguous sources, adjacent literals and release marks stay judged.
+TOOL_SOURCE = r"https://(?![A-Za-z0-9._~:/-]*(?i:olivares))[A-Za-z0-9._~:/-]+"
+TOOL_COMMAND = re.compile(r"^[ \t]*olivares[ \t]+tool[ \t]+install[ \t]+--from(?:[ \t]+|=)" + TOOL_SOURCE
+                          + r"[ \t]+--version(?:[ \t]+|=)(?P<version>[^\s;`\"'<>()\]]+)"
+                          + r"(?=[ \t]*(?:$|;))", re.M)
+TOOL_DECLARATION = re.compile(r'"tool_install"\s*:\s*(\{[^{}]*\})')
+TOOL_VERSION = re.compile(r'"version"\s*:\s*"([^"\\]*)"')
+
+
+def tool_install_versions(text: str) -> set[tuple[int, int]]:
+    """Return the exact spans of third-party version values; file_hits still judges release marks."""
+    versions = {match.span("version") for match in TOOL_COMMAND.finditer(text)}
+    for declaration in TOOL_DECLARATION.finditer(text):
+        body = declaration.group(1)
+        try:
+            pairs = json.loads(body, object_pairs_hook=list)
+        except json.JSONDecodeError:
+            continue  # An invalid declaration earns no exemption; its literals stay in the census.
+        spec = dict(pairs)
+        fields = list(TOOL_VERSION.finditer(body))
+        if (len(pairs) != len(spec) or any(key != key.lower() for key in spec)
+                or len(fields) != 1 or fields[0].group(1) != spec.get("version")
+                or not isinstance(spec.get("source_url"), str)
+                or not re.fullmatch(TOOL_SOURCE, spec["source_url"])
+                or (spec.get("archive_url") and not re.fullmatch(TOOL_SOURCE, str(spec["archive_url"])))
+                or any("olivares" in str(value).lower() for value in spec.values())):
+            continue
+        field = fields[0]
+        versions.add((declaration.start(1) + field.start(1), declaration.start(1) + field.end(1)))
+    return versions
+
+
 def file_hits(path, text, start, wanted):
     """-> [Hit] in one file: every literal inside a mark that no INSIDE_MARKS row names (and, in a
-    README, our image coordinates), plus every literal outside one that `wanted` keeps. A mark
-    that holds no such literal is malformed."""
+    README, our image coordinates), plus every literal outside one that `wanted` keeps except a
+    third-party tool's version value. A mark that holds no such literal is malformed."""
     spans = marks(path, text)
     starts = [a for a, _ in spans]
     inline = next((p for suffixes, p in MARK_FORMS if path.endswith(suffixes)), None)
     filled = set()
+    tool_versions = tool_install_versions(text)
     readme = re.fullmatch(r"README(?:\.[^.]+)?\.md", path) is not None
     hits = []
     for number, (offset, body) in enumerate(lines_at(text), 1):
@@ -1851,7 +1888,7 @@ def file_hits(path, text, start, wanted):
                 if not not_release(m, path, marked=True):
                     filled.update(held)
                     hits.append(Hit(path, number, m.group(0), line, dated, True, m.start() - lead))
-            elif wanted(m):
+            elif wanted(m) and (offset + m.start(), offset + m.end()) not in tool_versions:
                 hits.append(Hit(path, number, m.group(0), line, dated, False, m.start() - lead))
     for k, (a, _b) in enumerate(spans):
         if k not in filled:

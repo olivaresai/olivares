@@ -12,7 +12,7 @@ import { ModuleGate } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { SectionCard } from '@/features/_intel'
+import { ListTruncationBadge, SectionCard } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
 import { identityApi, identityKeys } from './api'
 import { DeclaredSection, FindingList } from './components'
@@ -49,6 +49,16 @@ function McpAuthReads() {
     <div className="flex flex-col gap-6">
       <SectionCard title={t('mcp.title')} description={t('mcp.description')}>
         <div className="flex flex-col gap-4">
+          {/* The count is the rows LOADED, not the page size asked for: the notice must not
+              state a measure the engine never reported. It sits outside DeclaredSection so
+              a failed refetch cannot leave it floating over the error. */}
+          <ListTruncationBadge
+            query={findings}
+            filas={findings.data?.items.length}
+            label={t('mcp.truncated', { n: findings.data?.items.length ?? 0 })}
+            hint={t('mcp.truncatedHint')}
+            className="px-0 pt-0"
+          />
           <DeclaredSection
             query={findings}
             what={t('mcp.seamWhat')}

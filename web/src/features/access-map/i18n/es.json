@@ -188,6 +188,7 @@
       "attributed": "atribuida",
       "approximate": "aproximada"
     },
-    "analyse": "Analizar caminos de ataque (auditado)"
+    "analyse": "Analizar caminos de ataque (auditado)",
+    "truncated": "El motor limitó este análisis, así que los caminos mostrados no son la respuesta completa."
   }
 }

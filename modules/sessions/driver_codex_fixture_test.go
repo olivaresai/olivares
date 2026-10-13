@@ -77,6 +77,10 @@ type codexFixture struct {
 	// HoldStartPath makes the peer wait for that file before answering
 	// thread/start, so a test can observe the launch WHILE the handshake is open.
 	HoldStartPath string `json:"hold_start_path"`
+	// HoldSecondTurnPath makes the peer wait for that file before answering the second
+	// turn/start, so a test can observe a run whose input the provider has received
+	// but not yet named a turn for.
+	HoldSecondTurnPath string `json:"hold_second_turn_path"`
 	// CompleteTurn emits turn/completed right after answering turn/start.
 	CompleteTurn bool `json:"complete_turn"`
 	// ApprovalOnTurn asks for that approval method after answering turn/start.
@@ -109,7 +113,8 @@ type codexFixture struct {
 	// after each turn/start; it must never reach this run.
 	ForeignUsage *codexFixtureTokens `json:"foreign_usage"`
 	// Model overrides the model the thread answer names ("" ⇒ "the model").
-	Model string `json:"model"`
+	Model         string           `json:"model"`
+	CatalogModels []map[string]any `json:"catalog_models,omitempty"`
 }
 
 // codexFixtureTokens is one TokenUsageBreakdown, in the wire's own field names.
@@ -355,6 +360,12 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 			account = map[string]any{"type": "chatgpt", "email": nil, "planType": "pro"}
 		}
 		p.reply(id, map[string]any{"account": account, "requiresOpenaiAuth": p.cfg.RequiresAuth})
+	case "model/list":
+		models := p.cfg.CatalogModels
+		if models == nil {
+			models = []map[string]any{}
+		}
+		p.reply(id, map[string]any{"data": models, "nextCursor": nil})
 	case codexMethodThreadStart:
 		p.waitForRelease()
 		p.thread = p.cfg.ThreadID
@@ -390,6 +401,9 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 		p.rec.Efforts = append(p.rec.Efforts, effort)
 		p.recordInput(params)
 		p.flush()
+		if p.cfg.HoldSecondTurnPath != "" && p.turn == 2 {
+			waitForFile(p.cfg.HoldSecondTurnPath)
+		}
 		if p.cfg.UsageBeforeTurnReply {
 			for _, total := range p.cfg.TurnUsage {
 				p.tokenUsage(turnID, total)
@@ -550,4 +564,52 @@ func (p *codexFixturePeer) replyError(id json.RawMessage, code int, message stri
 	p.send(map[string]any{
 		"id": json.RawMessage(id), "error": map[string]any{"code": code, "message": message},
 	})
+}
+
+// This journey exercises the real HTTP server, SQLite and OS process runner.
+// The protocol peer's upstream model file changes without changing Olivares.
+func TestProfileModelCatalogExecutableJourney(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := New(WithRunner(NewProcRunner()), WithProviderDriver(NewCodexDriver()), WithDriverProgram("codex", exe))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "catalog-process")
+	home := t.TempDir()
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", UserHome: t.TempDir(), ConfigHome: home, AuthSource: AuthSourceAccountHome})
+	writeCatalog := func(id string) {
+		cfg := codexFixture{Account: "chatgpt", RequiresAuth: true, RecordPath: filepath.Join(home, codexFixtureRecordFile), CatalogModels: []map[string]any{{"model": id, "displayName": "Upstream model", "isDefault": true, "supportedReasoningEfforts": []map[string]any{{"reasoningEffort": "future-effort"}}, "defaultReasoningEffort": "future-effort"}}}
+		raw, err := json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(home, codexFixtureConfigFile), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := "/v1/m/sessions/provider-profiles/" + profile.Ref + "/models"
+	for _, id := range []string{"vendor-today", "vendor-just-added"} {
+		writeCatalog(id)
+		r := h.do("GET", path+"?refresh=true", admin, tenantHdr(tenant))
+		if r.code != 200 || r.body["state"] != "fresh" || r.body["default_model"] != id || !strings.Contains(r.raw, "future-effort") {
+			t.Fatalf("catalog journey: %d %s", r.code, r.raw)
+		}
+		raw, err := os.ReadFile(filepath.Join(home, codexFixtureRecordFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var record codexFixtureRecord
+		if err = json.Unmarshal(raw, &record); err != nil {
+			t.Fatal(err)
+		}
+		for _, method := range record.Methods {
+			if method != "initialize" && method != "initialized" && method != "account/read" && method != "model/list" {
+				t.Fatalf("catalog started inference: %s", method)
+			}
+		}
+		t.Logf("real HTTP/SQLite/OS process journey: %s and future-effort discovered without product change", id)
+	}
 }

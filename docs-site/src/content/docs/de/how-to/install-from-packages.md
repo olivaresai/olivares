@@ -9,10 +9,10 @@ description: >-
 draft: false
 ---
 
-Das nächste Release ist <!-- release -->`0.1`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+Das nächste Release ist <!-- release -->`0.2`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
 
 :::note[Veröffentlichte Paketnamen]
-Die GitHub-Release <!-- release -->0.1<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
+Die GitHub-Release <!-- release -->0.2<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
 `amd64` und `arm64`, zusammen mit `checksums.txt`, `checksums.txt.sig` und
 `checksums.txt.pem`. Die Befehle unten verwenden die wörtlichen `amd64`-Namen dieser
 Release; ersetzen Sie `amd64` auf einem 64-Bit-ARM-Host durch `arm64`. Installieren
@@ -88,13 +88,13 @@ tragen dieselben Dienst-Adapter: `scripts/install-service.sh` und `packaging/ser
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.2_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
 ```
 <!-- /release -->
 

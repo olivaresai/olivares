@@ -6,9 +6,18 @@
 // painted: the default view is operator, assistant, tool, system, result. The
 // raw line is one click away (inspect), never the row itself.
 import { Check, Eye, Pencil, Terminal, Wrench } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react'
 import type { TFunction } from 'i18next'
+import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { agentOpsKeys } from '@/features/agentops/api'
 import { useRunAttach } from '@/features/agentops/attach'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
 import { formatDuration, formatInt } from '@/lib/format'
@@ -18,15 +27,19 @@ import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import {
   conversationCwd,
+  isQuiet,
   mapConversationFrames,
   type ConversationItem,
 } from './conversation-frames'
 import { systemFailed, systemText } from './conversation-text'
+import { MarkdownText } from './markdown-text'
 import { hostIsolationUnavailable } from './provenance'
 import { unechoedTurns, useRunSentTurns, type SentTurn } from './sent-turns'
 import './i18n'
 
 const MAX_FRAMES = 5000
+/** The side pane's Activity is read again at most this often while the tool writes. */
+const ACTIVITY_REFRESH_MS = 1_500
 
 /** How an ACP turn stopped, in words; an outcome this console does not know is shown as
  * the agent sent it. */
@@ -76,15 +89,38 @@ export function SessionConversation({
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [autoscroll, setAutoscroll] = useState(true)
 
-  const onFrame = useCallback((f: AttachFrame) => {
-    setFrames((prev) => {
-      const next =
-        prev.length >= MAX_FRAMES
-          ? prev.slice(prev.length - MAX_FRAMES + 1)
-          : prev
-      return [...next, f]
-    })
-  }, [])
+  // Whatever the tool writes may change what it is doing: the Activity tab reads it again,
+  // once per burst of frames, and only while that tab is open (an inactive query is only
+  // marked stale).
+  const queryClient = useQueryClient()
+  const activityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runRef = run.run_ref
+  useEffect(
+    () => () => {
+      if (activityTimer.current) clearTimeout(activityTimer.current)
+      activityTimer.current = null
+    },
+    [runRef],
+  )
+  const onFrame = useCallback(
+    (f: AttachFrame) => {
+      setFrames((prev) => {
+        const next =
+          prev.length >= MAX_FRAMES
+            ? prev.slice(prev.length - MAX_FRAMES + 1)
+            : prev
+        return [...next, f]
+      })
+      if (activityTimer.current) return
+      activityTimer.current = setTimeout(() => {
+        activityTimer.current = null
+        void queryClient.invalidateQueries({
+          queryKey: agentOpsKeys.runActivity(tenant, runRef),
+        })
+      }, ACTIVITY_REFRESH_MS)
+    },
+    [queryClient, tenant, runRef],
+  )
   const onLag = useCallback((lag: { dropped: number }) => {
     setDropped((d) => d + lag.dropped)
   }, [])
@@ -107,7 +143,7 @@ export function SessionConversation({
       mapConversationFrames([
         ...(history ? [history] : []),
         ...frames.map((f) => f.line),
-      ]).filter((item) => item.systemKind !== 'protocol'),
+      ]).filter((item) => item.systemKind !== 'protocol' && !isQuiet(item)),
     [frames, history],
   )
   // The first message the console sent, until the tool shows it itself (HU2-27).
@@ -528,23 +564,41 @@ function ConversationRow({
       </li>
     )
 
+  // THE ASSISTANT'S WORDS ARE MARKDOWN (#1784): lists, code and bold are shown as such. A
+  // reply holds blocks and links, which a button cannot, so the row is the reply itself. A
+  // click on its words opens the inspector, but not on a link and not while the person is
+  // selecting text to copy it; "Inspect" is the keyboard's way in, shown when it has focus.
+  const openFromWords = (e: MouseEvent<HTMLElement>) => {
+    if ((e.target as Element).closest('a, button')) return
+    // the second click of a double click is picking a word, not asking for the frame
+    if (e.detail > 1) return
+    const selection = window.getSelection()
+    if (
+      selection &&
+      !selection.isCollapsed &&
+      e.currentTarget.contains(selection.anchorNode)
+    )
+      return
+    inspect()
+  }
   return (
     <li className="py-1">
-      <button
-        type="button"
+      <div
         data-testid="conversation-item"
         data-kind={item.kind}
-        onClick={inspect}
+        onClick={openFromWords}
         className={cn(
-          'w-full rounded-ctl text-left text-body-l text-text outline-none',
-          'focus-visible:ring-2 focus-visible:ring-focus',
+          'w-full rounded-ctl text-left text-body-l text-text [overflow-wrap:anywhere]',
           selected && 'bg-active',
         )}
       >
-        <span className="whitespace-pre-wrap break-words">
-          {item.text || item.summary}
-        </span>
-      </button>
+        <MarkdownText text={item.text || item.summary} />
+        {onInspect ? (
+          <div className="sr-only focus-within:not-sr-only focus-within:mt-1">
+            <InspectButton onClick={inspect} />
+          </div>
+        ) : null}
+      </div>
     </li>
   )
 }

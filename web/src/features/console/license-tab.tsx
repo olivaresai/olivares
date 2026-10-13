@@ -165,10 +165,34 @@ function LicenseFacts({
             {t('console:license.noUserLimit')}
           </span>
         </Row>
-        {license.expires_at && (
-          <Row label={t('console:license.expires')}>
-            {new Date(license.expires_at).toLocaleDateString(currentLanguage())}
-          </Row>
+        {/* An expired licence keeps the single "Expires" row: its paid_through says nothing a
+            buyer can rely on once the lease has ended unrenewed (a refund looks the same). */}
+        {license.paid_through && license.status !== 'expired' ? (
+          <>
+            <Row label={t('console:license.paidThrough')}>
+              {new Date(license.paid_through).toLocaleDateString(
+                currentLanguage(),
+              )}
+            </Row>
+            {license.lease_until && (
+              <Row label={t('console:license.leaseUntil')}>
+                {new Date(license.lease_until).toLocaleDateString(
+                  currentLanguage(),
+                )}
+                <span className="ml-2 text-caption text-muted-foreground">
+                  {t('console:license.leaseNote')}
+                </span>
+              </Row>
+            )}
+          </>
+        ) : (
+          license.expires_at && (
+            <Row label={t('console:license.expires')}>
+              {new Date(license.expires_at).toLocaleDateString(
+                currentLanguage(),
+              )}
+            </Row>
+          )
         )}
         {license.issued_at && (
           <Row label={t('console:license.issued')}>

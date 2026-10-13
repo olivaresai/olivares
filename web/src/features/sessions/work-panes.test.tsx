@@ -437,6 +437,31 @@ describe('SessionContextPane — the scope this session ran under', () => {
     expect(within(pane).getAllByText('claude')).toHaveLength(2)
   })
 
+  it('names a profile that is an account by its account name on the scope block', async () => {
+    ops.listProfiles.mockResolvedValue({
+      items: [
+        {
+          profile_ref: 'ppf_team',
+          driver: 'claude',
+          environment_ref: 'env-prod',
+          account_name: 'claude-b',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      ],
+      has_more: false,
+    })
+    renderIntel(
+      <SessionContextPane resolution={resolution({ runs: [run()] })} />,
+    )
+    const pane = await screen.findByTestId('session-context')
+    const scope = within(pane).getByTestId('context-scope')
+    await waitFor(() =>
+      expect(within(scope).getByText('claude-b')).toBeInTheDocument(),
+    )
+  })
+
   // ⛔ NO `ppf_…` IN THE BLOCK WHOSE CAPTION SAYS THESE ARE NOT REFERENCES. The scope
   //    block answers "what did this session run under" in names; the identifiers block
   //    below it is the one meant for copying. The profile row was the last leaf still

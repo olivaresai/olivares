@@ -3,6 +3,10 @@ title: "连接一个源"
 description: "把一个真实的观测源接入 control plane，理解连接器模型，并为每个系统选择合适的信号。"
 ---
 
+:::note[版本]
+目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）和托管身份生命周期需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、用户/组入站 SCIM、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+:::
+
 本页解释通用的连接器模型，以及如何把一个真实的源接入引擎。如果你只想连接一个编码代理，请从
 [连接 Claude Code](/zh/how-to/connect-claude-code/) 开始——那是协作路径上的一个具体的源，而本页是
 它底下的模型。

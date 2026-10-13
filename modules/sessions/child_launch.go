@@ -23,7 +23,8 @@ import (
 // childSpec turns it into the exact child: program and argv, folder, explicit
 // environment, filesystem policy and network policy. launchChild then lets the
 // launch-time contributions add theirs, in one order — the repository read
-// credential (session_git_read.go), the Codex sandbox probe
+// credential (session_git_read.go), the profile's programs and package registries
+// (provider_profile_packages.go), the Codex sandbox probe
 // (driver_codex_sandbox_probe.go), Claude's tool hooks (claude_hook_launch.go) and
 // the session MCP endpoint (session_mcp_launch.go) — and starts the child on the
 // runner. The runner adds only what exists once the process does: the session's
@@ -55,6 +56,11 @@ type childDecision struct {
 // the spec is returned whatever happened, as the runner may hand back a process
 // together with an error.
 func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, d childDecision) (LaunchSpec, Process, string, error) {
+	program, err := m.resolveRunProgram(ctx, tenant, *p)
+	if err != nil {
+		return LaunchSpec{}, nil, "tool version selection", err
+	}
+	p.resolvedProgram, p.resolvedIdentity = toolProgramIdentity(program)
 	spec := m.childSpec(*p, d)
 	if stage, err := m.prepareSessionLaunch(ctx, runCtx, tenant, runRef, p, &spec); err != nil {
 		return spec, nil, stage, err
@@ -116,13 +122,15 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 
 	var args []string
 	var driverLaunch DriverLaunch
-	program := m.claudeProgram()
+	program := p.resolvedProgram
 	if driven {
 		// The driver owns its own official argv. The resume ID is deliberately NOT a flag
 		// here: an app-server/ACP child resumes through a METHOD on the owned
 		// protocol, and the correlated root response is the only thing allowed to
 		// nominate the conversation.
-		program = m.driverProgram(drv)
+		if program == "" {
+			program = m.driverProgram(drv)
+		}
 		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: d.cred.localModelEndpoint, LocalModels: d.cred.localModels, BoundProvider: d.cred.bound}
 		if p.ProviderHome != nil {
 			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
@@ -130,6 +138,9 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		}
 		args = drv.LaunchArgs(driverLaunch)
 	} else {
+		if program == "" {
+			program = m.claudeProgram()
+		}
 		// The Claude argv is not built here: cliruntime declares the `--print`
 		// stream-json form and its transport, and this launch path consults that one
 		// table, so changing the declaration changes what the engine launches.
@@ -339,6 +350,9 @@ func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.
 	}
 	if err := m.configureGitRead(ctx, runCtx, tenant, runRef, p, spec); err != nil {
 		return "repository read credential", err
+	}
+	if err := m.configureProfilePackages(ctx, runCtx, tenant, runRef, p, spec); err != nil {
+		return "profile programs and package registries", err
 	}
 	if err := m.prepareCodexSandbox(ctx, p, spec); err != nil {
 		return "Codex sandbox check", err

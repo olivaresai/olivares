@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/klauspost/compress/zstd"
 	"io"
 	"io/fs"
 	"os"
@@ -18,6 +17,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 type archiveContextReader struct {
@@ -42,7 +43,7 @@ func codexPackageResource(name string) bool {
 // Safe archive links are materialized as ordinary files. No extracted symlink
 // exists, including while another member is being written. Link copies count
 // toward the same expanded-byte limit as ordinary members.
-func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, prefix, fetched string, layout ExpectedLayout) (*ObservedPayloadInventory, error) {
+func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, prefix, fetched string, layout ExpectedLayout, stripPrefix ...string) (*ObservedPayloadInventory, error) {
 	if driver == DriverGemini {
 		return extractGeminiBundle(ctx, root, prefix, fetched, layout)
 	}
@@ -92,9 +93,30 @@ func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, pr
 		if members > layout.Limits.MaxMembers {
 			return nil, refuse(KindResponseTooLarge, "archive member count exceeds policy")
 		}
+		// Git tag archives include a global PAX header recording the commit.
+		// It creates no filesystem member; its bytes and count remain bounded.
+		if strings.HasPrefix(driver, "declared-") && hdr.Typeflag == tar.TypeXGlobalHeader {
+			continue
+		}
 		name, err := releaseArchivePath(hdr.Name)
 		if err != nil {
 			return nil, refuse(KindManifestInvalid, "%v", err)
+		}
+		if len(stripPrefix) > 0 && stripPrefix[0] != "" {
+			prefix := stripPrefix[0]
+			if name == prefix {
+				name = ""
+			} else if strings.HasPrefix(name, prefix+"/") {
+				name = strings.TrimPrefix(name, prefix+"/")
+			} else {
+				return nil, refuse(KindManifestInvalid, "archive member is outside the declared root")
+			}
+		}
+		if strings.HasPrefix(driver, "declared-") && name != "" && !releaseArchiveMember(driver, name) {
+			if hdr.Typeflag != tar.TypeDir && hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA {
+				return nil, refuse(KindManifestInvalid, "declared archive contains a link or special file")
+			}
+			continue
 		}
 		if name == "" {
 			if hdr.Typeflag != tar.TypeDir || rootSeen {

@@ -505,7 +505,9 @@ def derive():
     enforcement = proven_seams()
     source_census = runpy.run_path("scripts/lib/source_census.py")["source_census"]
     try:
-        _, inproc_dirs, all_kinds = source_census(rd("cmd/olivares/sources.go"))
+        roster_path = "cmd/olivares/identity_noenterprise.go"
+        roster_seam = rd(roster_path) if os.path.exists(roster_path) else None
+        _, inproc_dirs, all_kinds = source_census(rd("cmd/olivares/sources.go"), roster_seam)
     except (OSError, ValueError) as exc:
         blind(f"UNVERIFIED check-public-counts: cannot measure source wiring: {exc}")
     kinds = len(all_kinds)

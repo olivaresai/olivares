@@ -4,11 +4,19 @@
 # DIST-24-05. This is an installer/userland qualification, not a native-package
 # repository qualification. Linux uses five real container userlands; macOS uses
 # a hosted runner. A missing public-release network path returns the third answer
-# after a dry-run and never turns into a green content assertion.
+# after a dry-run and never turns into a green content assertion. Pull requests
+# use their own archives, which are unsigned development payloads.
 name: installer-matrix
 
 on:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Published MAJOR.MINOR tag (defaults to RELEASE-VERSION)'
+        required: false
+        type: string
+  release:
+    types: [published]
   pull_request:
     branches: [main]
     paths:
@@ -22,6 +30,7 @@ on:
       - "core/**"
       - "go.work"
       - "go.work.sum"
+      - "RELEASE-VERSION"
       - "Taskfile.yml"
       - "INSTALL.md"
       - "docs/RELEASE-INSTALLER.md"
@@ -77,6 +86,7 @@ jobs:
         timeout-minutes: 3
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         timeout-minutes: 5
         with:
@@ -94,14 +104,28 @@ jobs:
         timeout-minutes: 20
         env:
           CGO_ENABLED: "0"
-        run: go build -trimpath -o "$RUNNER_TEMP/olivares-matrix" ./cmd/olivares
-      - name: live installer — ${{ matrix.family }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/installer-candidate"
+          go build -trimpath -ldflags "$(sh scripts/build-ldflags.sh)" -o "$RUNNER_TEMP/installer-candidate/olivares" ./cmd/olivares
+      - name: package this PR head's installer archive
+        if: github.event_name == 'pull_request'
+        run: |
+          tar -czf "$RUNNER_TEMP/installer-candidate.tar.gz" \
+            -C "$RUNNER_TEMP/installer-candidate" olivares \
+            -C "$GITHUB_WORKSPACE" scripts/install-service.sh packaging/service
+      - name: qualify installer payload — ${{ matrix.family }}
         timeout-minutes: 30
-        run: >-
-          bash scripts/installer-matrix-ci.sh
-          --family "${{ matrix.family }}"
-          --image "${{ matrix.image }}"
-          --candidate "$RUNNER_TEMP/olivares-matrix"
+        env:
+          MATRIX_FAMILY: ${{ matrix.family }}
+          MATRIX_IMAGE: ${{ matrix.image }}
+          MATRIX_CANDIDATE_ARCHIVE: ${{ github.event_name == 'pull_request' && format('{0}/installer-candidate.tar.gz', runner.temp) || '' }}
+          MATRIX_RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.release_version }}
+        run: |
+          args=(--family "$MATRIX_FAMILY" --image "$MATRIX_IMAGE"
+            --candidate "$RUNNER_TEMP/installer-candidate/olivares"
+            --candidate-archive "$MATRIX_CANDIDATE_ARCHIVE")
+          if [[ -n "$MATRIX_RELEASE_VERSION" ]]; then args+=(--release-version "$MATRIX_RELEASE_VERSION"); fi
+          bash scripts/installer-matrix-ci.sh "${args[@]}"
 
   macos-installer:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
@@ -112,6 +136,7 @@ jobs:
         timeout-minutes: 3
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         timeout-minutes: 5
         with:
@@ -129,10 +154,22 @@ jobs:
         timeout-minutes: 20
         env:
           CGO_ENABLED: "0"
-        run: go build -trimpath -o "$RUNNER_TEMP/olivares-matrix" ./cmd/olivares
-      - name: live installer — hosted macOS
+        run: |
+          mkdir -p "$RUNNER_TEMP/installer-candidate"
+          go build -trimpath -ldflags "$(sh scripts/build-ldflags.sh)" -o "$RUNNER_TEMP/installer-candidate/olivares" ./cmd/olivares
+      - name: package this PR head's installer archive
+        if: github.event_name == 'pull_request'
+        run: |
+          tar -czf "$RUNNER_TEMP/installer-candidate.tar.gz" \
+            -C "$RUNNER_TEMP/installer-candidate" olivares \
+            -C "$GITHUB_WORKSPACE" scripts/install-service.sh packaging/service
+      - name: qualify installer payload — hosted macOS
         timeout-minutes: 30
-        run: >-
-          bash scripts/installer-matrix-ci.sh
-          --family macos
-          --candidate "$RUNNER_TEMP/olivares-matrix"
+        env:
+          MATRIX_CANDIDATE_ARCHIVE: ${{ github.event_name == 'pull_request' && format('{0}/installer-candidate.tar.gz', runner.temp) || '' }}
+          MATRIX_RELEASE_VERSION: ${{ github.event.release.tag_name || inputs.release_version }}
+        run: |
+          args=(--family macos --candidate "$RUNNER_TEMP/installer-candidate/olivares"
+            --candidate-archive "$MATRIX_CANDIDATE_ARCHIVE")
+          if [[ -n "$MATRIX_RELEASE_VERSION" ]]; then args+=(--release-version "$MATRIX_RELEASE_VERSION"); fi
+          bash scripts/installer-matrix-ci.sh "${args[@]}"

@@ -93,8 +93,8 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 
 # The read/write access map — module III:
 curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
@@ -165,8 +165,8 @@ PY
 ```
 
 Ahora haz un **primer arranque real**: arranca una vez sin credenciales por defecto,
-reclama el token de configuración de un solo uso y crea un tenant al que adjuntar el
-conector.
+reclama el token de configuración de un solo uso y usa la organización que crea la
+configuración inicial para conectar el conector.
 
 ```bash
 BASE=http://127.0.0.1:8901
@@ -187,9 +187,9 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+# La configuración inicial ya creó la única organización; consulta su ID de tenant.
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 
 kill "$SERVER"                  # stop the first-run server; we restart it with pgAudit wired

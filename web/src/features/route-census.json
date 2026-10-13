@@ -94,5 +94,5 @@
     "/workspace",
     "/workspace-templates"
   ],
-  "business_paths": ["/automations", "/orchestration"]
+  "business_paths": ["/automations", "/orchestration", "/tenants", "/residency"]
 }

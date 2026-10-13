@@ -124,6 +124,34 @@ def release_fixture(dist):
 
 
 class NativeReleaseVersions(unittest.TestCase):
+    def test_deb_ships_engine_userns_profile_only(self) -> None:
+        profile_path = '/usr/share/olivares/apparmor/usr.bin.olivares'
+        with tempfile.TemporaryDirectory(prefix='native-apparmor-', dir=os.environ.get('TMPDIR')) as tmp:
+            dist = Path(tmp)
+            release_fixture(dist)
+            paths = builder.build(ROOT, dist, '26.1100', 1790812800, ROOT / 'packaging/nfpm/packages.json', False)
+            for path in paths:
+                if path.suffix == '.deb':
+                    extracted = dist / path.stem
+                    subprocess.run(['dpkg-deb', '-x', str(path), str(extracted)], check=True)
+                    profile = extracted / profile_path.lstrip('/')
+                    self.assertTrue(profile.is_file(), f'{path.name}: missing engine userns profile')
+                    self.assertEqual(profile.read_bytes(), (ROOT / 'packaging/apparmor/olivares-engine.conf').read_bytes())
+                    self.assertEqual(payload_mode_owner(path, profile_path), (0o644, 'root'))
+                    control = dist / (path.stem + '-control')
+                    subprocess.run(['dpkg-deb', '-e', str(path), str(control)], check=True)
+                    conffiles = control / 'conffiles'
+                    self.assertNotIn(profile_path, conffiles.read_text() if conffiles.exists() else '')
+                elif path.suffix == '.rpm':
+                    with self.assertRaises(ValueError):
+                        payload_mode_owner(path, profile_path)
+                elif path.suffix == '.apk':
+                    with tarfile.open(path, 'r:gz', ignore_zeros=True) as bundle:
+                        self.assertNotIn(profile_path.lstrip('/'), bundle.getnames())
+                else:
+                    with arch_tar(path) as bundle:
+                        self.assertNotIn(profile_path.lstrip('/'), bundle.getnames())
+
     def test_packages_render_systemd_from_template(self) -> None:
         with tempfile.TemporaryDirectory(prefix='native-unit-', dir=os.environ.get('TMPDIR')) as tmp:
             project = Path(tmp)

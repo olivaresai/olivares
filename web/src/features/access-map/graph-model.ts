@@ -344,22 +344,23 @@ export function buildGraph({
   const layout = layeredLayout(layoutNodes, layoutEdges, {
     layerGapX: 360,
     nodeGapY: 76,
-    // ⛔ SIN ESTO la vista más visible del producto sale como una columna vertical
-    // ilegible. Un estate de 56 orígenes los apilaba en UNA columna: 55 · 76 =
-    // 4180 px de alto por 360 de ancho, dentro de un contenedor de ~630 px
-    // (`access-map-view.tsx` `h-[70vh]`). `fitView` encogía a ~0,12 y las etiquetas
-    // `text-xs` (12 px) se pintaban a ~1,5 px. Con 14 por sub-columna esos 56 pasan
-    // a 988 px y el conjunto queda 1480 × 988 (medido, no estimado).
+    // ⛔ WITHOUT THIS the product's most visible view comes out as an unreadable
+    // vertical column. An estate of 56 origins stacked them in ONE column: 55 · 76 =
+    // 4180 px tall by 360 px wide, inside a container of about 630 px
+    // (`access-map-view.tsx` `h-[70vh]`). `fitView` shrank it to about 0.12 and the
+    // `text-xs` labels (12 px) were drawn at about 1.5 px. With 14 per sub-column those
+    // 56 origins take 988 px and the whole graph is 1480 × 988 (measured, not estimated).
     //
-    // 14 no es un número redondo: es la altura que cabe legible en el contenedor.
+    // 14 is not a round number: it is the height that fits legibly in the container.
     //
-    // ⛔ CORREGIDO tras el contraste `sol max` (F-07): AQUÍ DECÍA que por encima de
-    // ~400 nodos manda `WEBGL_NODE_THRESHOLD` y «este valor sólo gobierna el tramo
-    // que React Flow dibuja». **Es falso.** `buildGraph` corre ANTES de elegir
-    // renderer (`access-map-view.tsx:138-164`) y Sigma copia `n.position.x/y` tal
-    // cual (`sigma-graph-build.ts:94-111`), así que la envoltura le llega igual. Lo
-    // que NO le llega es el suelo de zoom, que es del lienzo de React Flow. No se ha
-    // medido que la envoltura empeore Sigma; lo que se corrige es la afirmación.
+    // ⛔ CORRECTED after the `sol max` contrast (F-07): THIS COMMENT USED TO SAY that
+    // above about 400 nodes `WEBGL_NODE_THRESHOLD` rules and "this value only governs
+    // the stretch React Flow draws". **That is false.** `buildGraph` runs BEFORE the
+    // renderer is chosen (`access-map-view.tsx:138-164`) and Sigma copies
+    // `n.position.x/y` as they are (`sigma-graph-build.ts:94-111`), so the wrapping
+    // reaches it too. What does NOT reach it is the zoom floor, which belongs to the
+    // React Flow canvas. It has not been measured that wrapping makes Sigma worse; what
+    // is corrected here is the claim.
     maxPerColumn: 14,
   })
 

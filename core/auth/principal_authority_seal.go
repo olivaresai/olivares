@@ -63,6 +63,12 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 		w.h.Reset()
 		_, _ = w.h.Write([]byte("olivares.auth.os-account-installation-seal.v1\x00"))
 	}
+	if p.evidence.authorityMode == principalEngineSystemAuthority {
+		// The engine system shape is the only one with local attribution, so it
+		// has its own domain; the field order below is the same.
+		w.h.Reset()
+		_, _ = w.h.Write([]byte(systemAuthoritySealDomain))
+	}
 	w.str(string(p.Kind))
 	w.id(p.UserID)
 	w.id(p.CredID)
@@ -85,7 +91,8 @@ func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	w.str(p.localSubject)
 	// A resolved principal must carry no local attribution. Encode the semantic
 	// zero explicitly so adding a local shape to a future protocol requires a
-	// new domain/version rather than silently changing v4.
+	// new domain/version rather than silently changing v4. The engine system
+	// shape is that domain; its audit metadata stays attribution, not authority.
 	w.nilValue()
 	w.boolean(p.localSystem)
 	w.ref(p.credentialRef)
@@ -121,8 +128,12 @@ func validPrincipalAuthoritySeal(p Principal) bool {
 // canonical agent-OBO token, or one of the two server-authored runtime tokens.
 // A human superadmin may carry owner admission to one explicit tenant, with
 // that tenant bound into the seal and SessionScope. Global tokens, synthetic,
-// ambiguous delegation/act-as and local principals remain ineligible.
+// ambiguous delegation/act-as and local principals remain ineligible; the one
+// exception is the engine system principal ResolveSystemScope produces.
 func validPrincipalAuthorityShape(p Principal) bool {
+	if p.evidence.authorityMode == principalEngineSystemAuthority {
+		return validSealedSystemPrincipal(p)
+	}
 	if p.Email != "" || p.sessionOrigin != nil || p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
 		(p.Superadmin && p.Kind != KindUser) || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
 		len(p.grants) != 1 {

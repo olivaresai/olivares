@@ -493,6 +493,15 @@ MODELOS_COSTE = [
 
 def sembrar_coste(base, token, tenant, dias=30):
     """Serie diaria de coste por la ruta canonica de ingesta."""
+    code, info = pedir(base, token, tenant, "GET", "/v1/server-info")
+    edition = info.get("edition") if isinstance(info, dict) else None
+    if code != 200 or edition not in ("community", "business", "enterprise"):
+        print("ERROR: could not determine the build edition (%s)" % code, file=sys.stderr)
+        return 1
+    if edition == "community":
+        print("cost seed SKIPPED: FinOps spend analysis is a Business capability")
+        return 0
+
     import datetime
     hoy = datetime.datetime.now(datetime.timezone.utc).replace(
         hour=12, minute=0, second=0, microsecond=0)
@@ -571,33 +580,17 @@ PERSONAS = [
 
 
 def sembrar_consola(base, token, tenant):
-    # Padron de personas por la ruta de APROVISIONAMIENTO, no por la de conveniencia.
-    #
-    # ⛔ ESTO VA EN COMENTARIOS Y NO EN UN DOCSTRING, y no es estilo: en Python un docstring es un
-    #    VALOR, no un comentario. El gate de exportacion **limpia los comentarios y NUNCA los
-    #    valores**, asi que una referencia interna aqui dentro se PUBLICA. Me lo enseno el propio
-    #    gate rechazando el push de esta rama por una cita interna que estaba justo aqui.
-    #
-    # ⛔ `POST /v1/onboard` —la del boton «Onboard user» de la consola— responde **403
-    #    `step_up_required`**: exige AAL3, un autenticador hardware verificado. NO es un obstaculo
-    #    que rodear: es una propiedad de seguridad deliberada de las acciones CONFIGURE
-    #    privilegiadas (`core/api/middleware.go:297`), la misma que protege SSO, secretos y
-    #    fuentes. Un sembrador con un token de contrase~na **no debe** poder crear cuentas.
-    #
-    # ⇒ Se usa la ruta que un aprovisionamiento real usa y que NO esta tras el step-up:
-    #   `POST /v1/users` (superadmin) + `POST /v1/memberships` (rol en el inquilino). Ninguna de
-    #   las dos llama a `requireAAL3`, y eso tambien es deliberado: son de superadmin de plataforma.
-    #
-    # ⛔ Y LAS INVITACIONES PENDIENTES **NO SE SIEMBRAN**, asi que ese panel sigue vacio. Emitir
-    #    una invitacion viva pasa por el flujo con step-up. Se deja vacio Y SE DICE, en vez de
-    #    fabricar una fila: el panel en blanco es la consecuencia honesta de un control que va.
-    altas, invitaciones = 0, 0
+    # Create the new account and its first membership atomically through the
+    # published product API. A separate later grant must not join an existing
+    # non-member without its holder's consent. Pending invitations remain unseeded.
+    altas, esperados = 0, {}
     for p in PERSONAS:
         if p["modo"] != "password":
-            continue                      # ver el comentario de arriba: las invitaciones exigen AAL3
+            continue                      # Pending invitations use the real invitation ceremony.
         code, u = pedir(base, token, tenant, "POST", "/v1/users",
                         {"email": p["email"], "display_name": p["nombre"],
-                         "password": "olivares-demo-estate", "superadmin": False})
+                         "password": "olivares-demo-estate", "superadmin": False,
+                         "tenant": tenant, "role": p["rol"]})
         if code not in (200, 201):
             print("ERROR: create user %s -> %s %s" % (p["email"], code, u), file=sys.stderr)
             return 1
@@ -605,26 +598,31 @@ def sembrar_consola(base, token, tenant):
         if not uid:
             print("ERROR: /v1/users returns no id: %s" % list(u)[:8], file=sys.stderr)
             return 1
-        code, g = pedir(base, token, tenant, "POST", "/v1/memberships",
-                        {"user_id": uid, "tenant": tenant, "role": p["rol"]})
-        if code not in (200, 201):
-            print("ERROR: membership %s -> %s %s" % (p["email"], code, g), file=sys.stderr)
+        membership = u.get("membership") or {}
+        if (membership.get("user_id") != uid or membership.get("tenant") != tenant
+                or membership.get("role") != p["rol"]):
+            print("ERROR: created account lacks the requested first membership", file=sys.stderr)
             return 1
+        esperados[uid] = p["rol"]
         altas += 1
 
-    # ⛔ Se releen LAS DOS COSAS, porque el panel vacio era una de ellas: un padron lleno con cero
-    #    invitaciones dejaria el hueco igual que estaba y el recuento diria que todo fue bien.
+    # Reread every new account and role; a count alone does not prove roster membership.
     code, miembros = pedir(base, token, tenant, "GET", "/v1/members")
     if code != 200:
         print("ERROR: could not reread the membership list (%s) %s" % (code, miembros), file=sys.stderr)
         return 1
-    n_miembros = len(miembros.get("items") or [])
+    roster = miembros.get("items") or []
+    reread = {member.get("user_id"): member.get("role") for member in roster}
+    if any(reread.get(uid) != role for uid, role in esperados.items()):
+        print("ERROR: tenant roster does not contain every requested new member and role", file=sys.stderr)
+        return 1
+    n_miembros = len(roster)
     con_nombre = sum(1 for m in (miembros.get("items") or []) if m.get("display_name"))
     if n_miembros < altas:
         print("ERROR: %d registrations but the membership list returns %d" % (altas, n_miembros), file=sys.stderr)
         return 1
     print("console seeded and REREAD: %d members (%d named) · invitations NOT seeded "
-          "(require AAL3 by design)" % (n_miembros, con_nombre))
+          "(use the invitation flow)" % (n_miembros, con_nombre))
     return 0
 
 
@@ -997,7 +995,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Seed the real content used by demo estate captures through the API.")
     parser.add_argument("base_url")
-    parser.add_argument("token")
+    parser.add_argument("token", help="bearer token, or - to read OLIVARES_TOKEN")
     parser.add_argument("tenant")
     parser.add_argument("workspace_root",
                         help="disposable root to register for Browse files")
@@ -1005,6 +1003,10 @@ def main():
         "--decision-count", type=int, default=DEFAULT_DECISION_COUNT, metavar="N",
         help="effective heads (default: one console page plus one row)")
     args = parser.parse_args()
+    if args.token == "-":
+        args.token = os.environ.get("OLIVARES_TOKEN", "")
+        if not args.token:
+            parser.error("OLIVARES_TOKEN is required when token is -")
     if args.decision_count <= DECISION_PAGE_SIZE:
         parser.error("--decision-count must exceed the page size (%d)"
                      % DECISION_PAGE_SIZE)

@@ -1280,21 +1280,6 @@ export const identitySsoReal = {
   pkce_method: 'S256',
 }
 
-export const governanceNhiPosture = {
-  total: 0,
-  rotation_known: 0,
-  rotation_coverage: 0,
-  stale: 0,
-  blocked: 0,
-  alerting: 0,
-  orphaned: 0,
-  unsponsored: 0,
-  owned: 0,
-  soft_deleted: 0,
-  finalized: 0,
-  critical: 0,
-}
-
 export const adoptionDiscrepancy = {
   days: [],
   thresholds: {
@@ -2481,6 +2466,9 @@ export function frameworkStatusFor(id: string) {
 }
 
 export function fixtureFor(pathname: string): unknown | null {
+  // The console signs in by recovering its cookie session (lib/auth/browser-session.ts);
+  // anything else here leaves every shot on the sign-in page.
+  if (pathname === '/v1/auth/browser-session') return browserSession
   if (pathname === '/v1/m/agenttools/inventory')
     return {
       drivers: ['claude', 'codex', 'grok', 'opencode', 'ollama'],
@@ -2548,9 +2536,8 @@ export function fixtureFor(pathname: string): unknown | null {
   if (pathname.endsWith('/v1/m/adoption/summary')) return adoptionSummaryReal
   if (pathname.endsWith('/v1/m/adoption/trend')) return adoptionTrend
   if (pathname.endsWith('/v1/m/identity/sso')) return identitySsoReal
-  if (pathname.endsWith('/v1/m/governance/nhi/posture'))
-    return governanceNhiPosture
-  if (pathname.endsWith('/v1/server-info')) return serverInfo
+  if (pathname === '/v1/server-info')
+    return { ...serverInfo, edition: 'community' }
   if (pathname.endsWith('/v1/auth/whoami')) return whoami
   if (pathname.endsWith('/v1/auth/refresh')) return refresh
   if (pathname.endsWith('/v1/m/accessmap/graph')) return accessGraph

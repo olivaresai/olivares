@@ -15,7 +15,7 @@
   "state": {
     "pending": "保留中",
     "running": "実行中",
-    "idle": "実行中",
+    "idle": "待機中",
     "stopped": "停止",
     "failed": "失敗",
     "cleaned": "クリーンアップ済み"
@@ -103,7 +103,6 @@
     "effort": "Effort",
     "effortDefault": "モデルのデフォルト",
     "model": "モデル",
-    "modelPlaceholder": "opus  ·  claude-opus-4-8  （任意）",
     "workspace": "フォルダー",
     "workspaceNone": "このセッションの一時フォルダー",
     "worktree": "新しい git worktree で作業する",
@@ -130,18 +129,9 @@
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME、GROK_HOME はプロファイルが所有します。いずれかを転送する起動はここで拒否されます。その他の名前は引き続きサーバー側の検証を受けます。",
     "identity": {
       "title": "起動時のID",
-      "hint": "人間のスポンサーの代理となる承認済みエージェントを選択します。人間のアクセス権だけでエージェント権限は付与されません。",
       "humanHint": "セッションはあなた自身のアクセス権で実行されます。",
       "human": "現在の人間のオペレーター",
-      "agent": "承認済みエージェント（スポンサーの代理）",
-      "required": "オーケストレーションには独立して認証されたエージェントIDが必要です。",
-      "choose": "エージェントID",
-      "sponsorHint": "起動前にサーバーがエージェント、ライフサイクル、スポンサー関係を検証します。",
-      "placeholder": "承認済みエージェントを選択",
-      "readRequired": "NHIの読み取り権限が必要です。",
-      "loading": "エージェントIDを読み込み中…",
-      "loadFailed": "ID一覧を取得できません。",
-      "loadMore": "さらに読み込む"
+      "required": "オーケストレーションには独立して認証されたエージェントIDが必要です。"
     },
     "blocked": {
       "profilesForbidden": "あなたのロールはプロバイダープロファイルを読めない (sessions:profile:read) ため、ここではセッションを開始できません。",
@@ -156,6 +146,26 @@
       "templateRefused": "このテンプレートは、この起動では適用できない条件を求めています。「詳細オプション」で別のものを選んでください。",
       "readinessFailed": "プロファイルの要件を読み込めませんでした。"
     }
+  },
+  "picker": {
+    "search": "モデルを検索",
+    "none": "一致するモデルがありません。",
+    "loading": "このツールが提供するモデルを読み込み中…",
+    "failed": "ツールが応答しなかったため、一覧はありません。モデルを入力するか、既定のままにしてください。",
+    "unsupported": "このツールはモデルを一覧表示しません。入力するか、既定のままにしてください。",
+    "unavailable": "ここではモデルの一覧を利用できません。モデルを入力するか、既定のままにしてください。",
+    "default": "既定",
+    "new": "新規",
+    "favorites": "お気に入り",
+    "models": "モデル",
+    "legacy": "旧モデル",
+    "star": "{{model}} をお気に入りに追加",
+    "unstar": "{{model}} をお気に入りから削除",
+    "use": "「{{model}}」を使用",
+    "defaultNamed": "既定（{{model}}）",
+    "defaultUnnamed": "{{tool}} の既定",
+    "effortDefaultNamed": "モデルのデフォルト（{{effort}}）",
+    "effortNeedsModel": "先にモデルを選んでください。Effort はモデルのレベルです。"
   },
   "detail": {
     "live": "ライブ",
@@ -196,7 +206,7 @@
     "inputAria": "セッション入力行",
     "textPlaceholder": "文を送信…",
     "textAria": "セッションのターン",
-    "advanced": "上級 · 生の行",
+    "advanced": "生の行",
     "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
     "send": "送信",
     "noOutput": "まだ出力はありません。",

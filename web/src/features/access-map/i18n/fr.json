@@ -188,6 +188,7 @@
       "attributed": "attribuée",
       "approximate": "approximative"
     },
-    "analyse": "Analyser les chemins d'attaque (audité)"
+    "analyse": "Analyser les chemins d'attaque (audité)",
+    "truncated": "Le moteur a plafonné cette analyse : les chemins affichés ne sont pas la réponse complète."
   }
 }

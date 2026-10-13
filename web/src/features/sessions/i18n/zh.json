@@ -130,6 +130,33 @@
     "noProfileRead": "未显示提供方配置名称：你的角色不包含 sessions:profile:read。“实例”列改为显示每行的配置引用。",
     "profileLookupFailed": "未能读取提供方配置名称：配置查询出错。“实例”列改为显示每行的配置引用。"
   },
+  "move": {
+    "open": "移动到…",
+    "title": "移动此会话",
+    "mode": "如何继续",
+    "modeMove": "同一工具，另一个账户",
+    "modeHandoff": "另一个工具，作为新会话",
+    "moveHint": "同一会话将连同其对话在所选账户上继续。不会启动任何内容：之后请恢复它。从现在起适用该账户自己的限额和审批；不会复制任何登录信息。",
+    "handoffHint": "将在所选配置文件中启动一个与本会话关联的新会话，以下方摘要为起点，并附上完整记录。本会话保持不变。",
+    "target": "账户",
+    "pick": "选择账户",
+    "noTargets": "没有其他账户可用于此操作",
+    "summary": "新会话的起始摘要",
+    "loading": "正在生成摘要…",
+    "transcript": "已附记录：{{turns}} 个请求，{{bytes}} 字节。",
+    "confirmMove": "移动",
+    "confirmHandoff": "启动新会话",
+    "moved": "已移动到 {{name}}。恢复它即可继续。",
+    "started": "已根据摘要启动新会话。",
+    "failed": "无法完成该操作。",
+    "stateNotDelivered": "新会话已启动，但其第一条消息未送达。请从该会话发送下面的文本。",
+    "stateUnknown": "新会话已启动，其第一条消息可能已送达。再次发送下面的文本前，请先检查该会话。",
+    "stateWaits": "新会话正在等待审批，其第一条消息不会自动发送。它开始运行后，请发送下面的文本。",
+    "firstTurn": "第一条消息",
+    "close": "关闭",
+    "profilesFailed": "无法列出账户。",
+    "profilesDenied": "你无权列出账户，因此无法选择。"
+  },
   "card": {
     "tabs": {
       "overview": "概览",
@@ -238,7 +265,7 @@
   "runState": {
     "pending": "待启动",
     "running": "运行中",
-    "idle": "运行中",
+    "idle": "空闲",
     "stopped": "已停止",
     "failed": "失败",
     "cleaned": "已清理"
@@ -369,6 +396,7 @@
     "folder": "文件夹",
     "temporaryFolder": "此会话的临时文件夹",
     "panels": "面板",
+    "tabActivity": "活动",
     "tabChanges": "变更",
     "tabFiles": "文件",
     "noFiles": "此会话没有可浏览的文件夹。",
@@ -483,5 +511,56 @@
   "thread": {
     "copyReference": "复制引用",
     "terminalHint": "在终端中操作同一个会话。"
+  },
+  "activity": {
+    "empty": "暂无内容。工具的任务列表、它启动的智能体、在后台运行的工作以及它修改的文件，会在它工作时显示在这里。",
+    "missing": "此会话的记录不在其账户主目录中，因此无法显示其工具所做的事。",
+    "failed": "无法读取活动。",
+    "todos": "计划",
+    "todosCount": "已完成 {{done}}/{{total}}",
+    "todo": {
+      "pending": "待办",
+      "in_progress": "进行中",
+      "completed": "已完成"
+    },
+    "agents": "智能体",
+    "agent": "智能体",
+    "tasks": "后台",
+    "files": "已修改的文件",
+    "fileNew": "新建",
+    "lines": "新增 {{added}} 行，删除 {{removed}} 行",
+    "context": "上下文",
+    "model": "模型",
+    "tokens": "上下文中",
+    "compactions": "压缩",
+    "compactedTimes_other": "已压缩 {{n}} 次",
+    "neverCompacted": "未压缩",
+    "skills": "技能",
+    "mcp": "MCP 服务器",
+    "unreadable_other": "{{n}} 条记录无法读取，未显示。",
+    "countRunning": "{{total}} · {{running}} 个运行中",
+    "state": {
+      "running": "运行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "stopped": "已停止",
+      "scheduled": "已计划"
+    },
+    "kind": {
+      "shell": "Shell 命令",
+      "monitor": "监视器",
+      "workflow": "工作流",
+      "wakeup": "计划唤醒"
+    },
+    "due": "{{time}}",
+    "toolUses_other": "{{n}} 次工具调用",
+    "agentTokens": "{{value}} 个令牌",
+    "agentFailed": "无法读取此智能体的记录。",
+    "role": {
+      "user": "请求",
+      "assistant": "回答",
+      "tool": "工具",
+      "result": "结果"
+    }
   }
 }

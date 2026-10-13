@@ -79,8 +79,8 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 
 # The read/write access map — module III:
 curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
@@ -142,7 +142,7 @@ PY
 ```
 
 现在做一次**真实的首次运行**：在没有默认凭据的情况下启动一次，领取一次性的安装 token，
-并创建一个租户来挂接 connector。
+并使用初始设置创建的组织来连接 connector。
 
 ```bash
 BASE=http://127.0.0.1:8901
@@ -163,9 +163,9 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+# 初始设置已经创建了唯一的组织；请获取其租户 ID。
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 
 kill "$SERVER"                  # stop the first-run server; we restart it with pgAudit wired

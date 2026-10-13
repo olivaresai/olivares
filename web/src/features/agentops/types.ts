@@ -77,6 +77,8 @@ export interface RunDTO {
   /** The branch of the session's own git worktree, when it was launched with the
    * "new worktree" option; absent for a session that works in its folder directly. */
   worktree_branch?: string
+  /** The session this one was handed off from, when a handoff started it. */
+  handoff_of?: string
   /** The workspace template this run was last launched under, if any.*/
   template_id?: string
   /** The vault secrets this session receives as environment variables, by name. */
@@ -222,9 +224,59 @@ export interface ProviderProfileDTO {
    * login, which has no name, and on an engine that does not give names yet. */
   account_name?: string
   session_work_grant?: SessionWorkGrantDTO | null
+  /** The programs every session under this profile gets first on PATH. */
+  session_programs?: string[]
+  /** The npm registries those sessions install from; `secret` names a vault entry,
+   * never a token. */
+  session_registries?: {
+    kind: string
+    url: string
+    scope?: string
+    secret?: string
+  }[]
   created_at?: string
   updated_at?: string
   retired_at?: string
+}
+
+/** What a profile is called: the label it was given, else the name of the account it is
+ * (`claude-b`). Undefined for a profile nobody has named; the caller then falls back to
+ * what suits its place (the reference, the tool). */
+export function profileName(
+  profile: Pick<ProviderProfileDTO, 'display_name' | 'account_name'>,
+): string | undefined {
+  return (
+    profile.display_name?.trim() || profile.account_name?.trim() || undefined
+  )
+}
+
+/** A profile as a person reads it: the name it was given, else its tool and the end of
+ * its reference, so two unnamed accounts of one tool are still told apart. */
+export function profileLabel(
+  profile: Pick<
+    ProviderProfileDTO,
+    'display_name' | 'account_name' | 'driver' | 'profile_ref'
+  >,
+): string {
+  return (
+    profileName(profile) ?? `${profile.driver} ${profile.profile_ref.slice(-6)}`
+  )
+}
+
+/** The ledger names a profile by its opaque reference, because the record is
+ * append-only and an account name can be an email address. Showing it, the console
+ * puts the name the person gave the account in its place; a reference it cannot
+ * resolve (a profile retired or not readable) stays as it is. */
+export function nameProfileRefs(
+  detail: string,
+  names: ReadonlyMap<string, string>,
+): string {
+  return detail.replace(/ppf_[0-9a-f-]{36}/g, (ref) => names.get(ref) ?? ref)
+}
+
+/** The ledger events whose detail names profiles. */
+export function namesProfiles(event: string): boolean {
+  return event === 'moved' || event === 'handed_off'
 }
 
 export type SessionWorkCapability =
@@ -300,6 +352,9 @@ export interface ProfilePreviewDTO {
   /** The tool cannot start on this key without a model, its own default included. Absent on
    * an engine that does not say. */
   model_required?: boolean
+  /** The profile the session would reuse; absent when the launch would create one
+   * (which declares no programs or registries). */
+  profile?: ProviderProfileDTO
 }
 
 /** GET /provider-profiles/readiness: whether a new session can start on each tool the
@@ -314,6 +369,37 @@ export interface ToolReadinessDTO {
   model_required?: boolean
   code?: string
   message?: string
+}
+
+/** One model of a profile's live catalog (GET /provider-profiles/{ref}/models). Every
+ * marker and capability is present only when the tool reports it: an absent one is
+ * unknown, never false. */
+export interface ProfileModelDTO {
+  id: string
+  display_name?: string
+  effort_levels?: string[]
+  default_effort?: string
+  is_default?: boolean
+  is_new?: boolean
+  is_legacy?: boolean
+  supports_fast_mode?: boolean
+  service_tiers?: string[]
+}
+
+/** GET /provider-profiles/{ref}/models: the models and effort levels the installed tool
+ * or the bound provider of one profile reports now. `fresh` is a real answer; `unsupported`
+ * and `failed` leave free text and the tool's own default. An empty `default_model` is the
+ * tool's own default. */
+export interface ProfileModelCatalogDTO {
+  profile_ref: string
+  driver: string
+  state: 'fresh' | 'unsupported' | 'failed'
+  models: ProfileModelDTO[]
+  default_model: string
+  free_text: boolean
+  message?: string
+  checked_at: string
+  refresh_interval_seconds: number
 }
 
 /** POST /provider-profiles/resolve: the same answer, as the profile the session
@@ -414,6 +500,116 @@ export interface CreateAccountRequest {
  * a field: an adopted home is shared by what it is. */
 export interface AdoptAccountRequest {
   name?: string
+}
+
+/** GET …/activity: what a Claude Code session's tool is doing, read by the engine from the
+ * transcript the tool keeps (modules/sessions/session_activity.go). */
+export type ActivityState =
+  'running' | 'completed' | 'failed' | 'stopped' | 'scheduled'
+
+export interface ActivityAgentDTO {
+  tool_use_id: string
+  agent_id?: string
+  type?: string
+  description?: string
+  state: ActivityState
+  background?: boolean
+  started_at?: string
+  ended_at?: string
+  duration_ms?: number
+  tokens?: number
+  tool_uses?: number
+  model?: string
+  summary?: string
+}
+
+export interface ActivityTaskDTO {
+  tool_use_id: string
+  task_id?: string
+  /** shell, monitor, workflow or wakeup. */
+  kind: string
+  description?: string
+  command?: string
+  state: ActivityState
+  started_at?: string
+  ended_at?: string
+  due_at?: string
+  summary?: string
+}
+
+export interface ActivityFileDTO {
+  path: string
+  added: number
+  removed: number
+  created?: boolean
+  edits: number
+  last_at?: string
+}
+
+export interface ActivityTodoDTO {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed' | string
+  active_form?: string
+}
+
+export interface RunActivityDTO {
+  driver: string
+  /** read; pending (not reported or not written yet); missing (it should be there). */
+  transcript: 'read' | 'pending' | 'missing'
+  model?: string
+  effort?: string
+  context_tokens: number
+  compactions: {
+    at?: string
+    trigger?: string
+    pre_tokens?: number
+    post_tokens?: number
+  }[]
+  agents: ActivityAgentDTO[]
+  tasks: ActivityTaskDTO[]
+  files: ActivityFileDTO[]
+  todos: ActivityTodoDTO[]
+  skills: string[]
+  mcp_servers: string[]
+  unreadable?: number
+  updated_at?: string
+}
+
+/** GET …/activity/agents/{agent}: one subagent's transcript in plain turns. */
+export interface ActivityAgentTranscriptDTO {
+  agent_id: string
+  turns: {
+    role: 'user' | 'assistant' | 'tool' | 'result' | string
+    text: string
+  }[]
+  unreadable?: number
+}
+
+/** What GET …/handoff answers: the text a handoff would start from, for review. */
+export interface HandoffPreviewDTO {
+  summary: string
+  source_driver: string
+  /** The requests the conversation holds. */
+  turns: number
+  transcript_bytes: number
+}
+
+/** POST …/handoff. `summary` is the reviewed text; absent, the engine generates it. */
+export interface HandoffRunRequest {
+  provider_profile_ref: string
+  summary?: string
+  name?: string
+}
+
+/** What became of the first turn of a handoff. Only `delivered` is a certainty. */
+export type HandoffSummaryState =
+  'delivered' | 'not_delivered' | 'unknown' | 'waits_for_approval'
+
+/** The new, linked session and what became of its first turn. `first_turn` is the
+ * text the engine would have sent, present only when it did not arrive. */
+export type HandoffRunResult = RunDTO & {
+  summary_state: HandoffSummaryState
+  first_turn?: string
 }
 
 /** One lifecycle-ledger event (GET /runs/{ref}/events), seq-ordered. The PayloadHash
@@ -586,6 +782,30 @@ export interface AttachNotice {
   state?: string
   detail?: string
   io_unavailable?: string
+}
+
+/**
+ * One entry of the "/" menu: a command or skill (both are typed as /name) or an agent,
+ * exactly as the session's tool reports it. `source` is empty when the tool does not say.
+ */
+export interface RunCommandDTO {
+  name: string
+  description: string
+  argument_hint?: string
+  source: '' | 'built-in' | 'user' | 'project' | 'plugin'
+  kind: 'command' | 'agent'
+}
+
+/**
+ * What the session's tool reports it offers (GET /runs/{ref}/commands). `reported` is
+ * false when the tool reported nothing: the session is not live, or its tool is not read yet.
+ * `stale` is true when the last ask of the tool failed and `commands` is what it reported before.
+ */
+export interface RunCommandsDTO {
+  tool: string
+  reported: boolean
+  stale?: boolean
+  commands: RunCommandDTO[]
 }
 
 /** GET /v1/m/sessions/runs/{ref}/changes: files the session changed in its folder. */

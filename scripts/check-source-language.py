@@ -40,6 +40,9 @@ IMMUTABLE_MIGRATIONS = {
     "commercial/license-worker/migrations/0062_commercial_identity_history.sql": (
         "38a33eda4b9be041d5310941ff5d3e849bc7095720fe4759a723c23ec64a98dc",
         "applied migration, immutable; check-migration-hashes.py"),
+    "commercial/license-worker/migrations/0063_commercial_identity_es_origin_and_moves.sql": (
+        "8412796e0f1872384d13d98fddd5a87f51ff4d291f843ff7b725d7068809e002",
+        "applied migration, immutable; check-migration-hashes.py"),
 }
 WORD_DATA = "archivo|archivos|fichero|ficheros|formateador|incumplidor|incumplidores|senuelo|senuelos|probar|juzgar|carril|censo|deuda|salida|fallo|fallan|fallar|arreglado|arreglados|arreglar|anadir|anadido|ninguno|ninguna|ilegible|medida|medidas|falta|faltan|pudo|pude|puedo|cuantos|cuantas|tarea|tareas"  # language-data: vocabulary
 PHRASE_DATA = "por defecto|sin cambios|se puede|no existe|en la|de la|esto es|no he podido mirar"  # language-data: vocabulary

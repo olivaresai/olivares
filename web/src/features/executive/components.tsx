@@ -23,6 +23,8 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 import { cn } from '@/lib/utils'
 
 import { StatusBar, useChartTheme } from '@/components/charts'
@@ -41,6 +43,7 @@ import { formatInt, formatPercent } from '@/lib/format'
 import {
   SEVERITY_ORDER,
   type ComplianceKpi,
+  type DriftKpi,
   type HealthKpi,
   type RiskKpi,
   type UsageKpi,
@@ -546,69 +549,95 @@ export function SeverityRow({
 
 export function RiskSection({
   risk,
+  drift,
+  driftUnavailable,
   robustness,
   description,
 }: {
-  risk: RiskKpi
+  risk: RiskKpi | null
+  drift?: DriftKpi | null
+  /** The drift read failed: say so instead of drawing no card. */
+  driftUnavailable?: boolean
   robustness?: ReactNode
   description?: string
 }) {
+  const panels = useOfferedPanels(PANEL_EXTENSIONS.executiveRiskCards)
   const { t } = useTranslation('executive')
   return (
     <SectionCard
       title={t('risk.title')}
       description={description ?? t('risk.sharedDescription')}
-      actions={<DrillLink to="/security">{t('risk.title')}</DrillLink>}
+      actions={
+        risk ? (
+          <DrillLink to="/security">{t('risk.title')}</DrillLink>
+        ) : undefined
+      }
     >
-      <div
-        className={
-          robustness ? 'grid gap-4 md:grid-cols-3' : 'grid gap-4 md:grid-cols-2'
-        }
-      >
-        {/* findings */}
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-          <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
-            {t('risk.openFindings')}
-          </span>
-          <span className="font-display text-display tabular-nums text-foreground">
-            {formatInt(risk.openFindings)}
-          </span>
-          {risk.openFindings > 0 ? (
-            <SeverityRow bySeverity={risk.bySeverity} />
-          ) : (
-            <span className="text-caption text-muted-foreground">
-              {t('risk.noFindings')}
-            </span>
-          )}
-        </div>
-
+      <div className={'grid gap-4 md:grid-cols-3'}>
+        {risk ? (
+          <>
+            {/* findings */}
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+              <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+                {t('risk.openFindings')}
+              </span>
+              <span className="font-display text-display tabular-nums text-foreground">
+                {formatInt(risk.openFindings)}
+              </span>
+              {risk.openFindings > 0 ? (
+                <SeverityRow bySeverity={risk.bySeverity} />
+              ) : (
+                <span className="text-caption text-muted-foreground">
+                  {t('risk.noFindings')}
+                </span>
+              )}
+            </div>
+          </>
+        ) : null}
         {robustness}
 
         {/* access drift */}
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-          <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
-            {t('risk.drift')}
-          </span>
-          <DriftRow
-            label={t('risk.driftFirm')}
-            value={risk.drift.unexpectedFirm}
-            tone="danger"
-          />
-          <DriftRow
-            label={t('risk.driftPending')}
-            value={risk.drift.unexpectedPending}
-            tone="warning"
-          />
-          <DriftRow
-            label={t('risk.driftUnused')}
-            value={risk.drift.unused}
-            tone="muted"
-          />
-          <DrillLink to="/access-map">{t('risk.drift')}</DrillLink>
-        </div>
+        {drift || driftUnavailable ? (
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+            <span className="text-caption font-medium uppercase tracking-wide text-muted-foreground">
+              {t('risk.drift')}
+            </span>
+            {drift ? (
+              <>
+                <DriftRow
+                  label={t('risk.driftFirm')}
+                  value={drift.unexpectedFirm}
+                  tone="danger"
+                />
+                <DriftRow
+                  label={t('risk.driftPending')}
+                  value={drift.unexpectedPending}
+                  tone="warning"
+                />
+                <DriftRow
+                  label={t('risk.driftUnused')}
+                  value={drift.unused}
+                  tone="muted"
+                />
+              </>
+            ) : (
+              <span role="status" className="text-body text-muted-foreground">
+                {t('risk.driftUnavailable')}
+              </span>
+            )}
+            <DrillLink to="/access-map">{t('risk.drift')}</DrillLink>
+          </div>
+        ) : null}
+
+        {panels.map(({ id, Component }) => (
+          <Component key={id} />
+        ))}
       </div>
-      {risk.coverageLimited > 0 ? (
+      {drift && drift.coverageLimited > 0 ? (
         <CaveatNotice className="mt-4">{t('risk.coverageNote')}</CaveatNotice>
+      ) : null}
+      {drift?.truncated ? (
+        <CaveatNotice className="mt-4">{t('risk.driftTruncated')}</CaveatNotice>
       ) : null}
     </SectionCard>
   )

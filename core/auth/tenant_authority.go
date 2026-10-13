@@ -185,6 +185,63 @@ func (a *Authenticator) OffboardFromTenant(ctx context.Context, as store.AuthSco
 	return a.scopedOffboard(ctx, as, actor, user, t, cause)
 }
 
+// scimLeaverAction is the tenant-ledger action of a SCIM leaver: the name the
+// Identity leaver card reads (GET /v1/audit?action=scim.user.deprovision) and
+// docs/contracts-identity.md publishes.
+const scimLeaverAction = "scim.user.deprovision"
+
+// The causes a SCIM offboard records (membership.offboard and scimLeaverAction):
+// a DELETE, a PATCH active:false and a SET deactivate.
+const (
+	scimDeprovisionCause   = "scim.deprovision"
+	scimDeactivateCause    = "scim.deactivate"
+	scimSetDeactivateCause = "scim.set.deactivate"
+)
+
+// recordSCIMLeaver puts a SCIM offboard that has committed on the TENANT's own
+// chain. scopedOffboard runs in the auth partition, whose events land on the
+// system chain a tenant admin cannot read, so without this the tenant holds no
+// evidence of its own leavers. cause is the offboard's cause, as recorded in
+// membership.offboard. The event carries the cause only: the actor's local
+// provenance (host, uid, pid) stays on the system chain, which a tenant viewer
+// cannot read.
+//
+// The offboard has already committed, so a failure here changes nothing the
+// caller asked for: the published SCIM status codes stay as they were, and the
+// failure is logged with the tenant, the account and the cause. The append is
+// detached from the request's cancellation so an IdP that hangs up after the
+// commit does not lose the record.
+//
+// ponytail: this append follows the auth commit instead of sharing it, because
+// the auth partition is bound to the system tenant and no one transaction spans
+// both chains. A crash or a refused append (a suspended tenant's chain is
+// frozen) leaves membership.offboard on the system chain as the only record,
+// and an IdP retry finds no member, so it cannot repair the tenant ledger.
+// Upgrade trigger: an outbox row written inside the offboard transaction.
+func (a *Authenticator) recordSCIMLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) {
+	err := a.appendSCIMLeaver(context.WithoutCancel(ctx), actor, tenant, user, cause)
+	if err != nil {
+		a.log.Error("auth: SCIM leaver not recorded on the tenant ledger; membership.offboard is on the system chain",
+			"tenant", tenant.String(), "user", user.String(), "cause", cause, "err", err)
+	}
+}
+
+func (a *Authenticator) appendSCIMLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) error {
+	// Fail closed on an unattributable principal, as metaAudit does.
+	subject, err := actor.AttributableActor()
+	if err != nil {
+		return err
+	}
+	return a.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		_, err := sc.Audit().Append(ctx, model.AuditDraft{
+			Actor: subject, ActorKind: actor.ActorKind(),
+			Action: scimLeaverAction, TargetKind: "core.user", TargetID: user,
+			Meta: map[string]any{"cause": cause},
+		})
+		return err
+	})
+}
+
 // removeTenantGroupRows deletes the account's rows in t's groups. A stale row
 // grants nothing without a membership, but it would re-elevate the account the
 // moment a membership reappeared. Groups of other tenants are untouched.

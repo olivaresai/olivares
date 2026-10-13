@@ -59,6 +59,22 @@ describe('CodeLine', () => {
     )
   })
 
+  // A sentence is a paragraph: the inline chip sits inside a <p>, so its root must be phrasing
+  // content. A div there is invalid HTML and React reports it.
+  it('keeps the inline form valid inside a paragraph', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = render(
+      <p>
+        Run <CodeLine inline command="olivares version" /> to see it.
+      </p>,
+    )
+    expect(container.querySelector('[data-inline="true"]')!.tagName).toBe(
+      'SPAN',
+    )
+    expect(error).not.toHaveBeenCalled()
+    error.mockRestore()
+  })
+
   it('has an inline form for a sentence, with the same copy button', () => {
     const { container } = render(
       <CodeLine inline command="olivares session start" />,

@@ -799,6 +799,20 @@ regexes = [
   regexTarget = "match"
   regexes = ['''^Olivares-Connect-New-Key-Proof": "oQ4kdmdnB_Gi2fhgBHh58xEB1ApsBu-OT2nKiMyzv-0SRCxj-2UEMRVNYWdAeX6Sa1U6uO62J5btnULWNdexCg"$''']
 
+# The license Worker's retained-capture pin lists the SHA-256 of each retained Dodo capture by its
+# path. One capture's file name contains `secreto` ("secret" in Spanish), so `generic-api-key`
+# reads the 64-hex digest after it as a key. The value is the digest OF a public evidence file in
+# commercial/dodo-sandbox/evidence, and test/retained-capture-language.test.ts recomputes it. The
+# entry is anchored to the whole captured match on this one file: another value, another key or
+# another file is still a finding.
+[[allowlists]]
+  description = "license Worker retained-capture pin: SHA-256 of the evidence file whose name contains 'secreto', not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^commercial/license-worker/test/testdata/retained-capture-hashes\.json$''']
+  regexTarget = "match"
+  regexes = ['''^001-paridad-secreto-sandbox\.json": "da645b48ced630c88fcb490dd3ee9bb77649e83372c40a1c8215a4d4cfa9ea2f"$''']
+
 # Same vector, TypeScript Worker side. A separate block, not a second `paths` entry: with
 # `condition = "AND"` every listed term is mandatory, so two paths in one block can never both
 # hold for a single finding and the exemption would silently never apply. Measured here before
@@ -1027,3 +1041,19 @@ regexes = [
   ]
 
 # End exact fixtures.
+
+# The Community WIF refusal test formerly used a JWT-shaped local exchange witness.
+# Its payload names probe-workload; the signature decodes to the literal
+# probe-signature (15 bytes), not an RSA signature. It authorizes nothing.
+# The test requires an explicit refusal, an empty token, and zero HTTP calls.
+# The current test builds it from its public claims and fake signature.
+# Exempt only its immutable introduction: rule AND commit AND path AND value.
+# Current source, later commits, other paths and other rules remain findings.
+[[allowlists]]
+  description = "Community WIF refusal history: exact synthetic exchange witness in its introduction only"
+  targetRules = ["jwt"]
+  condition = "AND"
+  commits = ["5a9cc9965854f15f1c52f2b20663ac78fba4a2f4"]
+  paths = ['''^connectors/claude-wif/wif_unavailable_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^eyJhbGciOiJSUzI1NiJ9\.eyJzdWIiOiJwcm9iZS13b3JrbG9hZCJ9\.cHJvYmUtc2lnbmF0dXJl$''']

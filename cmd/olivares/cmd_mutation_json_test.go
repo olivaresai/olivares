@@ -22,7 +22,6 @@ func TestDestructiveBootstrapCommandsHonorJSONOutput(t *testing.T) {
 	}{
 		{"token", []string{"tokens", "revoke", "item-1"}, "/v1/tokens/item-1", "revoked API token item-1\n", "revoked"},
 		{"invitation", []string{"members", "invites", "revoke", "item-1"}, "/v1/invites/item-1", "revoked invitation item-1\n", "revoked"},
-		{"tenant", []string{"tenants", "rm", "item-1"}, "/v1/system/orgs/item-1", "deleted tenant item-1\n", "deleted"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			requests := 0

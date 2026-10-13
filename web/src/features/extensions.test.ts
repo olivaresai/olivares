@@ -7,6 +7,7 @@ import {
   ANONYMOUS_FEATURE_EXTENSIONS,
   EXTENSION_ROUTES,
   FEATURE_EXTENSIONS,
+  LAUNCH_IDENTITY_EXTENSION,
   PANEL_EXTENSIONS,
 } from './extensions'
 
@@ -19,11 +20,14 @@ describe('default console extensions', () => {
   })
 
   it('contains no panel inside a public page', () => {
+    expect(LAUNCH_IDENTITY_EXTENSION).toBeUndefined()
     expect(PANEL_EXTENSIONS).toEqual({
+      identityTabs: [],
+      governanceTabs: [],
+      executiveRiskCards: [],
       identityLoginCards: [],
       identityStepUpMethods: [],
       sessionPanels: [],
-      governanceTabs: [],
       capabilitiesTabs: [],
       complianceTabs: [],
       reportingCards: [],

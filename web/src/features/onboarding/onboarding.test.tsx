@@ -121,6 +121,17 @@ beforeEach(() => {
       ),
     ),
   )
+  // The New session dialog also waits for the account list and the profiles behind it
+  // (useProfileList); with them unstubbed it stays on its spinner. A fresh install has
+  // no named accounts and no profiles.
+  vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
 })
 
 describe('the setup wizard', () => {

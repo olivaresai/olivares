@@ -42,6 +42,7 @@ vi.mock('@/features/dictation/recognizer', () => ({
   transcribe: vi.fn().mockResolvedValue('and run the tests.'),
 }))
 
+import { transcribe } from '@/features/dictation/recognizer'
 import { WorkComposer } from '@/components/layout/work-composer'
 
 const RUNNING: RunDTO = {
@@ -80,6 +81,28 @@ describe('dictation in the composer', () => {
     expect(field).toHaveFocus()
     expect(api.inputText).not.toHaveBeenCalled()
     expect(api.input).not.toHaveBeenCalled()
+  })
+
+  it('keeps what is typed while the words are being transcribed', async () => {
+    let finish: (text: string) => void = () => {}
+    vi.mocked(transcribe).mockImplementationOnce(
+      () => new Promise<string>((resolve) => (finish = resolve)),
+    )
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const field = await screen.findByTestId('launcher-input')
+    await user.type(field, 'Fix the build')
+    const dictate = screen.getByRole('button', { name: 'Dictate' })
+    await user.click(dictate)
+    await waitFor(() => expect(dictate).toHaveAttribute('aria-pressed', 'true'))
+    await user.click(dictate)
+
+    // The person goes on typing while the recognizer works.
+    await user.type(field, ' now')
+    finish('and run the tests.')
+    await waitFor(() =>
+      expect(field).toHaveValue('Fix the build now and run the tests.'),
+    )
   })
 
   it('cannot dictate into a session that cannot take a turn', async () => {

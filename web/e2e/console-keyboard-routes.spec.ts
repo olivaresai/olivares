@@ -16,6 +16,9 @@
 // actually runs, against `serve --insecure --seed-demo`.
 import { expect, test, type Page } from '@playwright/test'
 import { rawKeyProbe } from './raw-i18n'
+import { browserSessionHeaders, type BrowserSession } from './browser-session'
+
+test.use({ trace: 'off' })
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
@@ -67,7 +70,7 @@ const ROUTE_IDENTIFIERS: Record<string, readonly string[]> = {
   '/alerting': ['finding.reported', 'approval.requested', 'approval.resolved'],
 }
 
-async function signIn(page: Page) {
+async function signIn(page: Page): Promise<BrowserSession> {
   await page.goto('/login')
   // Fail closed: no password box means this is not the seeded engine, and every
   // assertion after this point would grade the wrong page.
@@ -83,13 +86,17 @@ async function signIn(page: Page) {
       response.request().method() === 'POST',
   )
   await page.locator('button[type=submit]').first().click()
+  const response = await login
   expect(
-    (await login).status(),
+    response.status(),
     'demo sign-in must succeed before inspecting routes',
   ).toBe(200)
+  const session = (await response.json()) as BrowserSession
+  browserSessionHeaders(session, demoTenant)
   await page.waitForURL((url) => !url.pathname.startsWith('/login'), {
     timeout: 20_000,
   })
+  return session
 }
 
 test('raw-key probe catches untranslated text and links', async ({ page }) => {

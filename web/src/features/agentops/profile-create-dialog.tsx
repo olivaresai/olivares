@@ -41,7 +41,7 @@ const DRIVERS: [string, string][] = [
   ['gemini-cli', 'Gemini CLI'],
 ]
 const selectClass =
-  'h-9 w-full min-w-0 rounded-md border border-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'h-9 w-full min-w-0 rounded-md border border-ctl-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 // The tool's own login, kept in its own folders, unless the operator picks otherwise.
 const DEFAULT_AUTHENTICATION = { source: 'provider_account_home', provider: '' }
 

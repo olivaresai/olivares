@@ -45,7 +45,7 @@ name: olivares
 services:
   olivares:
     # release
-    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.1}
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.2}
     # /release
     # A FIXED NAME, so the documented next step is one argv an operator can type:
     #   docker exec olivares olivares first-boot

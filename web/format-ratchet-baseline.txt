@@ -3,44 +3,5 @@
 # estrecho anterior tapaba diez ficheros de e2e/, e2e-visual/, un .md y un .html.
 # Medida el 2026-08-15 contra origin/main. NO se sube para acomodar un fichero nuevo:
 # sólo BAJA, según se van formateando. scripts/format-ratchet.sh la aplica.
-README.md
-e2e-visual/at-run.ts
-e2e-visual/compliance-governance.spec.ts
-e2e/foundation.spec.ts
-e2e/onboarding-first-hour.spec.ts
-e2e/sessions-unified.spec.ts
-index.html
-src/features/access-map/authority.test.ts
-src/features/access-map/legend.tsx
-src/features/access-map/types.ts
-src/features/audit/export-format.test.ts
-src/features/backups/step-up-residue.test.ts
-src/features/claude-policy/pdp-lifecycle.test.tsx
-src/features/claude-policy/schema/hooks.ts
-src/features/claude-policy/schema/index.ts
-src/features/claude-policy/types.ts
-src/features/governance/agentcore-export.test.tsx
-src/features/governance/routine-policies.test.tsx
-src/features/governance/step-up-policy.test.tsx
-src/features/health/status-page.test.tsx
 src/features/identity/identity-deeplink.test.tsx
-src/features/identity/wif/wif-lint.test.ts
-src/features/identity/wif/wif-lint.ts
-src/features/killswitch/types.ts
-src/features/observability/types.ts
-src/features/onboarding/onboarding-dismissed.test.tsx
-src/features/platforms/fixtures.ts
-src/features/platforms/platforms.test.tsx
-src/features/recordings/recordings.test.tsx
-src/features/redteam/types.ts
-src/features/route-census.test.ts
-src/features/route-census.ts
-src/features/sandbox/fixtures.ts
-src/features/sandbox/stream.test.tsx
-src/features/sandbox/types.ts
-src/features/saved-views/saved-views.test.tsx
-src/features/security/security.test.tsx
-src/features/team-costs/cost-sparkline.tsx
-src/features/workspace-templates/templates.test.tsx
-src/security/trusted-types.test.ts
 src/styles/selection-indicator.test.ts

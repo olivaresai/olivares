@@ -75,8 +75,6 @@
     "session-viewer": "Session viewer",
     "backups": "Backups",
     "logs": "Logs",
-    "residency": "Data residency",
-    "tenants": "Tenants",
     "inferenceProxy": "Inference proxy",
     "alerting": "Alerting",
     "agentcoreExport": "AgentCore export",
@@ -148,8 +146,6 @@
     "audit": "Tamper-evident evidence ledger",
     "workspaceDashboard": "Agents, sessions, resources and activity scoped to one workspace",
     "settings": "Workspace and account settings",
-    "residency": "Pin each org to a region, or leave it unpinned",
-    "tenants": "Withdraw or restore a tenant's service",
     "inferenceProxy": "Proxy gates, egress DLP rules and device approvals",
     "alerting": "Route findings to destinations and inspect deliveries",
     "reporting": "Generate and download governance reports",
@@ -331,13 +327,32 @@
     "turnPlaceholder": "Send a sentence…",
     "turnAria": "Session turn",
     "attachedWaiting": "Needs you",
-    "advanced": "Advanced",
+    "rawLine": "Raw line",
     "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
     "wirePlaceholder": "Send an NDJSON line to stdin…",
     "wireAria": "Session input line",
     "turnFailed": "The session could not accept this turn.",
     "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence.",
-    "messagePlaceholder": "Message {{title}}…"
+    "messagePlaceholder": "Message {{title}}…",
+    "slashLabel": "Commands and skills",
+    "slashOption": "{{name}}, {{i}} of {{n}}",
+    "slashNoMatch": "No command matches “{{query}}”.",
+    "slash": {
+      "loading": "Reading the tool's commands…",
+      "failed": "The tool's commands could not be read.",
+      "unreported": "This tool reported no commands for the session.",
+      "stale": "The tool's commands could not be refreshed; this list may be out of date.",
+      "agent": "Agent",
+      "source": {
+        "built-in": "Built-in",
+        "user": "User",
+        "project": "Project",
+        "plugin": "Plugin"
+      }
+    },
+    "modelAria": "Model and effort of this session: {{value}}",
+    "sessionKeeps": "This session keeps {{value}}. A different model or effort starts a new session.",
+    "startWithChoice": "Start a new session with this choice"
   },
   "shell": {
     "journeysLabel": "Journeys",

@@ -88,31 +88,6 @@ type passwordCredential struct {
 	EndDateTime string `json:"endDateTime"`
 }
 
-// blueprintPrincipal is the slice of microsoft.graph.agentIdentityBlueprintPrincipal
-// (a servicePrincipal subtype) the connector reads. It is the principal that
-// holds the credential shared by ALL the blueprint's agents.
-// Verified against learn.microsoft.com on 2026-06-11:
-// /v1.0/servicePrincipals/microsoft.graph.agentIdentityBlueprintPrincipal.
-type blueprintPrincipal struct {
-	ID             string `json:"id"`
-	AppID          string `json:"appId"`
-	DisplayName    string `json:"displayName"`
-	AccountEnabled bool   `json:"accountEnabled"`
-}
-
-// agentUser is the microsoft.graph.agentUser OData cast under users. It is a
-// user subtype linked 1:1 to the parent agentIdentity by identityParentId.
-// Verified against learn.microsoft.com on 2026-07-04:
-// /v1.0/users/microsoft.graph.agentUser.
-type agentUser struct {
-	ID                string `json:"id"`
-	DisplayName       string `json:"displayName"`
-	AccountEnabled    bool   `json:"accountEnabled"`
-	IdentityParentID  string `json:"identityParentId"`
-	UserPrincipalName string `json:"userPrincipalName"`
-	CreatedDateTime   string `json:"createdDateTime"`
-}
-
 // directoryObjectPage is one page of an owners/sponsors relationship listing:
 // heterogeneous directoryObject rows discriminated by "@odata.type".
 // Verified against learn.microsoft.com on 2026-06-11:

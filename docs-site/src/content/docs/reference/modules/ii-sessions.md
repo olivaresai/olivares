@@ -13,7 +13,7 @@ and a reconstructable timeline. Where module I (inventory) materializes the dura
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
 
-Olivares <!-- release -->0.1<!-- /release --> also **launches** official provider CLIs as owned children under a
+Olivares <!-- release -->0.2<!-- /release --> also **launches** official provider CLIs as owned children under a
 [provider profile](/how-to/operate-provider-sessions/). That managed path is
 the same module. It does not replace the overlay, and it does not merge two
 homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).

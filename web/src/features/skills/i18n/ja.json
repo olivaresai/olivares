@@ -10,7 +10,7 @@
     "retired": "廃止",
     "search": "パックを検索",
     "emptyTitle": "スキルパックがインストールされていません",
-    "emptyDescription": "olivares skills install でパックをインストールすると、ここに表示され割り当てられます。",
+    "emptyDescription": "上で組み込みパックを選ぶか Git からインストールし、パックを開いて割り当てを管理します。",
     "truncated": "最初の {{n}} 件のパックを表示しています",
     "truncatedHint": "残りは olivares skills ls --cursor で一覧表示します。"
   },
@@ -18,14 +18,16 @@
     "skills": "このパックのスキル",
     "revisions": "リビジョン",
     "revision": "リビジョン {{n}}",
-    "revisionLine": "リビジョン {{n}}（{{source}}）"
+    "revisionLine": "リビジョン {{n}}（{{source}}）",
+    "activeContent": "読み込み時に動作: {{items}}"
   },
   "kind": {
     "workspace": "部門",
     "agent_group": "エージェントグループ",
     "agent": "エージェント",
     "template": "テンプレート",
-    "session": "セッション"
+    "session": "セッション",
+    "folder": "フォルダー"
   },
   "uses": {
     "title": "割り当て先",
@@ -36,7 +38,13 @@
     "confirmDescription": "{{target}} の新しいセッションはこれらのスキルを受け取らなくなります。記録済みの会話はそのスナップショットを保持します。",
     "truncated": "最初の {{n}} 件の割り当てを表示しています",
     "truncatedHint": "残りは olivares skills assignments --pack と --cursor で一覧表示します。",
-    "unassignFrom": "{{target}} への割り当てを解除"
+    "unassignFrom": "{{target}} への割り当てを解除",
+    "useLatest": "最新を使用",
+    "useLatestFor": "最新を使用: {{target}}",
+    "moved": "割り当てを最新のリビジョンへ移しました",
+    "approveTitle": "読み込み時に動作するスキルを承認しますか？",
+    "approveDescription": "最新のリビジョンは、ツールが確認なしに動作させるスキルを {{target}} に割り当てます: {{skills}}。確認したうえで承認してください。",
+    "approve": "承認して最新を使用"
   },
   "assign": {
     "title": "割り当て",
@@ -47,6 +55,51 @@
     "noTargets": "閲覧できるこの種類の対象はありません。",
     "submit": "割り当て",
     "done": "スキルパックを割り当てました",
-    "directoryFailed": "対象を読み込めませんでした。パックを閉じて開き直し、再試行してください。"
+    "directoryFailed": "対象を読み込めませんでした。パックを閉じて開き直し、再試行してください。",
+    "approve": "これらのスキルを確認し、読み込み時にツールが動作させることを承認します: {{skills}}"
+  },
+  "install": {
+    "title": "スキルパックをインストール",
+    "workspace": "ワークスペース",
+    "workspaceHint": "カタログにのみインストールするか、リビジョンをワークスペースにも割り当てます。",
+    "catalogOnly": "カタログのみ",
+    "assigned": "スキルパックをインストールして割り当てました",
+    "done": "スキルパックをインストールしました",
+    "assignmentFailed": "インストール済みですが、割り当てに失敗しました: {{reason}}",
+    "failed": "インストールに失敗しました: {{reason}}",
+    "unavailable": "サービスを利用できません",
+    "retryAssignment": "割り当てを再試行",
+    "retry": "インストールを再試行",
+    "builtins": "組み込みパック",
+    "loading": "組み込みパックを読み込み中…",
+    "pack": "{{name}} をインストール",
+    "inCatalog": "カタログに登録済み",
+    "submit": "インストール",
+    "git": "Git から",
+    "gitURL": "Git URL",
+    "ref": "Git 参照",
+    "subdir": "サブディレクトリ",
+    "gitSubmit": "Git からインストール",
+    "name": "パック名",
+    "nameHint": "任意。既定はリポジトリ名です。同じリポジトリの別のパックには異なる名前を指定してください。",
+    "held": "スキルパックをインストールしました。読み込み時に動作するスキルを含むため割り当てていません。内容を確認し、パックの画面から割り当ててください。"
+  },
+  "update": {
+    "title": "更新",
+    "check": "更新を確認",
+    "checking": "確認中…",
+    "current": "リビジョン {{n}} で最新です。",
+    "availableToast": "更新があります",
+    "available": "リビジョン {{n}} の上に更新があります。",
+    "summary": "追加 {{added}}、変更 {{changed}}、削除 {{removed}}。差分のあるファイル: {{files}}。",
+    "change": {
+      "added": "追加",
+      "changed": "変更",
+      "removed": "削除"
+    },
+    "acts": "{{skill}} は読み込み時に動作するようになりました: {{items}}。割り当てには承認が必要です。",
+    "pinsKeep": "既存の割り当ては、「最新を使用」で一つずつ移すまで現在のリビジョンのままです。",
+    "apply": "この更新を適用",
+    "applied": "リビジョン {{n}} として更新を公開しました"
   }
 }

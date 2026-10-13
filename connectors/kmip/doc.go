@@ -35,4 +35,7 @@
 //
 // It imports only the SDK, the Apache identitysource/tlsx helpers and the standard
 // library — never the engine (/core).
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package kmip

@@ -19,7 +19,8 @@ import "context"
 // A nil transmitter is the default: any caller must guard on non-nil before calling
 // EmitAgentRisk, so the community binary never reaches this code path (no rug-pull).
 // The receiver (the security piece: revoking access on an incoming CAEP/RISC signal)
-// is open-core (core/auth/caep_events.go) and is unaffected by this seam.
+// belongs to Business Identity & Scale. Its stored configuration and shared safety
+// primitives remain in core/auth; Community refuses the receiver with HTTP 501.
 
 // caepTransmitter emits CAEP agent-risk events to external SSF receivers.
 // The enterprise build (caeptransmit_enterprise.go) wires a real implementation;

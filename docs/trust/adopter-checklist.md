@@ -16,6 +16,10 @@ Start the timer immediately before the first build command. Stop it after the au
 verification succeeds. Record wall-clock time, including operator actions and any
 investigation needed to complete a milestone.
 
+The graph and drift milestone below runs on the Community binary that public `task build`
+produces at `./bin/olivares`. Record the edition with the result; an unavailable graph is
+not an empty assessed graph.
+
 ## Milestone record
 
 | Complete | Milestone | Started at | Completed at | Measured time |
@@ -63,8 +67,8 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 ```
 
 - [ ] Retrieve the read/write access map and the permitted-versus-observed drift.

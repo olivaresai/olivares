@@ -15,7 +15,7 @@ func TestOperationDocumentationRequiredFields(t *testing.T) {
 		required []string
 	}{
 		{"/ollama/start", nil},
-		{"/plans", []string{"driver", "version"}},
+		{"/plans", []string{"version"}},
 		{"/sign-in", []string{"driver", "tenant_id"}},
 	} {
 		t.Run(tt.pattern, func(t *testing.T) {

@@ -23,7 +23,7 @@ const geminiSettingsMaxBytes = 1 << 20
 // geminiHomeRefusal is the launch-time check of a Gemini CLI profile's home.
 //
 // The configuration home must be named .gemini, because the CLI reads
-// <GEMINI_CLI_HOME>/.gemini and the launch sets GEMINI_CLI_HOME to its parent: any
+// <GEMINI_CLI_HOME>/.gemini and the initial launch sets GEMINI_CLI_HOME to its parent: any
 // other name would leave the child reading a directory nobody validated.
 //
 // The home must also pre-approve nothing. A user-level `tools.allowed` or a policy

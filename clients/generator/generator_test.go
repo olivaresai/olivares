@@ -126,6 +126,27 @@ func TestPathExprs(t *testing.T) {
 	}
 }
 
+func TestPythonPerCallHeaders(t *testing.T) {
+	for _, op := range []Operation{
+		{Method: "GET", Path: "/test/{headers}/{headers_path}", PathParams: []string{"headers", "headers_path"}},
+		{Method: "POST", Path: "/test", HasBody: true, BodyRequired: true, RequestBodyDisposition: "schema-published"},
+		{Method: "GET", Path: "/test", RawBody: true},
+		{Method: "PUT", Path: "/test", HasBody: true, RawReqBody: true, RequestContentType: "application/octet-stream"},
+	} {
+		t.Run(op.Method+op.Path, func(t *testing.T) {
+			source := string(emitPython(&Document{Operations: []Operation{op}}))
+			if !strings.Contains(source, "tenant=None, headers=None, **query") || !strings.Contains(source, "query=query, headers=headers, tenant=tenant)") {
+				t.Fatalf("operation must forward headers separately from query:\n%s", source)
+			}
+			if len(op.PathParams) > 0 {
+				if !strings.Contains(source, "self, headers_path_path, headers_path,") || !strings.Contains(source, `quote(str(headers_path_path), safe="")`) {
+					t.Fatalf("header transport option collides with path parameters:\n%s", source)
+				}
+			}
+		})
+	}
+}
+
 func TestGenerateFixture(t *testing.T) {
 	spec := writeFixture(t)
 	out := t.TempDir()
@@ -165,11 +186,11 @@ func TestGenerateFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"def get_v1_widgets(self, *, tenant=None, **query):",
-		"def patch_v1_widgets_by_id(self, id, body=None, *, tenant=None, **query):",
-		`return self._do("PATCH", "/v1/widgets/{id}", "/v1/widgets/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)`,
-		`return self._do_raw("GET", "/textish", "/textish", query=query, tenant=tenant)`,
-		`return self._do_raw("POST", "/archive", "/archive", query=query, tenant=tenant)`,
+		"def get_v1_widgets(self, *, tenant=None, headers=None, **query):",
+		"def patch_v1_widgets_by_id(self, id, body=None, *, tenant=None, headers=None, **query):",
+		`return self._do("PATCH", "/v1/widgets/{id}", "/v1/widgets/" + quote(str(id), safe=""), body=body, query=query, headers=headers, tenant=tenant)`,
+		`return self._do_raw("GET", "/textish", "/textish", query=query, headers=headers, tenant=tenant)`,
+		`return self._do_raw("POST", "/archive", "/archive", query=query, headers=headers, tenant=tenant)`,
 		`.. deprecated:: deprecated since 2026-06-01T00:00:00Z`,
 		`API_VERSION = "v1"`,
 	} {
@@ -1319,12 +1340,12 @@ func TestGenerateUnion(t *testing.T) {
 		`body=body, raw_request_content_type="application/octet-stream",`,
 		`body=body, raw_request_content_type="application/x-ndjson",`,
 		`body=body, raw_request_content_type="application/json",`,
-		"def post_v1_m_compliance_oscal_profiles(self, body, *, tenant=None, **query):",
-		"def post_v1_m_test_optional(self, body=None, *, tenant=None, **query):",
-		"def post_v1_m_test_required(self, body, *, tenant=None, **query):",
-		`return self._do_json_required("POST", "/v1/m/test/required", "/v1/m/test/required", body=body, query=query, tenant=tenant)`,
-		`return self._do("POST", "/v1/m/test/optional", "/v1/m/test/optional", body=body, query=query, tenant=tenant)`,
-		"def post_v1_m_finops_recalculate(self, *, tenant=None, **query):",
+		"def post_v1_m_compliance_oscal_profiles(self, body, *, tenant=None, headers=None, **query):",
+		"def post_v1_m_test_optional(self, body=None, *, tenant=None, headers=None, **query):",
+		"def post_v1_m_test_required(self, body, *, tenant=None, headers=None, **query):",
+		`return self._do_json_required("POST", "/v1/m/test/required", "/v1/m/test/required", body=body, query=query, headers=headers, tenant=tenant)`,
+		`return self._do("POST", "/v1/m/test/optional", "/v1/m/test/optional", body=body, query=query, headers=headers, tenant=tenant)`,
+		"def post_v1_m_finops_recalculate(self, *, tenant=None, headers=None, **query):",
 	} {
 		if !strings.Contains(py, want) {
 			t.Errorf("union Python missing %q", want)
@@ -2104,10 +2125,10 @@ func TestStatementExportCSVGeneratesRawSeams(t *testing.T) {
 			lang: "Python", file: filepath.Join("python", "src", "olivares_client", "_operations.py"),
 			rawSeam: "self._do_raw(", jsonSeam: []string{"self._do(", "self._do_json_required("},
 			want: []string{
-				"def get_v1_m_finops_statements_by_id_export(self, id, *, tenant=None, **query):",
-				`return self._do_raw("GET", "/v1/m/finops/statements/{id}/export", "/v1/m/finops/statements/" + quote(str(id), safe="") + "/export", query=query, tenant=tenant)`,
+				"def get_v1_m_finops_statements_by_id_export(self, id, *, tenant=None, headers=None, **query):",
+				`return self._do_raw("GET", "/v1/m/finops/statements/{id}/export", "/v1/m/finops/statements/" + quote(str(id), safe="") + "/export", query=query, headers=headers, tenant=tenant)`,
 			},
-			sibling: `return self._do("GET", "/v1/m/finops/statements/{id}", "/v1/m/finops/statements/" + quote(str(id), safe=""), query=query, tenant=tenant)`,
+			sibling: `return self._do("GET", "/v1/m/finops/statements/{id}", "/v1/m/finops/statements/" + quote(str(id), safe=""), query=query, headers=headers, tenant=tenant)`,
 		},
 		{
 			lang: "TypeScript", file: filepath.Join("typescript", "src", "operations.gen.ts"),

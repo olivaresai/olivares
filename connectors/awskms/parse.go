@@ -205,45 +205,6 @@ func resolveSecretResources(r record) []resource {
 	return nil
 }
 
-// store identifies a secret-manager custodian for the inventory: an
-// AWS KMS or Secrets Manager scope in one account+region. It is derived from the
-// ARNs seen in the export, never invented.
-type store struct {
-	service string // "kms" | "secretsmanager"
-	account string
-	region  string
-}
-
-// ref is the stable external id the roster converges on.
-func (s store) ref() string { return "aws." + s.service + ":" + s.account + ":" + s.region }
-
-func (s store) displayName() string {
-	switch s.service {
-	case "kms":
-		return "AWS KMS (" + s.account + "/" + s.region + ")"
-	default:
-		return "AWS Secrets Manager (" + s.account + "/" + s.region + ")"
-	}
-}
-
-// storeFromARN parses the account+region+service out of a KMS key ARN or a Secrets
-// Manager secret ARN. ARN form: arn:partition:service:region:account:resource.
-// ok=false for a non-ARN reference (a bare key id or alias has no account/region).
-func storeFromARN(arn string) (store, bool) {
-	if !strings.HasPrefix(arn, "arn:") {
-		return store{}, false
-	}
-	parts := strings.SplitN(arn, ":", 6)
-	if len(parts) < 6 {
-		return store{}, false
-	}
-	service := parts[2]
-	if service != "kms" && service != "secretsmanager" {
-		return store{}, false
-	}
-	return store{service: service, region: parts[3], account: parts[4]}, true
-}
-
 // awsTimeLayouts are the timestamp formats CloudTrail emits in eventTime.
 var awsTimeLayouts = []string{time.RFC3339, time.RFC3339Nano}
 

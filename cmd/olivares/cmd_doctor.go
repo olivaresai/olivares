@@ -431,6 +431,9 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorLicenseCheck(o.dataDir))
 	add(doctorActivationSourceCheck(o.dataDir))
 	add(doctorTracingOverridesCheck())
+	for _, check := range doctorToolVersionOverrides(deps.getenv) {
+		add(check)
+	}
 	add(doctorBackgroundJobsCheck(ctx, deps, o, ca))
 	add(doctorAuditCheck(ctx, deps, o))
 	add(doctorChannelCheck(ctx, deps, o))

@@ -2,36 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// API for the identity & NHI admin console. ARCHITECTURE.md — presentation over
-// the SAME API; no server logic here.
-//
-// CONTRACT PROVENANCE (honest):
-//  • REAL today:
-//      - SSO federation start/callback (501 sso_not_configured when unconfigured) —
-//      - SCIM 2.0 ServiceProviderConfig + Users — (/v1/scim/v2)
-//      - NHI roster identities + groups — (/v1/m/governance)
-//      - security/governance Findings (iam_posture, governance/anthropic.federation
-//        footgun, mcp_auth) — (/v1/m/security/findings)
-//      - audit ledger (leaver evidence) — core (/v1/audit)
-//  • LIVE (flipped from a declared seam in):
-//      - WIF object graph — GET /v1/m/identity/wif, served by modules/governance
-//        (identityconsole.go). Read-only + self-audited; always 200 (an empty
-//        federation returns empty arrays, never a seam). The Go WIFGraph mirrors the
-//        WifGraphData shape 1:1.
-//  • LIVE (flipped from a declared seam in after a browser walk caught the panel
-//    calling routes the engine never mounted):
-//      - SSO connection-state summary — GET /v1/m/identity/sso
-//      - External Keys / CMEK inventory — GET /v1/m/identity/external-keys
-//      - Workspace data-residency posture — GET /v1/m/identity/residency
-//    All three are served by modules/governance (identitysso.go, identityposture.go),
-//    read-only and self-audited, and answer 200 with `available`/`reason` rather than
-//    404 when the upstream Admin credential is not provisioned — a mounted route that
-//    says "not wired" is an answer; a 404 is a defect.
-//  • DECLARED (wired to a route that today 404/501s → honest pending seam):
-//      - cert-manager TLS + crypto/PQC inventory (did NOT build these) and the
-//        WebAuthn/PIV privileged-login ceremony (no backend — Declared seam).
-//        Both are registered in scripts/console-route-seams.json with their reason,
-//        which is what keeps the class check green without hiding them.
+// Published identity transport contracts. Directory inventory, federation graphs,
+// lifecycle inventory and posture are Business capabilities; Community keeps these
+// thin clients for compatibility and the server answers 501. Local sign-in, passkeys,
+// TOTP and inbound SCIM use the same contracts in both editions.
 import { http } from '@/lib/api'
 import type { RequestOptions } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
@@ -185,13 +159,22 @@ export const identityApi = {
     }),
 
   // --- REAL: audit ledger (leaver evidence) ----------------------------------
-  audit: (params?: { action?: string; cursor?: string; limit?: number }) =>
-    http.get<ListResponse<AuditEntry>>(AUDIT, { query: { ...params } }),
+  /** One page of the ledger from sequence `from` (default 1), ASCENDING: the ledger has no
+   *  cursor and no newest-first order, so the newest events are on the last page. A full
+   *  page answers `has_more` with `next_from`, the `from` of the next one. */
+  audit: (
+    params?: { action?: string; from?: number; limit?: number },
+    opts?: Pick<RequestOptions, 'signal'>,
+  ) =>
+    http.get<ListResponse<AuditEntry> & { next_from?: number }>(AUDIT, {
+      query: { ...params },
+      signal: opts?.signal,
+    }),
 
-  // --- LIVE: WIF object graph (ANT2-08/07; flipped in) ------------------
+  // --- Business: WIF object graph -----------------------------------------
   /** The rich fdis_/fdrl_/svac_ objects (CEL/lifetime/scope/jwks/subject) the linter
    *  renders over. Served by GET /v1/m/identity/wif (modules/governance) — always
-   *  200, self-audited; an empty federation returns empty arrays, never a seam. */
+   *  self-audited in Business; Community returns an explicit 501 edition seam. */
   wifGraph: () => http.get<WifGraphData>(`${IDENTITY}/wif`),
 
   // --- DECLARED: posture (ANT2-04/06 via via) ---------

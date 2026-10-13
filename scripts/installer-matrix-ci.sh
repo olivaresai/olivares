@@ -4,8 +4,8 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
 # Live DIST-24-05 leg. Linux families run inside their named container; macOS
-# runs on the hosted runner. Both install the selected two-number release through the
-# tracked verifier, then exercise this commit's service/doctor candidate.
+# runs on the hosted runner. PRs qualify this head's archive; publication and
+# dispatch qualify the signed release. Both exercise the service/doctor candidate.
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,11 +13,12 @@ lib="$root/scripts/installer-matrix-lib.sh"
 family=""
 image=""
 candidate=""
+candidate_archive=""
 release_version="$(sh "$root/scripts/build-ldflags.sh" --version)"
 inside=0
 
 usage() {
-	printf '%s\n' 'usage: installer-matrix-ci.sh --family NAME --candidate ABSOLUTE_PATH [--image IMAGE] [--release-version MAJOR.MINOR]'
+	printf '%s\n' 'usage: installer-matrix-ci.sh --family NAME --candidate ABSOLUTE_PATH [--image IMAGE] [--release-version MAJOR.MINOR] [--candidate-archive ABSOLUTE_PATH]'
 }
 
 while [[ "$#" -gt 0 ]]; do
@@ -25,6 +26,7 @@ while [[ "$#" -gt 0 ]]; do
 		--family) family="${2:-}"; shift 2 ;;
 		--image) image="${2:-}"; shift 2 ;;
 		--candidate) candidate="${2:-}"; shift 2 ;;
+		--candidate-archive) candidate_archive="${2:-}"; shift 2 ;;
 		--release-version) release_version="${2:-}"; shift 2 ;;
 		--inside) inside=1; shift ;;
 		-h|--help) usage; exit 0 ;;
@@ -42,6 +44,13 @@ case "$family" in
 	debian|ubuntu|fedora|opensuse-leap|alpine|macos) ;;
 	*) bash "$lib" platform "$family"; exit $? ;;
 esac
+
+if [[ -n "$candidate_archive" ]]; then
+	[[ "$candidate_archive" == /* && -f "$candidate_archive" ]] || {
+		printf 'installer-matrix: PR archive must be an existing absolute path\n' >&2
+		exit 1
+	}
+fi
 
 if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 	[[ -n "$image" ]] || { printf 'installer-matrix: --image is required for Linux\n' >&2; exit 2; }
@@ -82,6 +91,11 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 	trap cleanup_scratch EXIT
 	mkdir -p "$host_scratch/candidate"
 	install -m 0755 "$candidate" "$host_scratch/candidate/olivares"
+	container_archive=""
+	if [[ -n "$candidate_archive" ]]; then
+		cp "$candidate_archive" "$host_scratch/candidate/archive.tar.gz"
+		container_archive=/matrix/candidate/archive.tar.gz
+	fi
 	cosign_path="${OLIVARES_COSIGN_BIN:-$(command -v cosign)}"
 	# python3 is on the list because the doctor predicate in installer-matrix-lib.sh reads the
 	# doctor JSON with it, and the minimal images ship without it (the debian/fedora/opensuse/
@@ -90,16 +104,17 @@ if [[ "$inside" -eq 0 && "$family" != macos ]]; then
 	# This program is expanded by /bin/sh inside the container.
 	# shellcheck disable=SC2016
 	bootstrap='case "$MATRIX_FAMILY" in
-debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y --no-install-recommends bash ca-certificates coreutils curl gzip procps python3 tar ;;
-fedora) dnf install -y bash ca-certificates coreutils curl gzip procps-ng python3 tar ;;
-opensuse-leap) zypper --non-interactive refresh; zypper --non-interactive install -y bash ca-certificates coreutils curl gzip procps python3 tar ;;
-alpine) apk add --no-cache bash ca-certificates coreutils curl gzip procps python3 tar ;;
+debian|ubuntu) export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y --no-install-recommends bash ca-certificates coreutils curl diffutils gzip procps python3 tar ;;
+fedora) dnf install -y bash ca-certificates coreutils curl diffutils gzip procps-ng python3 tar ;;
+opensuse-leap) zypper --non-interactive refresh; zypper --non-interactive install -y bash ca-certificates coreutils curl diffutils gzip procps python3 tar ;;
+alpine) apk add --no-cache bash ca-certificates coreutils curl diffutils gzip procps python3 tar ;;
 *) echo "installer-matrix: COULD NOT LOOK — bootstrap family $MATRIX_FAMILY" >&2; exit 2 ;;
 esac
-exec bash /repo/scripts/installer-matrix-ci.sh --inside --family "$MATRIX_FAMILY" --candidate /matrix/candidate/olivares --release-version "$MATRIX_RELEASE_VERSION"'
+exec bash /repo/scripts/installer-matrix-ci.sh --inside --family "$MATRIX_FAMILY" --candidate /matrix/candidate/olivares --release-version "$MATRIX_RELEASE_VERSION" --candidate-archive "$MATRIX_CANDIDATE_ARCHIVE"'
 	docker run --rm \
 		--env MATRIX_FAMILY="$family" \
 		--env MATRIX_RELEASE_VERSION="$release_version" \
+		--env MATRIX_CANDIDATE_ARCHIVE="$container_archive" \
 		--volume "$root:/repo:ro" \
 		--volume "$host_scratch:/matrix" \
 		--volume "$cosign_path:/usr/local/bin/cosign:ro" \
@@ -237,27 +252,22 @@ release_tag() {
 	printf '%s' "${1:?}"
 }
 
-release_base="https://github.com/olivaresai/olivares/releases/download/$(release_tag "$release_version")"
-if ! curl -fsSL --range 0-0 "$release_base/checksums.txt" -o /dev/null; then
-	env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" \
-		--version "$(release_tag "$release_version")" --bindir "$HOME/.local/bin" --dry-run >>"$all_log" 2>&1
-	printf 'installer-matrix: COULD NOT LOOK — public release network path unavailable; dry-run only\n' >&2
-	exit 2
+installed="$HOME/.local/bin/olivares"
+service_root="$root"
+payload_label="public $release_version + candidate"
+bash "$lib" payload "$candidate" "$candidate_archive" "$work" "$(release_tag "$release_version")" "$os_name" >>"$all_log" 2>&1
+if [[ -n "$candidate_archive" ]]; then
+	service_root="$work/archive"
+	payload_label="PR archive $release_version (unsigned development payload)"
 fi
-
-# Real public release: current installer, real Fulcio/Rekor identity, signed checksums
-# and the published archive. No service flag is passed in this phase.
-env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" --version "$(release_tag "$release_version")" \
-	--bindir "$HOME/.local/bin" >>"$all_log" 2>&1
 # The user-mode service adapter accepts exactly one binary route, $HOME/.local/bin/olivares
 # (install-service.sh, the release-index install_layout). The matrix used to install into
 # $work/bin and every leg died at "user binary path is outside the release-index
 # install_layout" — read for the first time on 2026-09-17 once the leg log was printed.
-installed="$HOME/.local/bin/olivares"
 bash "$lib" binary "$installed" "$(id -u)"
 "$installed" version >"$work/release-version.log" 2>&1
 grep -Fq "$release_version" "$work/release-version.log" || {
-	printf 'installer-matrix: public binary did not report %s\n' "$release_version" >&2
+	printf 'installer-matrix: installed binary did not report %s\n' "$release_version" >&2
 	exit 1
 }
 cat "$work/release-version.log" >>"$all_log"
@@ -270,16 +280,14 @@ cat "$work/release-version.log" >>"$all_log"
 	exit 1
 }
 
-# The public tag predates this candidate's service/doctor seam. Replace only the
-# binary with this commit's static candidate, then exercise the exact helper the
-# verified second stage carries. The report names this split rather than treating
-# post-tag bytes as if v26.8.0 had contained them.
-install -m 0755 "$candidate" "$installed"
+# Published runs qualify the downloaded binary first, then this checkout's
+# candidate. PR runs keep the archive's binary and use its bundled service helper.
+if [[ -z "$candidate_archive" ]]; then install -m 0755 "$candidate" "$installed"; fi
 bash "$lib" binary "$installed" "$(id -u)"
 
 service_args=(--user --init "$init_name" --binary "$installed" --data-dir "$MATRIX_DATA" --config "$MATRIX_CONFIG")
-env OLIVARES_OS="$os_name" OLIVARES_ASSET_ROOT="$root" \
-	/bin/sh "$root/scripts/install-service.sh" "${service_args[@]}" >>"$all_log" 2>&1
+env OLIVARES_OS="$os_name" OLIVARES_ASSET_ROOT="$service_root" \
+	/bin/sh "$service_root/scripts/install-service.sh" "${service_args[@]}" >>"$all_log" 2>&1
 [[ -f "$MATRIX_DATA/install-manifest.json" && -f "$MATRIX_CONFIG" ]] || {
 	printf 'installer-matrix: opt-in service did not create its manifest/config\n' >&2
 	exit 1
@@ -292,8 +300,8 @@ printf '# DIST-24-05 secret value must never be rendered by installer, doctor or
 	"$secret_value" >"$MATRIX_CONFIG"
 chmod 0600 "$MATRIX_CONFIG"
 
-env OLIVARES_OS="$os_name" OLIVARES_ASSET_ROOT="$root" \
-	/bin/sh "$root/scripts/install-service.sh" "${service_args[@]}" --start >>"$all_log" 2>&1
+env OLIVARES_OS="$os_name" OLIVARES_ASSET_ROOT="$service_root" \
+	/bin/sh "$service_root/scripts/install-service.sh" "${service_args[@]}" --start >>"$all_log" 2>&1
 grep -Eq 'enable --now olivares|bootstrap gui/[0-9]+' "$MATRIX_INIT_TRACE" || {
 	printf 'installer-matrix: explicit --start did not reach the selected init adapter\n' >&2
 	exit 1
@@ -315,4 +323,4 @@ bash "$lib" binary "$installed" "$(id -u)"
 # a resume, with a protocol stub as the agent CLI; on Linux the session process must also be
 # denied the engine data directory (scripts/session-journey-smoke.sh says what it measured).
 bash "$root/scripts/session-journey-smoke.sh" --binary "$installed" --label "$family" 2>&1 | tee -a "$all_log"
-printf 'installer-matrix: LIVE OK — %s, public %s + candidate service/doctor + session journey\n' "$family" "$release_version"
+printf 'installer-matrix: LIVE OK — %s, %s service/doctor + session journey\n' "$family" "$payload_label"

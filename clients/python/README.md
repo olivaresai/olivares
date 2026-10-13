@@ -20,6 +20,12 @@ response headers → one `DeprecationWarning` per endpoint, or your
 `on_deprecation` callback). The operation layer (`_operations.py`) is generated
 from the published OpenAPI snapshot by `task sdk:generate` — do not edit it.
 
+Ordinary operations accept per-call headers separately from query parameters.
+For example, pass `headers={"Idempotency-Key": "reviewed-update"}` when applying
+a skills pack update, or `headers={"If-Match": '"3"'}` when replacing an assignment.
+The transport retains the client's bearer token and tenant unless you override
+their headers explicitly.
+
 Route arguments that collide with method or transport names gain a `_path`
 suffix. For example, `c.get_v1_console_sso_tenants_by_tenant("target", tenant="caller")`
 uses `target` in the URL and `caller` in the tenant header. The route argument

@@ -24,17 +24,15 @@ test('Claude Code portal: setup → login → navigate → create form → works
     'PLAYWRIGHT_SETUP_TOKEN not set — run via scripts/web-e2e.sh',
   )
 
-  // First boot → setup → login (superadmin sees every nav group).
+  // First boot → setup, which signs the superadmin in (it sees every nav group).
   await page.goto('/setup')
   await page.locator('#token').fill(setupToken)
   await page.locator('#setup-email').fill('admin@example.com')
   await page.locator('#setup-password').fill(PASSWORD)
   await page.getByRole('button', { name: /create administrator/i }).click()
 
-  await page.waitForURL('**/login')
-  await page.locator('#email').fill('admin@example.com')
-  await page.locator('#password').fill(PASSWORD)
-  await page.getByRole('button', { name: /^sign in$/i }).click()
+  // Setup signs the new administrator in and opens the setup wizard (pages/setup.tsx).
+  await page.waitForURL('**/onboarding')
 
   // THE ENTRY IS INSIDE A NAV AREA, AND SIGN-IN LANDS ON THE ROOT. The sidebar
   // renders a closed area's panel hidden, and the root belongs to no area, so this
@@ -46,11 +44,11 @@ test('Claude Code portal: setup → login → navigate → create form → works
 
   // The operate door opens the one Sessions screen, and navigation names it Sessions
   // too (26.10.1 review: "Operate sessions" opened a page titled "Claude Code").
-  // `exact` is load-bearing: neighbouring entries mention sessions.
-  const navLink = page.getByRole('link', {
-    name: 'Sessions',
-    exact: true,
-  })
+  // `exact` is load-bearing: neighbouring entries mention sessions. The top bar's
+  // current-page crumb is a link of the same name, so the entry is read in Journeys.
+  const navLink = page
+    .getByRole('navigation', { name: 'Journeys', exact: true })
+    .getByRole('link', { name: 'Sessions', exact: true })
   await expect(navLink).toBeVisible()
   await navLink.click()
 

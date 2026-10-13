@@ -342,6 +342,36 @@ func TestCommunityDisablesStoredLoweringPolicy(t *testing.T) {
 	}
 }
 
+// Community has no cap on approval policies: only a stored tier below the action's
+// default is Business. These bodies are what the console editor sends (no risk_tier),
+// plus two policies that raise the quorum or the tier.
+func TestCommunityAcceptsSeveralReviewAndRaisingPolicies(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	for _, tc := range []struct {
+		name string
+		spec map[string]any
+	}{
+		{"review-all", map[string]any{"required_approvals": 1, "match": map[string]any{}}},
+		{"review-deploy", map[string]any{"required_approvals": 1, "match": map[string]any{"action": "deploy.apply"}}},
+		{"review-tool", map[string]any{"required_approvals": 1, "match": map[string]any{"action": "claude.tool.use", "subject_kind": "session"}}},
+		{"raise-quorum", map[string]any{"required_approvals": 3, "match": map[string]any{"action": "deploy.apply"}}},
+		{"raise-tier", map[string]any{"risk_tier": "critical", "match": map[string]any{"action": "claude.tool.use"}}},
+	} {
+		r := h.do("POST", govPath+"/policies", admin, map[string]any{
+			"name": tc.name, "kind": "approval", "enabled": true, "spec": tc.spec,
+		}, tenantHdr(tenant))
+		if r.code != http.StatusCreated {
+			t.Errorf("policy %q = %d %s, want 201", tc.name, r.code, r.raw)
+		}
+	}
+	list := h.do("GET", govPath+"/policies?kind=approval", admin, nil, tenantHdr(tenant))
+	if items, _ := list.body["items"].([]any); len(items) != 5 {
+		t.Errorf("approval policies stored = %d, want 5: %s", len(items), list.raw)
+	}
+}
+
 // An explicit tier equal to the default lowers nothing: Community accepts it.
 func TestCommunityAcceptsDefaultEqualTierPolicies(t *testing.T) {
 	h := newHarness(t)

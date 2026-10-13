@@ -22,6 +22,8 @@ import * as redteam from '../src/features/redteam/fixtures'
 import * as compliance from '../src/features/compliance/fixtures'
 import * as orchestration from '../src/features/orchestration/fixtures'
 import * as voice from '../src/features/voice/fixtures'
+import { EXTENSION_ROUTES } from '../src/features/extensions'
+import { browserSession } from '../e2e-visual/fixtures'
 
 const list = (items: unknown[]) => ({ items, cursor: '', has_more: false })
 
@@ -150,13 +152,18 @@ function bodyFor(p: string): unknown {
   }
 }
 
+// FinOps and red team are Business pages; without the paid extension their paths are
+// ROUTE_ALIASES redirects (features/registry.tsx), not the views shot here.
+const businessRoute = (path: string) =>
+  EXTENSION_ROUTES.some((route) => route.path === `/${path}`) ? [path] : []
+
 const ROUTES = [
-  'finops',
+  ...businessRoute('finops'),
   'models',
   'evals',
   'sandbox',
   'security',
-  'red-team',
+  ...businessRoute('red-team'),
   'compliance',
   ...(existsSync(
     fileURLToPath(
@@ -168,23 +175,12 @@ const ROUTES = [
   'voice',
 ]
 
-test.beforeEach(async ({ context, page }) => {
-  // Seed a session so the shell guard treats us as authenticated (whoami is mocked).
-  await context.addInitScript(() => {
-    localStorage.setItem(
-      'olivares.session',
-      JSON.stringify({
-        state: {
-          token: 'olvs_e2e',
-          sessionId: 's-e2e',
-          expiresAt: '2099-01-01T00:00:00Z',
-        },
-        version: 0,
-      }),
-    )
-  })
+test.beforeEach(async ({ page }) => {
   await page.route('**/v1/**', async (route) => {
     const p = new URL(route.request().url()).pathname
+    // The console signs in by recovering its cookie session here (whoami is mocked too).
+    if (p === '/v1/auth/browser-session')
+      return route.fulfill({ json: browserSession })
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

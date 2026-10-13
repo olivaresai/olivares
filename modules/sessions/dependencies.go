@@ -72,6 +72,7 @@ type Dependencies struct {
 	RecoveryWorkSessionCreds          WorkSessionCredentialSource
 	RecoveryCommunicationSessionCreds CommunicationSessionCredentialSource
 	ProgramResolver                   func(driver string) string
+	VersionProgramResolver            func(context.Context, string, string) (string, error)
 	ApprovalGate                      ProviderApprovalGate
 	ProviderVault                     ProviderSecretVault
 	ProviderProbe                     ProviderProbe
@@ -205,6 +206,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"RecoveryWorkSessionCreds", d.RecoveryWorkSessionCreds, "work credential withdrawal during recovery", true},
 		{"RecoveryCommunicationSessionCreds", d.RecoveryCommunicationSessionCreds, "communication credential withdrawal during recovery", true},
 		{"ProgramResolver", d.ProgramResolver, "managed executable override", false},
+		{"VersionProgramResolver", d.VersionProgramResolver, "pinned tool resolution", false},
 		{"ApprovalGate", configuredDependency(d.ApprovalGate), "provider approvals", true},
 		{"ProviderVault", d.ProviderVault, "provider credential custody", false},
 		{"ProviderProbe", d.ProviderProbe, "provider connection probes", false},

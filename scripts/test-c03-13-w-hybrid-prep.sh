@@ -124,9 +124,9 @@ expect_named "mutant (the completer classifies without committed history) is kil
 stage
 mutate "$LW/dodo/webhook.ts" \
   'return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {
-    ...input, detailPrefix: "operator replay: ", judgedBy: "operator_replay",' \
+    ...input, detailPrefix: input.reconciled ? "operator reconciliation: " : "operator replay: ", judgedBy: "operator_replay",' \
   "return await fulfilCompleteCohort(env, deps, payment, subscription, $EMPTY_HISTORY, held, {
-    ...input, detailPrefix: \"operator replay: \", judgedBy: \"operator_replay\","
+    ...input, detailPrefix: input.reconciled ? \"operator reconciliation: \" : \"operator replay: \", judgedBy: \"operator_replay\","
 expect_named "mutant (operator replay classifies without committed history) is killed" 1 \
   "judgedBy: \"operator_replay\",', found 0"
 

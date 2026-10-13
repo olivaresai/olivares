@@ -430,10 +430,11 @@ func switchCaseKinds(t *testing.T, filename, funcName string) []string {
 // Canonical source kinds are offered once; aliases still construct without cards.
 func TestConnectorCatalogCoversSwitch(t *testing.T) {
 	excluded := map[string]string{
-		"okta":          "idp",
-		"entra":         "idp",
 		"pg-audit":      "pgaudit",
 		"s3-cloudtrail": "s3cloudtrail",
+	}
+	for alias, canonical := range editionDirectoryAliasesTest() {
+		excluded[alias] = canonical
 	}
 	infos, err := (&sourceReconciler{}).ListConnectors(context.Background())
 	if err != nil {

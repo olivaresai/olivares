@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,21 +46,6 @@ type apiError struct {
 // Error renders "agentcore: <METHOD path>: status <code>: <excerpt>".
 func (e *apiError) Error() string {
 	return fmt.Sprintf("agentcore: %s: status %d: %s", e.op, e.status, e.excerpt)
-}
-
-// isStatus reports whether err is an *apiError with one of the given statuses
-// (the per-identity degrade discrimination in detail mode).
-func isStatus(err error, statuses ...int) bool {
-	var ae *apiError
-	if !errors.As(err, &ae) {
-		return false
-	}
-	for _, s := range statuses {
-		if ae.status == s {
-			return true
-		}
-	}
-	return false
 }
 
 // client is the package-local signed transport for bedrock-agentcore-control.

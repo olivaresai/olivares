@@ -198,8 +198,11 @@ GET	/v1/m/sessions/decisions/{id}	Returns one recorded work decision by id.
 GET	/v1/m/sessions/leases	Lists the work leases with keyset paging, narrowed by the allowlisted filters, which combine with AND.
 GET	/v1/m/sessions/runs	Lists the session runs newest first, optionally narrowed by state or by the provider session a run drives.
 GET	/v1/m/sessions/runs/{ref}	Returns one session run by reference.
+GET	/v1/m/sessions/runs/{ref}/activity	Returns what one Claude Code session's tool is doing, read from the transcript it keeps: the agents it spawned, its background tasks, the files its edits changed, its task list, the skills and MCP servers it used, and its context; read-only.
+GET	/v1/m/sessions/runs/{ref}/activity/agents/{agent}	Returns what one subagent of a Claude Code session was asked, the tools it called and what it answered, from the subagent's own transcript; read-only.
 GET	/v1/m/sessions/runs/{ref}/events	Lists the events of one session run in sequence order.
 GET	/v1/m/sessions/runs/{ref}/git	Returns the current branch, local branches, working-tree status and write policy in the session's folder.
+GET	/v1/m/sessions/runs/{ref}/handoff	Returns the summary a handoff of one stopped Claude Code session would start from, generated from its stored conversation without a model, for review; it starts nothing.
 GET	/v1/m/sessions/templates	Lists the session templates, optionally narrowed to built-in ones and optionally including archived ones.
 GET	/v1/m/sessions/templates/{id}	Returns one session template with its full detail.
 GET	/v1/m/sessions/work-items	Lists the work items with keyset paging, narrowed by the allowlisted filters, which combine with AND; any other query parameter is refused.
@@ -246,7 +249,7 @@ POST	/v1/m/governance/breakglass/consume	Returns HTTP 501 with business_required
 POST	/v1/m/governance/breakglass/{id}/review	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
 POST	/v1/m/governance/breakglass/{id}/revoke	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
 POST	/v1/m/governance/killswitch	Engages a stop across the estate or over one named agent scope.
-POST	/v1/m/governance/nhi/{ref}/offboard/finalize	Finalizes the offboarding of one non-human identity.
+POST	/v1/m/governance/nhi/{ref}/offboard/finalize	Requires Business Identity & Scale to finalize non-human identity offboarding; returns HTTP 501 when unavailable.
 POST	/v1/m/governance/pdp/dry-run	Evaluates an authorization request against an unpublished candidate policy; the route is separate from explain so a console can label the intent.
 POST	/v1/m/governance/rbac/grants	Creates one scoped RBAC grant from the posted document. Requires Business; Community returns 501.
 POST	/v1/m/governance/rbac/inheritance-filters	Stores one inheritance filter on a workspace, agent group or folder for one resource class. Only an admin of the node may set it. Rights that reach the node from above stop applying to that class there; grants at or below it and forbids are unchanged.
@@ -290,7 +293,9 @@ POST	/v1/m/sessions/runs/{ref}/git/branch	Switches the session's folder to the n
 POST	/v1/m/sessions/runs/{ref}/git/commit	Commits the staged changes in the session's folder with the supplied message and authenticated author.
 POST	/v1/m/sessions/runs/{ref}/git/stage	Stages the selected paths in the session's folder for the next commit.
 POST	/v1/m/sessions/runs/{ref}/git/unstage	Removes the selected paths from the session's Git index while keeping their working-tree changes.
+POST	/v1/m/sessions/runs/{ref}/handoff	Starts a new session in the chosen provider profile, linked to one stopped Claude Code session, from a reviewed summary and the attached transcript; the answer says whether the first turn arrived.
 POST	/v1/m/sessions/runs/{ref}/input	Sends one input line or message to a live session run.
+POST	/v1/m/sessions/runs/{ref}/move	Moves one stopped or failed Claude Code session to another profile of the same tool, carrying that conversation's own files, without starting a process.
 POST	/v1/m/sessions/runs/{ref}/resume	Resumes one suspended session run.
 POST	/v1/m/sessions/runs/{ref}/stop	Stops one session run; a fenced stop carries the lease fence, and a reason without a fence is refused.
 POST	/v1/m/sessions/templates	Creates one session template; an unknown key in the body is refused rather than dropped, so a misspelled policy key cannot silently govern nothing.
@@ -311,6 +316,7 @@ POST	/v1/m/sessions/work-items/{id}/transitions	Transitions one work item to ano
 POST	/v1/m/sessions/workspaces	Creates one session workspace from the posted parameters, and answers 503 when the workspace registry is not available.
 POST	/v1/m/sessions/workspaces/{ref}/files/dir	Creates one directory in a workspace at the path query parameter.
 POST	/v1/m/sessions/workspaces/{ref}/files/move	Moves one workspace entry from the posted source path to the posted destination path.
+POST	/v1/m/sessions/workspaces/{ref}/wiki	Initializes the wiki layout and assigns wiki skills to the workspace, creating missing files while preserving existing content.
 POST	/v1/m/sourcescope/posture-requests/{id}/approve	Approves one pending posture relaxation and applies it.
 POST	/v1/m/voice/sessions/open	Opens one voice session; session, agent, model and provider references are all required, and an engaged stop freezes the call.
 PUT	/v1/m/compliance/nis2/incidents/{id}	Updates one NIS2 incident, moving it to one of the early_warning, notification, intermediate or final phases.

@@ -162,24 +162,16 @@ export interface AttackPath {
   min_confidence: string
 }
 
-/** El motor emite `map[string]any{"paths": …}` (`attackpath.go:386`), no un struct:
- *  un oráculo de paridad que lea `json:` de structs no ve esta forma. */
+/** One analysis answer (`attackPathsDTO`, modules/access-map/attackpath.go). `truncated` is
+ *  set when a read cap or the 100-path cap cut the analysis: `paths` is then a subset. */
 export interface AttackPathsResponse {
   paths: AttackPath[]
+  truncated?: boolean
 }
 
-/** El resumen del patrimonio.
- *
- *  ⛔⛔ DOS DE ESTOS SEIS CAMPOS NO SE CALCULAN NUNCA. `out.EscalationPaths` y
- *  `out.ExfilRoutes` tienen CERO asignaciones en `handleAttackPathSummary`
- *  (medido 2026-08-20): las funciones que los computan existen y sólo las usan los
- *  handlers por agente. Salen siempre `0`, y la CLI ya los imprime
- *  (`cmd_accessmap.go:562-563`). Escalado al dueño de `access-map`; hasta que se
- *  arregle, la consola NO puede pintarlos como hechos.
- *
- *  ⚠ Y los otros cuatro son SUELOS: el handler lista con `Limit: 1000` y este DTO no
- *  tiene bandera de truncado, así que con más de mil un total y un tope se ven igual.
- *  `reachable_paths` cuenta además ARISTAS, no caminos (`ReachablePaths = len(edges)`). */
+/** The estate summary. `escalation_paths` and `exfil_routes` are the sums of the per-agent
+ *  and per-sensitive-resource answers; `reachable_paths` counts EDGES, not paths. When
+ *  `truncated` is set a cap cut a read or a path list and every count is a floor. */
 export interface AttackPathSummary {
   total_agents: number
   reachable_paths: number
@@ -187,4 +179,5 @@ export interface AttackPathSummary {
   exfil_routes: number
   critical_agents: number
   sensitive_targets: number
+  truncated?: boolean
 }

@@ -61,6 +61,7 @@ import {
   type Request,
   type Response,
 } from '@playwright/test'
+import { sessionToken } from './live-session'
 
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''
 const PASSWORD = 'correct-horse-battery-staple-42'
@@ -175,18 +176,19 @@ type AuthenticatedResponse<T> = {
 }
 
 /**
- * Seed only the disposable first-boot engine, with the SAME bearer and tenant the
- * console is using. Keeping this in the page avoids a second login and makes the
- * local Zustand stores the single credential source; no token is logged or copied
- * into the Playwright report.
+ * Seed only the disposable first-boot engine, with the SAME session and tenant the
+ * console is using. The token is the value of the page's own session cookie
+ * (live-session.ts) and the tenant is the console's persisted store, so there is no
+ * second login; no token is logged or copied into the Playwright report.
  */
 async function authenticatedFetch<T>(
   page: Page,
   path: string,
   options: AuthenticatedFetchOptions = {},
 ): Promise<AuthenticatedResponse<T>> {
+  const token = await sessionToken(page)
   const result = await page.evaluate(
-    async ({ requestPath, requestOptions }) => {
+    async ({ requestPath, requestOptions, token }) => {
       function storedState(key: string): Record<string, unknown> {
         const raw = localStorage.getItem(key)
         if (!raw) throw new Error(`authenticated fetch: missing ${key}`)
@@ -196,14 +198,11 @@ async function authenticatedFetch<T>(
         return parsed.state ?? {}
       }
 
-      const session = storedState('olivares.session')
       const tenantStore = storedState('olivares.tenant')
-      const token = typeof session.token === 'string' ? session.token : ''
       const tenant =
         typeof tenantStore.activeTenant === 'string'
           ? tenantStore.activeTenant
           : ''
-      if (!token) throw new Error('authenticated fetch: session has no bearer')
 
       const headers = new Headers(requestOptions.headers ?? {})
       headers.set('Accept', 'application/json')
@@ -238,7 +237,7 @@ async function authenticatedFetch<T>(
         idempotencyReplayed: response.headers.get('Idempotency-Replayed'),
       }
     },
-    { requestPath: path, requestOptions: options },
+    { requestPath: path, requestOptions: options, token },
   )
   return result as AuthenticatedResponse<T>
 }
@@ -295,10 +294,8 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await page.locator('#setup-password').fill(PASSWORD)
     await page.getByRole('button', { name: /create administrator/i }).click()
 
-    await page.waitForURL('**/login')
-    await page.locator('#email').fill('admin@example.com')
-    await page.locator('#password').fill(PASSWORD)
-    await page.getByRole('button', { name: /^sign in$/i }).click()
+    // Setup signs the new administrator in and opens the setup wizard (pages/setup.tsx).
+    await page.waitForURL('**/onboarding')
     await expect(
       page
         .getByRole('navigation', { name: 'Journeys', exact: true })
@@ -318,6 +315,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       '/v1/m/compliance/retention/classes',
       200,
     )
+    await page.goto('/compliance')
     const panel = await openTab(page, /^Retention$/i)
 
     await expectPainted(

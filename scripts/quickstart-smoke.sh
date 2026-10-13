@@ -5,17 +5,19 @@
 #
 # quickstart-smoke.sh — runs the EXACT commands the quickstart documents
 # (docs-site/src/content/docs/start/quickstart.md) against the real single binary
-# and asserts the numbers the page prints. It is the time-to-value reproducibility
+# and asserts the numbers the page prints.
+# It is the time-to-value reproducibility
 # contract (G10): if the quickstart's hero stops being true — the
 # install→value path breaks, or the R/RW drift count drifts from the doc — this
 # fails, so the page can never quietly lie.
 #
 # It exercises BOTH honest hero paths end to end:
 #   A) the instant demo estate (serve --seed-demo): synthetic observations through
-#      the REAL bus/graph — the value-at-minute-one on-ramp.
+#      the real bus and graph.
 #   B) the real connector path: a stock serve with the pgAudit connector pointed at a
-#      PostgreSQL audit log, proving the hero runs on genuinely-parsed data, not a
-#      demo — including the create-org → restart-with-OLIVARES_SOURCES_CONFIG flow
+#      PostgreSQL audit log, proving shared resource/provenance/counter ingestion and
+#      the graph and drift on genuinely parsed data, not a
+#      demo — including the setup-org → restart-with-OLIVARES_SOURCES_CONFIG flow
 #      every operator walks.
 #
 # Usage:  scripts/quickstart-smoke.sh
@@ -27,6 +29,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The engine binary is built ONE way outside a release: see scripts/lib/build-bin.sh.
 # Writing the flags out longhand here is what let five scripts drift from build:bin.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
+. "$ROOT/scripts/lib/select-console-modules.sh"
 BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
 PORT="${SMOKE_PORT:-8951}"
 GRPC_PORT="$((PORT + 1))"
@@ -93,6 +96,18 @@ wait_health() {
 
 # graph_field FIELD: prints a python-computed scalar over /graph (TOKEN+TENANT in env).
 api_get() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE$1" -H @- -H "X-Olivares-Tenant: $TENANT"; }
+# Probe an authenticated seam without turning an HTTP refusal into a transport error.
+api_status() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS -o "$WORK/probe.json" -w '%{http_code}' "$BASE$1" -H @- -H "X-Olivares-Tenant: $TENANT"; }
+capability_status() {
+  local status
+  status="$(api_status "$1")" || fail "capability transport failed: $1"
+  case "$status" in 200|501) printf '%s' "$status" ;; *) fail "$1 returned HTTP $status; expected 200 or 501" ;; esac
+}
+check_findings() {
+  api_get '/v1/m/security/findings' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d["items"],list)'
+  echo '    ok: shared security findings are readable'
+}
+
 
 if [ ! -x "$BIN" ]; then
   note "building $BIN (the quickstart's 'task build')"
@@ -113,16 +128,30 @@ PID=$!
 wait_health || { cat "$WORK/demo.log" >&2; fail "demo engine never became healthy"; }
 
 # The quickstart's exact login + tenant-resolve commands.
-TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
+TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "$BASE/v1/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+  --data-binary @- \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "demo login returned no token"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/system/orgs" -H @- \
-  | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 [ -n "$TENANT" ] || fail "could not resolve the demo tenant"
 note "demo tenant: $TENANT"
 
+# Shared optional readers are selected through the normal deployment API.
+enable_console_modules "$BASE" inventory observability security accessmap
+
+BUILD_EDITION="$(api_get '/v1/server-info' | python3 -c 'import json,sys;print(json.load(sys.stdin)["edition"])')"
+case "$BUILD_EDITION" in community|enterprise|business) ;; *) fail "unknown build edition: $BUILD_EDITION" ;; esac
+GRAPH_STATUS="$(capability_status '/v1/m/accessmap/graph?limit=200')"
+IDENTITY_STATUS="$(capability_status '/v1/m/governance/identities')"
+if [ "$BUILD_EDITION" = community ]; then
+  assert_eq 'Community serves the access graph' "$GRAPH_STATUS" 200
+  assert_eq 'Community serves the identity inventory' "$IDENTITY_STATUS" 200
+fi
+note "build edition: $BUILD_EDITION; graph HTTP $GRAPH_STATUS; identity inventory HTTP $IDENTITY_STATUS"
+check_findings
+if [ "$GRAPH_STATUS" = 200 ]; then
 note "PATH A: assert the access graph (the hero) matches the quickstart"
 GRAPH="$(api_get '/v1/m/accessmap/graph?limit=200')"
 read -r A_NODES A_EDGES A_FIRM A_APPROX <<EOF
@@ -194,6 +223,11 @@ assert_eq "demo drift unused_grants (quickstart guide says $R_UNUSED)" "$A_UNUSE
 assert_eq "demo secrets-read attribution_tier" "$A_SECRETS_TIER" "firm"
 assert_eq "demo logs-write attribution_tier" "$A_LOGS_TIER" "approximate"
 
+else
+  assert_eq 'unavailable graph drift seam' "$(capability_status '/v1/m/accessmap/drift')" 501
+  echo '    ok: graph unavailable in this build; no assessed graph/drift counts claimed'
+fi
+
 kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 
 # ---------------------------------------------------------------------------
@@ -216,7 +250,7 @@ with open(sys.argv[1], 'w', newline='') as f:
     csv.writer(f).writerows(rows)
 PY
 
-note "PATH B: fresh install — setup, login, create org (no default credentials)"
+note "PATH B: fresh install — setup, login, use the setup organization (no default credentials)"
 TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
 "$BIN" serve --insecure \
   --listen "127.0.0.1:$PORT" --grpc-listen "127.0.0.1:$GRPC_PORT" \
@@ -226,41 +260,21 @@ wait_health || { cat "$WORK/real1.log" >&2; fail "real engine never became healt
 
 SETUP_TOKEN="$(grep -oE 'olst_[A-Z0-9]+' "$WORK/real1.log" | head -1)"
 [ -n "$SETUP_TOKEN" ] || fail "no one-time setup token on stdout"
-curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
-  -d "{\"token\":\"$SETUP_TOKEN\",\"email\":\"admin@local\",\"password\":\"correct-horse-battery-staple\"}" >/dev/null \
+printf '%s' "{\"token\":\"$SETUP_TOKEN\",\"email\":\"admin@local\",\"password\":\"correct-horse-battery-staple\"}" | curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
+  --data-binary @- >/dev/null \
   || fail "setup failed"
-TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
+TOKEN="$(printf '%s' '{"email":"admin@local","password":"correct-horse-battery-staple"}' | curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
+  --data-binary @- \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 [ -n "$TOKEN" ] || fail "real login returned no token"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
-  -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
-[ -n "$TENANT" ] || fail "could not create the production tenant"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+[ -n "$TENANT" ] || fail "could not resolve the setup organization"
 note "production tenant: $TENANT"
 
 # Match the ordinary-install guide: optional modules are selected explicitly.
-note "PATH B: enable Access Map and wait for the module-selection restart"
-api_get '/v1/console/modules' | python3 -c '
-import json,sys
-modules=json.load(sys.stdin)["modules"]
-selected=[m["name"] for m in modules if m["selected"]]
-if "accessmap" not in selected: selected.append("accessmap")
-json.dump({"selected":selected},sys.stdout)' > "$WORK/modules.json"
-printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf --max-time 10 \
-  -X PUT "$BASE/v1/console/modules" -H @- -H 'Content-Type: application/json' \
-  --data-binary @"$WORK/modules.json" >/dev/null || fail "could not enable Access Map"
-ACCESSMAP_RUNNING=""
-for _ in $(seq 1 240); do
-  if api_get '/v1/console/modules' 2>/dev/null | python3 -c '
-import json,sys
-sys.exit(not any(m["name"]=="accessmap" and m["running"]
-                 for m in json.load(sys.stdin)["modules"]))' 2>/dev/null; then
-    ACCESSMAP_RUNNING=1; break
-  fi
-  sleep 0.5
-done
-[ -n "$ACCESSMAP_RUNNING" ] || fail "Access Map never became running after restart"
+note "PATH B: enable shared inventory, observability and security plus the published Access Map seam"
+enable_console_modules "$BASE" inventory observability security accessmap
 
 kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 
@@ -285,10 +299,42 @@ grep -qE 'ingest: (wired source|sources wired from the durable roster.*added=[1-
 grep -q 'ingest: source not wired (deny-closed)' "$WORK/real2.log" \
   && { cat "$WORK/real2.log" >&2; fail "pgAudit source was rejected (deny-closed)"; }
 
-TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
+TOKEN="$(printf '%s' '{"email":"admin@local","password":"correct-horse-battery-staple"}' | curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
+  --data-binary @- \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
+note "PATH B: assert pgAudit reaches the shared resource catalog and ingestion counters"
+RESOURCES=''
+for _ in $(seq 1 40); do
+  RESOURCES="$(api_get '/v1/m/inventory/entities?kind=resource&limit=200')" || fail 'shared resource catalog read failed'
+  RESOURCE_COUNT="$(printf '%s' "$RESOURCES" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["items"]))')"
+  [ "$RESOURCE_COUNT" -ge 3 ] && break
+  sleep 0.25
+done
+printf '%s' "$RESOURCES" | python3 -c '
+import json,sys
+rows=json.load(sys.stdin)["items"]
+assert sorted(r["ref"] for r in rows)==["salesdb.public.customers","salesdb.public.orders","salesdb.public.secrets"], rows
+assert all("pg_audit" in r["signal_sources"] and r["occurrence_count"]>=1 for r in rows), rows
+'
+INGEST_OK=''
+for _ in $(seq 1 40); do
+  INGEST="$(api_get '/v1/m/observability/ingestion-health')" || fail 'shared ingestion-health read failed'
+  if printf '%s' "$INGEST" | python3 -c '
+import json,sys
+d=json.load(sys.stdin)
+assert d["engine_scope"] is True
+row=next((s for s in d["sources"] if s["name"]=="salesdb-pgaudit"),{})
+sys.exit(not (row.get("kinds",{}).get("edge",0)>=3 and row.get("signals",{}).get("pg_audit",0)>=3 and row.get("records_total",0)>=3))
+'; then INGEST_OK=1; break; fi
+  sleep 0.25
+done
+[ -n "$INGEST_OK" ] || fail 'three pgAudit observations never reached shared ingestion counters'
+echo '    ok: three parsed pgAudit resources, provenance receipts and pg_audit ingestion counters'
+check_findings
+assert_eq 'real-path graph capability unchanged' "$(capability_status '/v1/m/accessmap/graph?limit=200')" "$GRAPH_STATUS"
+assert_eq 'real-path identity capability unchanged' "$(capability_status '/v1/m/governance/identities')" "$IDENTITY_STATUS"
+if [ "$GRAPH_STATUS" = 200 ]; then
 note "PATH B: assert the real pgAudit edges materialize in the R/RW graph"
 B_EDGES=0
 for _ in $(seq 1 40); do
@@ -316,10 +362,19 @@ B_UNEXP="$(api_get '/v1/m/accessmap/drift' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin).get("unexpected_count",0))')"
 assert_eq "real pgAudit drift unexpected_accesses" "$B_UNEXP" "3"
 
+else
+  assert_eq 'real-path unavailable drift seam' "$(capability_status '/v1/m/accessmap/drift')" 501
+fi
+
 kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 
 ELAPSED="$(( $(date +%s) - START ))"
 echo
-echo "PASS — quickstart hero reproduced on the real binary in ${ELAPSED}s of wall clock."
-echo "  Path A (demo):  20 nodes / 13 edges, drift 8 unexpected + 2 unused, attribution_tier live."
-echo "  Path B (real):  3 pgAudit edges (clean tier), drift 3 unexpected — genuinely parsed, not seeded."
+echo "PASS — quickstart reproduced on the real $BUILD_EDITION binary in ${ELAPSED}s of wall clock."
+echo '  Shared: authenticated findings, three parsed pgAudit resources and ingestion counters.'
+if [ "$GRAPH_STATUS" = 200 ]; then
+  echo '  Path A (demo): 20 nodes / 13 edges, drift 8 unexpected + 2 unused, attribution_tier live.'
+  echo '  Path B (real): 3 clean pgAudit edges, drift 3 unexpected.'
+else
+  echo '  Graph/drift: HTTP 501 before and after real ingestion; no assessed counts reported.'
+fi

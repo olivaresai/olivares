@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { ProviderAccent } from './provider-accent'
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { AlertTriangle, Link2, RefreshCw } from 'lucide-react'
 import {
   useEffect,
@@ -44,7 +48,11 @@ import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { agentOpsApi, agentOpsKeys, PROFILE_PAGE } from './api'
 import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
-import type { ProviderBindingDTO, ProviderProfileDTO } from './types'
+import {
+  profileName,
+  type ProviderBindingDTO,
+  type ProviderProfileDTO,
+} from './types'
 import { useFreshRead, type FreshRead } from './use-fresh-read'
 import './i18n'
 
@@ -52,6 +60,12 @@ const NONE = '__none__'
 /** One page of the profile picker. The picker PAGES: every active profile is
  * reachable through "Load more", never only the first page. */
 const PROFILE_PICK = 200
+/** The profile page the Profile column names its rows from. The sessions page reads
+ * the same page (limit 200, no filter), so keeping the two equal makes them share one
+ * cache entry.
+ * ponytail: profiles past this page show their id; move to a read by reference (or
+ * a name on the binding) when a tenant has more than 200. */
+const PROFILE_NAMES = 200
 
 /** A profile that can take a binding: active, and of THIS node's environment. The
  * same two checks the engine makes first (provider_source_binding.go CreateBinding),
@@ -104,6 +118,7 @@ export function BindingsTable({
   const canRead = can('sessions:profile-binding:read')
   const canWrite = can('sessions:profile-binding:write')
   const canAdmin = can('sessions:profile-binding:admin')
+  const canReadProfiles = can('sessions:profile:read')
 
   const [createOpen, setCreateOpen] = useState(false)
   const [confirmRevoke, setConfirmRevoke] = useState<ProviderBindingDTO | null>(
@@ -139,6 +154,43 @@ export function BindingsTable({
     () => query.data?.pages.flatMap((p) => p.items) ?? [],
     [query.data],
   )
+  // A BINDING CARRIES ONLY THE PROFILE'S REFERENCE, so the Profile column joins the
+  // profile list for its name, under that list's own tier (`sessions:profile:read`),
+  // never under the binding tier. A profile's own sheet has no Profile column and
+  // reads nothing. Without the tier, or while the read has not answered or failed,
+  // the column keeps the reference: a name is only ever painted from an answer.
+  const namesKey = useMemo(
+    () =>
+      agentOpsKeys.profiles(activeTenant, boundary.epoch, {
+        limit: PROFILE_NAMES,
+      }),
+    [activeTenant, boundary.epoch],
+  )
+  // Names exist only under the tier that read them: when it leaves, the read in flight
+  // and the answered page leave the cache too, so regaining the tier reads again
+  // instead of repainting what the earlier grant saw (as BindingCreateDialog does for
+  // its picker).
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (canReadProfiles) return
+    void queryClient.cancelQueries({ queryKey: namesKey })
+    queryClient.removeQueries({ queryKey: namesKey })
+  }, [canReadProfiles, namesKey, queryClient])
+  const namesQuery = useQuery({
+    queryKey: namesKey,
+    queryFn: ({ signal }) =>
+      agentOpsApi.listProfiles({ limit: PROFILE_NAMES }, { signal }),
+    enabled: canRead && canReadProfiles && !profile && !!activeTenant,
+  })
+  const nameByRef = useMemo(() => {
+    const names = new Map<string, string>()
+    if (!canReadProfiles) return names
+    for (const p of namesQuery.data?.items ?? []) {
+      const name = profileName(p)
+      if (name) names.set(p.profile_ref, name)
+    }
+    return names
+  }, [namesQuery.data, canReadProfiles])
   /** The binding named by a confirmation, as the CURRENT list knows it. Closures
    * here are rebuilt every render and react-query reads the mutation function of
    * the latest render at dispatch, so "current" is the last committed render. */
@@ -308,9 +360,20 @@ export function BindingsTable({
     ]
     if (!profile) {
       cols.push({
-        accessorKey: 'profile_ref',
+        id: 'profile',
         header: t('profiles.bindings.cols.profile'),
-        cell: ({ getValue }) => <Mono value={getValue<string>()} />,
+        accessorFn: (b) => nameByRef.get(b.profile_ref) ?? b.profile_ref,
+        cell: ({ row }) => {
+          const ref = row.original.profile_ref
+          const name = nameByRef.get(ref)
+          return name ? (
+            <span className="font-medium text-foreground" title={ref}>
+              {name}
+            </span>
+          ) : (
+            <Mono value={ref} />
+          )
+        },
       })
     }
     cols.push(
@@ -370,7 +433,7 @@ export function BindingsTable({
       },
     )
     return cols
-  }, [t, i18n.language, canAdmin, profile])
+  }, [t, i18n.language, canAdmin, profile, nameByRef])
 
   if (!canRead) {
     return (
@@ -857,7 +920,7 @@ function BindingCreateDialog({
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           {profile ? (
             <p className="font-mono text-caption text-muted-foreground">
-              {profile.display_name || profile.profile_ref} ·{' '}
+              {profileName(profile) ?? profile.profile_ref} ·{' '}
               {profile.profile_ref} · {profile.driver}
             </p>
           ) : (
@@ -889,7 +952,7 @@ function BindingCreateDialog({
                         disabled={!bindable(p)}
                       >
                         <ProviderAccent accent={p.accent} />
-                        {p.display_name || p.profile_ref} · {p.driver}
+                        {profileName(p) ?? p.profile_ref} · {p.driver}
                         {!bindable(p) &&
                           ` — ${t('profiles.bindings.create.profileNotBindable')}`}
                       </SelectItem>

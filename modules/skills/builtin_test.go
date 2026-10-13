@@ -34,6 +34,89 @@ func builtinSource(ref string) map[string]string {
 	return map[string]string{"kind": "builtin", "ref": ref}
 }
 
+func TestBuiltinCatalogListsPinnedSourcesBeforeInstallation(t *testing.T) {
+	h := catalog(t)
+	reply := h.request("GET", "/v1/m/skills/builtins", nil, "")
+	var result struct {
+		Items []struct {
+			ID     string `json:"id"`
+			Origin string `json:"origin"`
+			Commit string `json:"resolved_commit"`
+			Digest string `json:"source_digest"`
+		} `json:"items"`
+	}
+	if reply.Code != http.StatusOK || json.Unmarshal(reply.Body.Bytes(), &result) != nil {
+		t.Fatalf("browse builtins: %d %s", reply.Code, reply.Body.String())
+	}
+	pin := readPin(t)
+	if len(result.Items) != len(pin.Packs) {
+		t.Fatalf("got %d packs, want %d", len(result.Items), len(pin.Packs))
+	}
+	for i, item := range result.Items {
+		entry := pin.Packs[i]
+		if item.ID != entry.ID || item.Origin != pin.Sources[entry.Source].Repository || item.Commit != pin.Sources[entry.Source].Commit || item.Digest != entry.SHA256 {
+			t.Fatalf("catalog provenance differs from pinned source: %+v", item)
+		}
+	}
+	anonymous := h
+	anonymous.token = ""
+	if denied := anonymous.request("GET", "/v1/m/skills/builtins", nil, ""); denied.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous browse: %d", denied.Code)
+	}
+	if installed := h.request("GET", "/v1/m/skills/packs", nil, ""); strings.Contains(installed.Body.String(), "ecc-security") {
+		t.Fatal("browsing installed a pack")
+	}
+}
+
+// The console census (web/src/features/registry.list-ceilings.test.ts) declares this route
+// as one that drains: it takes no limit, so the client sends none and shows no truncation
+// notice. A change that paginates it must give the client a ceiling and a notice first.
+func TestBuiltinCatalogIgnoresLimitAndNeverTruncates(t *testing.T) {
+	h := catalog(t)
+	pin := readPin(t)
+	if len(pin.Packs) < 2 {
+		t.Fatalf("the pin lists %d packs; limit=1 proves nothing with fewer than two", len(pin.Packs))
+	}
+	reply := h.request("GET", "/v1/m/skills/builtins?limit=1", nil, "")
+	var result struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+		HasMore bool   `json:"has_more"`
+		Cursor  string `json:"cursor"`
+	}
+	if reply.Code != http.StatusOK || json.Unmarshal(reply.Body.Bytes(), &result) != nil {
+		t.Fatalf("browse builtins: %d %s", reply.Code, reply.Body.String())
+	}
+	if len(result.Items) != len(pin.Packs) || result.HasMore || result.Cursor != "" {
+		t.Fatalf("limit=1 returned %d of %d pinned packs (has_more=%v cursor=%q)",
+			len(result.Items), len(pin.Packs), result.HasMore, result.Cursor)
+	}
+}
+
+func TestBuiltinCatalogInstallAndWorkspaceAssignment(t *testing.T) {
+	h := catalogOptions(t, skills.Options{Targets: workspaceAuthority{}})
+	workspace := h.workspace(t, false)
+	if browse := h.request("GET", "/v1/m/skills/builtins", nil, ""); browse.Code != http.StatusOK || !strings.Contains(browse.Body.String(), "ecc-security") {
+		t.Fatalf("builtin unavailable before workspace installation: %d %s", browse.Code, browse.Body.String())
+	}
+	reply := h.installJSON("builtin-workspace", "/v1/m/skills/packs", map[string]any{"name": "ecc-security", "source": builtinSource("ecc-security")})
+	var result skills.InstallResult
+	if reply.Code != http.StatusCreated || json.Unmarshal(reply.Body.Bytes(), &result) != nil {
+		t.Fatalf("install: %d %s", reply.Code, reply.Body.String())
+	}
+	assigned := h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: workspace, RevisionID: result.Revision.ID}, "")
+	var pin skills.AssignmentResult
+	if assigned.Code != http.StatusCreated || json.Unmarshal(assigned.Body.Bytes(), &pin) != nil || pin.Assignment.RevisionID != result.Revision.ID {
+		t.Fatalf("workspace pin: %d %s", assigned.Code, assigned.Body.String())
+	}
+	retained := h.request("GET", "/v1/m/skills/packs/"+result.Pack.ID, nil, "")
+	var detail skills.PackDetail
+	if json.Unmarshal(retained.Body.Bytes(), &detail) != nil || len(detail.Revisions) != 1 || detail.Revisions[0].ManifestDigest != result.Revision.ManifestDigest {
+		t.Fatal("assigning changed the immutable revision")
+	}
+}
+
 func TestBuiltinPacksInstallAsPinnedRevisionsWithTheirLicense(t *testing.T) {
 	pin := readPin(t)
 	h := catalog(t)

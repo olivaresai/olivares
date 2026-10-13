@@ -888,6 +888,92 @@ describe('ProfilesPanel — one-line rows', () => {
   })
 })
 
+describe('ProfilesPanel — a profile that is an account is listed by its name', () => {
+  // Found by real use of 0.1: the engine names an account in `account_name` and leaves
+  // `display_name` empty, so three of four rows painted ppf_… while Provider accounts
+  // named the same profiles claude-b, claude-c and claude-d.
+  const account = (ref: string, name: string): ProviderProfileDTO => ({
+    profile_ref: ref,
+    driver: 'claude',
+    environment_ref: 'xenv_1',
+    account_name: name,
+    state: 'active',
+    local_environment: true,
+    operable: true,
+  })
+  const claudeB = account('ppf_01hzb', 'claude-b')
+  const claudeC = account('ppf_01hzc', 'claude-c')
+  const claudeD = account('ppf_01hzd', 'claude-d')
+  const defaultLogin: ProviderProfileDTO = {
+    ...account('ppf_01hza', 'claude'),
+    display_name: 'Default sign-in',
+  }
+  const unnamed: ProviderProfileDTO = {
+    profile_ref: 'ppf_01hze',
+    driver: 'claude',
+    environment_ref: 'xenv_1',
+    state: 'active',
+    local_environment: true,
+    operable: true,
+  }
+
+  it('paints every row with its name and keeps the id on title=', async () => {
+    api.listProfiles.mockResolvedValue(
+      page([defaultLogin, claudeB, claudeC, claudeD]),
+    )
+    wrap()
+    await screen.findByText('Default sign-in')
+    for (const p of [claudeB, claudeC, claudeD]) {
+      const cell = rowOf(p.account_name as string).querySelector('td')
+      expect(cell).toHaveAttribute('title', p.profile_ref)
+      expect(within(cell as HTMLElement).queryByText(/^ppf_/)).toBeNull()
+    }
+    expect(screen.queryByText(/^ppf_/)).toBeNull()
+  })
+
+  it('lets a display name win over the account name', async () => {
+    api.listProfiles.mockResolvedValue(page([defaultLogin, claudeB]))
+    wrap()
+    await screen.findByText('Default sign-in')
+    expect(rowOf('Default sign-in').querySelector('td')).toHaveTextContent(
+      /^Default sign-in$/,
+    )
+  })
+
+  it('finds an account by its name in the search box', async () => {
+    api.listProfiles.mockResolvedValue(page([defaultLogin, claudeB, claudeC]))
+    wrap()
+    const user = userEvent.setup()
+    await screen.findByText('claude-c')
+    await user.type(screen.getByPlaceholderText('Search profiles…'), 'claude-c')
+    expect(screen.queryByText('claude-b')).toBeNull()
+    expect(screen.getByText('claude-c')).toBeInTheDocument()
+  })
+
+  it('names the profile by its account in the sheet and in the retire phrase', async () => {
+    api.listProfiles.mockResolvedValue(page([claudeB]))
+    api.getProfile.mockResolvedValue(claudeB)
+    const { user } = await openSheet(/^claude-b$/)
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText('claude-b')).toBeInTheDocument()
+    expect(
+      within(sheet).getByText('ppf_01hzb', { selector: 'p' }),
+    ).toBeInTheDocument()
+    await user.click(within(sheet).getByRole('button', { name: 'Retire' }))
+    await user.type(await screen.findByLabelText(/confirm/i), 'claude-b')
+    await user.click(screen.getByRole('button', { name: 'Retire' }))
+    await waitFor(() =>
+      expect(api.retireProfile).toHaveBeenCalledWith('ppf_01hzb'),
+    )
+  })
+
+  it('keeps the id as the label of a profile nothing has named', async () => {
+    api.listProfiles.mockResolvedValue(page([unnamed, claudeB]))
+    wrap()
+    expect(await screen.findByText('ppf_01hze')).toBeInTheDocument()
+  })
+})
+
 describe('ProfilesPanel — registering', () => {
   it('posts exactly the driver, the two homes, the login source and the label — no environment, no credential', async () => {
     const user = userEvent.setup()

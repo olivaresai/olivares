@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQuery } from '@tanstack/react-query'
-import { Link2, Link2Off, RefreshCw, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { Link2, Link2Off, Users } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,25 +15,26 @@ import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { StatusBadge } from '@/components/data/badges'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
-import { RegisterAgentDialog } from './register-agent-dialog'
-import { EmergingStandardsPanel } from './emerging-standards'
 import { governanceApi, governanceKeys } from './api'
 import { BindDialog } from './bind-dialog'
 import { GroupMembersSheet } from './group-members'
 import './i18n'
-import type { BindingDTO, GroupDTO, IdentityDTO, RosterReport } from './types'
-import {
-  PagePrimaryAction,
-  PageSecondaryActions,
-} from '@/components/ui/page-actions'
+import type { BindingDTO, GroupDTO, IdentityDTO } from './types'
+import { PagePrimaryAction } from '@/components/ui/page-actions'
 
-type SubTab = 'identities' | 'groups' | 'bindings' | 'standards'
+type SubTab = 'identities' | 'groups' | 'bindings'
+
+/** An account state the source never reported is unknown, not enabled. */
+function accountState(disabled: boolean | null) {
+  if (disabled === null) return 'unknown'
+  return disabled ? 'disabled' : 'enabled'
+}
 
 /**
  * IdentitiesView covers the reconciled roster (identities), the directory collections
  * (groups + members drill-in) and the agent↔NHI bindings. Reads gate on
- * governance:identity:read; the resync, bind and unbind privileged actions gate on
- * governance:identity:admin. Identity metadata is allow-listed by the backend — the
+ * governance:identity:read; the bind and unbind privileged actions gate on
+ * governance:identity:admin. Filling the roster from a directory is Business. Identity metadata is allow-listed by the backend — the
  * UI just renders what is returned.
  */
 export function IdentitiesView() {
@@ -41,64 +42,42 @@ export function IdentitiesView() {
   const { activeTenant, can } = useAuth()
   const canRead = can('governance:identity:read')
   const canAdmin = can('governance:identity:admin')
-  // ⛔ El registro de agentes NO va por `identity:admin`: el motor lo gatea con
-  // `governance:nhi:admin` (`governance.go:71`, ruta `POST /agents`). Usar el de la vista
-  // escondería el botón a quien SÍ puede registrar, o se lo enseñaría a quien recibirá un 403.
-  const canNHIAdmin = can('governance:nhi:admin')
-
   const [sub, setSub] = useState<SubTab>('identities')
   const [membersRef, setMembersRef] = useState<string | null>(null)
   const [membersOpen, setMembersOpen] = useState(false)
   const [bindOpen, setBindOpen] = useState(false)
   const [bindAgent, setBindAgent] = useState<string | undefined>(undefined)
-  const [confirmResync, setConfirmResync] = useState(false)
   const [confirmUnbind, setConfirmUnbind] = useState<BindingDTO | null>(null)
 
-  const identities = useQuery({
+  // The roster and the group list are cursor-paged: walk the pages so a row past the
+  // first one is reachable, and say there is more instead of presenting a page as the whole.
+  const identities = useInfiniteQuery({
     queryKey: governanceKeys.identities(activeTenant),
-    queryFn: () => governanceApi.listIdentities(),
+    queryFn: ({ pageParam }) =>
+      governanceApi.listIdentities({ cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.has_more ? last.cursor : undefined),
     enabled: canRead && sub === 'identities',
   })
-  const groups = useQuery({
+  const groups = useInfiniteQuery({
     queryKey: governanceKeys.groups(activeTenant),
-    queryFn: () => governanceApi.listGroups(),
+    queryFn: ({ pageParam }) => governanceApi.listGroups({ cursor: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.has_more ? last.cursor : undefined),
     enabled: canRead && sub === 'groups',
   })
+  const identityRows = useMemo(
+    () => identities.data?.pages.flatMap((p) => p.items) ?? [],
+    [identities.data],
+  )
+  const groupRows = useMemo(
+    () => groups.data?.pages.flatMap((p) => p.items) ?? [],
+    [groups.data],
+  )
   const bindings = useQuery({
     queryKey: governanceKeys.bindings(activeTenant),
     queryFn: () => governanceApi.listBindings(),
     enabled: canRead && sub === 'bindings',
-  })
-
-  const resync = usePrivilegedMutation<void, RosterReport>({
-    mutationFn: () => governanceApi.syncRoster(),
-    invalidateKeys: () => [governanceKeys.all(activeTenant)],
-    // Render the RosterReport as a result summary (it is a single report, not a
-    // list). With no providers wired, say so honestly instead of implying success.
-    // A PARTIAL failure is a 200, so this is the ONLY place the operator learns a source
-    // did not answer. Reporting it as plain success would turn a loud 502 into a green tick
-    // — the exact "fail mute" this whole change exists to avoid. Found by the adversarial
-    // contrast of PR #622 (P1-1): the field existed in types.ts and nothing rendered it.
-    successMessage: (report) => {
-      const failed = report.providers_failed ?? []
-      if (report.providers_configured === 0) return t('resync.noProviders')
-      const summary = `${t('resync.done')} — ${t('resync.result', {
-        sources: report.sources,
-        identities: report.identities,
-        collections: report.collections,
-        memberships: report.memberships,
-      })}`
-      if (failed.length === 0) return summary
-      return `${summary} — ${t('resync.partial', {
-        failed: failed.length,
-        providers: failed.map((f) => f.provider).join(', '),
-      })}`
-    },
-    successIntent: (report) =>
-      report.providers_configured === 0 || report.providers_failed?.length
-        ? 'warning'
-        : 'success',
-    onDone: () => setConfirmResync(false),
   })
 
   const unbind = usePrivilegedMutation({
@@ -159,7 +138,7 @@ export function IdentitiesView() {
       accessorKey: 'disabled',
       header: t('identities.state'),
       cell: ({ row }) => (
-        <StatusBadge status={row.original.disabled ? 'disabled' : 'enabled'} />
+        <StatusBadge status={accountState(row.original.disabled)} />
       ),
     },
   ]
@@ -291,31 +270,26 @@ export function IdentitiesView() {
           <TabsTrigger value="identities">{t('identities.title')}</TabsTrigger>
           <TabsTrigger value="groups">{t('groups.title')}</TabsTrigger>
           <TabsTrigger value="bindings">{t('bindings.title')}</TabsTrigger>
-          <TabsTrigger value="standards">{t('emerging.tab')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="identities">
-          {canAdmin && (
-            <PageSecondaryActions>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setConfirmResync(true)}
-              >
-                <RefreshCw />
-                {t('identities.resync')}
-              </Button>
-            </PageSecondaryActions>
-          )}
           <p className="mb-3 text-caption text-muted-foreground">
             {t('identities.caption')}
           </p>
+          {identities.hasNextPage && (
+            <p className="mb-3 text-caption text-muted-foreground">
+              {t('list.loadedOnly')}
+            </p>
+          )}
           <DataTable
             columns={identityColumns}
-            data={identities.data?.items ?? []}
+            data={identityRows}
             isLoading={identities.isLoading}
             error={identities.error}
             onRetry={() => identities.refetch()}
+            hasMore={identities.hasNextPage}
+            onLoadMore={() => void identities.fetchNextPage()}
+            isFetchingMore={identities.isFetchingNextPage}
             searchable
             searchPlaceholder={t('identities.search')}
             getRowId={(r) => r.id}
@@ -332,12 +306,20 @@ export function IdentitiesView() {
           <p className="mb-3 text-caption text-muted-foreground">
             {t('groups.caption')}
           </p>
+          {groups.hasNextPage && (
+            <p className="mb-3 text-caption text-muted-foreground">
+              {t('list.loadedOnly')}
+            </p>
+          )}
           <DataTable
             columns={groupColumns}
-            data={groups.data?.items ?? []}
+            data={groupRows}
             isLoading={groups.isLoading}
             error={groups.error}
             onRetry={() => groups.refetch()}
+            hasMore={groups.hasNextPage}
+            onLoadMore={() => void groups.fetchNextPage()}
+            isFetchingMore={groups.isFetchingNextPage}
             searchable
             searchPlaceholder={t('groups.search')}
             getRowId={(r) => r.ref}
@@ -366,12 +348,9 @@ export function IdentitiesView() {
               </Button>
             </PagePrimaryAction>
           )}
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <p className="text-caption text-muted-foreground">
-              {t('bindings.caption')}
-            </p>
-            <RegisterAgentDialog canAdmin={canNHIAdmin} />
-          </div>
+          <p className="mb-3 text-caption text-muted-foreground">
+            {t('bindings.caption')}
+          </p>
           <DataTable
             columns={bindingColumns}
             data={bindings.data?.items ?? []}
@@ -389,10 +368,6 @@ export function IdentitiesView() {
             }
           />
         </TabsContent>
-
-        <TabsContent value="standards">
-          <EmergingStandardsPanel canRead={canRead} />
-        </TabsContent>
       </Tabs>
 
       <GroupMembersSheet
@@ -406,18 +381,6 @@ export function IdentitiesView() {
         onOpenChange={setBindOpen}
         agentId={bindAgent}
       />
-
-      {confirmResync && (
-        <ConfirmDialog
-          open={confirmResync}
-          onOpenChange={setConfirmResync}
-          title={t('resync.title')}
-          description={t('resync.body')}
-          confirmLabel={t('resync.confirm')}
-          pending={resync.isPending}
-          onConfirm={() => resync.mutate()}
-        />
-      )}
 
       {confirmUnbind && (
         <ConfirmDialog

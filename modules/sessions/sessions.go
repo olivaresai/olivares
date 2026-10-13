@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/skills"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 )
@@ -34,6 +35,7 @@ const (
 type Module struct {
 	*Dependencies
 	engineDependencies bool
+	wikiSkills         func(context.Context, api.ModuleContext, skills.Target) (skills.Assignment, error)
 
 	publishObservation func(context.Context, event.Event) error
 	log                *slog.Logger
@@ -48,7 +50,8 @@ type Module struct {
 	// the deny-closed launch seams and the in-memory registry of live processes.
 	rt *runtimeState
 	// previews are the open browser previews of session ports (preview.go).
-	previews previewGrants
+	previews        previewGrants
+	profileCatalogs profileCatalogCache
 	// protocolBindingSpecValidators are server-owned K5 capability witnesses,
 	// keyed by protocol. Browser/CLI input is never trusted as validation.
 	protocolBindingSpecValidators map[BindingProtocol][]ProtocolBindingSpecValidator

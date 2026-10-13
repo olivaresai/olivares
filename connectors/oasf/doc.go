@@ -97,4 +97,7 @@
 //
 // It imports only the SDK, the Apache identitysource contract, the shared
 // httpx/redact internals and go-jose — never the engine.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package oasf

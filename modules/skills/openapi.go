@@ -4,7 +4,10 @@
 
 package skills
 
-import "github.com/olivaresai/olivares/core/api"
+import (
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/api/oas"
+)
 
 // OperationDocumentation publishes the existing mutation envelopes without
 // changing their handlers, authorization, or tenant scope.
@@ -17,11 +20,12 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 			"type": "object", "additionalProperties": false,
 			"required": []string{"target_kind", "target_id", "pack_revision_id"},
 			"properties": map[string]any{
-				"target_kind":      map[string]any{"type": "string", "enum": []string{"workspace", "template", "agent_group", "agent", "session"}},
+				"target_kind":      map[string]any{"type": "string", "enum": []string{"workspace", "folder", "template", "agent_group", "agent", "session"}},
 				"target_id":        map[string]any{"type": "string", "format": "uuid"},
 				"pack_revision_id": map[string]any{"type": "string", "format": "uuid"},
 				"members": map[string]any{"type": []string{"array", "null"}, "maxItems": MaxSelectedMembers, "uniqueItems": true,
 					"items": map[string]any{"type": "string"}, "description": "Omitted, null, or empty selects all members of the pinned revision."},
+				"approve_active_content": map[string]any{"type": "boolean", "description": "Required when a selected member carries hooks, shell interpolation, a tool pre-approval or a plugin, settings or hooks file. Revisions list these as active_content; the approval is recorded in the audit event."},
 			},
 		}
 	case "POST /packs", "POST /packs/{id}/revisions":
@@ -54,6 +58,28 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 		}
 		doc.Parameters = []map[string]any{{"name": "Idempotency-Key", "in": "header", "required": true,
 			"schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[!-~]+$"}}}
+	case "POST /packs/{id}/update":
+		doc.Responses = api.GenericModuleResponses()
+		doc.Responses["200"] = oas.JSONResp("Update check or idempotent replay of a published revision.")
+		doc.Responses["201"] = oas.JSONResp("Reviewed update published as a new pack revision.")
+		schema = map[string]any{
+			"type": "object", "additionalProperties": false,
+			"properties": map[string]any{
+				"apply":           map[string]any{"type": "boolean", "description": "Publish the source's current content as the next revision. Requires expected_digest and an Idempotency-Key header."},
+				"expected_digest": map[string]any{"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The candidate manifest digest (candidate.manifest_digest of the check) the caller reviewed. Required with apply; refused otherwise."},
+				"ref":             map[string]any{"type": "string", "description": "Git packs only: follow this branch, tag or commit from now on. Defaults to the recorded ref."},
+				"subdir":          map[string]any{"type": "string", "description": "Git packs only: the selected directory, for a revision recorded before directories were kept."},
+			},
+		}
+		doc.Parameters = []map[string]any{{"name": "Idempotency-Key", "in": "header", "required": false,
+			"description": "Required with apply.", "schema": map[string]any{"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[!-~]+$"}}}
+	case "GET /packs/{id}/diff":
+		doc.BodyKind = api.ModuleOperationBodyless
+		doc.Parameters = []map[string]any{
+			{"name": "from", "in": "query", "required": false, "description": "Revision to compare from. Defaults to the revision before to.", "schema": map[string]any{"type": "string", "format": "uuid"}},
+			{"name": "to", "in": "query", "required": false, "description": "Revision to compare to. Defaults to the latest revision.", "schema": map[string]any{"type": "string", "format": "uuid"}},
+		}
+		return doc, true
 	case "DELETE /assignments/{id}", "DELETE /packs/{id}":
 		doc.BodyKind = api.ModuleOperationBodyless
 	default:

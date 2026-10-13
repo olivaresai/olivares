@@ -12,7 +12,6 @@
 //    is evidenced from the audit ledger (scim.user.deprovision = sessions+tokens
 //    revoked). Group provisioning is REAL inbound since — the panel used to
 //    claim otherwise, which was a false statement about our own capability.
-//  • The claude-console posture surfaces the HONEST Admin-API blind-spot finding.
 import {
   ModuleGate,
   QueryErrorState,
@@ -21,7 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { CircleAlert, CircleCheck, ExternalLink } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SectionCard } from '@/features/_intel'
+import { ListTruncationBadge, SectionCard } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
 import { StatusBadge } from '@/components/data/badges'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -32,6 +31,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
+import { AUDIT_PAGE_MAX } from '@/lib/api/endpoints'
+import type { ListResponse } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import {
@@ -43,11 +44,10 @@ import {
 import {
   ContractPendingNotice,
   DeclaredSection,
-  FindingList,
   PostureUnavailableNotice,
 } from './components'
 import { AuthorityReferences } from './references'
-import type { ScimUser, SsoEnvField } from './types'
+import type { AuditEntry, ScimUser, SsoEnvField } from './types'
 
 /** The env keys that configure SSO (read-only documentation — there is NO config
  *  write API; these are read once at boot via FromEnv).*/
@@ -83,9 +83,6 @@ export function FederationTab() {
         <SsoSection />
       </ModuleGate>
       <ScimSection />
-      <ModuleGate module="security">
-        <ClaudeConsolePostureSection />
-      </ModuleGate>
       <AuthorityReferences
         area="sso"
         keys={['scim', 'oauthSecurityBcp', 'pkce']}
@@ -288,6 +285,52 @@ function scimUserColumns(
   ]
 }
 
+const LEAVER_ACTION = 'scim.user.deprovision'
+/** How many leaver events the card lists. */
+const LEAVER_ROWS = 10
+
+/**
+ * The newest `LEAVER_ROWS` deprovision events, newest first, in the list envelope.
+ *
+ * The ledger pages FORWARDS only (`from`, ascending sequence), so the newest events are on
+ * its LAST page: one `limit: 10` read returned the ten oldest and a tenant past ten leavers
+ * never saw the latest. This follows `next_from` to the last page and keeps the tail;
+ * `has_more` on the result means older events exist that the card does not list.
+ *
+ * A page that reports `has_more` without a `next_from` that moves forward cannot be walked
+ * to its end, and its rows are the oldest ones: that is an error, never a "latest" list.
+ *
+ * The walk is several requests, and each one takes the tenant that is active when it is SENT.
+ * A tenant switch cancels the query (tenant-cache-isolation), which discards its result but
+ * would not stop the later pages: `signal` stops them, so none goes out under the new tenant.
+ *
+ * ponytail: one read per 1,000 leaver events on every load, and each read appends an
+ * `audit.read` event to the ledger. Upgrade trigger: a tenant with tens of thousands of
+ * leaver events, which wants a newest-first filter on GET /v1/audit.
+ */
+async function newestLeavers(
+  signal: AbortSignal,
+): Promise<ListResponse<AuditEntry>> {
+  let from = 1
+  let newest: AuditEntry[] = []
+  let seen = 0
+  for (;;) {
+    signal.throwIfAborted()
+    const page = await identityApi.audit(
+      { action: LEAVER_ACTION, from, limit: AUDIT_PAGE_MAX },
+      { signal },
+    )
+    seen += page.items.length
+    newest = [...newest, ...page.items].slice(-LEAVER_ROWS)
+    if (!page.has_more) break
+    if (!page.next_from || page.next_from <= from) {
+      throw new Error('audit page has more rows but no next_from after from')
+    }
+    from = page.next_from
+  }
+  return { items: newest.slice().reverse(), has_more: seen > LEAVER_ROWS }
+}
+
 function ScimSection() {
   const { t } = useTranslation(['identity', 'common'])
   const { activeTenant } = useAuth()
@@ -302,9 +345,8 @@ function ScimSection() {
     retry: false,
   })
   const leaver = useQuery({
-    queryKey: identityKeys.audit(activeTenant, 'scim.user.deprovision'),
-    queryFn: () =>
-      identityApi.audit({ action: 'scim.user.deprovision', limit: 10 }),
+    queryKey: identityKeys.audit(activeTenant, LEAVER_ACTION),
+    queryFn: ({ signal }) => newestLeavers(signal),
     retry: false,
   })
   const columns = useMemo(() => scimUserColumns(t), [t])
@@ -402,6 +444,18 @@ function ScimSection() {
           <h3 className="mb-1.5 flex items-center gap-2 text-body font-medium text-foreground">
             {t('scim.leaverTitle')}
           </h3>
+          {/* The card lists the newest `LEAVER_ROWS` events, so an OLDER leaver can be
+              missing from it. The count is the rows LISTED; the notice stays out of
+              DeclaredSection so a failed refetch cannot leave it floating over the error. */}
+          <ListTruncationBadge
+            query={leaver}
+            filas={leaver.data?.items.length}
+            label={t('scim.leaverTruncated', {
+              n: leaver.data?.items.length ?? 0,
+            })}
+            hint={t('scim.leaverTruncatedHint')}
+            className="mb-2 px-0 pt-0"
+          />
           <DeclaredSection
             query={leaver}
             what={t('scim.leaverSeamWhat')}
@@ -426,10 +480,14 @@ function ScimSection() {
                         </code>
                       }
                       align="start"
+                      // A 36-character id does not fit beside the badge at 390 px, and KvRow's label
+                      // never shrinks while its value has a zero basis: let the value drop under the
+                      // id when it does not fit, and the id wrap inside the card.
+                      className="flex-wrap gap-y-1.5 [&>dt]:max-w-full [&>dd]:basis-auto"
                     >
                       <span className="flex flex-wrap items-center gap-2">
                         <Badge variant="danger">{t('scim.revoked')}</Badge>
-                        {e.at ? <RelTimeLabel ts={e.at} /> : null}
+                        <RelTimeLabel ts={e.occurred_at} />
                       </span>
                     </KvRow>
                   ))}
@@ -437,71 +495,6 @@ function ScimSection() {
               )
             }
           </DeclaredSection>
-        </div>
-      </div>
-    </SectionCard>
-  )
-}
-
-function ClaudeConsolePostureSection() {
-  const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant } = useAuth()
-  const posture = useQuery({
-    queryKey: identityKeys.findings(activeTenant, 'iam_posture'),
-    queryFn: () => identityApi.findings({ kind: 'iam_posture' }),
-    retry: false,
-  })
-  // The honest, structural Admin-API blind-spot facts. Source: the
-  // claude-console connector's `iam_posture` postureFinding detail (sso_enforcement /
-  // scim_provisioning unknown-by-api, members listable, sso_jit=team+,
-  // scim_audit_export=enterprise, continuous audit = Compliance Activity Feed) — NOT
-  // which documents the WIF/svac write-Console-only (read via org:admin OAuth) fact.
-  const blindSpots = [
-    'ssoEnforcement',
-    'scimProvisioning',
-    'members',
-    'ssoJit',
-    'auditExport',
-    'continuousAudit',
-  ] as const
-
-  return (
-    <SectionCard
-      title={t('console.title')}
-      description={t('console.description')}
-    >
-      <div className="flex flex-col gap-4">
-        <DeclaredSection
-          query={posture}
-          what={t('console.seamWhat')}
-          skeletonHeight={80}
-        >
-          {(findings) => (
-            <FindingList
-              findings={findings.items}
-              label={t('console.title')}
-              emptyTitle={t('console.noFindings')}
-              emptyDescription={t('console.noFindingsHint')}
-            />
-          )}
-        </DeclaredSection>
-        <div className="rounded-md border border-border bg-muted/30 p-3">
-          <p className="mb-2 text-caption font-medium text-muted-foreground">
-            {t('console.blindSpotTitle')}
-          </p>
-          <ul className="flex flex-col gap-1">
-            {blindSpots.map((k) => (
-              <li
-                key={k}
-                className="flex items-start gap-2 text-caption text-foreground"
-              >
-                <span className="mt-px text-muted-foreground" aria-hidden>
-                  ·
-                </span>
-                {t(`console.blindSpots.${k}`)}
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
     </SectionCard>

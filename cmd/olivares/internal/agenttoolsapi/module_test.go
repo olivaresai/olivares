@@ -69,8 +69,8 @@ func TestEveryRouteRequiresSystemAdministrator(t *testing.T) {
 	defer m.Close()
 	r := &registrar{}
 	m.APIRoutes(r)
-	// 5 sign-in routes + 5 tool routes, the providers read, and the 5 routes of the local Ollama (HU-R17).
-	if len(r.routes) != 16 {
+	// The existing host routes plus release removal and stored version selection.
+	if len(r.routes) != 19 {
 		t.Fatalf("routes = %d", len(r.routes))
 	}
 	for _, rt := range r.routes {
@@ -291,15 +291,8 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 	if w := call("GET", "/v1/m/agenttools/inventory", "", nil, ""); w.Code != 401 {
 		t.Fatalf("anonymous %d %s", w.Code, w.Body.String())
 	}
-	org := call("POST", "/v1/system/orgs", token, map[string]string{"name": "Tools", "slug": "tools"}, "")
-	if org.Code != 201 {
-		t.Fatalf("org %d %s", org.Code, org.Body.String())
-	}
-	var o struct {
-		Tenant model.TenantID `json:"tenant_id"`
-	}
-	json.Unmarshal(org.Body.Bytes(), &o)
-	p := call("POST", "/v1/m/agenttools/plans", token, map[string]string{"driver": "claude", "version": "latest"}, o.Tenant)
+	tenant := seedOrg(t, st, "Tools", "tools")
+	p := call("POST", "/v1/m/agenttools/plans", token, map[string]string{"driver": "claude", "version": "latest"}, tenant)
 	if p.Code != 200 {
 		t.Fatalf("plan %d %s", p.Code, p.Body.String())
 	}
@@ -307,7 +300,7 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 	json.Unmarshal(p.Body.Bytes(), &preview)
 	id := model.NewID()
 	body := map[string]any{"plan_digest": preview.Digest, "request_id": id}
-	if w := call("POST", "/v1/m/agenttools/installs", token, body, o.Tenant); w.Code != 403 {
+	if w := call("POST", "/v1/m/agenttools/installs", token, body, tenant); w.Code != 403 {
 		t.Fatalf("AAL1 %d %s", w.Code, w.Body.String())
 	}
 	principal, err := a.Authenticate(ctx, token)
@@ -325,22 +318,22 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", probeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	detection := call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(path), token, nil, o.Tenant)
+	detection := call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(path), token, nil, tenant)
 	if detection.Code != 200 || !strings.Contains(detection.Body.String(), `"version":"`+release+`"`) {
 		t.Fatalf("explicit detected version: %d %s", detection.Code, detection.Body.String())
 	}
-	foreign := call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(filepath.Join(probeDir, "other")), token, nil, o.Tenant)
+	foreign := call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(filepath.Join(probeDir, "other")), token, nil, tenant)
 	if foreign.Code != 400 {
 		t.Fatalf("non-candidate probe: %d %s", foreign.Code, foreign.Body.String())
 	}
-	installed := call("POST", "/v1/m/agenttools/installs", token, body, o.Tenant)
+	installed := call("POST", "/v1/m/agenttools/installs", token, body, tenant)
 	if installed.Code != 202 {
 		t.Fatalf("install %d %s", installed.Code, installed.Body.String())
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	var result Job
 	for time.Now().Before(deadline) {
-		w := call("GET", "/v1/m/agenttools/jobs/"+id.String(), token, nil, o.Tenant)
+		w := call("GET", "/v1/m/agenttools/jobs/"+id.String(), token, nil, tenant)
 		if w.Code != 200 {
 			t.Fatalf("job %d %s", w.Code, w.Body.String())
 		}
@@ -361,7 +354,7 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	detection = call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(path), token, nil, o.Tenant)
+	detection = call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(path), token, nil, tenant)
 	if detection.Code != 200 || !strings.Contains(detection.Body.String(), `"version":"`+release+`"`) {
 		t.Fatalf("selected probe with a managed release: %d %s", detection.Code, detection.Body.String())
 	}
@@ -376,11 +369,11 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 	if !bytes.Equal(managedBefore, managedAfter) || string(selectedAfter) != string(selectedBefore)+"ran\n" {
 		t.Fatalf("explicit selection executed unrelated tools or ran more than once: managed %q -> %q; selected %q -> %q", managedBefore, managedAfter, selectedBefore, selectedAfter)
 	}
-	if w := call("POST", "/v1/m/agenttools/installs", token, body, o.Tenant); w.Code != 202 {
+	if w := call("POST", "/v1/m/agenttools/installs", token, body, tenant); w.Code != 202 {
 		t.Fatalf("replay %d %s", w.Code, w.Body.String())
 	}
 	body["plan_digest"] = "changed"
-	if w := call("POST", "/v1/m/agenttools/installs", token, body, o.Tenant); w.Code != 409 {
+	if w := call("POST", "/v1/m/agenttools/installs", token, body, tenant); w.Code != 409 {
 		t.Fatalf("changed retry %d %s", w.Code, w.Body.String())
 	}
 	other := model.NewTenantID()
@@ -430,8 +423,22 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 			}
 		}
 	}
-	fault := call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(path), token, nil, o.Tenant)
+	fault := call("GET", "/v1/m/agenttools/detect?driver=claude&probe_path="+url.QueryEscape(path), token, nil, tenant)
 	if fault.Code != http.StatusUnprocessableEntity || !strings.Contains(fault.Body.String(), `"code":"destination_unsafe"`) {
 		t.Fatalf("global selected-probe failure was not reported: %d %s", fault.Code, fault.Body.String())
 	}
+}
+
+func seedOrg(t *testing.T, st store.Store, name, slug string) model.TenantID {
+	t.Helper()
+	ctx := context.Background()
+	var org model.Org
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: name, Slug: slug, Status: model.StatusActive})
+		return err
+	}); err != nil {
+		t.Fatalf("seed organization %s: %v", slug, err)
+	}
+	return org.TenantID
 }

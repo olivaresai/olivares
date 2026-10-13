@@ -61,11 +61,7 @@ func TestTaskIdentityMCPAndInferenceLifetime(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			code, org, raw := doDemoViewJSON(t, eng.api.Handler(), http.MethodPost, "/v1/system/orgs", ordinary, "", map[string]any{"name": "Task identity", "slug": "task-identity"})
-			if code != http.StatusCreated {
-				t.Fatalf("organization: %d %s", code, raw)
-			}
-			tenant := model.TenantID(org["tenant_id"].(string))
+			tenant := createOrganizationFixture(t, eng.store, "Task identity", "task-identity").TenantID
 			launchToken, _, err := eng.authr.IssueToken(ctx, launcher, auth.TokenSpec{Name: "task-launcher", BoundTenant: tenant, Role: auth.RoleEditor})
 			if err != nil {
 				t.Fatal(err)

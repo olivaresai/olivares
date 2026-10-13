@@ -5,8 +5,10 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowUp } from 'lucide-react'
 import {
+  useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -16,6 +18,11 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { toolName } from '@/features/agentops/tool-names'
@@ -23,13 +30,22 @@ import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import {
+  effortAfterModel,
+  useModelChoices,
+} from '@/features/agentops/model-choices'
+import {
+  EffortSelect,
+  ModelList,
+} from '@/features/agentops/model-effort-picker'
+import {
   sendBlockedReason,
   sessionTurnBody,
 } from '@/features/agentops/session-turn'
-import type { RunDTO } from '@/features/agentops/types'
+import type { RunCommandDTO, RunDTO } from '@/features/agentops/types'
 import { currentControlFence } from '@/features/agentops/work-fence'
 import { DictateButton } from '@/features/dictation/dictate-button'
 import { joinDictation } from '@/features/dictation/join'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { APPROVAL_READ } from '@/features/governance/use-pending-approvals'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
@@ -41,6 +57,15 @@ import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { useTenantLabel } from './tenant-label'
 import { approvalDestination } from './session-rail-model'
+import { SlashMenu } from './slash-menu'
+import {
+  commandLabel,
+  filterCommands,
+  insertText,
+  slashOptionId,
+  slashQuery,
+  type SlashMenuEmpty,
+} from './slash-menu-model'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 
 const PAGE = 200
@@ -228,6 +253,11 @@ export function WorkComposer({
   )
 
   const [turn, setTurn] = useState('')
+  // The draft as it is NOW, for a callback that fires seconds after it was made (dictation).
+  const turnRef = useRef(turn)
+  useEffect(() => {
+    turnRef.current = turn
+  }, [turn])
   const fieldRef = useRef<HTMLTextAreaElement>(null)
   // The field grows with its text from 2 to 8 rows, then scrolls.
   useLayoutEffect(() => {
@@ -238,6 +268,7 @@ export function WorkComposer({
   }, [turn])
   const [wire, setWire] = useState('')
   const sendReasonId = useId()
+  const slashListId = useId()
   const wireReasonId = useId()
   const sendTurn = useMutation({
     mutationFn: async (payload: { value: string; asWire: boolean }) => {
@@ -252,7 +283,7 @@ export function WorkComposer({
     retry: false,
     onSuccess: (_ok, payload) => {
       if (payload.asWire) setWire('')
-      else setTurn('')
+      else changeTurn('')
     },
     onError: (error: unknown) => {
       toast.error(launchFailureMessage(error, t('nav:launcher.turnFailed')))
@@ -262,6 +293,91 @@ export function WorkComposer({
   const runLive =
     attached.run.state === 'running' || attached.run.state === 'idle'
   const waitingApproval = attached.run.state === 'waiting_approval'
+
+  // THE "/" MENU: while the first word of the message is a slash command being typed,
+  // the session's own tool says what it offers (commands, skills, agents), asked again
+  // each time the menu opens so a skill added meanwhile is there. Escape closes it for
+  // the word typed so far; the next character brings it back.
+  const slash = slashQuery(turn)
+  const [slashDismissed, setSlashDismissed] = useState<string | null>(null)
+  const [slashActive, setSlashActive] = useState(0)
+  /** Every change of the draft: the choice goes back to the first entry, and an Escape lasts only while the word is the same. */
+  function changeTurn(next: string) {
+    setTurn(next)
+    setSlashActive(0)
+    if (slashQuery(next) !== slashDismissed) setSlashDismissed(null)
+  }
+  // While a send is pending the field is disabled and the list would only be a target
+  // for a click that rewrites the draft under it.
+  const menuOpen =
+    canWrite &&
+    runLive &&
+    !sendTurn.isPending &&
+    !!activeTenant &&
+    slash !== null &&
+    slashDismissed !== slash
+  const commandsQuery = useQuery({
+    queryKey: agentOpsKeys.runCommands(activeTenant, attached.run.run_ref),
+    queryFn: ({ signal }) =>
+      agentOpsApi.commands(attached.run.run_ref, { signal }),
+    enabled: menuOpen,
+    // Every opening asks again (the engine caches for a few seconds); the last answer
+    // shows meanwhile.
+    staleTime: 0,
+    // A refocused window does not re-ask while the menu is open: that would flicker the
+    // one-line state and re-announce it.
+    refetchOnWindowFocus: false,
+    retry: false,
+  })
+  const catalog = commandsQuery.data
+  const slashMatches = useMemo<RunCommandDTO[]>(
+    () =>
+      menuOpen && catalog?.reported
+        ? filterCommands(catalog.commands, slash ?? '')
+        : [],
+    [menuOpen, catalog, slash],
+  )
+  const slashIndex = Math.min(slashActive, Math.max(slashMatches.length - 1, 0))
+  // Why there is nothing to choose: still reading (also while an old "nothing reported"
+  // is being asked again), not readable, nothing reported, or nothing matches.
+  const readFailed = commandsQuery.isError && !commandsQuery.isFetching
+  let slashEmpty: SlashMenuEmpty = 'nomatch'
+  if (!catalog) slashEmpty = readFailed ? 'failed' : 'loading'
+  else if (!catalog.reported || catalog.commands.length === 0)
+    slashEmpty = readFailed
+      ? 'failed'
+      : commandsQuery.isFetching
+        ? 'loading'
+        : 'unreported'
+  const slashEmptyText =
+    slashEmpty === 'nomatch'
+      ? t('nav:launcher.slashNoMatch', { query: slash ?? '' })
+      : t(`nav:launcher.slash.${slashEmpty}`)
+  // What is listed may be older than the tool: the engine served what the tool reported
+  // before (stale), or this console's own refresh failed and the previous list stays.
+  // The one line already says the read failed when there is nothing else to show.
+  const slashStale =
+    menuOpen &&
+    !!catalog?.reported &&
+    slashEmpty !== 'failed' &&
+    (catalog.stale === true || readFailed)
+  const slashNotice = slashStale ? t('nav:launcher.slash.stale') : ''
+  // The one live region of the menu: it exists before the menu opens and only its text
+  // changes, which is what a screen reader announces. The active option is said here too,
+  // because not every reader follows aria-activedescendant on a text field.
+  const slashSaid = !menuOpen
+    ? ''
+    : slashMatches.length > 0
+      ? t('nav:launcher.slashOption', {
+          name: commandLabel(slashMatches[slashIndex]),
+          i: slashIndex + 1,
+          n: slashMatches.length,
+        })
+      : slashEmptyText
+  const pickCommand = (command: RunCommandDTO) => {
+    changeTurn(insertText(command))
+    fieldRef.current?.focus()
+  }
   // A disabled Send says why, from the state that disables it.
   const sendReason = sendBlockedReason({
     live: runLive,
@@ -290,6 +406,32 @@ export function WorkComposer({
     // Enter sends and Shift+Enter breaks a line (the binding table matches Enter alone);
     // a key that is choosing a character of an IME composition is not a send.
     if (e.nativeEvent.isComposing) return
+    if (menuOpen && e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      setSlashDismissed(slash)
+      return
+    }
+    const plain = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey
+    if (menuOpen && slashMatches.length > 0 && plain) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        setSlashActive(
+          (slashIndex + step + slashMatches.length) % slashMatches.length,
+        )
+        return
+      }
+      const active = slashMatches[slashIndex]
+      // A name typed in full is a command already: Enter sends it (the menu ranks it
+      // first), Tab still completes. Any other Enter chooses the active entry.
+      const typedInFull = commandLabel(active) === turn
+      if (e.key === 'Tab' || (e.key === 'Enter' && !typedInFull)) {
+        e.preventDefault()
+        pickCommand(active)
+        return
+      }
+    }
     const command = resolveBinding(KEYBINDINGS, e, { launcherFocused: true })
     if (command !== 'launcher.start' && command !== 'launcher.startBackground')
       return
@@ -312,6 +454,23 @@ export function WorkComposer({
       attached.run.provider_environment_ref || null,
     ),
   }
+  // THE SESSION'S MODEL AND EFFORT. The tool cannot change either inside a running
+  // session, so a different choice is handed to a new session: the person sees what this
+  // session keeps and starts the other one from here, preset.
+  const sessionModel =
+    attached.run.model_ref || attached.run.usage_model_ref || ''
+  const sessionEffort = attached.run.effort ?? ''
+  const [modelOpen, setModelOpen] = useState(false)
+  const [draft, setDraft] = useState<{ model: string; effort: string } | null>(
+    null,
+  )
+  const chosen = draft ?? { model: sessionModel, effort: sessionEffort }
+  const modelChoices = useModelChoices({
+    profileRef: attached.run.provider_profile_ref ?? '',
+    driver: attached.run.provider_driver ?? '',
+    model: chosen.model,
+    enabled: canWrite && modelOpen,
+  })
   // Read-only operators still see the scope declared by the run.
   if (!canWrite) {
     return <ScopeLine {...attachedScope} className="px-3 py-2" />
@@ -333,10 +492,12 @@ export function WorkComposer({
   const driver = attached.run.provider_driver
   const toolModel = [
     driver ? toolName(driver) : null,
-    attached.run.model_ref || attached.run.usage_model_ref || null,
+    sessionModel || null,
+    sessionEffort || null,
   ]
     .filter(Boolean)
     .join(' · ')
+  const chipText = toolModel || t('agentops:create.model')
   // A session that cannot take a turn says why where the sentence would go: the
   // placeholder is the one place a disabled field already is read.
   const blockedText =
@@ -376,70 +537,190 @@ export function WorkComposer({
           </Link>
         </p>
       ) : null}
+      {menuOpen ? (
+        <SlashMenu
+          listId={slashListId}
+          items={slashMatches}
+          active={slashIndex}
+          emptyText={slashEmptyText}
+          notice={slashNotice}
+          onPick={pickCommand}
+        />
+      ) : null}
+      <p role="status" data-testid="slash-status" className="sr-only">
+        {slashSaid}
+      </p>
+      {/* Its own region, so the notice is said when it appears and not with every key. */}
+      <p role="status" data-testid="slash-notice-status" className="sr-only">
+        {slashNotice}
+      </p>
       <textarea
         ref={fieldRef}
         id={COMPOSER_INPUT_ID}
         value={turn}
         rows={2}
-        onChange={(e) => setTurn(e.target.value)}
+        onChange={(e) => changeTurn(e.target.value)}
         onKeyDown={onKeyDown}
+        // Leaving the field closes the menu: its keys only reach it while it has focus.
+        onBlur={() => {
+          if (menuOpen) setSlashDismissed(slash)
+        }}
         placeholder={placeholder}
         aria-label={t('nav:launcher.turnAria')}
+        aria-autocomplete={menuOpen ? 'list' : undefined}
+        aria-controls={
+          menuOpen && slashMatches.length > 0 ? slashListId : undefined
+        }
+        aria-activedescendant={
+          menuOpen && slashMatches.length > 0
+            ? slashOptionId(slashListId, slashIndex)
+            : undefined
+        }
         data-testid="launcher-input"
         disabled={!runLive || sendTurn.isPending}
         className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
       />
       <div className="flex min-w-0 items-center gap-2 px-3 pb-3">
-        {toolModel ? (
-          <span
-            data-testid="composer-tool-model"
-            title={toolModel}
-            className="min-w-0 max-w-48 shrink truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-overline font-normal text-text-2"
+        {/* ALWAYS THERE: a session whose tool has not said its model yet still takes the
+            choice, and the scope of the next action lives in this popover. */}
+        <Popover
+          open={modelOpen}
+          onOpenChange={(next) => {
+            setModelOpen(next)
+            if (!next) setDraft(null)
+          }}
+        >
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              data-testid="composer-tool-model"
+              aria-label={t('nav:launcher.modelAria', { value: chipText })}
+              title={chipText}
+              className="min-w-0 max-w-64 shrink truncate rounded-[6px] bg-muted px-1.5 py-0.5 text-overline font-normal text-text-2 outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              {chipText}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            className="w-80 max-w-[calc(100vw-2rem)] p-0"
           >
-            {toolModel}
-          </span>
-        ) : null}
-        <AdvancedDisclosure label={t('nav:launcher.advanced')}>
-          <div className="absolute inset-x-0 bottom-full z-20 mb-1 flex flex-col gap-2 rounded-md border border-border bg-elevated p-2 shadow-lg">
-            <p className="text-caption text-muted-foreground">
-              {t('nav:launcher.advancedHint')}
-            </p>
-            <div className="flex items-center gap-2">
-              <Input
-                value={wire}
-                onChange={(e) => setWire(e.target.value)}
-                placeholder={t('nav:launcher.wirePlaceholder')}
-                aria-label={t('nav:launcher.wireAria')}
-                data-testid="composer-wire-input"
-                disabled={!runLive || sendTurn.isPending}
-                mono
-                className="h-8 min-w-0 flex-1"
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="shrink-0"
-                disabled={wireReason !== null}
-                aria-describedby={wireReason ? wireReasonId : undefined}
-                onClick={sendWire}
-                data-testid="composer-wire-send"
-              >
-                {t('nav:launcher.send')}
-              </Button>
+            <ModelList
+              driver={attached.run.provider_driver ?? ''}
+              choices={modelChoices}
+              value={chosen.model}
+              onPick={(next) =>
+                setDraft({
+                  model: next,
+                  effort: effortAfterModel(
+                    attached.run.provider_driver ?? '',
+                    modelChoices.catalog,
+                    next,
+                    '',
+                    chosen.effort,
+                  ),
+                })
+              }
+            />
+            <div className="flex flex-col gap-2 border-t border-border p-3">
+              <label className="flex flex-col gap-1 text-caption text-text-2">
+                {t('agentops:create.effort')}
+                <EffortSelect
+                  label={t('agentops:create.effort')}
+                  efforts={modelChoices.efforts}
+                  value={chosen.effort}
+                  onChange={(effort) =>
+                    setDraft({ model: chosen.model, effort })
+                  }
+                  defaultEffort={modelChoices.start?.default_effort}
+                />
+              </label>
+              {modelChoices.efforts === null ? (
+                <p className="text-caption text-muted-foreground">
+                  {t('agentops:picker.effortNeedsModel')}
+                </p>
+              ) : null}
+              {draft &&
+              (draft.model !== sessionModel ||
+                draft.effort !== sessionEffort) ? (
+                <>
+                  <p className="text-caption text-muted-foreground">
+                    {t('nav:launcher.sessionKeeps', {
+                      value: chipText,
+                    })}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    data-testid="composer-new-with-choice"
+                    onClick={() => {
+                      useNewSessionDialog.getState().openAdvanced({
+                        profileRef: attached.run.provider_profile_ref,
+                        // A model the tool only reported (usage) was not chosen.
+                        model:
+                          draft.model === sessionModel
+                            ? (attached.run.model_ref ?? '')
+                            : draft.model,
+                        effort: draft.effort,
+                      })
+                      setModelOpen(false)
+                      setDraft(null)
+                    }}
+                  >
+                    {t('nav:launcher.startWithChoice')}
+                  </Button>
+                </>
+              ) : null}
+              <ScopeLine {...attachedScope} />
             </div>
-            {wireReason && (
-              <p
-                id={wireReasonId}
-                className="text-caption text-muted-foreground"
-              >
-                {t(`agentops:${wireReason}`)}
+          </PopoverContent>
+        </Popover>
+        {/* THE RAW LINE IS A DEVELOPER'S TOOL: one NDJSON line to the tool's stdin. A
+            production console does not show it (the CLI and the API keep it), and it
+            carries its own name, not "Advanced". */}
+        {import.meta.env.DEV ? (
+          <AdvancedDisclosure label={t('nav:launcher.rawLine')}>
+            <div className="absolute inset-x-0 bottom-full z-20 mb-1 flex flex-col gap-2 rounded-md border border-border bg-elevated p-2 shadow-lg">
+              <p className="text-caption text-muted-foreground">
+                {t('nav:launcher.advancedHint')}
               </p>
-            )}
-
-            <ScopeLine {...attachedScope} />
-          </div>
-        </AdvancedDisclosure>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={wire}
+                  onChange={(e) => setWire(e.target.value)}
+                  placeholder={t('nav:launcher.wirePlaceholder')}
+                  aria-label={t('nav:launcher.wireAria')}
+                  data-testid="composer-wire-input"
+                  disabled={!runLive || sendTurn.isPending}
+                  mono
+                  className="h-8 min-w-0 flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={wireReason !== null}
+                  aria-describedby={wireReason ? wireReasonId : undefined}
+                  onClick={sendWire}
+                  data-testid="composer-wire-send"
+                >
+                  {t('nav:launcher.send')}
+                </Button>
+              </div>
+              {wireReason && (
+                <p
+                  id={wireReasonId}
+                  className="text-caption text-muted-foreground"
+                >
+                  {t(`agentops:${wireReason}`)}
+                </p>
+              )}
+            </div>
+          </AdvancedDisclosure>
+        ) : null}
         {/* SEND IS A 32 px ROUND ICON: orange only while there is something to send (the
             one primary action of the thread), a quiet ghost otherwise. It is never
             dashed: a control that cannot act says so by being quiet, and why in its
@@ -448,7 +729,7 @@ export function WorkComposer({
           <DictateButton
             disabled={!runLive || sendTurn.isPending}
             field={fieldRef}
-            onText={(text) => setTurn((draft) => joinDictation(draft, text))}
+            onText={(text) => changeTurn(joinDictation(turnRef.current, text))}
           />
           <Button
             type="button"

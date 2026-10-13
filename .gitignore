@@ -142,7 +142,7 @@ olivares-data/
 # Commercial license Worker (commercial/license-worker): local deps, wrangler
 # state, build output, and LOCAL SECRETS. .dev.vars holds the dev signing key + Polar/
 # Resend secrets and must NEVER be committed (the .example template IS committed).
-/commercial/license-worker/node_modules/
+/commercial/license-worker/node_modules
 /commercial/license-worker/.wrangler/
 /commercial/license-worker/dist/
 /commercial/license-worker/.dev.vars

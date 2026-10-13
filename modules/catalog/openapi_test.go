@@ -44,7 +44,7 @@ func TestCatalogMutationRequestBodyCensus(t *testing.T) {
 		{
 			method: http.MethodPost, pattern: "/entries/{id}/admit", kind: catalogBodyful,
 			fields:   []string{"bundle", "expected_digest", "note", "predicate_types"},
-			required: []string{"bundle"},
+			required: nil,
 		},
 		{
 			method: http.MethodPut, pattern: "/connector-admission/policy", kind: catalogBodyful,

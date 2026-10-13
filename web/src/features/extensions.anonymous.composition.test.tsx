@@ -31,7 +31,11 @@ vi.mock('./extensions', async () => {
     'Acceder con ejemplo',
   )
   return {
+    LAUNCH_IDENTITY_EXTENSION: undefined,
     PANEL_EXTENSIONS: {
+      identityTabs: [],
+      governanceTabs: [],
+      executiveRiskCards: [],
       capabilitiesTabs: [],
       complianceTabs: [],
       reportingCards: [],

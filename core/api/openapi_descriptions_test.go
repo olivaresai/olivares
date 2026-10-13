@@ -175,3 +175,54 @@ func TestApplyOperationDescriptionsFiltersCatalogOnlySummaries(t *testing.T) {
 		t.Fatalf("handler-doc summary = %q, want %q", handlerDoc["summary"], want)
 	}
 }
+
+// TestIdentityOperationDescriptionsQualifyEditionUnavailability protects the shared
+// generated metadata used by Community, Business base and Business Identity & Scale.
+// Paid routes need an edition prerequisite, while a refusal applies only when that
+// prerequisite is absent: a Business handler must not be described as always refusing.
+func TestIdentityOperationDescriptionsQualifyEditionUnavailability(t *testing.T) {
+	t.Parallel()
+
+	for _, route := range []struct{ method, path string }{
+		{"POST", "/v1/m/governance/nhi/{ref}/offboard/finalize"},
+		{"POST", "/v1/m/governance/roster/sync"},
+		{"GET", "/v1/m/governance/nhi"},
+		{"GET", "/v1/m/governance/nhi/posture"},
+		{"GET", "/v1/m/governance/nhi/{ref}"},
+		{"GET", "/v1/m/governance/nhi/{ref}/events"},
+		{"PUT", "/v1/m/governance/nhi/{ref}/ownership"},
+		{"PUT", "/v1/m/governance/nhi/{ref}/policy"},
+		{"POST", "/v1/m/governance/nhi/sweep"},
+		{"POST", "/v1/m/governance/nhi/{ref}/rotate"},
+		{"POST", "/v1/m/governance/nhi/{ref}/offboard"},
+		{"POST", "/v1/m/governance/nhi/{ref}/restore"},
+		{"POST", "/v1/m/governance/agents"},
+		{"GET", "/v1/m/identity/wif"},
+		{"GET", "/v1/m/identity/external-keys"},
+		{"GET", "/v1/m/identity/residency"},
+	} {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			op := map[string]any{"summary": "registered module route"}
+			paths := map[string]any{route.path: map[string]any{strings.ToLower(route.method): op}}
+			applyOperationDescriptions(paths)
+			fields := []string{"description"}
+			if route.path != "/v1/m/governance/nhi/{ref}/offboard/finalize" {
+				fields = append(fields, "summary")
+			}
+			for _, field := range fields {
+				prose, ok := op[field].(string)
+				if !ok {
+					t.Fatalf("published %s is missing", field)
+				}
+				lower := strings.ToLower(prose)
+				if !strings.Contains(lower, "requires business") {
+					t.Errorf("published %s omits the Business prerequisite: %q", field, prose)
+				}
+				status := strings.Index(lower, "http 501")
+				if status < 0 || !strings.Contains(lower[status:], "when unavailable") {
+					t.Errorf("published %s does not qualify the refusal by edition availability: %q", field, prose)
+				}
+			}
+		})
+	}
+}

@@ -98,7 +98,7 @@ func TestSeedDemoThenSelfRestartReachesReadiness(t *testing.T) {
 			t.Fatalf("demo access graph = %d: %s, want %d", code, raw, want)
 		}
 	}
-	assertGraph(t, second, http.StatusOK)
+	assertGraph(t, second, editionDemoGraphStatus())
 	// The next fixture is another start of the same binary, not a second engine beside this one.
 	_ = second.Close()
 	t.Run("explicit selection stays authoritative", func(t *testing.T) {

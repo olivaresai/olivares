@@ -163,8 +163,17 @@ class FakeControlPlane(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
-        elif url.path == "/raw-request":
+        elif url.path in ("/raw-request", "/v1/m/knowledge/memory/import"):
             self._json(200, {})
+        elif url.path.startswith("/v1/m/skills/"):
+            required_header = (
+                "Idempotency-Key" if self.command == "POST"
+                else "If-Match" if self.command in ("PUT", "DELETE") else None
+            )
+            if required_header and not self.headers.get(required_header):
+                self._json(400, {"error": {"code": "invalid_request", "message": "missing header"}})
+            else:
+                self._json(201 if self.command == "POST" else 200, {"ok": True})
         elif url.path.startswith("/v1/console/sso/tenants/"):
             self._json(200, {"ok": True})
         elif url.path == "/v1/auth/capabilities" and self.command == "POST":
@@ -254,6 +263,52 @@ class ClientSmokeTest(unittest.TestCase):
         self.assertEqual(headers["X-Olivares-Tenant"], "t-override")
         self.assertIn("olivares-client-python/", headers["User-Agent"])
         self.assertIn(f"api {API_VERSION}", headers["User-Agent"])
+
+    def test_skills_mutation_headers_reach_wire(self):
+        cases = (
+            ("post_v1_m_skills_packs_by_id_update", ["pack/a", {"apply": True, "expected_digest": "a" * 64}],
+             "POST", "/v1/m/skills/packs/pack%2Fa/update", "Idempotency-Key", "reviewed-update"),
+            ("post_v1_m_skills_packs", [{"name": "pack", "source": {"kind": "builtin", "ref": "ecc"}}],
+             "POST", "/v1/m/skills/packs", "Idempotency-Key", "install-pack"),
+            ("post_v1_m_skills_packs_by_id_revisions", ["pack/a", {"source": {"kind": "builtin", "ref": "ecc"}}],
+             "POST", "/v1/m/skills/packs/pack%2Fa/revisions", "Idempotency-Key", "import-revision"),
+            ("put_v1_m_skills_assignments_by_id", ["assignment/a", {"target_kind": "folder", "target_id": "folder", "pack_revision_id": "revision"}],
+             "PUT", "/v1/m/skills/assignments/assignment%2Fa", "If-Match", '"3"'),
+            ("delete_v1_m_skills_assignments_by_id", ["assignment/a"],
+             "DELETE", "/v1/m/skills/assignments/assignment%2Fa", "If-Match", '"3"'),
+        )
+        for name, args, verb, route, header, value in cases:
+            with self.subTest(operation=name):
+                out = getattr(self.client, name)(
+                    *args, headers={header: value}, tenant="t-folder", trace="wire",
+                )
+                self.assertEqual(out, {"ok": True})
+                method, path, headers = FakeControlPlane.requests[-1]
+                self.assertEqual((method, path), (verb, route + "?trace=wire"))
+                self.assertEqual(headers[header], value)
+                self.assertEqual(headers["X-Olivares-Tenant"], "t-folder")
+                self.assertEqual(headers["Authorization"], "Bearer olvk_test_secret")
+                if verb != "DELETE":
+                    self.assertEqual(json.loads(FakeControlPlane.request_bodies[-1]), args[-1])
+                    self.assertEqual(headers["Content-Type"], "application/json")
+
+    def test_raw_response_headers_reach_wire(self):
+        self.client.get_metrics(headers={"X-Request-ID": "raw-wire"}, tenant="t-raw", trace="raw")
+        method, path, headers = FakeControlPlane.requests[-1]
+        self.assertEqual((method, path), ("GET", "/metrics?trace=raw"))
+        self.assertEqual({k.lower(): v for k, v in headers.items()}["x-request-id"], "raw-wire")
+        self.assertEqual(headers["X-Olivares-Tenant"], "t-raw")
+
+    def test_raw_request_headers_reach_wire(self):
+        body = b'{"fact":"wire"}\n'
+        self.client.post_v1_m_knowledge_memory_import(
+            body, headers={"X-Request-ID": "raw-request"}, trace="raw",
+        )
+        method, path, headers = FakeControlPlane.requests[-1]
+        self.assertEqual((method, path), ("POST", "/v1/m/knowledge/memory/import?trace=raw"))
+        self.assertEqual({k.lower(): v for k, v in headers.items()}["x-request-id"], "raw-request")
+        self.assertEqual(headers["Content-Type"], "application/x-ndjson")
+        self.assertEqual(FakeControlPlane.request_bodies[-1], body)
 
     def test_sso_tenant_paths_are_independent_of_transport_tenant(self):
         routes = (

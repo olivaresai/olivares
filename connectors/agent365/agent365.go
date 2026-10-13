@@ -53,13 +53,14 @@
 // packages deployed to all users. It imports only the SDK, the Apache
 // identitysource contract and the shared httpx/redact internals, never the
 // engine.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package agent365
 
 import (
 	"context"
-	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -82,12 +83,6 @@ const (
 // packagesPath is the Agent 365 package inventory list surface (Graph v1.0;
 // verified 2026-07-04 under the Package Management API docs).
 const packagesPath = "/v1.0/copilot/admin/catalog/packages"
-
-// kindRegisteredAgent is the Identity.Kind stamped on every registry package.
-// A package-level row is a governed NHI but NEVER a firm per-agent identity
-// signal (that is KindAgentIdentity territory, which only the identity-level
-// federation sources may claim — see identitysource docs).
-const kindRegisteredAgent = "registered_agent"
 
 // Source is the Agent 365 registry connector. It satisfies sdk.SourceConnector
 // (registry-hygiene findings) and identitysource.GraphProvider (the registry
@@ -198,71 +193,6 @@ type copilotPackage struct {
 	LastModifiedDateTime string   `json:"lastModifiedDateTime"`
 }
 
-// copilotPackageDetail is the opt-in detail payload. It intentionally decodes
-// only the fields mapped below. Long descriptions, zipFile and
-// elementDetails.elements[].definition are omitted from the struct so they
-// cannot surface in attributes.
-type copilotPackageDetail struct {
-	Categories            []string               `json:"categories"`
-	Sensitivity           string                 `json:"sensitivity"`
-	AllowedUsersAndGroups *[]packageAccessEntity `json:"allowedUsersAndGroups"`
-	AcquireUsersAndGroups *[]packageAccessEntity `json:"acquireUsersAndGroups"`
-	ElementDetails        []packageElementDetail `json:"elementDetails"`
-}
-
-// packageAccessEntity is deliberately empty: the connector maps only collection
-// counts, not resource ids/types.
-type packageAccessEntity struct{}
-
-type packageElementDetail struct {
-	ElementType string `json:"elementType"`
-}
-
-// Snapshot reads the registry package inventory read-only and assembles the
-// identity graph: one NHI per package (an admin-blocked package is Disabled —
-// a governance signal). With no configured credential it returns the offline
-// (empty) graph and a nil error. It never returns credential material.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceAgent365, CapturedAt: s.clock().UTC()}
-	if s.offline() {
-		return g, nil // offline
-	}
-
-	client, err := s.graphClient(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	packages, err := s.listPackages(ctx, client)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, p := range packages {
-		if p.ID == "" {
-			continue // a row without the natural key cannot be deduplicated
-		}
-		attrs := packageAttrs(p)
-		if s.expandDetails {
-			detail, ok, err := s.packageDetail(ctx, client, p.ID)
-			if err != nil {
-				return identitysource.Graph{}, err
-			}
-			if ok {
-				enrichAttrs(attrs, p, detail)
-			}
-		}
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         p.ID,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        kindRegisteredAgent,
-			DisplayName: p.DisplayName,
-			Source:      identitysource.SourceAgent365,
-			Disabled:    p.IsBlocked,
-			Attributes:  pruneAttrs(attrs),
-		})
-	}
-	return g, nil
-}
-
 func (s *Source) listPackages(ctx context.Context, client *httpx.Client) ([]copilotPackage, error) {
 	var out []copilotPackage
 	path := packagesPath
@@ -283,59 +213,6 @@ func (s *Source) listPackages(ctx context.Context, client *httpx.Client) ([]copi
 		path = resp.NextLink // absolute and self-contained (httpx uses it verbatim)
 	}
 	return out, nil
-}
-
-func (s *Source) packageDetail(ctx context.Context, client *httpx.Client, id string) (copilotPackageDetail, bool, error) {
-	path := packagesPath + "/" + url.PathEscape(id)
-	var detail copilotPackageDetail
-	if err := client.GetJSON(ctx, path, nil, &detail); err != nil {
-		var se *httpx.StatusError
-		if errors.As(err, &se) && (se.Status == http.StatusForbidden || se.Status == http.StatusNotFound) {
-			return copilotPackageDetail{}, false, nil
-		}
-		return copilotPackageDetail{}, false, err
-	}
-	return detail, true, nil
-}
-
-func packageAttrs(p copilotPackage) map[string]string {
-	return map[string]string{
-		"type":              p.Type,
-		"publisher":         p.Publisher,
-		"version":           p.Version,
-		"app_id":            p.AppID,
-		"manifest_id":       p.ManifestID,
-		"asset_id":          p.AssetID,
-		"short_description": p.ShortDescription,
-		"available_to":      p.AvailableTo,
-		"deployed_to":       p.DeployedTo,
-		"element_types":     strings.Join(p.ElementTypes, ","),
-		"last_modified":     p.LastModifiedDateTime,
-	}
-}
-
-func enrichAttrs(attrs map[string]string, p copilotPackage, d copilotPackageDetail) {
-	attrs["sensitivity"] = d.Sensitivity
-	attrs["categories"] = strings.Join(d.Categories, ",")
-	if d.AllowedUsersAndGroups != nil {
-		attrs["allowed_users_and_groups"] = strconv.Itoa(len(*d.AllowedUsersAndGroups))
-	}
-	if d.AcquireUsersAndGroups != nil {
-		attrs["acquire_users_and_groups"] = strconv.Itoa(len(*d.AcquireUsersAndGroups))
-	}
-	if len(p.ElementTypes) == 0 {
-		attrs["element_types"] = strings.Join(detailElementTypes(d), ",")
-	}
-}
-
-func detailElementTypes(d copilotPackageDetail) []string {
-	out := make([]string, 0, len(d.ElementDetails))
-	for _, e := range d.ElementDetails {
-		if e.ElementType != "" {
-			out = append(out, e.ElementType)
-		}
-	}
-	return out
 }
 
 // offline reports whether the connector lacks effective auth. A delegated token
@@ -362,18 +239,4 @@ func (s *Source) clock() time.Time {
 		return s.now()
 	}
 	return time.Now()
-}
-
-// pruneAttrs drops empty values and returns nil for an empty map, so emitted
-// Attributes are diff-stable (the claude-wif convention).
-func pruneAttrs(m map[string]string) map[string]string {
-	for k, v := range m {
-		if v == "" {
-			delete(m, k)
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
 }

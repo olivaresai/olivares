@@ -159,23 +159,14 @@ func bootJoinedApplyPostcommitEstate(t *testing.T, backing communicationHTTPTest
 	}); code != http.StatusCreated {
 		t.Fatalf("setup = %d", code)
 	}
-	code, login, _ := doDemoViewJSON(t, handler, http.MethodPost, "/v1/auth/login", "", "", map[string]any{
+	code, _, _ := doDemoViewJSON(t, handler, http.MethodPost, "/v1/auth/login", "", "", map[string]any{
 		"email": "root@joined-apply-postcommit.test", "password": "joined-apply-postcommit-root-password",
 	})
 	if code != http.StatusOK {
 		t.Fatalf("login = %d", code)
 	}
-	adminToken, _ := login["token"].(string)
-	code, org, _ := doDemoViewJSON(t, handler, http.MethodPost, "/v1/system/orgs", adminToken, "",
-		map[string]any{"name": "joined apply postcommit", "slug": "joined-apply-postcommit"})
-	if code != http.StatusCreated {
-		t.Fatalf("create tenant = %d", code)
-	}
-	tenantID, _ := org["tenant_id"].(string)
-	if tenantID == "" {
-		t.Fatal("created tenant has no id")
-	}
-	return joinedApplyPostcommitEstate{eng: eng, tenant: model.TenantID(tenantID)}
+	tenantID := createOrganizationFixture(t, eng.store, "joined apply postcommit", "joined-apply-postcommit").TenantID
+	return joinedApplyPostcommitEstate{eng: eng, tenant: tenantID}
 }
 
 func seedJoinedApplyPostcommitOwner(t *testing.T, e joinedApplyPostcommitEstate, slug string) joinedApplyPostcommitOwner {

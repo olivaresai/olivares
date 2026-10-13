@@ -160,7 +160,9 @@ func TestSetupRollsBackItsTenantWhenTheSuperadminCannotBeCreated(t *testing.T) {
 		t.Fatalf("setup = %d %s", first.code, first.raw)
 	}
 	admin := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "root@x.io", "password": "supersecret1"}, nil)
-	adminTok, _ := admin.body["token"].(string)
+	if admin.code != http.StatusOK {
+		t.Fatalf("login = %d %s", admin.code, admin.raw)
+	}
 
 	// Re-mint the consumed one-time token so the second attempt reaches the
 	// provisioning path instead of being turned away at the door.
@@ -176,17 +178,14 @@ func TestSetupRollsBackItsTenantWhenTheSuperadminCannotBeCreated(t *testing.T) {
 		t.Fatalf("second setup = %d %s, want 409 setup_complete", second.code, second.raw)
 	}
 
-	lr := h.do("GET", "/v1/system/orgs", adminTok, nil, nil)
-	if lr.code != http.StatusOK {
-		t.Fatalf("list orgs = %d %s", lr.code, lr.raw)
-	}
-	items, _ := lr.body["items"].([]any)
+	items := h.storedOrgs()
 	if len(items) != 1 {
-		t.Fatalf("orgs after a failed second setup = %d, want 1 (the tenant it provisioned must be rolled back): %s", len(items), lr.raw)
+		t.Fatalf("organizations after failed second setup = %d, want 1", len(items))
 	}
-	if m, _ := items[0].(map[string]any); m["slug"] != "default" {
-		t.Fatalf("surviving org = %v, want the one the FIRST setup created", items[0])
+	if items[0].Slug != "default" {
+		t.Fatalf("surviving organization = %+v", items[0])
 	}
+
 }
 
 // TestSetupNeverDropsATenantThatAlreadyHasAnOwner is the other half of the
@@ -228,16 +227,14 @@ func TestSetupNeverDropsATenantThatAlreadyHasAnOwner(t *testing.T) {
 	}
 	token, _ := lr.body["token"].(string)
 
-	olr := h.do("GET", "/v1/system/orgs", token, nil, nil)
-	items, _ := olr.body["items"].([]any)
 	stillThere := false
-	for _, it := range items {
-		if m, _ := it.(map[string]any); m["tenant_id"] == tenant {
+	for _, org := range h.storedOrgs() {
+		if org.TenantID.String() == tenant {
 			stillThere = true
 		}
 	}
 	if !stillThere {
-		t.Fatalf("the owned tenant %s was dropped by the losing setup: %s", tenant, olr.raw)
+		t.Fatalf("owned tenant %s was dropped by losing setup", tenant)
 	}
 
 	wr := h.do("GET", "/v1/auth/whoami", token, nil, nil)
@@ -288,11 +285,11 @@ func TestSetupAdoptsAnOwnerlessOrganization(t *testing.T) {
 
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "root@x.io", "password": "supersecret1"}, nil)
 	token, _ := lr.body["token"].(string)
-	olr := h.do("GET", "/v1/system/orgs", token, nil, nil)
-	items, _ := olr.body["items"].([]any)
+	items := h.storedOrgs()
 	if len(items) != 1 {
-		t.Fatalf("orgs after adoption = %d, want 1: %s", len(items), olr.raw)
+		t.Fatalf("organizations after adoption = %d, want 1", len(items))
 	}
+
 	if r := h.do("GET", "/v1/workspaces", token, nil, map[string]string{"X-Olivares-Tenant": orphan.String()}); r.code != http.StatusOK {
 		t.Fatalf("GET /v1/workspaces on the adopted tenant = %d %s", r.code, r.raw)
 	}

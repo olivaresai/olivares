@@ -843,7 +843,13 @@ export interface LicenseStatusDTO {
    * older clients keep parsing. */
   max_users: number
   issued_at?: string
+  /** When the right ends if nothing renews it. For a purchase still in its refund window this is
+   * the short lease, not the paid term: show `paid_through` as the licence term when present. */
   expires_at?: string
+  /** End of the term the buyer paid for (the date the licence email states). v3 credentials only. */
+  paid_through?: string
+  /** End of the provisional lease of the base line; absent once the paid term starts. */
+  lease_until?: string
   /** @deprecated Retained for wire compatibility and IGNORED by this console. Nothing
    * enforces a seat limit any more; the engine normalizes any non-positive figure to
    * (0, false) = unlimited, so these must never be rendered as a quota. */

@@ -7,9 +7,7 @@ package governance_test
 import (
 	"context"
 	"errors"
-	"net/http"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -19,19 +17,12 @@ import (
 func TestAgentEligibleForWorkRequiresLiveLifecycleAndSponsor(t *testing.T) {
 	h := newHarness(t)
 	tenant, tok := h.nhiTenant()
-	hdr := tenantHdr(tenant)
 	ctx := context.Background()
 
 	register := func(agentRef, sponsorRef string) {
 		t.Helper()
 		h.seedIdentity(tenant, sponsorRef, "user", "okta", "human", false)
-		if r := h.do("POST", "/v1/m/governance/agents", tok, map[string]any{
-			"identity_ref": agentRef,
-			"source":       "spiffe",
-			"sponsor_ref":  sponsorRef,
-		}, hdr); r.code != http.StatusCreated {
-			t.Fatalf("register %s = %d %s", agentRef, r.code, r.raw)
-		}
+		registerWorkAgent(t, h, tenant, tok, agentRef, sponsorRef)
 	}
 
 	register("agent:work:eligible", "human:work:eligible")
@@ -52,9 +43,7 @@ func TestAgentEligibleForWorkRequiresLiveLifecycleAndSponsor(t *testing.T) {
 	if eligible, err := h.gov.AgentEligibleForWork(ctx, tenant, "agent:work:orphaned"); err != nil || eligible {
 		t.Fatalf("disabled sponsor = %v, %v; want false, nil", eligible, err)
 	}
-	if r := h.do("POST", "/v1/m/governance/nhi/sweep", tok, nil, hdr); r.code != http.StatusOK {
-		t.Fatalf("orphan sweep = %d %s", r.code, r.raw)
-	}
+	materializeWorkOrphan(t, h, tenant, tok, "agent:work:orphaned")
 	if eligible, err := h.gov.AgentEligibleForWork(ctx, tenant, "agent:work:orphaned"); err != nil || eligible {
 		t.Fatalf("materialized orphan = %v, %v; want false, nil", eligible, err)
 	}
@@ -66,25 +55,13 @@ func TestAgentEligibleForWorkRequiresLiveLifecycleAndSponsor(t *testing.T) {
 	}
 
 	register("agent:work:blocked", "human:work:blocked")
-	if r := h.do("PUT", "/v1/m/governance/nhi/agent:work:blocked/policy", tok, map[string]any{
-		"criticality": "critical",
-		"rotated_at":  baseTime.Add(-40 * 24 * time.Hour).UTC().Format(time.RFC3339),
-	}, hdr); r.code != http.StatusNoContent {
-		t.Fatalf("blocked policy = %d %s", r.code, r.raw)
-	}
-	if r := h.do("POST", "/v1/m/governance/nhi/sweep", tok, nil, hdr); r.code != http.StatusOK {
-		t.Fatalf("blocked sweep = %d %s", r.code, r.raw)
-	}
+	blockWorkAgent(t, h, tenant, tok, "agent:work:blocked")
 	if eligible, err := h.gov.AgentEligibleForWork(ctx, tenant, "agent:work:blocked"); err != nil || eligible {
 		t.Fatalf("blocked agent = %v, %v; want false, nil", eligible, err)
 	}
 
 	register("agent:work:offboarded", "human:work:offboarded")
-	h.gov.UseLifecycleGate(&fakeGate{status: governance.GateStatusApproved})
-	if r := h.do("POST", "/v1/m/governance/nhi/agent:work:offboarded/offboard", tok,
-		map[string]any{"reason": "work eligibility regression"}, hdr); r.code != http.StatusOK {
-		t.Fatalf("offboard = %d %s", r.code, r.raw)
-	}
+	offboardWorkAgent(t, h, tenant, tok, "agent:work:offboarded")
 	if eligible, err := h.gov.AgentEligibleForWork(ctx, tenant, "agent:work:offboarded"); err != nil || eligible {
 		t.Fatalf("offboarded agent = %v, %v; want false, nil", eligible, err)
 	}

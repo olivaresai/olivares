@@ -24,8 +24,8 @@ usage unique et TLS activé par défaut. Le port de l'hôte est publié sur tout
 interfaces, car c'est un serveur — restreignez-le délibérément, comme ci-dessous.
 
 <!-- release -->
-:::note[Olivares 0.1]
-La prochaine version est `0.1` ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans `docs/releases/0.1-install-surfaces.json`.
+:::note[Olivares 0.2]
+La prochaine version est `0.2` ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans `docs/releases/0.2-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -40,7 +40,7 @@ Le pull de conteneur primaire est **Docker Hub** :
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.1
+docker pull docker.io/olivaresai/olivares:0.2
 ```
 <!-- /release -->
 
@@ -49,8 +49,8 @@ digest, utilisé comme sauvegarde et comme registre de build. Docker Hub appliqu
 de débit aux pulls **anonymes** ; ghcr.io n'impose aucune limite sur les pulls anonymes
 d'images publiques — `docker login` ou la coordonnée ghcr.io est donc la porte de sortie si un
 nœud de CI ou une flotte importante atteint le plafond. Les tags ne portent
-**aucun `v` initial** : <!-- release -->`:0.1`<!-- /release --> épingle une release, `:latest` flotte, et <!-- release -->
-`:0.1-fips`<!-- /release --> / <!-- release -->`:0.1-stig`<!-- /release --> sont les variantes durcies. Les tags de base et
+**aucun `v` initial** : <!-- release -->`:0.2`<!-- /release --> épingle une release, `:latest` flotte, et <!-- release -->
+`:0.2-fips`<!-- /release --> / <!-- release -->`:0.2-stig`<!-- /release --> sont les variantes durcies. Les tags de base et
 `:latest` sont multi-arch (`linux/amd64`, `linux/arm64`) ; `fips`/`stig` sont
 `amd64`-only.
 
@@ -63,7 +63,7 @@ même :
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.1")"
+DIGEST="$(crane digest "$IMAGE:0.2")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -103,7 +103,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.1 \
+  docker.io/olivaresai/olivares:0.2 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -342,7 +342,7 @@ et re-vérifiez la nouvelle image avant de recréer.
 
 ## 8. Épingler par digest pour la production
 
-Les tags mutables (<!-- release -->`:0.1`<!-- /release -->, `:latest`) sont pour l'évaluation. En production, épinglez
+Les tags mutables (<!-- release -->`:0.2`<!-- /release -->, `:latest`) sont pour l'évaluation. En production, épinglez
 le **digest** que vous avez vérifié — un digest est immuable et correspond exactement à
 ce que vous avez validé :
 

@@ -25,7 +25,7 @@ const SANDBOX =
   'allow-scripts allow-forms allow-popups allow-modals allow-downloads'
 
 const selectClass =
-  'h-8 min-w-0 rounded-md border border-border bg-background px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'h-8 min-w-0 rounded-md border border-ctl-border bg-background px-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 export function SessionPreview({ run }: { run: RunDTO }) {
   const { t } = useTranslation('sessions')

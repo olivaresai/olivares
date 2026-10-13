@@ -193,12 +193,12 @@ func catalogAdmitEntrySchema() map[string]any {
 		// Both dispatch targets decode bundle as json.RawMessage. Omitting a type here
 		// preserves that exact wire shape instead of inventing one Sigstore envelope.
 		"bundle", oas.Obj(
-			"description", "Sigstore attestation bundle captured as raw JSON and validated by the verifier.",
+			"description", "Sigstore attestation bundle captured as raw JSON and validated by the verifier. Omit only to approve an agent or MCP entry with a pinned spec.tool_install declaration through the existing approval policy.",
 		),
 		"predicate_types", catalogStringArray(),
 		"expected_digest", oas.Obj("type", "string"),
 		"note", oas.Obj("type", "string"),
-	), "bundle")
+	))
 }
 
 func catalogInstantiateSchema() map[string]any {

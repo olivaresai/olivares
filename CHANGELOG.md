@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.1`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.2`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.1`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.2`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.1<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.2<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -28,8 +28,134 @@ See [versioning](INSTALL.md#versioning) for the release policy.
 
 ## [Unreleased]
 
+## [0.2] - 2026-10-13
+
+Community 0.2 release notes, covering changes since 0.1.
+
+
+### Added
+
+- A Claude Code session's Activity tab shows what the tool is doing, read from the
+  tool's own transcript: its task list and progress, the agents and subagents with
+  their task, state, duration and summary (each opens its transcript), background
+  work, the files it changed with their added and removed lines (each opens Changes),
+  and its context: model, effort, context tokens, compactions, skills and MCP servers.
+  The tab updates while the session runs and keeps its state after a reload.
+  `olivares session show <session> --activity` prints the same, and
+  `GET /v1/m/sessions/runs/{ref}/activity` serves it. A session given vault secrets
+  or a repository credential answers 409.
+- The README and the documentation home page show the console in a light and dark
+  screenshot gallery. The README shows the Cockpit, Session, Parallel sessions and
+  Access map screens; the documentation home shows the overview screens, from Now and
+  the Cockpit to Identity and access, Budgets and spend, Audit and Integrations.
+- Typing `/` as the first word of a message to a session lists the commands, skills
+  and agents the session's own tool reports, each with a one-line description and its
+  source: built-in, user, project or plugin. Type to search, move with the arrow keys,
+  and press Enter or Tab to put the choice in the message; the tool runs it like any
+  typed message. A name typed in full is listed first and Enter sends it. Claude Code
+  reports its catalog today, so a skill added to your project or user folder appears
+  without restarting Olivares. When the list could not be refreshed the menu says it may
+  be out of date. For the other tools the menu says that the tool reported no commands.
+  The API route is `GET /v1/m/sessions/runs/{ref}/commands`; it asks the live session,
+  so it needs permission to write to the run and the session's current authority.
+  A catalog longer than the tool's output line limit does not stop the session: the
+  menu reports the error or shows the previous catalog as out of date.
+- A skills pack follows its whole lifecycle from the CLI, the console and the API.
+  `skills update <pack>` reads the pack's recorded source again and reports whether a
+  newer revision exists, with its diff and manifest digest; `--apply --expected-digest`
+  publishes exactly that revision and refuses when the pack changed meanwhile.
+  `skills diff` compares two revisions, `skills pin` moves every pin of a pack to a
+  revision (an older revision is the rollback), `skills enable` and `skills disable`
+  turn skills on or off for a workspace, folder, template, agent group, agent or
+  session, and `skills selection` shows what a session started there will receive.
+  Pinning a skill that acts when it loads (hooks, inline commands, allowed tools,
+  plugin or settings files) needs approval: `--approve-active-content` in the CLI or
+  the checkbox in the console, and a new revision asks again.
+- Skills assigned to a workspace, folder or session now reach Gemini CLI, Grok Build
+  and OpenCode sessions, delivered read-only through each tool's `.agents/skills`
+  folder; before, those sessions were refused. A tool with no documented skills folder
+  is refused with a message that names the tool and the reason.
+- Workspace wiki: `olivares wiki init <folder>` creates the missing wiki files in a
+  folder on the engine host, keeps existing files, and assigns the bundled
+  `olivares-wiki` skill to that folder only. `olivares wiki ingest <folder>
+  raw/<file>`, `wiki query <folder> "<question>"` and `wiki lint <folder>` run that
+  skill in a Claude Code or Codex session and return its ID; read the result with
+  `session follow` or `session show`. The API route is
+  `POST /v1/m/sessions/workspaces/{ref}/wiki`.
+- Install a third-party CLI or MCP server from a pinned Git or release URL. An
+  administrator stores a catalog entry whose `spec.tool_install` names the URL,
+  version and archive SHA-256, and admits it with `olivares catalog admit <entry-id>`.
+  `olivares tool install --from <url> --version <v>`, or Install from a URL on AI
+  tools, then shows the plan for approval and installs it through the same job,
+  receipt and audit ledger as the official tools. The archive digest is checked before
+  the tools folder is touched: a mismatch fails with `digest_mismatch` (exit 1), and
+  a declaration that is not admitted fails with `unadmitted_declaration` (exit 5).
+  The Catalog module must be on.
+- Manage installed tool versions. `olivares tool update <tool> [--version <v>]`
+  installs an official release and keeps the existing versions; `tool rm <tool>
+  --version <v>` removes one and is refused while a session uses it; `tool pin <tool>
+  --workspace <ref> | --agent <id> --version <v>` (or `--clear`) selects the version
+  new and resumed sessions launch, and an agent's selection wins over its
+  workspace's. AI tools offers the same selection and removal. A pinned version that
+  is no longer installed refuses the launch instead of switching versions.
+- A provider profile can give its sessions installed programs and npm registries:
+  `olivares agent profile update <ref> --program <name>` and
+  `--npm-registry url=<URL>[,scope=@name][,secret=env/<name>]`, or `session_programs`
+  and `session_registries` on the provider profile API. Each program goes first on the
+  session's `PATH`, and a launch whose program is not installed is refused by name.
+  The registry token is written to an npm configuration file for that session alone,
+  never to its environment, and a session confined to its provider can also reach
+  the declared registry hosts. Declaring either needs tenant administration. Limits:
+  npm only, native sessions only.
+- MCP servers can be given to only some sessions: `olivares mcp assign <name>` and
+  `mcp unassign` take the skills targets (workspace, folder, template, agent group,
+  agent, session), and a server with no targets still serves every session.
+  `olivares mcp add <name> --tool <program>@<version>` adds an installed release as a
+  local server pinned to its executable's SHA-256, and a session start whose
+  executable no longer matches is refused. `mcp add --egress-host <host>` (repeatable)
+  limits a local server's network to those HTTPS hosts. Assignment and pin changes
+  are recorded in the audit ledger.
+- AI tools shows an Installed here list for the active workspace: the tool programs,
+  the programs and npm registries of the provider profile a new session reuses, the
+  skills, and the MCP servers that a session started there receives.
+  `GET /v1/m/sessions/provider-profiles/resolve` also returns that `profile`, without
+  creating one.
+- `GET /v1/m/sessions/provider-profiles/{ref}/models` lists the models and effort
+  levels that the profile's installed tool or bound provider reports now, so a new
+  vendor model appears without an Olivares release. Claude Code, Codex and Grok Build
+  are read through their own protocol; OpenCode answers `unsupported`. Answers are
+  cached for two minutes per profile; `?refresh=true` reads again.
+- Move a stopped or failed Claude Code session to another account of the same tool,
+  for example when the first account is out of quota: `olivares session move
+  <session> --account <account> [--resume]`, Move to in the console, or
+  `POST /v1/m/sessions/runs/{ref}/move`. Only that conversation's files are carried,
+  never the login, and the session keeps its ID and record. `olivares session handoff
+  <session>` prints a summary generated from the stored conversation without a model;
+  with `--account` (and optionally `--summary-file`) it starts a new, linked session in
+  any tool from that summary (`GET` and `POST /v1/m/sessions/runs/{ref}/handoff`). A
+  session given vault secrets or a repository credential cannot be handed off.
+- The Workspace page lists the folders sessions work in, with a link to manage them,
+  and New session's Change folder offers the registered folders, a new folder, or a
+  typed path.
+
 ### Changed
 
+- Model and effort are chosen in front: on the New session form, in the launch dialog
+  and from the session's message bar, from the live catalog of the session's
+  profile, with search, favorites and a Legacy group. A running session keeps its
+  model and effort; choosing another starts a new session with that choice. The
+  launch dialog opens on the profile the form shows, and the session header shows the
+  effort beside the model. The production console no longer offers the raw input
+  line.
+- The [edition table](docs/editions.md) records where each capability sits and is the
+  authority for this release. Since 0.1, the access map and the identity inventory, any
+  number of approval policies that require review or raise the approval count or risk
+  tier, and the workspace wiki are Community.
+- Skills starts enabled on fresh installations; upgrades keep their saved module
+  selection. Browse and install built-in or Git packs from the console, optionally
+  assigning the published revision to a workspace in the same action. The CLI
+  supports `skills ls --builtin` and `skills install --builtin`; both surfaces
+  publish immutable, digest-validated revisions.
 - A session's `secret_env` and a provider credential adapter can no longer set the
   variables that make a tool run other code, trust another certificate authority or
   use another registry or proxy for yarn, bun, uv, Maven, Gradle, Ant, sbt, .NET,
@@ -39,15 +165,107 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   and `BUNDLE_<HOST>`. `COMPOSER_AUTH` is refused because Composer reads it as
   configuration. Give a session repository access with `git_read`. Resuming a stored
   session that names a refused variable fails; start a new session without it.
+- When two launch targets give a skill of the same name different content, the
+  narrower target (workspace, folder, template, agent group, agent, session, broad to
+  narrow) now provides it and the selection records what it replaced. Before, the
+  launch was refused; two targets of the same kind that disagree still refuse it.
+- Access map attack-path answers and the identity inventory report what they could
+  not read. `GET /v1/m/accessmap/attack-paths/escalation` for an unknown `agent_id`
+  answers 404 `not_found` and the CLI exits 4, as the reachability query already did;
+  before, it answered 200 with an empty list and the CLI exited 0. A store error
+  during an analysis returns that error status instead of a partial or empty list.
+  Answers cut by the row or path cap carry `"truncated": true` and the CLI prints
+  `TRUNCATED`. The summary computes `escalation_paths` and `exfil_routes`, which were
+  always 0. In `GET /v1/m/governance/identities`, `disabled` is `null` when the
+  directory never reported the account state (before, `false`), and the console shows
+  it as Unknown; transitive group members carry `"truncated": true` when a nested group
+  was left unexpanded; the identity and group tables load more pages.
+- A session that answered and waits for input reads `idle` in
+  `GET /v1/m/sessions/runs` and in the console's Sessions list, Now and the rail.
+  Before, it read `running` until five minutes of silence, and the console listed an
+  idle session under Working. Stop, Resume and the composer still treat it as live.
+- The container image runs on Node 24 LTS (`node:24-trixie-slim`); 0.1 shipped on
+  Node 25.
+- Documented the Business release policy: the same core source commit as Community
+  and publication within 24 hours. Hotfixes use the next release number, no schema
+  migration, and the existing signed channels. Automatic paired publication and
+  full cross-edition qualification remain pending. See
+  [Editions](docs/editions.md#release-cadence).
 
 ### Fixed
 
+- Release notes qualify vendor sign-in and inference only with real accounts on
+  the installed release. Local models and protocol stand-ins do not qualify vendor
+  accounts.
+- Claude Code sign-in with your own account works from the console: it was used with
+  several real Claude Code accounts on the installed 0.1 release, and their sessions
+  answer. Sign-in with real Codex, OpenCode and Gemini CLI accounts is not yet
+  verified end to end.
 - The deployment-wide Secrets API refuses `env/` writes and points to Manage
   session secrets or `scope=tenant`. Existing global values remain readable and
   deletable; session secrets continue to use the tenant store.
 - JSON request errors name unknown fields and type-mismatch paths, such as
   `request.action`, while preserving existing HTTP statuses and error codes.
-
+- The session conversation shows an assistant's reply as formatted text (lists, bold,
+  code, tables, quotes and links to web and mail addresses) instead of the characters
+  it was sent in, and no longer shows Claude Code's thinking-token counters or an
+  allowed rate-limit report as rows of the thread. A rate limit that is near its
+  window, on overage or refused still shows. The reply is read into elements, never
+  into HTML: markup in it stays visible as text.
+- A SCIM leaver (DELETE, PATCH `active:false` or a SET deactivate) is recorded on the
+  tenant's own audit ledger as `scim.user.deprovision`, so the Identity leaver card lists
+  it. Before, the offboard was recorded only on the system ledger, which a tenant admin
+  cannot read, and the card said no leavers had been processed. SCIM status codes do not change.
+- The Identity leaver card lists the ten newest leavers, newest first, instead of the
+  ten oldest, shows when each was processed, keeps its status badge inside the card on
+  narrow screens, and says when older events exist. The MCP authorization findings
+  list says when it shows only part of the list.
+- The console license tab and `GET /v1/console/license` show the term you paid for
+  (`paid_through`) apart from the 72-hour provisional lease (`lease_until`), so the
+  lease date is no longer shown as the license expiry. `expires_at` keeps its meaning.
+- A session on a provider profile with its own account is ready, and starts, when
+  that account is signed in, even if the default login is signed out; it is not ready
+  when only the default login is signed in. The engine checks the selected account
+  again when the session is created and resumed.
+- The console names provider profiles by their account name, such as `claude-b`,
+  instead of their `ppf_` reference, in Provider profiles, Bindings, New session, the
+  bind and adopt pickers and the Sessions list. Recent work, the session overview and
+  the Sessions table name the model the run used, as the thread header does, instead
+  of the model of the last cost sample.
+- `PATCH /v1/m/sessions/workspaces/{ref}` accepts `dlp_mode` (`label`, `deny` or
+  `off`) as registration does. Before, it answered 400 for an unknown field.
+- When saving an approval policy is refused because it lowers a risk tier below the
+  action's default, the dialog says that this needs Business and that turning the
+  policy off keeps it stored. With no DLP rules listed, the Inference proxy page says
+  that secrets in prompts are still denied by default while request DLP is on.
+- A local MCP server listed with a session's tools reports its real network:
+  `confined` with its egress hosts, or `none` when offline. Before, it always reported
+  `unrestricted`.
+- The deb package lets confined sessions run on Ubuntu 24.04 and other kernels with
+  AppArmor's unprivileged user namespace restriction. It installs and loads
+  `/etc/apparmor.d/usr.bin.olivares`, which allows user namespaces for
+  `/usr/bin/olivares` only, without changing the host's global setting; removing the
+  package unloads and deletes it. Before, those sessions were refused.
+- Confined sessions start when the engine's `TMPDIR` is up to 82 bytes long; before,
+  the proxy socket path passed the 107-byte Unix limit at about 70 bytes.
+- When the engine runs as root and a tool's program or a granted path lies under
+  another user's private home folder, the refusal names the path and recommends a
+  root-owned data directory such as `/var/lib/olivares`, instead of a bare permission
+  error.
+- Building the console from source no longer downloads the dictation model: the pinned
+  model files are in the repository, and the build fails, naming the file, when one
+  does not match its pinned SHA-256.
+- `olivares upgrade` on a Business build no longer reads the public Community channel,
+  which could replace the Business binary with the Community one. It takes the licensed
+  route, as `upgrade --enterprise` does, and so does the unit `upgrade --install-timer`
+  writes; with `--endpoint` and no `--enterprise` it refuses and names the next step.
+  A Business binary built before this change still needs `upgrade --enterprise`.
+  Community builds are unchanged.
+- The Python client passes per-call headers through to the request, so operations
+  that need one, such as applying a skills pack update with its `Idempotency-Key`,
+  work from Python.
+- The first-boot hint, the setup refusals and the attestation provenance note show
+  their commands as code instead of text between backticks.
 
 ## [0.1] - 2026-10-10
 
@@ -233,7 +451,6 @@ section records those gaps.
 - Fresh empty-store release-container setup and first-session output, final package journeys and the complete release-binary replay are still pending; this draft does not establish release readiness.
 - Local bundle files are read into memory before verification; uncompressed tar extraction has no total-size cap, including with `--check`.
 - Same-version package reinstalls and downgrades can still print "upgraded"; that notice does not prove the installed version increased.
-- Real vendor sign-in and inference with Claude Code, Codex, OpenCode and DeepSeek are deferred until after the stable release; local models and protocol stand-ins do not qualify those accounts.
 - Tool sign-in forwards the engine's supported CA-file variables but excludes `SSL_CERT_DIR`; a certificate directory alone does not configure the tool's trust.
 - Grok Build and OpenCode provider-key sessions lack provider-only network enforcement and can reach other hosts permitted by the network; [session network isolation](SECURITY.md#session-network-isolation) describes the boundary per tool.
 - Grok Build's sandboxed presets require bubblewrap on Linux, which the release image does not supply; its local host-process turn does not qualify the container first hour.

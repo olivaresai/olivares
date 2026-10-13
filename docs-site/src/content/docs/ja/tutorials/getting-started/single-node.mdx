@@ -24,7 +24,7 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 ## 前提条件
 
 - systemd と `curl` を備えた Linux ホスト。
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.2`{/* /release */} is the next release, not yet published.
 
 ## 1. バイナリをビルドしてインストールする
 
@@ -181,15 +181,15 @@ TOKEN="$(curl -ksf -X POST https://127.0.0.1:8443/v1/auth/login \
 使われることは決してあり得ません。
 </Aside>
 
-## 4. 最初の組織を作成する
+## 4. 最初の組織を使う
 
-製品内のすべてはテナントスコープなので、ソースが報告先とする組織を作成します:
+初期設定で組織はすでに作成されています。製品内のすべてはテナントスコープなので、
+ソースを接続するためにそのテナント ID を取得します:
 
 ```bash
-TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+TENANT="$(curl -ksf https://127.0.0.1:8443/v1/auth/whoami \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 ```
 

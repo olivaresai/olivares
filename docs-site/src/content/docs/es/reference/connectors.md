@@ -101,8 +101,8 @@ honestamente en lugar de parecer sano).
 | `claude-api` | Muestras de coste de la Admin-API de Claude + hallazgos de postura de gobernanza | En proceso; no-op offline (sin admin key) |
 | `claude-compliance` | Evidencia del activity-feed de Claude Compliance → hallazgos | Solo GET por construcción; no-op offline |
 | `claude-config` | Árbol estático de config de Claude (subagents / Skills / plugins) → aristas de **capacidad-declarada** | Solo metadatos — una superficie de capacidad, no un acceso observado |
-| `claude-console` | IAM de la org de Claude → hallazgos de postura SSO/SCIM (roster de identidad + fuente) | |
-| `claude-wif` | Roster de identidad no humana / workload-identity de Anthropic + aristas de scope permitido | Modela la federación declarada por el operador; señala los footguns de claves estáticas |
+| `claude-console` | IAM de la org de Claude → hallazgos de postura SSO/SCIM (roster de identidad + fuente) | Business: Identity & Scale;  |
+| `claude-wif` | Roster de identidad no humana / workload-identity de Anthropic + aristas de scope permitido | Business: Identity & Scale; Modela la federación declarada por el operador; señala los footguns de claves estáticas |
 | `claude-managed-agents` | Inventario de managed agents de Claude + eventos de hilos (receptor webhook + pollers GET) | Fuente en streaming (`poll_seconds: 0`); offline es un no-op |
 | `claude-projects` | Inventario de Projects de Claude Organization (membresía / claves API) + política de proyecto declarada por el operador | Admin-API de solo lectura; no-op offline |
 | `claude-apps-gateway` | Postura de apps-gateway de Claude, grants de modelos declarados e ingest de eventos de auditoría → topología + hallazgos | Lee un `gateway.yaml` existente y una exportación de auditoría JSONL opcional |

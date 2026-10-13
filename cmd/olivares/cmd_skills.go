@@ -33,26 +33,39 @@ func newSkillsCmd() *cobra.Command {
 	cmd.Example = "  olivares skills ls"
 	flags.addPersistent(cmd)
 	client := datalaneClient{flags: flags, base: "/v1/m/skills", what: "skills"}
-	cmd.AddCommand(newSkillsImportCmd(client, false), newSkillsImportCmd(client, true), newSkillsListCmd(client), newSkillsGetCmd(client), newSkillsAssignCmd(client), newSkillsAssignmentsCmd(client), newSkillsUnassignCmd(client), newSkillsRemoveCmd(client))
+	cmd.AddCommand(newSkillsImportCmd(client, false), newSkillsImportCmd(client, true), newSkillsListCmd(client), newSkillsGetCmd(client), newSkillsAssignCmd(client), newSkillsAssignmentsCmd(client), newSkillsUnassignCmd(client), newSkillsRemoveCmd(client),
+		newSkillsDiffCmd(client), newSkillsPinCmd(client), newSkillsSelectionCmd(client), newSkillsEnableCmd(client, true), newSkillsEnableCmd(client, false))
 	return cmd
 }
 func newSkillsListCmd(client datalaneClient) *cobra.Command {
 	var page datalanePageFlags
+	var builtin bool
 	cmd := &cobra.Command{Use: "ls", Aliases: []string{"list"}, Short: "List installed catalog packs", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		q, err := page.values(cmd, nil)
 		if err != nil {
 			return err
 		}
-		raw, status, err := skillsRequest(cmd, client, "GET", "/packs?"+q.Encode(), nil, "", nil)
+		path := "/packs?" + q.Encode()
+		if builtin {
+			if cmd.Flags().Changed("cursor") || cmd.Flags().Changed("limit") {
+				return exitcode.New(exitcode.Usage, fmt.Errorf("--builtin lists the complete built-in catalog; pagination flags apply to installed packs"))
+			}
+			path = "/builtins"
+		}
+		raw, status, err := skillsRequest(cmd, client, "GET", path, nil, "", nil)
 		if err != nil {
 			return err
 		}
 		if !datalaneOK(status) {
 			return datalaneHTTPError("skills", status, raw)
 		}
+		if builtin {
+			return datalaneRenderList(cmd, "skills", raw, "no built-in skills available", datalaneCols("ID", "id", "ORIGIN", "origin", "COMMIT", "resolved_commit", "DIGEST", "source_digest"))
+		}
 		return datalaneRenderList(cmd, "skills", raw, "no skills installed in the catalog", datalaneCols("ID", "id", "NAME", "name", "STATE", "state", "REVISION", "latest_revision"))
 	}}
-	cmd.Long = "List installed skill packs; use olivares skills get <pack-id> to inspect a pack and its revisions."
+	cmd.Flags().BoolVar(&builtin, "builtin", false, "browse the pinned built-in catalog")
+	cmd.Long = "List installed skill packs or browse available packs with --builtin; use olivares skills get <pack-id> to inspect a pack and its revisions."
 	cmd.Example = "  olivares skills ls"
 	page.add(cmd)
 	return cmd
@@ -83,7 +96,8 @@ func newSkillsGetCmd(client datalaneClient) *cobra.Command {
 	return cmd
 }
 func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
-	var name, gitURL, ref, subdir, folder, archive, format, key, expected string
+	var name, builtin, gitURL, ref, subdir, folder, archive, format, key, expected string
+	var apply, showDiff bool
 	use := "install"
 	args := cobra.NoArgs
 	if update {
@@ -92,19 +106,26 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 	}
 	cmd := &cobra.Command{Use: use, Short: "Publish a reviewed immutable catalog revision", Args: args, RunE: func(cmd *cobra.Command, args []string) error {
 		count := 0
-		for _, s := range []string{gitURL, folder, archive} {
+		for _, s := range []string{builtin, gitURL, folder, archive} {
 			if s != "" {
 				count++
 			}
 		}
+		if update && count == 0 && format == "" {
+			// No source named: read the pack's recorded source again (check, then apply).
+			return skillsUpdateFromSource(cmd, client, args[0], ref, subdir, expected, key, apply, showDiff)
+		}
 		if count != 1 || (gitURL == "" && (ref != "" || subdir != "")) || (format != "" && archive == "") {
-			return exitcode.New(exitcode.Usage, fmt.Errorf("choose exactly one of --git, --folder, or --archive; --ref and --subdir apply to Git, and --format applies to archives"))
+			return exitcode.New(exitcode.Usage, fmt.Errorf("choose exactly one of --builtin, --git, --folder, or --archive; --ref and --subdir apply to Git, and --format applies to archives"))
 		}
 		if gitURL != "" && ref == "" {
 			ref = "HEAD"
 		}
 		if !update && name == "" {
 			sourceName := folder
+			if builtin != "" {
+				sourceName = builtin
+			}
 			if gitURL != "" {
 				parsed, err := url.Parse(gitURL)
 				if err != nil {
@@ -143,7 +164,9 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 		ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 		cmd.SetContext(ctx)
 		defer func() { cancel(); cmd.SetContext(parent) }()
-		if gitURL != "" {
+		if builtin != "" {
+			body, _ = json.Marshal(map[string]any{"name": name, "source": map[string]string{"kind": "builtin", "ref": builtin, "expected_digest": expected}})
+		} else if gitURL != "" {
 			body, _ = json.Marshal(map[string]any{"name": name, "source": map[string]string{"kind": "git", "url": gitURL, "ref": ref, "subdir": subdir, "expected_digest": expected}})
 		} else {
 			var pack *skills.ValidatedPack
@@ -243,9 +266,10 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 		}
 		return datalaneResult(cmd, raw, status, "")
 	}}
-	cmd.Long = "Import a reviewed skill pack from Git, a folder or an archive; inspect the catalog with olivares skills ls."
+	cmd.Long = "Import a reviewed skill pack from the built-in catalog, Git, a folder or an archive; inspect the catalog with olivares skills ls."
 	cmd.Example = "  olivares skills " + use + " --folder ./skills"
 	cmd.Flags().StringVar(&name, "name", "", "catalog pack name (defaults to the selected source name)")
+	cmd.Flags().StringVar(&builtin, "builtin", "", "pinned built-in pack ID (browse with skills ls --builtin)")
 	cmd.Flags().StringVar(&gitURL, "git", "", "public HTTPS git URL")
 	cmd.Flags().StringVar(&ref, "ref", "", "git ref or full commit (defaults to HEAD; the published revision records the resolved commit)")
 	cmd.Flags().StringVar(&subdir, "subdir", "", "selected skills directory inside the git source")
@@ -254,6 +278,11 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "", "archive format: zip or tar.gz")
 	cmd.Flags().StringVar(&key, "idempotency-key", "", "retain this key to read back an ambiguous import")
 	cmd.Flags().StringVar(&expected, "expected-digest", "", "expected SHA-256 source digest")
+	if update {
+		cmd.Flags().BoolVar(&apply, "apply", false, "with no source flag: publish the update the check showed (needs --expected-digest)")
+		cmd.Flags().BoolVar(&showDiff, "diff", false, "with no source flag: print the unified text diff of each changed file")
+		cmd.Long = "Publish a new immutable revision of a pack. With --builtin, --git, --folder or --archive it publishes that source. With none it reads the pack's recorded source again, shows what changed and the digest to apply; then run it again with --apply --expected-digest <digest>. Existing pins keep their revision until you move them with olivares skills pin."
+	}
 	return cmd
 }
 
@@ -343,10 +372,11 @@ func skillsRequest(cmd *cobra.Command, c datalaneClient, method, path string, bo
 	return raw, response.StatusCode, nil
 }
 
-type skillsTargetFlags struct{ workspace, group, agent, template, session string }
+type skillsTargetFlags struct{ workspace, folder, group, agent, template, session string }
 
 func (f *skillsTargetFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.workspace, "workspace", "", "stored workspace (department) identifier")
+	cmd.Flags().StringVar(&f.folder, "folder", "", "registered folder workspace reference")
 	cmd.Flags().StringVar(&f.group, "group", "", "stored agent group identifier")
 	cmd.Flags().StringVar(&f.agent, "agent", "", "stored agent identifier")
 	cmd.Flags().StringVar(&f.template, "template", "", "stored template identifier")
@@ -356,7 +386,7 @@ func (f *skillsTargetFlags) add(cmd *cobra.Command) {
 // targets returns the targets named on the command line, in flag order.
 func (f *skillsTargetFlags) targets() []skills.Target {
 	var out []skills.Target
-	for _, pair := range []struct{ kind, id string }{{"workspace", f.workspace}, {"agent_group", f.group}, {"agent", f.agent}, {"template", f.template}, {"session", f.session}} {
+	for _, pair := range []struct{ kind, id string }{{"workspace", f.workspace}, {"folder", f.folder}, {"agent_group", f.group}, {"agent", f.agent}, {"template", f.template}, {"session", f.session}} {
 		if pair.id != "" {
 			out = append(out, skills.Target{Kind: pair.kind, ID: pair.id})
 		}
@@ -366,7 +396,7 @@ func (f *skillsTargetFlags) targets() []skills.Target {
 func (f *skillsTargetFlags) target() (skills.Target, error) {
 	targets := f.targets()
 	if len(targets) != 1 {
-		return skills.Target{}, exitcode.New(exitcode.Usage, fmt.Errorf("choose exactly one of --workspace, --group, --agent, --template, or --session"))
+		return skills.Target{}, exitcode.New(exitcode.Usage, fmt.Errorf("choose exactly one of --workspace, --folder, --group, --agent, --template, or --session"))
 	}
 	return targets[0], nil
 }
@@ -375,6 +405,7 @@ func newSkillsAssignCmd(client datalaneClient) *cobra.Command {
 	var revision, assignment string
 	var members []string
 	var version int64
+	var approve bool
 	cmd := &cobra.Command{Use: "assign <pack-id>", Short: "Pin a catalog revision for new conversations", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		t, err := target.target()
 		if err != nil {
@@ -420,7 +451,7 @@ func newSkillsAssignCmd(client datalaneClient) *cobra.Command {
 		if !found {
 			return exitcode.New(exitcode.Usage, fmt.Errorf("revision does not belong to this pack"))
 		}
-		body, _ := json.Marshal(skills.AssignmentRequest{Target: t, RevisionID: revision, Members: members})
+		body, _ := json.Marshal(skills.AssignmentRequest{Target: t, RevisionID: revision, Members: members, ApproveActiveContent: approve})
 		method, path, headers := "POST", "/assignments", http.Header{}
 		if assignment != "" {
 			if version < 1 {
@@ -449,6 +480,7 @@ func newSkillsAssignCmd(client datalaneClient) *cobra.Command {
 	cmd.Flags().StringSliceVar(&members, "member", nil, "selected member names (all revision members when omitted)")
 	cmd.Flags().StringVar(&assignment, "assignment", "", "existing binding to change")
 	cmd.Flags().Int64Var(&version, "version", 0, "current binding version for a change")
+	cmd.Flags().BoolVar(&approve, "approve-active-content", false, "approve skills that carry hooks, shell interpolation, tool pre-approvals or plugin files")
 	return cmd
 }
 func newSkillsAssignmentsCmd(client datalaneClient) *cobra.Command {

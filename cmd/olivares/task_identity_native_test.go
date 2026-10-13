@@ -87,8 +87,7 @@ func TestTaskIdentityNativeMCPAndInference(t *testing.T) {
 				}
 				return result
 			}
-			org := do(http.MethodPost, "/v1/system/orgs", map[string]any{"name": "Native task identity", "slug": "native-task-identity"}, http.StatusCreated)
-			tenant = org["tenant_id"].(string)
+			tenant = createOrganizationFixture(t, eng.store, "Native task identity", "native-task-identity").TenantID.String()
 			policy := map[string]any{"record_mandatory": true, "gate_model_access": false, "gate_budget": false, "gate_residency": false, "gate_context_window": false, "gate_dlp_request": false, "gate_dlp_response": false}
 			do(http.MethodPut, "/v1/m/inferenceproxy/config", policy, http.StatusOK)
 			var forwards atomic.Int32

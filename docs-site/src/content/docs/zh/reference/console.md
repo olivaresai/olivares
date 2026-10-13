@@ -5,6 +5,10 @@ description: >-
   RBAC 权限及产品内帮助链接打开的参考页面。由控制台自己的路由清单生成。
 ---
 
+:::note[版本]
+目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）和托管身份生命周期需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、用户/组入站 SCIM、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+:::
+
 本页是控制台的地图。它列出**应用挂载的每条路由**——不是选集，也不是某人记得
 写下的那些——以及主体进入路由所需的权限和更多信息所在的位置。
 
@@ -48,7 +52,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **83 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **75 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 主页
@@ -112,9 +116,7 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 告警 | `/alerting` | 将发现项路由到目的地并检查投递 | `notify:route:read` | [reference/modules/xv-notify](/zh/reference/modules/xv-notify/) |
-| 自动化 | `/automations` | 所有三条自动化轨道及其触发器目录 | `orchestration:schedule:read` | [reference/modules/iv-orchestration](/zh/reference/modules/iv-orchestration/) |
 | Webhook 与事件 | `/eventing` | 出站 webhook 订阅、投递日志和死信队列。 | `eventing:subscription:read` | [reference/modules/eventing](/zh/reference/modules/eventing/) |
-| 编排 | `/orchestration` | Agent 间协调与计划 | `orchestration:graph:read` | [reference/modules/iv-orchestration](/zh/reference/modules/iv-orchestration/) |
 
 ### 安全与身份
 
@@ -127,8 +129,6 @@ description: >-
 | 推理代理 | `/inference-proxy` | 代理门禁、出站 DLP 规则和设备批准 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/zh/reference/modules/inferenceproxy/) |
 | 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
 | 权限 | `/permissions` | 身份、角色和批准 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
-| 红队测试 | `/red-team` | 对 Agent 进行对抗性测试 | `redteam:target:read` | [reference/modules/xviii-redteam](/zh/reference/modules/xviii-redteam/) |
-| 数据驻留 | `/residency` | 将每个组织固定到某个区域，或保持不固定 | `system:admin` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 例行策略 | `/routine-policies` | Claude Code 例行任务的周期下限、并发上限、批准要求和 cron allowlist。 | `governance:routine:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 安全 | `/security` | 护栏、取证和异常 | `security:finding:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
 
@@ -149,14 +149,11 @@ description: >-
 | 合规 | `/compliance` | 框架、控制和证据 | `compliance:framework:read` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 仪表板 | `/dashboards` | 管理层 KPI 和报告 | 任何已登录用户 | [reference/modules/xxi-executive-dashboards](/zh/reference/modules/xxi-executive-dashboards/) |
 | 评估 | `/evals` | 质量、评估和回归 | `evals:run:read` | [reference/modules/xii-evals](/zh/reference/modules/xii-evals/) |
-| 成本与 FinOps | `/finops` | Token 成本、预算和支出 | `finops:spend:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
 | 健康与 SLA | `/health` | Agent 和 MCP 的运行时间及 SLA | `health:status:read` | [reference/modules/xxii-health](/zh/reference/modules/xxii-health/) |
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
-| 状态导出 | `/posture-export` | 为控制塔导出事实状态 | `posture:export:read` | [reference/modules/posture-export](/zh/reference/modules/posture-export/) |
 | 录制 | `/recordings` | 特权会话录制和重放 | `recording:session:admin` | [reference/modules/recording](/zh/reference/modules/recording/) |
-| 报告 | `/reporting` | 生成和下载治理报告 | `reporting:report:read` | [reference/modules/reporting](/zh/reference/modules/reporting/) |
 | 会话查看器 | `/session-viewer/$id`（仅深层链接） | 一个已录制会话的完整时间线；从“录制”中的行进入，而不是从侧边栏进入。 | `recording:session:admin` | [reference/modules/recording](/zh/reference/modules/recording/) |
-| 团队成本 | `/team-costs` | 按团队归属的支出，可展开到每个项目和模型的明细。 | `finops:spend:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
+| 预算 | `/stored-budgets` | 针对每个已保存限额的消耗情况。预留容量计入限额。 | `finops:budget:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
 
 ### 系统与设置
 
@@ -168,7 +165,6 @@ description: >-
 | 源差异 | `/console/sources/diff` | 逐个文件比较已连接 Git 仓库的基准修订与 head 修订 | `system:admin` | [reference/console](/zh/reference/console/) |
 | 日志 | `/logs` | 实时引擎日志流，可按级别和模块过滤，并支持搜索和暂停。 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 设置向导 | `/onboarding` | 分步部署配置 | `system:admin` | [start/quickstart](/zh/start/quickstart/) |
-| 租户 | `/tenants` | 撤销或恢复租户服务 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 
 ### 登录、设置与账户
 

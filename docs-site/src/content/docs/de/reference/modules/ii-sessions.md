@@ -14,7 +14,7 @@ Estate materialisiert, hält Modul II ein **Live-Betriebs-Overlay** pro Session
 über demselben Beobachtungsstrom — und zeigt nur, was dieser Strom ehrlich
 trägt.
 
-Olivares <!-- release -->0.1<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
+Olivares <!-- release -->0.2<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
 [Anbieterprofil](/how-to/operate-provider-sessions/). Dieser verwaltete Pfad
 ist dasselbe Modul. Er ersetzt das Overlay nicht und führt zwei Homes, die
 dieselbe Anbieter-Session-ID bekanntgeben, nicht zusammen

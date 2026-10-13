@@ -16,16 +16,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	claudecompliancePkg "github.com/olivaresai/olivares/connectors/claude-compliance"
 	"github.com/olivaresai/olivares/connectors/contentsource"
-	"github.com/olivaresai/olivares/core/api"
-	coreengine "github.com/olivaresai/olivares/core/engine"
-	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
-	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -76,98 +70,6 @@ const spireExport = `{
     }
   ]
 }`
-
-// TestWireRosterPopulatesAndSchedules is the IDN-06/CB-3 proof: the composition
-// root builds a configured identity GraphProvider, hands it to governance via
-// UseRosterProviders and schedules the periodic SyncRoster on the runtime — so the
-// NHI roster populates IN THE BINARY (no longer empty), automatically, from a real
-// connector. It uses the SPIFFE connector with an offline JSON export so no network
-// is needed.
-func TestWireRosterPopulatesAndSchedules(t *testing.T) {
-	ctx := context.Background()
-	log := quietLog()
-
-	gov := governance.New()
-	st, err := coreengine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, gov.RegisterSchema)
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
-	if err := st.System(ctx, func(sys store.SystemScope) error { _, e := sys.EnsureSystemTenant(ctx); return e }); err != nil {
-		t.Fatal(err)
-	}
-	gov.UseData(api.NewModuleData(st))
-
-	// A real business tenant the roster belongs to.
-	var tenant model.TenantID
-	if err := st.System(ctx, func(sys store.SystemScope) error {
-		org, e := sys.CreateOrg(ctx, model.Org{Name: "Acme", Slug: "acme", Status: model.StatusActive})
-		if e != nil {
-			return e
-		}
-		tenant = org.TenantID
-		return nil
-	}); err != nil {
-		t.Fatalf("create org: %v", err)
-	}
-
-	// The SPIFFE entries export the connector reads offline.
-	fixture := filepath.Join(t.TempDir(), "entries.json")
-	if err := os.WriteFile(fixture, []byte(spireExport), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	cfg := sourcesConfig{
-		RosterSyncSeconds: 1, // a short cadence so the test does not lean only on the immediate pass
-		Identity: []identitySpec{{
-			Name:   "corp-spire",
-			Kind:   "spiffe",
-			Tenant: tenant.String(),
-			Config: map[string]string{"entries_file": fixture, "trust_domain": "corp.example"},
-		}},
-	}
-
-	rt := runtime.New(runtime.Options{Logger: log})
-	if err := rt.AddModule(gov, sdk.Config{}); err != nil {
-		t.Fatal(err)
-	}
-	wireRoster(ctx, rt, gov, newWifGraphAdapter(log), cfg, nil, log)
-	if err := rt.Start(ctx); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-	t.Cleanup(func() {
-		c, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = rt.Stop(c)
-	})
-
-	// The scheduled SyncRoster (immediate pass) must populate the NHI roster with
-	// the workload identity from the export.
-	const wantRef = "spiffe://corp.example/workload/api"
-	deadline := time.After(3 * time.Second)
-	for {
-		var found bool
-		if err := st.View(ctx, tenant, func(sc store.Scope) error {
-			list, _, e := sc.Identities().List(ctx, model.Query{Limit: 16})
-			for _, id := range list {
-				if id.ExternalID == wantRef {
-					found = true
-				}
-			}
-			return e
-		}); err != nil {
-			t.Fatalf("list identities: %v", err)
-		}
-		if found {
-			return // roster populated by the boot-wired, scheduled sync
-		}
-		select {
-		case <-deadline:
-			t.Fatalf("roster never populated with %q (UseRosterProviders/SyncRoster not wired)", wantRef)
-		case <-time.After(20 * time.Millisecond):
-		}
-	}
-}
 
 // TestBuildInProcSourceDataPlatforms pins the wiring (DoD: every connector
 // registered in `serve` by the seam): each data-platform observer kind
@@ -322,74 +224,6 @@ func TestBuildInProcSourceOpencodeAgentSurface(t *testing.T) {
 	}
 }
 
-// TestWireClaudeConnectors is the Pieza-1 proof: claude-compliance (CLA-06,
-// in-process source) and claude-wif (CLA-12/IDN-01, roster provider + as_source)
-// stop being dead-code — the composition root wires them by kind, WITHOUT an
-// "unknown kind" warning, and OFFLINE (no api_key/admin_key) the boot does not fail.
-// An absent kind still warns honestly (the established posture).
-func TestWireClaudeConnectors(t *testing.T) {
-	// claude-compliance resolves as an in-process SourceConnector.
-	conn, ok := buildInProcSource("claude-compliance")
-	if !ok {
-		t.Fatal("claude-compliance: not wired (buildInProcSource returned ok=false) — still dead-code")
-	}
-	if got := conn.Descriptor().Name; got != "olivares.claude-compliance" {
-		t.Errorf("claude-compliance Descriptor.Name = %q", got)
-	}
-
-	// claude-wif resolves as BOTH the roster GraphProvider and the SourceConnector
-	// (it emits PERMITTED edges + the WIF footgun finding, like claude-console).
-	prov, srcConn, ok := buildRosterProvider("claude-wif")
-	if !ok {
-		t.Fatal("claude-wif: not wired (buildRosterProvider returned ok=false) — still dead-code")
-	}
-	if prov == nil || srcConn == nil {
-		t.Fatal("claude-wif: provider/source must both be non-nil (GraphProvider+SourceConnector)")
-	}
-	if got := srcConn.Descriptor().Name; got != "olivares.claude-wif" {
-		t.Errorf("claude-wif Descriptor.Name = %q", got)
-	}
-
-	// wireSources wires an OFFLINE claude-compliance source (empty api_key) without
-	// the unknown-kind warning and without a boot failure; an absent kind warns.
-	var srcBuf bytes.Buffer
-	srcLog := slog.New(slog.NewTextHandler(&srcBuf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	rt := runtime.New(runtime.Options{Logger: quietLog()})
-	wireSources(context.Background(), rt, sourcesConfig{Sources: []sourceSpec{
-		{Name: "claude-compliance", Kind: "claude-compliance", Tenant: "acme", Config: map[string]string{}},
-		{Name: "bogus", Kind: "not-a-real-kind", Tenant: "acme"},
-	}}, t.TempDir(), nil, srcLog)
-	if !logHasLine(srcBuf.String(), "wired source (in-process fast-path)", "kind=claude-compliance") {
-		t.Errorf("claude-compliance was not wired in-process; log = %q", srcBuf.String())
-	}
-	if logHasLine(srcBuf.String(), "unknown or unsupported source kind", "kind=claude-compliance") {
-		t.Errorf("claude-compliance warned unknown-kind (not wired)")
-	}
-	if !logHasLine(srcBuf.String(), "unknown or unsupported source kind", "kind=not-a-real-kind") {
-		t.Errorf("an unknown source kind must still warn honestly; log = %q", srcBuf.String())
-	}
-
-	// wireRoster wires claude-wif as a roster provider AND, with as_source=true, as a
-	// permitted-access source, offline (no admin_key) without a warning or boot failure.
-	var rosBuf bytes.Buffer
-	rosLog := slog.New(slog.NewTextHandler(&rosBuf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	gov := governance.New()
-	rt2 := runtime.New(runtime.Options{Logger: quietLog()})
-	wireRoster(context.Background(), rt2, gov, newWifGraphAdapter(rosLog), sourcesConfig{Identity: []identitySpec{{
-		Name: "claude-wif", Kind: "claude-wif", Tenant: "acme", AsSource: true, Config: map[string]string{},
-	}}}, nil, rosLog)
-	ros := rosBuf.String()
-	if strings.Contains(ros, "unknown identity connector kind") {
-		t.Errorf("claude-wif warned unknown identity kind (not wired): %q", ros)
-	}
-	if !strings.Contains(ros, "wired identity provider") {
-		t.Errorf("claude-wif roster provider not wired; log = %q", ros)
-	}
-	if !strings.Contains(ros, "also wired identity provider as a permitted-access source") {
-		t.Errorf("claude-wif as_source=true did not also wire the permitted-access source; log = %q", ros)
-	}
-}
-
 // TestClaudeComplianceGatherE2E is the integration proof: the connector
 // constructed via the composition root path (buildInProcSource) ingests Activity
 // Feed events and emits minimal-data FindingReport observations through the
@@ -501,6 +335,7 @@ func (d *e2eActivityDoer) Do(req *http.Request) (*http.Response, error) {
 }
 
 const e2ePage1 = `{"data":[{"id":"act_e2e_1","created_at":"2026-06-20T10:00:00Z","organization_id":"org_x","type":"claude_chat_created","actor":{"type":"user_actor","ip_address":"203.0.113.42","user_agent":"Mozilla/5.0 (E2ESecret)","email_address":"alice@corp.example.com","user_id":"u_1"},"claude_chat_id":"chat_e2e_1"}],"has_more":true,"first_id":"act_e2e_1","last_id":"act_e2e_1"}`
+
 const e2ePage2 = `{"data":[{"id":"act_e2e_2","created_at":"2026-06-20T11:00:00Z","organization_id":"org_x","type":"api_key_created","actor":{"type":"admin_api_key_actor","ip_address":"198.51.100.9","email_address":"bob@corp.example.com","api_key_id":"key_1"}}],"has_more":false,"first_id":"act_e2e_2","last_id":"act_e2e_2"}`
 
 // e2eCaptureSink captures FindingReport observations at the composition root level.
@@ -813,36 +648,6 @@ func TestKnowledgeContentOptions(t *testing.T) {
 	}
 }
 
-// TestBuildRosterProviderS156Federation pins the (FED-1) composition: every
-// federation roster kind resolves to its GraphProvider + SourceConnector pair
-// with the expected Descriptor.Name, so the agent-identity federation is wirable
-// from OLIVARES_SOURCES_CONFIG — never an unknown-kind no-op.
-func TestBuildRosterProviderS156Federation(t *testing.T) {
-	cases := map[string]string{
-		"entra-agent":      "olivares.entra-agent",
-		"agentcore":        "olivares.agentcore",
-		"google-agent":     "olivares.google-agent",
-		"oasf":             "olivares.oasf",
-		"agent365":         "olivares.agent365",
-		"foundry-agents":   "olivares.foundry-agents",
-		"ai-control-tower": "olivares.ai-control-tower",
-		"onepassword":      "olivares.onepassword",
-	}
-	for kind, wantName := range cases {
-		prov, conn, ok := buildRosterProvider(kind)
-		if !ok {
-			t.Errorf("kind %q: not wired (buildRosterProvider returned ok=false)", kind)
-			continue
-		}
-		if prov == nil {
-			t.Errorf("kind %q: nil GraphProvider", kind)
-		}
-		if got := conn.Descriptor().Name; got != wantName {
-			t.Errorf("kind %q: Descriptor.Name = %q, want %q", kind, got, wantName)
-		}
-	}
-}
-
 // TestBuildInProcSourceS156 pins that the kinds whose Gather is a
 // re-pollable batch scan (item-usage edges, drift findings, badge findings, the
 // vault audit tail) resolve as in-process observation sources — the cfg.Sources
@@ -877,47 +682,6 @@ func TestBuildInProcSourceS156(t *testing.T) {
 	for _, kind := range []string{"ai-control-tower"} {
 		if _, ok := buildInProcSource(kind); ok {
 			t.Errorf("kind %q has a no-op Gather and must not resolve as an observation source", kind)
-		}
-	}
-}
-
-// TestBuildInProcSourceS158IdentityGrants pins the composition: the
-// identity sources whose Gather is now a re-pollable permitted-grant scan
-// (ldap privileged-directory grants, idp Okta/Entra app/scope assignments,
-// infisical project grants) resolve in buildInProcSource, so a cfg.Sources
-// entry with poll_seconds re-runs them — the as_source=true path runs a Gather
-// only once per boot. okta/entra are aliases of the one idp connector
-// (Descriptor olivares.idp): a shared descriptor, no longer a shared identity —
-// each registration carries its own configured name, and
-// TestWireRosterWiresTwoIdpEntriesAsSeparateSources wires both at once. The
-// roster-only kinds stay pinned NOT to resolve
-// (TestBuildInProcSourceS156), and spiffe/keycloak keep a no-op Gather.
-func TestBuildInProcSourceS158IdentityGrants(t *testing.T) {
-	cases := map[string]string{
-		"ldap":      "olivares.ldap",
-		"idp":       "olivares.idp",
-		"okta":      "olivares.idp",
-		"entra":     "olivares.idp",
-		"infisical": "olivares.infisical",
-	}
-	for kind, wantName := range cases {
-		conn, ok := buildInProcSource(kind)
-		if !ok {
-			t.Errorf("kind %q: not wired (buildInProcSource returned ok=false) — its permitted-grant scan is not re-pollable", kind)
-			continue
-		}
-		if got := conn.Descriptor().Name; got != wantName {
-			t.Errorf("kind %q: Descriptor.Name = %q, want %q", kind, got, wantName)
-		}
-		if got := conn.Descriptor().Type; got != sdk.TypeSource {
-			t.Errorf("kind %q: Type = %q, want source", kind, got)
-		}
-	}
-	// spiffe and keycloak remain roster-only (no grant surface, no-op Gather):
-	// deliberately NOT in-process observation sources.
-	for _, kind := range []string{"spiffe", "keycloak"} {
-		if _, ok := buildInProcSource(kind); ok {
-			t.Errorf("kind %q is roster-only and must not resolve as an observation source", kind)
 		}
 	}
 }

@@ -74,6 +74,7 @@
     "folder": "Ordner",
     "folderHint": "Ein Ordner auf diesem Server. Leer lassen, um in einem neuen Ordner zu beginnen.",
     "folderNew": "Ein neuer Ordner für diese Sitzung",
+    "folderTyped": "Anderer Ordner …",
     "folderChange": "Ordner ändern",
     "readingFolder": "Der Ordner der letzten Sitzung wird gelesen…",
     "prompt": "Erste Nachricht (optional)",
@@ -102,7 +103,8 @@
     "openProviders": "Anbieter öffnen",
     "profile": "Profil",
     "profileNotSignedIn": "Nicht angemeldet",
-    "profileNeedsKey": "Schlüssel fehlt"
+    "profileNeedsKey": "Schlüssel fehlt",
+    "foldersUnreadable": "Die registrierten Ordner konnten nicht gelesen werden. Geben Sie den Pfad eines Ordners auf diesem Server ein."
   },
   "lists": {
     "runsTruncated": "Letzte Sitzungen: {{count}} geladen; es gibt weitere.",

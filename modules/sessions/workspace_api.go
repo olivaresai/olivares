@@ -37,6 +37,7 @@ func workspacePermissions() []auth.Permission {
 // /v1/m/sessions/. The relative file path travels as ?path=<rel> (never a URL
 // segment) so the jail is unambiguous and a slash cannot break routing.
 func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
+	reg.HandleEntity("POST", "/workspaces/{ref}/wiki", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleInitWiki)
 	reg.Handle("POST", "/workspaces", permWsAdmin, m.handleCreateWorkspace)
 	reg.Handle("GET", "/workspaces", permWsRead, m.handleListWorkspaces)
 	reg.Handle("GET", "/workspaces/{ref}", permWsRead, m.handleGetWorkspace)
@@ -74,8 +75,9 @@ func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, m
 	writeJSON(w, http.StatusCreated, dto)
 }
 
-// handlePatchWorkspace replaces a workspace's additional read-only host folders.
-// Requires workspace administrator permission; an empty array removes access.
+// handlePatchWorkspace changes a workspace's read-only host folders or DLP mode.
+// Requires workspace administrator permission; a setting left out is not changed
+// and an empty folder array removes access.
 func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.Data == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("workspace registry not available"))
@@ -83,15 +85,16 @@ func (m *Module) handlePatchWorkspace(w http.ResponseWriter, r *http.Request, mc
 	}
 	var body struct {
 		ReadOnlyFolders *[]string `json:"read_only_folders"`
+		DLPMode         *string   `json:"dlp_mode"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if body.ReadOnlyFolders == nil {
-		writeRunErr(w, badRequest("read_only_folders must be an array; use [] to remove access"))
+	if body.ReadOnlyFolders == nil && body.DLPMode == nil {
+		writeRunErr(w, badRequest("send read_only_folders (an array; [] removes access) and/or dlp_mode (label|deny|off)"))
 		return
 	}
-	dto, err := m.patchWorkspaceReadOnlyFolders(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), *body.ReadOnlyFolders, mc.Principal.Actor(), mc.Principal.ActorKind())
+	dto, err := m.patchWorkspace(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ReadOnlyFolders, body.DLPMode, mc.Principal.Actor(), mc.Principal.ActorKind())
 	if err != nil {
 		writeRunErr(w, err)
 		return

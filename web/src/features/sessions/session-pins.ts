@@ -32,8 +32,11 @@ export const MAX_PINS = 20
 
 const VERSION = 1
 
-/** Where this principal's pins live, or null when there is no partition to write to. */
-export function pinStorageKey(
+/** Where one named browser preference of this principal lives, or null when there is
+ * no partition to write to (a token principal, or no tenant). Pins and the model
+ * favorites share the rule. */
+export function preferenceStorageKey(
+  name: string,
   origin: string,
   principal: Whoami | null,
   tenant: string | null,
@@ -45,7 +48,21 @@ export function pinStorageKey(
     !tenant
   )
     return null
-  return `olivares.sessions.pins:${JSON.stringify([origin, 'user', principal.user_id, tenant])}`
+  return `${name}:${JSON.stringify([origin, 'user', principal.user_id, tenant])}`
+}
+
+/** Where this principal's pins live, or null when there is no partition to write to. */
+export function pinStorageKey(
+  origin: string,
+  principal: Whoami | null,
+  tenant: string | null,
+): string | null {
+  return preferenceStorageKey(
+    'olivares.sessions.pins',
+    origin,
+    principal,
+    tenant,
+  )
 }
 
 const EMPTY: readonly string[] = Object.freeze([])

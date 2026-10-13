@@ -205,9 +205,9 @@ curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
   || fail "setup failed"
 TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jqp 'd["token"]')"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
-  -H 'Content-Type: application/json' -d '{"name":"Provider smoke","slug":"provider-smoke"}' | jqp 'd["tenant_id"]')"
-[ -n "$TENANT" ] || fail "could not create the tenant"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+[ -n "$TENANT" ] || fail "could not resolve the setup organization"
 ok "tenant $TENANT"
 
 CLI=("$BIN" --server "$BASE" --token "$TOKEN" --tenant "$TENANT")

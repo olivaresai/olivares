@@ -33,5 +33,15 @@
     "loading": "Leyendo el contenido del espacio de trabajo…",
     "empty": "Este espacio de trabajo aún no contiene nada.",
     "unavailable": "El contenido del espacio de trabajo no está disponible."
+  },
+  "sessionFolders": {
+    "title": "Carpetas de sesión",
+    "intro": "Carpetas de este servidor donde trabajan las sesiones. No son lo mismo que los espacios de trabajo.",
+    "manage": "Gestionar carpetas",
+    "folder": "Carpeta",
+    "empty": "Aún no hay carpetas de sesión. Una carpeta aparece aquí cuando una sesión empieza en ella.",
+    "loading": "Leyendo las carpetas de sesión…",
+    "unavailable": "Las carpetas de sesión no están disponibles.",
+    "truncationHint": "Abra Sesiones para ver todas las carpetas."
   }
 }

@@ -18,6 +18,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The engine binary is built ONE way outside a release: see scripts/lib/build-bin.sh.
 # Writing the flags out longhand here is what let five scripts drift from build:bin.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
+. "$ROOT/scripts/lib/select-console-modules.sh"
 . "$ROOT/scripts/lib/session-conversation-fixture.sh"
 PORT="${E2E_PORT:-8466}"
 GRPC_PORT="$((PORT + 1))"
@@ -34,7 +35,7 @@ cleanup() {
 trap cleanup EXIT
 
 DATA="$(mktemp -d)"
-BIN="$ROOT/bin/olivares"
+BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
 
 
 # ⛔ ESTO VA DESPUES DEL `trap`, y no es orden estetico (the reviewer, A-02). El scratch se crea
@@ -72,10 +73,15 @@ if curl -sf "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Building web bundle + olivares binary"
-pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null
-pnpm --dir "$ROOT/web" run build
-build_olivares_bin "$BIN"
+if [ -n "${OLIVARES_BIN:-}" ]; then
+  [ -x "$BIN" ] || { echo 'ERROR: OLIVARES_BIN must name an executable release candidate' >&2; exit 1; }
+  echo '==> Using the supplied release candidate'
+else
+  echo "==> Building web bundle + olivares binary"
+  pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null
+  pnpm --dir "$ROOT/web" run build
+  build_olivares_bin "$BIN"
+fi
 
 # Recheck both listeners after the long build. The early health probe fails fast
 # for a stale engine; this TCP check also catches a non-HTTP or gRPC occupant.
@@ -145,9 +151,9 @@ for _ in $(seq 1 40); do
   if ! kill -0 "$PID" 2>/dev/null; then
     break
   fi
-  LOGIN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
+  LOGIN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
     -H 'Content-Type: application/json' \
-    -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' || true)"
+    --data-binary @- || true)"
   TOKEN="$(python3 -c 'import sys,json;print(json.load(sys.stdin).get("token", ""))' \
     <<<"$LOGIN" 2>/dev/null || true)"
   if [ -n "$TOKEN" ]; then
@@ -166,10 +172,10 @@ for _ in $(seq 1 40); do
   if ! kill -0 "$PID" 2>/dev/null; then
     break
   fi
-  ORGS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" \
+  WHOAMI="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/auth/whoami" \
     -H @- || true)"
-  TENANT="$(python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin).get("items", []) if o.get("slug")=="demo"]' \
-    <<<"$ORGS" 2>/dev/null || true)"
+  TENANT="$(python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])' \
+    <<<"$WHOAMI" 2>/dev/null || true)"
   if [ -n "$TENANT" ]; then
     break
   fi
@@ -182,6 +188,27 @@ if [ -z "$TENANT" ]; then
 fi
 echo "==> Demo tenant: $TENANT"
 seed_conversation_fixture
+
+# Enable the optional shared readers exercised by the browser journey.
+enable_console_modules "http://127.0.0.1:$PORT" accessmap catalog compliance evals finops health inventory knowledge models notify observability orchestration recording redteam reporting security sessions
+
+# Only authenticated 200 and the published 501 refusal describe a capability.
+capability_status() {
+  local status
+  status="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS -o "$DATA/capability.json" -w '%{http_code}' \
+    "http://127.0.0.1:$PORT$1" -H @- -H "X-Olivares-Tenant: $TENANT")" || return 1
+  case "$status" in 200|501) printf '%s' "$status" ;; *) echo "ERROR: $1 returned HTTP $status; expected 200 or 501" >&2; return 1 ;; esac
+}
+GRAPH_STATUS="$(capability_status '/v1/m/accessmap/graph')"
+IDENTITY_STATUS="$(capability_status '/v1/m/governance/identities')"
+BUILD_EDITION="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/server-info" -H @- \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["edition"])')"
+case "$BUILD_EDITION" in community|enterprise|business) ;; *) echo "ERROR: unknown build edition: $BUILD_EDITION" >&2; exit 1 ;; esac
+if [ "$BUILD_EDITION" = community ] && { [ "$GRAPH_STATUS" != 200 ] || [ "$IDENTITY_STATUS" != 200 ]; }; then
+  echo 'ERROR: Community must serve both the access graph and the identity inventory' >&2; exit 1
+fi
+echo "==> Build: $BUILD_EDITION; graph HTTP $GRAPH_STATUS; identity inventory HTTP $IDENTITY_STATUS"
+
 
 if ! kill -0 "$PID" 2>/dev/null; then
   echo "ERROR: engine exited before Playwright" >&2
@@ -207,7 +234,21 @@ cd "$ROOT/web"
 # it MEASURES the rail in seven languages (`scrollWidth > clientWidth`) and the computed
 # font size of a painted element, and both of those need a real console with a real
 # estate behind it — on the shared engine it would measure the login page seven times.
-PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" DEMO_TENANT="$TENANT" \
-  pnpm exec playwright test e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts \
-  e2e/console-keyboard-routes.spec.ts e2e/first-screens.spec.ts \
-  e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts "$@"
+SPECS=(e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts e2e/console-keyboard-routes.spec.ts
+  e2e/first-screens.spec.ts e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts)
+# The access graph and the identity inventory are Community: the public specs above cover them.
+# A non-Community build that serves them must bring its private suites; an installed one is always run.
+if [ "$BUILD_EDITION" != community ]; then
+  if [ "$GRAPH_STATUS" = 200 ]; then
+    [ -f e2e/demo-graph-business.spec.ts ] || { echo 'ERROR: available Business graph requires its private E2E suite' >&2; exit 1; }
+  fi
+  if [ "$IDENTITY_STATUS" = 200 ]; then
+    [ -f e2e/console-func-l4-business.spec.ts ] || { echo 'ERROR: available Business identity inventory requires its private E2E suite' >&2; exit 1; }
+  fi
+fi
+for private in e2e/demo-graph-business.spec.ts e2e/console-func-l4-business.spec.ts; do
+  [ -f "$private" ] && SPECS+=("$private")
+done
+# Playwright sends Secure browser-session cookies over the trusted localhost origin.
+PLAYWRIGHT_BASE_URL="http://localhost:$PORT" DEMO_TENANT="$TENANT" \
+  pnpm exec playwright test "${SPECS[@]}" "$@"

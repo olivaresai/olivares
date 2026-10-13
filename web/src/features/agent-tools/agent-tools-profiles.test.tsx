@@ -15,6 +15,7 @@ import './i18n'
 const { api, auth, signIn, providers } = vi.hoisted(() => ({
   api: {
     inventory: vi.fn(),
+    pins: vi.fn().mockResolvedValue({ pins: [] }),
     providers: vi.fn(),
     plan: vi.fn(),
     install: vi.fn(),
@@ -323,6 +324,35 @@ it('keeps host presence unknown while a cold provider snapshot is refreshing', a
 })
 
 describe('AI tools: one boxed list per installed tool', () => {
+  it('marks only the account whose own home is signed in as ready', async () => {
+    signIn.status.mockImplementation(
+      (driver: string, _tenant: unknown, _signal: unknown, ref?: string) =>
+        Promise.resolve({
+          driver,
+          installed: true,
+          signed_in: ref === 'ppf_b',
+        }),
+    )
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+    mount()
+    const row = await screen.findByTestId('profile-claude-b')
+    expect(await within(row).findByText('Ready')).toBeInTheDocument()
+    expect(within(row).getByText('Account · signed in')).toBeInTheDocument()
+    const tool = await screen.findByTestId('tool-claude')
+    const defaultRow = within(tool).getByTestId('profile-default')
+    expect(
+      await within(defaultRow).findByText('Account · not signed in'),
+    ).toBeInTheDocument()
+    expect(within(defaultRow).queryByText('Ready')).toBeNull()
+    expect(signIn.status).toHaveBeenCalledWith(
+      'claude',
+      't1',
+      expect.anything(),
+      'ppf_b',
+      expect.anything(),
+    )
+  })
+
   it('shows signed-out Codex as ready on its resolved API key without asking for sign-in', async () => {
     signIn.status.mockImplementation((driver: string) =>
       Promise.resolve({ driver, installed: true, signed_in: false }),

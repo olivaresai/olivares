@@ -20,9 +20,7 @@
 //    name to show and the honest rendering is the short id — which is what the switcher
 //    has always shown a member. A hook that fabricated a label would be worse than the
 //    id it replaced.
-import { useQuery } from '@tanstack/react-query'
-import { systemApi } from '@/lib/api/endpoints'
-import { queryKeys } from '@/lib/api/query'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useAuth } from '@/lib/auth/context'
 
 /** Eight characters and an ellipsis: enough to tell two ids apart, short enough to read. */
@@ -41,22 +39,20 @@ export function grantName(
   )
 }
 
-/**
- * The deployment's organizations, for a superadmin: the one read the switcher, the scope
- * line and the SSO scope share. A deployment that did not answer it (on R1 08 with
- * Postgres, GET /v1/system/orgs answered 501 on every screen, N2 J8) is not asked again on
- * each mount or focus: one answer per session, and the label falls back to the short id.
- */
+/** Estate inventory is supplied only by the edition; own names come from whoami. */
+function useNoOrganizationInventory(): {
+  data?: import('@/lib/api/types').ListResponse<
+    import('@/lib/api/types').OrgDTO
+  >
+  error: Error | null
+} {
+  return { error: null }
+}
 export function useOrgs() {
-  const { isSuperadmin } = useAuth()
-  return useQuery({
-    queryKey: queryKeys.orgs,
-    queryFn: () => systemApi.listOrgs(),
-    enabled: isSuperadmin,
-    staleTime: 60_000,
-    retryOnMount: false,
-    refetchOnWindowFocus: (q) => q.state.status !== 'error',
-  })
+  // Resolve at render: the private SSO tab imports this hook while extensions compose.
+  const useInventory =
+    PANEL_EXTENSIONS.useOrganizationInventory ?? useNoOrganizationInventory
+  return useInventory()
 }
 
 /**

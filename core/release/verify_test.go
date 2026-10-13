@@ -32,7 +32,7 @@ func signManifest(t *testing.T, priv ed25519.PrivateKey, files map[string][]byte
 func TestVerifyHappyPath(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	artifact := []byte("the enterprise binary bytes")
-	name := "olivares-enterprise-linux-amd64.tar.gz"
+	name := "olivares-linux-amd64.tar.gz"
 	checksums, sig := signManifest(t, priv, map[string][]byte{
 		name:           artifact,
 		"other.tar.gz": []byte("unrelated"),

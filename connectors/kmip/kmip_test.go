@@ -8,7 +8,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -176,25 +175,6 @@ func TestGatherInventory(t *testing.T) {
 	}
 }
 
-func TestSnapshotInventory(t *testing.T) {
-	s := New()
-	s.tr = &fakeServer{t: t}
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{"endpoint": "hsm.local"}}); err != nil {
-		t.Fatal(err)
-	}
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(g.Identities) != 1 {
-		t.Fatalf("want 1 server NHI, got %+v", g.Identities)
-	}
-	id := g.Identities[0]
-	if id.Kind != identitysource.KindSecretStore || id.Type != identitysource.PrincipalNHI || id.Ref != "kmip:hsm.local:5696" {
-		t.Fatalf("server NHI = %+v", id)
-	}
-}
-
 func TestOpenEndpointDefaultPortIPv6(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -220,13 +200,5 @@ func TestOpenEndpointDefaultPortIPv6(t *testing.T) {
 				t.Fatalf("endpoint = %q, want %q", s.endpoint, tt.want)
 			}
 		})
-	}
-}
-
-func TestOfflineEmptyGraph(t *testing.T) {
-	s := New()
-	g, err := s.Snapshot(context.Background())
-	if err != nil || len(g.Identities) != 0 {
-		t.Fatalf("offline graph = %+v err=%v", g, err)
 	}
 }

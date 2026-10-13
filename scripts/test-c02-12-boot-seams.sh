@@ -117,7 +117,7 @@ expect "firing: doc claiming invariant closed is FAIL" 1
 stage
 mutate "$PORTS_T" $'\tagentServers ' $'\tunaccounted editionPort[any]\n\tagentServers '
 run
-expect "firing: an unaccounted port is FAIL on the count" 1 'live port count 58 != pinned 57'
+expect "firing: an unaccounted port is FAIL on the count" 1 'live port count 59 != pinned 58'
 
 stage
 mutate "$PORTS_T" $'\tbindModuleDependencies ' $'\trenamedBinding '

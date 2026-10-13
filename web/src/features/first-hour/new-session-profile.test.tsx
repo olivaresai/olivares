@@ -4,7 +4,7 @@
 //
 // A tool with several profiles: the New session dialog offers a profile select, defaulting
 // to the profile used most recently that is ready, else the first ready one. A tool with
-// one profile shows nothing new, and the engine picks the profile as it always did.
+// one profile hides the select and still carries a named account's reference.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -29,7 +29,7 @@ vi.mock('@/features/agentops/session-launch', async (orig) => ({
   ...((await orig()) as Record<string, unknown>),
   launchSession: launch.launchSession,
 }))
-const signedIn = vi.hoisted(() => ({ refs: new Set<string>() }))
+const signedIn = vi.hoisted(() => ({ refs: new Set<string>(), default: true }))
 vi.mock('./api', async (orig) => ({
   ...((await orig()) as Record<string, unknown>),
   signInApi: {
@@ -37,7 +37,7 @@ vi.mock('./api', async (orig) => ({
       Promise.resolve({
         driver,
         installed: true,
-        signed_in: ref ? signedIn.refs.has(ref) : true,
+        signed_in: ref ? signedIn.refs.has(ref) : signedIn.default,
       }),
   },
 }))
@@ -49,12 +49,18 @@ import type {
   RunDTO,
 } from '@/features/agentops/types'
 import { useTenantStore } from '@/stores/tenant'
-import { StartSessionForm } from './first-hour'
+import { NewSessionDialog, StartSessionForm } from './first-hour'
+import { firstHourKeys } from './api'
 import { readinessOf } from './readiness.fixture'
 
-function wrap(ui: ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+function wrap(
+  ui: ReactNode,
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
+  return {
+    ...render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>),
+    qc,
+  }
 }
 
 const account = (
@@ -102,6 +108,7 @@ beforeEach(() => {
   launch.launchSession.mockReset()
   launch.launchSession.mockResolvedValue({ run_ref: 'run_1' })
   signedIn.refs = new Set(['ppf_b', 'ppf_c'])
+  signedIn.default = true
   useTenantStore.setState({ activeTenant: 'tnt-a' })
   vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
     readinessOf({ claude: 'own_login', codex: 'own_login' }),
@@ -233,7 +240,43 @@ describe('the profile in the New session dialog', () => {
     await waitFor(() => expect(select).toHaveTextContent('claude-b'))
   })
 
+  // #1779 (srv17): with several sign-ins the advanced launch opened on "Select a profile";
+  // it opens on the one this form shows.
+  it('hands the advanced launch the sign-in the form shows', async () => {
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [run('r2', 'ppf_c'), run('r1', 'ppf_b')],
+      has_more: false,
+    })
+    vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+      profile_ref: 'ppf_c',
+      driver: 'claude',
+      state: 'fresh',
+      default_model: '',
+      free_text: true,
+      checked_at: '2026-10-12T10:00:00Z',
+      refresh_interval_seconds: 120,
+      models: [],
+    })
+    const onAdvanced = vi.fn()
+    const user = userEvent.setup()
+    wrap(<StartSessionForm onAdvanced={onAdvanced} />)
+    await waitFor(async () =>
+      expect(await profileSelect()).toHaveTextContent('claude-c'),
+    )
+    await user.click(screen.getByRole('button', { name: 'More options' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Advanced launch options' }),
+    )
+    expect(onAdvanced).toHaveBeenCalledWith({
+      driver: 'claude',
+      profileRef: 'ppf_c',
+      model: '',
+      effort: '',
+    })
+  })
+
   it('starts on a ready profile when the default login is not ready', async () => {
+    signedIn.default = false
     vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
       readinessOf({
         codex: 'own_login',
@@ -265,5 +308,113 @@ describe('the profile in the New session dialog', () => {
     expect(
       within(document.body).getByRole('radio', { name: 'Codex' }),
     ).toBeChecked()
+  })
+
+  it('starts on the sole adopted account when only that account is signed in', async () => {
+    signedIn.default = false
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+      readinessOf({ codex: 'own_login' }),
+    )
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [{ ...account('ppf_b', 'claude-b'), home_mode: 'adopted' }],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap(<StartSessionForm />)
+    await user.click(await screen.findByRole('radio', { name: 'Claude Code' }))
+    const start = screen.getByRole('button', { name: 'Start' })
+    await waitFor(() => expect(start).toBeEnabled())
+    expect(screen.queryByRole('combobox', { name: 'Profile' })).toBeNull()
+    await user.click(start)
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+      driver: 'claude',
+      profileRef: 'ppf_b',
+    })
+  })
+
+  it('refuses the sole signed-out account even when the default login is ready', async () => {
+    signedIn.refs.clear()
+    vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+      items: [{ ...account('ppf_b', 'claude-b'), home_mode: 'adopted' }],
+      has_more: false,
+    })
+    wrap(<StartSessionForm />)
+    await screen.findByRole('radio', { name: 'Claude Code' })
+    await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled(),
+    )
+    expect(launch.launchSession).not.toHaveBeenCalled()
+  })
+
+  it('disables Start when the selected account signs out while the default stays ready', async () => {
+    const { qc } = wrap(<StartSessionForm />)
+    const select = await profileSelect()
+    await waitFor(() => expect(select).toHaveTextContent('Default sign-in'))
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
+    // Keep the user's explicit selection through the status refresh.
+    const user = userEvent.setup()
+    await user.click(select)
+    await user.click(await screen.findByRole('option', { name: 'claude-b' }))
+    await waitFor(() => expect(select).toHaveTextContent('claude-b'))
+    signedIn.refs.delete('ppf_b')
+    await qc.invalidateQueries({
+      predicate: (q) => q.queryKey.includes('account-sign-in'),
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled(),
+    )
+    expect(launch.launchSession).not.toHaveBeenCalled()
+  })
+
+  it('offers the signed-in account when no tool has a ready default login', async () => {
+    signedIn.default = false
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(readinessOf({}))
+    const user = userEvent.setup()
+    wrap(<NewSessionDialog open onOpenChange={() => {}} />)
+    await screen.findByRole('radio', { name: 'Claude Code' })
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(launch.launchSession).toHaveBeenCalledTimes(1))
+    expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+      profileRef: 'ppf_b',
+    })
+  })
+
+  it('waits for account discovery before enabling Start from the default login', async () => {
+    let finish!: (
+      answer: Awaited<ReturnType<typeof agentOpsApi.listAccounts>>,
+    ) => void
+    vi.spyOn(agentOpsApi, 'listAccounts').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    signedIn.refs.clear()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData(
+      firstHourKeys.readiness('tnt-a'),
+      readinessOf({ claude: 'own_login' }),
+    )
+    wrap(<StartSessionForm />, qc)
+    await waitFor(() => expect(agentOpsApi.listAccounts).toHaveBeenCalled())
+    try {
+      await screen.findByRole('button', { name: 'Change folder' })
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    } finally {
+      finish({
+        items: [{ ...account('ppf_b', 'claude-b'), home_mode: 'adopted' }],
+        has_more: false,
+      })
+    }
+    await screen.findByText(/claude-b.*not signed in/i)
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
+    expect(launch.launchSession).not.toHaveBeenCalled()
   })
 })

@@ -243,7 +243,7 @@ func requireAuthSourceForDriver(driver, source string) error {
 //     WIF exchange IS Claude's managed adapter, so this is a name for what already
 //     happens, not a second issuer.
 //   - any driver, provider_account_home: NOTHING is injected. The child opens the
-//     home it was explicitly authorized for, and Olivares never reads it.
+//     home it was explicitly authorized for; the native tool checks its sign-in.
 //   - any other driver, managed_injection: that driver's OWN governed adapter, or
 //     a refusal that names the missing adapter. The Claude bearer is never reused.
 func (m *Module) mintLaunchAuthority(
@@ -265,6 +265,15 @@ func (m *Module) mintLaunchAuthority(
 		}
 	}
 	if source == AuthSourceAccountHome {
+		if driver != providerDriverOpenCode && p.ProviderHome != nil && p.ProviderHome.ProfileID != "" {
+			profile, err := m.GetProfile(ctx, tenant, p.ProviderHome.ProfileID)
+			if err != nil {
+				return Credential{}, nil, err
+			}
+			if err := m.requireAccountLogin(ctx, tenant, profile); err != nil {
+				return Credential{}, nil, err
+			}
+		}
 		// OpenCode otherwise selects its hosted provider even from an empty home.
 		// Recheck the exact profile on create and resume, outside store transactions.
 		if driver == providerDriverOpenCode {

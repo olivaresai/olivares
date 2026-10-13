@@ -1,25 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-//
-// IDENTITIES & ACCESS (console remake 26.10, slice 3): one place for who can sign in, what
-// they can do and how they prove it. The identity sections that lived here (federation,
-// the NHI inventory and lifecycle, MCP auth, the WIF graph, posture, privileged login,
-// TOTP) are joined by the administration sections that answer the same question — people,
-// roles, identity providers and API keys — reusing Administration's own components and
-// labels. Those four need `tenant:admin`, the permission their screen already required; a
-// principal without it sees exactly the identity sections it saw before. Administration
-// keeps its tabs until each of its other sections has its own destination.
-//
-// The sections are grouped in a vertical list beside the work at `lg`, and a scrolling
-// strip below it. `?tab=` deep links keep working for every key, old and new.
 import { useNavigate } from '@tanstack/react-router'
 import { Fingerprint } from 'lucide-react'
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '@/components/ui/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { usePendingCommandAction } from '@/features/navigation/command-actions'
 import { ApiKeysTab } from '@/features/console/api-keys-tab'
@@ -30,27 +20,12 @@ import '@/features/console/i18n'
 import { RecordingNotice } from '@/features/recordings/recording-notice'
 import { FederationTab } from './federation'
 import { McpAuthTab } from './mcp-auth'
-import { NhiLifecycleTab } from './nhi-lifecycle'
 import { NhiRosterTab } from './nhi-roster'
-import { PostureTab } from './posture'
 import { PrivilegedLoginTab } from './privileged-login'
 import { TOTPTab } from './totp'
-import { WifGraphTab } from './wif/wif-graph'
 import './i18n'
 
-type TabKey =
-  | 'people'
-  | 'roles'
-  | 'sso'
-  | 'federation'
-  | 'login'
-  | 'totp'
-  | 'inventory'
-  | 'lifecycle'
-  | 'wif'
-  | 'mcp'
-  | 'apiKeys'
-  | 'posture'
+type TabKey = string
 
 /** The sections that come from Administration, and the permission that screen required. */
 const ADMIN_TABS: ReadonlySet<TabKey> = new Set([
@@ -65,8 +40,7 @@ const ADMIN_PERMISSION = 'tenant:admin'
 const GROUPS: readonly { id: string; tabs: readonly TabKey[] }[] = [
   { id: 'people', tabs: ['people', 'roles'] },
   { id: 'signIn', tabs: ['sso', 'federation', 'login', 'totp'] },
-  { id: 'machines', tabs: ['inventory', 'lifecycle', 'wif', 'mcp', 'apiKeys'] },
-  { id: 'posture', tabs: ['posture'] },
+  { id: 'machines', tabs: ['inventory', 'mcp', 'apiKeys'] },
 ]
 
 function initialTab(available: readonly TabKey[]): TabKey {
@@ -85,12 +59,29 @@ export default function IdentityView() {
   const navigate = useNavigate()
   const { can } = useAuth()
   const admin = can(ADMIN_PERMISSION)
+  const panels = useOfferedPanels(PANEL_EXTENSIONS.identityTabs)
   const groups = GROUPS.map((g) => ({
     id: g.id,
-    tabs: g.tabs.filter((k) => admin || !ADMIN_TABS.has(k)),
+    tabs: [
+      ...panels.filter((p) => p.group === g.id).map((p) => p.id),
+      ...g.tabs,
+    ].filter((k) => admin || !ADMIN_TABS.has(k)),
   })).filter((g) => g.tabs.length > 0)
+  for (const panel of panels) {
+    if (!groups.some((g) => g.id === panel.group)) {
+      groups.push({
+        id: panel.group,
+        tabs: panels.filter((p) => p.group === panel.group).map((p) => p.id),
+      })
+    }
+  }
   const available = groups.flatMap((g) => g.tabs)
   const [tab, setTabState] = useState<TabKey>(() => initialTab(available))
+  const selectedTab = available.includes(tab) ? tab : initialTab(available)
+  const pendingTab = useRef<TabKey | null>(null)
+  useEffect(() => {
+    pendingTab.current = null
+  }, [selectedTab])
   // A vertical section list beside the work at `lg` (Up/Down move between sections), a
   // scrolling strip below it (Left/Right): the orientation decides the arrow keys.
   const wide = useMinWidth(1024)
@@ -105,6 +96,9 @@ export default function IdentityView() {
   })
 
   function setTab(value: TabKey) {
+    if (value === selectedTab || value === pendingTab.current) return
+    // Radix focus and mouse-down can request the same tab before state commits.
+    pendingTab.current = value
     setTabState(value)
     // `replace`, not push: the section is a facet of this screen, and preserving the
     // other params keeps a link from the access map intact.
@@ -116,7 +110,8 @@ export default function IdentityView() {
   }
 
   const label = (key: TabKey) =>
-    key === 'people'
+    panels.find((p) => p.id === key)?.label() ??
+    (key === 'people'
       ? t('console:tabs.people')
       : key === 'roles'
         ? t('console:tabs.roles')
@@ -124,7 +119,7 @@ export default function IdentityView() {
           ? t('console:tabs.sso')
           : key === 'apiKeys'
             ? t('console:tabs.apiKeys')
-            : t(`identity:tabs.${key}`)
+            : t(`identity:tabs.${key}`))
 
   return (
     <div className="flex flex-col gap-5">
@@ -135,7 +130,7 @@ export default function IdentityView() {
       />
       <RecordingNotice namespace="identity" />
       <Tabs
-        value={tab}
+        value={selectedTab}
         onValueChange={(v) => setTab(v as TabKey)}
         orientation={wide ? 'vertical' : 'horizontal'}
         className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-8"
@@ -186,21 +181,19 @@ export default function IdentityView() {
           <TabsContent value="federation" className="pt-0">
             <FederationTab />
           </TabsContent>
+
           <TabsContent value="inventory" className="pt-0">
             <NhiRosterTab />
-          </TabsContent>
-          <TabsContent value="lifecycle" className="pt-0">
-            <NhiLifecycleTab />
           </TabsContent>
           <TabsContent value="mcp" className="pt-0">
             <McpAuthTab />
           </TabsContent>
-          <TabsContent value="wif" className="pt-0">
-            <WifGraphTab />
-          </TabsContent>
-          <TabsContent value="posture" className="pt-0">
-            <PostureTab />
-          </TabsContent>
+
+          {panels.map(({ id, Component }) => (
+            <TabsContent key={id} value={id} className="pt-0">
+              <Component />
+            </TabsContent>
+          ))}
           <TabsContent value="login" className="pt-0">
             <PrivilegedLoginTab />
           </TabsContent>

@@ -35,9 +35,10 @@ The profile is **opt-in** (`semconv_opt_in`) because the GenAI conventions are s
 Development status — off, a `gen_ai.*` record still feeds the liveness watchdog but
 is not mapped to cost/edges.
 
-## 1. Install and create a tenant
+## 1. Install and use your organization
 
-A fresh install (same on-ramp as the [quickstart](../../docs-site/src/content/docs/start/quickstart.md)):
+Setup creates the single organization; log in and read its tenant ID
+(same on-ramp as the [quickstart](../../docs-site/src/content/docs/start/quickstart.md)):
 
 ```sh
 ./bin/olivares serve --insecure --data-dir ./data &      # note the olst_… setup token
@@ -45,8 +46,7 @@ curl -sf -X POST localhost:8443/v1/setup \
   -d '{"token":"olst_…","email":"admin@local","password":"correct-horse-battery-staple"}'
 TOKEN=$(curl -sf -X POST localhost:8443/v1/auth/login \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jq -r .token)
-TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localhost:8443/v1/system/orgs -H @- \
-  -d '{"name":"Agents","slug":"agents"}' | jq -r .tenant_id)
+TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf localhost:8443/v1/auth/whoami -H @- | jq -r '.grants[0].tenant')
 ```
 
 Turn on FinOps in the console (keep the other modules on) and wait for the engine to restart.

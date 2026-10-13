@@ -169,7 +169,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newModelsCmd(), newInferenceProxyCmd(), newFinOpsCmd())
 	// The governed-data lane (C09 lot 2): the corpus, who may reach it, and the
 	// admission gate the connectors and MCP servers carrying it pass through.
-	root.AddCommand(newKnowledgeCmd(), newSourceScopeCmd(), newCatalogCmd(), newSkillsCmd())
+	root.AddCommand(newKnowledgeCmd(), newSourceScopeCmd(), newCatalogCmd(), newSkillsCmd(), newWikiCmd())
 	// The git publication lane (J10-S3): the /v1/m/gitpublish routes as
 	// scriptable verbs — targets, the three effects, and the intents that
 	// follow them.
@@ -217,6 +217,7 @@ var commandGroups = map[string]string{
 	"account":    "manage",
 	"modules":    "manage",
 	"skills":     "beta",
+	"wiki":       "start",
 	"quickstart": "start", "login": "start", "tool": "start", "session": "start", "status": "start", "doctor": "start",
 	"auth": "manage", "logout": "manage", "users": "manage", "members": "manage", "tenants": "manage", "workspaces": "manage", "tokens": "manage", "provider": "manage", "mcp": "manage", "audit": "manage", "license": "manage", "agent": "manage",
 	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "admin": "engine", "openapi": "engine",

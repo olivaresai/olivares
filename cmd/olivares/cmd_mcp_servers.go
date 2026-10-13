@@ -22,7 +22,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 )
 
-// cmd_mcp_servers.go is `olivares mcp add|test|enable|disable|rm|ls|sessions`: the
+// cmd_mcp_servers.go is `olivares mcp add|test|enable|disable|assign|unassign|rm|ls|sessions`: the
 // MCP servers sessions can use, through the roster the console's MCP page edits
 // (/v1/console/mcp-gateway). A server is added disabled; a test lists its tools
 // without calling them; enabling it is a separate, explicit step. Every write
@@ -52,6 +52,7 @@ func newMCPServerCmds(flags *authClientFlags) []*cobra.Command {
 	return []*cobra.Command{
 		newMCPListCmd(flags), newMCPAddCmd(flags), newMCPSecretCmd(flags), newMCPTestCmd(flags),
 		newMCPEnableCmd(flags, "enable", true), newMCPEnableCmd(flags, "disable", false),
+		newMCPAssignCmd(flags, "assign", true), newMCPAssignCmd(flags, "unassign", false),
 		newMCPRemoveCmd(flags), newMCPSessionsCmd(flags),
 	}
 }
@@ -125,8 +126,9 @@ func newMCPListCmd(flags *authClientFlags) *cobra.Command {
 
 func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 	var (
-		envs, secrets []string
-		noTest        bool
+		envs, secrets, egressHosts []string
+		tool                       string
+		noTest                     bool
 	)
 	cmd := &cobra.Command{
 		Use:   "add <name> (-- <command> [args...] | <https-url>)",
@@ -135,28 +137,49 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 			"remote one (an HTTPS URL). It is added off; add then tests it, which lists its tools\n" +
 			"without calling any. Turn it on with `olivares mcp enable <name>`.\n\n" +
 			"Secrets never go in the command line: store each one with\n" +
-			"`olivares mcp secret <name> --value-file <file>` and pass --secret-env NAME=store:mcp/<name>.",
+			"`olivares mcp secret <name> --value-file <file>` and pass --secret-env NAME=store:mcp/<name>.\n\n" +
+			"--egress-host limits a local server's network to those HTTPS hosts (public addresses only);\n" +
+			"without it the server keeps the network of the session it runs next to.\n\n" +
+			"--tool runs a tool installed with `olivares tool install --from`, pinned to its version\n" +
+			"and the digest of its installed executable; a changed executable refuses to start.",
 		Example: "  olivares mcp add files -- npx -y @modelcontextprotocol/server-filesystem .\n" +
+			"  olivares mcp add fetch --egress-host registry.npmjs.org -- npx -y @modelcontextprotocol/server-fetch\n" +
+			"  olivares mcp add rea --tool rea@1.0.0 -- serve\n" +
 			"  olivares mcp secret github --value-file ./github-token\n" +
 			"  olivares mcp add github --secret-env GITHUB_TOKEN=store:mcp/github -- github-mcp-server stdio\n" +
 			"  olivares mcp add docs https://mcp.example.com/mcp",
-		Args: cobra.MinimumNArgs(2),
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			server := map[string]any{
 				"name": args[0], "egress_cidrs": []string{}, "allowed_tools": []any{},
 				"trust": map[string]any{}, "enabled": false,
 			}
+			local := true
 			switch dash := cmd.ArgsLenAtDash(); {
-			case dash == 1:
+			case tool != "":
+				program, version, ok := strings.Cut(tool, "@")
+				if !ok || program == "" || version == "" || !(dash == 1 || dash < 0 && len(args) == 1) {
+					return sentence(exitcode.Usage, "Give --tool <program>@<version>, and the server's arguments after --: olivares mcp add %s --tool <program>@<version> -- [args]", shellWord(args[0]))
+				}
+				// The engine fills the command and digest from the verified install.
+				server["pin"], server["args"] = map[string]any{"program": program, "version": version}, append([]string{}, args[1:]...)
+				warnEnvFlagsAfterTerminator(cmd, args[1:])
+			case dash == 1 && len(args) > 1:
 				server["command"], server["args"] = args[1], append([]string{}, args[2:]...)
 				warnEnvFlagsAfterTerminator(cmd, args[1:])
 			case dash < 0 && len(args) == 2 && strings.HasPrefix(args[1], "https://"):
-				server["url"] = args[1]
+				server["url"], local = args[1], false
 			default:
 				return sentence(exitcode.Usage, "Give a command after -- or an HTTPS URL: olivares mcp add %s -- <command> [args]", shellWord(args[0]))
 			}
+			if len(egressHosts) > 0 {
+				if !local {
+					return sentence(exitcode.Usage, "--egress-host is for a local server (a command after --); a remote server is reached at its URL only.")
+				}
+				server["egress_hosts"] = egressHosts
+			}
 			if len(envs)+len(secrets) > 0 {
-				if _, local := server["command"]; !local {
+				if !local {
 					return sentence(exitcode.Usage, "--env and --secret-env are for a local server (a command after --).")
 				}
 				env, err := keyValues(envs, "--env")
@@ -203,6 +226,8 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 	}
 	cmd.Flags().StringArrayVar(&envs, "env", nil, "NAME=value for a local server's environment (public values only; repeatable)")
 	cmd.Flags().StringArrayVar(&secrets, "secret-env", nil, "NAME=store:mcp/<secret> for a local server's secret environment (repeatable)")
+	cmd.Flags().StringVar(&tool, "tool", "", "<program>@<version> of a tool installed with olivares tool install --from, pinned by its digest")
+	cmd.Flags().StringArrayVar(&egressHosts, "egress-host", nil, "HTTPS host or host:port a local server may reach; the only network it gets (repeatable)")
 	cmd.Flags().BoolVar(&noTest, "no-test", false, "add without testing it")
 	return cmd
 }
@@ -220,7 +245,7 @@ func warnEnvFlagsAfterTerminator(cmd *cobra.Command, serverArgs []string) {
 			continue
 		}
 		name = strings.SplitN(name, "=", 2)[0]
-		if name != "env" && name != "secret-env" {
+		if name != "env" && name != "secret-env" && name != "egress-host" && name != "tool" {
 			continue
 		}
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
@@ -456,6 +481,98 @@ func newMCPEnableCmd(flags *authClientFlags, use string, on bool) *cobra.Command
 		cmd.Flags().StringSliceVar(&allow, "allow", nil,
 			"tools that run without approval (comma-separated or repeated; every other tool asks)")
 	}
+	return cmd
+}
+
+// newMCPAssignCmd is `mcp assign|unassign <name>`: the targets of the skills
+// assignment tree a server serves. A server with no target serves every session
+// of the organization, as before assignments existed.
+func newMCPAssignCmd(flags *authClientFlags, use string, add bool) *cobra.Command {
+	short := "Give an MCP server only to the sessions under a workspace, folder, template, group, agent or session"
+	long := "assign limits the server to sessions whose run is under the target: a workspace\n" +
+		"(department), a registered folder, a template, an agent group, an agent or one session,\n" +
+		"the same targets skills are assigned to. Assign again to add a target. A server with no\n" +
+		"target serves every session of the organization."
+	example := "  olivares mcp assign files --workspace <workspace-id>\n  olivares mcp assign files --agent <agent-id>"
+	if !add {
+		short = "Remove a target from an MCP server"
+		long = "unassign removes one target. When none is left, the server serves every session of\n" +
+			"the organization again; to stop sessions from using it, run olivares mcp disable."
+		example = "  olivares mcp unassign files --workspace <workspace-id>"
+	}
+	var target skillsTargetFlags
+	cmd := &cobra.Command{
+		Use:     use + " <name>",
+		Short:   short,
+		Long:    long,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			t, err := target.target()
+			if err != nil {
+				return err
+			}
+			cfg, err := mcpClient(cmd, flags)
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			snap, err := cfg.mcpSnapshot(ctx)
+			if err != nil {
+				return err
+			}
+			s, err := mcpMustFind(snap, args[0])
+			if err != nil {
+				return err
+			}
+			input := map[string]any{}
+			for k, v := range s {
+				if mcpWritableFields[k] {
+					input[k] = v
+				}
+			}
+			targets, found := []any{}, false
+			current, _ := s["targets"].([]any)
+			for _, item := range current {
+				if old, _ := item.(map[string]any); str(old, "target_kind") == t.Kind && str(old, "target_id") == t.ID {
+					found = true
+					if !add {
+						continue
+					}
+				}
+				targets = append(targets, item)
+			}
+			switch {
+			case add && !found:
+				targets = append(targets, map[string]any{"target_kind": t.Kind, "target_id": t.ID})
+			case !add && !found:
+				return sentence(exitcode.NotFound, "%s is not assigned to %s %s. See it: olivares mcp ls -o json", termSafe(args[0]), t.Kind, t.ID)
+			}
+			// Always sent, even empty: the engine keeps the stored targets of a write
+			// that omits them.
+			input["targets"] = targets
+			snap, err = cfg.mcpWrite(ctx, http.MethodPut, mcpGatewayPath+"/servers/"+url.PathEscape(str(s, "id")),
+				map[string]any{"version": snap.Version, "server": input})
+			if err != nil {
+				return err
+			}
+			updated, _ := mcpFind(snap, str(s, "id"))
+			return renderOut(cmd, func(w io.Writer) error {
+				if len(targets) == 0 {
+					_, err := fmt.Fprintf(w, "%s serves every session of the organization.\n", termSafe(args[0]))
+					return err
+				}
+				names := []string{}
+				for _, item := range targets {
+					entry, _ := item.(map[string]any)
+					names = append(names, termSafe(str(entry, "target_kind")+" "+str(entry, "target_id")))
+				}
+				_, err := fmt.Fprintf(w, "%s serves the sessions under: %s\n", termSafe(args[0]), strings.Join(names, ", "))
+				return err
+			}, updated)
+		},
+	}
+	target.add(cmd)
 	return cmd
 }
 
@@ -731,6 +848,9 @@ func mcpTarget(s map[string]any) string {
 		return termSafe(u)
 	}
 	parts := []string{str(s, "command")}
+	if pin, ok := s["pin"].(map[string]any); ok {
+		parts[0] = str(pin, "program") + "@" + str(pin, "version") + " (pinned)"
+	}
 	if args, ok := s["args"].([]any); ok {
 		for _, a := range args {
 			if as, ok := a.(string); ok {

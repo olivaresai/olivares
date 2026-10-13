@@ -7,13 +7,11 @@ package governance
 import (
 	"context"
 	"log/slog"
-	"net/http"
 
 	claudewif "github.com/olivaresai/olivares/connectors/claude-wif"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -39,12 +37,6 @@ type IdentityConsole struct {
 	// and a 404 is a defect. See identityposture.go.
 	posture IdentityPostureProvider
 }
-
-var (
-	_ sdk.Module       = (*IdentityConsole)(nil)
-	_ api.Module       = (*IdentityConsole)(nil)
-	_ api.DataConsumer = (*IdentityConsole)(nil)
-)
 
 // IdentityConsoleNamespace mounts the console at /v1/m/identity/.
 const IdentityConsoleNamespace = "identity"
@@ -82,13 +74,17 @@ func (c *IdentityConsole) Descriptor() sdk.Descriptor {
 }
 
 func (c *IdentityConsole) UseData(d api.ModuleData) { c.data = d }
+
 func (c *IdentityConsole) Init(_ context.Context, host sdk.Host) error {
 	c.log = host.Logger()
 	return nil
 }
+
 func (c *IdentityConsole) Start(context.Context) error { return nil }
-func (c *IdentityConsole) Stop(context.Context) error  { return nil }
-func (c *IdentityConsole) APINamespace() string        { return IdentityConsoleNamespace }
+
+func (c *IdentityConsole) Stop(context.Context) error { return nil }
+
+func (c *IdentityConsole) APINamespace() string { return IdentityConsoleNamespace }
 
 // Permissions declares only what this console's own routes require.
 //
@@ -129,29 +125,4 @@ func (c *IdentityConsole) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/sso", permIdentityPostureRead, c.handleSsoStatus)
 	reg.Handle("GET", "/external-keys", permIdentityPostureRead, c.handleExternalKeys)
 	reg.Handle("GET", "/residency", permIdentityPostureRead, c.handleResidency)
-}
-
-// handleWifGraph serves the declared WIF object graph. Viewing the federation graph is
-// a privileged, recon-relevant read, so it self-audits in a committed
-// transaction BEFORE returning — deny-closed: if the audit write fails, the graph is
-// NOT served. The graph carries `ca_cert_configured` as a boolean only; no PEM/key/SVID.
-func (c *IdentityConsole) handleWifGraph(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	graph := claudewif.WIFGraph{
-		Issuers:         []claudewif.WIFIssuer{},
-		Rules:           []claudewif.WIFRule{},
-		ServiceAccounts: []claudewif.WIFServiceAccount{},
-	}
-	if c.wif != nil {
-		if g, ok := c.wif.WifGraph(r.Context(), mc.Tenant); ok {
-			graph = g
-		}
-	}
-	// Self-audit the privileged read (committed); deny-closed on an audit-write failure.
-	if err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		return auditEvent(r.Context(), sc, mc, "governance.identity.wif.read", model.Kind("anthropic.federation"), "", nil)
-	}); err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, graph)
 }

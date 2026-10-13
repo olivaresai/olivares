@@ -98,11 +98,7 @@ func TestMemoryPortabilityWired(t *testing.T) {
 			if manifest["count"] != float64(1) || manifest["signature"] == "" {
 				t.Fatal("export did not carry a signed memory entry")
 			}
-			code, org, _ := doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/system/orgs", token, "", map[string]any{"name": "Target", "slug": "wire-memory-target"})
-			if code != http.StatusCreated {
-				t.Fatalf("create target org = %d", code)
-			}
-			target := model.TenantID(org["tenant_id"].(string))
+			target := createOrganizationFixture(t, eng.store, "Target", "wire-memory-target").TenantID
 			code, _, raw = wireMemoryImport(t, eng.api.Handler(), token, target, strings.Replace(bundle, "portable fixture", "tampered fixture", 1))
 			if code != http.StatusBadRequest || !strings.Contains(raw, "digest does not match") {
 				t.Fatalf("tampered import = %d", code)

@@ -10,7 +10,7 @@
     "retired": "Retired",
     "search": "Search packs",
     "emptyTitle": "No skill packs installed",
-    "emptyDescription": "Install a pack with olivares skills install; it then appears here to assign.",
+    "emptyDescription": "Choose a built-in pack or install from Git above, then open a pack to manage its assignments.",
     "truncated": "Showing the first {{n}} packs",
     "truncatedHint": "Use olivares skills ls --cursor to list the rest."
   },
@@ -18,14 +18,16 @@
     "skills": "Skills in this pack",
     "revisions": "Revisions",
     "revision": "revision {{n}}",
-    "revisionLine": "Revision {{n}} from {{source}}"
+    "revisionLine": "Revision {{n}} from {{source}}",
+    "activeContent": "acts when loaded: {{items}}"
   },
   "kind": {
     "workspace": "Department",
     "agent_group": "Agent group",
     "agent": "Agent",
     "template": "Template",
-    "session": "Session"
+    "session": "Session",
+    "folder": "Folder"
   },
   "uses": {
     "title": "Assigned to",
@@ -36,7 +38,13 @@
     "confirmDescription": "New sessions of {{target}} stop receiving these skills. Recorded conversations keep their snapshot.",
     "truncated": "Showing the first {{n}} assignments",
     "truncatedHint": "Use olivares skills assignments --pack with --cursor to list the rest.",
-    "unassignFrom": "Unassign from {{target}}"
+    "unassignFrom": "Unassign from {{target}}",
+    "useLatest": "Use latest",
+    "useLatestFor": "Use latest: {{target}}",
+    "moved": "Assignment moved to the latest revision",
+    "approveTitle": "Approve skills that act when loaded?",
+    "approveDescription": "The latest revision pins skills for {{target}} that their tool acts on without asking: {{skills}}. Approve only after reviewing them.",
+    "approve": "Approve and use latest"
   },
   "assign": {
     "title": "Assign",
@@ -47,6 +55,51 @@
     "noTargets": "No targets of this kind that you can read.",
     "submit": "Assign",
     "done": "Skill pack assigned",
-    "directoryFailed": "The targets could not be loaded. Close and reopen the pack to retry."
+    "directoryFailed": "The targets could not be loaded. Close and reopen the pack to retry.",
+    "approve": "I reviewed these skills and approve that their tool acts on them when loaded: {{skills}}"
+  },
+  "install": {
+    "title": "Install a skill pack",
+    "workspace": "Workspace",
+    "workspaceHint": "Install only in the catalog, or also assign the returned revision to a workspace.",
+    "catalogOnly": "Catalog only",
+    "assigned": "Skill pack installed and assigned",
+    "done": "Skill pack installed",
+    "assignmentFailed": "Pack installed; workspace assignment failed: {{reason}}",
+    "failed": "Installation failed: {{reason}}",
+    "unavailable": "Service unavailable",
+    "retryAssignment": "Retry assignment",
+    "retry": "Retry install",
+    "builtins": "Built-in packs",
+    "loading": "Loading built-in packs…",
+    "pack": "Install {{name}}",
+    "inCatalog": "In catalog",
+    "submit": "Install",
+    "git": "From Git",
+    "gitURL": "Git URL",
+    "ref": "Git ref",
+    "subdir": "Subdirectory",
+    "gitSubmit": "Install from Git",
+    "name": "Pack name",
+    "nameHint": "Optional; defaults to the repository name. Choose a distinct name for another pack from the same repository.",
+    "held": "Skill pack installed. It carries skills that act when loaded, so it was not assigned: review it and assign it from its pack sheet."
+  },
+  "update": {
+    "title": "Updates",
+    "check": "Check for update",
+    "checking": "Checking…",
+    "current": "Up to date at revision {{n}}.",
+    "availableToast": "An update is available",
+    "available": "An update is available over revision {{n}}.",
+    "summary": "{{added}} added, {{changed}} changed, {{removed}} removed; {{files}} files differ.",
+    "change": {
+      "added": "added",
+      "changed": "changed",
+      "removed": "removed"
+    },
+    "acts": "{{skill}} now acts when loaded: {{items}}. Assigning it needs your approval.",
+    "pinsKeep": "Existing assignments keep their revision until you move each one with “Use latest”.",
+    "apply": "Apply this update",
+    "applied": "Update published as revision {{n}}"
   }
 }

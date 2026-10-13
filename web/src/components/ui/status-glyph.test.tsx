@@ -85,7 +85,11 @@ describe('StatusGlyph renders its word', () => {
   it('pulses working green every 2 s and stops under reduced motion', () => {
     const { container } = render(<StatusGlyph status="working" />)
     const dot = container.querySelector('[data-slot="status-dot"]')!
-    expect(dot).toHaveClass('bg-ok', 'animate-pulse', '[animation-duration:2s]')
+    expect(dot).toHaveClass(
+      'bg-ok',
+      'animate-pulse-live',
+      '[animation-duration:2s]',
+    )
     expect(dot).toHaveClass(
       'motion-reduce:animate-none',
       '[[data-motion=reduce]_&]:animate-none',
@@ -96,7 +100,7 @@ describe('StatusGlyph renders its word', () => {
     const { container } = render(<RunningRing />)
     expect(container.querySelector('[data-slot="status-dot"]')).toHaveClass(
       'bg-ok',
-      'animate-pulse',
+      'animate-pulse-live',
       '[animation-duration:2s]',
     )
     expect(container.querySelector('svg')).toBeNull()

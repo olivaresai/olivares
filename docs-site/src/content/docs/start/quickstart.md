@@ -86,8 +86,8 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" \
   -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 
 # The read/write access map — module III:
 curl -sf "$BASE/v1/m/accessmap/graph?limit=200" \
@@ -157,7 +157,7 @@ PY
 ```
 
 Now do a **real first-run**: boot once with no default credentials, claim the one-time
-setup token, and create a tenant to attach the connector to.
+setup token, and use the organization setup creates for your connector.
 
 ```bash
 BASE=http://127.0.0.1:8901
@@ -178,9 +178,9 @@ TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/js
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
 
-TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+# Setup already created the single organization; read its tenant ID.
+TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 ```
 

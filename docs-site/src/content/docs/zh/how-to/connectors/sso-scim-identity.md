@@ -8,6 +8,10 @@ sidebar:
   order: 8
 ---
 
+:::note[版本]
+目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）和托管身份生命周期需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、用户/组入站 SCIM、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+:::
+
 身份是整个 access map 之下的硬依赖：原生审计把一次访问归属到一个**凭据
 （credential）**，而只有身份名册（roster）才能把该凭据绑定到一个**agent 或人**。本页
 接入三个身份表面：控制台 **SSO 登录**、向 control plane 的 **SCIM 预配**，以及让归属变为
@@ -54,7 +58,7 @@ control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于�
   （`scim.group.role.map`）；IdP 的推送绝不会悄无声息地提升某个角色。被推送的组中的未知
   成员会被跳过**并被审计**，而非凭空编造。
 
-## 3. 名册来源：LDAP、Okta、Entra ID
+## 3. 名册来源：LDAP、Okta、Entra ID — Business/Enterprise
 
 名册来源馈送模块 VI 的身份清单，并且 —— 这才是重点 —— 为模块 III 提供升级归属所需的绑定：
 

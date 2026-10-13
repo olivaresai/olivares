@@ -7,9 +7,9 @@ package main
 // e2e_harness_test.go is the reproducible in-process E2E harness. It stands
 // up the REAL engine — the same composition root the binary boots (boot.go /
 // wire.go), the same 19 modules, the same in-proc event bus, the same API/auth —
-// and drives it exactly as the binary's HTTP clients do (setup token → login →
-// org → bearer + X-Olivares-Tenant). The demo estate enters through the REAL
-// channel: a seed SourceConnector registered with the runtime BEFORE Start, whose
+// and drives its HTTP surfaces (setup token → login → bearer +
+// X-Olivares-Tenant), with real store fixtures for tenant isolation. The demo
+// estate enters through the REAL channel: a seed SourceConnector registered with the runtime BEFORE Start, whose
 // Emit the runtime lifts onto the bus identically to a live pg-audit/OTEL
 // collector, fanning out to every subscribing module (the decoupled-by-events
 // integration the product rests on).
@@ -18,8 +18,8 @@ package main
 // internally, after which AddSource returns ErrAlreadyStarted (runtime.go:160).
 // To inject the seed source through the bus, the source must be registered
 // before Start, AND for an agent-origin edge to attribute firmly the agent must
-// already exist — so the sequence is: assemble → API bootstrap (setup/login/org/
-// agents) → AddSource(tenant) → Start. That ordering is only expressible by
+// already exist — so the sequence is: assemble → API setup/login → store tenant
+// fixtures → API agents → AddSource(tenant) → Start. That ordering is only expressible by
 // inlining the wiring; it reuses buildModules() (the production module set) so it
 // cannot drift in WHICH modules run. TestCompositionRootBootsAndWiresModules
 // guards boot()'s own wiring.
@@ -155,6 +155,9 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 		t.Fatalf("secret sealer: %v", err)
 	}
 	secretStore := auth.NewSecretStore(st, secretSealer)
+	if err := bindManagedSCIMModules(set.all, st, authr, secretStore, authz); err != nil {
+		t.Fatalf("bind managed SCIM dependencies: %v", err)
+	}
 	secretResolver := newSecretResolver(secretStore, osGetenv, log)
 	var editionResources []io.Closer
 	if thisEdition.bindModuleDependencies != nil {
@@ -173,7 +176,9 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = rt.Stop(stopCtx)
-		closeEditionResources(editionResources, log)
+		if err := closeEditionResources(editionResources, st.Leader(), log); err != nil {
+			t.Errorf("close edition resources: %v", err)
+		}
 		_ = st.Close()
 	})
 	// wire the eventing engine's late-bound seams exactly as production
@@ -298,7 +303,6 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	return h
 }
 
-// createOrg provisions a business tenant via the real API and returns its id.
 // stepUp elevates a session token to AAL3 through the real elevation path
 //: the e2e operators act over step-up-verified sessions like a
 // production human would after the WebAuthn/PIV ceremony.
@@ -313,17 +317,10 @@ func (h *harness) stepUp(token string) {
 	}
 }
 
+// createOrg seeds a real tenant for isolation assertions and returns its id.
 func (h *harness) createOrg(name, slug string) string {
 	h.t.Helper()
-	var org struct {
-		TenantID string `json:"tenant_id"`
-	}
-	if code := h.reqInto("POST", "/v1/system/orgs", h.adminToken, "", map[string]any{
-		"name": name, "slug": slug,
-	}, &org); code != http.StatusCreated || org.TenantID == "" {
-		h.t.Fatalf("create org %q = %d id=%q", slug, code, org.TenantID)
-	}
-	return org.TenantID
+	return createOrganizationFixture(h.t, h.st, name, slug).TenantID.String()
 }
 
 // req issues one request against the real handler and returns the status + raw
@@ -431,24 +428,8 @@ func (h *harness) eventually(what string, timeout time.Duration, fn func() error
 func (h *harness) waitForGraph(tenant string) {
 	h.t.Helper()
 	h.eventually("estate settled (access graph + inventory catalog)", 10*time.Second, func() error {
-		// (a) The access graph carries the archive grant — every EDGE has ingested.
-		code, raw := h.req("GET", "/v1/m/accessmap/graph?limit=200", h.adminToken, tenant, nil)
-		if code != http.StatusOK {
-			return fmt.Errorf("graph = %d: %s", code, raw)
-		}
-		var g struct {
-			Edges []map[string]any `json:"edges"`
-		}
-		_ = json.Unmarshal(raw, &g)
-		hasArchive := false
-		for _, e := range g.Edges {
-			if e["resource_ref"] == seed.ResArchive {
-				hasArchive = true
-				break
-			}
-		}
-		if !hasArchive {
-			return fmt.Errorf("archive grant not yet ingested (%d edges)", len(g.Edges))
+		if err := h.editionGraphReady(tenant); err != nil {
+			return err
 		}
 		// (b) The inventory catalog reflects the model/provider the cost samples
 		// materialize. Those CostSample observations are emitted AFTER all the edges

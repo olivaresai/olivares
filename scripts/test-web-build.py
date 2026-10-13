@@ -18,6 +18,22 @@ TASK = shutil.which("task")
 
 
 class WebConsumerTests(unittest.TestCase):
+    def test_pr_web_checks_openapi_after_installing_codegen_tools(self) -> None:
+        workflow = (ROOT / ".github/workflows/pr-ci.yml").read_text()
+        job = workflow.split("  pr-web:\n", 1)[1].split("\n  userspace-compat:\n", 1)[0]
+        steps = re.split(r"(?m)^      - ", job.split("    steps:\n", 1)[1])[1:]
+        checks = [i for i, step in enumerate(steps)
+                  if re.search(r"(?m)^        run: task openapi:check$", step)]
+        self.assertEqual(len(checks), 1, "pr-web must reject stale OpenAPI output")
+        check = checks[0]
+        for provider in ["actions/setup-node@", "pnpm/action-setup@",
+                         "actions/setup-go@", "./.github/actions/olivares-tool-cache",
+                         "run: python3 scripts/capture-web-generation.py"]:
+            self.assertTrue(any(provider in step for step in steps[:check]), provider)
+        self.assertNotIn("continue-on-error:", steps[check])
+        self.assertNotIn("        if:", steps[check])
+        self.assertRegex(steps[check], r"(?m)^        timeout-minutes: [1-9][0-9]*$")
+
     def test_control_plane_checks_history_before_embedding_console(self):
         workflow = (ROOT / ".github/workflows/mainline-ci.yml").read_text()
         job = workflow.split("  control-plane:\n", 1)[1]

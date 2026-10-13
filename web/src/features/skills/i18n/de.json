@@ -10,7 +10,7 @@
     "retired": "Zurückgezogen",
     "search": "Pakete suchen",
     "emptyTitle": "Keine Skill-Pakete installiert",
-    "emptyDescription": "Installiere ein Paket mit olivares skills install; danach erscheint es hier zum Zuweisen.",
+    "emptyDescription": "Wählen Sie oben ein integriertes Paket oder installieren Sie aus Git. Öffnen Sie ein Paket, um Zuweisungen zu verwalten.",
     "truncated": "Die ersten {{n}} Pakete werden angezeigt",
     "truncatedHint": "Mit olivares skills ls --cursor listest du den Rest."
   },
@@ -18,14 +18,16 @@
     "skills": "Skills in diesem Paket",
     "revisions": "Revisionen",
     "revision": "Revision {{n}}",
-    "revisionLine": "Revision {{n}} aus {{source}}"
+    "revisionLine": "Revision {{n}} aus {{source}}",
+    "activeContent": "wirkt beim Laden: {{items}}"
   },
   "kind": {
     "workspace": "Abteilung",
     "agent_group": "Agentengruppe",
     "agent": "Agent",
     "template": "Vorlage",
-    "session": "Sitzung"
+    "session": "Sitzung",
+    "folder": "Ordner"
   },
   "uses": {
     "title": "Zugewiesen an",
@@ -36,7 +38,13 @@
     "confirmDescription": "Neue Sitzungen von {{target}} erhalten diese Skills nicht mehr. Aufgezeichnete Unterhaltungen behalten ihren Stand.",
     "truncated": "Die ersten {{n}} Zuweisungen werden angezeigt",
     "truncatedHint": "Mit olivares skills assignments --pack und --cursor listest du den Rest.",
-    "unassignFrom": "Zuweisung an {{target}} aufheben"
+    "unassignFrom": "Zuweisung an {{target}} aufheben",
+    "useLatest": "Neueste verwenden",
+    "useLatestFor": "Neueste verwenden: {{target}}",
+    "moved": "Zuweisung auf die neueste Revision verschoben",
+    "approveTitle": "Skills freigeben, die beim Laden wirken?",
+    "approveDescription": "Die neueste Revision weist {{target}} Skills zu, auf die ihr Tool ohne Rückfrage reagiert: {{skills}}. Gib sie erst nach der Prüfung frei.",
+    "approve": "Freigeben und neueste verwenden"
   },
   "assign": {
     "title": "Zuweisen",
@@ -47,6 +55,51 @@
     "noTargets": "Keine Ziele dieser Art, die du lesen kannst.",
     "submit": "Zuweisen",
     "done": "Skill-Paket zugewiesen",
-    "directoryFailed": "Die Ziele konnten nicht geladen werden. Schließe das Paket und öffne es erneut, um es noch einmal zu versuchen."
+    "directoryFailed": "Die Ziele konnten nicht geladen werden. Schließe das Paket und öffne es erneut, um es noch einmal zu versuchen.",
+    "approve": "Ich habe diese Skills geprüft und gebe frei, dass ihr Tool beim Laden auf sie reagiert: {{skills}}"
+  },
+  "install": {
+    "title": "Skill-Paket installieren",
+    "workspace": "Arbeitsbereich",
+    "workspaceHint": "Nur im Katalog installieren oder die Revision auch einem Arbeitsbereich zuweisen.",
+    "catalogOnly": "Nur Katalog",
+    "assigned": "Skill-Paket installiert und zugewiesen",
+    "done": "Skill-Paket installiert",
+    "assignmentFailed": "Paket installiert; Zuweisung fehlgeschlagen: {{reason}}",
+    "failed": "Installation fehlgeschlagen: {{reason}}",
+    "unavailable": "Dienst nicht verfügbar",
+    "retryAssignment": "Zuweisung wiederholen",
+    "retry": "Installation wiederholen",
+    "builtins": "Integrierte Pakete",
+    "loading": "Integrierte Pakete werden geladen…",
+    "pack": "{{name}} installieren",
+    "inCatalog": "Im Katalog",
+    "submit": "Installieren",
+    "git": "Aus Git",
+    "gitURL": "Git-URL",
+    "ref": "Git-Referenz",
+    "subdir": "Unterverzeichnis",
+    "gitSubmit": "Aus Git installieren",
+    "name": "Paketname",
+    "nameHint": "Optional; standardmäßig der Repository-Name. Wählen Sie einen anderen Namen für ein weiteres Paket aus demselben Repository.",
+    "held": "Skill-Paket installiert. Es enthält Skills, die beim Laden wirken, daher wurde es nicht zugewiesen: Prüfe es und weise es im Paketblatt zu."
+  },
+  "update": {
+    "title": "Updates",
+    "check": "Auf Update prüfen",
+    "checking": "Prüfe …",
+    "current": "Aktuell bei Revision {{n}}.",
+    "availableToast": "Ein Update ist verfügbar",
+    "available": "Ein Update ist über Revision {{n}} verfügbar.",
+    "summary": "{{added}} hinzugefügt, {{changed}} geändert, {{removed}} entfernt; {{files}} Dateien unterscheiden sich.",
+    "change": {
+      "added": "hinzugefügt",
+      "changed": "geändert",
+      "removed": "entfernt"
+    },
+    "acts": "{{skill}} wirkt jetzt beim Laden: {{items}}. Die Zuweisung braucht deine Freigabe.",
+    "pinsKeep": "Bestehende Zuweisungen behalten ihre Revision, bis du jede mit „Neueste verwenden“ verschiebst.",
+    "apply": "Dieses Update anwenden",
+    "applied": "Update als Revision {{n}} veröffentlicht"
   }
 }

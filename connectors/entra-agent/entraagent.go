@@ -91,6 +91,9 @@
 //
 // It imports only the SDK, the Apache identitysource contract and the shared
 // httpx/redact internals — never the engine.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package entraagent
 
 import (
@@ -144,18 +147,6 @@ const (
 // ownership N+1 expansion: at most max_pages*graphPageSize identities are
 // expanded.
 const graphPageSize = 100
-
-// notDisabled is the disabledByMicrosoftStatus value meaning "not disabled".
-// The Graph v1.0 reference (verified 2026-06-11) documents the property as
-// null | "NotDisabled" | "DisabledDueToViolationOfServicesAgreement"; anything
-// set and different from "NotDisabled" is a Microsoft-side disablement.
-const notDisabled = "NotDisabled"
-
-// serviceIdentityType is the servicePrincipalType of an agent identity
-// ("ServiceIdentity", Graph v1.0 verified 2026-06-11). Used to client-filter
-// the soft-deleted servicePrincipal inventory, since the agentIdentity cast
-// under deletedItems is contradictorily documented and deliberately not used.
-const serviceIdentityType = "ServiceIdentity"
 
 // Source is the Entra Agent ID connector. It satisfies sdk.SourceConnector
 // (the blueprint static-secret drift findings) and identitysource.GraphProvider
@@ -332,16 +323,6 @@ func (s *Source) token(ctx context.Context) (string, error) {
 	return tr.AccessToken, nil
 }
 
-// graphClient fetches a token and builds the read-only Graph client. The token
-// lives only on this call's stack and in the client's auth closure.
-func (s *Source) graphClient(ctx context.Context) (*httpx.Client, error) {
-	tok, err := s.token(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return s.graphClientFromToken(tok, nil)
-}
-
 // graphClientFromToken builds a read-only Graph client around an already-fetched
 // token. The optional headers are static non-secret headers for a specific leg
 // (currently only riskyAgents needs Prefer: include-unknown-enum-members).
@@ -354,213 +335,6 @@ func (s *Source) graphClientFromToken(tok string, headers map[string]string) (*h
 	// per-request timeout must bound every Graph GET, not only the token POST.
 	// Tests are unaffected (transport() returns the injected doer unchanged).
 	return httpx.New(s.baseURL, s.transport(), httpx.Bearer(tok), headers), nil
-}
-
-// Snapshot reads the Entra Agent ID registry read-only and assembles the
-// identity graph: agent identities (KindAgentIdentity — the firm per-agent
-// attribution rows), blueprints (collections), blueprint principals (governed
-// NHIs holding the shared blueprint credential — deliberately not
-// KindAgentIdentity), agent→blueprint memberships, in-snapshot orphan marking,
-// first-user owner/sponsor refs and (opt-in) soft-deleted agent identities.
-// Offline it returns an empty graph with Source/CapturedAt set and a nil error.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceEntraAgent, CapturedAt: s.clock().UTC()}
-	if s.offline() {
-		return g, nil
-	}
-
-	client, err := s.graphClient(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-
-	// B) Blueprints first: their appIds are the membership targets AND the live
-	// set the orphan computation diffs against.
-	blueprints, err := collectPages[blueprint](ctx, client, "/v1.0/applications/microsoft.graph.agentIdentityBlueprint", nil, s.maxPages)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	liveBlueprints := make(map[string]bool, len(blueprints))
-	for _, bp := range blueprints {
-		if bp.AppID == "" {
-			continue
-		}
-		liveBlueprints[bp.AppID] = true
-		g.Collections = append(g.Collections, identitysource.Collection{
-			Ref:         bp.AppID,
-			Kind:        identitysource.KindGroup,
-			DisplayName: bp.DisplayName,
-			Source:      identitysource.SourceEntraAgent,
-			Attributes:  map[string]string{"object": "agent_blueprint"},
-		})
-	}
-
-	// A) Agent identities (server-side cast, pages of 100 via @odata.nextLink).
-	agents, err := collectPages[agentIdentity](ctx, client, "/v1.0/servicePrincipals/microsoft.graph.agentIdentity", nil, s.maxPages)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-
-	// F) Soft-deleted agent identities (opt-in; needs Application.Read.All in
-	// addition). Documented path: deletedItems cast to servicePrincipal; the
-	// agentIdentity cast there is contradictorily documented, so the connector
-	// client-filters servicePrincipalType=="ServiceIdentity" instead.
-	var deleted []agentIdentity
-	if s.includeDeleted {
-		rows, err := collectPages[agentIdentity](ctx, client, "/v1.0/directory/deletedItems/microsoft.graph.servicePrincipal", nil, s.maxPages)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		for _, r := range rows {
-			if r.ServicePrincipalType == serviceIdentityType {
-				deleted = append(deleted, r)
-			}
-		}
-	}
-
-	// E) Ownership expansion (opt-in, default on): the first USER owner/sponsor
-	// per LIVE agent identity (a deleted item's relationship endpoints are not
-	// readable). These are N+1 calls, bounded to max_pages*graphPageSize
-	// identities; a per-identity 403/404 is tolerated (the sponsors list's
-	// documented app-only least-priv is AgentIdentity.ReadWrite.All, so a
-	// read-only registration may legitimately get 403) — the attribute is simply
-	// absent, never a snapshot failure.
-	owners := map[string]string{}
-	sponsors := map[string]string{}
-	if s.expandOwners {
-		bound := s.maxPages * graphPageSize
-		for i, a := range agents {
-			if i >= bound {
-				break
-			}
-			if err := ctx.Err(); err != nil {
-				return identitysource.Graph{}, err
-			}
-			if ref, _, err := s.firstUserRef(ctx, client, a.ID, "owners"); err != nil {
-				return identitysource.Graph{}, err
-			} else if ref != "" {
-				owners[a.ID] = ref
-			}
-			if ref, _, err := s.firstUserRef(ctx, client, a.ID, "sponsors"); err != nil {
-				return identitysource.Graph{}, err
-			} else if ref != "" {
-				sponsors[a.ID] = ref
-			}
-		}
-	}
-
-	// A+D+F) Roster rows + agent→blueprint memberships + orphan computation.
-	// There is NO orphan-list API; orphanhood is computed honestly from this
-	// snapshot's inventory (a permanently-deleted blueprint principal leaves its
-	// children orphaned and soft-deleted).
-	for _, a := range agents {
-		g.Identities = append(g.Identities, s.agentRow(a, liveBlueprints, owners[a.ID], sponsors[a.ID], false))
-		if a.AgentIdentityBlueprintID != "" && liveBlueprints[a.AgentIdentityBlueprintID] {
-			g.Memberships = append(g.Memberships, identitysource.Membership{
-				MemberRef:     a.ID,
-				MemberKind:    identitysource.MemberIdentity,
-				CollectionRef: a.AgentIdentityBlueprintID,
-				Source:        identitysource.SourceEntraAgent,
-			})
-		}
-	}
-	for _, a := range deleted {
-		g.Identities = append(g.Identities, s.agentRow(a, liveBlueprints, "", "", true))
-	}
-
-	// C) Blueprint principals: the service principal holding the credential
-	// SHARED by ALL the blueprint's agents. Deliberately NOT KindAgentIdentity —
-	// it is a governed NHI, but attribution must never treat an access by the
-	// shared principal as a firm per-agent signal (axis).
-	principals, err := collectPages[blueprintPrincipal](ctx, client, "/v1.0/servicePrincipals/microsoft.graph.agentIdentityBlueprintPrincipal", nil, s.maxPages)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, p := range principals {
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         p.ID,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        "blueprint_principal",
-			DisplayName: p.DisplayName,
-			Source:      identitysource.SourceEntraAgent,
-			Disabled:    !p.AccountEnabled,
-			Attributes:  pruneAttrs(map[string]string{"app_id": p.AppID}),
-		})
-		if p.AppID != "" && liveBlueprints[p.AppID] {
-			g.Memberships = append(g.Memberships, identitysource.Membership{
-				MemberRef:     p.ID,
-				MemberKind:    identitysource.MemberIdentity,
-				CollectionRef: p.AppID,
-				Source:        identitysource.SourceEntraAgent,
-			})
-		}
-	}
-
-	// G) agentUser roster rows (v1.0/GA, verified 2026-07-04). The
-	// identityParentId attribute is the linkage back to the parent agentIdentity;
-	// agentUser owners/sponsors are deliberately not expanded because those
-	// relationship paths were not verified for this resource.
-	agentUsers, err := s.agentUsers(ctx, client)
-	if err != nil {
-		var se *httpx.StatusError
-		if !errors.As(err, &se) || se.Status != http.StatusForbidden {
-			return identitysource.Graph{}, err
-		}
-	}
-	for _, u := range agentUsers {
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         u.ID,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        KindAgentUser,
-			DisplayName: u.DisplayName,
-			Source:      identitysource.SourceEntraAgent,
-			Disabled:    !u.AccountEnabled,
-			Attributes: pruneAttrs(map[string]string{
-				"identity_parent_id": u.IdentityParentID,
-				"upn":                u.UserPrincipalName,
-				"created_at":         u.CreatedDateTime,
-				"object":             "agent_user",
-			}),
-		})
-	}
-
-	return g, nil
-}
-
-func (s *Source) agentUsers(ctx context.Context, client *httpx.Client) ([]agentUser, error) {
-	query := url.Values{"$select": {"id,displayName,accountEnabled,identityParentId,userPrincipalName,createdDateTime"}}
-	return collectPages[agentUser](ctx, client, "/v1.0/users/microsoft.graph.agentUser", query, s.maxPages)
-}
-
-// agentRow maps one agentIdentity wire row to a roster Identity. Ref is the raw
-// service-principal object id — the external_id convergence anchor the engine
-// de-duplicates on. Disabled is honest: either the tenant disabled the account
-// (accountEnabled=false) or Microsoft did (disabledByMicrosoftStatus set and !=
-// "NotDisabled").
-func (s *Source) agentRow(a agentIdentity, liveBlueprints map[string]bool, ownerRef, sponsorRef string, softDeleted bool) identitysource.Identity {
-	attrs := map[string]string{
-		"blueprint_id":      a.AgentIdentityBlueprintID,
-		"created_by_app_id": a.CreatedByAppID,
-		"created_at":        a.CreatedDateTime,
-		"owner_ref":         ownerRef,
-		"sponsor_ref":       sponsorRef,
-	}
-	if a.AgentIdentityBlueprintID == "" || !liveBlueprints[a.AgentIdentityBlueprintID] {
-		attrs["orphaned"] = "true"
-	}
-	if softDeleted {
-		attrs["soft_deleted"] = "true"
-		attrs["deleted_at"] = a.DeletedDateTime
-	}
-	return identitysource.Identity{
-		Ref:         a.ID,
-		Type:        identitysource.PrincipalNHI,
-		Kind:        identitysource.KindAgentIdentity,
-		DisplayName: a.DisplayName,
-		Source:      identitysource.SourceEntraAgent,
-		Disabled:    softDeleted || !a.AccountEnabled || (a.DisabledByMicrosoftStatus != "" && a.DisabledByMicrosoftStatus != notDisabled),
-		Attributes:  pruneAttrs(attrs),
-	}
 }
 
 // firstUserRef GETs /v1.0/servicePrincipals/{id}/microsoft.graph.agentIdentity/{rel}
@@ -596,18 +370,4 @@ func (s *Source) firstUserRef(ctx context.Context, client *httpx.Client, id, rel
 		path = page.NextLink // absolute and self-contained; httpx passes it verbatim
 	}
 	return "", false, nil
-}
-
-// pruneAttrs drops empty values so the attribute map carries only present
-// metadata, and returns nil when nothing remains (keeping snapshots diff-stable).
-func pruneAttrs(m map[string]string) map[string]string {
-	for k, v := range m {
-		if v == "" {
-			delete(m, k)
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
 }

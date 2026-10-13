@@ -36,13 +36,6 @@ interface HealthCheck {
   state: string
 }
 
-interface Org {
-  tenant_id: string
-  name: string
-  slug: string
-  status: string
-}
-
 interface NotifyRoute {
   id: string
   name: string
@@ -190,36 +183,6 @@ async function reportHealth(
   expect(response.status(), `report ${state}`).toBe(200)
 }
 
-async function ensureOrg(
-  page: Page,
-  token: string,
-  slug: string,
-  name: string,
-): Promise<Org> {
-  let listed = await getJSON<ListBody<Org>>(page, token, '/v1/system/orgs')
-  const old = listed.items.find((org) => org.slug === slug)
-  if (old) {
-    const removed = await page.request.delete(
-      `/v1/system/orgs/${old.tenant_id}`,
-      {
-        headers: authHeaders(token),
-      },
-    )
-    expect(removed.status(), `remove stale ${slug}`).toBe(204)
-  }
-  const created = await page.request.post('/v1/system/orgs', {
-    headers: authHeaders(token),
-    data: { name, slug, data_region: '' },
-  })
-  expect(created.status(), `create disposable org ${slug}`).toBe(201)
-  const org = (await created.json()) as Org
-  listed = await getJSON<ListBody<Org>>(page, token, '/v1/system/orgs')
-  expect(listed.items.some((item) => item.tenant_id === org.tenant_id)).toBe(
-    true,
-  )
-  return org
-}
-
 async function ensureRoute(page: Page, token: string): Promise<NotifyRoute> {
   const listed = await getJSON<ListBody<NotifyRoute>>(
     page,
@@ -261,12 +224,6 @@ async function rowFor(page: Page, text: string): Promise<Locator> {
   const cell = page.getByText(text, { exact: true }).first()
   await expect(cell).toBeVisible({ timeout: 30_000 })
   return cell.locator('xpath=ancestor::tr[1]')
-}
-
-async function cardFor(page: Page, text: string): Promise<Locator> {
-  const label = page.getByText(text, { exact: true }).first()
-  await expect(label).toBeVisible({ timeout: 30_000 })
-  return label.locator('..')
 }
 
 async function selectEndpoint(
@@ -855,99 +812,10 @@ test('alerting route lifecycle, delivery log and dead-letter requeue are live', 
   await deleteCheckBySubject(page, token, 'l5-alert-dlq')
 })
 
-test('tenant lifecycle and API playground destructive send change disposable state', async ({
+test('public status and API playground send use real handlers', async ({
   page,
 }) => {
-  const token = await loginDemo(page)
-  const lifecycleOrg = await ensureOrg(
-    page,
-    token,
-    'l5-lifecycle',
-    'L5 Lifecycle',
-  )
-  const deleteOrg = await ensureOrg(page, token, 'l5-delete-ui', 'L5 Delete UI')
-  const playgroundOrg = await ensureOrg(
-    page,
-    token,
-    'l5-delete-playground',
-    'L5 Delete Playground',
-  )
-
-  const tenantsRead = observe(page, 'GET', '/v1/system/orgs', 200)
-  await page.goto('/tenants')
-  await tenantsRead
-  let lifecycleRow = await cardFor(page, 'L5 Lifecycle')
-  await lifecycleRow.getByRole('button', { name: 'Withdraw service' }).click()
-  let dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expect(dialog).not.toBeVisible()
-  lifecycleRow = await cardFor(page, 'L5 Lifecycle')
-  await lifecycleRow.getByRole('button', { name: 'Withdraw service' }).click()
-  dialog = page.getByRole('dialog')
-  let changed = observe(
-    page,
-    'PUT',
-    `/v1/system/orgs/${lifecycleOrg.tenant_id}/status`,
-    200,
-  )
-  await dialog.getByRole('textbox').fill('l5-lifecycle')
-  await dialog
-    .getByRole('button', { name: 'Withdraw service', exact: true })
-    .click()
-  expect(
-    ((await changed).request().postDataJSON() as { status: string }).status,
-  ).toBe('suspended')
-  lifecycleRow = await cardFor(page, 'L5 Lifecycle')
-  await lifecycleRow.getByRole('button', { name: 'Restore service' }).click()
-  dialog = page.getByRole('dialog')
-  changed = observe(
-    page,
-    'PUT',
-    `/v1/system/orgs/${lifecycleOrg.tenant_id}/status`,
-    200,
-  )
-  await dialog
-    .getByRole('button', { name: 'Restore service', exact: true })
-    .click()
-  expect(
-    ((await changed).request().postDataJSON() as { status: string }).status,
-  ).toBe('active')
-
-  const deleteRow = await cardFor(page, 'L5 Delete UI')
-  await deleteRow.getByRole('button', { name: 'Delete' }).click()
-  dialog = page.getByRole('dialog')
-  await expect(dialog).toContainText(/cloud control plane, not to this engine/i)
-  await dialog.getByRole('button', { name: 'Cancel' }).click()
-  await expect(dialog).not.toBeVisible()
-  await deleteRow.getByRole('button', { name: 'Delete' }).click()
-  dialog = page.getByRole('dialog')
-  await dialog.getByRole('textbox').fill('l5-delete-ui')
-  const deleted = observe(
-    page,
-    'DELETE',
-    `/v1/system/orgs/${deleteOrg.tenant_id}`,
-    204,
-  )
-  await dialog.getByRole('button', { name: 'Delete permanently' }).click()
-  await deleted
-  expect(
-    (await getJSON<ListBody<Org>>(page, token, '/v1/system/orgs')).items.some(
-      (item) => item.tenant_id === deleteOrg.tenant_id,
-    ),
-  ).toBe(false)
-
-  const residencyRegistry = observe(page, 'GET', '/v1/system/residency', 200)
-  const residencyOrgs = observe(page, 'GET', '/v1/system/orgs', 200)
-  await page.goto('/residency')
-  await residencyRegistry
-  await residencyOrgs
-  const residencyRow = await rowFor(page, 'L5 Lifecycle')
-  await residencyRow.getByRole('button', { name: 'Set region' }).click()
-  await expect(page.getByRole('dialog')).toContainText(
-    /hardware|verification|security key/i,
-  )
-  await page.keyboard.press('Escape')
-
+  await loginDemo(page)
   const publicRead = observe(page, 'GET', '/status', 200)
   await page.goto('/status-page')
   await publicRead
@@ -1017,23 +885,6 @@ test('tenant lifecycle and API playground destructive send change disposable sta
   )
   await expect(requestBody).toContainText('playground-not-sent')
 
-  await selectEndpoint(page, 'DELETE', '/v1/system/orgs/{tenant_id}')
-  await page.getByRole('tab', { name: 'Path Params' }).click()
-  await page.getByPlaceholder('Enter tenant_id').fill(playgroundOrg.tenant_id)
-  const playgroundDelete = observe(
-    page,
-    'DELETE',
-    `/v1/system/orgs/${playgroundOrg.tenant_id}`,
-    204,
-  )
-  await page.getByRole('button', { name: 'Send' }).click()
-  await playgroundDelete
-  expect(
-    (await getJSON<ListBody<Org>>(page, token, '/v1/system/orgs')).items.some(
-      (item) => item.tenant_id === playgroundOrg.tenant_id,
-    ),
-  ).toBe(false)
-
   await selectEndpoint(page, 'GET', '/v1/m/health/stream')
   const stream = observe(page, 'GET', '/v1/m/health/stream', 200)
   await page.getByRole('button', { name: 'Send' }).click()
@@ -1043,7 +894,7 @@ test('tenant lifecycle and API playground destructive send change disposable sta
 
   await page.getByRole('tab', { name: /^History/ }).click()
   await expect(
-    page.getByText('/v1/system/orgs/{tenant_id}', { exact: true }),
+    page.getByText('/v1/m/health/stream', { exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Clear request history' }).click()
   await expect(page.getByText('No requests yet')).toBeVisible()

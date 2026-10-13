@@ -69,8 +69,9 @@ type RouteRegistrar interface {
 }
 
 // CollectionScopeRef is a module's DECLARATION that ONE collection route is scoped to
-// a single workspace named by a request selector, and that the engine must corroborate
-// that selector against the stored workspace row BEFORE it authorizes the route.
+// a single workspace named by a request selector. Scoped authority requires the engine
+// to corroborate that selector against the stored workspace BEFORE authorization.
+// Body selectors preserve legacy tenant admission for tenant-authorized callers.
 //
 // ⛔ WHY THE ENGINE AND NOT THE HANDLER, which is where this check has always lived.
 // A collection route is authorized with auth.ResourceFor(perm) — no id, no workspace —
@@ -85,13 +86,22 @@ type RouteRegistrar interface {
 // is caller-NAMED, so on a non-tree kind it IS the authorization scope (see
 // auth.ResourceAttrs.WorkspaceID). Corroboration proves the workspace exists, is active,
 // belongs to this tenant and does not cross the caller's confinement; what makes the
-// grant honest is that the route then returns only rows of that workspace. A route that
-// does not filter that way must not declare this.
+// grant honest is that the route then reads or mutates only that workspace. A route that
+// does not bind its reads or mutations that way must not declare this.
 type CollectionScopeRef struct {
 	// WorkspaceQueryParam is the query parameter carrying the workspace id. Exactly
 	// one canonical occurrence is required: absent, repeated or non-canonical is a
 	// client error decided from the request alone, with no row read.
 	WorkspaceQueryParam string
+	// WorkspaceBodyField selects the mutation's workspace from its JSON body.
+	// Empty or omitted values retain tenant admission, which refuses confined writes.
+	// A supplied query selector must agree with the admitted body target.
+	WorkspaceBodyField string
+	// WorkspaceScopeField optionally selects the workspace branch of a scoped
+	// command. Other scope trees retain their existing tenant admission.
+	WorkspaceScopeField string
+	// WorkspaceBySlug resolves the body reference as a tenant-unique workspace slug.
+	WorkspaceBySlug bool
 }
 
 // CollectionScopeRouteRegistrar is the OPTIONAL capability a module asserts to declare

@@ -15,6 +15,21 @@ destino (un agente, un grupo, un workspace) puede usar es una **asignación** qu
 una revisión del pack, y cada pin se escribe en el ledger de auditoría
 (`skills.assignment.pin`).
 
+
+**Activado por defecto** en instalaciones nuevas, Skills sigue siendo opcional y no requiere otro módulo. Las actualizaciones conservan la selección guardada. En **Skills** (`/skills`), explora el catálogo integrado e instala un paquete con una asignación opcional a un workspace, o elige **Desde Git**. La CLI usa la misma importación inmutable validada por digest:
+
+```sh
+olivares skills ls --builtin
+olivares skills install --builtin ecc-security
+olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
+olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills update <pack-id>                       # read the recorded source again and review the diff
+olivares skills update <pack-id> --apply --expected-digest <digest>
+olivares skills pin <pack-id> [--revision <older-revision-id>]
+olivares skills enable tdd-workflow code-review --folder <folder-ref>
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
+```
+
 ## Qué entrega
 
 - **El catálogo.** Packs instalados bajo `/v1/m/skills/packs`, cada revisión
@@ -26,9 +41,7 @@ una revisión del pack, y cada pin se escribe en el ledger de auditoría
   un archivo subido. Nada de él se ejecuta al instalar.
 - **Las asignaciones.** `GET/POST /v1/m/skills/assignments` y
   `PUT/DELETE /v1/m/skills/assignments/{id}` fijan una revisión a un destino, con el
-  ámbito del workspace activo cuando lo hay. Dos skills asignadas con el mismo nombre
-  y contenido distinto se rechazan antes de iniciar una sesión, de modo que cada
-  lanzamiento es determinista.
+  ámbito del workspace activo cuando lo hay. Dos destinos del mismo tipo que fijan contenido distinto bajo un mismo nombre de skill se rechazan antes de iniciar una sesión; un destino más específico (carpeta, plantilla, agente, sesión) sustituye la skill del mismo nombre de uno más general, de modo que un proyecto sobrescribe un pack genérico sin editarlo.
 - **Importación desde Git.** Un importador con ámbito de operador puede traer un pack
   de skills desde una fuente Git bajo una política fijada; la importación aterriza en
   el catálogo como otra revisión inmutable, no como un checkout vivo que el motor lee.

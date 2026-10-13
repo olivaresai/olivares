@@ -30,7 +30,11 @@ import { Segmented } from '@/components/ui/segmented'
 import { Compass } from 'lucide-react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
-import type { RunDTO, WorkspaceDTO } from '@/features/agentops/types'
+import {
+  profileName,
+  type RunDTO,
+  type WorkspaceDTO,
+} from '@/features/agentops/types'
 import { WorkspaceBrowser } from '@/features/agentops/workspace-browser'
 import { consoleApi } from '@/features/console/api'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
@@ -51,6 +55,7 @@ import { RefChip } from './ref-chip'
 import { SessionBranchChanges } from './session-branch-changes'
 import { SessionChanges } from './session-changes'
 import { SessionGit } from './session-git'
+import { SessionActivity } from './session-activity'
 import { SessionPreview } from './session-preview'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
@@ -138,27 +143,33 @@ export function SessionContextPane({
       agentOpsApi.listProfiles({ limit: 200 }, { signal }),
     enabled: canReadProfiles && !!activeTenant && !!profileRef,
   })
-  const profileName =
-    profilesQuery.data?.items
-      .find((p) => p.profile_ref === profileRef)
-      ?.display_name?.trim() ||
-    profilesQuery.data?.items.find((p) => p.profile_ref === profileRef)
-      ?.driver ||
+  const profile = profilesQuery.data?.items.find(
+    (p) => p.profile_ref === profileRef,
+  )
+  const profileLabel =
+    (profile && profileName(profile)) ||
+    profile?.driver ||
     live?.provider ||
     run?.provider_driver ||
     null
 
-  // THE TABS: the console's own four, then what a build registers.
+  // THE TABS: the console's own, then what a build registers.
   // A registrant that took one of the pane's own ids is ignored, so a build can add tabs
-  // and never replace Context, Changes, Files or Preview.
+  // and never replace Context, Activity, Changes, Files or Preview.
   const registered = useOfferedPanels(
     (PANEL_EXTENSIONS.sessionPanels ?? []).filter(
       (p) => !(RESERVED_SESSION_PANEL_IDS as readonly string[]).includes(p.id),
     ),
   )
   const [localTab, setLocalTab] = useState('context')
+  // What the tool is doing is read from Claude Code's own transcript; another tool's
+  // session has no Activity tab until its own record is read the same way.
+  const hasActivity = run?.provider_driver === 'claude'
   const options = [
     { value: 'context', label: t('surface.pane.context') },
+    ...(hasActivity
+      ? [{ value: 'activity', label: t('context.tabActivity') }]
+      : []),
     { value: 'changes', label: t('context.tabChanges') },
     { value: 'files', label: t('context.tabFiles') },
     // The app the session serves on a local port. Only a launched session has one.
@@ -274,12 +285,12 @@ export function SessionContextPane({
               )}
             </Row>
             <Row label={t('context.profile')}>
-              {profileName ? (
+              {profileLabel ? (
                 <span
                   className="text-caption text-foreground"
                   title={profileRef || undefined}
                 >
-                  {profileName}
+                  {profileLabel}
                 </span>
               ) : (
                 <span className="text-caption text-muted-foreground">
@@ -520,7 +531,8 @@ export function SessionContextPane({
   return (
     <div className="flex flex-col gap-4" data-testid="session-context">
       {/* THE SIDE PANE HAS TABS: Context (what the header no longer says, the scope and
-          the references), Changes (what the session changed, and publishing it) and Files
+          the references), Activity (what the tool is doing: its agents, background tasks,
+          files and task list), Changes (what the session changed, and publishing it) and Files
           (the folder it works in), Preview (the app it serves on a local port), then whatever
           a build registers (a terminal). A build with none shows exactly these. */}
       <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
@@ -537,6 +549,17 @@ export function SessionContextPane({
       </div>
       {extension ? (
         <extension.Component key={extension.id} session={panelSession} />
+      ) : null}
+      {/* Keyed by run: another session's activity is another read. */}
+      {!extension && tab === 'activity' && run ? (
+        <SessionActivity
+          key={run.run_ref}
+          run={run}
+          onOpenChanges={() => {
+            setLocalTab('changes')
+            onPanel?.('changes')
+          }}
+        />
       ) : null}
       {!extension && tab === 'changes' ? changesBody : null}
       {!extension && tab === 'files' ? filesBody : null}

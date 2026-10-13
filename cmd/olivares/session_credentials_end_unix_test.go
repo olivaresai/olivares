@@ -111,11 +111,7 @@ func testSessionCredentialsEnd(t *testing.T, backend, end string) bool {
 		t.Fatalf("%s %s: HTTP %d, want %v: %s", method, path, code, want, raw)
 		return nil
 	}
-	org := do(http.MethodPost, "/v1/system/orgs", map[string]any{"name": "Credential end", "slug": "credential-end"}, http.StatusCreated)
-	tenant, _ = org["tenant_id"].(string)
-	if tenant == "" {
-		t.Fatalf("org create returned no tenant: %v", org)
-	}
+	tenant = createOrganizationFixture(t, eng.store, "Credential end", "credential-end").TenantID.String()
 	pep, err := buildClaudeHookPEPServer(eng, discardLog())
 	if err != nil || pep == nil {
 		t.Fatalf("build launch hook listener: %v", err)

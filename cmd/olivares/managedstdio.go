@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
+	sessionegress "github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
 // managedStdio owns one exact session's MCP process. Its only spawn site uses
@@ -29,6 +31,7 @@ type managedStdio struct {
 	closed   chan struct{}
 	frames   chan []byte
 	permit   chan struct{}
+	network  *sessionegress.Policy // the launch's network, as the runner received it
 	patterns []string
 	sequence int64 // protected by permit
 	once     sync.Once
@@ -46,7 +49,7 @@ func launchManagedStdio(ctx context.Context, runner sessions.Runner, spec sessio
 		}
 		return nil, newManagedStdioFailure("process_start", err, patterns)
 	}
-	s := &managedStdio{process: process, context: lifetime, cancel: cancel, closed: make(chan struct{}), drained: make(chan struct{}), frames: make(chan []byte, 16), permit: make(chan struct{}, 1), patterns: patterns}
+	s := &managedStdio{process: process, context: lifetime, cancel: cancel, closed: make(chan struct{}), drained: make(chan struct{}), frames: make(chan []byte, 16), permit: make(chan struct{}, 1), network: spec.NetworkPolicy, patterns: patterns}
 	s.permit <- struct{}{}
 	go func() {
 		defer close(s.frames)
@@ -104,12 +107,28 @@ func (s *managedStdio) Close() {
 	<-s.drained
 }
 
+// confinement reports what the runner enforces: its process state and the
+// network of the launch, which is the server's egress hosts when it has them.
 func (s *managedStdio) confinement() map[string]any {
+	out := map[string]any{"mode": "unknown", "reason": "the session runner does not report process confinement", "network_egress": "unrestricted"}
 	if process, ok := s.process.(interface{ Confinement() confine.State }); ok {
 		state := process.Confinement()
-		return map[string]any{"mode": state.Mode, "abi": state.ABI, "reason": state.Reason, "network_egress": "unrestricted"}
+		out = map[string]any{"mode": state.Mode, "abi": state.ABI, "reason": state.Reason, "network_egress": "unrestricted"}
 	}
-	return map[string]any{"mode": "unknown", "reason": "the session runner does not report process confinement", "network_egress": "unrestricted"}
+	switch {
+	case s.network == nil:
+	case s.network.Offline:
+		out["network_egress"] = "none"
+	default:
+		hosts := []string{}
+		for _, endpoint := range s.network.Providers {
+			if u, err := url.Parse(endpoint); err == nil {
+				hosts = append(hosts, u.Host)
+			}
+		}
+		out["network_egress"], out["egress_hosts"] = "confined", hosts
+	}
+	return out
 }
 
 func (s *managedStdio) Forward(ctx context.Context, req mcpc.UpstreamRequest) (mcpc.UpstreamResult, error) {

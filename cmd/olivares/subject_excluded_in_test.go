@@ -17,6 +17,7 @@ import (
 
 func TestSubjectExcludedInAgreesWithSubjectExcluded(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "comparing exclusion after a lift requires completed retirement and readmission")
 		ctx := context.Background()
 		const email = "transaction-fence@consent.test"
 		user := e.onboard(e.tT, email, "viewer")

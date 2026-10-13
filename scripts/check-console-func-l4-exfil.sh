@@ -105,8 +105,8 @@ cat "$TMP/vitest.log"
 if [ "$rc" -eq 0 ]; then
 	grep -Eq '^[[:space:]]*Test Files[[:space:]]+4 passed \(4\)[[:space:]]*$' "$TMP/vitest.log" ||
 		cannot 'vitest exited 0 without running the four focused suites'
-	grep -Eq '^[[:space:]]*Tests[[:space:]]+38 passed \(38\)[[:space:]]*$' "$TMP/vitest.log" ||
-		cannot 'vitest exited 0 without running the 38 focused cases'
+	grep -Eq '^[[:space:]]*Tests[[:space:]]+45 passed \(45\)[[:space:]]*$' "$TMP/vitest.log" ||
+		cannot 'vitest exited 0 without running the 45 focused cases'
 	printf '%s: PASS — exfiltration and URL state verified in four suites\n' "$NAME"
 	exit 0
 fi

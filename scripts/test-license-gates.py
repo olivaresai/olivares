@@ -4,6 +4,7 @@
 """Behavior tests for contributor and distribution license gates."""
 import importlib.util
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,6 +56,24 @@ class CLATests(unittest.TestCase):
             r" && github\.event\.pull_request\.user\.type != 'Bot'\n",
         )
         self.assertIn('github.event.pull_request.author_association', workflow)
+
+    def test_privileged_workflows_check_out_no_event_ref(self) -> None:
+        # Scorecard Dangerous-Workflow flags any checkout ref taken from the event payload
+        # in a privileged workflow; the trigger's default checkout is the trusted base.
+        # Lexical guard: a ref passed through env or a step output is not seen.
+        privileged = []
+        for path in sorted((ROOT / '.github/workflows').glob('*.y*ml')):
+            workflow = path.read_text()
+            # Any `on:` form (block, inline list, quoted key) lies before `jobs:`.
+            if re.search(r'\b(pull_request_target|workflow_run)\b', workflow.split('\njobs:', 1)[0]):
+                privileged.append(path.name)
+                self.assertNotRegex(
+                    workflow,
+                    r'(?im)^\s+(ref|repository):.*(github\.event\.(pull_request|workflow_run)\b'
+                    r'|github\.head_ref\b|refs/pull/)',
+                    msg=path.name,
+                )
+        self.assertIn('cla.yml', privileged)
 
 
 class LicenseTests(unittest.TestCase):

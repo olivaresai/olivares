@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -12,6 +13,7 @@ import {
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { SessionConversation } from './session-conversation'
 import { sentTurnsPartition, useSentTurns } from './sent-turns'
@@ -928,4 +930,306 @@ it('shows an initial attach failure while a sent turn is pending', async () => {
     'Reconnecting…',
   )
   expect(screen.queryByText('No turns yet. Send a sentence below.')).toBeNull()
+})
+
+// #1784: the released 0.1 painted two "thinking tokens" rows before the answer and an
+// "allowed · five hour" line after it. They are the tool's bookkeeping, not turns.
+describe('SessionConversation — the tool’s bookkeeping stays out of the thread (#1784)', () => {
+  const thinking = (estimated: number) =>
+    JSON.stringify({
+      type: 'system',
+      subtype: 'thinking_tokens',
+      estimated_tokens: estimated,
+      estimated_tokens_delta: estimated,
+      user_message_uuid: '3b3cbd79-7c2a-47f5-8d52-7e7d0a1b5c11',
+    })
+  const answer = (text: string) =>
+    JSON.stringify({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+    })
+  const rateLimit = (status: string) =>
+    JSON.stringify({
+      type: 'rate_limit_event',
+      rate_limit_info: {
+        status,
+        resetsAt: 1760270400,
+        rateLimitType: 'five_hour',
+      },
+    })
+
+  it('paints neither thinking-token counters nor an allowed rate limit', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(thinking(120), 1)
+      push(thinking(412), 2)
+      push(answer('The folder holds two files.'), 3)
+      push(rateLimit('allowed'), 4)
+    })
+    await screen.findByText('The folder holds two files.')
+    expect(
+      screen
+        .getAllByTestId('conversation-item')
+        .map((row) => row.getAttribute('data-kind')),
+    ).toEqual(['assistant'])
+    expect(screen.queryByText(/thinking tokens/i)).toBeNull()
+    expect(screen.queryByText(/five hour/i)).toBeNull()
+  })
+
+  it('still tells the person that a rate limit refused the turn', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    act(() => push(rateLimit('rejected'), 1))
+    expect(await screen.findByText(/rejected · five hour/i)).toBeInTheDocument()
+  })
+})
+
+// #1784: the released 0.1 painted the assistant's answer as the characters it was sent in
+// ("- **Identify clients:** ..."). The reply is markdown: lists, code and bold are shown as
+// such. It is read into elements, never into HTML, because what the model says can be
+// shaped by what it read.
+describe('SessionConversation — the assistant reply is rendered markdown (#1784)', () => {
+  const answer = (text: string) =>
+    JSON.stringify({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+    })
+  const reply = async (text: string, onInspect?: (item: unknown) => void) => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SessionConversation run={run} onInspect={onInspect} />
+      </QueryClientProvider>,
+    )
+    await screen.findByTestId('session-conversation')
+    act(() => push(answer(text), 1))
+    return waitFor(() => {
+      const row = screen
+        .getAllByTestId('conversation-item')
+        .find((el) => el.getAttribute('data-kind') === 'assistant')
+      expect(row).toBeDefined()
+      return row as HTMLElement
+    })
+  }
+
+  it('paints lists, bold and code as formatted elements, with no markers left', async () => {
+    const row = await reply(
+      [
+        'To find them:',
+        '',
+        '- **Identify clients:** list who calls the API',
+        '- Check `config.yaml`',
+        '',
+        '1. Run the suite',
+        '2. Read the report',
+        '',
+        '```sh',
+        'make test',
+        '```',
+      ].join('\n'),
+    )
+    expect(within(row).getAllByRole('listitem')).toHaveLength(4)
+    expect(within(row).getByText('Identify clients:').tagName).toBe('STRONG')
+    expect(row.querySelector('li code')).toHaveTextContent('config.yaml')
+    expect(row.querySelector('ol')).not.toBeNull()
+    expect(row.querySelector('pre code')).toHaveTextContent('make test')
+    expect(row.textContent).not.toContain('**')
+    expect(row.textContent).not.toContain('```')
+    expect(row.textContent).not.toContain('`config.yaml`')
+  })
+
+  it('shows markup in the reply as the characters it was sent in', async () => {
+    const row = await reply(
+      'Try <img src=x onerror="alert(1)"> and <script>alert(2)</script> today',
+    )
+    expect(row.querySelector('img, script')).toBeNull()
+    expect(row).toHaveTextContent('<img src=x onerror="alert(1)">')
+    expect(row).toHaveTextContent('<script>alert(2)</script>')
+  })
+
+  it('links only to web and mail addresses, and opens them without the opener', async () => {
+    const row = await reply(
+      'See [the docs](https://example.com/a?b=1) or [mail](mailto:a@example.com), not [this](javascript:alert(1)) or [that](data:text/html;base64,AAAA).',
+    )
+    const links = Array.from(row.querySelectorAll('a'))
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      'https://example.com/a?b=1',
+      'mailto:a@example.com',
+    ])
+    for (const a of links) {
+      expect(a.getAttribute('target')).toBe('_blank')
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer')
+    }
+    // an address that is not a web or mail one stays in the text as it was written
+    expect(row).toHaveTextContent(
+      'not [this](javascript:alert(1)) or [that](data:text/html;base64,AAAA).',
+    )
+  })
+
+  it('says where a link goes, and never nests one link in another', async () => {
+    const row = await reply(
+      '[https://bank.example](https://evil.example) and [a [b](https://x.y)](https://z.w)',
+    )
+    const links = within(row).getAllByRole('link')
+    expect(links).toHaveLength(2)
+    expect(links[0]).toHaveAttribute('title', 'https://evil.example')
+    expect(row.querySelector('a a')).toBeNull()
+    expect(links[1]).toHaveTextContent('a b (https://x.y)')
+  })
+
+  it('paints headings, quotes, tables, rules and nested lists as elements', async () => {
+    const row = await reply(
+      [
+        '## Plan',
+        '',
+        '> note',
+        '',
+        '| name | size |',
+        '|---|---|',
+        '| a | 1 |',
+        '',
+        '---',
+        '',
+        '3. three',
+        '   - nested',
+        '4. four',
+      ].join('\n'),
+    )
+    expect(row.textContent).not.toContain('##')
+    expect(within(row).getByText('Plan')).toBeInTheDocument()
+    expect(row.querySelector('blockquote')).toHaveTextContent('note')
+    expect(
+      within(row)
+        .getAllByRole('columnheader')
+        .map((c) => c.textContent),
+    ).toEqual(['name', 'size'])
+    expect(within(row).getByRole('cell', { name: '1' })).toBeInTheDocument()
+    expect(row.querySelector('hr')).not.toBeNull()
+    const steps = row.querySelector('ol')!
+    expect(steps.getAttribute('start')).toBe('3')
+    expect(steps.querySelector('ul li')).toHaveTextContent('nested')
+  })
+
+  it('keeps the lines and indentation of a paragraph as they were written', async () => {
+    const row = await reply('Traceback:\n  File "a.py", line 3')
+    const paragraph = row.querySelector('p')!
+    expect(paragraph.textContent).toBe('Traceback:\n  File "a.py", line 3')
+    expect(paragraph.className).toContain('whitespace-pre-wrap')
+  })
+
+  it('repaints the reply as it streams in', async () => {
+    wrap()
+    await screen.findByTestId('session-conversation')
+    const delta = (text: string) =>
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text },
+        },
+      })
+    act(() => push(delta('Hel'), 1))
+    await screen.findByText('Hel')
+    act(() => push(delta('lo **world**'), 2))
+    const strong = await screen.findByText('world')
+    expect(strong.tagName).toBe('STRONG')
+    expect(screen.getAllByTestId('conversation-item')).toHaveLength(1)
+  })
+
+  it('does not open the inspector while its words are selected, nor on a double click', async () => {
+    const onInspect = vi.fn()
+    const row = await reply('Pick **this** word', onInspect)
+    const words = row.querySelector('p')!
+    window.getSelection()!.selectAllChildren(words)
+    fireEvent.click(words)
+    expect(onInspect).not.toHaveBeenCalled()
+    window.getSelection()!.removeAllRanges()
+    fireEvent.click(words, { detail: 2 })
+    expect(onInspect).not.toHaveBeenCalled()
+    // a selection somewhere else on the page is not this reply's
+    const elsewhere = document.createElement('p')
+    elsewhere.textContent = 'elsewhere'
+    document.body.append(elsewhere)
+    window.getSelection()!.selectAllChildren(elsewhere)
+    fireEvent.click(words, { detail: 1 })
+    expect(onInspect).toHaveBeenCalledTimes(1)
+    elsewhere.remove()
+    window.getSelection()!.removeAllRanges()
+  })
+
+  it('still opens the inspector from the reply, but not from a link inside it', async () => {
+    const onInspect = vi.fn()
+    const row = await reply(
+      'Read [**the docs**](https://example.com/a) first.',
+      onInspect,
+    )
+    // the click lands on the bold text inside the link, not on the anchor itself
+    await userEvent.click(within(row).getByText('the docs'))
+    expect(onInspect).not.toHaveBeenCalled()
+    await userEvent.click(within(row).getByText(/first\./))
+    expect(onInspect).toHaveBeenCalledTimes(1)
+    expect(onInspect.mock.calls[0]![0]).toMatchObject({ kind: 'assistant' })
+  })
+
+  it('keeps the inspector one keystroke away without a pointer', async () => {
+    const onInspect = vi.fn()
+    const row = await reply('OK', onInspect)
+    const inspect = within(row).getByRole('button', { name: /inspect/i })
+    // the log region is the first stop; the reply's own button is the next
+    for (let i = 0; i < 4 && document.activeElement !== inspect; i++)
+      await userEvent.tab()
+    expect(inspect).toHaveFocus()
+    await userEvent.keyboard('{Enter}')
+    expect(onInspect).toHaveBeenCalledTimes(1)
+  })
+})
+
+// The side pane's Activity reads the tool's transcript again when the tool writes: once
+// per burst of frames, not once per frame.
+describe('SessionConversation and the Activity tab', () => {
+  it('asks for a fresh activity read once per burst of frames', async () => {
+    vi.useFakeTimers()
+    try {
+      const qc = new QueryClient()
+      const invalidate = vi.spyOn(qc, 'invalidateQueries')
+      render(
+        <QueryClientProvider client={qc}>
+          <SessionConversation run={run} />
+        </QueryClientProvider>,
+      )
+      act(() => {
+        push('{"type":"system","subtype":"init","session_id":"s"}', 1)
+        push('{"type":"assistant","message":{"content":[]}}', 2)
+        push('{"type":"user","message":{"content":[]}}', 3)
+      })
+      const activityKey = agentOpsKeys.runActivity(
+        useTenantStore.getState().activeTenant,
+        'run_1',
+      )
+      const reads = () =>
+        invalidate.mock.calls.filter(
+          ([filters]) =>
+            JSON.stringify(filters?.queryKey) === JSON.stringify(activityKey),
+        ).length
+      expect(reads()).toBe(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_600)
+      })
+      expect(reads()).toBe(1)
+      act(() => push('{"type":"assistant","message":{"content":[]}}', 4))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_600)
+      })
+      expect(reads()).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

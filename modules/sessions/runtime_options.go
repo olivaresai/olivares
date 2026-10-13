@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"context"
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -176,10 +177,14 @@ func WithClaudeHookPEP(dataDir, olivaresBinary string) Option {
 // no explicit program is pinned for it (WithProgram, WithDriverProgram): the
 // engine's newest verified managed install, then its PATH. An empty answer keeps
 // the official program name, which the runner's own inspection reports as
-// missing with the action that installs it.
-func WithProgramResolver(resolve func(driver string) string) Option {
+// missing with the action that installs it. The optional exact-version resolver
+// serves persisted workspace and agent pins; its errors refuse launch.
+func WithProgramResolver(resolve func(driver string) string, version ...func(context.Context, string, string) (string, error)) Option {
 	return func(m *Module) {
 		m.rt.ProgramResolver = resolve
+		if len(version) > 0 {
+			m.rt.VersionProgramResolver = version[0]
+		}
 	}
 }
 

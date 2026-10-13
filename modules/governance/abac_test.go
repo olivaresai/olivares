@@ -284,6 +284,19 @@ func TestABACDenyBlocksRealRequestEndToEnd(t *testing.T) {
 	if r := h.do("GET", "/v1/m/governance/identities", admin, nil, tenantHdr(tenant)); r.code != http.StatusOK {
 		t.Fatalf("identity read should be restored after deleting the deny policy: %d %s", r.code, r.raw)
 	}
+	// A shared route must recover to a real read, not merely reach an edition refusal.
+	pid = h.authorPolicy(admin, tenant, "no-policy-reads", map[string]any{"rules": []any{
+		map[string]any{"deny": true, "resource": "policy", "verb": "read"},
+	}})
+	if r := h.do("GET", govPath+"/policies", admin, nil, tenantHdr(tenant)); r.code != http.StatusForbidden {
+		t.Fatalf("shared policy read should be ABAC-denied: %d %s", r.code, r.raw)
+	}
+	if r := h.do("DELETE", govPath+"/policies/"+pid, admin, nil, tenantHdr(tenant)); r.code != http.StatusNoContent {
+		t.Fatalf("delete shared read policy = %d %s", r.code, r.raw)
+	}
+	if r := h.do("GET", govPath+"/policies", admin, nil, tenantHdr(tenant)); r.code != http.StatusOK {
+		t.Fatalf("shared policy read should recover after deleting the deny: %d %s", r.code, r.raw)
+	}
 }
 
 func TestABACConcurrentTenantsNoLeak(t *testing.T) {

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -47,17 +46,6 @@ func runMetrics(obs []model.Observation) map[string]int64 {
 		}
 	}
 	return out
-}
-
-func TestSnapshotRejectsAPartialRoster(t *testing.T) {
-	f := &fake{t: t, status: map[string]int{"/api/companies/" + companySide + "/agents": http.StatusForbidden}}
-	g, err := open(t, f, nil).Snapshot(context.Background())
-	if err == nil {
-		t.Fatal("a refused agents leg must fail the snapshot, not return a partial roster")
-	}
-	if len(g.Identities) != 0 || len(g.Collections) != 0 {
-		t.Errorf("graph on error = %+v", g)
-	}
 }
 
 func TestServerFaultsAreHardErrorsNotCoverage(t *testing.T) {
@@ -136,22 +124,6 @@ func TestOpenRejectsBadConfig(t *testing.T) {
 	}
 }
 
-func TestTrailingSlashBaseURLBuildsCleanPaths(t *testing.T) {
-	f := &fake{t: t}
-	srv := httptest.NewServer(f)
-	defer srv.Close()
-	s := New()
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{"base_url": srv.URL + "/", "api_key": testKey}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Snapshot(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if got := f.paths()[0]; got != "GET /api/companies" {
-		t.Errorf("first request = %q", got)
-	}
-}
-
 func TestDayBoundaries(t *testing.T) {
 	// Window at 2026-10-06T10:00Z with 3 days: 2026-10-03 00:00Z up to 2026-10-06 00:00Z (exclusive).
 	runs := `[
@@ -227,92 +199,6 @@ func TestGatherIsIdempotent(t *testing.T) {
 	}
 	if fmt.Sprintf("%+v", first) != fmt.Sprintf("%+v", second) {
 		t.Error("two passes over the same data must emit the same observations in the same order")
-	}
-}
-
-func TestRosterIsSortedAndDeduplicated(t *testing.T) {
-	co := func(id string) string { return `{"id":"` + id + `","name":"n","status":"active"}` }
-	ag := func(id string) string {
-		return `{"id":"` + id + `","name":"n","role":"general","status":"idle","adapterType":"process"}`
-	}
-	f := &fake{t: t, body: map[string]string{
-		"/api/companies": "[" + co(companySide) + "," + co(companyAcme) + "," + co(companyAcme) + "]",
-		acmeAgents:       "[" + ag(agentLinus) + "," + ag(agentAda) + "," + ag(agentAda) + "]",
-		"/api/companies/" + companySide + "/agents": "[" + ag(agentAda) + "," + ag(agentSolo) + "]",
-	}}
-	g, err := open(t, f, nil).Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cols, ids []string
-	for _, c := range g.Collections {
-		cols = append(cols, c.Ref)
-	}
-	for _, i := range g.Identities {
-		ids = append(ids, i.Ref)
-	}
-	wantCols := []string{"paperclip/company/" + companyAcme, "paperclip/company/" + companySide}
-	// agentAda is listed under both companies: the first (sorted) company keeps it.
-	wantIDs := []string{"paperclip/agent/" + agentAda, "paperclip/agent/" + agentLinus, "paperclip/agent/" + agentSolo}
-	if fmt.Sprint(cols) != fmt.Sprint(wantCols) || fmt.Sprint(ids) != fmt.Sprint(wantIDs) || len(g.Memberships) != 3 {
-		t.Errorf("collections %v identities %v memberships %d", cols, ids, len(g.Memberships))
-	}
-}
-
-func TestRemoteTextIsSanitizedBoundedAndTokenized(t *testing.T) {
-	long := strings.Repeat("x", 300)
-	agents := `[
-	 {"id":"` + agentAda + `","name":"\u001b[31mred\u001b[0m\nline","role":"` + long + `","title":"` + long + `","status":"IDLE ","adapterType":""},
-	 {"id":"` + agentLinus + `","name":"` + long + `","status":"idle; drop table","adapterType":"../../x"}
-	]`
-	f := &fake{t: t, body: map[string]string{acmeAgents: agents}}
-	g, err := open(t, f, nil).Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ada, _ := g.FindIdentity("paperclip/agent/" + agentAda)
-	linus, _ := g.FindIdentity("paperclip/agent/" + agentLinus)
-	if strings.ContainsAny(ada.DisplayName, "\x1b\n") {
-		t.Errorf("control characters survived: %q", ada.DisplayName)
-	}
-	if n := len([]rune(linus.DisplayName)); n > maxTextLen {
-		t.Errorf("display name is %d runes, cap is %d", n, maxTextLen)
-	}
-	if n := len([]rune(ada.Attributes["title"])); n > maxTextLen {
-		t.Errorf("title is %d runes, cap is %d", n, maxTextLen)
-	}
-	if ada.Kind != "paperclip/unknown" || linus.Kind != "paperclip/unknown" {
-		t.Errorf("kinds = %q, %q; an empty or off-shape adapterType is unknown", ada.Kind, linus.Kind)
-	}
-	if ada.Attributes["status"] != "idle" || linus.Attributes["status"] != "unknown" {
-		t.Errorf("statuses = %q, %q", ada.Attributes["status"], linus.Attributes["status"])
-	}
-}
-
-func TestHostileIDsAreRejected(t *testing.T) {
-	cases := map[string]map[string]string{
-		"dot-dot company id": {"/api/companies": `[{"id":"..","name":"x"}]`},
-		"empty company id":   {"/api/companies": `[{"name":"x"}]`},
-		"slash company id":   {"/api/companies": `[{"id":"a/b","name":"x"}]`},
-		"empty agent id":     {acmeAgents: `[{"name":"x","adapterType":"process"}]`},
-		"hostile reportsTo":  {acmeAgents: `[{"id":"` + agentAda + `","name":"x","reportsTo":"../x","adapterType":"process"}]`},
-	}
-	for name, body := range cases {
-		t.Run(name, func(t *testing.T) {
-			f := &fake{t: t, body: body}
-			s := open(t, f, nil)
-			if _, err := s.Snapshot(context.Background()); !errors.Is(err, errShape) {
-				t.Errorf("Snapshot err = %v, want a shape error", err)
-			}
-			if _, err := gather(s); !errors.Is(err, errShape) {
-				t.Errorf("Gather err = %v, want a shape error", err)
-			}
-			for _, line := range f.paths() {
-				if strings.Contains(line, "..") {
-					t.Errorf("a hostile id reached a URL path: %q", line)
-				}
-			}
-		})
 	}
 }
 

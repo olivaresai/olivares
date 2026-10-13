@@ -47,91 +47,83 @@ import (
 	"testing"
 )
 
-// verEngineRoutes is the census: every route the ten lot-4 namespaces mount,
+// verEngineRoutes() is the census: every route the ten lot-4 namespaces mount,
 // read off reg.Handle/HandleEntity in the module sources.
-var verEngineRoutes = []string{
-	"GET /v1/m/reporting/reports",
-	"GET /v1/m/reporting/reports/{type}",
-	"GET /v1/m/reporting/enterprise/posture",
-	"GET /v1/m/reporting/enterprise/risk",
-	"GET /v1/m/reporting/enterprise/bundle",
-	"GET /v1/m/reporting/schedules",
-	"POST /v1/m/reporting/schedules",
-	"DELETE /v1/m/reporting/schedules/{id}",
-	"GET /v1/m/reporting/schedules/{id}/runs",
-	"GET /v1/m/reporting/schedules/{id}/runs/{rid}",
-	"GET /v1/m/reporting/branding",
-	"PUT /v1/m/reporting/branding",
-	"GET /v1/m/reporting/templates/{type}",
-	"PUT /v1/m/reporting/templates/{type}",
-	"DELETE /v1/m/reporting/templates/{type}",
+func verEngineRoutes() []string {
+	return append([]string{
 
-	"GET /v1/m/notify/routes",
-	"POST /v1/m/notify/routes",
-	"GET /v1/m/notify/routes/{id}",
-	"PUT /v1/m/notify/routes/{id}",
-	"DELETE /v1/m/notify/routes/{id}",
-	"POST /v1/m/notify/routes/{id}/test",
-	"GET /v1/m/notify/routes/{id}/revisions",
-	"POST /v1/m/notify/routes/{id}/restore",
-	"POST /v1/m/notify/routes/evaluate",
-	"GET /v1/m/notify/match-types",
-	"GET /v1/m/notify/destinations",
-	"GET /v1/m/notify/deliveries",
-	"GET /v1/m/notify/outbox",
-	"POST /v1/m/notify/outbox/{id}/redeliver",
+		"GET /v1/m/reporting/reports",
+		"GET /v1/m/reporting/reports/{type}",
+		"GET /v1/m/reporting/enterprise/posture",
+		"GET /v1/m/reporting/enterprise/risk",
+		"GET /v1/m/reporting/enterprise/bundle",
+		"GET /v1/m/reporting/schedules",
+		"POST /v1/m/reporting/schedules",
+		"DELETE /v1/m/reporting/schedules/{id}",
+		"GET /v1/m/reporting/schedules/{id}/runs",
+		"GET /v1/m/reporting/schedules/{id}/runs/{rid}",
+		"GET /v1/m/reporting/branding",
+		"PUT /v1/m/reporting/branding",
+		"GET /v1/m/reporting/templates/{type}",
+		"PUT /v1/m/reporting/templates/{type}",
+		"DELETE /v1/m/reporting/templates/{type}",
 
-	"GET /v1/m/health/status",
-	"GET /v1/m/health/stream",
-	"GET /v1/m/health/sla",
-	"GET /v1/m/health/dependencies",
-	"GET /v1/m/health/events",
-	"GET /v1/m/health/incidents",
-	"GET /v1/m/health/incidents/{id}",
-	"GET /v1/m/health/checks",
-	"POST /v1/m/health/checks",
-	"GET /v1/m/health/checks/{id}",
-	"PUT /v1/m/health/checks/{id}",
-	"DELETE /v1/m/health/checks/{id}",
-	"POST /v1/m/health/checks/{id}/report",
-	"POST /v1/m/health/incidents/{id}/resolve",
+		"GET /v1/m/notify/routes",
+		"POST /v1/m/notify/routes",
+		"GET /v1/m/notify/routes/{id}",
+		"PUT /v1/m/notify/routes/{id}",
+		"DELETE /v1/m/notify/routes/{id}",
+		"POST /v1/m/notify/routes/{id}/test",
+		"GET /v1/m/notify/routes/{id}/revisions",
+		"POST /v1/m/notify/routes/{id}/restore",
+		"POST /v1/m/notify/routes/evaluate",
+		"GET /v1/m/notify/match-types",
+		"GET /v1/m/notify/destinations",
+		"GET /v1/m/notify/deliveries",
+		"GET /v1/m/notify/outbox",
+		"POST /v1/m/notify/outbox/{id}/redeliver",
 
-	"GET /v1/m/accessmap/graph",
-	"GET /v1/m/accessmap/neighbors",
-	"GET /v1/m/accessmap/drift",
-	"GET /v1/m/accessmap/attack-paths/reachability",
-	"GET /v1/m/accessmap/attack-paths/escalation",
-	"GET /v1/m/accessmap/attack-paths/exfil",
-	"GET /v1/m/accessmap/attack-paths/summary",
+		"GET /v1/m/health/status",
+		"GET /v1/m/health/stream",
+		"GET /v1/m/health/sla",
+		"GET /v1/m/health/dependencies",
+		"GET /v1/m/health/events",
+		"GET /v1/m/health/incidents",
+		"GET /v1/m/health/incidents/{id}",
+		"GET /v1/m/health/checks",
+		"POST /v1/m/health/checks",
+		"GET /v1/m/health/checks/{id}",
+		"PUT /v1/m/health/checks/{id}",
+		"DELETE /v1/m/health/checks/{id}",
+		"POST /v1/m/health/checks/{id}/report",
+		"POST /v1/m/health/incidents/{id}/resolve",
 
-	"GET /v1/m/observability/ingestion-health",
-	"GET /v1/m/observability/traces",
-	"GET /v1/m/observability/traces/{id}",
-	"GET /v1/m/observability/traces/{id}/export",
-	"GET /v1/m/observability/attestation",
+		"GET /v1/m/observability/ingestion-health",
+		"GET /v1/m/observability/traces",
+		"GET /v1/m/observability/traces/{id}",
+		"GET /v1/m/observability/traces/{id}/export",
+		"GET /v1/m/observability/attestation",
 
-	"GET /v1/m/consoleviews/views",
-	"GET /v1/m/consoleviews/views/{id}",
-	"POST /v1/m/consoleviews/views",
-	"PUT /v1/m/consoleviews/views/{id}",
-	"DELETE /v1/m/consoleviews/views/{id}",
+		"GET /v1/m/consoleviews/views",
+		"GET /v1/m/consoleviews/views/{id}",
+		"POST /v1/m/consoleviews/views",
+		"PUT /v1/m/consoleviews/views/{id}",
+		"DELETE /v1/m/consoleviews/views/{id}",
 
-	"GET /v1/m/adoption/summary",
-	"GET /v1/m/adoption/trend",
-	"GET /v1/m/adoption/teams",
-	"GET /v1/m/adoption/discrepancy",
-	"GET /v1/m/adoption/developers",
+		"GET /v1/m/adoption/summary",
+		"GET /v1/m/adoption/trend",
+		"GET /v1/m/adoption/teams",
+		"GET /v1/m/adoption/discrepancy",
+		"GET /v1/m/adoption/developers",
 
-	"GET /v1/m/identity/wif",
-	"GET /v1/m/identity/sso",
-	"GET /v1/m/identity/external-keys",
-	"GET /v1/m/identity/residency",
+		"GET /v1/m/identity/sso",
 
-	"GET /v1/m/inventory/summary",
-	"GET /v1/m/inventory/entities",
-	"GET /v1/m/inventory/entities/{kind}/{id}",
+		"GET /v1/m/inventory/summary",
+		"GET /v1/m/inventory/entities",
+		"GET /v1/m/inventory/entities/{kind}/{id}",
 
-	"GET /v1/m/posture/export",
+		"GET /v1/m/posture/export",
+	}, editionVerEngineRoutes()...)
 }
 
 // verLeaf is one leaf verb and the engine route it must address.
@@ -142,8 +134,7 @@ type verLeaf struct {
 
 func verLeaves(tmp string) []verLeaf {
 	tpl := filepath.Join(tmp, "tpl.html")
-	leaves := []verLeaf{
-		// ---- reporting (15) ----
+	leaves := append([]verLeaf{
 		{[]string{"reporting", "branding", "get"}, "GET /v1/m/reporting/branding"},
 		{[]string{"reporting", "branding", "set", "--company-name", "Acme"}, "PUT /v1/m/reporting/branding"},
 		{[]string{"reporting", "enterprise", "bundle"}, "GET /v1/m/reporting/enterprise/bundle"},
@@ -159,8 +150,6 @@ func verLeaves(tmp string) []verLeaf {
 		{[]string{"reporting", "templates", "get", "audit-summary", "--out", "-"}, "GET /v1/m/reporting/templates/{type}"},
 		{[]string{"reporting", "templates", "rm", "audit-summary", "--yes"}, "DELETE /v1/m/reporting/templates/{type}"},
 		{[]string{"reporting", "templates", "set", "audit-summary", tpl}, "PUT /v1/m/reporting/templates/{type}"},
-
-		// ---- notify (14) ----
 		{[]string{"notify", "deliveries"}, "GET /v1/m/notify/deliveries"},
 		{[]string{"notify", "destinations"}, "GET /v1/m/notify/destinations"},
 		{[]string{"notify", "evaluate", "--event-type", "finding.created"}, "POST /v1/m/notify/routes/evaluate"},
@@ -175,8 +164,6 @@ func verLeaves(tmp string) []verLeaf {
 		{[]string{"notify", "routes", "rm", "rt-1", "--yes"}, "DELETE /v1/m/notify/routes/{id}"},
 		{[]string{"notify", "routes", "test", "rt-1"}, "POST /v1/m/notify/routes/{id}/test"},
 		{[]string{"notify", "routes", "update", "rt-1", "--name", "n", "--destination", "d"}, "PUT /v1/m/notify/routes/{id}"},
-
-		// ---- health (14) ----
 		{[]string{"health", "checks", "create", "--subject-kind", "agent", "--subject-ref", "ag-7", "--interval", "60"}, "POST /v1/m/health/checks"},
 		{[]string{"health", "checks", "get", "chk-1"}, "GET /v1/m/health/checks/{id}"},
 		{[]string{"health", "checks", "ls"}, "GET /v1/m/health/checks"},
@@ -191,51 +178,27 @@ func verLeaves(tmp string) []verLeaf {
 		{[]string{"health", "sla", "--subject-kind", "agent", "--subject-ref", "ag-7"}, "GET /v1/m/health/sla"},
 		{[]string{"health", "status"}, "GET /v1/m/health/status"},
 		{[]string{"health", "watch"}, "GET /v1/m/health/stream"},
-
-		// ---- accessmap (7) ----
-		{[]string{"accessmap", "attack-paths", "escalation", "--agent-id", "ag-7"}, "GET /v1/m/accessmap/attack-paths/escalation"},
-		{[]string{"accessmap", "attack-paths", "exfil", "--resource-id", "r-1"}, "GET /v1/m/accessmap/attack-paths/exfil"},
-		{[]string{"accessmap", "attack-paths", "reachability", "--agent-id", "ag-7"}, "GET /v1/m/accessmap/attack-paths/reachability"},
-		{[]string{"accessmap", "attack-paths", "summary"}, "GET /v1/m/accessmap/attack-paths/summary"},
-		{[]string{"accessmap", "drift"}, "GET /v1/m/accessmap/drift"},
-		{[]string{"accessmap", "graph"}, "GET /v1/m/accessmap/graph"},
-		{[]string{"accessmap", "neighbors", "--id", "ag-7"}, "GET /v1/m/accessmap/neighbors"},
-
-		// ---- observability (5) ----
 		{[]string{"observability", "attestation"}, "GET /v1/m/observability/attestation"},
 		{[]string{"observability", "ingestion-health"}, "GET /v1/m/observability/ingestion-health"},
 		{[]string{"observability", "traces", "export", "tr-1"}, "GET /v1/m/observability/traces/{id}/export"},
 		{[]string{"observability", "traces", "get", "tr-1"}, "GET /v1/m/observability/traces/{id}"},
 		{[]string{"observability", "traces", "ls"}, "GET /v1/m/observability/traces"},
-
-		// ---- consoleviews (5) ----
 		{[]string{"consoleviews", "create", "--feature-id", "findings", "--name", "n", "--params", `{"a":1}`}, "POST /v1/m/consoleviews/views"},
 		{[]string{"consoleviews", "get", "sv-1"}, "GET /v1/m/consoleviews/views/{id}"},
 		{[]string{"consoleviews", "ls"}, "GET /v1/m/consoleviews/views"},
 		{[]string{"consoleviews", "rm", "sv-1", "--yes"}, "DELETE /v1/m/consoleviews/views/{id}"},
 		{[]string{"consoleviews", "update", "sv-1", "--name", "n", "--params", `{"a":1}`}, "PUT /v1/m/consoleviews/views/{id}"},
-
-		// ---- adoption (5) ----
 		{[]string{"adoption", "developers"}, "GET /v1/m/adoption/developers"},
 		{[]string{"adoption", "discrepancy"}, "GET /v1/m/adoption/discrepancy"},
 		{[]string{"adoption", "summary"}, "GET /v1/m/adoption/summary"},
 		{[]string{"adoption", "teams"}, "GET /v1/m/adoption/teams"},
 		{[]string{"adoption", "trend"}, "GET /v1/m/adoption/trend"},
-
-		// ---- identity (4) ----
-		{[]string{"identity", "external-keys"}, "GET /v1/m/identity/external-keys"},
-		{[]string{"identity", "residency"}, "GET /v1/m/identity/residency"},
 		{[]string{"identity", "sso"}, "GET /v1/m/identity/sso"},
-		{[]string{"identity", "wif"}, "GET /v1/m/identity/wif"},
-
-		// ---- inventory (3) ----
 		{[]string{"inventory", "entities", "get", "agent", "ent-1"}, "GET /v1/m/inventory/entities/{kind}/{id}"},
 		{[]string{"inventory", "entities", "ls"}, "GET /v1/m/inventory/entities"},
 		{[]string{"inventory", "summary"}, "GET /v1/m/inventory/summary"},
-
-		// ---- posture (1) ----
 		{[]string{"posture", "export"}, "GET /v1/m/posture/export"},
-	}
+	}, editionVerLeaves()...)
 	if thisEdition.name != "enterprise" {
 		return slices.DeleteFunc(leaves, func(l verLeaf) bool { return operationsExportCLIArgs(l.args) })
 	}
@@ -273,7 +236,10 @@ func (s *verSpy) all() []string {
 // the engine census. It returns "" when NO mounted route matches, which is the
 // failure this instrument exists to find.
 func verNormalise(line string) string {
-	for _, r := range verEngineRoutes {
+	for _, r := range verEngineRoutes() {
+		if thisEdition.name != "enterprise" && (r == "GET /v1/m/posture/export" || r == "GET /v1/m/observability/traces/{id}/export") {
+			continue
+		}
 		rm, rp, _ := strings.Cut(r, " ")
 		gm, gp, _ := strings.Cut(line, " ")
 		if rm != gm {
@@ -296,15 +262,17 @@ func TestEveryLaneVerbLandsOnARealEngineRouteExactlyOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	leaves := verLeaves(tmp)
-	expected := 73
+	if len(leaves) != editionVerCount() {
+		t.Fatalf("the driving table has %d leaves, not the 73 the census counted", len(leaves))
+	}
+	routes := verEngineRoutes()
 	if thisEdition.name != "enterprise" {
-		expected = 71
+		routes = slices.DeleteFunc(routes, func(r string) bool {
+			return r == "GET /v1/m/posture/export" || r == "GET /v1/m/observability/traces/{id}/export"
+		})
 	}
-	if len(leaves) != expected {
-		t.Fatalf("the driving table has %d leaves, want %d for this edition", len(leaves), expected)
-	}
-	if len(verEngineRoutes) != 73 {
-		t.Fatalf("the engine table has %d routes, not 73", len(verEngineRoutes))
+	if len(routes) != editionVerCount() {
+		t.Fatalf("the engine table has %d routes, not 73", len(verEngineRoutes()))
 	}
 	covered := map[string][]string{}
 	for _, lf := range leaves {
@@ -328,7 +296,7 @@ func TestEveryLaneVerbLandsOnARealEngineRouteExactlyOnce(t *testing.T) {
 			covered[route] = append(covered[route], name)
 		})
 	}
-	for _, r := range verEngineRoutes {
+	for _, r := range routes {
 		if thisEdition.name != "enterprise" && (r == "GET /v1/m/posture/export" || r == "GET /v1/m/observability/traces/{id}/export") {
 			continue
 		}

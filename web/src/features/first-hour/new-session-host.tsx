@@ -30,11 +30,24 @@ export function NewSessionHost() {
         <Suspense fallback={null}>
           <RunCreateDialog
             // Another template or handoff starts a draft of its own.
-            key={`${advanced.templateId ?? ''}\n${advanced.worktreeFrom ?? ''}`}
+            key={[
+              advanced.templateId,
+              advanced.worktreeFrom,
+              advanced.driver,
+              advanced.profileRef,
+              advanced.model,
+              advanced.effort,
+            ]
+              .map((part) => part ?? '')
+              .join('\n')}
             open={advanced.open}
             onOpenChange={(o) => (o ? undefined : closeAdvanced())}
             initialTemplateId={advanced.templateId}
             initialWorktreeFrom={advanced.worktreeFrom}
+            initialDriver={advanced.driver}
+            initialProfileRef={advanced.profileRef}
+            initialModel={advanced.model}
+            initialEffort={advanced.effort}
             onCloseAutoFocus={(event) => {
               const { opener } = useNewSessionDialog.getState()
               if (!opener?.isConnected) return

@@ -366,10 +366,11 @@ export function AccessMapView() {
               tone="danger"
             />
           )}
-          {/* ⛔ NO CONVERTIDO A ListTruncationBadge A PROPOSITO: `merged` es un useMemo derivado,
-              NO un objeto de consulta -- no tiene .error, que es la mitad de la regla que el
-              componente aplica. Pasarselo compilaria y mentiria: el aviso dependeria solo de
-              has_more. Atarlo bien pide decidir DE QUE consulta hereda el error. */}
+          {/* ⛔ NOT CONVERTED TO ListTruncationBadge ON PURPOSE: `merged` is a derived useMemo,
+              NOT a query object -- it has no .error, which is half of the rule the
+              component applies. Passing it would compile and lie: the notice would depend
+              only on has_more. Doing it right requires deciding WHICH query it inherits the
+              error from. */}
           {merged.has_more && (
             <Badge variant="warning" title={t('stats.truncatedHint')}>
               {t('stats.truncated', { n: GRAPH_LIMIT })}
@@ -410,11 +411,11 @@ export function AccessMapView() {
           <Spinner />
         </div>
       ) : error ? (
-        /* ⛔ ASEGURAMIENTO ANTES QUE ROL — el mismo orden que la costura
-           (_intel/async.tsx:56-63). `isForbidden` es SÓLO el status 403
-           (lib/api/errors.ts:59), así que un `step_up_required` lo satisface
-           también: leerlo primero borraba la pantalla entera y dejaba como único
-           control un refresh que devuelve el mismo 403 para siempre. */
+        /* ⛔ ASSURANCE BEFORE ROLE — the same order as the seam
+           (_intel/async.tsx:56-63). `isForbidden` is ONLY the 403 status
+           (lib/api/errors.ts:59), so a `step_up_required` satisfies it too:
+           reading it first erased the whole screen and left a refresh that returns
+           the same 403 forever as the only control. */
         error instanceof ApiError && error.isStepUpRequired ? (
           <StepUpRequiredState
             action="generic"
@@ -534,14 +535,14 @@ export function AccessMapView() {
                         return (
                           <tr key={n.id}>
                             <td className="py-1">
-                              {/* ⛔ UN BOTÓN, NO UN ENLACE. Esto se escribió como
-                                `<a href="#access-node-${n.id}">` con
-                                `preventDefault()`, y ese ancla NO EXISTE en
-                                ningún sitio del árbol: un lector de pantalla lo
-                                anuncia como enlace a un destino que no está, y
-                                el teclado lo ofrece como navegación cuando lo
-                                que hace es SELECCIONAR. Selecciona, luego es un
-                                botón. */}
+                              {/* ⛔ A BUTTON, NOT A LINK. This was written as
+                                `<a href="#access-node-${n.id}">` with
+                                `preventDefault()`, and that anchor EXISTS
+                                nowhere in the tree: a screen reader announces it
+                                as a link to a destination that is not there, and
+                                the keyboard offers it as navigation when what it
+                                does is SELECT. It selects, so it is a
+                                button. */}
                               <button
                                 type="button"
                                 onClick={() =>
@@ -589,11 +590,11 @@ export function AccessMapView() {
                   <Spinner />
                 </div>
               ) : driftQuery.error ? (
-                /* Este panel no distinguía NINGUNO de los dos 403: cualquier
-                   negativa se pintaba como avería roja con un reintento que no
-                   puede funcionar. Ahora ceremonia, luego rol, luego avería.
-                   (El ForbiddenState de arriba es la puerta de capacidad
-                   `!canDrift`, no una rama de error: ésa no se toca.) */
+                /* This panel did not tell EITHER of the two 403s apart: any
+                   refusal was drawn as a red failure with a retry that cannot
+                   work. Now ceremony, then role, then failure.
+                   (The ForbiddenState above is the capability gate
+                   `!canDrift`, not an error branch: that one is not touched.) */
                 driftQuery.error instanceof ApiError &&
                 driftQuery.error.isStepUpRequired ? (
                   <StepUpRequiredState

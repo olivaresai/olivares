@@ -143,7 +143,13 @@ func testLoginHome(root string) LoginHomeFunc {
 // newSignInServer serves the module with stub tools. home is the harness tenant's
 // login directory (<login root>/<tenant>); each tool's login is under <home>/<driver>.
 // Calls to the sign-in status and start name the harness tenant unless they name one.
-func newSignInServer(t *testing.T, configure ...func(m *Module, bin string)) (call func(method, path string, body any) (int, map[string]any), home string) {
+func newSignInServer(t *testing.T, configure ...func(m *Module, bin string)) (func(method, path string, body any) (int, map[string]any), string) {
+	t.Helper()
+	call, home, _ := newSignInServerWithStore(t, configure...)
+	return call, home
+}
+
+func newSignInServerWithStore(t *testing.T, configure ...func(m *Module, bin string)) (call func(method, path string, body any) (int, map[string]any), home string, fixtureStore store.Store) {
 	t.Helper()
 	ctx := context.Background()
 	signedInDecoy(t)
@@ -216,12 +222,8 @@ func newSignInServer(t *testing.T, configure ...func(m *Module, bin string)) (ca
 		_ = json.Unmarshal(w.Body.Bytes(), &out)
 		return w.Code, out
 	}
-	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Tools", "slug": "tools"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, org)
-	}
-	tenant = model.TenantID(org["tenant_id"].(string))
-	return call, filepath.Join(loginRoot, tenant.String())
+	tenant = seedOrg(t, st, "Tools", "tools")
+	return call, filepath.Join(loginRoot, tenant.String()), st
 }
 
 func pollSignIn(t *testing.T, call func(string, string, any) (int, map[string]any), id, want string) map[string]any {
@@ -434,11 +436,8 @@ func TestAFreshInstallIsNotSignedInWhateverTheEngineUserHas(t *testing.T) {
 // Root on FH 036: the own login is per tenant. One organization's sign-in lives in
 // its own home and does not sign the tool in for another organization.
 func TestEachOrganizationHasItsOwnLogin(t *testing.T) {
-	call, home := newSignInServer(t)
-	code, other := call("POST", "/v1/system/orgs", map[string]string{"name": "Other", "slug": "other"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, other)
-	}
+	call, home, st := newSignInServerWithStore(t)
+	other := seedOrg(t, st, "Other", "other")
 	_, s := call("POST", "/v1/m/agenttools/sign-in", map[string]string{"driver": "claude"})
 	if code, s := call("POST", "/v1/m/agenttools/sign-in/"+s["id"].(string)+"/code", map[string]string{"code": "good-code"}); code != 202 || s["state"] != "signed_in" {
 		t.Fatalf("sign-in for the first organization = %d %v", code, s)
@@ -449,7 +448,7 @@ func TestEachOrganizationHasItsOwnLogin(t *testing.T) {
 	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude", nil); code != 200 || st["signed_in"] != true {
 		t.Fatalf("first organization = %d %v, want signed in", code, st)
 	}
-	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude&tenant_id="+other["tenant_id"].(string), nil); code != 200 || st["signed_in"] != false {
+	if code, st := call("GET", "/v1/m/agenttools/sign-in?driver=claude&tenant_id="+other.String(), nil); code != 200 || st["signed_in"] != false {
 		t.Fatalf("other organization = %d %v, want NOT signed in", code, st)
 	}
 }
@@ -516,7 +515,7 @@ func TestAccountSignInStatusAndCompletionStayWithTheSelectedHome(t *testing.T) {
 }
 
 func TestOpenCodeSignInShowsTheDeviceCodeAndUsesItsNativeHome(t *testing.T) {
-	call, home := newSignInServer(t)
+	call, home, st := newSignInServerWithStore(t)
 	statusPath := "/v1/m/agenttools/sign-in?driver=opencode"
 	if code, st := call("GET", statusPath, nil); code != 200 || st["installed"] != true || st["signed_in"] != false {
 		t.Fatalf("fresh status = %d %v, want installed and not signed in", code, st)
@@ -535,11 +534,8 @@ func TestOpenCodeSignInShowsTheDeviceCodeAndUsesItsNativeHome(t *testing.T) {
 	if code, st := call("GET", statusPath, nil); code != 200 || st["signed_in"] != false {
 		t.Fatalf("named account signed in the default home: %d %v", code, st)
 	}
-	code, other := call("POST", "/v1/system/orgs", map[string]string{"name": "OpenCode other", "slug": "opencode-other"})
-	if code != 201 {
-		t.Fatalf("organization = %d %v", code, other)
-	}
-	if code, st := call("GET", statusPath+"&tenant_id="+other["tenant_id"].(string), nil); code != 200 || st["signed_in"] != false {
+	other := seedOrg(t, st, "OpenCode other", "opencode-other")
+	if code, st := call("GET", statusPath+"&tenant_id="+other.String(), nil); code != 200 || st["signed_in"] != false {
 		t.Fatalf("another organization used this login: %d %v", code, st)
 	}
 	for _, key := range []string{"access", "refresh", "token", "key"} {

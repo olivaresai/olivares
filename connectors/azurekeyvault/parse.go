@@ -176,45 +176,6 @@ func stripQuery(s string) string {
 	return s
 }
 
-// store identifies a Key Vault or Managed HSM custodian for the inventory.
-type store struct {
-	id      string // canonical resourceId
-	service string // "keyvault" | "managedhsm"
-	name    string
-}
-
-func (s store) ref() string { return s.id }
-
-func (s store) displayName() string {
-	if s.service == "managedhsm" {
-		return "Azure Managed HSM (" + s.name + ")"
-	}
-	return "Azure Key Vault (" + s.name + ")"
-}
-
-// storeFromResourceID parses the service and name out of a canonical Key Vault /
-// Managed HSM resourceId. ok=false for a non-Key-Vault resource id.
-func storeFromResourceID(id string) (store, bool) {
-	if id == "" {
-		return store{}, false
-	}
-	low := id // already lower-cased by resourceID()
-	var service string
-	switch {
-	case strings.Contains(low, "/providers/microsoft.keyvault/managedhsms/"):
-		service = "managedhsm"
-	case strings.Contains(low, "/providers/microsoft.keyvault/vaults/"):
-		service = "keyvault"
-	default:
-		return store{}, false
-	}
-	name := low[strings.LastIndexByte(low, '/')+1:]
-	if name == "" {
-		return store{}, false
-	}
-	return store{id: id, service: service, name: name}, true
-}
-
 // recordsFromBytes parses exported AuditEvent records, accepting a {"records":[…]}
 // wrapper (storage account export), a JSON array, NDJSON, or a single object.
 func recordsFromBytes(data []byte) []record {

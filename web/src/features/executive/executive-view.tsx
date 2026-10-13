@@ -39,6 +39,7 @@ import {
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { modelsApi, modelsKeys } from '@/features/models/api'
 import { securityApi, securityKeys } from '@/features/security/api'
+import { useOfferedPanels } from '@/features/panels'
 import { accessMapApi, accessMapKeys } from '@/features/access-map/api'
 import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
@@ -48,6 +49,7 @@ import {
   currentAnswer,
   deriveCompliance,
   deriveHealth,
+  deriveDrift,
   deriveRisk,
   deriveUsage,
 } from './derive'
@@ -165,13 +167,15 @@ export function ExecutiveView() {
   const redteamPanel = useDashboardRedteam()
   const canRedteam = !!redteamPanel?.permitted
   const runsQ = redteamPanel?.query
-  const canAccessMap = may('accessmap:graph:read')
+  const riskPanels = useOfferedPanels(PANEL_EXTENSIONS.executiveRiskCards)
   const canCompliance =
     Boolean(PANEL_EXTENSIONS.complianceView) && may('compliance:framework:read')
   const canHealth = may('health:status:read')
 
   const canUsage = canInventory || canSessions
-  const canRisk = canSecurity || canRedteam || canAccessMap
+  // The card reads /drift, which needs its own permission, not the graph's.
+  const canAccessMap = may('accessmap:drift:read')
+  const canRisk = canSecurity || canRedteam
 
   // --- queries (only the permitted ones run) ---------------------------------
   const modelsQ = useQuery({
@@ -341,9 +345,13 @@ export function ExecutiveView() {
     : ''
   const risk = canRisk
     ? redteamPanel
-      ? redteamPanel.deriveRisk(findingsQ.data, driftQ.data)
-      : deriveRisk(findingsQ.data, undefined, driftQ.data)
+      ? redteamPanel.deriveRisk(findingsQ.data)
+      : deriveRisk(findingsQ.data)
     : null
+  // A failed refetch keeps the last good data in the query: only a successful read counts.
+  const drift =
+    canAccessMap && driftQ.isSuccess ? deriveDrift(driftQ.data) : null
+  const driftUnavailable = canAccessMap && driftQ.isError
   const compliance = canCompliance
     ? deriveCompliance(complianceSummaryQ.data, complianceRiskQ.data)
     : null
@@ -351,9 +359,7 @@ export function ExecutiveView() {
   // The risk section composes three sources; bind its AsyncSection to whichever is
   // permitted first (its data type varies, but the section reads none of it — it
   // re-derives from all three .data), so widen the result type to unknown.
-  const riskPrimary = (
-    canSecurity ? findingsQ : canRedteam ? runsQ! : driftQ
-  ) as Pick<
+  const riskPrimary = (canSecurity ? findingsQ : runsQ!) as Pick<
     UseQueryResult<unknown>,
     'data' | 'isLoading' | 'isError' | 'error' | 'refetch'
   >
@@ -363,6 +369,8 @@ export function ExecutiveView() {
     canModels ||
     canUsage ||
     canRisk ||
+    canAccessMap ||
+    riskPanels.length > 0 ||
     canCompliance ||
     canHealth
 
@@ -370,8 +378,7 @@ export function ExecutiveView() {
   const headlineLoading =
     costPanels?.loading ||
     (canUsage && (inventoryQ.isLoading || sessionsQ.isLoading)) ||
-    (canRisk &&
-      (findingsQ.isLoading || runsQ?.isLoading || driftQ.isLoading)) ||
+    (canRisk && (findingsQ.isLoading || runsQ?.isLoading)) ||
     (canCompliance && complianceSummaryQ.isLoading)
 
   const tenantLabel = activeTenant ?? t('report.allOrgs')
@@ -553,17 +560,27 @@ export function ExecutiveView() {
       {costPanels?.sections}
 
       {/* risk */}
-      {canRisk ? (
+      {canRisk || canAccessMap || riskPanels.length > 0 ? (
         <div className="animate-enter" style={{ animationDelay: '120ms' }}>
-          <AsyncSection query={riskPrimary} skeletonHeight={220}>
-            {() => (
-              <RiskSection
-                risk={risk!}
-                robustness={redteamPanel?.panel}
-                description={redteamPanel?.description}
-              />
-            )}
-          </AsyncSection>
+          {canRisk ? (
+            <AsyncSection query={riskPrimary} skeletonHeight={220}>
+              {() => (
+                <RiskSection
+                  risk={risk!}
+                  drift={drift}
+                  driftUnavailable={driftUnavailable}
+                  robustness={redteamPanel?.panel}
+                  description={redteamPanel?.description}
+                />
+              )}
+            </AsyncSection>
+          ) : canAccessMap ? (
+            <AsyncSection query={driftQ} skeletonHeight={220}>
+              {() => <RiskSection risk={null} drift={drift} />}
+            </AsyncSection>
+          ) : (
+            <RiskSection risk={null} />
+          )}
         </div>
       ) : null}
 

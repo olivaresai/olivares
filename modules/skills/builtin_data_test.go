@@ -93,7 +93,7 @@ func TestBuiltinPinNamesTheReleasedSourcesAndTheirFullSelection(t *testing.T) {
 	}
 	// ECC v2.2.3 ships 293 skills and 8 are excluded (README.md, "Not shipped"); the two
 	// mattpocock categories carry 20 and 7 and 1 is excluded. The rest are in exactly one pack.
-	if skillsBySource["ecc"] != 285 || skillsBySource["mattpocock-skills"] != 26 || len(pin.Packs) != 23 || len(pin.Data) != 2 {
+	if skillsBySource["olivares"] != 1 || skillsBySource["ecc"] != 285 || skillsBySource["mattpocock-skills"] != 26 || len(pin.Packs) != 24 || len(pin.Data) != 2 {
 		t.Fatalf("catalog selection changed: skills=%v packs=%d data=%d", skillsBySource, len(pin.Packs), len(pin.Data))
 	}
 }
@@ -168,12 +168,22 @@ func TestBuiltinSourcesAreNoticedWithTheirLicenseText(t *testing.T) {
 		}
 		// A skill under another license needs its own NOTICE entry before it ships.
 		for _, m := range verified.Members {
-			if m.License != "" && m.License != "MIT" {
+			expected := "MIT"
+			if entry.Source == "olivares" {
+				expected = "AGPL-3.0-only"
+			}
+			if m.License != "" && m.License != expected {
 				t.Errorf("%s/%s declares license %q", entry.ID, m.Name, m.License)
 			}
 		}
 	}
 	for id, source := range pin.Sources {
+		if id == "olivares" {
+			if source.Repository != "https://github.com/olivaresai/olivares" || source.License != "AGPL-3.0-only" || !strings.Contains(string(notice), "Copyright 2026 Olivares.AI") {
+				t.Error("bundled wiki source lacks project provenance")
+			}
+			continue
+		}
 		text, err := os.ReadFile(filepath.Join("../../LICENSES/third-party", id+".txt"))
 		if err != nil || !bytes.HasPrefix(text, []byte(source.License+" License")) {
 			t.Errorf("%s: license text missing or not %s: %v", id, source.License, err)
@@ -186,7 +196,11 @@ func TestBuiltinSourcesAreNoticedWithTheirLicenseText(t *testing.T) {
 
 func licenseMatches(t *testing.T, source string, got []byte) bool {
 	t.Helper()
-	want, err := os.ReadFile("../../LICENSES/third-party/" + source + ".txt")
+	file := "../../LICENSES/third-party/" + source + ".txt"
+	if source == "olivares" {
+		file = "../../LICENSE"
+	}
+	want, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}

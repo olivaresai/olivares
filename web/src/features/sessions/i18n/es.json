@@ -132,6 +132,33 @@
     "noProfileRead": "No se muestran los nombres de los perfiles de proveedor: tu rol no incluye sessions:profile:read. La columna Instancia lleva en su lugar la referencia del perfil de cada fila.",
     "profileLookupFailed": "No se han podido leer los nombres de los perfiles de proveedor: falló la consulta de perfiles. La columna Instancia lleva en su lugar la referencia del perfil de cada fila."
   },
+  "move": {
+    "open": "Mover a…",
+    "title": "Mover esta sesión",
+    "mode": "Cómo continuar",
+    "modeMove": "Misma herramienta, otra cuenta",
+    "modeHandoff": "Otra herramienta, como sesión nueva",
+    "moveHint": "La misma sesión continúa en la cuenta que elijas, con su conversación. No se inicia nada: reanúdala después. Desde ahora rigen los límites y aprobaciones de esa cuenta; no se copia ningún inicio de sesión.",
+    "handoffHint": "Se inicia una sesión nueva en el perfil que elijas, enlazada a esta, con el resumen de abajo y la transcripción completa adjunta. Esta sesión no cambia.",
+    "target": "Cuenta",
+    "pick": "Elige una cuenta",
+    "noTargets": "Ninguna otra cuenta está lista para esto",
+    "summary": "Resumen con el que empieza la sesión nueva",
+    "loading": "Generando el resumen…",
+    "transcript": "Transcripción adjunta: {{turns}} peticiones, {{bytes}} bytes.",
+    "confirmMove": "Mover",
+    "confirmHandoff": "Iniciar sesión nueva",
+    "moved": "Movida a {{name}}. Reanúdala para continuar.",
+    "started": "Sesión nueva iniciada a partir del resumen.",
+    "failed": "No se pudo completar la acción.",
+    "stateNotDelivered": "La sesión nueva se inició, pero su primer mensaje no llegó. Envía desde la sesión el texto de abajo.",
+    "stateUnknown": "La sesión nueva se inició y su primer mensaje puede haber llegado. Revisa la sesión antes de volver a enviar el texto de abajo.",
+    "stateWaits": "La sesión nueva espera una aprobación y su primer mensaje no se envía automáticamente. Cuando esté en marcha, envía el texto de abajo.",
+    "firstTurn": "Primer mensaje",
+    "close": "Cerrar",
+    "profilesFailed": "No se pudieron listar las cuentas.",
+    "profilesDenied": "No tienes permiso para listar cuentas, así que no se puede elegir ninguna."
+  },
   "card": {
     "tabs": {
       "overview": "Resumen",
@@ -240,7 +267,7 @@
   "runState": {
     "pending": "Pendiente",
     "running": "En marcha",
-    "idle": "En marcha",
+    "idle": "Inactiva",
     "stopped": "Parada",
     "failed": "Fallida",
     "cleaned": "Limpiada"
@@ -379,6 +406,7 @@
     "folder": "Carpeta",
     "temporaryFolder": "Carpeta temporal de esta sesión",
     "panels": "Paneles",
+    "tabActivity": "Actividad",
     "tabChanges": "Cambios",
     "tabFiles": "Archivos",
     "noFiles": "Esta sesión no tiene una carpeta que explorar.",
@@ -497,5 +525,59 @@
   "thread": {
     "copyReference": "Copiar referencia",
     "terminalHint": "La misma sesión desde una terminal."
+  },
+  "activity": {
+    "empty": "Aún nada. La lista de tareas de la herramienta, los agentes que lanza, el trabajo que deja en segundo plano y los archivos que cambia aparecen aquí mientras trabaja.",
+    "missing": "La transcripción de esta sesión no está en el directorio de su cuenta, así que no se puede mostrar lo que hizo su herramienta.",
+    "failed": "No se ha podido leer la actividad.",
+    "todos": "Plan",
+    "todosCount": "{{done}} de {{total}} hechas",
+    "todo": {
+      "pending": "Pendiente",
+      "in_progress": "En curso",
+      "completed": "Hecha"
+    },
+    "agents": "Agentes",
+    "agent": "Agente",
+    "tasks": "En segundo plano",
+    "files": "Archivos cambiados",
+    "fileNew": "nuevo",
+    "lines": "añadidas: {{added}}, eliminadas: {{removed}}",
+    "context": "Contexto",
+    "model": "Modelo",
+    "tokens": "En contexto",
+    "compactions": "Compactaciones",
+    "compactedTimes_one": "Compactado una vez",
+    "compactedTimes_other": "Compactado {{n}} veces",
+    "neverCompacted": "Sin compactar",
+    "skills": "Skills",
+    "mcp": "Servidores MCP",
+    "unreadable_one": "{{n}} registro no se ha podido leer y no se muestra.",
+    "unreadable_other": "{{n}} registros no se han podido leer y no se muestran.",
+    "countRunning": "{{total}} · {{running}} en curso",
+    "state": {
+      "running": "En curso",
+      "completed": "Completado",
+      "failed": "Fallido",
+      "stopped": "Detenido",
+      "scheduled": "Programado"
+    },
+    "kind": {
+      "shell": "Comando de shell",
+      "monitor": "Monitor",
+      "workflow": "Flujo de trabajo",
+      "wakeup": "Reactivación programada"
+    },
+    "due": "a las {{time}}",
+    "toolUses_one": "{{n}} llamada a herramienta",
+    "toolUses_other": "{{n}} llamadas a herramientas",
+    "agentTokens": "{{value}} tokens",
+    "agentFailed": "No se ha podido leer la transcripción de este agente.",
+    "role": {
+      "user": "Petición",
+      "assistant": "Respuesta",
+      "tool": "Herramienta",
+      "result": "Resultado"
+    }
   }
 }

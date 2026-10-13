@@ -35,7 +35,9 @@ import sys
 
 root = pathlib.Path(sys.argv[1])
 workflow = (root / ".github/workflows/installer-matrix.yml").read_text(encoding="utf-8")
+release = (root / ".github/workflows/release.yml").read_text(encoding="utf-8")
 ci = (root / "scripts/installer-matrix-ci.sh").read_text(encoding="utf-8")
+lib = (root / "scripts/installer-matrix-lib.sh").read_text(encoding="utf-8")
 test = (root / "scripts/test-installer-matrix.sh").read_text(encoding="utf-8")
 taskfile = (root / "Taskfile.yml").read_text(encoding="utf-8")
 mainline = (root / ".github/workflows/mainline-ci.yml").read_text(encoding="utf-8")
@@ -46,6 +48,22 @@ docs = "\n".join((root / p).read_text(encoding="utf-8") for p in (
 
 for token in ("workflow_dispatch:", "pull_request:", "permissions:\n  contents: read"):
     assert token in workflow
+assert "release:\n    types: [published]" in workflow
+assert workflow.count("ref: ${{ github.event.pull_request.head.sha || github.ref }}") == 2
+assert workflow.count("if: github.event_name == 'pull_request'") == 2
+assert workflow.count('tar -czf "$RUNNER_TEMP/installer-candidate.tar.gz"') == 2
+assert workflow.count('--candidate-archive "$MATRIX_CANDIDATE_ARCHIVE"') == 2
+archive_selection = "MATRIX_CANDIDATE_ARCHIVE: ${{ github.event_name == 'pull_request' && format('{0}/installer-candidate.tar.gz', runner.temp) || '' }}"
+assert workflow.count(archive_selection) == 2
+assert workflow.count("github.event.release.tag_name || inputs.release_version") == 2
+assert 'if [[ -n "$candidate_archive" ]]; then' in ci
+assert 'bash "$lib" payload "$candidate" "$candidate_archive"' in ci
+assert 'service_root="$work/archive"' in ci
+assert 'qualify-published-installer:\n    needs: [publish-ota-manifest]' in release
+publication_job = release.split('  qualify-published-installer:\n', 1)[1]
+assert '      actions: write' in publication_job
+assert 'gh workflow run installer-matrix.yml --repo "$GITHUB_REPOSITORY"' in publication_job
+assert '--ref "refs/tags/$MATRIX_RELEASE_TAG" -f "release_version=$MATRIX_RELEASE_TAG"' in publication_job
 guard = "if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'"
 assert workflow.count(guard) == 2
 for family, image in (
@@ -77,7 +95,7 @@ assert "cosign-release: 'v2.6.4'" in workflow
 for token in (
     # The version is passed as its exact bare release tag.
     'release_tag()',
-    'scripts/install.sh" --version "$(release_tag "$release_version")"',
+    '"$(release_tag "$release_version")" "$os_name"',
     '"$installed" version', ' doctor ', ' -o json', '--start',
     'bash "$lib" binary', 'bash "$lib" doctor', 'bash "$lib" redacted',
     'bash "$lib" no-sudo', 'COULD NOT LOOK',
@@ -86,6 +104,7 @@ for token in (
     assert token in ci
 # No era-dependent tag normalization is allowed.
 assert 'printf \'%s\' "${1:?}"' in ci and 'release_tag "$release_version"' in ci
+assert 'scripts/install.sh"' in lib and '--version "$release_version"' in lib
 for mutant in range(1, 7):
     roman = ("i", "ii", "iii", "iv", "v", "vi")[mutant - 1]
     assert f"mutant {roman}:" in test

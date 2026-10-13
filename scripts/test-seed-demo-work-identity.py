@@ -226,6 +226,63 @@ class SeederIdentity(unittest.TestCase):
         self.assertEqual((rc, fake.run_profile_refs, fake.list_paths), (0, ["ppf_created"], []))
 
 
+class SeederFirstMembership(unittest.TestCase):
+    def run_people(self, membership_override=None, roster_override=None):
+        module = load_seeder()
+        people = [p for p in module.PERSONAS if p["modo"] == "password"]
+        created, writes = [], []
+
+        def api(base, token, tenant, method, path, body=None, cabeceras=None):
+            del base, token, cabeceras
+            if method == "POST" and path == "/v1/users":
+                writes.append(path)
+                uid = "person-%d" % len(writes)
+                # Match the published atomic-create/consent contract. A separate
+                # later grant cannot join an existing non-member account.
+                out = {"id": uid}
+                if body.get("tenant") == tenant:
+                    membership = {"user_id": uid, "tenant": tenant, "role": body.get("role")}
+                    membership.update(membership_override or {})
+                    out["membership"] = membership
+                    created.append({"user_id": uid, "display_name": body["display_name"], "role": body.get("role")})
+                return 201, out
+            if method == "POST" and path == "/v1/memberships":
+                writes.append(path)
+                return 202, {"status": "consent_required"}
+            if method == "GET" and path == "/v1/members":
+                return 200, {"items": [dict(member, **(roster_override or {})) for member in created]}
+            raise AssertionError("unexpected people seeding route")
+
+        module.pedir = api
+        rc = module.sembrar_consola("http://local.invalid", "synthetic", "tenant-test")
+        return rc, writes, len(people)
+
+    def test_new_people_receive_first_membership_atomically_without_existing_account_grant(self):
+        rc, writes, count = self.run_people()
+        self.assertEqual(rc, 0, "seeder must use the supported atomic first-membership request")
+        self.assertEqual(writes, ["/v1/users"] * count)
+
+    def test_foreign_tenant_membership_cannot_claim_success(self):
+        rc, _, _ = self.run_people({"tenant": "another-tenant"})
+        self.assertEqual(rc, 1)
+
+    def test_wrong_role_membership_cannot_claim_success(self):
+        rc, _, _ = self.run_people({"role": "wrong-role"})
+        self.assertEqual(rc, 1)
+
+    def test_wrong_account_membership_cannot_claim_success(self):
+        rc, _, _ = self.run_people({"user_id": "another-account"})
+        self.assertEqual(rc, 1)
+
+    def test_same_count_foreign_roster_cannot_claim_success(self):
+        rc, _, _ = self.run_people(roster_override={"user_id": "another-account"})
+        self.assertEqual(rc, 1)
+
+    def test_same_count_wrong_role_roster_cannot_claim_success(self):
+        rc, _, _ = self.run_people(roster_override={"role": "wrong-role"})
+        self.assertEqual(rc, 1)
+
+
 if __name__ == "__main__":
     result = unittest.main(verbosity=2, exit=False).result
     sys.exit(0 if result.wasSuccessful() else 1)

@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# Live Playwright spec for the session conversation surface. Boots
-# `serve --insecure --seed-demo` with the fixture driver (no provider account,
-# no model turn), creates a named running session, and runs
-# web/e2e/session-conversation.spec.ts. Extra arguments go to Playwright.
+# Live Playwright specs for the session conversation surface and the composer's "/"
+# menu. Boots `serve --insecure --seed-demo` with the fixture driver (no provider
+# account, no model turn), creates a named running session, and runs
+# web/e2e/session-conversation.spec.ts and web/e2e/session-slash-menu.spec.ts.
+# Extra arguments go to Playwright.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -68,8 +69,8 @@ LOGIN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
 TOKEN="$(python3 -c 'import sys,json;print(json.load(sys.stdin).get("token",""))' <<<"$LOGIN")"
 [ -n "$TOKEN" ] || { echo "demo login failed"; cat "$DATA/engine.log" >&2; exit 1; }
 
-ORGS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H @-)"
-TENANT="$(python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin).get("items",[]) if o.get("slug")=="demo"]' <<<"$ORGS")"
+WHOAMI="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @-)"
+TENANT="$(python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])' <<<"$WHOAMI")"
 [ -n "$TENANT" ] || { echo "could not resolve demo tenant"; exit 1; }
 echo "==> demo tenant $TENANT"
 
@@ -79,4 +80,5 @@ echo "==> Playwright session-conversation.spec.ts"
 cd "$ROOT/web"
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" \
 DEMO_TENANT="$TENANT" \
-  nice -n 10 pnpm exec playwright test e2e/session-conversation.spec.ts "$@"
+E2E_SESSION_FOLDER="$DATA/ws" \
+  nice -n 10 pnpm exec playwright test e2e/session-conversation.spec.ts e2e/session-slash-menu.spec.ts "$@"

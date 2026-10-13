@@ -11,9 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -174,5 +176,144 @@ while IFS= read -r line; do :; done
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A labeled ACP stand-in reads the documented discovery home and attempts to
+// modify it. The real composition, imported artifact, workspace assignment,
+// provider profile, native process, Landlock boundary and audit are exercised.
+func TestWorkspaceSkillsReachGeminiAndOpenCodeSealedAndAudited(t *testing.T) {
+	if state := confine.Probe(); state.Mode != confine.ModeLandlock || state.ABI < 3 {
+		t.Skip("truncate-protected Landlock required")
+	}
+	for _, driver := range []string{"gemini-cli", "opencode"} {
+		t.Run(driver, func(t *testing.T) {
+			facts, _ := driverfacts.Lookup(driver)
+			program := filepath.Join(t.TempDir(), facts.Program)
+			script := `#!/bin/sh
+set -eu
+skill_home="$HOME"
+config="$OPENCODE_CONFIG_DIR"
+if [ "${1:-} ${2:-}" = "auth list" ]; then
+  if [ -f "$XDG_DATA_HOME/opencode/auth.json" ]; then printf '●  OpenAI oauth\n└  1 credentials\n'; else printf '└  0 credentials\n'; fi
+  exit 0
+fi
+`
+			if driver == "gemini-cli" {
+				script = `#!/bin/sh
+set -eu
+skill_home="$GEMINI_CLI_HOME"
+config="$GEMINI_CLI_HOME/.gemini"
+`
+			}
+			script += `cat "$skill_home/.agents/skills/research/SKILL.md" > delivered.md
+cat "$config/profile-marker" > profile-marker
+if printf changed > "$skill_home/.agents/skills/research/SKILL.md"; then exit 11; fi
+if rm "$skill_home/.agents/skills/research/SKILL.md"; then exit 12; fi
+if mv "$skill_home/.agents" "$skill_home/replaced"; then exit 13; fi
+printf preserved > "$config/session-marker"
+printf sealed > sealed
+while IFS= read -r line; do
+  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+  [ -n "$id" ] || continue
+  case "$line" in
+    *'"method":"initialize"'*) result='{"protocolVersion":1,"agentInfo":{"name":"skills-acp-stand-in","version":"test"},"authMethods":[],"agentCapabilities":{"loadSession":true,"mcpCapabilities":{"http":true}}}' ;;
+    *'"method":"session/new"'*|*'"method":"session/load"'*) result='{"sessionId":"skills-acp-test","modes":{"currentModeId":"default","availableModes":[{"id":"default"},{"id":"plan"}]}}' ;;
+    *'"method":"session/set_mode"'*) result='{}' ;;
+    *) printf '{"jsonrpc":"2.0","id":%s,"error":{"code":-32601,"message":"unknown stand-in method"}}\n' "$id"; continue ;;
+  esac
+  printf '{"jsonrpc":"2.0","id":%s,"result":%s}\n' "$id" "$result"
+done
+`
+			if err := os.WriteFile(program, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(facts.RuntimeBinEnv, program)
+			t.Setenv("PATH", filepath.Dir(program)+string(os.PathListSeparator)+os.Getenv("PATH"))
+			c := bootSkillsComposition(t)
+			pep, err := buildClaudeHookPEPServer(c.eng, discardLog())
+			if err != nil || pep == nil {
+				t.Fatalf("hook listener: %v", err)
+			}
+			hooks := httptest.NewServer(pep.Handler)
+			t.Cleanup(hooks.Close)
+			if err := c.eng.hookCredentials().bindEndpoint(hooks.Listener.Addr().String()); err != nil {
+				t.Fatal(err)
+			}
+			do := func(method, path string, body any, want int) map[string]any {
+				t.Helper()
+				code, raw := c.do(method, path, c.token, body)
+				if code != want {
+					t.Fatalf("%s %s = %d %s", method, path, code, raw)
+				}
+				var result map[string]any
+				if err := json.Unmarshal(raw, &result); err != nil {
+					t.Fatal(err)
+				}
+				return result
+			}
+			folder := t.TempDir()
+			workspace := do("POST", "/v1/m/sessions/workspaces", map[string]any{"root_path": folder, "name": "skills workspace"}, http.StatusCreated)
+			revision := c.installPack("workspace-native")
+			if code, raw := c.assign(c, "workspace", c.workspaceID(), revision); code != http.StatusCreated {
+				t.Fatalf("assign workspace = %d %s", code, raw)
+			}
+			config := t.TempDir()
+			if driver == "gemini-cli" {
+				config = filepath.Join(config, ".gemini")
+				if err := os.Mkdir(config, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(config, "profile-marker"), []byte("selected profile"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			userHome := t.TempDir()
+			if driver == "opencode" {
+				authFile := filepath.Join(userHome, ".local", "share", "opencode", "auth.json")
+				if err := os.MkdirAll(filepath.Dir(authFile), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(authFile, []byte(`{"openai":{"type":"oauth","refresh":"fixture","access":"fixture","expires":0}}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			profile := do("POST", "/v1/m/sessions/provider-profiles", map[string]any{"driver": driver, "auth_source": sessions.AuthSourceAccountHome, "config_home": config, "user_home": userHome, "display_name": "skills profile"}, http.StatusCreated)
+			run := do("POST", "/v1/m/sessions/runs", map[string]any{"transport": "stream-json", "permission_mode": "default", "isolation": "native", "workspace_ref": workspace["workspace_ref"], "provider_profile_ref": profile["profile_ref"]}, http.StatusCreated)
+			ref := run["run_ref"].(string)
+			t.Cleanup(func() { _, _ = c.do("POST", "/v1/m/sessions/runs/"+ref+"/stop", c.token, nil) })
+			for name, want := range map[string]string{"delivered.md": "name: research", "profile-marker": "selected profile", "sealed": "sealed"} {
+				got, err := os.ReadFile(filepath.Join(folder, name))
+				if err != nil || !strings.Contains(string(got), want) {
+					t.Fatalf("%s = %q, %v", name, got, err)
+				}
+			}
+			count := 0
+			if err := c.eng.store.View(t.Context(), model.TenantID(c.tenant), func(sc store.Scope) error {
+				return sc.Audit().(store.CanonicalWalker).WalkCanonical(t.Context(), 0, func(ev model.AuditEvent, raw string, _ []byte) error {
+					if ev.Action == "sessions.skills.delivered" {
+						var meta struct {
+							RunRef  string                  `json:"run_ref"`
+							Members []skills.SelectedMember `json:"members"`
+						}
+						if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+							return err
+						}
+						count++
+						if meta.RunRef != ref || len(meta.Members) != 1 || meta.Members[0].RevisionID != revision {
+							t.Fatalf("unexpected delivery audit: %+v", meta)
+						}
+					}
+					return nil
+				})
+			}); err != nil || count != 1 {
+				t.Fatalf("workspace delivery audit count=%d err=%v", count, err)
+			}
+			do("POST", "/v1/m/sessions/runs/"+ref+"/stop", nil, http.StatusOK)
+			if got, err := os.ReadFile(filepath.Join(config, "session-marker")); err != nil || string(got) != "preserved" {
+				t.Fatalf("selected configuration home is no longer writable: %q %v", got, err)
+			}
+
+		})
 	}
 }

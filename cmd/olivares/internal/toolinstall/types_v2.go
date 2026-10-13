@@ -6,6 +6,7 @@ package toolinstall
 
 import (
 	"fmt"
+	"github.com/olivaresai/olivares/modules/catalog"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -87,6 +88,7 @@ type PlanV2 struct {
 // SelectionV2 is the operator-approved selection. Every field is represented;
 // absence uses an explicit state, never omitempty.
 type SelectionV2 struct {
+	Tool             *catalog.ToolDeclaration `json:"tool,omitempty"`
 	Driver           string                   `json:"driver"`
 	Channel          string                   `json:"channel"`
 	RequestedVersion string                   `json:"requested_version"`
@@ -222,6 +224,9 @@ func (p *PlanV2) validate() error {
 func (s *SelectionV2) validate() error {
 	if s == nil {
 		return refuse(KindInvalidRequest, "v2 selection is missing")
+	}
+	if s.Tool != nil {
+		return validateDeclaredSelection(s)
 	}
 	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok, DriverOpenCode, DriverOllama, DriverGemini); err != nil {
 		return err

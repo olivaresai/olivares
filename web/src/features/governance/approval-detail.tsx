@@ -4,7 +4,7 @@
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { Check, X } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { CodeLine } from '@/components/ui/code-line'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -48,16 +48,6 @@ function isToolCall(subjectKind?: string): boolean {
 
 /** The approval the engine opens to re-enable a stopped estate (dual control). */
 const REENABLE_ACTION = 'security.killswitch.reenable'
-
-/** A translated sentence whose `backticked` parts are commands: each becomes the inline
- * command chip, the rest stays text. */
-function withInlineCommands(text: string): ReactNode[] {
-  return text
-    .split(/`([^`]+)`/)
-    .map((part, i) =>
-      i % 2 === 1 ? <CodeLine key={i} command={part} inline /> : part,
-    )
-}
 
 export interface ApprovalDetailSheetProps {
   approvalId: string | null

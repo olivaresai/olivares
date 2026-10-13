@@ -122,13 +122,20 @@ func (h *harness) adminLogin() string {
 	return r.body["token"].(string)
 }
 
-func (h *harness) createOrg(token, slug string) model.TenantID {
+func (h *harness) createOrg(_ string, slug string) model.TenantID {
 	h.t.Helper()
-	r := h.post("/v1/system/orgs", token, map[string]any{"name": slug, "slug": slug})
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create org = %d %s", r.code, r.raw)
+	// Seed the isolation fixture through the store; organization management is edition-specific.
+	ctx := context.Background()
+	var org model.Org
+	err := h.st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+		return err
+	})
+	if err != nil {
+		h.t.Fatalf("seed organization %s: %v", slug, err)
 	}
-	return model.TenantID(r.body["tenant_id"].(string))
+	return org.TenantID
 }
 
 func (h *harness) viewerToken(admin string, tenant model.TenantID, email string) string {
@@ -237,6 +244,65 @@ func TestAPI_GraphDriftPrivilegedAuditedIsolated(t *testing.T) {
 	// Unauthenticated is rejected by the wrapping middleware.
 	if r := h.do("GET", "/v1/m/accessmap/graph", "", tenantHdr(tenantA)); r.code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated = %d, want 401", r.code)
+	}
+}
+
+// Neighbors and the attack-path analyses are the same privileged recon read as the
+// graph: refused to a viewer, served to an editor, refused without a credential, and
+// the required query parameters answer 400 rather than an empty success.
+func TestAPI_NeighborsAndAttackPathsPrivilegedAndAudited(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	if _, err := h.m.Ingest(context.Background(), tenant.String(), obs("agent", "agent-1", "postgres.table", "appdb.public.customers", sdkmodel.ModeRead, sdkmodel.SignalPGAudit, sdkmodel.ConfidenceAttributed)); err != nil {
+		t.Fatalf("seed ingest: %v", err)
+	}
+	viewer := h.viewerToken(admin, tenant, "v@acme.com")
+	editor := h.editorToken(admin, tenant, "e@acme.com")
+
+	g := h.do("GET", "/v1/m/accessmap/graph", editor, tenantHdr(tenant))
+	nodes, _ := g.body["nodes"].([]any)
+	if g.code != http.StatusOK || len(nodes) == 0 {
+		t.Fatalf("seed graph = %d %s", g.code, g.raw)
+	}
+	nodeID, _ := nodes[0].(map[string]any)["id"].(string)
+
+	readPaths := []string{
+		"/v1/m/accessmap/neighbors?id=" + nodeID,
+		"/v1/m/accessmap/attack-paths/summary",
+		"/v1/m/accessmap/attack-paths/reachability?agent_id=" + nodeID,
+		"/v1/m/accessmap/attack-paths/escalation?agent_id=" + nodeID,
+		"/v1/m/accessmap/attack-paths/exfil?resource_id=" + nodeID,
+	}
+	for _, path := range readPaths {
+		if r := h.do("GET", path, viewer, tenantHdr(tenant)); r.code != http.StatusForbidden {
+			t.Errorf("viewer GET %s = %d, want 403 (privileged recon read)", path, r.code)
+		}
+		if r := h.do("GET", path, "", tenantHdr(tenant)); r.code != http.StatusUnauthorized {
+			t.Errorf("unauthenticated GET %s = %d, want 401", path, r.code)
+		}
+	}
+
+	before := h.auditCount(tenant)
+	n := h.do("GET", "/v1/m/accessmap/neighbors?id="+nodeID, editor, tenantHdr(tenant))
+	if edges, _ := n.body["edges"].([]any); n.code != http.StatusOK || len(edges) == 0 {
+		t.Fatalf("editor neighbors = %d %s, want 200 with the seeded edge", n.code, n.raw)
+	}
+	if s := h.do("GET", "/v1/m/accessmap/attack-paths/summary", editor, tenantHdr(tenant)); s.code != http.StatusOK {
+		t.Fatalf("editor attack-paths summary = %d %s, want 200", s.code, s.raw)
+	}
+	if after := h.auditCount(tenant); after < before+2 {
+		t.Errorf("neighbors and summary reads did not self-audit: before=%d after=%d", before, after)
+	}
+	for _, path := range []string{
+		"/v1/m/accessmap/neighbors",
+		"/v1/m/accessmap/attack-paths/reachability",
+		"/v1/m/accessmap/attack-paths/escalation",
+		"/v1/m/accessmap/attack-paths/exfil",
+	} {
+		if r := h.do("GET", path, editor, tenantHdr(tenant)); r.code != http.StatusBadRequest {
+			t.Errorf("editor GET %s without its parameter = %d, want 400", path, r.code)
+		}
 	}
 }
 

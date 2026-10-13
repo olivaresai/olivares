@@ -280,6 +280,7 @@
     "matchActionHint": "留空 = 匹配任意操作。",
     "matchSubjectKind": "匹配对象类别",
     "matchSubjectKindHint": "留空 = 匹配任意对象类别。",
+    "needsBusiness": "将风险等级降到该操作的默认值以下需要 Business。关闭此策略即可保留已保存的内容。",
     "create": "创建策略",
     "save": "保存更改",
     "confirmCreateBody": "已启用的 ABAC 策略会立即进一步限制访问；已启用的审批策略会开始对匹配的操作要求人工审批。立即生效。",
@@ -313,15 +314,6 @@
     "principalTypeNhi": "NHI",
     "principalTypeUnknown": "未知"
   },
-  "resync": {
-    "title": "重新同步身份名册？",
-    "body": "此操作会从配置的目录来源协调此租户的每个身份和组。记录在审计轨迹中。",
-    "confirm": "重新同步",
-    "done": "名册已协调",
-    "result": "来源 {{sources}} 个 · 身份 {{identities}} 个 · 组 {{collections}} 个 · 成员关系 {{memberships}} 个。",
-    "partial": "{{failed}} 个来源未响应并被跳过：{{providers}}。上述计数仅涵盖已响应的来源。",
-    "noProviders": "此租户未配置任何身份提供方 —— 未协调任何内容。"
-  },
   "groups": {
     "title": "组",
     "caption": "从目录来源镜像而来、经协调的集合（组、角色、策略）。",
@@ -346,7 +338,8 @@
     "kindIdentity": "身份",
     "kindCollection": "集合",
     "empty": "暂无成员",
-    "emptyHint": "属于该组的主体会列在这里。先添加一名成员。"
+    "emptyHint": "属于该组的主体会列在这里。先添加一名成员。",
+    "truncated": "部分嵌套组超过了遍历深度上限，该深度以下的成员未列出。"
   },
   "bindings": {
     "title": "智能体绑定",
@@ -591,12 +584,12 @@
       "description": "将智能体绑定到现有或新建的 NHI，以便在访问映射中将其操作归因于该身份。"
     },
     "group": {
-      "title": "尚未协调目录组",
-      "description": "配置目录来源后，重新同步名册，以协调组、角色、策略和成员关系。"
+      "title": "尚无组",
+      "description": "当目录来源报告组时，组会显示在这里。"
     },
     "identity": {
-      "title": "尚未协调身份",
-      "description": "配置目录来源后，重新同步名册，以协调此租户的人类与非人类身份。"
+      "title": "尚无身份",
+      "description": "当代理访问资源，或您将代理绑定到某个身份时，身份会显示在这里。"
     },
     "policies": {
       "title": "暂无规则",
@@ -663,45 +656,6 @@
     "pageTitle": "AgentCore 导出",
     "emptyAction": "计算首个方案"
   },
-  "registerAgent": {
-    "action": "注册代理",
-    "title": "注册代理身份",
-    "body": "创建一条受治理的生命周期记录——若身份已存在，则将其提升。",
-    "identityRef": "代理身份",
-    "identityRefHint": "身份在登记表中的引用。",
-    "sponsorRef": "担保人",
-    "sponsorRefHint": "必填。必须是登记表中已存在的「人类」身份——其他一律被引擎拒绝。",
-    "source": "来源",
-    "criticality": "关键程度",
-    "noCriticality": "未设置",
-    "submit": "注册",
-    "created": "代理身份已注册",
-    "promoted": "已将现有身份提升为代理",
-    "crit": {
-      "low": "低",
-      "medium": "中",
-      "high": "高",
-      "critical": "严重"
-    }
-  },
-  "emerging": {
-    "tab": "新兴标准",
-    "title": "新兴的代理身份标准",
-    "description": "一个「设计方向」登记表：我们跟踪什么、它会接入哪里，以及为什么尚未实现。",
-    "noAccess": "你没有访问身份登记表的权限。",
-    "noAccessHint": "此面板跟踪平台正在对齐的各项标准。请向管理员申请身份注册表读取权限。",
-    "empty": "没有跟踪任何内容",
-    "emptyHint": "平台正在对齐的标准及其状态会显示在这里。目前尚未跟踪任何标准。",
-    "verifiedAt": "修订版本于 {{month}} 对照一手来源核对。它们会变动——请当作日期，而非保证。",
-    "spec": "规范",
-    "revision": "修订版本",
-    "seam": "将接入于",
-    "authority": "一手来源",
-    "status": {
-      "draft": "草案——不要写死",
-      "stable": "稳定——接缝可以指向它"
-    }
-  },
   "preview": {
     "title": "将要运行的内容",
     "session": "会话",
@@ -723,5 +677,8 @@
     "member": "成员",
     "apiToken": "API 令牌",
     "requestSummary": "请求"
+  },
+  "list": {
+    "loadedOnly": "搜索仅涵盖已加载的行；请继续加载更多。"
   }
 }

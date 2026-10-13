@@ -79,6 +79,41 @@ func TestSkillsCLIImportDefaultsAndRefusal(t *testing.T) {
 	}
 }
 
+func TestSkillsCLIBuiltinInstallAndBrowse(t *testing.T) {
+	prepareDatalaneCLITest(t)
+	rec := newDatalaneRecorder(t, http.StatusCreated, `{"state":"catalog_published"}`)
+	if _, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "install", "--builtin", "ecc-security", "--idempotency-key", "builtin-retry")...); err != nil {
+		t.Fatal(err)
+	}
+	body := rec.jsonBody(t)
+	source := body["source"].(map[string]any)
+	if body["name"] != "ecc-security" || source["kind"] != "builtin" || source["ref"] != "ecc-security" || rec.last(t).Header.Get("Idempotency-Key") != "builtin-retry" {
+		t.Fatalf("builtin import: %v", body)
+	}
+	before := rec.count()
+	for _, args := range [][]string{
+		{"--builtin", "ecc-security", "--git", "https://example.test/a.git"},
+		{"--builtin", "ecc-security", "--ref", "main"},
+		{"--builtin", "ecc-security", "--subdir", "skills"},
+	} {
+		if _, _, err := execDatalane(t, "", datalaneArgs(rec, append([]string{"skills", "install"}, args...)...)...); exitcode.From(err) != exitcode.Usage {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	if rec.count() != before {
+		t.Fatal("ambiguous builtin source sent a request")
+	}
+	rec.respond = func(r datalaneRequest) (int, string) {
+		if r.Method != "GET" || r.Path != "/v1/m/skills/builtins" {
+			t.Errorf("browse: %s %s", r.Method, r.Path)
+		}
+		return http.StatusOK, `{"items":[{"id":"ecc-security","origin":"https://github.com/example/skills","resolved_commit":"abc"}],"has_more":false}`
+	}
+	if out, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "ls", "--builtin")...); err != nil || !strings.Contains(out, "ecc-security") {
+		t.Fatalf("builtin list: %s %v", out, err)
+	}
+}
+
 func TestSkillsCLIRemovalReadsCurrentVersion(t *testing.T) {
 	prepareDatalaneCLITest(t)
 	id := model.NewID().String()

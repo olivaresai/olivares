@@ -39,7 +39,7 @@ description: >-
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
-  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.1<!-- /release -->**，尚未发布。发布前请从源码构建。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.2<!-- /release -->**，尚未发布。发布前请从源码构建。
 
 ## 开放内核 —— 哪些开放、哪些属于商业版
 

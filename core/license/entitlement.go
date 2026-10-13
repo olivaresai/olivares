@@ -59,7 +59,7 @@ func (e *AddonRequiredError) Unwrap() error { return ErrAddonRequiresLicense }
 
 // AddonRequired builds the refusal. Its production callers are in the closed
 // build, by design: enterprise/addongate's NotEntitled.Unwrap and the
-// cmd-overlay enable-module refusal, both in olivares-enterprise. A sweep of
+// cmd-overlay enable-module refusal, both in the Business overlay. A sweep of
 // this repository alone finds no caller — the open tree maps the refusal
 // (core/api, the MCP gateway); it never raises one.
 func AddonRequired(addon, operation string) error {

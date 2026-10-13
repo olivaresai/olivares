@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,7 @@ const (
 
 // Engine orchestrates providers against a destination root.
 type Engine struct {
+	httpClient       *http.Client
 	catalog          *Catalog
 	capabilities     *CapabilityCatalog
 	installerVersion string
@@ -67,6 +69,7 @@ func (e *Engine) probeContext(ctx context.Context) context.Context {
 }
 
 type EngineOptions struct {
+	HTTPClient       *http.Client
 	InstallerVersion string
 	Now              func() time.Time
 	// Verified is the process's cache of verified releases; nil checks every read.
@@ -74,7 +77,7 @@ type EngineOptions struct {
 }
 
 func NewEngine(c *Catalog, o EngineOptions) *Engine {
-	e := &Engine{catalog: c, installerVersion: o.InstallerVersion, now: o.Now, verified: o.Verified}
+	e := &Engine{httpClient: o.HTTPClient, catalog: c, installerVersion: o.InstallerVersion, now: o.Now, verified: o.Verified}
 	if e.now == nil {
 		e.now = func() time.Time { return time.Now().UTC() }
 	}

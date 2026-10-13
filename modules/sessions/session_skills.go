@@ -8,12 +8,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/skills"
@@ -32,7 +34,8 @@ var pdeclSkillsSelection = func() *model.ColumnDecl {
 	return model.Nested(skills.Selection{}, model.ClassEvidence,
 		model.Leaf("digest", none), model.Leaf("members[].pack_id", none), model.Leaf("members[].pack_revision_id", none), model.Leaf("members[].manifest_digest", none),
 		model.Leaf("members[].name", text), model.Leaf("members[].directory", text), model.Leaf("members[].skill_digest", none), model.Leaf("members[].content_digest", none),
-		model.Leaf("members[].origins[].target_kind", none), model.Leaf("members[].origins[].target_id", none), model.Leaf("members[].origins[].assignment_id", none))
+		model.Leaf("members[].origins[].target_kind", none), model.Leaf("members[].origins[].target_id", none), model.Leaf("members[].origins[].assignment_id", none),
+		model.Leaf("members[].overrides[].target_kind", none), model.Leaf("members[].overrides[].target_id", none), model.Leaf("members[].overrides[].pack_id", none), model.Leaf("members[].overrides[].pack_revision_id", none))
 }()
 
 // UseSessionSkills wires native discovery without writing into account homes or
@@ -116,6 +119,22 @@ func (m *Module) RefuseReferencedSkillsPack(ctx context.Context, sc store.Scope,
 	})
 }
 
+// RunAssignmentTargets is the stored target tree of an admitted run, the one its
+// skills are pinned from, for other assignments (MCP servers) to read the same
+// tree. sc is the composition root's tenant scope; runRef comes from the run's
+// authenticated session credential, never from a caller.
+func (m *Module) RunAssignmentTargets(ctx context.Context, sc store.Scope, runRef string) ([]skills.StoredTarget, error) {
+	repo, err := sc.Ext(runKind)
+	if err != nil {
+		return nil, err
+	}
+	rec, err := findRunRec(ctx, repo, runRef)
+	if err != nil {
+		return nil, err
+	}
+	return m.runSkillsTargets(ctx, sc, rec)
+}
+
 func (m *Module) runSkillsTargets(ctx context.Context, sc store.Scope, rec model.Record) ([]skills.StoredTarget, error) {
 	var out []skills.StoredTarget
 	workspaceID := model.ID(rec.String(colRunAuthzWorkspaceID))
@@ -125,6 +144,13 @@ func (m *Module) runSkillsTargets(ctx context.Context, sc store.Scope, rec model
 			return nil, err
 		}
 		out = append(out, skills.StoredTarget{Target: skills.Target{Kind: "workspace", ID: workspaceID.String()}, Version: workspace.Version, WorkspaceID: workspaceID})
+	}
+	if folder := rec.String(colWorkspaceRef); folder != "" {
+		stored, err := m.ReadSkillsTarget(ctx, sc, "folder", folder, false)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, skills.StoredTarget{Target: skills.Target{Kind: "folder", ID: folder}, Version: stored.Version})
 	}
 	if template := rec.String(colTemplateID); template != "" {
 		stored, err := m.ReadSkillsTarget(ctx, sc, "template", template, false)
@@ -205,8 +231,13 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		return err
 	}
 	driver := rec.String(colRunProfileDriver)
-	if driver != providerDriverClaude && driver != providerDriverCodex {
-		return &runErr{503, "assigned skills require Claude Code or Codex native discovery"}
+	facts, known := driverfacts.Lookup(driver)
+	if !known || facts.SkillsDir == "" {
+		name := facts.Name
+		if !known {
+			name = driver
+		}
+		return &runErr{503, fmt.Sprintf("assigned skills cannot be delivered to %q: no documented native skills folder", name)}
 	}
 	if spec.Confinement == nil {
 		return &runErr{503, "assigned skills require filesystem confinement"}
@@ -247,13 +278,21 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		}
 	}()
 	home := filepath.Join(dir, "home")
-	folder := ".agents"
-	if driver == providerDriverClaude {
-		folder = ".claude"
-	}
-	native := filepath.Join(home, folder)
-	if err := os.MkdirAll(filepath.Join(native, "skills"), 0700); err != nil {
+	destination := filepath.Join(home, filepath.FromSlash(facts.SkillsDir))
+	native := filepath.Dir(destination)
+	if err := os.MkdirAll(destination, 0700); err != nil {
 		return err
+	}
+	if driver == providerDriverGemini {
+		// Gemini resolves both configuration and global skills from GEMINI_CLI_HOME.
+		// Keep the selected, already-validated configuration via a link, rather
+		// than copying credentials into the temporary discovery home.
+		if p.ProviderHome == nil || p.ProviderHome.ConfigHome == "" {
+			return errors.New("Gemini CLI skill delivery needs the selected configuration home")
+		}
+		if err := os.Symlink(p.ProviderHome.ConfigHome, filepath.Join(home, geminiConfigDirName)); err != nil {
+			return err
+		}
 	}
 	// HOME itself is read-only, so a child cannot replace its discovery directory.
 	// Writable caches are siblings; the account's configuration home keeps its
@@ -269,7 +308,7 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		if !fs.ValidPath(file.Path) || strings.Contains(file.Path, "\\") || file.Mode&0222 != 0 {
 			return errors.New("invalid verified skill file")
 		}
-		name := filepath.Join(native, "skills", filepath.FromSlash(file.Path))
+		name := filepath.Join(destination, filepath.FromSlash(file.Path))
 		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
 			return err
 		}
@@ -291,10 +330,10 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		if err := os.WriteFile(filepath.Join(native, ".claude-plugin", "plugin.json"), []byte(`{"name":"olivares"}`), 0444); err != nil {
 			return err
 		}
-		spec.Args = append(spec.Args, "--plugin-dir", filepath.Join(home, folder))
+		spec.Args = append(spec.Args, "--plugin-dir", native)
 	}
 	for i := range spec.Env {
-		if spec.Env[i].Name == envUserHome {
+		if spec.Env[i].Name == envUserHome || driver == providerDriverGemini && spec.Env[i].Name == facts.ConfigHomeEnv {
 			spec.Env[i].Value = home
 		}
 	}

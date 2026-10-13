@@ -53,10 +53,6 @@ describe('groupOf — membership is a field the engine sent', () => {
     ['the engine says it is working now', row({ cc_state: 'active' })],
     ['a run holds a live process', row(undefined, { state: 'running' })],
     ['a run is pending', row(undefined, { state: 'pending' })],
-    // `idle` on a RUN means the process is alive and quiet; on the observed half it
-    // means quiet within tolerance. The two vocabularies share a word and mean
-    // different things, and the rail follows the run: there is a process.
-    ['a run is idle but alive', row(undefined, { state: 'idle' })],
   ])('puts it under Working when %s', (_why, s) => {
     expect(groupOf(s)).toBe('active')
   })
@@ -87,6 +83,17 @@ describe('groupOf — membership is a field the engine sent', () => {
   it.each<[string, UnifiedSession]>([
     ['it ended', row({ cc_state: 'ended' })],
     ['it is quiet within tolerance', row({ cc_state: 'idle' })],
+    // A run the engine reports `idle` has answered its turn and waits for the person
+    // (#1785): not working, whatever its process is doing. The observed half files the
+    // same word the same way, one row above.
+    ['its run answered and waits for input', row(undefined, { state: 'idle' })],
+    [
+      'its run waits for input while the observed row still says active',
+      row(
+        { session_ref: 'sess-1', cc_state: 'active' },
+        { claude_session_id: 'sess-1', state: 'idle' },
+      ),
+    ],
     ['its run stopped', row(undefined, { state: 'stopped' })],
     ['its run was cleaned', row(undefined, { state: 'cleaned' })],
     // Root 19:15Z: a failed run is not waiting for anyone; the sidebar says Earlier.

@@ -78,22 +78,8 @@ func bootIncomingHandoffHTTPEstate(
 	admin := communicationHTTPTestDecode[struct {
 		Token string `json:"token"`
 	}](t, login)
-	createdOrg := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-		admin.Token, "", map[string]any{"name": "K3 handoff read", "slug": "k3-handoff-read"}, nil)
-	if createdOrg.status != http.StatusCreated {
-		t.Fatalf("create tenant = %d: %s", createdOrg.status, createdOrg.raw)
-	}
-	org := communicationHTTPTestDecode[struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}](t, createdOrg)
-	createdOther := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-		admin.Token, "", map[string]any{"name": "K3 handoff other", "slug": "k3-handoff-other"}, nil)
-	if createdOther.status != http.StatusCreated {
-		t.Fatalf("create other tenant = %d: %s", createdOther.status, createdOther.raw)
-	}
-	other := communicationHTTPTestDecode[struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}](t, createdOther)
+	org := createOrganizationFixture(t, eng.store, "K3 handoff read", "k3-handoff-read")
+	other := createOrganizationFixture(t, eng.store, "K3 handoff other", "k3-handoff-other")
 
 	owner := createCommunicationHTTPTestUser(
 		t, eng, admin.Token, org.TenantID, "owner@k3-handoff-read.test", auth.RoleOwner)
@@ -181,14 +167,6 @@ func createIncomingHandoffHTTPAgent(
 		t.Fatalf("materialize sponsor roster identity: %v", err)
 	}
 	agentRef := "agent:k3-handoff-read"
-	registered := communicationHTTPTestRequest(t, eng, http.MethodPost,
-		"/v1/m/governance/agents", estate.owner.token, estate.tenant, map[string]any{
-			"identity_ref": agentRef, "source": "test-roster",
-			"sponsor_ref": sponsorRef, "criticality": "medium",
-		}, nil)
-	if registered.status != http.StatusCreated {
-		t.Fatalf("register agent lifecycle = %d: %s", registered.status, registered.raw)
-	}
 	created := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/agents",
 		estate.owner.token, estate.tenant, map[string]any{
 			"name": "K3 handoff read agent", "kind": "api", "external_id": agentRef,
@@ -200,20 +178,9 @@ func createIncomingHandoffHTTPAgent(
 	createdAgent := communicationHTTPTestDecode[struct {
 		ID model.ID `json:"id"`
 	}](t, created)
-	bound := communicationHTTPTestRequest(t, eng, http.MethodPost,
-		"/v1/m/governance/agents/"+createdAgent.ID.String()+"/identity",
-		estate.owner.token, estate.tenant, map[string]any{"identity_ref": agentRef}, nil)
-	if bound.status != http.StatusOK {
-		t.Fatalf("bind agent identity = %d: %s", bound.status, bound.raw)
-	}
-	boundBody := communicationHTTPTestDecode[struct {
-		IdentityID model.ID `json:"identity_id"`
-	}](t, bound)
-	if boundBody.IdentityID.IsZero() {
-		t.Fatal("bound agent identity is empty")
-	}
+	identityID := seedCommunicationAgentIdentity(t, eng, estate.tenant, createdAgent.ID, estate.owner.id, agentRef, sponsorRef)
 	return communicationHTTPTestAgent{
-		identityID: boundBody.IdentityID, externalID: agentRef,
+		identityID: identityID, externalID: agentRef,
 		token: exchangeCommunicationHTTPTestAgentToken(t, eng, estate.owner.token, agentRef),
 	}
 }

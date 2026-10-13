@@ -9,8 +9,13 @@ Its descriptor is `olivares.identity-console`; its selectable name and API
 namespace are `identity`. Sharing the governance package does not make it the
 same module as governance.
 
-The module serves the workload identity federation (WIF) graph, SSO posture,
-external-key posture and workspace residency at `/v1/m/identity/`. The WIF graph
+Community serves local SSO posture at `/v1/m/identity/sso`. Workload identity
+federation (WIF), managed identity lifecycle, external-key posture
+and workspace residency require the Business/Enterprise identity add-on. Their
+published routes remain available as HTTP `501` seams in Community, and the
+console hides their views. Selecting `identity` does not install an add-on.
+
+In Business/Enterprise, the WIF graph
 distinguishes declared configuration from observed configuration when a live
 source is available. Certificate presence is a boolean; the response does not
 expose certificate bodies, provider keys or identity tokens.
@@ -25,9 +30,11 @@ Use **Edition & modules** in the console, or the CLI:
 ```sh
 olivares modules ls
 olivares modules on identity
-olivares identity wif
 olivares modules off identity
 ```
 
-Identity lifecycle and authorization remain governance capabilities. See the
+Managed identity lifecycle and directory authorization are Business governance
+capabilities. See the
 [CLI reference](/reference/cli/#command-olivares-identity) for the posture commands.
+
+With the Business identity add-on, `olivares identity wif` reads the federation graph.

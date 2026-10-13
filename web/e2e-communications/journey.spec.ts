@@ -970,9 +970,8 @@ test('B (read only) sees the channel without a write bit and cannot compose; C (
 })
 
 // ─── workspace and tenant changes ────────────────────────────────────────────────
-test('changing the workspace or the tenant ends the previous scope: no rows survive, and no K3 request is made without a workspace', async ({
+test('changing the workspace ends the previous scope: no rows survive, and no K3 request is made without a workspace', async ({
   browser,
-  request,
 }) => {
   const b = await (await browser.newContext()).newPage()
   await uiLogin(b, B_EMAIL, MEMBER_PASSWORD)
@@ -1003,70 +1002,6 @@ test('changing the workspace or the tenant ends the previous scope: no rows surv
     b.getByRole('row').filter({ hasText: `Deploy window ${STAMP}` }),
   ).toHaveCount(1)
   await b.context().close()
-
-  // A second tenant for A: switching to it drops the workspace and makes NO K3 request.
-  const org = await api(request, tokenAdmin, 'POST', '/v1/system/orgs', {
-    name: `K3 other ${STAMP}`,
-    slug: `k3-other-${STAMP}`,
-  })
-  expect(org.status).toBe(201)
-  const otherTenant = (org.json as { tenant_id: string }).tenant_id
-  const member = await api(request, tokenAdmin, 'POST', '/v1/memberships', {
-    user_id: userA,
-    tenant: otherTenant,
-    role: 'owner',
-  })
-  expect(member.status).toBe(201)
-  const a = await (await browser.newContext()).newPage()
-  await uiLogin(a, A_EMAIL, MEMBER_PASSWORD)
-  await a.goto('/communications')
-  await selectWorkspace(a, 'Billing')
-  await expect(a.getByRole('row').filter({ hasText: channelSlug })).toHaveCount(
-    1,
-  )
-  const otherRequests: string[] = []
-  a.on('request', (r) => {
-    if (
-      r.url().includes('/v1/m/sessions/') &&
-      (r.headers()['x-olivares-tenant'] ?? '') === otherTenant
-    )
-      otherRequests.push(r.url())
-  })
-  // A member's tenant switcher labels each tenant by its short id and the role held
-  // there (tenant-switcher.tsx shortId): the trigger shows the active one.
-  await a
-    .getByRole('button', { name: new RegExp(TENANT.slice(0, 8)) })
-    .first()
-    .click()
-  // Two tenants minted in the same run can share the same 8-character prefix (UUID
-  // v7 is time-ordered; measured in run 16), so the label alone is ambiguous: the
-  // active tenant is the one carrying the check icon, the target is the other.
-  const candidates = a.getByRole('menuitem', {
-    name: new RegExp(otherTenant.slice(0, 8)),
-  })
-  await expect(candidates.first()).toBeVisible()
-  let switched = false
-  for (let i = 0; i < (await candidates.count()); i++) {
-    const item = candidates.nth(i)
-    if ((await item.locator('svg').count()) === 0) {
-      await item.click()
-      switched = true
-      break
-    }
-  }
-  expect(switched, 'a non-active tenant entry was offered').toBe(true)
-  await expect(a.getByText('Select a workspace')).toBeVisible()
-  await expect(a.getByRole('row').filter({ hasText: channelSlug })).toHaveCount(
-    0,
-  )
-  await a.waitForTimeout(500)
-  expect(otherRequests).toEqual([])
-  await shot(a, '20-a-tenant-switch-no-workspace')
-  evidence.tenantSwitch = {
-    other_tenant: otherTenant,
-    k3_requests_under_other_tenant: otherRequests.length,
-  }
-  await a.context().close()
 })
 
 // ─── revocation ──────────────────────────────────────────────────────────────────

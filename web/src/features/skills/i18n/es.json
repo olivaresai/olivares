@@ -10,7 +10,7 @@
     "retired": "Retirado",
     "search": "Buscar paquetes",
     "emptyTitle": "No hay paquetes de skills instalados",
-    "emptyDescription": "Instala un paquete con olivares skills install; después aparece aquí para asignarlo.",
+    "emptyDescription": "Elige un paquete incluido o instálalo desde Git arriba; abre un paquete para gestionar sus asignaciones.",
     "truncated": "Se muestran los primeros {{n}} paquetes",
     "truncatedHint": "Usa olivares skills ls --cursor para listar el resto."
   },
@@ -18,14 +18,16 @@
     "skills": "Skills de este paquete",
     "revisions": "Revisiones",
     "revision": "revisión {{n}}",
-    "revisionLine": "Revisión {{n}} desde {{source}}"
+    "revisionLine": "Revisión {{n}} desde {{source}}",
+    "activeContent": "actúa al cargarse: {{items}}"
   },
   "kind": {
     "workspace": "Departamento",
     "agent_group": "Grupo de agentes",
     "agent": "Agente",
     "template": "Plantilla",
-    "session": "Sesión"
+    "session": "Sesión",
+    "folder": "Carpeta"
   },
   "uses": {
     "title": "Asignado a",
@@ -36,7 +38,13 @@
     "confirmDescription": "Las sesiones nuevas de {{target}} dejan de recibir estas skills. Las conversaciones registradas conservan su instantánea.",
     "truncated": "Se muestran las primeras {{n}} asignaciones",
     "truncatedHint": "Usa olivares skills assignments --pack con --cursor para listar el resto.",
-    "unassignFrom": "Desasignar de {{target}}"
+    "unassignFrom": "Desasignar de {{target}}",
+    "useLatest": "Usar la última",
+    "useLatestFor": "Usar la última: {{target}}",
+    "moved": "Asignación movida a la última revisión",
+    "approveTitle": "¿Aprobar skills que actúan al cargarse?",
+    "approveDescription": "La última revisión asigna a {{target}} skills sobre las que su herramienta actúa sin preguntar: {{skills}}. Apruébalas solo después de revisarlas.",
+    "approve": "Aprobar y usar la última"
   },
   "assign": {
     "title": "Asignar",
@@ -47,6 +55,51 @@
     "noTargets": "No hay destinos de este tipo que puedas leer.",
     "submit": "Asignar",
     "done": "Paquete de skills asignado",
-    "directoryFailed": "No se pudieron cargar los destinos. Cierra y vuelve a abrir el paquete para reintentarlo."
+    "directoryFailed": "No se pudieron cargar los destinos. Cierra y vuelve a abrir el paquete para reintentarlo.",
+    "approve": "He revisado estas skills y apruebo que su herramienta actúe sobre ellas al cargarse: {{skills}}"
+  },
+  "install": {
+    "title": "Instalar un paquete de skills",
+    "workspace": "Espacio de trabajo",
+    "workspaceHint": "Instala en el catálogo o asigna también la revisión al espacio de trabajo.",
+    "catalogOnly": "Solo catálogo",
+    "assigned": "Paquete instalado y asignado",
+    "done": "Paquete instalado",
+    "assignmentFailed": "Paquete instalado; falló la asignación: {{reason}}",
+    "failed": "Error de instalación: {{reason}}",
+    "unavailable": "Servicio no disponible",
+    "retryAssignment": "Reintentar asignación",
+    "retry": "Reintentar instalación",
+    "builtins": "Paquetes incluidos",
+    "loading": "Cargando paquetes incluidos…",
+    "pack": "Instalar {{name}}",
+    "inCatalog": "En el catálogo",
+    "submit": "Instalar",
+    "git": "Desde Git",
+    "gitURL": "URL de Git",
+    "ref": "Referencia de Git",
+    "subdir": "Subdirectorio",
+    "gitSubmit": "Instalar desde Git",
+    "name": "Nombre del paquete",
+    "nameHint": "Opcional; usa el nombre del repositorio por defecto. Elige otro nombre para un paquete del mismo repositorio.",
+    "held": "Paquete instalado. Contiene skills que actúan al cargarse, así que no se asignó: revísalo y asígnalo desde su hoja."
+  },
+  "update": {
+    "title": "Actualizaciones",
+    "check": "Buscar actualización",
+    "checking": "Comprobando…",
+    "current": "Al día en la revisión {{n}}.",
+    "availableToast": "Hay una actualización disponible",
+    "available": "Hay una actualización disponible sobre la revisión {{n}}.",
+    "summary": "{{added}} añadidas, {{changed}} modificadas, {{removed}} eliminadas; difieren {{files}} archivos.",
+    "change": {
+      "added": "añadida",
+      "changed": "modificada",
+      "removed": "eliminada"
+    },
+    "acts": "{{skill}} ahora actúa al cargarse: {{items}}. Asignarla requiere tu aprobación.",
+    "pinsKeep": "Las asignaciones existentes conservan su revisión hasta que muevas cada una con «Usar la última».",
+    "apply": "Aplicar esta actualización",
+    "applied": "Actualización publicada como revisión {{n}}"
   }
 }

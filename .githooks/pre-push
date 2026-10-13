@@ -12,6 +12,9 @@
 #   SPDX       the changed files                       (scripts/check-spdx.sh)
 #   bundle     no generated console output in the push (scripts/check-web-bundle-freshness.sh)
 #   boundary   when Go code or modules changed         (task lint:boundary)
+#   migrations when Go code or a migration changed     (scripts/check-migrations.sh against main's merge base)
+#   release    when the release export, its scrubber or its exporter changed
+#              (task lint:export-release, hub-only: NOT APPLICABLE in the public tree)
 #   go vet     the touched packages, tests included    (scripts/changed-go-packages.sh)
 #   identity   the pushed commits' ident and trailers  (task lint:commit-identity, hub-only:
 #              the leg answers NOT APPLICABLE in the public tree)
@@ -19,8 +22,8 @@
 # in a temporary checkout.
 # The checks are this checkout's scripts and gitleaks config, run on the pushed tree, so a ref
 # whose tree lacks or predates them (a status board, an old branch) is checked all the same.
-# The boundary task is the exception: it is the pushed tree's own, and runs only when that
-# tree changed Go code.
+# The boundary task and the migration gate are the exception: each is the pushed tree's own,
+# and runs only when that tree changed Go code (the gate also for a migration file).
 set -euo pipefail
 EMPTY_TREE=4b825dc642cb6eb9a060e54bf8d69288fbee4904 # git's empty tree: a base when no remote holds any of the push
 PRE_PUSH_TREE=""
@@ -120,6 +123,21 @@ check() {
 	sh "$TOP/scripts/check-spdx.sh" --files "${files[@]}"
 	if grep -Eq '\.go$|(^|/)go\.(mod|sum|work)$' <<<"$changed"; then
 		task lint:boundary
+	fi
+	# Migration history is immutable against the merge base with main, as in pr-lint, which
+	# answers the same question after the push and only where the repository opts in to pr-ci:
+	# a Go edit that moved a hash (#1909) reached main before anything read it. The baseline is
+	# the gate's own default, not the remote's newest commit: a migration this branch added in
+	# an earlier push may still be edited until it merges.
+	if grep -Eq '\.go$|(^|/)migrations/.*\.sql$' <<<"$changed"; then
+		if [ -f scripts/check-migrations.sh ]; then
+			bash scripts/check-migrations.sh
+		else
+			echo "pre-push: migration hashes NOT CHECKED: this tree has no scripts/check-migrations.sh" >&2
+		fi
+	fi
+	if grep -Eq '^scripts/(release/|export-scrub/|export-public\.sh$)' <<<"$changed"; then
+		task lint:export-release
 	fi
 	touched="$(bash "$TOP/scripts/changed-go-packages.sh" "$base" "$head")"
 	[ -n "$touched" ] || return 0

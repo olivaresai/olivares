@@ -835,7 +835,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 
 	v1.Route("/agents", func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.tenantRoute("agent:read"), s.handleListAgents)
-		coreRoute(r, "POST", "/", s.tenantRoute("agent:write"), s.handleCreateAgent)
+		coreRoute(r, "POST", "/", s.collectionRoute("agent:write", CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"}), s.handleCreateAgent)
 		coreRoute(r, "GET", "/{id}", s.entityRoute("agent:read", "", "id"), s.handleGetAgent)
 		coreRoute(r, "PATCH", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleUpdateAgent)
 		coreRoute(r, "DELETE", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleDeleteAgent)
@@ -862,7 +862,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	})
 	v1.Route("/agent-groups", func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.tenantRoute("agent:read"), s.handleListAgentGroups)
-		coreRoute(r, "POST", "/", s.tenantRoute("agent:write"), s.handleCreateAgentGroup)
+		coreRoute(r, "POST", "/", s.collectionRoute("agent:write", CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"}), s.handleCreateAgentGroup)
 		coreRoute(r, "GET", "/{id}", s.entityRoute("agent:read", "agent_group", "id"), s.handleGetAgentGroup)
 		coreRoute(r, "PATCH", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleUpdateAgentGroup)
 		coreRoute(r, "DELETE", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleDeleteAgentGroup)
@@ -1370,7 +1370,7 @@ type chiRegistrar struct {
 // a value, so the declaration cannot leak onto any other route mounted through the
 // same seam — the identical argument withResponseHeaders makes.
 func (cr chiRegistrar) WithCollectionScope(scope CollectionScopeRef) RouteRegistrar {
-	if scope.WorkspaceQueryParam == "" {
+	if scope.WorkspaceQueryParam == "" && scope.WorkspaceBodyField == "" {
 		// A declaration with no selector names nothing to corroborate. Returning the
 		// registrar unchanged keeps the route mounting exactly as it always did, which
 		// is the direction that authorizes LESS.
@@ -1729,6 +1729,10 @@ type restoredRequestBody struct {
 // The body is restored before returning on every path. The max+1 probe both
 // proves the limit and avoids buffering an unbounded unauthenticated request.
 func bodyEntityID(r *http.Request, field string) (string, error) {
+	return bodyEntityString(r, field, false)
+}
+
+func bodyEntityString(r *http.Request, field string, optional bool) (string, error) {
 	if r.Body == nil {
 		return "", fmt.Errorf("%w: entity body is absent", errBadRequest)
 	}
@@ -1800,7 +1804,7 @@ func bodyEntityID(r *http.Request, field string) (string, error) {
 	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return "", fmt.Errorf("%w: entity body has trailing data", errBadRequest)
 	}
-	if !found || id == "" {
+	if (!found || id == "") && !optional {
 		return "", fmt.Errorf("%w: entity body field is absent", errBadRequest)
 	}
 	return id, nil

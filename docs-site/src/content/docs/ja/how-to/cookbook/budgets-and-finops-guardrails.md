@@ -8,7 +8,7 @@ sidebar:
   order: 2
 ---
 
-FinOps の予算と支出分析は **[Business](https://olivares.ai/pricing)** の機能です。Community はセッションごとのコスト追跡とデータのエクスポートを提供します。<!-- release -->0.1<!-- /release --> より前に保存された予算は引き続き参照・削除でき、FinOps モジュールが有効な間は適用されます。Community では予算の作成・変更はできません。評価とサンドボックスは Community に残ります。
+FinOps の予算と支出分析は **[Business](https://olivares.ai/pricing)** の機能です。Community はセッションごとのコスト追跡とデータのエクスポートを提供します。<!-- release -->0.2<!-- /release --> より前に保存された予算は引き続き参照・削除でき、FinOps モジュールが有効な間は適用されます。Community では予算の作成・変更はできません。評価とサンドボックスは Community に残ります。
 
 
 **目標:** 「このチームのエージェントは月 $500 で支出を止める」——一度宣言すれば

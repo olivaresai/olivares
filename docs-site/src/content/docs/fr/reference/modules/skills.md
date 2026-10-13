@@ -15,6 +15,21 @@ qu'une cible (un agent, un groupe, un workspace) peut utiliser est une
 **affectation** qui épingle une révision du pack, et chaque pin est écrit dans le
 registre d'audit (`skills.assignment.pin`).
 
+
+**Activé par défaut** sur les nouvelles installations, Skills reste facultatif et ne nécessite aucun autre module. Les mises à niveau conservent la sélection enregistrée. Dans **Skills** (`/skills`), parcourez les packs intégrés et installez avec une affectation facultative à un espace de travail, ou choisissez **Depuis Git**. La CLI utilise la même importation immuable validée par empreinte :
+
+```sh
+olivares skills ls --builtin
+olivares skills install --builtin ecc-security
+olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
+olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills update <pack-id>                       # read the recorded source again and review the diff
+olivares skills update <pack-id> --apply --expected-digest <digest>
+olivares skills pin <pack-id> [--revision <older-revision-id>]
+olivares skills enable tdd-workflow code-review --folder <folder-ref>
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
+```
+
 ## Ce qu'il livre
 
 - **Le catalogue.** Packs installés sous `/v1/m/skills/packs`, chaque révision
@@ -26,9 +41,7 @@ registre d'audit (`skills.assignment.pin`).
   comme une archive téléversée. Rien de tout cela ne s'exécute à l'installation.
 - **Les affectations.** `GET/POST /v1/m/skills/assignments` et
   `PUT/DELETE /v1/m/skills/assignments/{id}` épingle une révision sur une cible, dans
-  le périmètre du workspace actif. Deux skills affectées avec le même nom et un
-  contenu différent sont refusées avant le démarrage d'une session, pour que chaque
-  lancement soit déterministe.
+  le périmètre du workspace actif. Deux cibles du même type qui épinglent un contenu différent sous un même nom de skill sont refusées avant le démarrage d'une session ; une cible plus spécifique (dossier, modèle, agent, session) remplace la skill du même nom d'une cible plus large, de sorte qu'un projet remplace un pack générique sans le modifier.
 - **Import Git.** Un importateur à périmètre opérateur peut récupérer un pack de
   skills depuis une source Git sous une politique épinglée ; l'import atterrit dans le
   catalogue comme une autre révision immuable, pas comme un checkout vivant que le

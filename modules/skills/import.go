@@ -31,6 +31,13 @@ import (
 )
 
 const (
+	// maxActiveItems bounds what one member lists as active content.
+	maxActiveItems = 16
+	// activeRules versions the rules that decide what is active content. A revision
+	// records the version it was derived under; pinning re-derives the ones that
+	// predate it from their own bytes. Raise it when the rules change.
+	activeRules = 1
+
 	MaxSourceBytes     = 32 << 20
 	MaxExpandedBytes   = 64 << 20
 	MaxFileBytes       = 8 << 20
@@ -64,6 +71,9 @@ func refuse(code, detail string) error {
 		"source_unavailable":           "The skills source could not be read. No revision was published.",
 		"target_authority_unavailable": "Skills target authority is unavailable. No assignment was changed.",
 		"skill_name_conflict":          "Two assigned skills use the same name with different content. Choose one revision before starting the session.",
+		"update_unsupported":           "This pack came from an uploaded archive or folder snapshot, which cannot be read again. Install the new version from the same kind of source.",
+		"up_to_date":                   "This pack already holds the source's current content. No revision was published.",
+		"active_content_unapproved":    "A selected skill runs hooks, interpolates shell output, pre-approves tools or carries a plugin or settings file. Review it with skills diff, then assign it again with approval.",
 	}
 	if len(detail) > 160 {
 		detail = detail[:160]
@@ -96,6 +106,28 @@ type Member struct {
 	ContentDigest string            `json:"content_digest"`
 	Extensions    []string          `json:"unsupported_extensions"`
 	Scripts       []string          `json:"scripts"`
+	// Active is ActiveContent(), filled when a revision is read for a client; it
+	// is never part of the stored revision.
+	Active []string `json:"active_content,omitempty"`
+}
+
+// ActiveContent lists what in a member a native tool acts on without asking:
+// hooks, a tool pre-approval (allowed-tools), a shell interpolation in the body,
+// and a plugin, settings or hooks file. Descriptive frontmatter keys and a
+// scripts/ folder are not listed: those only act when the model chooses to run
+// them through the session's own approvals.
+func (m Member) ActiveContent() []string {
+	var out []string
+	for _, e := range m.Extensions {
+		switch {
+		case e == "hooks", e == "allowed-tools", e == "dynamic-command-interpolation", strings.Contains(e, "/"), strings.HasSuffix(e, ".json"):
+			if len(out) == maxActiveItems {
+				return out // a long list is still a non-empty one: the member needs approval
+			}
+			out = append(out, printable(e))
+		}
+	}
+	return out
 }
 
 // ValidatedPack owns a bounded snapshot, independent of the source afterwards.
@@ -467,6 +499,29 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 	return p, nil
 }
 
+// interpolation matches the two forms Claude Code runs when a skill loads: !`cmd`
+// inline, where the bang starts a token and a command follows (so `vec!` and a code
+// span holding only `!` in prose are not one), the command spanning lines if it
+// does, and a fence opened with ```! wherever the line starts (a list item or a
+// quote included). It errs toward flagging: an approval is a click, a miss is code
+// the tool runs unasked.
+var interpolation = regexp.MustCompile("(?:^|[^A-Za-z0-9_`])!`[^`]+`|(?:```|~~~)[ \\t]*!")
+
+// printable bounds pack-supplied text that is listed, audited or printed: no
+// control characters, at most 120 runes.
+func printable(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	if r := []rune(s); len(r) > 120 {
+		s = string(r[:120])
+	}
+	return s
+}
+
 var portableName = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func parseSkill(dir string, b []byte) (Member, error) {
@@ -521,13 +576,13 @@ func parseSkill(dir string, b []byte) (Member, error) {
 				m.Metadata[v.Content[j].Value] = v.Content[j+1].Value
 			}
 		default:
-			m.Extensions = append(m.Extensions, k)
+			m.Extensions = append(m.Extensions, printable(k))
 		}
 	}
 	if !portableName.MatchString(m.Name) || len(m.Name) > 64 || m.Name != path.Base(dir) || strings.TrimSpace(m.Description) == "" || utf8.RuneCountInString(m.Description) > 1024 || utf8.RuneCountInString(m.Compatibility) > 500 {
 		return m, refuse("invalid_skill", "name/description/compatibility")
 	}
-	if strings.Contains(strings.Join(lines[end+1:], "\n"), "!`") {
+	if interpolation.MatchString(strings.Join(lines[end+1:], "\n")) {
 		m.Extensions = append(m.Extensions, "dynamic-command-interpolation")
 	}
 	return m, nil

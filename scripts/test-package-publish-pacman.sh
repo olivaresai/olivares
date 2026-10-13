@@ -115,7 +115,7 @@ FAKE
 cat >"$scratch/bin/wrangler" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${1:-}" == --version ]]; then printf '%s\n' 4.100.0; exit 0; fi
+if [[ "${1:-}" == --version ]]; then printf '%s\n' "$FAKE_WRANGLER_VERSION"; exit 0; fi
 [[ "${1:-}" == r2 && "${2:-}" == object ]] || exit 9
 verb="${3:-}"; ref="${4:-}"; shift 4
 [[ "$ref" != /* && "$ref" != *..* ]] || exit 9
@@ -144,6 +144,10 @@ delete) rm -f -- "$target" ;;
 esac
 FAKE
 chmod 0755 "$scratch/bin/repo-add" "$scratch/bin/wrangler"
+# The publisher runs the wrangler docs-site/package.json pins, so the fake reports that pin.
+FAKE_WRANGLER_VERSION="$(sed -nE 's/^[[:space:]]*"wrangler": "([0-9]+\.[0-9]+\.[0-9]+)",?$/\1/p' "$root/docs-site/package.json")"
+[[ "$FAKE_WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || could_not_look 'no exact wrangler pin in docs-site/package.json'
+export FAKE_WRANGLER_VERSION
 
 mkdir -p "$scratch/release"
 printf 'fixture Arch Linux package %s\n' "$version" >"$scratch/release/$pkg_name"

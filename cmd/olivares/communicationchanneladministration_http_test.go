@@ -68,14 +68,7 @@ func bootChannelAdministrationHTTPEstate(
 	}](t, login)
 	newOrg := func(name, slug string) model.TenantID {
 		t.Helper()
-		created := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-			admin.Token, "", map[string]any{"name": name, "slug": slug}, nil)
-		if created.status != http.StatusCreated {
-			t.Fatalf("create tenant %s = %d: %s", slug, created.status, created.raw)
-		}
-		return communicationHTTPTestDecode[struct {
-			TenantID model.TenantID `json:"tenant_id"`
-		}](t, created).TenantID
+		return createOrganizationFixture(t, eng.store, name, slug).TenantID
 	}
 	tenant := newOrg("K3 administration", "k3-administration")
 	other := newOrg("K3 administration other", "k3-administration-other")

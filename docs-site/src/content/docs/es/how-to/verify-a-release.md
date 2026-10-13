@@ -11,7 +11,7 @@ description: >-
 
 > Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
 
-La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+La próxima release es <!-- release -->`0.2`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
 
 Un control plane es un producto de seguridad, así que lo primero que deberías hacer con una
 release es **demostrar que es la que el proyecto publicó**. Las releases de Olivares AI incluyen
@@ -56,7 +56,7 @@ y luego verifica los bundles de SBOM y OpenVEX por archivo de las releases hasta
 /path/to/olivares/scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-/path/to/olivares/scripts/verify-release.sh --source-tag 0.1
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.2
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

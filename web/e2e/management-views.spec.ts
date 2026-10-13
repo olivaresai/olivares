@@ -22,7 +22,7 @@ const whoami = {
   actor: 'admin@olivares.ai',
   display_name: 'Admin',
   superadmin: true,
-  grants: [{ tenant: 't1', role: 'owner' }],
+  grants: [{ tenant: 't1', tenant_name: 'Acme Corp', role: 'owner' }],
 }
 
 const serverInfo = {
@@ -34,20 +34,6 @@ const serverInfo = {
 
 // One representative row per default tab (fields mirror each module's list DTO).
 const FIXTURES: Record<string, unknown> = {
-  // The shell's org switcher (superadmin) calls this — must be a valid envelope.
-  '/v1/system/orgs': {
-    items: [
-      {
-        id: 'o1',
-        tenant_id: 't1',
-        name: 'Acme Corp',
-        slug: 'acme',
-        status: 'active',
-        created_at: '2026-01-01T00:00:00Z',
-      },
-    ],
-    has_more: false,
-  },
   '/v1/m/capabilities/servers': {
     items: [
       {

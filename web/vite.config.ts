@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { gunzipSync } from 'node:zlib'
 import type { Plugin, ProxyOptions } from 'vite'
 // defineConfig from vitest/config augments Vite's config with the typed `test` field.
 import { defineConfig } from 'vitest/config'
@@ -46,10 +46,8 @@ const apiProxy: ProxyOptions = {
   },
 }
 
-// Dictation's speech model ships inside the binary, so the engine serves it from its own
-// origin and the browser never reaches Hugging Face. The build fetches each file of the pinned
-// revision once (cached in node_modules), refuses any byte that does not match its pinned
-// SHA-256, and emits it at assets/voice/<revision>/<file>, where the worker looks for it.
+// Dictation's pinned model is a vendored build input. Verify the local bytes before
+// emitting them at the worker's existing same-origin path; builds never download a model.
 function dictationModel(): Plugin {
   const sha256 = (data: Buffer) =>
     createHash('sha256').update(data).digest('hex')
@@ -58,41 +56,37 @@ function dictationModel(): Plugin {
     apply: 'build',
     async generateBundle() {
       for (const [file, pin] of Object.entries(whisper.files)) {
-        const cached = fileURLToPath(
+        const compressed = 'gzipSha256' in pin
+        const inputFile = compressed ? `${file}.gz` : file
+        const input = fileURLToPath(
           new URL(
-            `./node_modules/.cache/dictation/${whisper.revision}/${file}`,
+            `./src/features/dictation/model/${inputFile}`,
             import.meta.url,
           ),
         )
-        // A missing or unreadable cached copy is fetched again; only verified bytes ship.
-        let data = await readFile(cached).catch(() => null)
-        if (!data || sha256(data) !== pin.sha256) {
-          const url = `https://huggingface.co/${whisper.repository}/resolve/${whisper.revision}/${file}`
-          const response = await fetch(url, {
-            signal: AbortSignal.timeout(300_000),
-          }).catch((error: unknown) => {
+        let data: Buffer = await readFile(input).catch((error: unknown) => {
+          this.error(
+            `dictation model: cannot read ${inputFile} at ${input} (${String(error)}); restore the pinned vendored file`,
+          )
+        })
+        if (compressed) {
+          if (sha256(data) !== pin.gzipSha256) {
             this.error(
-              `dictation model: cannot fetch ${url} (${String(error)}); to build offline, place the file at ${cached}`,
-            )
-          })
-          if (!response.ok) {
-            this.error(
-              `dictation model: ${url} answered ${response.status}; to build offline, place the file at ${cached}`,
+              `dictation model: ${inputFile} does not match its pinned SHA-256`,
             )
           }
-          if (Number(response.headers.get('content-length')) > pin.size) {
+          try {
+            data = gunzipSync(data, { maxOutputLength: pin.size })
+          } catch (error: unknown) {
             this.error(
-              `dictation model: ${url} is larger than its pinned ${pin.size} bytes`,
+              `dictation model: cannot decompress ${inputFile} (${String(error)})`,
             )
           }
-          data = Buffer.from(await response.arrayBuffer())
-          if (sha256(data) !== pin.sha256) {
-            this.error(
-              `dictation model: ${file} does not match its pinned SHA-256`,
-            )
-          }
-          await mkdir(dirname(cached), { recursive: true })
-          await writeFile(cached, data)
+        }
+        if (data.length !== pin.size || sha256(data) !== pin.sha256) {
+          this.error(
+            `dictation model: ${file} does not match its pinned SHA-256`,
+          )
         }
         this.emitFile({
           type: 'asset',

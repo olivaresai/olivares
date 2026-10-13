@@ -28,11 +28,13 @@ import { useTurnInterrupt } from './turn-interrupt'
 import type { AttachFrame, RunDTO } from './types'
 import { currentControlFence } from './work-fence'
 import {
+  isQuiet,
   mapConversationFrames,
   stripAnsi,
   type ConversationItem,
 } from '@/features/sessions/conversation-frames'
 import { systemFailed, systemText } from '@/features/sessions/conversation-text'
+import { MarkdownText } from '@/features/sessions/markdown-text'
 import './i18n'
 import '@/features/sessions/i18n'
 
@@ -123,7 +125,9 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   const [wire, setWire] = useState('')
   const sendReasonId = useId()
   const wireReasonId = useId()
-  const items = mapConversationFrames(frames.map((f) => f.line))
+  const items = mapConversationFrames(frames.map((f) => f.line)).filter(
+    (item) => !isQuiet(item),
+  )
   const turn = useTurnInterrupt(run)
   const inputMutation = useMutation({
     mutationFn: async (payload: { value: string; asWire: boolean }) => {
@@ -286,39 +290,43 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
           {t('live.send')}
         </Button>
       </form>
-      <details className="text-caption text-muted-foreground">
-        <summary className="cursor-pointer outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          {t('live.advanced')}
-        </summary>
-        <p className="mt-1">{t('live.advancedHint')}</p>
-        <form
-          onSubmit={onSubmitWire}
-          className="mt-1.5 flex items-center gap-2"
-        >
-          <Input
-            value={wire}
-            onChange={(e) => setWire(e.target.value)}
-            placeholder={t('live.inputPlaceholder')}
-            aria-label={t('live.inputAria')}
-            disabled={!canSend || inputMutation.isPending}
-            mono
-          />
-          <Button
-            type="submit"
-            variant="secondary"
-            size="sm"
-            disabled={wireReason !== null}
-            aria-describedby={wireReason ? wireReasonId : undefined}
+      {/* The raw NDJSON line is a developer's tool: a production console does not show
+          it, and the CLI and the API keep it. */}
+      {import.meta.env.DEV && (
+        <details className="text-caption text-muted-foreground">
+          <summary className="cursor-pointer outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+            {t('live.advanced')}
+          </summary>
+          <p className="mt-1">{t('live.advancedHint')}</p>
+          <form
+            onSubmit={onSubmitWire}
+            className="mt-1.5 flex items-center gap-2"
           >
-            {t('live.send')}
-          </Button>
-        </form>
-        {wireReason && (
-          <p id={wireReasonId} className="mt-1">
-            {t(wireReason)}
-          </p>
-        )}
-      </details>
+            <Input
+              value={wire}
+              onChange={(e) => setWire(e.target.value)}
+              placeholder={t('live.inputPlaceholder')}
+              aria-label={t('live.inputAria')}
+              disabled={!canSend || inputMutation.isPending}
+              mono
+            />
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={wireReason !== null}
+              aria-describedby={wireReason ? wireReasonId : undefined}
+            >
+              {t('live.send')}
+            </Button>
+          </form>
+          {wireReason && (
+            <p id={wireReasonId} className="mt-1">
+              {t(wireReason)}
+            </p>
+          )}
+        </details>
+      )}
       {sendReason && (
         <p id={sendReasonId} className="text-caption text-muted-foreground">
           {t(sendReason)}
@@ -385,6 +393,17 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
       </div>
     )
   }
+  // The assistant's reply is markdown (#1784): shown as the session conversation shows it.
+  if (item.kind === 'assistant')
+    return (
+      <div
+        data-testid="conversation-item"
+        data-kind="assistant"
+        className="break-words py-1"
+      >
+        <MarkdownText text={item.text || item.summary} />
+      </div>
+    )
   return (
     <div
       data-testid="conversation-item"

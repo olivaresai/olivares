@@ -66,13 +66,13 @@ describe.each(LANGUAGE_CODES)('session state words (%s)', (locale) => {
     ['sessions', 'state.idle', sessions, 'idle'],
     ['sessions', 'state.ended', sessions, 'ended'],
     ['sessions', 'runState.running', sessions, 'live'],
-    // A run that is idle is waiting for its next turn and the rail lists it under Working
-    // (`isLiveRun`: pending, running, idle), so its chip says the rail's word for that group.
-    ['sessions', 'runState.idle', sessions, 'live'],
+    // A run the engine reports idle has answered its turn and waits for the person: the
+    // rail files it as Idle (#1785), so its chip says the rail's Idle, like the observed half.
+    ['sessions', 'runState.idle', sessions, 'idle'],
     ['sessions', 'summary.active', sessions, 'live'],
     ['sessions', 'summary.idle', sessions, 'idle'],
     ['agentops', 'state.running', agentops, 'live'],
-    ['agentops', 'state.idle', agentops, 'live'],
+    ['agentops', 'state.idle', agentops, 'idle'],
     ['agentops', 'summary.running', agentops, 'live'],
     ['agentops', 'summary.idle', agentops, 'idle'],
   ]

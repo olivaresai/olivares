@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   createMemoryHistory,
@@ -16,19 +16,10 @@ import { renderIntel } from '@/test/intel'
 
 const auth = vi.hoisted(() => ({
   activeTenant: 'tnt-demo' as string | null,
-  isSuperadmin: false,
+  grants: [] as { tenant: string; tenant_name?: string }[],
   can: (_: string): boolean => true,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
-
-const listOrgs = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/api/endpoints', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@/lib/api/endpoints')>()
-  return {
-    ...real,
-    systemApi: { ...real.systemApi, listOrgs },
-  }
-})
 
 const api = vi.hoisted(() => ({
   listProfiles: vi.fn(),
@@ -36,6 +27,7 @@ const api = vi.hoisted(() => ({
   input: vi.fn(),
   inputText: vi.fn(),
   getRun: vi.fn(),
+  profileModels: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
@@ -69,13 +61,34 @@ const WORKSPACE = {
 beforeEach(() => {
   vi.clearAllMocks()
   auth.activeTenant = 'tnt-demo'
-  auth.isSuperadmin = false
+  auth.grants = []
   auth.can = () => true
-  listOrgs.mockResolvedValue({ items: [], has_more: false })
   api.listProfiles.mockResolvedValue({ items: [PROFILE], has_more: false })
   api.listWorkspaces.mockResolvedValue({ items: [WORKSPACE], has_more: false })
   api.input.mockResolvedValue({ accepted: true })
   api.inputText.mockResolvedValue({ accepted: true })
+  api.profileModels.mockResolvedValue({
+    profile_ref: 'ppf_team',
+    driver: 'claude',
+    state: 'fresh',
+    default_model: '',
+    free_text: true,
+    checked_at: '2026-10-12T10:00:00Z',
+    refresh_interval_seconds: 120,
+    models: [
+      {
+        id: 'opus-5-5',
+        display_name: 'Claude Opus 5.5',
+        is_default: true,
+        effort_levels: ['low', 'medium', 'high'],
+      },
+      {
+        id: 'haiku-5-5',
+        display_name: 'Claude Haiku 5.5',
+        effort_levels: ['low', 'high'],
+      },
+    ],
+  })
 })
 
 const RUNNING: RunDTO = {
@@ -255,20 +268,8 @@ describe('ScopeLine — the scope of the next action', () => {
   it('names a known organization with the name the switcher uses, not its id', async () => {
     const tenant = '01a0b95a-ee26-724d-9db8-1f5423e25db3'
     auth.activeTenant = tenant
-    auth.isSuperadmin = true
-    listOrgs.mockResolvedValue({
-      items: [
-        {
-          id: 'org-1',
-          tenant_id: tenant,
-          name: 'Golden Path',
-          slug: 'golden-path',
-          status: 'active',
-          created_at: '2026-01-01T00:00:00Z',
-        },
-      ],
-      has_more: false,
-    })
+    // Community has no estate inventory: the name is the one the principal's own grant carries.
+    auth.grants = [{ tenant, tenant_name: 'Golden Path' }]
     renderIntel(<ScopeLine workspace={null} environment={null} />)
     const line = await screen.findByTestId('work-scope-line')
     await waitFor(() => expect(line).toHaveTextContent('Golden Path'))
@@ -278,8 +279,6 @@ describe('ScopeLine — the scope of the next action', () => {
   it('falls back to a short identifier when the organization name is not known', async () => {
     const tenant = '01a0b95a-ee26-724d-9db8-1f5423e25db3'
     auth.activeTenant = tenant
-    auth.isSuperadmin = true
-    listOrgs.mockResolvedValue({ items: [], has_more: false })
     renderIntel(<ScopeLine workspace={null} environment={null} />)
     const line = await screen.findByTestId('work-scope-line')
     await waitFor(() => expect(line).toHaveTextContent('01a0b95a…'))
@@ -298,7 +297,8 @@ describe('ScopeLine — the scope of the next action', () => {
       has_more: false,
     })
     renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
-    const line = screen.getByTestId('work-scope-line')
+    await userEvent.click(await screen.findByTestId('composer-tool-model'))
+    const line = await screen.findByTestId('work-scope-line')
     await waitFor(() => expect(line).toHaveTextContent('another environment'))
     expect(line).not.toHaveTextContent('xenv_01a0b95a-ec91-7014-875a-5732')
     expect(line.getAttribute('title')).toContain(
@@ -316,6 +316,7 @@ describe('ScopeLine — the scope of the next action', () => {
 
   it('names the attached profile environment and keeps its reference on title', async () => {
     renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    await userEvent.click(await screen.findByTestId('composer-tool-model'))
     await waitFor(() =>
       expect(screen.getByTestId('work-scope-line')).toHaveTextContent(
         'This node',
@@ -375,7 +376,7 @@ describe('WorkComposer layout and disclosure', () => {
     expect(field.className).toContain('resize-none')
   })
 
-  it('names the tool and model of the session as a read-only tag', async () => {
+  it('names the tool, model and effort of the session on the control that changes them', async () => {
     renderIntel(
       <WorkComposer
         attached={{
@@ -383,14 +384,18 @@ describe('WorkComposer layout and disclosure', () => {
             ...RUNNING,
             provider_driver: 'codex',
             model_ref: 'stub-model',
+            effort: 'high',
           },
           group: 'active',
         }}
       />,
     )
-    const tag = await screen.findByTestId('composer-tool-model')
-    expect(tag).toHaveTextContent('Codex · stub-model')
-    expect(tag.tagName).toBe('SPAN')
+    const chip = await screen.findByTestId('composer-tool-model')
+    expect(chip).toHaveTextContent('Codex · stub-model · high')
+    expect(chip.tagName).toBe('BUTTON')
+    expect(chip).toHaveAccessibleName(
+      'Model and effort of this session: Codex · stub-model · high',
+    )
   })
 
   it('Send is a 32 px round icon button: orange only with text, a quiet ghost otherwise', async () => {
@@ -670,5 +675,167 @@ describe('WorkComposer — a disabled Send says why', () => {
         'Sending… Wait for the session to accept it.',
       ),
     )
+  })
+})
+
+// #1779: the message bar's "Advanced" opened a developer's raw stdin line to every user, and
+// the model and effort a person looked for were nowhere in it.
+describe('WorkComposer — model and effort', () => {
+  const ATTACHED = {
+    run: {
+      ...RUNNING,
+      model_ref: 'opus-5-5',
+      effort: 'medium',
+    },
+    group: 'active' as const,
+  }
+
+  it("lists the tool's models and the session's effort levels from the message bar", async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    const chip = await screen.findByTestId('composer-tool-model')
+    expect(chip).toHaveTextContent('Claude Code · opus-5-5 · medium')
+    await user.click(chip)
+    expect(await screen.findByText('Claude Haiku 5.5')).toBeInTheDocument()
+    expect(api.profileModels).toHaveBeenCalledWith(
+      'ppf_team',
+      expect.objectContaining({ tenant: 'tnt-demo' }),
+    )
+    expect(screen.getByLabelText('Effort')).toBeEnabled()
+    // Nothing differs from the session yet: no new session is offered.
+    expect(screen.queryByTestId('composer-new-with-choice')).toBeNull()
+  })
+
+  it('says the session keeps its model, and starts a new session with the other choice preset', async () => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    useNewSessionDialog.setState({ advanced: null })
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    expect(
+      await screen.findByText(
+        'This session keeps Claude Code · opus-5-5 · medium. A different model or effort starts a new session.',
+      ),
+    ).toBeInTheDocument()
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      open: true,
+      profileRef: 'ppf_team',
+      model: 'haiku-5-5',
+      // Haiku takes low and high only: the session's medium is not carried over.
+      effort: '',
+    })
+    // The session itself was not touched.
+    expect(api.input).not.toHaveBeenCalled()
+    expect(api.inputText).not.toHaveBeenCalled()
+  })
+
+  it('shows no raw stdin line and no control named Advanced in a production console', async () => {
+    vi.stubEnv('DEV', false)
+    try {
+      renderIntel(<WorkComposer attached={ATTACHED} />)
+      await screen.findByTestId('composer-tool-model')
+      expect(screen.queryByTestId('composer-advanced')).toBeNull()
+      expect(screen.queryByTestId('composer-wire-input')).toBeNull()
+      expect(screen.queryByText(/advanced/i)).toBeNull()
+      expect(screen.getByTestId('launcher-input')).toBeVisible()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('names the raw line what it is in a development console', async () => {
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    expect(await screen.findByTestId('composer-advanced')).toHaveTextContent(
+      'Raw line',
+    )
+  })
+  it('reads the catalog only when the control is opened, and not for a read-only operator', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await screen.findByText('Claude Haiku 5.5')
+    expect(api.profileModels).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not read the catalog at all without the right to start work', async () => {
+    auth.can = (p) => p !== 'sessions:run:write'
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    await screen.findByTestId('work-scope-line')
+    expect(screen.queryByTestId('composer-tool-model')).toBeNull()
+    expect(api.profileModels).not.toHaveBeenCalled()
+  })
+
+  it('forgets a choice that was not started when the control is closed', async () => {
+    const user = userEvent.setup()
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    const chip = await screen.findByTestId('composer-tool-model')
+    await user.click(chip)
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    await screen.findByTestId('composer-new-with-choice')
+    await user.keyboard('{Escape}')
+    await waitFor(() =>
+      expect(screen.queryByTestId('composer-new-with-choice')).toBeNull(),
+    )
+    await user.click(chip)
+    await screen.findByText('Claude Haiku 5.5')
+    expect(screen.queryByTestId('composer-new-with-choice')).toBeNull()
+  })
+
+  it('hands over the tool default as no model, and an effort-only change with the model it chose', async () => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    const chip = await screen.findByTestId('composer-tool-model')
+    await user.click(chip)
+    const list = await screen.findByRole('listbox')
+    await user.click(await within(list).findByText('Default (Claude Opus 5.5)'))
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      model: '',
+      effort: 'medium',
+    })
+    useNewSessionDialog.setState({ advanced: null })
+    await user.click(chip)
+    await screen.findByText('Claude Haiku 5.5')
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      model: 'opus-5-5',
+      effort: 'high',
+    })
+  })
+
+  it('does not hand over as chosen a model the tool only reported', async () => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    useNewSessionDialog.setState({ advanced: null })
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: {
+            ...RUNNING,
+            model_ref: undefined,
+            usage_model_ref: 'reported-by-usage',
+            effort: 'low',
+          },
+          group: 'active',
+        }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await screen.findByText('Claude Haiku 5.5')
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      model: '',
+      effort: 'high',
+    })
   })
 })

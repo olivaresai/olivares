@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -137,59 +136,6 @@ func edges(t *testing.T, sink *captureSink) []model.EdgeObservation {
 }
 
 // ---------------------------------------------------------------------------
-// Snapshot (custodian roster)
-// ---------------------------------------------------------------------------
-
-func TestSnapshotIntrospectSecretStoreRow(t *testing.T) {
-	d := newStub(t)
-	d.on(http.MethodGet, "/api/v2/auth/introspect", fixture(t, "introspect.json"))
-	s := openSource(t, d, map[string]string{"events_token": testToken})
-
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	if g.Source != identitysource.SourceOnePassword {
-		t.Errorf("source = %q, want onepassword", g.Source)
-	}
-	if !g.CapturedAt.Equal(fixedClock()) {
-		t.Errorf("CapturedAt = %v", g.CapturedAt)
-	}
-	if len(g.Identities) != 1 {
-		t.Fatalf("identities = %d, want 1 (the account custodian row)", len(g.Identities))
-	}
-	id := g.Identities[0]
-	if id.Ref != "1password:ACCOUNTUUID00000000000001" {
-		t.Errorf("ref = %q", id.Ref)
-	}
-	if id.Type != identitysource.PrincipalNHI || id.Kind != identitysource.KindSecretStore {
-		t.Errorf("type/kind = %q/%q, want nhi/secret_store", id.Type, id.Kind)
-	}
-	if id.DisplayName != "1Password account" {
-		t.Errorf("displayName = %q", id.DisplayName)
-	}
-	if id.Attributes["features"] != "auditevents,itemusages,signinattempts" {
-		t.Errorf("features attr = %q", id.Attributes["features"])
-	}
-	if len(g.Collections) != 0 || len(g.Memberships) != 0 {
-		t.Errorf("custodian snapshot must carry no collections/memberships: %+v", g)
-	}
-}
-
-func TestSnapshotPrunesEmptyAttributes(t *testing.T) {
-	d := newStub(t)
-	d.on(http.MethodGet, "/api/v2/auth/introspect", `{"uuid":"i","account_uuid":"acc","features":[]}`)
-	s := openSource(t, d, map[string]string{"events_token": testToken})
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	if g.Identities[0].Attributes != nil {
-		t.Errorf("empty attributes must prune to nil, got %v", g.Identities[0].Attributes)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Gather (item-usage feed)
 // ---------------------------------------------------------------------------
 
@@ -296,138 +242,6 @@ func TestGatherStopsAtMaxPages(t *testing.T) {
 	}
 	if len(d.calls) != 2 {
 		t.Fatalf("calls = %d, want exactly max_pages=2", len(d.calls))
-	}
-}
-
-func TestBearerHeaderOnEveryCall(t *testing.T) {
-	d := newStub(t)
-	d.on(http.MethodGet, "/api/v2/auth/introspect", fixture(t, "introspect.json"))
-	d.on(http.MethodPost, "/api/v2/itemusages", `{"cursor":"","has_more":false,"items":[]}`)
-	s := openSource(t, d, map[string]string{"events_token": testToken})
-
-	if _, err := s.Snapshot(context.Background()); err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	if err := s.Gather(context.Background(), &captureSink{}); err != nil {
-		t.Fatalf("Gather: %v", err)
-	}
-	if len(d.calls) != 2 {
-		t.Fatalf("calls = %d, want 2", len(d.calls))
-	}
-	for _, c := range d.calls {
-		if c.Auth != "Bearer "+testToken {
-			t.Errorf("%s %s auth = %q, want exact Bearer scheme", c.Method, c.URL, c.Auth)
-		}
-		if strings.Contains(c.Body, testToken) {
-			t.Errorf("token leaked into a request body: %q", c.Body)
-		}
-	}
-}
-
-func TestAPIErrorCarriesStatusNeverToken(t *testing.T) {
-	d := newStub(t)
-	d.routes["POST /api/v2/itemusages"] = []route{{status: 401, body: `{"Error":{"Message":"Unauthorized"}}`}}
-	s := openSource(t, d, map[string]string{"events_token": testToken})
-
-	err := s.Gather(context.Background(), &captureSink{})
-	if err == nil {
-		t.Fatal("expected error on 401")
-	}
-	if !strings.Contains(err.Error(), "401") {
-		t.Errorf("error should carry the status: %v", err)
-	}
-	if strings.Contains(err.Error(), testToken) {
-		t.Errorf("error must never carry the credential: %v", err)
-	}
-
-	d2 := newStub(t)
-	d2.routes["GET /api/v2/auth/introspect"] = []route{{status: 403, body: `{"Error":{"Message":"forbidden"}}`}}
-	s2 := openSource(t, d2, map[string]string{"events_token": testToken})
-	_, err = s2.Snapshot(context.Background())
-	if err == nil {
-		t.Fatal("expected error on 403")
-	}
-	if !strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), testToken) {
-		t.Errorf("introspect error wrong: %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Minimal data: no secret, no email, no user name in anything emitted.
-// ---------------------------------------------------------------------------
-
-func TestNoSecretOrEmailLeaksIntoEmissions(t *testing.T) {
-	d := newStub(t)
-	d.on(http.MethodGet, "/api/v2/auth/introspect", fixture(t, "introspect.json"))
-	d.on(http.MethodPost, "/api/v2/itemusages", fixture(t, "itemusages_page1.json"))
-	d.on(http.MethodPost, "/api/v2/itemusages", fixture(t, "itemusages_page2.json"))
-	s := openSource(t, d, map[string]string{"events_token": testToken})
-
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	sink := &captureSink{}
-	if err := s.Gather(context.Background(), sink); err != nil {
-		t.Fatalf("Gather: %v", err)
-	}
-
-	// The fixture's user PII and the token must appear in NOTHING emitted.
-	forbidden := []string{testToken, "alice@corp.example", "bob@corp.example", "Alice Smith", "Bob Jones"}
-
-	var fields []string
-	for _, id := range g.Identities {
-		fields = append(fields, id.Ref, id.Kind, id.DisplayName, string(id.Type))
-		for k, v := range id.Attributes {
-			fields = append(fields, k, v)
-		}
-	}
-	for _, c := range g.Collections {
-		fields = append(fields, c.Ref, c.DisplayName)
-		for k, v := range c.Attributes {
-			fields = append(fields, k, v)
-		}
-	}
-	for _, m := range g.Memberships {
-		fields = append(fields, m.MemberRef, m.CollectionRef)
-	}
-	for _, e := range edges(t, sink) {
-		fields = append(fields, e.OriginKind, e.OriginRef, e.ResourceKind, e.ResourceRef,
-			string(e.Mode), string(e.Source), string(e.Confidence), e.ToolRef)
-		for k, v := range e.Labels {
-			fields = append(fields, k, v)
-		}
-	}
-	for _, f := range fields {
-		for _, bad := range forbidden {
-			if strings.Contains(f, bad) {
-				t.Errorf("forbidden value %q leaked into emitted field %q", bad, f)
-			}
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Offline + descriptor
-// ---------------------------------------------------------------------------
-
-func TestOfflineSnapshotEmptyGraphNilError(t *testing.T) {
-	s := New() // no doer: any network call would nil-panic — offline must not call
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{}}); err != nil {
-		t.Fatalf("Open without credential must not fail: %v", err)
-	}
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("offline Snapshot must not error: %v", err)
-	}
-	if g.Source != identitysource.SourceOnePassword {
-		t.Errorf("offline source = %q", g.Source)
-	}
-	if g.CapturedAt.IsZero() {
-		t.Error("offline CapturedAt must be set")
-	}
-	if len(g.Identities) != 0 || len(g.Collections) != 0 || len(g.Memberships) != 0 {
-		t.Errorf("offline graph must be empty: %+v", g)
 	}
 }
 

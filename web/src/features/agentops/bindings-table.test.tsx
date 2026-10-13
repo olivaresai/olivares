@@ -236,12 +236,15 @@ describe('BindingsTable — listing and revoking', () => {
       screen.queryByRole('button', { name: 'Revoke' }),
     ).not.toBeInTheDocument()
     unmount()
+    // The first reader holds the profile tier too, so it read the names.
+    api.listProfiles.mockClear()
     grant(BW, BA, PR)
     wrap()
     expect(
       await screen.findByText(/does not include sessions:profile-binding:read/),
     ).toBeInTheDocument()
     expect(api.listBindings).toHaveBeenCalledOnce()
+    expect(api.listProfiles).not.toHaveBeenCalled()
   })
 
   it('an admin of profiles is not an admin of bindings', async () => {
@@ -310,6 +313,222 @@ describe('BindingsTable — a revoke confirmation does not outlive its tier', ()
     await user.click(within(dialog).getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(api.revokeBinding).toHaveBeenCalledWith('psb_1'))
     expect(toast.warning).not.toHaveBeenCalled()
+  })
+})
+
+describe('BindingsTable — a profile that is an account is named, not its ppf_ id', () => {
+  const account: ProviderProfileDTO = {
+    profile_ref: 'ppf_acc',
+    driver: 'claude',
+    environment_ref: 'xenv_1',
+    account_name: 'claude-b',
+    state: 'active',
+    local_environment: true,
+    operable: true,
+  }
+
+  it('offers the account by its name in the Profile picker', async () => {
+    api.listProfiles.mockResolvedValue({ items: [account], has_more: false })
+    const user = userEvent.setup()
+    wrap()
+    await screen.findAllByText(active.source_id)
+    await user.click(screen.getByRole('button', { name: 'Bind source' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByLabelText('Profile'))
+    expect(
+      await screen.findByRole('option', { name: /^claude-b · claude/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('heads the Bind dialog of one profile with its name first', async () => {
+    const user = userEvent.setup()
+    wrap(account)
+    await screen.findAllByText(active.source_id)
+    await user.click(screen.getByRole('button', { name: 'Bind source' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText('claude-b · ppf_acc · claude'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('BindingsTable — the Profile column names the profile, the ppf_ id is the title', () => {
+  const claude = (over: Partial<ProviderProfileDTO>): ProviderProfileDTO => ({
+    profile_ref: 'ppf_x',
+    driver: 'claude',
+    environment_ref: 'xenv_1',
+    state: 'active',
+    local_environment: true,
+    operable: true,
+    ...over,
+  })
+  const accB = claude({ profile_ref: 'ppf_accb', account_name: 'claude-b' })
+  const accC = claude({ profile_ref: 'ppf_accc', account_name: 'claude-c' })
+  // A label wins over the account name, as everywhere else profileName() is used.
+  const labelled = claude({
+    profile_ref: 'ppf_lab',
+    display_name: 'Team login',
+    account_name: 'claude-d',
+  })
+  const unnamed = claude({ profile_ref: 'ppf_none' })
+  const onProfile = (b: ProviderBindingDTO, profile_ref: string) => ({
+    ...b,
+    binding_ref: `psb_${profile_ref}`,
+    profile_ref,
+    state: 'active',
+  })
+  const rows = [
+    onProfile(active, 'ppf_accb'),
+    onProfile(active, 'ppf_accc'),
+    onProfile(active, 'ppf_lab'),
+    onProfile(active, 'ppf_none'),
+  ]
+  beforeEach(() => {
+    api.listBindings.mockResolvedValue({ items: rows, has_more: false })
+    api.listProfiles.mockResolvedValue({
+      items: [accB, accC, labelled, unnamed],
+      has_more: false,
+    })
+  })
+
+  it('shows the account name, or the label first, with the id on title=', async () => {
+    wrap()
+    const accountB = await screen.findByText('claude-b')
+    expect(accountB).toHaveAttribute('title', 'ppf_accb')
+    expect(screen.getByText('claude-c')).toHaveAttribute('title', 'ppf_accc')
+    expect(screen.getByText('Team login')).toHaveAttribute('title', 'ppf_lab')
+    // the label won: its account name is not painted
+    expect(screen.queryByText('claude-d')).not.toBeInTheDocument()
+    // a named profile's id is no longer the cell text
+    expect(screen.queryByText('ppf_accb')).not.toBeInTheDocument()
+    expect(screen.queryByText('ppf_accc')).not.toBeInTheDocument()
+    expect(screen.queryByText('ppf_lab')).not.toBeInTheDocument()
+  })
+
+  it('keeps the id for a profile nobody has named', async () => {
+    wrap()
+    await screen.findByText('claude-b')
+    expect(screen.getByText('ppf_none')).toHaveAttribute('title', 'ppf_none')
+  })
+
+  it('reads names only under the profile read tier: without it the ids stay and nothing is asked', async () => {
+    grant(BR, BW, BA)
+    wrap()
+    expect(await screen.findByText('ppf_accb')).toBeInTheDocument()
+    expect(screen.getByText('ppf_accc')).toBeInTheDocument()
+    expect(screen.queryByText('claude-b')).not.toBeInTheDocument()
+    expect(api.listProfiles).not.toHaveBeenCalled()
+  })
+
+  it('a name read under the profile tier leaves with it: the ids come back', async () => {
+    const { rerender } = wrap()
+    expect(await screen.findByText('claude-b')).toBeInTheDocument()
+    // The client learns the profile read tier is gone and re-renders.
+    grant(BR, BW, BA)
+    rerender()
+    // The column rebuilds when the names go: assert on what is in the document now.
+    await waitFor(() =>
+      expect(screen.getByText('ppf_accb')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('claude-b')).not.toBeInTheDocument()
+    expect(screen.queryByText('Team login')).not.toBeInTheDocument()
+  })
+
+  it('regaining the profile tier reads again: the names the earlier grant saw do not repaint first', async () => {
+    const { rerender } = wrap()
+    expect(await screen.findByText('claude-b')).toBeInTheDocument()
+    grant(BR, BW, BA)
+    rerender()
+    await waitFor(() =>
+      expect(screen.getByText('ppf_accb')).toBeInTheDocument(),
+    )
+    // The tier returns; the new answer is parked, so only a remembered one could paint.
+    let release!: (v: unknown) => void
+    api.listProfiles.mockReturnValueOnce(
+      new Promise((r) => {
+        release = r
+      }),
+    )
+    grant(BR, BW, BA, PR)
+    rerender()
+    await waitFor(() => expect(api.listProfiles).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('ppf_accb')).toBeInTheDocument()
+    expect(screen.queryByText('claude-b')).not.toBeInTheDocument()
+    release({ items: [accB], has_more: false })
+    expect(await screen.findByText('claude-b')).toBeInTheDocument()
+  })
+
+  it('a failed profile read leaves the ids, not an empty cell', async () => {
+    api.listProfiles.mockRejectedValue(new Error('upstream down'))
+    const { qc } = wrap()
+    // The read has failed, not merely not answered yet.
+    await waitFor(() =>
+      expect(
+        qc
+          .getQueryCache()
+          .findAll()
+          .some((q) => q.state.status === 'error'),
+      ).toBe(true),
+    )
+    expect(screen.getByText('ppf_accb')).toBeInTheDocument()
+    expect(screen.getByText('ppf_lab')).toBeInTheDocument()
+  })
+
+  it('a profile past the name page keeps its id, and the page read is the sessions page’s', async () => {
+    api.listBindings.mockResolvedValue({
+      items: [onProfile(active, 'ppf_accb'), onProfile(active, 'ppf_far_off')],
+      has_more: false,
+    })
+    api.listProfiles.mockResolvedValue({ items: [accB], has_more: true })
+    wrap()
+    expect(await screen.findByText('claude-b')).toBeInTheDocument()
+    expect(screen.getByText('ppf_far_off')).toBeInTheDocument()
+    expect(api.listProfiles).toHaveBeenCalledOnce()
+    expect(api.listProfiles.mock.calls[0][0]).toEqual({ limit: 200 })
+  })
+
+  it('names a revoked binding’s profile as well', async () => {
+    api.listBindings.mockResolvedValue({
+      items: [{ ...revoked, profile_ref: 'ppf_accb' }],
+      has_more: false,
+    })
+    wrap()
+    expect(await screen.findByText('claude-b')).toHaveAttribute(
+      'title',
+      'ppf_accb',
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Revoke' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('sorts by the name it shows, not by the reference', async () => {
+    const user = userEvent.setup()
+    const zeta = claude({ profile_ref: 'ppf_1', account_name: 'zeta' })
+    const alpha = claude({ profile_ref: 'ppf_2', account_name: 'alpha' })
+    api.listBindings.mockResolvedValue({
+      items: [onProfile(active, 'ppf_1'), onProfile(active, 'ppf_2')],
+      has_more: false,
+    })
+    api.listProfiles.mockResolvedValue({
+      items: [zeta, alpha],
+      has_more: false,
+    })
+    wrap()
+    const order = () =>
+      screen.getAllByText(/^(alpha|zeta)$/).map((el) => el.textContent)
+    await waitFor(() => expect(order()).toEqual(['zeta', 'alpha']))
+    await user.click(screen.getByRole('button', { name: /^Profile/ }))
+    await waitFor(() => expect(order()).toEqual(['alpha', 'zeta']))
+  })
+
+  it('a profile’s own sheet has no Profile column and reads no profile list', async () => {
+    wrap(accB)
+    await screen.findAllByText(active.source_id)
+    expect(api.listProfiles).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole('columnheader', { name: 'Profile' }),
+    ).not.toBeInTheDocument()
   })
 })
 

@@ -51,7 +51,7 @@
     "noRead": "You do not have permission to view DLP rules.",
     "noReadHint": "DLP rules inspect prompts and responses for data you do not want leaving. Ask an administrator for the DLP read permission.",
     "empty": "No DLP rules",
-    "emptyHint": "Add a rule to allow or deny a classification on egress.",
+    "emptyHint": "Secrets in prompts are denied by default while Request DLP is on. Add a rule to allow or deny a classification on egress.",
     "colClass": "Classification",
     "colAction": "Action",
     "colNote": "Note",

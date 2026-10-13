@@ -96,8 +96,8 @@ OpenTelemetry. Всё работает на `localhost`.
    арендатору):
 
    ```bash
-   TENANT="$(curl -sf "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOKEN" \
-     | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+   TENANT="$(curl -sf "$BASE/v1/auth/whoami" -H "Authorization: Bearer $TOKEN" \
+     | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
    ```
 
 3. **Получите read/write граф.** Это модуль III — access map:

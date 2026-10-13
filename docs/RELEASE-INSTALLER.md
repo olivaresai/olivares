@@ -53,15 +53,28 @@ before installing the binary. It has no cosign bypass and never invokes sudo. A
 binary-only installation remains the default; `--user` or `--system` explicitly
 adds the service adapter carried inside that same verified archive.
 
-**Installer qualification.** The dedicated pull-request/dispatch workflow runs this
-verified release path in Debian stable, Ubuntu 24.04 LTS, Fedora, openSUSE Leap and
+**Installer qualification.** The dedicated workflow runs in Debian stable,
+Ubuntu 24.04 LTS, Fedora, openSUSE Leap and
 Alpine containers and on a hosted macOS 14 runner. It checks path, mode, owner and
-reported version by content. Because the public `v26.8.0` tag predates the service
-adapter in this tree, each leg names and tests two subjects rather than conflating
-them: the real signed public payload first, then this commit's candidate with the
-opt-in service and `doctor -o json` TLS probes. No-network runs execute the dry-run
-but return unmeasurable, not green. This matrix does not certify native
+reported version by content. Pull requests qualify an archive built from that
+PR head, including its service helper and templates, without downloading a tag
+that may not be published yet. These are unsigned development payloads; they do
+not qualify release signatures. On `release: published`, the download uses the
+event's exact tag. Manual dispatch accepts a published `release_version` and
+defaults to `RELEASE-VERSION`. The release workflow also dispatches this matrix
+after successful publication, because publication using `GITHUB_TOKEN` does not
+trigger a `release` workflow run. Those runs qualify the signed public payload first,
+then this commit's candidate with the opt-in service and `doctor -o json` TLS probes.
+No-network release runs execute the dry-run but return unmeasurable, not green.
+This matrix does not certify native
 package-manager installation; package repositories remain a separate qualification.
+
+Qualification evidence must include both workflow run URLs: a release PR run
+using that PR head's archives and a published-assets run using the exact release
+tag. Record the head SHA, event and results for all six platforms; a skipped leg
+does not qualify. Hermetic fixtures and a native install of an older binary do
+not establish either result. Keep release qualification open until both runs
+pass, with any pending run tracked explicitly.
 
 **Proposed package repositories (phase 1 only).** Deterministic apt, rpm-md and APK
 metadata producers and clean-client qualification now exist in the source tree.

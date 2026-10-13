@@ -94,6 +94,8 @@
     "driftPending": "Awaiting identity link",
     "driftUnused": "Unused grants",
     "coverageNote": "Some access is observed with partial coverage (approximate or opaque capture); the drift figures are a lower bound.",
+    "driftTruncated": "The drift read is partial; the access drift figures are a lower bound.",
+    "driftUnavailable": "Access drift could not be read.",
     "noFindings": "No open findings.",
     "noRuns": "No red-team runs yet.",
     "sharedDescription": "Open security findings and access drift."

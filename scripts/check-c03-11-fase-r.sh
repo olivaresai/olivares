@@ -100,8 +100,9 @@ if [[ -n "$WRANGLER" ]]; then
 	python3 - C03-11 "$WRANGLER" "$STATE" "$OFFERS" <<'PY' || crc=$?
 # THE CURRENT PRODUCTION CONTRACT, the same block in every gate that reads production state
 # (an internal design note (not shipped)): the sale switch and release version it records, held
-# to sale on and to RELEASE-VERSION, the
-# four Business configurations by id in every sold place, and no Cloud id in any of them.
+# to sale on and to "latest", the
+# sold Business configuration by id in every sold place, the retired bundle products mapped to
+# it and absent from every sold place, and no Cloud id in any of them.
 import json, sys
 
 gate, wf, state_path, offers_path = sys.argv[1:5]
@@ -151,18 +152,21 @@ if not isinstance(state, dict):
 configs = state.get("configurations") or {}
 cloud_ids = {i for fam in (state.get("not_sold") or {}).values() for i in (fam.get("ids") or [])}
 pins = state.get("production")
-if (state.get("schema") != "production-state/v1" or len(configs) != 4 or not cloud_ids
+retired = state.get("retired_business")
+base = configs.get("business") or {}
+if (state.get("schema") != "production-state/v1" or set(configs) != {"business"}
+        or not base.get("monthly") or not base.get("annual")
+        or not all(isinstance(c.get("includes"), list) and c.get("includes")
+                   for c in configs.values() if c.get("kind") == "bundle")
+        or not isinstance(retired, dict) or not retired
+        or not cloud_ids
         or not isinstance(pins, dict) or set(pins) != {"FULFILLMENT_ENABLED", "ENTERPRISE_VERSION"}
         or not all(isinstance(v, str) and v for v in pins.values())):
-    cannot(f"{state_path} does not name the production pins, four configurations and the not-sold Cloud ids")
-# The record names the release being prepared: sale on, at the version RELEASE-VERSION names.
-try:
-    canon = next(l.strip() for l in open("RELEASE-VERSION", encoding="utf-8")
-                 if l.strip() and not l.lstrip().startswith("#"))
-except (OSError, StopIteration) as e:
-    cannot(f"RELEASE-VERSION names no release: {e!r}")
+    cannot(f"{state_path} does not name the production pins, the one sold Business configuration with what it bundles, the retired bundles and the not-sold Cloud ids")
+# The record names the production pins: sale on, and ENTERPRISE_VERSION "latest", the release the
+# stable channel manifest publishes (olivares-work#374), so a release bump edits neither file.
 for key, value, why in (("FULFILLMENT_ENABLED", "true", "sale on"),
-                        ("ENTERPRISE_VERSION", canon, "RELEASE-VERSION")):
+                        ("ENTERPRISE_VERSION", "latest", "the stable channel manifest names the release")):
     if pins[key] != value:
         found.append(f"the record's production {key} is {pins[key]!r}, want {value!r} ({why})")
 
@@ -207,6 +211,27 @@ for name, conf in sorted(configs.items()):
             if ((offers.get(name) or {}).get(cadence) or {}).get("product_id") != pid:
                 found.append(f"configuration {name} {cadence} {pid} is missing from {where}")
 
+# What the sold configuration includes is its DODO_CATALOG bundle, in the record's order.
+for name, conf in sorted(configs.items()):
+    for cadence in ("monthly", "annual"):
+        pid = conf.get(cadence)
+        if conf.get("kind") == "bundle" and (catalog.get("bundles") or {}).get(pid) != conf.get("includes"):
+            found.append(f"configuration {name} {cadence} {pid} does not bundle {conf.get('includes')} in production DODO_CATALOG")
+# A retired bundle product is sold nowhere and maps to the sold Business product of its cadence.
+retired_map = catalog.get("retired_business") or {}
+months = {"monthly": 1, "annual": 12}
+for name, conf in sorted(retired.items()):
+    for cadence in ("monthly", "annual"):
+        pid = conf.get(cadence)
+        for where, ids in places.items():
+            if pid in ids:
+                found.append(f"retired {name} {cadence} {pid} is still in production {where}")
+        for where, offers in offer_sets:
+            if any((c or {}).get("product_id") == pid for cs in offers.values() for c in (cs or {}).values() if isinstance(c, dict)):
+                found.append(f"retired {name} {cadence} {pid} is still offered in {where}")
+        entry = retired_map.get(pid) or {}
+        if entry.get("business_product_id") != base.get(cadence) or entry.get("cadence_months") != months[cadence]:
+            found.append(f"retired {name} {cadence} {pid} is not mapped to Business {cadence} in production DODO_CATALOG retired_business")
 catalogue = "production sells no Cloud, whatever the flags"
 for pid in catalog.get("cloud_products") or []:
     found.append(f"CFG-12 catalogue: production DODO_CATALOG cloud_products lists {pid} — {catalogue}")
@@ -243,5 +268,5 @@ if [ "$_public_partial" -eq 1 ]; then
 	echo "  the production contract were not graded (curated out of this tree)."
 	exit 0
 fi
-echo "C03-11: CLEAN — FASE R remains HOLD; seat seam still no-op; the Worker config's production pins match the production-state record and RELEASE-VERSION (the Worker deploy follows at release time): four Business configurations, no Cloud"
+echo "C03-11: CLEAN — FASE R remains HOLD; seat seam still no-op; the Worker config's production pins match the production-state record (sale on, ENTERPRISE_VERSION latest) (the Worker deploy follows at release time): one Business configuration with every paid family, the retired bundles mapped to it, no Cloud"
 exit 0

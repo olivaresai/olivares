@@ -7,6 +7,10 @@ description: >-
   Routeninventar der Konsole generiert.
 ---
 
+:::note[Edition]
+Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs) sowie der Lebenszyklus verwalteter Identitäten benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, eingehendes SCIM für Benutzer/Gruppen, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
+:::
+
 Diese Seite ist die Karte der Konsole. Sie listet **jede von der Anwendung gemountete
 Route** — keine Auswahl und nicht nur die Routen, an deren Dokumentation sich jemand
 erinnert hat — samt der Berechtigung, die ein Principal zum Öffnen benötigt, und der
@@ -70,7 +74,7 @@ Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **83 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **75 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
 ### Start
@@ -134,9 +138,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
 | Alerting | `/alerting` | Findings an Ziele routen und Zustellungen prüfen | `notify:route:read` | [reference/modules/xv-notify](/de/reference/modules/xv-notify/) |
-| Automatisierungen | `/automations` | Alle drei Automatisierungswege und ihr Trigger-Katalog | `orchestration:schedule:read` | [reference/modules/iv-orchestration](/de/reference/modules/iv-orchestration/) |
 | Webhooks & Events | `/eventing` | Ausgehende Webhook-Subscriptions, ihr Zustellungsprotokoll und die Dead-Letter-Queue. | `eventing:subscription:read` | [reference/modules/eventing](/de/reference/modules/eventing/) |
-| Orchestrierung | `/orchestration` | Agent-zu-Agent-Koordination und Zeitpläne | `orchestration:graph:read` | [reference/modules/iv-orchestration](/de/reference/modules/iv-orchestration/) |
 
 ### Sicherheit & Identität
 
@@ -149,8 +151,6 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Inference Proxy | `/inference-proxy` | Proxy-Gates, Egress-DLP-Regeln und Gerätefreigaben | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/de/reference/modules/inferenceproxy/) |
 | Kill Switch | `/killswitch` | Notstopp, Wiederherstellung unter dualer Kontrolle und Guardian-Containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/de/how-to/cookbook/kill-switch-drill/) |
 | Berechtigungen | `/permissions` | Identität, Rollen und Freigaben | `governance:identity:read` | [reference/modules/vi-governance](/de/reference/modules/vi-governance/) |
-| Red-Teaming | `/red-team` | Adversarial Tests Ihrer Agenten | `redteam:target:read` | [reference/modules/xviii-redteam](/de/reference/modules/xviii-redteam/) |
-| Datenresidenz | `/residency` | Jede Organisation an eine Region binden oder ungebunden lassen | `system:admin` | [reference/modules/xiii-compliance](/de/reference/modules/xiii-compliance/) |
 | Routine-Policies | `/routine-policies` | Taktuntergrenzen, Parallelitätsgrenzen, Freigabeanforderungen und Cron-Allowlists für Claude-Code-Routinen. | `governance:routine:read` | [reference/modules/vi-governance](/de/reference/modules/vi-governance/) |
 | Sicherheit | `/security` | Guardrails, Forensik und Anomalien | `security:finding:read` | [reference/modules/ix-security](/de/reference/modules/ix-security/) |
 
@@ -171,14 +171,11 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Compliance | `/compliance` | Frameworks, Controls und Evidenz | `compliance:framework:read` | [reference/modules/xiii-compliance](/de/reference/modules/xiii-compliance/) |
 | Dashboards | `/dashboards` | Executive-KPIs und Reporting | any signed-in user | [reference/modules/xxi-executive-dashboards](/de/reference/modules/xxi-executive-dashboards/) |
 | Evals | `/evals` | Qualität, Evaluierungen und Regression | `evals:run:read` | [reference/modules/xii-evals](/de/reference/modules/xii-evals/) |
-| Kosten & FinOps | `/finops` | Token-Kosten, Budgets und Ausgaben | `finops:spend:read` | [reference/modules/xi-finops](/de/reference/modules/xi-finops/) |
 | Health & SLA | `/health` | Uptime und SLAs für Agenten und MCP | `health:status:read` | [reference/modules/xxii-health](/de/reference/modules/xxii-health/) |
 | Observability | `/observability` | Ingestion-Zustand nach Standard und Trace-Drilldown | `health:status:read` | [reference/modules/observability](/de/reference/modules/observability/) |
-| Posture-Export | `/posture-export` | Ground-Truth-Posture für einen Control Tower exportieren | `posture:export:read` | [reference/modules/posture-export](/de/reference/modules/posture-export/) |
 | Aufzeichnungen | `/recordings` | Aufzeichnung und Replay privilegierter Sessions | `recording:session:admin` | [reference/modules/recording](/de/reference/modules/recording/) |
-| Berichte | `/reporting` | Governance-Berichte erzeugen und herunterladen | `reporting:report:read` | [reference/modules/reporting](/de/reference/modules/reporting/) |
 | Session-Viewer | `/session-viewer/$id` (nur Deep-Link) | Vollständige Timeline einer aufgezeichneten Session, aus einer Zeile in Aufzeichnungen statt aus der Seitenleiste geöffnet. | `recording:session:admin` | [reference/modules/recording](/de/reference/modules/recording/) |
-| Teamkosten | `/team-costs` | Nach Team zugeordnete Ausgaben, aufklappbar nach Projekt und Modell. | `finops:spend:read` | [reference/modules/xi-finops](/de/reference/modules/xi-finops/) |
+| Budgets | `/stored-budgets` | Verbrauch gegenüber jedem gespeicherten Limit. Reservierte Kapazität wird auf das Limit angerechnet. | `finops:budget:read` | [reference/modules/xi-finops](/de/reference/modules/xi-finops/) |
 
 ### System & Einstellungen
 
@@ -190,7 +187,6 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Quellvergleich | `/console/sources/diff` | Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei | `system:admin` | [reference/console](/de/reference/console/) |
 | Logs | `/logs` | Live-Log-Stream der Engine, nach Level und Modul filterbar, mit Suche und Pause. | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
 | Einrichtungsassistent | `/onboarding` | Schrittweise Konfiguration der Bereitstellung | `system:admin` | [start/quickstart](/de/start/quickstart/) |
-| Tenants | `/tenants` | Dienst eines Tenants entziehen oder wiederherstellen | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
 
 ### Anmeldung, Einrichtung und Konto
 

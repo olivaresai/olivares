@@ -76,8 +76,8 @@ description: >-
 | `claude-api` | Claude Admin-API のコストサンプル + ガバナンス姿勢の findings | プロセス内。オフライン時（admin key なし）は no-op |
 | `claude-compliance` | Claude Compliance アクティビティフィードの証跡 → findings | 構造上 GET のみ。オフライン時は no-op |
 | `claude-config` | 静的な Claude 設定ツリー（subagents / Skills / plugins）→ **宣言された能力**のエッジ | メタデータのみ —— 能力面であって、観測されたアクセスではない |
-| `claude-console` | Claude org IAM → SSO/SCIM 姿勢の findings（アイデンティティ名簿 + ソース） | |
-| `claude-wif` | Anthropic の非人間アイデンティティ／ワークロードアイデンティティ名簿 + 許可スコープのエッジ | オペレーターが宣言したフェデレーションをモデル化し、静的キーの落とし穴を警告する |
+| `claude-console` | Claude org IAM → SSO/SCIM 姿勢の findings（アイデンティティ名簿 + ソース） | Business: Identity & Scale;  |
+| `claude-wif` | Anthropic の非人間アイデンティティ／ワークロードアイデンティティ名簿 + 許可スコープのエッジ | Business: Identity & Scale; オペレーターが宣言したフェデレーションをモデル化し、静的キーの落とし穴を警告する |
 | `claude-managed-agents` | Claude managed agents のインベントリ + thread events（webhook receiver + GET pollers） | ストリーミングソース（`poll_seconds: 0`）。オフラインでは no-op |
 | `claude-projects` | Claude Organization Projects のインベントリ（メンバーシップ / API キー）+ オペレーター宣言のプロジェクトポリシー | 読み取り専用 Admin API。オフラインでは no-op |
 | `claude-apps-gateway` | Claude apps gateway の姿勢、宣言された model grants、audit event ingest → トポロジ + findings | 既存の `gateway.yaml` と任意の JSONL audit export を読む |

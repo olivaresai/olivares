@@ -15,7 +15,7 @@
   "state": {
     "pending": "Ausstehend",
     "running": "Läuft",
-    "idle": "Läuft",
+    "idle": "Untätig",
     "stopped": "Gestoppt",
     "failed": "Fehlgeschlagen",
     "cleaned": "Bereinigt"
@@ -103,7 +103,6 @@
     "effort": "Effort",
     "effortDefault": "Modellstandard",
     "model": "Modell",
-    "modelPlaceholder": "opus  ·  claude-opus-4-8  (optional)",
     "workspace": "Ordner",
     "workspaceNone": "Temporärer Ordner dieser Sitzung",
     "worktree": "In einem neuen Git-Worktree arbeiten",
@@ -131,18 +130,9 @@
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME und GROK_HOME gehören dem Profil: ein Start, der eine davon weiterreicht, wird hier abgelehnt. Andere Namen unterliegen weiterhin der Prüfung durch den Server.",
     "identity": {
       "title": "Startidentität",
-      "hint": "Wählen Sie einen zugelassenen Agenten für seinen menschlichen Sponsor. Menschlicher Zugriff allein erteilt keine Agentenberechtigung.",
       "humanHint": "Die Sitzung läuft mit Ihrem eigenen Zugriff.",
       "human": "Aktueller menschlicher Operator",
-      "agent": "Zugelassener Agent (für den Sponsor)",
-      "required": "Ein Orchestrierungsprofil erfordert eine separat authentifizierte Agentenidentität.",
-      "choose": "Agentenidentität",
-      "sponsorHint": "Der Server prüft Agent, Lebenszyklus und Ihre Sponsorzuordnung vor dem Start.",
-      "placeholder": "Zugelassenen Agenten auswählen",
-      "readRequired": "Die NHI-Leseberechtigung ist erforderlich.",
-      "loading": "Agentenidentitäten werden geladen…",
-      "loadFailed": "Identitätsliste nicht verfügbar.",
-      "loadMore": "Weitere Identitäten laden"
+      "required": "Ein Orchestrierungsprofil erfordert eine separat authentifizierte Agentenidentität."
     },
     "blocked": {
       "profilesForbidden": "Ihre Rolle kann keine Provider-Profile lesen (sessions:profile:read), daher kann hier keine Sitzung starten.",
@@ -157,6 +147,26 @@
       "templateRefused": "Die Vorlage verlangt Bedingungen, die dieser Start nicht durchsetzen kann: Wählen Sie unter Erweiterte Optionen eine andere.",
       "readinessFailed": "Die Anforderungen des Profils konnten nicht gelesen werden."
     }
+  },
+  "picker": {
+    "search": "Modelle suchen",
+    "none": "Kein Modell passt.",
+    "loading": "Die Modelle dieses Tools werden gelesen…",
+    "failed": "Das Tool hat nicht geantwortet, daher gibt es keine Liste. Geben Sie ein Modell ein oder behalten Sie die Vorgabe.",
+    "unsupported": "Dieses Tool listet seine Modelle nicht auf. Geben Sie eines ein oder behalten Sie die Vorgabe.",
+    "unavailable": "Die Modellliste ist hier nicht verfügbar. Geben Sie ein Modell ein oder behalten Sie die Vorgabe.",
+    "default": "Vorgabe",
+    "new": "Neu",
+    "favorites": "Favoriten",
+    "models": "Modelle",
+    "legacy": "Ältere",
+    "star": "{{model}} zu den Favoriten hinzufügen",
+    "unstar": "{{model}} aus den Favoriten entfernen",
+    "use": "„{{model}}“ verwenden",
+    "defaultNamed": "Vorgabe ({{model}})",
+    "defaultUnnamed": "Vorgabe von {{tool}}",
+    "effortDefaultNamed": "Modellstandard ({{effort}})",
+    "effortNeedsModel": "Wählen Sie zuerst ein Modell: Ein Effort ist eine Stufe eines Modells."
   },
   "detail": {
     "live": "Live",
@@ -197,7 +207,7 @@
     "inputAria": "Sitzungs-Eingabezeile",
     "textPlaceholder": "Einen Satz senden…",
     "textAria": "Sitzungszug",
-    "advanced": "Erweitert · Rohzeile",
+    "advanced": "Rohzeile",
     "advancedHint": "Eine NDJSON-Zeile an stdin senden. Das Satzfeld ist die Vorgabe.",
     "send": "Senden",
     "noOutput": "Noch keine Ausgabe.",

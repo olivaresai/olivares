@@ -75,7 +75,10 @@ against Google's own service.
 - The model is carried; the effort is not (the CLI has none).
 - `GEMINI_CLI_HOME` names the home that holds `.gemini`. A profiled launch sets it
   to the parent of the profile's configuration home, `HOME` stays the profile's
-  user home, and no `GEMINI_CLI_*` variable can come from `env_allow` or the host.
+  user home. With assigned skills, both name a temporary discovery home whose
+  `.gemini` links to the selected configuration home; the profile's settings and
+  authentication checks still apply. No `GEMINI_CLI_*` variable can come from
+  `env_allow` or the host.
 
 ## Limits
 
