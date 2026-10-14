@@ -10,6 +10,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -88,6 +89,9 @@ type AssignmentRequest struct {
 	Target
 	RevisionID string   `json:"pack_revision_id"`
 	Members    []string `json:"members,omitempty"`
+	// ApproveActiveContent is the explicit approval a selection needs when a
+	// member carries content its tool acts on without asking (Member.ActiveContent).
+	ApproveActiveContent bool `json:"approve_active_content,omitempty"`
 }
 type AssignmentResult struct {
 	State      string     `json:"state"`
@@ -108,6 +112,17 @@ type SelectedMember struct {
 	SkillDigest    string            `json:"skill_digest"`
 	ContentDigest  string            `json:"content_digest"`
 	Origins        []SelectionOrigin `json:"origins"`
+	// Overrides names the skills of the same name this one replaced, from broader
+	// targets: what a preview and the delivery audit show of a precedence rule.
+	Overrides []SelectionOverride `json:"overrides,omitempty"`
+}
+
+// SelectionOverride is a pinned skill a narrower target's skill of the same name
+// replaced, with the target that pinned it.
+type SelectionOverride struct {
+	Target
+	PackID     string `json:"pack_id"`
+	RevisionID string `json:"pack_revision_id"`
 }
 
 // Selection is the serializable immutable run/intent snapshot. The runtime
@@ -123,17 +138,20 @@ type Selection struct {
 // have their own node, then the groups the agent belongs to, then the agent.
 const (
 	targetWorkspace  = "workspace"
+	targetFolder     = "folder"
 	targetTemplate   = "template"
 	targetAgentGroup = "agent_group"
 	targetAgent      = "agent"
 	targetSession    = "session"
 )
 
-var targetRank = map[string]int{targetWorkspace: 0, targetTemplate: 1, targetAgentGroup: 2, targetAgent: 3, targetSession: 4}
+var targetRank = map[string]int{targetWorkspace: 0, targetFolder: 1, targetTemplate: 2, targetAgentGroup: 3, targetAgent: 4, targetSession: 5}
 
 // goneAfterDelete reports whether kind is one the core deletes outright, unlike
 // a workspace, a template or a session, which are retired and keep their row.
-func goneAfterDelete(kind string) bool { return kind == targetAgentGroup || kind == targetAgent }
+func goneAfterDelete(kind string) bool {
+	return kind == targetFolder || kind == targetAgentGroup || kind == targetAgent
+}
 
 func validTarget(t Target) bool {
 	_, known := targetRank[t.Kind]
@@ -247,6 +265,52 @@ func selectedNames(rev Revision, requested []string) ([]string, error) {
 	sort.Strings(out)
 	return out, nil
 }
+
+// activeSelected maps each selected member that carries active content to it.
+// fresh is what the current rules find in the revision's own bytes: a revision
+// published before a rule existed carries no record of what the rule would flag.
+func activeSelected(rev Revision, selected []string, fresh map[string][]string) map[string][]string {
+	out := map[string][]string{}
+	for _, name := range selected {
+		for _, member := range rev.Members {
+			if member.Name != name {
+				continue
+			}
+			items := member.ActiveContent()
+			for _, item := range fresh[name] {
+				if !slices.Contains(items, item) && len(items) < maxActiveItems {
+					items = append(items, item)
+				}
+			}
+			if len(items) > 0 {
+				out[name] = items
+			}
+		}
+	}
+	return out
+}
+
+// freshActive lists, per skill, what the current rules find in a revision
+// published under older ones: it reads the revision's verified artifact. A
+// revision at the current rule version already carries the answer.
+func (m *Module) freshActive(ctx context.Context, tenant model.TenantID, rev Revision) (map[string][]string, error) {
+	if rev.ActiveRules >= activeRules {
+		return nil, nil
+	}
+	var total int64
+	pack, err := m.readArtifact(ctx, tenant, rev, &total)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]string{}
+	for _, member := range pack.Members {
+		if items := member.ActiveContent(); len(items) > 0 {
+			out[member.Name] = items
+		}
+	}
+	return out, nil
+}
+
 func decodeAssignment(w http.ResponseWriter, r *http.Request) (AssignmentRequest, error) {
 	var body AssignmentRequest
 	if err := api.DecodeRequestBody(w, r, &body, api.RequestBodySpec{MaxBytes: 16 << 10}); err != nil {
@@ -291,62 +355,18 @@ func (m *Module) saveAssignment(w http.ResponseWriter, r *http.Request, mc api.M
 			return
 		}
 	}
-	var result Assignment
 	r, release, err := m.prepareTarget(r, mc, body.Target, true)
 	defer release()
 	if err != nil {
 		respondError(w, err)
 		return
 	}
-	err = m.mutateAssignment(r.Context(), mc, body.RevisionID, func(sc store.Scope, revision AssignmentRevisionReader) error {
-		target, err := m.target(r.Context(), sc, mc.Principal, body.Target, true)
-		if err != nil {
-			return err
-		}
-		rev, err := revision(r.Context(), body.RevisionID)
-		if err != nil {
-			return err
-		}
-		members, err := selectedNames(rev, body.Members)
-		if err != nil {
-			return err
-		}
-		encoded, _ := json.Marshal(members)
-		repo, err := sc.Ext(AssignmentKind)
-		if err != nil {
-			return err
-		}
-		row := model.Record{"target_kind": target.Kind, "target_id": target.ID, "target_version": target.Version, "pack_id": rev.PackID, "revision_id": rev.ID, "members": string(encoded), "created_by": mc.Principal.Actor()}
-		if !target.WorkspaceID.IsZero() {
-			row["workspace_id"] = target.WorkspaceID.String()
-		}
-		if id.IsZero() {
-			row, err = repo.Create(r.Context(), row)
-		} else {
-			old, e := repo.Get(r.Context(), id)
-			if e != nil {
-				return e
-			}
-			// An update changes a pin/member set, never relocates its authority.
-			if old.Int(model.ColVersion) != version || old.String("target_kind") != body.Kind || old.String("target_id") != body.ID || old.String("pack_id") != rev.PackID || old.String("workspace_id") != target.WorkspaceID.String() && !(old.String("workspace_id") == "" && target.WorkspaceID.IsZero()) {
-				return store.ErrConflict
-			}
-			old["revision_id"], old["members"], old["target_version"] = rev.ID, string(encoded), target.Version
-			row, err = repo.Update(r.Context(), old)
-		}
-		if err != nil {
-			return err
-		}
-		result, err = assignmentDTO(row)
-		if err != nil {
-			return err
-		}
-		return catalogAudit(r.Context(), sc, mc, "skills.assignment.pin", AssignmentKind, model.ID(result.ID), map[string]any{"target_kind": target.Kind, "target_id": target.ID, "target_version": target.Version, "revision_id": rev.ID, "assignment_version": result.Version, "manifest_digest": rev.ManifestDigest})
-	})
+	result, err := m.pinAssignment(r.Context(), mc, body, id, version, false)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
+
 	// The pin is committed: every selected member is now loaded for the target's
 	// next conversations — the GenAI load_skill moment Olivares can observe (the
 	// agent's own in-context load happens inside the tool). A session target
@@ -366,6 +386,117 @@ func (m *Module) saveAssignment(w http.ResponseWriter, r *http.Request, mc api.M
 		status = http.StatusOK
 	}
 	respond(w, status, AssignmentResult{State: "assignment_effective_for_new_conversations", Assignment: result})
+}
+
+// pinAssignment preserves the native target and catalog authority barriers.
+func (m *Module) pinAssignment(ctx context.Context, mc api.ModuleContext, body AssignmentRequest, id model.ID, version int64, idempotent bool) (result Assignment, err error) {
+	err = m.mutateAssignment(ctx, mc, body.RevisionID, func(sc store.Scope, revision AssignmentRevisionReader) error {
+		target, err := m.target(ctx, sc, mc.Principal, body.Target, true)
+		if err != nil {
+			return err
+		}
+		rev, err := revision(ctx, body.RevisionID)
+		if err != nil {
+			return err
+		}
+		members, err := selectedNames(rev, body.Members)
+		if err != nil {
+			return err
+		}
+		// Approval covers what is newly pinned: members an existing pin already
+		// holds at this same revision were approved when they were pinned.
+		fresh, err := m.freshActive(ctx, sc.Tenant(), rev)
+		if err != nil {
+			return err
+		}
+		active := activeSelected(rev, members, fresh)
+		approved := func(already []string) error {
+			if body.ApproveActiveContent {
+				return nil
+			}
+			var unapproved []string
+			for name := range active {
+				if !slices.Contains(already, name) {
+					unapproved = append(unapproved, name)
+				}
+			}
+			if len(unapproved) > 0 {
+				slices.Sort(unapproved)
+				return refuse("active_content_unapproved", strings.Join(unapproved, ","))
+			}
+			return nil
+		}
+		encoded, _ := json.Marshal(members)
+		repo, err := sc.Ext(AssignmentKind)
+		if err != nil {
+			return err
+		}
+		if idempotent {
+			filters := append(targetFilters(body.Target), model.Filter{Column: "pack_id", Op: model.OpEq, Value: rev.PackID})
+			rows, _, err := repo.List(ctx, model.Query{Limit: 2, Filters: filters})
+			if err != nil {
+				return err
+			}
+			if len(rows) > 1 {
+				return store.ErrConflict
+			}
+			if len(rows) == 1 {
+				result, err = assignmentDTO(rows[0])
+				if err != nil {
+					return err
+				}
+				pinned, err := pinnedRevision(ctx, sc, result.RevisionID)
+				if err != nil {
+					return err
+				}
+				if pinned.Source.Kind != "builtin" || pinned.Source.RequestedRef != "olivares-wiki" || len(result.Members) != 1 || result.Members[0] != "olivares-wiki" {
+					return store.ErrConflict
+				}
+				return nil
+			}
+		}
+		row := model.Record{"target_kind": target.Kind, "target_id": target.ID, "target_version": target.Version, "pack_id": rev.PackID, "revision_id": rev.ID, "members": string(encoded), "created_by": mc.Principal.Actor()}
+		if !target.WorkspaceID.IsZero() {
+			row["workspace_id"] = target.WorkspaceID.String()
+		}
+		if id.IsZero() {
+			if err := approved(nil); err != nil {
+				return err
+			}
+			row, err = repo.Create(ctx, row)
+		} else {
+			old, e := repo.Get(ctx, id)
+			if e != nil {
+				return e
+			}
+			// An update changes a pin/member set, never relocates its authority.
+			if old.Int(model.ColVersion) != version || old.String("target_kind") != body.Kind || old.String("target_id") != body.ID || old.String("pack_id") != rev.PackID || old.String("workspace_id") != target.WorkspaceID.String() && !(old.String("workspace_id") == "" && target.WorkspaceID.IsZero()) {
+				return store.ErrConflict
+			}
+			var held []string
+			if old.String("revision_id") == rev.ID {
+				_ = json.Unmarshal([]byte(old.String("members")), &held)
+			}
+			if err := approved(held); err != nil {
+				return err
+			}
+			old["revision_id"], old["members"], old["target_version"] = rev.ID, string(encoded), target.Version
+			row, err = repo.Update(ctx, old)
+		}
+		if err != nil {
+			return err
+		}
+		result, err = assignmentDTO(row)
+		if err != nil {
+			return err
+		}
+		meta := map[string]any{"target_kind": target.Kind, "target_id": target.ID, "target_version": target.Version, "revision_id": rev.ID, "assignment_version": result.Version, "manifest_digest": rev.ManifestDigest}
+		if len(active) > 0 {
+			meta["approved_active_content"] = active
+		}
+		return catalogAudit(ctx, sc, mc, "skills.assignment.pin", AssignmentKind, model.ID(result.ID), meta)
+	})
+	return result, err
 }
 
 // deleteAssignment removes a skills assignment from its authorized target at
@@ -571,6 +702,81 @@ func (m *Module) listPackAssignments(w http.ResponseWriter, r *http.Request, mc 
 
 var errPageFull = errors.New("skills page full")
 
+// selectionTargets reads the targets a selection names: one pair as
+// target_kind and target_id, or the tree of a launch as repeated target=kind:id.
+func selectionTargets(r *http.Request) ([]Target, error) {
+	q := r.URL.Query()
+	pairs := q["target"]
+	if len(pairs) == 0 {
+		return []Target{{Kind: q.Get("target_kind"), ID: q.Get("target_id")}}, nil
+	}
+	if q.Has("target_kind") || q.Has("target_id") {
+		return nil, errInvalidRequest
+	}
+	targets := make([]Target, 0, len(pairs))
+	for _, pair := range pairs {
+		kind, id, ok := strings.Cut(pair, ":")
+		if !ok {
+			return nil, errInvalidRequest
+		}
+		targets = append(targets, Target{Kind: kind, ID: id})
+	}
+	return targets, nil
+}
+
+// getSelection returns the skills a new conversation pinned to the authorized
+// target, or the tree of targets, receives: the same resolution a launch runs,
+// refusals included. Each target is read through its native authority first.
+func (m *Module) getSelection(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	r = r.WithContext(ctx)
+	targets, err := selectionTargets(r)
+	if err == nil {
+		for _, t := range targets {
+			if !validTarget(t) {
+				err = errInvalidRequest
+			}
+		}
+	}
+	if err == nil {
+		_, err = orderedSelectionTargets(targets)
+	}
+	if err != nil {
+		respondError(w, errInvalidRequest)
+		return
+	}
+	stored := make([]StoredTarget, 0, len(targets))
+	for _, target := range targets {
+		prepared, release, err := m.prepareTarget(r, mc, target, false)
+		var fact StoredTarget
+		if err == nil {
+			err = mc.Data.View(prepared.Context(), func(sc store.Scope) error {
+				var err error
+				fact, err = m.target(prepared.Context(), sc, mc.Principal, target, false)
+				return err
+			})
+		}
+		release()
+		if err != nil {
+			respondError(w, err)
+			return
+		}
+		stored = append(stored, fact)
+	}
+	var out Selection
+	err = mc.Data.View(r.Context(), func(sc store.Scope) error {
+		var err error
+		out, err = m.ResolveStoredSelection(r.Context(), sc, stored)
+		return err
+	})
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	respond(w, http.StatusOK, out)
+}
+
 // readableTarget runs a target listing's own read check on one pin's target.
 func (m *Module) readableTarget(r *http.Request, mc api.ModuleContext, t Target) (bool, error) {
 	r, release, err := m.prepareTarget(r, mc, t, false)
@@ -667,7 +873,15 @@ func (m *Module) resolveSelectionWithSnapshot(ctx context.Context, sc store.Scop
 		return Selection{}, err
 	}
 	selected := map[string]*SelectedMember{}
-	names := map[string]string{}
+	// A skill name has one owner: the content delivered under it and the rank of
+	// the narrowest target that pinned it. A narrower target replaces a broader
+	// one's skill of the same name, so a project can override a generic pack
+	// without editing it; two targets of one kind that disagree still refuse.
+	type owner struct {
+		digest string
+		rank   int
+	}
+	owners := map[string]owner{}
 	if prior.Digest != "" {
 		encoded, err := json.Marshal(prior.Members)
 		if err != nil || prior.Digest != digest(encoded) || len(prior.Members) > MaxSelectedMembers {
@@ -675,7 +889,11 @@ func (m *Module) resolveSelectionWithSnapshot(ctx context.Context, sc store.Scop
 		}
 		for _, member := range prior.Members {
 			selected[member.RevisionID+"\x00"+member.Name] = &member
-			names[member.Name] = member.ContentDigest
+			rank := owners[member.Name].rank
+			for _, origin := range member.Origins {
+				rank = max(rank, targetRank[origin.Kind])
+			}
+			owners[member.Name] = owner{digest: member.ContentDigest, rank: rank}
 		}
 	}
 	for _, t := range ordered {
@@ -727,13 +945,39 @@ func (m *Module) resolveSelectionWithSnapshot(ctx context.Context, sc store.Scop
 					}
 				}
 				key := rev.ID + "\x00" + name
-				if existing, ok := names[name]; ok && existing != member.ContentDigest {
-					return Selection{}, refuse("skill_name_conflict", name)
+				rank := targetRank[t.Kind]
+				var replaced []SelectionOverride
+				if existing, ok := owners[name]; ok && existing.digest != member.ContentDigest {
+					switch {
+					case rank == existing.rank:
+						return Selection{}, refuse("skill_name_conflict", name)
+					case rank < existing.rank:
+						// A narrower target already owns this name: say what it replaced.
+						for _, held := range selected {
+							if held.Name == name {
+								held.Overrides = append(held.Overrides, SelectionOverride{Target: t, PackID: rev.PackID, RevisionID: rev.ID})
+							}
+						}
+						continue
+					}
+					for other, held := range selected {
+						if held.Name != name {
+							continue
+						}
+						for _, origin := range held.Origins {
+							replaced = append(replaced, SelectionOverride{Target: origin.Target, PackID: held.PackID, RevisionID: held.RevisionID})
+						}
+						replaced = append(replaced, held.Overrides...)
+						delete(selected, other)
+					}
+				} else if ok {
+					rank = max(rank, existing.rank)
 				}
-				names[name] = member.ContentDigest
+				owners[name] = owner{digest: member.ContentDigest, rank: rank}
 				if selected[key] == nil {
 					selected[key] = &SelectedMember{PackID: rev.PackID, RevisionID: rev.ID, ManifestDigest: rev.ManifestDigest, Name: name, Directory: member.Directory, SkillDigest: member.SkillDigest, ContentDigest: member.ContentDigest, Origins: []SelectionOrigin{}}
 				}
+				selected[key].Overrides = append(selected[key].Overrides, replaced...)
 				origin := SelectionOrigin{Target: t, TargetVersion: stored.Version, AssignmentID: a.ID, AssignmentVersion: a.Version}
 				found := false
 				for _, old := range selected[key].Origins {
@@ -752,6 +996,11 @@ func (m *Module) resolveSelectionWithSnapshot(ctx context.Context, sc store.Scop
 	}
 	out := Selection{Members: []SelectedMember{}}
 	for _, member := range selected {
+		sort.Slice(member.Overrides, func(i, j int) bool {
+			a, b := member.Overrides[i], member.Overrides[j]
+			return strings.Join([]string{a.Kind, a.Target.ID, a.PackID, a.RevisionID}, "\x00") < strings.Join([]string{b.Kind, b.Target.ID, b.PackID, b.RevisionID}, "\x00")
+		})
+		member.Overrides = slices.Compact(member.Overrides)
 		out.Members = append(out.Members, *member)
 	}
 	sort.Slice(out.Members, func(i, j int) bool {

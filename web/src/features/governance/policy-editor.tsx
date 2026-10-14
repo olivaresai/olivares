@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { looksLikeCredential } from '@/lib/credentials'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -124,6 +125,8 @@ function PolicyForm({
   const [name, setName] = useState(policy?.name ?? '')
   const [kind, setKind] = useState<PolicyKind>(policy?.kind ?? 'abac')
   const [enabled, setEnabled] = useState(policy?.enabled ?? true)
+  // The server refused a tier below the action's default: Community keeps that in Business.
+  const [needsBusiness, setNeedsBusiness] = useState(false)
 
   // ABAC draft rules.
   const [rules, setRules] = useState<DraftRule[]>(() =>
@@ -193,6 +196,16 @@ function PolicyForm({
       ? t('policyEditor.updated')
       : t('policyEditor.created'),
     onDone: onClose,
+    onError: (err) => {
+      if (
+        !(err instanceof ApiError) ||
+        err.status !== 501 ||
+        err.code !== 'business_required'
+      )
+        return false
+      setNeedsBusiness(true)
+      return true
+    },
   })
 
   // Both branches start from the stored rule or spec and overlay only what this form
@@ -227,6 +240,7 @@ function PolicyForm({
 
   function submit() {
     if (!valid) return
+    setNeedsBusiness(false)
     const payload: PolicyInput = {
       name: name.trim(),
       kind,
@@ -565,6 +579,12 @@ function PolicyForm({
           </div>
         )}
       </div>
+
+      {needsBusiness && (
+        <p role="alert" className="text-caption text-danger">
+          {t('policyEditor.needsBusiness')}
+        </p>
+      )}
 
       <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />

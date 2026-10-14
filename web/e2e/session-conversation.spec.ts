@@ -4,6 +4,8 @@
 //
 // THE SESSION SURFACE AS A CONVERSATION, against a live seeded engine whose
 // child is the fixture driver (no provider account, no model turn).
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { openAdvancedSession } from './session-launch-form'
 import { JOURNEYS, stepHref } from '../src/features/navigation/journeys'
@@ -73,7 +75,8 @@ test.describe('the session surface is a conversation', () => {
       `/sessions?session=run:${process.env.E2E_CAPTURE_RUN_REF}&pane=narrative`,
     )
     await composerReady(page)
-    await page.getByTestId('composer-advanced').click()
+    // The scope of the next action is in the popover of the model and effort control.
+    await page.getByTestId('composer-tool-model').click()
     const scope = page.getByTestId('work-scope-line')
     await expect(scope).toBeVisible()
     const text = (await scope.innerText()).replace(/\s+/g, ' ')
@@ -116,6 +119,27 @@ test.describe('the session surface is a conversation', () => {
     ).toContainText(/Read/i)
     await expect(conversation).not.toContainText(/modelUsage/)
     await expect(conversation).not.toContainText(/rate_limit_event/)
+
+    // #1784: the reply reads as lists, bold and code, and the tool's bookkeeping
+    // (thinking-token counters, an allowed rate limit) is no row of the thread.
+    await expect(conversation.locator('[data-kind="assistant"]')).toHaveCount(2)
+    const reply = conversation.locator('[data-kind="assistant"]').last()
+    await expect(reply.locator('li')).toHaveCount(2)
+    await expect(reply.locator('strong')).toHaveText('Identify clients:')
+    await expect(reply.locator('li code')).toHaveText('README.md')
+    await expect(reply.locator('pre code')).toHaveText('make test')
+    await expect(reply).not.toContainText('**')
+    await expect(reply).not.toContainText('```')
+    await expect(conversation).not.toContainText(/thinking tokens/i)
+    await expect(conversation).not.toContainText(/five hour/i)
+
+    const captures = process.env.E2E_CONVERSATION_CAPTURES
+    if (captures) {
+      mkdirSync(captures, { recursive: true })
+      await conversation.screenshot({
+        path: join(captures, 'conversation-reply.png'),
+      })
+    }
   })
 
   test('at 390 px a list row opens the thread and composer', async ({

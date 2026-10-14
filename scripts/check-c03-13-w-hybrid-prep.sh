@@ -132,7 +132,7 @@ need(webhook, "webhook.ts",
      "    webhookId, businessId, eventType, bodySha256, nowISO,", 1)
 need(webhook, "webhook.ts",
      "return await fulfilCompleteCohort(env, deps, payment, subscription, prior, held, {\n"
-     '    ...input, detailPrefix: "operator replay: ", judgedBy: "operator_replay",', 1)
+     '    ...input, detailPrefix: input.reconciled ? "operator reconciliation: " : "operator replay: ", judgedBy: "operator_replay",', 1)
 need(webhook, "webhook.ts",
      "const prior = await deps.store.readDodoPriorGrantState(\n    purchase.businessId,\n"
      "    purchase.subscriptionId,\n    purchase.paymentId,\n  );", 1)

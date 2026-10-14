@@ -69,6 +69,8 @@ export interface QuickLaunch {
   /** A model the user chose. Absent means the engine resolves it: the key's saved
    * default, else the tool's own. */
   model?: string
+  /** An effort level of that model. Absent leaves the model's own. */
+  effort?: string
   /** Vault secrets the session receives as environment variables, by name. */
   secretEnv?: SecretEnvRef[]
   /** The profile the person chose when the tool has several: it is the session's, and the
@@ -149,7 +151,7 @@ async function quickRun(
     name: '',
     transport: 'stream-json',
     permission_mode: PERMISSION_MODE[quick.permission],
-    effort: '',
+    effort: quick.effort ?? '',
     ...(quick.model ? { model: quick.model } : {}),
     workspace_ref: workspaceRef,
     isolation: 'native',

@@ -757,6 +757,7 @@ func TestDatalaneEveryVerbAddressesItsOwnRoute(t *testing.T) {
 		method string
 		path   string
 	}{
+		{[]string{"catalog", "admit", "id1"}, http.MethodPost, "/v1/m/catalog/entries/id1/admit"},
 		{[]string{"catalog", "connector-admission", "ls"}, http.MethodGet, "/v1/m/catalog/connector-admissions"},
 		{[]string{"catalog", "connector-admission", "policy", "get"}, http.MethodGet, "/v1/m/catalog/connector-admission/policy"},
 		{[]string{"catalog", "connector-admission", "policy", "set"}, http.MethodPut, "/v1/m/catalog/connector-admission/policy"},

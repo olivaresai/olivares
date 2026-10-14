@@ -284,7 +284,7 @@ jobs:
       # 0.1 only (2026-10-10: 0.1 ships when it compiles and the README Compose starts the
       # engine). A failure of this gate or of the race-full gate below is logged and does not stop
       # 0.1; every later tag keeps both gates blocking.
-      - name: preflight — the release container first hour passed on this exact commit
+      - name: preflight — the release container first hour passed on this commit or an identical tree
         continue-on-error: ${{ github.ref_name == '0.1' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1118,6 +1118,27 @@ jobs:
       private-repository: ${{ github.event.repository.private }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # Compare the complete Phase-1 draft after all asset-producing jobs finish.
+  # A failed comparison makes the producing run red, so Phase 2 cannot publish it.
+  verify-assets:
+    needs: [preflight, goreleaser, provenance-binaries, provenance-image]
+    if: ${{ !failure() && !cancelled() && github.event_name == 'push' && needs.goreleaser.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # draft visibility requires push access; checker only reads metadata
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: compare release assets with the previous published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPO: ${{ needs.preflight.outputs.release_github_repo }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+        run: |
+          python3 -B scripts/check-release-assets.py --repo "$RELEASE_REPO" \
+            --tag "$RELEASE_TAG" --phase-one
 
   # The build produces versioned images. Verify their signatures before aliasing
   # latest* through scripts/alias-image-digest.sh, which requires digest equality.
@@ -2418,3 +2439,20 @@ jobs:
           # refusal — and its PUBLICATION_UNKNOWN (exit 3) is a red job that has told the
           # truth rather than a rollback it cannot perform.
           bash scripts/release-finalize-stable.sh "${RELEASE_TAG}" "${RELEASE_COMMIT}"
+
+  qualify-published-installer:
+    needs: [publish-ota-manifest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      # GITHUB_TOKEN publication does not emit a release-triggered workflow run.
+      # workflow_dispatch is the supported exception; dispatch only after publication.
+      - name: qualify the published tag's installer assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MATRIX_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          gh workflow run installer-matrix.yml --repo "$GITHUB_REPOSITORY" \
+            --ref "refs/tags/$MATRIX_RELEASE_TAG" -f "release_version=$MATRIX_RELEASE_TAG"

@@ -475,7 +475,7 @@ def control_dedup(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("base_url", help="the console/engine, e.g. http://127.0.0.1:18789")
-    ap.add_argument("token")
+    ap.add_argument("token", help="bearer token, or - to read OLIVARES_TOKEN")
     ap.add_argument("tenant")
     ap.add_argument("--otlp", default="http://127.0.0.1:14318/v1/metrics",
                     help="the connector receiver (precondition 1)")
@@ -497,6 +497,10 @@ def main():
                          "the envelope identical between runs — idempotency depends on THIS, "
                          "rather than receiver deduplication, which is unavailable)")
     a = ap.parse_args()
+    if a.token == "-":
+        a.token = os.environ.get("OLIVARES_TOKEN", "")
+        if not a.token:
+            ap.error("OLIVARES_TOKEN is required when token is -")
 
     # Register the token before requests so unstructured echoes are redacted.
     _RED.recuerda(a.token)

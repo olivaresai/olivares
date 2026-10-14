@@ -32,13 +32,12 @@ stage() {
     "$TMP/tree/commercial/license-worker/src/download"
   cp "$ROOT/design/c05-cloud-skus-prep-2026-08-20.json" "$TMP/tree/design/"
   cp "$ROOT/design/C05-CLOUD-SKUS-PREP-2026-08-20.md" "$TMP/tree/design/"
-  cp "$ROOT/commercial/license-worker/src/dodo/catalog.ts" \
-    "$TMP/tree/commercial/license-worker/src/dodo/"
-  cp "$ROOT/commercial/license-worker/src/dodo/events.ts" \
-    "$ROOT/commercial/license-worker/src/dodo/provider-id.ts" \
-    "$TMP/tree/commercial/license-worker/src/dodo/"
-  cp "$ROOT/commercial/license-worker/src/download/sets.ts" \
-    "$TMP/tree/commercial/license-worker/src/download/"
+  # The whole Worker source: catalog.ts's import closure (events.ts -> store/, util/) is what the
+  # typecheck case compiles, and a hand-picked file list goes stale when that closure grows.
+  cp -R "$ROOT/commercial/license-worker/src/." "$TMP/tree/commercial/license-worker/src/"
+  # Its type packages (@cloudflare/workers-types) resolve from the Worker's own install.
+  [ ! -d "$ROOT/commercial/license-worker/node_modules" ] ||
+    ln -s "$ROOT/commercial/license-worker/node_modules" "$TMP/tree/commercial/license-worker/node_modules"
   cp "$CHECK" "$TMP/tree/scripts/"
   chmod +x "$TMP/tree/scripts/check-c05-cloud-skus-prep.sh"
 }
@@ -57,12 +56,14 @@ typecheck_catalog() {
     printf '%s\n' "$tsc" >"$TMP/tsc.out"
     return 0
   fi
-  "$tsc" \
+  (cd "$TMP/tree/commercial/license-worker" && "$tsc" \
     --noEmit \
     --target ES2022 \
     --module ESNext \
     --moduleResolution bundler \
     --lib ES2023 \
+    --types @cloudflare/workers-types,node \
+    --resolveJsonModule \
     --strict \
     --allowImportingTsExtensions \
     --verbatimModuleSyntax \
@@ -70,7 +71,7 @@ typecheck_catalog() {
     --forceConsistentCasingInFileNames \
     --noUnusedLocals \
     --noUnusedParameters \
-    "$TMP/tree/commercial/license-worker/src/dodo/catalog.ts" \
+    src/dodo/catalog.ts) \
     >"$TMP/tsc.out" 2>&1 || rc=$?
   echo "$rc" >"$TMP/tsc.rc"
 }

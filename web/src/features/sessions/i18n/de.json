@@ -131,6 +131,33 @@
     "noProfileRead": "Namen der Anbieterprofile werden nicht angezeigt: Ihre Rolle enthält sessions:profile:read nicht. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile.",
     "profileLookupFailed": "Die Namen der Anbieterprofile konnten nicht gelesen werden: die Profil-Abfrage schlug fehl. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile."
   },
+  "move": {
+    "open": "Verschieben nach…",
+    "title": "Diese Sitzung verschieben",
+    "mode": "Wie fortfahren",
+    "modeMove": "Dasselbe Werkzeug, anderes Konto",
+    "modeHandoff": "Anderes Werkzeug, als neue Sitzung",
+    "moveHint": "Dieselbe Sitzung läuft mit ihrer Konversation auf dem gewählten Konto weiter. Es startet nichts: Setzen Sie sie anschließend fort. Ab jetzt gelten die Limits und Freigaben dieses Kontos; keine Anmeldung wird kopiert.",
+    "handoffHint": "Eine neue Sitzung startet im gewählten Profil, mit dieser verknüpft, aus der Zusammenfassung unten und mit dem vollständigen Transkript im Anhang. Diese Sitzung bleibt unverändert.",
+    "target": "Konto",
+    "pick": "Konto wählen",
+    "noTargets": "Kein anderes Konto ist dafür bereit",
+    "summary": "Zusammenfassung, mit der die neue Sitzung beginnt",
+    "loading": "Zusammenfassung wird erstellt…",
+    "transcript": "Transkript angehängt: {{turns}} Anfragen, {{bytes}} Bytes.",
+    "confirmMove": "Verschieben",
+    "confirmHandoff": "Neue Sitzung starten",
+    "moved": "Nach {{name}} verschoben. Setzen Sie sie fort, um weiterzumachen.",
+    "started": "Neue Sitzung aus der Zusammenfassung gestartet.",
+    "failed": "Die Aktion konnte nicht abgeschlossen werden.",
+    "stateNotDelivered": "Die neue Sitzung wurde gestartet, aber ihre erste Nachricht ist nicht angekommen. Senden Sie den Text unten aus der Sitzung.",
+    "stateUnknown": "Die neue Sitzung wurde gestartet und ihre erste Nachricht ist möglicherweise angekommen. Prüfen Sie die Sitzung, bevor Sie den Text unten erneut senden.",
+    "stateWaits": "Die neue Sitzung wartet auf eine Freigabe, und ihre erste Nachricht wird nicht automatisch gesendet. Senden Sie den Text unten, sobald sie läuft.",
+    "firstTurn": "Erste Nachricht",
+    "close": "Schließen",
+    "profilesFailed": "Die Konten konnten nicht aufgelistet werden.",
+    "profilesDenied": "Sie dürfen Konten nicht auflisten, daher kann keines gewählt werden."
+  },
   "card": {
     "tabs": {
       "overview": "Überblick",
@@ -239,7 +266,7 @@
   "runState": {
     "pending": "Ausstehend",
     "running": "Läuft",
-    "idle": "Läuft",
+    "idle": "Untätig",
     "stopped": "Gestoppt",
     "failed": "Fehlgeschlagen",
     "cleaned": "Aufgeräumt"
@@ -374,6 +401,7 @@
     "folder": "Ordner",
     "temporaryFolder": "Temporärer Ordner dieser Sitzung",
     "panels": "Bereiche",
+    "tabActivity": "Aktivität",
     "tabChanges": "Änderungen",
     "tabFiles": "Dateien",
     "noFiles": "Diese Sitzung hat keinen Ordner zum Durchsuchen.",
@@ -490,5 +518,59 @@
   "thread": {
     "copyReference": "Referenz kopieren",
     "terminalHint": "Dieselbe Sitzung im Terminal."
+  },
+  "activity": {
+    "empty": "Noch nichts. Die Aufgabenliste des Werkzeugs, die Agenten, die es startet, die Arbeit, die es im Hintergrund laufen lässt, und die Dateien, die es ändert, erscheinen hier, während es arbeitet.",
+    "missing": "Das Transkript dieser Sitzung liegt nicht im Verzeichnis ihres Kontos, daher kann nicht angezeigt werden, was ihr Werkzeug getan hat.",
+    "failed": "Die Aktivität konnte nicht gelesen werden.",
+    "todos": "Plan",
+    "todosCount": "{{done}} von {{total}} erledigt",
+    "todo": {
+      "pending": "Offen",
+      "in_progress": "In Arbeit",
+      "completed": "Erledigt"
+    },
+    "agents": "Agenten",
+    "agent": "Agent",
+    "tasks": "Im Hintergrund",
+    "files": "Geänderte Dateien",
+    "fileNew": "neu",
+    "lines": "hinzugefügt: {{added}}, entfernt: {{removed}}",
+    "context": "Kontext",
+    "model": "Modell",
+    "tokens": "Im Kontext",
+    "compactions": "Verdichtungen",
+    "compactedTimes_one": "Einmal verdichtet",
+    "compactedTimes_other": "{{n}}-mal verdichtet",
+    "neverCompacted": "Nicht verdichtet",
+    "skills": "Skills",
+    "mcp": "MCP-Server",
+    "unreadable_one": "{{n}} Eintrag konnte nicht gelesen werden und wird nicht angezeigt.",
+    "unreadable_other": "{{n}} Einträge konnten nicht gelesen werden und werden nicht angezeigt.",
+    "countRunning": "{{total}} · {{running}} laufen",
+    "state": {
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "stopped": "Gestoppt",
+      "scheduled": "Geplant"
+    },
+    "kind": {
+      "shell": "Shell-Befehl",
+      "monitor": "Monitor",
+      "workflow": "Workflow",
+      "wakeup": "Geplantes Aufwecken"
+    },
+    "due": "um {{time}}",
+    "toolUses_one": "{{n}} Werkzeugaufruf",
+    "toolUses_other": "{{n}} Werkzeugaufrufe",
+    "agentTokens": "{{value}} Tokens",
+    "agentFailed": "Das Transkript dieses Agenten konnte nicht gelesen werden.",
+    "role": {
+      "user": "Anfrage",
+      "assistant": "Antwort",
+      "tool": "Werkzeug",
+      "result": "Ergebnis"
+    }
   }
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"maps"
 	"strconv"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -33,7 +34,8 @@ type wsMutationInput struct {
 	contentHash  string // hex sha-256 of written content or configured folder list
 	actor        string
 	actorKind    string
-	classes      []string // DLP classes (non-sensitive); "" for non-read
+	classes      []string       // DLP classes (non-sensitive); "" for non-read
+	meta         map[string]any // extra non-secret facts the event states in the clear (not in the hash)
 }
 
 // sealWorkspaceMutation appends a FILE mutation to the global audit ledger in its own
@@ -58,6 +60,7 @@ func appendWorkspaceAudit(ctx context.Context, sc store.Scope, in wsMutationInpu
 	if in.contentHash != "" {
 		meta["sha256"] = in.contentHash
 	}
+	maps.Copy(meta, in.meta)
 	_, err := sc.Audit().Append(ctx, model.AuditDraft{
 		Actor:       orSystem(in.actor),
 		ActorKind:   orSystemKind(in.actorKind),

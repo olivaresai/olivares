@@ -24,7 +24,8 @@ func TestPythonPathParameterCollisions(t *testing.T) {
 		{"query", "/v1/widgets/{query}", `"route", tenant="transport", limit="5"`, "/v1/widgets/route", false, false, false, nil},
 		{"body", "/v1/widgets/{body}", `"route", body={"value": 1}, tenant="transport", limit="5"`, "/v1/widgets/route", true, false, false, nil},
 		{"body_without_payload", "/v1/widgets/{body}", `body="route", tenant="transport", limit="5"`, "/v1/widgets/route", false, false, false, nil},
-		{"headers_without_locals", "/v1/widgets/{headers}", `headers="route", tenant="transport", limit="5"`, "/v1/widgets/route", false, false, false, nil},
+		{"headers", "/v1/widgets/{headers}", `headers_path="route", headers={"If-Match": "3"}, tenant="transport", limit="5"`, "/v1/widgets/route", false, false, false, nil},
+		{"headers_alias_collision", "/v1/widgets/{headers}/{headers_path}", `headers_path_path="route", headers_path="existing", headers={"If-Match": "3"}, tenant="transport", limit="5"`, "/v1/widgets/route/existing", false, false, false, nil},
 		{"raw", "/v1/widgets/{tenant}/export", `"route", tenant="transport", limit="5"`, "/v1/widgets/route/export", false, true, false, nil},
 		{"alias_collision", "/v1/widgets/{tenant}/{tenant_path}/{tenant_path_path}", `"route", tenant_path="existing", tenant_path_path="also-existing", tenant="transport", limit="5"`, "/v1/widgets/route/existing/also-existing", false, false, false, nil},
 		{"typed_parameter", "/v1/m/sessions/channels/{id}", `"route", id="query-id", tenant="transport", limit=5`, "/v1/m/sessions/channels/route", false, false, true, []OperationParameter{{Name: "id", In: "query", Type: "string"}, {Name: "limit", In: "query", Type: "integer"}}},
@@ -60,6 +61,9 @@ class Capture(OperationsMixin):
 			}
 			if tc.typed {
 				script += "assert result[3]['headers'] == {}, result\n"
+			}
+			if tc.name == "headers" || tc.name == "headers_alias_collision" {
+				script += "assert result[3]['headers'] == {'If-Match': '3'}, result\n"
 			}
 			if output, err := exec.Command(python, "-B", "-c", script).CombinedOutput(); err != nil {
 				t.Fatalf("generated Python failed: %v\n%s\n%s", err, output, source)

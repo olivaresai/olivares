@@ -99,3 +99,39 @@ func TestInventoryReportsSessionToolPresence(t *testing.T) {
 		})
 	}
 }
+
+// "Installed here" lists the program each tool's new session runs: the launch
+// resolver's answer when it names an executable, never a run of the tool.
+func TestInventoryReportsEachLaunchProgram(t *testing.T) {
+	var claude string
+	call, _ := newSignInServer(t, func(m *Module, bin string) {
+		claude = filepath.Join(bin, "claude")
+		if err := os.WriteFile(claude, []byte("#!/bin/sh\nprintf ran > \"$0.ran\"\nexit 99\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		codex := filepath.Join(bin, "codex-not-executable")
+		if err := os.WriteFile(codex, []byte("not executable"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		m.SetProgramResolver(func(driver string) string {
+			switch driver {
+			case "claude":
+				return claude
+			case "codex":
+				return codex
+			}
+			return ""
+		})
+	})
+	status, body := call("GET", "/v1/m/agenttools/inventory", nil)
+	if status != 200 {
+		t.Fatalf("inventory status %d: %v", status, body)
+	}
+	programs, ok := body["launch_programs"].(map[string]any)
+	if !ok || len(programs) != 1 || programs["claude"] != claude {
+		t.Fatalf("launch programs %v; want only claude=%s", body["launch_programs"], claude)
+	}
+	if _, err := os.Stat(claude + ".ran"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("inventory executed the program: sentinel stat = %v", err)
+	}
+}

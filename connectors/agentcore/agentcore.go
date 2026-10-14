@@ -54,12 +54,14 @@
 //
 // It imports only the SDK, the Apache identitysource contract and the shared
 // connectors/internal helpers (awssig, httpx.Doer, redact) — never the engine.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package agentcore
 
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -258,182 +260,6 @@ func (s *Source) Close(context.Context) error { return nil }
 // long-lived keys have none.
 func (s *Source) offline() bool {
 	return s.region == "" || s.creds.AKID == "" || s.creds.Secret == ""
-}
-
-// Snapshot reads the AgentCore control plane read-only and assembles the
-// identity graph: workload identities (the dedicated per-agent rows), the token
-// vault's OAuth2/API-key credential providers (outbound-credential custodians),
-// and — when include_policies — the Cedar policy engines and policies as
-// collections with policy→engine memberships. Offline it returns the empty
-// graph with Source and CapturedAt set, nil error. It never returns credential
-// material.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceAgentCore, CapturedAt: s.clock().UTC()}
-	if s.offline() {
-		return g, nil // offline: no credential/region configured
-	}
-	c := s.newClient()
-
-	// A) Workload identities — the directory's DEDICATED per-agent primitive,
-	// stamped KindWorkloadIdentity so the access-map attribution axis
-	// treats them as a FIRM per-agent signal.
-	wids, err := s.listWorkloadIdentities(ctx, c)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, wi := range wids {
-		attrs := map[string]string{"region": s.region}
-		if s.detail {
-			// Opt-in N+1: the list items carry no timestamps on the wire (the
-			// devguide's list columns are stale doc), so detail mode resolves each
-			// identity via GetWorkloadIdentity. A per-identity 404 (deleted between
-			// list and get — the list/get TOCTOU) or 403 (IAM grants List but not
-			// Get) degrades to the listed row WITHOUT timestamps, never a snapshot
-			// failure (the entra-agent ownership-expansion precedent); any other
-			// status still fails the snapshot.
-			det, err := s.getWorkloadIdentity(ctx, c, wi.Name)
-			switch {
-			case err == nil:
-				attrs["created_at"] = epochToRFC3339(det.CreatedTime)
-				attrs["updated_at"] = epochToRFC3339(det.LastUpdatedTime)
-			case isStatus(err, http.StatusNotFound, http.StatusForbidden):
-				// degrade per identity: the row existed at list time
-			default:
-				return identitysource.Graph{}, err
-			}
-		}
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         wi.WorkloadIdentityArn,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        identitysource.KindWorkloadIdentity,
-			DisplayName: wi.Name,
-			Source:      identitysource.SourceAgentCore,
-			Attributes:  pruneAttrs(attrs),
-		})
-	}
-
-	// B) OAuth2 credential providers — custodians of OUTBOUND credentials,
-	// deliberately NOT KindWorkloadIdentity (never a firm per-agent signal).
-	// NOTE (VERIFIED 2026-06-11): credentialProviderArn lives in the "acps" ARN
-	// namespace (arn:aws:acps:<region>:<acct>:token-vault/...), not
-	// bedrock-agentcore — never assume the service prefix when parsing the ref.
-	oauthProviders, err := s.listOauth2Providers(ctx, c)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, p := range oauthProviders {
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         p.CredentialProviderArn,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        "credential_provider",
-			DisplayName: p.Name,
-			Source:      identitysource.SourceAgentCore,
-			Attributes: pruneAttrs(map[string]string{
-				"vendor":     p.CredentialProviderVendor,
-				"created_at": epochToRFC3339(p.CreatedTime),
-			}),
-		})
-	}
-
-	// C) API-key credential providers — same custodian class; these additionally
-	// drive the long-lived-credential drift finding in Gather.
-	apiKeyProviders, err := s.listAPIKeyProviders(ctx, c)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, p := range apiKeyProviders {
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         p.CredentialProviderArn,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        "apikey_credential_provider",
-			DisplayName: p.Name,
-			Source:      identitysource.SourceAgentCore,
-			Attributes: pruneAttrs(map[string]string{
-				"created_at": epochToRFC3339(p.CreatedTime),
-			}),
-		})
-	}
-
-	// D) Registry records as NHI identities — an agent registered in the account's
-	// agent directory is a non-human identity with its registry ARN as the ref.
-	// Only APPROVED records are roster entries; non-healthy records are posture
-	// findings emitted by Gather, not roster identities.
-	if s.enableRegistry {
-		registries, err := s.listRegistries(ctx, c)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		for _, reg := range registries {
-			records, err := s.listRegistryRecords(ctx, c, reg.RegistryID)
-			if err != nil {
-				return identitysource.Graph{}, err
-			}
-			for _, rec := range records {
-				if strings.EqualFold(rec.Status, "APPROVED") {
-					g.Identities = append(g.Identities, identitysource.Identity{
-						Ref:         rec.RecordArn,
-						Type:        identitysource.PrincipalNHI,
-						Kind:        identitysource.KindWorkloadIdentity,
-						DisplayName: rec.Name,
-						Source:      identitysource.SourceAgentCore,
-						Attributes: pruneAttrs(map[string]string{
-							"registry":        reg.Name,
-							"descriptor_type": rec.DescriptorType,
-							"version":         rec.RecordVersion,
-							"region":          s.region,
-						}),
-					})
-				}
-			}
-		}
-	}
-
-	// E) Policy engines + policies as collections. NO identity→resource permitted
-	// edges are derived from Cedar statements: AgentCore Cedar principals are
-	// OAuth claims (username/role/scope), not roster identities — fabricating an
-	// identity ref would violate the no-invented-identity rule (package doc seam).
-	if s.includePolicies {
-		engines, err := s.listPolicyEngines(ctx, c)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		for _, e := range engines {
-			g.Collections = append(g.Collections, identitysource.Collection{
-				Ref:         e.PolicyEngineArn,
-				Kind:        identitysource.KindGroup,
-				DisplayName: e.Name,
-				Source:      identitysource.SourceAgentCore,
-				Attributes: pruneAttrs(map[string]string{
-					"object": "policy_engine",
-					"status": e.Status,
-				}),
-			})
-			policies, err := s.listEnginePolicies(ctx, c, e.PolicyEngineID)
-			if err != nil {
-				return identitysource.Graph{}, err
-			}
-			for _, p := range policies {
-				g.Collections = append(g.Collections, identitysource.Collection{
-					Ref:         p.PolicyArn,
-					Kind:        identitysource.KindPolicy,
-					DisplayName: p.Name,
-					Source:      identitysource.SourceAgentCore,
-					Attributes: pruneAttrs(map[string]string{
-						"status":     p.Status,
-						"engine":     e.PolicyEngineID,
-						"definition": p.Definition.kind(), // discriminator only, never the statement text
-					}),
-				})
-				g.Memberships = append(g.Memberships, identitysource.Membership{
-					MemberRef:     p.PolicyArn,
-					MemberKind:    identitysource.MemberCollection,
-					CollectionRef: e.PolicyEngineArn,
-					Source:        identitysource.SourceAgentCore,
-				})
-			}
-		}
-	}
-	return g, nil
 }
 
 // clock returns the connector's time source (injectable for tests).

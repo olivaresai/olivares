@@ -98,11 +98,12 @@ function sessionState(live: LiveDTO): RailState {
 }
 
 /** A launched run: one asking for a person needs the operator (the rule Sessions files
- * by too), running or idle is working, pending needs the operator, and stopped, failed
- * or cleaned is earlier. */
+ * by too), running is working, idle (it answered and waits for input) is idle, pending
+ * needs the operator, and stopped, failed or cleaned is earlier. */
 function runState(run: RunDTO): RailState {
   if (runWantsAPerson(run)) return 'need'
-  if (run.state === 'running' || run.state === 'idle') return 'live'
+  if (run.state === 'running') return 'live'
+  if (run.state === 'idle') return 'idle'
   if (run.state === 'pending') return 'need'
   return 'ended'
 }

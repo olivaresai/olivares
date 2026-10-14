@@ -92,7 +92,17 @@ type LicenseStatus struct {
 	Features    []string   `json:"features,omitempty"`
 	MaxUsers    int        `json:"max_users"` // Deprecated: attested seat figure (0 = unlimited); IGNORED by every build since B10
 	IssuedAt    *time.Time `json:"issued_at,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// ExpiresAt is the end of the base line's term before any grace: its effective boundary while
+	// provisional, its paid_through otherwise. While the base line is provisional that is the
+	// short lease, not the paid term, so a console must not present it as the licence expiry.
+	// A signed renewal grace end is not carried on this DTO.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// PaidThrough is the end of the term the buyer paid for (the date the licence email states).
+	// Present for a v3 credential only; a flat license's ExpiresAt already is its term.
+	PaidThrough *time.Time `json:"paid_through,omitempty"`
+	// LeaseUntil is the end of the provisional lease of the base line, present only while the base
+	// line is provisional (refund window or promotion hold). Absent once the term starts.
+	LeaseUntil *time.Time `json:"lease_until,omitempty"`
 
 	// Live ACTIVE-USER usage. ActiveUsers is a usage figure, never a quota
 	// numerator: self-hosted accounts are unlimited in every tier (B10), which is

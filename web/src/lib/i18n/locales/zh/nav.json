@@ -75,8 +75,6 @@
     "session-viewer": "会话查看器",
     "backups": "备份",
     "logs": "日志",
-    "residency": "数据驻留",
-    "tenants": "租户",
     "inferenceProxy": "推理代理",
     "alerting": "告警",
     "agentcoreExport": "AgentCore 导出",
@@ -146,8 +144,6 @@
     "audit": "防篡改证据账本",
     "workspaceDashboard": "工作区内的代理、会话、资源和活动",
     "settings": "工作区与账户设置",
-    "residency": "将每个组织固定到某个区域，或保持未固定",
-    "tenants": "停用或恢复租户的服务",
     "inferenceProxy": "代理闸门、出站 DLP 规则与设备审批",
     "alerting": "将发现路由到目标并查看投递",
     "reporting": "生成并下载治理报告",
@@ -331,13 +327,32 @@
     "turnPlaceholder": "发送一句话…",
     "turnAria": "会话回合",
     "attachedWaiting": "需要你处理",
-    "advanced": "高级",
+    "rawLine": "原始行",
     "advancedHint": "向 stdin 发送一行 NDJSON。默认是句子栏。",
     "wirePlaceholder": "向 stdin 发送一行 NDJSON…",
     "wireAria": "会话输入行",
     "turnFailed": "会话无法接受此回合。",
     "sendBackgroundHint": "Ctrl+Enter 发送并保留草稿以写下一句。",
-    "messagePlaceholder": "给 {{title}} 发消息…"
+    "messagePlaceholder": "给 {{title}} 发消息…",
+    "slashLabel": "命令与技能",
+    "slashOption": "{{name}}，第 {{i}} 项，共 {{n}} 项",
+    "slashNoMatch": "没有与“{{query}}”匹配的命令。",
+    "slash": {
+      "loading": "正在读取工具的命令…",
+      "failed": "无法读取工具的命令。",
+      "unreported": "此工具没有为该会话报告任何命令。",
+      "stale": "无法刷新该工具的命令；此列表可能已过期。",
+      "agent": "代理",
+      "source": {
+        "built-in": "内置",
+        "user": "用户",
+        "project": "项目",
+        "plugin": "插件"
+      }
+    },
+    "modelAria": "此会话的模型与推理强度：{{value}}",
+    "sessionKeeps": "此会话保持 {{value}}。更换模型或推理强度将启动新会话。",
+    "startWithChoice": "用此选择启动新会话"
   },
   "shell": {
     "journeysLabel": "工作流程",

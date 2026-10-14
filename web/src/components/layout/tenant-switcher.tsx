@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ApiError } from '@/lib/api/errors'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { grantName, shortId, useOrgs } from './tenant-label'
@@ -57,7 +58,11 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
         }))
 
   // Nothing to show: a non-superadmin with no memberships.
-  if (!isSuperadmin && grants.length === 0) return null
+  if (
+    options.length === 0 &&
+    (!isSuperadmin || !PANEL_EXTENSIONS.useOrganizationInventory)
+  )
+    return null
 
   const active = options.find((o) => o.tenant === activeTenant)
   const activeLabel =
@@ -65,7 +70,10 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
     (activeTenant ? shortId(activeTenant) : t('auth:tenant.none'))
 
   // A single, fixed membership is a label, not a control.
-  if (!isSuperadmin && options.length <= 1) {
+  if (
+    options.length <= 1 &&
+    (!isSuperadmin || !PANEL_EXTENSIONS.useOrganizationInventory)
+  ) {
     return (
       <span
         className={cn(

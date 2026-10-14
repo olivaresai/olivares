@@ -5,16 +5,12 @@
   "groups": {
     "people": "ユーザー",
     "signIn": "サインイン",
-    "machines": "マシン ID",
-    "posture": "ポスチャ"
+    "machines": "マシン ID"
   },
   "tabs": {
     "federation": "SSO と SCIM",
     "inventory": "アイデンティティインベントリ",
-    "lifecycle": "NHI ライフサイクル",
     "mcp": "MCP 認可",
-    "wif": "WIF グラフ",
-    "posture": "鍵とレジデンシーの態勢",
     "login": "特権ログイン",
     "totp": "TOTP 要素"
   },
@@ -42,10 +38,7 @@
     "failed": "ステップアップが完了しませんでした。操作は拒否されたままです。",
     "relyingPartyUnusable": "この配備ではパスキーを利用できません。コンソールが提供されているアドレスに対して、エンジンが使用できるリライング パーティーを持っていません。運用担当者が有効なリライング パーティー ドメイン（ドットを含むホスト名、または適切な場合は localhost）を設定し、宣言されたその安全なオリジンでコンソールにアクセスし、変更後にエンジンを再起動する必要があります。別のアドレスで再試行するだけでは解決しません。",
     "actions": {
-      "wif": "Workload Identity Federation グラフの閲覧",
       "identity": "アイデンティティの管理",
-      "nhiLifecycleRotate": "非人間アイデンティティの認証情報ローテーション",
-      "nhiLifecycleFinalize": "非人間アイデンティティ廃止の確定",
       "providers": "プロバイダーの資格情報を登録または失効させる",
       "generic": "この操作",
       "console": "コネクターの管理",
@@ -102,12 +95,6 @@
     "mcpAuth": {
       "title": "MCP 認可の標準規格"
     },
-    "wif": {
-      "title": "Workload Identity Federation のリファレンス"
-    },
-    "posture": {
-      "title": "鍵とレジデンシーのリファレンス"
-    },
     "login": {
       "title": "特権ログインの標準規格"
     }
@@ -155,28 +142,14 @@
     "leaverSeamWhat": "退職者の監査証拠",
     "noLeaver": "デプロビジョニングイベントはありません",
     "noLeaverHint": "SCIM の退職処理（delete / prov:delete）が処理されると、バックエンドはそのユーザーのセッションとトークンを失効させ、ここに記録します。",
+    "leaverTruncated": "最新の退職イベントを {{n}} 件表示。古いものもあります",
+    "leaverTruncatedHint": "表示より多くの退職イベントがあります。このカードは最新のものを表示するため、表示されないのは古いイベントです。ユーザーが一覧にないことは、デプロビジョニングされていないことの証明にはなりません。",
     "revoked": "セッションとトークンを失効済み",
     "col": {
       "userName": "ユーザー",
       "state": "状態",
       "externalId": "External ID",
       "lastModified": "最終更新"
-    }
-  },
-  "console": {
-    "title": "Claude コンソールの態勢",
-    "description": "Anthropic Admin API が、組織のアイデンティティ態勢について検証できること、そしてできないことを示します。完全なロスターとしてではなく、誠実に表示します。",
-    "seamWhat": "claude-console の態勢に関する検出結果",
-    "noFindings": "態勢に関する検出結果はありません",
-    "noFindingsHint": "claude-console コネクターは、構成されると構造的な態勢の検出結果を発行します。",
-    "blindSpotTitle": "Admin API の盲点（構造的なものであり、設定ミスではありません）",
-    "blindSpots": {
-      "ssoEnforcement": "SSO の強制状態は Admin API では公開されません（API では不明）。",
-      "scimProvisioning": "SCIM のプロビジョニング状態は Admin API では公開されません（API では不明）。",
-      "members": "組織のメンバーは Admin API 経由で一覧取得できます。",
-      "ssoJit": "SSO / JIT は Team プラン以上のケーパビリティです。",
-      "auditExport": "SCIM / 監査エクスポートは Enterprise でのみ利用可能です。",
-      "continuousAudit": "継続的監査は Compliance Activity Feed であり、ポーリング可能な API ではありません（180 日分の CSV はオーナーのみがダウンロードできる Console の機能です）。"
     }
   },
   "roster": {
@@ -203,190 +176,10 @@
       "all": "すべて"
     }
   },
-  "lifecycle": {
-    "loading": "NHI ライフサイクルを読み込んでいます…",
-    "unknown": "不明",
-    "notSet": "未設定",
-    "orphaned": "孤立",
-    "forbidden": {
-      "title": "権限がありません",
-      "description": "現在のロールには NHI ライフサイクルを閲覧する権限がありません。"
-    },
-    "posture": {
-      "title": "ライフサイクル態勢",
-      "description": "テナント全体の経過状態、適用、責任者、重要度の態勢です。",
-      "total": "合計",
-      "stale": "古い",
-      "blocked": "ブロック",
-      "alerting": "警告中",
-      "orphaned": "孤立",
-      "critical": "重大"
-    },
-    "filters": {
-      "criticality": "重要度で絞り込む",
-      "enforcement": "適用状態で絞り込む",
-      "allCriticality": "すべての重要度",
-      "allEnforcement": "すべての適用状態"
-    },
-    "criticality": {
-      "low": "低",
-      "medium": "中",
-      "high": "高",
-      "critical": "重大"
-    },
-    "staleness": {
-      "ok": "有効",
-      "stale": "古い",
-      "unknown": "不明"
-    },
-    "enforcement": {
-      "monitor": "監視",
-      "alert": "警告",
-      "blocked": "ブロック"
-    },
-    "offboard": {
-      "none": "有効",
-      "soft_deleted": "復元可能な削除",
-      "finalized": "確定済み"
-    },
-    "table": {
-      "title": "統制対象の非人間アイデンティティ",
-      "description": "ローテーション態勢、適用状態、責任者、廃止状態です。アイデンティティを選ぶとイベント履歴と操作を表示します。",
-      "identity": "アイデンティティ",
-      "criticality": "重要度",
-      "staleness": "経過状態",
-      "enforcement": "適用",
-      "ownership": "所有者とスポンサー",
-      "offboarding": "廃止",
-      "ownerValue": "所有者: {{ref}}",
-      "sponsorValue": "スポンサー: {{ref}}",
-      "openDetail": "{{ref}} のライフサイクル詳細を開く",
-      "truncated_other": "最初の {{count}} 件の ID を表示しています。この条件に一致する ID は表示されているより多くあります。フィルターを絞り込んで残りを確認してください。"
-    },
-    "empty": {
-      "title": "ライフサイクルレコードがありません",
-      "description": "確認付きスイープを実行すると、インベントリの NHI が登録され、態勢が具体化されます。"
-    },
-    "detail": {
-      "description": "現在のライフサイクル状態と追記専用のガバナンス履歴です。",
-      "posture": "ライフサイクル詳細",
-      "enforcementReason": "適用理由",
-      "owner": "人間の所有者",
-      "sponsor": "人間のスポンサー",
-      "rotatedAt": "最終ローテーション",
-      "maxAge": "最大経過時間",
-      "seconds": "{{count}} 秒",
-      "inherited": "重要度の既定値を継承",
-      "rotationTarget": "ローテーション対象",
-      "recoveryUntil": "復元期間の終了"
-    },
-    "events": {
-      "title": "追記専用イベント履歴",
-      "description": "バックエンドが記録したライフサイクル変更と適用状態の遷移です。",
-      "empty": "ライフサイクルイベントはありません。",
-      "event": "イベント",
-      "actor": "実行者",
-      "detail": "詳細",
-      "when": "日時"
-    },
-    "actions": {
-      "title": "ライフサイクル操作",
-      "reason": "理由",
-      "critical": {
-        "twoAccountsAal3": "この重大操作を実行するには、異なる 2 つのユーザーアカウントによる承認が必要です。エンジンが強制するのは異なる「アカウント」であり、2 つのアカウントが 2 人の別人であることは証明できません。 Business ではポリシーで現在のリスク階層を引き下げられます。Community は既定の最低承認要件を維持します。",
-        "breakGlassPossible": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。有効なブレークグラス緊急付与があれば代わりに認可できます。その使用は記録され、事後にレビューされます。 Business ではポリシーで現在のリスク階層を引き下げられます。Community は既定の最低承認要件を維持します。",
-        "noBreakGlass": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。これにブレークグラスは使えません。2 人目の承認者を迂回する緊急経路は存在しません。 Business ではポリシーで現在のリスク階層を引き下げられます。Community は既定の最低承認要件を維持します。"
-      },
-      "ownership": {
-        "button": "責任者を割り当てる",
-        "title": "人間の責任者を割り当てる",
-        "description": "インベントリの参照を使って、責任を負う所有者とスポンサーを設定します。",
-        "owner": "所有者のアイデンティティ参照",
-        "sponsor": "スポンサーのアイデンティティ参照",
-        "humanOnly": "所有者とスポンサーは、いずれもインベントリ内の人間のアイデンティティである必要があります。",
-        "noChanges": "保存する前に、所有者またはスポンサーを変更してください。",
-        "cannotClear": "所有者とスポンサーの参照はここでは消去できません。代わりに別の人間のアイデンティティを割り当ててください。",
-        "confirm": "責任者を保存",
-        "saved": "NHI の責任者を保存しました。"
-      },
-      "policy": {
-        "button": "ポリシーを編集",
-        "title": "ローテーションポリシーを編集",
-        "description": "認証情報の重要度、ローテーション期間、対象、最終ローテーションを設定します。",
-        "enforcementWarning": "このポリシーの保存により適用状態が間接的に変わる場合があります。重要度によって期限超過時の警告またはブロックが決まり、期限超過の重大な認証情報は次回スイープでブロックされる可能性があります。",
-        "criticality": "認証情報の重要度",
-        "maxAge": "最大経過秒数",
-        "maxAgeHint": "0 を指定すると、選択した重要度の既定値を継承します。",
-        "rotationTarget": "ローテーション対象",
-        "rotatedAt": "確認済みの最終ローテーション",
-        "confirm": "ポリシーを保存",
-        "saved": "NHI ローテーションポリシーを保存しました。",
-        "partialUpdateNote": "空欄または 0 のままにすると現在の値が維持されます。これらの設定は変更できますが消去はできないため、すでに設定されたローテーション期間や対象は置き換えるまで残ります。"
-      },
-      "rotate": {
-        "button": "ローテーション",
-        "title": "認証情報ローテーションを申請",
-        "description": "統制対象の重大なローテーション申請を開始します。",
-        "target": "アクチュエータ対象",
-        "confirm": "ローテーションを申請",
-        "credentialTitle": "新しい認証情報 — 一度だけ表示",
-        "credentialWarning": "今すぐ安全な場所にコピーして保存してください。この認証情報は一度しか表示されず、Olivares AI には保存されません。ダイアログを閉じると復元できません。",
-        "credential": "新しい認証情報",
-        "credentialRef": "新しい認証情報の参照: {{ref}}",
-        "credentialSaved": "安全に保存しました"
-      },
-      "offboard": {
-        "button": "廃止",
-        "title": "NHI を復元可能な状態で削除",
-        "description": "承認者 1 人による高リスクの廃止申請を開始します。",
-        "warning": "この復元可能な手順は NHI と紐づくエージェントをブロックし、復元期間を開始します。AAL3 は不要です。",
-        "confirm": "復元可能な削除を申請"
-      },
-      "finalize": {
-        "button": "確定",
-        "title": "廃止を確定",
-        "description": "復元可能な状態で削除済みの NHI を恒久的に失効させます。",
-        "irreversible": "確定は取り消せません。ここでは break-glass は適用されず、2 つ目の異なるユーザーアカウントによる承認の要件を回避できません。",
-        "confirm": "恒久的に確定"
-      },
-      "restore": {
-        "button": "復元",
-        "title": "NHI を復元",
-        "description": "復元期間内に削除を取り消します。この管理操作には意図的に二重統制がありません。",
-        "confirm": "NHI を復元"
-      },
-      "sweep": {
-        "button": "スイープを実行",
-        "title": "ライフサイクルスイープを実行",
-        "description": "このテナントの経過状態、責任者、適用状態を再計算します。",
-        "warning": "このスイープは冪等ですが状態を変更します。アイデンティティをブロック状態に移し、統制対象の操作を拒否する場合があります。",
-        "confirm": "状態変更スイープを実行",
-        "done": "NHI ライフサイクルスイープが完了しました。",
-        "result": "検査: {{scanned}}、新規ブロック: {{blocked}}。"
-      },
-      "result": {
-        "title": "統制申請の状態",
-        "done": "ライフサイクル操作が完了しました。",
-        "pending": "申請は承認待ちです。まだ処理は実行されていません。",
-        "rejected": "申請は却下されました。処理は実行されていません。",
-        "expired": "申請は期限切れです。必要な場合は再申請してください。",
-        "noGate": "承認ゲートが構成されていないため、操作は拒否されたままです。",
-        "unavailable": "承認されましたが、このソースには自動アクチュエータがありません。プロバイダーの手動手順に従ってください。",
-        "breakGlass": "監査対象の緊急経路で操作が完了しました。",
-        "received": "バックエンドから統制申請の状態が返されました。",
-        "approval": "承認参照: {{ref}}"
-      }
-    },
-    "errors": {
-      "mutation": "ライフサイクル操作を完了できませんでした。申請内容を確認して再試行してください。",
-      "forbidden": "権限がありません。現在のロールではこのライフサイクル操作を実行できません。",
-      "humanOwnerRequired": "所有者とスポンサーはインベントリ内の人間のアイデンティティである必要があります。非人間アイデンティティはどちらの役割も担えません。",
-      "softDeleteRequired": "確定するには先に復元可能な削除が必要です。まず NHI を廃止し、復元判断後に確定してください。",
-      "gate": {
-        "rejected": "レビュー担当者がこの要求を却下しました。権限の問題ではありません。担当者に相談するか、不足していた背景を添えて新しい要求を作成してください。",
-        "expired": "この要求の承認は実行前に失効しました。新しい要求を作成してください。以前の決定はもう何も承認しません。",
-        "no_gate": "承認ゲートが接続されていないため、この操作は統制できず拒否されます。実行前に運用者がガバナンスを設定する必要があります。"
-      }
+  "empty": {
+    "nhiRoster": {
+      "title": "ID はまだありません",
+      "description": "エージェントがリソースにアクセスするか、エージェントを ID に紐付けると、ここに表示されます。"
     }
   },
   "mcp": {
@@ -395,6 +188,8 @@
     "seamWhat": "MCP 認可の検出結果",
     "noFindings": "MCP 認可の検出結果はありません",
     "noFindingsHint": "OAuth で保護された MCP サーバーが検出されると、そのトークンバインディングの態勢がここに記録されます。",
+    "truncated": "検出結果を {{n}} 件読み込みました。さらにあります",
+    "truncatedHint": "表示より多くの MCP 認可の検出結果があります。このページは 1 ページ分の行のみ取得します。サーバーが一覧にないことは、検出結果がないことの証明にはなりません。",
     "prmTitle": "オーディエンスにバインドされた認可（RFC 9728）",
     "prmDescription": "OAuth で保護された MCP サーバーがトークンを 1 つの具体的なリソースにバインドする方法です。これにより、あるサーバー向けに発行されたトークンを別のサーバーで再生することはできなくなります。",
     "flow": {
@@ -420,105 +215,6 @@
       }
     },
     "noPassthrough": "トークンのパススルーは設計上禁止されています。パネルは観測とイントロスペクションを行うものであり、MCP トークンを転送したり再生したりすることは決してありません。"
-  },
-  "wif": {
-    "gatedNote": "Workload Identity Federation グラフは特権的で監査対象のビューです。",
-    "consoleOnly": "Workload Identity Federation のオブジェクト（issuer、ルール、サービスアカウント）は Anthropic Console でのみ管理されます。このパネルはそれらを可視化しリント検査するものであり、作成や編集は決して行いません。",
-    "openConsole": "Anthropic Console で開く",
-    "graphTitle": "WIF オブジェクトグラフ",
-    "graphDescription": "フェデレーション issuer → ルール → サービスアカウント → OAuth スコープ。リンターが過度に広い境界をフラグします。",
-    "empty": "フェデレーションは宣言されていません",
-    "emptyHint": "この組織には Workload Identity Federation の issuer、ルール、サービスアカウントが構成されていません。静的キーを使わずに非人間アクセスを統制するには、Anthropic Console でフェデレーションを宣言してください。",
-    "lintClean": "リント問題なし",
-    "lintErrors": "{{n}} 件のエラー",
-    "lintWarnings": "{{n}} 件の警告",
-    "lintInfo": "{{n}} 件の情報",
-    "lintNoFindings": "リントの検出結果はありません。フェデレーショングラフは適切にスコープされているようです。",
-    "lintLabel": "WIF リントの検出結果",
-    "lintRulesTitle": "リンターは準備完了です。グラフが読み込まれると、次のルールが適用されます。",
-    "legend": {
-      "issuer": "フェデレーション issuer（fdis_）",
-      "rule": "フェデレーションルール（fdrl_）",
-      "svac": "サービスアカウント（svac_）",
-      "scope": "OAuth スコープ"
-    },
-    "lint": {
-      "cel-over-broad": {
-        "title": "過度に広いフェデレーションルール",
-        "detail": "このルールのマッチは緩すぎます。CEL 条件はセキュリティ境界です。subject_prefix、audience、claims、または CEL 条件を狭めてください。",
-        "rule": "subject / audience / claims / CEL のマッチが緩すぎるルールをフラグします。"
-      },
-      "key-shadow": {
-        "title": "静的キーがフェデレーションを覆い隠しています",
-        "detail": "{{var}} が存在します。静的な Anthropic キーが優先され、Workload Identity Federation を暗黙的に無効化します。そのため、「キーレス」のはずの組織が長期間有効なキーを使い続けることになります。",
-        "recommendation": "`ant auth status` を実行してアクティブなクレデンシャルを確認し、実際にフェデレーションを使用するために静的キーを解除してください。",
-        "rule": "WIF を覆い隠す静的な ANTHROPIC_API_KEY / AUTH_TOKEN をフラグします。"
-      },
-      "token-lifetime": {
-        "title": "トークン有効期間に関する懸念",
-        "detail": "token_lifetime_seconds = {{lifetime}}。最大値 {{max}}s を十分に下回り、サポート範囲内に収めてください。トークンが短いほど影響範囲が小さくなります。",
-        "rule": "60〜86400s の範囲外、または 24 時間の最大値に近い token_lifetime_seconds をフラグします。"
-      },
-      "scope-over-broad": {
-        "title": "過度に広い OAuth スコープ",
-        "detail": "スコープ {{scope}} は単一のワークスペースを超えて権限を付与します。組織全体の管理が本当に必要でない限り、workspace:developer を推奨します。",
-        "rule": "org:manage_tunnels や認識されないスコープをフラグし、最小権限を優先します。"
-      },
-      "jwks-insecure": {
-        "title": "インライン JWKS はローテーションしません",
-        "detail": "このルールはインライン JWKS（{{mode}}）を固定しています。issuer の鍵をローテーションできるよう、ディスカバリーを推奨します。",
-        "rule": "ローテーションできないインライン JWKS をフラグします。"
-      },
-      "drift": {
-        "title": "フェデレーションのドリフト",
-        "detail": "このオブジェクトは管理対象のフェデレーションと相違しています（{{reason}}）。宣言済みのルールを Anthropic の実際の構成と照合してください。",
-        "rule": "宣言と実際の差分を検出します。未宣言（未管理）のライブルール、実環境に存在しない宣言済みルール、または孤立したルール／発行者を検出します。",
-        "reason": {
-          "undeclared-rule": "未宣言のライブルール",
-          "declared-not-live": "宣言済みだが実在しない",
-          "orphan-rule": "孤立したルール",
-          "orphan-issuer": "孤立した発行者"
-        }
-      }
-    },
-    "recon": {
-      "declaredOnly": "宣言済みのフェデレーションを表示しています。org:admin OAuth トークンを設定すると、Anthropic の実際の構成と照合できます。",
-      "reconciled": "{{at}} に実際の構成と照合しました。",
-      "unavailable": "ライブ照合は利用できません — 宣言済みのベースラインを表示しています。org:admin OAuth トークンを確認してください。"
-    }
-  },
-  "posture": {
-    "ek": {
-      "title": "External Keys（CMEK）",
-      "description": "ワークスペースから参照される顧客管理の暗号化鍵です。態勢のみを表示し、鍵そのものを表示することは決してありません。",
-      "seamWhat": "External Keys の態勢",
-      "immutable": "使用中 — 変更不可",
-      "never": "検証されたことがありません",
-      "col": {
-        "id": "鍵の参照",
-        "provider": "プロバイダー",
-        "state": "状態",
-        "inUse": "参照済み",
-        "validated": "最終検証"
-      }
-    },
-    "residency": {
-      "title": "ワークスペースのレジデンシー",
-      "description": "ワークスペースごとのデータレジデンシーと CMEK バインディングです。ホームリージョンと参照された CMEK は変更できません。",
-      "seamWhat": "ワークスペースのレジデンシー態勢",
-      "none": "報告されたワークスペースはありません。",
-      "workspace": "ワークスペース",
-      "geo": "ホームリージョン",
-      "cmek": "CMEK",
-      "providerManaged": "プロバイダー管理（CMEK なし）",
-      "compartment": "KMS コンパートメント",
-      "inferenceGeos": "許可された推論リージョン",
-      "unrestricted": "制限なし / 未報告"
-    },
-    "unavailable": {
-      "badge": "読み取り不可",
-      "fallback": "このデプロイではこのポスチャを読み取れませんでした。"
-    }
   },
   "login": {
     "statusTitle": "セッションの保証",
@@ -575,16 +271,6 @@
       "lastCredential": "唯一のパスキーは削除できません。先に別のパスキーを登録してください。"
     }
   },
-  "empty": {
-    "externalKeys": {
-      "title": "External Keys の参照はまだ報告されていません",
-      "description": "この組織では顧客管理暗号鍵は報告されませんでした。インベントリの読み取りは成功しています。バックエンドの欠如ではなく、実際のゼロです。"
-    },
-    "nhiRoster": {
-      "title": "人間および非人間アイデンティティはまだありません",
-      "description": "ディレクトリソースを設定した後にアイデンティティ名簿を再同期すると、人間および非人間アイデンティティが External ID とともに登録されます。"
-    }
-  },
   "totp": {
     "title": "TOTP 第二要素",
     "description": "時間ベースのワンタイムパスワード（RFC 6238）をローカルアカウントの追加要素として設定します。パスキー を置き換えるものではなく、それらに加わるものです。",
@@ -634,6 +320,11 @@
     "refused": {
       "passkey_not_enrolled": "先にアカウントにパスキーを追加してから (アイデンティティとNHI > パスキー)、オンにしてください。",
       "totp_sign_in_required": "先に認証アプリを設定し、そのコードでサインインしてから、オンにしてください。"
+    }
+  },
+  "posture": {
+    "unavailable": {
+      "badge": "読み取り不可"
     }
   }
 }

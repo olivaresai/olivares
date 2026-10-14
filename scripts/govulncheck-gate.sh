@@ -89,7 +89,10 @@ done
 # neither cloud/ nor commercial/, so an absent directory is only forgiven when this tree says
 # it is that export. Absent without the marker is a REFUSAL — "the directory is not here" must
 # never be spelled the same way as "it is here and it is clean".
-for extra in cloud/control-plane commercial/commerce commercial/commerce-lint; do
+# scripts/check-go-toolchain.sh reads this line: a workspace member listed here must not sit below
+# go.work, since GOWORK=off lets its own go line pick the toolchain (#1531).
+STANDALONE_MODULES="cloud/control-plane commercial/commerce commercial/commerce-lint"
+for extra in ${STANDALONE_MODULES}; do
 	if [ -d "${extra}" ]; then
 		# GOWORK=off so each resolves against its OWN go.mod. Without it the workspace's
 		# module set wins and the scan silently measures the wrong dependency graph.

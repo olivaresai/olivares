@@ -87,12 +87,10 @@ function workerTemplateIds() {
 }
 
 function workerTemplate(locale, id) {
-  const re = new RegExp(
-    `\\n  ${locale}: \\{[\\s\\S]*?\\n    ${id}: \\{[\\s\\S]*?\\n      html: ("(?:[^"\\\\]|\\\\.)*"),`,
-  )
-  const m = re.exec(worker)
-  if (!m) throw new Error(`email/render-evidence: no html for ${locale}/${id}`)
-  return JSON.parse(m[1])
+  const data = JSON.parse(readFileSync(join(dirname(WORKER_BUNDLE), 'locales', `${locale}.json`), 'utf8'))
+  const html = data.templates?.[id]?.html
+  if (typeof html !== 'string') throw new Error(`email/render-evidence: no html for ${locale}/${id}`)
+  return html
 }
 
 // Values shaped like the real ones: a long signed blob, a long tokenised URL, an

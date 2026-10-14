@@ -352,8 +352,9 @@ describe('the Approvals entry (console remake slice 4)', () => {
       />,
     )
     const entry = document.querySelector('[data-journey="approvals"]')!
-    const badge = entry.querySelector('span.bg-warning-soft')
+    const badge = entry.querySelector('[data-slot="count-badge"]')
     expect(badge).not.toBeNull()
+    expect(badge).toHaveClass('bg-warn-soft', 'text-warn')
     expect(badge).toHaveTextContent('3')
   })
 })

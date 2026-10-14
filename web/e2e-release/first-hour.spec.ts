@@ -197,7 +197,9 @@ test('release container: a fresh administrator reaches a first answer and the co
       await page.getByRole('button', { name: /create administrator/i }).click()
       await page.waitForURL(`**${stepHref(WIZARD)}`)
       await expect(
-        page.getByRole('link', { name: 'Now', exact: true }),
+        page
+          .getByRole('navigation', { name: 'Journeys', exact: true })
+          .getByRole('link', { name: 'Now', exact: true }),
       ).toBeVisible()
     })
     // Keep later pages measurable even when the first answer is blocked. Every

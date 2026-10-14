@@ -5,11 +5,8 @@ package sops_test
 
 import (
 	"context"
-	"encoding/json"
 	"sort"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/connectors/sops"
@@ -121,135 +118,6 @@ func TestPlainFileIgnored(t *testing.T) {
 	edges := gather(t, open(t, "testdata/repo/plain/config.yaml"))
 	if len(edges) != 0 {
 		t.Fatalf("plain file produced %d edges, want 0: %+v", len(edges), edges)
-	}
-}
-
-// TestNoDataKeyLeaks is the no-decrypt/no-leak guarantee (docs/SECURITY-HARDENING.md): the fixture
-// embeds the encrypted data key (and mac) in every recipient's `enc`; that material
-// must NEVER appear in any emitted edge OR any snapshot identity.
-func TestNoDataKeyLeaks(t *testing.T) {
-	s := open(t, "testdata/repo")
-	edges := gather(t, s)
-	if len(edges) == 0 {
-		t.Fatal("expected edges")
-	}
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(g.Identities) == 0 {
-		t.Fatal("expected snapshot identities")
-	}
-
-	edgeBlob, _ := json.Marshal(edges)
-	idBlob, _ := json.Marshal(g.Identities)
-	for name, blob := range map[string]string{"edges": string(edgeBlob), "identities": string(idBlob)} {
-		if strings.Contains(blob, fakeDataKey) {
-			t.Fatalf("the encrypted data key leaked into %s: %s", name, blob)
-		}
-		if strings.Contains(blob, "FAKEMAC") {
-			t.Fatalf("the mac leaked into %s: %s", name, blob)
-		}
-		if strings.Contains(blob, "BEGIN PGP MESSAGE") || strings.Contains(blob, "BEGIN AGE ENCRYPTED FILE") {
-			t.Fatalf("ciphertext leaked into %s: %s", name, blob)
-		}
-	}
-}
-
-// TestSnapshotInventory checks the inventory: every distinct recipient —
-// across the encrypted file AND the .sops.yaml rules — is a secret_store NHI, and
-// the rules contribute a recipient (the second age key) that no edge names.
-func TestSnapshotInventory(t *testing.T) {
-	s := open(t, "testdata/repo")
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if g.Source != identitysource.SourceSOPS {
-		t.Errorf("graph source = %q, want sops", g.Source)
-	}
-	got := map[string]identitysource.Identity{}
-	for _, id := range g.Identities {
-		if id.Type != identitysource.PrincipalNHI {
-			t.Errorf("identity %q type = %q, want nhi", id.Ref, id.Type)
-		}
-		if id.Kind != identitysource.KindSecretStore {
-			t.Errorf("identity %q kind = %q, want secret_store", id.Ref, id.Kind)
-		}
-		if id.Source != identitysource.SourceSOPS {
-			t.Errorf("identity %q source = %q, want sops", id.Ref, id.Source)
-		}
-		if id.Attributes["provider"] != "sops" {
-			t.Errorf("identity %q provider attr = %q, want sops", id.Ref, id.Attributes["provider"])
-		}
-		if rt := id.Attributes["recipient_type"]; rt == "" {
-			t.Errorf("identity %q missing recipient_type attr", id.Ref)
-		}
-		got[id.Ref] = id
-	}
-	// The encrypted file's three recipients + the second age key and the KMS arn
-	// from .sops.yaml's first rule + the legacy pgp from the second rule.
-	for _, want := range []string{
-		"sops.age:age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p",
-		"sops.age:age1lggyhqrw2nlhcxprm67z43rta597azn8gk38fnem3d2es66x4z3qf0p5c0",
-		"sops.kms:arn:aws:kms:eu-west-1:111122223333:key/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-		"sops.pgp:85D77543B3D624B63CEA9E6DBC17301B491B3F21",
-	} {
-		if _, ok := got[want]; !ok {
-			t.Errorf("missing recipient NHI %q in %v", want, keys(got))
-		}
-	}
-}
-
-// TestRecipientsConverge asserts that every edge OriginRef is also present as a
-// Snapshot identity Ref (the edge and the inventory converge on the same key).
-func TestRecipientsConverge(t *testing.T) {
-	s := open(t, "testdata/repo")
-	edges := gather(t, s)
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, e := range edges {
-		if _, ok := g.FindIdentity(e.OriginRef); !ok {
-			t.Errorf("edge origin %q has no converging snapshot identity", e.OriginRef)
-		}
-	}
-}
-
-// TestOfflineEmptyGraph confirms an unopened (no path) source returns an empty
-// graph with no error.
-func TestOfflineEmptyGraph(t *testing.T) {
-	s := sops.New() // not opened => no path
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(g.Identities) != 0 {
-		t.Fatalf("offline graph not empty: %+v", g)
-	}
-	if g.Source != identitysource.SourceSOPS {
-		t.Errorf("offline graph source = %q, want sops", g.Source)
-	}
-}
-
-// TestClockDeterminism confirms the injectable clock drives ObservedAt/CapturedAt.
-func TestClockDeterminism(t *testing.T) {
-	fixed := time.Date(2026, 6, 6, 12, 0, 0, 0, time.UTC)
-	s := open(t, "testdata/repo")
-	sops.SetClock(s, func() time.Time { return fixed })
-	edges := gather(t, s)
-	for _, e := range edges {
-		if !e.ObservedAt.Equal(fixed) {
-			t.Errorf("observed at = %v, want %v", e.ObservedAt, fixed)
-		}
-	}
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !g.CapturedAt.Equal(fixed) {
-		t.Errorf("captured at = %v, want %v", g.CapturedAt, fixed)
 	}
 }
 

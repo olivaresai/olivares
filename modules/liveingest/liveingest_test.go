@@ -56,6 +56,20 @@ func (c *collector) findingCount() int {
 	return len(c.findings)
 }
 
+// findingAbout reports whether any finding names one of refs as its subject.
+func (c *collector) findingAbout(refs ...string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, f := range c.findings {
+		for _, ref := range refs {
+			if f.SubjectRef == ref {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (c *collector) observedCount() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -255,24 +269,32 @@ func TestOnlyToolArgsSurfaces(t *testing.T) {
 
 // TestVoiceProbeConsumedAndAllowList proves the voice probe: a valid telemetry sample
 // published by the probe is CONSUMED by module XVI (which, finding no allowing
-// policy, emits a finding — observable proof it folded the sample); and a payload
+// policy, emits findings — observable proof it folded the sample); and a payload
 // carrying a forbidden content key is DROPPED whole by the allow-list consumer
 // (parseTelemetry), folding nothing and emitting no finding.
+//
+// One valid sample emits more than one finding, so a count taken after the first
+// one arrives is not a baseline. Voice handles its events one at a time and in
+// order, so once a finding of a valid sample published AFTER the forbidden one
+// arrives, everything the forbidden one could have caused has already arrived.
 func TestVoiceProbeConsumedAndAllowList(t *testing.T) {
 	li, bus, tenant, c := newEnv(t, false, voice.New())
+	sample := func(session, agent string) {
+		t.Helper()
+		if err := li.PublishVoiceTelemetry(context.Background(), tenant.String(), voice.Telemetry{
+			SessionRef: session, AgentRef: agent, ModelRef: "gpt-realtime", ProviderRef: "openai",
+			LanguageCode: "es-ES", Role: "user", TurnDelta: 1, LatencyMS: 90, DurationMS: 4000,
+		}); err != nil {
+			t.Fatalf("probe publish: %v", err)
+		}
+	}
 
 	// The probe publishes a valid, allow-listed sample → voice folds it and (no policy
 	// permits this agent) emits a policy finding. That finding is the consumed proof.
-	if err := li.PublishVoiceTelemetry(context.Background(), tenant.String(), voice.Telemetry{
-		SessionRef: "vs-1", AgentRef: "voice-agent", ModelRef: "gpt-realtime", ProviderRef: "openai",
-		LanguageCode: "es-ES", Role: "user", TurnDelta: 1, LatencyMS: 90, DurationMS: 4000,
-	}); err != nil {
-		t.Fatalf("probe publish: %v", err)
-	}
-	if !waitFor(func() bool { return c.findingCount() > 0 }) {
+	sample("vs-1", "voice-agent-1")
+	if !waitFor(func() bool { return c.findingAbout("vs-1", "voice-agent-1") }) {
 		t.Fatal("voice did not consume the probe's telemetry (no finding emitted)")
 	}
-	before := c.findingCount()
 
 	// A forbidden content key (transcript_text) must make parseTelemetry drop the whole
 	// event — folded nothing, emits nothing. Published directly as a raw map so the key
@@ -280,12 +302,15 @@ func TestVoiceProbeConsumedAndAllowList(t *testing.T) {
 	_ = bus.Publish(context.Background(), event.Event{
 		Type: voice.TypeVoiceTelemetry, Tenant: tenant.String(), Source: "probe:test", Time: time.Now(),
 		Payload: map[string]any{
-			"session_ref": "vs-2", "agent_ref": "voice-agent", "transcript_text": "secret words",
+			"session_ref": "vs-2", "agent_ref": "voice-agent-2", "transcript_text": "secret words",
 		},
 	})
-	time.Sleep(120 * time.Millisecond)
-	if c.findingCount() != before {
-		t.Fatalf("a forbidden-key telemetry event was not dropped: finding count moved %d → %d", before, c.findingCount())
+	sample("vs-3", "voice-agent-3")
+	if !waitFor(func() bool { return c.findingAbout("vs-3", "voice-agent-3") }) {
+		t.Fatal("voice did not consume the telemetry sent after the forbidden-key event")
+	}
+	if c.findingAbout("vs-2", "voice-agent-2") {
+		t.Fatal("a forbidden-key telemetry event was not dropped: it produced a finding")
 	}
 }
 

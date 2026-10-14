@@ -65,6 +65,14 @@ func (f streamJSONFrame) isInit() bool {
 // argument. Nothing else in the result frame is read.
 func (f streamJSONFrame) isResult() bool { return f.Type == "result" }
 
+// isCommandsChanged reports Claude Code's own notice that the commands, skills or agents
+// it offers changed (a file appeared in a folder it watches, a plugin was reloaded).
+// The frame carries the new list; the engine only notes that its copy is out of date
+// and asks the tool again (tool_commands.go).
+func (f streamJSONFrame) isCommandsChanged() bool {
+	return f.Type == "system" && f.Subtype == "commands_changed"
+}
+
 // toolMode is the mode the tool reports on this frame, "" when it reports none.
 func (f streamJSONFrame) toolMode() string {
 	if f.Type != "system" || (f.Subtype != "init" && f.Subtype != "status") {

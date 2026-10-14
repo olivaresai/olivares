@@ -38,7 +38,14 @@ import { DiscardWorktreeOption } from './discard-worktree-option'
 import { GovernancePanel } from './governance-panel'
 import { LiveConsole } from './live-console'
 import { RunStateBadge } from './run-state-badge'
-import type { RunDTO, RunEventDTO } from './types'
+import { useAuthBoundary } from './auth-boundary'
+import {
+  nameProfileRefs,
+  namesProfiles,
+  profileLabel,
+  type RunDTO,
+  type RunEventDTO,
+} from './types'
 import { currentControlFence } from './work-fence'
 import './i18n'
 
@@ -381,12 +388,27 @@ function Chip({
 // ledger and the SAME run details as this sheet — one session, one card.
 export function EventsPanel({ runRef }: { runRef: string }) {
   const { t } = useTranslation('agentops')
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
+  const boundary = useAuthBoundary()
   const q = useQuery({
     queryKey: agentOpsKeys.runEvents(activeTenant, runRef, { limit: 200 }),
     queryFn: () => agentOpsApi.runEvents(runRef, { limit: 200 }),
   })
   const events = q.data?.items ?? []
+  // A move or a handoff names its profiles by reference in the append-only ledger;
+  // the account names are read only when such an event is on screen.
+  const namesNeeded = events.some((e) => namesProfiles(e.event))
+  const profiles = useQuery({
+    queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
+      limit: 200,
+    }),
+    queryFn: ({ signal }) =>
+      agentOpsApi.listProfiles({ limit: 200 }, { signal }),
+    enabled: namesNeeded && can('sessions:profile:read'),
+  })
+  const names = new Map<string, string>()
+  for (const p of profiles.data?.items ?? [])
+    names.set(p.profile_ref, profileLabel(p))
 
   return (
     <div className="flex flex-col gap-2">
@@ -404,7 +426,7 @@ export function EventsPanel({ runRef }: { runRef: string }) {
       ) : (
         <ol className="divide-y divide-border rounded-md border border-border">
           {events.map((e) => (
-            <EventRow key={e.seq} e={e} />
+            <EventRow key={e.seq} e={e} names={names} />
           ))}
         </ol>
       )}
@@ -412,7 +434,13 @@ export function EventsPanel({ runRef }: { runRef: string }) {
   )
 }
 
-function EventRow({ e }: { e: RunEventDTO }) {
+function EventRow({
+  e,
+  names,
+}: {
+  e: RunEventDTO
+  names: ReadonlyMap<string, string>
+}) {
   const { t } = useTranslation('agentops')
   return (
     <li className="flex flex-col gap-0.5 px-3 py-2">
@@ -429,7 +457,13 @@ function EventRow({ e }: { e: RunEventDTO }) {
           </span>
         )}
         {e.actor && <span className="font-mono">{e.actor}</span>}
-        {e.detail && <span className="italic">{e.detail}</span>}
+        {e.detail && (
+          <span className="italic">
+            {namesProfiles(e.event)
+              ? nameProfileRefs(e.detail, names)
+              : e.detail}
+          </span>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-muted-foreground">
         <span className="truncate font-mono" title={e.payload_hash}>

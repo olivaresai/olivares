@@ -25,11 +25,29 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 	text := func() map[string]any { return map[string]any{"type": "string"} }
 	declaration := api.ModuleOperationDocumentation{}
 	switch method + " " + pattern {
-	case "POST /plans":
+	case "DELETE /releases":
 		declaration.BodyKind = api.ModuleOperationJSONBody
-		declaration.RequestBody = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": jsonObject(map[string]any{"driver": map[string]any{"type": "string", "enum": driverfacts.InstallerKeys()}, "version": map[string]any{"type": "string", "maxLength": 128}}, "driver", "version")}}}
-		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Official release selected for administrator review", map[string]any{"type": "object", "properties": map[string]any{"driver": text(), "version": text(), "digest": text(), "verification": text(), "executable": text(), "document": map[string]any{"type": "object"}}, "required": []string{"driver", "version", "digest", "verification", "executable", "document"}})}
+		declaration.RequestBody = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": jsonObject(map[string]any{"driver": text(), "version": text()}, "driver", "version")}}}
+		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Verified release removed after session admission and audit", jsonObject(map[string]any{"ok": map[string]any{"type": "boolean"}, "driver": text(), "version": text(), "sha256": text()}, "ok", "driver", "version", "sha256"))}
+	case "GET /pins":
+		declaration.Parameters = []map[string]any{{"name": "tenant_id", "in": "query", "required": true, "schema": map[string]any{"type": "string", "format": "uuid"}}}
+		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Stored workspace and agent version selections", jsonObject(map[string]any{"pins": map[string]any{"type": "array", "items": toolPinSchema()}}, "pins"))}
+	case "PUT /pins":
+		declaration.BodyKind = api.ModuleOperationJSONBody
+		schema := toolPinSchema()
+		schema["properties"].(map[string]any)["tenant_id"] = map[string]any{"type": "string", "format": "uuid"}
+		schema["required"] = []string{"tenant_id", "driver", "version"}
+		declaration.RequestBody = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
+		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Version selection saved and audited; empty version clears it", jsonObject(map[string]any{"ok": map[string]any{"type": "boolean"}}, "ok"))}
+	case "POST /plans":
+		declaration.Parameters = []map[string]any{{"name": "X-Olivares-Tenant", "in": "header", "required": false, "description": "For from installs, select the organization whose Catalog admitted the declaration. Host authority and audit remain system-scoped.", "schema": map[string]any{"type": "string", "format": "uuid"}}}
+		declaration.BodyKind = api.ModuleOperationJSONBody
+		schema := jsonObject(map[string]any{"driver": map[string]any{"type": "string", "enum": driverfacts.InstallerKeys(), "minLength": 1}, "version": map[string]any{"type": "string", "minLength": 1, "maxLength": 128}, "from": map[string]any{"type": "string", "format": "uri", "minLength": 1, "maxLength": 2048}}, "version")
+		schema["oneOf"] = []map[string]any{{"required": []string{"driver"}, "not": map[string]any{"required": []string{"from"}}}, {"required": []string{"from"}, "not": map[string]any{"required": []string{"driver"}}}}
+		declaration.RequestBody = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": schema}}}
+		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Official or catalog-admitted release selected for administrator review", map[string]any{"type": "object", "properties": map[string]any{"driver": text(), "version": text(), "digest": text(), "verification": text(), "executable": text(), "document": map[string]any{"type": "object"}}, "required": []string{"driver", "version", "digest", "verification", "executable", "document"}})}
 	case "POST /installs":
+		declaration.Parameters = []map[string]any{{"name": "X-Olivares-Tenant", "in": "header", "required": false, "description": "For a catalog plan, select the same organization used in its preview.", "schema": map[string]any{"type": "string", "format": "uuid"}}}
 		declaration.BodyKind = api.ModuleOperationJSONBody
 		declaration.RequestBody = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": jsonObject(map[string]any{"plan_digest": text(), "request_id": map[string]any{"type": "string", "format": "uuid"}}, "plan_digest", "request_id")}}}
 		declaration.SuccessResponses = map[string]any{"202": jsonResponse("Installation job accepted or identical request replayed", jobSchema())}
@@ -115,4 +133,8 @@ func jobSchema() map[string]any {
 func signInSchema() map[string]any {
 	text := func() map[string]any { return map[string]any{"type": "string"} }
 	return map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "string", "format": "uuid"}, "driver": text(), "account_ref": text(), "state": map[string]any{"type": "string", "enum": []string{"starting", "needs_code", "waiting", "checking", "signed_in", "failed"}}, "url": text(), "user_code": text(), "message": text()}, "required": []string{"id", "driver", "state"}}
+}
+
+func toolPinSchema() map[string]any {
+	return jsonObject(map[string]any{"driver": map[string]any{"type": "string"}, "version": map[string]any{"type": "string", "maxLength": 128}, "workspace_ref": map[string]any{"type": "string"}, "agent_ref": map[string]any{"type": "string", "format": "uuid"}}, "driver", "version")
 }

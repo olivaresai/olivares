@@ -101,48 +101,6 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 	return nil
 }
 
-// Snapshot exposes the GCP secret-manager custodians seen in the export as
-// secret_store NHIs. With no configured path it returns an empty graph.
-func (s *Source) Snapshot(_ context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceGCPKMS, CapturedAt: s.clock().UTC()}
-	if s.path == "" {
-		return g, nil
-	}
-	files, err := s.listFiles()
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	stores := map[string]store{}
-	for _, f := range files {
-		entries, err := readEntries(f)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		for _, e := range entries {
-			if st, ok := storeFor(e); ok {
-				stores[st.ref()] = st
-			}
-		}
-	}
-	refs := make([]string, 0, len(stores))
-	for ref := range stores {
-		refs = append(refs, ref)
-	}
-	sort.Strings(refs)
-	for _, ref := range refs {
-		st := stores[ref]
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         ref,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        identitysource.KindSecretStore,
-			DisplayName: st.displayName(),
-			Source:      identitysource.SourceGCPKMS,
-			Attributes:  map[string]string{"provider": "gcp", "service": st.service, "project": st.project},
-		})
-	}
-	return g, nil
-}
-
 // buildEdge maps one Cloud Audit entry to an edge, or ok=false for a non-KMS/
 // non-Secret entry, one that names no resource or principal, or an unparseable
 // timestamp.
@@ -218,11 +176,4 @@ func readEntries(path string) ([]entry, error) {
 		return nil, err
 	}
 	return entriesFromBytes(data), nil
-}
-
-func (s *Source) clock() time.Time {
-	if s.now != nil {
-		return s.now()
-	}
-	return time.Now()
 }

@@ -131,11 +131,7 @@ func TestCompositionRootBootsAndWiresModules(t *testing.T) {
 		t.Fatalf("login = %d %s", code, raw)
 	}
 	admin := body["token"].(string)
-	code, body, raw = do("POST", "/v1/system/orgs", admin, map[string]any{"name": "acme", "slug": "acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("create org = %d %s", code, raw)
-	}
-	tenant := body["tenant_id"].(string)
+	tenant := createOrganizationFixture(t, eng.store, "acme", "acme").TenantID.String()
 
 	// boot() succeeding already proves all 19 modules registered their schema and
 	// mounted their namespaces (engine.Open / api.New reject a bad descriptor or

@@ -60,6 +60,11 @@ func (d *entryDTO) validate() string {
 	if !validSemver(d.Version) {
 		return "version must be a semantic version (e.g. 1.2.3, 1.0.0-beta.1)"
 	}
+	if tool, err := parseToolDeclaration(d.Spec); err != nil {
+		return err.Error()
+	} else if tool != nil && (tool.Version != d.Version || (tool.Kind == "mcp" && d.Kind != kindMCP) || (tool.Kind == "cli" && d.Kind != kindAgent)) {
+		return "tool declaration version and kind must match the catalog entry"
+	}
 	d.OwnerRef = strings.TrimSpace(d.OwnerRef)
 	if specBytes, err := json.Marshal(d.Spec); err == nil && containsInlineCredential(string(specBytes)) {
 		return "spec must not contain inline credentials; reference secrets by name/locator instead"
@@ -373,6 +378,10 @@ func (m *Module) transitionEntry(w http.ResponseWriter, r *http.Request, mc api.
 // freezes the entry. This is the privileged curation action (docs/SECURITY-HARDENING.md) — RBAC
 // admin-tier and self-audited.
 func (m *Module) handleApproveEntry(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	m.approveEntry(w, r, mc, false)
+}
+
+func (m *Module) approveEntry(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, declaredOnly bool) {
 	id := model.ID(chi.URLParam(r, "id"))
 	if id.IsZero() {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
@@ -401,6 +410,13 @@ func (m *Module) handleApproveEntry(w http.ResponseWriter, r *http.Request, mc a
 				"kind":   rec.String(colEntryKind),
 				"reason": reason,
 			})
+		}
+		if declaredOnly {
+			d, err := parseToolDeclaration(parseSpec(rec.String(colSpec)))
+			kind := rec.String(colEntryKind)
+			if err != nil || d == nil || (d.Kind == "mcp" && kind != kindMCP) || (d.Kind == "cli" && kind != kindAgent) {
+				return refuse("tool declaration changed before admission")
+			}
 		}
 		switch rec.String(colStatus) {
 		case statusDraft, statusPending:

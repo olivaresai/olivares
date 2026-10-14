@@ -20,6 +20,9 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
       onCloseAutoFocus,
       initialTemplateId,
       initialWorktreeFrom,
+      initialProfileRef,
+      initialModel,
+      initialEffort,
     }: ComponentProps<
       typeof import('@/features/agentops/run-create-dialog').RunCreateDialog
     >) => {
@@ -35,6 +38,9 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
             <p>
               template:{initialTemplateId ?? ''}|from:
               {initialWorktreeFrom ?? ''}
+            </p>
+            <p>
+              {`profile:${initialProfileRef ?? ''}|model:${initialModel ?? ''}|effort:${initialEffort ?? ''}`}
             </p>
           </DialogContent>
         </Dialog>
@@ -53,12 +59,27 @@ vi.mock('./first-hour', async () => {
     }: {
       open: boolean
       onOpenChange: (open: boolean) => void
-      onAdvanced: () => void
+      onAdvanced: (launch?: {
+        profileRef: string
+        model: string
+        effort: string
+      }) => void
     }) => (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent aria-describedby={undefined}>
           <DialogTitle>New session</DialogTitle>
-          <button onClick={onAdvanced}>Advanced options</button>
+          <button onClick={() => onAdvanced()}>Advanced options</button>
+          <button
+            onClick={() =>
+              onAdvanced({
+                profileRef: 'ppf_form',
+                model: 'm-1',
+                effort: 'high',
+              })
+            }
+          >
+            Advanced options with the form's choice
+          </button>
         </DialogContent>
       </Dialog>
     ),
@@ -112,6 +133,24 @@ describe('the one New session host', () => {
     )
     await screen.findByRole('dialog', { name: 'Advanced launch' })
     expect(mounts.advanced).toBe(1)
+  })
+
+  // #1779 (srv17): the form's sign-in, model and effort reach the advanced launch, which
+  // otherwise opens on "Select a profile" when the tenant has several.
+  it("opens the advanced launch on the form's sign-in, model and effort", async () => {
+    const user = userEvent.setup()
+    const door = shell('New session', (opener) =>
+      useNewSessionDialog.getState().setOpen(true, opener),
+    )
+    await user.click(door)
+    await user.click(
+      await screen.findByRole('button', {
+        name: "Advanced options with the form's choice",
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('profile:ppf_form|model:m-1|effort:high')
   })
 
   it('opens the advanced launch on a template or a handoff, each on a draft of its own', async () => {
@@ -234,4 +273,46 @@ describe('the one New session host', () => {
       })
     },
   )
+  it('opens the launch dialog on the profile, model and effort a session hands over, each choice its own draft', async () => {
+    shell('Door', () => undefined)
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({
+        profileRef: 'ppf_a',
+        model: 'haiku',
+        effort: 'low',
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('profile:ppf_a|model:haiku|effort:low')
+    expect(mounts.advanced).toBe(1)
+    // Another effort for the same model is another draft, not the old one with a new prop.
+    act(() => useNewSessionDialog.getState().closeAdvanced())
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({
+        profileRef: 'ppf_a',
+        model: 'haiku',
+        effort: 'high',
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('profile:ppf_a|model:haiku|effort:high')
+    expect(mounts.advanced).toBe(2)
+  })
+
+  it('forgets a handed-over choice when the organization changes', async () => {
+    shell('Door', () => undefined)
+    act(() =>
+      useNewSessionDialog
+        .getState()
+        .openAdvanced({ profileRef: 'ppf_a', model: 'haiku', effort: 'low' }),
+    )
+    await screen.findByRole('dialog', { name: 'Advanced launch' })
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      model: 'haiku',
+    })
+    act(() => useTenantStore.setState({ activeTenant: 'another-tenant' }))
+    expect(useNewSessionDialog.getState().advanced).toBeNull()
+  })
 })

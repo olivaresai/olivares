@@ -15,7 +15,7 @@
   "state": {
     "pending": "En attente",
     "running": "En cours",
-    "idle": "En cours",
+    "idle": "Inactive",
     "stopped": "Arrêtée",
     "failed": "Échec",
     "cleaned": "Nettoyée"
@@ -103,7 +103,6 @@
     "effort": "Effort",
     "effortDefault": "Valeur par défaut du modèle",
     "model": "Modèle",
-    "modelPlaceholder": "opus  ·  claude-opus-4-8  (facultatif)",
     "workspace": "Dossier",
     "workspaceNone": "Dossier temporaire de cette session",
     "worktree": "Travailler dans un nouveau worktree git",
@@ -132,18 +131,9 @@
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur.",
     "identity": {
       "title": "Identité de lancement",
-      "hint": "Choisissez un agent admis agissant pour son sponsor humain. L’accès humain seul ne donne aucune autorité d’agent.",
       "humanHint": "La session s’exécute avec votre propre accès.",
       "human": "Opérateur humain actuel",
-      "agent": "Agent admis (pour le sponsor)",
-      "required": "Un profil d’orchestration exige une identité d’agent authentifiée séparément.",
-      "choose": "Identité de l’agent",
-      "sponsorHint": "Le serveur valide l’agent, son état et votre rôle de sponsor avant le lancement.",
-      "placeholder": "Choisir un agent admis",
-      "readRequired": "La permission de lecture NHI est requise.",
-      "loading": "Chargement des identités…",
-      "loadFailed": "Liste des identités indisponible.",
-      "loadMore": "Charger plus d’identités"
+      "required": "Un profil d’orchestration exige une identité d’agent authentifiée séparément."
     },
     "blocked": {
       "profilesForbidden": "Votre rôle ne peut pas lire les profils de fournisseur (sessions:profile:read) : aucune session ne peut démarrer ici.",
@@ -158,6 +148,26 @@
       "templateRefused": "Le modèle demande des conditions que ce lancement ne peut pas appliquer : choisissez-en un autre dans Options avancées.",
       "readinessFailed": "Les exigences du profil n’ont pas pu être lues."
     }
+  },
+  "picker": {
+    "search": "Rechercher un modèle",
+    "none": "Aucun modèle ne correspond.",
+    "loading": "Lecture des modèles proposés par cet outil…",
+    "failed": "L'outil n'a pas répondu, il n'y a donc pas de liste. Saisissez un modèle ou gardez la valeur par défaut.",
+    "unsupported": "Cet outil ne liste pas ses modèles. Saisissez-en un ou gardez la valeur par défaut.",
+    "unavailable": "La liste des modèles n'est pas disponible ici. Saisissez un modèle ou gardez la valeur par défaut.",
+    "default": "par défaut",
+    "new": "Nouveau",
+    "favorites": "Favoris",
+    "models": "Modèles",
+    "legacy": "Anciens",
+    "star": "Ajouter {{model}} aux favoris",
+    "unstar": "Retirer {{model}} des favoris",
+    "use": "Utiliser « {{model}} »",
+    "defaultNamed": "Par défaut ({{model}})",
+    "defaultUnnamed": "Valeur par défaut de {{tool}}",
+    "effortDefaultNamed": "Valeur par défaut du modèle ({{effort}})",
+    "effortNeedsModel": "Choisissez d'abord un modèle : un effort est un niveau d'un modèle."
   },
   "detail": {
     "live": "En direct",
@@ -198,7 +208,7 @@
     "inputAria": "Ligne d’entrée de session",
     "textPlaceholder": "Envoyer une phrase…",
     "textAria": "Tour de session",
-    "advanced": "Avancé · ligne brute",
+    "advanced": "Ligne brute",
     "advancedHint": "Envoyer une ligne NDJSON sur stdin. Le champ de phrase est la valeur par défaut.",
     "send": "Envoyer",
     "noOutput": "Aucune sortie pour l’instant.",

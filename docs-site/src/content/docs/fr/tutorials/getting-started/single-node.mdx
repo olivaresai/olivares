@@ -24,7 +24,7 @@ faites le quickstart, puis revenez ici pour la vraie installation.
 ## Prérequis
 
 - Un hôte Linux avec systemd et `curl`.
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.2`{/* /release */} is the next release, not yet published.
 
 ## 1. Compiler et installer le binaire
 
@@ -182,16 +182,15 @@ ne fonctionne que tant qu'aucun utilisateur n'existe, donc cela ne peut jamais �
 installation configurée.
 </Aside>
 
-## 4. Créer votre première organisation
+## 4. Utiliser votre première organisation
 
-Tout dans le produit est à portée tenant, alors créez l'organisation dans laquelle vos
-sources reporteront :
+La configuration initiale a déjà créé votre organisation. Tout dans le produit est
+à portée tenant ; récupérez son identifiant pour connecter vos sources :
 
 ```bash
-TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+TENANT="$(curl -ksf https://127.0.0.1:8443/v1/auth/whoami \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 ```
 

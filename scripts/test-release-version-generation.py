@@ -248,6 +248,94 @@ class ReleaseGeneration(unittest.TestCase):
             hits = CHECKER['scan'](['README.md'], lambda _: coordinate)
             self.assertTrue(CHECKER['judge']('1.0', hits, set(), set())[0], coordinate)
 
+    def test_third_party_tool_examples_are_not_release_coordinates(self) -> None:
+        guide = (ROOT / 'docs/THIRD-PARTY-TOOLS.md').read_text()
+        declaration = json.loads(guide.split('```json\n', 1)[1].split('```', 1)[0])
+        command = next(line for line in guide.splitlines() if line.startswith('olivares tool install '))
+        for version in ('1.0.0', '2.3.4', '1.0'):
+            declaration['tool_install']['version'] = version
+            # Field order and the document path do not determine which project owns a version.
+            for sort_keys in (False, True):
+                example = json.dumps(declaration, indent=2, sort_keys=sort_keys) + '\n' + command.replace('1.0.0', version)
+                for path in ('docs/THIRD-PARTY-TOOLS.md', 'docs/another-tool.md'):
+                    with self.subTest(version=version, sort_keys=sort_keys, path=path):
+                        hits = CHECKER['scan']([path], lambda _: example)
+                        self.assertEqual(CHECKER['judge']('1.0', hits, set(), set())[0], [])
+        hits = CHECKER['scan'](['docs/THIRD-PARTY-TOOLS.md'], lambda _: guide)
+        self.assertEqual(CHECKER['judge']('1.0', hits, set(), set())[0], [])
+
+    def test_tool_install_examples_do_not_exempt_product_versions(self) -> None:
+        external = 'https://github.com/example/fixture-mcp.git'
+        own = 'https://github.com/olivaresai/olivares.git'
+        declaration = {'tool_install': {'source_url': external, 'version': '1.0.1'}}
+        command = f'olivares tool install --from {external} --version 1.0.1'
+        plants = (
+            json.dumps({'version': '1.0.1'}),
+            json.dumps({'tool_install': {'version': '1.0.1'}}),
+            json.dumps(declaration).replace(external, own),
+            json.dumps(declaration).replace(external, own.upper()),
+            json.dumps({'tool_install': {'source_url': external, 'version': '1.0.1', 'program': 'olivares'}}),
+            json.dumps({'tool_install': {'source_url': 7, 'version': '1.0.1'}}),
+            json.dumps(declaration).replace('"version":', '"version":,'),
+            command.replace(external, own),
+            json.dumps(declaration) + '\nOlivares 1.0.1 ships.',
+            command + '; image: olivaresai/olivares:1.0.1',
+            json.dumps(declaration) + '\n"version": "1.0.1"',
+            '<!-- release -->\n' + json.dumps(declaration) + '\n<!-- /release -->',
+            '<!-- release -->\n' + command + '\n<!-- /release -->',
+        )
+        for text in plants:
+            with self.subTest(text=text):
+                hits = CHECKER['scan'](['docs/THIRD-PARTY-TOOLS.md'], lambda _: text)
+                failures = CHECKER['judge']('1.0', hits, set(), set())[0]
+                self.assertEqual([token for _, _, token in failures], ['1.0.1'])
+
+    def test_ambiguous_tool_install_sources_remain_release_coordinates(self) -> None:
+        external = 'https://github.com/example/fixture-mcp.git'
+        own = 'https://github.com/olivaresai/olivares.git'
+        encoded = 'https://github.com/oliv%61resai/oliva%72es.git'
+        command = f'olivares tool install --from {external} --version 1.0.1'
+        plants = (
+            json.dumps({'tool_install': {'source_url': encoded, 'version': '1.0.1'}}),
+            json.dumps({'tool_install': {'source_url': external, 'archive_url': encoded, 'version': '1.0.1'}}),
+            command.replace(external, encoded),
+            command + f' --from {own}',
+            command + f' --from={own}',
+            command.replace(external, r'https://github.com/oliv\aresai/oliv\ares.git'),
+            command.replace(external, 'https://$REPO'),
+            command.replace(external, 'https://${OWNER}/${REPO}.git'),
+            command.replace(external, 'https://github.com/oliv{a,}resai/oliv{a,}res.git'),
+            command.replace(external, 'https://github.com/oliv?resai/oliv?res.git'),
+            command + f"`printf ' --from {own}'`",
+            f'{{"tool_install": {{"source_url": "{own}", "source_url": "{external}", "version": "1.0.1"}}}}',
+            f'{{"tool_install": {{"source_url": "{external}", "archive_url": "{own}", '
+            f'"archive_url": "{external}", "version": "1.0.1"}}}}',
+            json.dumps({'tool_install': {'source_url': external, 'archive_URL': encoded, 'version': '1.0.1'}}),
+            json.dumps({'tool_install': {'source_url': external, 'Source_URL': encoded, 'version': '1.0.1'}}),
+        )
+        for text in plants:
+            with self.subTest(text=text):
+                hits = CHECKER['scan'](['docs/another-tool.md'], lambda _: text)
+                self.assertEqual([token for _, _, token in CHECKER['judge']('1.0', hits, set(), set())[0]], ['1.0.1'])
+
+    def test_release_stamp_preserves_third_party_tool_versions(self) -> None:
+        original = (ROOT / 'docs/THIRD-PARTY-TOOLS.md').read_text()
+        original += '\nInstall <!-- release -->olivares:1.0<!-- /release -->.\n'
+        before = Path.cwd()
+        with tempfile.TemporaryDirectory() as folder:
+            try:
+                os.chdir(folder)
+                path = Path('docs/another-tool.md')
+                path.parent.mkdir()
+                path.write_text(original)
+                hits = CHECKER['scan']([str(path)], CHECKER['read_surface'])
+                CHECKER['stamp_surfaces']('1.1', hits)
+                self.assertEqual(path.read_text(), original.replace('olivares:1.0', 'olivares:1.1'))
+                hits = CHECKER['scan']([str(path)], CHECKER['read_surface'])
+                self.assertEqual(CHECKER['judge']('1.1', hits, set(), set())[0], [])
+            finally:
+                os.chdir(before)
+
     # Measured 2026-10-09: main refused each of these in its 26.x spelling, and this
     # checker passed them: a release above the canon in prose, a prerelease after a boundary word,
     # a 1.M.x series of a line that has no patch number, and a version behind a dependency word
@@ -498,6 +586,43 @@ class ReleaseGeneration(unittest.TestCase):
                     self.assertEqual(CHECKER['judge']('1.1', hits, set(), set())[0], [])
                 finally:
                     os.chdir(before)
+
+    def test_apparmor_abi_is_not_a_release_and_is_never_stamped(self) -> None:
+        policy = (ROOT / 'packaging/apparmor/olivares-engine.conf').read_text()
+        before = Path.cwd()
+        with tempfile.TemporaryDirectory() as folder:
+            try:
+                os.chdir(folder)
+                for path in ('packaging/apparmor/olivares-engine.conf',
+                             'deploy/apparmor/olivares-sessions.conf'):
+                    for version in ('3.0', '4.0', '5.0'):
+                        with self.subTest(path=path, abi=version):
+                            text = policy.replace('abi <abi/4.0>,', f'abi <abi/{version}>,')
+                            target = Path(path)
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            target.write_text(text)
+                            hits = CHECKER['scan']([path], CHECKER['read_surface'])
+                            self.assertEqual(CHECKER['judge_artifacts']('0.1', hits), [])
+                            CHECKER['stamp_surfaces']('1.1', hits)
+                            self.assertEqual(target.read_text(), text)
+            finally:
+                os.chdir(before)
+
+    def test_apparmor_abi_does_not_exempt_release_coordinates(self) -> None:
+        path = 'packaging/apparmor/olivares-engine.conf'
+        for text in ('abi <abi/4.0>, # install olivares:4.0\n',
+                     'abi <abi/4.0>,\nimage: olivaresai/olivares:4.0\n',
+                     'abi <abi/4.0>, install olivares:4.0\n',
+                     '# Olivares ABI 4.0 ships.\n',
+                     '# release\nabi <abi/4.0>,\n# /release\n'):
+            with self.subTest(text=text):
+                hits = CHECKER['scan']([path], lambda _: text)
+                self.assertIn('4.0', [hit.token for hit in hits])
+                self.assertTrue(CHECKER['judge_artifacts']('0.1', hits))
+        # The syntax earns no allowance outside AppArmor policy files.
+        for path in ('packaging/another.conf', 'docs/another.md'):
+            hits = CHECKER['scan']([path], lambda _: 'abi <abi/4.0>,\n')
+            self.assertEqual(CHECKER['judge_artifacts']('0.1', hits), [(path, 1, '4.0')])
 
     def test_moby_policy_provenance_is_not_an_engine_release(self):
         for path in ('deploy/apparmor/olivares-sessions.conf', 'deploy/compose/README.md'):

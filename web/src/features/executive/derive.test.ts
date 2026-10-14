@@ -11,6 +11,7 @@ import type { LiveDTO } from '@/features/sessions/types'
 import type { ListResponse } from '@/lib/api/types'
 import {
   deriveCompliance,
+  deriveDrift,
   deriveHealth,
   deriveRisk,
   deriveUsage,
@@ -238,15 +239,28 @@ describe('deriveRisk', () => {
     expect(risk.openFindings).toBe(3)
     expect(risk.bySeverity.low).toBe(0)
   })
+})
+
+describe('deriveDrift', () => {
+  it('is null until the access-map diff is read', () => {
+    expect(deriveDrift(undefined)).toBeNull()
+  })
 
   it('separates firm drift from reconciliation-pending and surfaces coverage limits', () => {
     // accessDriftFixture: 1 firm + 1 pending (approximate/opaque) unexpected, 1 unused.
-    const risk = deriveRisk(undefined, undefined, accessDriftFixture)!
-    expect(risk.drift.unexpectedFirm).toBe(1)
-    expect(risk.drift.unexpectedPending).toBe(1)
-    expect(risk.drift.unused).toBe(1)
-    // the pending edge is approximate + opaque → counted as a coverage limit.
-    expect(risk.coverageLimited).toBeGreaterThanOrEqual(1)
+    const drift = deriveDrift(accessDriftFixture)!
+    expect(drift.unexpectedFirm).toBe(1)
+    expect(drift.unexpectedPending).toBe(1)
+    expect(drift.unused).toBe(1)
+    // the pending edge is approximate + opaque, so it counts as a coverage limit.
+    expect(drift.coverageLimited).toBeGreaterThanOrEqual(1)
+  })
+
+  it('never presents a truncated diff as an authoritative figure', () => {
+    expect(deriveDrift(accessDriftFixture)!.truncated).toBe(false)
+    expect(
+      deriveDrift({ ...accessDriftFixture, truncated: true })!.truncated,
+    ).toBe(true)
   })
 })
 

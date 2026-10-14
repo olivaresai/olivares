@@ -13,6 +13,15 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# A migration no database ever applied may leave the tree once, by exact path and baseline content.
+# commercial/license-worker/migrations/0063_instance_lease.sql was this repository's draft of the
+# Business instance lease. The production and sandbox D1 ledgers (d1_migrations, read 2026-10-12)
+# never applied it; production applied its own 0063 and its instance leases are 0074.
+NEVER_APPLIED = {
+    'commercial/license-worker/migrations/0063_instance_lease.sql':
+        '1d654343b1f36fff13791daa7ade458f927e119dd50cfbf61fff7a843ae02522',
+}
+
 
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT, stderr=subprocess.PIPE)
@@ -113,7 +122,8 @@ def main():
     new.update(new_go)
     if not old:
         raise ValueError('baseline contains no migrations')
-    changed = [key for key, digest in old.items() if new.get(key) != digest]
+    changed = [key for key, digest in old.items() if new.get(key) != digest
+               and not (key not in new and NEVER_APPLIED.get(key) == digest)]
     for key in sorted(changed):
         print('migration immutable: ' + key + ' changed or disappeared; add a new version', file=sys.stderr)
     if changed:

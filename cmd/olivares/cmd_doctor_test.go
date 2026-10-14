@@ -429,3 +429,88 @@ func TestDoctorAgentOpsDropinDriftAndAbsentWorkspaceAreMeasuredDefects(t *testin
 		t.Fatalf("absent workspace = code %d check %+v", code, check)
 	}
 }
+
+// Landlock is a Linux kernel feature. Without it a Linux host still fails doctor;
+// on another OS its absence is a named limit (warn) and leaves the verdict alone.
+func TestDoctorSessionConfinementWithoutLandlockFailsOnlyOnLinux(t *testing.T) {
+	landlock := func() confine.State { return confine.State{Mode: confine.ModeLandlock, ABI: 3} }
+	none := func() confine.State { return confine.State{Mode: confine.ModeNone, Reason: "no Landlock"} }
+	for _, tc := range []struct{ goos, init, status string }{
+		{"linux", "systemd", "fail"},
+		{"darwin", "launchd", "warn"},
+	} {
+		t.Run(tc.goos, func(t *testing.T) {
+			run := func(probe func() confine.State) (doctorReport, int) {
+				o, deps := doctorFixture(t)
+				if tc.init == "launchd" {
+					doctorLaunchdFixture(t, o)
+				}
+				deps.goos, deps.confinement = tc.goos, probe
+				report, code, err := runDoctor(t.Context(), o, deps)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return report, code
+			}
+			base, baseCode := run(landlock)
+			for _, c := range base.Checks {
+				if c.Status == "fail" {
+					t.Fatalf("fixture already fails with Landlock on %s: %+v", tc.goos, c)
+				}
+			}
+			report, code := run(none)
+			check := doctorCheckByName(report, "session-confinement")
+			if check.Status != tc.status || !strings.Contains(check.Detail, "cannot start here") ||
+				!strings.Contains(check.Remediation, "Landlock") {
+				t.Fatalf("session-confinement on %s = %+v, want %s naming the limit", tc.goos, check, tc.status)
+			}
+			if tc.status == "fail" {
+				if code != exitcode.Err || report.Overall != "unhealthy" {
+					t.Fatalf("linux without Landlock: overall %q code %d, want unhealthy %d", report.Overall, code, exitcode.Err)
+				}
+				return
+			}
+			if !strings.Contains(check.Detail, "not confined by Landlock on "+tc.goos) {
+				t.Fatalf("detail does not name the OS limit: %q", check.Detail)
+			}
+			if code != baseCode || report.Overall != base.Overall {
+				t.Fatalf("%s without Landlock: overall %q code %d, want %q %d as with Landlock",
+					tc.goos, report.Overall, code, base.Overall, baseCode)
+			}
+		})
+	}
+}
+
+// doctorLaunchdFixture turns doctorFixture's install into the launchd layout the
+// installer writes on macOS: a plist that runs the data directory's wrapper.
+func doctorLaunchdFixture(t *testing.T, o *doctorOptions) {
+	t.Helper()
+	wrapper := filepath.Join(o.dataDir, "launchd-run.sh")
+	script := "#!/bin/sh\nexec " + o.binary + " serve --data-dir=" + o.dataDir + " --listen=127.0.0.1:8443 --config=" + o.config + "\n"
+	plist := "<?xml version=\"1.0\"?>\n<plist version=\"1.0\">\n<dict>\n  <key>ProgramArguments</key>\n  <array>\n    <string>" +
+		wrapper + "</string>\n  </array>\n</dict>\n</plist>\n"
+	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(o.unit, []byte(plist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := map[string]any{
+		"schema": "olivares.ai/local-install/v2", "mode": o.mode, "init": "launchd",
+		"data_dir": o.dataDir, "config": o.config,
+		"files": []map[string]string{
+			{"path": o.binary, "mode": "0755"},
+			{"path": o.config, "mode": "0600"},
+			{"path": o.unit, "mode": "0644"},
+			{"path": wrapper, "mode": "0755"},
+		},
+	}
+	body, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(o.dataDir, "install-manifest.json"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	o.init = "launchd"
+}

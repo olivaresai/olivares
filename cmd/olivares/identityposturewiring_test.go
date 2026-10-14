@@ -62,11 +62,3 @@ func TestIdentityPostureProviderIsNilWithoutACredential(t *testing.T) {
 		t.Errorf("provider = %v with no Admin credential, want nil", p)
 	}
 }
-
-func TestIdentityPostureProviderIsWiredWithACredential(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	p := newIdentityPostureProvider(envFrom(map[string]string{"OLIVARES_CLAUDE_ADMIN_KEY": "sk-ant-admin-x"}), log)
-	if p == nil {
-		t.Fatal("provider is nil though an Admin credential is configured")
-	}
-}

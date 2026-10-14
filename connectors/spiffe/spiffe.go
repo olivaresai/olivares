@@ -29,15 +29,15 @@
 // identity→resource access edge, so Gather is a no-op and the roster travels the
 // typed Snapshot (the pattern). It imports only the SDK, the Apache
 // identitysource contract and the shared read-only httpx client — never the engine.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package spiffe
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -199,149 +199,6 @@ func (s *Source) Gather(context.Context, sdk.Sink) error { return nil }
 
 // Close releases resources; the connector holds none.
 func (s *Source) Close(context.Context) error { return nil }
-
-// Snapshot reads the registration-entries export (file or URL) and assembles the
-// identity graph: one workload Identity per entry, grouped by parent agent into a
-// "spire_node" Collection with a parentage Membership. With neither file nor URL
-// it returns an empty graph (offline). It never returns SVID/key material — a
-// SPIRE entry carries none.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceSPIFFE, CapturedAt: s.clock().UTC()}
-	if s.entriesFile == "" && s.entriesURL == "" {
-		return g, nil // offline
-	}
-
-	export, err := s.load(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-
-	// Track parents we have already materialized as a Collection so each agent is
-	// emitted exactly once, and preserve first-seen order for a stable Snapshot.
-	seenParent := map[string]struct{}{}
-	var parentOrder []string
-
-	for _, e := range export.Entries {
-		spiffeID := e.SpiffeID.String()
-		if spiffeID == "" {
-			continue // an export row without a usable SPIFFE ID; skip rather than guess
-		}
-		td := e.SpiffeID.trustDomain()
-		if s.trustDomain != "" && td != s.trustDomain {
-			continue // outside the configured trust domain
-		}
-
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         spiffeID,
-			Type:        identitysource.PrincipalNHI, // a SPIFFE workload is always non-human
-			Kind:        "workload",
-			DisplayName: e.SpiffeID.path(),
-			Source:      identitysource.SourceSPIFFE,
-			Attributes:  workloadAttributes(td, e),
-		})
-
-		parentRef := e.ParentID.String()
-		if parentRef == "" {
-			continue // no parent agent recorded; the workload still stands alone
-		}
-		if _, ok := seenParent[parentRef]; !ok {
-			seenParent[parentRef] = struct{}{}
-			parentOrder = append(parentOrder, parentRef)
-		}
-		g.Memberships = append(g.Memberships, identitysource.Membership{
-			MemberRef:     spiffeID,
-			MemberKind:    identitysource.MemberIdentity,
-			CollectionRef: parentRef,
-			Source:        identitysource.SourceSPIFFE,
-		})
-	}
-
-	for _, parentRef := range parentOrder {
-		p := parseSpiffe(parentRef)
-		g.Collections = append(g.Collections, identitysource.Collection{
-			Ref:         parentRef,
-			Kind:        identitysource.KindGroup,
-			DisplayName: p.path(),
-			Source:      identitysource.SourceSPIFFE,
-			Attributes:  map[string]string{"agent": "spire_node", "trust_domain": p.trustDomain()},
-		})
-	}
-	return g, nil
-}
-
-// load reads the export from the configured URL (preferred) or file. The URL path
-// uses the shared read-only httpx GET client; the file path uses os.ReadFile.
-func (s *Source) load(ctx context.Context) (entriesExport, error) {
-	var export entriesExport
-	if s.entriesURL != "" {
-		// The whole URL is the resource; httpx.New takes it as the base and an
-		// empty path follows it verbatim. No credential: a SPIRE entries export is
-		// non-secret metadata served read-only by the operator.
-		client := httpx.New(s.entriesURL, s.doer, nil, nil)
-		if err := client.GetJSON(ctx, "", nil, &export); err != nil {
-			return entriesExport{}, fmt.Errorf("spiffe: fetch entries export: %w", err)
-		}
-		return export, nil
-	}
-	if err := ctx.Err(); err != nil {
-		return entriesExport{}, err
-	}
-	body, err := os.ReadFile(s.entriesFile)
-	if err != nil {
-		return entriesExport{}, fmt.Errorf("spiffe: read entries file: %w", err)
-	}
-	if err := json.Unmarshal(body, &export); err != nil {
-		return entriesExport{}, fmt.Errorf("spiffe: parse entries file: %w", err)
-	}
-	return export, nil
-}
-
-// workloadAttributes builds the non-sensitive governance attributes for a workload
-// Identity: its trust domain, its flattened selectors and its parent agent. A
-// SPIRE selector ("k8s:ns:prod") is matching metadata, not a secret. ttl/admin are
-// recorded only when meaningful.
-func workloadAttributes(td string, e entry) map[string]string {
-	attrs := map[string]string{}
-	if td != "" {
-		attrs["trust_domain"] = td
-	}
-	if sel := flattenSelectors(e.Selectors); sel != "" {
-		attrs["selectors"] = sel
-	}
-	if parent := e.ParentID.String(); parent != "" {
-		attrs["parent_id"] = parent
-	}
-	if e.Admin {
-		attrs["admin"] = "true"
-	}
-	if e.X509SVIDTTL > 0 {
-		attrs["x509_svid_ttl"] = strconv.Itoa(e.X509SVIDTTL)
-	}
-	if len(attrs) == 0 {
-		return nil
-	}
-	return attrs
-}
-
-// flattenSelectors renders the entry's selectors as a stable "type:value,..."
-// string. The slice is sorted so the rendering is deterministic regardless of the
-// export's order, which keeps a Snapshot diff stable across runs.
-func flattenSelectors(sels []selector) string {
-	if len(sels) == 0 {
-		return ""
-	}
-	parts := make([]string, 0, len(sels))
-	for _, sel := range sels {
-		t := strings.TrimSpace(sel.Type)
-		v := strings.TrimSpace(sel.Value)
-		if t == "" && v == "" {
-			continue
-		}
-		parts = append(parts, t+":"+v)
-	}
-	sort.Strings(parts)
-	return strings.Join(parts, ",")
-}
 
 // normalizeTrustDomain reduces a configured filter to a bare trust-domain name: it
 // strips a leading "spiffe://" scheme and any path so an operator can write either

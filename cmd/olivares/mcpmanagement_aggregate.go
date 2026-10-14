@@ -46,8 +46,16 @@ func (m *mcpManagement) aggregateSessionTools(ctx context.Context, p auth.Princi
 	if err != nil {
 		return nil, err
 	}
+	assigned := m.assignedToSession(ctx, tenant, p)
 	for _, row := range snapshot.Servers {
 		if !row.Enabled {
+			continue
+		}
+		// An unreadable assignment hides only the servers that have one.
+		if ok, err := assigned(row); err != nil || !ok {
+			if err != nil && m.eng.log != nil {
+				m.eng.log.Warn("mcp: session assignment unreadable; the assigned server is hidden from this session", "server_id", row.ID, "run_ref", p.SessionRunRef, "error", err.Error())
+			}
 			continue
 		}
 		entry, err := m.cachedSessionServer(ctx, tenant, p, companion, snapshot.Version, row)
@@ -107,8 +115,12 @@ func (m *mcpManagement) aggregateSessionCall(w http.ResponseWriter, r *http.Requ
 		sessionRPCError(w, in.ID, -32001, "Server configuration unavailable")
 		return true
 	}
+	assigned := m.assignedToSession(r.Context(), tenant, p)
 	for _, row := range snapshot.Servers {
 		if !row.Enabled {
+			continue
+		}
+		if ok, err := assigned(row); err != nil || !ok {
 			continue
 		}
 		for _, tool := range row.Probe.Tools {

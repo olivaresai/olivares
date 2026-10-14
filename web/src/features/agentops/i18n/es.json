@@ -15,7 +15,7 @@
   "state": {
     "pending": "Pendiente",
     "running": "En marcha",
-    "idle": "En marcha",
+    "idle": "Inactiva",
     "stopped": "Parada",
     "failed": "Fallida",
     "cleaned": "Limpiada"
@@ -103,7 +103,6 @@
     "effort": "Effort",
     "effortDefault": "Por defecto del modelo",
     "model": "Modelo",
-    "modelPlaceholder": "opus  ·  claude-opus-4-8  (opcional)",
     "workspace": "Carpeta",
     "workspaceNone": "Carpeta temporal de esta sesión",
     "worktree": "Trabajar en un nuevo git worktree",
@@ -132,18 +131,9 @@
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME y GROK_HOME pertenecen al perfil: aquí se rechaza un lanzamiento que reenvíe cualquiera de ellas. Los demás nombres siguen sujetos a la validación del servidor.",
     "identity": {
       "title": "Identidad de lanzamiento",
-      "hint": "Elige un agente admitido para actuar en nombre de su sponsor humano. El acceso humano por sí solo no otorga autoridad de agente.",
       "humanHint": "La sesión se ejecuta con tu propio acceso.",
       "human": "Operador humano actual",
-      "agent": "Agente admitido (en nombre del sponsor)",
-      "required": "Un perfil de orquestación requiere una identidad de agente autenticada de forma independiente.",
-      "choose": "Identidad del agente",
-      "sponsorHint": "El servidor valida el agente, su estado y tu patrocinio antes del lanzamiento.",
-      "placeholder": "Elige un agente admitido",
-      "readRequired": "Se requiere permiso de lectura de NHI.",
-      "loading": "Cargando identidades de agente…",
-      "loadFailed": "Lista de identidades no disponible.",
-      "loadMore": "Cargar más identidades"
+      "required": "Un perfil de orquestación requiere una identidad de agente autenticada de forma independiente."
     },
     "blocked": {
       "profilesForbidden": "Tu rol no puede leer los perfiles de proveedor (sessions:profile:read), así que aquí no puede iniciarse ninguna sesión.",
@@ -158,6 +148,26 @@
       "templateRefused": "La plantilla pide condiciones que este lanzamiento no puede aplicar: elige otra en Opciones avanzadas.",
       "readinessFailed": "No se pudieron leer los requisitos del perfil."
     }
+  },
+  "picker": {
+    "search": "Buscar modelos",
+    "none": "Ningún modelo coincide.",
+    "loading": "Leyendo los modelos que ofrece esta herramienta…",
+    "failed": "La herramienta no respondió, así que no hay lista. Escribe un modelo o deja el valor por defecto.",
+    "unsupported": "Esta herramienta no lista sus modelos. Escribe uno o deja el valor por defecto.",
+    "unavailable": "La lista de modelos no está disponible aquí. Escribe un modelo o deja el valor por defecto.",
+    "default": "por defecto",
+    "new": "Nuevo",
+    "favorites": "Favoritos",
+    "models": "Modelos",
+    "legacy": "Anteriores",
+    "star": "Añadir {{model}} a favoritos",
+    "unstar": "Quitar {{model}} de favoritos",
+    "use": "Usar «{{model}}»",
+    "defaultNamed": "Por defecto ({{model}})",
+    "defaultUnnamed": "{{tool}} por defecto",
+    "effortDefaultNamed": "Por defecto del modelo ({{effort}})",
+    "effortNeedsModel": "Elige primero un modelo: el effort es un nivel de un modelo."
   },
   "detail": {
     "live": "En vivo",
@@ -198,7 +208,7 @@
     "inputAria": "Línea de entrada de la sesión",
     "textPlaceholder": "Envía una frase…",
     "textAria": "Turno de la sesión",
-    "advanced": "Avanzado · línea en bruto",
+    "advanced": "Línea en bruto",
     "advancedHint": "Envía una línea NDJSON a stdin. El campo de frase es el valor por defecto.",
     "send": "Enviar",
     "noOutput": "Aún no hay salida.",

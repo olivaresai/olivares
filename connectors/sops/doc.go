@@ -45,4 +45,7 @@
 // Guardrails: zero crypto calls, zero network calls — only YAML metadata parsing.
 // It imports only the SDK, the Apache identitysource/internal helpers, gopkg.in/
 // yaml.v3 and the standard library — never the engine (/core).
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package sops

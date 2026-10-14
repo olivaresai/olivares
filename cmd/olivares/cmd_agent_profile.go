@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,7 +58,7 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 		cfg                         agentClientConfig
 		name, state, authSource     string
 		providerRef, permissionMode string
-		tools                       []string
+		tools, programs, registries []string
 		unbind                      bool
 	)
 	cmd := &cobra.Command{
@@ -68,12 +69,16 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 			"immutable: changing one of those is creating another profile.\n\n" +
 			"Everything else is repairable in place — the label, active/disabled, the\n" +
 			"authorized authentication source, the bound provider, and the session policy\n" +
-			"(--tools and --permission-mode). A running child keeps what its own launch\n" +
-			"resolved; the change governs the next launch and the next resume.\n\n" +
+			"(--tools and --permission-mode), and the installed programs and npm registries\n" +
+			"its sessions get (--program and --npm-registry). A running child keeps what\n" +
+			"its own launch resolved; the change governs the next launch and the next resume.\n\n" +
 			"Use `agent profile rm` to retire a profile for good.",
 		Example: "  olivares agent profile update ppf_01J8ABCDEF --name \"Claude (prod)\"\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --tools Read,Grep,Edit\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --tools \"\"   # declare NO tools\n" +
+			"  olivares agent profile update ppf_01J8ABCDEF --program rea --program jq\n" +
+			"  olivares agent profile update ppf_01J8ABCDEF --npm-registry url=https://npm.acme.dev/,scope=@acme,secret=env/npm-acme\n" +
+			"  olivares agent profile update ppf_01J8ABCDEF --npm-registry \"\"   # withdraw the registries\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --state disabled\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --unbind-provider",
 		Args: exactRef("profile-ref"),
@@ -114,8 +119,18 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 			if cmd.Flags().Changed("permission-mode") {
 				body["session_permission_mode"] = permissionMode
 			}
+			if cmd.Flags().Changed("program") {
+				body["session_programs"] = nonEmpty(programs)
+			}
+			if cmd.Flags().Changed("npm-registry") {
+				parsed, perr := parseNPMRegistryFlags(registries)
+				if perr != nil {
+					return perr
+				}
+				body["session_registries"] = parsed
+			}
 			if len(body) == 0 {
-				return sessionCLIUsage("name what to change: --name, --state, --auth-source, --provider, --unbind-provider, --tools or --permission-mode")
+				return sessionCLIUsage("name what to change: --name, --state, --auth-source, --provider, --unbind-provider, --tools, --permission-mode, --program or --npm-registry")
 			}
 			status, b, err := cfg.do(cmd.Context(), "PATCH", profilesPath+"/"+args[0], body, 200)
 			if err != nil {
@@ -144,6 +159,10 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 		"the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools \"\" declares NONE)")
 	cmd.Flags().StringVar(&permissionMode, "permission-mode", "",
 		"permission mode those sessions run under, or \"\" to withdraw the declaration")
+	cmd.Flags().StringSliceVar(&programs, "program", nil,
+		"an installed program put first on those sessions' PATH (repeatable; --program \"\" withdraws them all)")
+	cmd.Flags().StringArrayVar(&registries, "npm-registry", nil,
+		"an npm registry those sessions install from: url=<https URL>[,scope=@name][,secret=env/<vault secret>] (repeatable; --npm-registry \"\" withdraws them all)")
 	_ = cmd.RegisterFlagCompletionFunc("state", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"active\taccepts launches, resumes and bindings",
@@ -458,6 +477,7 @@ func profileRecordFields(rec map[string]any) []termrender.Field {
 		{Key: "tools", Value: profileToolsSentence(rec)},
 		{Key: "permission mode", Value: mode},
 	}
+	fields = append(fields, profilePackagesFields(rec)...)
 	// Only a named profile shows the line, so the form of an unnamed one is as it was.
 	if account := str(rec, "account_name"); account != "" {
 		fields = append(fields[:2], append([]termrender.Field{{Key: "account", Value: account}}, fields[2:]...)...)
@@ -480,6 +500,76 @@ func printProfileRecord(w io.Writer, rec map[string]any) error {
 		r.Next("olivares agent session create --provider-profile " + ref + " --workspace <workspace-ref>")
 	}
 	return nil
+}
+
+// nonEmpty drops the empty names a flag like `--program ""` produces, so that
+// form sends an empty list (withdraw) rather than an invalid name.
+func nonEmpty(in []string) []string {
+	out := []string{}
+	for _, s := range in {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// parseNPMRegistryFlags reads each --npm-registry value,
+// url=<URL>[,scope=@name][,secret=env/name]; an empty value contributes none.
+// The engine validates the values themselves.
+func parseNPMRegistryFlags(values []string) ([]map[string]string, error) {
+	out := []map[string]string{}
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		reg := map[string]string{"kind": "npm"}
+		for _, part := range strings.Split(value, ",") {
+			key, val, ok := strings.Cut(strings.TrimSpace(part), "=")
+			_, seen := reg[key]
+			switch {
+			case !ok || (key != "url" && key != "scope" && key != "secret"):
+				return nil, sessionCLIUsage("--npm-registry takes url=<URL>[,scope=@name][,secret=env/name], not " + strconv.Quote(part))
+			case seen:
+				return nil, sessionCLIUsage("--npm-registry names " + key + " twice")
+			case val == "":
+				// An empty value from an unset shell variable would silently drop the
+				// scope or the token; leave the key out instead.
+				return nil, sessionCLIUsage("--npm-registry has an empty " + key + "=; leave it out instead")
+			}
+			reg[key] = val
+		}
+		if reg["url"] == "" {
+			return nil, sessionCLIUsage("--npm-registry needs url=<URL>")
+		}
+		out = append(out, reg)
+	}
+	return out, nil
+}
+
+// profilePackagesFields shows the declared programs and registries, only when
+// declared, so the form of every other profile is as it was.
+func profilePackagesFields(rec map[string]any) []termrender.Field {
+	var fields []termrender.Field
+	if raw, _ := rec["session_programs"].([]any); len(raw) > 0 {
+		names := make([]string, 0, len(raw))
+		for _, item := range raw {
+			if s, ok := item.(string); ok {
+				names = append(names, s)
+			}
+		}
+		fields = append(fields, termrender.Field{Key: "programs", Value: strings.Join(names, ", ")})
+	}
+	raw, _ := rec["session_registries"].([]any)
+	for _, item := range raw {
+		reg, _ := item.(map[string]any)
+		line := strings.TrimSpace(str(reg, "scope") + " " + str(reg, "url"))
+		if secret := str(reg, "secret"); secret != "" {
+			line += " (token from " + secret + ")"
+		}
+		fields = append(fields, termrender.Field{Key: "npm registry", Value: line})
+	}
+	return fields
 }
 
 // permissionModeChoices is the completion for the declared session mode, with

@@ -51,6 +51,9 @@ type principalReadAuthorityMode byte
 const (
 	principalHumanAuthority principalReadAuthorityMode = iota + 1
 	principalTokenDirectoryOnly
+	// principalEngineSystemAuthority is an engine path no human triggered,
+	// sealed for one tenant by ResolveSystemScope: no User, no credential.
+	principalEngineSystemAuthority
 )
 
 // ResolvePrincipalScope reconstructs the current authority for one exact

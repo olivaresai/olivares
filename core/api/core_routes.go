@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // policyRoute is the common registration boundary for core and module routes.
@@ -66,6 +67,36 @@ func publicRoute(http.ResponseWriter, *http.Request) (ModuleContext, bool) {
 
 func (s *Server) tenantRoute(perm auth.Permission) coreAdmission {
 	return s.entityRoute(perm, "", "")
+}
+
+func (s *Server) collectionRoute(perm auth.Permission, scope CollectionScopeRef) coreAdmission {
+	return func(w http.ResponseWriter, r *http.Request) (ModuleContext, bool) {
+		p, tenant, resource, _, ok := s.authzScopedCollectionPolicy(w, r, perm, auth.RouteMetadata{}, scope, ungovernedRoute)
+		return ModuleContext{Principal: p, Tenant: tenant, Resource: resource}, ok
+	}
+}
+
+// Bind a creation to its admitted workspace in the same transaction as the write.
+// Tenant-authorized defaults keep their existing behavior.
+func collectionMutationScope(r *http.Request, sc store.Scope, mc ModuleContext, workspace string) (store.Scope, error) {
+	admitted := mc.Resource.WorkspaceID
+	if admitted.IsZero() {
+		return sc, nil
+	}
+	if workspace != admitted.String() {
+		return nil, forbiddenFor("agent:write", false)
+	}
+	current, err := sc.Workspaces().Get(r.Context(), admitted)
+	if err != nil {
+		return nil, err
+	}
+	if current.ID != admitted || current.TenantID != mc.Tenant {
+		return nil, errEntityAuthorizationUnavailable
+	}
+	if current.Status != model.StatusActive {
+		return nil, forbiddenFor("agent:write", false)
+	}
+	return store.ConfineWorkspace(r.Context(), sc, admitted)
 }
 
 func (s *Server) entityRoute(perm auth.Permission, kind, param string) coreAdmission {

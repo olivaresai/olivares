@@ -74,6 +74,7 @@
     "folder": "Dossier",
     "folderHint": "Un dossier sur ce serveur. Laissez-le vide pour démarrer dans un nouveau dossier.",
     "folderNew": "Un nouveau dossier pour cette session",
+    "folderTyped": "Un autre dossier…",
     "folderChange": "Changer de dossier",
     "readingFolder": "Lecture du dossier de la dernière session…",
     "prompt": "Premier message (facultatif)",
@@ -102,7 +103,8 @@
     "openProviders": "Ouvrir Fournisseurs",
     "profile": "Profil",
     "profileNotSignedIn": "Non connecté",
-    "profileNeedsKey": "Clé requise"
+    "profileNeedsKey": "Clé requise",
+    "foldersUnreadable": "Les dossiers enregistrés n'ont pas pu être lus. Saisissez le chemin d'un dossier de ce serveur."
   },
   "lists": {
     "runsTruncated": "Sessions récentes : {{count}} chargées ; il y en a d’autres.",

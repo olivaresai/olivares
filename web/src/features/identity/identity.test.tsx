@@ -74,9 +74,7 @@ vi.mock('@/features/shared', async (importOriginal) => ({
 // Import AFTER mocks are declared.
 import { FederationTab } from './federation'
 import { NhiRosterTab } from './nhi-roster'
-import { PostureTab } from './posture'
 import { PrivilegedLoginTab } from './privileged-login'
-import { WifGraphTab } from './wif/wif-graph'
 
 const empty = { items: [], has_more: false }
 const ROSTER_FILTER_CURSOR_CONTRACT =
@@ -213,14 +211,15 @@ describe('ADM-IDN-01 — SSO config', () => {
     expect(screen.queryByText(/sk-ant/)).not.toBeInTheDocument()
   })
 
-  it('shows the SCIM leaver as sessions+tokens revoked', async () => {
+  it('shows the SCIM leaver as sessions+tokens revoked, with when it was processed', async () => {
+    // The engine's audit event carries `occurred_at` (core/api/dto.go AuditEventDTO); it never sends `at`.
     api.audit.mockResolvedValue({
       items: [
         {
           id: 'a1',
           action: 'scim.user.deprovision',
           target_id: 'usr_42',
-          at: '2026-06-07T00:00:00Z',
+          occurred_at: '2026-06-07T00:00:00Z',
         },
       ],
       has_more: false,
@@ -228,6 +227,23 @@ describe('ADM-IDN-01 — SSO config', () => {
     wrap(<FederationTab />)
     expect(await screen.findByText('usr_42')).toBeInTheDocument()
     expect(screen.getByText(/sessions \+ tokens revoked/i)).toBeInTheDocument()
+    expect(screen.getByRole('time')).toHaveAttribute(
+      'datetime',
+      '2026-06-07T00:00:00Z',
+    )
+  })
+
+  it('marks a leaver event with no time as unknown instead of leaving it out', async () => {
+    api.audit.mockResolvedValue({
+      items: [
+        { id: 'a2', action: 'scim.user.deprovision', target_id: 'usr_43' },
+      ],
+      has_more: false,
+    })
+    wrap(<FederationTab />)
+    expect(await screen.findByText('usr_43')).toBeInTheDocument()
+    expect(screen.queryByRole('time')).not.toBeInTheDocument()
+    expect(screen.getByText('—')).toBeInTheDocument()
   })
 
   it('renders the SCIM users as an honest pending seam (not a red error) when not provisioned', async () => {
@@ -282,6 +298,33 @@ describe('ADM-IDN-02 — NHI roster', () => {
         search: { focus: 'apikey_abc123' },
       }),
     )
+  })
+
+  it('shows an account state the source never reported as unknown, in the table and the detail', async () => {
+    const user = userEvent.setup()
+    api.identities.mockReset()
+    api.identities.mockResolvedValue({
+      items: [
+        {
+          id: 'i-bridge',
+          ref: 'agent_bridge',
+          kind: 'service_account',
+          principal_type: 'nhi',
+          disabled: null,
+        },
+      ],
+      has_more: false,
+    })
+    wrap(<NhiRosterTab />)
+
+    const row = (await screen.findAllByText('agent_bridge'))[0].closest('tr')!
+    expect(within(row).getByText(/^unknown$/i)).toBeInTheDocument()
+    expect(within(row).queryByText(/^active$/i)).toBeNull()
+
+    await user.click(within(row).getAllByText('agent_bridge')[0])
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByText(/^unknown$/i)).toBeInTheDocument()
+    expect(within(sheet).queryByText(/^active$/i)).toBeNull()
   })
 
   it('walks cursor pages instead of presenting the first roster page as complete', async () => {
@@ -482,7 +525,7 @@ describe('ADM-IDN-02 — NHI roster', () => {
       ).toHaveBeenCalledTimes(2),
     )
     expect(
-      screen.getByText('No human or non-human identities yet'),
+      screen.getByText('No identities yet'),
       ROSTER_FILTER_CURSOR_CONTRACT,
     ).toBeInTheDocument()
   })
@@ -549,54 +592,7 @@ describe('ADM-IDN-02 — NHI roster', () => {
   })
 })
 
-describe('AAL gate (fail-closed)', () => {
-  it('DENIES the WIF graph without AAL3 and shows the step-up panel', async () => {
-    authState.principal = { aal: 1 } // password-only
-    wrap(<WifGraphTab />)
-    expect(
-      await screen.findByText(/step-up authentication required/i),
-    ).toBeInTheDocument()
-    // The gated content (Console-only note) must NOT be present.
-    expect(
-      screen.queryByText(/managed only in the Anthropic Console/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('ALLOWS the WIF graph with AAL3', async () => {
-    authState.principal = { aal: 3, amr: ['webauthn'] }
-    wrap(<WifGraphTab />)
-    expect(
-      await screen.findByText(/managed only in the Anthropic Console/i),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByText(/step-up authentication required/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('routes an unenrolled operator to passkey registration (no_webauthn_credential is guidance, not a red error)', async () => {
-    authState.principal = { aal: 1 }
-    // jsdom has no WebAuthn; provide the minimal surface isWebAuthnSupported checks.
-    vi.stubGlobal('PublicKeyCredential', function PublicKeyCredential() {})
-    Object.defineProperty(navigator, 'credentials', {
-      value: { get: vi.fn(), create: vi.fn() },
-      configurable: true,
-    })
-    api.webauthnAuthOptions.mockRejectedValue(
-      new ApiError(400, 'no_webauthn_credential', 'no registered credential'),
-    )
-    wrap(<WifGraphTab />)
-    await userEvent.click(
-      await screen.findByRole('button', { name: /authenticate/i }),
-    )
-    expect(
-      await screen.findByText(/no passkey is registered/i),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByText(/step-up did not complete/i),
-    ).not.toBeInTheDocument()
-    vi.unstubAllGlobals()
-  })
-
+describe('Local privileged login (fail-closed)', () => {
   it('keeps passkey actions closed when the credential inventory read fails', async () => {
     authState.principal = { aal: 3, amr: ['webauthn'] }
     api.webauthnCredentials.mockReset()
@@ -621,174 +617,5 @@ describe('AAL gate (fail-closed)', () => {
     await waitFor(() =>
       expect(api.webauthnCredentials).toHaveBeenCalledTimes(2),
     )
-  })
-})
-
-describe('ANT2-08/07 — WIF graph: visualise & lint, never create', () => {
-  it('surfaces the REAL key-shadow footgun with the `ant auth status` remedy', async () => {
-    authState.principal = { aal: 3 }
-    api.findings.mockImplementation((params?: { subject_kind?: string }) =>
-      params?.subject_kind === 'anthropic.federation'
-        ? Promise.resolve({
-            items: [
-              {
-                id: 'f1',
-                kind: 'governance',
-                severity: 'high',
-                status: 'open',
-                subject_kind: 'anthropic.federation',
-                subject_ref: 'ANTHROPIC_API_KEY',
-                title:
-                  'Static Anthropic key shadows Workload Identity Federation',
-              },
-            ],
-            has_more: false,
-          })
-        : Promise.resolve(empty),
-    )
-    wrap(<WifGraphTab />)
-    expect(await screen.findByText(/ant auth status/i)).toBeInTheDocument()
-  })
-
-  it('offers NO affordance to create fdis_/fdrl_/svac_ (Console-only)', async () => {
-    authState.principal = { aal: 3 }
-    wrap(<WifGraphTab />)
-    await screen.findByText(/managed only in the Anthropic Console/i)
-    expect(
-      screen.queryByRole('button', { name: /create|new|add|crear|nuevo/i }),
-    ).not.toBeInTheDocument()
-    // The only CTA is a link out to the Console (never a CRUD control).
-    expect(
-      screen.getByRole('link', { name: /open in anthropic console/i }),
-    ).toBeInTheDocument()
-  })
-
-  it('shows an honest empty state when no federation is declared (live route, empty)', async () => {
-    authState.principal = { aal: 3 }
-    // The default mock resolves an empty graph (200, no federation declared).
-    wrap(<WifGraphTab />)
-    expect(
-      await screen.findByText(/No federation declared/i),
-    ).toBeInTheDocument()
-    // It is NOT the old pending seam — the backend is live now.
-    expect(
-      screen.queryByText(/backend endpoint is not live yet/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('renders the live WIF graph when federation is declared (flipped from seam)', async () => {
-    authState.principal = { aal: 3 }
-    api.wifGraph.mockResolvedValue({
-      issuers: [
-        {
-          id: 'fdis_1',
-          issuer_url: 'https://idp.example.com',
-          jwks_mode: 'discovery',
-          ca_cert_configured: false,
-        },
-      ],
-      rules: [
-        {
-          rule_id: 'fdrl_1',
-          issuer_id: 'fdis_1',
-          service_account_id: 'svac_1',
-          service_account_name: 'ci',
-          oauth_scope: 'workspace:developer',
-          token_lifetime_seconds: 3600,
-          ca_cert_configured: false,
-        },
-      ],
-      service_accounts: [
-        {
-          id: 'svac_1',
-          name: 'ci',
-          oauth_scope: 'workspace:developer',
-          issuer_id: 'fdis_1',
-          rule_id: 'fdrl_1',
-        },
-      ],
-    })
-    wrap(<WifGraphTab />)
-    // The live graph renders (stubbed canvas) — never the empty state or a pending seam.
-    expect(await screen.findByTestId('wif-graph-canvas')).toBeInTheDocument()
-    expect(
-      screen.queryByText(/No federation declared/i),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByText(/backend endpoint is not live yet/i),
-    ).not.toBeInTheDocument()
-  })
-})
-
-//the posture tab's three answers. "No customer-managed keys" and "we could not
-// look" are different facts; before this they rendered alike, because the route 404'd
-// and every test in this file mocked the 404 rather than the engine.
-// EU-CB08 (EU sweep on 09b): the posture tab read /v1/m/identity/tls and
-// /crypto-inventory on every visit; neither route exists, so each open made 404s and
-// console errors under "Backend pending" cards. Only the served sections remain.
-describe('Posture reads only the routes the engine serves', () => {
-  it('shows External Keys and residency, and no TLS or PQC section', async () => {
-    wrap(<PostureTab />)
-    await waitFor(() => expect(api.externalKeys).toHaveBeenCalled())
-    expect(api.workspaceResidency).toHaveBeenCalled()
-    expect(screen.queryByText('Panel TLS (cert-manager)')).toBeNull()
-    expect(screen.queryByText('Crypto agility / PQC inventory')).toBeNull()
-    expect(api).not.toHaveProperty('tlsPosture')
-    expect(api).not.toHaveProperty('cryptoInventory')
-  })
-})
-
-describe('External Keys / residency posture — the three answers', () => {
-  it('says WHY when the Admin connector is not wired, instead of an empty inventory', async () => {
-    wrap(<PostureTab />)
-    expect(
-      await screen.findByText(/the Claude Admin-API connector is not wired/i),
-    ).toBeInTheDocument()
-    // The empty-state copy would tell the operator their org HAS no keys. Match the
-    // REAL string — an earlier draft asserted /no external keys/i, which never matches
-    // "No external key references reported yet" and so asserted nothing at all.
-    expect(
-      screen.queryByText(/no external key references reported yet/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('renders the inventory when the posture IS available', async () => {
-    api.externalKeys.mockResolvedValue({
-      items: [
-        {
-          id: 'ekey_01ABC',
-          provider: 'aws_kms',
-          name: 'prod-cmek',
-          state: 'active',
-          in_use: true,
-        },
-      ],
-      has_more: false,
-      available: true,
-    })
-    api.workspaceResidency.mockResolvedValue({
-      items: [],
-      has_more: false,
-      available: true,
-    })
-    wrap(<PostureTab />)
-    expect(await screen.findByText('ekey_01ABC')).toBeInTheDocument()
-    // With BOTH postures available, no "could not read" notice survives anywhere.
-    expect(
-      screen.queryByText(/the Claude Admin-API connector is not wired/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('an AVAILABLE but empty inventory is a real zero, not a failure', async () => {
-    api.externalKeys.mockResolvedValue({
-      items: [],
-      has_more: false,
-      available: true,
-    })
-    wrap(<PostureTab />)
-    // The honest empty state — the inventory WAS read and the org genuinely has none.
-    expect(
-      await screen.findByText(/no external key references reported yet/i),
-    ).toBeInTheDocument()
   })
 })

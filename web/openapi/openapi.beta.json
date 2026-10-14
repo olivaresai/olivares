@@ -1360,7 +1360,18 @@
     "/v1/m/agenttools/installs": {
       "post": {
         "description": "Starts one audited host installation from an approved plan behind the administrative step-up.",
-        "parameters": [],
+        "parameters": [
+          {
+            "description": "For a catalog plan, select the same organization used in its preview.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2436,15 +2447,315 @@
         "x-stability": "beta"
       }
     },
-    "/v1/m/agenttools/plans": {
-      "post": {
-        "description": "Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.",
+    "/v1/m/agenttools/pins": {
+      "get": {
+        "description": "Lists the selected organization's stored session tool versions.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "pins": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "agent_ref": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "driver": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "maxLength": 128,
+                            "type": "string"
+                          },
+                          "workspace_ref": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "driver",
+                          "version"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "pins"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Stored workspace and agent version selections"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the selected organization's stored session tool versions.",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      },
+      "put": {
+        "description": "Saves or clears a version selection for a tenant's workspace or agent.",
         "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "additionalProperties": false,
+                "properties": {
+                  "agent_ref": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "driver": {
+                    "type": "string"
+                  },
+                  "tenant_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "version": {
+                    "maxLength": 128,
+                    "type": "string"
+                  },
+                  "workspace_ref": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "tenant_id",
+                  "driver",
+                  "version"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Version selection saved and audited; empty version clears it"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Saves or clears a version selection for a tenant's workspace or agent.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/plans": {
+      "post": {
+        "description": "Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.",
+        "parameters": [
+          {
+            "description": "For from installs, select the organization whose Catalog admitted the declaration. Host authority and audit remain system-scoped.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "not": {
+                      "required": [
+                        "from"
+                      ]
+                    },
+                    "required": [
+                      "driver"
+                    ]
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "driver"
+                      ]
+                    },
+                    "required": [
+                      "from"
+                    ]
+                  }
+                ],
                 "properties": {
                   "driver": {
                     "enum": [
@@ -2455,15 +2766,22 @@
                       "gemini-cli",
                       "ollama"
                     ],
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "from": {
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "minLength": 1,
                     "type": "string"
                   },
                   "version": {
                     "maxLength": 128,
+                    "minLength": 1,
                     "type": "string"
                   }
                 },
                 "required": [
-                  "driver",
                   "version"
                 ],
                 "type": "object"
@@ -2509,7 +2827,7 @@
                 }
               }
             },
-            "description": "Official release selected for administrator review"
+            "description": "Official or catalog-admitted release selected for administrator review"
           },
           "400": {
             "content": {
@@ -2828,6 +3146,141 @@
           }
         ],
         "summary": "Reports one snapshot per tool instance on this node.",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/releases": {
+      "delete": {
+        "description": "Deletes one verified managed host release after checking live sessions.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "driver": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "driver",
+                  "version"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "driver": {
+                      "type": "string"
+                    },
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "sha256": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "driver",
+                    "version",
+                    "sha256"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Verified release removed after session admission and audit"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Deletes one verified managed host release after checking live sessions.",
+        "x-olivares-request-body-disposition": "schema-published",
         "x-olivares-scope": "system",
         "x-required-permission": "system:admin",
         "x-stability": "beta"
@@ -6646,7 +7099,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "bundle": {
-                    "description": "Sigstore attestation bundle captured as raw JSON and validated by the verifier."
+                    "description": "Sigstore attestation bundle captured as raw JSON and validated by the verifier. Omit only to approve an agent or MCP entry with a pinned spec.tool_install declaration through the existing approval policy."
                   },
                   "expected_digest": {
                     "type": "string"
@@ -6661,9 +7114,6 @@
                     "type": "array"
                   }
                 },
-                "required": [
-                  "bundle"
-                ],
                 "type": "object"
               }
             }
@@ -37419,7 +37869,7 @@
     },
     "/v1/m/governance/agents": {
       "post": {
-        "description": "Creates a lifecycle row with kind=agent and mandatory sponsor.",
+        "description": "Requires Business Identity \u0026 Scale to register managed agent identities; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -37550,7 +38000,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Creates a lifecycle row with kind=agent and mandatory sponsor.",
+        "summary": "Requires Business Identity \u0026 Scale to register managed agent identities; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "governance:nhi:admin",
         "x-stability": "beta"
@@ -41945,7 +42395,7 @@
     },
     "/v1/m/governance/nhi": {
       "get": {
-        "description": "Lists the NHI lifecycle rows, optionally filtered by enforcement state or offboard state.",
+        "description": "Requires Business Identity \u0026 Scale to query non-human identity inventory; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42038,14 +42488,14 @@
             "browserSession": []
           }
         ],
-        "summary": "Lists the NHI lifecycle rows, optionally filtered by enforcement state or offboard state.",
+        "summary": "Requires Business Identity \u0026 Scale to query non-human identity inventory; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:nhi:read",
         "x-stability": "beta"
       }
     },
     "/v1/m/governance/nhi/posture": {
       "get": {
-        "description": "Aggregates the lifecycle posture. Read-tier, self-audited.",
+        "description": "Requires Business Identity \u0026 Scale to analyze non-human identity posture; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42138,14 +42588,14 @@
             "browserSession": []
           }
         ],
-        "summary": "Aggregates the lifecycle posture.",
+        "summary": "Requires Business Identity \u0026 Scale to analyze non-human identity posture; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:nhi:read",
         "x-stability": "beta"
       }
     },
     "/v1/m/governance/nhi/sweep": {
       "post": {
-        "description": "Materializes staleness/escalation, orphan and unsponsored state for the tenant's NHI lifecycle rows, and ensures a row exists for every roster NHI.",
+        "description": "Requires Business Identity \u0026 Scale to run non-human identity lifecycle sweeps; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42238,7 +42688,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Materializes staleness/escalation, orphan and unsponsored state for the tenant's NHI lifecycle rows, and ensures a row exists for every roster NHI.",
+        "summary": "Requires Business Identity \u0026 Scale to run non-human identity lifecycle sweeps; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "governance:nhi:admin",
         "x-stability": "beta"
@@ -42246,7 +42696,7 @@
     },
     "/v1/m/governance/nhi/{ref}": {
       "get": {
-        "description": "Returns one NHI lifecycle row by identity_ref.",
+        "description": "Requires Business Identity \u0026 Scale to query non-human identity details; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42348,14 +42798,14 @@
             "browserSession": []
           }
         ],
-        "summary": "Returns one NHI lifecycle row by identity_ref.",
+        "summary": "Requires Business Identity \u0026 Scale to query non-human identity details; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:nhi:read",
         "x-stability": "beta"
       }
     },
     "/v1/m/governance/nhi/{ref}/events": {
       "get": {
-        "description": "Lists the append-only lifecycle event trail for one NHI.",
+        "description": "Requires Business Identity \u0026 Scale to query non-human identity lifecycle events; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42457,14 +42907,14 @@
             "browserSession": []
           }
         ],
-        "summary": "Lists the append-only lifecycle event trail for one NHI.",
+        "summary": "Requires Business Identity \u0026 Scale to query non-human identity lifecycle events; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:nhi:read",
         "x-stability": "beta"
       }
     },
     "/v1/m/governance/nhi/{ref}/offboard": {
       "post": {
-        "description": "Runs the reversible soft-delete step of a governed offboarding: it blocks the NHI in-product (enforcement=blocked, the cascade that denies every bound agent at the PEP), opens an audited recovery window, and best-effort disables the credential at the source.",
+        "description": "Requires Business Identity \u0026 Scale to offboard non-human identities; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42608,7 +43058,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Runs the reversible soft-delete step of a governed offboarding: it blocks the NHI in-product (enforcement=blocked, the cascade that denies every bound agent at the PEP), opens an audited recovery window, and best-effort disables the credential at the source.",
+        "summary": "Requires Business Identity \u0026 Scale to offboard non-human identities; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "governance:nhi:admin",
         "x-stability": "beta"
@@ -42616,7 +43066,7 @@
     },
     "/v1/m/governance/nhi/{ref}/offboard/finalize": {
       "post": {
-        "description": "Finalizes the offboarding of one non-human identity.",
+        "description": "Requires Business Identity \u0026 Scale to finalize non-human identity offboarding; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42768,7 +43218,7 @@
     },
     "/v1/m/governance/nhi/{ref}/ownership": {
       "put": {
-        "description": "Assigns owner/sponsor. Each reference, when non-empty, must resolve to a roster identity classified HUMAN (never an NHI/unknown — owner and sponsor are accountable people).",
+        "description": "Requires Business Identity \u0026 Scale to assign non-human identity owners; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -42931,7 +43381,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Assigns owner/sponsor.",
+        "summary": "Requires Business Identity \u0026 Scale to assign non-human identity owners; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "governance:nhi:write",
         "x-stability": "beta"
@@ -42939,7 +43389,7 @@
     },
     "/v1/m/governance/nhi/{ref}/policy": {
       "put": {
-        "description": "Authors the per-NHI rotation policy. Write-tier, self-audited.",
+        "description": "Requires Business Identity \u0026 Scale to configure non-human identity lifecycle policy; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -43108,7 +43558,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Authors the per-NHI rotation policy.",
+        "summary": "Requires Business Identity \u0026 Scale to configure non-human identity lifecycle policy; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "governance:nhi:write",
         "x-stability": "beta"
@@ -43116,7 +43566,7 @@
     },
     "/v1/m/governance/nhi/{ref}/restore": {
       "post": {
-        "description": "Reverses a soft-delete within the recovery window: best-effort re-enable at the source, clear the in-product block.",
+        "description": "Requires Business Identity \u0026 Scale to restore offboarded non-human identities; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -43218,7 +43668,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Reverses a soft-delete within the recovery window: best-effort re-enable at the source, clear the in-product block.",
+        "summary": "Requires Business Identity \u0026 Scale to restore offboarded non-human identities; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "governance:nhi:admin",
         "x-stability": "beta"
@@ -43226,7 +43676,7 @@
     },
     "/v1/m/governance/nhi/{ref}/rotate": {
       "post": {
-        "description": "Orchestrates a governed rotation: it opens the CRITICAL approval (two-person floor via the engine), and only on an approved/break-glass decision invokes the wired actuator, returning the minted credential ONCE.",
+        "description": "Requires Business Identity \u0026 Scale to rotate non-human identity credentials; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -43370,7 +43820,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Orchestrates a governed rotation: it opens the CRITICAL approval (two-person floor via the engine), and only on an approved/break-glass decision invokes the wired actuator, returning the minted credential ONCE.",
+        "summary": "Requires Business Identity \u0026 Scale to rotate non-human identity credentials; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "governance:nhi:admin",
         "x-stability": "beta"
@@ -48565,7 +49015,7 @@
     },
     "/v1/m/governance/roster/sync": {
       "post": {
-        "description": "Triggers a roster reconciliation for the resolved tenant from the identity providers the composition root wired (UseRosterProviders).",
+        "description": "Requires Business Identity \u0026 Scale to reconcile directory rosters; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -48658,7 +49108,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Triggers a roster reconciliation for the resolved tenant from the identity providers the composition root wired (UseRosterProviders).",
+        "summary": "Requires Business Identity \u0026 Scale to reconcile directory rosters; returns HTTP 501 when unavailable.",
         "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "governance:identity:admin",
         "x-stability": "beta"
@@ -51203,7 +51653,7 @@
     },
     "/v1/m/identity/external-keys": {
       "get": {
-        "description": "Serves the read-only CMEK inventory (ANT2-04).",
+        "description": "Requires Business Identity \u0026 Scale to query customer-managed encryption key inventory; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -51296,14 +51746,14 @@
             "browserSession": []
           }
         ],
-        "summary": "Serves the read-only CMEK inventory (ANT2-04).",
+        "summary": "Requires Business Identity \u0026 Scale to query customer-managed encryption key inventory; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:idposture:read",
         "x-stability": "beta"
       }
     },
     "/v1/m/identity/residency": {
       "get": {
-        "description": "Serves the read-only workspace governance object (ANT2-06). ARCHIVED workspaces are omitted: an archived workspace takes no inference, so listing its missing CMEK would report a residency gap nobody can act on or exploit.",
+        "description": "Requires Business Identity \u0026 Scale to query workspace residency and customer-managed encryption posture; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -51396,7 +51846,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Serves the read-only workspace governance object (ANT2-06).",
+        "summary": "Requires Business Identity \u0026 Scale to query workspace residency and customer-managed encryption posture; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:idposture:read",
         "x-stability": "beta"
       }
@@ -51503,7 +51953,7 @@
     },
     "/v1/m/identity/wif": {
       "get": {
-        "description": "Serves the declared WIF object graph. Viewing the federation graph is a privileged, recon-relevant read, so it self-audits in a committed transaction BEFORE returning — deny-closed: if the audit write fails, the graph is NOT served.",
+        "description": "Requires Business Identity \u0026 Scale to query workload identity federation graphs; returns HTTP 501 when unavailable.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -51596,7 +52046,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Serves the declared WIF object graph.",
+        "summary": "Requires Business Identity \u0026 Scale to query workload identity federation graphs; returns HTTP 501 when unavailable.",
         "x-required-permission": "governance:idposture:read",
         "x-stability": "beta"
       }
@@ -100302,6 +100752,63 @@
                       }
                     ]
                   },
+                  "session_programs": {
+                    "anyOf": [
+                      {
+                        "description": "Installed third-party programs (the tool installer's program names) put first on each session's PATH. A launch whose program is not installed is refused 409. Declaring programs needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it.",
+                        "items": {
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                          "type": "string"
+                        },
+                        "maxItems": 16,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "session_registries": {
+                    "anyOf": [
+                      {
+                        "description": "npm registries each native session installs from. The token travels in a per-launch npm configuration file, never in the environment or argv, and a confined session's network reaches the registry hosts. Declaring registries needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "npm"
+                              ],
+                              "type": "string"
+                            },
+                            "scope": {
+                              "description": "An npm scope (@name) routed to this registry; empty makes it the default registry, one per profile.",
+                              "type": "string"
+                            },
+                            "secret": {
+                              "description": "The tenant vault secret (env/...) holding the registry token. Empty sends none.",
+                              "type": "string"
+                            },
+                            "url": {
+                              "description": "The registry's base URL: https, or http on a loopback host.",
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "url"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "session_work_grant": {
                     "anyOf": [
                       {
@@ -100966,6 +101473,63 @@
                       {
                         "description": "Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved.",
                         "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "session_programs": {
+                    "anyOf": [
+                      {
+                        "description": "Installed third-party programs (the tool installer's program names) put first on each session's PATH. A launch whose program is not installed is refused 409. Declaring programs needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it.",
+                        "items": {
+                          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+                          "type": "string"
+                        },
+                        "maxItems": 16,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "session_registries": {
+                    "anyOf": [
+                      {
+                        "description": "npm registries each native session installs from. The token travels in a per-launch npm configuration file, never in the environment or argv, and a confined session's network reaches the registry hosts. Declaring registries needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it.",
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "npm"
+                              ],
+                              "type": "string"
+                            },
+                            "scope": {
+                              "description": "An npm scope (@name) routed to this registry; empty makes it the default registry, one per profile.",
+                              "type": "string"
+                            },
+                            "secret": {
+                              "description": "The tenant vault secret (env/...) holding the registry token. Empty sends none.",
+                              "type": "string"
+                            },
+                            "url": {
+                              "description": "The registry's base URL: https, or http on a loopback host.",
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "url"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
                       },
                       {
                         "type": "null"
@@ -101955,6 +102519,244 @@
           }
         ],
         "summary": "Reports the LOCAL launch requirements observed for one provider profile under one transport and isolation, with the checks this read cannot make left explicitly unknown; it starts nothing, mints nothing and authorizes nothing.",
+        "x-required-permission": "sessions:profile:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/provider-profiles/{ref}/models": {
+      "get": {
+        "description": "Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Refresh the upstream catalog now.",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "checked_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "default_model": {
+                      "description": "Empty selects the installed tool's own default. Optional model markers and capabilities are present only when the tool reports them.",
+                      "type": "string"
+                    },
+                    "driver": {
+                      "type": "string"
+                    },
+                    "free_text": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "models": {
+                      "items": {
+                        "properties": {
+                          "default_effort": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "effort_levels": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 32,
+                            "type": "array"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "is_default": {
+                            "type": "boolean"
+                          },
+                          "is_legacy": {
+                            "type": "boolean"
+                          },
+                          "is_new": {
+                            "type": "boolean"
+                          },
+                          "service_tiers": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "maxItems": 32,
+                            "type": "array"
+                          },
+                          "supports_fast_mode": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 1000,
+                      "type": "array"
+                    },
+                    "profile_ref": {
+                      "type": "string"
+                    },
+                    "refresh_interval_seconds": {
+                      "type": "integer"
+                    },
+                    "state": {
+                      "enum": [
+                        "fresh",
+                        "unsupported",
+                        "failed"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "profile_ref",
+                    "driver",
+                    "state",
+                    "models",
+                    "default_model",
+                    "free_text",
+                    "checked_at",
+                    "refresh_interval_seconds"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Live catalog from the profile's installed tool or bound provider. Cached per profile for two minutes; refresh=true bypasses the cache. Free text remains available. Vendor errors, paths and credentials are never returned."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invalid profile reference or refresh query"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Profile read permission required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Profile absent in this tenant"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Profile unavailable or changed during discovery"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Profile driver or authentication source is unavailable"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Store or audit failure"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Required runtime wiring is unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.",
         "x-required-permission": "sessions:profile:read",
         "x-stability": "beta"
       }
@@ -103958,6 +104760,233 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/runs/{ref}/activity": {
+      "get": {
+        "description": "Returns what one Claude Code session's tool is doing, read from the transcript it keeps: the agents it spawned, its background tasks, the files its edits changed, its task list, the skills and MCP servers it used, and its context; read-only.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:run:read)",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/activity/agents/{agent}": {
+      "get": {
+        "description": "Returns what one subagent of a Claude Code session was asked, the tools it called and what it answered, from the subagent's own transcript; read-only.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter agent.",
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:run:read)",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/runs/{ref}/attach": {
       "get": {
         "description": "Streams a live session's bridged I/O as server-sent events, replaying from an optional ?from=\u003cseq\u003e cursor.",
@@ -104416,6 +105445,201 @@
         "summary": "sessions module route (requires sessions:run:admin)",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:run:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/commands": {
+      "get": {
+        "description": "Lists the commands, skills and agents the session's tool reports.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "commands": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "argument_hint": {
+                            "description": "How the tool shows the arguments, when it does.",
+                            "type": "string"
+                          },
+                          "description": {
+                            "description": "One line, as the tool wrote it.",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "description": "A command is a slash command or a skill; both are typed as /name.",
+                            "enum": [
+                              "command",
+                              "agent"
+                            ],
+                            "type": "string"
+                          },
+                          "name": {
+                            "description": "What follows the slash, without it.",
+                            "type": "string"
+                          },
+                          "source": {
+                            "description": "Where the command comes from, when the tool says so.",
+                            "enum": [
+                              "",
+                              "built-in",
+                              "user",
+                              "project",
+                              "plugin"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "source",
+                          "kind"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "reported": {
+                      "description": "False when the tool reported nothing: the session is not live on this node, or its tool is not read yet.",
+                      "type": "boolean"
+                    },
+                    "stale": {
+                      "description": "True when the last ask of the tool failed and the commands are what it reported before.",
+                      "type": "boolean"
+                    },
+                    "tool": {
+                      "description": "The session's tool; empty when the session is not live on this node.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tool",
+                    "reported",
+                    "commands"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the commands, skills and agents the session's tool reports"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the session's launch is no longer its authority, or its work lease needs a fence"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the tool refused or could not be asked for its commands"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the tool did not report its commands in time"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the commands, skills and agents the session's tool reports.",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       }
     },
@@ -105694,6 +106918,252 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/runs/{ref}/handoff": {
+      "get": {
+        "description": "Returns the summary a handoff of one stopped Claude Code session would start from, generated from its stored conversation without a model, for review; it starts nothing.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:run:read)",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Starts a new session in the chosen provider profile, linked to one stopped Claude Code session, from a reviewed summary and the attached transcript; the answer says whether the first turn arrived.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "The new session's name. Defaults to a name that says it continues this one.",
+                    "type": "string"
+                  },
+                  "provider_profile_ref": {
+                    "description": "The provider profile to continue in. It may belong to any tool, including the session's own.",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "description": "The reviewed text the new session starts from. Omitted, the server generates it (GET /runs/{ref}/handoff returns the same text for review).",
+                    "maxLength": 65536,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "provider_profile_ref"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:run:write)",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/sessions/runs/{ref}/input": {
       "post": {
         "description": "Sends one input line or message to a live session run.",
@@ -106082,6 +107552,136 @@
           }
         ],
         "summary": "Cancels the active provider turn of a live session and keeps its owned process running; it is the non-terminal control, /stop remains the terminal one, and the optional body decides which control plane answers — absent, it is the legacy interrupt of a non-work run; with a positive work_lease_fence, it is the fenced control this work-bound run's input and stop already use.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/move": {
+      "post": {
+        "description": "Moves one stopped or failed Claude Code session to another profile of the same tool, carrying that conversation's own files, without starting a process.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "provider_profile_ref": {
+                    "description": "The provider profile to move the stopped session to. It must belong to the same tool as the session's current profile.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "provider_profile_ref"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:run:write)",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
@@ -113787,7 +115387,7 @@
         "x-stability": "beta"
       },
       "patch": {
-        "description": "Replaces a workspace's additional read-only host folders. Requires workspace administrator permission; an empty array removes access.",
+        "description": "Changes a workspace's read-only host folders or DLP mode. Requires workspace administrator permission; a setting left out is not changed and an empty folder array removes access.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -113814,19 +115414,42 @@
             "application/json": {
               "schema": {
                 "additionalProperties": false,
+                "description": "Name at least one setting with a value. A setting left out or null is not changed.",
+                "minProperties": 1,
                 "properties": {
+                  "dlp_mode": {
+                    "anyOf": [
+                      {
+                        "description": "Empty selects off, as on registration.",
+                        "enum": [
+                          "",
+                          "label",
+                          "deny",
+                          "off"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "read_only_folders": {
-                    "description": "Additional read-only host folders for native sessions. Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions. Must be absolute, existing directories outside protected engine folders. The server stores canonical paths. Omitted on create or an empty array grants no extra access.",
-                    "items": {
-                      "minLength": 1,
-                      "type": "string"
-                    },
-                    "type": "array"
+                    "anyOf": [
+                      {
+                        "description": "Additional read-only host folders for native sessions. Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions. Must be absolute, existing directories outside protected engine folders. The server stores canonical paths. Omitted on create or an empty array grants no extra access.",
+                        "items": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
-                "required": [
-                  "read_only_folders"
-                ],
                 "type": "object"
               }
             }
@@ -113913,7 +115536,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Replaces a workspace's additional read-only host folders.",
+        "summary": "Changes a workspace's read-only host folders or DLP mode.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:workspace:admin",
         "x-stability": "beta"
@@ -114720,6 +116343,116 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/sessions/workspaces/{ref}/wiki": {
+      "post": {
+        "description": "Initializes the wiki layout and assigns wiki skills to the workspace, creating missing files while preserving existing content.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "sessions module route (requires sessions:workspace:admin)",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:workspace:admin",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/skills/assignments": {
       "get": {
         "description": "Lists pinned skills assignments for an authorized workspace, template, agent group, agent, or session target with cursor pagination.",
@@ -114839,6 +116572,10 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "approve_active_content": {
+                    "description": "Required when a selected member carries hooks, shell interpolation, a tool pre-approval or a plugin, settings or hooks file. Revisions list these as active_content; the approval is recorded in the audit event.",
+                    "type": "boolean"
+                  },
                   "members": {
                     "description": "Omitted, null, or empty selects all members of the pinned revision.",
                     "items": {
@@ -114862,6 +116599,7 @@
                   "target_kind": {
                     "enum": [
                       "workspace",
+                      "folder",
                       "template",
                       "agent_group",
                       "agent",
@@ -115123,6 +116861,10 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "approve_active_content": {
+                    "description": "Required when a selected member carries hooks, shell interpolation, a tool pre-approval or a plugin, settings or hooks file. Revisions list these as active_content; the approval is recorded in the audit event.",
+                    "type": "boolean"
+                  },
                   "members": {
                     "description": "Omitted, null, or empty selects all members of the pinned revision.",
                     "items": {
@@ -115146,6 +116888,7 @@
                   "target_kind": {
                     "enum": [
                       "workspace",
+                      "folder",
                       "template",
                       "agent_group",
                       "agent",
@@ -115248,6 +116991,106 @@
         "summary": "Creates or updates a target's pin to an immutable skills revision and selected members for new conversations.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "skills:assignment:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/skills/builtins": {
+      "get": {
+        "description": "Lists the embedded, pinned sources without installing or executing them.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Lists the embedded, pinned sources without installing or executing them.",
+        "x-required-permission": "skills:catalog:read",
         "x-stability": "beta"
       }
     },
@@ -115893,6 +117736,135 @@
         "x-stability": "beta"
       }
     },
+    "/v1/m/skills/packs/{id}/diff": {
+      "get": {
+        "description": "Compares two revisions of a pack from their verified artifacts.",
+        "parameters": [
+          {
+            "description": "Revision to compare from. Defaults to the revision before to.",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Revision to compare to. Defaults to the latest revision.",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Compares two revisions of a pack from their verified artifacts.",
+        "x-required-permission": "skills:catalog:write",
+        "x-stability": "beta"
+      }
+    },
     "/v1/m/skills/packs/{id}/revisions": {
       "post": {
         "description": "Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.",
@@ -116107,6 +118079,268 @@
         "summary": "Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "skills:catalog:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/skills/packs/{id}/update": {
+      "post": {
+        "description": "Reads a pack's recorded source again. Without apply it answers current or available, with the diff of what a new revision would change and the manifest digest of the bytes read; nothing is published.",
+        "parameters": [
+          {
+            "description": "Required with apply.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[!-~]+$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "apply": {
+                    "description": "Publish the source's current content as the next revision. Requires expected_digest and an Idempotency-Key header.",
+                    "type": "boolean"
+                  },
+                  "expected_digest": {
+                    "description": "The candidate manifest digest (candidate.manifest_digest of the check) the caller reviewed. Required with apply; refused otherwise.",
+                    "pattern": "^[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "ref": {
+                    "description": "Git packs only: follow this branch, tag or commit from now on. Defaults to the recorded ref.",
+                    "type": "string"
+                  },
+                  "subdir": {
+                    "description": "Git packs only: the selected directory, for a revision recorded before directories were kept.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Update check or idempotent replay of a published revision."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Reviewed update published as a new pack revision."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Reads a pack's recorded source again.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "skills:catalog:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/skills/selection": {
+      "get": {
+        "description": "Returns the skills a new conversation pinned to the authorized target, or the tree of targets, receives: the same resolution a launch runs, refusals included.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Returns the skills a new conversation pinned to the authorized target, or the tree of targets, receives: the same resolution a launch runs, refusals included.",
+        "x-required-permission": "skills:catalog:read",
         "x-stability": "beta"
       }
     },

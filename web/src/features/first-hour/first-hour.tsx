@@ -17,6 +17,7 @@ import { Check, ExternalLink, Loader2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { agentToolsKeys } from '@/features/agent-tools/api'
+import { useProfileList } from '@/features/agent-tools/use-profiles'
 import { ListTruncationBadge } from '@/features/_intel/notices'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,14 +42,16 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import type { ToolReadinessDTO } from '@/features/agentops/types'
+import type { ToolReadinessDTO, WorkspaceDTO } from '@/features/agentops/types'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { ModelEffortFields } from '@/features/agentops/model-effort-picker'
 import type { ProviderKind } from '@/features/providers/types'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import type { RequestOptions } from '@/lib/api/client'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { useTenantStore } from '@/stores/tenant'
+import type { AdvancedLaunch } from './new-session-store'
 import { stoppedAtStartReason } from '@/features/agentops/launch-readiness'
 import {
   DEFAULT_PERMISSION,
@@ -71,7 +74,7 @@ import {
   type ToolKey,
 } from './api'
 import { SessionSecrets } from './session-secrets'
-import { useSessionProfiles } from './session-profiles'
+import { useReuseProfile, useSessionProfiles } from './session-profiles'
 import './i18n'
 
 function errorText(err: unknown): string {
@@ -666,6 +669,20 @@ export function SignIn({
 const DEFAULT_MODEL = ' default'
 /** The Select value of the default login: Radix refuses an empty value. */
 const DEFAULT_PROFILE = ' default-login'
+/** The Select values of "a new folder of the session's own" and "a path I type"; a
+ * workspace_ref has no spaces, so neither is one. */
+const FOLDER_NEW = ' new-folder'
+const FOLDER_TYPED = ' typed-folder'
+/** A folder row is one line however long its path: the name stays, the path is cut, and
+ * the whole label is the tooltip. */
+const FOLDER_ITEM = '[&>span:last-child]:min-w-0 [&>span:last-child]:truncate'
+
+/** A registered folder in the list: its name when it has one, always its path. */
+function folderLabel(w: Pick<WorkspaceDTO, 'name' | 'root_path'>): string {
+  return w.name && w.name !== w.root_path
+    ? `${w.name} (${w.root_path})`
+    : w.root_path
+}
 
 const PERMISSIONS: PermissionChoice[] = [
   'editsAndCommands',
@@ -688,8 +705,9 @@ export function StartSessionForm({
   onAdvanced,
 }: {
   onStarted?: () => void
-  /** The advanced launch dialog, offered inside More options: one expander (Root, 09b). */
-  onAdvanced?: () => void
+  /** The advanced launch dialog, offered inside More options: one expander (Root, 09b).
+   * It opens on the sign-in, model and effort this form shows. */
+  onAdvanced?: (launch?: AdvancedLaunch) => void
 }) {
   const { t } = useTranslation('firstHour')
   const navigate = useNavigate()
@@ -701,7 +719,7 @@ export function StartSessionForm({
   const [driver, setDriver] = useState<SessionTool | null>(null)
   // Every tool can be chosen; one that cannot start yet says why in ONE line, for the
   // chosen tool only (Root, 09b capture review: three "Install X first" lines at once).
-  const tool = driver ?? ready[0]
+  const tool = driver ?? ready[0] ?? SESSION_TOOLS[0]
   // Start points at the sentence under the tool choice when that tool cannot start (#1083).
   const notReadyId = useId()
   // The product fills the folder in, shows it, and asks for a path only after Change
@@ -735,19 +753,20 @@ export function StartSessionForm({
     enabled: !!boundary.tenant,
     staleTime: 0,
   })
-  // A tool with several profiles asks which one; with one, the engine picks as it always
-  // did. A named profile that is ready can start the tool even when its default login
-  // is not.
+  // A sole named account still supplies its reference. Readiness belongs to the
+  // selected profile; the default login cannot qualify another home.
+  const profileList = useProfileList()
   const profiles = useSessionProfiles(
     tool,
     runs.data?.items ?? [],
     !!tool && ready.includes(tool),
   )
   const profileRef = profiles?.selected ?? ''
-  const profileReady =
-    profileRef !== '' &&
-    !!profiles?.choices.find((c) => c.value === profileRef)?.ready
-  const toolReady = !!tool && (ready.includes(tool) || profileReady)
+  const selectedProfile = profiles?.choices.find((c) => c.value === profileRef)
+  const toolReady =
+    !profileList.isLoading &&
+    !!tool &&
+    (profiles ? selectedProfile?.ready === true : ready.includes(tool))
   // Taken once the reads settle and kept, so a refetch never moves the folder under the
   // user. It belongs to the tenant and sign-in it was read for, like the model pick.
   const folderScope = `${boundary.tenant}:${epoch}`
@@ -756,6 +775,10 @@ export function StartSessionForm({
     folder: string
     workspace_ref?: string
     editing: boolean
+    /** A path typed instead of picked: set by "Another folder…", or when Change folder
+     * opens with no folder to pick from. Fixed then, so a list that arrives later never
+     * swaps the field under what the user is typing. */
+    typing?: boolean
   } | null>(null)
   if (
     chosen?.scope !== folderScope &&
@@ -769,6 +792,10 @@ export function StartSessionForm({
     })
   const current = chosen?.scope === folderScope ? chosen : null
   const folder = current?.folder ?? ''
+  // The folders sessions already use, to pick from; a path is typed only as the fallback.
+  const pickable = (registered.data?.items ?? []).filter(
+    (w) => w.state === 'active' && w.root_path,
+  )
   const [prompt, setPrompt] = useState('')
   const [more, setMore] = useState(false)
   const [permission, setPermission] =
@@ -780,10 +807,20 @@ export function StartSessionForm({
   const saved = key?.record.default_model || ''
   const tested = key?.record.models ?? []
   const noDefault = key?.modelRequired === true && !saved
-  const scope = `${tool}:${key?.record.provider_ref ?? ''}:${tenant}:${epoch}`
-  const [pick, setPick] = useState({ scope, model: '' })
-  if (pick.scope !== scope) setPick({ scope, model: '' })
+  const scope = `${tool}:${key?.record.provider_ref ?? ''}:${profileRef}:${tenant}:${epoch}`
+  const [pick, setPick] = useState({ scope, model: '', effort: '' })
+  if (pick.scope !== scope) setPick({ scope, model: '', effort: '' })
   const model = pick.scope === scope ? pick.model : ''
+  const effort = pick.scope === scope ? pick.effort : ''
+  // The catalog of the profile the session runs under: the chosen one, else the profile
+  // the engine's own rule would reuse (read only, nothing is created). A key has no
+  // profile before its first launch: its tested models are its list (below).
+  const canReadProfiles = can('sessions:profile:read')
+  const reuse = useReuseProfile(
+    tool,
+    toolReady && !profileRef && !key && canReadProfiles,
+  )
+  const catalogProfile = profileRef || reuse.data?.profile?.profile_ref || ''
   // A key with no tested model, for a tool that needs one, can start nothing yet: its remedy
   // is a connection test in Providers.
   const untested = noDefault && tested.length === 0
@@ -812,6 +849,7 @@ export function StartSessionForm({
             permission,
             secretEnv,
             ...(model ? { model } : {}),
+            ...(effort ? { effort } : {}),
             ...(profileRef ? { profileRef } : {}),
           },
           message: prompt,
@@ -845,7 +883,7 @@ export function StartSessionForm({
       onSubmit={(e) => {
         e.preventDefault()
         // A second Start would retire the launch in flight and leave its run unopened.
-        if (start.isPending) return
+        if (start.isPending || !toolReady) return
         const owner = captureOwner()
         start.mutate({ tenant: owner.tenant, attempt: owner.begin() })
       }}
@@ -864,7 +902,7 @@ export function StartSessionForm({
           }))}
         />
       </Field>
-      {profiles ? (
+      {profiles && profiles.choices.length > 1 ? (
         <Field label={t('start.profile')}>
           <Select
             value={profiles.selected || DEFAULT_PROFILE}
@@ -898,7 +936,10 @@ export function StartSessionForm({
           role="status"
           data-slot="tool-not-ready"
         >
-          {refusal(tool) ?? t('start.notReady', { tool: TOOL_NAMES[tool] })}{' '}
+          {profileRef && selectedProfile
+            ? `${selectedProfile.label} · ${t(selectedProfile.missing === 'key' ? 'start.profileNeedsKey' : 'start.profileNotSignedIn')}`
+            : (refusal(tool) ??
+              t('start.notReady', { tool: TOOL_NAMES[tool] }))}{' '}
           <Button
             type="button"
             variant="link"
@@ -918,7 +959,12 @@ export function StartSessionForm({
             // Always controlled: '' shows the placeholder, so a forgotten pick is gone.
             value={model || (noDefault ? '' : DEFAULT_MODEL)}
             onValueChange={(v) =>
-              setPick({ scope, model: v === DEFAULT_MODEL ? '' : v })
+              setPick({
+                scope,
+                model: v === DEFAULT_MODEL ? '' : v,
+                // An effort is a level of a model: no model known, no effort kept.
+                effort: v === DEFAULT_MODEL && !saved ? '' : effort,
+              })
             }
           >
             <SelectTrigger aria-label={t('start.model')}>
@@ -941,6 +987,18 @@ export function StartSessionForm({
           </Select>
         </Field>
       ) : null}
+      {tool && toolReady ? (
+        <ModelEffortFields
+          profileRef={catalogProfile}
+          driver={tool}
+          model={model}
+          effort={effort}
+          onChange={(next) => setPick({ scope, ...next })}
+          enabled
+          fallbackModel={key ? saved : ''}
+          withModel={!key}
+        />
+      ) : null}
       {untested && canReadProviders ? (
         <Button
           type="button"
@@ -951,8 +1009,78 @@ export function StartSessionForm({
           {t('start.openProviders')}
         </Button>
       ) : null}
-      {current?.editing ? (
-        <Field label={t('start.folder')} description={t('start.folderHint')}>
+      {current?.editing && !current.typing ? (
+        <Field label={t('start.folder')}>
+          <Select
+            value={current.workspace_ref ?? FOLDER_NEW}
+            onValueChange={(v) => {
+              if (v === FOLDER_TYPED)
+                return setChosen({
+                  ...current,
+                  typing: true,
+                  workspace_ref: undefined,
+                })
+              if (v === FOLDER_NEW)
+                return setChosen({
+                  ...current,
+                  folder: '',
+                  workspace_ref: undefined,
+                })
+              const picked = pickable.find((w) => w.workspace_ref === v)
+              if (picked)
+                setChosen({
+                  ...current,
+                  folder: picked.root_path,
+                  workspace_ref: picked.workspace_ref,
+                })
+            }}
+          >
+            <SelectTrigger autoFocus aria-label={t('start.folder')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-w-[var(--radix-select-content-available-width)]">
+              {/* A folder the list stopped naming after it was picked stays shown: Start
+                  sends what the form shows, and the engine refuses it in its own words. */}
+              {current.workspace_ref &&
+              !pickable.some(
+                (w) => w.workspace_ref === current.workspace_ref,
+              ) ? (
+                <SelectItem
+                  value={current.workspace_ref}
+                  title={folder}
+                  className={FOLDER_ITEM}
+                >
+                  {folder}
+                </SelectItem>
+              ) : null}
+              {pickable.map((w) => (
+                <SelectItem
+                  key={w.workspace_ref}
+                  value={w.workspace_ref}
+                  title={folderLabel(w)}
+                  className={FOLDER_ITEM}
+                >
+                  {folderLabel(w)}
+                </SelectItem>
+              ))}
+              <SelectItem value={FOLDER_NEW}>{t('start.folderNew')}</SelectItem>
+              <SelectItem value={FOLDER_TYPED}>
+                {t('start.folderTyped')}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : current?.editing ? (
+        <Field
+          label={t('start.folder')}
+          description={
+            // An unreadable list is not an empty one; a principal who may not list
+            // folders is not told of a list they were never to see.
+            registered.isError && can('sessions:workspace:read')
+              ? t('start.foldersUnreadable')
+              : t('start.folderHint')
+          }
+        >
           <Input
             autoFocus
             value={folder}
@@ -980,7 +1108,13 @@ export function StartSessionForm({
               <Button
                 type="button"
                 variant="link"
-                onClick={() => setChosen({ ...current, editing: true })}
+                onClick={() =>
+                  setChosen({
+                    ...current,
+                    editing: true,
+                    typing: pickable.length === 0,
+                  })
+                }
               >
                 {t('start.folderChange')}
               </Button>
@@ -1061,7 +1195,17 @@ export function StartSessionForm({
           type="button"
           variant="link"
           className="self-start"
-          onClick={onAdvanced}
+          // The tool always goes with it, so the dialog reads its default profile for this
+          // tool and no other. A tool on a key has no profile before its first launch, and
+          // a model tested for the key is no model of a profile: only the tool is handed
+          // over then, and while the reuse profile is still being read.
+          onClick={() =>
+            onAdvanced(
+              catalogProfile
+                ? { driver: tool, profileRef: catalogProfile, model, effort }
+                : { driver: tool },
+            )
+          }
         >
           {t('start.advanced')}
         </Button>
@@ -1138,7 +1282,7 @@ export function NewSessionDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdvanced?: () => void
+  onAdvanced?: (launch?: AdvancedLaunch) => void
 }) {
   const { t } = useTranslation('firstHour')
   return (
@@ -1158,19 +1302,25 @@ export function NewSessionDialog({
   )
 }
 
-/** Start form when a tool is ready; otherwise the tool cards that get one ready. */
+/** Named accounts can start a session even when no default login is ready. */
 export function SessionReady({
   onStarted,
   onAdvanced,
 }: {
   onStarted?: () => void
-  onAdvanced?: () => void
+  onAdvanced?: (launch?: AdvancedLaunch) => void
 }) {
   const { t } = useTranslation('firstHour')
   const { ready, isLoading } = useReadyTools()
-  if (isLoading)
+  const profiles = useProfileList()
+  if (isLoading || profiles.isLoading)
     return <Loader2 aria-hidden className="size-5 animate-spin text-text-3" />
-  if (ready.length > 0)
+  if (
+    ready.length > 0 ||
+    profiles.data?.accounts.some((a) =>
+      SESSION_TOOLS.some((d) => d === a.driver),
+    )
+  )
     return <StartSessionForm onStarted={onStarted} onAdvanced={onAdvanced} />
   // No tool ready: the cards that get one ready, and the advanced dialog as the only link.
   return (
@@ -1179,7 +1329,11 @@ export function SessionReady({
         <ToolCard key={d} driver={d} />
       ))}
       {onAdvanced ? (
-        <Button variant="link" className="self-start" onClick={onAdvanced}>
+        <Button
+          variant="link"
+          className="self-start"
+          onClick={() => onAdvanced()}
+        >
           {t('start.advanced')}
         </Button>
       ) : null}

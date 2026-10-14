@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"path/filepath"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/runtime"
@@ -33,18 +34,19 @@ func TestWireSourcesResolvesStoreReference(t *testing.T) {
 		secret.SchemeEnv:   secret.EnvHandler{},
 	})
 
-	// A vault source (in-process; its "token" field is declared Secret) carrying a
-	// store reference resolves and wires.
+	// A vault-audit source (in-process; its "token" field is declared Secret) carrying
+	// a store reference resolves and wires.
+	auditLog := filepath.Join(t.TempDir(), "audit.jsonl")
 	var okBuf bytes.Buffer
 	okLog := slog.New(slog.NewTextHandler(&okBuf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	rt := runtime.New(runtime.Options{Logger: quietLog()})
 	wireSources(context.Background(), rt, sourcesConfig{Sources: []sourceSpec{
-		{Name: "vault-ref", Kind: "vault", Tenant: "acme", Config: map[string]string{
-			"base_url": "https://vault.example:8200", "token": "store:vault-token",
+		{Name: "vault-ref", Kind: "vault-audit", Tenant: "acme", Config: map[string]string{
+			"path": auditLog, "base_url": "https://vault.example:8200", "token": "store:vault-token",
 		}},
 	}}, t.TempDir(), resolver, okLog)
-	if !logHasLine(okBuf.String(), "wired source (in-process fast-path)", "kind=vault") {
-		t.Errorf("a vault source with a store: token reference was not wired; log = %q", okBuf.String())
+	if !logHasLine(okBuf.String(), "wired source (in-process fast-path)", "kind=vault-audit") {
+		t.Errorf("a vault-audit source with a store: token reference was not wired; log = %q", okBuf.String())
 	}
 
 	// The same source with an INLINE secret in the declared-secret token field is
@@ -54,8 +56,8 @@ func TestWireSourcesResolvesStoreReference(t *testing.T) {
 	rt2 := runtime.New(runtime.Options{Logger: quietLog()})
 	const inlineSecret = "hvs.CAESrawinlinetokenvaluexxxxxxxxxxxxxxxx"
 	wireSources(context.Background(), rt2, sourcesConfig{Sources: []sourceSpec{
-		{Name: "vault-inline", Kind: "vault", Tenant: "acme", Config: map[string]string{
-			"base_url": "https://vault.example:8200", "token": inlineSecret,
+		{Name: "vault-inline", Kind: "vault-audit", Tenant: "acme", Config: map[string]string{
+			"path": auditLog, "base_url": "https://vault.example:8200", "token": inlineSecret,
 		}},
 	}}, t.TempDir(), resolver, badLog)
 	if logHasLine(badBuf.String(), "wired source (in-process fast-path)", "name=vault-inline") {

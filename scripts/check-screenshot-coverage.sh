@@ -29,12 +29,19 @@
 #    escribirlo — un primer conteo por nombre dijo 29 sin captura y se equivocaba en las dos
 #    direcciones. Se empareja por el `path`, que es lo que el navegador visita.
 #
-# Salida: la lista de rutas sin captura, siempre · rc 0 verde · 1 subió · 2 NO HE PODIDO MIRAR.
+# WHAT COUNTS AS A CAPTURE (2026-10-13): the takes in the capture manifest (`take[].id`), not the
+# files under docs-site/public/console/. Counting files forced every take to be published for its
+# route to look covered, and the public site served 73 views that no page reads. Now the harness
+# takes every view and publishes only those a docs page or a README names
+# (scripts/lib/capture-refs.sh); this check fails when a published capture is named by nobody.
+#
+# Output: the list of routes without a capture, always · rc 0 green · 1 the count rose or orphans exist · 2 COULD NOT LOOK.
 set -uo pipefail
 LC_ALL=C
 export LC_ALL
 
-RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
+AQUI="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
+RAIZ="${OLIVARES_CLONE:-$(dirname -- "$AQUI")}"
 cd "$RAIZ" 2>/dev/null || {
 	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: missing $RAIZ" >&2
 	exit 2
@@ -45,6 +52,7 @@ REG="web/src/features/*/views.tsx"
 # shellcheck disable=SC2206 # the pattern is meant to expand
 reg_files=($REG)
 CAPS="docs-site/public/console"
+MANIFEST="$CAPS/manifest.json"
 TECHO="${OLIVARES_SCREENSHOT_UNCOVERED_MAX:-40}"
 
 [ -f "${reg_files[0]}" ] || {
@@ -53,6 +61,11 @@ TECHO="${OLIVARES_SCREENSHOT_UNCOVERED_MAX:-40}"
 }
 [ -d "$CAPS" ] || {
 	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: missing $CAPS/" >&2
+	exit 2
+}
+# shellcheck source=lib/capture-refs.sh
+. "$AQUI/lib/capture-refs.sh" || {
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: cannot source $AQUI/lib/capture-refs.sh" >&2
 	exit 2
 }
 
@@ -81,13 +94,18 @@ if [ "${n_rutas:-0}" -lt 10 ]; then
 	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: registry yielded $n_rutas routes (<10)." >&2
 	exit 2
 fi
-n_caps="$(find "$CAPS" -name '*.png' -type f 2>/dev/null | wc -l | tr -d ' ')"
+# Positive control: a manifest without takes is not a green, it is not having looked.
+# A take counts only with the sha256 the harness records, so a hand-added id cannot cover a route.
+bases="$(jq -r '.take[] | select(.sha256 != null) | .id' "$MANIFEST")" || {
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: cannot read the takes in $MANIFEST." >&2
+	exit 2
+}
+bases="$(sort -u <<<"$bases")"
+n_caps="$(grep -c . <<<"$bases" || true)"
 if [ "${n_caps:-0}" -eq 0 ]; then
-	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: no PNG files in $CAPS/." >&2
+	echo "check-screenshot-coverage: ⛔ COULD NOT CHECK: no takes in $MANIFEST." >&2
 	exit 2
 fi
-bases="$(find "$CAPS" -name '*.png' -type f -printf '%f\n' 2>/dev/null |
-	sed -E 's/-(light|dark)\.png$//; s/\.png$//' | sort -u)"
 
 sin=""
 n_sin=0
@@ -123,10 +141,25 @@ done <<EOF
 $rutas
 EOF
 
-echo "check-screenshot-coverage: $n_sin of $n_rutas route(s) without screenshots (maximum $TECHO) · $n_caps PNGs in $CAPS/"
+echo "check-screenshot-coverage: $n_sin of $n_rutas route(s) without screenshots (maximum $TECHO) · $n_caps takes in $MANIFEST"
 if [ "$n_sin" -gt 0 ]; then
 	echo "  without screenshots:"
 	printf '%s' "$sin" | sed 's/^/    /'
+fi
+
+# A published capture that no docs page, README or launch post names is served and read by nothing. Hand
+# the here-string to grep instead of a pipe: `grep -q` exiting early would SIGPIPE the writer.
+referenced="$(referenced_captures "$RAIZ")" || exit 2
+orphans=""
+while IFS= read -r png; do
+	[ -n "$png" ] || continue
+	grep -qxF "$png" <<<"$referenced" || orphans="$orphans$png"$'\n'
+done < <(find "$CAPS" -maxdepth 1 -name '*.png' -type f -printf '%f\n' | sort)
+if [ -n "$orphans" ]; then
+	echo "check-screenshot-coverage: ⛔ ORPHAN: $(grep -c . <<<"$orphans") published capture(s) that no docs page, README or launch post names:" >&2
+	printf '%s' "$orphans" | sed 's/^/    /' >&2
+	echo "  Delete them from $CAPS/ (the harness keeps them in web/playwright-report/docs/), or reference" >&2
+	echo "  them from the page that shows them. scripts/docs-captures.sh publishes only referenced captures." >&2
 fi
 
 if [ "$n_sin" -gt "$TECHO" ]; then
@@ -145,6 +178,7 @@ if [ "$n_sin" -gt "$TECHO" ]; then
 	echo "  not in a separate comment. Resolve avoidable exclusions instead of declaring them." >&2
 	exit 1
 fi
+[ -z "$orphans" ] || exit 1
 if [ "$n_sin" -lt "$TECHO" ]; then
 	echo "check-screenshot-coverage: ✔ decreased to $n_sin; lower the maximum in this commit."
 fi

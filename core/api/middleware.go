@@ -647,6 +647,68 @@ func (s *Server) authzScopedCollectionPolicy(
 		s.writeError(w, r, errBadRequest)
 		return auth.Principal{}, "", resource, none, false
 	}
+	if scope.WorkspaceBodyField != "" {
+		// Keep tenant-authorized callers' defaults and historical inactive-target
+		// behavior. Scoped authority still needs a corroborated active workspace.
+		_, query := r.URL.Query()[scope.WorkspaceQueryParam]
+		_, confined := p.ConfinedWorkspaceIn(tenant)
+		if raw == "" {
+			p, tenant, witness, ok := s.authzTenantResourcePolicy(w, r, perm, resource, meta, errForbidden, governed)
+			return p, tenant, resource, witness, ok
+		}
+		var tenantWitness auth.RouteAuthorizationWitness
+		tenantAuthority := false
+		if !confined {
+			var err error
+			tenantWitness, err = s.admit(r.Context(), auth.Request{
+				Principal: p, Permission: perm, Tenant: tenant, Resource: resource, Route: meta,
+			}, errForbidden, governed)
+			tenantAuthority = err == nil
+			// Preserve the original tenant-policy refusal for built-in authority.
+			// A principal with only scoped grants may instead seek workspace admission.
+			role, member := p.RoleIn(tenant)
+			if err != nil && (!errors.Is(err, errForbidden) || p.Superadmin || (member && auth.RoleGrants(role, perm))) {
+				if errors.Is(err, auth.ErrRouteUndecided) {
+					w.Header().Set("Retry-After", "5")
+				}
+				s.writeError(w, r, err)
+				return auth.Principal{}, "", resource, none, false
+			}
+		}
+		if tenantAuthority && (!query || !scope.WorkspaceBySlug) {
+			return p, tenant, resource, tenantWitness, true
+		}
+		if scope.WorkspaceBySlug {
+			var matches []model.Workspace
+			err := s.st.View(r.Context(), tenant, func(sc store.Scope) error {
+				var err error
+				matches, _, err = sc.Workspaces().List(r.Context(), model.Query{
+					Filters: []model.Filter{{Column: "slug", Op: model.OpEq, Value: raw}}, Limit: 2,
+				})
+				return err
+			})
+			if err != nil || len(matches) > 1 {
+				s.writeError(w, r, errEntityAuthorizationUnavailable)
+				return auth.Principal{}, "", resource, none, false
+			}
+			if len(matches) == 0 {
+				s.writeError(w, r, forbiddenFor(perm, false))
+				return auth.Principal{}, "", resource, none, false
+			}
+			if matches[0].TenantID != tenant {
+				s.writeError(w, r, errEntityAuthorizationUnavailable)
+				return auth.Principal{}, "", resource, none, false
+			}
+			raw = matches[0].ID.String()
+			if tenantAuthority {
+				if values, query := r.URL.Query()[scope.WorkspaceQueryParam]; query && values[0] != raw {
+					s.writeError(w, r, errBadRequest)
+					return auth.Principal{}, "", resource, none, false
+				}
+				return p, tenant, resource, tenantWitness, true
+			}
+		}
+	}
 	workspace, admission := s.corroborateActiveWorkspace(r.Context(), p, tenant, raw)
 	switch admission {
 	case workspaceAdmissionOK:
@@ -670,6 +732,14 @@ func (s *Server) authzScopedCollectionPolicy(
 	p, tenant, witness, decided := s.authzTenantResourcePolicy(
 		w, r, perm, resource, meta, errForbidden, governed,
 	)
+	// A slug requires stored resolution before it can be compared to a query ID.
+	// Compare only after admission, so a mismatch cannot reveal an unreadable row.
+	if decided && scope.WorkspaceBodyField != "" && scope.WorkspaceBySlug {
+		if values, query := r.URL.Query()[scope.WorkspaceQueryParam]; query && values[0] != workspace.String() {
+			s.writeError(w, r, errBadRequest)
+			return auth.Principal{}, "", resource, none, false
+		}
+	}
 	return p, tenant, resource, witness, decided
 }
 

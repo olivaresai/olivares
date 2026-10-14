@@ -589,6 +589,7 @@ func sortedNames(obj map[string]any) []string {
 
 // admissionServer is the engine's API server over a SQLite store, with m mounted.
 type admissionServer struct {
+	st       store.Store
 	t        *testing.T
 	srv      *api.Server
 	setupTok string
@@ -623,7 +624,7 @@ func newAdmissionServer(t *testing.T, m *Module) *admissionServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &admissionServer{t: t, srv: srv, setupTok: plaintext}
+	return &admissionServer{st: st, t: t, srv: srv, setupTok: plaintext}
 }
 
 // do sends one request through the server's handler, with a bearer token and, when
@@ -672,14 +673,20 @@ func (s *admissionServer) session(email, password string) string {
 	return token
 }
 
-func (s *admissionServer) createOrg(admin, slug string) model.TenantID {
+func (s *admissionServer) createOrg(_ string, slug string) model.TenantID {
 	s.t.Helper()
-	got := s.do(http.MethodPost, "/v1/system/orgs", admin, "", map[string]any{"name": slug, "slug": slug})
-	id, _ := got.body["tenant_id"].(string)
-	if got.code != http.StatusCreated || id == "" {
-		s.t.Fatalf("create org %s = %d %s", slug, got.code, got.raw)
+	// Seed the isolation fixture through the store; organization management is edition-specific.
+	ctx := context.Background()
+	var org model.Org
+	err := s.st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+		return err
+	})
+	if err != nil {
+		s.t.Fatalf("seed organization %s: %v", slug, err)
 	}
-	return model.TenantID(id)
+	return org.TenantID
 }
 
 // roleToken creates a user with role in tenant and returns the user's session.

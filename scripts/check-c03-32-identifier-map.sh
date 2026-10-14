@@ -148,24 +148,28 @@ try:
 except Exception as e:
     cannot("wrangler config is not JSON after comment strip: %s" % e)
 prod = ((wr.get("env") or {}).get("production") or {}).get("vars") or {}
-pmap_raw = prod.get("PRODUCT_MAP") or ""
-try:
-    pmap = json.loads(pmap_raw)
-except Exception as e:
-    cannot("PRODUCT_MAP is not JSON: %s" % e)
-products = (pmap.get("products") or {})
+def var(name):
+    try:
+        return json.loads(prod.get(name) or "")
+    except Exception as e:
+        cannot("%s is not JSON: %s" % (name, e))
+
+# Production includes every add-on in the one Business product (2026-09-30): each mapped adn_
+# is listed in DODO_CATALOG included_addons and is sold nowhere on its own.
+products = var("PRODUCT_MAP").get("products") or {}
+catalog = var("DODO_CATALOG")
+included = set(catalog.get("included_addons") or [])
+sold = set(products) | set(catalog.get("addons") or {}) | set(catalog.get("products") or {})
 for row in entries:
     dodo = row["dodo_id"]
-    rec = products.get(dodo) or {}
-    if rec.get("plan") != row["plan"]:
-        fail("PRODUCT_MAP %s plan %r want %r" % (dodo, rec.get("plan"), row["plan"]))
-    if rec.get("edition") != "Business":
-        fail("PRODUCT_MAP %s edition %r" % (dodo, rec.get("edition")))
-
-adn_in_map = {k for k in products if k.startswith("adn_")}
-if adn_in_map != seen_dodo:
-    fail("PRODUCT_MAP adn_ set != map (%d vs %d)" % (len(adn_in_map), len(seen_dodo)))
+    if dodo not in included:
+        fail("DODO_CATALOG included_addons does not list %s (%s)" % (dodo, row["plan"]))
+    if dodo in sold:
+        fail("%s (%s) is sold on its own in production" % (dodo, row["plan"]))
+adn_included = {k for k in included if k.startswith("adn_")}
+if adn_included != seen_dodo:
+    fail("DODO_CATALOG included_addons adn_ set != map (%d vs %d)" % (len(adn_included), len(seen_dodo)))
 PY
 
-say "check-c03-32-identifier-map: CLEAN — eight rows join adn_, feature, offer; grants unwritten."
+say "check-c03-32-identifier-map: CLEAN — eight rows join adn_, feature, offer; each adn_ is included in Business and sold nowhere alone; grants unwritten."
 exit 0

@@ -17,7 +17,6 @@ def release_notes(source: str, tag: str) -> dict[str, str]:
     """Keep the curated Markdown intact; never fall back to commit history."""
     if not re.fullmatch(r'[0-9]+\.[0-9]+', tag):
         raise ValueError(f'expected a release tag, got {tag!r}')
-    version = tag.removeprefix('v')
     lines = source.splitlines(keepends=True)
     headings = []
     fence = None
@@ -34,7 +33,7 @@ def release_notes(source: str, tag: str) -> dict[str, str]:
     matches = []
     for position, start in enumerate(headings):
         heading = re.fullmatch(r'## \[([^\]]+)\] - (\d{4}-\d{2}-\d{2})\s*', lines[start])
-        if heading and heading[1].removeprefix('v') == version:
+        if heading and heading[1] == tag:
             date.fromisoformat(heading[2])
             end = headings[position + 1] if position + 1 < len(headings) else len(lines)
             if not ''.join(lines[start + 1:end]).strip():

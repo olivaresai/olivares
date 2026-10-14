@@ -80,6 +80,7 @@ type ruleset struct {
 	fd      int
 	access  access
 	protect []string
+	paths   []string
 }
 
 // grant allows path (directory or file) with the rights for its kind. A path
@@ -88,7 +89,13 @@ type ruleset struct {
 // granted; a path under one is granted only when the policy names it (a tool
 // install, an account home). A missing path is skipped.
 func (r *ruleset) grant(path string, write bool) error {
-	return r.grantPath(realPath(path), write, true)
+	real := realPath(path)
+	before := len(r.paths)
+	err := r.grantPath(real, write, true)
+	if err == nil && len(r.paths) > before && path != real {
+		r.paths = append(r.paths, path)
+	}
+	return err
 }
 
 func (r *ruleset) grantPath(real string, write, named bool) error {
@@ -156,7 +163,7 @@ func (r *ruleset) grantEntries(dir string, write bool) error {
 }
 
 func (r *ruleset) addRule(path string, mask uint64) error {
-	fd, err := unix.Open(path, unix.O_PATH|unix.O_CLOEXEC, 0)
+	fd, err := unix.Open(realPath(path), unix.O_PATH|unix.O_CLOEXEC, 0)
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) || errors.Is(err, unix.EACCES) {
 			return nil
@@ -174,6 +181,7 @@ func (r *ruleset) addRuleHandle(fd int, path string, mask uint64) error {
 	if errno != 0 {
 		return fmt.Errorf("allow %s: %w", path, errno)
 	}
+	r.paths = append(r.paths, path)
 	return nil
 }
 
@@ -190,7 +198,7 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 		return errors.New(state.Reason)
 	}
 	acc := accessFor(state.ABI)
-	attr := unix.LandlockRulesetAttr{Access_fs: acc.handled}
+	attr := unix.LandlockRulesetAttr{Handled_access_fs: acc.handled}
 	if state.ABI >= 6 {
 		// The child may not signal or reach abstract sockets of processes
 		// outside its own domain (the engine).
@@ -241,7 +249,7 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 		if device.IOCTL {
 			mask |= acc.fileRW & unix.LANDLOCK_ACCESS_FS_IOCTL_DEV
 		}
-		if err := r.addRule(realPath(device.Path), mask); err != nil {
+		if err := r.addRule(device.Path, mask); err != nil {
 			return err
 		}
 	}
@@ -255,6 +263,22 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 	}
 	if err := DropCapabilities(false); err != nil {
 		return err
+	}
+	if os.Geteuid() == 0 {
+		// Check DAC after dropping capabilities, before Landlock can mask the
+		// cause. The kernel honors supplementary groups and directory ACLs.
+		for _, path := range append([]string{program}, r.paths...) {
+			info, err := os.Stat(path)
+			if err == nil && info.IsDir() {
+				err = unix.Faccessat(unix.AT_FDCWD, path, unix.X_OK, unix.AT_EACCESS)
+			}
+			if errors.Is(err, unix.EACCES) {
+				return fmt.Errorf("confine: path %q cannot be traversed without DAC override; use a root-owned data directory (the default or /var/lib/olivares) and ensure granted paths are searchable by the child", path)
+			}
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("check confined path %q after dropping capabilities: %w", path, err)
+			}
+		}
 	}
 	if _, _, errno := unix.Syscall(unix.SYS_LANDLOCK_RESTRICT_SELF, fd, 0, 0); errno != 0 {
 		return fmt.Errorf("enter the Landlock domain: %w", errno)

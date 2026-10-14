@@ -6,15 +6,11 @@ package main
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 
-	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
-	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
-	"github.com/olivaresai/olivares/sdk"
 )
 
 // the identity console's posture tab (External Keys / CMEK + workspace residency)
@@ -40,43 +36,6 @@ func claudeAdminSettings(getenv func(string) string) (map[string]string, bool) {
 		settings["workspace_id"] = v
 	}
 	return settings, true
-}
-
-// claudeIdentityPostureProvider adapts the Claude Admin connector's read-only governance
-// inventory to the identity console's posture seam (ANT2-04/06). Read-only by
-// construction: the adapter exposes exactly the two reads the console needs and nothing
-// else the connector happens to carry.
-type claudeIdentityPostureProvider struct{ src *claudeapi.Source }
-
-// Compile-time proof the adapter satisfies the module's read seam.
-var _ governance.IdentityPostureProvider = claudeIdentityPostureProvider{}
-
-func (p claudeIdentityPostureProvider) ExternalKeys(ctx context.Context) ([]modelprovider.ExternalKeyRef, error) {
-	return p.src.ExternalKeys(ctx)
-}
-
-func (p claudeIdentityPostureProvider) Workspaces(ctx context.Context) ([]modelprovider.WorkspaceRef, error) {
-	return p.src.Workspaces(ctx)
-}
-
-// newIdentityPostureProvider builds the read-only posture provider. It returns nil — so
-// GET /v1/m/identity/external-keys and /residency answer available=false WITH A REASON,
-// never an empty inventory — when no Admin credential is configured or the connector
-// cannot be opened.
-func newIdentityPostureProvider(getenv func(string) string, log *slog.Logger) governance.IdentityPostureProvider {
-	settings, ok := claudeAdminSettings(getenv)
-	if !ok {
-		return nil
-	}
-	src := claudeapi.New()
-	if err := src.Open(context.Background(), sdk.Config{Settings: settings}); err != nil {
-		// Never log the error (it can embed the endpoint/credential): a configuration
-		// fault leaves the routes answering with a reason, not wired.
-		log.Warn("identity: could not open the Claude Admin connector for the posture inventory; GET /v1/m/identity/external-keys and /residency stay unavailable-with-reason")
-		return nil
-	}
-	log.Info("identity: wired read-only Claude Admin posture provider (External Keys + workspace residency, ANT2-04/06)")
-	return claudeIdentityPostureProvider{src: src}
 }
 
 // fedSsoPosture adapts the engine's federation service to the identity console's SSO

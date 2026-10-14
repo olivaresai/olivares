@@ -49,6 +49,36 @@ describe('operated runs in the rail', () => {
     expect(earlier.rows[0]).toMatchObject({ title: null, reference: 'r3' })
   })
 
+  it('a run that answered and waits for input is Idle and listed under Earlier, not Working (#1785)', () => {
+    const [needs, working, earlier] = railGroups(
+      {
+        live: [],
+        handoffs: [],
+        runs: [
+          {
+            run_ref: 'r-wait',
+            name: 'Answered, waiting',
+            state: 'idle',
+            provider_driver: 'claude',
+          } as never,
+          {
+            run_ref: 'r-busy',
+            name: 'Still answering',
+            state: 'running',
+            provider_driver: 'claude',
+          } as never,
+        ],
+      },
+      Date.parse('2026-10-01T11:00:00Z'),
+    )
+    expect(needs.rows).toHaveLength(0)
+    expect(working.rows.map((row) => row.title)).toEqual(['Still answering'])
+    expect(earlier.rows[0]).toMatchObject({
+      title: 'Answered, waiting',
+      state: 'idle',
+    })
+  })
+
   it('a running session whose tool call waits for an approval needs you, and opens the request (HU-R12)', () => {
     const now = Date.parse('2026-10-01T11:00:00Z')
     const [needs, working] = railGroups(

@@ -282,7 +282,7 @@ func (a *Authenticator) SCIMSetMemberActive(ctx context.Context, actor Principal
 	if _, err := a.SCIMGetMember(ctx, tenant, id); err != nil {
 		return err
 	}
-	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+	err := a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		// A successful preflight does not authorize a later transaction: a
 		// departure may have committed before we acquired the directory lock.
 		// Preparation holds that lock, so this membership stays valid until commit.
@@ -297,9 +297,13 @@ func (a *Authenticator) SCIMSetMemberActive(ctx context.Context, actor Principal
 		if active {
 			return auditAct(ctx, as, actor, "scim.set.activate.local", "core.user", id)
 		}
-		_, err := a.scopedOffboard(ctx, as, actor, id, tenant, "scim.set.deactivate")
+		_, err := a.scopedOffboard(ctx, as, actor, id, tenant, scimSetDeactivateCause)
 		return err
 	})
+	if err == nil && !active {
+		a.recordSCIMLeaver(ctx, actor, tenant, id, scimSetDeactivateCause)
+	}
+	return err
 }
 
 // checkIssuerAudience enforces the configured issuer/audience binding and a

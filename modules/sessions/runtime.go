@@ -32,6 +32,8 @@ import (
 // processes (the durable state of record is the sessions_run table; this map is
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
+	// toolMu holds launch selection through live registration against release removal.
+	toolMu sync.RWMutex
 	*Dependencies
 
 	launchObserver        runtimeLaunchObserverState
@@ -69,6 +71,9 @@ type runtimeState struct {
 	// worktreeRootRefusal is why a worktree directory the composition root offered
 	// was not taken, kept so the refusal a launch gets names the value and its remedy.
 	worktreeRootRefusal error
+	// activityAudits is when each person's read of each session's activity was last
+	// recorded (session_activity.go).
+	activityAudits sync.Map
 
 	program string // the executable to launch ("claude")
 	// drivers is the OPERABLE set of registered provider drivers, keyed by driver
@@ -303,6 +308,8 @@ const defaultRuntimeIdleWindow = 5 * time.Minute
 
 // liveRun is a process Olivares currently supervises.
 type liveRun struct {
+	program         string      // canonical executable selected before confinement and launch
+	programIdentity fs.FileInfo // immutable identity captured before exec
 	// authorityMu pins registration while a profiled effect commits and publishes.
 	authorityMu sync.RWMutex
 	tenant      model.TenantID
@@ -344,6 +351,8 @@ type liveRun struct {
 	// acpEcho holds the person's accepted ACP prompts until the bridge writes them
 	// into the output stream (acp_prompt_echo.go).
 	acpEcho acpPromptEcho
+	// commands is the tool's command catalog for this process (tool_commands.go).
+	commands toolCommandCache
 	// credentialRefused is set while the engine interrupts a Claude turn whose
 	// provider refused the credential, so the turn's further retries add nothing;
 	// claudeTurnsEnded counts the turn results seen, so that interrupt is bound to
@@ -381,6 +390,8 @@ type liveRun struct {
 	sessionCallsEnded  bool
 	claudeTurnDone     chan struct{}
 	claudePendingTurns int
+	driverTurnEnded    bool // a driver's last turn ended and no input has started the next (waitingForInput)
+	claudeOutputOpen   bool // Claude produced turn output since its last result (waitingForInput)
 	stopReason         string
 	ioEvidenceFailure  string                 // safe, terminal reason; protected by mu, survives an operator stop
 	accessStopCause    runtimeAccessStopCause // exact-generation lifecycle cause, never parsed from text
@@ -556,6 +567,8 @@ func refuseUnrestrictedFor(mode string, mayRunUnrestricted bool) error {
 
 // CreateRunParams is the validated input to a launch (built from the API body).
 type CreateRunParams struct {
+	resolvedProgram      string
+	resolvedIdentity     fs.FileInfo
 	codexSandboxFallback bool
 	queuedCredential     auth.QueuedCredential
 	queuedIntent         *LaunchIntent
@@ -628,6 +641,9 @@ type CreateRunParams struct {
 	// Server-set only: the request DTO has no agent_ref field, so a caller cannot
 	// declare somebody else's agent (a confused deputy).
 	AgentRef string
+	// HandoffOf is the run_ref of the session a handoff started this one from
+	// (session_handoff.go). Server-set only, never from the wire.
+	HandoffOf string `json:"-"`
 	// RecordRequested is the operator's per-launch opt-in to full I/O recording for a
 	// non-CRITICAL session (CRITICAL/privileged sessions are recorded regardless — the
 	// LaunchGate decides).
@@ -696,6 +712,14 @@ type CreateRunParams struct {
 	GitRead       string `json:"git_read,omitempty"`
 	gitReadToken  string
 	gitReadDetail string
+	// profilePrograms and profileRegistries are the profile's declared programs
+	// and package registries (provider_profile_packages.go), re-read on every
+	// launch and resume. registryTokens are the opened registry tokens, held for
+	// the output redactor and never persisted; registryDetail is the ledger's line.
+	profilePrograms   []string
+	profileRegistries []SessionRegistry
+	registryTokens    []EnvVar
+	registryDetail    string
 
 	// --- The provider-profile plane (provider_profile.go). ---
 	//
@@ -1214,6 +1238,8 @@ func (m *Module) createRunInternal(
 	// process with an un-finalized row.
 	wctx := context.WithoutCancel(ctx)
 	runCtx, cancel := context.WithCancel(context.Background())
+	m.rt.toolMu.RLock()
+	defer m.rt.toolMu.RUnlock()
 	spec, proc, stage, lerr := m.launchChild(ctx, runCtx, tenant, runRef, &p, childDecision{
 		cred: cred, work: runtimeCreds.work, communication: runtimeCreds.communication,
 		ws: ws, gateEnv: pr.injectEnv, providerEnv: providerEnv,
@@ -1229,7 +1255,7 @@ func (m *Module) createRunInternal(
 			// unenumerable. The bridge owns/drains Output and will confirm a later exit.
 			lr := &liveRun{
 				tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
-				proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
+				proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 				redact: p.outputRedactor(),
 				cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
@@ -1285,7 +1311,7 @@ func (m *Module) createRunInternal(
 
 	lr := &liveRun{
 		tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
-		proc: proc, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
+		proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
 		redact: p.outputRedactor(),
 		cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
@@ -1336,7 +1362,7 @@ func (m *Module) createRunInternal(
 	rec, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "launched", toState: stateRunning,
 		detail: joinDetail(pr.contextPolicySummary, templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, codexSandboxDetail(p, spec)),
+			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, codexSandboxDetail(p, spec)),
 		actor: p.Actor, actorKind: p.ActorKind, guard: guardRuntimeLaunch(runtimeCreds.launchID),
 		confinement: reportedConfinement(proc),
 		mutate: func(rec model.Record) {
@@ -1722,6 +1748,8 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		return abortReservation(errors.Join(err, revokeErr), lease)
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
+	m.rt.toolMu.RLock()
+	defer m.rt.toolMu.RUnlock()
 	spec, proc, stage, lerr := m.launchChild(ctx, runCtx, tenant, runRef, &p, childDecision{
 		cred: cred, work: runtimeCreds.work, communication: runtimeCreds.communication,
 		resumeID: claudeID, ws: ws, gateEnv: pr.injectEnv, providerEnv: providerEnv,
@@ -1732,7 +1760,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		if proc != nil {
 			lr := &liveRun{
 				tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
-				proc: proc, ring: ring,
+				proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: ring,
 				redact: p.outputRedactor(),
 				cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
@@ -1773,7 +1801,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	}
 	lr := &liveRun{
 		tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
-		proc: proc, ring: ring,
+		proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: ring,
 		redact: p.outputRedactor(),
 		cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
@@ -1818,7 +1846,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	updated, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "resumed", toState: stateRunning,
 		detail: joinDetail(templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, codexSandboxDetail(p, spec)),
+			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, codexSandboxDetail(p, spec)),
 		actor: actor, actorKind: actorKind, lease: lease, guard: guardRuntimeLaunch(launchID),
 		confinement: reportedConfinement(proc),
 		mutate: func(rec model.Record) {
@@ -2103,9 +2131,7 @@ func (m *Module) interruptRunLoadedWithReason(ctx context.Context, tenant model.
 	// Claude Code has no protocol driver session, but its stream-json stdin takes
 	// control requests: a turn is interrupted the way the Agent SDK does it.
 	// A run with no profile driver recorded is a Claude run (launchDriverKey).
-	driver := rec.String(colRunProfileDriver)
-	claudeTurn := lr.session == nil && Transport(rec.String(colTransport)) == TransportStreamJSON &&
-		(driver == "" || driver == providerDriverClaude)
+	claudeTurn := claudeFrameRun(lr, rec)
 	if lr.session == nil && !claudeTurn {
 		// And it never becomes a stop. A provider with no turn interruption is
 		// told so; ending the process instead would answer "cancel this turn" by
@@ -2848,6 +2874,7 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 		setIf(row, colWorkspaceRef, p.WorkspaceRef)
 		setIf(row, colRunWorkspacePath, p.WorkspaceDir)
 		setIf(row, colRunWorktreeBranch, p.WorktreeBranch)
+		setIf(row, colRunHandoffOf, p.HandoffOf)
 		// Written in BOTH directions, never only when true: an explicit false is a
 		// recorded "this directory is not mine", which is what the release purge
 		// needs to read. Absent would be indistinguishable from a legacy row.
@@ -3063,6 +3090,14 @@ type transitionInput struct {
 	actorKind   string
 	guard       func(rec model.Record) error // optional in-transaction generation precondition
 	mutate      func(rec model.Record)       // optional extra field updates
+	// within is an optional write of ANOTHER row that must commit or roll back with
+	// this transition (the move retargets the managed live row). It runs after guard
+	// and mutate and before the ledger append, so a failure leaves no event behind.
+	within func(ctx context.Context, sc store.Scope, rec model.Record) error
+	// keepReason leaves the row's `reason` alone. The detail still goes to the ledger;
+	// only its mirror onto the row is skipped, for an event that is not a new
+	// lifecycle outcome (a move or a handoff must not replace why a session failed).
+	keepReason bool
 	// lease is the claim the CALLER is acting under. When it is set, this
 	// transition is conditioned on that claim still being the session's, in the same
 	// transaction as the write. The zero value means "not an act of a holder" —
@@ -3100,6 +3135,7 @@ var allowedFrom = map[string][]string{
 	"resuming":       {stateStopped, stateFailed, stateWaitingApproval}, // the fenced write that precedes the spawn
 	"resume_aborted": {statePending},
 	"resumed":        {statePending},
+	"moved":          {stateStopped, stateFailed}, // a move never touches a live process
 	"interrupting":   {stateRunning},
 	"interrupted":    {stateRunning},
 	"stopping":       {statePending, stateRunning},
@@ -3201,6 +3237,11 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 		if in.mutate != nil {
 			in.mutate(rec)
 		}
+		if in.within != nil {
+			if err := in.within(ctx, sc, rec); err != nil {
+				return err
+			}
+		}
 		if in.toState == stateRunning || in.toState == stateDeclined || in.toState == stateExpired || in.toState == stateStopped || in.toState == stateFailed {
 			clearQueuedLaunchAuthority(rec)
 		}
@@ -3216,7 +3257,7 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 		}
 		// reason mirrors the last transition's note onto the live row (the contract's
 		// API-visible field); the full note also lives in the immutable event ledger.
-		if in.detail != "" {
+		if in.detail != "" && !in.keepReason {
 			rec[colReason] = in.detail
 		}
 		runID := model.ID(rec.String(model.ColID))

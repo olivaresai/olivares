@@ -1,0 +1,181 @@
+// SPDX-FileCopyrightText: 2026 Olivares.AI
+// SPDX-License-Identifier: AGPL-3.0-only
+// Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+//
+// THE ASSISTANT'S WORDS, PAINTED AS THE MARKDOWN THEY ARE (#1784). The reply is parsed into
+// data (./markdown) and painted as elements: nothing here builds a string of HTML, so what
+// the model says can never become markup. A link says where it goes (its title) and opens
+// without the opener.
+import { Fragment, memo, type ReactNode } from 'react'
+import { parseMarkdown, type Block, type Inline } from './markdown'
+
+function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
+  return nodes.map((node, i) => {
+    if (typeof node === 'string') return <Fragment key={i}>{node}</Fragment>
+    switch (node.kind) {
+      case 'code':
+        return (
+          <code
+            key={i}
+            className="rounded-ctl bg-muted px-1 font-mono text-mono-s text-text"
+          >
+            {node.text}
+          </code>
+        )
+      case 'strong':
+        return (
+          <strong key={i} className="font-semibold">
+            <Inlines nodes={node.children} />
+          </strong>
+        )
+      case 'em':
+        return (
+          <em key={i}>
+            <Inlines nodes={node.children} />
+          </em>
+        )
+      case 'link':
+        return (
+          <a
+            key={i}
+            href={node.href}
+            title={node.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-text underline underline-offset-[3px] decoration-text-3 decoration-1 hover:decoration-text hover:decoration-2"
+          >
+            <Inlines nodes={node.children} />
+          </a>
+        )
+    }
+  })
+}
+
+/** An item that is one paragraph reads as its words, without a paragraph box around them. */
+function ListItem({ blocks }: { blocks: readonly Block[] }) {
+  const only = blocks.length === 1 ? blocks[0] : undefined
+  if (only?.kind === 'paragraph')
+    return (
+      <li>
+        <Inlines nodes={only.inline} />
+      </li>
+    )
+  return (
+    <li>
+      <Blocks blocks={blocks} gap="gap-1" />
+    </li>
+  )
+}
+
+function Blocks({
+  blocks,
+  gap = 'gap-2',
+}: {
+  blocks: readonly Block[]
+  gap?: string
+}) {
+  return (
+    <div className={`flex flex-col ${gap}`}>
+      {blocks.map((block, i) => {
+        switch (block.kind) {
+          case 'paragraph':
+            return (
+              <p key={i} className="whitespace-pre-wrap">
+                <Inlines nodes={block.inline} />
+              </p>
+            )
+          case 'heading':
+            // The transcript is not the page's outline: a reply's heading is a bold line.
+            return (
+              <p key={i} className="font-semibold">
+                <Inlines nodes={block.inline} />
+              </p>
+            )
+          case 'code':
+            return (
+              <pre
+                key={i}
+                tabIndex={0}
+                data-slot="reply-code"
+                className="m-0 overflow-x-auto rounded-ctl bg-muted p-3 font-mono text-mono-s text-text focus-visible:ring-2 focus-visible:ring-focus"
+              >
+                <code>{block.text}</code>
+              </pre>
+            )
+          case 'quote':
+            return (
+              <blockquote
+                key={i}
+                className="m-0 border-l-2 border-line pl-3 text-text-2"
+              >
+                <Blocks blocks={block.blocks} gap="gap-1" />
+              </blockquote>
+            )
+          case 'list': {
+            const Tag = block.ordered ? 'ol' : 'ul'
+            return (
+              <Tag
+                key={i}
+                start={block.ordered ? block.start : undefined}
+                className={`m-0 flex flex-col gap-1 pl-5 ${block.ordered ? 'list-decimal' : 'list-disc'}`}
+              >
+                {block.items.map((item, n) => (
+                  <ListItem key={n} blocks={item} />
+                ))}
+              </Tag>
+            )
+          }
+          case 'table':
+            return (
+              <div
+                key={i}
+                tabIndex={0}
+                className="overflow-x-auto focus-visible:ring-2 focus-visible:ring-focus"
+              >
+                <table className="w-full border-collapse text-caption">
+                  <thead>
+                    <tr>
+                      {block.head.map((cell, c) => (
+                        <th
+                          key={c}
+                          scope="col"
+                          className="border-b border-line px-2 py-1 text-left font-medium"
+                        >
+                          <Inlines nodes={cell} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row, r) => (
+                      <tr key={r}>
+                        {row.map((cell, c) => (
+                          <td
+                            key={c}
+                            className="border-b border-line px-2 py-1 align-top"
+                          >
+                            <Inlines nodes={cell} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          case 'rule':
+            return <hr key={i} className="m-0 border-line" />
+        }
+      })}
+    </div>
+  )
+}
+
+/** Re-parsed only when the words change: a long thread repaints on every frame. */
+export const MarkdownText = memo(function MarkdownText({
+  text,
+}: {
+  text: string
+}) {
+  return <Blocks blocks={parseMarkdown(text)} />
+})

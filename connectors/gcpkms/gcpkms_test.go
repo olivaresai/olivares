@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/connectors/gcpkms"
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -82,25 +81,5 @@ func TestNoSecretValueLeaks(t *testing.T) {
 	// The fixture embeds a base64 secret payload; it must never reach an edge.
 	if strings.Contains(string(blob), "U1VQRVJTRUNSRVRWQUxVRQ") {
 		t.Fatalf("secret payload leaked: %s", blob)
-	}
-}
-
-func TestSnapshotInventory(t *testing.T) {
-	s := open(t)
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	refs := map[string]bool{}
-	for _, id := range g.Identities {
-		if id.Kind != identitysource.KindSecretStore || id.Type != identitysource.PrincipalNHI {
-			t.Errorf("bad store NHI: %+v", id)
-		}
-		refs[id.Ref] = true
-	}
-	for _, want := range []string{"gcp.cloudkms:acme-prod", "gcp.secretmanager:acme-prod"} {
-		if !refs[want] {
-			t.Errorf("missing store %q in %v", want, refs)
-		}
 	}
 }

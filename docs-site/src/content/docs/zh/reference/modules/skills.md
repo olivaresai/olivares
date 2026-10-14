@@ -12,6 +12,21 @@ Skills（`modules/skills`、`olivares.skills`）是 32 个模块之一。它拥�
 把包修订固定下来的**分配**决定，而每一次固定都会写入审计账本
 （`skills.assignment.pin`）。
 
+
+新安装时 **默认启用** Skills，但它仍是可选模块，不依赖其他模块。升级保留已保存的模块选择。在 **Skills** (`/skills`) 中浏览内置技能包，安装时可选择分配到工作区，也可选择 **从 Git 安装**。CLI 使用相同的不可变且经过摘要验证的导入流程：
+
+```sh
+olivares skills ls --builtin
+olivares skills install --builtin ecc-security
+olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
+olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills update <pack-id>                       # read the recorded source again and review the diff
+olivares skills update <pack-id> --apply --expected-digest <digest>
+olivares skills pin <pack-id> [--revision <older-revision-id>]
+olivares skills enable tdd-workflow code-review --folder <folder-ref>
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
+```
+
 ## 它提供什么
 
 - **目录。** 安装在 `/v1/m/skills/packs` 下的包，每个不可变修订都记录其清单
@@ -21,8 +36,7 @@ Skills（`modules/skills`、`olivares.skills`）是 32 个模块之一。它拥�
   内容。
 - **分配。** `GET/POST /v1/m/skills/assignments` 与
   `PUT/DELETE /v1/m/skills/assignments/{id}` 把修订固定到目标（存在活动工作区时
-  按其限定）。同名但内容不同的两个已分配技能会在会话启动前被拒绝，因此每次启动
-  都是确定性的。
+  按其限定）。同一类型的两个目标若把不同内容固定到同一个技能名下，会在会话启动前被拒绝；更窄的目标（文件夹、模板、代理、会话）会取代更宽目标中同名的技能，因此项目无需编辑通用技能包即可覆盖它。
 - **Git 导入。** 一个操作员范围的导入器可以在固定策略之下从 Git 源获取技能包；
   导入会作为又一条不可变修订落入目录，而不是引擎读取的活检出。
 

@@ -223,6 +223,65 @@ function rateLimitSummary(frame: Record<string, unknown>): string {
   return truncateSummary(parts.join(' · '))
 }
 
+/** The system lines a conversation view leaves out: the tool's bookkeeping with no row. */
+export const isQuiet = (item: ConversationItem): boolean =>
+  item.systemKind === 'quiet'
+
+/**
+ * THE TOOL'S OWN BOOKKEEPING IS NO CONVERSATION ROW (#1784). A thinking-token counter and a
+ * rate limit report that says `allowed` are neither a turn the person took nor words the
+ * assistant said: painted as rows they read "thinking tokens" before the answer and
+ * "allowed · five hour" after it. The line joins the item before it, so the inspector keeps
+ * it and a streamed answer around it stays one message. With nothing before it, or only
+ * the tool's printed output (a terminal block shows every raw line it holds), it is a quiet
+ * item of its own that both views leave out. That one line is therefore not reachable in
+ * the inspector: it carries no words and no turn, and only a line that opens the
+ * conversation or follows printed output ends up there.
+ */
+function foldQuiet(
+  items: ConversationItem[],
+  trimmed: string,
+  summary: string,
+): ConversationItem[] {
+  const last = items[items.length - 1]
+  if (last && last.systemKind !== 'output')
+    return [...items.slice(0, -1), { ...last, raw: [...last.raw, trimmed] }]
+  return [
+    ...items,
+    {
+      kind: 'system',
+      id: nextId('system', items.length),
+      summary,
+      systemKind: 'quiet',
+      raw: [trimmed],
+    },
+  ]
+}
+
+/**
+ * A rate limit report with nothing in it to act on: allowed, well under the window, and not
+ * on overage. Utilization near the limit and any overage state are news, whatever `status`
+ * says, so they stay rows.
+ */
+const QUIET_UTILIZATION = 0.9
+function rateLimitIsQuiet(frame: Record<string, unknown>): boolean {
+  const info = asRecord(frame.rate_limit_info)
+  if (asString(info?.status) !== 'allowed') return false
+  if (info?.isUsingOverage === true) return false
+  const overage = asString(info?.overageStatus)
+  if (overage !== undefined && overage !== 'allowed') return false
+  if (asString(info?.rateLimitType) === 'overage') return false
+  // the top-level figure is the limiting window; every other window counts too
+  const windows = Object.values(asRecord(info?.unifiedWindows) ?? {})
+  const used = [
+    info?.utilization,
+    ...windows.map((w) => asRecord(w)?.utilization),
+  ]
+    .map(asNumber)
+    .filter((n): n is number => n !== undefined)
+  return used.every((n) => n < QUIET_UTILIZATION)
+}
+
 function resultFields(
   frame: Record<string, unknown>,
 ): Pick<
@@ -806,6 +865,10 @@ export function foldConversationLine(
   }
 
   if (type === 'rate_limit_event') {
+    // `allowed` far from the limit says nothing to act on. A warning, a refusal, a window
+    // nearly used or an overage does, and nothing else in the console shows it: rows.
+    if (rateLimitIsQuiet(frame))
+      return foldQuiet(items, trimmed, rateLimitSummary(frame))
     return [
       ...items,
       {
@@ -817,6 +880,9 @@ export function foldConversationLine(
       },
     ]
   }
+
+  if (type === 'system' && asString(frame.subtype) === 'thinking_tokens')
+    return foldQuiet(items, trimmed, 'thinking tokens')
 
   // Claude Code retrying the provider call (HU2-13): one line that counts the retries,
   // with the category (`error`) and the HTTP status (`error_status`) each frame carries.

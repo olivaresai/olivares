@@ -64,8 +64,8 @@ description: >-
 | `claude-api` | Claude Admin-API 成本采样 + 治理态势 findings | 进程内；离线（无 admin key）时为空操作 |
 | `claude-compliance` | Claude Compliance 活动流证据 → findings | 构造上仅 GET；离线时为空操作 |
 | `claude-config` | 静态 Claude config 树（subagents / Skills / plugins）→ **声明能力** edges | 仅元数据——一个能力面，而非已观测的访问 |
-| `claude-console` | Claude 组织 IAM → SSO/SCIM 态势 findings（身份名册 + source） | |
-| `claude-wif` | Anthropic 非人类身份 / 工作负载身份名册 + 允许范围 edges | 建模运营方声明的 federation；标记静态 key 隐患 |
+| `claude-console` | Claude 组织 IAM → SSO/SCIM 态势 findings（身份名册 + source） | Business: Identity & Scale;  |
+| `claude-wif` | Anthropic 非人类身份 / 工作负载身份名册 + 允许范围 edges | Business: Identity & Scale; 建模运营方声明的 federation；标记静态 key 隐患 |
 | `claude-managed-agents` | Claude managed-agents 清单 + thread event（webhook receiver + GET poller） | 流式 source（`poll_seconds: 0`）；离线时为空操作 |
 | `claude-projects` | Claude Organization Projects 清单（membership / API key）+ 运维方声明的 project policy | Admin API 只读；离线时为空操作 |
 | `claude-apps-gateway` | Claude apps-gateway 态势、声明的 model grant 与审计事件 ingest → topology + finding | 读取既有 `gateway.yaml` 与可选 JSONL 审计导出 |

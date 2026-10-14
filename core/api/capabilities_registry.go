@@ -203,6 +203,38 @@ func (s *Server) corroborateActiveWorkspace(
 // too: the three pilot collections require the selector, and treating an absent one as
 // "the default workspace" would authorize a scope the caller never named.
 func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string, bool) {
+	if scope.WorkspaceBodyField != "" {
+		if scope.WorkspaceScopeField != "" {
+			kind, err := bodyEntityID(r, scope.WorkspaceScopeField)
+			if err != nil {
+				return "", false
+			}
+			if strings.TrimSpace(kind) != "workspace" {
+				_, query := r.URL.Query()[scope.WorkspaceQueryParam]
+				return "", !query
+			}
+		}
+		raw, err := bodyEntityString(r, scope.WorkspaceBodyField, true)
+		if err != nil {
+			return "", false
+		}
+		if scope.WorkspaceBySlug {
+			raw = strings.TrimSpace(raw)
+			if raw != "" && !slugPattern.MatchString(raw) {
+				return "", false
+			}
+		}
+		if values, query := r.URL.Query()[scope.WorkspaceQueryParam]; query {
+			if raw == "" || len(values) != 1 {
+				return "", false
+			}
+			id, err := model.ParseID(values[0])
+			if err != nil || id.IsZero() || id.String() != values[0] || (!scope.WorkspaceBySlug && raw != values[0]) {
+				return "", false
+			}
+		}
+		return raw, true
+	}
 	if scope.WorkspaceQueryParam == "" {
 		return "", false
 	}

@@ -235,13 +235,14 @@ export default async function globalSetup() {
     else await new Promise((res) => setTimeout(res, 500))
   }
   if (!token) fail('the demo superadmin could not log in (seed not ready?)')
-  const orgs = (await (
-    await fetch(`${base}/v1/system/orgs`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  ).json()) as { items: { tenant_id: string; slug: string }[] }
-  const demo = orgs.items.find((o) => o.slug === 'demo')
-  if (!demo) fail('the demo tenant is not seeded')
+  const whoami = await fetch(`${base}/v1/auth/whoami`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!whoami.ok) fail('the demo principal could not read its memberships')
+  const principal = (await whoami.json()) as { grants: { tenant: string }[] }
+  const own = principal.grants[0]
+  if (!own) fail('the demo tenant is not seeded')
+  const demo = { tenant_id: own.tenant }
 
   // 2 · the activation ceremony on the STOPPED store.
   if (engineLifecycleRequired()) await stopObservedEngine(work, 'activation')

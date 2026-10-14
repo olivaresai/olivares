@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/skills"
 )
 
 // skillsComposition boots the real composition root with one owner and one
@@ -51,11 +52,7 @@ func bootSkillsComposition(t *testing.T) skillsComposition {
 		t.Fatalf("login = %d %s", code, raw)
 	}
 	c.token = decodeField(t, raw, "token")
-	code, raw = c.do("POST", "/v1/system/orgs", c.token, map[string]any{"name": "acme", "slug": "acme"})
-	if code != http.StatusCreated {
-		t.Fatalf("create org = %d %s", code, raw)
-	}
-	c.tenant = decodeField(t, raw, "tenant_id")
+	c.tenant = createOrganizationFixture(t, eng.store, "acme", "acme").TenantID.String()
 	return c
 }
 
@@ -223,6 +220,28 @@ func TestSkillsAssignmentForWorkspaceIsWiredInComposition(t *testing.T) {
 	}
 	if err := json.Unmarshal(raw, &listed); err != nil || code != http.StatusOK || len(listed.Items) != 1 || len(listed.Items[0].Members) != 1 || listed.Items[0].Members[0] != "research" {
 		t.Fatalf("list after assign = %d %s", code, raw)
+	}
+}
+
+// AI tools > Installed here reads a workspace's skills through GET /selection on the
+// shipped binary: the production target authority admits the workspace, the answer
+// is the resolved member set, and an absent workspace is not found.
+func TestSkillsSelectionForWorkspaceIsWiredInComposition(t *testing.T) {
+	c := bootSkillsComposition(t)
+	revision := c.installPack("selection-pack")
+	workspace := c.workspaceID()
+	if code, raw := c.do("POST", "/v1/m/skills/assignments", c.token, map[string]any{
+		"target_kind": "workspace", "target_id": workspace, "pack_revision_id": revision,
+	}); code != http.StatusCreated {
+		t.Fatalf("assign to workspace = %d %s", code, raw)
+	}
+	code, raw := c.do("GET", "/v1/m/skills/selection?target_kind=workspace&target_id="+workspace, c.token, nil)
+	var selection skills.Selection
+	if err := json.Unmarshal(raw, &selection); err != nil || code != http.StatusOK || len(selection.Members) != 1 || selection.Members[0].Name != "research" || selection.Members[0].RevisionID != revision {
+		t.Fatalf("selection = %d %s", code, raw)
+	}
+	if code, raw := c.do("GET", "/v1/m/skills/selection?target_kind=workspace&target_id="+model.NewID().String(), c.token, nil); code != http.StatusNotFound {
+		t.Fatalf("selection of an absent workspace = %d %s", code, raw)
 	}
 }
 

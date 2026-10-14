@@ -5,11 +5,17 @@ import { create } from 'zustand'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
-/** What the advanced launch opens on: a template from the catalog, or the commit or
- * branch a handoff names for a new worktree. */
+/** What the launch dialog opens on: a template from the catalog, the commit or branch a
+ * handoff names for a new worktree, or the profile, model and effort a session's message
+ * bar hands over for a new session. `driver` is the tool the New session form had chosen:
+ * the default profile is read for it, not for another tool. */
 export interface AdvancedLaunch {
   templateId?: string
   worktreeFrom?: string
+  driver?: string
+  profileRef?: string
+  model?: string
+  effort?: string
 }
 
 const focused = () =>
@@ -29,8 +35,9 @@ export const useNewSessionDialog = create<{
    * opens on the same draft. */
   advanced: (AdvancedLaunch & { open: boolean }) | null
   setOpen: (open: boolean, opener?: HTMLElement | null) => void
-  /** The form hands over to the advanced launch, keeping the form's opener. */
-  advance: () => void
+  /** The form hands over to the advanced launch, keeping the form's opener and the
+   * sign-in, model and effort it shows. */
+  advance: (launch?: AdvancedLaunch) => void
   openAdvanced: (launch?: AdvancedLaunch) => void
   closeAdvanced: () => void
 }>((set) => ({
@@ -39,7 +46,8 @@ export const useNewSessionDialog = create<{
   advanced: null,
   setOpen: (open, opener) =>
     set(open ? { open, opener: opener ?? focused() } : { open }),
-  advance: () => set({ open: false, advanced: { open: true } }),
+  advance: (launch = {}) =>
+    set({ open: false, advanced: { ...launch, open: true } }),
   openAdvanced: (launch = {}) =>
     set({ opener: focused(), advanced: { ...launch, open: true } }),
   closeAdvanced: () =>

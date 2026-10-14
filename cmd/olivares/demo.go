@@ -132,10 +132,19 @@ func demoReadModelsSeeded(ctx context.Context, st store.Store, tenant model.Tena
 	return seeded, err
 }
 
-// createDemoOrg creates the demo org with the seed's marker, in one transaction.
+// createDemoOrg creates the demo org with the seed's marker on a fresh store.
 func createDemoOrg(ctx context.Context, st store.Store) (model.TenantID, error) {
 	var tenant model.TenantID
 	if err := st.System(ctx, func(sys store.SystemScope) error {
+		orgs, err := sys.ListOrgs(ctx)
+		if err != nil {
+			return err
+		}
+		for _, org := range orgs {
+			if !org.TenantID.IsSystem() {
+				return errors.New("an organization already exists; start without --seed-demo or use a fresh --data-dir")
+			}
+		}
 		org, err := sys.CreateOrg(ctx, model.Org{Name: demoOrgName, Slug: demoOrgSlug, Status: model.StatusActive,
 			Settings: map[string]any{demoSeedMarkerKey: demoSeedMarkerValue}})
 		if err != nil {

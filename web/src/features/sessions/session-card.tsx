@@ -37,6 +37,7 @@ import { LiveConsole } from '@/features/agentops/live-console'
 import { EventsPanel, RunInfo } from '@/features/agentops/run-detail'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { sessionNameLadder } from '@/features/home/work-line'
+import { FEATURE_VIEWS } from '@/features/registry'
 import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
@@ -370,12 +371,16 @@ function CardBody({
           Feature routes are generated from the registry, so their paths are not in the
           static route union — the shell uses the same `as never` escape hatch. */}
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" size="sm" asChild>
-          <Link to={'/access-map' as never}>
-            <Network className="size-3.5" />
-            {t('detail.viewAccess')}
-          </Link>
-        </Button>
+        {FEATURE_VIEWS.some(
+          (view) => view.id === 'accessMap' && !view.hideInNav,
+        ) && (
+          <Button variant="secondary" size="sm" asChild>
+            <Link to={'/access-map' as never}>
+              <Network className="size-3.5" />
+              {t('detail.viewAccess')}
+            </Link>
+          </Button>
+        )}
         <Button variant="secondary" size="sm" asChild>
           <Link to={'/inventory' as never}>
             <Boxes className="size-3.5" />

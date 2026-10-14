@@ -4,6 +4,8 @@
 
 package toolinstall
 
+import "github.com/olivaresai/olivares/modules/catalog"
+
 // RequestV2 is the operator request handed to PackageProviderV2.ResolveV2.
 // It is a runtime value, not a persisted plan or receipt schema.
 //
@@ -18,11 +20,12 @@ package toolinstall
 // for the driver (SelectionV2.PackagePolicyID). CLI consent remains a later
 // wiring concern and is not invented here as a trust status.
 type RequestV2 struct {
-	Driver   string
-	Version  string
-	Platform PlatformV2
-	DestRoot string
-	Source   string
+	Declaration *catalog.ToolDeclaration
+	Driver      string
+	Version     string
+	Platform    PlatformV2
+	DestRoot    string
+	Source      string
 }
 
 // ResolvedMaterialV2 is metadata ResolveV2 retained for later FetchV2 / PlaceV2 /

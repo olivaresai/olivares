@@ -96,7 +96,84 @@ func (in *inventory) load(dir string) error {
 			}
 		}
 	}
+	in.blankNoneReasons(dir)
 	return nil
+}
+
+// blankNoneReasons empties the string literal that model.None, or a function of this package that
+// passes its parameter straight to it, takes as a reason. The reason cites the reader lines that
+// show a column names no principal (file.go:line) and is only checked for that shape; no schema
+// or migration reads it. Hashing it made a line shifting in an unrelated file rewrite every key
+// that depends on the descriptor (#1909). The None call itself, its position among the other
+// fields and every other string stay in the hash.
+func (in *inventory) blankNoneReasons(dir string) {
+	var files []*sourceFile
+	for _, file := range in.files {
+		if path.Dir(file.path) == dir {
+			files = append(files, file)
+		}
+	}
+	isNone := func(file *sourceFile, call *ast.CallExpr) bool {
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "None" || len(call.Args) != 1 {
+			return false
+		}
+		id, ok := sel.X.(*ast.Ident)
+		return ok && id.Obj == nil && file.imports[id.Name] == "core/model"
+	}
+	forwarders := map[string]bool{}
+	for _, file := range files {
+		for _, decl := range file.tree.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil || fn.Body == nil || fn.Type.Params.NumFields() != 1 {
+				continue
+			}
+			param := fn.Type.Params.List[0]
+			if typ, ok := param.Type.(*ast.Ident); !ok || typ.Name != "string" || len(param.Names) != 1 {
+				continue
+			}
+			// The parameter's only use is as the None argument: a function that also branches on
+			// it or builds SQL from it carries more than a citation.
+			uses, passed := 0, false
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				switch n := node.(type) {
+				case *ast.Ident:
+					if n.Name == param.Names[0].Name {
+						uses++
+					}
+				case *ast.CallExpr:
+					if isNone(file, n) {
+						arg, ok := n.Args[0].(*ast.Ident)
+						passed = passed || ok && arg.Name == param.Names[0].Name
+					}
+				}
+				return true
+			})
+			if passed && uses == 1 {
+				forwarders[fn.Name.Name] = true
+			}
+		}
+	}
+	for _, file := range files {
+		ast.Inspect(file.tree, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || len(call.Args) != 1 {
+				return true
+			}
+			forwarded := false
+			if id, ok := call.Fun.(*ast.Ident); ok {
+				// A local variable of the same name is not the package function.
+				forwarded = forwarders[id.Name] && (id.Obj == nil || id.Obj.Kind == ast.Fun)
+			}
+			if !forwarded && !isNone(file, call) {
+				return true
+			}
+			if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				lit.Value = `""`
+			}
+			return true
+		})
+	}
 }
 
 func rendered(fset *token.FileSet, node ast.Node) string {

@@ -226,8 +226,9 @@ func pinnedTLSConfig(t *testing.T, certFile, serverName string) *tls.Config {
 
 func (s *ipv6RealServer) setupLoginAndOrg(t *testing.T) (adminToken, tenant string) {
 	t.Helper()
-	code, _, raw := s.doJSON(t, http.MethodPost, "/v1/setup", "", "", map[string]any{
+	code, setup, raw := s.doJSON(t, http.MethodPost, "/v1/setup", "", "", map[string]any{
 		"token": s.token, "email": "admin@ipv6.test", "password": "supersecret-ipv6",
+		"organization": "IPv6 Acme",
 	})
 	if code != http.StatusCreated {
 		t.Fatalf("setup over [::1] = %d: %s\nannouncement:\n%s", code, raw, s.announced)
@@ -242,15 +243,10 @@ func (s *ipv6RealServer) setupLoginAndOrg(t *testing.T) (adminToken, tenant stri
 	if adminToken == "" {
 		t.Fatalf("login over [::1] returned no token: %s", raw)
 	}
-	code, org, raw := s.doJSON(t, http.MethodPost, "/v1/system/orgs", adminToken, "", map[string]any{
-		"name": "IPv6 Acme", "slug": "ipv6-acme",
-	})
-	if code != http.StatusCreated {
-		t.Fatalf("create org over [::1] = %d: %s", code, raw)
-	}
+	org, _ := setup["organization"].(map[string]any)
 	tenant, _ = org["tenant_id"].(string)
 	if tenant == "" {
-		t.Fatalf("create org over [::1] returned no tenant_id: %s", raw)
+		t.Fatalf("setup over [::1] returned no organization tenant_id: %v", setup)
 	}
 	return adminToken, tenant
 }

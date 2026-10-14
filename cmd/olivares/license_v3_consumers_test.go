@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -145,6 +146,191 @@ func TestTheStatusDTOCarriesTheCredentialFacts(t *testing.T) {
 	}
 	if got := lic.SupportProfile(); got != "business" {
 		t.Fatalf("SupportProfile() = %q, want business — the field must be reachable under its own name", got)
+	}
+}
+
+// signBaseOnlyCredentialV3 signs a credential holding one base line, given as the JSON of that
+// grant, so a test can state the exact phase and dates it protects. The dev key signs it and the
+// key_id is derived from that key, as the Worker does.
+func signBaseOnlyCredentialV3(t *testing.T, issuedAt, baseGrant string) string {
+	t.Helper()
+	priv := license.DevPrivateKey()
+	if len(priv) != ed25519.PrivateKeySize {
+		t.Skip("this build embeds no dev key")
+	}
+	payload := []byte(`{"schema":"olivares.commercial.credential.v3","serial":"cred_base_only_0001",` +
+		`"issue_seq":1,"key_id":"issuer-2026-08","key_epoch":1,` +
+		`"issued_at":"` + issuedAt + `","not_before":"` + issuedAt + `",` +
+		`"entity_id":"ent_acme_sl","deployment_id":"dep_prod_01","purpose":"production",` +
+		`"licensee":{"display_name":"ACME S.L."},"support_profile":"business","grants":[` + baseGrant + `]}`)
+	payload = withDevKeyID(t, payload)
+	enc := base64.RawURLEncoding
+	return enc.EncodeToString(payload) + "." + enc.EncodeToString(ed25519.Sign(priv, payload))
+}
+
+// The annual base line a buyer holds right after purchase: a 72 h lease, a term paid to
+// 2027-10-12. Dates are fixed so no test depends on the wall clock.
+const (
+	refundWindowIssuedAt = "2026-10-12T15:40:06Z"
+	refundWindowBase     = `{"grant_id":"gr_base","order_line_id":"ol_base","product_id":"pdt_business","kind":"base",` +
+		`"cadence":"year","paid_through":"2027-10-12T15:40:06Z","expires_at":"2026-10-15T15:40:06Z",` +
+		`"issuance_phase":"refund_window","guarantee_deadline":"2026-10-26T15:40:06Z",` +
+		`"promotion_hold_deadline":"2026-10-26T15:40:06Z","lease_until":"2026-10-15T15:40:06Z"}`
+)
+
+// signRefundWindowCredentialV3 signs the credential a buyer holds right after a purchase: one
+// annual base line in the refund_window phase, whose 72 h lease ends days before paid_through.
+func signRefundWindowCredentialV3(t *testing.T) string {
+	t.Helper()
+	return signBaseOnlyCredentialV3(t, refundWindowIssuedAt, refundWindowBase)
+}
+
+// TestTheStatusDTONamesPaidThroughApartFromTheLease is the 1854 defect at the surface the console
+// reads. A buyer right after purchase holds a 72 h lease and an annual paid term; expires_at is
+// the lease (the right's effective boundary, a published field that keeps its meaning), so the
+// DTO must also carry the paid term under its own name or the console has nothing true to show.
+func TestTheStatusDTONamesPaidThroughApartFromTheLease(t *testing.T) {
+	pub := license.DefaultPublicKey()
+	if len(pub) == 0 {
+		t.Skip("this build embeds no verification key")
+	}
+	svc, _, _ := newTestLicenseService(t)
+	svc.holder = newLicenseHolder(pub, licenseSource{Blob: signRefundWindowCredentialV3(t), Kind: licenseSourceDataDir},
+		func() time.Time { return time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC) }, discardLogger())
+
+	got, err := svc.LicenseStatus(context.Background())
+	if err != nil {
+		t.Fatalf("LicenseStatus: %v", err)
+	}
+	if got.Status != "valid" {
+		t.Fatalf("status = %q, want valid", got.Status)
+	}
+	wantPaid := time.Date(2027, 10, 12, 15, 40, 6, 0, time.UTC)
+	wantLease := time.Date(2026, 10, 15, 15, 40, 6, 0, time.UTC)
+	if got.PaidThrough == nil || !got.PaidThrough.Equal(wantPaid) {
+		t.Fatalf("paid_through = %v, want %v (the term the buyer paid for, as the email says)", got.PaidThrough, wantPaid)
+	}
+	if got.LeaseUntil == nil || !got.LeaseUntil.Equal(wantLease) {
+		t.Fatalf("lease_until = %v, want %v (the provisional lease, named as such)", got.LeaseUntil, wantLease)
+	}
+	// expires_at is a published field: it keeps reporting the right's effective boundary.
+	if got.ExpiresAt == nil || !got.ExpiresAt.Equal(wantLease) {
+		t.Fatalf("expires_at = %v, want %v unchanged (published contract)", got.ExpiresAt, wantLease)
+	}
+}
+
+// A credential promoted to `term` has no lease: lease_until is absent, so the console never
+// invents a second date, and paid_through is still the one answer.
+func TestTheStatusDTOHasNoLeaseOnceTheTermStarts(t *testing.T) {
+	pub := license.DefaultPublicKey()
+	if len(pub) == 0 {
+		t.Skip("this build embeds no verification key")
+	}
+	svc, _, _ := newTestLicenseService(t)
+	svc.holder = newLicenseHolder(pub, licenseSource{Blob: signNonExpiringCredentialV3(t), Kind: licenseSourceDataDir},
+		func() time.Time { return time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC) }, discardLogger())
+
+	got, err := svc.LicenseStatus(context.Background())
+	if err != nil {
+		t.Fatalf("LicenseStatus: %v", err)
+	}
+	want := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	if got.PaidThrough == nil || !got.PaidThrough.Equal(want) {
+		t.Fatalf("paid_through = %v, want %v", got.PaidThrough, want)
+	}
+	if got.LeaseUntil != nil {
+		t.Fatalf("lease_until = %v, want absent in the term phase", got.LeaseUntil)
+	}
+}
+
+// The same defect read across the other phases a base line can be in: the dates the DTO names
+// must follow the signed grant, not the phase a test happened to start from.
+func TestTheStatusDTODatesFollowTheBasePhase(t *testing.T) {
+	pub := license.DefaultPublicKey()
+	if len(pub) == 0 {
+		t.Skip("this build embeds no verification key")
+	}
+	at := func(s string) time.Time {
+		v, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	promotionHold := strings.Replace(refundWindowBase, `"issuance_phase":"refund_window"`, `"issuance_phase":"promotion_hold"`, 1)
+	grace := `{"grant_id":"gr_base","order_line_id":"ol_base","product_id":"pdt_business","kind":"base",` +
+		`"cadence":"year","paid_through":"2026-10-10T00:00:00Z","expires_at":"2026-10-15T00:00:00Z",` +
+		`"issuance_phase":"renewal_grace","grace_reason":"renewal_failure","grace_ends_at":"2026-10-15T00:00:00Z",` +
+		`"guarantee_deadline":null,"promotion_hold_deadline":null,"lease_until":null}`
+	cases := []struct {
+		name       string
+		issuedAt   string
+		base       string
+		now        time.Time
+		wantStatus string
+		wantPaid   time.Time
+		wantLease  time.Time // zero = absent
+		wantExpiry time.Time
+	}{
+		{"promotion hold is still a lease", refundWindowIssuedAt, promotionHold,
+			at("2026-10-13T12:00:00Z"), "valid", at("2027-10-12T15:40:06Z"), at("2026-10-15T15:40:06Z"), at("2026-10-15T15:40:06Z")},
+		{"renewal grace has no lease and expires_at is the paid term", "2026-09-01T00:00:00Z", grace,
+			at("2026-10-12T12:00:00Z"), "", at("2026-10-10T00:00:00Z"), time.Time{}, at("2026-10-10T00:00:00Z")},
+		{"an ended lease still names the paid term and reads expired", refundWindowIssuedAt, refundWindowBase,
+			at("2026-10-20T12:00:00Z"), "expired", at("2027-10-12T15:40:06Z"), at("2026-10-15T15:40:06Z"), at("2026-10-15T15:40:06Z")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _, _ := newTestLicenseService(t)
+			svc.holder = newLicenseHolder(pub,
+				licenseSource{Blob: signBaseOnlyCredentialV3(t, tc.issuedAt, tc.base), Kind: licenseSourceDataDir},
+				func() time.Time { return tc.now }, discardLogger())
+			got, err := svc.LicenseStatus(context.Background())
+			if err != nil {
+				t.Fatalf("LicenseStatus: %v", err)
+			}
+			if tc.wantStatus != "" && got.Status != tc.wantStatus {
+				t.Fatalf("status = %q, want %q", got.Status, tc.wantStatus)
+			}
+			if got.Status == "invalid" || got.Status == "none" {
+				t.Fatalf("status = %q: the credential did not verify, so the dates below prove nothing", got.Status)
+			}
+			if got.PaidThrough == nil || !got.PaidThrough.Equal(tc.wantPaid) {
+				t.Fatalf("paid_through = %v, want %v", got.PaidThrough, tc.wantPaid)
+			}
+			switch {
+			case tc.wantLease.IsZero() && got.LeaseUntil != nil:
+				t.Fatalf("lease_until = %v, want absent", got.LeaseUntil)
+			case !tc.wantLease.IsZero() && (got.LeaseUntil == nil || !got.LeaseUntil.Equal(tc.wantLease)):
+				t.Fatalf("lease_until = %v, want %v", got.LeaseUntil, tc.wantLease)
+			}
+			if got.ExpiresAt == nil || !got.ExpiresAt.Equal(tc.wantExpiry) {
+				t.Fatalf("expires_at = %v, want %v (published field, unchanged)", got.ExpiresAt, tc.wantExpiry)
+			}
+		})
+	}
+}
+
+// A flat license has no credential lines: its expires_at already is its term, so the two new keys
+// stay absent from the wire (omitempty) and a client that never heard of them sees no change.
+func TestTheStatusDTOOmitsTheNewKeysForAFlatLicense(t *testing.T) {
+	svc, _, _ := newTestLicenseService(t)
+	blob := signTestLicense(t, license.Claims{Licensee: "Acme", MaxUsers: 50, IssuedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(24 * time.Hour)})
+	st, err := svc.InstallLicense(context.Background(), blob, false)
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	if st.ExpiresAt == nil {
+		t.Fatal("a flat license must keep reporting expires_at")
+	}
+	raw, err := json.Marshal(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"paid_through", "lease_until"} {
+		if strings.Contains(string(raw), `"`+key+`"`) {
+			t.Fatalf("flat license wire carries %q: %s", key, raw)
+		}
 	}
 }
 

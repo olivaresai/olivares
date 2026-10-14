@@ -8,21 +8,23 @@ description: >-
 draft: false
 ---
 
-The next release is <!-- release -->`0.1`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> for the observed publication state.
+The next release is <!-- release -->`0.2`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release --> for the observed publication state.
 
 :::note[Published package names]
-The Olivares <!-- release -->0.1<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
+The Olivares <!-- release -->0.2<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
 and `arm64`, with `checksums.txt`, `checksums.txt.sig` and `checksums.txt.pem`. The
 commands below use the literal `amd64` names from that release; replace `amd64` with
 `arm64` on a 64-bit ARM host. Install from those verified release assets. Repository
 metadata producers in a source tree are not installation instructions for this guide.
 
 **Installer qualification.** What CI qualifies is the verified **shell installer** and
-its service/doctor contract, not `dpkg`, `rpm` or `apk`: a dispatch/pull-request matrix
-runs it against the published release in Debian stable, Ubuntu 24.04 LTS,
+its service/doctor contract, not `dpkg`, `rpm` or `apk`: the matrix
+runs in Debian stable, Ubuntu 24.04 LTS,
 Fedora, openSUSE Leap and Alpine container userlands and on a hosted macOS 14 runner,
-and it fails as unmeasurable when the public release cannot be reached rather than
-counting a dry-run as coverage. That matrix does not certify native package-manager installation.
+using an unsigned archive built from the PR head on pull requests. On release
+publication or manual dispatch it also verifies and installs the published tag,
+and fails as unmeasurable when that release cannot be reached rather than counting
+a dry-run as coverage. That matrix does not certify native package-manager installation.
 The native package lifecycle of packages built from this source — install, start, restart,
 upgrade of a running OpenRC service and removal — has been exercised locally in a
 disposable Alpine guest; that is evidence for this tree, not a signed, hosted or
@@ -79,13 +81,13 @@ survive an upgrade), the data directory `/var/lib/olivares`, and the licence tex
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.2_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
 ```
 <!-- /release -->
 

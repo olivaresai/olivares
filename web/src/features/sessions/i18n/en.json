@@ -131,6 +131,33 @@
     "noProfileRead": "Provider profile names are not shown: your role does not include sessions:profile:read. The Instance column carries each row's profile reference instead.",
     "profileLookupFailed": "Provider profile names could not be read: the profile lookup failed. The Instance column carries each row's profile reference instead."
   },
+  "move": {
+    "open": "Move to…",
+    "title": "Move this session",
+    "mode": "How to continue",
+    "modeMove": "Same tool, another account",
+    "modeHandoff": "Another tool, as a new session",
+    "moveHint": "The same session continues on the account you choose, with its conversation. Nothing starts: resume it next. That account's own limits and approvals apply from now on; no login is copied.",
+    "handoffHint": "A new session starts in the profile you choose, linked to this one, from the summary below and with the full transcript attached. This session stays as it is.",
+    "target": "Account",
+    "pick": "Choose an account",
+    "noTargets": "No other account is ready for this",
+    "summary": "Summary the new session starts from",
+    "loading": "Generating the summary…",
+    "transcript": "Transcript attached: {{turns}} requests, {{bytes}} bytes.",
+    "confirmMove": "Move",
+    "confirmHandoff": "Start new session",
+    "moved": "Moved to {{name}}. Resume it to continue.",
+    "started": "New session started from the summary.",
+    "failed": "The action could not be completed.",
+    "stateNotDelivered": "The new session started, but its first message did not arrive. Send the text below from the session.",
+    "stateUnknown": "The new session started and its first message may have arrived. Check the session before sending the text below again.",
+    "stateWaits": "The new session waits for an approval, and its first message is not sent automatically. Once it runs, send the text below.",
+    "firstTurn": "First message",
+    "close": "Close",
+    "profilesFailed": "The accounts could not be listed.",
+    "profilesDenied": "You are not allowed to list accounts, so none can be chosen."
+  },
   "card": {
     "tabs": {
       "overview": "Overview",
@@ -239,7 +266,7 @@
   "runState": {
     "pending": "Pending",
     "running": "Working",
-    "idle": "Working",
+    "idle": "Idle",
     "stopped": "Stopped",
     "failed": "Failed",
     "cleaned": "Cleaned"
@@ -374,6 +401,7 @@
     "folder": "Folder",
     "temporaryFolder": "Temporary folder for this session",
     "panels": "Panels",
+    "tabActivity": "Activity",
     "tabChanges": "Changes",
     "tabFiles": "Files",
     "noFiles": "This session has no folder to browse.",
@@ -490,5 +518,59 @@
   "thread": {
     "copyReference": "Copy reference",
     "terminalHint": "The same session from a terminal."
+  },
+  "activity": {
+    "empty": "Nothing yet. The tool's task list, the agents it spawns, the work it runs in the background and the files it changes appear here as it works.",
+    "missing": "This session's transcript is not in its account home, so what its tool did cannot be shown.",
+    "failed": "The activity could not be read.",
+    "todos": "Plan",
+    "todosCount": "{{done}} of {{total}} done",
+    "todo": {
+      "pending": "To do",
+      "in_progress": "In progress",
+      "completed": "Done"
+    },
+    "agents": "Agents",
+    "agent": "Agent",
+    "tasks": "In the background",
+    "files": "Files changed",
+    "fileNew": "new",
+    "lines": "{{added}} added, {{removed}} removed",
+    "context": "Context",
+    "model": "Model",
+    "tokens": "In context",
+    "compactions": "Compactions",
+    "compactedTimes_one": "Compacted once",
+    "compactedTimes_other": "Compacted {{n}} times",
+    "neverCompacted": "Not compacted",
+    "skills": "Skills",
+    "mcp": "MCP servers",
+    "unreadable_one": "{{n}} record could not be read and is not shown.",
+    "unreadable_other": "{{n}} records could not be read and are not shown.",
+    "countRunning": "{{total}} · {{running}} running",
+    "state": {
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "scheduled": "Scheduled"
+    },
+    "kind": {
+      "shell": "Shell command",
+      "monitor": "Monitor",
+      "workflow": "Workflow",
+      "wakeup": "Scheduled wakeup"
+    },
+    "due": "at {{time}}",
+    "toolUses_one": "{{n}} tool call",
+    "toolUses_other": "{{n}} tool calls",
+    "agentTokens": "{{value}} tokens",
+    "agentFailed": "This agent's transcript could not be read.",
+    "role": {
+      "user": "Asked",
+      "assistant": "Answered",
+      "tool": "Tool",
+      "result": "Result"
+    }
   }
 }

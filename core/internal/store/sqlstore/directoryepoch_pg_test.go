@@ -696,14 +696,15 @@ func TestDirectoryEpochPostgresDropPurgesClosedAuthEstate(t *testing.T) {
 }
 
 func TestDirectoryEpochPostgresLifecyclePathsShareGlobalWriterLock(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	// Provisioning and fresh migrations are fixture setup, not part of the
+	// writer-lock interleaving budget (as in the lock-order test above).
+	setupCtx := context.Background()
 	pg := isolatedPGSplit(t)
 	cfg := store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner,
 		AdminDSN: pg.Admin, MaxConns: 4,
 	}
-	st, err := Open(ctx, cfg, nil)
+	st, err := Open(setupCtx, cfg, nil)
 	if err != nil {
 		t.Fatalf("open lifecycle-lock store: %v", err)
 	}
@@ -715,6 +716,9 @@ func TestDirectoryEpochPostgresLifecyclePathsShareGlobalWriterLock(t *testing.T)
 	}
 	defer raw.Close() //nolint:errcheck
 	directoryEpochTestDeletePostgresRow(t, raw, missing)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	backfillPaused := make(chan struct{})
 	releaseBackfill := make(chan struct{})

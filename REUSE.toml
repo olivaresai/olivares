@@ -69,12 +69,52 @@ precedence = "override"
 SPDX-FileCopyrightText = "2025 Astral Software Inc."
 SPDX-License-Identifier = "MIT"
 
-# Upstream OpenAI Whisper license, shipped with the console beside the model it covers.
+# Upstream OpenAI Whisper model and license, shipped together with the console.
 [[annotations]]
-path = ["web/public/licenses/whisper/Whisper-MIT.txt"]
+path = ["web/public/licenses/whisper/Whisper-MIT.txt", "web/src/features/dictation/model/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "2022 OpenAI"
 SPDX-License-Identifier = "MIT"
+
+# Fonts shipped with the console, vendored verbatim. NOTICE credits them and their
+# license texts ship under web/public/licenses/fonts/.
+[[annotations]]
+path = ["web/src/assets/fonts/geist/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2023 Vercel, in collaboration with basement.studio"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["web/src/assets/fonts/jetbrains-mono/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+SPDX-License-Identifier = "OFL-1.1"
+
+# Our own shipped files that cannot carry an inline header: images and recordings
+# (binary), gzip fixtures, byte-exact test inputs and patches, one-line version and
+# placeholder files, and the OpenAPI client generated from our own contract. Same
+# reason as the stamps and *.bin payloads in the repository-wide annotation above.
+[[annotations]]
+path = [
+  ".node-version",
+  "RELEASE-VERSION",
+  "**/PLACEHOLDER",
+  "ci/oracles/commit-outcome/*.patch",
+  "cmd/olivares/testdata/*.ndjson",
+  "cmd/olivares/testdata/public-v26.8.0/*.gz",
+  "core/internal/store/sqlstore/testdata/**/*.gz",
+  "modules/security/testdata/fuzz/**",
+  "modules/sessions/testdata/*.jsonl",
+  "scripts/openapi-op-catalog.tsv",
+  "web/badge-vacio-filas.baseline",
+  "web/e2e-visual/__shots__/*.png",
+  "web/public/*.png",
+  "web/public/site.webmanifest",
+  "web/src/lib/api/openapi.gen.ts",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
 
 # --- Product documentation site (docs-site/) ---------------------------------
 # The docs site and its content are part of the AGPL product (like /web). Its
@@ -164,6 +204,18 @@ SPDX-License-Identifier = "MIT"
 # the additive Enterprise Edition is distributed separately under
 # LicenseRef-Olivares-Commercial, so there is no enterprise/** override here.
 
+# Locale data extracted from the commercial source retains its original license.
+[[annotations]]
+path = [
+  "commercial/commerce-lint/vocabulary/**",
+  "commercial/license-worker/src/email/locales/**",
+  "commercial/license-worker/src/commerce/locales/es/registry-names.json",
+  "commercial/license-worker/test/testdata/*.json",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "LicenseRef-Olivares-Commercial"
+
 # --- The license / notice / legal text files themselves ----------------------
 # License texts are not the project's copyrightable content; mark them CC0-1.0
 # (public-domain-equivalent) so REUSE does not demand a license-for-the-license.
@@ -204,6 +256,12 @@ SPDX-License-Identifier = "Apache-2.0"
 # Extracted egress vocabulary retains its source script's license.
 [[annotations]]
 path = ["scripts/testdata/egress-claims-patterns.tsv"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = ["modules/skills/builtin/olivares-wiki.tar.gz"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "AGPL-3.0-only"

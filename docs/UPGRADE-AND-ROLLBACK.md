@@ -45,7 +45,7 @@ command is for binary/systemd/compose installs.
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.1`<!-- /release -->, image tags <!-- release -->`:0.1`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.2`<!-- /release -->, image tags <!-- release -->`:0.2`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -63,11 +63,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.1 \
+cosign verify docker.io/olivaresai/olivares:0.2 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.1   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.2   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -532,7 +532,12 @@ start — one restart.** The license itself needs no restart (below).
 binary to the next signed release of the **same edition** on a **channel** (§8), verified
 offline and swapped atomically with a kept backup. On the **public channel** the community
 edition needs **no license and no token**; `--enterprise` adds the license gate and the
-gated download. Installing from `--bundle` requires the Enterprise binary (§10); Community refuses before reading a license or bundle.
+gated download. A **Business build reads `olivares upgrade` as `olivares upgrade --enterprise`**:
+it never installs from the public channel, because that channel is signed by the same key and a
+Community release would replace the Business binary. Without a license it refuses and says to
+install one. With `--endpoint` and no `--enterprise` it refuses too, because the licensed download
+token must not travel to a host nobody chose for it. The default follows the edition of the binary
+that runs `upgrade`, not the one named by `--target`. Installing from `--bundle` requires the Enterprise binary (§10); Community refuses before reading a license or bundle.
 `--bundle --check` is never gated because it installs nothing.
 
 ```bash
@@ -567,7 +572,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.1
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.2
   ```
   <!-- /release -->
 
@@ -651,6 +656,15 @@ then `sudo systemctl daemon-reload`. The service runs
 `--if-eligible`, so a node upgrades only when it is in the manifest's rollout cohort and in the
 window.
 
+On a Business build the unit always runs the licensed route, with or without `--enterprise` in its
+`ExecStart`: the command applies that default itself. A unit written by an older Business binary
+therefore stops reading the public channel once the binary is replaced, but it has no
+`EnvironmentFile` line and no `--connect`. Without an inherited `OLIVARES_UPGRADE_TOKEN`, it refuses
+for the missing token and installs nothing; with one, it can fetch from the licensed channel.
+Regenerate it with `olivares upgrade --install-timer` (or `--install-timer --connect`).
+A Business binary built before this default still reads the public channel on its own; take it to a
+current Business release with `olivares upgrade --enterprise`, and regenerate its unit.
+
 ### Activation: `olivares enterprise enable <preset>` (buying turns something ON)
 
 A commercial binary starts **byte-identical to community** — its add-ons are opt-in and
@@ -719,12 +733,13 @@ can check it yourself the same way CI does — diff `olivares migrate manifest` 
 builds and expect no difference — so a binary swap in **either** direction can never land in a
 partial-upgrade state.
 
-### Rollback commercial build → community is symmetric
+### Rollback commercial build → community: export, not serve
 
-Roll back the **binary, not the schema** (§5). Swapping the commercial binary back to the
-community one on the **same data directory** works: any rows written by the commercial build stay
-**dormant, not deleted**. The community binary simply stops serving the commercial
-surfaces; user accounts are unaffected in either direction (they are never capped).
+Roll back the **binary, not the schema** (§5), within one edition. A community **server** may refuse to start
+on a data directory that a commercial build has initialized: its store admission compares the stored history
+with the one it was built with, refuses before login and changes nothing. The data is not lost:
+`olivares dr backup` and `olivares dr verify` of the community build open the directory offline and export it,
+and the commercial binary opens it again unchanged. User accounts are unaffected.
 
 ---
 
@@ -764,6 +779,14 @@ what the code makes it: a declaration, with nothing enforcing it.
 channel, so switching `--channel` never downgrades silently: a lower target still requires
 `--force-rollback` (audited). The `security` channel is a subset of what is also on `stable`
 except during an embargoed out-of-band push, when it may lead briefly.
+
+### Hotfix releases
+
+A fix that cannot wait for the next feature release is published as the **next release number**
+(there is no third number); [Release cadence](editions.md#release-cadence) defines it. It carries **no schema
+migration**, so rolling the binary back to the release before it (§5) needs no data step. It is delivered on
+`stable`, and on `security` too when it declares an advisory. The ordinary rules apply to it:
+`olivares upgrade --check` shows it, and anti-rollback refuses to go below it without `--force-rollback`.
 
 ---
 

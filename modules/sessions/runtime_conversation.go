@@ -37,23 +37,51 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
+	m.rt.toolMu.RLock()
+	releaseAdmission := true
+	defer func() {
+		if releaseAdmission {
+			m.rt.toolMu.RUnlock()
+		}
+	}()
+	program, err := m.resolveRunProgram(ctx, tenant, CreateRunParams{ProviderHome: &home, WorkspaceRef: rec.String(colWorkspaceRef), AgentRef: rec.String(colRunAgentRef)})
+	if err != nil {
+		return "", errors.New("stored conversation tool version is unavailable; install it or clear its version selection")
+	}
+	program, _ = toolProgramIdentity(program)
 	args := NewCodexDriver().LaunchArgs(DriverLaunch{})
 	args = append([]string{"-c", "features.api_key_model_discovery=false"}, args...)
-	spec := LaunchSpec{Program: m.driverProgram(NewCodexDriver()), Args: args,
+	spec := LaunchSpec{Program: program, Args: args,
 		Dir: home.UserHome, Env: toSessionEnv(cliruntime.HomeEnv(home.Driver, home.UserHome, home.ConfigHome)),
 		Isolation: IsolationNative, WaitDelay: time.Second,
 		Confinement: m.sessionConfinement("", &home, PresetNone), NetworkPolicy: &egress.Policy{Offline: true}}
 	proc, err := m.rt.Runner.Launch(ctx, spec)
-	if err != nil {
+	if proc != nil {
+		defer func() {
+			stopCtx, stop := context.WithTimeout(context.Background(), 3*time.Second)
+			defer stop()
+			stopErr := proc.Stop(stopCtx)
+			if !childWasReaped(stopErr) {
+				// Keep custody after a partial launch or uncertain Stop. Removal
+				// uses TryLock, so this hold never queues a writer ahead of launches.
+				releaseAdmission = false
+				go func() {
+					_, waitErr := proc.Wait()
+					if childWasReaped(waitErr) {
+						m.rt.toolMu.RUnlock()
+					} else {
+						m.warnf("stored conversation reader collection remains unconfirmed")
+					}
+				}()
+			}
+			if stopErr != nil {
+				line, err = "", errors.New("stored conversation reader could not be stopped without error")
+			}
+		}()
+	}
+	if err != nil || proc == nil {
 		return "", errors.New("stored conversation reader could not be started")
 	}
-	defer func() {
-		stopCtx, stop := context.WithTimeout(context.Background(), 3*time.Second)
-		defer stop()
-		if proc.Stop(stopCtx) != nil {
-			line, err = "", errors.New("stored conversation reader could not be stopped")
-		}
-	}()
 	line, err = readCodexConversation(ctx, proc, threadID)
 	if err != nil {
 		return "", errors.New("stored conversation could not be read; live output remains available where bridged")

@@ -26,7 +26,7 @@ Installation hierher zurück.
 ## Voraussetzungen
 
 - Ein Linux-Host mit systemd und `curl`.
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.2`{/* /release */} is the next release, not yet published.
 
 ## 1. Das Binary bauen und installieren
 
@@ -186,16 +186,15 @@ solange keine Benutzer existieren, sodass es niemals zur Übernahme einer
 konfigurierten Installation genutzt werden kann.
 </Aside>
 
-## 4. Ihre erste Organisation anlegen
+## 4. Ihre erste Organisation verwenden
 
-Alles im Produkt ist mandantenbezogen, legen Sie also die Organisation an, in die
-Ihre Sources melden werden:
+Die Ersteinrichtung hat Ihre Organisation bereits angelegt. Alles im Produkt ist
+mandantenbezogen; lesen Sie die Mandanten-ID für Ihre Sources aus:
 
 ```bash
-TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+TENANT="$(curl -ksf https://127.0.0.1:8443/v1/auth/whoami \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 ```
 

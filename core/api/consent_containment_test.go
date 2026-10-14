@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/core/api/caep"
 	"github.com/olivaresai/olivares/core/api/scim"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -462,39 +461,6 @@ func TestNoTenantActionWritesGlobalStatusOrCutsAnotherTenant(t *testing.T) {
 			}
 		})
 
-		t.Run("caep events", func(t *testing.T) {
-			priv, bearer := setupCAEP(t, ctx, h, super, tT)
-			send := func(event string, v model.ID, jti string) {
-				t.Helper()
-				if r := h.scim("POST", caepEndpoint, bearer, signCAEP(t, priv, caepSET(event, v.String(), jti))); r.code != http.StatusAccepted {
-					t.Fatalf("CAEP %s = %d %s, want 202", event, r.code, r.raw)
-				}
-			}
-
-			v, sess := h.sharedAccount(admin, "caep-session@table.example", tT, tB)
-			send(caep.EventSessionRevoked, v, "c-1")
-			globalUnchanged(t, v, sess)
-			if code := h.actsIn(sess, tT); code != http.StatusForbidden {
-				t.Errorf("an account-scope session after the tenant's session-revoked = %d in that tenant, want 403", code)
-			}
-
-			v, sess = h.sharedAccount(admin, "caep-credential@table.example", tT, tB)
-			send(caep.EventCredentialChange, v, "c-2")
-			globalUnchanged(t, v, sess)
-			if code := h.actsIn(sess, tT); code != http.StatusForbidden {
-				t.Errorf("an account-scope session after the tenant's credential-change = %d in that tenant, want 403", code)
-			}
-
-			v, sess = h.sharedAccount(admin, "caep-disabled@table.example", tT, tB)
-			send(caep.EventAccountDisabled, v, "c-3")
-			globalUnchanged(t, v, sess)
-			offboarded(t, v, sess)
-
-			v, sess = h.sharedAccount(admin, "caep-compromise@table.example", tT, tB)
-			send(caep.EventCredentialCompromise, v, "c-4")
-			globalUnchanged(t, v, sess)
-			offboarded(t, v, sess)
-		})
 	})
 }
 

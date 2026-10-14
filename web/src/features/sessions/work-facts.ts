@@ -42,11 +42,16 @@ export interface FactFormatters {
 /**
  * The facts line, in reading order: how long it worked, how many tool calls, how many
  * events, what it cost, which model. Every entry is a figure the engine sent.
+ *
+ * `model` is the model the CALLER names for the session (`sessionModelRef`: the run's
+ * first). It is not read from the observed row here: that row's `model_ref` is the model
+ * of the last cost sample.
  */
 export function workFacts(
   s: LiveDTO,
   t: FactTranslate,
   fmt: FactFormatters,
+  model: string | undefined,
 ): string[] {
   return [
     s.duration_seconds > 0
@@ -61,6 +66,6 @@ export function workFacts(
       ? t('sessions:work.events', { count: s.event_count })
       : null,
     s.cost_micro_usd > 0 && fmt.cost ? fmt.cost(s.cost_micro_usd) : null,
-    s.model_ref ?? null,
+    model ?? null,
   ].filter((f): f is string => f !== null)
 }

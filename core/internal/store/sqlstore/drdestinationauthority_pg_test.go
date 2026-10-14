@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	osexec "os/exec"
 	"strings"
 	"sync"
 	"testing"
@@ -181,12 +182,46 @@ func ddaFirstDatabaseRoute(t *testing.T, dsn, firstDatabase string) string {
 	return v.String()
 }
 
+// The module suite has no PostgreSQL fixture; the dedicated PostgreSQL job
+// supplies both clusters. Exercise the real test entry point with a clean
+// fixture environment so its prerequisite order cannot break ordinary Go runs.
+func TestDRDestinationUnrelatedClusterWithoutPostgres(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		appDSN      string
+		wantFailure bool
+		want        string
+	}{
+		{"unconfigured", "", false, "--- SKIP: TestDRDestinationUnrelatedCluster"},
+		{"misconfigured", "postgres://fixture@127.0.0.1/fixture", true, pgtest.EnvSuperuserDSN + " is not"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := osexec.CommandContext(ctx, os.Args[0], "-test.run=^TestDRDestinationUnrelatedCluster$", "-test.v")
+			for _, entry := range os.Environ() {
+				if !strings.HasPrefix(entry, "OLIVARES_TEST_POSTGRES_") && !strings.HasPrefix(entry, "OLIVARES_TEST_PG_") && !strings.HasPrefix(entry, "CI=") {
+					cmd.Env = append(cmd.Env, entry)
+				}
+			}
+			cmd.Env = append(cmd.Env, "CI=1")
+			if tc.appDSN != "" {
+				cmd.Env = append(cmd.Env, pgtest.EnvAppDSN+"="+tc.appDSN)
+			}
+			output, err := cmd.CombinedOutput()
+			if (err != nil) != tc.wantFailure || !strings.Contains(string(output), tc.want) {
+				t.Fatalf("want failure=%t and %q, got %v\n%s", tc.wantFailure, tc.want, err, output)
+			}
+		})
+	}
+}
+
 func TestDRDestinationUnrelatedCluster(t *testing.T) {
+	a := isolatedPG(t)
 	other := os.Getenv("OLIVARES_TEST_POSTGRES_OTHER_DSN")
 	if other == "" {
 		t.Fatal("a second owned real cluster is required")
 	}
-	a := isolatedPG(t)
 	t.Setenv(pgtest.EnvSuperuserDSN, other)
 	// pgtest caches the primary-major verdict per process. Corroborate the
 	// unrelated cluster independently before provisioning on another server.

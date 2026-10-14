@@ -69,7 +69,12 @@ const report = auditRouteCensus({
 
 describe('route conservation', () => {
   it('records the approved Business placement without deleting published history', () => {
-    expect(census.business_paths).toEqual(['/automations', '/orchestration'])
+    expect(census.business_paths).toEqual([
+      '/automations',
+      '/orchestration',
+      '/tenants',
+      '/residency',
+    ])
     expect(
       census.business_paths.every((path) => census.paths.includes(path)),
     ).toBe(true)

@@ -9,6 +9,10 @@ sidebar:
   order: 8
 ---
 
+:::note[Édition]
+Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges) et le cycle de vie des identités gérées nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, SCIM entrant utilisateurs/groupes, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
+:::
+
 L'identité est la dépendance dure sous l'ensemble de l'access map : l'audit
 natif attribue un accès à un **identifiant (credential)**, et seul un roster
 d'identité peut lier ce credential à un **agent ou une personne**. Cette page
@@ -70,7 +74,7 @@ Le control plane est un fournisseur de service SCIM 2.0 (RFC 7644) standard à :
   rôle. Les membres inconnus dans un groupe poussé sont ignorés **et audités**,
   non inventés.
 
-## 3. Sources de roster : LDAP, Okta, Entra ID
+## 3. Sources de roster : LDAP, Okta, Entra ID — Business/Enterprise
 
 Les sources de roster alimentent l'inventaire d'identité du module VI et — c'est
 là le point — donnent au module III les liaisons qui font monter l'attribution

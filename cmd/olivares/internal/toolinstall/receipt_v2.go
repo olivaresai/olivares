@@ -7,9 +7,11 @@ package toolinstall
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/olivaresai/olivares/modules/catalog"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -20,6 +22,7 @@ const ReceiptSchemaV2 = "olivares.ai/tool-install/receipt/v2"
 // directory is renamed into place. Observation of the fetched object is always
 // present, including origin-only Grok where the plan digest state is unknown.
 type ReceiptV2 struct {
+	Tool             *catalog.ToolDeclaration `json:"tool,omitempty"`
 	Schema           string                   `json:"schema"`
 	Driver           string                   `json:"driver"`
 	Version          string                   `json:"version"`
@@ -104,6 +107,10 @@ func readReceiptV2(root *os.Root, rel, wantReleaseDir string) (*ReceiptV2, error
 	}
 	if wantReleaseDir != "" && rec.Destination.ReleaseDir != wantReleaseDir {
 		return nil, fmt.Errorf("receipt was written for %s, not for %s (the release directory was moved or copied)", rec.Destination.ReleaseDir, wantReleaseDir)
+	}
+	declared := strings.HasPrefix(rec.Driver, "declared-")
+	if declared != (rec.Tool != nil) || declared != (rec.VerificationKind == VerificationCatalogSHA256) {
+		return nil, fmt.Errorf("receipt declaration and verification kind disagree")
 	}
 	entry := rec.Destination.Executable
 	if entry == "" || !filepath.IsAbs(entry) {

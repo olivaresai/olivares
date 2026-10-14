@@ -89,7 +89,9 @@ const AT_THE_STANDARD = [
   'features/recordings',
   'features/redteam',
   'features/reporting',
-  'features/residency',
+  ...(FEATURE_EXTENSIONS.some((view) => view.id === 'residency')
+    ? ['features/residency']
+    : []),
   'features/sandbox',
   'features/security',
   ...(FEATURE_EXTENSIONS.some((view) => view.id === 'team-costs')
@@ -112,7 +114,9 @@ const AT_THE_STANDARD = [
     ? ['features/posture-export']
     : []),
   'features/session-viewer',
-  'features/tenants',
+  ...(FEATURE_EXTENSIONS.some((view) => view.id === 'tenants')
+    ? ['features/tenants']
+    : []),
   'features/work',
   'features/inference-proxy',
   'features/protocol-bindings',

@@ -83,6 +83,9 @@
     "activeUsers": "Aktive Benutzerkonten",
     "noUserLimit": "self-hosted: kein Limit",
     "expires": "Läuft ab",
+    "paidThrough": "Bezahlt bis",
+    "leaseUntil": "Vorläufige Laufzeit bis",
+    "leaseNote": "Vorläufige Laufzeit (Widerrufsfrist). Vor diesem Datum erneuern, damit die Lizenz bis zum bezahlten Datum gültig bleibt.",
     "issued": "Ausgestellt",
     "sourceLabel": "Quelle",
     "sources": {

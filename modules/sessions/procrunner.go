@@ -274,7 +274,12 @@ func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stre
 	}
 	br := bufio.NewReaderSize(r, 64*1024)
 	for {
-		line, err := readBoundedLine(br, pr.lineCap)
+		line, err := readBoundedLineWithOverflow(br, pr.lineCap, func(prefix []byte) []byte {
+			if c := p.commandResponses.Load(); c != nil {
+				return c.oversizedResponse(prefix)
+			}
+			return nil
+		})
 		if errors.Is(err, ErrOutputLineTooLong) {
 			p.outputFailure.Do(func() {
 				p.outputErr = errors.Join(ErrOutputLineTooLong, ErrOutputAbandoned)
@@ -371,17 +376,20 @@ func (p *procProcess) deliver(frame OutputFrame) bool {
 
 // procProcess is a live native process and its bridged streams.
 type procProcess struct {
-	cmd            *exec.Cmd
-	stdin          io.WriteCloser
-	stdout         io.ReadCloser
-	stderr         io.ReadCloser
-	out            chan OutputFrame
-	waitDone       chan struct{}
-	waitDelay      time.Duration
-	outputFailure  sync.Once
-	outputErr      error // written once by a pump, read after both pumps join
-	stopping       atomic.Bool
-	drainAbandoned atomic.Bool
+	cmd           *exec.Cmd
+	stdin         io.WriteCloser
+	stdout        io.ReadCloser
+	stderr        io.ReadCloser
+	out           chan OutputFrame
+	waitDone      chan struct{}
+	waitDelay     time.Duration
+	outputFailure sync.Once
+	outputErr     error // written once by a pump, read after both pumps join
+	stopping      atomic.Bool
+	// The catalog's existing waiter map is also the authority for recovering an
+	// oversized initialize answer. Set before its request reaches stdin.
+	commandResponses atomic.Pointer[toolCommandCache]
+	drainAbandoned   atomic.Bool
 
 	exit    int
 	waitErr error
@@ -824,6 +832,14 @@ var ErrOutputLineTooLong = errors.New("sessions: native output line exceeds its 
 // adds at most the reader's fixed buffer as read-ahead; it never collects a whole
 // oversized record. Excess is terminal, so no unbounded discard is needed.
 func readBoundedLine(br *bufio.Reader, limit int) ([]byte, error) {
+	return readBoundedLineWithOverflow(br, limit, nil)
+}
+
+// readBoundedLineWithOverflow may replace an identified oversized control answer
+// with a fixed error frame. It discards the rest without retaining it; Stop and
+// the natural-exit drain bound close the owned reader even without a newline.
+// Every other oversized line remains terminal and no truncated prefix is output.
+func readBoundedLineWithOverflow(br *bufio.Reader, limit int, overflow func([]byte) []byte) ([]byte, error) {
 	if limit <= 0 {
 		limit = maxOutputLine
 	}
@@ -832,6 +848,21 @@ func readBoundedLine(br *bufio.Reader, limit int) ([]byte, error) {
 		fragment, err := br.ReadSlice('\n')
 		size := len(line) + len(fragment)
 		if size > limit+2 {
+			if overflow != nil {
+				keep := min(len(fragment), limit+2-len(line))
+				prefix := make([]byte, len(line)+keep)
+				copy(prefix, line)
+				copy(prefix[len(line):], fragment[:keep])
+				if replacement := overflow(prefix); replacement != nil {
+					for errors.Is(err, bufio.ErrBufferFull) {
+						_, err = br.ReadSlice('\n')
+					}
+					if err == nil || errors.Is(err, io.EOF) {
+						return replacement, err
+					}
+					return nil, err
+				}
+			}
 			return nil, ErrOutputLineTooLong
 		}
 		if size > cap(line) {
@@ -848,6 +879,11 @@ func readBoundedLine(br *bufio.Reader, limit int) ([]byte, error) {
 		}
 		line = trimCRLF(line)
 		if len(line) > limit {
+			if overflow != nil {
+				if replacement := overflow(line); replacement != nil {
+					return replacement, err
+				}
+			}
 			return nil, ErrOutputLineTooLong
 		}
 		return line, err

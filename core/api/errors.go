@@ -170,6 +170,8 @@ func statusFor(err error) (int, string) {
 		return http.StatusBadRequest, "activation_invalid_request"
 	case errors.Is(err, ErrModulesUnavailable):
 		return http.StatusNotImplemented, "modules_unavailable"
+	case errors.Is(err, ErrOrganizationsUnavailable):
+		return http.StatusNotImplemented, "organizations_unavailable"
 	case errors.Is(err, ErrDepartmentsUnavailable):
 		// Departments and filing a group in a workspace are the Business
 		// edition (docs/editions.md). 501 honest seam.
@@ -548,6 +550,7 @@ var honestSeamMessage = map[string]string{
 	"log_broker_unavailable":           "The log broker is not wired on this deployment.",
 	"license_unavailable":              "License operations are not wired on this deployment.",
 	"activation_unavailable":           "Activation is not wired on this deployment.",
+	"organizations_unavailable":        "Managing several organizations is in the Enterprise edition. Stored data stays available for export.",
 	"departments_unavailable":          "Departments and filing a group in a workspace are in the Business edition. What is already stored stays readable and keeps applying.",
 	"recording_unavailable":            "Session recording is not wired on this deployment.",
 	"entity_authorization_unavailable": "Entity authorization evidence is temporarily unavailable.",

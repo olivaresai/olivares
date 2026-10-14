@@ -49,6 +49,12 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		// and the decision ledger projection spans decisionDTO.
 		{"dto.go", 284, 284}: {"modules/orchestration/dto.go", 269, 269},
 		{"dto.go", 271, 288}: {"modules/orchestration/dto.go", 239, 273},
+		// The inventory readers of the directory mirror moved from roster.go to
+		// identity_inventory.go when the Business roster sync left Community.
+		{"roster.go", 512, 512}: {"modules/governance/identity_inventory.go", 87, 87},
+		{"roster.go", 522, 522}: {"modules/governance/identity_inventory.go", 97, 97},
+		{"roster.go", 590, 590}: {"modules/governance/identity_inventory.go", 165, 165},
+		{"roster.go", 623, 623}: {"modules/governance/identity_inventory.go", 198, 198},
 	}
 	namespace, _, _ := strings.Cut(string(kind), ".")
 	// Bare citations can relocate only within their owning module. Explicit
@@ -157,6 +163,26 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	{"governance.breakglass_use", "the caller-declared subject of the use, recorded and rendered only: breakglass.go:413"}:                                                            {"breakglass.go:413"},
 	{"governance.breakglass_use", "the consumed action name, rendered only: breakglass.go:412"}:                                                                                       {"breakglass.go:412"},
 	{"governance.breakglass_use", "the id of the break-glass grant that was used: breakglass.go:406"}:                                                                                 {"breakglass.go:406"},
+
+	// Identity & Scale readers moved to Business in 46cfbf0c. Each citation was checked in that commit's parent.
+	// Some were already approximate there: handlers:143 is the brace after the event read at :139; handlers:372 and :375 are the
+	// block that declares and reads source, target and kind; agentidentity:269 returns on the empty reference (the agent-kind
+	// comparison is at :279 and :289).
+	{"governance.nhi_lifecycle", "the provider an identity comes from, rendered and used to pick a rotation actuator: nhilifecycle.go:267, nhilifecycle_handlers.go:372"}: {"nhilifecycle_handlers.go:372"},
+	{"governance.nhi_lifecycle", "an operator-declared actuation target handed to the rotation actuator: nhilifecycle_handlers.go:375"}:                                   {"nhilifecycle_handlers.go:375"},
+	{"governance.nhi_lifecycle", "ok, stale or unknown, counted by status only: reportsource.go:65, nhilifecycle_sweep.go:431"}:                                           {"nhilifecycle_sweep.go:431"},
+	{"governance.nhi_lifecycle", "monitor, alert or blocked, compared at nhilifecycle_sweep.go:492"}:                                                                      {"nhilifecycle_sweep.go:492"},
+	{"governance.nhi_lifecycle", "a lifecycle reason returned with a block and rendered: nhilifecycle_sweep.go:494, nhilifecycle.go:277"}:                                 {"nhilifecycle_sweep.go:494"},
+	{"governance.nhi_lifecycle", "empty or agent, compared at agentidentity.go:269"}:                                                                                      {"agentidentity.go:269"},
+	{"governance.nhi_lifecycle_event", "a lifecycle event name, rendered only: nhilifecycle_handlers.go:143"}:                                                             {"nhilifecycle_handlers.go:143"},
+	// The directory roster sync stayed in Business (roster.go:339, :369, :399, :277 of 46cfbf0c's parent); the inventory
+	// readers the same declarations cite moved to identity_inventory.go and relocate above.
+	{"governance.collection", "directory group metadata whose email, UPN and credential keys are dropped before storage (roster.go:51, roster.go:399); no reader decodes it: roster.go:512"}: {"roster.go:399"},
+	{"governance.collection", "a directory source name, a lookup key and a rendered label: roster.go:339, roster.go:512"}:                                                                    {"roster.go:339"},
+	{"governance.collection", "a directory group ref, a lookup key and a rendered label: roster.go:339, roster.go:512"}:                                                                      {"roster.go:339"},
+	{"governance.collection_member", "a directory source name, part of the edge's lookup key: roster.go:369"}:                                                                                {"roster.go:369"},
+	{"core.identity", "closed governance keys and allow-listed, non-identifying directory attributes: modules/governance/roster.go:45, modules/governance/roster.go:277"}:                    {"modules/governance/roster.go:277"},
+	{"core.set_seen_jti", "a SET publisher id, compared to refuse a replay and resolved to a publisher: core/auth/set_publisher.go:237, core/auth/caep_events.go:182"}:                       {"core/auth/caep_events.go:182"},
 }
 
 func TestHistoricalBusinessNoneCitationsAreExact(t *testing.T) {
@@ -170,6 +196,11 @@ func TestHistoricalBusinessNoneCitationsAreExact(t *testing.T) {
 		{"redteam.result", "a closed severity set: helpers.go:173-183", "helpers.go:173-183"},
 		{"finops.cost_center", "operator display text or tags of a cost center, rendered only: costcenter.go:42-56", "costcenter.go:42-56"},
 		{"governance.breakglass", "an action pattern matched against the consumed action only: breakglass.go:652", "breakglass.go:652"},
+		{"governance.collection", "a directory source name, a lookup key and a rendered label: roster.go:339, roster.go:512", "roster.go:339"},
+		{"governance.collection", "a directory group ref, a lookup key and a rendered label: roster.go:339, roster.go:512", "roster.go:339"},
+		{"governance.collection", "directory group metadata whose email, UPN and credential keys are dropped before storage (roster.go:51, roster.go:399); no reader decodes it: roster.go:512", "roster.go:399"},
+		{"governance.collection_member", "a directory source name, part of the edge's lookup key: roster.go:369", "roster.go:369"},
+		{"core.identity", "closed governance keys and allow-listed, non-identifying directory attributes: modules/governance/roster.go:45, modules/governance/roster.go:277", "modules/governance/roster.go:277"},
 	} {
 		t.Run(string(tc.kind), func(t *testing.T) {
 			if !historicalBusinessNoneCitation(true, tc.kind, tc.reason, tc.cited) {
@@ -272,6 +303,53 @@ func TestEditionNoneCitationRelocationsRespectOwnership(t *testing.T) {
 				t.Error("admitted an out-of-range relocated reader")
 			}
 		})
+	}
+}
+
+// The directory inventory readers live in identity_inventory.go; roster.go keeps
+// only the Business seam, so a bare roster.go citation relocates for governance
+// kinds alone and only while identity_inventory.go still has the cited line.
+func TestRosterInventoryCitationsRelocateToIdentityInventory(t *testing.T) {
+	const inventory = "modules/governance/identity_inventory.go"
+	for _, tc := range []struct {
+		kind           model.Kind
+		cited, current int
+	}{
+		{"governance.collection", 512, 87},
+		{"governance.collection", 522, 97},
+		{"governance.collection_member", 590, 165},
+		{"governance.collection_member", 623, 198},
+	} {
+		t.Run(fmt.Sprintf("%s:%d", tc.kind, tc.cited), func(t *testing.T) {
+			counts := map[string][]int{"modules/governance/roster.go": {95}}
+			if localNoneCitationResolves(counts, tc.kind, "roster.go", tc.cited, tc.cited) {
+				t.Error("the short roster.go resolved a reader it does not have")
+			}
+			counts[inventory] = []int{tc.current - 1}
+			if localNoneCitationResolves(counts, tc.kind, "roster.go", tc.cited, tc.cited) {
+				t.Error("admitted an out-of-range relocated reader")
+			}
+			counts[inventory] = []int{tc.current}
+			if !localNoneCitationResolves(counts, tc.kind, "roster.go", tc.cited, tc.cited) {
+				t.Error("lost the relocated inventory reader")
+			}
+			if localNoneCitationResolves(counts, "finops.cost_sample", "roster.go", tc.cited, tc.cited) {
+				t.Error("a foreign module borrowed the governance relocation")
+			}
+		})
+	}
+}
+
+// The four inventory readers must resolve through the relocation, which checks them in
+// identity_inventory.go. Recording any of them as Business custody would hide a broken
+// relocation, so no historical entry may admit them.
+func TestHistoricalCustodyDoesNotCoverRelocatedRosterReaders(t *testing.T) {
+	for declaration := range historicalBusinessNoneCitations {
+		for _, cited := range []string{"roster.go:512", "roster.go:522", "roster.go:590", "roster.go:623"} {
+			if historicalBusinessNoneCitation(true, declaration.kind, declaration.reason, cited) {
+				t.Errorf("%s admits %s as historical custody", declaration.kind, cited)
+			}
+		}
 	}
 }
 

@@ -140,6 +140,9 @@ shift 2
 
 if [ -f "$ROOT/$SCRIPT" ]; then
 	cd "$ROOT"
+	case "$SCRIPT" in
+	*.py) exec python3 -B "$SCRIPT" "$@" ;;
+	esac
 	exec bash "$SCRIPT" "$@"
 fi
 

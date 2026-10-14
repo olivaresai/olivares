@@ -8,10 +8,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -149,5 +152,201 @@ func TestConversationHistoryDoesNotReadSecretsOrUnprovenHomes(t *testing.T) {
 	}
 	if len(runner.procs) != 0 {
 		t.Fatal("reader spawned before secret/home proof")
+	}
+}
+
+// This uses the real scoped profile/pin store and the native protocol reader;
+// the peer blocks Stop so removal must refuse for the entire reader lifetime.
+type pinnedHistoryRunner struct {
+	proc    Process
+	program string
+	err     error
+}
+
+func (r *pinnedHistoryRunner) Launch(_ context.Context, spec LaunchSpec) (Process, error) {
+	r.program = spec.Program
+	return r.proc, r.err
+}
+
+type stoppingConversationPeer struct {
+	*conversationPeer
+	entered, release chan struct{}
+}
+
+func (p *stoppingConversationPeer) Stop(ctx context.Context) error {
+	close(p.entered)
+	select {
+	case <-p.release:
+		return p.fakeProc.Stop(ctx)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestConversationHistoryUsesPinAndHoldsRemovalUntilCollected(t *testing.T) {
+	peer := &stoppingConversationPeer{conversationPeer: &conversationPeer{fakeProc: &fakeProc{out: make(chan OutputFrame, 4), stopped: make(chan struct{})}, t: t, thread: map[string]any{"id": "root", "turns": []any{}}}, entered: make(chan struct{}), release: make(chan struct{})}
+	runner := &pinnedHistoryRunner{proc: peer}
+	m, st, _ := openProfiledRuntime(t, profileBackends(t)[0], WithRunner(runner), WithProviderDriver(NewCodexDriver()), WithProgramResolver(func(string) string { return "/latest/codex" }, func(_ context.Context, driver, version string) (string, error) {
+		return "/pinned/" + driver + "/" + version, nil
+	}))
+	defer st.Close()
+	tenant := ensureTenant(t, st, "pinned-history")
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	ws, err := m.createWorkspace(t.Context(), tenant, CreateWorkspaceParams{Name: "History", RootPath: t.TempDir(), Actor: "admin", ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetToolVersionPin(t.Context(), tenant, ToolVersionPin{Driver: "codex", WorkspaceRef: ws.WorkspaceRef, Version: "0.1"}, "admin", model.ActorUser); err != nil {
+		t.Fatal(err)
+	}
+	rec := model.Record{colRunProfileID: profile.Ref, colRunProfileDriver: profile.Driver, colRunProfileEnvRef: profile.EnvironmentRef, colRunProfileConfigHome: profile.ConfigHome, colRunProfileUserHome: profile.UserHome, colClaudeSessionID: "root", colWorkspaceRef: ws.WorkspaceRef}
+	done := make(chan error, 1)
+	go func() { _, err := m.conversationHistory(t.Context(), tenant, rec); done <- err }()
+	select {
+	case <-peer.entered:
+	case err := <-done:
+		t.Fatalf("reader returned before stop: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("reader did not reach stop")
+	}
+	if runner.program != "/pinned/codex/0.1" {
+		t.Errorf("history program=%s", runner.program)
+	}
+	if unlock, err := m.LockUnusedTool("/pinned/codex/0.1"); !errors.Is(err, ErrToolInUse) {
+		if unlock != nil {
+			unlock()
+		}
+		t.Errorf("removal admitted before reader collected: %v", err)
+	}
+	close(peer.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := m.LockUnusedTool("/pinned/codex/0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+}
+
+type historyCustodyPeer struct {
+	Process
+	stopErr, waitErr                  error
+	stopped, waiting, release, waited chan struct{}
+}
+
+func (p *historyCustodyPeer) Stop(context.Context) error {
+	close(p.stopped)
+	return p.stopErr
+}
+
+func (p *historyCustodyPeer) Wait() (int, error) {
+	close(p.waiting)
+	<-p.release
+	close(p.waited)
+	return 0, p.waitErr
+}
+
+func TestConversationHistoryPartialLaunchKeepsUnconfirmedCustody(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		stopErr, waitErr error
+	}{
+		{"collected with abandoned output", ErrOutputAbandoned, nil},
+		{"later collected", ErrChildNotReaped, nil},
+		{"wait remains unconfirmed", ErrChildNotReaped, ErrChildNotReaped},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			peer := &historyCustodyPeer{stopErr: tc.stopErr, waitErr: tc.waitErr, stopped: make(chan struct{}), waiting: make(chan struct{}), release: make(chan struct{}), waited: make(chan struct{})}
+			defer func() {
+				select {
+				case <-peer.release:
+				default:
+					close(peer.release)
+				}
+			}()
+			runner := &pinnedHistoryRunner{proc: peer, err: errors.New("partial launch")}
+			m, st, _ := openProfiledRuntime(t, profileBackends(t)[0], WithRunner(runner), WithProviderDriver(NewCodexDriver()))
+			defer st.Close()
+			logs := &runtimeObserverLogs{}
+			m.log = slog.New(logs)
+			tenant := ensureTenant(t, st, "history-custody")
+			profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+			rec := model.Record{colRunProfileID: profile.Ref, colRunProfileDriver: profile.Driver, colRunProfileEnvRef: profile.EnvironmentRef, colRunProfileConfigHome: profile.ConfigHome, colRunProfileUserHome: profile.UserHome, colClaudeSessionID: "root"}
+			if line, err := m.conversationHistory(t.Context(), tenant, rec); err == nil || line != "" {
+				t.Fatalf("partial launch history=%q err=%v", line, err)
+			}
+			select {
+			case <-peer.stopped:
+			default:
+				t.Fatal("partial launch process escaped Stop")
+			}
+			if childWasReaped(tc.stopErr) {
+				unlock, err := m.LockUnusedTool("codex")
+				if err != nil {
+					t.Fatal(err)
+				}
+				unlock()
+				return
+			}
+			select {
+			case <-peer.waiting:
+			case <-time.After(time.Second):
+				t.Fatal("uncollected reader escaped Wait")
+			}
+			unlock, err := m.LockUnusedTool("codex")
+			if unlock != nil {
+				unlock()
+			}
+			if !errors.Is(err, ErrToolInUse) {
+				t.Fatalf("unconfirmed custody admitted removal: %v", err)
+			}
+			close(peer.release)
+			<-peer.waited
+			if !childWasReaped(tc.waitErr) {
+				// Observe the collector's decision before asserting its retained
+				// hold; Wait returning alone races that decision.
+				for deadline := time.Now().Add(time.Second); ; {
+					logs.mu.Lock()
+					observed := false
+					for _, record := range logs.records {
+						observed = observed || record.Message == "stored conversation reader collection remains unconfirmed"
+					}
+					logs.mu.Unlock()
+					if observed {
+						break
+					}
+					if time.Now().After(deadline) {
+						t.Fatal("unconfirmed reader collection was not retained and reported")
+					}
+					time.Sleep(time.Millisecond)
+				}
+				unlock, err := m.LockUnusedTool("codex")
+				if unlock != nil {
+					unlock()
+				}
+				if !errors.Is(err, ErrToolInUse) {
+					t.Fatalf("unconfirmed Wait admitted removal: %v", err)
+				}
+				// A refused removal must not queue a writer and freeze new launches.
+				if !m.rt.toolMu.TryRLock() {
+					t.Fatal("new launch admission blocked")
+				}
+				m.rt.toolMu.RUnlock()
+				return
+			}
+			deadline := time.Now().Add(time.Second)
+			for {
+				unlock, err := m.LockUnusedTool("codex")
+				if err == nil {
+					unlock()
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("confirmed Wait did not release admission")
+				}
+				time.Sleep(time.Millisecond)
+			}
+		})
 	}
 }

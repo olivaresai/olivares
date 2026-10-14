@@ -153,38 +153,6 @@ func project(resourceName string) (string, bool) {
 	return rest, true
 }
 
-// store identifies a Cloud KMS or Secret Manager custodian in one project for the
-// inventory.
-type store struct {
-	service string // "cloudkms" | "secretmanager"
-	project string
-}
-
-func (s store) ref() string { return "gcp." + s.service + ":" + s.project }
-
-func (s store) displayName() string {
-	if s.service == "cloudkms" {
-		return "Google Cloud KMS (" + s.project + ")"
-	}
-	return "Google Secret Manager (" + s.project + ")"
-}
-
-// storeFor derives the custodian for a recognized entry, or ok=false.
-func storeFor(e entry) (store, bool) {
-	proj, ok := project(e.ProtoPayload.ResourceName)
-	if !ok {
-		return store{}, false
-	}
-	switch e.ProtoPayload.ServiceName {
-	case kmsServiceName:
-		return store{"cloudkms", proj}, true
-	case secretServiceName:
-		return store{"secretmanager", proj}, true
-	default:
-		return store{}, false
-	}
-}
-
 // entriesFromBytes parses Cloud Logging entries from a file's bytes, accepting an
 // {"entries":[…]} wrapper, a JSON array, NDJSON, or a single entry object.
 func entriesFromBytes(data []byte) []entry {

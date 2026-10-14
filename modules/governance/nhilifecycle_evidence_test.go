@@ -6,14 +6,9 @@ package governance
 
 import (
 	"context"
-	"errors"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -162,20 +157,6 @@ func (f *nhiEvidenceFixture) seedLifecycle(t *testing.T, rec model.Record) {
 	}
 }
 
-func (f *nhiEvidenceFixture) sweep(t *testing.T) {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/v1/m/governance/nhi/sweep", nil)
-	w := httptest.NewRecorder()
-	f.m.handleNHISweep(w, req, api.ModuleContext{
-		Principal: auth.ScopedPrincipal("evidence-admin", "Evidence Admin", f.tenant, auth.RoleAdmin),
-		Tenant:    f.tenant,
-		Data:      api.NewScopedData(f.injected, f.tenant),
-	})
-	if w.Code != http.StatusOK {
-		t.Fatalf("sweep returned %d: %s", w.Code, w.Body.String())
-	}
-}
-
 func evidenceHostHasFinding(host *capturingHost, kind string) bool {
 	host.mu.Lock()
 	defer host.mu.Unlock()
@@ -251,77 +232,6 @@ func TestNHILifecycleSignalConflictDoesNotEmitFalseEvidence(t *testing.T) {
 		}
 		if evidenceTrailHasEvent(t, f.base, f.tenant, ref, "orphaned") {
 			t.Fatal("conflicted orphan transition recorded lifecycle evidence")
-		}
-	})
-}
-
-func TestNHILifecycleSponsorLookupErrorPreservesOrphanGate(t *testing.T) {
-	const (
-		ref     = "agent:lookup-failure"
-		sponsor = "human:sponsor"
-	)
-	f := newNHIEvidenceFixture(t, "", sponsor, errors.New("transient roster outage"))
-	f.seedIdentity(t, sponsor, string(identitysource.PrincipalHuman), false)
-	rec := newLifecycleRecord(ref, "spiffe", NHIKindAgent)
-	rec[colNHIOwnerRef] = sponsor
-	rec[colNHISponsorRef] = sponsor
-	rec[colNHIOrphaned] = true
-	f.seedLifecycle(t, rec)
-
-	f.sweep(t)
-
-	if !readOrphan(t, f.base, f.tenant, ref) {
-		t.Fatal("transient sponsor lookup error cleared the orphan gate")
-	}
-	if err := f.m.CheckAgentForExchange(context.Background(), f.tenant, ref, sponsor); err == nil {
-		t.Fatal("token exchange was allowed while the preserved orphan gate was set")
-	}
-}
-
-func TestNHILifecycleSweepOrphanEvidenceRequiresPersistedTransition(t *testing.T) {
-	const (
-		ref     = "agent:new-orphan"
-		sponsor = "human:disabled"
-	)
-	seed := func(t *testing.T, f *nhiEvidenceFixture) {
-		f.seedIdentity(t, sponsor, string(identitysource.PrincipalHuman), true)
-		rec := newLifecycleRecord(ref, "spiffe", NHIKindAgent)
-		rec[colNHIOwnerRef] = sponsor
-		rec[colNHISponsorRef] = sponsor
-		f.seedLifecycle(t, rec)
-	}
-
-	t.Run("successful update records and emits", func(t *testing.T) {
-		f := newNHIEvidenceFixture(t, "", "", nil)
-		seed(t, f)
-
-		f.sweep(t)
-
-		if !readOrphan(t, f.base, f.tenant, ref) {
-			t.Fatal("successful sweep did not persist orphan state")
-		}
-		if !evidenceHostHasFinding(f.host, "nhi_orphaned") {
-			t.Fatal("successful orphan transition did not emit nhi_orphaned")
-		}
-		if !evidenceTrailHasEvent(t, f.base, f.tenant, ref, "orphaned") {
-			t.Fatal("successful orphan transition is missing from the lifecycle trail")
-		}
-	})
-
-	t.Run("conflicted update records and emits nothing", func(t *testing.T) {
-		f := newNHIEvidenceFixture(t, ref, "", nil)
-		seed(t, f)
-
-		f.sweep(t)
-
-		if readOrphan(t, f.base, f.tenant, ref) {
-			t.Fatal("conflicted sweep persisted orphan state")
-		}
-		if evidenceHostHasFinding(f.host, "nhi_orphaned") {
-			t.Fatal("conflicted sweep emitted nhi_orphaned")
-		}
-		if evidenceTrailHasEvent(t, f.base, f.tenant, ref, "orphaned") {
-			t.Fatal("conflicted sweep recorded orphaned lifecycle evidence")
 		}
 	})
 }

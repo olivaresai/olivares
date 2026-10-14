@@ -260,8 +260,8 @@ export interface Authority {
    * Whether `signals` was read from the FUSED corroborating set or from the scalar alone.
    *
    * `signal_sources` is `omitempty` on the wire (modules/access-map/dto.go:30), and the UI
-   * contract is explicit about what the two fields are: `signal_source` is "señal escalar
-   * (última)" and `signal_sources` "TODAS las señales que corroboran (fusión)"
+   * contract is explicit about what the two fields are: `signal_source` is the scalar
+   * signal (the last one) and `signal_sources` is ALL the corroborating signals (fused).
    * So when the plural is absent this module is
    * looking at the LAST writer, not the set — and absent is not "nothing corroborates it",
    * it is "you were not told". Anything said about the ABSENCE of a permit signal, or about

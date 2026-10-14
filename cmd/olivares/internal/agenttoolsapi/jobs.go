@@ -151,7 +151,13 @@ func (m *Module) run(j *savedJob, p *Plan, mc api.ModuleContext) {
 	if p.v1 != nil {
 		receipt, _, err = m.engine.Install(ctx, toolinstall.Request{Driver: p.Driver, Version: p.requested, Platform: toolinstall.HostPlatform(), DestRoot: m.root}, p.v1, out)
 	} else {
-		receipt, _, err = m.engine.InstallV2(ctx, toolinstall.RequestV2{Driver: p.Driver, Version: p.requested, Platform: p.v2.Selection.Platform, DestRoot: m.root}, p.v2, out)
+		req := toolinstall.RequestV2{Driver: p.Driver, Version: p.requested, Platform: p.v2.Selection.Platform, DestRoot: m.root}
+		if d := p.v2.Selection.Tool; d != nil {
+			req.Declaration, err = m.declaration(ctx, mc, p.catalogTenant, d.SourceURL, d.Version)
+		}
+		if err == nil {
+			receipt, _, err = m.engine.InstallV2(ctx, req, p.v2, out)
+		}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()

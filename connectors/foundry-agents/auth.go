@@ -68,11 +68,3 @@ func (s *Source) armClient(ctx context.Context) (*httpx.Client, error) {
 	}
 	return httpx.New(s.managementEndpoint, s.transport(), httpx.Bearer(tok), nil), nil
 }
-
-func (s *Source) dataPlaneToken(ctx context.Context) (string, error) {
-	return s.token(ctx, dataPlaneScope)
-}
-
-func (s *Source) dataPlaneClient(base, tok string) *httpx.Client {
-	return httpx.New(base, s.transport(), httpx.Bearer(tok), nil)
-}

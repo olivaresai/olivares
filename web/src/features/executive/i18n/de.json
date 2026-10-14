@@ -94,6 +94,8 @@
     "driftPending": "Wartet auf Identitätsverknüpfung",
     "driftUnused": "Ungenutzte Gewährungen",
     "coverageNote": "Einige Zugriffe werden mit teilweiser Abdeckung beobachtet (annähernde oder undurchsichtige Erfassung); die Abweichungswerte sind eine Untergrenze.",
+    "driftTruncated": "Die Abfrage der Zugriffsabweichung ist unvollständig; die Werte sind eine Untergrenze.",
+    "driftUnavailable": "Die Zugriffsabweichung konnte nicht gelesen werden.",
     "noFindings": "Keine offenen Befunde.",
     "noRuns": "Noch keine Red-Team-Läufe.",
     "sharedDescription": "Offene Sicherheitsbefunde und Abweichungen bei Zugriffsrechten."

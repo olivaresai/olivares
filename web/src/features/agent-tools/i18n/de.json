@@ -39,7 +39,8 @@
     "sigstore-cosign": "Paketprüfsumme und Herausgebersignaturen verifiziert.",
     "none-origin-only": "Offizieller HTTPS-Ursprung; keine Herausgebersignatur.",
     "github-release-sha256": "Festgelegte SHA-256-Prüfsumme aus offiziellen Metadaten; keine Herausgebersignatur.",
-    "unknown": "Nicht verifiziert"
+    "unknown": "Nicht verifiziert",
+    "catalog-sha256": "Im Katalog festgelegter SHA-256-Prüfwert"
   },
   "probe": "Version prüfen",
   "probeName": "Version unter {{path}} prüfen",
@@ -167,5 +168,56 @@
     "notNow": "Nicht jetzt",
     "close": "Schließen",
     "keyNeedsAccess": "Das Wählen eines Schlüssels erfordert die Berechtigung, Profile zu ändern."
+  },
+  "from": {
+    "title": "Von einer URL installieren",
+    "source": "Git- oder Release-URL",
+    "version": "Festgelegte Version",
+    "review": "Installation prüfen",
+    "hint": "Lassen Sie das Werkzeug zuerst im Katalog zu. Die festgelegte Version und der SHA-256-Prüfwert werden vor der Installation geprüft.",
+    "tenant": "Wähle eine Organisation, um ihre zugelassenen Tools zu verwenden."
+  },
+  "versions": {
+    "title": "Sitzungsversionen",
+    "hint": "Wählen Sie die Version für neue und fortgesetzte Sitzungen in diesem Arbeitsbereich. Die Auswahl des Agenten hat Vorrang.",
+    "workspace": "Arbeitsbereich",
+    "chooseWorkspace": "Arbeitsbereich wählen",
+    "version": "Sitzungsversion",
+    "default": "Neueste installierte Version",
+    "unavailable": "{{version}} (nicht installiert)",
+    "save": "Version speichern",
+    "saved": "Sitzungsversion gespeichert.",
+    "chooseOrganization": "Wählen Sie eine Organisation, um eine Version festzulegen.",
+    "failed": "Die Versionen konnten nicht gelesen werden.",
+    "removeName": "{{name}} {{version}} entfernen",
+    "removeHint": "Beenden Sie zuerst laufende Sitzungen. Ein Arbeitsbereich mit dieser Version kann erst nach erneuter Installation oder Aufheben der Auswahl Sitzungen starten.",
+    "removed": "Version entfernt.",
+    "confirmRemoval": "Entfernung bestätigen",
+    "confirmPin": "Version bestätigen",
+    "pinHint": "Neue und fortgesetzte Sitzungen verwenden {{name}}: {{version}}.",
+    "loading": "Arbeitsbereiche und gespeicherte Versionen werden geladen…"
+  },
+  "installed": {
+    "title": "Hier installiert",
+    "workspace": "Was eine neue Sitzung in {{name}} erhält.",
+    "reading": "Wird gelesen…",
+    "readFailed": "Konnte nicht gelesen werden: {{message}}",
+    "tools": "KI-Tools",
+    "packages": "Programme und Registries",
+    "skills": "Skills",
+    "mcp": "MCP-Server",
+    "none": "Keine",
+    "olivaresTools": "Olivares-Sitzungstools",
+    "mcpDrivers": "Für {{tools}}-Sitzungen.",
+    "noWorkspace": "Kein Standard-Arbeitsbereich zum Lesen.",
+    "skillsOff": "Das Skills-Modul ist aus: Sitzungen erhalten keine.",
+    "notReadable": "Ihre Rolle kann keine Skills lesen.",
+    "skillsHint": "Eine Sitzung, die an einen Ordner, eine Vorlage oder einen Agenten gebunden ist, erhält auch die dort angehefteten Skills.",
+    "workspacesTruncated": "Die Liste der Arbeitsbereiche endete vor dem Standard-Arbeitsbereich: Wählen Sie einen im Arbeitsbereich-Umschalter.",
+    "toolsHint": "Eine in den Installationsdetails eines Tools gespeicherte Sitzungsversion ersetzt diese für diesen registrierten Arbeitsbereich oder Agenten.",
+    "profilesNotReadable": "Ihre Rolle kann keine Anbieterprofile lesen.",
+    "packagesHint": "Vom Anbieterprofil deklariert, das die neue Sitzung jedes Tools verwendet ({{profiles}}). Ein Tool ohne Profil erhält ein neues, das keine deklariert.",
+    "packagesNoProfile": "Sie stammen aus dem Anbieterprofil, unter dem die Sitzungen jedes Tools laufen. Es gibt noch keines, und ein neues deklariert keine.",
+    "packagesRefused": "Nicht aufgeführt, weil noch keine Sitzung starten kann: {{tools}}."
   }
 }

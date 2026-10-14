@@ -31,9 +31,9 @@ Claude Code  ──PreToolUse hook──▶  olivares claude-hook  ──HTTP PO
   governed **policy**, layers a live **PDP** (Cedar/ABAC) hard-deny overlay, routes
   `ask` to **human approval** (HITL), and audits every decision.
 
-## 1. Install and create a governed tenant
+## 1. Install and use your organization
 
-A fresh install — one-time setup, login, create the tenant the policy will govern
+A fresh install — one-time setup creates your organization; log in and read its tenant ID
 (the same on-ramp as the [quickstart](../../docs-site/src/content/docs/start/quickstart.md)):
 
 ```sh
@@ -42,8 +42,7 @@ curl -sf -X POST localhost:8443/v1/setup \
   -d '{"token":"olst_…","email":"admin@local","password":"correct-horse-battery-staple"}'
 TOKEN=$(curl -sf -X POST localhost:8443/v1/auth/login \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' | jq -r .token)
-TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localhost:8443/v1/system/orgs -H @- \
-  -d '{"name":"Production","slug":"prod"}' | jq -r .tenant_id)
+TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf localhost:8443/v1/auth/whoami -H @- | jq -r '.grants[0].tenant')
 ```
 
 ## 2. Write the governed policy and mount the PEP

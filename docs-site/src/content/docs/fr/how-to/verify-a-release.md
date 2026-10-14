@@ -11,7 +11,7 @@ description: >-
 
 > Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
 
-La prochaine version est <!-- release -->`0.1`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+La prochaine version est <!-- release -->`0.2`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
 
 Un control plane est un produit de sécurité, donc la première chose à faire avec une release est
 de **prouver que c'est bien celle que le projet a publiée**. Les releases d'Olivares AI livrent
@@ -56,7 +56,7 @@ signalent ces deux étapes comme ignorées) et la provenance SLSA.
 /path/to/olivares/scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-/path/to/olivares/scripts/verify-release.sh --source-tag 0.1
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.2
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

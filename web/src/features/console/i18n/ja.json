@@ -83,6 +83,9 @@
     "activeUsers": "アクティブなユーザーアカウント",
     "noUserLimit": "セルフホスト: 上限なし",
     "expires": "有効期限",
+    "paidThrough": "お支払い済み期間",
+    "leaseUntil": "暫定期間の終了日",
+    "leaseNote": "暫定期間（返金対応期間）です。支払い済みの日付まで有効にするには、この日付より前に更新してください。",
     "issued": "発行日",
     "sourceLabel": "ソース",
     "sources": {

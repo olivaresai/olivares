@@ -25,6 +25,7 @@ vi.mock('./api', async (orig) => {
       listWorkspaces: vi.fn(),
       listProfiles: vi.fn(),
       profileLaunchReadiness: vi.fn(),
+      profileModels: vi.fn(),
     },
   }
 })
@@ -47,7 +48,7 @@ import { templatesApi } from '@/features/workspace-templates/api'
 import { agentOpsApi } from './api'
 import { fixtureReadiness } from './launch-readiness.fixture'
 import { RunCreateDialog } from './run-create-dialog'
-import type { ProviderProfileDTO } from './types'
+import type { ProfileModelCatalogDTO, ProviderProfileDTO } from './types'
 
 const homeA: ProviderProfileDTO = {
   profile_ref: 'ppf_a',
@@ -75,6 +76,29 @@ function wrap() {
       <RunCreateDialog open onOpenChange={vi.fn()} />
     </QueryClientProvider>,
   )
+}
+
+const claudeCatalog: ProfileModelCatalogDTO = {
+  profile_ref: 'ppf_a',
+  driver: 'claude',
+  state: 'fresh',
+  default_model: '',
+  free_text: true,
+  checked_at: '2026-10-12T10:00:00Z',
+  refresh_interval_seconds: 120,
+  models: [
+    {
+      id: 'opus-5-5',
+      display_name: 'Claude Opus 5.5',
+      is_default: true,
+      effort_levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+    },
+    {
+      id: 'haiku-5-5',
+      display_name: 'Claude Haiku 5.5',
+      effort_levels: ['low', 'high'],
+    },
+  ],
 }
 
 const postedBody = () =>
@@ -111,6 +135,7 @@ beforeEach(() => {
     has_more: false,
   })
   vi.mocked(agentOpsApi.createRun).mockResolvedValue({} as never)
+  vi.mocked(agentOpsApi.profileModels).mockResolvedValue(claudeCatalog)
   vi.mocked(agentOpsApi.profileLaunchReadiness).mockImplementation(
     async (ref: string) =>
       fixtureReadiness({
@@ -260,6 +285,33 @@ describe('RunCreateDialog — provider profiles', () => {
     expect(screen.queryByText(/New Claude Code session/)).toBeNull()
   })
 
+  it('offers a profile that is an account by its account name and posts its reference', async () => {
+    vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+      items: [
+        {
+          profile_ref: 'ppf_acc',
+          driver: 'claude',
+          environment_ref: 'xenv_1',
+          account_name: 'claude-b',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(
+      await screen.findByRole('option', { name: /^claude-b · claude/ }),
+    )
+    await waitReadyToRequest()
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
+    expect(postedBody().provider_profile_ref).toBe('ppf_acc')
+  })
+
   it('posts only the profile REFERENCE when one is chosen — never a home', async () => {
     const user = userEvent.setup()
     wrap()
@@ -396,18 +448,178 @@ describe('RunCreateDialog — provider profiles', () => {
   })
 })
 
-it('preserves an entered model in the existing native launch payload', async () => {
-  const user = userEvent.setup()
-  wrap()
-  await user.click(await screen.findByLabelText('Provider profile'))
-  await user.click(await screen.findByRole('option', { name: /Home A/ }))
-  await waitReadyToRequest()
-  await user.type(
-    screen.getByRole('combobox', { name: 'Model' }),
-    'custom-model',
-  )
-  await user.click(screen.getByRole('button', { name: 'Start' }))
-  await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
-  expect(postedBody().model).toBe('custom-model')
-  expect(postedBody().provider_profile_ref).toBe('ppf_a')
+describe('RunCreateDialog — model and effort, in front of Advanced options', () => {
+  it('chooses a model and its effort without opening any advanced section, and posts both', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    const advanced = screen.getByRole('button', { name: 'Advanced options' })
+    expect(advanced).toHaveAttribute('aria-expanded', 'false')
+    await user.click(screen.getByRole('button', { name: 'Model' }))
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    expect(advanced).toHaveAttribute('aria-expanded', 'false')
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody()).toMatchObject({
+      model: 'haiku-5-5',
+      effort: 'high',
+      provider_profile_ref: 'ppf_a',
+    })
+    expect(agentOpsApi.profileModels).toHaveBeenCalledWith(
+      'ppf_a',
+      expect.anything(),
+    )
+  })
+
+  it('posts no effort when the model default is kept', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody().effort).toBe('')
+    expect(postedBody()).not.toHaveProperty('model')
+  })
+
+  it('keeps a model typed when the tool lists none', async () => {
+    vi.mocked(agentOpsApi.profileModels).mockResolvedValue({
+      ...claudeCatalog,
+      state: 'unsupported',
+      models: [],
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await user.click(screen.getByRole('button', { name: 'Model' }))
+    await user.type(
+      await screen.findByPlaceholderText('Search models'),
+      'custom-model',
+    )
+    await user.click(await screen.findByText('Use “custom-model”'))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody().model).toBe('custom-model')
+    expect(postedBody().provider_profile_ref).toBe('ppf_a')
+  })
+
+  it("forgets the model and effort when another profile's tool is chosen", async () => {
+    vi.mocked(agentOpsApi.profileModels).mockImplementation(async (ref) =>
+      ref === 'ppf_codex'
+        ? {
+            ...claudeCatalog,
+            profile_ref: 'ppf_codex',
+            driver: 'codex',
+            state: 'unsupported',
+            models: [],
+          }
+        : claudeCatalog,
+    )
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await user.click(screen.getByRole('button', { name: 'Model' }))
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
+        'Claude Haiku 5.5',
+      ),
+    )
+    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Codex home/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
+        'Codex default',
+      ),
+    )
+    expect(screen.getByLabelText('Effort')).toBeDisabled()
+    // The choice belongs to Home A: it is there again with Home A, and never under Codex.
+    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
+        'Claude Haiku 5.5',
+      ),
+    )
+  })
+
+  it('ignores a handed-over model for a profile that is not offered', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <RunCreateDialog
+          open
+          onOpenChange={vi.fn()}
+          initialProfileRef="ppf_retired"
+          initialModel="haiku-5-5"
+          initialEffort="low"
+        />
+      </QueryClientProvider>,
+    )
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody()).not.toHaveProperty('model')
+    expect(postedBody().effort).toBe('')
+    expect(postedBody().provider_profile_ref).toBe('ppf_a')
+  })
+
+  it('opens on the profile, model and effort a session handed over', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <RunCreateDialog
+          open
+          onOpenChange={vi.fn()}
+          initialProfileRef="ppf_a"
+          initialModel="haiku-5-5"
+          initialEffort="low"
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
+        'Claude Haiku 5.5',
+      ),
+    )
+    await waitFor(() =>
+      expect(screen.getByLabelText('Effort')).toHaveTextContent('low'),
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody()).toMatchObject({
+      model: 'haiku-5-5',
+      effort: 'low',
+      provider_profile_ref: 'ppf_a',
+    })
+  })
 })

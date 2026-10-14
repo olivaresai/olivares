@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -24,9 +25,11 @@ func wiredCatalogKinds(t *testing.T) map[string]bool {
 		kinds[k] = true
 	}
 	for k := range inProcSourceAliases {
-		kinds[k] = true
+		if _, ok := buildInProcSource(k); ok {
+			kinds[k] = true
+		}
 	}
-	for _, k := range switchCaseKinds(t, "sources.go", "buildRosterProvider") {
+	for _, k := range editionRosterCatalogKinds(t) {
 		kinds[k] = true
 	}
 	for _, k := range switchCaseKinds(t, "sources.go", "buildContentSource") {
@@ -97,10 +100,13 @@ func TestConnectorDocsListNoUnwiredKind(t *testing.T) {
 		"tools/call": true, "resources/read": true, "prompts/get": true,
 	}
 	wired := wiredCatalogKinds(t)
-	rowRe := regexp.MustCompile("(?m)^\\| `([a-z0-9_/-]+)`")
+	rowRe := regexp.MustCompile("(?m)^\\| `([a-z0-9_/-]+)`[^\\n]*")
 	for _, m := range rowRe.FindAllStringSubmatch(string(doc), -1) {
 		kind := m[1]
 		if notKinds[kind] || wired[kind] {
+			continue
+		}
+		if len(editionRosterCatalogKinds(t)) == 0 && strings.Contains(m[0], "Business: Identity & Scale") {
 			continue
 		}
 		t.Errorf("docs table row names %q but this build wires no such kind — remove the row or wire the connector (%s)", kind, connectorsDocPath)

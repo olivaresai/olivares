@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strconv"
@@ -84,6 +85,11 @@ func (m *Module) bridge(lr *liveRun) {
 		// are withheld before the ring (the attach stream), the recorder and the
 		// frame parser see the line (session_secret_env.go).
 		frame.Data = lr.redact.apply(frame.Data)
+		// The tool's answer to the engine's own request for its commands is handed to
+		// the waiter and goes no further (tool_commands.go).
+		if frame.Stream == streamStdout && lr.takeCommandsResponse(frame.Data) {
+			continue
+		}
 		seq := m.publishRuntimeOutput(lr, frame.Stream, frame.Data, at)
 		if seq == 0 {
 			if !sequenceExhausted {
@@ -142,6 +148,7 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		turn := lr.session.ActiveTurn()
 		lr.session.Deliver(OutputFrame{Stream: streamStdout, Data: data})
 		if turn != "" && lr.session.ActiveTurn() != turn {
+			lr.setDriverTurnEnded(true)
 			m.finishSessionCalls(lr, turn)
 		}
 	} else if frame, ok := parseStreamJSON(data); ok && frame.isResult() {
@@ -153,6 +160,15 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		if turn, first := lr.beginCredentialRefusal(); first {
 			// Off the bridge: the interrupt's answer arrives through this very loop.
 			go m.stopTurnOnRefusedCredential(lr, frame.ErrorStatus, turn)
+		}
+	} else if ok && frame.Type == "assistant" {
+		lr.noteClaudeOutput()
+	}
+	// Claude Code says when its commands, skills or agents changed: the catalog the
+	// engine holds is then out of date (tool_commands.go).
+	if lr.session == nil && bytes.Contains(data, []byte(`"commands_changed"`)) {
+		if frame, ok := parseStreamJSON(data); ok && frame.isCommandsChanged() {
+			lr.commands.dirty.Store(true)
 		}
 	}
 	aplicar := func() {

@@ -47,7 +47,7 @@ exporters compile against, so when a pin moves, the surface moves with it.
 
 ## Reproducing the read-model journey
 
-On a **fresh, disposable SQLite Compose installation**, run
+On a **fresh, disposable Enterprise SQLite Compose installation**, run
 `scripts/qualify-observability.py` with Python 3.11 or later. Supply the installed
 binary, HTTPS address, container name, full source commit and a new evidence directory:
 
@@ -55,6 +55,8 @@ binary, HTTPS address, container name, full source commit and a new evidence dir
 python3 scripts/qualify-observability.py /path/to/olivares \
   https://127.0.0.1:8443 olivares <source-sha> /path/to/new-evidence
 ```
+
+The probe uses Enterprise organization management to provision a second tenant for its isolation checks. The ingestion-health, trace read models and attestation surfaces remain available in Community.
 
 The probe creates fixture accounts and agents through the API, enables the
 existing observability and security modules, and physically restarts the

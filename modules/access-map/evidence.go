@@ -6,6 +6,7 @@ package accessmap
 
 import (
 	"context"
+	"errors"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -81,6 +82,8 @@ func (c EvidenceCase) Reconstructible() bool {
 // mistaken for an ingest path. Every lookup is tenant-pinned by that scope, so a
 // reference to another tenant's record resolves to nothing here exactly as it
 // does at write time.
+// Required artifact read failures abort the case; only ErrNotFound is reported
+// as an absence through Completeness.MissingRefs.
 func (m *Module) EvidenceCase(ctx context.Context, tenant model.TenantID, observationID model.ID) (EvidenceCase, error) {
 	if m.data == nil {
 		return EvidenceCase{}, errNoData
@@ -116,7 +119,10 @@ func (m *Module) EvidenceCase(ctx context.Context, tenant model.TenantID, observ
 			}
 			artifact, aerr := ev.PolicyArtifact(ctx, id)
 			if aerr != nil {
-				continue // likewise: absence is Completeness's to report, not this loop's
+				if errors.Is(aerr, store.ErrNotFound) {
+					continue // absence is Completeness's to report, not this loop's
+				}
+				return aerr
 			}
 			out.Artifacts = append(out.Artifacts, artifact)
 		}

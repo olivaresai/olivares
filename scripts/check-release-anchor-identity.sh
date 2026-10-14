@@ -33,6 +33,14 @@
 #              This is the form a release job can call.
 #   --live     fetch the two variables from the release repository with `gh` and compare those.
 #              This is the form that catches configuration drift, which is what actually happened.
+#   --worker [URL]
+#              read the licence public key id the production Worker publishes on `GET /`
+#              (`license_key_id`) and compare it with the reviewed LICENSE
+#              anchor. URL defaults to $OLIVARES_LICENSE_WORKER_URL, then
+#              https://licenses.olivares.ai. Read-only, needs no credential and no sale: it is
+#              the check that the deployed LICENSE_SIGNING_KEY is the key the releases trust,
+#              which until then only the first real purchase could show. Production profile
+#              only; the OTA anchor is not the Worker's and is not consulted.
 #   --selftest run the battery in scripts/test-release-anchor-identity.sh.
 #
 # Exit codes, and the distinction is the whole point:
@@ -85,7 +93,37 @@ for _t in base64 sha256sum tr; do
 done
 
 LIVE=0
-[ "${1:-}" = "--live" ] && LIVE=1
+WORKER=0
+case "${1:-}" in
+"") ;;
+--live) LIVE=1 ;;
+--worker)
+	WORKER=1
+	[ "$#" -le 2 ] || fail2 "--worker takes at most one URL."
+	# `${VAR-default}`, not `${VAR:-default}`, for the reason the profile above spells out: an
+	# EMPTY url (a CI expression that resolved to "") must refuse, not quietly check production.
+	WORKER_URL="${2-${OLIVARES_LICENSE_WORKER_URL-https://licenses.olivares.ai}}"
+	[ -n "$WORKER_URL" ] || fail2 "--worker was given an empty URL (argument or OLIVARES_LICENSE_WORKER_URL)."
+	# https, or http on loopback for a local Worker; no credentials, no whitespace, no option-like
+	# text. The check is read from the network: over plaintext anyone on the path could answer with
+	# the public key id, which is derivable from the anchor.
+	case "$WORKER_URL" in
+	*[!A-Za-z0-9._~:/?\&=%+-]*) fail2 "--worker URL has characters outside [A-Za-z0-9._~:/?&=%+-] (no credentials, no spaces)." ;;
+	esac
+	case "$WORKER_URL" in
+	https://* | http://127.0.0.1 | http://127.0.0.1[:/]* | http://localhost | http://localhost[:/]*) ;;
+	*) fail2 "--worker URL '$WORKER_URL' is not https:// (http:// only for 127.0.0.1 or localhost)." ;;
+	esac
+	# The Worker is the PRODUCTION signer. Under another profile the reviewed half is the O03
+	# record, which is not the sandbox Worker's key (see the refusal at the end of this file), so
+	# a comparison there would assert a false pair either way: refuse, never guess.
+	[ "$ANCHOR_PREFIX" = prod ] || fail2 "--worker compares the PRODUCTION Worker with the production anchor; profile '$PROFILE' has no reviewed Worker key."
+	for _t in curl python3; do
+		command -v "$_t" >/dev/null 2>&1 || fail2 "--worker needs '$_t' and it is not on this host."
+	done
+	;;
+*) fail2 "unknown argument '$1' (none, --live, --worker [URL], --selftest)." ;;
+esac
 
 # fingerprint of the RAW 32 bytes: the same form commercial/license-worker/src/license/sign.ts:39
 # documents for key_id, so a fingerprint printed here can be matched against an issued licence.
@@ -116,6 +154,8 @@ from_table() { # <license|ota>
 
 rc=0
 for name in LICENSE OTA; do
+	# The Worker holds the licence key only; the OTA anchor is off-box and not its to publish.
+	[ "$WORKER" -eq 1 ] && [ "$name" = OTA ] && continue
 	case "$name" in
 	LICENSE) file="$DIR/${ANCHOR_PREFIX}-license.pub"; dom=license ;;
 	OTA) file="$DIR/${ANCHOR_PREFIX}-ota.pub"; dom=OTA ;;
@@ -147,6 +187,56 @@ for name in LICENSE OTA; do
 		[ -n "$want" ] || { want="$tbl"; src="$TABLE"; }
 	fi
 	[ -n "$want" ] || fail2 "no reviewed ${name} anchor is readable — neither $file nor a row in $TABLE. Without the reviewed half there is nothing to compare against."
+
+	if [ "$WORKER" -eq 1 ]; then
+		# The Worker publishes an ID, sha256 over the RAW 32-byte public key, not the key. So the
+		# reviewed anchor is hashed here, after the same shape guard --live uses: the digest of an
+		# undecodable value is the digest of nothing (e3b0c442…), and "equal to nothing" must
+		# never be read as an answer.
+		[ "$(printf '%s' "$want" | base64 -d 2>/dev/null | wc -c)" -eq 32 ] \
+			|| fail2 "the reviewed LICENSE anchor is not base64 of 32 bytes, so no key id can be derived from it."
+		want_kid="sha256:$(printf '%s' "$want" | base64 -d 2>/dev/null | sha256sum | cut -d' ' -f1)"
+		url="${WORKER_URL%/}/"
+		# `curl -f` makes an HTTP error a failure, so an error body never passes for the document.
+		# `-q` ignores any .curlrc, the size cap bounds what a hostile endpoint can make us read.
+		body="$(curl -q -fsS --max-time 20 --max-filesize 65536 -H 'Accept: application/json' "$url" 2>/dev/null)" \
+			|| fail2 "could not read $url (network, DNS, TLS or an HTTP error). An unreadable Worker is not a matching one."
+		# The TOP-LEVEL field of a document that says it is the licence Worker. A grep over the raw
+		# body would also take a nested or repeated "license_key_id" and let a null hide behind it.
+		published="$(printf '%s' "$body" | python3 -I -c '
+import json, re, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if not isinstance(d, dict) or d.get("service") != "olivares-license-worker" or "license_key_id" not in d:
+    sys.exit(0)
+v = d["license_key_id"]
+if v is None:
+    print("null")
+elif isinstance(v, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", v):
+    print(v)
+' 2>/dev/null)"
+		[ -n "$published" ] \
+			|| fail2 "$url publishes no well-formed license_key_id for the license Worker: an older deployment, another service, or a malformed document. Nothing was compared."
+		if [ "$published" = null ]; then
+			echo "check-release-anchor-identity: ⛔ LICENSE the Worker at $url reports NO usable signing key (license_key_id: null)." >&2
+			echo "    LICENSE_SIGNING_KEY is unset or unreadable there, so it cannot issue a licence the releases trust." >&2
+			rc=1
+			continue
+		fi
+		if [ "$published" = "$want_kid" ]; then
+			echo "check-release-anchor-identity: LICENSE key id published by $url is the reviewed anchor's ($(printf '%s' "$want_kid" | cut -c1-15)…)"
+		else
+			echo "check-release-anchor-identity: ⛔ LICENSE MISMATCH — the Worker names a key the releases do not trust." >&2
+			echo "    published by $url:  $published" >&2
+			echo "    reviewed  ($src):   $want_kid" >&2
+			echo "    A buyer would be refused with 'the license does not verify against this deployment's license trust'." >&2
+			echo "    Fix the Worker's LICENSE_SIGNING_KEY secret (and redeploy it), not this gate." >&2
+			rc=1
+		fi
+		continue
+	fi
 
 	if [ "$LIVE" -eq 1 ]; then
 		command -v gh >/dev/null 2>&1 || fail2 "--live needs 'gh' and it is not on this host."
@@ -227,5 +317,11 @@ if [ "$rc" -eq 0 ] && [ "$ANCHOR_PREFIX" != prod ]; then
 	echo "    which key is authoritative, not this check." >&2
 	exit 2
 fi
-[ "$rc" -eq 0 ] && echo "check-release-anchor-identity: OK — both anchors in effect are the reviewed ones."
+if [ "$rc" -eq 0 ]; then
+	if [ "$WORKER" -eq 1 ]; then
+		echo "check-release-anchor-identity: OK — the Worker publishes the reviewed LICENSE key id."
+	else
+		echo "check-release-anchor-identity: OK — both anchors in effect are the reviewed ones."
+	fi
+fi
 exit "$rc"

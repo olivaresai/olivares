@@ -123,59 +123,6 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 	return nil
 }
 
-// Snapshot exposes every DISTINCT recipient seen — across the encrypted files AND
-// the `.sops.yaml` rules — as a secret_store NHI, converging on the
-// SAME ref string used as the edge OriginRef. With no configured path it returns an
-// empty graph (offline). It carries the recipient's PUBLIC identifier and type
-// only — never the `enc` data key or any other key material.
-func (s *Source) Snapshot(_ context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceSOPS, CapturedAt: s.clock().UTC()}
-	if s.path == "" {
-		return g, nil
-	}
-	files, err := s.listFiles()
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	recips := map[string]recipient{}
-	for _, f := range files {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		if rs, ok := parseEncrypted(data); ok {
-			for _, r := range rs {
-				recips[r.ref] = r
-			}
-			continue
-		}
-		if filepath.Base(f) == sopsRulesFile {
-			if rs, ok := parseRules(data); ok {
-				for _, r := range rs {
-					recips[r.ref] = r
-				}
-			}
-		}
-	}
-	refs := make([]string, 0, len(recips))
-	for ref := range recips {
-		refs = append(refs, ref)
-	}
-	sort.Strings(refs)
-	for _, ref := range refs {
-		r := recips[ref]
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         r.ref,
-			Type:        identitysource.PrincipalNHI,
-			Kind:        identitysource.KindSecretStore,
-			DisplayName: r.displayName(),
-			Source:      identitysource.SourceSOPS,
-			Attributes:  map[string]string{"provider": "sops", "recipient_type": r.typ},
-		})
-	}
-	return g, nil
-}
-
 // sopsRulesFile is the well-known name of a SOPS creation_rules configuration file.
 const sopsRulesFile = ".sops.yaml"
 

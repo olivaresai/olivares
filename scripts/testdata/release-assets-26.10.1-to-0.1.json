@@ -1,0 +1,288 @@
+{
+  "26.10.1": {
+    "tag_name": "26.10.1",
+    "assets": [
+      {
+        "name": "checksums.txt"
+      },
+      {
+        "name": "checksums.txt.pem"
+      },
+      {
+        "name": "checksums.txt.sig"
+      },
+      {
+        "name": "image.spdx.sbom.json"
+      },
+      {
+        "name": "multiple.intoto.jsonl"
+      },
+      {
+        "name": "olivares-install-26.10.1.sh"
+      },
+      {
+        "name": "olivares.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_amd64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_amd64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_amd64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_amd64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_amd64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_amd64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_arm64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_arm64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_arm64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_arm64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_arm64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_darwin_arm64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_amd64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_amd64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_amd64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_amd64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_amd64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_amd64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_arm64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_arm64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_arm64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_arm64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_arm64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_darwin_arm64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_amd64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_amd64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_amd64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_amd64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_amd64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_amd64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_arm64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_arm64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_arm64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_arm64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_arm64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_fips_linux_arm64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.apk"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.deb"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.pkg.tar.zst"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.rpm"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_amd64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.apk"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.deb"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.rpm"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.tar.gz"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.tar.gz.cdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.tar.gz.sbom.sigstore.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.tar.gz.spdx.sbom.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.tar.gz.vex.openvex.json"
+      },
+      {
+        "name": "olivares_26.10.1_linux_arm64.tar.gz.vex.sigstore.json"
+      },
+      {
+        "name": "release-build-context.json"
+      },
+      {
+        "name": "release-commit.txt"
+      },
+      {
+        "name": "stable-manifest.json"
+      },
+      {
+        "name": "stable-manifest.json.pipeline.pem"
+      },
+      {
+        "name": "stable-manifest.json.pipeline.sig"
+      },
+      {
+        "name": "stable-manifest.json.sig"
+      }
+    ]
+  },
+  "0.1": {
+    "tag_name": "0.1",
+    "assets": [
+      {
+        "name": "checksums.txt"
+      },
+      {
+        "name": "checksums.txt.pem"
+      },
+      {
+        "name": "checksums.txt.sig"
+      },
+      {
+        "name": "multiple.intoto.jsonl"
+      },
+      {
+        "name": "olivares-install-0.1.sh"
+      },
+      {
+        "name": "olivares.spdx.sbom.json"
+      },
+      {
+        "name": "olivares.vex.openvex.json"
+      },
+      {
+        "name": "olivares_0.1_darwin_amd64.tar.gz"
+      },
+      {
+        "name": "olivares_0.1_darwin_arm64.tar.gz"
+      },
+      {
+        "name": "olivares_0.1_linux_amd64.apk"
+      },
+      {
+        "name": "olivares_0.1_linux_amd64.deb"
+      },
+      {
+        "name": "olivares_0.1_linux_amd64.pkg.tar.zst"
+      },
+      {
+        "name": "olivares_0.1_linux_amd64.rpm"
+      },
+      {
+        "name": "olivares_0.1_linux_amd64.tar.gz"
+      },
+      {
+        "name": "olivares_0.1_linux_arm64.apk"
+      },
+      {
+        "name": "olivares_0.1_linux_arm64.deb"
+      },
+      {
+        "name": "olivares_0.1_linux_arm64.rpm"
+      },
+      {
+        "name": "olivares_0.1_linux_arm64.tar.gz"
+      },
+      {
+        "name": "release-build-context.json"
+      },
+      {
+        "name": "release-commit.txt"
+      },
+      {
+        "name": "stable-manifest.json"
+      },
+      {
+        "name": "stable-manifest.json.pipeline.pem"
+      },
+      {
+        "name": "stable-manifest.json.pipeline.sig"
+      },
+      {
+        "name": "stable-manifest.json.sig"
+      }
+    ]
+  }
+}

@@ -3,6 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { readFileSync } from 'node:fs'
 import { expect, type Page, test } from '@playwright/test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { Skeleton } from '../src/components/ui/skeleton'
+import { StatusChip } from '../src/components/ui/status-chip'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 import {
   expectReleaseVersion,
@@ -11,6 +15,65 @@ import {
   surfaceOptions,
   watchSurface,
 } from './surface'
+
+const workingSessions = renderToStaticMarkup(
+  createElement(
+    'main',
+    null,
+    ...['Claude Code', 'Codex', 'OpenCode'].map((name) =>
+      createElement(StatusChip, {
+        key: name,
+        tone: 'ok',
+        working: true,
+        children: `${name} working`,
+      }),
+    ),
+  ),
+)
+
+test('first-hour guard accepts live working sessions without a pending load', async ({
+  page,
+}) => {
+  const findings: string[] = []
+  await page.clock.install()
+  await page.exposeFunction('__firstHourFinding', (message: string) =>
+    findings.push(message),
+  )
+  await page.setContent(workingSessions)
+  await expect(page.getByText('Codex working')).toBeVisible()
+  await expect(page.locator('[data-slot="status-dot"]')).toHaveCount(3)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  expect(await page.evaluate(() => window.__firstHourLoading?.())).toBe(false)
+  await page.clock.runFor(31_000)
+  expect(await page.evaluate(() => window.__firstHourLoading?.())).toBe(false)
+  expect(findings).toEqual([])
+})
+
+test('first-hour guard still rejects a skeleton alongside live working sessions', async ({
+  page,
+}) => {
+  const findings: string[] = []
+  await page.clock.install()
+  await page.exposeFunction('__firstHourFinding', (message: string) =>
+    findings.push(message),
+  )
+  const skeleton = renderToStaticMarkup(
+    createElement(Skeleton, {
+      id: 'loading',
+      style: { width: 100, height: 20 },
+    }),
+  )
+  await page.setContent(workingSessions + skeleton)
+  await expect(page.locator('#loading')).toBeVisible()
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  expect(await page.evaluate(() => window.__firstHourLoading?.())).toBe(true)
+  await page.clock.runFor(31_000)
+  await expect.poll(() => findings).toEqual(['blank: loading longer than 30 s'])
+  await page.locator('#loading').evaluate((element) => element.remove())
+  await page.clock.runFor(200)
+  expect(await page.evaluate(() => window.__firstHourLoading?.())).toBe(false)
+  await expect(page.getByText('Codex working')).toBeVisible()
+})
 
 test('release identity is read from the visible shell, including behind a dialog', async ({
   page,

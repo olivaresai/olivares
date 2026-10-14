@@ -135,9 +135,19 @@ TABLES=""
 while IFS= read -r f; do
 	[ -n "$f" ] || continue
 	b=$(basename -- "$f")
-	for t in $(tr '\n' ' ' < "$f" | tr -s ' ' |
+	flat=$(tr '\n' ' ' < "$f" | tr -s ' ')
+	for t in $(printf '%s' "$flat" |
 		grep -oiE 'CREATE TABLE (IF NOT EXISTS )?[A-Za-z_][A-Za-z_0-9]*' |
 		awk '{print tolower($NF)}' | sort -u); do
+		# A file that DROPs the table before it CREATEs it rebuilds the definition an earlier file
+		# made (SQLite cannot alter a CHECK or a column in place): one table, one current
+		# definition, not a second one.
+		# Read statements, not text: comments are removed first, so a DROP that is only mentioned in
+		# a comment does not count, and the DROP must begin a statement.
+		stmts=$(perl -0pe 's{/\*.*?\*/}{ }gs; s{--[^\n]*}{ }g' "$f" | tr '\n' ' ' | tr -s ' ')
+		drop=$(printf '%s' "$stmts" | grep -boiE "(^|;) ?DROP TABLE (IF EXISTS )?${t}([^A-Za-z_0-9]|$)" | head -1 | cut -d: -f1)
+		create=$(printf '%s' "$stmts" | grep -boiE "(^|;) ?CREATE TABLE (IF NOT EXISTS )?${t}([^A-Za-z_0-9]|$)" | head -1 | cut -d: -f1)
+		if [ -n "$drop" ] && [ -n "$create" ] && [ "$drop" -lt "$create" ]; then continue; fi
 		TABLES="${TABLES}${t} ${b}"$'\n'
 	done
 done <<EOF

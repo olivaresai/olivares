@@ -483,6 +483,30 @@ describe('the first-hour launch', () => {
   })
 })
 
+// #1779: the New session form chooses an effort beside the model, and the launch sends it.
+describe('the quick form effort', () => {
+  it('is sent with the model, and is empty when none was chosen', async () => {
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: '',
+      permission: 'ask',
+      model: 'haiku-5-5',
+      effort: 'high',
+    })
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: '',
+      permission: 'ask',
+    })
+    const [chosen, none] = ops.createRun.mock.calls.map((c) => c[0])
+    expect(chosen).toMatchObject({ model: 'haiku-5-5', effort: 'high' })
+    expect(none.effort).toBe('')
+    expect(none).not.toHaveProperty('model')
+  })
+})
+
 // The quick form and the advanced dialog launch the same choices, the profile the engine
 // resolved, a registered folder, a permission mode and a first message, as one run.
 describe('the same choices from either New session form', () => {

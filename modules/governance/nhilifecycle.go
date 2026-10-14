@@ -6,10 +6,7 @@ package governance
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"strings"
-	"time"
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/core/model"
@@ -198,103 +195,6 @@ func (m *Module) UseLifecycleActuators(bindings []LifecycleActuatorBinding) {
 	}
 }
 
-// actuatorFor returns the wired actuator for (tenant, source), or nil for honest
-// degrade (no rotation/offboarding capability for that provider).
-func (m *Module) actuatorFor(tenant model.TenantID, source string) identitysource.LifecycleActuator {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if bySource := m.actuators[tenant]; bySource != nil {
-		return bySource[source]
-	}
-	return nil
-}
-
-// gate returns the wired LifecycleGate or the deny-closed default.
-func (m *Module) gate() LifecycleGate {
-	m.mu.Lock()
-	g := m.lifecycleGate
-	m.mu.Unlock()
-	if g != nil {
-		return g
-	}
-	return denyLifecycleGate{}
-}
-
-// defaultMaxAge is the rotation window per criticality when a row sets none. The
-// values reflect the CSA/Five-Eyes posture (critical NHI rotated frequently,
-// short-lived); an operator overrides per row via the policy endpoint.
-func defaultMaxAge(crit ActionRiskTier) time.Duration {
-	switch crit {
-	case RiskTierCritical:
-		return 30 * 24 * time.Hour
-	case RiskTierHigh:
-		return 90 * 24 * time.Hour
-	case RiskTierMedium:
-		return 180 * 24 * time.Hour
-	default:
-		return 365 * 24 * time.Hour
-	}
-}
-
-// blockGraceWindow is the alert→block escalation window for a NON-critical stale
-// credential (automatic escalation to a block after 30 days). A
-// CRITICAL credential skips this grace and blocks immediately on staleness.
-const blockGraceWindow = 30 * 24 * time.Hour
-
-// nhiDTO is the lifecycle view of one NHI. It never carries a secret.
-type nhiDTO struct {
-	IdentityRef    string `json:"identity_ref"`
-	Source         string `json:"source,omitempty"`
-	Kind           string `json:"kind,omitempty"` // agent | "" (legacy)
-	Criticality    string `json:"criticality"`
-	OwnerRef       string `json:"owner_ref,omitempty"`
-	SponsorRef     string `json:"sponsor_ref,omitempty"`
-	RotatedAt      string `json:"rotated_at,omitempty"`
-	MaxAgeSeconds  int64  `json:"max_age_seconds,omitempty"`
-	RotationTarget string `json:"rotation_target,omitempty"`
-	Staleness      string `json:"staleness_status"`
-	Enforcement    string `json:"enforcement"`
-	EnforceReason  string `json:"enforcement_reason,omitempty"`
-	Orphaned       bool   `json:"orphaned"`
-	RegistryOrphan bool   `json:"registry_orphaned,omitempty"` // the registry's own assertion
-	OffboardState  string `json:"offboard_state"`
-	RecoveryUntil  string `json:"recovery_until,omitempty"`
-}
-
-func toNHIDTO(rec model.Record) nhiDTO {
-	d := nhiDTO{
-		IdentityRef:    rec.String(colNHIIdentityRef),
-		Source:         rec.String(colNHISource),
-		Kind:           rec.String(colNHIKind),
-		Criticality:    rec.String(colNHICriticality),
-		OwnerRef:       rec.String(colNHIOwnerRef),
-		SponsorRef:     rec.String(colNHISponsorRef),
-		RotatedAt:      rec.String(colNHIRotatedAt),
-		MaxAgeSeconds:  rec.Int(colNHIMaxAgeSec),
-		RotationTarget: rec.String(colNHITargetRef),
-		Staleness:      rec.String(colNHIStaleStatus),
-		Enforcement:    rec.String(colNHIEnforce),
-		EnforceReason:  rec.String(colNHIEnforceWhy),
-		Orphaned:       rec.Bool(colNHIOrphaned),
-		RegistryOrphan: rec.Bool(colNHIRegistryOrphan),
-		OffboardState:  rec.String(colNHIOffboard),
-		RecoveryUntil:  rec.String(colNHIRecoverUntil),
-	}
-	if d.Criticality == "" {
-		d.Criticality = string(defaultNHICriticality)
-	}
-	if d.Staleness == "" {
-		d.Staleness = staleUnknown
-	}
-	if d.Enforcement == "" {
-		d.Enforcement = enforceMonitor
-	}
-	if d.OffboardState == "" {
-		d.OffboardState = offboardNone
-	}
-	return d
-}
-
 // newLifecycleRecord seeds a lifecycle row's defaults for a freshly-registered NHI.
 // kind optionally sets the colNHIKind field; pass "" to leave it unset
 // (legacy behavior — no agent constraints applied).
@@ -313,6 +213,26 @@ func newLifecycleRecord(identityRef, source, kind string) model.Record {
 		rec[colNHIKind] = kind
 	}
 	return rec
+}
+
+// StoredNHIRequiresBusiness reports retained clock-dependent protection. Community
+// retains static lifecycle decisions, but cannot advance a rotation window or an
+// alert deadline without the private lifecycle sweep. Read errors must refuse boot.
+func StoredNHIRequiresBusiness(ctx context.Context, sc store.Scope) (bool, error) {
+	repo, err := sc.Ext(nhiLifecycleKind)
+	if err != nil {
+		return false, err
+	}
+	rows, err := listAll(ctx, repo)
+	if err != nil {
+		return false, err
+	}
+	for _, rec := range rows {
+		if !rec.IsNull(colNHIRotatedAt) || !rec.IsNull(colNHIBlockAfter) || rec.Int(colNHIMaxAgeSec) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // foLifecycle find-or-creates the lifecycle row for an NHI identity_ref and returns
@@ -369,25 +289,4 @@ func (m *Module) recordLifecycleEvent(ctx context.Context, sc store.Scope, ident
 		colNHIEvtAt:       m.clock.Now().String(),
 	})
 	return err
-}
-
-// planHashFor binds a governed actuation to its exact parameters (anti-TOCTOU): a
-// later actuation under the same approval must present the same identity, op and
-// target, or the gate's plan binding rejects it.
-func planHashFor(identityRef, op, target string) string {
-	sum := sha256.Sum256([]byte(identityRef + "\x1f" + op + "\x1f" + target))
-	return hex.EncodeToString(sum[:])
-}
-
-// nhiResultDTO is the response to a governed actuation: the gate status (so the
-// operator knows whether to await approval) plus, on a completed rotation, the
-// minted credential ONCE.
-type nhiResultDTO struct {
-	Status      string `json:"status"` // approved|pending|rejected|expired|no_gate|break_glass|done
-	ApprovalRef string `json:"approval_ref,omitempty"`
-	Detail      string `json:"detail,omitempty"`
-	// NewSecret is the freshly-minted credential, returned EXACTLY ONCE and stored
-	// nowhere (the WIF MintedToken rule). Empty unless a rotation completed.
-	NewSecret        string `json:"new_secret,omitempty"`
-	NewCredentialRef string `json:"new_credential_ref,omitempty"`
 }

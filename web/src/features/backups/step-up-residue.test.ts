@@ -58,7 +58,6 @@ const sinComentarios = (src: string): string[] => {
 const SUJETOS = [
   'backups/restore-dialog.tsx',
   'claude-policy/cedar-opa-view.tsx',
-  'identity/nhi-actions.tsx',
   'inference-proxy/inference-proxy-view.tsx',
   'recordings/recording-config-panel.tsx',
   'session-viewer/session-viewer-page.tsx',

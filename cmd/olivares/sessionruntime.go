@@ -129,6 +129,12 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// environment variable; the variables above stay as explicit overrides.
 	opts = append(opts, sessions.WithProgramResolver(func(driver string) string {
 		return installedSessionProgram(obs, driver, exec.LookPath)
+	}, func(ctx context.Context, driver, version string) (string, error) {
+		if obs.rootErr != nil {
+			return "", obs.rootErr
+		}
+		in, err := toolInstallEngine(ctx).InstalledVersion(ctx, obs.root, driver, version)
+		return in.Executable, err
 	}))
 	// Claude sessions get Olivares' tool-call hooks when the PEP is mounted.
 	if self, err := os.Executable(); err == nil && filepath.IsAbs(dataDir) {

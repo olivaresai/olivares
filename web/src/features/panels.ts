@@ -42,6 +42,11 @@ export interface ProfileSignInExtension {
   }>
 }
 
+/** An identity section placed beside the local sign-in sections. */
+export interface IdentityTabExtension extends TabExtension {
+  readonly group: string
+}
+
 /** The places in public pages that accept extension panels, in page order. */
 export type AdditionalStepUpCeremony = (
   attempt: StepUpAttempt,
@@ -74,6 +79,7 @@ export interface SessionPanelSession {
 /** The ids of the side pane's own tabs: a registered panel cannot take one. */
 export const RESERVED_SESSION_PANEL_IDS = [
   'context',
+  'activity',
   'changes',
   'files',
   'preview',
@@ -141,13 +147,23 @@ export interface DashboardRedteamPanels {
     findings?: import('@/lib/api/types').ListResponse<
       import('@/features/security/types').Finding
     >,
-    drift?: import('@/features/access-map/types').DiffResponse,
   ) => import('@/features/executive/derive').RiskKpi | null
   readonly description: string
   readonly panel: ReactNode
 }
 
 export interface PanelExtensions {
+  readonly identityTabs: readonly IdentityTabExtension[]
+  readonly executiveRiskCards: readonly PanelExtension[]
+  /** Edition-owned estate selection and organization provisioning. */
+  readonly tenantGate?: ComponentType<{ children: ReactNode }>
+  /** Optional estate inventory; Community labels use only the caller's grants. */
+  readonly useOrganizationInventory?: () => {
+    data?: import('@/lib/api/types').ListResponse<
+      import('@/lib/api/types').OrgDTO
+    >
+    error: Error | null
+  }
   /** The edition supplies operations export; stored choices remain portable. */
   readonly operationsExportAvailable?: true
   /** Optional action beside the local trace detail. */

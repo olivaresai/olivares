@@ -78,7 +78,11 @@ import {
 import { ProfileCreateDialog } from './profile-create-dialog'
 import { ProfileWorkGrant } from './profile-work-grant'
 import { ProfileAuthentication } from './profile-authentication'
-import type { PatchProfileRequest, ProviderProfileDTO } from './types'
+import {
+  profileName,
+  type PatchProfileRequest,
+  type ProviderProfileDTO,
+} from './types'
 import { useFreshRead } from './use-fresh-read'
 import './i18n'
 
@@ -188,7 +192,7 @@ function ProfilesPanelInner({
     const q = needle.trim().toLowerCase()
     if (!q) return rows
     return rows.filter((p) =>
-      `${p.display_name ?? ''} ${p.profile_ref} ${p.driver} ${p.environment_ref}`
+      `${p.display_name ?? ''} ${p.account_name ?? ''} ${p.profile_ref} ${p.driver} ${p.environment_ref}`
         .toLowerCase()
         .includes(q),
     )
@@ -455,7 +459,8 @@ function ProfilesTable({
       </thead>
       <tbody>
         {profiles.map((profile) => {
-          const label = profile.display_name || profile.profile_ref
+          const name = profileName(profile)
+          const label = name ?? profile.profile_ref
           return (
             <tr
               key={profile.profile_ref}
@@ -467,7 +472,7 @@ function ProfilesTable({
                   <ProviderAccent accent={profile.accent} />
                   <NamedRef
                     className="font-medium text-foreground"
-                    name={profile.display_name}
+                    name={name}
                     reference={profile.profile_ref}
                     fallback={label}
                   />
@@ -721,7 +726,7 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
           <Fingerprint className="size-4 text-accent-text" />
           <ProviderAccent accent={profile.accent} />
           <span className="truncate">
-            {profile.display_name || profile.profile_ref}
+            {profileName(profile) ?? profile.profile_ref}
           </span>
         </SheetTitle>
         <SheetDescription className="font-mono text-caption">
@@ -934,7 +939,7 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
         title={t('profiles.retire.title')}
         description={t('profiles.retire.description')}
         confirmLabel={t('profiles.retire.confirm')}
-        confirmPhrase={profile.display_name?.trim() || profile.profile_ref}
+        confirmPhrase={profileName(profile) ?? profile.profile_ref}
         pending={retire.isPending}
         onConfirm={onConfirmRetire}
       />

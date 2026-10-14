@@ -7,6 +7,10 @@ description: >-
   recensement des routes de la console.
 ---
 
+:::note[Édition]
+Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges) et le cycle de vie des identités gérées nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, SCIM entrant utilisateurs/groupes, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
+:::
+
 Cette page est la carte de la console. Elle répertorie **toutes les routes montées par
 l'application** — pas une sélection, ni celles que quelqu'un a pensé à documenter — avec la
 permission nécessaire à un principal pour y accéder et l'endroit où en savoir plus.
@@ -66,7 +70,7 @@ Sécurité & identité, Déploiement, Observabilité & preuves, puis Système & 
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **83 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **75 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
 ### Accueil
@@ -130,9 +134,7 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Alertes | `/alerting` | Acheminez les constats vers des destinations et inspectez les livraisons | `notify:route:read` | [reference/modules/xv-notify](/fr/reference/modules/xv-notify/) |
-| Automatisations | `/automations` | Les trois rails d'automatisation et leur catalogue de déclencheurs | `orchestration:schedule:read` | [reference/modules/iv-orchestration](/fr/reference/modules/iv-orchestration/) |
 | Webhooks et événements | `/eventing` | Abonnements aux webhooks sortants, leur journal de livraison et la file des lettres mortes. | `eventing:subscription:read` | [reference/modules/eventing](/fr/reference/modules/eventing/) |
-| Orchestration | `/orchestration` | Coordination d'agent à agent et planifications | `orchestration:graph:read` | [reference/modules/iv-orchestration](/fr/reference/modules/iv-orchestration/) |
 
 ### Sécurité & identité
 
@@ -145,8 +147,6 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Proxy d'inférence | `/inference-proxy` | Gates du proxy, règles DLP de sortie et approbations d'appareils | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/fr/reference/modules/inferenceproxy/) |
 | Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identité, rôles et approbations | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
-| Équipe rouge | `/red-team` | Test adverse de vos agents | `redteam:target:read` | [reference/modules/xviii-redteam](/fr/reference/modules/xviii-redteam/) |
-| Résidence des données | `/residency` | Épinglez chaque organisation à une région, ou laissez-la non épinglée | `system:admin` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Politiques de routines | `/routine-policies` | Planchers de cadence, plafonds de concurrence, exigences d'approbation et listes d'autorisation cron pour les routines Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Sécurité | `/security` | Garde-fous, investigation et anomalies | `security:finding:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
 
@@ -167,14 +167,11 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Conformité | `/compliance` | Référentiels, contrôles et preuves | `compliance:framework:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Tableaux de bord | `/dashboards` | Indicateurs clés et reporting pour la direction | tout utilisateur connecté | [reference/modules/xxi-executive-dashboards](/fr/reference/modules/xxi-executive-dashboards/) |
 | Évaluations | `/evals` | Qualité, évaluations et régression | `evals:run:read` | [reference/modules/xii-evals](/fr/reference/modules/xii-evals/) |
-| Coût et FinOps | `/finops` | Coût des tokens, budgets et dépenses | `finops:spend:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
 | Santé et SLA | `/health` | Disponibilité et SLA des agents et des MCP | `health:status:read` | [reference/modules/xxii-health](/fr/reference/modules/xxii-health/) |
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
-| Export de posture | `/posture-export` | Exportez la posture réelle pour une tour de contrôle | `posture:export:read` | [reference/modules/posture-export](/fr/reference/modules/posture-export/) |
 | Enregistrements | `/recordings` | Enregistrement et relecture des sessions privilégiées | `recording:session:admin` | [reference/modules/recording](/fr/reference/modules/recording/) |
-| Rapports | `/reporting` | Générez et téléchargez des rapports de gouvernance | `reporting:report:read` | [reference/modules/reporting](/fr/reference/modules/reporting/) |
 | Visionneuse de sessions | `/session-viewer/$id` (lien profond uniquement) | Chronologie complète d'une session enregistrée, atteinte depuis une ligne des Enregistrements et non depuis la barre latérale. | `recording:session:admin` | [reference/modules/recording](/fr/reference/modules/recording/) |
-| Coûts par équipe | `/team-costs` | Dépenses attribuées par équipe, développables en ventilation par projet et par modèle. | `finops:spend:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
+| Budgets | `/stored-budgets` | Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite. | `finops:budget:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
 
 ### Système & paramètres
 
@@ -186,7 +183,6 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Comparaison de source | `/console/sources/diff` | Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier | `system:admin` | [reference/console](/fr/reference/console/) |
 | Journaux | `/logs` | Flux en direct du journal du moteur, filtré par niveau et module, avec recherche et pause. | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 | Assistant de configuration | `/onboarding` | Configuration du déploiement étape par étape | `system:admin` | [start/quickstart](/fr/start/quickstart/) |
-| Locataires | `/tenants` | Retirer ou rétablir le service d'un locataire | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 
 ### Connexion, configuration et compte
 

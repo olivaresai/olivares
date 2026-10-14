@@ -162,7 +162,26 @@ func TestReleaseArchiveInstallAndRevalidation(t *testing.T) {
 			if _, err := os.Stat(req.DestRoot); !os.IsNotExist(err) {
 				t.Fatal("planning wrote to disk")
 			}
+			var runtimeRequirement string
+			if driver == DriverGemini {
+				runtimeRequirement = geminiRuntimeRequirement(t)
+			}
 			receipt, _, err := engine.InstallV2(context.Background(), req, plan, io.Discard)
+			if runtimeRequirement != "" {
+				if KindOf(err) != KindProbeFailed || !strings.Contains(err.Error(), runtimeRequirement) || receipt != nil {
+					t.Fatalf("unsupported Gemini runtime: receipt=%+v error=%v, want probe_failed with %q", receipt, err, runtimeRequirement)
+				}
+				inv, err := engine.List(context.Background(), req.DestRoot)
+				if err != nil || len(inv.Installed) != 0 {
+					t.Fatalf("refused runtime inventory: %+v %v", inv, err)
+				}
+				entries, err := os.ReadDir(filepath.Join(req.DestRoot, driver))
+				if err != nil || len(entries) != 0 {
+					t.Fatalf("refused runtime left release or staging files: %v %v", entries, err)
+				}
+				t.Log(runtimeRequirement)
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -204,6 +223,32 @@ func TestReleaseArchiveInstallAndRevalidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Use the launcher's real prerequisite check and fixed PATH: the Go suite may
+// run on a host without Node 20, where installation must refuse publication.
+// A supported host still exercises the complete install and revalidation path.
+func geminiRuntimeRequirement(t *testing.T) string {
+	t.Helper()
+	check, _, ok := strings.Cut(geminiLauncher, "exec node ")
+	if !ok {
+		t.Fatal("Gemini launcher has no Node entry point")
+	}
+	report, err := runProbe(t.Context(), probeSpec{
+		Exe: "/bin/sh", Args: []string{"-c", check},
+		Env:    []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"},
+		Budget: 10 * time.Second, Grace: time.Second,
+	})
+	if err == nil {
+		return ""
+	}
+	message := strings.TrimSpace(report.Output)
+	if KindOf(err) != KindProbeFailed || !strings.Contains(err.Error(), "exited with exit status 1") ||
+		(message != "Gemini CLI requires Node.js 20 or newer. Install Node.js and try again." &&
+			message != "Gemini CLI requires Node.js 20 or newer. Upgrade Node.js and try again.") {
+		t.Fatalf("unexpected Gemini prerequisite failure: %v (%q)", err, report.Output)
+	}
+	return message
 }
 
 // A person who types an exact version in AI tools (CONTRACT on the builder, 09570b6b: Codex

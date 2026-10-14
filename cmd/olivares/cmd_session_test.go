@@ -40,7 +40,8 @@ type fakeSessionEngine struct {
 	failOnAttach string
 	failed       map[string]string // run_ref -> reason, once failOnAttach has fired
 	// launchWaits answers a new run with 202: it waits for a launch approval.
-	launchWaits bool
+	launchWaits  bool
+	launchDriver string
 	// launchRefusal, when set, answers a new run with 422 and this sentence, as the
 	// engine does for a permission preset the tool cannot honour.
 	launchRefusal string
@@ -71,6 +72,28 @@ type fakeSessionEngine struct {
 	// refused are ready tools whose only key its provider refused at the last test:
 	// the readiness answer says key_refused while their resolve still answers.
 	refused map[string]bool
+	// moveRefusal, when set, answers POST …/move with 409 and this sentence.
+	// handoffPreview is what GET …/handoff answers; handoffState is the state the
+	// started session reports for its first turn (default: delivered).
+	moveRefusal    string
+	handoffPreview map[string]any
+	handoffState   string
+}
+
+// handoffStateOrDelivered is what POST …/handoff answers for the first turn.
+func (f *fakeSessionEngine) handoffStateOrDelivered() string {
+	if f.handoffState == "" {
+		return "delivered"
+	}
+	return f.handoffState
+}
+
+// handoffFirstTurn is the text the engine returns only when it was not delivered.
+func (f *fakeSessionEngine) handoffFirstTurn() any {
+	if f.handoffStateOrDelivered() == "delivered" {
+		return nil
+	}
+	return "Summary text.\n\nTranscript of the earlier session (tool calls and results shortened): /srv/acct/olivares-handoff/r1-ab.md"
 }
 
 func newFakeSessionEngine(t *testing.T) *fakeSessionEngine {
@@ -102,6 +125,17 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == "GET" && path == sessionWorkspacesPath:
 		writeJSON(200, map[string]any{"items": f.workspaces})
+	case r.Method == "GET" && strings.HasPrefix(path, sessionWorkspacesPath+"/"):
+		ref := strings.TrimPrefix(path, sessionWorkspacesPath+"/")
+		for _, ws := range f.workspaces {
+			if ws["workspace_ref"] == ref {
+				writeJSON(200, ws)
+				return
+			}
+		}
+		writeJSON(404, map[string]any{"error": "workspace not found"})
+	case r.Method == "POST" && strings.HasSuffix(path, "/wiki"):
+		writeJSON(200, map[string]any{"workspace_ref": strings.TrimSuffix(strings.TrimPrefix(path, sessionWorkspacesPath+"/"), "/wiki")})
 	case r.Method == "POST" && path == sessionWorkspacesPath:
 		ws := map[string]any{"workspace_ref": "ws-new", "root_path": body["root_path"], "state": "active"}
 		writeJSON(201, ws)
@@ -164,6 +198,24 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			writeJSON(200, map[string]any{"profile": profile, "reason": "own_login", "created": created})
 		}
+	case r.Method == "GET" && strings.HasPrefix(path, profilesPath+"/") && !strings.Contains(strings.TrimPrefix(path, profilesPath+"/"), "/"):
+		ref := strings.TrimPrefix(path, profilesPath+"/")
+		for _, p := range f.profiles {
+			if p["profile_ref"] == ref {
+				writeJSON(200, p)
+				return
+			}
+		}
+		writeJSON(404, map[string]any{"error": map[string]any{"code": "not_found", "message": "profile not found"}})
+	case r.Method == "POST" && strings.HasSuffix(path, "/move") && f.moveRefusal != "":
+		writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.moveRefusal}})
+	case r.Method == "GET" && strings.HasSuffix(path, "/handoff"):
+		writeJSON(200, f.handoffPreview)
+	case r.Method == "POST" && strings.HasSuffix(path, "/handoff"):
+		writeJSON(201, map[string]any{
+			"run_ref": "r-handoff", "name": body["name"], "state": "running", "provider_driver": "codex",
+			"handoff_of": "r1", "summary_state": f.handoffStateOrDelivered(), "first_turn": f.handoffFirstTurn(),
+		})
 	case r.Method == "GET" && path == sessionRunsPath:
 		writeJSON(200, map[string]any{"items": f.runs})
 	case r.Method == "POST" && path == sessionRunsPath && f.launchRefusal != "":
@@ -176,9 +228,13 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			"approval_ref": "apr-1", "approval_url": "/v1/m/governance/approvals/apr-1",
 		})
 	case r.Method == "POST" && path == sessionRunsPath:
+		driver := f.launchDriver
+		if driver == "" {
+			driver = "claude"
+		}
 		writeJSON(201, map[string]any{
 			"run_ref": "01a0f6dc-0000-7000-8000-000000000009", "name": body["name"], "state": "running",
-			"provider_driver": "claude", "transport": "stream-json", "workspace_path": "/srv/demo",
+			"provider_driver": driver, "transport": "stream-json", "workspace_path": "/srv/demo",
 		})
 	case r.Method == "POST" && strings.HasSuffix(path, "/cleanup") && f.cleanupRefusal != "":
 		writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.cleanupRefusal}})

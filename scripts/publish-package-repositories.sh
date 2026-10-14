@@ -329,7 +329,12 @@ wrangler_bin="${OLIVARES_WRANGLER_BIN:-}"
 if [[ -z "$wrangler_bin" ]]; then wrangler_bin="$(command -v wrangler || true)"; fi
 [[ "$wrangler_bin" == /* && -x "$wrangler_bin" ]] || blind 'wrangler is not an absolute executable'
 wrangler_version="$($wrangler_bin --version 2>/dev/null | awk 'NR==1{print $1}')"
-[[ "$wrangler_version" == 4.100.0 ]] || blind "wrangler version is $wrangler_version, want reviewed 4.100.0"
+# One pin: docs-site/package.json names the exact wrangler, and publish-packages.yml installs it
+# from the docs-site lockfile with npm ci.
+wrangler_pin_file="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/docs-site/package.json"
+wrangler_pin="$(sed -nE 's/^[[:space:]]*"wrangler": "([0-9]+\.[0-9]+\.[0-9]+)",?$/\1/p' "$wrangler_pin_file" 2>/dev/null)"
+[[ "$wrangler_pin" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind "no exact wrangler pin in $wrangler_pin_file"
+[[ "$wrangler_version" == "$wrangler_pin" ]] || blind "wrangler version is $wrangler_version, want pinned $wrangler_pin"
 
 content_type() {
 	case "$1" in

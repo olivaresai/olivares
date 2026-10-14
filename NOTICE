@@ -76,8 +76,10 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
   * OpenAI Whisper tiny speech model (multilingual), in the ONNX export
     onnx-community/whisper-tiny at revision ff4177021cc41f7db950912b73ea4fdf7d01d8e7
     (https://huggingface.co/onnx-community/whisper-tiny): its 8-bit encoder and
-    decoder, configuration and tokenizer, unmodified, fetched at build time against the
-    SHA-256 pinned in web/src/features/dictation/whisper-model.json and embedded in the
+    decoder, configuration and tokenizer, unmodified (tokenizer stored as lossless
+    gzip), vendored under
+    web/src/features/dictation/model/ and verified at build time against the SHA-256
+    pinned in web/src/features/dictation/whisper-model.json and embedded in the
     console under assets/voice/ for in-browser dictation. Copyright (c) 2022 OpenAI.
     MIT License; the license text ships with the console as
     web/public/licenses/whisper/Whisper-MIT.txt.

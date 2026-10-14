@@ -176,6 +176,9 @@ func (p Principal) AttributableActor() (string, error) {
 // boot-time seed as a human operator would be a more precise lie than the
 // anonymous "user:" it replaces: an auditor filtering for human privileged
 // activity would find an event nobody performed.
+//
+// The value carries attribution, not tenant authority. A governed product
+// mutation needs ResolveSystemScope, which seals it for one tenant.
 func NewSystemOperator(via, reason string) (Principal, error) {
 	via = strings.TrimSpace(via)
 	reason = strings.TrimSpace(reason)

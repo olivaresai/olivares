@@ -459,6 +459,14 @@ func (m *Module) handleAdmitEntry(w http.ResponseWriter, r *http.Request, mc api
 		return
 	}
 	switch kind {
+	case kindAgent:
+		var in struct{}
+		if !decodeJSON(w, r, &in) {
+			return
+		}
+		if !m.admitDeclaredTool(w, r, mc) {
+			writeJSON(w, http.StatusBadRequest, errorBody(admitWrongKindMsg))
+		}
 	case kindMCP:
 		m.handleAdmitMCPEntry(w, r, mc)
 	case kindConnector:

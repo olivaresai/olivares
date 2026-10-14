@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // A call belongs to one live launch and turn. Its owner closes done only after
@@ -164,6 +165,56 @@ func (m *Module) finishSessionCalls(lr *liveRun, turn string) {
 		}
 		lr.mu.Unlock()
 	}
+}
+
+// waitingForInput reports a session that has answered at least one turn and has none
+// running: the person's move. The turn accounting is the one admission already keeps
+// (a raw Claude run counts its result frames and the inputs it accepted; a driver run
+// asks its conversation for the active turn), so the state is read from the run's turns
+// and not from whether its process is alive. A session that never finished a turn is
+// not waiting yet: it is starting, and only the idle window (deriveRunState) idles it.
+//
+// Every doubt falls on the side of working, the old behavior: a turn the plane did not
+// see start (a Claude turn that began by itself shows as output after the last result)
+// or whose provider has not named it yet (a driver between its input and its turn id)
+// is not waiting.
+func (lr *liveRun) waitingForInput() bool {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	if lr.session != nil {
+		return lr.driverTurnEnded && lr.session.ActiveTurn() == ""
+	}
+	return lr.claudeTurnsEnded > 0 && lr.claudePendingTurns == 0 && !lr.claudeOutputOpen
+}
+
+// setDriverTurnEnded records that a driver's turn ended (true) or that an input is
+// starting the next one (false), and returns the earlier value. The provider names a
+// new turn only when it answers the input, so the person's input, not the provider's
+// turn id, is what ends the wait.
+func (lr *liveRun) setDriverTurnEnded(ended bool) (previous bool) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	previous, lr.driverTurnEnded = lr.driverTurnEnded, ended
+	return previous
+}
+
+// noteClaudeOutput records turn output from Claude: it speaks only inside a turn, so a
+// turn that no input started (a background task finishing) is still a turn. The next
+// result frame closes it (endCredentialRefusal).
+func (lr *liveRun) noteClaudeOutput() {
+	lr.mu.Lock()
+	lr.claudeOutputOpen = true
+	lr.mu.Unlock()
+}
+
+// runWaitsForInput is waitingForInput for the live handle of this very launch: a
+// handle left from an earlier launch of the same run says nothing about this row.
+func (m *Module) runWaitsForInput(rec model.Record) bool {
+	lr, ok := m.rt.getLive(model.TenantID(rec.String(model.ColTenantID)), rec.String(colRunRef))
+	if !ok || lr.launchID.String() != rec.String(colRuntimeLaunchID) {
+		return false
+	}
+	return lr.waitingForInput()
 }
 
 // A reserved input is not a confirmed successor if authority was lost or the

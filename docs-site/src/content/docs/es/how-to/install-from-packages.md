@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+La próxima release es <!-- release -->`0.2`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
 
 :::note[Nombres de paquete publicados]
-La release <!-- release -->0.1<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
+La release <!-- release -->0.2<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
 `arm64`, con `checksums.txt`, `checksums.txt.sig` y `checksums.txt.pem`. Los comandos
 de abajo usan los nombres literales `amd64` de esa release; sustituye `amd64` por
 `arm64` en un host ARM de 64 bits. Instala desde esos artefactos de release verificados.
@@ -85,13 +85,13 @@ adaptadores de servicio: `scripts/install-service.sh` y `packaging/service/`.
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.2_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
 ```
 <!-- /release -->
 

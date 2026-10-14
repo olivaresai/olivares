@@ -35,7 +35,7 @@ var credentialBindingDescriptor = model.EntityDescriptor{
 		pdecl(field("credential_kind", model.KindText, false),
 			model.None("the closed credential kind user or token, switched on: core/auth/credential_binding.go:725")),
 		pdecl(field("credential_id", model.KindUUID, false),
-			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:727, core/auth/credential_binding.go:739, core/auth/principal_evidence.go:262, core/auth/principal_evidence.go:355")),
+			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:727, core/auth/credential_binding.go:739, core/auth/principal_evidence.go:265, core/auth/principal_evidence.go:358")),
 		field("credential_version", model.KindInt, false),
 		field("os_uid", model.KindInt, true),
 		pdecl(field("os_account", model.KindText, true), model.None("the immutable native account name, compared without deriving a product subject: core/auth/credential_binding.go:777")),

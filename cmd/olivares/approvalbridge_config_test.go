@@ -106,7 +106,7 @@ func bootBridgeTenant(t *testing.T, write func(*harness) approvalBridgeConfig) (
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{t: t, h: eng.api.Handler(), authr: eng.authr}
+	h := &harness{t: t, h: eng.api.Handler(), authr: eng.authr, st: eng.store}
 	setup, _, err := eng.setupTok.Ensure()
 	if err != nil {
 		t.Fatal(err)

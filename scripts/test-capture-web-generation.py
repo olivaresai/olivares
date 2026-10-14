@@ -218,6 +218,69 @@ else:
         self.assertIn('PR_HEAD: ${{ github.event.pull_request.head.sha }}', step, job)
         return textwrap.dedent(step.split('        run: |\n', 1)[1])
 
+    def test_self_hosted_development_rebuilds_without_console_transfer(self):
+        workflow = (SOURCE.parent.parent / '.github/workflows/pr-ci.yml').read_text()
+        local = "github.repository != 'olivaresai/olivares' && runner.environment == 'self-hosted'"
+        for job in ['pr-build', 'pr-test-shard']:
+            body = workflow.split(f'  {job}:\n', 1)[1]
+            body = re.split(r'\n  [a-z][a-z0-9-]*:', body, maxsplit=1)[0]
+            steps = body.split('      - ')[1:]
+            rebuild = next((step for step in steps
+                            if step.startswith('name: rebuild the console on the development runner\n')), None)
+            self.assertIsNotNone(rebuild, job + ' still requires the Actions console artifact')
+            self.assertIn('        if: ' + local + '\n', rebuild)
+            self.assertIn('PR_HEAD: ${{ github.event.pull_request.head.sha }}', rebuild)
+            self.assertNotIn('continue-on-error:', rebuild)
+            self.assertEqual(rebuild.split('        run: ', 1)[1].strip(),
+                             'python3 scripts/capture-web-generation.py')
+            download = next(step for step in steps if 'uses: actions/download-artifact@' in step)
+            self.assertIn('        if: ' + '${{ !(' + local + ') }}\n', download)
+            self.assertNotIn('continue-on-error:', download)
+            node = next(step for step in steps if 'uses: actions/setup-node@' in step)
+            pnpm = next(step for step in steps if 'uses: pnpm/action-setup@' in step)
+            for setup in [node, pnpm]:
+                self.assertIn('        if: ' + local + '\n', setup)
+            self.assertIn('node-version-file: .node-version', node)
+            self.assertIn('dest: ${{ runner.temp }}/setup-pnpm', pnpm)
+            self.assertIn('standalone: true', pnpm)
+            self.assertLess(body.index('uses: actions/setup-node@'), body.index('uses: pnpm/action-setup@'))
+            self.assertLess(body.index('uses: ./.github/actions/olivares-tool-cache'),
+                            body.index('run: python3 scripts/capture-web-generation.py'))
+            self.assertLess(body.index('run: python3 scripts/capture-web-generation.py'),
+                            body.index('name: embed the verified console output'))
+        producer = workflow.split('  pr-web:\n', 1)[1].split('\n  userspace-compat:', 1)[0]
+        upload = next(step for step in producer.split('      - ')
+                      if step.startswith('name: retain the generated console bundle\n'))
+        self.assertIn("if: success() && steps.web-generation.outcome == 'success' && !(" + local + ')', upload)
+        self.assertNotIn('continue-on-error:', upload)
+
+    def test_local_rebuild_failure_cannot_reach_console_embedding(self):
+        workflow = (SOURCE.parent.parent / '.github/workflows/pr-ci.yml').read_text()
+        for job in ['pr-build', 'pr-test-shard']:
+            body = workflow.split(f'  {job}:\n', 1)[1]
+            body = re.split(r'\n  [a-z][a-z0-9-]*:', body, maxsplit=1)[0]
+            marker = '      - name: rebuild the console on the development runner\n'
+            self.assertIn(marker, body, job + ' has no local rebuild to propagate failure')
+            rebuild = body.split(marker, 1)[1]
+            rebuild = rebuild.split('      - ', 1)[0]
+            command = rebuild.split('        run: ', 1)[1].strip()
+            for mode in ['good', 'failed', 'partial', 'mutate']:
+                with self.subTest(job=job, mode=mode):
+                    artifact = self.runner / 'web-generation-artifact'
+                    if artifact.exists():
+                        shutil.rmtree(artifact)
+                    self.git('checkout', '--', 'web/src/main.tsx')
+                    script = command + '\n' + self.consumer_script(job)
+                    result = subprocess.run(['bash', '-euo', 'pipefail', '-c', script],
+                                            cwd=self.repo,
+                                            env=dict(self.env, FIXTURE_MODE=mode,
+                                                     GITHUB_WORKSPACE=str(self.repo),
+                                                     GITHUB_REPOSITORY='fixture/development'),
+                                            capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode == 0, mode == 'good',
+                                     result.stdout + result.stderr)
+                    self.assertEqual(artifact.exists(), mode == 'good')
+
     def consume(self, script):
         return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', script],
                               cwd=self.repo,

@@ -36,7 +36,7 @@ var accessMapEdgeFilters = []struct {
 	{"origin-kind", "origin_kind", "filter by origin kind (agent, session, identity)"},
 	{"origin-id", "origin_id", "filter by origin id"},
 	{"resource-id", "resource_id", "filter by resource id"},
-	{"mode", "mode", "filter by access mode (r, rw)"},
+	{"mode", "mode", "filter by access mode (read, write, readwrite, unknown)"},
 	{"confidence", "confidence", "filter by attribution confidence"},
 	{"signal-source", "signal_source", "filter by the signal that produced the edge"},
 }
@@ -189,7 +189,7 @@ func newAccessMapGraphCmd(flags *authClientFlags) *cobra.Command {
 			"attribution is. Filters narrow it by any supported edge column; unlisted columns\n" +
 			"are rejected by the store rather than silently ignored.",
 		Example: "  olivares accessmap graph\n" +
-			"  olivares accessmap graph --origin-kind agent --mode rw\n" +
+			"  olivares accessmap graph --origin-kind agent --mode readwrite\n" +
 			"  olivares accessmap graph --limit 50 -o json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -374,6 +374,8 @@ type accessMapAttackPath struct {
 
 type accessMapAttackPaths struct {
 	Paths []accessMapAttackPath `json:"paths"`
+	// Truncated is set by the engine when a read or path cap cut the analysis.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 type accessMapAttackSummary struct {
@@ -383,7 +385,14 @@ type accessMapAttackSummary struct {
 	ExfilRoutes      int `json:"exfil_routes"`
 	CriticalAgents   int `json:"critical_agents"`
 	SensitiveTargets int `json:"sensitive_targets"`
+	// Truncated is set by the engine when a cap cut a read, so the counts are floors.
+	Truncated bool `json:"truncated,omitempty"`
 }
+
+// accessMapTruncationNote is what an operator reads when the engine capped an
+// analysis. An under-count of attack paths reads as good news, which is the one
+// direction this command must never fail in.
+const accessMapTruncationNote = "TRUNCATED: the engine capped this analysis, so what is shown is a FLOOR, not the whole answer"
 
 // accessMapStepName names one node of a path, preferring the human name over the id.
 func accessMapStepName(s accessMapAttackStep) string {
@@ -414,8 +423,10 @@ func attackPathHops(steps int) int {
 func renderAttackPaths(cmd *cobra.Command, raw []byte, p accessMapAttackPaths, empty string) error {
 	return renderOut(cmd, func(w io.Writer) error {
 		if len(p.Paths) == 0 {
-			_, err := fmt.Fprintln(w, empty)
-			return err
+			if _, err := fmt.Fprintln(w, empty); err != nil {
+				return err
+			}
+			return renderAccessMapTruncation(w, p.Truncated)
 		}
 		tw := newTabWriter(w)
 		if _, err := fmt.Fprintln(tw, "KIND\tHOPS\tSENSITIVITY\tATTRIBUTION\tMIN-CONF\tPATH"); err != nil {
@@ -434,8 +445,19 @@ func renderAttackPaths(cmd *cobra.Command, raw []byte, p accessMapAttackPaths, e
 				return err
 			}
 		}
-		return tw.Flush()
+		if err := tw.Flush(); err != nil {
+			return err
+		}
+		return renderAccessMapTruncation(w, p.Truncated)
 	}, observeJSON(raw))
+}
+
+func renderAccessMapTruncation(w io.Writer, truncated bool) error {
+	if !truncated {
+		return nil
+	}
+	_, err := fmt.Fprintln(w, accessMapTruncationNote)
+	return err
 }
 
 func newAccessMapAttackPathsCmd(flags *authClientFlags) *cobra.Command {
@@ -563,7 +585,10 @@ func newAttackPathSummaryCmd(flags *authClientFlags) *cobra.Command {
 				fmt.Fprintf(tw, "exfil routes\t%d\n", s.ExfilRoutes)
 				fmt.Fprintf(tw, "critical agents\t%d\n", s.CriticalAgents)
 				fmt.Fprintf(tw, "sensitive targets\t%d\n", s.SensitiveTargets)
-				return tw.Flush()
+				if err := tw.Flush(); err != nil {
+					return err
+				}
+				return renderAccessMapTruncation(w, s.Truncated)
 			}, observeJSON(res.raw))
 		},
 	}

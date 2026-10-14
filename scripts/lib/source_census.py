@@ -9,7 +9,9 @@ entry rather than publish an incomplete count after a wiring refactor.
 import re
 
 
-def source_census(source: str) -> tuple[set[str], set[str], set[str]]:
+def source_census(
+    source: str, roster_seam: str | None = None,
+) -> tuple[set[str], set[str], set[str]]:
     source = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
     imports = {}
     for alias, path in re.findall(
@@ -54,6 +56,15 @@ def source_census(source: str) -> tuple[set[str], set[str], set[str]]:
             source, re.M | re.S,
         )
         if match is None:
+            if name == "buildRosterProvider" and roster_seam is not None:
+                seam = re.sub(r"//[^\n]*|/\*.*?\*/", "", roster_seam, flags=re.S)
+                if (roster_seam.startswith("//go:build !enterprise || !addon_ids\n")
+                        and re.search(
+                            r"^func buildRosterProvider\([^{}]*\)[^{}]*\{\s*"
+                            r"return nil, nil, false\s*\}", seam, re.M,
+                        )):
+                    continue
+                raise ValueError("invalid Community roster refusal contract")
             raise ValueError(f"missing connector kind switch: {name}")
         # Only the builder's direct kind cases count; nested switches and
         # quoted operands in config/mode expressions are not connector kinds.

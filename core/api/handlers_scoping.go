@@ -424,6 +424,11 @@ func (s *Server) handleCreateAgentGroup(w http.ResponseWriter, r *http.Request, 
 	}
 	var dto AgentGroupDTO
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
+		var err error
+		sc, err = collectionMutationScope(r, sc, mc, in.WorkspaceID)
+		if err != nil {
+			return err
+		}
 		if err := s.validateWorkspaceRef(r, sc, in.WorkspaceID); err != nil {
 			return err
 		}

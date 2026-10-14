@@ -70,7 +70,7 @@ func newToolCmd() *cobra.Command {
 			"with its own login (your Claude, ChatGPT or Google account), and see what is installed.",
 		Example: "  olivares tool install claude\n  olivares tool login claude\n  olivares tool ls",
 	}
-	cmd.AddCommand(newToolListCmd(), newToolProvidersCmd(), newToolInstallCmd(), newToolLoginCmd(), newToolStartCmd(), newToolPullCmd())
+	cmd.AddCommand(newToolListCmd(), newToolProvidersCmd(), newToolInstallCmd(), newToolUpdateCmd(), newToolRemoveCmd(), newToolPinCmd(), newToolLoginCmd(), newToolStartCmd(), newToolPullCmd())
 	return cmd
 }
 
@@ -307,17 +307,28 @@ func newToolInstallCmd() *cobra.Command {
 	var (
 		cfg     agentClientConfig
 		version string
+		from    string
 	)
 	cmd := &cobra.Command{
-		Use:   "install <claude|codex|grok|opencode|gemini|ollama>",
-		Short: "Install an agent tool on the engine's host from its official signed release",
+		Use:   "install [tool] [--from URL --version VERSION]",
+		Short: "Install an official or catalog-admitted tool on the engine's host",
 		Long: "install asks the engine to resolve the tool's official release, verify it (signature or\n" +
-			"published digest, per tool) and place it where sessions find it. Sessions use it\n" +
-			"without any setting or restart.",
-		Example: "  olivares tool install claude\n  olivares tool install codex --version 0.159.3",
-		Args:    cobra.ExactArgs(1),
+			"published digest, per tool) and place it where sessions find it. Official sessions use it\n" +
+			"without any setting or restart. Use --from URL --version VERSION for an admitted\n" +
+			"third-party tool. Catalog pins its archive digest and executable before installation.",
+		Example: "  olivares tool install claude\n  olivares tool install codex --version 0.159.3\n  olivares tool install --from https://github.com/example/tool.git --version 1.0.0",
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			driver := strings.ToLower(strings.TrimSpace(args[0]))
+			driver := ""
+			if len(args) > 0 {
+				driver = strings.ToLower(strings.TrimSpace(args[0]))
+			}
+			if (from == "") == (driver == "") {
+				return sentence(exitcode.Usage, "Choose a tool name or --from with an admitted source URL")
+			}
+			if from != "" && (!cmd.Flags().Changed("version") || version == "latest" || version == "stable") {
+				return sentence(exitcode.Usage, "--from requires a pinned --version")
+			}
 			if driver == "gemini" {
 				driver = "gemini-cli"
 			}
@@ -330,7 +341,12 @@ func newToolInstallCmd() *cobra.Command {
 			}
 			ctx := cmd.Context()
 			w := cmd.ErrOrStderr()
-			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/plans", map[string]any{"driver": driver, "version": requestedVersion}, http.StatusOK, http.StatusNotFound)
+			request := map[string]any{"driver": driver, "version": requestedVersion}
+			if from != "" {
+				delete(request, "driver")
+				request["from"] = from
+			}
+			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/plans", request, http.StatusOK, http.StatusNotFound)
 			if err != nil {
 				return err
 			}
@@ -338,12 +354,16 @@ func newToolInstallCmd() *cobra.Command {
 				return toolHTTPErr(status, b)
 			}
 			var plan struct {
+				Driver       string `json:"driver"`
 				Digest       string `json:"digest"`
 				Version      string `json:"version"`
 				Verification string `json:"verification"`
 			}
 			if err := json.Unmarshal(b, &plan); err != nil {
 				return err
+			}
+			if from != "" {
+				driver = plan.Driver
 			}
 			fmt.Fprintf(w, "Installing %s %s (verified: %s)…\n", toolName(driver), plan.Version, plan.Verification)
 			reqID, err := uuid.NewV7()
@@ -382,6 +402,7 @@ func newToolInstallCmd() *cobra.Command {
 			}, job)
 		},
 	}
+	cmd.Flags().StringVar(&from, "from", "", "Git or release URL of a catalog-admitted tool")
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&version, "version", "latest", "release version, or the vendor's channel (latest; stable for Grok Build)")
 	// Resolving and verifying a release takes the engine up to 45 seconds.
@@ -391,12 +412,13 @@ func newToolInstallCmd() *cobra.Command {
 }
 
 type toolJob struct {
-	ID       string `json:"id"`
-	Driver   string `json:"driver"`
-	Version  string `json:"version"`
-	State    string `json:"state"`
-	Progress string `json:"progress"`
-	Error    string `json:"error,omitempty"`
+	ID       string          `json:"id"`
+	Driver   string          `json:"driver"`
+	Version  string          `json:"version"`
+	State    string          `json:"state"`
+	Progress string          `json:"progress"`
+	Error    string          `json:"error,omitempty"`
+	Receipt  json.RawMessage `json:"receipt,omitempty"`
 }
 
 // waitToolJob polls an install job until it is no longer queued or running.

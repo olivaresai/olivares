@@ -83,6 +83,9 @@
     "activeUsers": "Active user accounts",
     "noUserLimit": "self-hosted: no limit",
     "expires": "Expires",
+    "paidThrough": "Paid through",
+    "leaseUntil": "Lease until",
+    "leaseNote": "Provisional lease (refund window). Renew before this date to stay valid through the paid date.",
     "issued": "Issued",
     "sourceLabel": "Source",
     "sources": {

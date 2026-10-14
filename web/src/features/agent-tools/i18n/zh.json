@@ -39,7 +39,8 @@
     "sigstore-cosign": "已验证软件包摘要和发布者签名。",
     "none-origin-only": "官方 HTTPS 来源；没有发布者签名。",
     "github-release-sha256": "已固定官方版本元数据中的 SHA-256；没有发布者签名。",
-    "unknown": "未验证"
+    "unknown": "未验证",
+    "catalog-sha256": "目录中固定的 SHA-256"
   },
   "probe": "检查版本",
   "probeName": "检查 {{path}} 的版本",
@@ -167,5 +168,56 @@
     "notNow": "稍后",
     "close": "关闭",
     "keyNeedsAccess": "选择密钥需要修改配置文件的权限。"
+  },
+  "from": {
+    "title": "通过 URL 安装",
+    "source": "Git 或发布版本 URL",
+    "version": "固定版本",
+    "review": "检查安装",
+    "hint": "请先在目录中批准此工具。安装前会验证固定版本和 SHA-256 摘要。",
+    "tenant": "请选择一个组织以使用其已准入工具。"
+  },
+  "versions": {
+    "title": "会话版本",
+    "hint": "选择此工作区新建和恢复会话所用的版本。代理的版本选择优先。",
+    "workspace": "工作区",
+    "chooseWorkspace": "选择工作区",
+    "version": "会话版本",
+    "default": "最新安装版本",
+    "unavailable": "{{version}}（未安装）",
+    "save": "保存版本",
+    "saved": "会话版本已保存。",
+    "chooseOrganization": "选择组织以设置工作区版本。",
+    "failed": "无法读取工具版本。",
+    "removeName": "移除 {{name}} {{version}}",
+    "removeHint": "请先停止正在运行的会话。固定此版本的工作区需重新安装此版本或清除版本选择后才能启动会话。",
+    "removed": "工具版本已移除。",
+    "confirmRemoval": "确认移除",
+    "confirmPin": "确认版本",
+    "pinHint": "新建和恢复的会话将使用 {{name}}：{{version}}。",
+    "loading": "正在加载工作区和已保存的版本…"
+  },
+  "installed": {
+    "title": "此处已安装",
+    "workspace": "{{name}} 中的新会话会获得的内容。",
+    "reading": "正在读取…",
+    "readFailed": "无法读取：{{message}}",
+    "tools": "AI 工具",
+    "packages": "程序和注册表",
+    "skills": "技能",
+    "mcp": "MCP 服务器",
+    "none": "无",
+    "olivaresTools": "Olivares 会话工具",
+    "mcpDrivers": "适用于 {{tools}} 会话。",
+    "noWorkspace": "没有可读取的默认工作区。",
+    "skillsOff": "技能模块已关闭：会话不会获得任何技能。",
+    "notReadable": "你的角色无法读取技能。",
+    "skillsHint": "绑定到文件夹、模板或智能体的会话还会获得固定在那里的技能。",
+    "workspacesTruncated": "工作区列表在默认工作区之前被截断：请在工作区切换器中选择一个。",
+    "toolsHint": "在工具的安装详情中保存的会话版本会在该已注册工作区或智能体中替代此版本。",
+    "profilesNotReadable": "你的角色无法读取提供方配置文件。",
+    "packagesHint": "由每个工具的新会话所用的提供方配置文件声明（{{profiles}}）。没有配置文件的工具会获得一个不声明任何内容的新配置文件。",
+    "packagesNoProfile": "它们来自每个工具的会话所运行的提供方配置文件。目前还没有，新的配置文件不声明任何内容。",
+    "packagesRefused": "因尚无法启动会话而未列出：{{tools}}。"
   }
 }

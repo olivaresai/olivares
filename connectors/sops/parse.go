@@ -38,26 +38,6 @@ type recipient struct {
 	ref string
 }
 
-// displayName is a human label for the recipient in the secret_store inventory.
-func (r recipient) displayName() string {
-	switch r.typ {
-	case recipientAge:
-		return "SOPS age recipient"
-	case recipientKMS:
-		return "SOPS AWS KMS key"
-	case recipientGCPKMS:
-		return "SOPS GCP KMS key"
-	case recipientAzureKV:
-		return "SOPS Azure Key Vault key"
-	case recipientVault:
-		return "SOPS HashiCorp Vault key"
-	case recipientPGP:
-		return "SOPS PGP key"
-	default:
-		return "SOPS recipient"
-	}
-}
-
 // fileMetadata is the cleartext SOPS metadata block embedded in an ENCRYPTED file
 // (top-level `sops:` in YAML/JSON). Deliberately ABSENT: the per-recipient `enc`
 // (the encrypted data key), `mac`, `lastmodified` — none are read into a field, so
@@ -163,94 +143,6 @@ func parseEncrypted(data []byte) (recips []recipient, ok bool) {
 		return nil, false
 	}
 	return f.SOPS.recipients(), true
-}
-
-// rulesFile is the `.sops.yaml` configuration: a list of creation_rules, each
-// naming the recipients that encrypt files matching its path_regex. Note the Azure
-// key in .sops.yaml is `azure_keyvault` (distinct from the file metadata's
-// `azure_kv`), and `age`/`pgp` are comma/newline-separated strings here.
-type rulesFile struct {
-	CreationRules []creationRule `yaml:"creation_rules"`
-}
-
-type creationRule struct {
-	PathRegex     string         `yaml:"path_regex"`
-	Age           string         `yaml:"age"`
-	PGP           string         `yaml:"pgp"`
-	KMS           []ruleKMS      `yaml:"kms"`
-	GCPKMS        []ruleGCPKMS   `yaml:"gcp_kms"`
-	AzureKeyvault []ruleAzureKV  `yaml:"azure_keyvault"`
-	VaultURI      string         `yaml:"hc_vault_transit_uri"`
-	KeyGroups     []creationRule `yaml:"key_groups"`
-}
-
-type ruleKMS struct {
-	ARN string `yaml:"arn"`
-}
-
-type ruleGCPKMS struct {
-	ResourceID string `yaml:"resource_id"`
-}
-
-type ruleAzureKV struct {
-	VaultURL string `yaml:"vaultUrl"`
-	Key      string `yaml:"key"`
-}
-
-// recipients flattens one creation_rule into the distinct public recipients it
-// configures. age/pgp are comma/newline-separated lists of identifiers.
-func (r creationRule) recipients() []recipient {
-	var out []recipient
-	add := func(typ, ref string) {
-		ref = strings.TrimSpace(ref)
-		if ref == "" {
-			return
-		}
-		out = append(out, recipient{typ: typ, ref: "sops." + typ + ":" + ref})
-	}
-	for _, a := range splitList(r.Age) {
-		add(recipientAge, a)
-	}
-	for _, p := range splitList(r.PGP) {
-		add(recipientPGP, p)
-	}
-	for _, k := range r.KMS {
-		add(recipientKMS, k.ARN)
-	}
-	for _, k := range r.GCPKMS {
-		add(recipientGCPKMS, k.ResourceID)
-	}
-	for _, k := range r.AzureKeyvault {
-		if k.VaultURL == "" && k.Key == "" {
-			continue
-		}
-		add(recipientAzureKV, strings.TrimRight(k.VaultURL, "/")+"/"+k.Key)
-	}
-	if uri := strings.TrimSpace(r.VaultURI); uri != "" {
-		add(recipientVault, uri)
-	}
-	for _, g := range r.KeyGroups {
-		out = append(out, g.recipients()...)
-	}
-	return out
-}
-
-// parseRules reads a `.sops.yaml` file's bytes into its creation_rules' recipients.
-// A parse error yields ok=false, no error (an unrelated `.sops.yaml`-named file is
-// simply skipped). The recipients feed the Snapshot inventory only.
-func parseRules(data []byte) (recips []recipient, ok bool) {
-	var f rulesFile
-	if err := yaml.Unmarshal(data, &f); err != nil {
-		return nil, false
-	}
-	if len(f.CreationRules) == 0 {
-		return nil, false
-	}
-	var out []recipient
-	for _, r := range f.CreationRules {
-		out = append(out, r.recipients()...)
-	}
-	return dedupeRecipients(out), true
 }
 
 // splitList splits a comma/newline-separated recipient string (age/pgp in

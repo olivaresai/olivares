@@ -4,7 +4,7 @@
 //
 // The skills catalog (modules/skills): the installed packs; a pack opens its skills,
 // revisions and the departments, groups and agents it is pinned to, where it is
-// assigned and unassigned. Installing a pack stays in `olivares skills install`.
+// assigned and unassigned. Built-in and Git packs share the immutable import API.
 import { useQuery } from '@tanstack/react-query'
 import { GraduationCap } from 'lucide-react'
 import { useState } from 'react'
@@ -16,6 +16,7 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { skillsApi, skillsKeys } from './api'
+import { InstallPack } from './install-pack'
 import { PackSheet, PackState } from './pack-sheet'
 import type { SkillPack } from './types'
 import './i18n'
@@ -23,7 +24,10 @@ import './i18n'
 export function SkillsView() {
   const { t } = useTranslation('skills')
   const { activeTenant } = useAuth()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // `?pack=<id>` opens that pack (AI tools > Installed here links each skill here).
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('pack'),
+  )
   const packs = useQuery({
     queryKey: skillsKeys.packs(activeTenant),
     queryFn: () => skillsApi.packs(),
@@ -66,6 +70,7 @@ export function SkillsView() {
         title={t('title')}
         description={t('subtitle')}
       />
+      <InstallPack key={activeTenant} packs={items} />
       <ListTruncationBadge
         query={packs}
         label={t('packs.truncated', { n: items.length })}

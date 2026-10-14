@@ -38,6 +38,38 @@ command_name="$1"
 shift
 
 case "$command_name" in
+	payload)
+		[[ "$#" -eq 5 ]] || blind "payload needs CANDIDATE ARCHIVE WORK VERSION OS (empty ARCHIVE selects published assets)"
+		candidate="$1"; candidate_archive="$2"; work="$3"; release_version="$4"; os_name="$5"
+		if [[ -n "$candidate_archive" ]]; then
+			bash "${BASH_SOURCE[0]}" candidate-archive "$candidate_archive" "$candidate" "$work/archive" || exit $?
+			install -m 0755 "$work/archive/olivares" "$HOME/.local/bin/olivares" || fail "cannot install PR archive binary"
+		else
+			root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+			release_base="https://github.com/olivaresai/olivares/releases/download/$release_version"
+			if ! curl -fsSL --range 0-0 "$release_base/checksums.txt" -o /dev/null; then
+				env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" \
+					--version "$release_version" --bindir "$HOME/.local/bin" --dry-run || exit $?
+				blind "public release network path unavailable; dry-run only"
+			fi
+			# Published payloads retain the production cosign identity and checksum verifier.
+			env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" \
+				--version "$release_version" --bindir "$HOME/.local/bin" || exit $?
+		fi
+		;;
+	candidate-archive)
+		[[ "$#" -eq 3 ]] || blind "candidate-archive needs ARCHIVE CANDIDATE DESTINATION"
+		need tar
+		need cmp
+		[[ -f "$1" ]] || fail "PR archive is absent: $1"
+		mkdir -p "$3" || fail "cannot create PR archive destination"
+		tar -xzf "$1" -C "$3" olivares scripts/install-service.sh packaging/service ||
+			fail "PR archive is missing its binary or service assets"
+		[[ -f "$3/olivares" && -x "$3/olivares" && -f "$3/scripts/install-service.sh" ]] ||
+			fail "PR archive does not contain executable payload and service helper"
+		cmp -s "$2" "$3/olivares" || fail "PR archive binary differs from this head's candidate"
+		printf 'installer-matrix: PR archive binary and service assets OK (unsigned development payload)\n'
+		;;
 	binary)
 		[[ "$#" -eq 2 ]] || blind "binary needs FILE EXPECTED_UID"
 		[[ "$2" =~ ^[0-9]+$ ]] || blind "expected uid is not numeric"

@@ -29,11 +29,11 @@
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-json": "^6.0.2",
-    "@codemirror/language": "^6.12.4",
+    "@codemirror/language": "^6.13.1",
     "@codemirror/lint": "^6.9.7",
     "@codemirror/merge": "^6.12.2",
     "@codemirror/state": "^6.7.6",
-    "@codemirror/view": "^6.43.13",
+    "@codemirror/view": "^6.43.14",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource-variable/space-grotesk": "^5.3.0",
@@ -67,7 +67,7 @@
     "graphology": "0.26.0",
     "i18next": "^26.4.2",
     "i18next-browser-languagedetector": "^8.2.1",
-    "lucide-react": "^1.52.0",
+    "lucide-react": "^1.53.0",
     "onnxruntime-web": "1.31.0-dev.20260914-8d85527a0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -83,7 +83,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^10.0.1",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query-devtools": "^5.104.1",
     "@tanstack/router-devtools": "^1.167.2",
@@ -109,7 +109,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.1",
-    "vite": "^8.3.3",
+    "vite": "^8.3.4",
     "vitest": "^4.1.11"
   },
   "pnpm": {

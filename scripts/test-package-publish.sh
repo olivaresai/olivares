@@ -32,7 +32,7 @@ mkdir -p "$scratch/bin" "$scratch/store" "$scratch/tree" "$scratch/evidence"
 cat >"$scratch/bin/wrangler" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${1:-}" == --version ]]; then printf '%s\n' 4.100.0; exit 0; fi
+if [[ "${1:-}" == --version ]]; then printf '%s\n' "$FAKE_WRANGLER_VERSION"; exit 0; fi
 [[ "${1:-}" == r2 && "${2:-}" == object ]] || exit 9
 verb="${3:-}"; ref="${4:-}"; shift 4
 [[ "$ref" != /* && "$ref" != *..* ]] || exit 9
@@ -88,6 +88,11 @@ for rel in \
 	make_file "$rel"
 done
 
+# The publisher runs the wrangler docs-site/package.json pins (publish-packages.yml installs it
+# with npm ci), so the fake reports that pin.
+FAKE_WRANGLER_VERSION="$(sed -nE 's/^[[:space:]]*"wrangler": "([0-9]+\.[0-9]+\.[0-9]+)",?$/\1/p' "$root/docs-site/package.json")"
+[[ "$FAKE_WRANGLER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+export FAKE_WRANGLER_VERSION
 export FAKE_STORE="$scratch/store"
 export FAKE_LOG="$scratch/wrangler.log"
 export CLOUDFLARE_API_TOKEN=test-only
@@ -106,6 +111,14 @@ run_publish --mode stage >"$scratch/out"
 [[ "$(find "$scratch/store" -type f | wc -l)" -eq 0 ]]
 grep -F 'DRY-RUN' "$scratch/out" >/dev/null
 ok 'dry-run writes zero R2 objects'
+
+set +e
+FAKE_WRANGLER_VERSION=0.0.0 run_publish --mode stage --apply >"$scratch/out" 2>&1
+rc=$?
+set -e
+[[ "$rc" -eq 2 && "$(find "$scratch/store" -type f | wc -l)" -eq 0 ]]
+grep -F 'want pinned' "$scratch/out" >/dev/null
+ok 'a wrangler other than the docs-site pin writes zero R2 objects'
 
 run_publish --mode stage --apply >"$scratch/out"
 [[ -f "$scratch/store/olivares-packages/staging/run-42-attempt-1/.inventory.sha256" ]]

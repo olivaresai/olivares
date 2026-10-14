@@ -216,6 +216,18 @@ it('withholds administrative settings for a non-superadmin and unoffered setting
   )
 })
 
+it('binds the palette inventory cache entry to the active tenant', async () => {
+  const queryClient = createTestQueryClient()
+  useCommandStore.getState().setOpen(true)
+  renderIntel(<CommandMenu />, { queryClient })
+  await screen.findByRole('option', { name: /Codex/ })
+  const reads = queryClient.getQueryCache().findAll({
+    predicate: (query) => query.state.data === inventory,
+  })
+  expect(reads).toHaveLength(1)
+  expect(reads[0].queryKey).toContain(state.tenant)
+})
+
 it('drops the previous tenant tool result while the next tenant read is pending', async () => {
   const user = userEvent.setup()
   const view = open()

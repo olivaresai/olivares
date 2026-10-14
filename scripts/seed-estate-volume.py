@@ -424,13 +424,19 @@ def main(argv):
     #    en el import: un banco que importe este guion como modulo no debe heredar el hook.
     instala_excepthook(redacta, "seed-estate-volume")
     p = argparse.ArgumentParser(description="Fill the demo estate to each surface target.")
-    p.add_argument("base"); p.add_argument("token"); p.add_argument("tenant")
+    p.add_argument("base")
+    p.add_argument("token", help="bearer token, or - to read OLIVARES_TOKEN")
+    p.add_argument("tenant")
     p.add_argument("--workspace", default="billing")
     p.add_argument("--objetivos", default=OBJETIVOS_POR_DEFECTO)
     p.add_argument("--prefijo", default=PREFIJO_POR_DEFECTO)
     p.add_argument("--solo-medir", action="store_true",
                    help="count and distribute WITHOUT sending a POST (no side effects)")
     a = p.parse_args(argv[1:])
+    if a.token == "-":
+        a.token = os.environ.get("OLIVARES_TOKEN", "")
+        if not a.token:
+            p.error("OLIVARES_TOKEN is required when token is -")
 
     decl, no_sembrables, motivo = carga_objetivos(a.objetivos)
     if motivo:

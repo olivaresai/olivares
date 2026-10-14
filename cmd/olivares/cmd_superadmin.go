@@ -35,7 +35,7 @@ func newSuperadminCmd() *cobra.Command {
 			"  olivares superadmin enable --email admin@example.com --actor ops-oncall --reason leave-ended",
 		Long: "List the internal superadmin accounts and their active/inactive status, and enable\n" +
 			"or disable one. Disabling is non-destructive and reversible: the account is marked\n" +
-			"inactive and its live sessions/tokens are revoked, but it is never deleted — re-enable\n" +
+			"inactive and its live sessions and tokens are revoked, but it is never deleted — re-enable\n" +
 			"it later with `superadmin enable`. The last ACTIVE superadmin cannot be disabled\n" +
 			"(deny-closed against total lockout); provision another active superadmin first.",
 	}
@@ -122,7 +122,7 @@ type superadminSetActiveResult struct {
 
 func superadminDisableCmd() *cobra.Command {
 	return superadminSetActiveCmd("disable", false,
-		"Disable an internal superadmin (marks it inactive and revokes its sessions/tokens; never deletes)")
+		"Disable an internal superadmin (marks it inactive and revokes its sessions and tokens; never deletes)")
 }
 
 func superadminEnableCmd() *cobra.Command {

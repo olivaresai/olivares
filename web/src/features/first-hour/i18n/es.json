@@ -74,6 +74,7 @@
     "folder": "Carpeta",
     "folderHint": "Una carpeta de este servidor. Déjala vacía para empezar en una carpeta nueva.",
     "folderNew": "Una carpeta nueva para esta sesión",
+    "folderTyped": "Otra carpeta…",
     "folderChange": "Cambiar carpeta",
     "readingFolder": "Leyendo la carpeta de la última sesión…",
     "prompt": "Primer mensaje (opcional)",
@@ -102,7 +103,8 @@
     "openProviders": "Abrir Proveedores",
     "profile": "Perfil",
     "profileNotSignedIn": "Sin iniciar sesión",
-    "profileNeedsKey": "Falta una clave"
+    "profileNeedsKey": "Falta una clave",
+    "foldersUnreadable": "No se pudieron leer las carpetas registradas. Escriba la ruta de una carpeta de este servidor."
   },
   "lists": {
     "runsTruncated": "Sesiones recientes: {{count}} cargadas; hay más.",

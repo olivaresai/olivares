@@ -159,10 +159,18 @@ type ProviderProfile struct {
 	SessionToolsDeclared  bool
 	SessionPermissionMode string
 	SessionWorkGrant      string
-	Version               int64
-	CreatedAt             string
-	UpdatedAt             string
-	RetiredAt             string
+	// SessionPrograms and SessionRegistries are the programs and package
+	// registries every session under this profile gets
+	// (provider_profile_packages.go); nil declares none.
+	SessionPrograms   []string
+	SessionRegistries []SessionRegistry
+	// packagesUnreadable: a stored declaration could not be read; a launch
+	// under this profile is refused (errUnreadablePackages).
+	packagesUnreadable bool
+	Version            int64
+	CreatedAt          string
+	UpdatedAt          string
+	RetiredAt          string
 }
 
 // ProviderHomeSnapshot is the non-secret launch snapshot resolved server-side from a
@@ -222,6 +230,13 @@ type CreateProfileInput struct {
 	SessionPermissionMode string
 	SessionWorkGrant      json.RawMessage
 	WorkGrantActor        auth.Principal
+	// SessionPrograms and SessionRegistries declare the programs and package
+	// registries sessions under this profile get (provider_profile_packages.go).
+	SessionPrograms   []string
+	SessionRegistries []SessionRegistry
+	// MayUseSecretEnv is set by the server from the AUTHENTICATED caller's tenant
+	// administration: declaring programs or registries needs it.
+	MayUseSecretEnv bool
 }
 
 // registerProviderProfileSchema declares the three B1 entities: the profile, the
@@ -262,6 +277,8 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// that predates the columns therefore reads as undeclared, which is what it is.
 			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionTools},
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
+			{Name: colPPSessionPrograms, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionPrograms},
+			{Name: colPPSessionRegistries, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionRegistries},
 			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace; re-read for mint and renewal: modules/sessions/orchestration_work.go:87, modules/sessions/orchestration_work.go:145")},
 			// Account metadata does not enter ProviderHomeSnapshot. A NULL name keeps
 			// every existing row an unnamed profile; account identity reuses its ref.
@@ -669,6 +686,7 @@ func (m *Module) localEnvironment() (string, error) {
 
 func profileFromRecord(rec model.Record) ProviderProfile {
 	policy := decodeSessionPolicy(rec)
+	programs, registries, packagesOK := decodeProfilePackages(rec)
 	return ProviderProfile{
 		ID:                    model.ID(rec.String(model.ColID)),
 		Ref:                   rec.String(colPPRef),
@@ -686,6 +704,9 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		SessionToolsDeclared:  policy.ToolsDeclared,
 		SessionPermissionMode: policy.PermissionMode,
 		SessionWorkGrant:      rec.String(colPPSessionWorkGrant),
+		SessionPrograms:       programs,
+		SessionRegistries:     registries,
+		packagesUnreadable:    !packagesOK,
 		Version:               rec.Int(model.ColVersion),
 		CreatedAt:             rec.String(model.ColCreatedAt),
 		UpdatedAt:             rec.String(model.ColUpdatedAt),
@@ -813,6 +834,11 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
+	programs, registries, err := validateProfilePackagesInput(in.SessionPrograms, in.SessionRegistries,
+		len(in.SessionPrograms)+len(in.SessionRegistries) > 0, in.MayUseSecretEnv)
+	if err != nil {
+		return ProviderProfile{}, err
+	}
 	if err := m.authorizeProfileWorkGrant(ctx, in.WorkGrantActor, tenant, in.SessionWorkGrant); err != nil {
 		return ProviderProfile{}, err
 	}
@@ -858,6 +884,8 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 		setIf(rec, colPPSessionWorkGrant, encodeProfileWorkGrant(grant))
 		setIf(rec, colPPSessionTools, policyTools)
 		setIf(rec, colPPSessionPermissionMode, policyMode)
+		setIf(rec, colPPSessionPrograms, programs)
+		setIf(rec, colPPSessionRegistries, registries)
 		created, err := repo.Create(ctx, rec)
 		if err != nil {
 			return err
@@ -952,6 +980,13 @@ type ProfilePatch struct {
 	SessionPermissionMode *string
 	SessionWorkGrant      json.RawMessage
 	WorkGrantActor        auth.Principal
+	// SessionPrograms and SessionRegistries re-declare the programs and package
+	// registries; an empty list withdraws the declaration. Like the tool policy,
+	// they do not reach a live child.
+	SessionPrograms   *[]string
+	SessionRegistries *[]SessionRegistry
+	// MayUseSecretEnv: as CreateProfileInput's.
+	MayUseSecretEnv bool
 }
 
 // PatchProfile renames and/or transitions a profile in ONE validated transaction.
@@ -1004,8 +1039,21 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 	if grantErr != nil {
 		return ProviderProfile{}, grantErr
 	}
+	var inPrograms []string
+	var inRegistries []SessionRegistry
+	if p.SessionPrograms != nil {
+		inPrograms = *p.SessionPrograms
+	}
+	if p.SessionRegistries != nil {
+		inRegistries = *p.SessionRegistries
+	}
+	programs, registries, err := validateProfilePackagesInput(inPrograms, inRegistries,
+		p.SessionPrograms != nil || p.SessionRegistries != nil, p.MayUseSecretEnv)
+	if err != nil {
+		return ProviderProfile{}, err
+	}
 	var out ProviderProfile
-	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
@@ -1064,6 +1112,12 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		}
 		if p.SessionPermissionMode != nil {
 			setOrNull(rec, colPPSessionPermissionMode, strings.TrimSpace(*p.SessionPermissionMode))
+		}
+		if p.SessionPrograms != nil {
+			setOrNull(rec, colPPSessionPrograms, programs)
+		}
+		if p.SessionRegistries != nil {
+			setOrNull(rec, colPPSessionRegistries, registries)
 		}
 		if p.State != nil {
 			switch *p.State {
@@ -1138,6 +1192,9 @@ func profileSessionPolicy(prof ProviderProfile) sessionPolicy {
 		ToolsDeclared:  prof.SessionToolsDeclared,
 		PermissionMode: prof.SessionPermissionMode,
 		workGrant:      prof.SessionWorkGrant,
+		programs:       prof.SessionPrograms,
+		registries:     prof.SessionRegistries,
+		unreadable:     prof.packagesUnreadable,
 	}
 }
 
@@ -1219,13 +1276,7 @@ const providerDriverClaude = "claude"
 // comparison is over the immutable identity and the current state — a rename in
 // between is fine; a moved home, a retire or a foreign environment is not.
 func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.TenantID, rec model.Record) (ProviderHomeSnapshot, sessionPolicy, error) {
-	stored := ProviderHomeSnapshot{
-		ProfileID: rec.String(colRunProfileID), Driver: rec.String(colRunProfileDriver),
-		EnvironmentRef: rec.String(colRunProfileEnvRef),
-		ConfigHome:     rec.String(colRunProfileConfigHome), UserHome: rec.String(colRunProfileUserHome),
-		AuthSource:        rec.String(colRunProviderAuthSource),
-		ProviderRecordRef: rec.String(colRunProviderRecordRef),
-	}
+	stored := storedProfileSnapshot(rec)
 	if stored.ProfileID == "" {
 		return ProviderHomeSnapshot{}, sessionPolicy{}, conflictErr("legacy session has no proven provider home and cannot be continued")
 	}
@@ -1288,5 +1339,17 @@ var (
 	// array of strings and decoded back (provider_profile_policy.go:138-150).
 	pdeclProfileSessionTools = model.Nested([]string{}, model.ClassEvidence,
 		model.Leaf("[]", model.None("a declared session tool name: provider_profile_policy.go:138-150")),
+	)
+	// pdeclProfileSessionPrograms and pdeclProfileSessionRegistries are the
+	// declared programs and registries, JSON arrays decoded back for a launch
+	// (provider_profile_packages.go:230).
+	pdeclProfileSessionPrograms = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("an installed program name resolved to a session's PATH: provider_profile_packages.go:279")),
+	)
+	pdeclProfileSessionRegistries = model.Nested([]SessionRegistry{}, model.ClassEvidence,
+		model.Leaf("[].kind", model.None("a closed package manager kind: provider_profile_packages.go:176")),
+		model.Leaf("[].url", model.None("a registry base URL written to a session's npm configuration: provider_profile_packages.go:330")),
+		model.Leaf("[].scope", model.None("an npm scope routed to the registry: provider_profile_packages.go:332")),
+		model.Leaf("[].secret", model.None("a vault secret name, never its value, opened at launch: provider_profile_packages.go:313")),
 	)
 )

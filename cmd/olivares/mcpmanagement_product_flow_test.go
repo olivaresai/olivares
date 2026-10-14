@@ -262,6 +262,15 @@ for line in sys.stdin:
             out['managed_healthy'] = 'result' in healthy and listing.get('result',{}).get('tools') == []
             denied = rpc('tools/call',{'name':'hu_echo','arguments':{'text':'must not execute'}})
             out['denial_code'] = denied.get('error',{}).get('code')
+        if 'Call managed ' in line:
+            alias, server_id = line.split('Call managed ',1)[1].split('"',1)[0].split()
+            called = rpc('tools/call',{'name':alias,'arguments':{'text':'assigned'}})
+            out['alias_call'] = called['result']['content'][0]['text'] if 'result' in called else str(called.get('error',{}).get('code'))
+            direct = urllib.request.Request(server['url']+'?server='+server_id,data=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{}}).encode(),headers=headers)
+            try:
+                with opener.open(direct,timeout=10) as response: out['direct_status'] = response.status
+            except urllib.error.HTTPError as response:
+                out['direct_status'] = response.code
     except Exception as e:
         out = {'error':type(e).__name__}
     with open('catalogue-result.tmp','w') as f: json.dump(out,f)

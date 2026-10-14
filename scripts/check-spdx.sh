@@ -230,6 +230,8 @@ classify() {
   # header would change what the grammar reads. DATA, scoped to that directory and not
   # to the suffixes: a .line or .record anywhere else is still unclassified (exit 2).
   case "$1" in
+    # Vendored ONNX model weights are protobuf data; their MIT license is in REUSE.toml.
+    web/src/features/dictation/model/onnx/*.onnx) echo data; return ;;
     scripts/fixtures/package-upgrade/records-v1/*.line|scripts/fixtures/package-upgrade/records-v1/*.record)
       echo data; return ;;
     # The built-in skills catalog archives hold third-party upstream bytes under their own

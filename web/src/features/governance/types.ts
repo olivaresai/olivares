@@ -35,8 +35,9 @@ export interface IdentityDTO {
   source?: string
   /** human | nhi | unknown (from Metadata.principal_type). */
   principal_type?: PrincipalType
-  /** Account disabled flag (from Metadata.disabled). */
-  disabled: boolean
+  /** Account disabled flag (from Metadata.disabled). `null` when the source never
+   *  reported the state: an identity created from a bare ref is not "enabled". */
+  disabled: boolean | null
 }
 
 /** One reconciled collection (item of GET /groups). */

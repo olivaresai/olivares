@@ -128,3 +128,53 @@ func TestAgentProfileGetNamesAnUndeclaredToolPolicy(t *testing.T) {
 		t.Fatalf("an undeclared policy must read as the default set, got %q", out)
 	}
 }
+
+// dev#1517: the CLI declares a profile's programs and npm registries, shows them,
+// and withdraws them with an empty value; a malformed registry never leaves.
+func TestAgentProfileUpdateDeclaresProgramsAndRegistries(t *testing.T) {
+	withPackages := strings.TrimSuffix(profileJSON, "}") + `,"session_programs":["rea"],` +
+		`"session_registries":[{"kind":"npm","url":"https://npm.acme.dev/","scope":"@acme","secret":"env/npm-acme"}]}`
+	p := newCreateProbe(t, http.StatusOK, withPackages)
+	t.Setenv("HOME", t.TempDir())
+
+	out, _, err := execRoot(t, profileArgs(p.URL, "update", "ppf-1", "--program", "rea",
+		"--npm-registry", "url=https://npm.acme.dev/,scope=@acme,secret=env/npm-acme")...)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got := decodeCreateBody(t, p.lastBody())
+	if programs, _ := got["session_programs"].([]any); len(programs) != 1 || programs[0] != "rea" {
+		t.Fatalf("session_programs=%v", got["session_programs"])
+	}
+	regs, _ := got["session_registries"].([]any)
+	reg, _ := regs[0].(map[string]any)
+	if len(regs) != 1 || reg["kind"] != "npm" || reg["url"] != "https://npm.acme.dev/" || reg["scope"] != "@acme" || reg["secret"] != "env/npm-acme" {
+		t.Fatalf("session_registries=%v", got["session_registries"])
+	}
+	if _, present := got["session_tools"]; present {
+		t.Fatalf("update sent session_tools, which the operator did not name: %v", got)
+	}
+	if !strings.Contains(out, "rea") || !strings.Contains(out, "@acme https://npm.acme.dev/ (token from env/npm-acme)") {
+		t.Fatalf("the printed record must show the programs and registries, got %q", out)
+	}
+
+	if _, _, err := execRoot(t, profileArgs(p.URL, "update", "ppf-1", "--program", "", "--npm-registry", "")...); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	got = decodeCreateBody(t, p.lastBody())
+	for _, key := range []string{"session_programs", "session_registries"} {
+		if list, ok := got[key].([]any); !ok || len(list) != 0 {
+			t.Fatalf(`an empty value must send an EMPTY %s list, got %v`, key, got[key])
+		}
+	}
+
+	calls := p.calls.Load()
+	for _, bad := range []string{"https://npm.acme.dev/", "url=https://npm.acme.dev/,secret=", "url=,url=https://npm.acme.dev/"} {
+		if _, _, err := execRoot(t, profileArgs(p.URL, "update", "ppf-1", "--npm-registry", bad)...); err == nil {
+			t.Fatalf("--npm-registry %q was accepted", bad)
+		}
+	}
+	if p.calls.Load() != calls {
+		t.Fatal("a malformed registry reached the server")
+	}
+}

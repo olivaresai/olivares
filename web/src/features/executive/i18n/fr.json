@@ -94,6 +94,8 @@
     "driftPending": "En attente de liaison d’identité",
     "driftUnused": "Octrois inutilisés",
     "coverageNote": "Certains accès sont observés avec une couverture partielle (capture approximative ou opaque) ; les chiffres de dérive constituent une borne inférieure.",
+    "driftTruncated": "La lecture de la dérive des accès est partielle ; les chiffres constituent une borne inférieure.",
+    "driftUnavailable": "La dérive des accès n’a pas pu être lue.",
     "noFindings": "Aucun constat ouvert.",
     "noRuns": "Aucune exécution de l’équipe rouge pour l’instant.",
     "sharedDescription": "Constats de sécurité ouverts et dérive des accès."

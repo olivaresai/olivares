@@ -12,6 +12,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import { EmptyState } from '@/components/ui/empty-state'
 import { AccessibleChart } from '@/components/data/accessible-chart'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -790,9 +791,13 @@ export function ReleaseStatePanel({
           backend — the same untranslated channel as signature_reason and
           pipeline.note. It is what stops the chip above from reading as proof that a
           release was published, and it needs no locale string to do it. */}
-      <CaveatNotice tone="neutral">{release.provenance.note}</CaveatNotice>
+      <CaveatNotice tone="neutral">
+        {withInlineCommands(release.provenance.note)}
+      </CaveatNotice>
       <dl>
-        <Row label={t('live.fields.releaseReason')}>{release.reason}</Row>
+        <Row label={t('live.fields.releaseReason')}>
+          {withInlineCommands(release.reason)}
+        </Row>
         <Row label={t('live.fields.signature')}>
           <span className="font-mono">{release.signature_status}</span>
           {' — '}

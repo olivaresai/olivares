@@ -56,30 +56,6 @@ type reasoningEngine struct {
 	} `json:"spec"`
 }
 
-// trustDomainOf returns the SPIFFE trust domain of a scheme-less effective
-// identity: its first path component, e.g.
-// agents.global.org-123456789012.system.id.goog (org parent) or
-// agents.global.project-9876543210.system.id.goog (org-less project).
-func trustDomainOf(effectiveIdentity string) string {
-	if i := strings.IndexByte(effectiveIdentity, '/'); i >= 0 {
-		return effectiveIdentity[:i]
-	}
-	return effectiveIdentity
-}
-
-// projectNumberOf returns the path segment after "projects/" in a scheme-less
-// effective identity (the PROJECT NUMBER, distinct from the configured project
-// id), or "" when absent.
-func projectNumberOf(effectiveIdentity string) string {
-	segs := strings.Split(effectiveIdentity, "/")
-	for i, seg := range segs {
-		if seg == "projects" && i+1 < len(segs) {
-			return segs[i+1]
-		}
-	}
-	return ""
-}
-
 // lastSegment returns the final path segment of a resource name (the engine id),
 // used as the display-name fallback.
 func lastSegment(name string) string {

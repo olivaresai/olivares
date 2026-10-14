@@ -144,7 +144,14 @@ export function useUrlState(
         searchPatch[k] = next[k]
       }
       stateRef.current = next
-      if (!sameState(prev, next, ownedKeys)) setOptimistic(next)
+      // A patch that changes nothing writes nothing. One gesture can reach this
+      // function twice with the same value before the view re-renders (Radix Tabs
+      // 1.1.22 focuses the trigger inside its mousedown handler, so its focus handler
+      // selects the still-unselected tab and the mousedown handler selects it again).
+      // `stateRef` already holds the first write, so the repeat is recognised here
+      // and costs the router no second navigation.
+      if (sameState(prev, next, ownedKeys)) return
+      setOptimistic(next)
       // Reflect into the URL: merge over the existing search so non-owned
       // params survive; explicit undefined deletes (TanStack drops them).
       void navigate({

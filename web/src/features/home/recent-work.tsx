@@ -38,6 +38,7 @@ import {
 import { runFolder } from '@/features/sessions/folder'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
+import { sessionModelRef } from '@/features/sessions/session-usage'
 import { WorkClause } from '@/features/sessions/work-clause'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
@@ -69,10 +70,15 @@ function WorkRow({
   // field was added. Every part is still a figure the engine sent, and a part it did
   // not send is still left out rather than printed as a zero.
   const facts = live
-    ? workFacts(live, ts, {
-        duration: (ms) => formatDuration(ms),
-        cost: (micro) => formatMicroUsd(micro, { compact: true }),
-      })
+    ? workFacts(
+        live,
+        ts,
+        {
+          duration: (ms) => formatDuration(ms),
+          cost: (micro) => formatMicroUsd(micro, { compact: true }),
+        },
+        sessionModelRef(run, live),
+      )
     : []
   const fullTitle = [name, shortId, naming.reference, folder, ...facts]
     .filter((part, i, all) => part && all.indexOf(part) === i)

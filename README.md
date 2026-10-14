@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
+[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -21,8 +21,29 @@ Your developers work with Claude Code and Codex. Agents call MCP servers, models
 Olivares AI answers them in one place. It connects to the agents and tools you already use, shows what each one does, applies your rules before an action runs, and keeps a signed record of everything. It is a single program that runs on your own servers, and the complete product is free and open source.
 
 <div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
-<br><sub><b>The access map</b> — what every agent reads and writes, and the one write nobody allowed.</sub>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
+  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="The Cockpit screen of the Olivares AI console">
+</picture>
+<br><sub><b>Cockpit</b> — what every agent is doing now, the approvals waiting for you and each account's usage limits.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
+  <img src=".github/assets/console-session-light.webp" width="840" alt="The Session screen of the Olivares AI console">
+</picture>
+<br><sub><b>Session</b> — the conversation beside its plan, agents, background tasks, changed files and usage limits.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
+  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="The Parallel sessions screen of the Olivares AI console">
+</picture>
+<br><sub><b>Parallel sessions</b> — six agents at work side by side, each in its own branch, with its latest output, cost and usage limit.</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
+  <img src=".github/assets/console-access-map-light.webp" width="840" alt="The Access map screen of the Olivares AI console">
+</picture>
+<br><sub><b>Access map</b> — what each agent reads and writes, checked against what it was granted.</sub>
 </div>
 
 ## What it does
@@ -62,7 +83,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.1 \
+  docker.io/olivaresai/olivares:0.2 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -158,9 +179,10 @@ Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) explains the set
 
 ## Support the project
 
-Olivares AI is built in the open. If it helps you, sponsor its development on GitHub Sponsors — [olivaresai](https://github.com/sponsors/olivaresai) or [fran-olivares](https://github.com/sponsors/fran-olivares) — or buy us a coffee on Ko-fi. Sponsors who want to be named appear in [`SUPPORTERS.md`](SUPPORTERS.md). Sponsorship is not a support contract ([`SUPPORT.md`](SUPPORT.md)).
+Olivares AI is built in the open. If it helps you, support its development on GitHub Sponsors or tip us on Ko-fi. Sponsors who want to be named appear in [`SUPPORTERS.md`](SUPPORTERS.md). Sponsorship is not a support contract ([`SUPPORT.md`](SUPPORT.md)).
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z1R625SAD2)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-Sponsor-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/olivaresai)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/Z1R625SAD2)
 
 ## License
 

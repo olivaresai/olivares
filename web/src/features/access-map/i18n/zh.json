@@ -188,6 +188,7 @@
       "attributed": "已归因",
       "approximate": "近似"
     },
-    "analyse": "分析攻击路径（留痕）"
+    "analyse": "分析攻击路径（留痕）",
+    "truncated": "引擎对本次分析设置了上限，所显示的路径并非完整结果。"
   }
 }

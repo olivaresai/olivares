@@ -33,5 +33,15 @@
     "loading": "Lecture du contenu de l’espace de travail…",
     "empty": "Cet espace de travail ne contient encore rien.",
     "unavailable": "Le contenu de l’espace de travail est indisponible."
+  },
+  "sessionFolders": {
+    "title": "Dossiers de session",
+    "intro": "Dossiers de ce serveur où travaillent les sessions. Ils sont distincts des espaces de travail.",
+    "manage": "Gérer les dossiers",
+    "folder": "Dossier",
+    "empty": "Aucun dossier de session pour l'instant. Un dossier apparaît ici dès qu'une session y démarre.",
+    "loading": "Lecture des dossiers de session…",
+    "unavailable": "Les dossiers de session sont indisponibles.",
+    "truncationHint": "Ouvrez Sessions pour voir tous les dossiers."
   }
 }

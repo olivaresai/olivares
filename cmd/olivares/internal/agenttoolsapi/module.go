@@ -25,23 +25,26 @@ import (
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/catalog"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 const maxRetained = 1000
 
 // Plan exposes the original approval document and a small console summary.
 type Plan struct {
-	Digest       string `json:"digest"`
-	Driver       string `json:"driver"`
-	Version      string `json:"version"`
-	Verification string `json:"verification"`
-	Executable   string `json:"executable"`
-	Document     any    `json:"document"`
-	v1           *toolinstall.Plan
-	v2           *toolinstall.PlanV2
-	requested    string
-	tenant       model.TenantID
-	expires      time.Time
+	Digest        string `json:"digest"`
+	Driver        string `json:"driver"`
+	Version       string `json:"version"`
+	Verification  string `json:"verification"`
+	Executable    string `json:"executable"`
+	Document      any    `json:"document"`
+	v1            *toolinstall.Plan
+	v2            *toolinstall.PlanV2
+	requested     string
+	tenant        model.TenantID
+	catalogTenant model.TenantID
+	expires       time.Time
 }
 
 // Job is an immutable snapshot when returned to the caller. Receipt is the engine's receipt.
@@ -64,17 +67,19 @@ type savedJob struct {
 }
 
 type Module struct {
-	engine   *toolinstall.Engine
-	root     string
-	readOnly bool
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
-	mu       sync.Mutex
-	plans    map[string]*Plan
-	jobs     map[model.ID]*savedJob
-	files    *os.Root
-	active   bool
+	toolDeclaration func(context.Context, api.ModuleContext, model.TenantID, string, string) (*catalog.ToolDeclaration, error)
+	engine          *toolinstall.Engine
+	root            string
+	readOnly        bool
+	ctx             context.Context
+	cancel          context.CancelFunc
+	wg              sync.WaitGroup
+	mu              sync.Mutex
+	plans           map[string]*Plan
+	jobs            map[model.ID]*savedJob
+	files           *os.Root
+	active          bool
+	sessions        *sessions.Module
 
 	// resolveProgram and signIns serve the tool sign-in (signin.go).
 	resolveProgram func(driver string) string
@@ -149,6 +154,26 @@ func (m *Module) Close() {
 		m.files.Close()
 	}
 }
+
+// SetToolDeclarationResolver binds the running catalog's tenant-scoped admission.
+func (m *Module) SetToolDeclarationResolver(f func(context.Context, api.ModuleContext, model.TenantID, string, string) (*catalog.ToolDeclaration, error)) {
+	m.toolDeclaration = f
+}
+
+func (m *Module) declaration(ctx context.Context, mc api.ModuleContext, tenant model.TenantID, source, version string) (*catalog.ToolDeclaration, error) {
+	if m.toolDeclaration == nil {
+		return nil, &toolinstall.Refusal{Kind: toolinstall.KindUnadmitted, Err: catalog.ErrToolUnadmitted}
+	}
+	d, err := m.toolDeclaration(ctx, mc, tenant, source, version)
+	if errors.Is(err, catalog.ErrToolUnadmitted) || (err == nil && d == nil) {
+		if err == nil {
+			err = catalog.ErrToolUnadmitted
+		}
+		err = &toolinstall.Refusal{Kind: toolinstall.KindUnadmitted, Err: err}
+	}
+	return d, err
+}
+
 func (*Module) APINamespace() string           { return "agenttools" }
 func (*Module) Permissions() []auth.Permission { return nil }
 
@@ -160,6 +185,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 		panic("agenttools requires system-scope module registration")
 	}
 	door.HandleSystem("GET", "/inventory", m.handleInventory)
+	door.HandleSystem("DELETE", "/releases", m.handleRemove)
+	door.HandleSystem("GET", "/pins", m.handlePins)
+	door.HandleSystem("PUT", "/pins", m.handlePin)
 	door.HandleSystem("GET", "/detect", m.handleDetect)
 	door.HandleSystem("POST", "/plans", m.handlePlan)
 	door.HandleSystem("POST", "/installs", m.handleInstall)
@@ -247,20 +275,24 @@ type toolPresence struct {
 	Present bool   `json:"present"`
 }
 
-// sessionToolPresence lists unmanaged tools and the published Gemini presence field.
-// It uses the launch program resolver and executable lookup; it never runs a tool.
-func (m *Module) sessionToolPresence() map[string]toolPresence {
-	presence := map[string]toolPresence{}
+// launchPrograms reads the launch program resolver once per session tool: the
+// executable each new session runs, and the unmanaged tools' published presence
+// field (Gemini's predates its installer). It never runs a tool.
+func (m *Module) launchPrograms() (map[string]string, map[string]toolPresence) {
+	programs, presence := map[string]string{}, map[string]toolPresence{}
 	for _, facts := range driverfacts.All() {
-		// Gemini presence predates its installer and remains a published API field.
-		if !facts.Session || facts.Installer != "" && facts.Key != "gemini-cli" {
+		if !facts.Session {
 			continue
 		}
-		_, err := exec.LookPath(m.program(facts.Key))
-		presence[facts.Key] = toolPresence{Program: facts.Program,
-			Present: err == nil}
+		program, err := exec.LookPath(m.program(facts.Key))
+		if err == nil {
+			programs[facts.Key] = program
+		}
+		if facts.Installer == "" || facts.Key == "gemini-cli" {
+			presence[facts.Key] = toolPresence{Program: facts.Program, Present: err == nil}
+		}
 	}
-	return presence
+	return programs, presence
 }
 
 func (m *Module) inventory(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -283,7 +315,8 @@ func (m *Module) inventory(w http.ResponseWriter, r *http.Request, mc api.Module
 	if len(recent) > 5 {
 		recent = recent[:5]
 	}
-	write(w, 200, map[string]any{"drivers": m.engine.DriverKeys(), "presence": m.sessionToolPresence(), "verification_levels": m.engine.VerificationLevels(), "platform": toolinstall.HostPlatform(), "inventory": inv, "read_only": m.readOnly, "jobs": recent})
+	programs, presence := m.launchPrograms()
+	write(w, 200, map[string]any{"drivers": m.engine.DriverKeys(), "presence": presence, "launch_programs": programs, "verification_levels": m.engine.VerificationLevels(), "platform": toolinstall.HostPlatform(), "inventory": inv, "read_only": m.readOnly, "jobs": recent})
 }
 func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	driver := r.URL.Query().Get("driver")
@@ -360,6 +393,7 @@ func (m *Module) plan(w http.ResponseWriter, r *http.Request, mc api.ModuleConte
 	var in struct {
 		Driver  string `json:"driver"`
 		Version string `json:"version"`
+		From    string `json:"from,omitempty"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -368,7 +402,30 @@ func (m *Module) plan(w http.ResponseWriter, r *http.Request, mc api.ModuleConte
 		fail(w, 400, "bad_request", "Choose a release version or vendor channel.")
 		return
 	}
-	capab, err := m.engine.Capability(in.Driver)
+	var declaration *catalog.ToolDeclaration
+	var catalogTenant model.TenantID
+	var capab toolinstall.ProviderCapability
+	var err error
+	if in.From != "" {
+		if in.Driver != "" {
+			fail(w, 400, "bad_request", "Choose either an official tool or a catalog source.")
+			return
+		}
+		var ok bool
+		catalogTenant, ok = tenantOf(r.Header.Get("X-Olivares-Tenant"))
+		if !ok {
+			fail(w, 400, "bad_request", "Select the organization whose Catalog admitted this source.")
+			return
+		}
+		declaration, err = m.declaration(r.Context(), mc, catalogTenant, in.From, in.Version)
+		if err == nil {
+			in.Driver = declaration.Driver()
+			in.Version = declaration.Version
+			capab = toolinstall.ProviderCapabilityV2
+		}
+	} else {
+		capab, err = m.engine.Capability(in.Driver)
+	}
 	if err != nil {
 		installerError(w, err)
 		return
@@ -379,7 +436,7 @@ func (m *Module) plan(w http.ResponseWriter, r *http.Request, mc api.ModuleConte
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
-	p := &Plan{Driver: in.Driver, requested: in.Version, tenant: mc.Tenant, expires: time.Now().Add(10 * time.Minute)}
+	p := &Plan{Driver: in.Driver, requested: in.Version, tenant: mc.Tenant, catalogTenant: catalogTenant, expires: time.Now().Add(10 * time.Minute)}
 	if capab == toolinstall.ProviderCapabilityV1 {
 		p.v1, err = m.engine.Plan(ctx, toolinstall.Request{Driver: in.Driver, Version: in.Version, Platform: toolinstall.HostPlatform(), DestRoot: m.root})
 		if err == nil {
@@ -390,12 +447,19 @@ func (m *Module) plan(w http.ResponseWriter, r *http.Request, mc api.ModuleConte
 			p.Document = p.v1
 		}
 	} else {
-		platform, _, pe := toolinstall.PlatformV2For(in.Driver, toolinstall.HostPlatform())
+		var platform toolinstall.PlatformV2
+		var pe error
+		if declaration != nil {
+			host := toolinstall.HostPlatform()
+			platform = toolinstall.PlatformV2{OS: host.OS, Arch: host.Arch}
+		} else {
+			platform, _, pe = toolinstall.PlatformV2For(in.Driver, toolinstall.HostPlatform())
+		}
 		if pe != nil {
 			installerError(w, pe)
 			return
 		}
-		p.v2, err = m.engine.PlanV2(ctx, toolinstall.RequestV2{Driver: in.Driver, Version: in.Version, Platform: platform, DestRoot: m.root})
+		p.v2, err = m.engine.PlanV2(ctx, toolinstall.RequestV2{Driver: in.Driver, Version: in.Version, Platform: platform, DestRoot: m.root, Declaration: declaration})
 		if err == nil {
 			p.Digest = p.v2.Digest
 			p.Version = p.v2.Selection.Version
@@ -420,7 +484,11 @@ func (m *Module) plan(w http.ResponseWriter, r *http.Request, mc api.ModuleConte
 		return
 	}
 	// A digest is not a tenant identifier: the same selection may be approved in two tenants.
-	m.plans[mc.Tenant.String()+":"+p.Digest] = p
+	key := mc.Tenant.String() + ":" + p.Digest
+	if !p.catalogTenant.IsZero() {
+		key += ":" + p.catalogTenant.String()
+	}
+	m.plans[key] = p
 	write(w, 200, p)
 }
 func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -459,9 +527,25 @@ func (m *Module) install(w http.ResponseWriter, r *http.Request, mc api.ModuleCo
 		return
 	}
 	p := m.plans[mc.Tenant.String()+":"+in.Digest]
+	if p == nil {
+		if tenant, ok := tenantOf(r.Header.Get("X-Olivares-Tenant")); ok {
+			p = m.plans[mc.Tenant.String()+":"+in.Digest+":"+tenant.String()]
+		}
+	}
 	if p == nil || time.Now().After(p.expires) {
 		fail(w, 409, "plan_expired", "Preview the installation again before installing.")
 		return
+	}
+	if p.v2 != nil && p.v2.Selection.Tool != nil {
+		d, err := m.declaration(r.Context(), mc, p.catalogTenant, p.v2.Selection.Tool.SourceURL, p.Version)
+		if err != nil {
+			installerError(w, err)
+			return
+		}
+		if *d != *p.v2.Selection.Tool {
+			fail(w, 409, "plan_changed", "The catalog declaration changed. Review a new plan.")
+			return
+		}
 	}
 	if m.active {
 		fail(w, 409, "install_busy", "Another host tool installation is running.")
@@ -519,7 +603,7 @@ func installerError(w http.ResponseWriter, err error) {
 	switch toolinstall.KindOf(err) {
 	case toolinstall.KindInvalidRequest, toolinstall.KindUnsupportedProvider, toolinstall.KindUnsupportedPlatform:
 		status = 400
-	case toolinstall.KindPlanChanged, toolinstall.KindLocked, toolinstall.KindConflict:
+	case toolinstall.KindPlanChanged, toolinstall.KindLocked, toolinstall.KindConflict, toolinstall.KindUnadmitted:
 		status = 409
 	case toolinstall.KindTransport:
 		status = 502

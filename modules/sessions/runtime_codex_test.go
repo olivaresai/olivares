@@ -604,10 +604,13 @@ func TestCodexRuntimeCompletedTurnLeavesTheProcessLiveForAnotherInput(t *testing
 	if !processRunning(pid) {
 		t.Fatal("a completed turn must not end the owned process")
 	}
-	current, _ := m.getRun(ctx, tenant, dto.RunRef)
-	if current.State != stateRunning {
-		t.Fatalf("state after a completed turn = %q", current.State)
-	}
+	// The run waits for the next input: its derived state says so (idle) while the
+	// process state stays running. The bridge records the turn's end a moment after
+	// the conversation clears it.
+	waitFor(t, "the answered run to read idle", func() bool {
+		current, _ := m.getRun(ctx, tenant, dto.RunRef)
+		return current.State == stateIdle && current.ProcessState == stateRunning
+	})
 	if err := m.sendTextInput(ctx, tenant, dto.RunRef, "second"); err != nil {
 		t.Fatalf("second input on the same child: %v", err)
 	}

@@ -229,7 +229,16 @@ func (e *Engine) inspectReleaseV2(ctx context.Context, root *os.Root, rel, abs, 
 			return in
 		}
 	}
+	if rec.VerificationKind == VerificationCatalogSHA256 {
+		if err := verifyDeclaredReceipt(ctx, root, rel, rec); err != nil {
+			in.Reason = err.Error()
+			return in
+		}
+	}
 	entry := "bin/" + driver
+	if rec.Tool != nil {
+		entry = "bin/" + rec.Tool.Program
+	}
 	if rec.VerificationKind == VerificationGitHubReleaseSHA256 {
 		entry = releaseArchiveLayout(driver).EntryPoint
 	}

@@ -170,8 +170,9 @@ func TestRootUnknownCommandWithHelpOrVersionIsAUsageError(t *testing.T) {
 }
 
 // TestValidCommandHelpStillSucceeds is the preservation half, swept over the
-// WHOLE tree rather than sampled: every command that exists must still answer
-// `--help` with its help text on stdout and exit 0.
+// WHOLE tree rather than sampled: every available command must still answer
+// `--help` with its help text on stdout and exit 0. The Community organization
+// compatibility seam instead keeps its edition refusal, including for help.
 //
 // The rows that make this more than a formality are the leaves whose own Args
 // validator refuses an empty or partial operand list — `connector init --help`
@@ -188,6 +189,12 @@ func TestValidCommandHelpStillSucceeds(t *testing.T) {
 	for _, path := range paths {
 		name := "olivares " + strings.Join(path, " ")
 		code, printed, stdout := runOutcome(t, append(append([]string{}, path...), "--help")...)
+		if len(path) == 1 && path[0] == "tenants" && !newTenantsCmd().HasSubCommands() {
+			if code != exitcode.Edition || !strings.Contains(printed, "Enterprise") || !strings.Contains(printed, pricingURL) || stdout != "" {
+				t.Errorf("`%s --help` must preserve the edition refusal without help output: exit=%d, stderr=%q, stdout=%q", name, code, printed, stdout)
+			}
+			continue
+		}
 		if code != exitcode.OK {
 			t.Errorf("`%s --help` exit = %d, want 0: %s", name, code, printed)
 		}

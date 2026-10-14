@@ -273,11 +273,11 @@ describe('buildGraph — permitted vs observed overlay', () => {
     expect(edges.find((e) => e.id === 'g1')).toBeUndefined()
   })
 
-  // ⛔ ESTE CASO VIGILA EL LLAMANTE, no el algoritmo. `layout.test.ts` prueba que
-  // `maxPerColumn` envuelve; esto prueba que el access map LO PIDE. Sin él, borrar
-  // la opción de `buildGraph` devolvería la vista a la columna de 4180 px y ninguna
-  // batería caería: el defecto no estaba en el layout, estaba en no usarlo.
-  it('un estate alto no sale como una sola columna vertical', () => {
+  // ⛔ THIS CASE WATCHES THE CALLER, not the algorithm. `layout.test.ts` proves that
+  // `maxPerColumn` wraps; this proves that the access map ASKS FOR IT. Without it,
+  // deleting the option from `buildGraph` would send the view back to the 4180 px column
+  // and no suite would fail: the defect was not in the layout, it was in not using it.
+  it('a tall estate does not come out as a single vertical column', () => {
     const origins = 56
     const resources = 18
     const big: GraphResponse = {
@@ -311,13 +311,13 @@ describe('buildGraph — permitted vs observed overlay', () => {
     })
     const ys = nodes.map((n) => n.position.y)
     const xs = [...new Set(nodes.map((n) => n.position.x))]
-    const alto = Math.max(...ys) - Math.min(...ys)
-    const ancho = Math.max(...xs) - Math.min(...xs)
+    const height = Math.max(...ys) - Math.min(...ys)
+    const width = Math.max(...xs) - Math.min(...xs)
 
-    // Sin envolver serían 55 · 76 = 4180 px de alto por 360 de ancho.
-    expect(alto).toBeLessThanOrEqual(1100)
-    expect(xs.length).toBeGreaterThan(2) // más columnas que capas ⇒ hubo envoltura
-    // Y lo que de verdad se pide: que quepa sin ser una tira vertical.
-    expect(alto / ancho).toBeLessThan(1.5)
+    // Unwrapped it would be 55 · 76 = 4180 px tall by 360 px wide.
+    expect(height).toBeLessThanOrEqual(1100)
+    expect(xs.length).toBeGreaterThan(2) // more columns than layers ⇒ it wrapped
+    // And what is actually asked for: it fits without being a vertical strip.
+    expect(height / width).toBeLessThan(1.5)
   })
 })

@@ -164,7 +164,7 @@ describe('AirgapPanel', () => {
     expect(
       screen.queryByText(/oci:\/\/ghcr\.io\/olivaresai\/charts/),
     ).toBeNull()
-    expect(screen.queryByText(/olivares-enterprise\/\.github/)).toBeNull()
+    expect(screen.queryByText(/enterprise\/\.github/)).toBeNull()
     // Enterprise local GPG provenance remains distinct from the Business package signature.
     expect(screen.getByText(/Helm-native GPG \.prov/)).toBeInTheDocument()
   })
@@ -228,6 +228,45 @@ describe('ReleaseStatePanel — honest not-published state', () => {
     expect(
       screen.getByText(/SELF-DECLARED build provenance/i),
     ).toBeInTheDocument()
+  })
+
+  // #1844: the engine writes the provenance note with its command between backticks, and the
+  // panel printed them as they came. The command reads as a command; the sentence is the
+  // engine's, word for word.
+  it('shows the command in the provenance note as code, with no backtick', () => {
+    renderIntel(
+      <ReleaseStatePanel
+        release={binaryAttestationFixture.release}
+        pipeline={binaryAttestationFixture.pipeline}
+      />,
+    )
+    const note = screen.getByText(/SELF-DECLARED build provenance/i)
+    expect(note.textContent).not.toContain('`')
+    expect(note.textContent).toContain(
+      'olivares version reports the same anchors under the same caveat',
+    )
+    expect(
+      [...note.querySelectorAll('code')].map((c) => c.textContent),
+    ).toEqual(['olivares version'])
+  })
+
+  // The not-a-release reason names the git command a source build stamps with.
+  it('shows the command in the release reason as code, with no backtick', () => {
+    renderIntel(
+      <ReleaseStatePanel
+        release={{
+          ...binaryAttestationFixture.release,
+          reason:
+            'not a release: this binary version stamp is not a semantic version (a source build stamps `git describe --tags --always`, which yields a bare commit object)',
+        }}
+        pipeline={binaryAttestationFixture.pipeline}
+      />,
+    )
+    const reason = screen.getByText(/not a release: this binary version stamp/)
+    expect(reason.textContent).not.toContain('`')
+    expect(
+      [...reason.querySelectorAll('code')].map((c) => c.textContent),
+    ).toEqual(['git describe --tags --always'])
   })
 
   // The other polarity, and the reason this file changed at all: until 2026-08-13 the

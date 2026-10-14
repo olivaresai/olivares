@@ -74,6 +74,7 @@
     "folder": "Folder",
     "folderHint": "A folder on this server. Leave it empty to start in a new folder.",
     "folderNew": "A new folder for this session",
+    "folderTyped": "Another folder…",
     "folderChange": "Change folder",
     "readingFolder": "Reading the last session's folder…",
     "prompt": "First message (optional)",
@@ -102,7 +103,8 @@
     "openProviders": "Open Providers",
     "profile": "Profile",
     "profileNotSignedIn": "Not signed in",
-    "profileNeedsKey": "Needs a key"
+    "profileNeedsKey": "Needs a key",
+    "foldersUnreadable": "The registered folders could not be read. Type the path of a folder on this server."
   },
   "lists": {
     "runsTruncated": "Recent sessions: {{count}} loaded; there are more.",

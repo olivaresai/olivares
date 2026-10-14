@@ -15,7 +15,7 @@
   "state": {
     "pending": "Pending",
     "running": "Working",
-    "idle": "Working",
+    "idle": "Idle",
     "stopped": "Stopped",
     "failed": "Failed",
     "cleaned": "Cleaned"
@@ -103,7 +103,6 @@
     "effort": "Effort",
     "effortDefault": "Model default",
     "model": "Model",
-    "modelPlaceholder": "opus  ·  claude-opus-4-8  (optional)",
     "workspace": "Folder",
     "workspaceNone": "Temporary folder for this session",
     "worktree": "Work in a new git worktree",
@@ -131,18 +130,9 @@
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile: a launch that forwards any of them is refused here. Other names are still subject to the server's own validation.",
     "identity": {
       "title": "Launch identity",
-      "hint": "Choose an admitted agent to act on behalf of its human sponsor. Human access alone grants no agent authority.",
       "humanHint": "The session runs with your own access.",
       "human": "Current human operator",
-      "agent": "Admitted agent (on behalf of sponsor)",
-      "required": "An orchestration profile requires an independently authenticated agent identity.",
-      "choose": "Agent identity",
-      "sponsorHint": "The server validates the selected agent, its lifecycle and your sponsorship before launch.",
-      "placeholder": "Choose an admitted agent",
-      "readRequired": "NHI read permission is required to select an agent.",
-      "loading": "Loading agent identities…",
-      "loadFailed": "Agent identity list unavailable.",
-      "loadMore": "Load more identities"
+      "required": "An orchestration profile requires an independently authenticated agent identity."
     },
     "blocked": {
       "profilesForbidden": "Your role cannot read provider profiles (sessions:profile:read), so no session can start here.",
@@ -157,6 +147,26 @@
       "templateRefused": "The template asks for terms this launch cannot enforce: choose another under Advanced options.",
       "readinessFailed": "The profile's requirements could not be read."
     }
+  },
+  "picker": {
+    "search": "Search models",
+    "none": "No model matches.",
+    "loading": "Reading the models this tool offers…",
+    "failed": "The tool did not answer, so there is no list. Type a model, or keep the default.",
+    "unsupported": "This tool does not list its models. Type one, or keep the default.",
+    "unavailable": "The model list is not available here. Type a model, or keep the default.",
+    "default": "default",
+    "new": "New",
+    "favorites": "Favorites",
+    "models": "Models",
+    "legacy": "Legacy",
+    "star": "Add {{model}} to favorites",
+    "unstar": "Remove {{model}} from favorites",
+    "use": "Use “{{model}}”",
+    "defaultNamed": "Default ({{model}})",
+    "defaultUnnamed": "{{tool}} default",
+    "effortDefaultNamed": "Model default ({{effort}})",
+    "effortNeedsModel": "Choose a model first: an effort is a level of a model."
   },
   "detail": {
     "live": "Live",
@@ -197,7 +207,7 @@
     "inputAria": "Session input line",
     "textPlaceholder": "Send a sentence…",
     "textAria": "Session turn",
-    "advanced": "Advanced · raw line",
+    "advanced": "Raw line",
     "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
     "send": "Send",
     "noOutput": "No output yet.",

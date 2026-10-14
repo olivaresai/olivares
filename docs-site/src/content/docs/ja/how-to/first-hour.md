@@ -99,10 +99,10 @@ curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
 TOKEN=$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
-TENANT=$(curl -sf -X POST "$BASE/v1/system/orgs" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"First hour","slug":"first-hour"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')
+# 初期設定で単一の組織はすでに作成されています。そのテナント ID を取得します。
+TENANT=$(curl -sf "$BASE/v1/auth/whoami" \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')
 ```
 
 ### 3. コーディングエージェントを 1 つ接続し、インベントリで確認する

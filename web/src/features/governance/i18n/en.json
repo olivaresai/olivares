@@ -282,6 +282,7 @@
     "matchActionHint": "Empty = matches any action.",
     "matchSubjectKind": "Match subject kind",
     "matchSubjectKindHint": "Empty = matches any subject kind.",
+    "needsBusiness": "Lowering a risk tier below the action's default needs Business. Turn this policy off to keep it stored.",
     "create": "Create policy",
     "save": "Save changes",
     "confirmCreateBody": "An enabled ABAC policy further-restricts access immediately; an enabled approval policy starts requiring human approvals for matching actions. Takes effect immediately.",
@@ -315,15 +316,6 @@
     "principalTypeNhi": "NHI",
     "principalTypeUnknown": "Unknown"
   },
-  "resync": {
-    "title": "Resync the identity roster?",
-    "body": "It reconciles every identity and group for this tenant from the configured directory sources. Recorded in the audit trail.",
-    "confirm": "Resync",
-    "done": "Roster reconciled",
-    "result": "Sources {{sources}} · identities {{identities}} · groups {{collections}} · memberships {{memberships}}.",
-    "partial": "{{failed}} source(s) did NOT answer and were skipped: {{providers}}. The counts above cover only the sources that did.",
-    "noProviders": "No identity providers are configured for this tenant — nothing was reconciled."
-  },
   "groups": {
     "title": "Groups",
     "caption": "Reconciled collections (groups, roles, policies) mirrored from a directory source.",
@@ -348,7 +340,8 @@
     "kindIdentity": "Identity",
     "kindCollection": "Collection",
     "empty": "No members",
-    "emptyHint": "The subjects that belong to this group are listed here. Add a member to start."
+    "emptyHint": "The subjects that belong to this group are listed here. Add a member to start.",
+    "truncated": "Some nested groups are deeper than the walk limit, so members below that depth are not listed."
   },
   "bindings": {
     "title": "Agent bindings",
@@ -594,12 +587,12 @@
       "description": "Bind an agent to an existing or newly minted NHI so its actions can be attributed to that identity in the access map."
     },
     "group": {
-      "title": "No directory groups reconciled yet",
-      "description": "After a directory source is configured, resync the roster to reconcile its groups, roles, policies and memberships."
+      "title": "No groups yet",
+      "description": "Groups appear here when a directory source reports them."
     },
     "identity": {
-      "title": "No identities reconciled yet",
-      "description": "After a directory source is configured, resync the roster to reconcile its human and non-human identities for this tenant."
+      "title": "No identities yet",
+      "description": "Identities appear here as agents reach resources, or when you bind an agent to an identity."
     },
     "policies": {
       "title": "No rules yet",
@@ -666,45 +659,6 @@
     "pageTitle": "AgentCore export",
     "emptyAction": "Compute the first plan"
   },
-  "registerAgent": {
-    "action": "Register agent",
-    "title": "Register an agent identity",
-    "body": "Creates a governed lifecycle row — or promotes an identity that already exists.",
-    "identityRef": "Agent identity",
-    "identityRefHint": "The identity reference in the roster.",
-    "sponsorRef": "Sponsor",
-    "sponsorRefHint": "Required. Must be a HUMAN identity already in the roster — the engine refuses anything else.",
-    "source": "Source",
-    "criticality": "Criticality",
-    "noCriticality": "Not set",
-    "submit": "Register",
-    "created": "Agent identity registered",
-    "promoted": "Existing identity promoted to agent",
-    "crit": {
-      "low": "Low",
-      "medium": "Medium",
-      "high": "High",
-      "critical": "Critical"
-    }
-  },
-  "emerging": {
-    "tab": "Emerging standards",
-    "title": "Emerging agent-identity standards",
-    "description": "A design-toward registry: what we track, where it would plug in, and why it is not implemented.",
-    "noAccess": "You do not have access to the identity registry.",
-    "noAccessHint": "This panel tracks the standards the platform is aligning towards. Ask an administrator for the identity registry read permission.",
-    "empty": "Nothing tracked",
-    "emptyHint": "Standards the platform is aligning towards appear here with their status. None is being tracked yet.",
-    "verifiedAt": "Revisions verified against primary sources in {{month}}. They move — treat this as a date, not a guarantee.",
-    "spec": "Spec",
-    "revision": "Revision",
-    "seam": "Would plug in at",
-    "authority": "Primary source",
-    "status": {
-      "draft": "Draft — do not hard-code",
-      "stable": "Stable — a seam may target it"
-    }
-  },
   "preview": {
     "title": "What will run",
     "session": "Session",
@@ -726,5 +680,8 @@
     "member": "A member",
     "apiToken": "An API token",
     "requestSummary": "Request"
+  },
+  "list": {
+    "loadedOnly": "Search covers only the rows loaded so far; load more to read further."
   }
 }

@@ -1204,7 +1204,7 @@ tasks:
 
   lint:guide-docs:
     desc: >-
-      Check console and gRPC references and upgrade-guide claims against the source. Requires installed TypeScript dependencies.
+      Check English and translated console rosters, gRPC references and upgrade-guide claims against the source. Requires installed TypeScript dependencies.
 
     cmds:
       - bash scripts/check-guide-docs.sh --self-test
@@ -1397,9 +1397,10 @@ tasks:
       thing preventing charging without delivering is that FULFILLMENT_ENABLED is off. It charges ONLY
       the dangerous combination (selling enabled and unable to deliver); with selling off it reports what
       is missing and exits 0, because an environment that does not sell cannot mis-sell and reddening
-      there teaches people to ignore it. Also checks ENTERPRISE_VERSION has the project shape (0.0.0 is
-      the exact value release-version.ts exists to reject) and, when selling a real version, that at
-      least one object exists in R2 for it. Human-called: it queries live config and R2.
+      there teaches people to ignore it. Also checks ENTERPRISE_VERSION is "latest" or an X.Y pin (0.0.0
+      is the exact value release-version.ts exists to reject) and that each sold set's stable channel
+      manifest resolves, with real objects in R2 for the release it serves. Human-called: it queries
+      live config and R2.
     cmds:
       - bash scripts/hub-leg.sh check:commerce-preflight scripts/check-commerce-preflight.sh {{.CLI_ARGS}}
 
@@ -2021,6 +2022,7 @@ tasks:
       - bash scripts/test-alias-image-digest.sh
       - bash scripts/test-release-wiring.sh
       - python3 scripts/test-release-notes.py
+      - python3 -B scripts/test-release-assets.py
       - bash scripts/test-verify-release-summary.sh
       # DIST-24-01: deterministic distribution inventory, including source-drift
       # and remote-surface claim mutants. The task already runs in CI and pre-push.
@@ -2042,9 +2044,9 @@ tasks:
 
   lint:installer-matrix:
     desc: >-
-      DIST-24-05 static contract: the dedicated pull-request/dispatch workflow carries
+      DIST-24-05 static contract: the pull-request/publication/dispatch workflow carries
       Debian stable, Ubuntu LTS, Fedora, openSUSE Leap, Alpine and hosted macOS; every live
-      leg checks the public signed release plus this commit's service/doctor candidate.
+      leg checks the PR archive or public signed release plus the service/doctor candidate.
       This leg checks the workflow, shared predicates, docs and hook/CI cables without
       needing Docker, macOS, network access or a build.
     cmds:
@@ -2190,6 +2192,18 @@ tasks:
       # The Dockerfile toolchain gate rides this leg because mainline-ci's control-plane job
       # already runs it; the gate reads the same Dockerfiles and needs no Docker either.
       - task: lint:dockerfile-node-toolchain
+      - task: lint:runtime-base
+
+  lint:runtime-base:
+    desc: >-
+      The agent runtime base is one Node.js LTS image pinned by digest: Dockerfile.release has
+      one `FROM node:<even major>-<variant>@sha256:<digest>` and Dockerfile's runtime stage is the
+      same line. Dependabot moved both to node:25 (odd, never LTS, end of life), and
+      patch-velocity, which reads its base from this gate, stopped before scanning. Reads files
+      only: no Docker, no network. Its battery runs first.
+    cmds:
+      - bash scripts/test-check-runtime-base.sh
+      - bash scripts/check-runtime-base.sh
 
   lint:compose-ready:selftest:
     desc: >-
@@ -2865,6 +2879,15 @@ tasks:
       About one second under the same conditions.
     cmds:
       - bash scripts/test-exec-tmpdir.sh
+
+  lint:private-suite-guard:selftest:
+    desc: >-
+      Test the private-suite guards of scripts/docs-captures.sh and scripts/web-e2e-demo.sh: only a
+      non-Community build that serves the access graph or the identity inventory without its private
+      suite is refused. Runs the real guard text over every edition, status and suite-presence case,
+      and two weakened copies must be caught. About one second, no engine.
+    cmds:
+      - bash scripts/test-private-suite-guard.sh
 
   lint:sembrado-volumen:selftest:
     desc: >-
@@ -4553,6 +4576,25 @@ tasks:
       - bash scripts/hub-leg.sh lint:export-closure scripts/test-fleet-edition-export.sh --selftest
       - bash scripts/hub-leg.sh lint:export-closure scripts/test-fleet-edition-export.sh
 
+  lint:candidate-paths:
+    desc: Reject hand-edited export/CI paths between BASE and CANDIDATE before release export.
+    requires:
+      vars: [BASE, CANDIDATE]
+    env:
+      CANDIDATE_PATHS_BASE: '{{.BASE}}'
+      CANDIDATE_PATHS_HEAD: '{{.CANDIDATE}}'
+    cmds:
+      - bash scripts/hub-leg.sh lint:candidate-paths scripts/release/check-candidate-paths.sh . "$CANDIDATE_PATHS_BASE" "$CANDIDATE_PATHS_HEAD"
+
+  lint:export-release:
+    desc: >-
+      Offline controls of the release publication script (disposable repositories, no GitHub
+      writes, about 10 s). The pre-push hook runs it when a push changes scripts/release,
+      scripts/export-scrub or scripts/export-public.sh. Development repository only: the
+      public tree does not carry scripts/release and answers NOT APPLICABLE.
+    cmds:
+      - bash scripts/hub-leg.sh lint:export-release scripts/release/test-export-release.sh
+
   lint:export-license:
     desc: >-
       Refuse to PUBLISH privately-licensed source — ANY `LicenseRef-` identifier — or enterprise-tagged
@@ -4879,9 +4921,11 @@ tasks:
 
   lint:screenshot-coverage:
     desc: >-
-      Maintain the coverage floor for published console screenshots.
+      Maintain the coverage floor for console routes (counted from the capture manifest's takes)
+      and fail when a published capture is named by no docs page or README.
 
     cmds:
+      - bash scripts/test-screenshot-coverage.sh
       # El techo va aquí y no dentro del guion para que subirlo sea un cambio VISIBLE en el diff
       # del Taskfile, como el de config-coverage.
 # ⛔ TECHO 6, DECLARADO, Y ANTES ERA 0 SOBRE UN DENOMINADOR CORTO. El gate leia 52 rutas de
@@ -5107,7 +5151,8 @@ tasks:
   lint:addon-sets:public:
     desc: >-
       Verify the six public entries in their original order, including both
-      documentation floors. The complete private sequence contains these entries too.
+      documentation floors and CAEP Community/no-add-on refusal contracts.
+      The complete private sequence contains these entries too.
       This task is selected only by the dispatcher.
     cmds:
       - bash scripts/check-c03-grants-seam.sh
@@ -5120,7 +5165,8 @@ tasks:
   lint:addon-sets:legs:
     desc: >-
       Run the complete private sequence with its original commands, arguments,
-      order and exit codes. Public checks remain included in this sequence.
+      order and exit codes. Public checks, including CAEP refusal contracts,
+      remain included in this sequence; paid receiver behavior uses Business tests.
 
       Derive the four self-hosted business add-on sets from the private pricing canon, which is the
       source the entitlement design names (DISENO-ENTITLEMENT-POR-MODULO 2.1) and NOT the
@@ -6160,6 +6206,15 @@ tasks:
         goreleaser release --snapshot --clean --skip=sign,docker
         snapshot_version="$(python3 -c 'import json;print(json.load(open("dist/metadata.json"))["version"])')"
         python3 scripts/build-native-release-packages.py --snapshot --version "$snapshot_version" --dist dist
+
+  release:phase1-rehearsal:
+    desc: >-
+      Private pre-tag rehearsal on a disposable export tree: production snapshot,
+      checksum-covered release evidence, and phase-1 checksum/image secret scans.
+      Usage: task release:phase1-rehearsal -- --tree EXPORT --tag MAJOR.MINOR.
+      Run through heavy-job with the release toolchain and public anchors. No publication.
+    cmds:
+      - bash scripts/hub-leg.sh release:phase1-rehearsal scripts/release/phase1-rehearsal.py {{.CLI_ARGS}}
 
   release:smoke:
     desc: >-

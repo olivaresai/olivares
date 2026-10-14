@@ -94,6 +94,8 @@
     "driftPending": "A la espera de vínculo de identidad",
     "driftUnused": "Permisos sin usar",
     "coverageNote": "Parte del acceso se observa con cobertura parcial (captura aproximada u opaca); las cifras de deriva son un mínimo.",
+    "driftTruncated": "La lectura de la deriva de accesos es parcial; las cifras son un mínimo.",
+    "driftUnavailable": "No se pudo leer la deriva de accesos.",
     "noFindings": "Sin hallazgos abiertos.",
     "noRuns": "Aún no hay ejecuciones red-team.",
     "sharedDescription": "Hallazgos de seguridad abiertos y cambios de acceso."

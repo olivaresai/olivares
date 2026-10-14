@@ -67,22 +67,8 @@ func bootChannelCatalogHTTPEstateOn(
 	admin := communicationHTTPTestDecode[struct {
 		Token string `json:"token"`
 	}](t, login)
-	createdOrg := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-		admin.Token, "", map[string]any{"name": "K3 catalog", "slug": "k3-catalog"}, nil)
-	if createdOrg.status != http.StatusCreated {
-		t.Fatalf("create tenant = %d: %s", createdOrg.status, createdOrg.raw)
-	}
-	org := communicationHTTPTestDecode[struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}](t, createdOrg)
-	otherOrg := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/system/orgs",
-		admin.Token, "", map[string]any{"name": "K3 catalog other", "slug": "k3-catalog-other"}, nil)
-	if otherOrg.status != http.StatusCreated {
-		t.Fatalf("create other tenant = %d: %s", otherOrg.status, otherOrg.raw)
-	}
-	other := communicationHTTPTestDecode[struct {
-		TenantID model.TenantID `json:"tenant_id"`
-	}](t, otherOrg)
+	org := createOrganizationFixture(t, eng.store, "K3 catalog", "k3-catalog")
+	other := createOrganizationFixture(t, eng.store, "K3 catalog other", "k3-catalog-other")
 	owner := createCommunicationHTTPTestUser(t, eng, admin.Token, org.TenantID, "owner@k3-catalog.test", auth.RoleOwner)
 	reader := createCommunicationHTTPTestUser(t, eng, admin.Token, org.TenantID, "reader@k3-catalog.test", auth.RoleEditor)
 	stranger := createCommunicationHTTPTestUser(t, eng, admin.Token, other.TenantID, "stranger@k3-catalog.test", auth.RoleOwner)
@@ -399,11 +385,6 @@ func TestCommunicationChannelCatalogFreshHTTP(t *testing.T) {
 			t.Fatalf("materialize sponsor roster identity: %v", err)
 		}
 		agentRef := "agent:k3-catalog-agent"
-		registered := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/m/governance/agents", owner.token, tenant,
-			map[string]any{"identity_ref": agentRef, "source": "test-roster", "sponsor_ref": sponsorRef, "criticality": "medium"}, nil)
-		if registered.status != http.StatusCreated {
-			t.Fatalf("register agent lifecycle = %d: %s", registered.status, registered.raw)
-		}
 		createdAgent := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/agents", owner.token, tenant,
 			map[string]any{"name": "K3 catalog agent", "kind": "api", "external_id": agentRef, "status": "active", "workspace_id": workspace.String()}, nil)
 		if createdAgent.status != http.StatusCreated {
@@ -412,14 +393,7 @@ func TestCommunicationChannelCatalogFreshHTTP(t *testing.T) {
 		agentID := communicationHTTPTestDecode[struct {
 			ID model.ID `json:"id"`
 		}](t, createdAgent).ID
-		bound := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/m/governance/agents/"+agentID.String()+"/identity",
-			owner.token, tenant, map[string]any{"identity_ref": agentRef}, nil)
-		if bound.status != http.StatusOK {
-			t.Fatalf("bind agent identity = %d: %s", bound.status, bound.raw)
-		}
-		identityID := communicationHTTPTestDecode[struct {
-			IdentityID model.ID `json:"identity_id"`
-		}](t, bound).IdentityID
+		identityID := seedCommunicationAgentIdentity(t, eng, tenant, agentID, owner.id, agentRef, sponsorRef)
 		agentToken := exchangeCommunicationHTTPTestAgentToken(t, eng, owner.token, agentRef)
 
 		empty := page(agentToken, wsQuery+"&limit=50")

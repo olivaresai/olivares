@@ -305,6 +305,11 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	if err != nil {
 		return moduleSet{}, err
 	}
+	if !edition.NoIngest {
+		if err := validateNHIActuatorsConfig(nhiCfg); err != nil {
+			return moduleSet{}, err
+		}
+	}
 	eraserCfg, err := loadClaudeEraserConfig(log)
 	if err != nil {
 		return moduleSet{}, err

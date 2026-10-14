@@ -34,11 +34,11 @@ import (
 // runs under a background context (NOT Start's ctx) so it outlives the boot call, and is
 // canceled by Stop. Idempotent: a second call without a Stop is a no-op.
 func (m *Module) startStopSweep() {
-	if m.rt == nil || (m.rt.stopSweepInterval <= 0 && m.rt.SessionAccessCheck == nil) {
+	if m.rt == nil {
 		return
 	}
 	m.mu.Lock()
-	if m.rt.sweepCancel != nil {
+	if m.rt.sweepCancel != nil || (m.rt.stopSweepInterval <= 0 && m.rt.SessionAccessCheck == nil) {
 		m.mu.Unlock()
 		return
 	}
@@ -57,6 +57,21 @@ func (m *Module) startStopSweep() {
 	}
 }
 
+// SetSessionAccessCheck binds the owner-access check under the module lock the
+// sweep reads it with. Bind before Start: a rebind after Start replaces a bound
+// check from the next owner pass, but does not start owner passes that were off.
+func (m *Module) SetSessionAccessCheck(check func(context.Context, model.TenantID, string) (auth.SessionScope, string, error)) {
+	m.mu.Lock()
+	m.SessionAccessCheck = check
+	m.mu.Unlock()
+}
+
+func (m *Module) sessionAccessCheck() func(context.Context, model.TenantID, string) (auth.SessionScope, string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.SessionAccessCheck
+}
+
 // stopStopSweep cancels the sweep loop (called from Stop).
 func (m *Module) stopStopSweep() {
 	m.mu.Lock()
@@ -73,7 +88,7 @@ func (m *Module) stopStopSweep() {
 func (m *Module) runStopSweep(ctx context.Context, interval time.Duration) {
 	now := time.Now()
 	var nextAccess, nextKill time.Time
-	if m.rt.SessionAccessCheck != nil {
+	if m.sessionAccessCheck() != nil {
 		nextAccess = now.Add(interval)
 	}
 	if m.rt.stopSweepInterval > 0 {
@@ -130,7 +145,8 @@ const ownerAccessReadGrace = 5 * time.Minute
 // locks over store reads. A proven withdrawal stops immediately; read failures
 // retry with backoff for a bounded grace. Admission still requires a valid read.
 func (m *Module) sweepSessionAccess(ctx context.Context) {
-	if m.rt.SessionAccessCheck == nil {
+	check := m.sessionAccessCheck()
+	if check == nil {
 		return
 	}
 	for _, lr := range m.rt.snapshotLive() {
@@ -142,7 +158,7 @@ func (m *Module) sweepSessionAccess(ctx context.Context) {
 			continue
 		}
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		scope, user, err := m.rt.SessionAccessCheck(checkCtx, lr.tenant, lr.runRef)
+		scope, user, err := check(checkCtx, lr.tenant, lr.runRef)
 		cancel()
 		if ctx.Err() != nil {
 			return

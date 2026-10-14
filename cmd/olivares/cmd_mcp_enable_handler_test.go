@@ -43,57 +43,14 @@ func TestMCPEnableAndDisableRoundTripThroughTheRealHandler(t *testing.T) {
 	if err != nil {
 		t.Skip("python3 is not installed")
 	}
-	for _, name := range []string{"OLIVARES_SOURCES_CONFIG", "OLIVARES_AGENT_GATEWAY_CONFIG", "OLIVARES_HOOK_PEP_CONFIG", "OLIVARES_COMMUNICATION_ACTIVATION"} {
-		t.Setenv(name, "")
-	}
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	script := filepath.Join(t.TempDir(), "notes_mcp.py")
 	if err := os.WriteFile(script, []byte(mcpTrustCatalogueServer), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	eng, err := boot(t.Context(), bootConfig{DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test", Logger: discardLogger()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = eng.Close() })
-	setup, _, err := eng.setupTok.Ensure()
-	if err != nil {
-		t.Fatal(err)
-	}
-	handler := eng.api.Handler()
-	call := func(method, path, token, tenant string, body any, want int) map[string]any {
-		t.Helper()
-		code, result, raw := doDemoViewJSON(t, handler, method, path, token, tenant, body)
-		if code != want {
-			t.Fatalf("%s %s = %d, want %d: %s", method, path, code, want, raw)
-		}
-		return result
-	}
-	created := call("POST", "/v1/setup", "", "", map[string]any{"token": setup, "email": "mcp-cli@olivares.ai",
-		"password": "fixture-password-2026!", "organization": "MCP CLI test"}, http.StatusCreated)
-	login := call("POST", "/v1/auth/login", "", "", map[string]any{"email": "mcp-cli@olivares.ai", "password": "fixture-password-2026!"}, http.StatusOK)
-	admin, _ := login["token"].(string)
-	org, _ := created["organization"].(map[string]any)
-	tenant, _ := org["tenant_id"].(string)
-	if admin == "" || tenant == "" {
-		t.Fatalf("setup/login gave token %q tenant %q", admin, tenant)
-	}
-	srv := httptest.NewServer(handler)
-	t.Cleanup(srv.Close)
-	cli := func(args ...string) string {
-		t.Helper()
-		full := append([]string{"mcp", args[0], "--server", srv.URL, "--token", admin, "--tenant", tenant}, args[1:]...)
-		out, errb, err := execSessionCLI(t, nil, full...)
-		if err != nil {
-			t.Fatalf("olivares mcp %s: %v\n%s%s", strings.Join(args, " "), err, out, errb)
-		}
-		return out
-	}
+	cli, call, _ := mcpRealHandler(t)
 
 	cli("add", "notes", "--", python, "-u", script)
-	snap := call("GET", "/v1/console/mcp-gateway", admin, tenant, nil, http.StatusOK)
+	snap := call("GET", "/v1/console/mcp-gateway", nil, http.StatusOK)
 	servers, _ := snap["servers"].([]any)
 	if len(servers) != 1 {
 		t.Fatalf("servers = %v", snap["servers"])
@@ -120,4 +77,73 @@ func TestMCPEnableAndDisableRoundTripThroughTheRealHandler(t *testing.T) {
 	if out = cli("enable", "notes"); !strings.Contains(out, "  Run without approval: read_note\n  Ask first: write_note\n") {
 		t.Fatalf("enable after disable =\n%s", out)
 	}
+}
+
+// TestMCPAddEgressHostReachesTheRoster: `mcp add --egress-host` stores the hosts the
+// engine's own roster confines the command to.
+func TestMCPAddEgressHostReachesTheRoster(t *testing.T) {
+	cli, call, _ := mcpRealHandler(t)
+	cli("add", "fetch", "--no-test", "--egress-host", "registry.npmjs.org", "--", "npx", "-y", "server-fetch")
+	snap := call("GET", "/v1/console/mcp-gateway", nil, http.StatusOK)
+	servers, _ := snap["servers"].([]any)
+	if len(servers) != 1 {
+		t.Fatalf("servers = %v", snap["servers"])
+	}
+	if hosts := toStrings(servers[0].(map[string]any)["egress_hosts"]); strings.Join(hosts, ",") != "registry.npmjs.org" {
+		t.Fatalf("roster egress_hosts = %v", servers[0].(map[string]any)["egress_hosts"])
+	}
+}
+
+// mcpRealHandler boots an engine with one organization and returns the CLI's `mcp`
+// group and a JSON caller, both as its administrator, against the engine's own API,
+// and the engine's data directory.
+func mcpRealHandler(t *testing.T) (cli func(args ...string) string, call func(method, path string, body any, want int) map[string]any, dataDir string) {
+	t.Helper()
+	for _, name := range []string{"OLIVARES_SOURCES_CONFIG", "OLIVARES_AGENT_GATEWAY_CONFIG", "OLIVARES_HOOK_PEP_CONFIG", "OLIVARES_COMMUNICATION_ACTIVATION"} {
+		t.Setenv(name, "")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	dataDir = t.TempDir()
+	eng, err := boot(t.Context(), bootConfig{DataDir: dataDir, Engine: "sqlite", DSN: ":memory:", Version: "test", Logger: discardLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = eng.Close() })
+	setup, _, err := eng.setupTok.Ensure()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := eng.api.Handler()
+	var admin, tenant string
+	call = func(method, path string, body any, want int) map[string]any {
+		t.Helper()
+		code, result, raw := doDemoViewJSON(t, handler, method, path, admin, tenant, body)
+		if code != want {
+			t.Fatalf("%s %s = %d, want %d: %s", method, path, code, want, raw)
+		}
+		return result
+	}
+	created := call("POST", "/v1/setup", map[string]any{"token": setup, "email": "mcp-cli@olivares.ai",
+		"password": "fixture-password-2026!", "organization": "MCP CLI test"}, http.StatusCreated)
+	login := call("POST", "/v1/auth/login", map[string]any{"email": "mcp-cli@olivares.ai", "password": "fixture-password-2026!"}, http.StatusOK)
+	admin, _ = login["token"].(string)
+	org, _ := created["organization"].(map[string]any)
+	tenant, _ = org["tenant_id"].(string)
+	if admin == "" || tenant == "" {
+		t.Fatalf("setup/login gave token %q tenant %q", admin, tenant)
+	}
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	cli = func(args ...string) string {
+		t.Helper()
+		full := append([]string{"mcp", args[0], "--server", srv.URL, "--token", admin, "--tenant", tenant}, args[1:]...)
+		out, errb, err := execSessionCLI(t, nil, full...)
+		if err != nil {
+			t.Fatalf("olivares mcp %s: %v\n%s%s", strings.Join(args, " "), err, out, errb)
+		}
+		return out
+	}
+	return cli, call, dataDir
 }

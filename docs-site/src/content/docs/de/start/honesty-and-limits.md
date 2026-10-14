@@ -47,7 +47,7 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
   [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
   Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
-  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.1<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.2<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
 
 ## Open Core — was offen ist vs. kommerziell
 

@@ -25,6 +25,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
 
+vi.mock('@/features/extensions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/extensions')>()),
+  PANEL_EXTENSIONS: { identityTabs: [] },
+}))
+
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
@@ -66,21 +71,16 @@ vi.mock('@/features/recordings/recording-notice', () => ({
 vi.mock('./federation', () => ({
   FederationTab: () => <div>FederationTab mounted</div>,
 }))
+
+
 vi.mock('./nhi-roster', () => ({
   NhiRosterTab: () => <div>NhiRosterTab mounted</div>,
-}))
-vi.mock('./nhi-lifecycle', () => ({
-  NhiLifecycleTab: () => <div>NhiLifecycleTab mounted</div>,
 }))
 vi.mock('./mcp-auth', () => ({
   McpAuthTab: () => <div>McpAuthTab mounted</div>,
 }))
-vi.mock('./wif/wif-graph', () => ({
-  WifGraphTab: () => <div>WifGraphTab mounted</div>,
-}))
-vi.mock('./posture', () => ({
-  PostureTab: () => <div>PostureTab mounted</div>,
-}))
+
+
 vi.mock('./privileged-login', () => ({
   PrivilegedLoginTab: () => <div>PrivilegedLoginTab mounted</div>,
 }))
@@ -107,10 +107,21 @@ beforeEach(() => {
 })
 
 describe('IdentityView — ?tab= deep link', () => {
-  it('opens the NHI roster when the access map links to ?tab=inventory', () => {
+  it('opens the identity inventory when the access map links to ?tab=inventory', () => {
     renderAt('?tab=inventory')
     expect(screen.getByText('NhiRosterTab mounted')).toBeInTheDocument()
     expect(screen.queryByText('FederationTab mounted')).toBeNull()
+  })
+
+  it('Community keeps local sign-in and the inventory, and omits the Business identity panels', () => {
+    renderAt('?tab=federation')
+    for (const name of ['NHI lifecycle', 'WIF graph', 'Key & residency posture']) {
+      expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument()
+    }
+    expect(screen.getByRole('tab', { name: 'Identity inventory' })).toBeInTheDocument()
+    expect(screen.getByText('FederationTab mounted')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /privileged login/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /TOTP/i })).toBeInTheDocument()
   })
 
   it('falls back to federation with no tab parameter', () => {
@@ -187,7 +198,7 @@ describe('IdentityView — Identities & access (console remake slice 3)', () => 
   it('without tenant:admin, offers exactly the identity sections and mounts no administration panel', () => {
     renderAt('')
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    expect(tabs).toHaveLength(8)
+    expect(tabs).toHaveLength(5)
     expect(tabs).not.toContain('Users & groups')
     expect(
       screen.queryByText(/PeopleTab|RolesTab|SSOTab|ApiKeysTab/),

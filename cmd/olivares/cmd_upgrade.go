@@ -130,6 +130,8 @@ func newUpgradeCmd() *cobra.Command {
 			"  olivares upgrade --bundle f.tar.gz --check   # verify offline; installation requires Enterprise\n" +
 			"  olivares upgrade --enterprise        # licensed Business edition (needs a live license)\n" +
 			"  olivares upgrade --install-timer     # print an opt-in systemd auto-check timer\n\n" +
+			"A Business build reads `upgrade` as `upgrade --enterprise`: it never installs from the public\n" +
+			"channel, so it needs a live license and a download token (or --connect).\n" +
 			"A build with no embedded OTA key requires --pubkey (air-gapped / self-signed mirror).\n" +
 			"NOTE: a Go binary is not hot-patched; zero downtime is a drain + handover, see\n" +
 			"docs/UPGRADE-AND-ROLLBACK.md.",
@@ -305,6 +307,11 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	}
 	if !validDownloadProtocol(o.downloadProtocol) {
 		return fmt.Errorf("unknown --download-protocol %q (want %s | %s)", o.downloadProtocol, downloadProtocolReleaseV1, downloadProtocolLegacy)
+	}
+	// The edition picks the route before anything reads o.enterprise, so --connect, the timer
+	// generator and the source selection all see the same answer.
+	if err := defaultToLicensedChannel(o); err != nil {
+		return err
 	}
 	// --connect is the connected licensed route, so it is validated with the other selectors: a
 	// timer unit must never pin a combination the run would refuse.
@@ -645,6 +652,37 @@ func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, 
 		return nil, nil, err
 	}
 	return src, nil, nil
+}
+
+// defaultToLicensedChannel makes a Business build upgrade from the licensed channel.
+//
+// The public channel is signed by the same OTA key and its manifest carries no edition, so a
+// Business binary that read it would verify and install the newer Community binary over the
+// Business one: the swap succeeds and the install silently loses its edition. A Business
+// build therefore reads `upgrade` as `upgrade --enterprise`, and so does the unit
+// --install-timer writes, because both pass through here before the route is read.
+//
+// The test is "not Community", so a build whose edition name is empty or unknown fails
+// closed onto the licensed route instead of onto the public one.
+//
+// --bundle keeps its own gate (requireBundleLicense, after the manifest verifies). An
+// explicit --endpoint without --enterprise names a public or static channel, and the licensed
+// route would send the download token to it, so it is refused with the way out instead of
+// being promoted.
+func defaultToLicensedChannel(o *upgradeOptions) error {
+	if thisEdition.name == "community" || o.enterprise || o.bundle != "" {
+		return nil
+	}
+	// A blank --endpoint is no endpoint: buildUpdateSource tests the raw string, so it must
+	// not see the spaces after the default has promoted the run.
+	o.endpoint = strings.TrimSpace(o.endpoint)
+	if o.endpoint != "" {
+		return exitcode.New(exitcode.Usage, errors.New("this is a Business build and upgrades only from the licensed channel; "+
+			"--endpoint alone names a public or static one. Add --enterprise to point the licensed download at that endpoint, "+
+			"use --bundle for an offline install, or drop --endpoint"))
+	}
+	o.enterprise = true
+	return nil
 }
 
 // installedVersion is what the updater KNOWS about the binary at --target. Known is

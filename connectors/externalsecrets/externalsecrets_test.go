@@ -119,73 +119,6 @@ func TestGatherEdges(t *testing.T) {
 	}
 }
 
-// TestSnapshotInventory checks the secret_store inventory: the
-// SecretStore and ClusterSecretStore become secret_store NHIs carrying the backend.
-func TestSnapshotInventory(t *testing.T) {
-	g, err := open(t).Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if g.Source != identitysource.SourceExternalSecrets {
-		t.Errorf("graph source = %q, want externalsecrets", g.Source)
-	}
-	got := map[string]identitysource.Identity{}
-	for _, id := range g.Identities {
-		if id.Type != identitysource.PrincipalNHI {
-			t.Errorf("store NHI %q has type %q, want nhi", id.Ref, id.Type)
-		}
-		if id.Kind != identitysource.KindSecretStore {
-			t.Errorf("store NHI %q has kind %q, want secret_store", id.Ref, id.Kind)
-		}
-		if id.Attributes["provider"] != "eso" {
-			t.Errorf("store NHI %q provider attr = %q", id.Ref, id.Attributes["provider"])
-		}
-		got[id.Ref] = id
-	}
-
-	cases := []struct {
-		ref       string
-		backend   string
-		storeKind string
-	}{
-		{"eso.store:SecretStore:default:vault-backend", "vault", "SecretStore"},
-		{"eso.store:ClusterSecretStore:cluster:aws-sm", "aws", "ClusterSecretStore"},
-	}
-	for _, c := range cases {
-		id, ok := got[c.ref]
-		if !ok {
-			t.Errorf("missing store NHI %q in %v", c.ref, keysOf(got))
-			continue
-		}
-		if id.Attributes["backend"] != c.backend {
-			t.Errorf("store %q backend = %q, want %q", c.ref, id.Attributes["backend"], c.backend)
-		}
-		if id.Attributes["store_kind"] != c.storeKind {
-			t.Errorf("store %q store_kind = %q, want %q", c.ref, id.Attributes["store_kind"], c.storeKind)
-		}
-	}
-}
-
-// TestEdgeStoreConvergence asserts that every edge's OriginRef equals the Ref of an
-// inventoried store NHI — inventory and use converge on one node (the contract).
-func TestEdgeStoreConvergence(t *testing.T) {
-	s := open(t)
-	edges := gather(t, s)
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	storeRefs := map[string]bool{}
-	for _, id := range g.Identities {
-		storeRefs[id.Ref] = true
-	}
-	for _, e := range edges {
-		if !storeRefs[e.OriginRef] {
-			t.Errorf("edge OriginRef %q has no matching store NHI (refs: %v)", e.OriginRef, keysOf2(storeRefs))
-		}
-	}
-}
-
 // TestNoSecretValueLeaks is the minimal-data negative test: a CRD manifest holds no
 // secret value, so no emitted field may carry one. We assert the literal key-name
 // token used in the fixture is never mistaken for / emitted as a value (it appears
@@ -220,39 +153,6 @@ func TestNoSecretValueLeaks(t *testing.T) {
 	}
 	if strings.Count(string(blob), "MUST_NOT_LEAK") != count {
 		t.Fatalf("MUST_NOT_LEAK appears outside ToolRef in %s", blob)
-	}
-}
-
-// TestMultiDocumentParsing confirms a single multi-document file yields every ESO
-// object (the fixture is one file with 6 documents, 4 of them ESO CRDs).
-func TestMultiDocumentParsing(t *testing.T) {
-	s := open(t)
-	edges := gather(t, s)
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(g.Identities) != 2 {
-		t.Fatalf("multi-doc parse: got %d stores, want 2", len(g.Identities))
-	}
-	if len(edges) != 4 {
-		t.Fatalf("multi-doc parse: got %d edges, want 4", len(edges))
-	}
-}
-
-// TestOfflineEmptyGraph: with no configured path, Snapshot returns an empty graph
-// and no error (offline), exactly like awskms.
-func TestOfflineEmptyGraph(t *testing.T) {
-	s := externalsecrets.New() // not opened => no path
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(g.Identities) != 0 {
-		t.Fatalf("offline graph not empty: %+v", g)
-	}
-	if g.Source != identitysource.SourceExternalSecrets {
-		t.Errorf("offline graph source = %q", g.Source)
 	}
 }
 

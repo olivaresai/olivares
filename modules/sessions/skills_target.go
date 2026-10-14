@@ -24,9 +24,9 @@ type SkillsTarget struct {
 	Permission  auth.Permission
 }
 
-// ReadSkillsTarget reads the template or session (run) row a skills assignment
-// names, inside the caller's transaction. kind is "template" or "session"; a
-// session is named by its public run_ref. A write touches the row so its version
+// ReadSkillsTarget reads the folder, template or session (run) row a skills assignment
+// names, inside the caller's transaction. kind is "folder", "template" or "session"; a
+// folder is named by workspace_ref and a session by run_ref. A write touches the row so its version
 // is fenced until commit. The scope is the request's own: a principal confined
 // to one workspace reaches only that workspace's rows, and a template declares no
 // workspace, so it is refused to such a principal as not found.
@@ -34,6 +34,11 @@ func (m *Module) ReadSkillsTarget(ctx context.Context, sc store.Scope, kind, id 
 	var target SkillsTarget
 	var entity model.Kind
 	switch kind {
+	case "folder":
+		entity, target.Permission = workspaceKind, permWsRead
+		if write {
+			target.Permission = permWsAdmin
+		}
 	case "template":
 		entity, target.Permission = templateKind, permTemplateRead
 		if write {
@@ -56,7 +61,11 @@ func (m *Module) ReadSkillsTarget(ctx context.Context, sc store.Scope, kind, id 
 		rec, err = repo.Get(ctx, model.ID(id))
 	} else {
 		var rows []model.Record
-		rows, _, err = repo.List(ctx, model.Query{Filters: []model.Filter{eq(colRunRef, id)}, Limit: 2})
+		locator := colRunRef
+		if kind == "folder" {
+			locator = colWsRef
+		}
+		rows, _, err = repo.List(ctx, model.Query{Filters: []model.Filter{eq(locator, id)}, Limit: 2})
 		switch {
 		case err != nil:
 		case len(rows) == 0:
@@ -72,6 +81,10 @@ func (m *Module) ReadSkillsTarget(ctx context.Context, sc store.Scope, kind, id 
 	}
 	if kind == "template" {
 		if write && rec.String(colTplArchivedAt) != "" {
+			return SkillsTarget{}, store.ErrConflict
+		}
+	} else if kind == "folder" {
+		if write && rec.String(colWsState) != wsActive {
 			return SkillsTarget{}, store.ErrConflict
 		}
 	} else if ws := rec.String(colRunAuthzWorkspaceID); ws != "" {

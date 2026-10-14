@@ -6,7 +6,7 @@ description: >-
 draft: false
 ---
 
-La prochaine version est <!-- release -->`0.1`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+La prochaine version est <!-- release -->`0.2`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
 
 C’est le chemin macOS que `INSTALL.md` nomme recommandé. Il installe le
 binaire `olivares` signé via le cask Homebrew et lève la quarantaine

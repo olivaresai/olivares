@@ -7,7 +7,8 @@
 # Usage: scripts/docs-captures.sh [Playwright args, e.g. --grep sessions].
 # Requires Go, pnpm and Chromium (pnpm --dir web exec playwright install chromium).
 # This rebuilds core/internal/webui/dist; run only in an owned disposable worktree.
-# PUBLICAR=1 copies verified output to docs-site/public/console.
+# PUBLICAR=1 copies verified output to docs-site/public/console: the manifest and only the captures
+# that a docs page, a README or a launch post names. The other takes stay in web/playwright-report/docs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,10 +24,11 @@ _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/g
 unset _olivares_git_env
 # Use the shared build flags from scripts/lib/build-bin.sh.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
+. "$ROOT/scripts/lib/select-console-modules.sh"
 PORT="${E2E_PORT:-8466}"
 GRPC_PORT="$((PORT + 1))"
 DATA="$(mktemp -d)"
-BIN="$ROOT/bin/olivares"
+BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
 # Disposable host tree for the governed sessions.workspace shown by video scene 10. The harness
 # owns both its creation and cleanup; the API seeder only registers it.
 WS_ROOT="$(mktemp -d)"
@@ -41,12 +43,17 @@ trap cleanup EXIT
 # builds so a renamed demo session fails at its source rather than much later as a missing tab.
 bash "$ROOT/scripts/test-demo-agent.sh"
 
-echo "==> Building web bundle + olivares binary"
-pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null 2>&1 || true
-pnpm --dir "$ROOT/web" run build
-# Build connector plugins before the engine binary; go:embed requires their artifacts.
-bash "$ROOT/scripts/build-connectors.sh"
-build_olivares_bin "$BIN"
+if [ -n "${OLIVARES_BIN:-}" ]; then
+  [ -x "$BIN" ] || { echo 'ERROR: OLIVARES_BIN must name an executable release candidate' >&2; exit 1; }
+  echo '==> Using the supplied release candidate'
+else
+  echo "==> Building web bundle + olivares binary"
+  pnpm --dir "$ROOT/web" install --frozen-lockfile >/dev/null 2>&1 || true
+  pnpm --dir "$ROOT/web" run build
+  # Build connector plugins before the engine binary; go:embed requires their artifacts.
+  bash "$ROOT/scripts/build-connectors.sh"
+  build_olivares_bin "$BIN"
+fi
 
 # A browsable workspace needs a real tree. These are synthetic service files in the disposable
 # scratch directory, not paths or content borrowed from the repository being photographed.
@@ -201,12 +208,12 @@ if [ "$ARRIBA" -ne 1 ]; then
   exit 2
 fi
 
-TOKEN="$(curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
+TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
-  -d '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' \
+  --data-binary @- \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/system/orgs" -H @- \
-  | python3 -c 'import sys,json;[print(o["tenant_id"]) for o in json.load(sys.stdin)["items"] if o["slug"]=="demo"]')"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 if [ -z "$TENANT" ]; then
   echo "ERROR: could not resolve the demo tenant" >&2
   cat "$DATA/engine.log" >&2
@@ -228,6 +235,9 @@ case "$K3_PROBE" in
   ;;
 esac
 
+# Enable the optional shared readers before connector/work seeding and captures.
+enable_console_modules "http://127.0.0.1:$PORT" accessmap adoption catalog claude-agents compliance deploy evals finops gitpublish health inferenceproxy inventory knowledge models notify observability orchestration posture recording redteam reporting sandbox security sessions skills voice
+
 # Seed the three guide connectors after resolving the tenant and before capturing their
 # views.
 OLIVARES_TOKEN="$TOKEN" OTLP_BASE="$((PORT + 30))" OLIVARES_ENGINE_PID="$PID" \
@@ -239,11 +249,29 @@ OLIVARES_TOKEN="$TOKEN" OTLP_BASE="$((PORT + 30))" OLIVARES_ENGINE_PID="$PID" \
 }
 echo "==> Demo tenant: $TENANT"
 
+# Only authenticated 200 and the published 501 refusal describe a capability.
+capability_status() {
+  local status
+  status="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS -o "$DATA/capability.json" -w '%{http_code}' \
+    "http://127.0.0.1:$PORT$1" -H @- -H "X-Olivares-Tenant: $TENANT")" || return 1
+  case "$status" in 200|501) printf '%s' "$status" ;; *) echo "ERROR: $1 returned HTTP $status; expected 200 or 501" >&2; return 1 ;; esac
+}
+GRAPH_STATUS="$(capability_status '/v1/m/accessmap/graph')"
+IDENTITY_STATUS="$(capability_status '/v1/m/governance/identities')"
+BUILD_EDITION="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/server-info" -H @- \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["edition"])')"
+case "$BUILD_EDITION" in community|enterprise|business) ;; *) echo "ERROR: unknown build edition: $BUILD_EDITION" >&2; exit 1 ;; esac
+if [ "$BUILD_EDITION" = community ] && { [ "$GRAPH_STATUS" != 200 ] || [ "$IDENTITY_STATUS" != 200 ]; }; then
+  echo 'ERROR: Community must serve both the access graph and the identity inventory' >&2; exit 1
+fi
+echo "==> Build: $BUILD_EDITION; graph HTTP $GRAPH_STATUS; identity inventory HTTP $IDENTITY_STATUS"
+
+
 # Seed work items through the product API after authentication, retaining lease and
 # acceptance-criteria validation.
 echo "==> Seeding work items through the product API"
-python3 "$ROOT/scripts/seed-demo-work.py" \
-  "http://127.0.0.1:$PORT" "$TOKEN" "$TENANT" "$WS_ROOT"
+OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-demo-work.py" \
+  "http://127.0.0.1:$PORT" - "$TENANT" "$WS_ROOT"
 
 # Fill each surface to its target with the idempotent seeder.
 # Below-target results warn and continue so the captures show the remaining gaps.
@@ -255,18 +283,19 @@ python3 "$ROOT/scripts/seed-demo-work.py" \
 # de la llamada, y aqui NO hay sitio de llamada.
 #
 echo "==> Filling the estate to the per-surface target"
-python3 "$ROOT/scripts/seed-estate-volume.py" \
-  "http://127.0.0.1:$PORT" "$TOKEN" "$TENANT" || {
+OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-estate-volume.py" \
+  "http://127.0.0.1:$PORT" - "$TENANT" || {
   echo "    (some surfaces remain below their targets; the distribution above identifies them)"
 }
 
 # Report synthetic health states through the product API; unreported checks stay
 # unknown.
 echo "==> Reporting a probe against each declared health check"
-python3 - "$PORT" "$TOKEN" "$TENANT" <<'PYHEALTH' || echo "   (health probes skipped; the panel keeps its Unknown rows)" >&2
-import json, sys, urllib.request
+OLIVARES_TOKEN="$TOKEN" python3 - "$PORT" "$TENANT" <<'PYHEALTH' || echo "   (health probes skipped; the panel keeps its Unknown rows)" >&2
+import json, os, sys, urllib.request
 
-port, token, tenant = sys.argv[1], sys.argv[2], sys.argv[3]
+port, tenant = sys.argv[1:3]
+token = os.environ["OLIVARES_TOKEN"]
 base = f"http://127.0.0.1:{port}"
 
 # Module requests require X-Olivares-Tenant as well as authentication.
@@ -328,8 +357,8 @@ if "$BIN" sources set --name claude-code-prod --kind claude --tenant "$TENANT" \
   if [ "$OTLP_UP" = "1" ]; then
     echo "==> Seeding the adoption plane through the connector receiver"
     # resource_labels must be set at registration so team labels reach adoption data.
-    python3 "$ROOT/scripts/seed-adoption-otlp.py" \
-      "http://127.0.0.1:$PORT" "$TOKEN" "$TENANT" \
+    OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-adoption-otlp.py" \
+      "http://127.0.0.1:$PORT" - "$TENANT" \
       --otlp "http://127.0.0.1:$OTLP_PORT/v1/metrics" || {
       echo "    (adoption seeding failed; captures will show zero adoption)"
     }
@@ -370,8 +399,8 @@ done
 # this client cannot distinguish that result from a fresh installation.
 SETUP_REQUIRED=unknown
 if [ "$SETUP_UP" = "1" ]; then
-  SETUP_REQUIRED="$(curl -sf --connect-timeout 2 --max-time 10 "http://127.0.0.1:$SETUP_PORT/v1/server-info" \
-    | python3 -c 'import sys,json;v=json.load(sys.stdin).get("setup_required");print("true" if v is True else ("false" if v is False else "unknown"))' 2>/dev/null || echo unknown)"
+  SETUP_REQUIRED="$(python3 -c 'import sys,json;v=json.load(sys.stdin).get("setup_required");print("true" if v is True else ("false" if v is False else "unknown"))' \
+    <<<"$(curl -sf --connect-timeout 2 --max-time 10 "http://127.0.0.1:$SETUP_PORT/v1/server-info")" 2>/dev/null || echo unknown)"
 else
   echo "==> ⛔ the SECOND engine did not accept connections (or stopped): COULD NOT LOOK" >&2
 fi
@@ -432,8 +461,18 @@ mkdir -p "$ROOT/web/playwright-report/docs"
 echo "==> Running the docs-captures Playwright spec against live seeded data"
 cd "$ROOT/web"
 RC=0
-PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" DEMO_TENANT="$TENANT" \
-  pnpm exec playwright test e2e/docs-captures.spec.ts "$@" || RC=$?
+SPECS=(e2e/docs-captures.spec.ts)
+# The Community spec above captures the access map itself. A non-Community build that
+# serves the graph must bring its private capture suite; an installed one is always run.
+if [ "$BUILD_EDITION" != community ] && [ "$GRAPH_STATUS" = 200 ]; then
+  [ -f e2e/docs-captures-business.spec.ts ] || { echo 'ERROR: available Business graph requires its private capture suite' >&2; exit 1; }
+fi
+if [ -f e2e/docs-captures-business.spec.ts ]; then
+  SPECS+=(e2e/docs-captures-business.spec.ts)
+fi
+# Playwright's request client sends Secure browser-session cookies on localhost.
+PLAYWRIGHT_BASE_URL="http://localhost:$PORT" DEMO_TENANT="$TENANT" \
+  pnpm exec playwright test "${SPECS[@]}" "$@" || RC=$?
 
 # Merge per-capture evidence even after a failed run so missing captures remain visible.
 echo "==> Merging evidence from each capture into manifest.json"
@@ -442,9 +481,14 @@ import glob, json, os, subprocess, time
 
 d = os.environ["DOCS_DIR"]
 tomas = []
+skipped = {}
 for f in sorted(glob.glob(os.path.join(d, "*.evidence.json"))):
     with open(f, encoding="utf8") as fh:
-        tomas.append(json.load(fh))
+        evidence = json.load(fh)
+    if "skipped" in evidence:
+        skipped[evidence["id"]] = evidence["skipped"]
+    else:
+        tomas.append(evidence)
     os.remove(f)  # Per-capture files are merged into the manifest.
 
 
@@ -471,6 +515,7 @@ man = {
     "views": len(por_vista),
     "captures": len(tomas),
     "unpaired": descabalados,
+    "skipped": skipped,
     # List panel IDs and measurements, ordered by text length and empty-panel count.
     # An empty panel does not prove that the view is empty or defective.
     "empty_panels": [
@@ -531,6 +576,8 @@ print(f"    {man['captures']} captures across {man['views']} views · commit {ma
       + (" · ⚠ DIRTY TREE: the SHA does NOT reproduce these images" if man["tree_dirty"] else ""))
 if descabalados:
     print(f"    ⚠ missing light/dark pair: {', '.join(descabalados)}")
+for view, reason in skipped.items():
+    print(f"    SKIPPED {view}: {reason}")
 PY
 
 # PUBLICAR=1 requires a successful run, a clean tree and a manifest alongside the
@@ -558,12 +605,25 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
   n=0
   manifiesto=0
   retenidas=0
+  sin_pagina=0
+  # The site serves only captures that a docs page, a README or a launch post names. Every take stays in $SRC and
+  # in the manifest, which is what the route coverage check counts.
+  # shellcheck source=lib/capture-refs.sh
+  . "$ROOT/scripts/lib/capture-refs.sh"
+  referenciadas="$(referenced_captures "$ROOT")" || exit 2
   for art in "$SRC"/*; do
     [ -f "$art" ] || continue
     base="$(basename "$art")"
     case "$base" in
     *.evidence.json) continue ;;
     manifest.json) manifiesto=1 ;;
+    *.png)
+      # Here-string, not a pipe: an early `grep -q` exit would SIGPIPE the writer under pipefail.
+      if ! grep -qxF "$base" <<<"$referenciadas"; then
+        sin_pagina=$((sin_pagina + 1))
+        continue
+      fi
+      ;;
     esac
     id_toma="${base%-light.png}"; id_toma="${id_toma%-dark.png}"
     case " $no_publicar " in
@@ -582,6 +642,7 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
   fi
   echo "==> PUBLISHED $n artifact(s) in docs-site/public/console/ (including the manifest)"
   [ "$retenidas" -gt 0 ] && echo "==> WITHHELD $retenidas capture(s) because their declared state is not representative: $no_publicar" >&2
+  [ "$sin_pagina" -gt 0 ] && echo "==> NOT PUBLISHED $sin_pagina capture(s) that no docs page, README or launch post names; they stay in $SRC and in the manifest" >&2
   echo "==> Check the limit on the SAME commit:  task lint:screenshot-coverage"
 fi
 

@@ -6,7 +6,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -69,6 +74,9 @@ func (m *mcpManagement) probeLocalServer(ctx context.Context, tenant model.Tenan
 	defer cancel()
 	spec := sessions.LaunchSpec{Program: row.Command, Args: row.Args, Dir: dir, Isolation: sessions.IsolationNative, WaitDelay: time.Second, Env: env}
 	if err := m.confineLocalServer(&spec, row.EgressHosts...); err != nil {
+		return nil, newManagedStdioFailure("process_start", err, patterns)
+	}
+	if err := checkPinnedProgram(spec.Program, row.Pin); err != nil {
 		return nil, newManagedStdioFailure("process_start", err, patterns)
 	}
 	if m.eng != nil && m.eng.sessionsMod != nil {
@@ -181,6 +189,74 @@ func (m *mcpManagement) confineLocalServer(spec *sessions.LaunchSpec, egressHost
 			return newManagedStdioFailure("process_start", &os.PathError{Op: "read configured MCP argument", Path: path, Err: os.ErrPermission}, nil)
 		}
 		spec.Confinement.ReadOnly = append(spec.Confinement.ReadOnly, path)
+	}
+	return nil
+}
+
+// pinDeclaredTool resolves a pinned local server to the verified install of its
+// catalog declaration (olivares tool install --from): the release's executable
+// becomes the command and its SHA-256 the pin. A pin naming another digest or
+// command than that install, or a release that is not installed, is refused.
+// The stored pin sent back unchanged (disable, assign) is kept as stored, so a
+// server whose install changed can still be turned off or reassigned.
+func (m *mcpManagement) pinDeclaredTool(ctx context.Context, tenant model.TenantID, id string, in *auth.MCPGatewayServerInput) error {
+	pin := in.Pin
+	if pin == nil {
+		return nil
+	}
+	if id != "" {
+		snapshot, err := m.store.Get(ctx, tenant)
+		if err != nil {
+			return err
+		}
+		for _, row := range snapshot.Servers {
+			if row.ID == id && row.Pin != nil && *row.Pin == *pin && (in.Command == "" || in.Command == row.Command) {
+				in.Command = row.Command
+				return nil
+			}
+		}
+	}
+	if m.eng == nil || m.eng.dataDir == "" {
+		return auth.ErrMCPGatewayUnavailable
+	}
+	inv, err := toolInstallEngine(ctx).List(ctx, filepath.Join(absOrSame(m.eng.dataDir), "tools"))
+	if err != nil {
+		return fmt.Errorf("%w: %w", auth.ErrMCPGatewayUnavailable, err)
+	}
+	for _, release := range inv.Installed {
+		if release.Driver != "declared-"+pin.Program || release.Version != pin.Version {
+			continue
+		}
+		if release.State != toolinstall.StateInstalled || release.SHA256 == "" {
+			return fmt.Errorf("%w: %s %s is %s here (%s); install it again with olivares tool install --from <url> --version %s", auth.ErrMCPGatewayInvalid, pin.Program, pin.Version, release.State, release.Reason, pin.Version)
+		}
+		if pin.SHA256 != "" && pin.SHA256 != release.SHA256 || in.Command != "" && in.Command != release.Executable {
+			return fmt.Errorf("%w: the pin differs from the installed %s %s", auth.ErrMCPGatewayInvalid, pin.Program, pin.Version)
+		}
+		in.Command, pin.SHA256 = release.Executable, release.SHA256
+		return nil
+	}
+	return fmt.Errorf("%w: %s %s is not installed here; install it with olivares tool install --from <url> --version %s", auth.ErrMCPGatewayInvalid, pin.Program, pin.Version, pin.Version)
+}
+
+// checkPinnedProgram refuses a launch whose resolved executable is not the one
+// the server was pinned to.
+// ponytail: hashes the executable, then the runner opens it again; verify the opened file when the runner can exec by descriptor.
+func checkPinnedProgram(program string, pin *auth.MCPGatewayPin) error {
+	if pin == nil {
+		return nil
+	}
+	f, err := os.Open(program)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	if hex.EncodeToString(h.Sum(nil)) != pin.SHA256 {
+		return fmt.Errorf("the pinned %s %s executable changed since it was pinned; reinstall it or pin the server again", pin.Program, pin.Version)
 	}
 	return nil
 }

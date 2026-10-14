@@ -119,7 +119,7 @@ func TestProviderCompositionTwoSourceInstancesAdmissionAndAPI(t *testing.T) {
 			}
 			request("POST", "/v1/setup", map[string]any{"token": setupValue, "email": "composition@example.invalid", "password": "fixture-password-1"}, 201)
 			bearer = request("POST", "/v1/auth/login", map[string]any{"email": "composition@example.invalid", "password": "fixture-password-1"}, 200)["token"].(string)
-			tenantHeader = request("POST", "/v1/system/orgs", map[string]any{"name": "composition", "slug": "composition"}, 201)["tenant_id"].(string)
+			tenantHeader = createOrganizationFixture(t, st, "composition", "composition").TenantID.String()
 			tenant := model.TenantID(tenantHeader)
 
 			bus := eventbus.NewInProc(eventbus.Options{Logger: quietLog()})

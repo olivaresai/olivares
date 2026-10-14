@@ -4,7 +4,10 @@
 
 package toolinstall
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // PlatformV2For maps a host or operator platform onto the closed v2 platform
 // for driver. Grok does not use a libc field. Codex is the musl package on
@@ -63,6 +66,14 @@ func PlatformV2For(driver string, host Platform) (PlatformV2, string, error) {
 }
 
 func validateRequestV2(req RequestV2) error {
+	if req.Declaration != nil {
+		_, err := declaredSelection(req)
+		return err
+	}
+	if strings.HasPrefix(req.Driver, "declared-") {
+		return refuse(KindUnadmitted, "a catalog-admitted declaration is required")
+	}
+
 	if req.Driver == "" {
 		return refuse(KindInvalidRequest, "a driver is required")
 	}

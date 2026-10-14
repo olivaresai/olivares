@@ -612,6 +612,18 @@ func (e *consentEstate) retireSeeded(t *testing.T, key string, subject retiremen
 	}
 	e.scimDelete(e.tT, subject.id)
 	e.runPump()
+	if !e.eng.census.CompositionReadiness().Ready() {
+		if !e.wantEditionRetirementRefusal(t, subject.id, e.tT, s, row) {
+			t.Fatal("an incomplete composition did not prove its retirement refusal")
+		}
+		if !e.seededRowExists(s.kind, row) {
+			t.Errorf("an incomplete composition deleted the %s row", s.kind)
+		}
+		if e.comm != nil {
+			e.wantControlUntouched(t, key, subject.id)
+		}
+		return
+	}
 	present := e.seededRowExists(s.kind, row)
 	switch s.outcome {
 	case retireDeletes:
@@ -651,6 +663,7 @@ func (e *consentEstate) retireSeeded(t *testing.T, key string, subject retiremen
 // the tenant blocks its retirement, listed by id, until the tenant resolves it.
 func TestOwnedObligationsBlockReadmissionUntilResolved(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "resolving owned obligations requires a blocked verdict and later completion")
 		subject := e.retirementSubjectIn(e.tT, "obligations")
 		schedule := e.seedFenced(e.tT, "orchestration.schedule", scheduleRecord("obligations", subject.id), subject.id)
 		run := e.seedFenced(e.tT, "orchestration.workflow_run", runRecord(subject.id), subject.id)
@@ -777,6 +790,7 @@ func (e *consentEstate) restoreRow(tenant model.TenantID, kind model.Kind, value
 // knows, however it got there, keeps the retirement from completing.
 func TestAnUnknownStoredKindBlocksRetirement(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "an unknown stored kind requires a published blocked verdict")
 		subject := e.retirementSubjectIn(e.tT, "unknown-kind")
 		steps := strings.Replace(workCreateSteps(t, subject.id), `"work-create"`, `"work-escalate"`, 1)
 		e.restoreRow(e.tT, "orchestration.workflow", model.Record{
@@ -825,6 +839,7 @@ func TestATokenOwnedSubscriptionBlocksReadmissionUntilResolved(t *testing.T) {
 	for _, engineName := range consentEngines {
 		t.Run(engineName, func(t *testing.T) {
 			e := bootConsentEstate(t, engineName)
+			e.requireRetirementCompletion(t, "resolving a token-owned subscription requires a blocked verdict and later completion")
 			const email = "token-owner@consent.test"
 			user := e.onboard(e.tT, email, "admin")
 			sess := e.login(email, consentMemberPassword)

@@ -284,7 +284,7 @@ func TestProxyIPv6OnlyLocalhost(t *testing.T) {
 	if err != nil {
 		t.Skipf("IPv6 is unavailable: %v", err)
 	}
-	provider := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	provider := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "IPv6 provider") }))
 	_ = provider.Listener.Close()
 	provider.Listener = l
 	provider.Start()
@@ -295,7 +295,9 @@ func TestProxyIPv6OnlyLocalhost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := startProxy(context.Background(), ds)
+	// The runner may resolve localhost to IPv4 only. Pin both families so this
+	// fixture always exercises IPv4 refusal followed by the IPv6-only provider.
+	p, err := startProxyWithResolver(context.Background(), ds, &changingResolver{first: net.ParseIP("127.0.0.1"), ip: net.ParseIP("::1")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,6 +314,13 @@ func TestProxyIPv6OnlyLocalhost(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("IPv6-only provider: status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "IPv6 provider" {
+		t.Fatalf("IPv6-only provider: body %q", body)
 	}
 }
 
@@ -572,6 +581,51 @@ func TestSessionTLSLeafKeyIsNotTheCAKey(t *testing.T) {
 	}
 	if leaf.PublicKey.(*ecdsa.PublicKey).Equal(ca.PublicKey) {
 		t.Fatal("the session CA key takes part in TLS handshakes")
+	}
+}
+
+// Runner temp roots can fit a Unix socket when its private directory name is short.
+func TestProxyRunnerTMPDIR(t *testing.T) {
+	t.Chdir(t.TempDir())
+	dir := strings.Repeat("d", 76)
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", dir)
+	p, err := startProxy(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(p.close)
+	for path, mode := range map[string]os.FileMode{p.dir: 0o700, p.socket: 0o600} {
+		info, err := os.Stat(path)
+		if err != nil || info.Mode().Perm() != mode {
+			t.Fatalf("private proxy path %s: info=%v err=%v", path, info, err)
+		}
+	}
+	conn, err := net.Dial("unix", p.socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(conn, "GET http://127.0.0.1:1/ HTTP/1.1\r\nHost: 127.0.0.1:1\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("offline proxy status=%d; want 403", response.StatusCode)
+	}
+	p.close()
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("proxy cleanup: entries=%v err=%v", entries, err)
 	}
 }
 

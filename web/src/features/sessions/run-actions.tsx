@@ -6,7 +6,14 @@
 // by the session card and the session header, and driven by the same capability model the
 // card shows.
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CirclePause, Disc3, Play, Square, Trash2 } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  CirclePause,
+  Disc3,
+  Play,
+  Square,
+  Trash2,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -21,8 +28,9 @@ import { useClientSettings } from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
-import { startsAgain, type Capability } from './provenance'
+import { canMoveSession, startsAgain, type Capability } from './provenance'
 import { DisabledTip, IconTip } from './icon-tip'
+import { MoveSessionDialog } from './session-move'
 import './i18n'
 
 /**
@@ -100,6 +108,9 @@ export function RunActions({
     setConfirm(null)
     setDiscardWorktree(false)
   }
+  // "Move to…": the same session on another account of its tool, or a linked session
+  // in another tool. Offered where Resume is, for a session that has a conversation.
+  const [moveOpen, setMoveOpen] = useState(false)
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
@@ -208,6 +219,29 @@ export function RunActions({
               : t('card.actions.resume')}
           </Button>
         )}
+        {allow('resume') && !startsAgain(run) && canMoveSession(run) && (
+          <>
+            <IconTip label={t('move.open')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t('move.open')}
+                onClick={() => setMoveOpen(true)}
+              >
+                <ArrowRightLeft />
+              </Button>
+            </IconTip>
+            {/* Mounted only while open: it reads profiles and the handoff preview, and a
+                card that never opens it must not pay for either. */}
+            {moveOpen && (
+              <MoveSessionDialog
+                key={run.run_ref}
+                run={run}
+                onClose={() => setMoveOpen(false)}
+              />
+            )}
+          </>
+        )}
         <ConfirmDialog
           open={confirm === 'stop'}
           onOpenChange={(o) => !o && setConfirm(null)}
@@ -261,6 +295,25 @@ export function RunActions({
             ? t('card.actions.startAgain')
             : t('card.actions.resume')}
         </Button>
+      )}
+      {allow('resume') && !startsAgain(run) && canMoveSession(run) && (
+        <>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setMoveOpen(true)}
+          >
+            <ArrowRightLeft className="size-3.5" />
+            {t('move.open')}
+          </Button>
+          {moveOpen && (
+            <MoveSessionDialog
+              key={run.run_ref}
+              run={run}
+              onClose={() => setMoveOpen(false)}
+            />
+          )}
+        </>
       )}
       {allow('cleanup') && (
         <Button

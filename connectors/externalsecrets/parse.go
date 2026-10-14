@@ -4,7 +4,6 @@
 package externalsecrets
 
 import (
-	"sort"
 	"strings"
 )
 
@@ -120,31 +119,6 @@ type rawAny struct{}
 // never pulled into memory.
 func (rawAny) UnmarshalYAML(func(interface{}) error) error { return nil }
 
-// provider is the resolved single backend of a SecretStore. ESO requires exactly
-// one backend key under spec.provider; backend is that key ("vault", "aws",
-// "gcpsm", "azurekv", "kubernetes", or any other ESO provider). ok is false when no
-// backend key is present (a malformed/empty provider) — the store is still
-// inventoried, with backend left empty, never guessed.
-type provider struct {
-	backend string
-}
-
-// resolveProvider returns the single backend key declared under spec.provider. ESO
-// validates that exactly one is set; if a manifest somehow lists several, the
-// lexicographically first is chosen for determinism and the rest are a documented
-// seam (the connector does not invent a composite). An empty map yields ok=false.
-func resolveProvider(m map[string]rawAny) (provider, bool) {
-	if len(m) == 0 {
-		return provider{}, false
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return provider{backend: keys[0]}, true
-}
-
 // storeRef is the resolved identity of a SecretStore/ClusterSecretStore: its kind,
 // scope (namespace, or the clusterScope sentinel) and name. It is the convergence
 // key shared by the inventory NHI Ref and the edge OriginRef.
@@ -158,16 +132,6 @@ type storeRef struct {
 // eso.store:<StoreKind>:<ns|cluster>:<name>.
 func (r storeRef) ref() string {
 	return "eso.store:" + r.kind + ":" + r.scope + ":" + r.name
-}
-
-// displayName is the human label stamped on the inventory NHI, e.g.
-// "ESO SecretStore default/vault-backend (vault)".
-func (r storeRef) displayName(backend string) string {
-	label := "ESO " + r.kind + " " + r.scope + "/" + r.name
-	if backend != "" {
-		label += " (" + backend + ")"
-	}
-	return label
 }
 
 // storeRefForES resolves the store an ExternalSecret references. The store kind is
@@ -189,16 +153,6 @@ func storeRefForES(es document) (storeRef, bool) {
 		scope = clusterScope
 	}
 	return storeRef{kind: kind, scope: scope, name: name}, true
-}
-
-// storeRefForStore resolves a SecretStore/ClusterSecretStore object to its own ref,
-// so its inventory NHI shares the exact key an ExternalSecret's edge converges on. A
-// ClusterSecretStore is cluster-scoped regardless of any metadata.namespace.
-func storeRefForStore(d document) storeRef {
-	if d.Kind == kindClusterSecretStore {
-		return storeRef{kind: kindClusterSecretStore, scope: clusterScope, name: d.Metadata.Name}
-	}
-	return storeRef{kind: kindSecretStore, scope: namespaceOf(d), name: d.Metadata.Name}
 }
 
 // namespaceOf returns an object's namespace, defaulting to "default" when omitted.

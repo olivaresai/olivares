@@ -7,6 +7,20 @@ import { renderIntel, screen } from '@/test/intel'
 import { RiskSection } from './components'
 import { deriveRisk } from './derive'
 import { securityFindingsFixture } from './fixtures'
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+}))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...original,
+    PANEL_EXTENSIONS: {
+      ...original.PANEL_EXTENSIONS,
+      executiveRiskCards: [],
+    },
+  }
+})
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>

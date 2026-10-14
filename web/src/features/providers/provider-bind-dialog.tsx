@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
-import type { ProviderProfileDTO } from '@/features/agentops/types'
+import { profileName, type ProviderProfileDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys } from './api'
@@ -136,7 +136,7 @@ export function ProviderBindDialog({
                       key={profile.profile_ref}
                       value={profile.profile_ref}
                     >
-                      {profile.display_name || profile.profile_ref} ·{' '}
+                      {profileName(profile) ?? profile.profile_ref} ·{' '}
                       {profile.driver}
                     </SelectItem>
                   ))}

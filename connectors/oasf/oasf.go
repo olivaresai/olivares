@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -138,26 +137,6 @@ func (s *Source) clock() time.Time {
 	return time.Now()
 }
 
-// Snapshot assembles the agent-descriptor roster: every VALID record (and,
-// under require_badge, only badge-VERIFIED ones) becomes one PrincipalNHI
-// identity of kind "agent_descriptor". Offline it returns an empty graph with
-// Source and CapturedAt set, nil error. It never returns credential material —
-// the inputs hold none to begin with.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceOASF, CapturedAt: s.clock().UTC()}
-	if s.offline() {
-		return g, nil
-	}
-	ev, err := s.evaluate(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, row := range ev.rostered {
-		g.Identities = append(g.Identities, identityFor(row))
-	}
-	return g, nil
-}
-
 // Gather emits the connector's findings: one per invalid record (validation
 // reason category in the title), one per badge that failed verification, and
 // one per record denied by require_badge. The roster itself travels Snapshot
@@ -247,31 +226,6 @@ func finding(kind, title, ref string, now time.Time) model.FindingReport {
 		Title:       title,
 		DetailHash:  redact.Hash(kind + "|" + ref),
 		OccurredAt:  now,
-	}
-}
-
-// identityFor maps one rostered record to its roster identity. An OASF
-// descriptor is a governed NHI but NOT a dedicated per-agent registry identity
-// (identitysource.KindAgentIdentity), so its kind is "agent_descriptor" and the
-// access-map attribution axis treats it as approximate. Zero counts are pruned
-// rather than emitted as "0" (only-present metadata, diff-stable).
-func identityFor(row recordRow) identitysource.Identity {
-	locators := ""
-	if n := len(row.rec.Locators); n > 0 {
-		locators = strconv.Itoa(n)
-	}
-	return identitysource.Identity{
-		Ref:         row.rec.Ref(),
-		Type:        identitysource.PrincipalNHI,
-		Kind:        "agent_descriptor",
-		DisplayName: row.rec.Name,
-		Source:      identitysource.SourceOASF,
-		Attributes: pruneAttrs(map[string]string{
-			"schema_version": row.rec.SchemaVersion,
-			"badge":          row.status,
-			"skills":         strconv.Itoa(len(row.rec.Skills)),
-			"locators":       locators,
-		}),
 	}
 }
 
@@ -415,19 +369,4 @@ func splitJSONDocs(data []byte) ([]json.RawMessage, bool) {
 	default:
 		return nil, false
 	}
-}
-
-// pruneAttrs drops empty values so the attribute map carries only present
-// metadata, and returns nil when nothing remains (diff-stable Snapshots; the
-// claude-wif convention).
-func pruneAttrs(m map[string]string) map[string]string {
-	for k, v := range m {
-		if v == "" {
-			delete(m, k)
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
 }

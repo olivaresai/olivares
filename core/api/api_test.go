@@ -238,103 +238,20 @@ func (h *harness) adminLogin() string {
 	return r.body["token"].(string)
 }
 
-func (h *harness) createOrg(token, slug string) model.TenantID {
+func (h *harness) createOrg(_ string, slug string) model.TenantID {
 	h.t.Helper()
-	r := h.do("POST", "/v1/system/orgs", token, map[string]any{"name": slug, "slug": slug}, nil)
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create org %s = %d %s", slug, r.code, r.raw)
+	// Seed the isolation fixture through the store; organization management is edition-specific.
+	ctx := context.Background()
+	var org model.Org
+	err := h.st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+		return err
+	})
+	if err != nil {
+		h.t.Fatalf("seed organization %s: %v", slug, err)
 	}
-	return model.TenantID(r.body["tenant_id"].(string))
-}
-
-func TestSystemDropOrg(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-
-	r := h.do("DELETE", "/v1/system/orgs/"+tenant.String(), admin, nil, nil)
-	if r.code != http.StatusNoContent {
-		t.Fatalf("drop org = %d %s", r.code, r.raw)
-	}
-	r = h.do("GET", "/v1/system/orgs", admin, nil, nil)
-	if r.code != http.StatusOK {
-		t.Fatalf("list orgs after drop = %d %s", r.code, r.raw)
-	}
-	for _, it := range r.body["items"].([]any) {
-		m := it.(map[string]any)
-		if m["tenant_id"] == tenant.String() {
-			t.Fatalf("dropped tenant %s still present in list response: %v", tenant, r.body["items"])
-		}
-	}
-
-	r = h.do("GET", "/v1/audit/system", admin, nil, nil)
-	if r.code != http.StatusOK {
-		t.Fatalf("system audit after drop = %d %s", r.code, r.raw)
-	}
-	found := false
-	for _, it := range r.body["items"].([]any) {
-		m := it.(map[string]any)
-		if m["action"] == "tenant.drop" && m["target_id"] == tenant.String() {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("system audit missing tenant.drop for %s: %v", tenant, r.body["items"])
-	}
-}
-
-func TestSystemDropOrgUnknownTenant(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := model.NewTenantID()
-
-	r := h.do("DELETE", "/v1/system/orgs/"+tenant.String(), admin, nil, nil)
-	if r.code != http.StatusNotFound {
-		t.Fatalf("drop unknown org = %d %s, want 404", r.code, r.raw)
-	}
-}
-
-func TestSystemDropOrgUnauthenticated(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-
-	r := h.do("DELETE", "/v1/system/orgs/"+tenant.String(), "", nil, nil)
-	if r.code != http.StatusUnauthorized {
-		t.Fatalf("drop org without auth = %d %s, want 401", r.code, r.raw)
-	}
-}
-
-func TestSystemDropOrgNonSuperadminForbidden(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-
-	cr := h.do("POST", "/v1/users", admin, map[string]any{"email": "owner@acme.io", "password": "tenantowner1", "tenant": tenant.String(), "role": auth.RoleOwner}, nil)
-	if cr.code != http.StatusCreated {
-		t.Fatalf("create user = %d %s", cr.code, cr.raw)
-	}
-	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "owner@acme.io", "password": "tenantowner1"}, nil)
-	if lr.code != http.StatusOK {
-		t.Fatalf("login = %d %s", lr.code, lr.raw)
-	}
-	bound := lr.body["token"].(string)
-
-	r := h.do("DELETE", "/v1/system/orgs/"+tenant.String(), bound, nil, nil)
-	if r.code != http.StatusForbidden {
-		t.Fatalf("drop org as tenant owner = %d %s, want 403", r.code, r.raw)
-	}
-}
-
-func TestSystemDropOrgRejectsSystemTenant(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-
-	r := h.do("DELETE", "/v1/system/orgs/"+model.SystemTenantID.String(), admin, nil, nil)
-	if r.code != http.StatusBadRequest {
-		t.Fatalf("drop system tenant = %d %s, want 400", r.code, r.raw)
-	}
+	return org.TenantID
 }
 
 // TestSystemAuditReadSuperadminOnly covers the case where the superadmin reads the
@@ -689,4 +606,23 @@ func TestWhoamiSignedInEmail(t *testing.T) {
 	if _, exists := r.body["email"]; exists {
 		t.Fatal("token principal exposed its owner's email")
 	}
+}
+
+func (h *harness) storedOrgs() []model.Org {
+	h.t.Helper()
+	var orgs []model.Org
+	if err := h.st.System(context.Background(), func(sys store.SystemScope) error {
+		var err error
+		orgs, err = sys.ListOrgs(context.Background())
+		return err
+	}); err != nil {
+		h.t.Fatal(err)
+	}
+	visible := orgs[:0]
+	for _, org := range orgs {
+		if org.TenantID != model.SystemTenantID {
+			visible = append(visible, org)
+		}
+	}
+	return visible
 }

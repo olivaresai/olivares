@@ -83,6 +83,9 @@
     "activeUsers": "活动用户账户",
     "noUserLimit": "自托管：无上限",
     "expires": "过期时间",
+    "paidThrough": "已付费至",
+    "leaseUntil": "临时期限至",
+    "leaseNote": "临时期限（退款期）。请在此日期前续期，以便在已付费日期之前保持有效。",
     "issued": "签发时间",
     "sourceLabel": "来源",
     "sources": {

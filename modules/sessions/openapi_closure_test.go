@@ -70,6 +70,8 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		// worktree and branch. A call with no body is the call it always was.
 		{http.MethodPost, "/runs/{ref}/cleanup", sessionsClosureBodyful, false},
 		{http.MethodPost, "/runs/{ref}/resume", sessionsClosureBodyless, false},
+		{http.MethodPost, "/runs/{ref}/move", sessionsClosureBodyful, true},
+		{http.MethodPost, "/runs/{ref}/handoff", sessionsClosureBodyful, true},
 		{http.MethodPut, "/runs/{ref}/peers", sessionsClosureBodyful, true},
 		{http.MethodPost, "/runs/{ref}/preview", sessionsClosureBodyful, true},
 		{http.MethodPost, "/templates", sessionsClosureBodyful, true},
@@ -82,6 +84,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		{http.MethodDelete, "/workspaces/{ref}", sessionsClosureBodyless, false},
 		{http.MethodDelete, "/workspaces/{ref}/files", sessionsClosureBodyless, false},
 		{http.MethodPost, "/workspaces/{ref}/files/dir", sessionsClosureBodyless, false},
+		{http.MethodPost, "/workspaces/{ref}/wiki", sessionsClosureBodyless, false},
 		{http.MethodPost, "/workspaces/{ref}/files/move", sessionsClosureBodyful, true},
 		{http.MethodPost, "/provider-profiles", sessionsClosureBodyful, true},
 		{http.MethodPatch, "/provider-profiles/{ref}", sessionsClosureBodyful, true},
@@ -106,7 +109,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 15, sessionsClosureBodyless: 8}
+	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 17, sessionsClosureBodyless: 9}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}

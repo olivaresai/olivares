@@ -27,17 +27,6 @@ async function mockApi(page: Page) {
   })
   await page.addInitScript(() => {
     localStorage.setItem(
-      'olivares.session',
-      JSON.stringify({
-        state: {
-          token: 'olvs_demo',
-          sessionId: 's1',
-          expiresAt: '2030-01-01T00:00:00Z',
-        },
-        version: 0,
-      }),
-    )
-    localStorage.setItem(
       'olivares.tenant',
       JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
     )

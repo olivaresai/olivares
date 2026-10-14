@@ -33,5 +33,15 @@
     "loading": "Reading workspace contents…",
     "empty": "This workspace holds nothing yet.",
     "unavailable": "Workspace contents are unavailable."
+  },
+  "sessionFolders": {
+    "title": "Session folders",
+    "intro": "Folders on this server where sessions work. They are separate from workspaces.",
+    "manage": "Manage folders",
+    "folder": "Folder",
+    "empty": "No session folders yet. A folder appears here once a session starts in it.",
+    "loading": "Reading session folders…",
+    "unavailable": "Session folders are unavailable.",
+    "truncationHint": "Open Sessions to see every folder."
   }
 }

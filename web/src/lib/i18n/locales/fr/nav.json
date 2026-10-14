@@ -75,8 +75,6 @@
     "session-viewer": "Visionneuse de sessions",
     "backups": "Sauvegardes",
     "logs": "Journaux",
-    "residency": "Résidence des données",
-    "tenants": "Locataires",
     "inferenceProxy": "Proxy d'inférence",
     "alerting": "Alertes",
     "agentcoreExport": "Export AgentCore",
@@ -146,8 +144,6 @@
     "audit": "Registre de preuves inviolable",
     "workspaceDashboard": "Agents, sessions, ressources et activité d’un espace de travail",
     "settings": "Paramètres d’espace de travail et de compte",
-    "residency": "Épinglez chaque organisation à une région, ou laissez-la non épinglée",
-    "tenants": "Retirer ou rétablir le service d'un locataire",
     "inferenceProxy": "Gates du proxy, règles DLP de sortie et approbations d'appareils",
     "alerting": "Acheminez les constats vers des destinations et inspectez les livraisons",
     "reporting": "Générez et téléchargez des rapports de gouvernance",
@@ -331,13 +327,32 @@
     "turnPlaceholder": "Envoyer une phrase…",
     "turnAria": "Tour de session",
     "attachedWaiting": "Vous attend",
-    "advanced": "Avancé",
+    "rawLine": "Ligne brute",
     "advancedHint": "Envoyer une ligne NDJSON sur stdin. Le champ de phrase est la valeur par défaut.",
     "wirePlaceholder": "Envoyer une ligne NDJSON sur stdin…",
     "wireAria": "Ligne d’entrée de session",
     "turnFailed": "La session n’a pas pu accepter ce tour.",
     "sendBackgroundHint": "Ctrl+Entrée envoie et laisse le brouillon prêt pour la phrase suivante.",
-    "messagePlaceholder": "Message à {{title}}…"
+    "messagePlaceholder": "Message à {{title}}…",
+    "slashLabel": "Commandes et skills",
+    "slashOption": "{{name}}, {{i}} sur {{n}}",
+    "slashNoMatch": "Aucune commande ne correspond à « {{query}} ».",
+    "slash": {
+      "loading": "Lecture des commandes de l'outil…",
+      "failed": "Les commandes de l'outil n'ont pas pu être lues.",
+      "unreported": "Cet outil n'a signalé aucune commande pour la session.",
+      "stale": "Les commandes de l'outil n'ont pas pu être actualisées ; cette liste est peut-être obsolète.",
+      "agent": "Agent",
+      "source": {
+        "built-in": "Intégré",
+        "user": "Utilisateur",
+        "project": "Projet",
+        "plugin": "Plugin"
+      }
+    },
+    "modelAria": "Modèle et effort de cette session : {{value}}",
+    "sessionKeeps": "Cette session reste sur {{value}}. Un autre modèle ou un autre effort démarre une nouvelle session.",
+    "startWithChoice": "Démarrer une nouvelle session avec ce choix"
   },
   "shell": {
     "journeysLabel": "Parcours",

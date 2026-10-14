@@ -20,6 +20,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // TestFakeOllamaProcess is not a test: it is the fake `ollama serve` the module starts
@@ -78,6 +79,7 @@ type ollamaFixture struct {
 	endpoint  string
 	tenant    model.TenantID
 	registers int
+	store     store.Store
 	mod       *Module
 	gate      chan struct{} // when set, Register waits for it to close
 	entered   int
@@ -101,7 +103,7 @@ func newOllamaServer(t *testing.T) (call func(string, string, any) (int, map[str
 	if err != nil {
 		t.Fatal(err)
 	}
-	call, _ = newSignInServer(t, func(m *Module, bin string) {
+	call, _, f.store = newSignInServerWithStore(t, func(m *Module, bin string) {
 		wrapper := "#!/bin/sh\n[ \"$1\" = serve ] || exit 2\nOLIVARES_FAKE_OLLAMA=serve exec " + self + " -test.run='^TestFakeOllamaProcess$'\n"
 		if err := os.WriteFile(filepath.Join(bin, "ollama"), []byte(wrapper), 0o755); err != nil {
 			t.Fatal(err)
@@ -162,11 +164,8 @@ func TestOllamaStartsAnswersIsRegisteredAndStopsWithTheEngine(t *testing.T) {
 	if code, st := call("GET", "/v1/m/agenttools/ollama", nil); code != 200 || st["installed"] != true || st["state"] != "stopped" {
 		t.Fatalf("before start = %d %v", code, st)
 	}
-	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Second", "slug": "second"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, org)
-	}
-	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org["tenant_id"].(string)}); code != 202 {
+	org := seedOrg(t, f.store, "Second", "second")
+	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()}); code != 202 {
 		t.Fatalf("start = %d %v", code, st)
 	}
 	st := waitOllama(t, call, "running")
@@ -184,8 +183,8 @@ func TestOllamaStartsAnswersIsRegisteredAndStopsWithTheEngine(t *testing.T) {
 	f.mu.Lock()
 	tenant := f.tenant
 	f.mu.Unlock()
-	if tenant.String() != org["tenant_id"] {
-		t.Fatalf("registered for tenant %q, want the named %v", tenant, org["tenant_id"])
+	if tenant.String() != org.String() {
+		t.Fatalf("registered for tenant %q, want the named %v", tenant, org.String())
 	}
 	if _, err := os.Stat(f.models); err != nil {
 		t.Fatalf("the models directory was not made: %v", err)
@@ -289,11 +288,8 @@ func TestOllamaStartedWithoutATenantRegistersNothing(t *testing.T) {
 // registers again, for the tenant that started the service, so its list is read.
 func TestOllamaDownloadRegistersAgainForTheStartingTenant(t *testing.T) {
 	call, f := newOllamaServer(t)
-	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Second", "slug": "second"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, org)
-	}
-	call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org["tenant_id"].(string)})
+	org := seedOrg(t, f.store, "Second", "second")
+	call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()})
 	waitOllama(t, call, "running")
 	registers := func() int {
 		f.mu.Lock()
@@ -318,7 +314,7 @@ func TestOllamaDownloadRegistersAgainForTheStartingTenant(t *testing.T) {
 	f.mu.Lock()
 	n, tenant, endpoint := f.registers, f.tenant, f.endpoint
 	f.mu.Unlock()
-	if n != 2 || tenant.String() != org["tenant_id"] || endpoint != "http://"+f.addr {
+	if n != 2 || tenant.String() != org.String() || endpoint != "http://"+f.addr {
 		t.Fatalf("after the download: %d registrations, tenant %q, endpoint %q", n, tenant, endpoint)
 	}
 }
@@ -373,12 +369,9 @@ func TestOllamaReportsRunningAndADoneDownloadOnlyOnceItsEndpointIsRegistered(t *
 			time.Sleep(20 * time.Millisecond)
 		}
 	}
-	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Second", "slug": "second"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, org)
-	}
+	org := seedOrg(t, f.store, "Second", "second")
 	release := hold()
-	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org["tenant_id"].(string)}); code != 202 {
+	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()}); code != 202 {
 		t.Fatalf("start = %d %v", code, st)
 	}
 	waitEntered(1)

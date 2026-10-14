@@ -58,7 +58,8 @@ export interface IdentityDTO {
   source?: string
   /** human | nhi | unknown */
   principal_type?: string
-  disabled: boolean
+  /** `null` when the source never reported the account state. */
+  disabled: boolean | null
 }
 
 /** A directory collection (group/role) or a federation rule projected as a policy. */
@@ -253,7 +254,8 @@ export interface AuditEntry {
   actor_kind?: string
   target_kind?: string
   target_id?: string
-  at?: string
+  /** RFC3339 time the ledger recorded the event (core/api/dto.go AuditEventDTO). */
+  occurred_at?: string
 }
 
 // ---------------------------------------------------------------------------

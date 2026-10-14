@@ -115,9 +115,26 @@ func (s *licenseService) statusFor(ctx context.Context, d licenseDisplay) (api.L
 		// boundary — its lease while provisional, its paid_through once promoted — and NOT a
 		// summary of the purchase: the add-on lines have their own terms and their own phases,
 		// and `olivares license status` prints every one of them. This DTO carries no per-line
-		// field yet, and adding one is a console change, named in the PR.
+		// field; the base line's two dates a buyer is told about are named below.
 		if t := d.lic.Term(); !t.IsZero() {
 			out.ExpiresAt = &t
+		}
+		// ExpiresAt stays what it always was (a published field). While the base line is still on
+		// its 72 h lease it is the lease, not the term the buyer paid for, and the licence email
+		// states the term. So the DTO also names the paid term and the lease under their own keys,
+		// and a console says "paid through" for one and "lease until" for the other.
+		// Both come from the signed base grant, never inferred.
+		if d.lic.IsCredentialV3() {
+			if base, ok := d.lic.Credential.BaseGrant(); ok {
+				if t := base.PaidThrough; !t.IsZero() {
+					out.PaidThrough = &t
+				}
+				if base.Phase == license.PhaseRefundWindow || base.Phase == license.PhasePromotionHold {
+					if t := base.LeaseUntil; !t.IsZero() {
+						out.LeaseUntil = &t
+					}
+				}
+			}
 		}
 	}
 	limit, limited := s.authr.SeatLimit()

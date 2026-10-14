@@ -10,6 +10,9 @@ import (
 	"embed"
 	"encoding/json"
 	"io/fs"
+	"net/http"
+
+	"github.com/olivaresai/olivares/core/api"
 )
 
 // The built-in catalog is vendored data (builtin/README.md): packs of upstream skills
@@ -39,10 +42,9 @@ type builtinPin struct {
 // importBuiltin validates the built-in pack named id. An unpinned, unreadable or
 // altered pack is refused; there is no fallback to another source.
 func importBuiltin(ctx context.Context, id string) (*ValidatedPack, Source, error) {
-	raw, err := fs.ReadFile(builtinData, "builtin/PIN.json")
-	var pin builtinPin
-	if err != nil || json.Unmarshal(raw, &pin) != nil {
-		return nil, Source{}, refuse("source_unavailable", "built-in pin unreadable")
+	pin, err := readBuiltinPin()
+	if err != nil {
+		return nil, Source{}, err
 	}
 	for _, entry := range pin.Packs {
 		if entry.ID != id {
@@ -67,4 +69,40 @@ func importBuiltin(ctx context.Context, id string) (*ValidatedPack, Source, erro
 		return pack, Source{Kind: "builtin", Origin: source.Repository, RequestedRef: entry.ID, ResolvedCommit: source.Commit, SourceDigest: pack.SourceDigest}, nil
 	}
 	return nil, Source{}, refuse("unsupported_source", "built-in pack")
+}
+
+// BuiltinPack is a pinned source available for installation, independent of tenant packs.
+type BuiltinPack struct {
+	ID             string `json:"id"`
+	Origin         string `json:"origin"`
+	ResolvedCommit string `json:"resolved_commit"`
+	SourceDigest   string `json:"source_digest"`
+}
+
+func readBuiltinPin() (builtinPin, error) {
+	raw, err := fs.ReadFile(builtinData, "builtin/PIN.json")
+	var pin builtinPin
+	if err != nil || json.Unmarshal(raw, &pin) != nil {
+		return pin, refuse("source_unavailable", "built-in pin unreadable")
+	}
+	return pin, nil
+}
+
+// listBuiltins lists the embedded, pinned sources without installing or executing them.
+func (m *Module) listBuiltins(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	pin, err := readBuiltinPin()
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	items := make([]BuiltinPack, 0, len(pin.Packs))
+	for _, entry := range pin.Packs {
+		source, known := pin.Sources[entry.Source]
+		if !known || source.Commit == "" || entry.SHA256 == "" {
+			respondError(w, refuse("source_unavailable", "built-in pin incomplete for "+entry.ID))
+			return
+		}
+		items = append(items, BuiltinPack{ID: entry.ID, Origin: source.Repository, ResolvedCommit: source.Commit, SourceDigest: entry.SHA256})
+	}
+	respond(w, http.StatusOK, api.ListResponse[BuiltinPack]{Items: items})
 }

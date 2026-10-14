@@ -24,7 +24,6 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -611,40 +610,6 @@ func TestWireSourcesRegistersEachEntryUnderItsOwnName(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "source has no name") {
 		t.Errorf("a nameless entry must warn honestly; log = %q", buf.String())
-	}
-}
-
-// TestWireRosterWiresTwoIdpEntriesAsSeparateSources: okta and entra are two
-// entries served by ONE connector (Descriptor olivares.idp). Before, the second
-// as_source registration was refused as a duplicate and the operator silently ran
-// one directory's grant scan. Now each registers under its entry name.
-func TestWireRosterWiresTwoIdpEntriesAsSeparateSources(t *testing.T) {
-	var buf strings.Builder
-	log := newTestLogger(&buf)
-	rt := runtime.New(runtime.Options{Logger: quietLog()})
-	gov := governance.New()
-
-	wireRoster(context.Background(), rt, gov, newWifGraphAdapter(log), sourcesConfig{Identity: []identitySpec{
-		{Name: "okta-corp", Kind: "idp", Tenant: "acme", AsSource: true, Config: map[string]string{
-			"provider": "okta", "base_url": "https://okta.example",
-		}},
-		{Name: "entra-corp", Kind: "idp", Tenant: "acme", AsSource: true, Config: map[string]string{
-			"provider": "entra",
-		}},
-	}}, nil, log)
-
-	inv := map[string]string{}
-	for _, s := range rt.LiveSourceInventory() {
-		inv[s.Name] = s.Component
-	}
-	if len(inv) != 2 {
-		t.Fatalf("both idp entries must wire as sources, got %v (log = %q)", inv, buf.String())
-	}
-	if inv["okta-corp"] != "olivares.idp" || inv["entra-corp"] != "olivares.idp" {
-		t.Fatalf("two directories served by one connector must be two named sources: %v", inv)
-	}
-	if strings.Contains(buf.String(), "could not also be wired as a source") {
-		t.Errorf("an entry was refused as a duplicate; log = %q", buf.String())
 	}
 }
 

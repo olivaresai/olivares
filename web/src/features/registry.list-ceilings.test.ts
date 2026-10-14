@@ -147,8 +147,6 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
     listBreakGlassUses: 'linea base 2026-08-28; sin clasificar drena/recorta',
     listDecisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
     listGroupMembers: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    listGroups: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    listIdentities: 'linea base 2026-08-28; sin clasificar drena/recorta',
     listPolicies: 'linea base 2026-08-28; sin clasificar drena/recorta',
     listRoutinePolicies: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
@@ -213,9 +211,13 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   redteam: {
     results: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
-  residency: {
-    listOrgs: 'linea base 2026-08-28; sin clasificar drena/recorta',
-  },
+  ...(existsSync(join(RAIZ, 'residency/api.ts'))
+    ? {
+        residency: {
+          listOrgs: 'linea base 2026-08-28; sin clasificar drena/recorta',
+        },
+      }
+    : {}),
   sandbox: {
     outputs: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
@@ -227,9 +229,17 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   sessions: {
     live: 'linea base 2026-08-28; sin clasificar drena/recorta',
   },
-  tenants: {
-    list: 'linea base 2026-08-28; sin clasificar drena/recorta',
+  skills: {
+    builtins:
+      'modules/skills/builtin.go: listBuiltins answers every pack of the embedded builtin/PIN.json in one response, reads no limit or cursor and never sets has_more; builtin_test.go TestBuiltinCatalogIgnoresLimitAndNeverTruncates proves limit=1 still returns every pinned pack',
   },
+  ...(existsSync(join(RAIZ, 'tenants/api.ts'))
+    ? {
+        tenants: {
+          list: 'linea base 2026-08-28; sin clasificar drena/recorta',
+        },
+      }
+    : {}),
   voice: {
     allDecisions: 'linea base 2026-08-28; sin clasificar drena/recorta',
     decisions: 'linea base 2026-08-28; sin clasificar drena/recorta',

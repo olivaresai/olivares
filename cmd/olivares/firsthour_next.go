@@ -162,6 +162,7 @@ var topLevelNextCommands = map[string]string{
 // has nothing after it" and "nobody got to this verb" look identical in an empty
 // table, and only one of them is a decision.
 var nextCommandExempt = map[string]string{
+	"wiki":       "Wiki operations require a folder; use wiki init, ingest, query or lint with its path.",
 	"help":       "cobra's own verb: what follows is the command you asked about, which it just printed",
 	"completion": "its output is evaluated by the shell, not run as a command",
 	"uninstall":  "on success this binary is gone; a next command would name something that is no longer installed",

@@ -104,9 +104,9 @@ if [ ! -x "$BIN" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 1 — fresh install: setup, login, create the tenant the source feeds.
+# Step 1 — fresh install: setup, login, use the setup organization the source feeds.
 # ---------------------------------------------------------------------------
-note "fresh install: serve, one-time setup, login, create the tenant"
+note "fresh install: serve, one-time setup, login, use the setup organization"
 "$BIN" serve --insecure \
   --listen "127.0.0.1:$PORT" --grpc-listen "127.0.0.1:$GRPC_PORT" \
   --data-dir "$WORK/data" >"$WORK/boot1.log" 2>&1 &
@@ -118,14 +118,12 @@ SETUP_TOKEN="$(grep -oE 'olst_[A-Z0-9]+' "$WORK/boot1.log" | head -1)"
 curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
   -d "{\"token\":\"$SETUP_TOKEN\",\"email\":\"admin@local\",\"password\":\"correct-horse-battery-staple\"}" >/dev/null \
   || fail "setup failed"
-TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+TOKEN="$(python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])' <<<"$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
+  -d '{"email":"admin@local","password":"correct-horse-battery-staple"}')")"
 [ -n "$TOKEN" ] || fail "login returned no token"
-TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE/v1/system/orgs" -H @- \
-  -H 'Content-Type: application/json' -d '{"name":"Agents","slug":"agents"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
-[ -n "$TENANT" ] || fail "could not create the tenant"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+[ -n "$TENANT" ] || fail "could not resolve the setup organization"
 note "tenant: $TENANT"
 
 # Fresh installations leave optional modules off. Keep the administrator's

@@ -14,6 +14,7 @@ import './i18n'
 const { api, auth, signIn, providers } = vi.hoisted(() => ({
   api: {
     inventory: vi.fn(),
+    pins: vi.fn().mockResolvedValue({ pins: [] }),
     providers: vi.fn(),
     plan: vi.fn(),
     install: vi.fn(),

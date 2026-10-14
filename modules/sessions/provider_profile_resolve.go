@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -220,9 +221,11 @@ func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID,
 	return c, nil
 }
 
-// PreviewProfile is the rule's answer without its write: why, and for a key which
-// record. Profile is empty and Created false; a refusal is the one ResolveProfile
-// would give. It is what a page shows before the person starts a session.
+// PreviewProfile is the rule's answer without its write: why, for a key which
+// record, and the profile ResolveProfile would reuse. Profile is empty when the launch
+// would create one (it declares no programs or registries), and Created is false; a
+// refusal is the one ResolveProfile would give. It is what a page shows before the
+// person starts a session.
 func (m *Module) PreviewProfile(ctx context.Context, tenant model.TenantID, driver string) (ResolvedProfile, error) {
 	if m.Data == nil {
 		return ResolvedProfile{}, errNoData
@@ -230,6 +233,33 @@ func (m *Module) PreviewProfile(ctx context.Context, tenant model.TenantID, driv
 	c, err := m.chooseProfileSource(ctx, tenant, driver)
 	if err != nil {
 		return ResolvedProfile{}, err
+	}
+	// Read without creating anything, not even the own-login folder: with no
+	// environment or no folder yet no profile can match, and the launch creates one
+	// (or refuses with its own error).
+	env, err := m.localEnvironment()
+	if err != nil {
+		return c.out, nil
+	}
+	loginHome := ""
+	if c.source == AuthSourceAccountHome {
+		_, raw, ok := m.OwnToolLoginHomes(tenant, c.driver)
+		if !ok {
+			return c.out, nil
+		}
+		if _, err := os.Stat(raw); errors.Is(err, os.ErrNotExist) {
+			return c.out, nil
+		}
+		if loginHome, err = canonicalHome("config_home", raw); err != nil {
+			return ResolvedProfile{}, err
+		}
+	}
+	found, err := m.findChosenProfile(ctx, tenant, c, env, loginHome)
+	if err != nil {
+		return ResolvedProfile{}, err
+	}
+	if found != nil {
+		c.out.Profile = profileFromRecord(found)
 	}
 	return c.out, nil
 }
@@ -293,7 +323,10 @@ func (m *Module) ToolsReadiness(ctx context.Context, tenant model.TenantID) ([]T
 
 func (m *Module) toolReadiness(ctx context.Context, tenant model.TenantID, driver string) (ToolReadiness, error) {
 	out := ToolReadiness{Driver: driver}
-	got, err := m.PreviewProfile(ctx, tenant, driver)
+	if m.Data == nil {
+		return out, errNoData
+	}
+	c, err := m.chooseProfileSource(ctx, tenant, driver)
 	var coded *codedRunErr
 	if errors.As(err, &coded) {
 		out.Code, out.Message = coded.code, coded.msg
@@ -302,6 +335,7 @@ func (m *Module) toolReadiness(ctx context.Context, tenant model.TenantID, drive
 	if err != nil {
 		return out, err
 	}
+	got := c.out
 	terms, _ := m.LaunchTermsFor(driver)
 	out.Reason, out.Provider = got.Reason, got.Provider
 	out.ModelRequired = got.Provider != nil && terms.BoundModelRequired
@@ -415,15 +449,7 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 	}
 	// The profile that already exists is the usual answer: find it in a read
 	// transaction, and take the write lock below only to create one.
-	var found model.Record
-	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
-		repo, err := sc.Ext(providerProfileKind)
-		if err != nil {
-			return err
-		}
-		found, err = findResolvedProfile(ctx, repo, c, env, loginHome)
-		return err
-	})
+	found, err := m.findChosenProfile(ctx, tenant, c, env, loginHome)
 	if err != nil {
 		return ResolvedProfile{}, err
 	}
@@ -478,11 +504,25 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 	return out, nil
 }
 
+// findChosenProfile reads the profile ResolveProfile reuses for a choice on this
+// environment and canonical own-login home (nil when it would create one).
+func (m *Module) findChosenProfile(ctx context.Context, tenant model.TenantID, c resolveChoice, env, loginHome string) (found model.Record, err error) {
+	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		found, err = findResolvedProfile(ctx, repo, c, env, loginHome)
+		return err
+	})
+	return found, err
+}
+
 // ResolveAccountProfile answers a request that names its account (a name, or a
 // profile reference): that account's profile, and nothing else. The rule above
 // does not run: the caller chose, so there is no fallback to another profile,
-// nothing is created, and the tool's sign-in is not read. The account must be of
-// the driver asked for, on this node, and active; the launch checks the rest.
+// nothing is created. A named account's own login must be ready; the default
+// login never qualifies it. The launch checks it again before spawning.
 func (m *Module) ResolveAccountProfile(ctx context.Context, tenant model.TenantID, driverIn, account string) (ResolvedProfile, error) {
 	if m.Data == nil {
 		return ResolvedProfile{}, errNoData
@@ -533,7 +573,36 @@ func (m *Module) ResolveAccountProfile(ctx context.Context, tenant model.TenantI
 	case profile.State == ProfileDisabled:
 		return ResolvedProfile{}, ErrProfileDisabled
 	}
+	if err := m.requireAccountLogin(ctx, tenant, profile); err != nil {
+		return ResolvedProfile{}, err
+	}
 	return ResolvedProfile{Profile: profile, Reason: ResolveAccount}, nil
+}
+
+// requireAccountLogin reads a named account's native status outside store
+// transactions. Unnamed/default profiles retain their existing launch behavior.
+func (m *Module) requireAccountLogin(ctx context.Context, tenant model.TenantID, profile ProviderProfile) error {
+	tool, ok := resolveToolFor(profile.Driver)
+	if !ok || !tool.signsIn || profile.AccountName == "" || profile.AuthSource != AuthSourceAccountHome {
+		return nil
+	}
+	if m.ProfileLogin == nil {
+		return &codedRunErr{&runErr{http.StatusServiceUnavailable,
+			"the sign-in status of this " + tool.name + " profile cannot be checked on this node"}, resolveCodeSignInUnreadable}
+	}
+	installed, signedIn, err := m.ProfileLogin(ctx, tenant, profile.Driver, profile.Ref)
+	if err != nil {
+		return &codedRunErr{&runErr{http.StatusServiceUnavailable,
+			"the sign-in status of this " + tool.name + " profile could not be read on this node"}, resolveCodeSignInUnreadable}
+	}
+	if !installed {
+		return &codedRunErr{conflictErr("Install " + tool.name + " first, under AI tools."), resolveCodeToolNotInstalled}
+	}
+	if !signedIn {
+		return &codedRunErr{conflictErr(tool.name + " profile " + profile.AccountName +
+			" is not signed in. Sign it in under AI tools."), resolveCodeNothingToRunOn}
+	}
+	return nil
 }
 
 // serverHomedProfileRow is a new profile row whose homes the server makes: the

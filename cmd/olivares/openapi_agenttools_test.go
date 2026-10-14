@@ -14,7 +14,7 @@ func TestAgentToolsOfflineOpenAPICarriesAllSystemRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := doc["paths"].(map[string]any)
-	for path, method := range map[string]string{"inventory": "get", "detect": "get", "plans": "post", "installs": "post", "jobs/{id}": "get"} {
+	for path, method := range map[string]string{"inventory": "get", "detect": "get", "plans": "post", "installs": "post", "jobs/{id}": "get", "releases": "delete", "pins": "put"} {
 		raw, ok := paths["/v1/m/agenttools/"+path].(map[string]any)
 		if !ok {
 			t.Fatalf("missing %s", path)
@@ -23,12 +23,20 @@ func TestAgentToolsOfflineOpenAPICarriesAllSystemRoutes(t *testing.T) {
 		if op["x-olivares-scope"] != "system" || op["x-required-permission"] != "system:admin" {
 			t.Fatalf("authority: %#v", op)
 		}
+		catalogHeader := false
 		for _, parameter := range op["parameters"].([]any) {
-			if parameter.(map[string]any)["name"] == "X-Olivares-Tenant" {
-				t.Fatal("system route advertises tenant header")
+			p := parameter.(map[string]any)
+			if p["name"] == "X-Olivares-Tenant" {
+				catalogHeader = true
+				if p["in"] != "header" || p["required"] != false || !strings.Contains(p["description"].(string), "organization") {
+					t.Fatalf("catalog selection header: %#v", p)
+				}
 			}
 		}
-		if method == "post" && (op["requestBody"] == nil || op["x-olivares-request-body-disposition"] != "schema-published") {
+		if catalogHeader != (path == "plans" || path == "installs") {
+			t.Fatalf("%s catalog selection header: %t; host authority remains system-scoped", path, catalogHeader)
+		}
+		if (method == "post" || method == "put" || method == "delete") && (op["requestBody"] == nil || op["x-olivares-request-body-disposition"] != "schema-published") {
 			t.Fatal("mutation body is not published")
 		}
 		if path == "installs" {

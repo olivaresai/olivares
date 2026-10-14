@@ -370,6 +370,13 @@ const COPY_GLOB = 'email/locales/'
 // fails until it is.
 const GENERATED = [
   'commercial/license-worker/src/email/templates.generated.ts',
+  'commercial/license-worker/src/email/locales/en.json',
+  'commercial/license-worker/src/email/locales/es.json',
+  'commercial/license-worker/src/email/locales/zh.json',
+  'commercial/license-worker/src/email/locales/ja.json',
+  'commercial/license-worker/src/email/locales/de.json',
+  'commercial/license-worker/src/email/locales/ru.json',
+  'commercial/license-worker/src/email/locales/fr.json',
   'core/emailtemplate/templates.generated.json',
   'email/email.manifest.json',
 ]

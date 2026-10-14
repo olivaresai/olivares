@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// las invariantes honestas del panel de caminos de ataque.
+// the honest invariants of the attack paths panel.
 //
-// Cada celda fija una frase que sería MENTIRA si el código cambiara debajo, y está
-// escrita para morir con una mutación concreta. Las que importan son las formas de que
-// esta pantalla parezca correcta y engañe en una superficie de seguridad: consultar sin
-// sujeto o con el parámetro equivocado (el motor da 400 y parecería un vacío),
-// dibujar un camino sin decir que su atribución es la del ESLABÓN MÁS DÉBIL, y leer una
-// sensibilidad ausente como «no es sensible».
+// Each case pins a sentence that would be a LIE if the code changed underneath it, and
+// is written to die with one specific mutation. The ones that matter are the ways this
+// screen can look right and mislead on a security surface: querying without a subject
+// or with the wrong parameter (the engine answers 400 and it would look empty),
+// drawing a path without saying its attribution is the WEAKEST LINK's, and reading an
+// absent sensitivity as "not sensitive".
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -35,9 +35,9 @@ const { AccessDetailSheet } = await import('./detail')
 const { DRIFT_UNREAD } = await import('./authority')
 await import('./i18n')
 
-/** Cada analítica SELLA UNA FILA DE AUDITORÍA, así que no se dispara al seleccionar:
- *  se pide. Todas las celdas que esperan datos pasan por aquí. */
-async function pedir() {
+/** Each analysis SEALS AN AUDIT ROW, so it does not fire on selection: it is asked
+ *  for. Every case that waits for data goes through here. */
+async function ask() {
   await userEvent.click(
     await screen.findByRole('button', { name: /analyse attack paths/i }),
   )
@@ -48,8 +48,8 @@ function wrap(node: ReactNode) {
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>)
 }
 
-/** Cuatro saltos firmes y uno sin atribuir: el motor lo compone a `unknown` porque toma
- *  el ESLABÓN MÁS DÉBIL (`weakestAttribution`). */
+/** Four firm hops and one unattributed: the engine composes it to `unknown` because it
+ *  takes the WEAKEST LINK (`weakestAttribution`). */
 const WEAK: AttackPath = {
   kind: 'escalation',
   steps: [
@@ -60,8 +60,8 @@ const WEAK: AttackPath = {
   min_confidence: 'approximate',
 }
 
-/** Sin `max_sensitivity`: el campo es `omitempty`, así que ausente y vacío son los
- *  mismos bytes — y ninguno de los dos afirma que no haya nada sensible. */
+/** Without `max_sensitivity`: the field is `omitempty`, so absent and empty are the same
+ *  bytes — and neither claims that nothing is sensitive. */
 const NO_SENS: AttackPath = {
   kind: 'reachability',
   steps: [{ node_kind: 'agent', node_id: 'a2', node_name: 'sync-bot' }],
@@ -75,24 +75,24 @@ beforeEach(() => {
   api.attackExfil.mockReset()
 })
 
-describe('attack paths — sin sujeto no se consulta', () => {
-  it('no pide NADA al motor cuando no hay sujeto elegido', async () => {
+describe('attack paths — without a subject nothing is queried', () => {
+  it('asks the engine for NOTHING when no subject is chosen', async () => {
     wrap(<AttackPathsPanel subject={null} />)
 
     expect(await screen.findByTestId('attack-paths-idle')).toBeInTheDocument()
-    // La mutación que mata: quitar la guarda de `subject`. Los handlers devuelven 400 sin
-    // su id raíz y ese fallo no se puede dibujar como «no hay caminos».
+    // The mutation that kills: removing the `subject` guard. The handlers answer 400 without
+    // their root id and that failure cannot be drawn as "no paths".
     expect(api.attackReachability).not.toHaveBeenCalled()
     expect(api.attackEscalation).not.toHaveBeenCalled()
     expect(api.attackExfil).not.toHaveBeenCalled()
   })
 
-  it('un agente pide reachability y escalation, nunca exfil', async () => {
+  it('an agent asks for reachability and escalation, never exfil', async () => {
     api.attackReachability.mockResolvedValue({ paths: [] })
     api.attackEscalation.mockResolvedValue({ paths: [] })
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() =>
       expect(api.attackReachability).toHaveBeenCalledWith('a1'),
@@ -104,17 +104,17 @@ describe('attack paths — sin sujeto no se consulta', () => {
     ).not.toHaveBeenCalled()
   })
 
-  it('un recurso pide exfil con su id, nunca los análisis de agente', async () => {
+  it('a resource asks for exfil with its id, never the agent analyses', async () => {
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() => expect(api.attackExfil).toHaveBeenCalledWith('r7'))
     expect(api.attackReachability).not.toHaveBeenCalled()
     expect(api.attackEscalation).not.toHaveBeenCalled()
   })
 
-  it('una lectura auditada no se reintenta ni se repite al reenfocar', async () => {
+  it('an audited read is neither retried nor repeated on refocus', async () => {
     const qc = new QueryClient({
       defaultOptions: {
         queries: {
@@ -135,7 +135,7 @@ describe('attack paths — sin sujeto no se consulta', () => {
       </StrictMode>,
     )
 
-    await pedir()
+    await ask()
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     window.dispatchEvent(new Event('focus'))
     window.dispatchEvent(new Event('online'))
@@ -147,7 +147,7 @@ describe('attack paths — sin sujeto no se consulta', () => {
     ).toHaveBeenCalledTimes(1)
   })
 
-  it('volver a abrir y pulsar hace una lectura auditada nueva', async () => {
+  it('reopening and clicking makes a new audited read', async () => {
     const qc = new QueryClient()
     api.attackExfil.mockResolvedValue({ paths: [] })
     const first = render(
@@ -155,7 +155,7 @@ describe('attack paths — sin sujeto no se consulta', () => {
         <AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />
       </QueryClientProvider>,
     )
-    await pedir()
+    await ask()
     await waitFor(() => expect(api.attackExfil).toHaveBeenCalledTimes(1))
     first.unmount()
 
@@ -164,7 +164,7 @@ describe('attack paths — sin sujeto no se consulta', () => {
         <AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />
       </QueryClientProvider>,
     )
-    await pedir()
+    await ask()
     await waitFor(() =>
       expect(
         api.attackExfil,
@@ -174,24 +174,24 @@ describe('attack paths — sin sujeto no se consulta', () => {
   })
 })
 
-describe('attack paths — una lectura auditada se PIDE', () => {
-  it('con agente elegido NO consulta hasta que el operador lo pide', async () => {
+describe('attack paths — an audited read is ASKED for', () => {
+  it('with an agent chosen it does NOT query until the operator asks', async () => {
     api.attackReachability.mockResolvedValue({ paths: [NO_SENS] })
     api.attackEscalation.mockResolvedValue({ paths: [] })
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
 
-    // Ancla POSITIVA primero: el boton existe, luego la ausencia significa algo.
+    // POSITIVE anchor first: the button exists, so the absence means something.
     await screen.findByRole('button', { name: /analyse attack paths/i })
-    // La mutación que mata: montar los análisis al recibir `subject`. Cada consulta sella
-    // una fila, así que seleccionar escribiría DOS para un agente o UNA para un recurso
-    // y el libro dejaría de distinguir «investigó» de «pasó el ratón».
+    // The mutation that kills: mounting the analyses on receiving `subject`. Each query
+    // seals a row, so selecting would write TWO for an agent or ONE for a resource and
+    // the ledger could no longer tell "investigated" from "moved the pointer".
     expect(api.attackReachability).not.toHaveBeenCalled()
     expect(api.attackEscalation).not.toHaveBeenCalled()
     expect(api.attackExfil).not.toHaveBeenCalled()
   })
 
-  it('con recurso elegido tampoco consulta hasta una petición explícita', async () => {
+  it('with a resource chosen it does not query until an explicit request either', async () => {
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />)
 
@@ -208,48 +208,73 @@ describe('attack paths — una lectura auditada se PIDE', () => {
   })
 })
 
-describe('attack paths — la atribución es la del eslabón más débil', () => {
-  it('rotula el eslabón más débil y dibuja `unknown` como «sin atribuir»', async () => {
+describe("attack paths — the attribution is the weakest link's", () => {
+  it('labels the weakest link and draws `unknown` as "not attributed"', async () => {
     api.attackReachability.mockResolvedValue({ paths: [] })
     api.attackEscalation.mockResolvedValue({ paths: [WEAK] })
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
-    await pedir()
+    await ask()
 
     expect(await screen.findByText(/weakest link/i)).toBeInTheDocument()
     expect(await screen.findByText('not attributed')).toBeInTheDocument()
   })
 })
 
-describe('attack paths — una sensibilidad ausente no es «no sensible»', () => {
-  it('dice «not stated» en vez de callarse', async () => {
+describe('attack paths — a capped analysis says it is partial', () => {
+  it('shows the cut note beside the paths and beside "No paths found"', async () => {
+    api.attackReachability.mockResolvedValue({
+      paths: [NO_SENS],
+      truncated: true,
+    })
+    api.attackEscalation.mockResolvedValue({ paths: [], truncated: true })
+    wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
+    await ask()
+
+    expect(await screen.findAllByText(/capped this analysis/i)).toHaveLength(2)
+    expect(screen.getByText('No paths found.')).toBeInTheDocument()
+  })
+
+  it('shows no cut note for a complete answer', async () => {
+    api.attackReachability.mockResolvedValue({ paths: [NO_SENS] })
+    api.attackEscalation.mockResolvedValue({ paths: [] })
+    wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
+    await ask()
+
+    expect(await screen.findByText('not stated')).toBeInTheDocument()
+    expect(screen.queryByText(/capped this analysis/i)).toBeNull()
+  })
+})
+
+describe('attack paths — an absent sensitivity is not "not sensitive"', () => {
+  it('says "not stated" instead of staying silent', async () => {
     api.attackReachability.mockResolvedValue({ paths: [NO_SENS] })
     api.attackEscalation.mockResolvedValue({ paths: [] })
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
-    await pedir()
+    await ask()
 
     expect(await screen.findByText('not stated')).toBeInTheDocument()
   })
 
-  it('separa «ningún camino» de «no se pudo leer»', async () => {
+  it('tells "no path" apart from "could not be read"', async () => {
     api.attackReachability.mockRejectedValue(new Error('boom'))
     api.attackEscalation.mockResolvedValue({ paths: [] })
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
-    await pedir()
+    await ask()
 
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toMatch(/could not be read/i)
-    // No dentro de waitFor a propósito: una aserción de ausencia ahí se cumple en el
-    // primer tick y pasaría con el defecto puesto.
+    // Not inside waitFor on purpose: an absence assertion there holds on the first tick
+    // and would pass with the defect in place.
     expect(alert.textContent).not.toMatch(/No paths found/i)
   })
 
-  it('un 200 sin array paths es ilegible, nunca un cero', async () => {
+  it('a 200 without a paths array is unreadable, never a zero', async () => {
     api.attackExfil.mockResolvedValue({})
     wrap(<AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() =>
       expect(
@@ -260,10 +285,10 @@ describe('attack paths — una sensibilidad ausente no es «no sensible»', () =
     expect(screen.queryByText('No paths found.')).not.toBeInTheDocument()
   })
 
-  it('un 200 null es ilegible, nunca un cero ni una excepción de render', async () => {
+  it('a 200 null is unreadable, never a zero or a render exception', async () => {
     api.attackExfil.mockResolvedValue(null)
     wrap(<AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() =>
       expect(
@@ -274,10 +299,10 @@ describe('attack paths — una sensibilidad ausente no es «no sensible»', () =
     expect(screen.queryByText('No paths found.')).not.toBeInTheDocument()
   })
 
-  it('un camino sin forma contractual es ilegible y no rompe PathRow', async () => {
+  it('a path without the contractual shape is unreadable and does not break PathRow', async () => {
     api.attackExfil.mockResolvedValue({ paths: [{}] })
     wrap(<AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() =>
       expect(
@@ -288,7 +313,7 @@ describe('attack paths — una sensibilidad ausente no es «no sensible»', () =
     expect(screen.queryByText('No paths found.')).not.toBeInTheDocument()
   })
 
-  it('un camino sin ningún eslabón es ilegible, nunca una cadena real', async () => {
+  it('a path without any link is unreadable, never a real chain', async () => {
     api.attackExfil.mockResolvedValue({
       paths: [
         {
@@ -300,7 +325,7 @@ describe('attack paths — una sensibilidad ausente no es «no sensible»', () =
       ],
     })
     wrap(<AttackPathsPanel subject={{ id: 'r7', kind: 'resource' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() =>
       expect(
@@ -310,13 +335,13 @@ describe('attack paths — una sensibilidad ausente no es «no sensible»', () =
     )
   })
 
-  it('un camino válido de otro análisis no se presenta bajo el rótulo pedido', async () => {
+  it('a valid path of another analysis is not presented under the requested label', async () => {
     api.attackReachability.mockResolvedValue({
       paths: [{ ...NO_SENS, kind: 'exfil' }],
     })
     api.attackEscalation.mockResolvedValue({ paths: [] })
     wrap(<AttackPathsPanel subject={{ id: 'a1', kind: 'agent' }} />)
-    await pedir()
+    await ask()
 
     await waitFor(() =>
       expect(
@@ -328,19 +353,19 @@ describe('attack paths — una sensibilidad ausente no es «no sensible»', () =
   })
 })
 
-// --- el cableado ---------------------------------------------------------------
+// --- the wiring ----------------------------------------------------------------
 //
-// Un componente que nadie renderiza pasa TODAS sus celdas de componente. Esta empieza en
-// la hoja de detalle y comprueba las dos raíces contractuales: agente para
-// reachability/escalation y recurso para exfiltration.
+// A component nobody renders passes ALL of its component cases. This one starts at the
+// detail sheet and checks the two contractual roots: agent for
+// reachability/escalation and resource for exfiltration.
 
 const sheetProps = {
   onClose: () => {},
   // Make the cluster test exercise the actual `!selection.cluster` expansion guard.
   // Without this callback, the button is absent regardless of the guard.
   onExpand: () => {},
-  // La constante NOMBRADA del propio módulo: fabricar el objeto a mano fue lo que
-  // rompió el typecheck, y dos copias de un tipo son dos sitios donde discrepar.
+  // The module's own NAMED constant: building the object by hand is what broke the
+  // typecheck, and two copies of a type are two places to disagree.
   drift: DRIFT_UNREAD,
   recheck: { status: 'idle' as const },
   onRecheck: () => {},
@@ -348,8 +373,8 @@ const sheetProps = {
   canDrift: false,
 }
 
-describe('el panel se alcanza desde la hoja de detalle con la raíz correcta', () => {
-  it('aparece cuando el nodo elegido es un AGENTE', async () => {
+describe('the panel is reached from the detail sheet with the correct root', () => {
+  it('appears when the chosen node is an AGENT', async () => {
     api.attackReachability.mockResolvedValue({ paths: [NO_SENS] })
     api.attackEscalation.mockResolvedValue({ paths: [] })
     api.attackExfil.mockResolvedValue({ paths: [] })
@@ -365,12 +390,12 @@ describe('el panel se alcanza desde la hoja de detalle con la raíz correcta', (
         }}
       />,
     )
-    await pedir()
+    await ask()
 
     expect(await screen.findByText('not stated')).toBeInTheDocument()
   })
 
-  it('un recurso alcanza exfil con resource_id', async () => {
+  it('a resource reaches exfil with resource_id', async () => {
     api.attackExfil.mockResolvedValue({ paths: [] })
     wrap(
       <AccessDetailSheet
@@ -385,13 +410,13 @@ describe('el panel se alcanza desde la hoja de detalle con la raíz correcta', (
       />,
     )
 
-    await pedir()
+    await ask()
     await waitFor(() => expect(api.attackExfil).toHaveBeenCalledWith('r7'))
     expect(api.attackReachability).not.toHaveBeenCalled()
     expect(api.attackEscalation).not.toHaveBeenCalled()
   })
 
-  it('un cluster no ofrece exfil porque su id no existe en el motor', async () => {
+  it('a cluster does not offer exfil because its id does not exist in the engine', async () => {
     wrap(
       <AccessDetailSheet
         {...sheetProps}
@@ -418,7 +443,7 @@ describe('el panel se alcanza desde la hoja de detalle con la raíz correcta', (
     expect(api.attackExfil).not.toHaveBeenCalled()
   })
 
-  it('un cluster que conserva kind=agent tampoco ofrece análisis', async () => {
+  it('a cluster that keeps kind=agent offers no analysis either', async () => {
     wrap(
       <AccessDetailSheet
         {...sheetProps}

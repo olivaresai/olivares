@@ -361,7 +361,7 @@ func (p *ReleaseArchive) Probe(ctx context.Context, exe, scratch, want string) (
 	// runtime from lib/<driver> beside bin. Only a real directory is granted: a
 	// detected tool's lib/<driver> could be a link to anywhere.
 	var read []string
-	libs := filepath.Join(filepath.Dir(filepath.Dir(exe)), "lib", p.driver)
+	libs := filepath.Join(filepath.Dir(filepath.Dir(exe)), "lib", declaredProgram(p.driver))
 	if fi, err := os.Lstat(libs); err == nil && fi.IsDir() {
 		read = []string{libs}
 	}

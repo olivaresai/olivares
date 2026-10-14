@@ -27,6 +27,7 @@ import (
 )
 
 type harness struct {
+	st       store.Store
 	t        *testing.T
 	srv      *api.Server
 	setupTok string
@@ -59,7 +60,7 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &harness{t: t, srv: srv, setupTok: plaintext}
+	return &harness{st: st, t: t, srv: srv, setupTok: plaintext}
 }
 
 type resp struct {
@@ -104,13 +105,20 @@ func (h *harness) rootLogin() string {
 	return r.body["token"].(string)
 }
 
-func (h *harness) createOrg(token, slug string) model.TenantID {
+func (h *harness) createOrg(_ string, slug string) model.TenantID {
 	h.t.Helper()
-	r := h.do("POST", "/v1/system/orgs", token, map[string]any{"name": slug, "slug": slug}, "")
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create org = %d %s", r.code, r.raw)
+	// Seed the isolation fixture through the store; organization management is edition-specific.
+	ctx := context.Background()
+	var org model.Org
+	err := h.st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+		return err
+	})
+	if err != nil {
+		h.t.Fatalf("seed organization %s: %v", slug, err)
 	}
-	return model.TenantID(r.body["tenant_id"].(string))
+	return org.TenantID
 }
 
 func (h *harness) roleToken(admin string, tenant model.TenantID, email, role string) string {

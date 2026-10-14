@@ -101,11 +101,8 @@ func ollamaStateWithin(m *Module, want string, d time.Duration) bool {
 // the same tenant; Stop forgets it.
 func TestOllamaComesBackWithTheEngineUntilStopped(t *testing.T) {
 	call, f := newOllamaServer(t)
-	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Second", "slug": "second"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, org)
-	}
-	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org["tenant_id"].(string)}); code != 202 {
+	org := seedOrg(t, f.store, "Second", "second")
+	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()}); code != 202 {
 		t.Fatalf("start = %d %v", code, st)
 	}
 	waitOllama(t, call, "running")
@@ -135,8 +132,8 @@ func TestOllamaComesBackWithTheEngineUntilStopped(t *testing.T) {
 		registers, tenant := f.registers, f.tenant
 		f.mu.Unlock()
 		if registers > before {
-			if tenant.String() != org["tenant_id"] {
-				t.Fatalf("registered again for %q, want %v", tenant, org["tenant_id"])
+			if tenant.String() != org.String() {
+				t.Fatalf("registered again for %q, want %v", tenant, org.String())
 			}
 			break
 		}
@@ -169,11 +166,8 @@ func TestOllamaComesBackWithTheEngineUntilStopped(t *testing.T) {
 // when, the tenant and the endpoint; with no audit written, nothing is started.
 func TestOllamaRestartWritesItsAuditRow(t *testing.T) {
 	call, f := newOllamaServer(t)
-	code, org := call("POST", "/v1/system/orgs", map[string]string{"name": "Third", "slug": "third"})
-	if code != 201 {
-		t.Fatalf("org %d %v", code, org)
-	}
-	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org["tenant_id"].(string)}); code != 202 {
+	org := seedOrg(t, f.store, "Third", "third")
+	if code, st := call("POST", "/v1/m/agenttools/ollama/start", map[string]string{"tenant_id": org.String()}); code != 202 {
 		t.Fatalf("start = %d %v", code, st)
 	}
 	waitOllama(t, call, "running")
@@ -192,7 +186,7 @@ func TestOllamaRestartWritesItsAuditRow(t *testing.T) {
 	meta := drafts[0].Meta
 	reason, _ := meta["reason"].(string)
 	if !strings.HasPrefix(reason, "restarted with the engine; started by user:") || !strings.Contains(reason, " at 20") ||
-		meta["register_in"] != org["tenant_id"] || meta["endpoint"] != "http://"+f.addr {
+		meta["register_in"] != org.String() || meta["endpoint"] != "http://"+f.addr {
 		t.Fatalf("restart row metadata = %v, want who started it and when, the tenant and the endpoint", meta)
 	}
 	next.Close()

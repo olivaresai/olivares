@@ -53,18 +53,31 @@ function rawFormElements(): { where: string; tag: string }[] {
       const p = join(d, n)
       if (statSync(p).isDirectory()) walk(p)
       else if (/\.tsx$/.test(n) && !/\.test\.tsx$/.test(n)) {
-        const lines = readFileSync(p, 'utf8').split('\n')
+        const text = readFileSync(p, 'utf8')
+        const lines = text.split('\n')
+        // `className={selectClass}` is judged by the file's own `const selectClass = '…'`.
+        const classes = new Map(
+          [...text.matchAll(/^const (\w+) =\s*'([^']*)'/gm)].map((m) => [
+            m[1],
+            m[2],
+          ]),
+        )
         lines.forEach((line, i) => {
           if (!/<(input|select|textarea)\b/.test(line)) return
+          if (/^\s*(\/\/|\/?\*)/.test(line)) return
           const tag: string[] = []
           for (let j = i; j < lines.length && j < i + 30; j++) {
             tag.push(lines[j])
-            if (/\/?>\s*$/.test(lines[j].trim()) && j > i) break
-            if (j === i && /\/?>\s*$/.test(lines[j].trim())) break
+            // The tag closes at `>` or `/>`; an arrow `=>` inside a handler does not close it.
+            if (/(?<!=)\/?>\s*$/.test(lines[j].trim())) break
           }
           out.push({
             where: `${relative(SRC, p)}:${i + 1}`,
-            tag: tag.join('\n'),
+            tag: tag
+              .join('\n')
+              .replace(/className=\{(\w+)\}/, (whole, id: string) =>
+                classes.has(id) ? `className="${classes.get(id)}"` : whole,
+              ),
           })
         })
       }
@@ -127,8 +140,16 @@ describe('control boundaries use ctl-border', () => {
     const found = rawFormElements()
     // The sweep must see the elements it judges, or an empty census reads as clean.
     expect(found.length).toBeGreaterThanOrEqual(10)
-    const wrong = found
-      .filter(({ tag }) => !/type="(hidden|file|checkbox|radio)"/.test(tag))
+    const judged = found.filter(
+      ({ tag }) => !/type="(hidden|file|checkbox|radio)"/.test(tag),
+    )
+    // A class the sweep cannot resolve is skipped, not judged: name it instead.
+    expect(
+      judged
+        .filter(({ tag }) => /className=\{\w+\}/.test(tag))
+        .map(({ where }) => where),
+    ).toEqual([])
+    const wrong = judged
       .filter(({ tag }) => /className="[^"]*\bborder\b/.test(tag))
       .filter(({ tag }) => !/className="[^"]*\bborder-ctl-border\b/.test(tag))
       .map(({ where }) => where)

@@ -30,7 +30,7 @@ import {
 } from '@/features/agentops/auth-boundary'
 import { ProfilesPanel } from '@/features/agentops/profiles-panel'
 import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
-import type { RunState } from '@/features/agentops/types'
+import { profileName, type RunState } from '@/features/agentops/types'
 import { WorkspacesPanel } from '@/features/agentops/workspaces-panel'
 import { RelTimeLabel, useLiveStream } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
@@ -68,6 +68,7 @@ import {
 import { SessionCard } from './session-card'
 import { chooseDefaultAddress } from './default-selection'
 import { groupSessions, railOrder } from './session-groups'
+import { sessionModelRef } from './session-usage'
 import { useSessionPins } from './use-session-pins'
 import { useSessionResolution } from './use-session-resolution'
 import {
@@ -539,7 +540,7 @@ function Inner({
   const profileNameByRef = useMemo(() => {
     const map = new Map<string, string>()
     for (const p of profilesQuery.data?.items ?? []) {
-      const name = p.display_name?.trim() || p.driver
+      const name = profileName(p) ?? p.driver
       if (name) map.set(p.profile_ref, name)
     }
     return map
@@ -1161,7 +1162,7 @@ function Inner({
              the cell paints the same quiet dash an empty cell paints and keeps the
              whole reference on `title=` — the one place this screen has always left an
              identifier reachable without reading it out. */
-          const profileName = s.profileRef
+          const profileLabel = s.profileRef
             ? (profileNameByRef.get(s.profileRef) ?? s.live?.provider ?? null)
             : null
           return (
@@ -1172,7 +1173,7 @@ function Inner({
                   className="min-w-0 truncate text-[11px] text-muted-foreground"
                   title={s.profileRef}
                 >
-                  {profileName ?? (
+                  {profileLabel ?? (
                     /* ⛔ THE DASH SAYS "not known" TO A READER WHO CANNOT SEE IT. On its
                        own it is a glyph, and the only accessible text on this cell was
                        the raw `ppf_…` reference on `title` — which names the profile
@@ -1198,7 +1199,7 @@ function Inner({
         // Two badges on one line, and they never wrap: the width is what the pair
         // needs, not a share of the table — above the breakpoint, where it fits.
         size: phone ? undefined : 140,
-        accessorFn: (s) => s.live?.cc_state ?? primaryRun(s.runs)?.state ?? '',
+        accessorFn: (s) => primaryRun(s.runs)?.state ?? s.live?.cc_state ?? '',
         header: t('cols.state'),
         cell: ({ row }) => {
           const s = row.original
@@ -1243,8 +1244,7 @@ function Inner({
       },
       {
         id: 'model',
-        accessorFn: (s) =>
-          s.live?.model_ref ?? primaryRun(s.runs)?.model_ref ?? '',
+        accessorFn: (s) => sessionModelRef(primaryRun(s.runs), s.live) ?? '',
         header: t('cols.model'),
         cell: ({ getValue }) => {
           const v = getValue<string>()

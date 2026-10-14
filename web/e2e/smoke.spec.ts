@@ -18,27 +18,40 @@ test.use({ screenshot: 'off', trace: 'off' })
 
 test('first-boot setup → login → shell, in light and dark', async ({
   page,
+  browser,
+  baseURL,
+  ignoreHTTPSErrors,
 }) => {
   test.skip(
     !setupToken,
     'PLAYWRIGHT_SETUP_TOKEN not set — run via scripts/web-e2e.sh',
   )
 
-  // First boot: no users yet → the app routes to setup.
-  await page.goto('/setup')
-  await page.locator('#token').fill(setupToken)
-  await page.locator('#setup-email').fill('admin@example.com')
-  await page.locator('#setup-password').fill(PASSWORD)
-  // The one-time token and password are still live at this point. A failed submit
-  // must not leave either value in an artifact retained by CI.
-  await page.screenshot({
-    path: 'playwright-report/setup-ready.png',
-    mask: [page.locator('#token'), page.locator('#setup-password')],
-  })
-  await page.getByRole('button', { name: /create administrator/i }).click()
+  // Setup signs the administrator in. Keep that session in a separate context
+  // so the fixture page can still exercise the public sign-in flow.
+  const setupPage = await browser.newPage({ baseURL, ignoreHTTPSErrors })
+  try {
+    await setupPage.goto('/setup')
+    await setupPage.locator('#token').fill(setupToken)
+    await setupPage.locator('#setup-email').fill('admin@example.com')
+    await setupPage.locator('#setup-password').fill(PASSWORD)
+    // The one-time token and password are still live at this point. A failed submit
+    // must not leave either value in an artifact retained by CI.
+    await setupPage.screenshot({
+      path: 'playwright-report/setup-ready.png',
+      mask: [setupPage.locator('#token'), setupPage.locator('#setup-password')],
+    })
+    await setupPage
+      .getByRole('button', { name: /create administrator/i })
+      .click()
+    await expect(setupPage).toHaveURL(/\/onboarding$/)
+  } finally {
+    await setupPage.close()
+  }
 
-  // Setup closes → login.
-  await page.waitForURL('**/login')
+  // The fixture page has no setup session: exercise the ordinary sign-in page.
+  await page.goto('/login')
+  await expect(page).toHaveURL(/\/login$/)
   await page.screenshot({ path: 'playwright-report/login-after-setup.png' })
 
   // The public auth shell owns the same theme control as the signed-in shell.

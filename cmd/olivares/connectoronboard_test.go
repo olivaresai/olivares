@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
@@ -88,13 +89,13 @@ func TestListConnectorsShapesCatalog(t *testing.T) {
 		byKind[i.Kind] = i
 	}
 
-	// vault is in-process: fields are known and at least one is a Secret field.
-	v, ok := byKind["vault"]
+	// vault-audit is in-process: fields are known and at least one is a Secret field.
+	v, ok := byKind["vault-audit"]
 	if !ok {
-		t.Fatal("catalog missing the in-process 'vault' kind")
+		t.Fatal("catalog missing the in-process 'vault-audit' kind")
 	}
 	if v.Transport != "in_process" || !v.FieldsKnown {
-		t.Fatalf("vault info = %+v, want in_process + fields_known", v)
+		t.Fatalf("vault-audit info = %+v, want in_process + fields_known", v)
 	}
 	hasSecret := false
 	for _, f := range v.Fields {
@@ -103,7 +104,7 @@ func TestListConnectorsShapesCatalog(t *testing.T) {
 		}
 	}
 	if !hasSecret {
-		t.Errorf("vault should declare at least one Secret field; fields = %+v", v.Fields)
+		t.Errorf("vault-audit should declare at least one Secret field; fields = %+v", v.Fields)
 	}
 
 	// claude is out-of-process: the host knows no fields (honest degradation).
@@ -123,7 +124,7 @@ func TestPutConnectorSealsInlineSecret(t *testing.T) {
 	ctx := context.Background()
 
 	res, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "vault-prod", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "vault-prod", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://vault.example:8200"},
 		Secrets: map[string]string{"token": "hvs.SUPERSECRETVALUE"},
 	})
@@ -170,9 +171,14 @@ func TestPutConnectorRotatesOwnedSecretWithoutChangingReference(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests <- r.Header.Get("X-Vault-Token")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"keys":[]}}`))
+		_, _ = w.Write([]byte(`{"data":{"name":"fixture-entity"}}`))
 	}))
 	defer server.Close()
+	// One attributable access, so every Gather resolves its entity with the configured token.
+	auditLog := filepath.Join(t.TempDir(), "audit.jsonl")
+	if err := os.WriteFile(auditLog, []byte(`{"type":"response","time":"2026-06-10T08:00:00Z","auth":{"entity_id":"ent-fixture"},"request":{"operation":"read","path":"secret/data/app","mount_class":"secret"}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	sr, sources, _ := newOnboardHarness(t)
 	sr.prepare = sr.defaultPrepare
 	ctx := context.Background()
@@ -192,8 +198,9 @@ func TestPutConnectorRotatesOwnedSecretWithoutChangingReference(t *testing.T) {
 		}
 	}
 	in := api.ConnectorOnboardInput{
-		Name: "vault-rotation", Kind: "vault", Tenant: "acme", Enabled: true, PollSeconds: 3600,
-		Config: map[string]string{"base_url": server.URL}, Secrets: map[string]string{"token": "fixture-initial"},
+		Name: "vault-rotation", Kind: "vault-audit", Tenant: "acme", Enabled: true, PollSeconds: 3600,
+		Config:  map[string]string{"path": auditLog, "resolve_entities": "true", "base_url": server.URL},
+		Secrets: map[string]string{"token": "fixture-initial"},
 	}
 	res, err := sr.PutConnector(ctx, recAdmin(), in)
 	if err != nil || !res.Persisted || !res.Applied || res.Action != "added" {
@@ -247,7 +254,7 @@ func TestPutConnectorBlankKeepsAndReferencePassthrough(t *testing.T) {
 
 	// 1) Seal an inline secret.
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "vault-prod", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "vault-prod", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://a:8200"},
 		Secrets: map[string]string{"token": "hvs.ORIGINAL"},
 	}); err != nil {
@@ -257,7 +264,7 @@ func TestPutConnectorBlankKeepsAndReferencePassthrough(t *testing.T) {
 	// 2) Edit with a BLANK secret (and a changed non-secret setting): the token
 	// reference is preserved (blank = keep the stored sealed value).
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "vault-prod", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "vault-prod", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://b:8200"},
 		Secrets: map[string]string{"token": ""},
 	}); err != nil {
@@ -273,7 +280,7 @@ func TestPutConnectorBlankKeepsAndReferencePassthrough(t *testing.T) {
 
 	// 3) Point the field at an existing/external reference: stored verbatim, NOT sealed.
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "vault-prod", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "vault-prod", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://b:8200"},
 		Secrets: map[string]string{"token": "vault:secret/data/prod#token"},
 	}); err != nil {
@@ -300,7 +307,7 @@ func TestDeleteConnectorCascadesOwnedSecretOnly(t *testing.T) {
 	// A connector with an inline (owned) token AND a non-secret field referencing the
 	// shared secret.
 	if _, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-		Name: "vault-a", Kind: "vault", Tenant: "acme", Enabled: true,
+		Name: "vault-a", Kind: "vault-audit", Tenant: "acme", Enabled: true,
 		Config:  map[string]string{"base_url": "https://a:8200", "extra_ref": "store:shared-cred"},
 		Secrets: map[string]string{"token": "hvs.OWNED"},
 	}); err != nil {
@@ -430,10 +437,11 @@ func switchCaseKinds(t *testing.T, filename, funcName string) []string {
 // Canonical source kinds are offered once; aliases still construct without cards.
 func TestConnectorCatalogCoversSwitch(t *testing.T) {
 	excluded := map[string]string{
-		"okta":          "idp",
-		"entra":         "idp",
 		"pg-audit":      "pgaudit",
 		"s3-cloudtrail": "s3cloudtrail",
+	}
+	for alias, canonical := range editionDirectoryAliasesTest() {
+		excluded[alias] = canonical
 	}
 	infos, err := (&sourceReconciler{}).ListConnectors(context.Background())
 	if err != nil {
@@ -556,9 +564,14 @@ func TestListConnectorsHostingIsDerivedFromTheRealCatalog(t *testing.T) {
 		// The two kinds an operator mixes up with gemini. Distinct rows, distinct answers.
 		"gemini-cli": api.HostingUnknown,      // a local settings.json observer: no endpoint
 		"vertex":     api.HostingVendorHosted, // Google's cloud
-		// The other measured loopback kinds, so the rule cannot quietly narrow to `local`.
-		"vault":       api.HostingSelfHosted,
+		// The other measured loopback kind, so the rule cannot quietly narrow to `local`.
 		"vault-audit": api.HostingSelfHosted,
+	}
+	selfHosted := []string{"local", "vault-audit"}
+	// Business builds also offer the Vault roster connector, which defaults to loopback too.
+	if _, ok := byKind["vault"]; ok {
+		want["vault"] = api.HostingSelfHosted
+		selfHosted = append(selfHosted, "vault")
 	}
 	for kind, wantHosting := range want {
 		info, ok := byKind[kind]
@@ -593,10 +606,10 @@ func TestListConnectorsHostingIsDerivedFromTheRealCatalog(t *testing.T) {
 	for _, i := range infos {
 		counts[i.Hosting]++
 	}
-	if counts[api.HostingSelfHosted] != 3 {
-		t.Errorf("self_hosted count = %d, want 3 (local, vault, vault-audit). "+
+	if counts[api.HostingSelfHosted] != len(selfHosted) {
+		t.Errorf("self_hosted count = %d, want %d %v. "+
 			"A new loopback-defaulting connector is a REAL change: re-measure and update this number.",
-			counts[api.HostingSelfHosted])
+			counts[api.HostingSelfHosted], len(selfHosted), selfHosted)
 	}
 	if counts[api.HostingVendorHosted] == 0 || counts[api.HostingUnknown] == 0 {
 		t.Errorf("degenerate distribution self=%d vendor=%d unknown=%d: a classifier that answers "+
@@ -649,7 +662,7 @@ func TestPutConnectorSealsPerSourceNotPerKind(t *testing.T) {
 		{"vault-us", "https://vault.us.example:8200", "hvs.SECOND-FICTIONAL-VALUE"},
 	} {
 		res, err := sr.PutConnector(ctx, recAdmin(), api.ConnectorOnboardInput{
-			Name: c.name, Kind: "vault", Tenant: "acme", Enabled: true,
+			Name: c.name, Kind: "vault-audit", Tenant: "acme", Enabled: true,
 			Config:  map[string]string{"base_url": c.url},
 			Secrets: map[string]string{"token": c.token},
 		})

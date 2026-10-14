@@ -2222,6 +2222,28 @@
           "name": {
             "type": "string"
           },
+          "pin": {
+            "additionalProperties": false,
+            "description": "Command servers only: run the tool installed with olivares tool install --from at this exact version. The engine sets command and sha256 from that verified install and refuses a version that is not installed. A launch whose executable digest differs refuses to start. A write that omits the field keeps the stored pin unless it changes command, which unpins the server; another digest withdraws the last test.",
+            "properties": {
+              "program": {
+                "type": "string"
+              },
+              "sha256": {
+                "description": "Filled by the engine from the verified install; a write that sends it must name that digest.",
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "program",
+              "version"
+            ],
+            "type": "object"
+          },
           "probe": {
             "additionalProperties": false,
             "properties": {
@@ -2291,6 +2313,36 @@
             },
             "maxItems": 128,
             "readOnly": true,
+            "type": "array"
+          },
+          "targets": {
+            "description": "Nodes of the skills assignment tree this server serves: a session gets its tools only when its run is under one of them (its workspace, registered folder, template, agent groups, agent or the session itself). Empty serves every session of the tenant. A write that omits the field keeps the stored targets; send [] to clear them. A target that does not exist matches no session.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "target_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "target_kind": {
+                  "enum": [
+                    "workspace",
+                    "folder",
+                    "template",
+                    "agent_group",
+                    "agent",
+                    "session"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "target_kind",
+                "target_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
             "type": "array"
           },
           "transport": {
@@ -2381,6 +2433,58 @@
           },
           "name": {
             "type": "string"
+          },
+          "pin": {
+            "additionalProperties": false,
+            "description": "Command servers only: run the tool installed with olivares tool install --from at this exact version. The engine sets command and sha256 from that verified install and refuses a version that is not installed. A launch whose executable digest differs refuses to start. A write that omits the field keeps the stored pin unless it changes command, which unpins the server; another digest withdraws the last test.",
+            "properties": {
+              "program": {
+                "type": "string"
+              },
+              "sha256": {
+                "description": "Filled by the engine from the verified install; a write that sends it must name that digest.",
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "program",
+              "version"
+            ],
+            "type": "object"
+          },
+          "targets": {
+            "description": "Nodes of the skills assignment tree this server serves: a session gets its tools only when its run is under one of them (its workspace, registered folder, template, agent groups, agent or the session itself). Empty serves every session of the tenant. A write that omits the field keeps the stored targets; send [] to clear them. A target that does not exist matches no session.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "target_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "target_kind": {
+                  "enum": [
+                    "workspace",
+                    "folder",
+                    "template",
+                    "agent_group",
+                    "agent",
+                    "session"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "target_kind",
+                "target_id"
+              ],
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
           },
           "transport": {
             "enum": [

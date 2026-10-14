@@ -68,10 +68,10 @@ func TestSkillsMutationDocumentation(t *testing.T) {
 				t.Fatal("request must preserve the closed JSON decoder")
 			}
 			if strings.HasPrefix(route.path, "/assignments") {
-				if len(properties) != 4 || !reflect.DeepEqual(schema["required"], []string{"target_kind", "target_id", "pack_revision_id"}) {
+				if len(properties) != 5 || !reflect.DeepEqual(schema["required"], []string{"target_kind", "target_id", "pack_revision_id"}) {
 					t.Fatal("assignment fields differ from its wire contract")
 				}
-				if !reflect.DeepEqual(properties["target_kind"].(map[string]any)["enum"], []string{"workspace", "template", "agent_group", "agent", "session"}) || properties["members"] == nil || properties["target_id"] == nil || properties["pack_revision_id"] == nil {
+				if !reflect.DeepEqual(properties["target_kind"].(map[string]any)["enum"], []string{"workspace", "folder", "template", "agent_group", "agent", "session"}) || properties["members"] == nil || properties["target_id"] == nil || properties["pack_revision_id"] == nil {
 					t.Fatal("assignment target or member selection is missing")
 				}
 				return
@@ -97,5 +97,26 @@ func TestSkillsMutationDocumentation(t *testing.T) {
 				t.Fatal("source decoder or archive alternative is misrepresented")
 			}
 		})
+	}
+}
+
+func TestSkillsUpdateSuccessResponses(t *testing.T) {
+	doc := api.ModuleOpenAPIDocument([]api.Module{skills.New(skills.Options{})})
+	op := doc["paths"].(map[string]any)["/v1/m/skills/packs/{id}/update"].(map[string]any)["post"].(map[string]any)
+	responses := op["responses"].(map[string]any)
+	for status, response := range api.GenericModuleResponses() {
+		if status != "200" && !reflect.DeepEqual(responses[status], response) {
+			t.Fatalf("update changed existing error response %s", status)
+		}
+	}
+	for _, status := range []string{"200", "201"} {
+		response, ok := responses[status].(map[string]any)
+		if !ok {
+			t.Fatalf("update omits success response %s", status)
+		}
+		content := response["content"].(map[string]any)
+		if content["application/json"] == nil {
+			t.Fatalf("update response %s omits JSON content", status)
+		}
 	}
 }

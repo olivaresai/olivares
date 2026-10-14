@@ -110,6 +110,13 @@ export function isLiveRun(run: RunDTO): boolean {
   return LIVE_RUN_STATES.includes(run.state)
 }
 
+/** A live run that is not waiting for its person: the Working half of `isLiveRun`. The
+ * engine derives `idle` from the run's turns (it answered and awaits input), so an idle
+ * run is alive and listed, but it is not working. */
+export function isWorkingRun(run: RunDTO): boolean {
+  return isLiveRun(run) && run.state !== 'idle'
+}
+
 /** A run is asking for a person: its provider needs a login, its launch waits for an
  * approval, or a tool call of a live run waits on one (HU-R12). The one rule for every
  * list that says a session needs you: the sidebar and Sessions read it alike. */
@@ -159,6 +166,15 @@ export function hostIsolationUnavailable(run: RunDTO): boolean {
 /** True when continuing this run starts a new conversation rather than resuming one. */
 export function startsAgain(run: RunDTO): boolean {
   return run.transport === 'stream-json' && !run.claude_session_id
+}
+
+/**
+ * Whether the engine can move this session to another account or hand it off at all:
+ * only a Claude Code session has a stored conversation it reads, so no other session
+ * is offered either (session_move.go, session_handoff.go).
+ */
+export function canMoveSession(run: RunDTO): boolean {
+  return run.provider_driver === 'claude'
 }
 
 /** A stopped, failed or cleaned run can be deleted; one not yet cleaned is cleaned first. */

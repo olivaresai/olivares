@@ -87,6 +87,15 @@ export function GroupMembersSheet({
           </p>
         </div>
 
+        {query.data?.truncated && (
+          <p
+            role="status"
+            className="rounded-md border border-border bg-muted/40 px-3 py-2 text-caption text-muted-foreground"
+          >
+            {t('members.truncated')}
+          </p>
+        )}
+
         <ScrollArea className="-mr-4 flex-1 pr-4">
           {query.isLoading ? (
             <div className="flex flex-col gap-2">
@@ -96,8 +105,8 @@ export function GroupMembersSheet({
             </div>
           ) : query.error instanceof ApiError &&
             query.error.isStepUpRequired ? (
-            /* Aseguramiento antes que rol: `isForbidden` es sólo el status
-               (lib/api/errors.ts:59) y el 403 de ceremonia lo satisface también. */
+            /* Assurance before role: `isForbidden` is only the status
+               (lib/api/errors.ts:59) and the ceremony 403 satisfies it too. */
             <StepUpRequiredState
               action="generic"
               onElevated={() => void query.refetch()}

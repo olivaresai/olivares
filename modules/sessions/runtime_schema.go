@@ -103,6 +103,11 @@ const (
 	// and resume and release leave its directory alone.
 	colRunWorktreeBranch = "worktree_branch"
 
+	// colRunHandoffOf is the run_ref of the session this one was handed off from
+	// (session_handoff.go): a reference, never content. Nullable: a run that was not
+	// started by a handoff, or predates the column, names none.
+	colRunHandoffOf = "handoff_of"
+
 	// Governance facts: the non-sensitive launch-decision posture persisted
 	// on the run so the portal renders the per-session governance panel without the
 	// secrets that decided it. References and flags only — never a token, env value,
@@ -284,6 +289,9 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// Nullable for the same expand-contract reason: an existing sessions_run gains
 			// it on the next boot and a row that predates it names no worktree.
 			{Name: colRunWorktreeBranch, Kind: model.KindText, Nullable: true, Principal: model.None("a git branch name this plane made for the run's worktree, read for resume and release, never an account: runtime_worktree.go:442-443, runtime_worktree.go:523-524, runtime_dto.go:169")},
+			// The session this one was handed off from. Nullable for the same
+			// expand-contract reason: an existing sessions_run gains it on the next boot.
+			{Name: colRunHandoffOf, Kind: model.KindText, Nullable: true, Principal: model.None("the run_ref of the session a handoff started this one from, a reference and never content: runtime.go:2874, runtime_dto.go:173")},
 			// the template this run was last launched under. A reference, never the
 			// template's body — the terms are re-resolved from the template row on every
 			// launch and resume, so a tightened template governs the next relaunch rather

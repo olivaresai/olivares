@@ -633,6 +633,32 @@ describe('ProviderAccountsPanel — adopt', () => {
     expect(api.adoptAccount.mock.calls[0][1]).toEqual({})
   })
 
+  it('the picker names a profile that is already an account by its account name, with its reference beside it', async () => {
+    grant(AR, AW, PR)
+    api.listAccounts.mockResolvedValue(page([workClaude]))
+    api.listProfiles.mockResolvedValue(
+      page([
+        {
+          profile_ref: 'ppf_acc',
+          driver: 'claude',
+          environment_ref: 'xenv_1',
+          account_name: 'claude-b',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      ]),
+    )
+    const user = userEvent.setup()
+    wrap()
+    await screen.findByRole('button', { name: 'work-claude' })
+    const dialog = await openAdopt(user)
+    await user.click(within(dialog).getByRole('combobox', { name: 'Profile' }))
+    expect(
+      await screen.findByRole('option', { name: /claude-b.*ppf_acc/ }),
+    ).toBeInTheDocument()
+  })
+
   it('while the profile page loads the picker says so and the reference path stays available', async () => {
     grant(AR, AW, PR)
     const profiles = deferred<{

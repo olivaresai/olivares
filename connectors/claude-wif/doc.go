@@ -35,8 +35,9 @@
 //     host writes to the ledger (docs/SECURITY-HARDENING.md). The composition root wires it; an
 //     attested assertion comes from connectors/spiffe's live JWT-SVID verifier (IDN-07).
 //
-// Read-first and minimal-data (docs/SECURITY-HARDENING.md §0-3). Every API call this connector makes is a
-// GET; it never creates or mutates an Anthropic object. It carries identity METADATA only
+// Read-first and minimal-data (docs/SECURITY-HARDENING.md §0-3). The roster source uses GET and never
+// creates or mutates an Anthropic object. The Business exchanger and lifecycle
+// actuator make their explicitly requested token and managed-key operations. It carries identity METADATA only
 // — ids, names, emails, roles, key hints — never a key secret, never a private key, never
 // the minted token at rest. Anthropic's WIF Admin API lists the federation
 // issuers/rules/service accounts under an org:admin OAuth bearer token (Admin API keys are
@@ -48,4 +49,8 @@
 //
 // It imports only the SDK, the Apache identitysource and modelprovider contracts and
 // the shared internal helpers — never the engine (/core). License boundary: Apache-2.0.
+//
+// Directory rosters, federation exchange and managed NHI lifecycle are available
+// in Business Identity & Scale. Community retains their value contracts and
+// exported refusal APIs; it performs no roster, exchange or actuator requests.
 package claudewif

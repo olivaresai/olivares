@@ -189,7 +189,8 @@ type costRow struct {
 }
 
 func companyRef(id string) string { return "paperclip/company/" + id }
-func agentRef(id string) string   { return "paperclip/agent/" + id }
+
+func agentRef(id string) string { return "paperclip/agent/" + id }
 
 // clean makes remote free text safe for a roster row or a finding title.
 func clean(s string) string {
@@ -289,56 +290,6 @@ func (s *Source) loadEstate(ctx context.Context, c *httpx.Client, tolerate bool)
 		out = append(out, v)
 	}
 	return out, nil
-}
-
-// Snapshot maps companies to group collections and agents to NHI roster rows.
-// A partial roster is never returned: any failed leg fails the snapshot.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourcePaperclip, CapturedAt: s.clock().UTC()}
-	if s.offline() {
-		return g, nil
-	}
-	estate, err := s.loadEstate(ctx, s.client(), false)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	for _, v := range estate {
-		cref := companyRef(v.company.ID)
-		g.Collections = append(g.Collections, identitysource.Collection{
-			Ref: cref, Kind: identitysource.KindGroup, DisplayName: clean(v.company.Name), Source: identitysource.SourcePaperclip,
-			Attributes: map[string]string{"status": token(v.company.Status)},
-		})
-		for _, a := range v.agents {
-			ref := agentRef(a.ID)
-			status := token(a.Status)
-			g.Identities = append(g.Identities, identitysource.Identity{
-				Ref:         ref,
-				Type:        identitysource.PrincipalNHI,
-				Kind:        "paperclip/" + token(a.AdapterType),
-				DisplayName: clean(a.Name),
-				Source:      identitysource.SourcePaperclip,
-				Disabled:    status == "paused" || status == "terminated",
-				Attributes:  agentAttributes(a, cref, status),
-			})
-			g.Memberships = append(g.Memberships, identitysource.Membership{
-				MemberRef: ref, MemberKind: identitysource.MemberIdentity, CollectionRef: cref, Source: identitysource.SourcePaperclip,
-			})
-		}
-	}
-	return g, nil
-}
-
-func agentAttributes(a agent, cref, status string) map[string]string {
-	attrs := map[string]string{"company": cref, "status": status}
-	for k, v := range map[string]string{"role": a.Role, "title": a.Title} {
-		if v = clean(v); v != "" {
-			attrs[k] = v
-		}
-	}
-	if a.ReportsTo != "" {
-		attrs["reports_to"] = agentRef(a.ReportsTo)
-	}
-	return attrs
 }
 
 // Gather emits the inventory summary, finished runs and advisory cost.

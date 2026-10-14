@@ -77,7 +77,19 @@ func (m *Module) OwnToolModelHome(tenant model.TenantID, driver string) (Provide
 	return ProviderHomeSnapshot{Driver: driver, UserHome: userHome, ConfigHome: configHome, AuthSource: AuthSourceAccountHome}, nil
 }
 
-func (m *Module) readToolModels(ctx context.Context, home ProviderHomeSnapshot) (ids []string, err error) {
+func (m *Module) readToolModels(ctx context.Context, home ProviderHomeSnapshot) ([]string, error) {
+	models, err := m.readToolModelCatalog(ctx, home)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(models))
+	for _, md := range models {
+		ids = append(ids, md.ID)
+	}
+	return ids, nil
+}
+
+func (m *Module) readToolModelCatalog(ctx context.Context, home ProviderHomeSnapshot) (models []CatalogModel, err error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	var program string
@@ -87,6 +99,9 @@ func (m *Module) readToolModels(ctx context.Context, home ProviderHomeSnapshot) 
 		program = m.driverProgram(NewCodexDriver())
 		args = NewCodexDriver().LaunchArgs(DriverLaunch{})
 	case providerDriverClaude:
+		if m.rt.Runner == nil {
+			return nil, errors.New("tool model catalog runtime is unavailable")
+		}
 		program = m.claudeProgram()
 		if err := m.requireClaudeCatalogLogin(ctx, home, program); err != nil {
 			return nil, err
@@ -99,7 +114,12 @@ func (m *Module) readToolModels(ctx context.Context, home ProviderHomeSnapshot) 
 		program = m.driverProgram(NewGrokDriver())
 		args = []string{"models"}
 	default:
+		// ponytail: OpenCode `models` loads configured plugins; enable discovery
+		// when the tool exposes a catalog interface that disables user automation.
 		return nil, ErrToolModelListUnsupported
+	}
+	if m.rt.Runner == nil {
+		return nil, errors.New("tool model catalog runtime is unavailable")
 	}
 	spec := LaunchSpec{Program: program, Args: args, Dir: home.UserHome,
 		Env:       toSessionEnv(cliruntime.HomeEnv(home.Driver, home.UserHome, home.ConfigHome)),
@@ -113,7 +133,7 @@ func (m *Module) readToolModels(ctx context.Context, home ProviderHomeSnapshot) 
 		stopCtx, stop := context.WithTimeout(context.Background(), 3*time.Second)
 		defer stop()
 		if stopErr := proc.Stop(stopCtx); stopErr != nil {
-			ids, err = nil, errors.New("the model catalog process could not be stopped")
+			models, err = nil, errors.New("the model catalog process could not be stopped")
 		}
 	}()
 	if home.Driver == providerDriverCodex {
@@ -127,7 +147,7 @@ func (m *Module) readToolModels(ctx context.Context, home ProviderHomeSnapshot) 
 
 // Grok's native models command also prints its reference list when signed out.
 // Only a confirmed account-home login can advertise that list as available.
-func readGrokModelCatalog(ctx context.Context, proc Process) ([]string, error) {
+func readGrokModelCatalog(ctx context.Context, proc Process) ([]CatalogModel, error) {
 	var data []byte
 	for {
 		select {
@@ -153,9 +173,9 @@ func readGrokModelCatalog(ctx context.Context, proc Process) ([]string, error) {
 	}
 }
 
-func parseGrokModelCatalog(data string) ([]string, error) {
+func parseGrokModelCatalog(data string) ([]CatalogModel, error) {
 	signed, listed := false, false
-	ids := []string{}
+	ids := []CatalogModel{}
 	for _, line := range strings.Split(data, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -192,7 +212,8 @@ func parseGrokModelCatalog(data string) ([]string, error) {
 		if !validToolCatalogModelID(id) || len(ids) == 1000 {
 			return nil, errors.New("invalid tool model list")
 		}
-		ids = append(ids, id)
+		isDefault := strings.HasPrefix(line, "* ")
+		ids = append(ids, CatalogModel{ID: id, IsDefault: &isDefault})
 	}
 	if !signed || !listed {
 		return nil, errors.New("invalid tool model list")
@@ -204,7 +225,7 @@ func validToolCatalogModelID(id string) bool {
 	return id != "" && len(id) <= 200 && strings.IndexFunc(id, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
 }
 
-func readCodexModelCatalog(ctx context.Context, proc Process) ([]string, error) {
+func readCodexModelCatalog(ctx context.Context, proc Process) ([]CatalogModel, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	conn := newRPCConn(proc.Send, false)
 	done := make(chan struct{})
@@ -241,7 +262,7 @@ func readCodexModelCatalog(ctx context.Context, proc Process) ([]string, error) 
 	if json.Unmarshal(raw, &account) != nil || len(account.Account) == 0 || string(account.Account) == "null" {
 		return nil, errors.New("the tool account is not signed in")
 	}
-	var out []string
+	out := []CatalogModel{}
 	cursor := ""
 	for page := 0; page < 10; page++ {
 		params := map[string]any{"includeHidden": false, "limit": 100}
@@ -254,12 +275,23 @@ func readCodexModelCatalog(ctx context.Context, proc Process) ([]string, error) 
 		}
 		var result struct {
 			Data []struct {
-				Model  string `json:"model"`
-				Hidden bool   `json:"hidden"`
+				Model                     string `json:"model"`
+				Hidden                    bool   `json:"hidden"`
+				DisplayName               string `json:"displayName"`
+				IsDefault                 *bool  `json:"isDefault"`
+				Upgrade                   any    `json:"upgrade"`
+				AvailabilityNux           any    `json:"availabilityNux"`
+				DefaultReasoningEffort    string `json:"defaultReasoningEffort"`
+				SupportedReasoningEfforts []struct {
+					ReasoningEffort string `json:"reasoningEffort"`
+				} `json:"supportedReasoningEfforts"`
+				ServiceTiers []struct {
+					ID string `json:"id"`
+				} `json:"serviceTiers"`
 			} `json:"data"`
 			NextCursor *string `json:"nextCursor"`
 		}
-		if json.Unmarshal(raw, &result) != nil || result.Data == nil {
+		if len(raw) > 1<<20 || json.Unmarshal(raw, &result) != nil || result.Data == nil {
 			return nil, errors.New("invalid tool model list")
 		}
 		for _, md := range result.Data {
@@ -267,7 +299,21 @@ func readCodexModelCatalog(ctx context.Context, proc Process) ([]string, error) 
 				return nil, errors.New("invalid tool model list")
 			}
 			if !md.Hidden {
-				out = append(out, md.Model)
+				// Codex sends no isNew or isLegacy. It names a newer model in
+				// `upgrade` for an older one and announces a model it wants
+				// users to try in `availabilityNux`; those are the tool's markers.
+				isLegacy, isNew := md.Upgrade != nil && md.Upgrade != "", md.AvailabilityNux != nil
+				entry := CatalogModel{ID: md.Model, DisplayName: md.DisplayName, IsDefault: md.IsDefault, IsNew: &isNew, IsLegacy: &isLegacy, DefaultEffort: md.DefaultReasoningEffort}
+				for _, effort := range md.SupportedReasoningEfforts {
+					entry.EffortLevels = append(entry.EffortLevels, effort.ReasoningEffort)
+				}
+				for _, tier := range md.ServiceTiers {
+					entry.ServiceTiers = append(entry.ServiceTiers, tier.ID)
+				}
+				if err := validateCatalogModel(entry); err != nil {
+					return nil, err
+				}
+				out = append(out, entry)
 			}
 		}
 		if len(out) > 1000 {
@@ -284,7 +330,7 @@ func readCodexModelCatalog(ctx context.Context, proc Process) ([]string, error) 
 	return nil, errors.New("the tool model catalog exceeded its page bound")
 }
 
-func readClaudeModelCatalog(ctx context.Context, proc Process) ([]string, error) {
+func readClaudeModelCatalog(ctx context.Context, proc Process) ([]CatalogModel, error) {
 	requestID := model.NewID().String()
 	request, _ := json.Marshal(map[string]any{"type": "control_request", "request_id": requestID, "request": map[string]any{"subtype": "initialize"}})
 	if err := proc.Send(ctx, request); err != nil {
@@ -308,10 +354,16 @@ func readClaudeModelCatalog(ctx context.Context, proc Process) ([]string, error)
 					Subtype   string `json:"subtype"`
 					Response  struct {
 						Models []struct {
-							Value string `json:"value"`
+							Value                 string   `json:"value"`
+							DisplayName           string   `json:"displayName"`
+							SupportedEffortLevels []string `json:"supportedEffortLevels"`
+							SupportsFastMode      *bool    `json:"supportsFastMode"`
 						} `json:"models"`
 					} `json:"response"`
 				} `json:"response"`
+			}
+			if len(frame.Data) > 1<<20 {
+				return nil, errors.New("tool model list exceeded its response bound")
 			}
 			if json.Unmarshal(frame.Data, &response) != nil || response.Type != "control_response" || response.Response.RequestID != requestID {
 				continue
@@ -322,12 +374,24 @@ func readClaudeModelCatalog(ctx context.Context, proc Process) ([]string, error)
 			if response.Response.Response.Models == nil {
 				return nil, ErrToolModelListUnsupported
 			}
-			var out []string
+			out := []CatalogModel{}
 			for _, md := range response.Response.Response.Models {
 				if !validToolCatalogModelID(md.Value) || len(out) == 1000 {
 					return nil, errors.New("invalid tool model list")
 				}
-				out = append(out, md.Value)
+				// Claude Code reports no new, legacy or default-effort marker; they
+				// stay absent and the console must not guess them.
+				entry := CatalogModel{ID: md.Value, DisplayName: md.DisplayName, EffortLevels: md.SupportedEffortLevels, SupportsFastMode: md.SupportsFastMode}
+				// The SDK offers its native default as value="default" and has no
+				// separate default marker.
+				if md.Value == "default" {
+					value := true
+					entry.IsDefault = &value
+				}
+				if err := validateCatalogModel(entry); err != nil {
+					return nil, err
+				}
+				out = append(out, entry)
 			}
 			return out, nil
 		}

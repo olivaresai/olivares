@@ -6,6 +6,10 @@ description: >-
   help link opens. Generated from the console's own route census.
 ---
 
+:::note[Edition]
+Directory roster sources (LDAP, Okta/Entra and agent/workload IdPs) and managed identity lifecycle require the Business/Enterprise add-ons. Community keeps generic source ingestion, the resource catalog, security findings, the access map, the identity inventory, single-IdP SSO, inbound SCIM users/groups, local roles and bindings, policies and approvals. Community hides the paid console panels and CLI commands; their published API routes return HTTP `501`. Selecting a module does not add its Business implementation.
+:::
+
 This page is the map of the console. It lists **every route the application mounts** —
 not a selection, not the ones somebody remembered to write up — with the permission a
 principal needs to enter it and where to read more.
@@ -62,7 +66,7 @@ Deployment, Observability & evidence, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **77 routes**. Every one of them is in the tables below, with the
+The console publishes **75 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Now
@@ -139,7 +143,6 @@ permission it requires and the reference page its in-product help link opens.
 | Inference proxy | `/inference-proxy` | Proxy gates, egress DLP rules and device approvals | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/reference/modules/inferenceproxy/) |
 | Kill switch | `/killswitch` | Emergency stop, dual-control recovery and guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identity, roles and approvals | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
-| Data residency | `/residency` | Pin each org to a region, or leave it unpinned | `system:admin` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
 | Routine policies | `/routine-policies` | Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines | `governance:routine:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Security | `/security` | Guardrails, forensics and anomalies | `security:finding:read` | [reference/modules/ix-security](/reference/modules/ix-security/) |
 
@@ -176,7 +179,6 @@ permission it requires and the reference page its in-product help link opens.
 | Source diff | `/console/sources/diff` | Compare a base and a head revision of a connected Git repository, file by file | `system:admin` | [reference/console](/reference/console/) |
 | Logs | `/logs` | The live engine log stream, with level and module filters, search and pause | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
 | Setup wizard | `/onboarding` | Step-by-step deployment configuration | `system:admin` | [start/quickstart](/start/quickstart/) |
-| Tenants | `/tenants` | Withdraw or restore a tenant's service | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
 
 ### Sign-in, setup and account
 

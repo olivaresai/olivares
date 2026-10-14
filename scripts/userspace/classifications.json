@@ -174,5 +174,205 @@
     "candidate": {"name": "sslmode", "type": "string", "default": "", "usage": "libpq sslmode (default verify-full for the printed DSN hints; with --data-dir, prefer for local hosts/sockets and verify-full for remote hosts; preserves an explicit DSN mode)", "effective_default": "verify-full"},
     "reason": "The optional data-directory mode has different flag metadata; classic omitted-input behavior is unchanged.",
     "evidence": "cmd/olivares/cmd_db.go and the actual published/candidate db init provisioning JSON both retain 'verify-full' for sslmode."
+  },
+  {
+    "finding": "olivares tenants create: command removed",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants ls: command removed",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants rm: command removed",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants set-region: command removed",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants set-status: command removed",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed allow-cleartext",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed ca-cert",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed insecure",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed pin-sha256",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed server",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed tenant",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed timeout",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed token",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares tenants: flag removed token-file",
+    "path": ["cli", "commands", {"path": "olivares tenants"}, "short"],
+    "published": "Organizations: create, list, suspend, delete",
+    "candidate": "Organization management requires Enterprise",
+    "reason": "Managing several organizations moved to the Enterprise edition. Community keeps the organization created by setup; `olivares tenants` remains and exits 9 naming the edition that provides it.",
+    "evidence": "cmd/olivares/cmd_tenants.go (Community build): `olivares tenants` is a hidden stub with no subcommands or flags that returns exitcode.Edition; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares governance nhi events: command removed",
+    "path": ["cli", "commands", {"path": "olivares governance nhi"}, "short"],
+    "published": "Non-human identities: ownership, rotation age and what is already being refused",
+    "candidate": "Agent identity lifecycle requires Business Identity & Scale",
+    "reason": "The non-human identity register moved to the Business edition (Identity & Scale). `olivares governance nhi` remains and reports the edition that provides it.",
+    "evidence": "cmd/olivares/identity_noenterprise.go unavailableIdentityCommand(\"nhi\"): a hidden stub with no subcommands; docs/editions.md places agent identity federation and directories in Business Identity & Scale."
+  },
+  {
+    "finding": "olivares governance nhi get: command removed",
+    "path": ["cli", "commands", {"path": "olivares governance nhi"}, "short"],
+    "published": "Non-human identities: ownership, rotation age and what is already being refused",
+    "candidate": "Agent identity lifecycle requires Business Identity & Scale",
+    "reason": "The non-human identity register moved to the Business edition (Identity & Scale). `olivares governance nhi` remains and reports the edition that provides it.",
+    "evidence": "cmd/olivares/identity_noenterprise.go unavailableIdentityCommand(\"nhi\"): a hidden stub with no subcommands; docs/editions.md places agent identity federation and directories in Business Identity & Scale."
+  },
+  {
+    "finding": "olivares governance nhi ls: command removed",
+    "path": ["cli", "commands", {"path": "olivares governance nhi"}, "short"],
+    "published": "Non-human identities: ownership, rotation age and what is already being refused",
+    "candidate": "Agent identity lifecycle requires Business Identity & Scale",
+    "reason": "The non-human identity register moved to the Business edition (Identity & Scale). `olivares governance nhi` remains and reports the edition that provides it.",
+    "evidence": "cmd/olivares/identity_noenterprise.go unavailableIdentityCommand(\"nhi\"): a hidden stub with no subcommands; docs/editions.md places agent identity federation and directories in Business Identity & Scale."
+  },
+  {
+    "finding": "olivares governance nhi posture: command removed",
+    "path": ["cli", "commands", {"path": "olivares governance nhi"}, "short"],
+    "published": "Non-human identities: ownership, rotation age and what is already being refused",
+    "candidate": "Agent identity lifecycle requires Business Identity & Scale",
+    "reason": "The non-human identity register moved to the Business edition (Identity & Scale). `olivares governance nhi` remains and reports the edition that provides it.",
+    "evidence": "cmd/olivares/identity_noenterprise.go unavailableIdentityCommand(\"nhi\"): a hidden stub with no subcommands; docs/editions.md places agent identity federation and directories in Business Identity & Scale."
+  },
+  {
+    "finding": "olivares identity external-keys: flag removed strict",
+    "path": ["cli", "commands", {"path": "olivares identity external-keys"}, "short"],
+    "published": "List the customer-managed encryption key inventory",
+    "candidate": "External key inventory requires Business Identity & Scale",
+    "reason": "The external key inventory moved to the Business edition (Identity & Scale). `olivares identity external-keys` remains and reports the edition that provides it, so its posture flag no longer applies.",
+    "evidence": "cmd/olivares/identity_noenterprise.go unavailableIdentityCommand(\"external-keys\"): a hidden stub that parses no flags; the pinned short help states the requirement."
+  },
+  {
+    "finding": "olivares identity residency: flag removed strict",
+    "path": ["cli", "commands", {"path": "olivares identity residency"}, "short"],
+    "published": "List each workspace's data-residency and CMEK posture",
+    "candidate": "Residency posture requires Business Identity & Scale",
+    "reason": "The residency posture moved to the Business edition (Identity & Scale). `olivares identity residency` remains and reports the edition that provides it, so its posture flag no longer applies.",
+    "evidence": "cmd/olivares/identity_noenterprise.go unavailableIdentityCommand(\"residency\"): a hidden stub that parses no flags; the pinned short help states the requirement."
+  },
+  {
+    "finding": "openapi_beta: PATCH /v1/m/sessions/workspaces/{ref} request: tightened minProperties",
+    "path": ["openapi_beta", "paths", "/v1/m/sessions/workspaces/{ref}", "patch", "requestBody", "content", "application/json", "schema"],
+    "published": {"additionalProperties": false, "properties": {"read_only_folders": {"description": "Additional read-only host folders for native sessions. Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions. Must be absolute, existing directories outside protected engine folders. The server stores canonical paths. Omitted on create or an empty array grants no extra access.", "items": {"minLength": 1, "type": "string"}, "type": "array"}}, "required": ["read_only_folders"], "type": "object"},
+    "candidate": {"additionalProperties": false, "description": "Name at least one setting with a value. A setting left out or null is not changed.", "minProperties": 1, "properties": {"dlp_mode": {"anyOf": [{"description": "Empty selects off, as on registration.", "enum": ["", "label", "deny", "off"], "type": "string"}, {"type": "null"}]}, "read_only_folders": {"anyOf": [{"description": "Additional read-only host folders for native sessions. Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions. Must be absolute, existing directories outside protected engine folders. The server stores canonical paths. Omitted on create or an empty array grants no extra access.", "items": {"minLength": 1, "type": "string"}, "type": "array"}, {"type": "null"}]}}, "type": "object"},
+    "reason": "Beta tier change: the request now accepts dlp_mode, and read_only_folders is no longer required. minProperties 1 replaces that required field, so every request valid in 0.1 stays valid.",
+    "evidence": "modules/sessions/openapi_closure.go sessionsPatchWorkspaceSchema; modules/sessions/workspace_dlp_mode_patch_test.go; CHANGELOG.md [0.2] Changed (PATCH /v1/m/sessions/workspaces/{ref} accepts dlp_mode)."
+  },
+  {
+    "finding": "openapi_beta: POST /v1/m/agenttools/plans request.driver: field removed",
+    "path": ["openapi_beta", "paths", "/v1/m/agenttools/plans", "post", "requestBody", "content", "application/json", "schema"],
+    "published": {"additionalProperties": false, "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "type": "string"}, "version": {"maxLength": 128, "type": "string"}}, "required": ["driver", "version"], "type": "object"},
+    "candidate": {"additionalProperties": false, "oneOf": [{"not": {"required": ["from"]}, "required": ["driver"]}, {"not": {"required": ["driver"]}, "required": ["from"]}], "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "minLength": 1, "type": "string"}, "from": {"format": "uri", "maxLength": 2048, "minLength": 1, "type": "string"}, "version": {"maxLength": 128, "minLength": 1, "type": "string"}}, "required": ["version"], "type": "object"},
+    "reason": "Beta tier change: a tool install plan can name a pinned Git or release URL (from) instead of a driver. A request with a driver and a non-empty version keeps its 0.1 meaning; an empty version is refused.",
+    "evidence": "POST /v1/m/agenttools/plans schema: oneOf driver or from, version required with minLength 1; CHANGELOG.md [0.2] Added (install a third-party CLI or MCP server from a pinned Git or release URL)."
+  },
+  {
+    "finding": "openapi_beta: POST /v1/m/agenttools/plans request.version: field removed",
+    "path": ["openapi_beta", "paths", "/v1/m/agenttools/plans", "post", "requestBody", "content", "application/json", "schema"],
+    "published": {"additionalProperties": false, "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "type": "string"}, "version": {"maxLength": 128, "type": "string"}}, "required": ["driver", "version"], "type": "object"},
+    "candidate": {"additionalProperties": false, "oneOf": [{"not": {"required": ["from"]}, "required": ["driver"]}, {"not": {"required": ["driver"]}, "required": ["from"]}], "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "minLength": 1, "type": "string"}, "from": {"format": "uri", "maxLength": 2048, "minLength": 1, "type": "string"}, "version": {"maxLength": 128, "minLength": 1, "type": "string"}}, "required": ["version"], "type": "object"},
+    "reason": "Beta tier change: a tool install plan can name a pinned Git or release URL (from) instead of a driver. A request with a driver and a non-empty version keeps its 0.1 meaning; an empty version is refused.",
+    "evidence": "POST /v1/m/agenttools/plans schema: oneOf driver or from, version required with minLength 1; CHANGELOG.md [0.2] Added (install a third-party CLI or MCP server from a pinned Git or release URL)."
+  },
+  {
+    "finding": "openapi_beta: POST /v1/m/agenttools/plans request: changed type",
+    "path": ["openapi_beta", "paths", "/v1/m/agenttools/plans", "post", "requestBody", "content", "application/json", "schema"],
+    "published": {"additionalProperties": false, "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "type": "string"}, "version": {"maxLength": 128, "type": "string"}}, "required": ["driver", "version"], "type": "object"},
+    "candidate": {"additionalProperties": false, "oneOf": [{"not": {"required": ["from"]}, "required": ["driver"]}, {"not": {"required": ["driver"]}, "required": ["from"]}], "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "minLength": 1, "type": "string"}, "from": {"format": "uri", "maxLength": 2048, "minLength": 1, "type": "string"}, "version": {"maxLength": 128, "minLength": 1, "type": "string"}}, "required": ["version"], "type": "object"},
+    "reason": "Beta tier change: a tool install plan can name a pinned Git or release URL (from) instead of a driver. A request with a driver and a non-empty version keeps its 0.1 meaning; an empty version is refused.",
+    "evidence": "POST /v1/m/agenttools/plans schema: oneOf driver or from, version required with minLength 1; CHANGELOG.md [0.2] Added (install a third-party CLI or MCP server from a pinned Git or release URL)."
+  },
+  {
+    "finding": "openapi_beta: POST /v1/m/agenttools/plans request: review changed not",
+    "path": ["openapi_beta", "paths", "/v1/m/agenttools/plans", "post", "requestBody", "content", "application/json", "schema"],
+    "published": {"additionalProperties": false, "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "type": "string"}, "version": {"maxLength": 128, "type": "string"}}, "required": ["driver", "version"], "type": "object"},
+    "candidate": {"additionalProperties": false, "oneOf": [{"not": {"required": ["from"]}, "required": ["driver"]}, {"not": {"required": ["driver"]}, "required": ["from"]}], "properties": {"driver": {"enum": ["claude", "codex", "grok", "opencode", "gemini-cli", "ollama"], "minLength": 1, "type": "string"}, "from": {"format": "uri", "maxLength": 2048, "minLength": 1, "type": "string"}, "version": {"maxLength": 128, "minLength": 1, "type": "string"}}, "required": ["version"], "type": "object"},
+    "reason": "Beta tier change: a tool install plan can name a pinned Git or release URL (from) instead of a driver. A request with a driver and a non-empty version keeps its 0.1 meaning; an empty version is refused.",
+    "evidence": "POST /v1/m/agenttools/plans schema: oneOf driver or from, version required with minLength 1; CHANGELOG.md [0.2] Added (install a third-party CLI or MCP server from a pinned Git or release URL)."
   }
 ]

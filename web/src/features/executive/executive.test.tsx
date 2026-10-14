@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
 import '@/features/_intel' // register the shared `intel` namespace for badges/notices
 import './i18n'
-import type { Run } from '@/features/redteam/types'
-import type { ListResponse } from '@/lib/api/types'
+
 import {
   deriveCompliance,
   deriveHealth,
@@ -16,7 +15,6 @@ import {
 } from './derive'
 import { KpiTiles, ComplianceSection, ReliabilitySection } from './components'
 import {
-  accessDriftFixture,
   complianceRiskFixture,
   complianceSummary,
   healthIncidentsFixture,
@@ -39,21 +37,24 @@ vi.mock('@tanstack/react-router', () => ({
 const panels = vi.hoisted(() => ({
   complianceView: undefined as undefined | (() => null),
 }))
-vi.mock('@/features/extensions', () => ({
-  PANEL_EXTENSIONS: panels,
-  FEATURE_EXTENSIONS: [],
-}))
-
-const list = <T,>(items: T[]): ListResponse<T> => ({ items, has_more: false })
-const run = (status: string, score: number, finished_at: string): Run =>
-  ({ status, score, finished_at }) as unknown as Run
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...original,
+    PANEL_EXTENSIONS: {
+      ...original.PANEL_EXTENSIONS,
+      executiveRiskCards: [],
+      get complianceView() {
+        return panels.complianceView
+      },
+    },
+    FEATURE_EXTENSIONS: [],
+  }
+})
 
 const usage = deriveUsage(inventorySummaryFixture, sessionsLiveFixture)
-const risk = deriveRisk(
-  securityFindingsFixture,
-  list([run('completed', 78, '2026-06-03T00:00:00Z')]),
-  accessDriftFixture,
-)
+const risk = deriveRisk(securityFindingsFixture)
 const compliance = deriveCompliance(complianceSummary, complianceRiskFixture)
 const health = deriveHealth(healthStatusFixture, healthIncidentsFixture)
 
@@ -68,14 +69,7 @@ describe('KpiTiles (headline pillars)', () => {
   })
 
   it('omits a pillar whose source the role cannot read (so the PDF cannot leak it)', () => {
-    renderIntel(
-      <KpiTiles
-        cost={null}
-        usage={usage}
-        risk={null}
-        compliance={compliance}
-      />,
-    )
+    renderIntel(<KpiTiles usage={usage} risk={null} compliance={compliance} />)
     expect(screen.queryByText('Spend')).not.toBeInTheDocument()
     expect(screen.queryByText('Open risk')).not.toBeInTheDocument()
     expect(screen.getByText('Control coverage')).toBeInTheDocument()

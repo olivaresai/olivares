@@ -41,11 +41,7 @@ func TestPublicationReplyBeyondHTTPWriteTimeout(t *testing.T) {
 		t.Fatalf("setup = %d %s", code, raw)
 	}
 	root := s.login("root@x.io", "supersecret1")
-	code, org, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("org = %d %s", code, raw)
-	}
-	s.tenant = model.TenantID(org["tenant_id"].(string))
+	s.tenant = s.seedOrg("acme")
 	admin := s.member(root, "admin")
 	code, target, raw := s.do("POST", "/v1/m/gitpublish/targets", root, targetBody{
 		WorkspaceID: model.NewID().String(), CredentialBindingID: "cb1", RepositoryBindingID: "rb1", PushPrefix: "olivares/", MergeBases: []string{"main"},

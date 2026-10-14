@@ -139,8 +139,8 @@ func TestSourcesPlanDoesNotWireTheRoster(t *testing.T) {
 // rosters; if the output did not depend on the store, all three would agree.
 func TestSourcesPlanChangesWithTheStartingState(t *testing.T) {
 	argv := func(dir string) []string {
-		return []string{"--data-dir", dir, "--name", "vault-prod", "--kind", "vault",
-			"--tenant", planTenantA, "--config", "addr=https://vault.internal:8200"}
+		return []string{"--data-dir", dir, "--name", "gitlab-prod", "--kind", "gitlab",
+			"--tenant", planTenantA, "--config", "api_base=https://gitlab.internal"}
 	}
 
 	// 1) Absent from the roster.
@@ -156,8 +156,8 @@ func TestSourcesPlanChangesWithTheStartingState(t *testing.T) {
 	// 2) Present and already IDENTICAL: the same argv must now be a no-op.
 	same := initialisedDataDir(t)
 	seedRoster(t, same, model.SourceDef{
-		Name: "vault-prod", Kind: "vault", Tenant: planTenantA, Enabled: true,
-		Config: map[string]string{"addr": "https://vault.internal:8200"},
+		Name: "gitlab-prod", Kind: "gitlab", Tenant: planTenantA, Enabled: true,
+		Config: map[string]string{"api_base": "https://gitlab.internal"},
 	})
 	repSame, err := planJSON(t, argv(same)...)
 	if err != nil {
@@ -173,8 +173,8 @@ func TestSourcesPlanChangesWithTheStartingState(t *testing.T) {
 	// while still reporting the other.
 	differs := initialisedDataDir(t)
 	seedRoster(t, differs, model.SourceDef{
-		Name: "vault-prod", Kind: "vault", Tenant: planTenantB, Enabled: true,
-		Config: map[string]string{"addr": "https://vault-old.internal:8200"},
+		Name: "gitlab-prod", Kind: "gitlab", Tenant: planTenantB, Enabled: true,
+		Config: map[string]string{"api_base": "https://gitlab-old.internal"},
 	})
 	repDiff, err := planJSON(t, argv(differs)...)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestSourcesPlanChangesWithTheStartingState(t *testing.T) {
 	}
 	want := []sourceChange{
 		{Field: "tenant", From: planTenantB, To: planTenantA},
-		{Field: "config.addr", From: "https://vault-old.internal:8200", To: "https://vault.internal:8200"},
+		{Field: "config.api_base", From: "https://gitlab-old.internal", To: "https://gitlab.internal"},
 	}
 	if !reflect.DeepEqual(repDiff.Changes, want) {
 		t.Fatalf("plan must report both moved fields and nothing else\n got: %#v\nwant: %#v", repDiff.Changes, want)
@@ -199,13 +199,13 @@ func TestSourcesPlanChangesWithTheStartingState(t *testing.T) {
 func TestSourcesPlanPersistsNothing(t *testing.T) {
 	dir := initialisedDataDir(t)
 	seedRoster(t, dir, model.SourceDef{
-		Name: "vault-prod", Kind: "vault", Tenant: planTenantA, Enabled: true,
-		Config: map[string]string{"addr": "https://vault.internal:8200"},
+		Name: "gitlab-prod", Kind: "gitlab", Tenant: planTenantA, Enabled: true,
+		Config: map[string]string{"api_base": "https://gitlab.internal"},
 	})
 	before := readRoster(t, dir)
 
 	// An UPDATE plan (a field really moves) and a CREATE plan (a whole new row).
-	if _, err := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "vault-prod", "--tenant", planTenantB); err != nil {
+	if _, err := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "gitlab-prod", "--tenant", planTenantB); err != nil {
 		t.Fatalf("plan an update: %v", err)
 	}
 	if _, err := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "brand-new", "--kind", "claude-config", "--tenant", planTenantA); err != nil {
@@ -255,11 +255,11 @@ func TestSourcesPlanRefusesToCreateTheInstallationItPreviews(t *testing.T) {
 func TestSourcesPlanAndSetAgree(t *testing.T) {
 	dir := initialisedDataDir(t)
 	seedRoster(t, dir, model.SourceDef{
-		Name: "vault-prod", Kind: "vault", Tenant: planTenantA, Enabled: true, PollSeconds: 30,
-		Config: map[string]string{"addr": "https://vault.internal:8200", "namespace": "team-a"},
+		Name: "gitlab-prod", Kind: "gitlab", Tenant: planTenantA, Enabled: true, PollSeconds: 30,
+		Config: map[string]string{"api_base": "https://gitlab.internal", "group": "team-a", "bot_accounts": "ci-bot"},
 	})
-	edit := []string{"--name", "vault-prod", "--tenant", planTenantB,
-		"--config", "addr=https://vault-dr.internal:8200", "--config", "namespace=", "--poll-seconds", "60"}
+	edit := []string{"--name", "gitlab-prod", "--tenant", planTenantB,
+		"--config", "api_base=https://gitlab-dr.internal", "--config", "bot_accounts=", "--poll-seconds", "60"}
 
 	planned, err := planJSON(t, append([]string{"--data-dir", dir}, edit...)...)
 	if err != nil {
@@ -285,7 +285,7 @@ func TestSourcesPlanAndSetAgree(t *testing.T) {
 		}
 	}
 	// The field plan did NOT mention must be untouched.
-	if got["kind"] != "vault" {
+	if got["kind"] != "gitlab" {
 		t.Errorf("set moved a field the plan never mentioned: kind = %q", got["kind"])
 	}
 
@@ -389,11 +389,11 @@ func TestSourcesPlanAcceptsASecondRowOfOneKind(t *testing.T) {
 func TestSourcesPlanRedactsAValueTheStoreWouldRefuse(t *testing.T) {
 	dir := initialisedDataDir(t)
 	seedRoster(t, dir, model.SourceDef{
-		Name: "vault-prod", Kind: "vault", Tenant: planTenantA, Enabled: true,
+		Name: "gitlab-prod", Kind: "gitlab", Tenant: planTenantA, Enabled: true,
 		Config: map[string]string{"token": "store:vault/token"},
 	})
 	const literal = "hunter2-this-must-never-be-printed"
-	out, err := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "vault-prod", "--config", "token="+literal)
+	out, err := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "gitlab-prod", "--config", "token="+literal)
 	if exitcode.From(err) != exitcode.Conflict {
 		t.Fatalf("a literal under a credential-bearing key must be refused, got %v", err)
 	}
@@ -407,7 +407,7 @@ func TestSourcesPlanRedactsAValueTheStoreWouldRefuse(t *testing.T) {
 		t.Fatalf("the refusal must name the field so it can be fixed:\n%s", out)
 	}
 	// A REFERENCE is not a secret and is the whole point of reading a plan.
-	refOut, rerr := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "vault-prod", "--config", "token=store:vault/other")
+	refOut, rerr := runCLI(t, "sources", "plan", "--data-dir", dir, "--name", "gitlab-prod", "--config", "token=store:vault/other")
 	if rerr != nil {
 		t.Fatalf("a reference must plan cleanly: %v\n%s", rerr, refOut)
 	}
@@ -713,10 +713,10 @@ func TestSourcesTestHidesTheConnectorErrorUnlessAsked(t *testing.T) {
 	// A source whose secret reference cannot resolve: the probe fails before any
 	// network is touched, which is exactly the failure an operator runs `test` for.
 	seedRoster(t, dir, model.SourceDef{
-		Name: "vault-prod", Kind: "vault", Tenant: planTenantA, Enabled: true,
-		Config: map[string]string{"addr": "https://vault.invalid:8200", "token": "store:no-such-secret"},
+		Name: "gitlab-prod", Kind: "gitlab", Tenant: planTenantA, Enabled: true,
+		Config: map[string]string{"api_base": "https://gitlab.invalid", "group": "team-a", "token": "store:no-such-secret"},
 	})
-	quiet, err := runCLI(t, "sources", "test", "--data-dir", dir, "--name", "vault-prod", "--timeout", "5s")
+	quiet, err := runCLI(t, "sources", "test", "--data-dir", dir, "--name", "gitlab-prod", "--timeout", "5s")
 	if err == nil {
 		t.Fatalf("an unresolvable reference cannot answer:\n%s", quiet)
 	}

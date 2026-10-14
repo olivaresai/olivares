@@ -14,12 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/governance/testsupport"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 )
@@ -60,6 +58,7 @@ func (e *consentEstate) wantRetired(t *testing.T, user model.ID, tenant model.Te
 // names the account blocks its retirement until the tenant revises the policy.
 func TestAnAuthoredCedarGrantBlocksReadmissionUntilRevised(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "revising an authored grant requires a blocked verdict and later readmission")
 		const email = "cedar-permit@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		e.publishCedar(e.tT, `permit(principal in User::"`+user.String()+`", action, resource);`)
@@ -127,6 +126,7 @@ func credName(dec sourcescope.Decision) string {
 // approved.
 func TestASourceScopeBindingDoesNotSurviveALift(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "source resolution after a lift requires completed retirement and readmission")
 		const email = "binding@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		other := e.onboard(e.tT, "binding-other@consent.test", "viewer")
@@ -223,104 +223,6 @@ func TestASourceScopeBindingDoesNotSurviveALift(t *testing.T) {
 	})
 }
 
-// rosterProvider is a fixed identity-source snapshot.
-type rosterProvider struct{ graph identitysource.Graph }
-
-func (p rosterProvider) Snapshot(context.Context) (identitysource.Graph, error) { return p.graph, nil }
-
-// sponsoredAgentRoster is an agent registry that declares sponsor as agent's
-// sponsor.
-func sponsoredAgentRoster(agent, sponsor string) identitysource.Graph {
-	return identitysource.Graph{Source: identitysource.SourceEntraAgent, Identities: []identitysource.Identity{{
-		Ref: agent, Type: identitysource.PrincipalNHI, Kind: identitysource.KindAgentIdentity,
-		DisplayName: agent, Source: identitysource.SourceEntraAgent,
-		Attributes: map[string]string{"sponsor_ref": sponsor},
-	}}}
-}
-
-// bindRoster makes the composition's governance module sync graph for tenant.
-func (e *consentEstate) bindRoster(tenant model.TenantID, graph identitysource.Graph) {
-	e.t.Helper()
-	gov, ok := e.eng.nhiEnforcer.(*governance.Module)
-	if !ok {
-		e.t.Fatal("the composition's governance module is not reachable")
-	}
-	gov.UseRosterProviders([]governance.RosterBinding{{Provider: rosterProvider{graph: graph}, TenantRef: tenant.String()}})
-}
-
-// TestNHISponsorshipBlocksReadmissionUntilReassigned: an agent the account
-// sponsors blocks its retirement until the tenant reassigns the sponsor, and no
-// ownership naming the account can be written while it retires, by a route or by
-// a roster sync, even one that read the account's standing before the offboard.
-func TestNHISponsorshipBlocksReadmissionUntilReassigned(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		const email = "sponsor@consent.test"
-		c := e.scimCreateExternal(e.tT, email, "ext-sponsor")
-		user := model.ID(c)
-		e.rosterHuman(e.tT, "ext-sponsor")
-		e.rosterHuman(e.tT, "ext-sponsor-heir")
-		if r := e.do("POST", "/v1/m/governance/agents", e.admin, e.tT, map[string]any{
-			"identity_ref": "agent-sponsor", "sponsor_ref": "ext-sponsor",
-		}); r.code != http.StatusCreated && r.code != http.StatusOK {
-			t.Fatalf("register agent = %d %s", r.code, r.raw)
-		}
-		// A roster sync whose registry names the account as a sponsor, parked
-		// between its standing read and its barrier while the offboard commits.
-		e.bindRoster(e.tT, sponsoredAgentRoster("agent-sponsor-fed", "ext-sponsor"))
-		parked := make(chan struct{})
-		release := make(chan struct{})
-		var once sync.Once
-		if e.eng.standing == nil {
-			t.Fatal("the composition has no standing port")
-		}
-		e.eng.standing.afterReadHook = func(tenant model.TenantID, users []model.ID) {
-			for _, u := range users {
-				if u == user {
-					once.Do(func() {
-						close(parked)
-						<-release
-					})
-				}
-			}
-		}
-		result := make(chan consentResp, 1)
-		go func() { result <- e.do("POST", "/v1/m/governance/roster/sync", e.admin, e.tT, nil) }()
-		select {
-		case <-parked:
-		case r := <-result:
-			t.Fatalf("the roster writer never read the sponsor's standing: %d %s", r.code, r.raw)
-		case <-time.After(10 * time.Second):
-			t.Fatal("the roster writer never read the sponsor's standing")
-		}
-		e.scimDelete(e.tT, user)
-		close(release)
-		if r := <-result; r.code != http.StatusConflict || r.errorCode() != "subject_retirement_active" {
-			t.Errorf("the parked roster sync after the offboard = %d %s, want 409 subject_retirement_active", r.code, r.raw)
-		}
-		e.eng.standing.afterReadHook = nil
-		if r := e.do("POST", "/v1/m/governance/roster/sync", e.admin, e.tT, nil); r.code != http.StatusConflict || r.errorCode() != "subject_retirement_active" {
-			t.Errorf("a roster sync naming the account while it retires = %d %s, want 409 subject_retirement_active", r.code, r.raw)
-		}
-		if r := e.do("PUT", "/v1/m/governance/nhi/agent-sponsor-b/ownership", e.admin, e.tT, map[string]any{
-			"owner_ref": "ext-sponsor",
-		}); r.code != http.StatusConflict {
-			t.Errorf("ownership naming the account while it retires = %d %s, want 409", r.code, r.raw)
-		}
-		e.runPump()
-		e.wantBlocked(t, user, e.tT, "agent-sponsor")
-		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {
-			t.Errorf("re-admission while the account sponsors an agent = %d %s, want 409", r.code, r.raw)
-		}
-		if r := e.do("PUT", "/v1/m/governance/nhi/agent-sponsor/ownership", e.admin, e.tT, map[string]any{
-			"sponsor_ref": "ext-sponsor-heir",
-		}); r.code != http.StatusNoContent {
-			t.Fatalf("reassign the sponsor = %d %s", r.code, r.raw)
-		}
-		e.runPump()
-		e.wantRetired(t, user, e.tT)
-	})
-}
-
 // scimCreateExternal provisions an address with an external id through the
 // tenant's SCIM connection and returns the account id.
 func (e *consentEstate) scimCreateExternal(tenant model.TenantID, email, externalID string) string {
@@ -396,6 +298,7 @@ func participantSteps(t *testing.T, role string, who, other model.ID) []map[stri
 // retires.
 func TestAWorkflowNamingTheUserBlocksReadmissionUntilEdited(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "editing workflow participants requires a blocked verdict and later completion")
 		heir := e.onboard(e.tT, "workflow-heir@consent.test", "viewer")
 		for i, role := range []string{"work owner", "assign target", "message recipient"} {
 			t.Run(role, func(t *testing.T) {
@@ -498,6 +401,7 @@ var managedSurfaces = []string{"managed-settings", "hooks", "managed-mcp", "sand
 // offboard is refused at its barrier.
 func TestAManagedDocumentNamingTheUserBlocksReadmissionUntilRevised(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "revising managed documents requires a blocked verdict and later completion")
 		for i, surface := range managedSurfaces {
 			t.Run(surface, func(t *testing.T) {
 				e := e.forSubtest(t)
@@ -591,6 +495,7 @@ func TestAManagedDocumentNamingTheUserBlocksReadmissionUntilRevised(t *testing.T
 // not; and the forbid still names the account once it is admitted again.
 func TestAModelForbidOutlivesTheRetirementAndStillRestricts(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "checking a forbid after readmission requires completed retirement")
 		const email = "model-forbid@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		rule := func(target, effect string) consentResp {
@@ -641,4 +546,54 @@ func (s inertStep) Module() string { return s.module }
 // RetireUser implements auth.RetirementStep.
 func (s inertStep) RetireUser(context.Context, auth.RetirementRequest) (auth.RetirementOutcome, error) {
 	return auth.RetirementOutcome{}, nil
+}
+
+// TestNHISponsorshipBlocksReadmissionUntilReassigned proves durable sponsorship
+// remains an obligation after directory inventory moves editions.
+func TestNHISponsorshipBlocksReadmissionUntilReassigned(t *testing.T) {
+	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "reassigning sponsorship requires a blocked verdict and later completion")
+		const email = "sponsor@consent.test"
+		user := model.ID(e.scimCreateExternal(e.tT, email, "ext-sponsor"))
+		heir := model.ID(e.scimCreateExternal(e.tT, "sponsor-heir@consent.test", "ext-sponsor-heir"))
+		e.rosterHuman(e.tT, "ext-sponsor")
+		e.rosterHuman(e.tT, "ext-sponsor-heir")
+		id := e.seedFenced(e.tT, "governance.nhi_lifecycle", nhiRecord("agent-sponsor", "sponsor_ref", "ext-sponsor"), user)
+		e.scimDelete(e.tT, user)
+		e.runPump()
+		e.wantBlocked(t, user, e.tT, "agent-sponsor")
+		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {
+			t.Errorf("re-admission while the account sponsors an agent = %d %s, want 409", r.code, r.raw)
+		}
+		ctx := context.Background()
+		refs := e.authorityRefs(heir)
+		if err := e.eng.store.Mutate(ctx, e.tT, func(sc store.Scope) error {
+			fact, err := directoryEpochFact(ctx, sc)
+			if err != nil {
+				return err
+			}
+			locker, ok := sc.(store.DirectoryAuthoritySnapshotLocker)
+			if !ok {
+				return fmt.Errorf("scope has no directory authority barrier")
+			}
+			if err := locker.LockDirectoryAuthoritySnapshot(ctx, store.AuthoritySnapshotBundle{Facts: []store.AuthorizationFactRef{fact}, UserAuthorities: refs}); err != nil {
+				return err
+			}
+			repo, err := sc.Ext("governance.nhi_lifecycle")
+			if err != nil {
+				return err
+			}
+			rec, err := repo.Get(ctx, id)
+			if err != nil {
+				return err
+			}
+			rec["sponsor_ref"] = "ext-sponsor-heir"
+			_, err = repo.Update(ctx, rec)
+			return err
+		}); err != nil {
+			t.Fatalf("reassign durable sponsorship: %v", err)
+		}
+		e.runPump()
+		e.wantRetired(t, user, e.tT)
+	})
 }

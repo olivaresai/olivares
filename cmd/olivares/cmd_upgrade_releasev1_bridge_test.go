@@ -283,7 +283,8 @@ func readsContain(reads []string, needle string) bool {
 }
 
 // publishedRelease is one signed publication laid out the way the Worker's producer contract keys
-// objects (contracts/publisher.gen.json): mutable channel/set metadata, version/set artifacts.
+// objects (contracts/publisher.gen.json): mutable channel/set metadata, version/set
+// artifacts. The full entitlement identity in bridgeSpec.Codes selects the publication.
 type publishedRelease struct {
 	rel     *v1Release
 	channel string
@@ -351,6 +352,23 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		return bridgeSpec{Holder: holder, Codes: codes, Objects: objects, Tokens: []bridgeToken{{Name: "link8", Version: "26.800"}}}, files
 	}
 
+	t.Run("an add-on holder cannot fall back to a base-only publication", func(t *testing.T) {
+		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz"})
+		b := startWorkerBridge(t, spec, files)
+		target := writeTarget(t, old)
+		_, err := run(t, b, b.tokens["link8"], target, t.TempDir())
+		if err == nil || !strings.Contains(err.Error(), "release_unavailable") {
+			t.Fatalf("want release_unavailable for the unpublished entitled set, got %v", err)
+		}
+		assertTargetRuns(t, target, "26.700")
+		if reqs := b.requests(); countServed(reqs, "manifest", 404) != 1 || countServed(reqs, "", 200) != 0 {
+			t.Fatalf("served: %+v (want an unavailable manifest and no artifact bytes)", reqs)
+		}
+		if reads := b.reads(); !readsContain(reads, bridgeManifestKey("stable", "biz+reg")) || readsContain(reads, "/biz/") || readsContain(reads, "olivares_") {
+			t.Fatalf("object reads %v: want only the unpublished biz+reg manifest, without a biz fallback", reads)
+		}
+	})
+
 	t.Run("the complete same-version authenticated journey installs the entitled set's bytes", func(t *testing.T) {
 		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"})
 		b := startWorkerBridge(t, spec, files)
@@ -364,8 +382,8 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 			t.Fatalf("served requests: %+v", reqs)
 		}
 		reads := b.reads()
-		if !readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || readsContain(reads, "/biz/") {
-			t.Fatalf("the Worker read %v; want the biz+reg artifact and no biz object", reads)
+		if !readsContain(reads, bridgeManifestKey("stable", "biz+reg")) || !readsContain(reads, bridgeManifestKey("stable", "biz+reg")+".sig") || !readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || readsContain(reads, "/biz/") {
+			t.Fatalf("the Worker read %v; want the biz+reg publication and artifact, and no biz object", reads)
 		}
 	})
 
@@ -439,8 +457,8 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 	})
 
 	t.Run("a grant change after resolution is a set conflict; one fresh resolution installs the same release for the new set", func(t *testing.T) {
-		// biz+reg AND biz publish 26.800 with the SAME artifact bytes, so the re-resolved descriptor
-		// is identical and the run may complete under the new set's own object.
+		// Each entitlement set has its own publication. The client must resolve the new set
+		// after the grant change, even when both publications name the same version.
 		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
@@ -454,8 +472,8 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 			t.Fatalf("served: %+v (want one 409 artifact, then a full second resolution and one artifact)", reqs)
 		}
 		reads := b.reads()
-		if readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) {
-			t.Fatalf("artifact reads %v: the biz+reg object must not be served after the set changed", reads)
+		if !readsContain(reads, bridgeManifestKey("stable", "biz+reg")) || !readsContain(reads, bridgeManifestKey("stable", "biz")) || readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) {
+			t.Fatalf("object reads %v: want both sets resolved, but only the new set's biz artifact", reads)
 		}
 	})
 
@@ -463,14 +481,20 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
-		b.after("manifest.sig", map[string]any{"op": "grants", "codes": []string{"biz"}})
+		// ent has no publication here; the initial biz+reg resolution must succeed first.
+		b.after("manifest.sig", map[string]any{"op": "grants", "codes": []string{"ent"}})
 		_, err := run(t, b, b.tokens["link8"], target, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "release_unavailable") {
 			t.Fatalf("want release_unavailable after the fresh resolution, got %v", err)
 		}
+		reqs := b.requests()
+		if countServed(reqs, "manifest", 200) != 1 || countServed(reqs, "manifest.sig", 200) != 1 || countServed(reqs, "", 409) != 1 || countServed(reqs, "manifest", 404) != 1 {
+			t.Fatalf("served: %+v (want a resolved pair, one artifact conflict, then an unavailable fresh resolution)", reqs)
+		}
 		assertTargetRuns(t, target, "26.700")
-		if readsContain(b.reads(), "olivares_") {
-			t.Fatalf("an artifact object was read: %v", b.reads())
+		reads := b.reads()
+		if readsContain(reads, "olivares_") || !readsContain(reads, bridgeManifestKey("stable", "ent")) {
+			t.Fatalf("object reads %v: want the unpublished ent manifest and no artifact bytes", reads)
 		}
 	})
 

@@ -42,7 +42,10 @@ type runDTO struct {
 	WorkspacePath string `json:"workspace_path,omitempty"`
 	// WorktreeBranch is the branch of the session's own git worktree, named by the
 	// plane that made it. Empty for a session that works in its workspace directly.
-	WorktreeBranch  string `json:"worktree_branch,omitempty"`
+	WorktreeBranch string `json:"worktree_branch,omitempty"`
+	// HandoffOf is the session this one was handed off from, when a handoff started it.
+	// A reference: the transcript the handoff attached is not part of the resource.
+	HandoffOf       string `json:"handoff_of,omitempty"`
 	TemplateID      string `json:"template_id,omitempty"`
 	TemplateVersion int64  `json:"template_version,omitempty"`
 	// SecretEnv names the vault secrets this session receives as environment
@@ -167,6 +170,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		AuthzWorkspaceID:       rec.String(colRunAuthzWorkspaceID),
 		WorkspacePath:          rec.String(colRunWorkspacePath),
 		WorktreeBranch:         rec.String(colRunWorktreeBranch),
+		HandoffOf:              rec.String(colRunHandoffOf),
 		TemplateID:             rec.String(colTemplateID),
 		TemplateVersion:        rec.Int(colTemplateVersion),
 		SecretEnv:              storedSecretEnvNames(rec),
@@ -226,12 +230,16 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 	return out
 }
 
-// deriveRunState derives the displayed state: a stored `running` session whose
-// last activity is older than the idle window is shown as `idle` (the process is
-// not killed). Every other stored state is shown verbatim.
+// deriveRunState derives the displayed state: a stored `running` session that has
+// answered its turn and waits for the person's next input is shown as `idle`, and so
+// is one whose last activity is older than the idle window (the process is not killed
+// in either case). Every other stored state is shown verbatim.
 func (m *Module) deriveRunState(rec model.Record) string {
 	if rec.String(colState) != stateRunning {
 		return rec.String(colState)
+	}
+	if m.runWaitsForInput(rec) {
+		return stateIdle
 	}
 	if t, err := model.ParseTimestamp(rec.String(colLastActivityAt)); err == nil {
 		if m.now().Sub(t.Time()) > m.rt.idleWindow {

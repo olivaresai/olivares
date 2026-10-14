@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/confine"
@@ -288,6 +289,127 @@ func TestSessionSkillsHistoricalUpgradeResumesWithoutInventingAssignments(t *tes
 			var selection skills.Selection
 			if err := json.Unmarshal([]byte(row.String(colRunSkillsSelection)), &selection); err != nil || selection.Digest == "" || len(selection.Members) != 0 {
 				t.Fatalf("historical snapshot: %+v %v", selection, err)
+			}
+		})
+	}
+}
+
+func TestRuntimeSkillsUnsupportedToolNamesTheReason(t *testing.T) {
+	runner := &fakeRunner{initSID: "unsupported-skills"}
+	m, st, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
+	run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := m.UseSessionSkills(sessionSkillsFixture{selection: skills.Selection{Digest: "fixture", Members: []skills.SelectedMember{{Name: "research"}}}}, root); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		row, err := findRunRec(t.Context(), repo, run.RunRef)
+		if err != nil {
+			return err
+		}
+		row[colRunProfileDriver] = "ollama"
+		_, err = repo.Update(t.Context(), row)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	spec := runner.lastSpec()
+	err = m.prepareSessionSkills(t.Context(), t.Context(), tenant, run.RunRef, CreateRunParams{}, &spec)
+	refusal := launchFailedErr("assigned skills delivery", err)
+	if err == nil || refusal.status != 503 || !strings.Contains(refusal.Error(), "Ollama") || !strings.Contains(refusal.Error(), "no documented native skills folder") {
+		t.Fatalf("unsupported tool refusal = %v", refusal)
+	}
+	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+		t.Fatalf("unsupported tool created a delivery home: %v %v", entries, err)
+	}
+}
+
+func TestRuntimeSkillsDocumentedFoldersPreserveConfiguration(t *testing.T) {
+	for _, driver := range []string{"codex", "grok", "gemini-cli", "opencode"} {
+		t.Run(driver, func(t *testing.T) {
+			runner := &fakeRunner{initSID: "driver-skills"}
+			m, st, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
+			run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: model.ActorUser})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+				repo, err := sc.Ext(runKind)
+				if err != nil {
+					return err
+				}
+				row, err := findRunRec(t.Context(), repo, run.RunRef)
+				if err != nil {
+					return err
+				}
+				row[colRunProfileDriver] = driver
+				_, err = repo.Update(t.Context(), row)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			facts, _ := driverfacts.Lookup(driver)
+			config := t.TempDir()
+			if driver == "gemini-cli" {
+				config = filepath.Join(config, ".gemini")
+				if err := os.Mkdir(config, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(config, "settings.json"), []byte(`{"security":{"auth":{"selectedType":"gemini-api-key"}}}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			spec := runner.lastSpec()
+			configEnv := config
+			if driver == "gemini-cli" {
+				configEnv = filepath.Dir(config)
+			}
+			spec.Env = []EnvVar{{Name: "HOME", Value: t.TempDir()}, {Name: facts.ConfigHomeEnv, Value: configEnv}}
+			spec.Confinement.ReadWrite = append(spec.Confinement.ReadWrite, config)
+			if err := m.UseSessionSkills(sessionSkillsFixture{selection: skills.Selection{Digest: "fixture", Members: []skills.SelectedMember{{Name: "research"}}}, files: []skills.DeliveryFile{{Path: "research/SKILL.md", Bytes: []byte("verified"), Mode: 0444}}}, t.TempDir()); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if err := m.prepareSessionSkills(t.Context(), ctx, tenant, run.RunRef, CreateRunParams{Actor: "user:u1", ActorKind: model.ActorUser, ProviderHome: &ProviderHomeSnapshot{Driver: driver, ConfigHome: config}}, &spec); err != nil {
+				t.Fatal(err)
+			}
+			env := map[string]string{}
+			for _, item := range spec.Env {
+				env[item.Name] = item.Value
+			}
+			if got, err := os.ReadFile(filepath.Join(env["HOME"], ".agents", "skills", "research", "SKILL.md")); err != nil || string(got) != "verified" {
+				t.Fatalf("discovery file = %q %v", got, err)
+			}
+			if !slices.Contains(spec.Confinement.Sealed, filepath.Join(env["HOME"], ".agents")) {
+				t.Fatal("discovery directory is not sealed")
+			}
+			if driver == "gemini-cli" {
+				if env[facts.ConfigHomeEnv] != env["HOME"] {
+					t.Fatal("Gemini discovery home differs from HOME")
+				}
+				if got, err := filepath.EvalSymlinks(filepath.Join(env["HOME"], ".gemini")); err != nil || got != config {
+					t.Fatalf("Gemini selected configuration = %q %v", got, err)
+				}
+				spec.BoundProvider.Kind = ProviderKindGemini
+				if err := checkGeminiBoundProviderConfig(&spec); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(config, "settings.json"), []byte(`{"security":{"auth":{"selectedType":"oauth-personal"}}}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := checkGeminiBoundProviderConfig(&spec); err == nil {
+					t.Fatal("linked configuration bypasses Gemini authentication guard")
+				}
+			} else if env[facts.ConfigHomeEnv] != config {
+				t.Fatal("selected configuration home changed")
 			}
 		})
 	}

@@ -89,6 +89,27 @@ describe('Trusted Types — ADM-CORE-05', () => {
     spy.mockRestore()
   })
 
+  it('checkSafetyNet does not report a pass-through sanitiser as sanitising', async () => {
+    const purify = (await import('dompurify')).default
+    const spy = vi
+      .spyOn(purify, 'sanitize')
+      .mockImplementation(((s: unknown) => String(s)) as typeof purify.sanitize)
+    expect(checkSafetyNet()).toBe('blanking')
+    spy.mockRestore()
+  })
+
+  // Chromium logs "Executing inline event handler violates … script-src" when
+  // DOMPurify merely PARSES an on* attribute under the console's CSP, so a probe
+  // carrying one put a CSP error on every page load (#2050).
+  it('checkSafetyNet probes without an inline event-handler attribute', async () => {
+    const purify = (await import('dompurify')).default
+    const spy = vi.spyOn(purify, 'sanitize')
+    checkSafetyNet()
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(String(spy.mock.calls[0]?.[0])).not.toMatch(/\son[a-z]+\s*=/i)
+    spy.mockRestore()
+  })
+
   it('install reports a blanking safety net instead of failing silently', async () => {
     mockTrustedTypes()
     const purify = (await import('dompurify')).default

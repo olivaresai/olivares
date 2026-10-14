@@ -415,8 +415,22 @@ func (f *updFixture) writeBundle(t *testing.T) string {
 
 func sha256hash(b []byte) []byte { s := sha256.Sum256(b); return s[:] }
 
-// runUpgradeCmd execs the real command with the given args.
+// runUpgradeCmd execs the real command with the given args, as the Community edition: the
+// callers exercise the public route, which a Business build no longer takes by default.
 func runUpgradeCmd(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	return runUpgradeCmdAs(t, "community", args...)
+}
+
+// runUpgradeCmdAs is runUpgradeCmd with this binary reporting the named edition.
+func runUpgradeCmdAs(t *testing.T, edition string, args ...string) (string, error) {
+	t.Helper()
+	asEdition(t, edition)
+	return runUpgradeCmdForBuild(t, args...)
+}
+
+// runUpgradeCmdForBuild preserves the edition bound into this test binary.
+func runUpgradeCmdForBuild(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	// Pin the data directory. `upgrade --install-timer` resolves one to write
 	// the unit files, and defaultDataDir falls back to $HOME — correctly

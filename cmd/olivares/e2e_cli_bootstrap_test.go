@@ -7,7 +7,7 @@
 package main
 
 // C-21 of an internal design note (not shipped), executed rather than described:
-// "clean install → the `olivares` CLI creates token/user/tenant → the API answers
+// "clean install → the `olivares` CLI creates token/user in its setup organization → the API answers
 // authenticated · finishes 0 without opening the console".
 //
 // WHAT MAKES THIS DIFFERENT FROM e2e_binary_test.go. That test walks the same
@@ -205,18 +205,9 @@ func TestE2ECLIBootstrapReachesOperationalWithoutABrowser(t *testing.T) {
 		t.Fatalf("`auth status` echoed the password:\n%s", whoami)
 	}
 
-	// ── STEP 3 · create a TENANT ─────────────────────────────────────────────
-	tenantOut := cli.mustRun(t, "tenants create", "",
-		"tenants", "create", "--name", "Second Org", "--slug", "second", "-o", "json")
-	var tenant struct {
-		TenantID string `json:"tenant_id"`
-	}
-	if err := json.Unmarshal([]byte(tenantOut), &tenant); err != nil || tenant.TenantID == "" {
-		t.Fatalf("tenants create did not return a tenant id: %v\n%s", err, tenantOut)
-	}
-	if list := cli.mustRun(t, "tenants ls", "", "tenants", "ls"); !strings.Contains(list, tenant.TenantID) {
-		t.Fatalf("the tenant just created is not in `tenants ls`:\n%s", list)
-	}
+	// ── STEP 3 · use the organization created by setup ───────────────────────
+	// Community reaches operational use without creating a second organization.
+	tenant := struct{ TenantID string }{firstTenant}
 
 	// ── STEP 4 · create a USER with its first MEMBERSHIP atomically ───────────
 	// A separately created global account cannot be joined by an admin grant:
@@ -231,7 +222,7 @@ func TestE2ECLIBootstrapReachesOperationalWithoutABrowser(t *testing.T) {
 		t.Fatalf("users create did not return a user id: %v\n%s", err, userOut)
 	}
 
-	// ── STEP 5 · update the existing MEMBERSHIP in the new tenant ────────────
+	// ── STEP 5 · update the existing MEMBERSHIP in the setup organization ────────────
 	grantOut := cli.mustRun(t, "members grant", "",
 		"members", "grant", "--tenant", tenant.TenantID, "--user", user.ID, "--role", "admin", "-o", "json")
 	var granted cliGrantedMembership

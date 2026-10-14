@@ -51,6 +51,9 @@
 // builds against v2 only. The 'Unified Access' audit pillar announced
 // 2026-03-17 is still 'coming soon' as of the verification date — the Events
 // Reporting API IS today's secret-access attribution surface.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package onepassword
 
 import (
@@ -177,41 +180,6 @@ func (s *Source) Open(_ context.Context, cfg sdk.Config) error {
 
 // Close releases resources; this connector holds none.
 func (s *Source) Close(context.Context) error { return nil }
-
-// introspectResponse is the relevant slice of GET /api/v2/auth/introspect.
-type introspectResponse struct {
-	UUID        string   `json:"uuid"`
-	AccountUUID string   `json:"account_uuid"`
-	Features    []string `json:"features"`
-}
-
-// Snapshot inventories the 1Password account as ONE secret_store NHI (the
-// Custodian pattern): the row says "this account is a governed
-// secret custodian" and carries the token's granted feature scopes as
-// non-sensitive metadata. With no token it returns the offline (empty) graph
-// with Source and CapturedAt set, nil error. It never returns credential
-// material.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceOnePassword, CapturedAt: s.clock().UTC()}
-	if s.token == "" || s.client == nil {
-		return g, nil // offline
-	}
-	var resp introspectResponse
-	if err := s.client.GetJSON(ctx, "/api/v2/auth/introspect", nil, &resp); err != nil {
-		return identitysource.Graph{}, err
-	}
-	g.Identities = append(g.Identities, identitysource.Identity{
-		Ref:         "1password:" + resp.AccountUUID,
-		Type:        identitysource.PrincipalNHI,
-		Kind:        identitysource.KindSecretStore,
-		DisplayName: "1Password account",
-		Source:      identitysource.SourceOnePassword,
-		Attributes: pruneAttrs(map[string]string{
-			"features": strings.Join(resp.Features, ","),
-		}),
-	})
-	return g, nil
-}
 
 // usagesRequest is the itemusages POST body. Exactly one form is sent per call:
 // the ResetCursor form (Limit + StartTime) on the first page of a run, the
@@ -359,19 +327,4 @@ func (s *Source) clock() time.Time {
 		return s.now()
 	}
 	return time.Now()
-}
-
-// pruneAttrs drops empty values and returns nil for an empty map, so emitted
-// attribute maps are diff-stable (the claude-wif convention, kept local: a
-// connector never imports another connector).
-func pruneAttrs(attrs map[string]string) map[string]string {
-	for k, v := range attrs {
-		if v == "" {
-			delete(attrs, k)
-		}
-	}
-	if len(attrs) == 0 {
-		return nil
-	}
-	return attrs
 }

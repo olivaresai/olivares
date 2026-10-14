@@ -12,6 +12,7 @@ import (
 // Refusal kinds. The CLI maps them to exit codes; the kind is also printed so a
 // script never has to parse prose to learn why an install did not happen.
 const (
+	KindUnadmitted              = "unadmitted_declaration"
 	KindInvalidRequest          = "invalid_request"
 	KindUnsupportedProvider     = "unsupported_provider"
 	KindUnsupportedPlatform     = "unsupported_platform"

@@ -59,6 +59,9 @@ var sessionConfigTools = []sessionConfigTool{
 		pin:         map[string]func(model.Workspace) any{"workspace_ref": func(ws model.Workspace) any { return ws.Slug }},
 		description: "Add a connector (name, kind, non-secret config) to this session's workspace, as the console's Workspace connectors and `olivares sourcescope workspace-connectors` do. Secret values never travel through a session: the operator adds them in the console. Runs with your launcher's own rights: a refusal is the console's refusal."},
 	{name: "olivares_skill_assign", path: "/v1/m/skills/assignments",
+		// A session never approves content its tool acts on at load: that approval
+		// is an operator's, given on the console or the CLI.
+		omit: []string{"approve_active_content"},
 		pin: map[string]func(model.Workspace) any{
 			"target_kind": func(model.Workspace) any { return "workspace" },
 			"target_id":   func(ws model.Workspace) any { return ws.ID },

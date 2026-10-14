@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-"""Qualify the existing read models on a fresh, disposable Compose installation.
+"""Qualify the existing read models on a fresh, disposable Enterprise Compose installation.
 
 Usage: qualify-observability.py BINARY HTTPS_URL CONTAINER SOURCE_SHA EVIDENCE_DIR
 The caller owns the Compose stack and must remove it and its volumes afterward.
@@ -111,6 +111,10 @@ def main() -> None:
                backend="sqlite", install="Dockerfile.release and documented Compose stack",
                candidate="unsigned development candidate")
         ready()
+        info = request("GET", "/v1/server-info")
+        if info.get("edition") != "enterprise":
+            raise RuntimeError("This isolation qualification requires a disposable Enterprise engine; Community retains the observability read models.")
+        record("build-edition", edition=info["edition"])
         setup_output = run(["docker", "exec", container, "olivares", "first-boot", "--new-token"])
         match = re.search(r"single-use:\s+(\S+)", setup_output)
         if match is None:

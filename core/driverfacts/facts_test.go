@@ -5,6 +5,7 @@
 package driverfacts
 
 import (
+	"io/fs"
 	"slices"
 	"testing"
 )
@@ -119,6 +120,21 @@ func TestSessionToolsDeclareTheirEnvironment(t *testing.T) {
 			if len(prefix) < 2 || prefix[len(prefix)-1] != '_' {
 				t.Errorf("%s family %q is not a NAME_ prefix", facts.Key, prefix)
 			}
+		}
+	}
+}
+
+func TestDocumentedSessionSkillsFolders(t *testing.T) {
+	want := map[string]string{
+		"claude": ".claude/skills", "codex": ".agents/skills", "grok": ".agents/skills",
+		"gemini-cli": ".agents/skills", "opencode": ".agents/skills", "ollama": "",
+	}
+	for _, facts := range All() {
+		if facts.SkillsDir != want[facts.Key] {
+			t.Errorf("%s skills folder = %q, want %q", facts.Key, facts.SkillsDir, want[facts.Key])
+		}
+		if facts.SkillsDir != "" && !fs.ValidPath(facts.SkillsDir) {
+			t.Errorf("%s skills folder must be relative to the private HOME", facts.Key)
 		}
 	}
 }

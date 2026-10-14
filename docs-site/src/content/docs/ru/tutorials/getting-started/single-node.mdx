@@ -24,7 +24,7 @@ quickstart, а затем вернитесь сюда за реальной ус
 ## Предварительные требования
 
 - Linux-хост с systemd и `curl`.
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.2`{/* /release */} is the next release, not yet published.
 
 ## 1. Сборка и установка бинарника
 
@@ -181,16 +181,15 @@ TOKEN="$(curl -ksf -X POST https://127.0.0.1:8443/v1/auth/login \
 захватить настроенную установку.
 </Aside>
 
-## 4. Создайте свою первую организацию
+## 4. Используйте свою первую организацию
 
-Всё в продукте привязано к арендатору, так что создайте организацию, в которую будут
-рапортовать ваши источники:
+Первоначальная настройка уже создала вашу организацию. Всё в продукте привязано
+к арендатору; получите его ID для подключения источников:
 
 ```bash
-TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+TENANT="$(curl -ksf https://127.0.0.1:8443/v1/auth/whoami \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 ```
 

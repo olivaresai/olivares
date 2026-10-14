@@ -23,7 +23,7 @@ import (
 
 // The consent estate is the real Community composition, booted the way the
 // binary boots it, on SQLite and on PostgreSQL. Its tests drive the HTTP routes
-// the product exposes and read the store only to observe.
+// the product exposes, with real store fixtures for tenant isolation.
 
 // consentEngines are the engines every composition case runs on.
 var consentEngines = []string{"sqlite", "postgres"}
@@ -230,12 +230,7 @@ func (e *consentEstate) login(email, password string) string {
 
 func (e *consentEstate) createOrg(slug string) model.TenantID {
 	e.t.Helper()
-	r := e.do("POST", "/v1/system/orgs", e.admin, "", map[string]any{"name": slug, "slug": slug})
-	if r.code != http.StatusCreated {
-		e.t.Fatalf("create org %s = %d %s", slug, r.code, r.raw)
-	}
-	id, _ := r.body["tenant_id"].(string)
-	return model.TenantID(id)
+	return createOrganizationFixture(e.t, e.eng.store, slug, slug).TenantID
 }
 
 // onboard onboards a new person into tenant with a password and returns the id.

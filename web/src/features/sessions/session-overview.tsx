@@ -33,7 +33,7 @@ import { isScopedRow, primaryRun, type UnifiedSession } from './provenance'
 import type { EvidenceBlock } from './session-address'
 import { SessionEvidence } from './session-evidence'
 import { SessionMeter, SessionMode } from './session-meter'
-import { sessionUsage } from './session-usage'
+import { sessionModelRef, sessionUsage } from './session-usage'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkClause } from './work-clause'
 import { workFacts } from './work-facts'
@@ -63,12 +63,17 @@ export function SessionOverview({
   // With the meter shown, the cost is its to say (or to say it is unknown): the facts
   // line does not repeat it, nor print a second figure beside "cost not reported".
   const facts = live
-    ? workFacts(live, t, {
-        duration: (ms) => formatDuration(ms),
-        cost: usage
-          ? undefined
-          : (micro) => formatMicroUsd(micro, { locale: lang }),
-      })
+    ? workFacts(
+        live,
+        t,
+        {
+          duration: (ms) => formatDuration(ms),
+          cost: usage
+            ? undefined
+            : (micro) => formatMicroUsd(micro, { locale: lang }),
+        },
+        sessionModelRef(run, live),
+      )
     : []
   const cwd = run?.workspace_path || frameCwd
   return (

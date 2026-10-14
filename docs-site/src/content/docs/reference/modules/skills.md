@@ -14,14 +14,18 @@ as an immutable revision — it is never edited in place afterwards. What a targ
 agent, a group, a workspace) may use is an **assignment** that pins a pack revision,
 and every pin is written to the audit ledger (`skills.assignment.pin`).
 
-**Off by default** on a fresh installation, `skills` has no required module in
-the selectable module spec. Use **Edition & modules** in the console, or the CLI:
+**On by default** on fresh installations, Skills remains optional and has no required module. Upgrades preserve the saved module selection. In **Skills** (`/skills`), browse the built-in catalog and install a pack with an optional workspace assignment, or choose **From Git**. The CLI uses the same immutable, digest-validated import:
 
 ```sh
-olivares modules ls
-olivares modules on skills
-olivares skills ls
-olivares modules off skills
+olivares skills ls --builtin
+olivares skills install --builtin ecc-security
+olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
+olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills update <pack-id>                       # read the recorded source again and review the diff
+olivares skills update <pack-id> --apply --expected-digest <digest>
+olivares skills pin <pack-id> [--revision <older-revision-id>]
+olivares skills enable tdd-workflow code-review --folder <folder-ref>
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
 ```
 
 See the [CLI reference](/reference/cli/#command-olivares-skills) for installation,
@@ -37,8 +41,7 @@ revision and assignment options.
   uploaded archive. Nothing in it runs at install.
 - **Assignments.** `GET/POST /v1/m/skills/assignments` and
   `PUT/DELETE /v1/m/skills/assignments/{id}` pin a revision to a target, scoped to a
-  workspace where one is active. Two assigned skills with the same name and different
-  content are refused before a session starts, so a launch is deterministic.
+  workspace where one is active. Two targets of one kind that pin different content under one skill name are refused before a session starts; a narrower target (folder, template, agent, session) replaces a broader target's skill of that name, so a project overrides a generic pack without editing it.
 - **Git import.** An operator-scoped importer can fetch a skills pack from a Git
   source under a pinned policy; the import lands in the catalog as another immutable
   revision, not as a live checkout the engine reads.

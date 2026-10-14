@@ -138,13 +138,14 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: install and assert reviewed wrangler
+      - name: install and assert the pinned wrangler
         timeout-minutes: 5
         run: |
           set -euo pipefail
-          npm install --global wrangler@4.100.0
-          [[ "$(wrangler --version | awk 'NR==1{print $1}')" == 4.100.0 ]]
-          printf 'OLIVARES_WRANGLER_BIN=%s\n' "$(command -v wrangler)" >>"$GITHUB_ENV"
+          # The docs-site lockfile carries wrangler's integrity hash; no package script runs here.
+          npm ci --prefix docs-site --ignore-scripts --no-audit --no-fund
+          node scripts/check-wrangler-pin.mjs
+          printf 'OLIVARES_WRANGLER_BIN=%s\n' "$PWD/docs-site/node_modules/.bin/wrangler" >>"$GITHUB_ENV"
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         timeout-minutes: 5

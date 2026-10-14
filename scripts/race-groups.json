@@ -24,7 +24,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 114,
+          "tests_now": 149,
           "minutes_est": 40.2,
           "families": [
             "Batched",
@@ -47,12 +47,18 @@
             "Register",
             "Route",
             "Test",
-            "Web"
+            "Web",
+            "Community",
+            "Drop",
+            "Journey",
+            "Pausing",
+            "Refused",
+            "Trustee"
           ]
         },
         {
           "name": "b",
-          "tests_now": 249,
+          "tests_now": 236,
           "minutes_est": 40.2,
           "families": [
             "Bind",
@@ -117,7 +123,7 @@
         },
         {
           "name": "c",
-          "tests_now": 147,
+          "tests_now": 149,
           "minutes_est": 40.2,
           "families": [
             "Bootstrap",
@@ -139,12 +145,13 @@
             "Validate",
             "Verify",
             "Work",
-            "Retained"
+            "Retained",
+            "Verifier"
           ]
         },
         {
           "name": "d",
-          "tests_now": 270,
+          "tests_now": 268,
           "minutes_est": 40.2,
           "families": [
             "A",
@@ -179,7 +186,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 317,
+          "tests_now": 356,
           "minutes_est": 30.6,
           "families": [
             "A",
@@ -236,7 +243,7 @@
         },
         {
           "name": "b",
-          "tests_now": 386,
+          "tests_now": 321,
           "minutes_est": 30.6,
           "families": [
             "Body",
@@ -334,7 +341,18 @@
             "Zero",
             "Decode",
             "Duplicate",
-            "Oversized"
+            "Oversized",
+            "Beta",
+            "Default",
+            "Departments",
+            "Disabled",
+            "Forbidden",
+            "Organization",
+            "Restore",
+            "SQ",
+            "SessionPreview",
+            "User",
+            "ValidRestored"
           ]
         }
       ]
@@ -343,7 +361,6 @@
       "name": "core-api-protocols",
       "measured": "race-full 36808708564 (2026-10-01): API protocol packages completed in 15.356 s combined. Kept unfiltered to retain the SCIM fuzz seed; 20% scheduling margin and 3 min startup margin estimate 3.4 min.",
       "patterns": [
-        "github.com/olivaresai/olivares/core/api/caep/...",
         "github.com/olivaresai/olivares/core/api/ratelimit/...",
         "github.com/olivaresai/olivares/core/api/scim/..."
       ]
@@ -357,7 +374,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 405,
+          "tests_now": 452,
           "minutes_est": 29.2,
           "families": [
             "ACLDiscovery",
@@ -416,12 +433,18 @@
             "Trusted",
             "Verify",
             "View",
-            "Workspace"
+            "Workspace",
+            "ASwallowed",
+            "OS",
+            "Opposing",
+            "ReadWorkspace",
+            "Record",
+            "Versioned"
           ]
         },
         {
           "name": "b",
-          "tests_now": 451,
+          "tests_now": 463,
           "minutes_est": 29.2,
           "families": [
             "AHandler",
@@ -503,7 +526,7 @@
         },
         {
           "name": "c",
-          "tests_now": 513,
+          "tests_now": 523,
           "minutes_est": 29.2,
           "families": [
             "ALost",
@@ -662,12 +685,18 @@
             "Unresolved",
             "Value",
             "Withdrawn",
-            "Zero"
+            "Zero",
+            "Community",
+            "Contracts",
+            "Department",
+            "Module",
+            "Operation",
+            "Stored"
           ]
         },
         {
           "name": "b",
-          "tests_now": 146,
+          "tests_now": 134,
           "minutes_est": 34.92,
           "families": [
             "A",
@@ -705,7 +734,7 @@
         },
         {
           "name": "c",
-          "tests_now": 141,
+          "tests_now": 122,
           "minutes_est": 34.92,
           "families": [
             "Begin",
@@ -755,7 +784,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 325,
+          "tests_now": 251,
           "minutes_est": 25.6,
           "families": [
             "ABACAuthorization",
@@ -790,6 +819,7 @@
             "Floor",
             "Grant",
             "Guardian",
+            "Hold",
             "Is",
             "JSONOwner",
             "Kill",
@@ -839,12 +869,18 @@
             "Unconditional",
             "Write",
             "LiveAuthorization",
-            "NHIActions"
+            "NHIActions",
+            "Confined",
+            "GRPCREST",
+            "Governance",
+            "OPARollback",
+            "Stored",
+            "UnbindClears"
           ]
         },
         {
           "name": "b",
-          "tests_now": 252,
+          "tests_now": 257,
           "minutes_est": 25.7,
           "families": [
             "ABACCache",
@@ -899,7 +935,11 @@
             "Valid",
             "Whoami",
             "Wif",
-            "Workspace"
+            "Workspace",
+            "Claude",
+            "Community",
+            "Inheritance",
+            "Raised"
           ]
         }
       ]
@@ -931,7 +971,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 196,
+          "tests_now": 261,
           "minutes_est": 26.9,
           "families": [
             "ANested",
@@ -991,12 +1031,26 @@
             "Native",
             "ProgramResolver",
             "Real",
-            "RecordMint"
+            "RecordMint",
+            "ALive",
+            "ARun",
+            "Bash",
+            "Child",
+            "Dependencies",
+            "Failed",
+            "Npm",
+            "Observe",
+            "Privileged",
+            "Sidebar",
+            "Wiki",
+            "WorkAdmission",
+            "CopyClaudeSessionState",
+            "PatchWorkspaceDLPMode"
           ]
         },
         {
           "name": "b",
-          "tests_now": 172,
+          "tests_now": 259,
           "minutes_est": 26.9,
           "families": [
             "CCState",
@@ -1016,12 +1070,26 @@
             "WorkAPIPermissions",
             "WorkEvent",
             "WorkGoverned",
-            "WorkReady"
+            "WorkReady",
+            "Artifact",
+            "Campaign",
+            "F03",
+            "Filesystem",
+            "Head",
+            "Offline",
+            "Preview",
+            "Proxy",
+            "Refused",
+            "RevHead",
+            "Two",
+            "WorkDecode",
+            "DeliverFirstTurn",
+            "PatchWorkspaceMatches"
           ]
         },
         {
           "name": "c",
-          "tests_now": 218,
+          "tests_now": 262,
           "minutes_est": 26.9,
           "families": [
             "SameSubject",
@@ -1050,12 +1118,22 @@
             "WorkWire",
             "FullPreset",
             "Grant",
-            "Superadmin"
+            "Superadmin",
+            "Boundary",
+            "Control",
+            "Conversation",
+            "Fresh",
+            "Only",
+            "Registry",
+            "Relay",
+            "Unlink",
+            "WorkAdmin",
+            "WorkSession"
           ]
         },
         {
           "name": "d",
-          "tests_now": 353,
+          "tests_now": 429,
           "minutes_est": 26.9,
           "families": [
             "Ack",
@@ -1109,7 +1187,7 @@
         },
         {
           "name": "e",
-          "tests_now": 231,
+          "tests_now": 265,
           "minutes_est": 26.9,
           "families": [
             "Agent",
@@ -1130,12 +1208,21 @@
             "WorkTerminal",
             "WorkWaiver",
             "Workflow",
-            "Workspace"
+            "Workspace",
+            "ATurn",
+            "Dialable",
+            "Endpoint",
+            "HostUnix",
+            "Pin",
+            "HintedTenant",
+            "Unsupported",
+            "WorkValidation",
+            "MoveRun"
           ]
         },
         {
           "name": "f",
-          "tests_now": 253,
+          "tests_now": 269,
           "minutes_est": 26.9,
           "families": [
             "AccountHome",
@@ -1175,10 +1262,11 @@
         },
         {
           "name": "g",
-          "tests_now": 245,
+          "tests_now": 277,
           "minutes_est": 27.0,
           "families": [
             "ATransition",
+            "Activity",
             "Channel",
             "Clamp",
             "Classify",
@@ -1203,7 +1291,7 @@
         },
         {
           "name": "h",
-          "tests_now": 143,
+          "tests_now": 293,
           "minutes_est": 26.9,
           "families": [
             "AJoined",
@@ -1238,7 +1326,20 @@
             "WorkContent",
             "WorkOutbox",
             "WorkPlan",
-            "WorkStore"
+            "WorkStore",
+            "ADenied",
+            "Approved",
+            "Community",
+            "Enforce",
+            "Gemini",
+            "Git",
+            "Hook",
+            "Model",
+            "Price",
+            "Shadow",
+            "Stored",
+            "Tool",
+            "Version"
           ]
         }
       ],
@@ -1251,24 +1352,17 @@
       "patterns": [
         "github.com/olivaresai/olivares/modules/..."
       ]
-    },
-    {
-      "name": "appliance",
-      "measured": "not yet measured on the hosted runner: standard-library-only packages of the appliance module, expected well under a minute",
-      "patterns": [
-        "github.com/olivaresai/olivares/appliance/..."
-      ]
     }
   ],
   "cloud_task_group": "sdk-and-tools",
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Rebalanced for the current native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. Each root turn is estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority.",
+  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. 2026-10-13 rebalance: race-full 38450457336 stopped root-b, root-g and root-l at the 70-minute Go timeout with tests still passing, and root-k used 65 of the 70 minutes. The universe had grown to 3324 tests and one boot cost more. The moves use that run's measured elapsed times. Tests the run never reached are estimated at 1.54 times their elapsed time on main's race-full 38133395001, the median ratio for the tests both runs measured, or 60 seconds when main never ran them. SessionClaude is divided by its next CamelCase word into root-b, root-u and root-v. E2 moves to root-w, and SkillsSession joins root-u. Console moves to root-n, DRBackup to root-s, Community to root-t, and Approval and SkillsAssignment to root-r. TestEveryCatalogModuleTurnsOffAndOnAcrossARestart, the test root-l was running when it stopped, restarts the engine twice for each catalog module on SQLite and then on PostgreSQL. Its SQLite leg was still at the knowledge module after 10 min 17 s, so it gets root-x to itself, and the rest of Every is divided by its next CamelCase word. root-x has no estimate yet: the run never measured the PostgreSQL leg. The minutes_est of every moved shard is that estimate without margin; every other minutes_est is the historical snapshot. 2026-10-14 rebalance: race-full 38474331905 stopped root-q at the 70-minute Go timeout with 82 of its 106 tests done in 68.4 min and tests still passing. Its Module family took 35 min, 26 min of it in TestModuleProfileLiveIngestSelectionCompatibility alone, and CommunicationIncoming took 17.4 min. Module is divided by its next CamelCase words. ModuleProfileLive joins root-x, whose catalog off/on test that run measured complete at 22.2 min, and CommunicationIncoming joins root-b, measured at 22.8 min. The 24 root-q tests that run never reached use their elapsed time on race-full 38450457336. Estimates without margin: root-q 37.9, root-b 40.2, root-x 48.1 min; root-x is no longer a single test.",
   "root_shards": [
     {
       "name": "root-a",
-      "tests_now": 96,
+      "tests_now": 124,
       "minutes_est": 43.4,
       "families": [
         "AStale",
@@ -1293,25 +1387,42 @@
     },
     {
       "name": "root-b",
-      "tests_now": 69,
-      "minutes_est": 43.4,
+      "tests_now": 76,
+      "minutes_est": 40.2,
       "families": [
         "Account",
-        "Console",
         "Content",
         "DRPostgres",
         "Delete",
         "Enforce",
         "MCPTool",
-        "SessionClaude",
+        "SessionClaudeCanceled",
+        "SessionClaudeCustom",
+        "SessionClaudePost",
+        "SessionClaudeReview",
+        "SessionClaudeStructured",
+        "SessionClaudeTenant",
+        "SessionClaudeUnknown",
         "SessionStop",
         "Setup",
-        "Two"
+        "Two",
+        "Cockpit",
+        "Compose",
+        "Decision",
+        "Homebrew",
+        "MCPSecret",
+        "Messaging",
+        "Package",
+        "RetirementCompletion",
+        "SkillsCatalog",
+        "SkillsExisting",
+        "AccessMapModeHelp",
+        "CommunicationIncoming"
       ]
     },
     {
       "name": "root-c",
-      "tests_now": 127,
+      "tests_now": 140,
       "minutes_est": 43.4,
       "families": [
         "AJoined",
@@ -1371,7 +1482,7 @@
     },
     {
       "name": "root-e-communication",
-      "tests_now": 108,
+      "tests_now": 112,
       "minutes_est": 43.4,
       "families": [
         "ABlank",
@@ -1396,12 +1507,21 @@
         "RetirementActive",
         "SessionCredential",
         "SessionUnknown",
-        "Source"
+        "Source",
+        "Business",
+        "ContainerImage",
+        "Department",
+        "Inspection",
+        "PIV",
+        "Recovery",
+        "RetirementPump",
+        "SessionGit",
+        "SkillsSelection"
       ]
     },
     {
       "name": "root-e-rest",
-      "tests_now": 457,
+      "tests_now": 403,
       "minutes_est": 43.4,
       "families": [
         "ADeclared",
@@ -1577,7 +1697,7 @@
     },
     {
       "name": "root-f",
-      "tests_now": 117,
+      "tests_now": 113,
       "minutes_est": 43.4,
       "families": [
         "Clean",
@@ -1604,8 +1724,8 @@
     },
     {
       "name": "root-g",
-      "tests_now": 81,
-      "minutes_est": 43.4,
+      "tests_now": 72,
+      "minutes_est": 37.1,
       "families": [
         "ADocument",
         "AModelForbid",
@@ -1615,7 +1735,6 @@
         "CommunicationGlobal",
         "DDILEvidence",
         "DRCommunication",
-        "E2",
         "Follow",
         "Inventory",
         "LoginAsks",
@@ -1632,12 +1751,21 @@
         "Stamped",
         "Suspended",
         "TOTPSeed",
-        "Text"
+        "Text",
+        "ContainerUses",
+        "DROffline",
+        "Env",
+        "Invite",
+        "Preview",
+        "SessionMemory",
+        "SkillsConfined",
+        "SkillsTarget",
+        "Wiki"
       ]
     },
     {
       "name": "root-h",
-      "tests_now": 93,
+      "tests_now": 112,
       "minutes_est": 43.41,
       "families": [
         "APermitNaming",
@@ -1653,12 +1781,20 @@
         "SQLiteServerInfo",
         "SessionLaunch",
         "SessionProvider",
-        "StandingRevoke"
+        "StandingRevoke",
+        "CreateDemo",
+        "ExecRoot",
+        "Large",
+        "ProductString",
+        "SessionPublish",
+        "SkillsPack",
+        "Spanish",
+        "SessionHandoff"
       ]
     },
     {
       "name": "root-i",
-      "tests_now": 125,
+      "tests_now": 121,
       "minutes_est": 43.4,
       "families": [
         "AReport",
@@ -1688,14 +1824,13 @@
     },
     {
       "name": "root-j",
-      "tests_now": 95,
-      "minutes_est": 43.4,
+      "tests_now": 87,
+      "minutes_est": 51.1,
       "families": [
         "ADelayedCleanup",
         "ADelete",
         "AValid",
         "Aims",
-        "Approval",
         "COMPATB",
         "CommunicationCommit",
         "Demo",
@@ -1713,19 +1848,27 @@
         "SLAWith",
         "SessionSend",
         "Stop",
-        "ValidCommandHelp"
+        "ValidCommandHelp",
+        "Bind",
+        "CA",
+        "Critical",
+        "Expanded",
+        "Historical",
+        "LoginGuide",
+        "Promotion",
+        "SessionRunQuestions",
+        "SessionMove"
       ]
     },
     {
       "name": "root-k",
-      "tests_now": 98,
-      "minutes_est": 43.41,
+      "tests_now": 103,
+      "minutes_est": 45.3,
       "families": [
         "ADormant",
         "ATokenOwnedSubscription",
         "Capability",
         "Cloudflare",
-        "Community",
         "DRDrill",
         "DRIn",
         "DRPush",
@@ -1739,8 +1882,8 @@
     },
     {
       "name": "root-l",
-      "tests_now": 102,
-      "minutes_est": 43.41,
+      "tests_now": 109,
+      "minutes_est": 43.8,
       "families": [
         "AWorkflowNaming",
         "Apps",
@@ -1749,11 +1892,32 @@
         "Composition",
         "Config",
         "DDILImport",
-        "DRBackup",
         "DROffsite",
         "DRSQ",
         "Edition",
-        "Every",
+        "EveryBoot",
+        "EveryCensused",
+        "EveryColumn",
+        "EveryCommand",
+        "EveryComposition",
+        "EveryConsole",
+        "EveryCounted",
+        "EveryEngine",
+        "EveryFamily",
+        "EveryFirst",
+        "EveryLane",
+        "EveryLimit",
+        "EveryList",
+        "EveryLocal",
+        "EveryModule",
+        "EveryNext",
+        "EveryNone",
+        "EveryPublishing",
+        "EveryRender",
+        "EveryReplay",
+        "EveryRoute",
+        "EveryTop",
+        "EveryVisible",
         "Identity",
         "Permission",
         "SessionHook"
@@ -1761,7 +1925,7 @@
     },
     {
       "name": "root-m",
-      "tests_now": 206,
+      "tests_now": 208,
       "minutes_est": 43.4,
       "families": [
         "ANon",
@@ -1791,8 +1955,8 @@
     },
     {
       "name": "root-n",
-      "tests_now": 157,
-      "minutes_est": 43.4,
+      "tests_now": 174,
+      "minutes_est": 34.7,
       "families": [
         "AManagedDocument",
         "ARetirementWithout",
@@ -1819,12 +1983,13 @@
         "TLSCertificate",
         "Task",
         "Test",
-        "UsedModules"
+        "UsedModules",
+        "Console"
       ]
     },
     {
       "name": "root-o",
-      "tests_now": 212,
+      "tests_now": 222,
       "minutes_est": 43.4,
       "families": [
         "ATrace",
@@ -1857,7 +2022,7 @@
     },
     {
       "name": "root-p",
-      "tests_now": 246,
+      "tests_now": 242,
       "minutes_est": 43.4,
       "families": [
         "Argument",
@@ -1890,29 +2055,48 @@
     },
     {
       "name": "root-q",
-      "tests_now": 78,
-      "minutes_est": 43.41,
+      "tests_now": 99,
+      "minutes_est": 37.9,
       "families": [
         "Admin",
         "Arming",
         "CommitOutcome",
-        "CommunicationIncoming",
         "CommunicationStore",
         "Default",
-        "Module",
+        "ModuleCatalog",
+        "ModuleContext",
+        "ModuleProfileEventing",
+        "ModuleProfileFresh",
+        "ModuleProfileKeeps",
+        "ModuleProfileNames",
+        "ModuleProfileRefuses",
+        "ModuleProfileRuns",
+        "ModuleProfileServes",
+        "ModuleSelection",
+        "ModuleSpec",
+        "Modules",
         "Production",
         "RetirementHold",
         "Roster",
         "SR2Provider",
         "SessionWorkspace",
         "Support",
-        "Wrap"
+        "Wrap",
+        "CLILanes",
+        "DRFixture",
+        "FreshInstall",
+        "GovernanceRBAC",
+        "MCPAssign",
+        "RBAC",
+        "SessionResume",
+        "SharedLedger",
+        "SkillsPrepared"
       ]
     },
     {
       "name": "root-r",
-      "tests_now": 300,
-      "minutes_est": 43.4,
+      "tests_now": 252,
+      "minutes_est": 40.1,
       "families": [
         "AAL3",
         "ABlockedRetirement",
@@ -1936,13 +2120,15 @@
         "SessionName",
         "SessionRemove",
         "SessionView",
-        "SkillsCLI"
+        "SkillsCLI",
+        "Approval",
+        "SkillsAssignment"
       ]
     },
     {
       "name": "root-s",
-      "tests_now": 184,
-      "minutes_est": 43.41,
+      "tests_now": 200,
+      "minutes_est": 48.4,
       "families": [
         "Agent",
         "CommunicationLineage",
@@ -1958,13 +2144,14 @@
         "Persisted",
         "Quickstart",
         "Reconcile",
-        "Superadmin"
+        "Superadmin",
+        "DRBackup"
       ]
     },
     {
       "name": "root-t",
-      "tests_now": 119,
-      "minutes_est": 43.4,
+      "tests_now": 161,
+      "minutes_est": 44.7,
       "families": [
         "A2",
         "APartial",
@@ -1988,7 +2175,53 @@
         "Routine",
         "SessionIO",
         "SessionList",
-        "SessionMCP"
+        "SessionMCP",
+        "AModule",
+        "CRLWarning",
+        "CommunicationEffects",
+        "DRSame",
+        "Gemini",
+        "Maintenance",
+        "Raw",
+        "SessionWorktree",
+        "SkillsDirectory",
+        "AccessMapAttackPaths",
+        "Community"
+      ]
+    },
+    {
+      "name": "root-u",
+      "tests_now": 14,
+      "minutes_est": 30.5,
+      "families": [
+        "SessionClaudeApproval",
+        "SkillsSession"
+      ]
+    },
+    {
+      "name": "root-v",
+      "tests_now": 16,
+      "minutes_est": 31.3,
+      "families": [
+        "SessionClaudeHook",
+        "SessionClaudePreset"
+      ]
+    },
+    {
+      "name": "root-w",
+      "tests_now": 32,
+      "minutes_est": 26.3,
+      "families": [
+        "E2"
+      ]
+    },
+    {
+      "name": "root-x",
+      "tests_now": 3,
+      "minutes_est": 48.1,
+      "families": [
+        "EveryCatalog",
+        "ModuleProfileLive"
       ]
     }
   ],

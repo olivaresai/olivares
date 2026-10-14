@@ -75,8 +75,6 @@
     "session-viewer": "Sitzungsviewer",
     "backups": "Backups",
     "logs": "Protokolle",
-    "residency": "Datenresidenz",
-    "tenants": "Mandanten",
     "inferenceProxy": "Inferenz-Proxy",
     "alerting": "Benachrichtigungen",
     "agentcoreExport": "AgentCore-Export",
@@ -146,8 +144,6 @@
     "audit": "Manipulationssicheres Nachweis-Hauptbuch",
     "workspaceDashboard": "Agenten, Sitzungen, Ressourcen und Aktivitäten eines Arbeitsbereichs",
     "settings": "Arbeitsbereichs- und Kontoeinstellungen",
-    "residency": "Jede Organisation an eine Region binden oder ungebunden lassen",
-    "tenants": "Den Dienst eines Mandanten entziehen oder wiederherstellen",
     "inferenceProxy": "Proxy-Gates, Egress-DLP-Regeln und Gerätefreigaben",
     "alerting": "Befunde an Ziele leiten und Zustellungen prüfen",
     "reporting": "Governance-Berichte erstellen und herunterladen",
@@ -331,13 +327,32 @@
     "turnPlaceholder": "Einen Satz senden…",
     "turnAria": "Sitzungszug",
     "attachedWaiting": "Braucht Sie",
-    "advanced": "Erweitert",
+    "rawLine": "Rohzeile",
     "advancedHint": "Eine NDJSON-Zeile an stdin senden. Das Satzfeld ist die Vorgabe.",
     "wirePlaceholder": "Eine NDJSON-Zeile an stdin senden…",
     "wireAria": "Sitzungseingabezeile",
     "turnFailed": "Die Sitzung konnte diesen Zug nicht annehmen.",
     "sendBackgroundHint": "Strg+Eingabe sendet und lässt den Entwurf für den nächsten Satz bereit.",
-    "messagePlaceholder": "Nachricht an {{title}}…"
+    "messagePlaceholder": "Nachricht an {{title}}…",
+    "slashLabel": "Befehle und Skills",
+    "slashOption": "{{name}}, {{i}} von {{n}}",
+    "slashNoMatch": "Kein Befehl passt zu „{{query}}“.",
+    "slash": {
+      "loading": "Befehle des Tools werden gelesen…",
+      "failed": "Die Befehle des Tools konnten nicht gelesen werden.",
+      "unreported": "Dieses Tool hat für die Sitzung keine Befehle gemeldet.",
+      "stale": "Die Befehle des Tools konnten nicht aktualisiert werden; diese Liste ist möglicherweise veraltet.",
+      "agent": "Agent",
+      "source": {
+        "built-in": "Eingebaut",
+        "user": "Benutzer",
+        "project": "Projekt",
+        "plugin": "Plugin"
+      }
+    },
+    "modelAria": "Modell und Effort dieser Sitzung: {{value}}",
+    "sessionKeeps": "Diese Sitzung bleibt bei {{value}}. Ein anderes Modell oder ein anderer Effort startet eine neue Sitzung.",
+    "startWithChoice": "Neue Sitzung mit dieser Auswahl starten"
   },
   "shell": {
     "journeysLabel": "Arbeitswege",

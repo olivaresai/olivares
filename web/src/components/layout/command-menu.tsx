@@ -198,7 +198,7 @@ function PaletteBody() {
     [toolScope, queryClient, readTools],
   )
   const inventoryQ = useQuery({
-    queryKey: [...toolScope, 'inventory'],
+    queryKey: [...toolScope, 'inventory', activeTenant],
     queryFn: ({ signal }) => agentToolsApi.inventory(signal),
     enabled: readTools && !commandOnly,
     staleTime: 30_000,

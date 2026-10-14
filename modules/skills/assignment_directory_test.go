@@ -137,14 +137,14 @@ func TestSkillsAssignmentPinsToAgentGroupAndAgent(t *testing.T) {
 func TestSkillsAssignmentRefusesAbsentRowsAndUnknownKinds(t *testing.T) {
 	h := catalogOptions(t, skills.Options{Targets: directoryAuthority{}})
 	pack := h.install(t, "absent-directory", "fixture")
-	for _, kind := range []string{"agent_group", "agent"} {
+	for _, kind := range []string{"folder", "agent_group", "agent"} {
 		absent := skills.Target{Kind: kind, ID: model.NewID().String()}
 		response := h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: absent, RevisionID: pack.Revision.ID}, "")
 		if response.Code != http.StatusNotFound {
 			t.Fatalf("absent %s: %d %s", kind, response.Code, response.Body.String())
 		}
 	}
-	for _, kind := range []string{"agent_groups", "department", "folder", ""} {
+	for _, kind := range []string{"agent_groups", "department", "folders", ""} {
 		unknown := skills.Target{Kind: kind, ID: model.NewID().String()}
 		post := h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: unknown, RevisionID: pack.Revision.ID}, "")
 		list := h.request("GET", "/v1/m/skills/assignments?target_kind="+kind+"&target_id="+unknown.ID, nil, "")

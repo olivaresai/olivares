@@ -29,8 +29,8 @@ blobs:
     directory: "enterprise/{{ .Version }}"
 dockers:
   - image_templates:
-      - "r2-registry.olivares.ai/olivares-enterprise:latest"
-      - "r2-registry.olivares.ai/olivares-enterprise:latest-amd64"
+      - "registry.example.invalid/olivares-enterprise:latest"
+      - "registry.example.invalid/olivares-enterprise:latest-amd64"
 EOF
 }
 

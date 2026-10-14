@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
+[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -22,8 +22,29 @@
 Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工具，展示每个工具的行为，在操作执行前应用你的规则，并为一切保留签名记录。它是一个运行在你自己服务器上的程序，完整产品免费且开源。
 
 <div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
-<br><sub><b>访问图</b> — 每个 agent 读取和写入了什么，以及那次无人授权的写入。</sub>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
+  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Olivares AI 控制台的驾驶舱页面">
+</picture>
+<br><sub><b>驾驶舱</b> — 每个 agent 正在做什么、等待你审批的操作，以及每个账户的用量限制。</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
+  <img src=".github/assets/console-session-light.webp" width="840" alt="Olivares AI 控制台的会话页面">
+</picture>
+<br><sub><b>会话</b> — 对话旁边是它的计划、agent、后台任务、已更改的文件和用量限制。</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
+  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Olivares AI 控制台的并行会话页面">
+</picture>
+<br><sub><b>并行会话</b> — 六个 agent 并排工作，各自在自己的分支上，显示最新输出、成本和用量限制。</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
+  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Olivares AI 控制台的访问图页面">
+</picture>
+<br><sub><b>访问图</b> — 每个 agent 读取和写入了什么，并与授予它的权限对照。</sub>
 </div>
 
 ## 它做什么
@@ -56,7 +77,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.1 \
+  docker.io/olivaresai/olivares:0.2 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->

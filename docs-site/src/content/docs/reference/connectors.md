@@ -103,8 +103,8 @@ honestly rather than appearing healthy).
 | `claude-api` | Claude Admin-API cost samples + governance-posture findings | In-process; a no-op offline (no admin key) |
 | `claude-compliance` | Claude Compliance activity-feed evidence → findings | GET-only by construction; no-op offline |
 | `claude-config` | Static Claude config tree (subagents / Skills / plugins) → **declared-capability** edges | Metadata only — a capability surface, not an observed access |
-| `claude-console` | Claude org IAM → SSO/SCIM posture findings (identity roster + source) | |
-| `claude-wif` | Anthropic non-human-identity / workload-identity roster + permitted-scope edges | Models operator-declared federation; flags static-key footguns |
+| `claude-console` | Claude org IAM → SSO/SCIM posture findings (identity roster + source) | Business: Identity & Scale |
+| `claude-wif` | Anthropic non-human-identity / workload-identity roster + permitted-scope edges | Business: Identity & Scale; models operator-declared federation; flags static-key footguns |
 | `claude-managed-agents` | Claude managed-agents inventory + thread events (webhook receiver + GET pollers) | Streaming source (`poll_seconds: 0`); offline it is a no-op |
 | `claude-projects` | Claude Organization Projects inventory (membership / API keys) + operator-declared project policy | Admin-API read-only; a no-op offline |
 | `claude-apps-gateway` | Claude apps-gateway posture, declared model grants and audit-event ingest → topology + findings | Reads an existing `gateway.yaml` and optional JSONL audit export |
@@ -425,20 +425,23 @@ dependency never links into the core). One connector reaches many targets.
 
 ## Identity roster providers
 
+Directory snapshots and roster reconciliation require **Business: Identity & Scale**.
+Community keeps the observation and credential interfaces used by its own tools.
+
 These populate the non-human-identity **roster** that sharpens attribution (turning
 `approximate` edges into `attributed` ones). Each source with a grant surface also
 emits its **permitted-access** (`SignalPolicy`) edges from `Gather` — the PERMITTED
 side of the permitted-vs-observed diff:
 
-| Kind | Roster | Permitted edges |
-|---|---|---|
-| `vault` | entities, groups, policies | ACL policy path grants (`vault.path`), expanded per bound entity |
-| `ldap` | users, service/computer accounts, groups | privileged-group membership → directory grants (`ldap.directory`) |
-| `idp` (Okta / Entra) | users, apps/service principals, groups | app-assignment / scope grants (`okta.app` / `entra.app`) |
-| `infisical` | machine identities, org members, projects | project grants (`infisical.project`) |
-| `keycloak` | realms, clients, roles, groups, users | roster only (no-op `Gather`) |
-| `pingone` / `forgerock` | PingOne / ForgeRock directory rosters via the same multi-provider reader (the kind seeds the matching `provider`; `ping` aliases `pingone`) | roster only (no-op `Gather`) |
-| `spiffe` | SPIRE registration entries | roster only (no-op `Gather`) |
+| Kind | Roster | Permitted edges | Edition |
+|---|---|---|---|
+| `vault` | entities, groups, policies | ACL policy path grants (`vault.path`), expanded per bound entity | Business: Identity & Scale |
+| `ldap` | users, service/computer accounts, groups | privileged-group membership → directory grants (`ldap.directory`) | Business: Identity & Scale |
+| `idp` (Okta / Entra) | users, apps/service principals, groups | app-assignment / scope grants (`okta.app` / `entra.app`) | Business: Identity & Scale |
+| `infisical` | machine identities, org members, projects | project grants (`infisical.project`) | Business: Identity & Scale |
+| `keycloak` | realms, clients, roles, groups, users | roster only (no-op `Gather`) | Business: Identity & Scale |
+| `pingone` / `forgerock` | PingOne / ForgeRock directory rosters via the same multi-provider reader (the kind seeds the matching `provider`; `ping` aliases `pingone`) | roster only (no-op `Gather`) | Business: Identity & Scale |
+| `spiffe` | SPIRE registration entries | roster only (no-op `Gather`) | Business: Identity & Scale |
 
 Wire `as_source: true` on the `identity` entry for a one-shot permitted-grant pass
 per boot, or a separate `sources` entry with `poll_seconds` for periodic re-scans.
@@ -457,16 +460,16 @@ attribution; ancillary rows from the same sources (blueprint principals, credent
 providers, service-account-backed agents) stay approximate. Federation never writes to
 a registry; *export* to the control towers is a separate, later capability.
 
-| Kind | Federates | Gather |
-|---|---|---|
-| `entra-agent` | Microsoft Entra Agent ID (agent identities, agent users, blueprints, blueprint principals, owners/sponsors, in-snapshot orphan computation, opt-in soft-deleted) via Graph v1.0 | `nhi_longlived_credential` drift findings, CA/risky-agent/governance/sponsorless posture findings, and opt-in beta `auditLogs/signIns` observed agent access edges — add a `sources` entry with `poll_seconds` |
-| `agentcore` | AWS Bedrock AgentCore Identity (workload identities, token-vault credential providers) + AgentCore Policy engines/Cedar policies as collections | `nhi_longlived_credential` drift findings (static API-key providers) — add a `sources` entry with `poll_seconds` |
-| `google-agent` | Google Agent Identity (Agent Runtime reasoning engines; SPIFFE-based agent identities) plus Agent Registry / Agent Gateway posture. Rows use the **full SPIFFE ID** as ref, converging with the `spiffe` roster; Gather detects unattributed registry agents, shadow reasoning engines outside a readable registry, risky MCP tool annotations, and gateway registry posture | registry/gateway posture findings and shadow-agent detection — add a `sources` entry with `poll_seconds` |
-| `agent365` | Microsoft Agent 365 registry (package-level inventory incl. agents *without* an Entra identity) via Graph v1.0, app-permission client credentials or delegated token, opt-in package details | registry-hygiene findings (blocked deployed packages; external/shared packages deployed to all users) — add a `sources` entry with `poll_seconds` |
-| `foundry-agents` | Microsoft Foundry projects, agent applications/deployments and current Agent Service agents via ARM + Foundry Agent Service v1; correlates app identity links to `entra-agent` | ARM-derived application posture findings (missing Entra agent identity; failed deployment on enabled app) — add a `sources` entry with `poll_seconds` |
-| `ai-control-tower` | ServiceNow AI Control Tower digital-asset inventory (Table API, read-only) | no-op (roster only) |
-| `oasf` | AGNTCY/OASF agent descriptors + Agent Badge verification — **EXPERIMENTAL** until the identity spec is VCDM 2.0 conformant | badge findings — add a `sources` entry with `poll_seconds` |
-| `onepassword` | 1Password account as a `secret_store` custodian | item-usage secret-access edges — add a `sources` entry with `poll_seconds` |
+| Kind | Federates | Gather | Edition |
+|---|---|---|---|
+| `entra-agent` | Microsoft Entra Agent ID (agent identities, agent users, blueprints, blueprint principals, owners/sponsors, in-snapshot orphan computation, opt-in soft-deleted) via Graph v1.0 | `nhi_longlived_credential` drift findings, CA/risky-agent/governance/sponsorless posture findings, and opt-in beta `auditLogs/signIns` observed agent access edges — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
+| `agentcore` | AWS Bedrock AgentCore Identity (workload identities, token-vault credential providers) + AgentCore Policy engines/Cedar policies as collections | `nhi_longlived_credential` drift findings (static API-key providers) — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
+| `google-agent` | Google Agent Identity (Agent Runtime reasoning engines; SPIFFE-based agent identities) plus Agent Registry / Agent Gateway posture. Rows use the **full SPIFFE ID** as ref, converging with the `spiffe` roster; Gather detects unattributed registry agents, shadow reasoning engines outside a readable registry, risky MCP tool annotations, and gateway registry posture | registry/gateway posture findings and shadow-agent detection — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
+| `agent365` | Microsoft Agent 365 registry (package-level inventory incl. agents *without* an Entra identity) via Graph v1.0, app-permission client credentials or delegated token, opt-in package details | registry-hygiene findings (blocked deployed packages; external/shared packages deployed to all users) — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
+| `foundry-agents` | Microsoft Foundry projects, agent applications/deployments and current Agent Service agents via ARM + Foundry Agent Service v1; correlates app identity links to `entra-agent` | ARM-derived application posture findings (missing Entra agent identity; failed deployment on enabled app) — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
+| `ai-control-tower` | ServiceNow AI Control Tower digital-asset inventory (Table API, read-only) | no-op (roster only) | Business: Identity & Scale |
+| `oasf` | AGNTCY/OASF agent descriptors + Agent Badge verification — **EXPERIMENTAL** until the identity spec is VCDM 2.0 conformant | badge findings — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
+| `onepassword` | 1Password account as a `secret_store` custodian | item-usage secret-access edges — add a `sources` entry with `poll_seconds` | Business: Identity & Scale |
 
 For the seven kinds with a re-pollable Gather (`entra-agent`, `agent365`, `agentcore`,
 `foundry-agents`, `google-agent`, `oasf`, `onepassword`), wire the **roster** half as an `identity` entry *without*

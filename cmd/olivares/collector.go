@@ -91,6 +91,9 @@ func newCollectorCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("load sources operator config: %w", err)
 			}
+			if err := validateIdentitySourcesConfig(srcCfg); err != nil {
+				return err
+			}
 			// a sealed sources config that could not be opened is a custody
 			// failure — refuse to run an empty collector instead of degrading.
 			if scErr := sealedConfigFailure(); scErr != nil {

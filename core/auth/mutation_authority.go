@@ -117,7 +117,7 @@ func (az *Authorizer) AuthorizeRouteMutation(
 		return RouteMutationAuthorization{}, fmt.Errorf(
 			"%w: the principal's complete authority could not be extracted", ErrRouteUndecided)
 	}
-	credential, ok := copied.Principal.Ref()
+	credential, ok := copied.Principal.evidenceCredential()
 	if !ok {
 		return RouteMutationAuthorization{}, fmt.Errorf(
 			"%w: the principal has no established credential reference", ErrRouteUndecided)
@@ -193,7 +193,7 @@ func (a RouteMutationAuthorization) AuthorityFor(
 	if !ok {
 		return store.AuthoritySnapshotBundle{}, ErrRouteUndecided
 	}
-	credential, ok := req.Principal.Ref()
+	credential, ok := req.Principal.evidenceCredential()
 	if !ok || req.Tenant != a.tenant || credential != a.ref ||
 		req.Principal.evidence.seal != a.principalSeal ||
 		req.Principal.evidence.authorityMode != a.authorityMode ||
@@ -239,25 +239,32 @@ func (a RouteMutationAuthorization) capturedUserAuthorities() []store.UserAuthor
 
 // wellFormed is every structural predicate that does not depend on the present or
 // on a caller-supplied question: issued by the minter, an ALLOW, a supported
-// explicit authority mode with matching User coordinates, and canonical facts.
+// explicit authority mode with matching credential and User coordinates, and
+// canonical facts.
 //
-// A mode this package does not know is refused rather than defaulted: a system
-// actor or a synthetic principal gains no path here, and neither does a future
-// mode that has not stated what its User coordinates mean.
+// A mode this package does not know is refused rather than defaulted: an
+// unsealed system actor or a synthetic principal gains no path here, and neither
+// does a future mode that has not stated what its User coordinates mean. The
+// engine system mode states it: no credential and no User, only tenant facts.
 func (a RouteMutationAuthorization) wellFormed() bool {
 	w := a.witness
 	if !a.issued || !w.minted || w.Decision.Outcome != EvidenceAllow ||
-		!validPrincipalEvidenceTenant(a.tenant) || !validPrincipalRef(a.ref) {
+		!validPrincipalEvidenceTenant(a.tenant) {
 		return false
 	}
 	switch a.authorityMode {
 	case principalHumanAuthority:
-		if a.ref.kind != KindUser || !validPrincipalEvidenceID(a.userAuthority.UserID) ||
-			a.userAuthority.Version < 1 {
+		if !validPrincipalRef(a.ref) || a.ref.kind != KindUser ||
+			!validPrincipalEvidenceID(a.userAuthority.UserID) || a.userAuthority.Version < 1 {
 			return false
 		}
 	case principalTokenDirectoryOnly:
-		if a.ref.kind != KindToken || a.userAuthority != (store.UserAuthorityFactRef{}) {
+		if !validPrincipalRef(a.ref) || a.ref.kind != KindToken ||
+			a.userAuthority != (store.UserAuthorityFactRef{}) {
+			return false
+		}
+	case principalEngineSystemAuthority:
+		if a.ref != (PrincipalRef{}) || a.userAuthority != (store.UserAuthorityFactRef{}) {
 			return false
 		}
 	default:
@@ -278,7 +285,7 @@ func (a RouteMutationAuthorization) wellFormed() bool {
 //
 // In order: the ordinary witness EvidenceDigest as 32 raw bytes; the captured
 // principal seal as 32 raw bytes; one authority-mode byte; the User count — zero for
-// a token, one for a human — and, for a human, its canonical User ID as
+// a token or the engine system, one for a human — and, for a human, its canonical User ID as
 // length-prefixed UTF-8 followed by its positive version.
 //
 // ⛔ IT IS A CONSISTENCY COMMITMENT IN A TRUSTED PROCESS, NOT A MAC. It is unkeyed

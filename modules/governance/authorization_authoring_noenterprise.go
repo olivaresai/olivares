@@ -36,6 +36,10 @@ func (m *Module) handleCreateScopedGrant(w http.ResponseWriter, _ *http.Request,
 	authorizationRequiresBusiness(w)
 }
 
+func (m *Module) registerCreateScopedGrant(reg api.RouteRegistrar) {
+	reg.Handle("POST", "/rbac/grants", permRBACAdmin, m.handleCreateScopedGrant)
+}
+
 func (m *Module) handleCedarPublish(w http.ResponseWriter, _ *http.Request, _ api.ModuleContext, _ pdpEngineSourceBody) {
 	authorizationRequiresBusiness(w)
 }

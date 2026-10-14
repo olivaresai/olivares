@@ -28,3 +28,7 @@ func assertEditionAbsenceProofReadiness(t *testing.T, _ *consentEstate, r store.
 func (e *consentEstate) wantEditionRetirementRefusal(*testing.T, model.ID, model.TenantID, retirementSeeder, model.ID) bool {
 	return false
 }
+
+// Community can prove retirement on both engines. The edition overlay supplies
+// the same applicability predicate used by its personal-data erasure tests.
+func businessErasureRefusedOn(string) bool { return false }

@@ -14,31 +14,51 @@ bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail+1)); }
 
 stage() {
   rm -rf "$TMP/tree"
-  mkdir -p "$TMP/tree/core/auth" "$TMP/tree/cmd/olivares" "$TMP/tree/scripts"
-  cp "$ROOT/core/auth/caep_events.go" "$TMP/tree/core/auth/"
-  cp "$ROOT/cmd/olivares/caeptransmitgate.go" "$TMP/tree/cmd/olivares/"
+  for path in core/auth/caep_events.go core/auth/caep_noenterprise.go core/api/handlers_identity_noenterprise.go cmd/olivares/caeptransmitgate.go; do
+    mkdir -p "$TMP/tree/$(dirname "$path")"
+    cp "$ROOT/$path" "$TMP/tree/$path"
+  done
+  mkdir -p "$TMP/tree/scripts"
   cp "$CHECK" "$TMP/tree/scripts/"
-  chmod +x "$TMP/tree/scripts/check-caep-inbound.sh"
 }
-run() { OLIVARES_ROOT="$TMP/tree" bash "$TMP/tree/scripts/check-caep-inbound.sh" >/dev/null 2>"$TMP/err"; }
+expect() {
+  local name="$1" wanted="$2" rc=0
+  OLIVARES_ROOT="$TMP/tree" bash "$TMP/tree/scripts/check-caep-inbound.sh" >"$TMP/out" 2>"$TMP/err" || rc=$?
+  if [ "$rc" -eq "$wanted" ]; then ok "$name"; else bad "$name: exit $rc, want $wanted ($(cat "$TMP/err"))"; fi
+}
 
 stage
-if run; then ok "live tree is CLEAN"; else bad "live tree should be CLEAN ($(cat "$TMP/err"))"; fi
-
+expect "public edition contracts and refusals are clean" 0
 stage
-sed -i '/CAEPReceiveEvent/d' "$TMP/tree/core/auth/caep_events.go"
-if run; then bad "deleting CAEPReceiveEvent stayed CLEAN"; else ok "missing receiver is a finding"; fi
-
+sed -i '/ErrCAEPSetDisabled/d' "$TMP/tree/core/auth/caep_events.go"
+expect "shared disabled receiver error remains required" 1
 stage
-sed -i '/open-core (core\/auth\/caep_events.go)/d' "$TMP/tree/cmd/olivares/caeptransmitgate.go"
-if run; then bad "dropping the open-core name stayed CLEAN"; else ok "unnamed inbound seam is a finding"; fi
-
+sed -i 's/return ErrCAEPRequiresBusiness/return nil/' "$TMP/tree/core/auth/caep_noenterprise.go"
+expect "configuration cannot silently succeed" 1
 stage
-rm -f "$TMP/tree/core/auth/caep_events.go"
-if run; then bad "missing file stayed CLEAN"; else
-  if grep -q 'COULD NOT LOOK' "$TMP/err"; then ok "missing file is COULD NOT LOOK"
-  else bad "missing file should be exit 2 ($(cat "$TMP/err"))"; fi
-fi
+sed -i 's/return CAEPEventResult{}, ErrCAEPRequiresBusiness/return CAEPEventResult{}, nil/' "$TMP/tree/core/auth/caep_noenterprise.go"
+expect "received events cannot silently succeed" 1
+stage
+sed -i 's/!enterprise || !addon_ids/!enterprise/' "$TMP/tree/core/auth/caep_noenterprise.go"
+expect "Business without identity add-on retains the refusal" 1
+stage
+sed -i 's/http.StatusNotImplemented/http.StatusOK/' "$TMP/tree/core/api/handlers_identity_noenterprise.go"
+expect "HTTP refusal cannot become success" 1
+stage
+printf '\nfunc (a *Authenticator) dispatchCAEPAction() {}\n' >> "$TMP/tree/core/auth/caep_events.go"
+expect "contract file cannot carry receiver dispatch" 1
+stage
+printf 'package auth\nfunc (a *Authenticator) CAEPReceiveEvent() {}\n' > "$TMP/tree/core/auth/leaked_receiver.go"
+expect "another public file cannot carry receiver implementation" 1
+stage
+printf '//go:build enterprise && addon_ids\n\npackage auth\nfunc (a *Authenticator) CAEPReceiveEvent() {}\n' > "$TMP/tree/core/auth/caep_events_enterprise.go"
+expect "assembled Business implementation stays outside the public guard" 0
+stage
+printf '//go:build enterprise || debug\n\npackage auth\nfunc (a *Authenticator) CAEPReceiveEvent() {}\n' > "$TMP/tree/core/auth/leaked_receiver.go"
+expect "an unsafe enterprise alternative cannot hide a public receiver" 1
+stage
+rm "$TMP/tree/core/auth/caep_noenterprise.go"
+expect "missing refusal source is unverified" 2
 
 printf 'check-caep-inbound selftest: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

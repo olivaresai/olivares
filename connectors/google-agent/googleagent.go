@@ -90,6 +90,9 @@
 // It imports only the SDK, the Apache identitysource contract, the shared
 // read-only httpx/redact internals and go-jose (already a module dependency) —
 // never the engine.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package googleagent
 
 import (
@@ -116,12 +119,6 @@ const Name = "olivares.google-agent"
 // effectiveIdentity the API returns, so agent-identity Refs equal the
 // connectors/spiffe roster convention.
 const scheme = "spiffe://"
-
-// kindServiceAccountAgent is the Identity.Kind for an engine whose identity is a
-// service-account email. An SA is possibly SHARED across engines, so this kind is
-// a governed NHI but never a firm per-agent attribution signal (unlike
-// identitysource.KindAgentIdentity).
-const kindServiceAccountAgent = "service_account_agent"
 
 // Default configuration values.
 const (
@@ -411,140 +408,6 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 // Close releases resources; the connector holds no long-lived connection.
 func (s *Source) Close(context.Context) error { return nil }
 
-// Snapshot lists each configured location's reasoning engines read-only and
-// assembles the identity graph. With no credentials it returns the offline
-// (empty) graph, nil error. It never returns credential material.
-func (s *Source) Snapshot(ctx context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceGoogleAgent, CapturedAt: s.clock().UTC()}
-	if s.key == nil {
-		return g, nil // offline
-	}
-
-	token, err := s.accessToken(ctx)
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-
-	// agentRow keeps what the principalSet derivation needs per AGENT_IDENTITY row.
-	type agentRow struct {
-		ref           string // the spiffe:// identity Ref
-		trustDomain   string
-		projectNumber string
-	}
-	var agentRows []agentRow
-
-	for _, loc := range s.locations {
-		// The bearer token lives only on this call's stack and the client's auth
-		// closure; it is never logged or persisted. transport(), not s.doer: in
-		// production the doer is nil and httpx would fall back to
-		// http.DefaultClient, which has NO timeout (review fix).
-		client := httpx.New(s.locationBase(loc), s.transport(), httpx.Bearer(token), nil)
-		engines, err := s.listEngines(ctx, client, loc)
-		if err != nil {
-			return identitysource.Graph{}, err
-		}
-		for _, e := range engines {
-			eff := e.Spec.EffectiveIdentity
-			if eff == "" {
-				// No invented identity, no finding: the engine is still provisioning
-				// or was never granted one — it is simply absent from the roster
-				// (Snapshot stays stateless; the engine re-polls review fix).
-				continue
-			}
-			display := e.DisplayName
-			if display == "" {
-				display = lastSegment(e.Name)
-			}
-			switch e.Spec.IdentityType {
-			case identityTypeAgent:
-				// Dedicated per-agent SPIFFE identity: the FIRM attribution kind.
-				td := trustDomainOf(eff)
-				ref := scheme + eff
-				g.Identities = append(g.Identities, identitysource.Identity{
-					Ref:         ref,
-					Type:        identitysource.PrincipalNHI,
-					Kind:        identitysource.KindAgentIdentity,
-					DisplayName: display,
-					Source:      identitysource.SourceGoogleAgent,
-					Attributes: pruneAttrs(map[string]string{
-						"trust_domain":              td, // survives governance's attribute allowlist (deliberate)
-						"framework":                 e.Spec.AgentFramework,
-						"resource":                  e.Name,
-						"location":                  loc,
-						"gateway_client_to_agent":   e.Spec.DeploymentSpec.AgentGatewayConfig.ClientToAgentConfig.AgentGateway,
-						"gateway_agent_to_anywhere": e.Spec.DeploymentSpec.AgentGatewayConfig.AgentToAnywhereConfig.AgentGateway,
-					}),
-				})
-				agentRows = append(agentRows, agentRow{ref: ref, trustDomain: td, projectNumber: projectNumberOf(eff)})
-			case identityTypeSA, identityTypeUnspecified, "":
-				// The identity is an SA email, possibly shared across engines — a
-				// governed NHI, never a firm per-agent signal.
-				g.Identities = append(g.Identities, identitysource.Identity{
-					Ref:         eff,
-					Type:        identitysource.PrincipalNHI,
-					Kind:        kindServiceAccountAgent,
-					DisplayName: display,
-					Source:      identitysource.SourceGoogleAgent,
-					Attributes: pruneAttrs(map[string]string{
-						"framework":                 e.Spec.AgentFramework,
-						"resource":                  e.Name,
-						"location":                  loc,
-						"gateway_client_to_agent":   e.Spec.DeploymentSpec.AgentGatewayConfig.ClientToAgentConfig.AgentGateway,
-						"gateway_agent_to_anywhere": e.Spec.DeploymentSpec.AgentGatewayConfig.AgentToAnywhereConfig.AgentGateway,
-					}),
-				})
-			default:
-				// Forward-compat: an enum value this connector does not know is treated
-				// like SERVICE_ACCOUNT (approximate NHI) — AGENT_IDENTITY firmness is
-				// never guessed.
-				g.Identities = append(g.Identities, identitysource.Identity{
-					Ref:         eff,
-					Type:        identitysource.PrincipalNHI,
-					Kind:        kindServiceAccountAgent,
-					DisplayName: display,
-					Source:      identitysource.SourceGoogleAgent,
-					Attributes: pruneAttrs(map[string]string{
-						"framework":                 e.Spec.AgentFramework,
-						"resource":                  e.Name,
-						"location":                  loc,
-						"gateway_client_to_agent":   e.Spec.DeploymentSpec.AgentGatewayConfig.ClientToAgentConfig.AgentGateway,
-						"gateway_agent_to_anywhere": e.Spec.DeploymentSpec.AgentGatewayConfig.AgentToAnywhereConfig.AgentGateway,
-					}),
-				})
-			}
-		}
-	}
-
-	// The documented IAM aggregate binding for a project's agents:
-	// principalSet://{TRUST_DOMAIN}/attribute.platformContainer/aiplatform/projects/{PROJECT_NUMBER}.
-	// One Collection per distinct (trust domain, project number) — a single one in
-	// practice — plus a membership per agent-identity row.
-	seen := map[string]bool{}
-	for _, r := range agentRows {
-		if r.projectNumber == "" {
-			continue // cannot derive the principal set; the identity row stands alone
-		}
-		ref := "principalSet://" + r.trustDomain + "/attribute.platformContainer/aiplatform/projects/" + r.projectNumber
-		if !seen[ref] {
-			seen[ref] = true
-			g.Collections = append(g.Collections, identitysource.Collection{
-				Ref:         ref,
-				Kind:        identitysource.KindGroup,
-				DisplayName: "aiplatform agents " + s.project,
-				Source:      identitysource.SourceGoogleAgent,
-				Attributes:  map[string]string{"object": "iam_principal_set"},
-			})
-		}
-		g.Memberships = append(g.Memberships, identitysource.Membership{
-			MemberRef:     r.ref,
-			MemberKind:    identitysource.MemberIdentity,
-			CollectionRef: ref,
-			Source:        identitysource.SourceGoogleAgent,
-		})
-	}
-	return g, nil
-}
-
 func (s *Source) gatherReasoningEngines(ctx context.Context, token string) ([]reasoningEngine, error) {
 	var out []reasoningEngine
 	for _, loc := range s.locations {
@@ -832,20 +695,6 @@ func splitCSV(v string) []string {
 		}
 	}
 	return out
-}
-
-// pruneAttrs drops empty values so the attribute map carries only present
-// metadata, and returns nil when nothing remains (keeping Snapshots diff-stable).
-func pruneAttrs(m map[string]string) map[string]string {
-	for k, v := range m {
-		if v == "" {
-			delete(m, k)
-		}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return m
 }
 
 // transport returns the injected Doer or a per-request-timeout HTTP client.

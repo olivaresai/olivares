@@ -23,7 +23,7 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 ## 先决条件
 
 - 一台带有 systemd 和 `curl` 的 Linux 主机。
-- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.2`{/* /release */} is the next release, not yet published.
 
 ## 1. 构建并安装二进制
 
@@ -177,16 +177,15 @@ token 会被铸造并打印。此方式已针对当前二进制验证；它
 已配置的安装。
 </Aside>
 
-## 4. 创建你的第一个组织
+## 4. 使用你的第一个组织
 
-产品中的一切都是租户范围的，因此请创建你的
-sources 将上报到的组织：
+初始设置已经创建了你的组织。产品中的一切都在租户范围内；
+请获取该组织的租户 ID，以连接你的 sources：
 
 ```bash
-TENANT="$(curl -ksf -X POST https://127.0.0.1:8443/v1/system/orgs \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Production","slug":"prod"}' \
-  | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
+TENANT="$(curl -ksf https://127.0.0.1:8443/v1/auth/whoami \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
 echo "tenant: $TENANT"
 ```
 

@@ -10,6 +10,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO, BindingDTO, PolicyDTO } from './types'
 import { ApiError } from '@/lib/api/errors'
 
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: { ...actual.PANEL_EXTENSIONS, governanceTabs: [] },
+  }
+})
+
 // --- mocks -------------------------------------------------------------------
 
 const toast = vi.hoisted(() => ({
@@ -66,6 +74,7 @@ vi.mock('./api', async (importOriginal) => {
 import GovernanceView from './governance-view'
 import { PolicyEditorDialog } from './policy-editor'
 import { IdentitiesView } from './identities-view'
+import { GroupMembersSheet } from './group-members'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({
@@ -479,6 +488,60 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
     ).toStrictEqual({ rules: [{ deny: true, min_aal: 3 }] })
   })
 
+  // The form has no risk-tier field, but it keeps the tier of a stored policy. Saving
+  // a stored tier-lowering policy while it is on is the one way Community refuses
+  // from this form (501 business_required). The dialog says why, in a line that stays.
+  it('names the Business limit in the dialog when the server refuses a tier-lowering policy', async () => {
+    const limit =
+      /lowering a risk tier below the action's default needs business/i
+    api.updatePolicy.mockRejectedValue(
+      new ApiError(
+        501,
+        'business_required',
+        'Tier-lowering approval policies require Olivares Business.',
+      ),
+    )
+    const policy: PolicyDTO = {
+      id: 'p9',
+      name: 'legacy downgrade',
+      kind: 'approval',
+      enabled: true,
+      spec: { risk_tier: 'high', match: { action: 'deploy.apply' } },
+    }
+    wrap(<PolicyEditorDialog open onOpenChange={() => {}} policy={policy} />)
+    expect(screen.queryByText(limit)).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(limit)
+    expect(toast.error).not.toHaveBeenCalled()
+    // A later save that works clears the line.
+    api.updatePolicy.mockResolvedValue(policy)
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('keeps the generic error toast for any other refusal', async () => {
+    api.updatePolicy.mockRejectedValue(
+      new ApiError(500, 'internal', 'store unavailable'),
+    )
+    wrap(
+      <PolicyEditorDialog
+        open
+        onOpenChange={() => {}}
+        policy={{
+          id: 'p10',
+          name: 'two-eyes',
+          kind: 'approval',
+          enabled: true,
+          spec: { required_approvals: 2 },
+        }}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('approval counts must be whole numbers in range, or nothing is sent', async () => {
     api.createPolicy.mockResolvedValue({
       id: 'p5',
@@ -545,44 +608,147 @@ describe('IdentitiesView — roster, bindings RBAC + shared cue', () => {
     // Unbind is hidden without identity:admin.
     expect(screen.queryByRole('button', { name: /unbind/i })).toBeNull()
   })
+})
 
-  it.each([
-    ['complete', 1, [], 'success'],
-    ['partial', 2, [{ provider: 'vault', reason: 'unreachable' }], 'warning'],
-    ['no providers', 0, [], 'warning'],
-  ] as const)(
-    'reports a %s resync with the matching toast intent',
-    async (_label, providers_configured, providers_failed, intent) => {
-      api.listIdentities.mockResolvedValue({ items: [], has_more: false })
-      api.syncRoster.mockResolvedValue({
-        sources: 1,
-        providers_configured,
-        providers_failed,
-        identities: 4,
-        collections: 2,
-        memberships: 6,
-      })
-      wrap(<IdentitiesView />)
-      await userEvent.click(
-        await screen.findByRole('button', { name: /resync roster/i }),
-      )
-      const dialog = await screen.findByRole('dialog')
-      await userEvent.click(
-        within(dialog).getByRole('button', { name: /^resync$/i }),
-      )
-      await waitFor(() => expect(api.syncRoster).toHaveBeenCalledTimes(1))
-      await waitFor(() => expect(toast[intent]).toHaveBeenCalledTimes(1))
-      expect(
-        toast[intent === 'success' ? 'warning' : 'success'],
-      ).not.toHaveBeenCalled()
-    },
-  )
+describe('IdentitiesView — cursor pages and an account state nobody reported', () => {
+  const identity = (
+    ref: string,
+    extra: Partial<Record<string, unknown>> = {},
+  ) => ({
+    id: `id-${ref}`,
+    ref,
+    kind: 'service_account',
+    source: 'dir',
+    principal_type: 'nhi',
+    disabled: false,
+    ...extra,
+  })
+
+  it('walks the identities cursor instead of presenting the first page as the whole roster', async () => {
+    api.listIdentities.mockImplementation(
+      async (params?: { cursor?: string }) =>
+        params?.cursor === 'ident-page-2'
+          ? { items: [identity('svac_second')], has_more: false }
+          : {
+              items: [identity('apikey_first')],
+              cursor: 'ident-page-2',
+              has_more: true,
+            },
+    )
+    wrap(<IdentitiesView />)
+
+    expect(await screen.findByText('apikey_first')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(await screen.findByText('svac_second')).toBeInTheDocument()
+    expect(api.listIdentities).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'ident-page-2' }),
+    )
+    // The last page is loaded: nothing is left to say about partial search.
+    expect(screen.queryByText(/search covers only the rows loaded/i)).toBeNull()
+  })
+
+  it('says the search covers only the loaded rows while more pages exist', async () => {
+    api.listIdentities.mockResolvedValue({
+      items: [identity('apikey_first')],
+      cursor: 'ident-page-2',
+      has_more: true,
+    })
+    wrap(<IdentitiesView />)
+
+    expect(await screen.findByText('apikey_first')).toBeInTheDocument()
+    expect(
+      screen.getByText(/search covers only the rows loaded/i),
+    ).toBeInTheDocument()
+  })
+
+  it('walks the groups cursor instead of presenting the first page as every group', async () => {
+    api.listGroups.mockImplementation(async (params?: { cursor?: string }) =>
+      params?.cursor === 'group-page-2'
+        ? {
+            items: [{ ref: 'grp_second', kind: 'group', source: 'dir' }],
+            has_more: false,
+          }
+        : {
+            items: [{ ref: 'grp_first', kind: 'group', source: 'dir' }],
+            cursor: 'group-page-2',
+            has_more: true,
+          },
+    )
+    wrap(<IdentitiesView />)
+    await userEvent.click(screen.getByRole('tab', { name: 'Groups' }))
+
+    expect((await screen.findAllByText('grp_first')).length).toBeGreaterThan(0)
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect((await screen.findAllByText('grp_second')).length).toBeGreaterThan(0)
+    expect(api.listGroups).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'group-page-2' }),
+    )
+  })
+
+  it('shows an account whose state the source never reported as unknown, not enabled', async () => {
+    api.listIdentities.mockResolvedValue({
+      items: [
+        identity('cn=bridge', { disabled: null }),
+        identity('cn=on'),
+        identity('cn=off', { disabled: true }),
+      ],
+      has_more: false,
+    })
+    wrap(<IdentitiesView />)
+
+    const stateOf = async (ref: string) =>
+      within((await screen.findByText(ref)).closest('tr')!).getByText(
+        /^(enabled|disabled|unknown)$/i,
+      ).textContent
+    expect(await stateOf('cn=on')).toMatch(/^enabled$/i)
+    expect(await stateOf('cn=off')).toMatch(/^disabled$/i)
+    expect(await stateOf('cn=bridge')).toMatch(/^unknown$/i)
+  })
+})
+
+describe('GroupMembersSheet — bounded transitive walk', () => {
+  it('says so when the walk was cut at the depth bound', async () => {
+    api.listGroupMembers.mockResolvedValue({
+      items: [{ member_ref: 'user:near', member_kind: 'identity' }],
+      has_more: false,
+      truncated: true,
+    })
+    wrap(<GroupMembersSheet open onOpenChange={() => {}} groupRef="grp:0" />)
+
+    expect(await screen.findByText('user:near')).toBeInTheDocument()
+    expect(screen.getByText(/deeper than the walk limit/i)).toBeInTheDocument()
+  })
+
+  it('shows no cut note for a complete walk', async () => {
+    api.listGroupMembers.mockResolvedValue({
+      items: [{ member_ref: 'user:near', member_kind: 'identity' }],
+      has_more: false,
+    })
+    wrap(<GroupMembersSheet open onOpenChange={() => {}} groupRef="grp:0" />)
+
+    expect(await screen.findByText('user:near')).toBeInTheDocument()
+    expect(screen.queryByText(/deeper than the walk limit/i)).toBeNull()
+  })
 })
 
 describe('GovernanceView — ?tab= deep link (console remake slice 4)', () => {
   afterEach(() => {
     window.history.replaceState({}, '', '/')
     authState.can = () => true
+  })
+
+  it('opens the identity inventory from a ?tab=identities link, without a directory resync or agent registration', () => {
+    window.history.replaceState({}, '', '/permissions?tab=identities')
+    wrap(<GovernanceView />)
+    expect(
+      screen.getByRole('tab', { name: 'Identities & groups' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    expect(
+      screen.queryByRole('button', { name: /resync roster/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Register agent' }),
+    ).not.toBeInTheDocument()
   })
 
   it('opens the section the link names, and the queue when it names nothing', () => {

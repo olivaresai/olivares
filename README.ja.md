@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
+[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -22,8 +22,29 @@
 Olivares AI は、その答えを一か所にまとめます。すでに使っているエージェントやツールに接続し、それぞれの動きを表示し、実行前にルールを適用して、すべての署名付き記録を残します。自社のサーバーで動く単一のプログラムで、製品全体を無料のオープンソースとして利用できます。
 
 <div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
-<br><sub><b>アクセスマップ</b> — 各エージェントが何を読み書きするか、そして誰も許可していない書き込み。</sub>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-cockpit-dark.webp">
+  <img src=".github/assets/console-cockpit-light.webp" width="840" alt="Olivares AI コンソールのコックピット画面">
+</picture>
+<br><sub><b>コックピット</b> — 各エージェントが今していること、あなたの承認を待つ操作、アカウントごとの使用量上限。</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-session-dark.webp">
+  <img src=".github/assets/console-session-light.webp" width="840" alt="Olivares AI コンソールのセッション画面">
+</picture>
+<br><sub><b>セッション</b> — 会話の横に、計画、エージェント、バックグラウンドタスク、変更されたファイル、使用量上限。</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-parallel-sessions-dark.webp">
+  <img src=".github/assets/console-parallel-sessions-light.webp" width="840" alt="Olivares AI コンソールの並列セッション画面">
+</picture>
+<br><sub><b>並列セッション</b> — 6 つのエージェントが並んで作業し、それぞれ専用のブランチで、最新の出力、コスト、使用量上限を表示。</sub>
+<br><br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/console-access-map-dark.webp">
+  <img src=".github/assets/console-access-map-light.webp" width="840" alt="Olivares AI コンソールのアクセスマップ画面">
+</picture>
+<br><sub><b>アクセスマップ</b> — 各エージェントが何を読み書きするかを、付与された権限と照らし合わせて表示。</sub>
 </div>
 
 ## できること
@@ -56,7 +77,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.1 \
+  docker.io/olivaresai/olivares:0.2 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->

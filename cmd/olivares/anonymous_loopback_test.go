@@ -102,15 +102,11 @@ func TestNoAnonymousWriteOrAdminFromLoopback(t *testing.T) {
 	if _, err := eng.authr.BootstrapSuperadmin(ctx, "loopback@example.invalid", "loopback-fixture-123"); err != nil {
 		t.Fatal(err)
 	}
-	admin, _, err := eng.authr.Login(ctx, "loopback@example.invalid", "loopback-fixture-123", "fixture")
+	_, _, err = eng.authr.Login(ctx, "loopback@example.invalid", "loopback-fixture-123", "fixture")
 	if err != nil {
 		t.Fatal(err)
 	}
-	code, org, raw := doDemoViewJSON(t, eng.api.Handler(), http.MethodPost, "/v1/system/orgs", admin, "", map[string]any{"name": "Loopback", "slug": "loopback"})
-	tenant, _ := org["tenant_id"].(string)
-	if code != http.StatusCreated || tenant == "" {
-		t.Fatalf("create tenant: HTTP %d %s", code, raw)
-	}
+	tenant := createOrganizationFixture(t, eng.store, "Loopback", "loopback").TenantID.String()
 	handler := thisEdition.routes(eng.api.Handler(), eng, log)
 	router, ok := handler.(chi.Routes)
 	if !ok {

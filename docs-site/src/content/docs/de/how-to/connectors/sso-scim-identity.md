@@ -9,6 +9,10 @@ sidebar:
   order: 8
 ---
 
+:::note[Edition]
+Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs) sowie der Lebenszyklus verwalteter Identitäten benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, eingehendes SCIM für Benutzer/Gruppen, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
+:::
+
 Identität ist die harte Abhängigkeit unter der gesamten Access Map: natives
 Audit attribuiert einen Zugriff einem **Credential**, und nur ein
 Identitäts-Roster kann dieses Credential an einen **Agenten oder eine Person**
@@ -69,7 +73,7 @@ Die Control Plane ist ein standardkonformer SCIM-2.0-Service-Provider (RFC
   Rolle. Unbekannte Mitglieder in einer gepushten Gruppe werden übersprungen
   **und auditiert**, nicht erfunden.
 
-## 3. Roster-Quellen: LDAP, Okta, Entra ID
+## 3. Roster-Quellen: LDAP, Okta, Entra ID — Business/Enterprise
 
 Roster-Quellen speisen das Identitätsinventar von Modul VI und — das ist der
 Punkt — geben Modul III die Bindungen, die die Attribution hochstufen:

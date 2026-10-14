@@ -58,6 +58,10 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(true, sessionsCreateRunSchema()), true
 	case http.MethodPut + " /runs/{ref}/peers":
 		return sessionsClosureBodyDeclaration(true, sessionsSetRunPeersSchema()), true
+	case http.MethodPost + " /runs/{ref}/move":
+		return sessionsClosureBodyDeclaration(true, sessionsMoveRunSchema()), true
+	case http.MethodPost + " /runs/{ref}/handoff":
+		return sessionsClosureBodyDeclaration(true, sessionsHandoffRunSchema()), true
 	case http.MethodPost + " /runs/{ref}/preview":
 		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(
 			oas.Obj("port", oas.Obj("type", "integer", "minimum", 1, "maximum", 65535,
@@ -73,7 +77,7 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 	case http.MethodPost + " /workspaces":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateWorkspaceSchema()), true
 	case http.MethodPatch + " /workspaces/{ref}":
-		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("read_only_folders", sessionsWorkspaceReadOnlyFoldersSchema()), "read_only_folders")), true
+		return sessionsClosureBodyDeclaration(true, sessionsPatchWorkspaceSchema()), true
 	case http.MethodPost + " /workspaces/{ref}/files/move":
 		return sessionsClosureBodyDeclaration(true, sessionsMoveFileSchema()), true
 	case http.MethodPost + " /provider-profiles":
@@ -121,6 +125,7 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		http.MethodDelete + " /workspaces/{ref}",
 		http.MethodDelete + " /workspaces/{ref}/files",
 		http.MethodPost + " /workspaces/{ref}/files/dir",
+		http.MethodPost + " /workspaces/{ref}/wiki",
 		http.MethodPost + " /channels/{id}/grants/{grant_id}/revoke",
 		http.MethodPost + " /deliveries/{id}/ack":
 		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
@@ -212,6 +217,27 @@ func sessionsSetRunPeersSchema() map[string]any {
 	return schema
 }
 
+// sessionsMoveRunSchema is the body of POST /runs/{ref}/move. Only the reference of
+// the target profile: homes, driver and authorization are the server's to resolve.
+func sessionsMoveRunSchema() map[string]any {
+	return sessionsClosureClosedObject(oas.Obj(
+		"provider_profile_ref", oas.Obj("type", "string",
+			"description", "The provider profile to move the stopped session to. It must belong to the same tool as the session's current profile."),
+	), "provider_profile_ref")
+}
+
+// sessionsHandoffRunSchema is the body of POST /runs/{ref}/handoff.
+func sessionsHandoffRunSchema() map[string]any {
+	return sessionsClosureClosedObject(oas.Obj(
+		"provider_profile_ref", oas.Obj("type", "string",
+			"description", "The provider profile to continue in. It may belong to any tool, including the session's own."),
+		"summary", oas.Obj("type", "string", "maxLength", handoffSummaryMax,
+			"description", "The reviewed text the new session starts from. Omitted, the server generates it (GET /runs/{ref}/handoff returns the same text for review)."),
+		"name", oas.Obj("type", "string",
+			"description", "The new session's name. Defaults to a name that says it continues this one."),
+	), "provider_profile_ref")
+}
+
 func sessionsTemplateBodySchema() map[string]any {
 	hookEntry := sessionsClosureNullable(sessionsClosureClosedObject(oas.Obj(
 		"command", sessionsClosureOptionalString("Hook command; the template authoring handler stores it without semantic validation."),
@@ -301,8 +327,24 @@ func sessionsCreateWorkspaceSchema() map[string]any {
 		)),
 		"read_only_folders", sessionsClosureNullable(sessionsWorkspaceReadOnlyFoldersSchema()),
 		"max_read_bytes", sessionsClosureNullable(oas.Obj("type", "integer", "format", "int64", "minimum", 0)),
-		"dlp_mode", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "label", "deny", "off"), "description", "Empty/null defaults to off.")),
+		"dlp_mode", sessionsClosureNullable(sessionsWorkspaceDLPModeSchema("Empty/null defaults to off.")),
 	), "root_path")
+}
+
+// sessionsPatchWorkspaceSchema is the PATCH /workspaces/{ref} body: any of the
+// settings, at least one; a setting left out or null is not changed.
+func sessionsPatchWorkspaceSchema() map[string]any {
+	schema := sessionsClosureClosedObject(oas.Obj(
+		"read_only_folders", sessionsClosureNullable(sessionsWorkspaceReadOnlyFoldersSchema()),
+		"dlp_mode", sessionsClosureNullable(sessionsWorkspaceDLPModeSchema("Empty selects off, as on registration.")),
+	))
+	schema["minProperties"] = 1
+	schema["description"] = "Name at least one setting with a value. A setting left out or null is not changed."
+	return schema
+}
+
+func sessionsWorkspaceDLPModeSchema(description string) map[string]any {
+	return oas.Obj("type", "string", "enum", oas.Enum("", "label", "deny", "off"), "description", description)
 }
 
 func sessionsWorkspaceReadOnlyFoldersSchema() map[string]any {
@@ -332,6 +374,8 @@ func sessionsCreateProviderProfileSchema() map[string]any {
 		"environment_ref", sessionsClosureOptionalString("Optional; when present must equal this node's execution environment (a foreign environment cannot have its homes validated here)."),
 		"auth_source", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "provider_account_home", "managed_injection"), "description", "Authorized authentication source for this profile: provider_account_home (the child uses the saved login inside its own homes) or managed_injection (a provider-compatible credential minted by that driver's governed adapter). They are distinct authorizations with no fallback between them; empty authorizes neither and refuses every launch whose driver requires one.")),
 		"provider_record_ref", sessionsClosureOptionalString("Optional: the registered provider whose credential this profile's managed launches use. Empty binds no registered provider; auth_source still governs how launches authenticate. The engine refuses a credential whose kind this driver cannot read."),
+		"session_programs", sessionsProfileProgramsSchema(),
+		"session_registries", sessionsProfileRegistriesSchema(),
 	), "driver", "config_home", "user_home")
 }
 
@@ -345,7 +389,28 @@ func sessionsPatchProviderProfileSchema() map[string]any {
 		"state", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("active", "disabled"), "description", "Reversible lifecycle transition; retired is refused here.")),
 		"auth_source", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "provider_account_home", "managed_injection"), "description", "Re-authorizes (or, with the empty string, withdraws) the authentication source. It is not identity, so it does not create a new profile id; a live child keeps the source its own launch was authorized under.")),
 		"provider_record_ref", sessionsClosureOptionalString("Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved."),
+		"session_programs", sessionsProfileProgramsSchema(),
+		"session_registries", sessionsProfileRegistriesSchema(),
 	))
+}
+
+// sessionsProfileProgramsSchema and sessionsProfileRegistriesSchema mirror
+// provider_profile_packages.go: what every session under the profile gets.
+func sessionsProfileProgramsSchema() map[string]any {
+	return sessionsClosureNullable(oas.Obj("type", "array", "maxItems", maxSessionPrograms,
+		"items", oas.Obj("type", "string", "pattern", "^[a-z0-9][a-z0-9_-]{0,63}$"),
+		"description", "Installed third-party programs (the tool installer's program names) put first on each session's PATH. A launch whose program is not installed is refused 409. Declaring programs needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it."))
+}
+
+func sessionsProfileRegistriesSchema() map[string]any {
+	return sessionsClosureNullable(oas.Obj("type", "array", "maxItems", maxSessionRegistries,
+		"items", sessionsClosureClosedObject(oas.Obj(
+			"kind", oas.Obj("type", "string", "enum", oas.Enum(registryKindNPM)),
+			"url", oas.Obj("type", "string", "minLength", 1, "description", "The registry's base URL: https, or http on a loopback host."),
+			"scope", oas.Obj("type", "string", "description", "An npm scope (@name) routed to this registry; empty makes it the default registry, one per profile."),
+			"secret", oas.Obj("type", "string", "description", "The tenant vault secret (env/...) holding the registry token. Empty sends none."),
+		), "kind", "url"),
+		"description", "npm registries each native session installs from. The token travels in a per-launch npm configuration file, never in the environment or argv, and a confined session's network reaches the registry hosts. Declaring registries needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it."))
 }
 
 // sessionsResolveProviderProfileSchema mirrors resolveProfileRequest: the driver

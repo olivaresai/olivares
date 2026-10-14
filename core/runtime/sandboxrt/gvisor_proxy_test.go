@@ -114,12 +114,7 @@ func TestGVisorProxySocketReachesOnlyAuthorizedTargetWithoutNIC(t *testing.T) {
 	defer target.Close()
 	denied := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("unlisted target was reached") }))
 	defer denied.Close()
-	// A short external TMPDIR is required on hosts with long checkout paths (AF_UNIX limit).
-	base, err := os.MkdirTemp("", "uds-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	base := shortProxySocketDir(t)
 	f := &socketGuest{t: t, denied: denied.URL, fakeCmd: fakeCmd{stateExit: 1}}
 	backend := newGVisorBackendWith(GVisorConfig{RootfsDir: t.TempDir(), BundleRoot: base, ProxySocket: true}, f)
 	engine := New(WithBackend(backend))

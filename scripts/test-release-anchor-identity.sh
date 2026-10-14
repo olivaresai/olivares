@@ -271,5 +271,175 @@ check "(17) reports that environments do not match" si "$d"
 #      comentario y NO lo habia implementado; este caso lo ata.
 check "(18) alias 'prod' does NOT exist, consistent with the sibling -> 2" 2 "$(runp prod "$NUEVA_LIC" "$NUEVA_OTA")"
 
+# --- (24)-(31) THE `--worker` MODE ----------------------------------------
+# The production Worker publishes its license key id on `GET /` (`license_key_id`, the
+# sha256 of the 32 raw bytes). Before, nothing read-only could tell whether the deployed secret
+# was the key the release binaries accept: the first buyer would have been the test.
+# `curl` is replaced by a double on PATH, like `gh` above: the battery never talks to the network.
+# The two expected ids are an INDEPENDENT ORACLE (python3 hashlib over the 32 bytes of the
+# toy anchor), not the SUT's own computation: a SUT that hashed wrongly would agree with itself.
+KID_NUEVA_LIC="sha256:843e7deacad76299f462830702246d04ddeafe2d36923f6a53a01998c6fe9114"
+KID_VIEJA="sha256:8294d7676cd7c09bdcfd0166dfc862f6163894811c75c73e0b2a319623c7e594"
+curl_doble() { # <exit-code> <stdout>; records its argv in $T/curl.args, one invocation per line
+	rm -f "$T/curl.args"
+	cat >"$T/bin/curl" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >>'$T/curl.args'
+printf '%s' '$2'
+exit $1
+EOF
+	chmod +x "$T/bin/curl"
+}
+run_worker() { # [url...]; usa el curl doble ya escrito. WURL=<v> fija OLIVARES_LICENSE_WORKER_URL (vacio incluido)
+	[ -n "${WURL+x}" ] && export OLIVARES_LICENSE_WORKER_URL="$WURL"
+	env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/claves" \
+		OLIVARES_ANCHOR_TABLE="$T/tabla.md" \
+		sh "$SUT" --worker "$@" >"$T/out" 2>&1
+	echo $?
+}
+doc() { # <license_key_id JSON literal>
+	printf '{"service":"olivares-license-worker","enabled":true,"provider":"dodo","license_key_id":%s,"endpoints":["GET /health"]}' "$1"
+}
+
+# (24) POSITIVE CONTROL: the Worker publishes the reviewed anchor's id. Without it, a gate that
+#      always refused would pass (25)-(30).
+curl_doble 0 "$(doc "\"$KID_NUEVA_LIC\"")"
+check "(24) Worker publishes the reviewed key id -> 0" 0 "$(run_worker https://worker.test)"
+grep -q 'OK — the Worker publishes the reviewed LICENSE key id' "$T/out" && d=si || d=no
+check "(24) says OK for the Worker, not for both anchors" si "$d"
+# The seam the double would otherwise hide: exactly one read, of exactly the Worker's GET /, with
+# `-f` (an HTTP error must fail), `-q` (no .curlrc) and a size cap.
+check "(24) one request" 1 "$(wc -l <"$T/curl.args" | tr -d ' ')"
+grep -qE '(^| )-q ' "$T/curl.args" && d=si || d=no
+check "(24) curl runs with -q" si "$d"
+grep -qE ' -[a-zA-Z]*f' "$T/curl.args" && d=si || d=no
+check "(24) curl runs with -f" si "$d"
+grep -q -- '--max-filesize ' "$T/curl.args" && d=si || d=no
+check "(24) curl bounds the body size" si "$d"
+check "(24) URL is the Worker's GET / exactly" "https://worker.test/" "$(tail -n 1 "$T/curl.args" | awk '{print $NF}')"
+
+# (25) THE DEFECT THIS MODE EXISTS FOR: the deployed secret is ANOTHER, well-formed key. That is
+#      what the first buyer would have found: «license does not verify against this deployment».
+curl_doble 0 "$(doc "\"$KID_VIEJA\"")"
+check "(25) Worker publishes another well-formed key id -> 1" 1 "$(run_worker https://worker.test)"
+grep -q 'LICENSE MISMATCH' "$T/out" && d=si || d=no
+check "(25) names LICENSE MISMATCH" si "$d"
+grep -q "$KID_VIEJA" "$T/out" && grep -q "$KID_NUEVA_LIC" "$T/out" && d=si || d=no
+check "(25) prints BOTH ids so an operator can see which side is stale" si "$d"
+
+# (26) `null` means «looked, and the Worker has no usable key»: a finding (1), not «could not look».
+curl_doble 0 "$(doc null)"
+check "(26) Worker reports license_key_id null -> 1" 1 "$(run_worker https://worker.test)"
+grep -q 'NO usable signing key' "$T/out" && d=si || d=no
+check "(26) says the Worker has no usable key" si "$d"
+
+# (27) An OLDER deployment does not publish the field: nothing was compared -> 2, never 0 or 1.
+curl_doble 0 '{"service":"olivares-license-worker","enabled":true,"provider":"dodo","endpoints":[]}'
+check "(27) Worker without the field (older deployment) -> 2" 2 "$(run_worker https://worker.test)"
+grep -q 'publishes no well-formed license_key_id' "$T/out" && d=si || d=no
+check "(27) names the missing field" si "$d"
+
+# (28) Network/HTTP: curl -f exits non-zero. An unreadable Worker is not a Worker that matches.
+curl_doble 22 ''
+check "(28) curl fails (HTTP error, DNS) -> 2" 2 "$(run_worker https://worker.test)"
+grep -q 'could not read https://worker.test/' "$T/out" && d=si || d=no
+check "(28) says it could not read, not that it differs" si "$d"
+
+# (29) The SHAPE closes the class: curl exits 0 and returns a proxy page, or a truncated id.
+curl_doble 0 '<html>502 Bad Gateway</html>'
+check "(29) HTML body -> 2" 2 "$(run_worker https://worker.test)"
+grep -q 'publishes no well-formed license_key_id' "$T/out" && d=si || d=no
+check "(29) says nothing was compared" si "$d"
+curl_doble 0 "$(doc '"sha256:843e7dea"')"
+check "(29) truncated key id -> 2" 2 "$(run_worker https://worker.test)"
+
+# (30) The mode depends on neither the OTA anchor NOR the environment: with no OTA row or
+#      ceremony file, and with a stray OLIVARES_LICENSE_PUBKEY exported that must NOT be read,
+#      it still gives 0. An unreadable reviewed LICENSE anchor refuses (2) instead of comparing.
+curl_doble 0 "$(doc "\"$KID_NUEVA_LIC\"")"
+check "(30) license-only table, no OTA anywhere, stray env anchor -> 0" 0 "$(env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/no-existe" OLIVARES_ANCHOR_TABLE="$T/tabla-parcial.md" OLIVARES_LICENSE_PUBKEY="$VIEJA_OTA" sh "$SUT" --worker https://worker.test >"$T/out" 2>&1; echo $?)"
+check "(30) no reviewed LICENSE anchor readable -> 2" 2 "$(env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/no-existe" OLIVARES_ANCHOR_TABLE="$T/sin-tabla.md" sh "$SUT" --worker https://worker.test >"$T/out" 2>&1; echo $?)"
+# (30c) The SHAPE guard on the reviewed anchor: 3 bytes are not a key. Without it the derived id
+#       would be that of garbage and the verdict a MISMATCH (1) instead of «could not look» (2).
+tabla "$T/tabla-corta.md" "YWJj" "$NUEVA_OTA"
+check "(30c) reviewed anchor of 3 bytes -> 2, never MISMATCH" 2 "$(env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/no-existe" OLIVARES_ANCHOR_TABLE="$T/tabla-corta.md" sh "$SUT" --worker https://worker.test >"$T/out" 2>&1; echo $?)"
+grep -q 'MISMATCH' "$T/out" && d=si || d=no
+check "(30c) does not call it a mismatch" no "$d"
+
+# (31) Profile: --worker is production only. Under preprod it refuses before touching the network.
+curl_doble 0 "$(doc "\"$KID_NUEVA_LIC\"")"
+check "(31) --worker under preprod -> 2" 2 "$(env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/claves" OLIVARES_ANCHOR_TABLE="$T/tabla.md" OLIVARES_RELEASE_PROFILE=preprod sh "$SUT" --worker https://worker.test >"$T/out" 2>&1; echo $?)"
+grep -q 'PRODUCTION Worker' "$T/out" && d=si || d=no
+check "(31) says why" si "$d"
+[ ! -e "$T/curl.args" ] && d=si || d=no
+check "(31) refused before touching the network" si "$d"
+
+# (32) THE DOCUMENT IS PARSED, not searched with grep. A top-level null does not hide behind a
+#      nested "license_key_id" that matches; another service does not count even if it carries the
+#      field; and the id shape is exact (64 lowercase hex).
+curl_doble 0 "{\"service\":\"olivares-license-worker\",\"note\":{\"license_key_id\":\"$KID_NUEVA_LIC\"},\"license_key_id\":null}"
+check "(32) nested id does not hide a top-level null -> 1" 1 "$(run_worker https://worker.test)"
+curl_doble 0 "{\"service\":\"another-service\",\"license_key_id\":\"$KID_NUEVA_LIC\"}"
+check "(32) another service's document -> 2" 2 "$(run_worker https://worker.test)"
+curl_doble 0 "$(doc "\"$(printf '%s' "$KID_NUEVA_LIC" | tr 'a-f' 'A-F' | sed 's/^SHA256/sha256/')\"")"
+check "(32) uppercase hex -> 2" 2 "$(run_worker https://worker.test)"
+curl_doble 0 "$(doc "\"$(printf '%s' "$KID_NUEVA_LIC" | cut -c1-70)\"")"
+check "(32) 63 hex digits -> 2" 2 "$(run_worker https://worker.test)"
+curl_doble 0 "$(doc "\"${KID_NUEVA_LIC}0\"")"
+check "(32) 65 hex digits -> 2" 2 "$(run_worker https://worker.test)"
+curl_doble 0 "$(doc 7)"
+check "(32) a number -> 2" 2 "$(run_worker https://worker.test)"
+
+# (33) THE URL: the one requested is the one read, with or without a trailing slash; the default
+#      is production; the environment variable replaces it; and empty refuses instead of production.
+curl_doble 0 "$(doc "\"$KID_NUEVA_LIC\"")"
+check "(33) trailing slash -> 0" 0 "$(run_worker https://worker.test/)"
+check "(33) trailing slash is not doubled" "https://worker.test/" "$(tail -n 1 "$T/curl.args" | awk '{print $NF}')"
+check "(33) default is production -> 0" 0 "$(run_worker)"
+check "(33) default URL" "https://licenses.olivares.ai/" "$(tail -n 1 "$T/curl.args" | awk '{print $NF}')"
+check "(33) env URL -> 0" 0 "$(WURL=https://env.test run_worker)"
+check "(33) env URL is the one read" "https://env.test/" "$(tail -n 1 "$T/curl.args" | awk '{print $NF}')"
+check "(33) loopback http for a local Worker -> 0" 0 "$(run_worker http://127.0.0.1:8787)"
+check "(33) empty URL argument -> 2" 2 "$(run_worker '')"
+grep -q 'empty URL' "$T/out" && d=si || d=no
+check "(33) names the empty URL" si "$d"
+check "(33) empty env URL -> 2, not production" 2 "$(WURL= run_worker)"
+rm -f "$T/curl.args"
+check "(33) plaintext http to another host -> 2" 2 "$(run_worker http://worker.test)"
+grep -q 'is not https://' "$T/out" && d=si || d=no
+check "(33) names the scheme rule" si "$d"
+check "(33) credentials in the URL -> 2" 2 "$(run_worker https://user:pass@worker.test)"
+grep -q 'characters outside' "$T/out" && d=si || d=no
+check "(33) names the character rule" si "$d"
+check "(33) option-like value -> 2" 2 "$(run_worker -oX)"
+grep -q 'is not https://' "$T/out" && d=si || d=no
+check "(33) option-like value fails the scheme rule" si "$d"
+check "(33) space in the URL -> 2" 2 "$(run_worker 'https://worker.test/ x')"
+grep -q 'characters outside' "$T/out" && d=si || d=no
+check "(33) space fails the character rule" si "$d"
+[ ! -e "$T/curl.args" ] && d=si || d=no
+check "(33) every refused URL stopped before the network" si "$d"
+
+# (34) AN UNKNOWN ARGUMENT IS NOT THE DEFAULT MODE. Before, `--wroker` fell into the environment
+#      variable mode and could print «OK — both anchors»: the twin of the profile defect.
+check "(34) unknown argument -> 2" 2 "$(env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/claves" OLIVARES_ANCHOR_TABLE="$T/tabla.md" OLIVARES_LICENSE_PUBKEY="$NUEVA_LIC" OLIVARES_OTA_PUBKEY="$NUEVA_OTA" sh "$SUT" --wroker >"$T/out" 2>&1; echo $?)"
+grep -q "unknown argument '--wroker'" "$T/out" && d=si || d=no
+check "(34) names the argument" si "$d"
+
+# (35) THE INTERPRETER LOADS NO CODE FROM THE CURRENT DIRECTORY. `python3 -c` puts the cwd first
+#      on sys.path: a planted json.py would be imported when the document is read and could
+#      print the expected id. With `-I` it is not. The planted file ALWAYS returns the reviewed id;
+#      the real document carries another, so the correct verdict is 1, and a 0 is the injection.
+mkdir -p "$T/plantado"
+cat >"$T/plantado/json.py" <<EOF
+def load(_f):
+    return {"service": "olivares-license-worker", "license_key_id": "$KID_NUEVA_LIC"}
+EOF
+curl_doble 0 "$(doc "\"$KID_VIEJA\"")"
+check "(35) a json.py planted in the cwd is not imported -> 1" 1 "$(cd "$T/plantado" && env PATH="$T/bin:$PATH" OLIVARES_ANCHOR_ROOT="$ROOT" OLIVARES_ANCHOR_DIR="$T/claves" OLIVARES_ANCHOR_TABLE="$T/tabla.md" sh "$SUT" --worker https://worker.test >"$T/out" 2>&1; echo $?)"
+
+# (36) Argumentos de mas no se ignoran en silencio.
+check "(36) --worker URL extra -> 2" 2 "$(run_worker https://worker.test extra)"
+
 printf '\ncheck-release-anchor-identity: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1

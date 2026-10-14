@@ -94,6 +94,8 @@
     "driftPending": "等待身份关联",
     "driftUnused": "未使用的授权",
     "coverageNote": "部分访问以局部覆盖率被观测（近似或不透明捕获）；漂移数值为下限。",
+    "driftTruncated": "访问漂移读取不完整；数值为下限。",
+    "driftUnavailable": "无法读取访问漂移。",
     "noFindings": "无未处理发现项。",
     "noRuns": "尚无红队运行。",
     "sharedDescription": "未解决的安全问题和访问偏移。"

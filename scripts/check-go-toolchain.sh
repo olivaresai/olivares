@@ -67,6 +67,10 @@ FINDINGS=0
 ver_le() {
 	local a="$1" b="$2" i
 	local -a A B
+	# Fail closed on anything but dotted numbers: the compares below swallow their own errors, so a
+	# CRLF go.mod ("1.26.4\r") used to read as "not older" and pass every rule (#1531 review).
+	[[ "$a" =~ ^[0-9]+(\.[0-9]+)*$ && "$b" =~ ^[0-9]+(\.[0-9]+)*$ ]] ||
+		cannot_look "cannot compare go versions '$(printf '%q' "$a")' and '$(printf '%q' "$b")'"
 	IFS=. read -r -a A <<<"$a"
 	IFS=. read -r -a B <<<"$b"
 	for i in 0 1 2; do
@@ -209,6 +213,38 @@ done <<EOF
 $CENSUS
 EOF
 
+# --- RULE 3b: workspace modules the vulnerability gate scans ALONE -----------------------------
+#
+# Added 2026-10-11 (#1531). Rule 3 skips workspace members, and rule 2 only stops a go line ABOVE
+# the workspace. But scripts/govulncheck-gate.sh scans some members AGAIN with GOWORK=off, and there
+# the module's own go line picks the toolchain. cloud/control-plane said `go 1.26.6`, so on a host
+# with go1.26.8 the gate graded the 1.26.8 standard library (11 called vulns) while CI, which
+# installs go1.26.9 from go.work, was green. A member scanned alone must not sit below go.work.
+# The list is read from the gate's own STANDALONE_MODULES line, so the two cannot disagree.
+GATE=scripts/govulncheck-gate.sh
+STANDALONE=""
+if [ -f "$GATE" ]; then
+	STANDALONE=$(sed -n 's/^STANDALONE_MODULES="\(.*\)"$/\1/p' "$GATE")
+	[ -n "$STANDALONE" ] || cannot_look "$GATE has no STANDALONE_MODULES=\"...\" line, so the modules it
+  scans with GOWORK=off are UNKNOWN"
+fi
+ALONE=0
+for m in $STANDALONE; do
+	m="${m#./}"; m="${m%/}" # the use list is read without ./ or a trailing slash; so is this one
+	# An absent module (the public export has no cloud/) is the gate's decision, not this one's.
+	[ -f "$m/go.mod" ] || continue
+	printf '%s\n' "$USED" | grep -qxF "$m" || continue # outside the workspace: rule 3 covers it
+	ALONE=$((ALONE + 1))
+	agv=$(grep -m1 -E '^go[[:space:]]+[0-9]' "$m/go.mod" | awk '{print $2}')
+	if [ -n "$agv" ] && ! ver_le "$WS_GO" "$agv"; then
+		FINDINGS=$((FINDINGS + 1))
+		say "check-go-toolchain: SCANNED ALONE BELOW THE WORKSPACE — $m/go.mod asks for go $agv, go.work" >&2
+		say "  pins $WS_GO, and $GATE scans it with GOWORK=off, where its own line picks the toolchain." >&2
+		say "  The gate then grades whatever Go the host has, not the one the estate ships." >&2
+		say "  repair: raise its 'go' line to $WS_GO in the same commit as go.work." >&2
+	fi
+done
+
 # --- THE FOURTH RULE: the toolchain the BUILDERS use -------------------------------------------
 #
 # Rules 1-3 are about go.mod files. They were all CLEAN on 2026-08-15 while the release workflow
@@ -287,6 +323,7 @@ if [ "$FINDINGS" -ne 0 ]; then
 fi
 say "check-go-toolchain: CLEAN — $N workspace module(s), none carrying a redundant toolchain line,"
 say "  none asking for a go version above the workspace's $WS_GO; and $OUTSIDE module(s) outside the"
-say "  workspace (census via $CENSUS_SRC), none pinned below it; and $BUILD_PINS builder pin(s)"
+say "  workspace (census via $CENSUS_SRC), none pinned below it;"
+say "  and $ALONE workspace module(s) the vulnerability gate scans alone, none below it; and $BUILD_PINS builder pin(s)"
 say "  (Dockerfile FROM, devcontainer feature, workflow literal) all equal to $WS_GO."
 exit 0

@@ -10,6 +10,7 @@ import './i18n'
 const { api, auth } = vi.hoisted(() => ({
   api: {
     inventory: vi.fn(),
+    pins: vi.fn().mockResolvedValue({ pins: [] }),
     providers: vi.fn(),
     job: vi.fn(),
   },

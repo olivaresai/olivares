@@ -24,6 +24,7 @@ import { formatInt } from '@/lib/format'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { cuentaConSuelo } from './count-floor'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
+import { SessionFolders } from './session-folders'
 import { WorkspaceContents } from './workspace-contents'
 import './i18n'
 
@@ -113,6 +114,7 @@ function WorkspaceSelection({
         }
         secondaryAction={selectable ? inventoryAction : undefined}
       />
+      <SessionFolders tenant={tenant} />
     </IntelPage>
   )
 }
@@ -220,6 +222,8 @@ function WorkspaceDashboard({
       {tenant && auth.can('tenant:admin') && (
         <WorkspaceContents tenant={tenant} workspaceId={workspaceId} />
       )}
+
+      <SessionFolders tenant={tenant} />
 
       <section className="flex flex-col gap-2">
         <div className="flex min-h-8 items-center justify-between gap-2">

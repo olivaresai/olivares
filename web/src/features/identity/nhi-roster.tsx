@@ -45,6 +45,12 @@ const NHI_KINDS = [
   'secret_store',
 ] as const
 
+/** An account state the source never reported is unknown, not active. */
+function accountStatus(disabled: boolean | null) {
+  if (disabled === null) return 'unknown'
+  return disabled ? 'inactive' : 'active'
+}
+
 function principalVariant(pt?: string) {
   if (pt === 'nhi') return 'accent' as const
   if (pt === 'human') return 'info' as const
@@ -164,7 +170,7 @@ export function NhiRosterTab() {
         header: t('roster.col.state'),
         enableSorting: false,
         cell: ({ row }) => (
-          <StatusBadge status={row.original.disabled ? 'inactive' : 'active'} />
+          <StatusBadge status={accountStatus(row.original.disabled)} />
         ),
       },
     ],
@@ -269,7 +275,7 @@ function RosterDetailSheet({
               {identity.source ?? '—'}
             </KvRow>
             <KvRow label={t('roster.col.state')}>
-              <StatusBadge status={identity.disabled ? 'inactive' : 'active'} />
+              <StatusBadge status={accountStatus(identity.disabled)} />
             </KvRow>
           </KvList>
           <p className="text-caption text-muted-foreground">

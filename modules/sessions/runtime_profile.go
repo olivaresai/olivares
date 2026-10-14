@@ -167,6 +167,19 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 	return nil
 }
 
+// storedProfileSnapshot reads back what setProfileSnapshot persisted: the profile,
+// homes and authorizations the run was launched under. An empty ProfileID is a run
+// that predates profiles.
+func storedProfileSnapshot(rec model.Record) ProviderHomeSnapshot {
+	return ProviderHomeSnapshot{
+		ProfileID: rec.String(colRunProfileID), Driver: rec.String(colRunProfileDriver),
+		EnvironmentRef: rec.String(colRunProfileEnvRef),
+		ConfigHome:     rec.String(colRunProfileConfigHome), UserHome: rec.String(colRunProfileUserHome),
+		AuthSource:        rec.String(colRunProviderAuthSource),
+		ProviderRecordRef: rec.String(colRunProviderRecordRef),
+	}
+}
+
 // setProfileSnapshot writes (or clears) the run row's profile snapshot columns.
 func setProfileSnapshot(rec model.Record, snap *ProviderHomeSnapshot) {
 	if snap == nil {
@@ -335,6 +348,16 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 // one: the declaration is refused when it is MADE (validateSessionPolicyInput), so
 // reaching here with a stored declaration refuses the launch with 422.
 func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy) error {
+	if policy.unreadable {
+		return errUnreadablePackages
+	}
+	if err := validateRegistryEnvAllow(policy.registries, p.EnvAllow); err != nil {
+		return err
+	}
+	p.profilePrograms, p.profileRegistries = policy.programs, policy.registries
+	if err := refuseNonNativePackages(*p); err != nil {
+		return err
+	}
 	if policy.PermissionMode != "" {
 		if !validPermissionModes[policy.PermissionMode] {
 			return &runErr{http.StatusUnprocessableEntity,

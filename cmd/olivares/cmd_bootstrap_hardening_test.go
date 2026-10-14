@@ -684,33 +684,12 @@ func TestAAL3GatedVerbsExistAndCarryTheCallersCredential(t *testing.T) {
 		}
 	})
 
-	t.Run("PERMIT tenants set-region carries the region", func(t *testing.T) {
-		prepareBootstrapCLITest(t)
-		var body map[string]any
-		srv := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": "org-1", "tenant_id": "t_acme", "name": "Acme", "slug": "acme",
-				"status": "active", "data_region": "eu", "created_at": "x"})
-		})
-		if _, _, err := execRoot(t, "tenants", "set-region", "t_acme", "--region", "eu", "--yes",
-			"--server", srv.URL, "--token", "olvs_elevated_session"); err != nil {
-			t.Fatalf("tenants set-region: %v", err)
-		}
-		if body["data_region"] != "eu" {
-			t.Fatalf("region body = %#v", body)
-		}
-	})
-
-	t.Run("DENY set-region without a decision, and without asking the plane", func(t *testing.T) {
+	t.Run("DENY users disable without consent, and without asking the plane", func(t *testing.T) {
 		prepareBootstrapCLITest(t)
 		srv := newCountingServer(t, func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"tenant_id": "t_acme"})
 		})
 		for _, args := range [][]string{
-			{"tenants", "set-region", "t_acme", "--yes"},
-			{"tenants", "set-region", "t_acme", "--region", "eu", "--clear", "--yes"},
-			{"tenants", "set-region", "t_acme", "--region", "eu"},
 			{"users", "disable", "usr-2"},
 		} {
 			full := append(append([]string{}, args...), "--server", srv.URL, "--token", "olvs_x")

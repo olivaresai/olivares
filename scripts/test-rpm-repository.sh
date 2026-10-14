@@ -262,7 +262,7 @@ PY
 STUB_FINGERPRINT=0123456789ABCDEF0123456789ABCDEF01234567
 # The olivares package the fixture repositories hold, named for the release this tree builds.
 # release
-FIXTURE_RPM=olivares-0.1-1.x86_64.rpm
+FIXTURE_RPM=olivares-0.2-1.x86_64.rpm
 # /release
 
 # Stub gpg, rpm, rpmkeys, rpmsign and createrepo_c for the path tests. Every call
@@ -999,7 +999,7 @@ import sys
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
     # release
-    ["olivares", "olivares-0.1-1.x86_64", "x86_64", "olivares-0.1-1.x86_64.rpm"],
+    ["olivares", "olivares-0.2-1.x86_64", "x86_64", "olivares-0.2-1.x86_64.rpm"],
     # /release
     ["olivares-appliance-base", "olivares-appliance-base-26.900-1.noarch", "noarch",
      "olivares-appliance-base-26.900-1.noarch.rpm"],

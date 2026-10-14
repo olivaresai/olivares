@@ -128,6 +128,7 @@ type commitOutcomeProxy struct {
 	unnamed    int
 	log        []string
 	held       *commitOutcomeProxyHold
+	released   *commitOutcomeProxyHold // the answer release() delivered; sever() resets its connection
 	conns      []net.Conn
 	closed     bool
 	identified bool
@@ -349,6 +350,7 @@ func (p *commitOutcomeProxy) release() {
 	p.mu.Lock()
 	held := p.held
 	p.held = nil
+	p.released = held
 	p.mu.Unlock()
 	if held == nil || held.mode != commitOutcomeProxyHoldAck {
 		p.t.Fatal("COULD_NOT_LOOK: no held answer to release")
@@ -370,24 +372,26 @@ func (p *commitOutcomeProxy) release() {
 	}
 }
 
-// sever closes both halves, which is what a real reset looks like to the pool.
+// sever closes both halves of the held connection, or of the one whose answer
+// release() delivered, which is what a real reset of that connection looks like
+// to the pool. The engine's other pooled connections stay open: closing them too
+// made the census after a release borrow a dead connection and fail with
+// "conn closed" instead of reading the outcome under test.
 func (p *commitOutcomeProxy) sever() {
+	p.t.Helper()
 	p.mu.Lock()
 	held := p.held
-	p.held = nil
-	p.mu.Unlock()
-	if held != nil {
-		p.settleWithheldTerminate(held)
-		_ = held.upstream.Close()
-		_ = held.client.Close()
-		return
+	if held == nil {
+		held = p.released
 	}
-	p.mu.Lock()
-	conns := append([]net.Conn(nil), p.conns...)
+	p.held, p.released = nil, nil
 	p.mu.Unlock()
-	for _, c := range conns {
-		_ = c.Close()
+	if held == nil {
+		p.t.Fatal("COULD_NOT_LOOK: no held or released connection to sever")
 	}
+	p.settleWithheldTerminate(held)
+	_ = held.upstream.Close()
+	_ = held.client.Close()
 }
 
 func (p *commitOutcomeProxy) record(line string) {

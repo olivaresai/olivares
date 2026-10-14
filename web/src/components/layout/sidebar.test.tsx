@@ -313,12 +313,12 @@ describe('the area directory search (P2-12, N1 index)', () => {
     const before = screen.getAllByRole('link').length
     expect(areaPanel('security-identity')).toHaveClass('hidden')
 
-    await user.type(filter(), 'residency')
+    await user.type(filter(), 'claude code governance')
     const after = screen.getAllByRole('link')
     // The non-firing direction matters as much: a filter that hides EVERYTHING also
     // "narrows" the list, and only the surviving match tells the two apart.
     expect(after.length).toBeLessThan(before)
-    expect(after.some((a) => a.getAttribute('href') === '/residency')).toBe(
+    expect(after.some((a) => a.getAttribute('href') === '/claude-policy')).toBe(
       true,
     )
     expect(after.some((a) => a.getAttribute('href') === '/models')).toBe(false)
@@ -328,7 +328,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
     expect(document.querySelector('[data-nav-ranked]')).not.toBeNull()
     expect(document.querySelector('[data-nav-area]')).toBeNull()
     expect(
-      screen.getByRole('link', { name: /Data residency/ }),
+      screen.getByRole('link', { name: /Claude Code governance/ }),
     ).toHaveTextContent(
       'Security & identity › Policies and governance boundaries',
     )
@@ -360,7 +360,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
     )
     expect(shown[0]).toBe('/console')
     expect(shown).toEqual(
-      expect.arrayContaining(['/console', '/tenants', '/provider-profiles']),
+      expect.arrayContaining(['/console', '/provider-profiles']),
     )
     // The announced count is the number of links on screen.
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
@@ -375,7 +375,9 @@ describe('the area directory search (P2-12, N1 index)', () => {
     await user.type(filter(), 'admin')
     const shown = hrefs()
     expect(shown).not.toContain('/console')
-    expect(shown).toContain('/tenants')
+    expect(shown.includes('/tenants')).toBe(
+      FEATURE_EXTENSIONS.some((view) => view.id === 'tenants'),
+    )
   })
 
   it('finds a view by a NOUN it manages, not just by its label', async () => {
@@ -449,7 +451,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
   it('announces the number of links the operator can actually see', async () => {
     const user = userEvent.setup()
     renderIntel(<AreasTree />)
-    await user.type(filter(), 'residency')
+    await user.type(filter(), 'claude code governance')
     const live = document.querySelector('[aria-live="polite"]') as HTMLElement
     const shown = screen.getAllByRole('link').length
     expect(live.textContent).toBe(`Matches: ${shown}`)
@@ -459,7 +461,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
     // The clear button unmounts on click, so focus would otherwise land on <body>.
     const user = userEvent.setup()
     renderIntel(<AreasTree />)
-    await user.type(filter(), 'residency')
+    await user.type(filter(), 'claude code governance')
     await user.click(screen.getByRole('button', { name: /clear/i }))
     expect(filter()).toHaveFocus()
   })
@@ -469,7 +471,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
     renderIntel(<AreasTree />)
     const before = screen.getAllByRole('link').length
 
-    await user.type(filter(), 'residency')
+    await user.type(filter(), 'claude code governance')
     await user.click(screen.getByRole('button', { name: /clear/i }))
 
     expect(screen.getAllByRole('link')).toHaveLength(before)

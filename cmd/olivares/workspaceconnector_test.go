@@ -61,11 +61,8 @@ func wireBoot(t *testing.T, cfg store.Config, dir string) (*engine, string, mode
 		t.Fatalf("login = %d", code)
 	}
 	token := login["token"].(string)
-	code, org, _ := doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/system/orgs", token, "", map[string]any{"name": "WIRE", "slug": "wire"})
-	if code != http.StatusCreated {
-		t.Fatalf("create org = %d", code)
-	}
-	return eng, token, model.TenantID(org["tenant_id"].(string))
+	tenant := createOrganizationFixture(t, eng.store, "WIRE", "wire").TenantID
+	return eng, token, tenant
 }
 
 func TestWorkspaceConnectorInlineSecretsWired(t *testing.T) {
@@ -166,15 +163,11 @@ func TestWorkspaceConnectorInlineSecretsWired(t *testing.T) {
 			if checkVault("wire-secret-two") != retained {
 				t.Fatal("moving a reference to another field deleted the live secret")
 			}
-			code, other, _ := doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/system/orgs", token, "", map[string]any{"name": "Other", "slug": "wire-other"})
-			if code != http.StatusCreated {
-				t.Fatalf("other org = %d", code)
-			}
-			foreign := model.TenantID(other["tenant_id"].(string))
+			foreign := createOrganizationFixture(t, eng.store, "Other", "wire-other").TenantID
 			if _, err := vault.Resolve(ctx, foreign, checkVault("wire-secret-two")); err == nil {
 				t.Fatal("foreign tenant opened workspace secret")
 			}
-			code, _, _ = doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/m/sourcescope/workspace-connectors", token, foreign.String(), body)
+			code, _, _ := doDemoViewJSON(t, eng.api.Handler(), "POST", "/v1/m/sourcescope/workspace-connectors", token, foreign.String(), body)
 			if code != http.StatusCreated {
 				t.Fatalf("same connector in foreign tenant = %d", code)
 			}

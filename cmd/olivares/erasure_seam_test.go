@@ -46,6 +46,7 @@ func erasureFixturePass(t *testing.T, e *consentEstate, user model.ID, step *era
 
 func TestSubjectExcludedFromOffboardUntilLift(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "checking exclusion through a lift requires completed retirement and readmission")
 		ctx := context.Background()
 		const email = "subject-fence@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
@@ -88,6 +89,7 @@ func TestSubjectExcludedFromOffboardUntilLift(t *testing.T) {
 
 func TestRetirementStoreStateBlocksUntilClean(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "external store-state transitions require published blocked and retired verdicts")
 		user := e.onboard(e.tT, "store-state@consent.test", "viewer")
 		e.scimDelete(e.tT, user)
 		step := &erasureFixtureStep{st: e.eng.store}
@@ -145,6 +147,7 @@ func TestRetirementStoreStateBlocksUntilClean(t *testing.T) {
 
 func TestReadmitRefusedUntilPrivateErasureCompletes(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "the private-store case requires completion to permit readmission")
 		const email = "private-erasure@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		e.scimDelete(e.tT, user)

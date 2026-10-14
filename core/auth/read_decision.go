@@ -135,7 +135,9 @@ func (az *Authorizer) DecideRouteRead(ctx context.Context, req Request) (RouteRe
 		return RouteReadDecision{}, ErrAuthorizerUnavailable
 	}
 	principalBundle, principalWindow, ok := principalCompleteAuthorizationEvidence(req.Principal, req.Tenant)
-	if !ok {
+	// The engine system principal is sealed for mutations only; a read decision
+	// for it would report Allowed with nothing a page barrier could verify.
+	if !ok || req.Principal.evidence.authorityMode == principalEngineSystemAuthority {
 		return RouteReadDecision{}, ErrRouteUndecided
 	}
 	contributions := readEvidenceContributions{}

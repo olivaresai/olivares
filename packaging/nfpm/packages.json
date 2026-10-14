@@ -10,6 +10,14 @@
       "bindir": "/usr/bin",
       "contents": [
         {
+          "dst": "/usr/share/olivares/apparmor/usr.bin.olivares",
+          "file_info": {
+            "mode": 420
+          },
+          "packager": "deb",
+          "src": "packaging/apparmor/olivares-engine.conf"
+        },
+        {
           "dst": "/usr/share/doc/olivares/LICENSE",
           "src": "LICENSE"
         },

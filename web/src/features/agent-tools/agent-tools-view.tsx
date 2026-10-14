@@ -11,6 +11,8 @@ import { ChevronDown } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +43,7 @@ import {
 } from './api'
 import { AddProfileDialog } from './add-profile-dialog'
 import { defaultVersion, InstallDetails } from './install-details'
+import { InstalledHere } from './installed-here'
 import { ProfileRowView, useAccountRow, useDefaultRow } from './profile-row'
 import { ProfileSheet } from './profile-sheet'
 import { ProfileSignInDialog } from './profile-sign-in'
@@ -70,6 +73,11 @@ function Tools({ epoch }: { epoch: number }) {
     queryKey: inventoryKey,
     queryFn: ({ signal }) => agentToolsApi.inventory(signal),
     enabled: isSuperadmin,
+  })
+  const pins = useQuery({
+    queryKey: [...scope, 'pins', tenant],
+    queryFn: ({ signal }) => agentToolsApi.pins(tenant!, signal),
+    enabled: isSuperadmin && !!tenant,
   })
   // Native provider probes share the host CPU with status and readiness. Let
   // the essential reads finish before starting these optional details.
@@ -125,10 +133,22 @@ function Tools({ epoch }: { epoch: number }) {
     plan: ToolPlan
     request: InstallRequest
   } | null>(null)
+  const [fromURL, setFromURL] = useState('')
+  const [fromVersion, setFromVersion] = useState('')
   const [startedJobID, setJobID] = useState<string | null>(null)
   const preview = useMutation({
-    mutationFn: ({ driver, version }: { driver: string; version: string }) =>
-      agentToolsApi.plan(driver, version),
+    mutationFn: ({
+      driver,
+      version,
+      from,
+    }: {
+      driver: string
+      version: string
+      from?: string
+    }) =>
+      from
+        ? agentToolsApi.plan(driver, version, undefined, undefined, from)
+        : agentToolsApi.plan(driver, version),
     onSuccess: (plan) =>
       setApproval({
         plan,
@@ -176,15 +196,19 @@ function Tools({ epoch }: { epoch: number }) {
   const installReason = install.isPending ? t('starting') : t('state.running')
   // Without the inventory nothing can be reviewed or installed: said, not hidden.
   const inventoryAvailable = !!inventory.data && !inventory.isError
-  const reviewDisabledReason = !inventoryAvailable
-    ? t('providers.state.error')
-    : inventory.data?.read_only
-      ? t('readOnly')
-      : busy
-        ? installReason
-        : preview.isPending
-          ? t('planning')
-          : undefined
+  const reviewDisabledReason = inventory.isPending
+    ? t('installed.reading')
+    : !inventoryAvailable
+      ? t('providers.state.error')
+      : inventory.data?.read_only
+        ? t('readOnly')
+        : busy
+          ? installReason
+          : preview.isPending
+            ? t('planning')
+            : undefined
+  const sourceDisabledReason =
+    reviewDisabledReason ?? (!tenant ? t('from.tenant') : undefined)
   const review = (driver: string, version: string) => {
     setApproval(null)
     install.reset()
@@ -193,9 +217,11 @@ function Tools({ epoch }: { epoch: number }) {
   const snaps = providers.data?.providers ?? []
   const facts = toolFacts(inventory.data, snaps)
   // A cold background read omits unchecked tools: absence is not an answer yet.
+  const pinnedDrivers = new Set(pins.data?.pins.map((p) => p.driver))
   const missing = facts.filter(
     (f) =>
       !f.installed &&
+      !pinnedDrivers.has(f.driver) &&
       (f.snapshots.length > 0 ||
         (providers.isSuccess && !providers.data.refreshing)),
   )
@@ -247,12 +273,27 @@ function Tools({ epoch }: { epoch: number }) {
               retry={() => void providers.refetch()}
             />
           )}
+          {inventory.data ? (
+            <InstalledHere
+              scope={scope}
+              inventory={inventory.data}
+              facts={facts}
+            />
+          ) : null}
           <ProfilesNotice profiles={profiles} />
+          {pins.isError && (
+            <QueryErrorState
+              error={pins.error}
+              subject={t('versions.title')}
+              retry={() => void pins.refetch()}
+            />
+          )}
           {facts
-            .filter((f) => f.installed)
+            .filter((f) => f.installed || pinnedDrivers.has(f.driver))
             .map((f) => (
               <InstalledTool
                 key={f.driver}
+                epoch={epoch}
                 driver={f.driver}
                 accounts={(profiles.data?.accounts ?? []).filter(
                   (a) => a.driver === f.driver,
@@ -312,6 +353,66 @@ function Tools({ epoch }: { epoch: number }) {
           )}
         </>
       )}
+      <details className="rounded-md border border-border p-4">
+        <summary className="cursor-pointer text-sm font-medium">
+          {t('from.title')}
+        </summary>
+        <form
+          className="mt-3 flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setApproval(null)
+            install.reset()
+            preview.mutate({
+              driver: '',
+              version: fromVersion.trim(),
+              from: fromURL.trim(),
+            })
+          }}
+        >
+          <p className="text-sm text-muted-foreground">{t('from.hint')}</p>
+          <div className="space-y-1">
+            <Label htmlFor="tool-source-url">{t('from.source')}</Label>
+            <Input
+              id="tool-source-url"
+              type="url"
+              pattern="https://.*"
+              required
+              value={fromURL}
+              onChange={(event) => setFromURL(event.target.value)}
+              disabled={!!sourceDisabledReason}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="tool-source-version">{t('from.version')}</Label>
+            <Input
+              id="tool-source-version"
+              required
+              value={fromVersion}
+              onChange={(event) => setFromVersion(event.target.value)}
+              disabled={!!sourceDisabledReason}
+            />
+          </div>
+          <Button
+            type="submit"
+            className="self-start"
+            disabled={!!sourceDisabledReason}
+            aria-describedby={
+              sourceDisabledReason ? 'tool-source-reason' : undefined
+            }
+          >
+            {t('from.review')}
+          </Button>
+          {sourceDisabledReason && (
+            <p
+              id="tool-source-reason"
+              className="text-sm text-muted-foreground"
+            >
+              {sourceDisabledReason}
+            </p>
+          )}
+        </form>
+      </details>
       {preview.isPending && <p role="status">{t('planning')}</p>}
       {preview.isError && (
         <QueryErrorState
@@ -434,6 +535,7 @@ function ProfilesNotice({
 
 /** One installed tool: its boxed list. A service (Ollama) has no profiles, only its panel. */
 function InstalledTool({
+  epoch,
   driver,
   accounts,
   taken,
@@ -446,6 +548,7 @@ function InstalledTool({
   onReview,
   job,
 }: {
+  epoch: number
   driver: string
   accounts: ProviderAccountDTO[]
   taken?: ReadonlySet<string>
@@ -519,6 +622,8 @@ function InstalledTool({
         />
       )}
       <InstallDetails
+        epoch={epoch}
+        workspacePins={!service}
         driver={driver}
         name={name}
         open={details}
@@ -527,7 +632,9 @@ function InstalledTool({
         verification={verification}
         disabledReason={disabledReason}
         onPreview={(v) => onReview(driver, v)}
-        installedOutside={installs.length === 0}
+        installedOutside={
+          installs.length === 0 && snapshots.some((s) => s.installed)
+        }
         logins={snapshots}
         job={job}
       />

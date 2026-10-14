@@ -42,4 +42,7 @@
 // registered in the Microsoft Entra agent registry. Code is replicated rather
 // than shared across these connectors to preserve the Apache/AGPL boundary and
 // the repo's ruling.
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package foundryagents

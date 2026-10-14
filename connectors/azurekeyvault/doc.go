@@ -36,4 +36,7 @@
 // export as secret_store NHIs (Ref = the resourceId) — the "where secrets live"
 // half. It imports only the SDK, the Apache identitysource helper and the standard
 // library — never the engine (/core).
+//
+// Directory inventory through Snapshot is available in Business. Community keeps
+// the observation and credential primitives and reports inventory as unavailable.
 package azurekeyvault

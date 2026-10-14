@@ -239,7 +239,7 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 			}
 		}
 	}
-	dir, err := os.MkdirTemp("", "olivares-egress-")
+	dir, err := os.MkdirTemp("", "eg-")
 	if err != nil {
 		return nil, err
 	}

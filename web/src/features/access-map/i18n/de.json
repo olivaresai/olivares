@@ -188,6 +188,7 @@
       "attributed": "zugeordnet",
       "approximate": "ungefähr"
     },
-    "analyse": "Angriffspfade analysieren (auditiert)"
+    "analyse": "Angriffspfade analysieren (auditiert)",
+    "truncated": "Die Engine hat diese Analyse begrenzt; die angezeigten Pfade sind nicht die vollständige Antwort."
   }
 }

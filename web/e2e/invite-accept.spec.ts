@@ -26,21 +26,33 @@ test.use({ screenshot: 'off', trace: 'off' })
 
 test('accept-invite: public page renders without a session and rejects a bogus token honestly', async ({
   page,
+  browser,
+  baseURL,
+  ignoreHTTPSErrors,
 }) => {
   test.skip(
     !setupToken,
     'PLAYWRIGHT_SETUP_TOKEN not set — run via scripts/web-e2e.sh',
   )
 
-  // Configure this virgin engine first, without creating a session. On a truly
-  // unconfigured engine /login correctly redirects to /setup, so testing the
-  // invite page's "Sign in" destination requires this real prerequisite.
-  await page.goto('/setup')
-  await page.locator('#token').fill(setupToken)
-  await page.locator('#setup-email').fill('invite-admin@example.com')
-  await page.locator('#setup-password').fill(PASSWORD)
-  await page.getByRole('button', { name: /create administrator/i }).click()
-  await page.waitForURL('**/login')
+  // Configure this virgin engine in a separate context: setup signs the new
+  // administrator in. The fixture page stays session-free for the invite flow.
+  // An unconfigured engine redirects /login to /setup instead.
+  const setupPage = await browser.newPage({ baseURL, ignoreHTTPSErrors })
+  try {
+    await setupPage.goto('/setup')
+    await setupPage.locator('#token').fill(setupToken)
+    await setupPage.locator('#setup-email').fill('invite-admin@example.com')
+    await setupPage.locator('#setup-password').fill(PASSWORD)
+    await setupPage
+      .getByRole('button', { name: /create administrator/i })
+      .click()
+    await expect(setupPage).toHaveURL(/\/onboarding$/)
+  } finally {
+    await setupPage.close()
+  }
+  await page.goto('/login')
+  await expect(page).toHaveURL(/\/login$/)
 
   // No session, no token → the page explains the link is incomplete (no form).
   await page.goto('/accept-invite')

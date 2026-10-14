@@ -83,6 +83,9 @@
     "activeUsers": "Comptes utilisateurs actifs",
     "noUserLimit": "auto-hébergé : sans limite",
     "expires": "Expire le",
+    "paidThrough": "Payée jusqu'au",
+    "leaseUntil": "Période provisoire jusqu'au",
+    "leaseNote": "Période provisoire (délai de remboursement). À renouveler avant cette date pour rester valide jusqu'à la date payée.",
     "issued": "Émise le",
     "sourceLabel": "Source",
     "sources": {

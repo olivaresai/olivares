@@ -17,7 +17,6 @@ import (
 	"github.com/olivaresai/olivares/connectors/agentcore"
 	"github.com/olivaresai/olivares/connectors/agentsmd"
 	aigateway "github.com/olivaresai/olivares/connectors/ai-gateway"
-	"github.com/olivaresai/olivares/connectors/aicontroltower"
 	"github.com/olivaresai/olivares/connectors/argocd"
 	"github.com/olivaresai/olivares/connectors/aws"
 	"github.com/olivaresai/olivares/connectors/awskms"
@@ -34,11 +33,9 @@ import (
 	claudebatch "github.com/olivaresai/olivares/connectors/claude-batch"
 	claudecompliance "github.com/olivaresai/olivares/connectors/claude-compliance"
 	claudeconfig "github.com/olivaresai/olivares/connectors/claude-config"
-	claudeconsole "github.com/olivaresai/olivares/connectors/claude-console"
 	claudemanagedagents "github.com/olivaresai/olivares/connectors/claude-managed-agents"
 	claudeprojects "github.com/olivaresai/olivares/connectors/claude-projects"
 	clauderoutines "github.com/olivaresai/olivares/connectors/claude-routines"
-	claudewif "github.com/olivaresai/olivares/connectors/claude-wif"
 	"github.com/olivaresai/olivares/connectors/cline"
 	"github.com/olivaresai/olivares/connectors/cloudflare"
 	cfaigateway "github.com/olivaresai/olivares/connectors/cloudflare-ai-gateway"
@@ -80,17 +77,12 @@ import (
 	"github.com/olivaresai/olivares/connectors/grok"
 	"github.com/olivaresai/olivares/connectors/hermes"
 	icebergcatalog "github.com/olivaresai/olivares/connectors/iceberg-catalog"
-	"github.com/olivaresai/olivares/connectors/identitysource"
-	"github.com/olivaresai/olivares/connectors/idp"
 	inferencegateway "github.com/olivaresai/olivares/connectors/inference-gateway"
-	"github.com/olivaresai/olivares/connectors/infisical"
 	istiotelemetry "github.com/olivaresai/olivares/connectors/istio-telemetry"
 	"github.com/olivaresai/olivares/connectors/kerberos"
-	"github.com/olivaresai/olivares/connectors/keycloak"
 	"github.com/olivaresai/olivares/connectors/kmip"
 	kongagw "github.com/olivaresai/olivares/connectors/kong-agent-gateway"
 	kongaudit "github.com/olivaresai/olivares/connectors/kong-audit"
-	"github.com/olivaresai/olivares/connectors/ldap"
 	"github.com/olivaresai/olivares/connectors/litellm"
 	"github.com/olivaresai/olivares/connectors/local"
 	"github.com/olivaresai/olivares/connectors/managedsettings"
@@ -125,7 +117,6 @@ import (
 	snowflakecontent "github.com/olivaresai/olivares/connectors/snowflake"
 	snowflakeaudit "github.com/olivaresai/olivares/connectors/snowflake-audit"
 	"github.com/olivaresai/olivares/connectors/sops"
-	"github.com/olivaresai/olivares/connectors/spiffe"
 	"github.com/olivaresai/olivares/connectors/ssf"
 	"github.com/olivaresai/olivares/connectors/tak"
 	"github.com/olivaresai/olivares/connectors/vault"
@@ -133,7 +124,6 @@ import (
 	"github.com/olivaresai/olivares/connectors/xai"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secret"
-	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -389,15 +379,12 @@ var inProcSourceFactories = map[string]func() sdk.SourceConnector{
 	"grok":                  func() sdk.SourceConnector { return grok.New() },
 	"hermes":                func() sdk.SourceConnector { return hermes.New() },
 	"iceberg-catalog":       func() sdk.SourceConnector { return icebergcatalog.New() },
-	"idp":                   func() sdk.SourceConnector { return idp.New() },
 	"inference-gateway":     func() sdk.SourceConnector { return inferencegateway.New() },
-	"infisical":             func() sdk.SourceConnector { return infisical.New() },
 	"istio-telemetry":       func() sdk.SourceConnector { return istiotelemetry.New() },
 	"kerberos":              func() sdk.SourceConnector { return kerberos.New() },
 	"kmip":                  func() sdk.SourceConnector { return kmip.New() },
 	"kong-agent-gateway":    func() sdk.SourceConnector { return kongagw.New() },
 	"kong-audit":            func() sdk.SourceConnector { return kongaudit.New() },
-	"ldap":                  func() sdk.SourceConnector { return ldap.New() },
 	"litellm":               func() sdk.SourceConnector { return litellm.New() },
 	"local":                 func() sdk.SourceConnector { return local.New() },
 	"managed-settings":      func() sdk.SourceConnector { return managedsettings.New() },
@@ -427,7 +414,6 @@ var inProcSourceFactories = map[string]func() sdk.SourceConnector{
 	"sops":                  func() sdk.SourceConnector { return sops.New() },
 	"ssf":                   func() sdk.SourceConnector { return ssf.New() },
 	"tak":                   func() sdk.SourceConnector { return tak.New() },
-	"vault":                 func() sdk.SourceConnector { return vault.New() },
 	"vault-audit":           func() sdk.SourceConnector { return vault.NewAudit() },
 	"vertex":                func() sdk.SourceConnector { return vertex.New() },
 	"xai":                   func() sdk.SourceConnector { return xai.New() },
@@ -436,8 +422,6 @@ var inProcSourceFactories = map[string]func() sdk.SourceConnector{
 // Aliases remain valid in stored and file-based source definitions without adding
 // duplicate catalog entries.
 var inProcSourceAliases = map[string]string{
-	"entra":         "idp",
-	"okta":          "idp",
 	"pg-audit":      "pgaudit",
 	"s3-cloudtrail": "s3cloudtrail",
 }
@@ -498,147 +482,6 @@ func rosterSettings(kind string, settings map[string]string) map[string]string {
 	}
 	cp["provider"] = p
 	return cp
-}
-
-func buildRosterProvider(kind string) (identitysource.GraphProvider, sdk.SourceConnector, bool) {
-	switch kind {
-	case "ldap":
-		c := ldap.New()
-		return c, c, true
-	case "idp", "okta", "entra":
-		c := idp.New()
-		return c, c, true
-	case "keycloak", "pingone", "ping", "forgerock":
-		//: the self-hosted & cloud directory connector behind one
-		// provider switch (keycloak | pingone | forgerock), on the same
-		// identitysource.GraphProvider contract. The kind is an alias for resolution;
-		// the connector reads config.provider (default keycloak) to choose the backend,
-		// so a pingone/forgerock entry MUST set provider accordingly.
-		c := keycloak.New()
-		return c, c, true
-	case "vault":
-		c := vault.New()
-		return c, c, true
-	case "infisical":
-		c := infisical.New()
-		return c, c, true
-	case "spiffe":
-		c := spiffe.New()
-		return c, c, true
-	case "claude-console":
-		// CLA-13/IDN-02: governs Claude's OWN org IAM. Unlike the other roster
-		// providers its Gather is NOT a no-op — it emits the SSO/SCIM blind-spot
-		// finding — so set the identity entry's as_source=true to also wire it as a
-		// source and route that finding to the ledger.
-		c := claudeconsole.New()
-		return c, c, true
-	case "claude-wif":
-		// CLA-12/IDN-01: Claude identity (NHI & WIF) roster provider (Apache).
-		// Snapshot models the Anthropic NHI roster — api keys, workspaces, service
-		// accounts (svac_), federation issuers/rules (fdis_/fdrl_) — converging by
-		// external_id (the raw Anthropic id) so module III can diff PERMITTED-vs-OBSERVED.
-		// Like claude-console its Gather is NOT a no-op: it emits the PERMITTED scope
-		// edges (svac_/apikey_ → workspace, Source=policy) AND the WIF static-key footgun
-		// finding (a static ANTHROPIC_API_KEY — even =="" — silently shadows federation;
-		// High). So set the identity entry's as_source=true to also wire it as a source
-		// and route those edges/findings to the ledger. Low-dependency (only the
-		// modelprovider HTTP client), so it runs in-process here; cmd/claude-wif-source
-		// exists for the out-of-process collector mode. With an org:admin OAuth token
-		// (org_admin_oauth_token) it LISTS the org's live federation (service accounts/
-		// issuers/rules) and reconciles it against the declared rules — drift edges/
-		// findings to the ledger, the live graph to the console; without it, it models
-		// only the operator-declared federation, an honest absence, never an invented
-		// roster. The credential-emitting WIF Exchanger is a SEPARATE primitive the host
-		// wires explicitly (claudewif.NewExchanger), never part of the Gather plane.
-		c := claudewif.New()
-		return c, c, true
-
-	// (FED-1) — the hyperscaler agent-identity registries federated against
-	// the plane's SPIFFE/WIF roster, plus the control-tower/descriptor/secret
-	// sources. All read-only (federation never writes to a registry; export to the
-	// towers is). The three hyperscaler connectors stamp the dedicated
-	// per-agent kinds (agent_identity/workload_identity) the access-map attribution
-	// axis treats as FIRM; google-agent rows use the full SPIFFE ID as Ref so
-	// they converge with the spiffe roster by external_id. entra-agent's and
-	// agentcore's Gather is NOT a no-op (the nhi_longlived_credential drift-class
-	// findings — Five Eyes 2026-05), agent365's emits registry-hygiene findings,
-	// foundry-agents emits ARM-derived application posture findings, google-agent
-	// emits registry/gateway posture findings, oasf's emits the badge findings,
-	// and onepassword's streams the item-usage secret-access edges — those seven
-	// are re-pollable BATCH scans, so wire their
-	// edges/findings half as a cfg.Sources entry with poll_seconds
-	// (buildInProcSource above) rather than via as_source=true, which runs Gather
-	// once per boot. (Registering the same KIND twice is no longer the obstacle it
-	// was: each registration carries its own name. The reason is the cadence — a
-	// one-shot pass per boot is not a re-pollable scan.)
-	// ai-control-tower Gather is a no-op (roster only).
-	case "entra-agent":
-		c := entraagent.New()
-		return c, c, true
-	case "agentcore":
-		c := agentcore.New()
-		return c, c, true
-	case "google-agent":
-		c := googleagent.New()
-		return c, c, true
-	case "oasf":
-		c := oasf.New()
-		return c, c, true
-	case "paperclip":
-		// Observe-only (I2.P5): companies as groups and agents as NHIs on the
-		// roster; runs and cost reach the ledger when the identity entry also
-		// sets as_source=true, or through a sources entry with poll_seconds.
-		c := paperclip.New()
-		return c, c, true
-	case "agent365":
-		c := agent365.New()
-		return c, c, true
-	case "foundry-agents":
-		c := foundryagents.New()
-		return c, c, true
-	case "ai-control-tower":
-		c := aicontroltower.New()
-		return c, c, true
-	case "onepassword":
-		c := onepassword.New()
-		return c, c, true
-
-	// Secret-store inventory providers: each exposes the
-	// secret-manager custodians it sees as secret_store NHIs that converge by
-	// external_id into the unified roster (GET /governance/identities?kind=secret_store).
-	// Their Gather is NOT a no-op — it emits the key/secret-access, provisioning or
-	// custody edges — so set as_source=true on the identity entry to also wire the
-	// edges. Honest limit (existence vs use): a connector reading only a management
-	// view (KMIP Locate, ESO/SOPS manifests) yields the store's EXISTENCE; only a
-	// connected audit trail (cloud audit) yields who USES it.
-	case "aws-kms":
-		c := awskms.New()
-		return c, c, true
-	case "gcp-kms":
-		c := gcpkms.New()
-		return c, c, true
-	case "azure-key-vault":
-		c := azurekeyvault.New()
-		return c, c, true
-	case "external-secrets":
-		c := externalsecrets.New()
-		return c, c, true
-	case "sops":
-		c := sops.New()
-		return c, c, true
-	case "kmip":
-		c := kmip.New()
-		return c, c, true
-	default:
-		// Build-tag-gated commercial roster providers (e.g. CyberArk Conjur):
-		// hosts as NHI + the host→variable permitted grants. The default (AGPL) build
-		// resolves none (it has no rosterProvider edition port); `-tags enterprise`
-		// wires them.
-		if thisEdition.rosterProvider == nil {
-			return nil, nil, false
-		}
-		return thisEdition.rosterProvider(kind)
-	}
 }
 
 // buildContentSource constructs a knowledge DOCUMENT source by kind: the
@@ -714,6 +557,7 @@ func (s modeContentSource) Mode() string { return normalizeContentSourceMode(s.m
 // silently orphan-deleting a truncated tail. A wrapped source that does not implement the
 // capability is reported complete (its listing is authoritative).
 func (s modeContentSource) ListingComplete() bool { return wrappedListingComplete(s.Source) }
+
 func (s modeContentSource) ListPage(ctx context.Context, cursor string, maxItems, maxBytes int) ([]contentsource.DocRef, string, bool, error) {
 	return wrappedListPage(ctx, s.Source, cursor, maxItems, maxBytes)
 }
@@ -723,8 +567,10 @@ type modeLiveContentSource struct {
 	mode string
 }
 
-func (s modeLiveContentSource) Mode() string          { return normalizeContentSourceMode(s.mode) }
+func (s modeLiveContentSource) Mode() string { return normalizeContentSourceMode(s.mode) }
+
 func (s modeLiveContentSource) ListingComplete() bool { return wrappedListingComplete(s.LiveSource) }
+
 func (s modeLiveContentSource) ListPage(ctx context.Context, cursor string, maxItems, maxBytes int) ([]contentsource.DocRef, string, bool, error) {
 	return wrappedListPage(ctx, s.LiveSource, cursor, maxItems, maxBytes)
 }
@@ -929,121 +775,4 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 		}
 		log.Info("ingest: wired source (in-process fast-path)", "name", s.Name, "kind", s.Kind, "tenant", s.Tenant, "poll_seconds", s.PollSeconds)
 	}
-}
-
-// wireRoster builds the configured identity GraphProviders, hands them to
-// governance via UseRosterProviders, and schedules the periodic SyncRoster on the
-// runtime's scheduler — closing IDN-06/CB-3 (the NHI roster stops being empty in
-// the binary). It Opens each provider here (the GraphProvider seam has no Open;
-// Snapshot needs the resolved config) and, when AsSource is set, also wires a
-// SEPARATE instance as a source — registered under the entry's own name, with its
-// own settings map — so the connector's permitted-access edges flow —
-// since that is every identity connector with a grant surface
-// (vault/ldap/idp/infisical, one-shot per boot; see identitySpec.AsSource), no
-// longer Vault alone. Honest posture: with no providers configured, or all
-// uncredentialed, it WARNS (the roster sync is then a visible no-op, not a silent
-// one). It must be called before rt.Start. ctx bounds the Open calls.
-func wireRoster(ctx context.Context, rt *runtime.Runtime, gov *governance.Module, wif *wifGraphAdapter, cfg sourcesConfig, resolver *secret.Resolver, log *slog.Logger) {
-	var bindings []governance.RosterBinding
-	// the idp connector's Entra path DEFERS agent identities
-	// (servicePrincipalType "ServiceIdentity") to the dedicated entra-agent
-	// connector, so the converged rows' Provider never flaps. An estate wiring
-	// Entra via idp WITHOUT entra-agent therefore stops maintaining previously
-	// rostered agent-identity rows — warn loudly (the per-sync audit also carries
-	// the deferred count; docs/SECURITY-HARDENING.md never-silent-gap).
-	var hasEntraIdp, hasEntraAgent bool
-	for _, spec := range cfg.Identity {
-		switch {
-		case spec.Kind == "entra-agent":
-			hasEntraAgent = true
-		case spec.Kind == "entra", spec.Kind == "idp" && spec.Config["provider"] == "entra":
-			hasEntraIdp = true
-		}
-	}
-	if hasEntraIdp && !hasEntraAgent {
-		log.Warn("roster: an Entra directory provider (idp) is wired without the entra-agent connector; Entra Agent ID agent identities are deferred by idp and will NOT be rostered/maintained — wire an entra-agent identity entry to govern them")
-	}
-	for _, spec := range cfg.Identity {
-		if spec.Tenant == "" {
-			log.Warn("roster: identity provider has no tenant; not wired", "name", spec.Name, "kind", spec.Kind)
-			continue
-		}
-		provider, conn, ok := buildRosterProvider(spec.Kind)
-		if !ok {
-			log.Warn("roster: unknown identity connector kind; not wired", "name", spec.Name, "kind", spec.Kind)
-			continue
-		}
-		// Open validates config (no network I/O); a configuration error here means
-		// the provider could never snapshot, so skip it. Never log the error: a
-		// connector's Open error can embed the configured endpoint/credential.
-		// rosterSettings defaults the directory connector's `provider` from the kind
-		// alias (kind=pingone/forgerock), so the registration kind and the connector
-		// backend can never silently diverge.
-		settings := rosterSettings(spec.Kind, spec.Config)
-		// resolve the directory/credential references to live values and enforce
-		// the strict no-inline-secret rule. An unresolvable secret fails the provider
-		// closed (not wired) rather than snapshotting half-configured.
-		resolved, rerr := resolveConfig(ctx, resolver, conn.Descriptor(), sdk.Config{Settings: settings})
-		if rerr != nil {
-			// Never log rerr: a backend resolver error can embed a response-body
-			// excerpt that carries credential material (the conn.Open rule below).
-			log.Warn("roster: identity provider secret reference could not be resolved; not wired", "name", spec.Name, "kind", spec.Kind)
-			continue
-		}
-		if err := conn.Open(ctx, resolved); err != nil {
-			log.Warn("roster: identity provider failed to open (configuration error); not wired", "name", spec.Name, "kind", spec.Kind)
-			continue
-		}
-		bindings = append(bindings, governance.RosterBinding{Provider: provider, TenantRef: spec.Tenant})
-		// E: a claude-wif source carries the operator-declared WIF object graph
-		// (issuers/rules/service-accounts + footgun). Capture it so the identity console
-		// (GET /v1/m/identity/wif) serves the DECLARED graph for this tenant.
-		if wif != nil && spec.Kind == "claude-wif" {
-			if src, ok := conn.(*claudewif.Source); ok {
-				if t, present, terr := parseBusinessTenant("roster source: tenant", spec.Tenant); terr == nil && present {
-					wif.add(t, src)
-				}
-			}
-		}
-		log.Info("roster: wired identity provider", "name", spec.Name, "kind", spec.Kind, "tenant", spec.Tenant)
-
-		if spec.AsSource {
-			if _, srcConn, _ := buildRosterProvider(spec.Kind); srcConn != nil {
-				sourceName := strings.TrimSpace(spec.Name)
-				if sourceName == "" {
-					log.Warn("roster: identity provider has no name, so it cannot also be wired as a source; roster still active", "kind", spec.Kind)
-					continue
-				}
-				// The same RESOLVED VALUES, in this instance's own map: the second
-				// instance is the same connector kind, so its declared secret fields
-				// and references match — but the two components must not share a
-				// mutable settings map. (The runtime copies again at registration;
-				// this keeps the provider's map out of reach either way.)
-				sourceCfg := sdk.Config{Settings: make(map[string]string, len(resolved.Settings))}
-				for k, v := range resolved.Settings {
-					sourceCfg.Settings[k] = v
-				}
-				// Registered under the ENTRY'S NAME: okta and entra share the one idp
-				// descriptor and are still two distinct sources.
-				if err := rt.AddSourceNamed(sourceName, srcConn, sourceCfg, spec.Tenant); err != nil {
-					log.Warn("roster: identity provider could not also be wired as a source; roster still active", "name", spec.Name, "kind", spec.Kind, "error", err)
-				} else {
-					log.Info("roster: also wired identity provider as a permitted-access source", "name", spec.Name, "kind", spec.Kind, "tenant", spec.Tenant)
-				}
-			}
-		}
-	}
-
-	if len(bindings) == 0 {
-		// /roster/sync is a no-op that answers; nothing refuses.
-		log.Info("roster: no identity providers configured (OLIVARES_SOURCES_CONFIG.identity is empty); the NHI roster stays empty and /roster/sync is a no-op. Configure ldap/idp/vault/infisical/spiffe — or the agent registries entra-agent/agentcore/google-agent — to populate it.")
-		return
-	}
-	gov.UseRosterProviders(bindings)
-	interval := cfg.rosterSyncInterval()
-	if err := rt.SchedulePeriodic("governance.roster.sync", interval, true, gov.Sync); err != nil {
-		log.Warn("roster: failed to schedule periodic SyncRoster; roster will only sync on demand via POST /roster/sync", "error", err)
-		return
-	}
-	log.Info("roster: scheduled periodic SyncRoster", "providers", len(bindings), "interval", interval.String())
 }

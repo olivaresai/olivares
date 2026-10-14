@@ -19,6 +19,7 @@ import (
 
 func TestRetirementActiveLegalHoldBlocksUntilReleased(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "releasing an active hold requires a blocked verdict and later completion")
 		for _, scope := range []string{"subject", "tenant"} {
 			t.Run(scope, func(t *testing.T) {
 				sub := e.forSubtest(t)
@@ -100,6 +101,7 @@ func TestDormantComplianceStillBlocksRetirementOnAnActiveHold(t *testing.T) {
 			e.setupRoot()
 			e.tT = e.createOrg("dormant-holds")
 			e.tB = e.createOrg("control")
+			e.requireRetirementCompletion(t, "the dormant-compliance case requires the hold verdict and completion after release")
 			user := e.onboard(e.tT, "dormant-hold@consent.test", "viewer")
 			id := e.seedFenced(e.tT, "compliance.legal_hold", model.Record{
 				"matter_ref": "matter-dormant", "scope_kind": "subject", "subject_kind": "user",
@@ -126,6 +128,7 @@ func TestDormantComplianceStillBlocksRetirementOnAnActiveHold(t *testing.T) {
 
 func TestRetirementLegalHoldStoreNamesNonUserHolds(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "clearing non-user store holds requires published blocked and retired verdicts")
 		user := e.onboard(e.tT, "session-hold@consent.test", "viewer")
 		e.scimDelete(e.tT, user)
 		var out auth.RetirementOutcome
@@ -155,6 +158,7 @@ func TestRetirementLegalHoldStoreNamesNonUserHolds(t *testing.T) {
 
 func TestRetirementHoldSubjectKindIsNotAUserAlias(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		e.requireRetirementCompletion(t, "an unrelated hold must permit retirement to complete")
 		user := e.onboard(e.tT, "unrelated-hold@consent.test", "viewer")
 		for _, kind := range []string{"session", "agent"} {
 			e.seedFenced(e.tT, "compliance.legal_hold", model.Record{

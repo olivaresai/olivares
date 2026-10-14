@@ -54,12 +54,9 @@ export const accessMapApi = {
     http.get<AttackPathsResponse>('/v1/m/accessmap/attack-paths/exfil', {
       query: { resource_id: resourceId },
     }),
-  // ⛔ NO hay envoltorio para `/attack-paths/summary`, y es deliberado: dos de sus seis
-  //    campos —`escalation_paths` y `exfil_routes`— NO SE CALCULAN NUNCA en el motor
-  //    (`handleAttackPathSummary`, cero asignaciones, medido 2026-08-20) y salen siempre 0.
-  //    Un metodo de cliente que ninguna pantalla pulsa es superficie muerta que insinua una
-  //    vista que no existe — y `lint:client-callers` lo caza, con razon. Cuando el motor
-  //    calcule esos dos campos, quien construya la vista añade aqui su envoltorio.
+  // No wrapper for `/attack-paths/summary`: no screen asks for it yet, and an unused client
+  // method is dead surface (`lint:client-callers`). The engine computes all six fields; a
+  // view that shows them also shows `truncated` (the counts are floors when it is set).
 }
 
 /** Tenant-scoped query keys (the active tenant id isolates cache per org). */

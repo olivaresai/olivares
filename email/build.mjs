@@ -41,6 +41,7 @@ const OUT_WORKER = join(
   ROOT,
   'commercial/license-worker/src/email/templates.generated.ts',
 )
+const OUT_WORKER_LOCALES = join(dirname(OUT_WORKER), 'locales')
 const OUT_CORE = join(ROOT, 'core/emailtemplate/templates.generated.json')
 
 // None of the seven product locales is right-to-left. The attribute is emitted
@@ -250,7 +251,7 @@ function tsLiteral(v) {
   return JSON.stringify(v)
 }
 
-function emitWorker(bundle, ids) {
+function emitWorker(ids) {
   const head = [
     '// SPDX-FileCopyrightText: 2026 Olivares.AI',
     '// SPDX-License-Identifier: LicenseRef-Olivares-Commercial',
@@ -264,6 +265,8 @@ function emitWorker(bundle, ids) {
     ' * tokens that generate the console. Nothing here was typed by hand, and a hex',
     ' * typed by hand into this file is erased by the next regeneration.',
     ' */',
+    '',
+    ...LOCALES.map((l) => `import locale_${l} from './locales/${l}.json' with { type: 'json' };`),
     '',
     `export type EmailLocale = ${LOCALES.map((l) => tsLiteral(l)).join(' | ')};`,
     '',
@@ -301,36 +304,31 @@ function emitWorker(bundle, ids) {
     '',
   ]
 
-  const tpl = ['export const EMAIL_TEMPLATES: Readonly<']
-  tpl.push('  Record<EmailLocale, Readonly<Record<WorkerTemplateId, EmailTemplate>>>')
-  tpl.push('> = {')
-  for (const locale of LOCALES) {
-    tpl.push(`  ${locale}: {`)
-    for (const id of ids) {
-      const t = bundle.templates[locale][id]
-      tpl.push(`    ${id}: {`)
-      tpl.push(`      subject: ${tsLiteral(t.subject)},`)
-      tpl.push(`      text: ${tsLiteral(t.text)},`)
-      tpl.push(`      html: ${tsLiteral(t.html)},`)
-      tpl.push('    },')
-    }
-    tpl.push('  },')
-  }
-  tpl.push('};')
-  tpl.push('')
-
-  const str = ['export const EMAIL_STRINGS: Readonly<Record<EmailLocale, EmailStrings>> = {']
-  for (const locale of LOCALES) {
-    const s = bundle.strings[locale]
-    str.push(`  ${locale}: {`)
-    str.push(`    statusPerpetual: ${tsLiteral(s.statusPerpetual)},`)
-    str.push(`    statusUntil: ${tsLiteral(s.statusUntil)},`)
-    str.push('  },')
-  }
-  str.push('};')
-  str.push('')
-
+  const tpl = [
+    'export const EMAIL_TEMPLATES: Readonly<',
+    '  Record<EmailLocale, Readonly<Record<WorkerTemplateId, EmailTemplate>>>',
+    '> = {',
+    ...LOCALES.map((locale) => `  ${locale}: locale_${locale}.templates,`),
+    '};',
+    '',
+  ]
+  const str = [
+    'export const EMAIL_STRINGS: Readonly<Record<EmailLocale, EmailStrings>> = {',
+    ...LOCALES.map((locale) => `  ${locale}: locale_${locale}.strings,`),
+    '};',
+    '',
+  ]
   return [...head, ...tpl, ...str].join('\n')
+}
+
+function emitWorkerLocale(bundle, ids, locale) {
+  return `${JSON.stringify({
+    templates: Object.fromEntries(ids.map((id) => [id, bundle.templates[locale][id]])),
+    strings: {
+      statusPerpetual: bundle.strings[locale].statusPerpetual,
+      statusUntil: bundle.strings[locale].statusUntil,
+    },
+  }, null, 2)}\n`
 }
 
 function emitCore(bundle, ids) {
@@ -488,7 +486,13 @@ function outputSpecs() {
   return [
     { path: OUT_MANIFEST, emit: (b) => `${JSON.stringify(b.manifest, null, 2)}\n` },
     ...(worker
-      ? [{ path: OUT_WORKER, emit: (b) => emitWorker(b.bundle, b.workerIds) }]
+      ? [
+          { path: OUT_WORKER, emit: (b) => emitWorker(b.workerIds) },
+          ...LOCALES.map((locale) => ({
+            path: join(OUT_WORKER_LOCALES, `${locale}.json`),
+            emit: (b) => emitWorkerLocale(b.bundle, b.workerIds, locale),
+          })),
+        ]
       : []),
     { path: OUT_CORE, emit: (b) => emitCore(b.bundle, b.coreIds) },
   ]

@@ -4,15 +4,7 @@
 
 package main
 
-import (
-	"log/slog"
-	"strings"
-
-	claudewif "github.com/olivaresai/olivares/connectors/claude-wif"
-	"github.com/olivaresai/olivares/connectors/identitysource"
-	"github.com/olivaresai/olivares/connectors/vault"
-	"github.com/olivaresai/olivares/modules/governance"
-)
+import "log/slog"
 
 // nhilifecycle.go wires the governed NHI lifecycle: the per-(tenant,source)
 // write-capable LifecycleActuators the module invokes once an approval is granted.
@@ -72,42 +64,4 @@ func loadNHIActuatorsConfig(_ *slog.Logger) (nhiActuatorsConfig, error) {
 		return nhiActuatorsConfig{}, err
 	}
 	return cfg, nil
-}
-
-// buildNHIActuatorBindings constructs the per-(tenant,source) LifecycleActuator
-// bindings from the config. Each actuator is built only when its credential is
-// present, so a tenant may wire Vault but not Anthropic (or neither) — the module
-// degrades honestly for any source without an actuator. The source keys MUST match
-// the roster identity Provider (identitysource.SourceKind strings).
-func buildNHIActuatorBindings(cfg nhiActuatorsConfig, log *slog.Logger) []governance.LifecycleActuatorBinding {
-	var out []governance.LifecycleActuatorBinding
-	for _, t := range cfg.Tenants {
-		tenant := strings.TrimSpace(t.Tenant)
-		if tenant == "" {
-			continue
-		}
-		if strings.TrimSpace(t.VaultToken) != "" {
-			out = append(out, governance.LifecycleActuatorBinding{
-				Source: string(identitysource.SourceVault), TenantRef: tenant,
-				Actuator: vault.NewActuator(t.VaultBaseURL, t.VaultToken, t.VaultNamespace, nil),
-			})
-			log.Info("nhi-lifecycle: Vault rotation/offboarding actuator wired", "tenant", tenant)
-		}
-		if strings.TrimSpace(t.AnthropicAdminKey) != "" {
-			out = append(out, governance.LifecycleActuatorBinding{
-				Source: string(identitysource.SourceAnthropic), TenantRef: tenant,
-				Actuator: claudewif.NewActuator(t.AnthropicBaseURL, t.AnthropicAdminKey, nil),
-			})
-			log.Info("nhi-lifecycle: Anthropic key-status actuator wired", "tenant", tenant)
-		}
-		// the COMMERCIAL CyberArk Conjur rotation actuator, wired only under
-		// -tags enterprise (the nhiActuator port); the default AGPL build has none
-		// and degrades honestly.
-		if thisEdition.nhiActuator != nil {
-			if binding, ok := thisEdition.nhiActuator(t, tenant, log); ok {
-				out = append(out, binding)
-			}
-		}
-	}
-	return out
 }

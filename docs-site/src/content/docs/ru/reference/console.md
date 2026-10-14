@@ -6,6 +6,10 @@ description: >-
   встроенная ссылка помощи. Сгенерировано из собственной переписи маршрутов консоли.
 ---
 
+:::note[Редакция]
+Источники каталогов (LDAP, Okta/Entra и IdP агентов/нагрузок) и жизненный цикл управляемых идентичностей требуют дополнений Business/Enterprise. Community сохраняет общий приём наблюдений, каталог ресурсов, результаты проверок безопасности, Access Map, инвентаризацию идентичностей, SSO с одним IdP, входящий SCIM пользователей/групп, локальные роли и привязки, политики и одобрения. Платные панели и команды CLI скрыты; их опубликованные API-маршруты возвращают HTTP `501`. Включение модуля не добавляет реализацию Business.
+:::
+
 Эта страница — карта консоли. Здесь перечислен **каждый маршрут, монтируемый приложением**,
 а не выборка или только те маршруты, которые кто-то вспомнил описать, с разрешением,
 необходимым субъекту для входа, и ссылкой на дополнительные сведения.
@@ -63,7 +67,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Консоль публикует **83 маршрута**. Каждый из них приведён в таблицах ниже вместе с требуемым
+Консоль публикует **75 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
 разрешением и справочной страницей, которую открывает встроенная ссылка помощи.
 
 ### Главная
@@ -127,9 +131,7 @@ description: >-
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
 | Оповещения | `/alerting` | Маршрутизация находок к назначениям и проверка доставок | `notify:route:read` | [reference/modules/xv-notify](/ru/reference/modules/xv-notify/) |
-| Автоматизации | `/automations` | Все три контура автоматизации и каталог их триггеров | `orchestration:schedule:read` | [reference/modules/iv-orchestration](/ru/reference/modules/iv-orchestration/) |
 | Webhooks и события | `/eventing` | Исходящие webhook-подписки, журнал их доставки и очередь недоставленных сообщений. | `eventing:subscription:read` | [reference/modules/eventing](/ru/reference/modules/eventing/) |
-| Оркестрация | `/orchestration` | Координация между агентами и расписания | `orchestration:graph:read` | [reference/modules/iv-orchestration](/ru/reference/modules/iv-orchestration/) |
 
 ### Безопасность и идентичность
 
@@ -142,8 +144,6 @@ description: >-
 | Прокси инференса | `/inference-proxy` | Шлюзы прокси, правила DLP исходящего трафика и одобрения устройств | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ru/reference/modules/inferenceproxy/) |
 | Аварийный выключатель | `/killswitch` | Экстренная остановка, восстановление с двойным контролем и локализация guardian | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ru/how-to/cookbook/kill-switch-drill/) |
 | Разрешения | `/permissions` | Идентичности, роли и одобрения | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
-| Red team | `/red-team` | Состязательное тестирование ваших агентов | `redteam:target:read` | [reference/modules/xviii-redteam](/ru/reference/modules/xviii-redteam/) |
-| Резидентность данных | `/residency` | Закрепление каждой организации за регионом или отсутствие закрепления | `system:admin` | [reference/modules/xiii-compliance](/ru/reference/modules/xiii-compliance/) |
 | Регулярные политики | `/routine-policies` | Минимальная периодичность, ограничения параллелизма, требования одобрения и allowlist cron для процедур Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Безопасность | `/security` | Ограничители, расследования и аномалии | `security:finding:read` | [reference/modules/ix-security](/ru/reference/modules/ix-security/) |
 
@@ -164,14 +164,11 @@ description: >-
 | Соответствие | `/compliance` | Фреймворки, контроли и свидетельства | `compliance:framework:read` | [reference/modules/xiii-compliance](/ru/reference/modules/xiii-compliance/) |
 | Панели | `/dashboards` | KPI руководства и отчётность | любой вошедший пользователь | [reference/modules/xxi-executive-dashboards](/ru/reference/modules/xxi-executive-dashboards/) |
 | Оценки | `/evals` | Качество, оценки и регрессии | `evals:run:read` | [reference/modules/xii-evals](/ru/reference/modules/xii-evals/) |
-| Стоимость и FinOps | `/finops` | Стоимость токенов, бюджеты и расходы | `finops:spend:read` | [reference/modules/xi-finops](/ru/reference/modules/xi-finops/) |
 | Здоровье и SLA | `/health` | Время работы и SLA агентов и MCP | `health:status:read` | [reference/modules/xxii-health](/ru/reference/modules/xxii-health/) |
 | Наблюдаемость | `/observability` | Здоровье приёма по стандартам и детализация трассировок | `health:status:read` | [reference/modules/observability](/ru/reference/modules/observability/) |
-| Экспорт состояния | `/posture-export` | Экспорт фактического состояния для центра управления | `posture:export:read` | [reference/modules/posture-export](/ru/reference/modules/posture-export/) |
 | Записи | `/recordings` | Запись и воспроизведение привилегированных сессий | `recording:session:admin` | [reference/modules/recording](/ru/reference/modules/recording/) |
-| Отчёты | `/reporting` | Создание и загрузка отчётов об управлении | `reporting:report:read` | [reference/modules/reporting](/ru/reference/modules/reporting/) |
 | Просмотр сессии | `/session-viewer/$id` (только прямая ссылка) | Полная временная шкала одной записанной сессии, доступная из строки раздела записей, а не из боковой панели. | `recording:session:admin` | [reference/modules/recording](/ru/reference/modules/recording/) |
-| Затраты команд | `/team-costs` | Расходы по командам с детализацией по проектам и моделям. | `finops:spend:read` | [reference/modules/xi-finops](/ru/reference/modules/xi-finops/) |
+| Бюджеты | `/stored-budgets` | Потребление относительно каждого сохранённого лимита. Зарезервированная ёмкость засчитывается в лимит. | `finops:budget:read` | [reference/modules/xi-finops](/ru/reference/modules/xi-finops/) |
 
 ### Система и настройки
 
@@ -183,7 +180,6 @@ description: >-
 | Сравнение источника | `/console/sources/diff` | Сравнение базовой и head-ревизии подключённого Git-репозитория, файл за файлом | `system:admin` | [reference/console](/ru/reference/console/) |
 | Журналы | `/logs` | Поток журнала движка в реальном времени с фильтрацией по уровню и модулю, поиском и паузой. | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
 | Мастер настройки | `/onboarding` | Пошаговая настройка развёртывания | `system:admin` | [start/quickstart](/ru/start/quickstart/) |
-| Арендаторы | `/tenants` | Приостановка и восстановление обслуживания арендатора | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
 
 ### Вход, настройка и учётная запись
 

@@ -227,13 +227,20 @@ func (h *harness) adminLogin() string {
 	return r.body["token"].(string)
 }
 
-func (h *harness) createOrg(token, slug string) model.TenantID {
+func (h *harness) createOrg(_ string, slug string) model.TenantID {
 	h.t.Helper()
-	r := h.do("POST", "/v1/system/orgs", token, map[string]any{"name": slug, "slug": slug}, nil)
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create org %s = %d %s", slug, r.code, r.raw)
+	// Seed the isolation fixture through the store; organization management is edition-specific.
+	ctx := context.Background()
+	var org model.Org
+	err := h.st.System(ctx, func(sys store.SystemScope) error {
+		var err error
+		org, err = sys.CreateOrg(ctx, model.Org{Name: slug, Slug: slug, Status: model.StatusActive})
+		return err
+	})
+	if err != nil {
+		h.t.Fatalf("seed organization %s: %v", slug, err)
 	}
-	return model.TenantID(r.body["tenant_id"].(string))
+	return org.TenantID
 }
 
 // roleToken creates a user with role of tenant and returns its session token.

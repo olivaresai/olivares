@@ -16,6 +16,20 @@ import (
 
 const testASIssuer = "https://as.example"
 
+// fakeJWTSource2 is the minimal jwtFetcher used by client assertion and
+// federation tests (distinct from the jwtsvid.Source fake in workload_test.go).
+type fakeJWTSource2 struct {
+	svid         *jwtsvid.SVID
+	calls        int
+	lastAudience string
+}
+
+func (f *fakeJWTSource2) FetchJWTSVID(_ context.Context, audience string, _ ...string) (*jwtsvid.SVID, error) {
+	f.calls++
+	f.lastAudience = audience
+	return f.svid, nil
+}
+
 func TestNewClientAssertion(t *testing.T) {
 	ctx := context.Background()
 

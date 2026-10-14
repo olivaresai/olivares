@@ -70,6 +70,7 @@ import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import {
   isLiveRun,
+  isWorkingRun,
   mergeSessions,
   type UnifiedSession,
 } from '@/features/sessions/provenance'
@@ -171,17 +172,27 @@ export function liveForTiles<T extends { items: LiveDTO[] }>(
   const echoes = new Set(
     sessions.flatMap((s) => (s.echoes ?? []).map((e) => e.live_ref)),
   )
-  const runState = new Map<string, boolean>()
+  // What a launched session's run lets its observed row claim: working while the run
+  // works, idle while it waits for input, ended once it is gone.
+  const allowed = new Map<string, 'active' | 'idle' | 'ended'>()
   for (const s of sessions)
     if (s.live && s.runs.length > 0)
-      runState.set(s.live.live_ref, s.runs.some(isLiveRun))
+      allowed.set(
+        s.live.live_ref,
+        s.runs.some(isWorkingRun)
+          ? 'active'
+          : s.runs.some(isLiveRun)
+            ? 'idle'
+            : 'ended',
+      )
   const items = answer.items
     .filter((l) => !echoes.has(l.live_ref))
-    .map((l) =>
-      runState.get(l.live_ref) === false && l.cc_state === 'active'
-        ? { ...l, cc_state: 'ended' as const }
-        : l,
-    )
+    .map((l) => {
+      const cc_state = allowed.get(l.live_ref)
+      return cc_state && cc_state !== 'active' && l.cc_state === 'active'
+        ? { ...l, cc_state }
+        : l
+    })
   return { ...answer, items }
 }
 

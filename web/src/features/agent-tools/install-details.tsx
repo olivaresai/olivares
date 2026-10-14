@@ -26,6 +26,7 @@ import {
   type ToolJob,
 } from './api'
 import { ProviderDetails } from './providers-section'
+import { ToolVersions } from './tool-versions'
 
 const message = (err: unknown) =>
   err instanceof Error ? err.message : undefined
@@ -47,7 +48,11 @@ export function InstallDetails({
   installedOutside,
   logins,
   job,
+  workspacePins = true,
+  epoch = 0,
 }: {
+  epoch?: number
+  workspacePins?: boolean
   driver: string
   name: string
   open: boolean
@@ -123,6 +128,16 @@ export function InstallDetails({
                   {row.reason}
                 </p>
               ),
+          )}
+          {open && (
+            <ToolVersions
+              epoch={epoch}
+              workspacePins={workspacePins}
+              driver={driver}
+              name={name}
+              installs={installs}
+              disabledReason={disabledReason}
+            />
           )}
           {verification && (
             <p className="text-caption text-text-2">

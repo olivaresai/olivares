@@ -2685,6 +2685,24 @@ describe('SessionsWorkspaceView — the PROFILE name is a read like any other', 
       .toHaveBeenCalled()
   })
 
+  it('CONTROL account: a profile with no display name is named by its account name', async () => {
+    grant(...BOTH_READ_AND_RUN_WRITE, PROFILE_READ)
+    harness.listProfiles.mockResolvedValue({
+      items: [
+        { ...PROFILE, display_name: undefined, account_name: 'spr-account-b' },
+      ],
+      has_more: false,
+    })
+    renderView()
+    const row = await rowFor(PROFILED_AT, 'spr-auth/profile-account/setup-row')
+    await waitFor(() =>
+      expect(
+        instanceCell(row)?.textContent,
+        'spr-auth/profile-account/name-from-the-account',
+      ).toBe('spr-account-b'),
+    )
+  })
+
   it.each([
     ['refused', FORBIDDEN],
     ['step-up', STEP_UP],

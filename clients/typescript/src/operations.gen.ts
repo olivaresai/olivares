@@ -2264,6 +2264,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/agenttools/pins — Lists the selected organization's stored session tool versions.
+   *
+   * Stability: beta.
+   */
+  getV1MAgenttoolsPins(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/agenttools/pins", "/v1/m/agenttools/pins", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/m/agenttools/pins — Saves or clears a version selection for a tenant's workspace or agent.
+   *
+   * Stability: beta.
+   */
+  putV1MAgenttoolsPins(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/agenttools/pins", "/v1/m/agenttools/pins", body, opts);
+  }
+
+  /**
    * POST /v1/m/agenttools/plans — Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.
    *
    * Stability: beta.
@@ -2279,6 +2297,15 @@ export class Client extends ClientCore {
    */
   getV1MAgenttoolsProviders(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/agenttools/providers", "/v1/m/agenttools/providers", undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/agenttools/releases — Deletes one verified managed host release after checking live sessions.
+   *
+   * Stability: beta.
+   */
+  deleteV1MAgenttoolsReleases(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("DELETE", "/v1/m/agenttools/releases", "/v1/m/agenttools/releases", body, opts);
   }
 
   /**
@@ -4721,7 +4748,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/agents — Creates a lifecycle row with kind=agent and mandatory sponsor.
+   * POST /v1/m/governance/agents — Requires Business Identity & Scale to register managed agent identities; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5054,7 +5081,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/nhi — Lists the NHI lifecycle rows, optionally filtered by enforcement state or offboard state.
+   * GET /v1/m/governance/nhi — Requires Business Identity & Scale to query non-human identity inventory; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5063,7 +5090,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/nhi/posture — Aggregates the lifecycle posture.
+   * GET /v1/m/governance/nhi/posture — Requires Business Identity & Scale to analyze non-human identity posture; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5072,7 +5099,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/nhi/sweep — Materializes staleness/escalation, orphan and unsponsored state for the tenant's NHI lifecycle rows, and ensures a row exists for every roster NHI.
+   * POST /v1/m/governance/nhi/sweep — Requires Business Identity & Scale to run non-human identity lifecycle sweeps; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5081,7 +5108,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/nhi/{ref} — Returns one NHI lifecycle row by identity_ref.
+   * GET /v1/m/governance/nhi/{ref} — Requires Business Identity & Scale to query non-human identity details; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5090,7 +5117,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/nhi/{ref}/events — Lists the append-only lifecycle event trail for one NHI.
+   * GET /v1/m/governance/nhi/{ref}/events — Requires Business Identity & Scale to query non-human identity lifecycle events; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5099,7 +5126,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/nhi/{ref}/offboard — Runs the reversible soft-delete step of a governed offboarding: it blocks the NHI in-product (enforcement=blocked, the cascade that denies every bound agent at the PEP), opens an audited recovery window, and best-effort disables the credential at the source.
+   * POST /v1/m/governance/nhi/{ref}/offboard — Requires Business Identity & Scale to offboard non-human identities; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5117,7 +5144,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PUT /v1/m/governance/nhi/{ref}/ownership — Assigns owner/sponsor.
+   * PUT /v1/m/governance/nhi/{ref}/ownership — Requires Business Identity & Scale to assign non-human identity owners; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5126,7 +5153,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PUT /v1/m/governance/nhi/{ref}/policy — Authors the per-NHI rotation policy.
+   * PUT /v1/m/governance/nhi/{ref}/policy — Requires Business Identity & Scale to configure non-human identity lifecycle policy; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5135,7 +5162,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/nhi/{ref}/restore — Reverses a soft-delete within the recovery window: best-effort re-enable at the source, clear the in-product block.
+   * POST /v1/m/governance/nhi/{ref}/restore — Requires Business Identity & Scale to restore offboarded non-human identities; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5144,7 +5171,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/nhi/{ref}/rotate — Orchestrates a governed rotation: it opens the CRITICAL approval (two-person floor via the engine), and only on an approved/break-glass decision invokes the wired actuator, returning the minted credential ONCE.
+   * POST /v1/m/governance/nhi/{ref}/rotate — Requires Business Identity & Scale to rotate non-human identity credentials; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5468,7 +5495,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/roster/sync — Triggers a roster reconciliation for the resolved tenant from the identity providers the composition root wired (UseRosterProviders).
+   * POST /v1/m/governance/roster/sync — Requires Business Identity & Scale to reconcile directory rosters; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5657,7 +5684,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/identity/external-keys — Serves the read-only CMEK inventory (ANT2-04).
+   * GET /v1/m/identity/external-keys — Requires Business Identity & Scale to query customer-managed encryption key inventory; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5666,7 +5693,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/identity/residency — Serves the read-only workspace governance object (ANT2-06).
+   * GET /v1/m/identity/residency — Requires Business Identity & Scale to query workspace residency and customer-managed encryption posture; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -5684,7 +5711,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/identity/wif — Serves the declared WIF object graph.
+   * GET /v1/m/identity/wif — Requires Business Identity & Scale to query workload identity federation graphs; returns HTTP 501 when unavailable.
    *
    * Stability: beta.
    */
@@ -8487,6 +8514,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/provider-profiles/{ref}/models — Lists the models and effort levels that the installed tool or bound provider of one provider profile reports now, cached for two minutes; it sends no prompt, starts no conversation and returns no credential.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfilesByRefModels(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles/{ref}/models", `/v1/m/sessions/provider-profiles/${encodeURIComponent(ref)}/models`, undefined, opts);
+  }
+
+  /**
    * POST /v1/m/sessions/provider-profiles/{ref}/retire — Retires a provider profile for good: the id stays, its history stays, and the home becomes free for a new profile id.
    *
    * Stability: beta.
@@ -8622,6 +8658,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/runs/{ref}/activity — sessions module route (requires sessions:run:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefActivity(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/activity", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/activity`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/runs/{ref}/activity/agents/{agent} — sessions module route (requires sessions:run:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefActivityAgentsByAgent(ref: string, agent: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/activity/agents/{agent}", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/activity/agents/${encodeURIComponent(agent)}`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/sessions/runs/{ref}/attach — Streams a live session's bridged I/O as server-sent events, replaying from an optional ?from=<seq> cursor.
    *
    * Stability: beta.
@@ -8663,6 +8717,15 @@ export class Client extends ClientCore {
    */
   postV1MSessionsRunsByRefCleanupWithBody(ref: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/sessions/runs/{ref}/cleanup", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/cleanup`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/runs/{ref}/commands — Lists the commands, skills and agents the session's tool reports.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefCommands(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/commands", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/commands`, undefined, opts);
   }
 
   /**
@@ -8738,6 +8801,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/sessions/runs/{ref}/handoff — sessions module route (requires sessions:run:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefHandoff(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/handoff", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/handoff`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/handoff — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefHandoff(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/handoff", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/handoff`, body, opts);
+  }
+
+  /**
    * POST /v1/m/sessions/runs/{ref}/input — sessions module route (requires sessions:run:write)
    *
    * Stability: beta.
@@ -8753,6 +8834,15 @@ export class Client extends ClientCore {
    */
   postV1MSessionsRunsByRefInterrupt(ref: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/sessions/runs/{ref}/interrupt", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/interrupt`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/move — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefMove(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/move", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/move`, body, opts);
   }
 
   /**
@@ -9098,7 +9188,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PATCH /v1/m/sessions/workspaces/{ref} — Replaces a workspace's additional read-only host folders.
+   * PATCH /v1/m/sessions/workspaces/{ref} — Changes a workspace's read-only host folders or DLP mode.
    *
    * Stability: beta.
    */
@@ -9179,6 +9269,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/sessions/workspaces/{ref}/wiki — sessions module route (requires sessions:workspace:admin)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsWorkspacesByRefWiki(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/workspaces/{ref}/wiki", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/wiki`, undefined, opts);
+  }
+
+  /**
    * GET /v1/m/skills/assignments — Lists pinned skills assignments for an authorized workspace, template, agent group, agent, or session target with cursor pagination.
    *
    * Stability: beta.
@@ -9212,6 +9311,15 @@ export class Client extends ClientCore {
    */
   deleteV1MSkillsAssignmentsById(id: string, opts?: RequestOptions): Promise<Json> {
     return this.do("DELETE", "/v1/m/skills/assignments/{id}", `/v1/m/skills/assignments/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/skills/builtins — Lists the embedded, pinned sources without installing or executing them.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsBuiltins(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/builtins", "/v1/m/skills/builtins", undefined, opts);
   }
 
   /**
@@ -9260,12 +9368,39 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/skills/packs/{id}/diff — Compares two revisions of a pack from their verified artifacts.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsPacksByIdDiff(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/packs/{id}/diff", `/v1/m/skills/packs/${encodeURIComponent(id)}/diff`, undefined, opts);
+  }
+
+  /**
    * POST /v1/m/skills/packs/{id}/revisions — Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.
    *
    * Stability: beta.
    */
   postV1MSkillsPacksByIdRevisions(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.doJsonRequired("POST", "/v1/m/skills/packs/{id}/revisions", `/v1/m/skills/packs/${encodeURIComponent(id)}/revisions`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/skills/packs/{id}/update — Reads a pack's recorded source again.
+   *
+   * Stability: beta.
+   */
+  postV1MSkillsPacksByIdUpdate(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/skills/packs/{id}/update", `/v1/m/skills/packs/${encodeURIComponent(id)}/update`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/skills/selection — Returns the skills a new conversation pinned to the authorized target, or the tree of targets, receives: the same resolution a launch runs, refusals included.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsSelection(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/selection", "/v1/m/skills/selection", undefined, opts);
   }
 
   /**

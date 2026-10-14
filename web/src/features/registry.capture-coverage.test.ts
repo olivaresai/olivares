@@ -28,9 +28,9 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FEATURE_VIEWS } from './registry'
+import { FEATURE_VIEWS, ROUTE_ALIASES } from './registry'
 import { ANONYMOUS_VIEWS } from './anonymous-registry'
-import censo from './route-census.json'
+import census from './route-census.json'
 import { ANONYMOUS_EXTENSION_ROUTES, EXTENSION_ROUTES } from './extensions'
 
 const SPEC = resolve(__dirname, '../../e2e/docs-captures.spec.ts')
@@ -41,9 +41,10 @@ const SPEC = resolve(__dirname, '../../e2e/docs-captures.spec.ts')
 const RUTAS_MONTADAS: { id: string; path: string }[] = [
   ...FEATURE_VIEWS.map((v) => ({ id: v.id, path: v.path })),
   ...ANONYMOUS_VIEWS.map((v) => ({ id: v.id, path: v.path })),
-  ...(censo.paths as string[])
+  ...(census.paths as string[])
+    .filter((p) => !census.business_paths.includes(p))
     .filter((p) => !FEATURE_VIEWS.some((v) => v.path === p))
-    .map((p) => ({ id: `censo${p}`, path: p })),
+    .map((p) => ({ id: `census${p}`, path: p })),
 ]
 
 /** Rutas que a propósito NO se capturan, con el motivo en la misma línea. Vacío hoy: si alguna
@@ -131,6 +132,7 @@ describe('cobertura del arnés de capturas', () => {
     const faltan = RUTAS_MONTADAS.filter(
       (v) =>
         !(v.path in SIN_CAPTURA) &&
+        !ROUTE_ALIASES.some((alias) => alias.from === v.path) &&
         ![...EXTENSION_ROUTES, ...ANONYMOUS_EXTENSION_ROUTES].some(
           (route) => route.path === v.path && route.heading.trim() !== '',
         ) &&
@@ -146,6 +148,17 @@ describe('cobertura del arnés de capturas', () => {
         `la vista, que es lo que impide guardar una captura del esqueleto — o decláralas en ` +
         `SIN_CAPTURA con el motivo.`,
     ).toEqual([])
+  })
+
+  // An alias is a redirect, not a page: the capture lands on its target (captured under its own
+  // entry) and waits for a heading the console never paints at that address (#1520).
+  it('no capture entry names a retired alias path', () => {
+    const alias = ROUTE_ALIASES.filter((a) =>
+      new RegExp(`(^|[^A-Za-z])path:\\s*'${escapaRegex(a.from)}'`, 'm').test(
+        spec,
+      ),
+    ).map((a) => `${a.from} -> ${a.to}`)
+    expect(alias).toEqual([])
   })
 
   // CONTROL QUE NO DEBE DISPARAR: la aserción de arriba mira el SPEC, no el disco. Si mirase los

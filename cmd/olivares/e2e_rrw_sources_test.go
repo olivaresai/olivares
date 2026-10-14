@@ -28,88 +28,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/audit"
-	"github.com/olivaresai/olivares/core/auth"
-	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/runtime"
-	"github.com/olivaresai/olivares/core/secure"
-	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/sdk"
 )
 
-// newSourcesHarness assembles the same engine boot() builds (the production module
-// set, the real store/bus/API/auth), bootstraps one business tenant, then wires the
-// observation sources mkSources returns through the SAME wireSources the binary
-// calls — before Start, as boot() does. It returns the started harness; the caller
-// polls the read surfaces. It mirrors newHarness but swaps the synthetic seed source
-// for the production connector-wiring path, so this test exercises wireSources itself.
+// newSourcesHarness uses production boot with ingestion paused until the real
+// setup creates its tenant. Boot binds every private module owner before sources
+// are registered, as stock serve does; the original source/graph assertions then
+// drive wireSources and the runtime with parsed pgAudit and CloudTrail inputs.
 func newSourcesHarness(t *testing.T, mkSources func(tenant string) []sourceSpec) *harness {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
 	log := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
-
-	priv, _, err := secure.LoadOrCreateSigningKey(filepath.Join(dir, "audit-signing.key"))
-	if err != nil {
-		t.Fatalf("signing key: %v", err)
-	}
-	signer, err := audit.NewSigner(priv)
-	if err != nil {
-		t.Fatalf("signer: %v", err)
-	}
-
-	rt := runtime.New(runtime.Options{Logger: log})
-	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
-	if err != nil {
-		t.Fatalf("build modules: %v", err)
-	}
-	for _, m := range set.all {
-		if err := rt.AddModule(m.(sdk.Module), sdk.Config{}); err != nil {
-			t.Fatalf("add module %q: %v", m.APINamespace(), err)
-		}
-	}
-
-	st, err := coreengine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, rt.RegisterSchema)
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	if err := st.System(ctx, func(sys store.SystemScope) error {
-		_, e := sys.EnsureSystemTenant(ctx)
-		return e
-	}); err != nil {
-		t.Fatalf("system tenant: %v", err)
-	}
-	data := api.NewModuleData(st)
-	for _, m := range set.all {
-		if dc, ok := m.(api.DataConsumer); ok {
-			dc.UseData(data)
-		}
-	}
-
-	authr := auth.NewAuthenticator(st, nil)
-	// production-equivalent authorizer (deny-overlay + per-tenant scoped grants).
-	authz := auth.NewAuthorizer(set.gov.RequestEvaluator(), auth.WithScopedGrants(set.gov.ScopedGrants()))
-	setupTok := secure.NewSetupToken(filepath.Join(dir, "setup.token"))
-	apiSrv, err := api.New(api.Options{
-		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
-		PrincipalEvidenceProducer: authr,
-		SetupToken:                setupTok, Logger: log, Version: "e2e-rrw", Modules: set.all,
+	prepareCompositionTestBoot(t)
+	eng, err := boot(ctx, bootConfig{
+		DataDir: dir, Engine: "sqlite", DSN: ":memory:", Version: "e2e-rrw",
+		NoIngest: true, Logger: log,
 	})
 	if err != nil {
-		t.Fatalf("api.New: %v", err)
+		t.Fatalf("boot source harness: %v", err)
 	}
+	t.Cleanup(func() { _ = eng.Close() })
+	h := &harness{t: t, h: eng.api.Handler(), rt: eng.rt, st: eng.store, now: time.Now()}
 
-	h := &harness{t: t, h: apiSrv.Handler(), rt: rt, st: st, now: time.Now()}
-	t.Cleanup(func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = rt.Stop(stopCtx)
-		_ = st.Close()
-	})
-
-	// API bootstrap over the real handler (setup token → admin → login → org).
-	tok, _, err := setupTok.Ensure()
+	// Bootstrap through the real HTTP handler before configuring tenant sources.
+	tok, _, err := eng.setupTok.Ensure()
 	if err != nil {
 		t.Fatalf("setup token: %v", err)
 	}
@@ -124,19 +67,15 @@ func newSourcesHarness(t *testing.T, mkSources func(tenant string) []sourceSpec)
 	if code := h.reqInto("POST", "/v1/auth/login", "", "", map[string]any{
 		"email": "admin@e2e.test", "password": "supersecret-e2e",
 	}, &login); code != http.StatusOK || login.Token == "" {
-		t.Fatalf("login = %d token=%q", code, login.Token)
+		t.Fatalf("login = %d", code)
 	}
 	h.adminToken = login.Token
 	h.tenantA = h.createOrg("Acme Robotics", "acme")
-
-	// The PRODUCTION wiring path: resolve the configured kinds to in-process source
-	// connectors and register them with the runtime BEFORE Start (an unknown kind or
-	// missing tenant would warn, never panic). This is the exact call boot() makes.
-	wireSources(context.Background(), rt, sourcesConfig{Sources: mkSources(h.tenantA)}, dir, nil, log)
-	if err := rt.Start(ctx); err != nil {
+	wireSources(ctx, eng.rt, sourcesConfig{Sources: mkSources(h.tenantA)}, dir, nil, log)
+	if err := eng.rt.Start(ctx); err != nil {
 		t.Fatalf("runtime start: %v", err)
 	}
-	for _, cs := range rt.Status() {
+	for _, cs := range eng.rt.Status() {
 		if cs.Status == runtime.StatusFailed {
 			t.Fatalf("source/module %q failed to start: %s", cs.Name, cs.Err)
 		}

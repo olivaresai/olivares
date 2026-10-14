@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -142,84 +141,6 @@ func open(t *testing.T, f *fake, extra map[string]string) *Source {
 	return s
 }
 
-func TestSnapshotMapsCompaniesToGroupsAndAgentsToNHIs(t *testing.T) {
-	f := &fake{t: t}
-	s := open(t, f, nil)
-
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	if g.Source != identitysource.SourcePaperclip {
-		t.Errorf("graph source = %q", g.Source)
-	}
-	if len(g.Collections) != 2 {
-		t.Fatalf("collections = %+v", g.Collections)
-	}
-	acme := g.Collections[0]
-	if acme.Ref != "paperclip/company/"+companyAcme || acme.Kind != identitysource.KindGroup || acme.DisplayName != "Acme Robotics" || acme.Source != identitysource.SourcePaperclip {
-		t.Errorf("company collection = %+v", acme)
-	}
-
-	linus, ok := g.FindIdentity("paperclip/agent/" + agentLinus)
-	if !ok {
-		t.Fatalf("agent identity missing; identities = %+v", g.Identities)
-	}
-	if linus.Type != identitysource.PrincipalNHI || linus.Kind != "paperclip/codex_local" || linus.DisplayName != "Linus" || linus.Disabled {
-		t.Errorf("identity = %+v", linus)
-	}
-	wantAttrs := map[string]string{
-		"role":       "engineer",
-		"title":      "Staff Engineer",
-		"reports_to": "paperclip/agent/" + agentAda,
-		"company":    "paperclip/company/" + companyAcme,
-		"status":     "running",
-	}
-	for k, v := range wantAttrs {
-		if linus.Attributes[k] != v {
-			t.Errorf("attribute %s = %q, want %q", k, linus.Attributes[k], v)
-		}
-	}
-	if _, ok := linus.Attributes["owner_ref"]; ok {
-		t.Error("a Paperclip reporting line must not be asserted as lifecycle ownership")
-	}
-
-	ada, _ := g.FindIdentity("paperclip/agent/" + agentAda)
-	if _, has := ada.Attributes["reports_to"]; has {
-		t.Errorf("a root agent carries no reports_to: %+v", ada.Attributes)
-	}
-	if ada.Kind != "paperclip/claude_local" {
-		t.Errorf("kind = %q", ada.Kind)
-	}
-	if retired, _ := g.FindIdentity("paperclip/agent/" + agentRetire); !retired.Disabled {
-		t.Error("a terminated agent must be Disabled")
-	}
-	if solo, _ := g.FindIdentity("paperclip/agent/" + agentSolo); !solo.Disabled {
-		t.Error("a paused agent must be Disabled")
-	}
-
-	wantMembers := map[string]string{
-		"paperclip/agent/" + agentAda:    "paperclip/company/" + companyAcme,
-		"paperclip/agent/" + agentLinus:  "paperclip/company/" + companyAcme,
-		"paperclip/agent/" + agentRetire: "paperclip/company/" + companyAcme,
-		"paperclip/agent/" + agentSolo:   "paperclip/company/" + companySide,
-	}
-	if len(g.Memberships) != len(wantMembers) {
-		t.Fatalf("memberships = %+v", g.Memberships)
-	}
-	for _, m := range g.Memberships {
-		if m.MemberKind != identitysource.MemberIdentity || wantMembers[m.MemberRef] != m.CollectionRef {
-			t.Errorf("membership = %+v", m)
-		}
-	}
-
-	var all strings.Builder
-	fmt.Fprintf(&all, "%+v", g)
-	if strings.Contains(all.String(), leakedSecret) || strings.Contains(all.String(), testKey) {
-		t.Error("the snapshot carries credential material")
-	}
-}
-
 func TestGatherMapsRunsAndCostsToObservations(t *testing.T) {
 	f := &fake{t: t}
 	s := open(t, f, nil)
@@ -321,21 +242,6 @@ func TestOnlyReadsAndOnlyCompletedDays(t *testing.T) {
 	}
 }
 
-func TestOfflineWithoutBaseURLSendsNothing(t *testing.T) {
-	s := New()
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{}}); err != nil {
-		t.Fatal(err)
-	}
-	g, err := s.Snapshot(context.Background())
-	if err != nil || len(g.Identities) != 0 || len(g.Collections) != 0 {
-		t.Errorf("offline snapshot = %+v, %v", g, err)
-	}
-	sink := &collectSink{}
-	if err := s.Gather(context.Background(), sink); err != nil || len(sink.obs) != 0 {
-		t.Errorf("offline gather = %v, %v", sink.obs, err)
-	}
-}
-
 func TestUnreadableLegIsReportedNotSilent(t *testing.T) {
 	f := &fake{t: t, status: map[string]int{
 		"/api/companies/" + companySide + "/costs/by-agent-model": http.StatusForbidden,
@@ -382,42 +288,6 @@ func TestRunListAtTheCapIsReportedAsTruncated(t *testing.T) {
 	}
 	if !found {
 		t.Error("a run list that reached its cap must be reported as possibly truncated")
-	}
-}
-
-func TestAuthFailureNeverEchoesTheKey(t *testing.T) {
-	f := &fake{t: t, echoKeyOnError: true, status: map[string]int{"/api/companies": http.StatusUnauthorized}}
-	s := open(t, f, nil)
-	_, err := s.Snapshot(context.Background())
-	if err == nil {
-		t.Fatal("a rejected key must fail the snapshot")
-	}
-	if strings.Contains(err.Error(), testKey) {
-		t.Errorf("error echoes the key: %v", err)
-	}
-	if err := s.Gather(context.Background(), &collectSink{}); err == nil || strings.Contains(err.Error(), testKey) {
-		t.Errorf("gather error = %v", err)
-	}
-}
-
-func TestKeylessLocalTrustedInstance(t *testing.T) {
-	// A local_trusted Paperclip needs no bearer. With no api_key the connector
-	// sends none rather than an empty "Bearer ".
-	var saw string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		saw = r.Header.Get("Authorization")
-		_, _ = w.Write([]byte("[]"))
-	}))
-	defer srv.Close()
-	s := New()
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{"base_url": srv.URL}}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Snapshot(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if saw != "" {
-		t.Errorf("Authorization = %q, want none", saw)
 	}
 }
 

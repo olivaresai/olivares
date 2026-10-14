@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Which profile a new session of a tool runs under, when the tool has more than one. The
+// Which profile a new session of a tool runs under. The
 // default login is the first profile and is picked by the engine's own rule (no profile
-// named); a named profile is sent by its reference. Nothing is offered for a tool with one
-// profile.
-import { useQueries } from '@tanstack/react-query'
+// named); a named profile is sent by its reference, even when it is the only choice.
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -14,12 +13,36 @@ import {
   useProfileList,
 } from '@/features/agent-tools/use-profiles'
 import '@/features/agent-tools/i18n'
-import { agentOpsKeys } from '@/features/agentops/api'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import type { RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { signInApi } from './api'
 import type { SignInTool } from './api'
+
+/**
+ * The profile the engine's own rule would reuse for a new session of `tool` (read only,
+ * nothing is created). The New session form and the advanced launch both read it, so
+ * the default sign-in is the same in both; one read, one cache entry.
+ */
+export function useReuseProfile(tool: string | undefined, enabled: boolean) {
+  const boundary = useAuthBoundary()
+  const eligible = enabled && !!boundary.tenant && !!tool
+  const query = useQuery({
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(boundary.tenant, boundary.epoch),
+      'reuse-profile',
+      tool,
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.previewProfile(tool!, { tenant: boundary.tenant, signal }),
+    enabled: eligible,
+    retry: false,
+  })
+  // Disabled queries still expose cached data. An ineligible tool must not take a
+  // former sign-in as its default, even while that profile remains in the cache.
+  return { ...query, data: eligible ? query.data : undefined }
+}
 
 export interface SessionProfileChoice {
   /** '' for the default login, else the profile's reference. */
@@ -38,7 +61,7 @@ export interface SessionProfiles {
 }
 
 /**
- * The profile choices of `driver`, or null when it has one profile or fewer. `defaultReady`
+ * The profile choices of `driver`, or null when only the default login is available. `defaultReady`
  * is the engine's answer for the default login (its readiness for the tool). `runs` are the
  * newest sessions first: the profile used most recently that is ready is the default pick,
  * else the first ready one.
@@ -114,7 +137,7 @@ export function useSessionProfiles(
       } as SessionProfileChoice
     }),
   ]
-  if (!driver || choices.length < 2) return null
+  if (!driver || (choices.length === 1 && choices[0].value === '')) return null
   const readyValues = new Set(
     choices.filter((c) => c.ready).map((c) => c.value),
   )

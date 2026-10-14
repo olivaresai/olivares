@@ -523,8 +523,9 @@ test.describe('the golden path, in the console', () => {
       )
       await expect(page.getByTestId('narrative-folder')).toHaveCount(0)
     }
-    await attached.getByTestId('composer-advanced').click()
-    const scope = attached.getByTestId('work-scope-line')
+    // The scope of the next action is in the popover of the model and effort control.
+    await attached.getByTestId('composer-tool-model').click()
+    const scope = page.getByTestId('work-scope-line')
     if (await scope.isVisible()) {
       const line = (await scope.innerText()).replace(/\s+/g, ' ')
       await expect(scope).toContainText('Organization')

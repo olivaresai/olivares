@@ -81,26 +81,13 @@ func TestSuspendedTenantIsNotServedByTheRealBinary(t *testing.T) {
 		t.Fatalf("login token: %v %s", err, body)
 	}
 
-	code, body = do("POST", "/v1/system/orgs", login.Token, map[string]any{"slug": "acme", "name": "Acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("create org: %d %s", code, body)
-	}
-	var org struct {
-		TenantID string `json:"tenant_id"`
-	}
-	if err := json.Unmarshal([]byte(body), &org); err != nil || org.TenantID == "" {
-		t.Fatalf("org tenant_id: %v %s", err, body)
-	}
-	tenant, err := model.ParseTenantID(org.TenantID)
-	if err != nil {
-		t.Fatalf("parse tenant: %v", err)
-	}
+	tenant := createOrganizationFixture(t, eng.store, "Acme", "acme").TenantID
 
 	// Baseline: the tenant is served, and holds one agent.
-	if code, body = do("POST", "/v1/agents", login.Token, map[string]any{"name": "alpha", "kind": "assistant"}, org.TenantID); code != http.StatusCreated {
+	if code, body = do("POST", "/v1/agents", login.Token, map[string]any{"name": "alpha", "kind": "assistant"}, tenant.String()); code != http.StatusCreated {
 		t.Fatalf("create agent: %d %s", code, body)
 	}
-	if code, body = do("GET", "/v1/agents", login.Token, nil, org.TenantID); code != http.StatusOK {
+	if code, body = do("GET", "/v1/agents", login.Token, nil, tenant.String()); code != http.StatusOK {
 		t.Fatalf("baseline list agents: %d %s", code, body)
 	}
 	if !bytes.Contains([]byte(body), []byte(`"alpha"`)) {
@@ -119,7 +106,7 @@ func TestSuspendedTenantIsNotServedByTheRealBinary(t *testing.T) {
 	// The customer's request is now REFUSED — not answered with an empty list,
 	// which is what a missing guard looks like and what the reproduction
 	// measured against a deleted tenant.
-	code, body = do("GET", "/v1/agents", login.Token, nil, org.TenantID)
+	code, body = do("GET", "/v1/agents", login.Token, nil, tenant.String())
 	if code != http.StatusLocked {
 		t.Fatalf("suspended tenant list agents = %d %s, want 423 (the store guard is not wired into boot)", code, body)
 	}
@@ -128,7 +115,7 @@ func TestSuspendedTenantIsNotServedByTheRealBinary(t *testing.T) {
 	}
 	// Writes too — and reads are refused as hard as writes on purpose: in this
 	// product reading IS the service.
-	if code, body = do("POST", "/v1/agents", login.Token, map[string]any{"name": "beta", "kind": "assistant"}, org.TenantID); code != http.StatusLocked {
+	if code, body = do("POST", "/v1/agents", login.Token, map[string]any{"name": "beta", "kind": "assistant"}, tenant.String()); code != http.StatusLocked {
 		t.Fatalf("suspended tenant create agent = %d %s, want 423", code, body)
 	}
 
@@ -153,7 +140,7 @@ func TestSuspendedTenantIsNotServedByTheRealBinary(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	code, body = do("GET", "/v1/agents", login.Token, nil, org.TenantID)
+	code, body = do("GET", "/v1/agents", login.Token, nil, tenant.String())
 	if code != http.StatusOK {
 		t.Fatalf("restored tenant list agents = %d %s, want 200", code, body)
 	}

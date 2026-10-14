@@ -4,17 +4,12 @@
 package paperclip
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/olivaresai/olivares/sdk"
-	"github.com/olivaresai/olivares/sdk/model"
 )
 
 // testdata/recorded holds the four GET answers of a real Paperclip, byte for byte:
@@ -64,56 +59,4 @@ func recordedServer(t *testing.T) *httptest.Server {
 	}))
 	t.Cleanup(srv.Close)
 	return srv
-}
-
-func TestRecordedPaperclipAnswers(t *testing.T) {
-	srv := recordedServer(t)
-	s := New()
-	// 2026-10-06: the run (2026-10-05) and the cost event (2026-10-04) fall on
-	// completed days of the default 3-day window.
-	s.now = func() time.Time { return time.Date(2026, 10, 6, 10, 0, 0, 0, time.UTC) }
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{"base_url": srv.URL}}); err != nil {
-		t.Fatal(err)
-	}
-
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatalf("Snapshot: %v", err)
-	}
-	if len(g.Collections) != 1 || g.Collections[0].DisplayName != "Acme Robotics" || len(g.Identities) != 2 || len(g.Memberships) != 2 {
-		t.Fatalf("graph = %+v", g)
-	}
-	eng, ok := g.FindIdentity("paperclip/agent/" + recordedEng)
-	if !ok || eng.Kind != "paperclip/process" || eng.Attributes["role"] != "engineer" ||
-		eng.Attributes["title"] != "Staff Engineer" || eng.Attributes["reports_to"] != "paperclip/agent/"+recordedCEO || eng.Disabled {
-		t.Errorf("engineer = %+v", eng)
-	}
-
-	sink := &collectSink{}
-	if err := s.Gather(context.Background(), sink); err != nil {
-		t.Fatalf("Gather: %v", err)
-	}
-	var runs, costs int
-	for _, o := range sink.obs {
-		switch v := o.(type) {
-		case model.MetricSample:
-			runs++
-			if v.SubjectRef != "paperclip/agent/"+recordedEng || v.Value != 1 || v.Dimensions["status"] != "succeeded" || v.OccurredAt.Format("2006-01-02") != "2026-10-05" {
-				t.Errorf("run metric = %+v", v)
-			}
-		case model.CostSample:
-			costs++
-			if v.ModelRef != "gpt-5" || v.CostMicroUSD != 1_250_000 || v.InputTokens != 120000 || v.OutputTokens != 4000 ||
-				v.Actor != "agent:paperclip/agent/"+recordedEng || v.OccurredAt.Format("2006-01-02") != "2026-10-04" {
-				t.Errorf("cost sample = %+v", v)
-			}
-		case model.FindingReport:
-			if v.Kind == "coverage" {
-				t.Errorf("unexpected coverage finding on a healthy instance: %+v", v)
-			}
-		}
-	}
-	if runs != 1 || costs != 1 {
-		t.Errorf("run metrics = %d, cost samples = %d, want 1 and 1", runs, costs)
-	}
 }

@@ -9,6 +9,10 @@ sidebar:
   order: 8
 ---
 
+:::note[Edition]
+Directory roster sources (LDAP, Okta/Entra and agent/workload IdPs) and managed identity lifecycle require the Business/Enterprise add-ons. Community keeps generic source ingestion, the resource catalog, security findings, the access map, the identity inventory, single-IdP SSO, inbound SCIM users/groups, local roles and bindings, policies and approvals. Community hides the paid console panels and CLI commands; their published API routes return HTTP `501`. Selecting a module does not add its Business implementation.
+:::
+
 Identity is the hard dependency under the whole access map: native audit
 attributes an access to a **credential**, and only an identity roster can
 bind that credential to an **agent or person**. This page wires the three
@@ -69,7 +73,7 @@ The control plane is a standard SCIM 2.0 (RFC 7644) service provider at:
   Unknown members in a pushed group are skipped **and audited**, not
   invented.
 
-## 3. Roster sources: LDAP, Okta, Entra ID
+## 3. Roster sources: LDAP, Okta, Entra ID — Business/Enterprise
 
 Roster sources feed module VI's identity inventory and — this is the point —
 give module III the bindings that upgrade attribution:

@@ -7,6 +7,10 @@ description: >-
   racine de l'actionnement gouverné.
 ---
 
+:::note[Édition]
+Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges) et le cycle de vie des identités gérées nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, SCIM entrant utilisateurs/groupes, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
+:::
+
 Le module VI est le **plan de gouvernance sur le modèle d'autorisation existant du
 moteur** — il ne réimplémente **pas** l'enforcer ni les connecteurs d'identité, il
 les consomme. Il lie cinq sous-systèmes derrière un contexte délimité unique

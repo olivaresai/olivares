@@ -16,8 +16,8 @@
 // each pillar by RBAC and pass only what the role may read.
 
 import type { Finding } from '@/features/security/types'
-import type { Run, RunStatus } from '@/features/redteam/types'
 import type { DiffResponse } from '@/features/access-map/types'
+import type { RunStatus } from '@/features/redteam/types'
 import type {
   ComplianceSummaryResponse,
   FrameworkRollup,
@@ -170,17 +170,47 @@ export interface RiskKpi {
     /** The latest run could not run its probes (sandbox pending) — NOT a pass. */
     degraded: boolean
   }
-  drift: {
-    /** Reconciled, firm unexpected accesses (act on these). */
-    unexpectedFirm: number
-    /** Unexpected accesses awaiting an identity link — honest amber, not red. */
-    unexpectedPending: number
-    /** Over-provisioned grants never observed (least-privilege opportunity). */
-    unused: number
-  }
-  /** Coverage limits behind the risk figures: some access is observed
+}
+
+export interface DriftKpi {
+  /** Reconciled, firm unexpected accesses (act on these). */
+  unexpectedFirm: number
+  /** Unexpected accesses awaiting an identity link — honest amber, not red. */
+  unexpectedPending: number
+  /** Over-provisioned grants never observed (least-privilege opportunity). */
+  unused: number
+  /** Coverage limits behind the figures: some access is observed
    *  approximately or with lossy/opaque capture — the drift count is a lower bound. */
   coverageLimited: number
+  /** The engine reconciled over a PARTIAL drift window: the figures are a lower bound,
+   *  never an authoritative zero. */
+  truncated: boolean
+}
+
+/** The access-map diff as the executive card shows it; null until the diff is read. */
+export function deriveDrift(drift?: DiffResponse): DriftKpi | null {
+  if (!drift) return null
+  const unexpected = drift.unexpected_accesses ?? []
+  const unexpectedPending = unexpected.filter(
+    (d) => d.reconciliation_pending,
+  ).length
+  const coverageLimited = [
+    ...unexpected,
+    ...(drift.unused_grants ?? []),
+  ].filter(
+    (d) =>
+      d.edge?.confidence === 'approximate' ||
+      d.edge?.coverage_tier === 'lossy' ||
+      d.edge?.coverage_tier === 'opaque' ||
+      d.edge?.coverage_tier === 'mixed',
+  ).length
+  return {
+    unexpectedFirm: (drift.unexpected_count ?? 0) - unexpectedPending,
+    unexpectedPending,
+    unused: drift.unused_count ?? 0,
+    coverageLimited,
+    truncated: drift.truncated === true,
+  }
 }
 
 function emptySeverity(): Record<Severity, number> {
@@ -189,12 +219,8 @@ function emptySeverity(): Record<Severity, number> {
 
 /** The most recent run by finish time (ties broken by array order). */
 
-export function deriveRisk(
-  findings?: ListResponse<Finding>,
-  _runs?: ListResponse<Run>,
-  drift?: DiffResponse,
-): RiskKpi | null {
-  if (!findings && !drift) return null
+export function deriveRisk(findings?: ListResponse<Finding>): RiskKpi | null {
+  if (!findings) return null
 
   const bySeverity = emptySeverity()
   let openFindings = 0
@@ -206,21 +232,6 @@ export function deriveRisk(
     if (key in bySeverity) bySeverity[key as Severity]++
   }
 
-  const unexpected = drift?.unexpected_accesses ?? []
-  const unexpectedPending = unexpected.filter(
-    (d) => d.reconciliation_pending,
-  ).length
-  const coverageLimited = [
-    ...unexpected,
-    ...(drift?.unused_grants ?? []),
-  ].filter(
-    (d) =>
-      d.edge?.confidence === 'approximate' ||
-      d.edge?.coverage_tier === 'lossy' ||
-      d.edge?.coverage_tier === 'opaque' ||
-      d.edge?.coverage_tier === 'mixed',
-  ).length
-
   return {
     bySeverity,
     openFindings,
@@ -230,12 +241,6 @@ export function deriveRisk(
       status: null,
       degraded: false,
     },
-    drift: {
-      unexpectedFirm: (drift?.unexpected_count ?? 0) - unexpectedPending,
-      unexpectedPending,
-      unused: drift?.unused_count ?? 0,
-    },
-    coverageLimited,
   }
 }
 

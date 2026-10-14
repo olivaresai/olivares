@@ -261,7 +261,7 @@ jobs:
 Y
 )
 check "(21) with cap 140, FAILS" 1 "$(corretf "$D2")"
-check "(21b) NAMES the task containing the timer" 0 "$( grep -q 'dentro de .task test:race-hot:modules' "$TMP/out"; echo $? )"
+check "(21b) NAMES the task containing the timer" 0 "$( grep -Fq '(inside `task test:race-hot:modules`)' "$TMP/out"; echo $? )"
 
 D3=$(wf tf-dep <<'Y'
 on: {push: {branches: [main]}}

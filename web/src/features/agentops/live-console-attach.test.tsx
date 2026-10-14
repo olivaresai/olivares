@@ -121,6 +121,79 @@ afterEach(() => {
 })
 
 describe('LiveConsole attach continuity', () => {
+  it('shows no row for a bookkeeping frame that arrives before any other (#1784)', async () => {
+    const frames = [
+      {
+        type: 'system',
+        subtype: 'thinking_tokens',
+        estimated_tokens: 40,
+        estimated_tokens_delta: 40,
+      },
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hi.' }],
+        },
+      },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        ok(openBody(...frames.map((f, i) => output(i + 1, JSON.stringify(f))))),
+      ),
+    )
+    wrap(baseRun)
+    await screen.findByText('Hi.')
+    expect(
+      screen
+        .getAllByTestId('conversation-item')
+        .map((row) => row.getAttribute('data-kind')),
+    ).toEqual(['assistant'])
+    expect(screen.queryByText(/Protocol frames/)).toBeNull()
+  })
+
+  it('paints an assistant reply as markdown and keeps the tool bookkeeping off the page (#1784)', async () => {
+    const frames = [
+      { type: 'user', message: { role: 'user', content: 'list the files' } },
+      {
+        type: 'system',
+        subtype: 'thinking_tokens',
+        estimated_tokens: 40,
+        estimated_tokens_delta: 40,
+      },
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: 'Found **two** files:\n\n- `a.go`\n- `b.go`',
+            },
+          ],
+        },
+      },
+      {
+        type: 'rate_limit_event',
+        rate_limit_info: { status: 'allowed', rateLimitType: 'five_hour' },
+      },
+    ]
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        ok(openBody(...frames.map((f, i) => output(i + 1, JSON.stringify(f))))),
+      ),
+    )
+    wrap(baseRun)
+    const strong = await screen.findByText('two')
+    expect(strong.tagName).toBe('STRONG')
+    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.queryByText(/\*\*two\*\*/)).toBeNull()
+    expect(screen.queryByText(/thinking tokens/i)).toBeNull()
+    expect(screen.queryByText(/five hour/i)).toBeNull()
+  })
+
   it('shows typed I/O-absence without marking the process ended and retries', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     let n = 0

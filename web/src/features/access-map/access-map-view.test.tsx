@@ -290,28 +290,26 @@ describe('AccessMapView', () => {
   })
 
   it('offers the ceremony, not the accusation, when the graph is refused for ASSURANCE', async () => {
-    // ⛔ Los dos 403 satisfacen `isForbidden` (errors.ts:59 es sólo el status).
-    // Leyéndolo primero, esta pantalla borraba su cuerpo entero y dejaba como
-    // único control un refresh que devuelve el mismo 403 para siempre: un
-    // callejón sin salida sobre un permiso que el operador SÍ tiene.
+    // ⛔ Both 403s satisfy `isForbidden` (errors.ts:59 is only the status).
+    // Reading it first, this screen erased its whole body and left a refresh that
+    // returns the same 403 forever as the only control: a dead end over a
+    // permission the operator DOES have.
     vi.mocked(accessMapApi.graph).mockRejectedValue(
       new ApiError(403, 'step_up_required', 'assurance level too low'),
     )
     renderView()
 
-    // Ancla POSITIVA primero: la ceremonia está en pantalla. Sin ella, la
-    // ausencia de abajo se cumpliría en el primer tick, con el defecto puesto.
-    expect(
-      await screen.findByText(/step-up|verification|verificación/i),
-    ).toBeInTheDocument()
+    // POSITIVE anchor first: the ceremony is on screen. Without it, the absence
+    // below would hold on the first tick, with the defect in place.
+    expect(await screen.findByText(/step-up|verification/i)).toBeInTheDocument()
     expect(
       screen.queryByText(/access map not authorized/i),
     ).not.toBeInTheDocument()
   })
 
   it('keeps the role refusal when the graph is refused for ROLE', async () => {
-    // El control negativo del anterior: un 403 SIN código de ceremonia sigue
-    // pintando la negativa de rol, que es cierta y no se toca.
+    // The negative control of the previous case: a 403 WITHOUT a ceremony code still
+    // draws the role refusal, which is true and is left alone.
     vi.mocked(accessMapApi.graph).mockRejectedValue(
       new ApiError(403, 'forbidden', 'no'),
     )
@@ -1155,25 +1153,25 @@ describe('AccessMapView — the two halves answer step 4 differently', () => {
   })
 })
 
-describe('P1 — el mapa PIDE el suelo de zoom legible', () => {
+describe('P1 — the map ASKS FOR the legible zoom floor', () => {
   /**
-   * ⛔ ESTE CASO VIGILA AL LLAMANTE, y existe porque su ausencia SOBREVIVIO a mi
-   * propia bateria: quitar `fitMinZoom` de la vista dejaba los 110 casos del modulo
-   * en verde. Es la misma clase que el F-01 del contraste `sol max` — la maquinaria
-   * estaba bien y nadie comprobaba que se usara.
+   * ⛔ THIS CASE WATCHES THE CALLER, and it exists because its absence SURVIVED my
+   * own battery: removing `fitMinZoom` from the view left the module's 110 cases
+   * green. It is the same class as F-01 of the `sol max` contrast — the machinery
+   * was fine and nobody checked that it was used.
    *
-   * Desde F-02 el suelo es OPT-IN (a health le recorta el overview con 15 nodos), asi
-   * que «existe la opcion» y «esta vista la pide» son dos afirmaciones distintas y
-   * hacen falta las dos.
+   * Since F-02 the floor is OPT-IN (it clips the health overview with 15 nodes), so
+   * "the option exists" and "this view asks for it" are two different claims and
+   * both are needed.
    */
-  it('la vista pasa un suelo legible a su lienzo', async () => {
+  it('the view passes a legible floor to its canvas', async () => {
     renderView()
     const canvas = await screen.findByTestId('graph-canvas')
-    const suelo = Number(canvas.getAttribute('data-fit-min-zoom'))
+    const floor = Number(canvas.getAttribute('data-fit-min-zoom'))
     expect(
-      suelo,
-      'el access map dejo de pedir suelo: `fitView` volveria a encoger hasta ~0,12',
+      floor,
+      'the access map stopped asking for a floor: `fitView` would shrink to about 0.12 again',
     ).toBeGreaterThanOrEqual(0.45)
-    expect(suelo).toBeLessThanOrEqual(1)
+    expect(floor).toBeLessThanOrEqual(1)
   })
 })

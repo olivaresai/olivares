@@ -43,11 +43,7 @@ func TestAdoptedEditorCannotPushToMergeBaseProduction(t *testing.T) {
 		t.Fatalf("setup = %d %s", code, raw)
 	}
 	root := s.login("root@x.io", "supersecret1")
-	code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")
-	if code != http.StatusCreated {
-		t.Fatalf("org = %d %s", code, raw)
-	}
-	s.tenant = model.TenantID(out["tenant_id"].(string))
+	s.tenant = s.seedOrg("acme")
 	editor := s.member(root, "editor")
 	var target model.ID
 	if err := s.m.data.Mutate(context.Background(), s.tenant, func(sc store.Scope) error {

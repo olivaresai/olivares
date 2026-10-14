@@ -15,7 +15,7 @@
   "state": {
     "pending": "待处理",
     "running": "运行中",
-    "idle": "运行中",
+    "idle": "空闲",
     "stopped": "已停止",
     "failed": "已失败",
     "cleaned": "已清理"
@@ -103,7 +103,6 @@
     "effort": "推理强度",
     "effortDefault": "模型默认",
     "model": "模型",
-    "modelPlaceholder": "opus  ·  claude-opus-4-8  （可选）",
     "workspace": "文件夹",
     "workspaceNone": "此会话的临时文件夹",
     "worktree": "在新的 git worktree 中工作",
@@ -130,18 +129,9 @@
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME 和 GROK_HOME 属于配置档案：此处会拒绝转发其中任一变量的启动。其他名称仍需通过服务端自身的校验。",
     "identity": {
       "title": "启动身份",
-      "hint": "选择代表人类赞助者的已准入代理。仅有人类访问权限不会授予代理权限。",
       "humanHint": "会话以你自己的访问权限运行。",
       "human": "当前人类操作员",
-      "agent": "已准入代理（代表赞助者）",
-      "required": "编排配置需要独立验证的代理身份。",
-      "choose": "代理身份",
-      "sponsorHint": "启动前服务器验证代理、生命周期和赞助关系。",
-      "placeholder": "选择已准入代理",
-      "readRequired": "需要NHI读取权限。",
-      "loading": "正在加载代理身份…",
-      "loadFailed": "身份列表不可用。",
-      "loadMore": "加载更多身份"
+      "required": "编排配置需要独立验证的代理身份。"
     },
     "blocked": {
       "profilesForbidden": "你的角色无法读取提供商配置档案（sessions:profile:read），因此无法在此启动会话。",
@@ -156,6 +146,26 @@
       "templateRefused": "该模板要求本次启动无法执行的条款：请在“高级选项”中选择其他模板。",
       "readinessFailed": "无法读取该配置档案的要求。"
     }
+  },
+  "picker": {
+    "search": "搜索模型",
+    "none": "没有匹配的模型。",
+    "loading": "正在读取此工具提供的模型…",
+    "failed": "工具没有响应，因此没有列表。请输入模型，或保留默认值。",
+    "unsupported": "此工具不会列出其模型。请输入模型，或保留默认值。",
+    "unavailable": "此处无法使用模型列表。请输入模型，或保留默认值。",
+    "default": "默认",
+    "new": "新",
+    "favorites": "收藏",
+    "models": "模型",
+    "legacy": "旧版",
+    "star": "将 {{model}} 加入收藏",
+    "unstar": "将 {{model}} 从收藏中移除",
+    "use": "使用“{{model}}”",
+    "defaultNamed": "默认（{{model}}）",
+    "defaultUnnamed": "{{tool}} 默认",
+    "effortDefaultNamed": "模型默认（{{effort}}）",
+    "effortNeedsModel": "请先选择模型：推理强度是模型的一个级别。"
   },
   "detail": {
     "live": "实时",
@@ -196,7 +206,7 @@
     "inputAria": "会话输入行",
     "textPlaceholder": "发送一句话……",
     "textAria": "会话回合",
-    "advanced": "高级 · 原始行",
+    "advanced": "原始行",
     "advancedHint": "向 stdin 发送一行 NDJSON。默认是句子栏。",
     "send": "发送",
     "noOutput": "暂无输出。",

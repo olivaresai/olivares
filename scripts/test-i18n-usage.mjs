@@ -62,8 +62,19 @@ try {
     )
     write(`web/src/features/${feature}/i18n/en.json`, JSON.stringify(bundle))
   }
+  for (const [feature, directory, key] of [
+    ['console', 'business-i18n', 'identity'],
+    ['extension-a', 'business-i18n', 'governance'],
+    ['extension-b', 'business-i18n', 'agentops'],
+    ['extension-b', 'executive-i18n', 'executive'],
+  ]) {
+    write(`web/src/features/${feature}/${directory}/index.ts`,
+      `import en from './en.json'\nregisterTranslations('${directory === 'executive-i18n' ? 'executive' : 'console'}', { en })\n`)
+    write(`web/src/features/${feature}/${directory}/en.json`,
+      JSON.stringify({ paid: { [key]: key } }))
+  }
   const calls =
-    "const { t } = useTranslation('console')\nt('shared.title')\nt('shared.first')\nt('shared.second')\nt('shared.count')\nt('common:actions.close')\nt('common:actions.extra')\n"
+    "const { t } = useTranslation('console')\nt('shared.title')\nt('shared.first')\nt('shared.second')\nt('shared.count')\nt('common:actions.close')\nt('common:actions.extra')\nt('paid.identity')\nt('paid.governance')\nt('paid.agentops')\nt('executive:paid.executive')\n"
   write('web/src/view.tsx', calls)
   const merged = run(
     0,
@@ -71,9 +82,12 @@ try {
   )
   assert.match(
     merged.stdout,
-    /6 literal t\(\) call\(s\), 2 English namespace\(s\)/,
+    /10 literal t\(\) call\(s\), 3 English namespace\(s\)/,
   )
+  write('web/src/features/console/unregistered/en.json', '{"ghost":"Not registered"}')
   for (const key of [
+    'console:ghost',
+    'console:paid.missing',
     'console:shared.missing',
     'common:actions.missing',
     'unknown:shared.title',
@@ -84,6 +98,9 @@ try {
       new RegExp(key.replaceAll('.', '\\.')),
     )
   }
+  write('web/src/features/console/business-i18n/en.json', '{}')
+  assert.match(run(1, 'removed registered additive key refuses').stderr, /paid\.identity/)
+  write('web/src/features/console/business-i18n/en.json', '{"paid":{"identity":"Identity"}}')
   write('web/src/features/extension-a/i18n/en.json', '{"shared":"Replacement"}')
   write('web/src/view.tsx', "t('console:shared.title')\n")
   assert.match(
@@ -112,7 +129,7 @@ try {
   write('web/src/view.tsx', '')
   assert.match(run(2, 'zero calls remain unverified').stderr, /COULD NOT LOOK/)
   console.log(
-    'PASS: merged namespaces resolve all six keys; missing overlay/foundation/namespace and removed keys refuse; shape conflicts refuse in both orders; zero calls remain unverified',
+    'PASS: merged conventional and registered additive namespaces resolve all ten keys; unregistered JSON refuses; missing overlay/foundation/namespace and removed keys refuse; shape conflicts refuse in both orders; zero calls remain unverified',
   )
 } finally {
   fs.rmSync(scratch, { recursive: true, force: true })

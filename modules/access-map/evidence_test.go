@@ -6,10 +6,14 @@ package accessmap
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
@@ -195,6 +199,141 @@ func TestEvidenceCaseReadsTheSeparateRecords(t *testing.T) {
 	}
 	if len(history) != 1 || history[0].Transition.Transition != sdk.TransitionActivate {
 		t.Fatalf("authority history = %+v, want the one activation", history)
+	}
+}
+
+func TestEvidenceCaseArtifactReadErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		trigger string
+		alter   string
+		wantErr error
+	}{
+		{"integrity", "policy_artifacts_no_update", "UPDATE policy_artifacts SET record_digest = 'tampered' WHERE id = ?", store.ErrAccessEvidenceIntegrity},
+		{"missing", "policy_artifacts_no_delete", "DELETE FROM policy_artifacts WHERE id = ?", store.ErrNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			dsn := filepath.Join(t.TempDir(), "evidence.db")
+			st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: dsn, Debug: true}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = st.Close() })
+			var tenant model.TenantID
+			if err := st.System(ctx, func(sys store.SystemScope) error {
+				org, err := sys.EnsureSystemTenant(ctx)
+				tenant = org.TenantID
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			observationID, decisionID := seedEvidenceCase(t, st, tenant)
+			m := New()
+			m.UseData(api.NewModuleData(st))
+			before, err := m.EvidenceCase(ctx, tenant, observationID)
+			if err != nil || len(before.Artifacts) != 1 || !before.Reconstructible() {
+				t.Fatalf("seeded case = %+v, err = %v; want one verified artifact", before, err)
+			}
+			artifactID := before.Artifacts[0].ID
+
+			// Simulate out-of-band corruption in this disposable database only.
+			// Restore the append-only trigger in the same transaction as the edit.
+			raw, err := sql.Open("sqlite", dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer raw.Close()
+			tx, err := raw.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			var guard string
+			if err := tx.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", tc.trigger).Scan(&guard); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.ExecContext(ctx, "DROP TRIGGER "+tc.trigger); err != nil {
+				t.Fatal(err)
+			}
+			result, err := tx.ExecContext(ctx, tc.alter, artifactID.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if n, err := result.RowsAffected(); err != nil || n != 1 {
+				t.Fatalf("altered rows = %d, err = %v; want one", n, err)
+			}
+			if _, err := tx.ExecContext(ctx, guard); err != nil {
+				t.Fatal(err)
+			}
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			if err := st.View(ctx, tenant, func(sc store.Scope) error {
+				_, err := sc.AccessEvidence().PolicyArtifact(ctx, artifactID)
+				return err
+			}); !errors.Is(err, tc.wantErr) {
+				t.Fatalf("artifact read = %v, want %v", err, tc.wantErr)
+			}
+
+			got, err := m.EvidenceCase(ctx, tenant, observationID)
+			if tc.wantErr == store.ErrAccessEvidenceIntegrity {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("case error = %v, want %v; returned reconstructible=%t artifacts=%d", err, tc.wantErr, got.Reconstructible(), len(got.Artifacts))
+				}
+				if got.DecisionRecorded || len(got.Artifacts) != 0 || !got.Observation.ID.IsZero() {
+					t.Fatalf("failed read returned a partial case: %+v", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("missing artifact case: %v", err)
+			}
+			if !got.DecisionRecorded || got.Decision.ID != decisionID || got.Observation.ID != observationID || len(got.Artifacts) != 0 || got.Reconstructible() {
+				t.Fatalf("missing artifact case = %+v, want the observation and decision with no artifact and incomplete inputs", got)
+			}
+			if refs := got.Completeness.MissingRefs; len(refs) != 1 || refs[0] != artifactID.String() {
+				t.Fatalf("missing refs = %v, want %s", refs, artifactID)
+			}
+		})
+	}
+}
+
+// Cancel only the artifact lookup, after the real completeness check succeeds.
+// The error comes from the actual SQL repository, rather than a canned result.
+type canceledArtifactStore struct{ store.Store }
+
+func (s canceledArtifactStore) View(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	return s.Store.View(ctx, tenant, func(sc store.Scope) error {
+		return fn(canceledArtifactScope{Scope: sc})
+	})
+}
+
+type canceledArtifactScope struct{ store.Scope }
+
+func (s canceledArtifactScope) AccessEvidence() store.AccessEvidenceRepo {
+	return canceledArtifactRepo{AccessEvidenceRepo: s.Scope.AccessEvidence()}
+}
+
+type canceledArtifactRepo struct{ store.AccessEvidenceRepo }
+
+func (r canceledArtifactRepo) PolicyArtifact(ctx context.Context, id model.ID) (model.PolicyArtifact, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	cancel()
+	return r.AccessEvidenceRepo.PolicyArtifact(ctx, id)
+}
+
+func TestEvidenceCasePropagatesCanceledArtifactRead(t *testing.T) {
+	st, tenant := newStore(t)
+	observationID, _ := seedEvidenceCase(t, st, tenant)
+	m := New()
+	m.UseData(api.NewModuleData(canceledArtifactStore{Store: st}))
+	got, err := m.EvidenceCase(context.Background(), tenant, observationID)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("case error = %v, want context.Canceled; returned reconstructible=%t artifacts=%d", err, got.Reconstructible(), len(got.Artifacts))
+	}
+	if got.DecisionRecorded || len(got.Artifacts) != 0 || !got.Observation.ID.IsZero() {
+		t.Fatalf("failed read returned a partial case: %+v", got)
 	}
 }
 

@@ -55,7 +55,7 @@ import { ProviderAccountCreate } from './provider-account-create'
 import { ProviderAccountMetadata } from './provider-account-metadata'
 import { ProviderAccountSignIn } from './provider-account-signin'
 import { ProfileListError, StateBadge } from './profiles-panel'
-import type { ProviderAccountDTO } from './types'
+import { profileName, type ProviderAccountDTO } from './types'
 import './i18n'
 
 /** The picker's "enter a reference" choice: never a profile reference. */
@@ -931,9 +931,10 @@ function AdoptAccountDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {candidates.map((p) => {
-                    const label = p.display_name
+                    const name = profileName(p)
+                    const label = name
                       ? t('accounts.adoptDialog.profileOption', {
-                          name: p.display_name,
+                          name,
                           ref: p.profile_ref,
                         })
                       : p.profile_ref

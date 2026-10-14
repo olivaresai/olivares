@@ -16,6 +16,7 @@ const { api, auth, signIn, launch, navigate } = vi.hoisted(() => ({
   navigate: vi.fn(),
   api: {
     inventory: vi.fn(),
+    pins: vi.fn().mockResolvedValue({ pins: [] }),
     // The providers section reads its own snapshot; these cases are about the rows below.
     providers: vi.fn(() =>
       Promise.resolve({

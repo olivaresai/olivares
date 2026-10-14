@@ -109,22 +109,24 @@ func observeArgs(server string, args ...string) []string {
 // reach. It is the table behind the credential, refusal and routing tests, so
 // every family is covered by each of them rather than one family standing in for
 // the other nine.
-var laneReadVerbs = []struct {
-	family string
-	args   []string
-	path   string
-}{
-	{"reporting", []string{"reporting", "reports", "ls"}, "/v1/m/reporting/reports"},
-	{"notify", []string{"notify", "routes", "ls"}, "/v1/m/notify/routes"},
-	{"health", []string{"health", "status"}, "/v1/m/health/status"},
-	{"accessmap", []string{"accessmap", "graph"}, "/v1/m/accessmap/graph"},
-	{"observability", []string{"observability", "traces", "ls"}, "/v1/m/observability/traces"},
-	{"consoleviews", []string{"consoleviews", "ls"}, "/v1/m/consoleviews/views"},
-	{"adoption", []string{"adoption", "summary"}, "/v1/m/adoption/summary"},
-	{"identity", []string{"identity", "sso"}, "/v1/m/identity/sso"},
-	{"inventory", []string{"inventory", "summary"}, "/v1/m/inventory/summary"},
-	{"governance", []string{"governance", "killswitch", "ls"}, "/v1/m/governance/killswitch"},
-	{"capabilities", []string{"capabilities", "servers", "ls"}, "/v1/m/capabilities/servers"},
+func laneReadVerbs() []laneReadVerb {
+	verbs := append([]laneReadVerb{
+		{"reporting", []string{"reporting", "reports", "ls"}, "/v1/m/reporting/reports"},
+		{"notify", []string{"notify", "routes", "ls"}, "/v1/m/notify/routes"},
+		{"health", []string{"health", "status"}, "/v1/m/health/status"},
+		{"observability", []string{"observability", "traces", "ls"}, "/v1/m/observability/traces"},
+		{"consoleviews", []string{"consoleviews", "ls"}, "/v1/m/consoleviews/views"},
+		{"adoption", []string{"adoption", "summary"}, "/v1/m/adoption/summary"},
+		{"identity", []string{"identity", "sso"}, "/v1/m/identity/sso"},
+		{"inventory", []string{"inventory", "summary"}, "/v1/m/inventory/summary"},
+		{"posture", []string{"posture", "export"}, "/v1/m/posture/export"},
+		{"governance", []string{"governance", "killswitch", "ls"}, "/v1/m/governance/killswitch"},
+		{"capabilities", []string{"capabilities", "servers", "ls"}, "/v1/m/capabilities/servers"},
+	}, editionLaneReadVerbs()...)
+	if thisEdition.name != "enterprise" {
+		return slices.DeleteFunc(verbs, func(v laneReadVerb) bool { return operationsExportCLIArgs(v.args) })
+	}
+	return verbs
 }
 
 // ---- DENY 1: no credential, and the paired control ---------------------------------
@@ -137,7 +139,7 @@ var laneReadVerbs = []struct {
 // The positive control is in the same subtest, so "zero requests" cannot be
 // satisfied by a command that never makes any.
 func TestLaneRefusesWithoutACredentialBeforeOpeningAConnection(t *testing.T) {
-	for _, v := range laneReadVerbs {
+	for _, v := range laneReadVerbs() {
 		t.Run(v.family, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, "{}")
 
@@ -206,7 +208,7 @@ func TestMissingClientValuesNameWhereTheyAreConfigured(t *testing.T) {
 // to everything, so the command would look perfectly healthy while addressing a
 // route that does not exist.
 func TestLaneReadsReachTheirModuleRoute(t *testing.T) {
-	for _, v := range laneReadVerbs {
+	for _, v := range laneReadVerbs() {
 		t.Run(v.family, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, "{}")
 			if _, _, err := execRoot(t, observeArgs(spy.srv.URL, v.args...)...); err != nil {
@@ -246,7 +248,7 @@ func TestLaneMapsServerRefusalsToTheExitContract(t *testing.T) {
 		{http.StatusInternalServerError, exitcode.Server},
 		{http.StatusBadGateway, exitcode.Server},
 	} {
-		for _, v := range laneReadVerbs {
+		for _, v := range laneReadVerbs() {
 			t.Run(fmt.Sprintf("%d/%s", tc.status, v.family), func(t *testing.T) {
 				spy := newObserveSpy(t, tc.status, `{"error":{"message":"refused"}}`)
 				out, _, err := execRoot(t, observeArgs(spy.srv.URL, v.args...)...)
@@ -342,37 +344,16 @@ func TestObserveLaneDestructiveVerbsRefuseUnattendedConsent(t *testing.T) {
 // ---- DENY 4: a required query parameter is refused locally ---------------------------
 
 func TestRoutesWithARequiredParameterRefuseBeforeTheRequest(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		missing []string
-		full    []string
-	}{
-		{
-			"accessmap-neighbors-id",
-			[]string{"accessmap", "neighbors"},
-			[]string{"accessmap", "neighbors", "--id", "ag-7"},
-		},
-		{
-			"accessmap-reachability-agent-id",
-			[]string{"accessmap", "attack-paths", "reachability"},
-			[]string{"accessmap", "attack-paths", "reachability", "--agent-id", "ag-7"},
-		},
-		{
-			"accessmap-escalation-agent-id",
-			[]string{"accessmap", "attack-paths", "escalation"},
-			[]string{"accessmap", "attack-paths", "escalation", "--agent-id", "ag-7"},
-		},
-		{
-			"accessmap-exfil-resource-id",
-			[]string{"accessmap", "attack-paths", "exfil"},
-			[]string{"accessmap", "attack-paths", "exfil", "--resource-id", "res-3"},
-		},
+	for _, tc := range append([]RoutesWithARequiredParameterRefuseBeforeTheRequestCase{
 		{
 			"health-sla-subject",
 			[]string{"health", "sla"},
 			[]string{"health", "sla", "--subject-kind", "agent", "--subject-ref", "ag-7"},
 		},
-	} {
+	}, editionRoutesWithARequiredParameterRefuseBeforeTheRequestCases()...) {
+		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.missing) {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, `{"has_data":true,"paths":[],"nodes":[],"edges":[]}`)
 
@@ -411,11 +392,7 @@ func TestRoutesWithARequiredParameterRefuseBeforeTheRequest(t *testing.T) {
 // socket.
 func TestPositionalIDsCannotRetargetTheRequest(t *testing.T) {
 	evil := "../../../v1/system/orgs/t_victim"
-	for _, tc := range []struct {
-		name   string
-		args   []string
-		prefix string
-	}{
+	for _, tc := range append([]PositionalIDsCannotRetargetTheRequestCase{
 		{"observability-traces-get", []string{"observability", "traces", "get", evil}, "/v1/m/observability/traces/"},
 		{"observability-traces-export", []string{"observability", "traces", "export", evil}, "/v1/m/observability/traces/"},
 		{"health-incidents-get", []string{"health", "incidents", "get", evil}, "/v1/m/health/incidents/"},
@@ -434,14 +411,12 @@ func TestPositionalIDsCannotRetargetTheRequest(t *testing.T) {
 		{"governance-rbac-grants-get", []string{"governance", "rbac", "grants", "get", evil}, "/v1/m/governance/rbac/grants/"},
 		{"governance-rbac-filters-get", []string{"governance", "rbac", "filters", "get", evil}, "/v1/m/governance/rbac/inheritance-filters/"},
 		{"governance-rbac-filters-rm", []string{"governance", "rbac", "filters", "rm", evil, "--yes"}, "/v1/m/governance/rbac/inheritance-filters/"},
-		{"governance-nhi-get", []string{"governance", "nhi", "get", evil}, "/v1/m/governance/nhi/"},
-		{"governance-nhi-events", []string{"governance", "nhi", "events", evil}, "/v1/m/governance/nhi/"},
 		{"consoleviews-get", []string{"consoleviews", "get", evil}, "/v1/m/consoleviews/views/"},
 		{"consoleviews-rm", []string{"consoleviews", "rm", evil, "--yes"}, "/v1/m/consoleviews/views/"},
 		{"inventory-entities-get", []string{"inventory", "entities", "get", "agent", evil}, "/v1/m/inventory/entities/agent/"},
 		{"reporting-schedules-rm", []string{"reporting", "schedules", "rm", evil, "--yes"}, "/v1/m/reporting/schedules/"},
 		{"reporting-schedule-runs", []string{"reporting", "schedules", "runs", evil}, "/v1/m/reporting/schedules/"},
-	} {
+	}, editionPositionalIDsCannotRetargetTheRequestCases(evil)...) {
 		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
 			continue
 		}
@@ -503,11 +478,7 @@ func TestTheTraversalWitnessCanFail(t *testing.T) {
 // accept or silently coerce, producing a plausible answer to a question nobody
 // asked.
 func TestLocalAllowListsRefuseWithoutSpendingARequest(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		args []string
-		why  string
-	}{
+	for _, tc := range append([]LocalAllowListsRefuseWithoutSpendingARequestCase{
 		{"posture-severity", []string{"posture", "export", "--severity", "urgent"},
 			"an unknown severity floor"},
 		{"adoption-lens", []string{"adoption", "trend", "--lens", "both"},
@@ -540,11 +511,9 @@ func TestLocalAllowListsRefuseWithoutSpendingARequest(t *testing.T) {
 			"two mutually exclusive sources for one document"},
 		{"consoleviews-update-no-name", []string{"consoleviews", "update", "sv-1", "--params", "{}"},
 			"a replace that omits the name it would clear"},
-		{"accessmap-direction", []string{"accessmap", "neighbors", "--id", "ag-7", "--direction", "sideways"},
-			"a traversal direction that does not exist"},
 		{"negative-limit", []string{"inventory", "entities", "ls", "--limit", "-5"},
 			"a negative page size the engine would ignore"},
-	} {
+	}, editionLocalAllowListsRefuseWithoutSpendingARequestCases()...) {
 		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
 			continue
 		}
@@ -567,10 +536,7 @@ func TestLocalAllowListsRefuseWithoutSpendingARequest(t *testing.T) {
 // TestTheAllowListsAcceptWhatTheEngineAccepts is the other half. Without it,
 // "refuse everything" would satisfy every case above.
 func TestTheAllowListsAcceptWhatTheEngineAccepts(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		args []string
-	}{
+	for _, tc := range append([]TheAllowListsAcceptWhatTheEngineAcceptsCase{
 		{"posture-severity-high", []string{"posture", "export", "--severity", "high"}},
 		{"adoption-lens-telemetry", []string{"adoption", "trend", "--lens", "telemetry"}},
 		{"adoption-since-rfc3339", []string{"adoption", "summary", "--since", "2026-08-01T00:00:00Z"}},
@@ -580,9 +546,8 @@ func TestTheAllowListsAcceptWhatTheEngineAccepts(t *testing.T) {
 		{"notify-create-ok", []string{"notify", "routes", "create", "--name", "n", "--destination", "d", "--min-severity", "critical"}},
 		{"notify-evaluate-ok", []string{"notify", "evaluate", "--event-type", "finding.created"}},
 		{"consoleviews-create-ok", []string{"consoleviews", "create", "--feature-id", "findings", "--name", "n", "--params", `{"a":1}`}},
-		{"accessmap-direction-incoming", []string{"accessmap", "neighbors", "--id", "ag-7", "--direction", "incoming"}},
 		{"limit-positive", []string{"inventory", "entities", "ls", "--limit", "5"}},
-	} {
+	}, editionTheAllowListsAcceptWhatTheEngineAcceptsCases()...) {
 		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
 			continue
 		}
@@ -643,11 +608,7 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 	// So the referent is now the route, and the table is exhaustive. The count
 	// assertion below is what keeps it that way: a verb added to the lot without a
 	// row here fails rather than being silently unmeasured.
-	cases := []struct {
-		path       string
-		wantCursor bool
-		wantLimit  bool
-	}{
+	cases := append([]PagingFlagsExistOnlyWhereTheEngineReadsThemCase{
 		{"olivares reporting branding get", false, false},
 		{"olivares reporting branding set", false, false},
 		{"olivares reporting enterprise bundle", false, false},
@@ -706,13 +667,6 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares health sla", false, false},
 		{"olivares health status", true, true},
 		{"olivares health watch", false, false},
-		{"olivares accessmap attack-paths escalation", false, false},
-		{"olivares accessmap attack-paths exfil", false, false},
-		{"olivares accessmap attack-paths reachability", false, false},
-		{"olivares accessmap attack-paths summary", false, false},
-		{"olivares accessmap drift", true, true},
-		{"olivares accessmap graph", true, true},
-		{"olivares accessmap neighbors", false, false},
 		{"olivares observability attestation", false, false},
 		{"olivares observability ingestion-health", false, false},
 		{"olivares observability traces export", false, false},
@@ -729,8 +683,8 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares governance pdp active", false, false},
 		{"olivares governance pdp tests", false, false},
 		{"olivares governance rbac catalog", false, false},
-		{"olivares governance rbac delegation-authority", false, false},
 		{"olivares governance rbac rights", false, false},
+		{"olivares governance rbac delegation-authority", false, false},
 		{"olivares governance rbac roles ls", false, false},
 		{"olivares governance rbac roles get", false, false},
 		{"olivares governance rbac permission-groups ls", false, false},
@@ -741,10 +695,6 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares governance rbac filters get", false, false},
 		{"olivares governance rbac filters set", false, false},
 		{"olivares governance rbac filters rm", false, false},
-		{"olivares governance nhi ls", true, true},
-		{"olivares governance nhi posture", false, false},
-		{"olivares governance nhi get", false, false},
-		{"olivares governance nhi events", false, false},
 		{"olivares consoleviews get", false, false},
 		{"olivares consoleviews ls", false, false},
 		{"olivares consoleviews rm", false, false},
@@ -754,36 +704,28 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares adoption summary", false, true},
 		{"olivares adoption teams", false, false},
 		{"olivares adoption trend", false, false},
-		{"olivares identity external-keys", false, false},
-		{"olivares identity residency", false, false},
 		{"olivares identity sso", false, false},
-		{"olivares identity wif", false, false},
 		{"olivares inventory entities get", false, false},
 		{"olivares inventory entities ls", true, true},
 		{"olivares inventory summary", false, false},
 		{"olivares posture export", false, false},
-	}
+	}, editionPagingFlagsExistOnlyWhereTheEngineReadsThemCases()...)
 	// The engine side of the table, measured in the module sources: cursor+limit
 	// come from a per-namespace list helper (notify/helpers.go:103,
 	// health/helpers.go:128, access-map/api.go:67 edgeQuery,
 	// observability/traces.go:324 traceListParams, inventory/api.go:211), and each
 	// is wired to the handlers named below. limit-without-cursor is adoption's
 	// top-N (dto.go:207) at its two call sites. Everything else reads neither.
-	// 114 including `governance rbac rights`, whose effective-rights handler
 	// reads neither a cursor nor a limit, and the four `governance rbac filters`
-	// verbs, whose list handler returns the whole set.
-	expected := 114
+	// 109 since `governance approvals approve`/`reject` and `reporting signing
+	// status`/`enable`/`disable`; none of the five reads a cursor or a limit.
 	if thisEdition.name != "enterprise" {
-		cases = slices.DeleteFunc(cases, func(c struct {
-			path                  string
-			wantCursor, wantLimit bool
-		}) bool {
+		cases = slices.DeleteFunc(cases, func(c PagingFlagsExistOnlyWhereTheEngineReadsThemCase) bool {
 			return operationsExportCLIArgs(strings.Fields(c.path)[1:])
 		})
-		expected = 112
 	}
-	if len(cases) != expected {
-		t.Fatalf("the table has %d rows, want %d for this edition", len(cases), expected)
+	if len(cases) != editionPagingCounts().rows {
+		t.Fatalf("the table has %d rows, not the %d leaves this edition exposes", len(cases), editionPagingCounts().rows)
 	}
 	cursorN, limitN := 0, 0
 	for _, tc := range cases {
@@ -794,8 +736,8 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 			limitN++
 		}
 	}
-	if cursorN != 22 || limitN != 24 {
-		t.Fatalf("the table itself claims %d cursor and %d limit verbs, want 22 and 24", cursorN, limitN)
+	if cursorN != editionPagingCounts().cursor || limitN != editionPagingCounts().limit {
+		t.Fatalf("the table itself claims %d cursor and %d limit verbs, want %d and %d", cursorN, limitN, editionPagingCounts().cursor, editionPagingCounts().limit)
 	}
 	root := newRootCmd()
 	seen := map[string]bool{}
@@ -834,19 +776,22 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 	// igualmente para dar de alta una: una sola lista que mantener en vez de dos que se
 	// desincronizan en silencio.
 	familias := map[string]bool{}
-	for _, v := range laneReadVerbs {
+	for _, v := range laneReadVerbs() {
 		familias[v.family] = true
 	}
 	if len(familias) < 10 {
 		t.Fatalf("only %d families derived from laneReadVerbs; the coverage walk would check almost nothing", len(familias))
 	}
 	for fam := range familias {
-		f, _, err := root.Find([]string{fam})
-		if err != nil || f == nil {
+		f, remaining, err := root.Find([]string{fam})
+		if err != nil || f == nil || f == root || len(remaining) != 0 {
 			t.Fatalf("family %s does not resolve", fam)
 		}
 		var walk func(c *cobra.Command, path string)
 		walk = func(c *cobra.Command, path string) {
+			if c.Hidden && c.DisableFlagParsing {
+				return
+			}
 			if !c.HasSubCommands() {
 				if !seen[path] {
 					t.Errorf("%s has no row in the paging table: it is unmeasured", path)
@@ -1031,13 +976,7 @@ func TestRouteUpdateOmitsEnabledUnlessItWasPassed(t *testing.T) {
 // TestIdentityPostureTellsOffApartFromUnmeasured is the central claim of
 // cmd_identity.go: "SSO is off" and "we could not look" must not exit alike.
 func TestIdentityPostureTellsOffApartFromUnmeasured(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		args     []string
-		body     string
-		wantExit int
-		wantText string
-	}{
+	for _, tc := range append([]IdentityPostureTellsOffApartFromUnmeasuredCase{
 		{
 			"sso-configured", []string{"identity", "sso"},
 			`{"configured":true,"protocol":"oidc"}`, exitcode.OK, "connected",
@@ -1051,25 +990,10 @@ func TestIdentityPostureTellsOffApartFromUnmeasured(t *testing.T) {
 			`{"configured":false,"reason":"the engine's federation posture is not readable from this build"}`,
 			exitcode.Indeterminate, "UNDETERMINED",
 		},
-		{
-			"external-keys-real-zero", []string{"identity", "external-keys"},
-			`{"items":[],"available":true}`, exitcode.OK, "read cleanly and is empty",
-		},
-		{
-			"external-keys-unmeasured", []string{"identity", "external-keys"},
-			`{"items":[],"available":false,"reason":"no admin credential is wired"}`,
-			exitcode.Indeterminate, "UNAVAILABLE",
-		},
-		{
-			"residency-real-zero", []string{"identity", "residency"},
-			`{"items":[],"available":true}`, exitcode.OK, "read cleanly and is empty",
-		},
-		{
-			"residency-unmeasured", []string{"identity", "residency"},
-			`{"items":[],"available":false,"reason":"the fetch failed"}`,
-			exitcode.Indeterminate, "UNAVAILABLE",
-		},
-	} {
+	}, editionIdentityPostureTellsOffApartFromUnmeasuredCases()...) {
+		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, tc.body)
 			out, _, err := execRoot(t, observeArgs(spy.srv.URL, tc.args...)...)
@@ -1557,22 +1481,20 @@ func TestUnknownableGateStateRendersAsUnknownNotOff(t *testing.T) {
 // TestEmptyListsSayWhichEmptinessTheyMean: on a fresh install every list is
 // empty, and "no rows" must be distinguishable from "the command did nothing".
 func TestEmptyListsSayWhichEmptinessTheyMean(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		args []string
-		want string
-	}{
+	for _, tc := range append([]EmptyListsSayWhichEmptinessTheyMeanCase{
 		{"notify-routes", []string{"notify", "routes", "ls"}, "no notification route is declared"},
 		{"notify-destinations", []string{"notify", "destinations"}, "no destination is provisioned"},
 		{"health-status", []string{"health", "status"}, "nothing is being monitored yet"},
 		{"health-checks", []string{"health", "checks", "ls"}, "no check has been declared"},
-		{"accessmap-graph", []string{"accessmap", "graph"}, "no access edges match this query"},
 		{"inventory-entities", []string{"inventory", "entities", "ls"}, "no catalog entities match"},
 		{"consoleviews", []string{"consoleviews", "ls"}, "no saved views are visible to you"},
 		{"observability-traces", []string{"observability", "traces", "ls"}, "no traces in the audit ledger"},
 		{"reporting-schedules", []string{"reporting", "schedules", "ls"}, "no report schedule is declared"},
 		{"adoption-teams", []string{"adoption", "teams"}, "no team recorded activity"},
-	} {
+	}, editionEmptyListsSayWhichEmptinessTheyMeanCases()...) {
+		if thisEdition.name != "enterprise" && operationsExportCLIArgs(tc.args) {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			spy := newObserveSpy(t, http.StatusOK, `{"items":[],"nodes":[],"edges":[],"teams":[],"destinations":[]}`)
 			out, _, err := execRoot(t, observeArgs(spy.srv.URL, tc.args...)...)
@@ -1672,36 +1594,6 @@ func TestEvaluateNamesADisabledRouteAsUnableToFire(t *testing.T) {
 	// It is a dry run: it must reach the evaluate route and nothing else.
 	if got := spy.last(t); got.path != "/v1/m/notify/routes/evaluate" || got.method != http.MethodPost {
 		t.Errorf("evaluate reached %s %s, want POST /v1/m/notify/routes/evaluate", got.method, got.path)
-	}
-}
-
-// TestKeyShadowIsReportedAboveTheGraph: a static API key takes precedence over
-// federation, so a perfectly configured WIF graph can be inert. Printing the
-// graph without that warning shows federation that is not in effect.
-func TestKeyShadowIsReportedAboveTheGraph(t *testing.T) {
-	spy := newObserveSpy(t, http.StatusOK,
-		`{"issuers":[{"id":"fdis_1","issuer_url":"https://idp","ca_cert_configured":true}],
-		  "rules":[],"service_accounts":[{"id":"svac_1","organization_role":"admin"}],
-		  "key_shadow":{"present":true,"var":"ANTHROPIC_API_KEY"},
-		  "reconciliation":{"reconciled":false,"unavailable":"no org:admin token"}}`)
-	out, _, err := execRoot(t, observeArgs(spy.srv.URL, "identity", "wif")...)
-	if err != nil {
-		t.Fatalf("verb failed: %v", err)
-	}
-	if !strings.Contains(out, "STATIC KEY SHADOWS FEDERATION") {
-		t.Errorf("the shadowing key must be reported, got:\n%s", out)
-	}
-	if !strings.Contains(out, "ANTHROPIC_API_KEY") {
-		t.Errorf("the shadowing variable must be named, got:\n%s", out)
-	}
-	if !strings.Contains(out, "NOT RECONCILED") {
-		t.Errorf("an unreconciled graph must not read as verified, got:\n%s", out)
-	}
-	if !strings.Contains(out, "ADMIN org role") {
-		t.Errorf("an admin-role service account is a posture signal and must be named, got:\n%s", out)
-	}
-	if !strings.Contains(out, "fdis_1") {
-		t.Errorf("the issuer must be listed with the real wire field names, got:\n%s", out)
 	}
 }
 
@@ -1822,13 +1714,8 @@ func (r repeatReader) Read(p []byte) (int, error) {
 // every test above vacuous for that family by simply not existing.
 func TestEveryFamilyInTheLotIsRegistered(t *testing.T) {
 	root := newRootCmd()
-	for _, name := range []string{
-		"reporting", "notify", "health", "accessmap", "observability",
-		"consoleviews", "adoption", "identity", "inventory", "posture",
-	} {
-		if name == "posture" && thisEdition.name != "enterprise" {
-			continue
-		}
+	for _, verb := range laneReadVerbs() {
+		name := verb.family
 		if cmd := resolveCommandPath(t, root, "olivares "+name); cmd == nil {
 			t.Errorf("olivares %s is not registered on the root command", name)
 		}
@@ -1842,15 +1729,16 @@ func TestEveryFamilyInTheLotIsRegistered(t *testing.T) {
 func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 	root := newRootCmd()
 	want := map[string]int{
-		"reporting": 18, "notify": 14, "health": 14, "accessmap": 7,
+		"reporting": 18, "notify": 14, "health": 14,
 		"observability": 5, "consoleviews": 5, "adoption": 5,
-		"identity": 4, "inventory": 3, "posture": 1,
+		"identity": editionIdentityVerbCount(), "inventory": 3, "posture": 1,
 	}
-	expected := 76
+	for family, n := range editionLaneVerbCounts() {
+		want[family] = n
+	}
 	if thisEdition.name != "enterprise" {
 		want["observability"] = 4
 		delete(want, "posture")
-		expected = 74
 	}
 	total := 0
 	for family, n := range want {
@@ -1865,8 +1753,8 @@ func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 		}
 		total += n
 	}
-	if total != expected {
-		t.Fatalf("the census table sums to %d, want %d for this edition", total, expected)
+	if total != editionLaneTotal() {
+		t.Fatalf("the census table itself sums to %d, not the %d routes it describes", total, editionLaneTotal())
 	}
 }
 
@@ -1878,6 +1766,9 @@ func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 // navigation as well as verbs, which is how the first version of this test
 // reported 21 verbs for reporting's 15 routes and 5 groups.
 func countLeafVerbs(cmd *cobra.Command) int {
+	if cmd.Hidden && cmd.DisableFlagParsing {
+		return 0
+	}
 	if !cmd.HasSubCommands() {
 		return 1
 	}

@@ -63,10 +63,7 @@ func testDRCommunicationRecovery(t *testing.T, console bool) {
 	admin := communicationHTTPTestDecode[struct {
 		Token string `json:"token"`
 	}](t, login)
-	org := request(http.MethodPost, "/v1/system/orgs", admin.Token, "", map[string]any{"name": "Recovery", "slug": "recovery"}, nil, http.StatusCreated)
-	tenant := communicationHTTPTestDecode[struct {
-		Tenant model.TenantID `json:"tenant_id"`
-	}](t, org).Tenant
+	tenant := createOrganizationFixture(t, eng.store, "Recovery", "recovery").TenantID
 	owner := createCommunicationHTTPTestUser(t, eng, admin.Token, tenant, "owner@recovery.test", auth.RoleOwner)
 	reader := createCommunicationHTTPTestUser(t, eng, admin.Token, tenant, "reader@recovery.test", auth.RoleEditor)
 	if err := eng.Close(); err != nil {

@@ -113,6 +113,24 @@ function deferred<T>() {
 const signalOf = (call: unknown[]) =>
   (call[1] as { signal?: AbortSignal } | undefined)?.signal
 
+type ProfilePage = { items: ProviderProfileDTO[]; has_more: boolean }
+const emptyPage = (): Promise<ProfilePage> =>
+  Promise.resolve({ items: [], has_more: false })
+const isPickerCall = (call: unknown[]) =>
+  (call[0] as { state?: string } | undefined)?.state === 'active'
+/** The bind picker's reads (`state: 'active'`), apart from the Profile column's own
+ * name read, which asks for the whole list. */
+const pickerCalls = () => api.listProfiles.mock.calls.filter(isPickerCall)
+/** Scripts the bind picker's answers in order. The column's name read is answered
+ * with an empty page and never consumes a scripted answer. */
+function scriptPicker() {
+  const answers: Array<Promise<ProfilePage>> = []
+  api.listProfiles.mockImplementation((params?: { state?: string }) =>
+    params?.state === 'active' ? (answers.shift() ?? emptyPage()) : emptyPage(),
+  )
+  return (...next: Array<Promise<ProfilePage>>) => answers.push(...next)
+}
+
 /** A FRESH element per render: React bails out of re-rendering an identical element
  * reference, which would hide a boundary change the real AuthContext always delivers. */
 function wrap(ui: () => React.ReactNode) {
@@ -187,6 +205,10 @@ beforeEach(() => {
     sessionId: SID,
     expiresAt: EXP,
   })
+  // clearAllMocks keeps implementations: a scripted picker must not leak forward.
+  api.listProfiles.mockReset()
+  // An unscripted read (the Profile column's name read) answers an empty page.
+  api.listProfiles.mockImplementation(() => emptyPage())
   api.listBindings.mockResolvedValue({ items: [], has_more: false })
   api.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
   consoleApi.listSources.mockResolvedValue({ sources: [] })
@@ -459,10 +481,8 @@ describe('C3 — bindings and the picker under a moved boundary', () => {
   it.each(moves)(
     'the bind picker read under A is not offered after a %s change',
     async (_what, move) => {
-      api.listProfiles.mockResolvedValueOnce({
-        items: [ownedBy('A')],
-        has_more: false,
-      })
+      const script = scriptPicker()
+      script(Promise.resolve({ items: [ownedBy('A')], has_more: false }))
       const user = userEvent.setup()
       const { qc, rerender } = wrap(() => <BindingsTable />)
       await waitFor(() => expect(api.listBindings).toHaveBeenCalled())
@@ -477,8 +497,8 @@ describe('C3 — bindings and the picker under a moved boundary', () => {
       expect(within(dialog).getByLabelText('Profile')).toHaveTextContent(
         'principal A',
       )
-      const b = deferred<{ items: ProviderProfileDTO[]; has_more: boolean }>()
-      api.listProfiles.mockReturnValueOnce(b.promise)
+      const b = deferred<ProfilePage>()
+      script(b.promise)
       act(() => {
         move()
       })
@@ -487,7 +507,7 @@ describe('C3 — bindings and the picker under a moved boundary', () => {
       // new boundary has nothing of A to offer — nor A's selection — while its own
       // read is pending.
       const after = await screen.findByRole('dialog')
-      await waitFor(() => expect(api.listProfiles).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(pickerCalls()).toHaveLength(2))
       expect(within(after).getByLabelText('Profile')).toHaveTextContent(
         'Select a profile',
       )
@@ -509,11 +529,9 @@ describe('C3 — bindings and the picker under a moved boundary', () => {
   it.each(moves)(
     'a LATE bind-picker answer of A released after a %s change is cancelled and never offered',
     async (_what, move) => {
-      const a = deferred<{ items: ProviderProfileDTO[]; has_more: boolean }>()
-      const b = deferred<{ items: ProviderProfileDTO[]; has_more: boolean }>()
-      api.listProfiles
-        .mockReturnValueOnce(a.promise)
-        .mockReturnValueOnce(b.promise)
+      const a = deferred<ProfilePage>()
+      const b = deferred<ProfilePage>()
+      scriptPicker()(a.promise, b.promise)
       const user = userEvent.setup()
       const { qc, rerender } = wrap(() => <BindingsTable />)
       await waitFor(() => expect(api.listBindings).toHaveBeenCalled())
@@ -521,14 +539,14 @@ describe('C3 — bindings and the picker under a moved boundary', () => {
         await screen.findByRole('button', { name: 'Bind source' }),
       )
       await screen.findByRole('dialog')
-      await waitFor(() => expect(api.listProfiles).toHaveBeenCalledOnce())
+      await waitFor(() => expect(pickerCalls()).toHaveLength(1))
       act(() => {
         move()
       })
       rerender()
       const after = await screen.findByRole('dialog')
-      await waitFor(() => expect(api.listProfiles).toHaveBeenCalledTimes(2))
-      expect(signalOf(api.listProfiles.mock.calls[0])?.aborted).toBe(true)
+      await waitFor(() => expect(pickerCalls()).toHaveLength(2))
+      expect(signalOf(pickerCalls()[0])?.aborted).toBe(true)
       await act(async () => {
         a.resolve({ items: [ownedBy('A')], has_more: false })
       })
@@ -550,6 +568,90 @@ describe('C3 — bindings and the picker under a moved boundary', () => {
         await screen.findByRole('option', { name: /principal B/ }),
       ).toBeInTheDocument()
       await user.keyboard('{Escape}')
+      expectOpaqueKeys(qc)
+    },
+  )
+})
+
+describe('C3 — the Profile column’s names under a moved boundary', () => {
+  // One binding row names profile ppf_P under both operators; what the profile is
+  // CALLED is each operator's own answer.
+  const namedFor = (who: string): ProfilePage => ({
+    items: [{ ...ownedBy(who), profile_ref: 'ppf_P' }],
+    has_more: false,
+  })
+  beforeEach(() => {
+    api.listBindings.mockResolvedValue({
+      items: [{ ...bindingOf('A'), profile_ref: 'ppf_P' }],
+      has_more: false,
+    })
+  })
+
+  it.each(moves)(
+    'a name read under A is not shown after a %s change until B answers',
+    async (_what, move) => {
+      const b = deferred<ProfilePage>()
+      api.listProfiles
+        .mockResolvedValueOnce(namedFor('A'))
+        .mockReturnValueOnce(b.promise)
+      const { qc, rerender } = wrap(() => <BindingsTable />)
+      expect(
+        await screen.findByText('Profile owned by principal A'),
+      ).toBeInTheDocument()
+      act(() => {
+        move()
+      })
+      rerender()
+      await waitFor(() => expect(api.listProfiles).toHaveBeenCalledTimes(2))
+      // B's answer is pending: the column keeps the reference, never A's name.
+      expect(await screen.findByText('ppf_P')).toBeInTheDocument()
+      expect(
+        screen.queryByText('Profile owned by principal A'),
+      ).not.toBeInTheDocument()
+      b.resolve(namedFor('B'))
+      expect(
+        await screen.findByText('Profile owned by principal B'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('Profile owned by principal A'),
+      ).not.toBeInTheDocument()
+      expectOpaqueKeys(qc)
+    },
+  )
+
+  it.each(moves)(
+    'a LATE name answer of A released after a %s change is cancelled and never shown',
+    async (_what, move) => {
+      const a = deferred<ProfilePage>()
+      const b = deferred<ProfilePage>()
+      api.listProfiles
+        .mockReturnValueOnce(a.promise)
+        .mockReturnValueOnce(b.promise)
+      const { qc, rerender } = wrap(() => <BindingsTable />)
+      await waitFor(() => expect(api.listProfiles).toHaveBeenCalledOnce())
+      act(() => {
+        move()
+      })
+      rerender()
+      await waitFor(() => expect(api.listProfiles).toHaveBeenCalledTimes(2))
+      expect(signalOf(api.listProfiles.mock.calls[0])?.aborted).toBe(true)
+      await act(async () => {
+        a.resolve(namedFor('A'))
+      })
+      expect(
+        screen.queryByText('Profile owned by principal A'),
+      ).not.toBeInTheDocument()
+      expect(
+        qc
+          .getQueryCache()
+          .findAll()
+          .map((q) => JSON.stringify(q.state.data ?? null))
+          .some((d) => d.includes('principal A')),
+      ).toBe(false)
+      b.resolve(namedFor('B'))
+      expect(
+        await screen.findByText('Profile owned by principal B'),
+      ).toBeInTheDocument()
       expectOpaqueKeys(qc)
     },
   )

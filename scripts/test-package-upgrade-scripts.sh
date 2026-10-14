@@ -93,11 +93,17 @@ prefixes = [
     "/usr/lib/olivares", "/usr/lib/systemd/system", "/usr/libexec/olivares",
     "/usr/bin/olivares", "/usr/share/olivares", "/etc/init.d/olivares",
     "/etc/olivares", "/var/lib/olivares", "/var/log/olivares", "/run/olivares",
-    "/etc/systemd/system", "/boot", "/proc",
+    "/etc/systemd/system", "/etc/apparmor.d", "/sys/kernel/security/apparmor", "/boot", "/proc",
 ]
+restriction = "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"
+prefixes.insert(0, restriction)
+mapping = {p: box + p for p in prefixes}
+# Keep the live /proc stat/boot probes, but isolate the Ubuntu switch on any host.
+mapping[restriction] = box + "/state/userns-switch"
 pat = re.compile(r"(?<![\w./-])(" + "|".join(re.escape(p) for p in prefixes) + r")")
-out = pat.sub(lambda m: box + m.group(1), text)
-if out.replace(box, "") != text:
+out = pat.sub(lambda m: mapping[m.group(1)], text)
+restored = out.replace(mapping[restriction], restriction).replace(box, "")
+if restored != text:
     raise SystemExit("rewrite changed more than the path prefixes")
 open(dst, "w", encoding="utf-8").write(out)
 PY
@@ -373,6 +379,118 @@ seed_install() { # FORMAT SIDE: fresh install by that side's postinstall
 	: >"$box/calls"
 }
 
+# Native AppArmor lifecycle: real maintainer scripts, real file operations; only
+# the kernel policy loader is recorded here. The VM journey proves namespaces.
+apparmor_box() {
+	new_box "$1"
+	ship deb
+	mkdir -p "$box/usr/share/olivares/apparmor" "$box/etc/apparmor.d" "$box/sys/kernel/security/apparmor"
+	: >"$box/sys/kernel/security/apparmor/profiles"
+	if [[ -f "$root/packaging/apparmor/olivares-engine.conf" ]]; then
+		cp "$root/packaging/apparmor/olivares-engine.conf" "$box/usr/share/olivares/apparmor/usr.bin.olivares"
+	fi
+	printf '1\n' >"$box/state/userns-switch"
+	cat >"$box/bin/apparmor_parser" <<'STUB'
+#!/bin/sh
+printf 'apparmor_parser %s\n' "$*" >>"$OLIVARES_TEST_BOX/calls"
+[ ! -f "$OLIVARES_TEST_BOX/state/parser-fails" ] || exit 1
+for arg in "$@"; do case "$arg" in /*) [ -r "$arg" ] || exit 1 ;; esac; done
+case "$1" in
+  -r) printf 'olivares-engine (unconfined)\n' >"$OLIVARES_TEST_BOX/sys/kernel/security/apparmor/profiles" ;;
+  -R) : >"$OLIVARES_TEST_BOX/sys/kernel/security/apparmor/profiles" ;;
+esac
+STUB
+	chmod 0755 "$box/bin/apparmor_parser"
+}
+for args in 'configure' 'configure 1.0' 'abort-remove'; do
+	apparmor_box "apparmor-${args// /-}"
+	set_state enabled active
+	run new postinstall.sh $args
+	profile="$box/etc/apparmor.d/usr.bin.olivares"
+	load=$(grep -n '^apparmor_parser -r ' "$box/calls" | cut -d: -f1 || true)
+	restart=$(grep -n '^systemctl try-restart ' "$box/calls" | cut -d: -f1 || true)
+	if [[ "$last_rc" -ne 0 || ! -f "$profile" || -z "$load" ]]; then
+		not_ok "AppArmor $args: profile must be installed and loaded (rc=$last_rc)"
+	elif [[ -n "$restart" && "$load" -ge "$restart" ]]; then
+		not_ok "AppArmor $args: load must precede restart"
+	elif [[ "$(stat -c %a "$profile")" != 644 || "$(cat "$box/state/userns-switch")" != 1 ]]; then
+		not_ok "AppArmor $args: profile mode or global switch changed"
+	else ok "AppArmor $args: profile loaded before restart, switch unchanged"; fi
+done
+for failure in parser-fails profile-link; do
+	apparmor_box "apparmor-$failure"
+	case "$failure" in
+	parser-fails) : >"$box/state/parser-fails" ;;
+	profile-link) printf 'victim\n' >"$box/victim"; ln -s "$box/victim" "$box/etc/apparmor.d/usr.bin.olivares" ;;
+	esac
+	set_state enabled active
+	run new postinstall.sh configure 1.0
+	if [[ "$last_rc" -eq 0 ]] || grep -q '^systemctl try-restart ' "$box/calls"; then
+		not_ok "AppArmor $failure: must refuse before restart"
+	elif ! grep -q 'refused: apparmor-' "$last_out.stderr"; then
+		not_ok "AppArmor $failure: missing named diagnostic"
+	else ok "AppArmor $failure: refused before restart"; fi
+done
+apparmor_box apparmor-debian
+rm "$box/state/userns-switch"
+run new postinstall.sh configure
+if [[ "$last_rc" -ne 0 || -e "$box/etc/apparmor.d/usr.bin.olivares" ]] || grep -q '^apparmor_parser ' "$box/calls"; then
+	not_ok 'AppArmor Debian: no restriction switch must leave policy unchanged'
+else ok 'AppArmor Debian: policy unchanged'; fi
+apparmor_box apparmor-remove
+run new postinstall.sh configure
+run new postremove.sh upgrade 1.1
+if [[ "$last_rc" -ne 0 || ! -f "$box/etc/apparmor.d/usr.bin.olivares" ]]; then
+	not_ok 'AppArmor upgrade postrm must keep the loaded profile'
+else ok 'AppArmor upgrade postrm keeps profile'; fi
+run new preremove.sh remove
+unship
+rm -f "$box/usr/share/olivares/apparmor/usr.bin.olivares"
+# A changed kernel or an administrator clearing the switch does not leave a
+# loaded profile behind after removal.
+rm -f "$box/state/userns-switch"
+run new postremove.sh remove
+if [[ "$last_rc" -ne 0 || -e "$box/etc/apparmor.d/usr.bin.olivares" ]] || ! grep -q '^apparmor_parser -R ' "$box/calls"; then
+	not_ok 'AppArmor dpkg removal must unload and remove the profile'
+else ok 'AppArmor removal unloads and removes profile'; fi
+run new postremove.sh purge
+if [[ "$last_rc" -ne 0 ]]; then not_ok 'AppArmor repeated purge must succeed'; else ok 'AppArmor repeated purge succeeds'; fi
+apparmor_box apparmor-remove-fails
+run new postinstall.sh configure
+: >"$box/state/parser-fails"
+run new postremove.sh remove
+if [[ "$last_rc" -eq 0 || ! -f "$box/etc/apparmor.d/usr.bin.olivares" ]]; then
+	not_ok 'AppArmor unload failure must be visible and retain the profile for retry'
+else ok 'AppArmor unload failure retains profile for retry'; fi
+apparmor_box apparmor-state-fails
+run new postinstall.sh configure
+rm "$box/sys/kernel/security/apparmor/profiles"
+mkdir "$box/sys/kernel/security/apparmor/profiles"
+run new postremove.sh remove
+if [[ "$last_rc" -eq 0 || ! -f "$box/etc/apparmor.d/usr.bin.olivares" ]]; then
+	not_ok 'AppArmor profile-list read failure must refuse and retain the profile'
+else ok 'AppArmor profile-list read failure retains profile for retry'; fi
+if [[ "${1:-}" = --apparmor-only ]]; then
+	printf '%s: AppArmor cells: %d checked, %d failed\n' "$me" "$n" "$failures"
+	[[ "$failures" -eq 0 ]]
+	exit
+fi
+
+# Synthetic package versions exercise script contracts, not retired release identities.
+pre_contract_version=0.9
+contract_prerelease='1.0~rc1'
+contract_version=1.0
+first_contract_version="$(sed -n "s/^first_contract_version='\(.*\)'$/\1/p" "$new_dir/postinstall.sh")"
+[[ -n "$first_contract_version" ]] || could_not_look 'missing first contract version'
+if /usr/bin/dpkg --compare-versions "$pre_contract_version" lt "$first_contract_version" &&
+	/usr/bin/dpkg --compare-versions "$first_contract_version" lt "$contract_prerelease" &&
+	/usr/bin/dpkg --compare-versions "$contract_prerelease" lt "$contract_version"; then
+	ok "fixture ordering: $pre_contract_version < $first_contract_version < $contract_prerelease < $contract_version"
+else
+	not_ok "fixture ordering: require $pre_contract_version < $first_contract_version < $contract_prerelease < $contract_version"
+
+fi
+
 states=("enabled active" "enabled inactive" "disabled active" "disabled inactive" "masked active" "masked inactive")
 
 # --- 1. DEB/RPM: upgrade arms a snapshot, restarts active units, keeps enablement
@@ -385,11 +503,11 @@ for fmt in deb rpm; do
 		set_state "$en" "$ac"
 		# Snapshot-style versions below the first contract version: only the prerm's
 		# record, bound to the version it replaces, tells this upgrade is new->new.
-		printf '1.0.0\n' >"$box/state/dpkg-version"
+		printf '%s\n' "$pre_contract_version" >"$box/state/dpkg-version"
 		if [[ "$fmt" == deb ]]; then
 			run new preremove.sh upgrade 2.0.0; r1=$last_rc
 			run new postremove.sh upgrade 2.0.0; r2=$last_rc
-			run new postinstall.sh configure 1.0.0; r3=$last_rc; post_out=$last_out
+			run new postinstall.sh configure "$pre_contract_version"; r3=$last_rc; post_out=$last_out
 		else
 			run new postinstall.sh 2; r1=$last_rc; post_out=$last_out
 			run new preremove.sh 1; r2=$last_rc
@@ -429,7 +547,7 @@ for failure in request request-sync directory-sync parent-sync restart; do
 	else
 		: >"$box/state/$failure-fails"
 	fi
-	run new postinstall.sh configure 26.10.1
+	run new postinstall.sh configure 1.0
 	if [[ "$last_rc" == 0 ]]; then
 		not_ok "$case_id: package falsely reported success"
 	elif [[ "$failure" != restart && -n "$(mutations)" ]]; then
@@ -450,7 +568,7 @@ for fmt in deb rpm; do
 		seed_install "$fmt" new || continue
 		set_state "$en" active
 		: >"$box/state/restart-fails"
-		args=(configure 26.10.1)
+		args=(configure 1.0)
 		[[ "$fmt" != rpm ]] || args=(2)
 		run new postinstall.sh "${args[@]}"
 		failed_out=$last_out
@@ -486,9 +604,9 @@ for fmt in deb rpm; do
 		seed_install "$fmt" old || continue
 		set_state "$en" "$ac"
 		if [[ "$fmt" == deb ]]; then
-			run old preremove.sh upgrade 26.10.1; r1=$last_rc
-			run old postremove.sh upgrade 26.10.1; r2=$last_rc
-			run new postinstall.sh configure 26.9.0; r3=$last_rc; post_out=$last_out; post_marker=3
+			run old preremove.sh upgrade 1.0; r1=$last_rc
+			run old postremove.sh upgrade 1.0; r2=$last_rc
+			run new postinstall.sh configure "$pre_contract_version"; r3=$last_rc; post_out=$last_out; post_marker=3
 		else
 			run new postinstall.sh 2; r1=$last_rc; post_out=$last_out; post_marker=1
 			run old preremove.sh 1; r2=$last_rc
@@ -583,7 +701,7 @@ for fmt in deb rpm; do
 		new_box "notice-$fmt-$en-$ac"
 		seed_install "$fmt" new || continue
 		set_state "$en" "$ac"
-		case "$fmt" in deb) run new postinstall.sh configure 26.10.1; from='upgraded from 26.10.1.' ;; rpm) run new postinstall.sh 2; from='upgraded.' ;; esac
+		case "$fmt" in deb) run new postinstall.sh configure 1.0; from='upgraded from 1.0.' ;; rpm) run new postinstall.sh 2; from='upgraded.' ;; esac
 		out="$last_out.stdout"
 		case "$en/$ac" in
 		masked*/*) want='unmask olivares' deny='restart requested|stays stopped' ;;
@@ -639,8 +757,8 @@ case_id="upgrade notice old->new deb legacy prerm"
 new_box notice-legacy
 if seed_install deb old; then
 	set_state enabled active
-	run old preremove.sh upgrade 26.10.1; run old postremove.sh upgrade 26.10.1
-	run new postinstall.sh configure 26.9.0
+	run old preremove.sh upgrade 1.0; run old postremove.sh upgrade 1.0
+	run new postinstall.sh configure "$pre_contract_version"
 	out="$last_out.stdout"
 	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
 	elif [[ "$(pending_field condition)" != legacy-prerm-upgrade ]] || ! grep -Fq 'systemctl enable --now olivares' "$out"; then
@@ -825,7 +943,7 @@ unship
 run new postremove.sh remove; r2=$last_rc
 ship deb
 # dpkg keeps the configured version of a config-files package: configure <old>.
-run new postinstall.sh configure 26.10.0; r3=$last_rc; post_out=$last_out
+run new postinstall.sh configure 1.0~rc1; r3=$last_rc; post_out=$last_out
 if [[ "$r1$r2$r3" != 000 ]]; then not_ok "$case_id: exit codes $r1/$r2/$r3"
 elif [[ "$(state)" != disabled/inactive ]]; then not_ok "$case_id: the removal effect changed: $(state)"
 elif clean_after "$case_id" "$post_out"; then ok "$case_id: the operator's removal is not reported as a legacy prerm"; fi
@@ -834,10 +952,10 @@ case_id="M-1 deb upgrade, then unwind (abort-upgrade consumes the record)"
 new_box m1-unwind
 seed_install deb new || true
 set_state enabled active
-printf '26.10.0\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1; r1=$last_rc
-run new postremove.sh abort-upgrade 26.10.0 26.10.1; r2=$last_rc
-run new postinstall.sh abort-upgrade 26.10.1; r3=$last_rc; post_out=$last_out
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade 1.0; r1=$last_rc
+run new postremove.sh abort-upgrade 1.0~rc1 1.0; r2=$last_rc
+run new postinstall.sh abort-upgrade 1.0; r3=$last_rc; post_out=$last_out
 m="$(mutations)"
 if [[ "$r1$r2$r3" != 000 ]]; then not_ok "$case_id: exit codes $r1/$r2/$r3"
 elif [[ "$(state)" != enabled/active || -n "$m" ]]; then not_ok "$case_id: state $(state), calls $(tr '\n' ';' <<<"$m")"
@@ -849,9 +967,9 @@ case_id="M-1 deb prerm upgrade fails over, then only postinst abort-upgrade runs
 new_box m1-unwind-postinst
 seed_install deb new || true
 set_state enabled active
-printf '26.10.0\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1; r1=$last_rc
-run new postinstall.sh abort-upgrade 26.10.1; r2=$last_rc; post_out=$last_out
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade 1.0; r1=$last_rc
+run new postinstall.sh abort-upgrade 1.0; r2=$last_rc; post_out=$last_out
 if [[ "$r1$r2" != 00 ]]; then not_ok "$case_id: exit codes $r1/$r2"
 elif [[ "$(state)" != enabled/active || -n "$(mutations)" ]]; then not_ok "$case_id: state $(state)"
 elif clean_after "$case_id" "$post_out"; then ok "$case_id: record consumed by postinst abort-upgrade"; fi
@@ -860,13 +978,13 @@ case_id="M-1 deb downgrade to ccf7ea20, then re-upgrade in the same boot"
 new_box m1-downgrade
 seed_install deb new || true
 set_state enabled active
-printf '26.10.1\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.9.0; r1=$last_rc
-run new postremove.sh upgrade 26.9.0; r2=$last_rc
-run old postinstall.sh configure 26.10.1; r3=$last_rc
-run old preremove.sh upgrade 26.10.1; r4=$last_rc
-run old postremove.sh upgrade 26.10.1; r5=$last_rc
-run new postinstall.sh configure 26.9.0; r6=$last_rc; post_out=$last_out
+printf '1.0\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade "$pre_contract_version"; r1=$last_rc
+run new postremove.sh upgrade "$pre_contract_version"; r2=$last_rc
+run old postinstall.sh configure 1.0; r3=$last_rc
+run old preremove.sh upgrade 1.0; r4=$last_rc
+run old postremove.sh upgrade 1.0; r5=$last_rc
+run new postinstall.sh configure "$pre_contract_version"; r6=$last_rc; post_out=$last_out
 want_instr='if olivares was enabled before this upgrade: systemctl enable --now olivares; if it was running but not enabled: systemctl start olivares'
 if [[ "$r1$r2$r3$r4$r5$r6" != 000000 ]]; then not_ok "$case_id: exit codes $r1/$r2/$r3/$r4/$r5/$r6"
 elif [[ "$(grep -c '^systemctl disable --now olivares$' "$box/calls")" -ne 1 ]]; then not_ok "$case_id: the ccf7ea20 prerm's disable was not measured once"
@@ -901,11 +1019,11 @@ for s in "enabled active" "disabled inactive"; do
 		new_box "m2-$next-$en-$ac"
 		seed_install deb new || continue
 		set_state "$en" "$ac"
-		run new preremove.sh deconfigure in-favour other 1.0 removing olivares 26.10.0; r1=$last_rc
+		run new preremove.sh deconfigure in-favour other 1.0 removing olivares 1.0~rc1; r1=$last_rc
 		if [[ "$next" == configure ]]; then
-			run new postinstall.sh configure 26.10.0; r2=$last_rc; post_out=$last_out
+			run new postinstall.sh configure 1.0~rc1; r2=$last_rc; post_out=$last_out
 		else
-			run new postinstall.sh abort-deconfigure in-favour other 1.0 removing olivares 26.10.0; r2=$last_rc; post_out=$last_out
+			run new postinstall.sh abort-deconfigure in-favour other 1.0 removing olivares 1.0~rc1; r2=$last_rc; post_out=$last_out
 		fi
 		m="$(mutations)"
 		want=''
@@ -994,9 +1112,9 @@ case_id="n-4 old->new deb static/active"
 new_box n4-deb-static
 seed_install deb old || true
 set_state static active
-run old preremove.sh upgrade 26.10.1; r1=$last_rc
-run old postremove.sh upgrade 26.10.1; r2=$last_rc
-run new postinstall.sh configure 26.9.0; r3=$last_rc
+run old preremove.sh upgrade 1.0; r1=$last_rc
+run old postremove.sh upgrade 1.0; r2=$last_rc
+run new postinstall.sh configure "$pre_contract_version"; r3=$last_rc
 if [[ "$r1$r2$r3" != 000 ]]; then not_ok "$case_id: exit codes $r1/$r2/$r3"
 elif [[ "$(pending_field condition)" != legacy-prerm-upgrade ]]; then not_ok "$case_id: pending '$(pending_field condition)', want legacy-prerm-upgrade (static/active -> $(state))"
 else defect "$case_id: old prerm 'disable --now' measured (static/active -> $(state)); recovery: pending legacy-prerm-upgrade"; fi
@@ -1013,7 +1131,7 @@ deconf_after() {
 	else return 0; fi
 	return 1
 }
-case_id="M2-1 deb deconfigure, then remove, then reinstall (configure 26.10.0)"
+case_id="M2-1 deb deconfigure, then remove, then reinstall (configure 1.0~rc1)"
 new_box m21-remove-reinstall
 seed_install deb new || true
 set_state enabled active
@@ -1022,7 +1140,7 @@ run new preremove.sh remove; r2=$last_rc
 unship
 run new postremove.sh remove; r3=$last_rc
 ship deb
-run new postinstall.sh configure 26.10.0; r4=$last_rc; post_out=$last_out
+run new postinstall.sh configure 1.0~rc1; r4=$last_rc; post_out=$last_out
 if [[ "$r1$r2$r3$r4" != 0000 ]]; then not_ok "$case_id: exit codes $r1/$r2/$r3/$r4"
 elif deconf_after "$case_id" disabled/inactive; then
 	if grep -q 'stopped when it was deconfigured' "$post_out.stdout"; then not_ok "$case_id: the removal did not consume the record (the reinstall printed the deconfigure instruction)"
@@ -1065,7 +1183,7 @@ seed_install deb new || true
 appliance
 set_state enabled active
 run new preremove.sh deconfigure in-favour other 1.0; r1=$last_rc
-run new postinstall.sh configure 26.10.0; r2=$last_rc; post_out=$last_out
+run new postinstall.sh configure 1.0~rc1; r2=$last_rc; post_out=$last_out
 if [[ "$r1$r2" != 00 ]]; then not_ok "$case_id: exit codes $r1/$r2"
 elif deconf_after "$case_id" enabled/inactive; then
 	if [[ "$(pending_field condition)" != package_recovery_required || "$(pending_field prior)" != active-before-deconfigure ]]; then
@@ -1149,7 +1267,7 @@ for target in install-manifest.json .package-scripts-contract; do
 	chmod 0600 "$box/victim"
 	rm -f "$box/var/lib/olivares/$target"
 	ln -s "$box/victim" "$box/var/lib/olivares/$target"
-	run new postinstall.sh configure 26.10.0
+	run new postinstall.sh configure 1.0~rc1
 	if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc $(tr '\n' ' ' <"$last_out.stderr")"
 	elif [[ "$(cat "$box/victim")" != victim || "$(stat -c '%a' "$box/victim")" != 600 ]]; then
 		not_ok "$case_id: the link target was rewritten or re-moded: '$(head -c 40 "$box/victim" | tr '\n' ' ')' mode $(stat -c '%a' "$box/victim")"
@@ -1162,15 +1280,15 @@ for target in install-manifest.json .package-scripts-contract; do
 done
 
 # --- 17. r3 Root N-10: a failed dpkg-query leaves old= empty and is never read as legacy -
-case_id="N-10 deb prerm upgrade with dpkg-query failing, then configure 26.10.0"
+case_id="N-10 deb prerm upgrade with dpkg-query failing, then configure 1.0~rc1"
 new_box n10-query-fails
 seed_install deb new || true
 set_state disabled inactive
 rm -f "$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1; r1=$last_rc
+run new preremove.sh upgrade 1.0; r1=$last_rc
 rec_old="$(grep -x 'old=.*' "$box/run/olivares.pkg-upgrade-state" 2>/dev/null || echo 'no record')"
-run new postremove.sh upgrade 26.10.1; r2=$last_rc
-run new postinstall.sh configure 26.10.0; r3=$last_rc; post_out=$last_out
+run new postremove.sh upgrade 1.0; r2=$last_rc
+run new postinstall.sh configure 1.0~rc1; r3=$last_rc; post_out=$last_out
 if [[ "$r1$r2$r3" != 000 ]]; then not_ok "$case_id: exit codes $r1/$r2/$r3"
 elif [[ "$rec_old" != 'old=unknown' ]]; then
 	# r4: the v1 schema spells N-10's empty value "unknown"; it never matches.
@@ -1380,7 +1498,7 @@ grep_shim
 : >"$box/state/fifo-before-grep"
 start=$SECONDS
 run_timeout=30
-run new postinstall.sh configure 26.9.0
+run new postinstall.sh configure "$pre_contract_version"
 run_timeout=
 took=$((SECONDS - start))
 if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc after ${took}s (124: killed while blocked on the read)"
@@ -1396,7 +1514,7 @@ mkdir -p "$box/var/lib/olivares-package"
 v1_record install-state "$host_boot" group_created=true user_created=true >"$box/var/lib/olivares-package/install-state"
 printf '{"user_created": false, "group_created": false}\n' >"$box/$M"
 grep_shim
-run new postinstall.sh configure 26.10.0
+run new postinstall.sh configure 1.0~rc1
 if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
 elif grep -q "^grep .*$box/$M" "$box/calls"; then not_ok "$case_id: the service-owned manifest was read although install-state exists"
 elif ! grep -q '"user_created": true' "$box/$M" || ! grep -q '"group_created": true' "$box/$M"; then not_ok "$case_id: the manifest does not carry install-state's values"
@@ -1475,8 +1593,8 @@ fi
 case_id="r4 v1: every pkg-phases line is the v1 line in its fixed key order"
 new_box r4-lines
 seed_install deb new || true
-printf '26.10.0\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1; run new postremove.sh upgrade 26.10.1; run new postinstall.sh configure 26.10.0
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade 1.0; run new postremove.sh upgrade 1.0; run new postinstall.sh configure 1.0~rc1
 run new postinstall.sh frobnicate
 n_lines=$(grep -c . "$box/$P" || true)
 if [[ "$n_lines" -lt 4 ]]; then not_ok "$case_id: $n_lines lines"
@@ -1487,13 +1605,13 @@ case_id="r4 v1: every key=value record begins with schema= and carries the commo
 new_box r4-records
 seed_install deb new || true
 set_state enabled active
-printf '26.10.0\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade 1.0
 cp "$box/run/olivares.pkg-upgrade-state" "$box/rec.upgrade-state" 2>/dev/null || : >"$box/rec.upgrade-state"
 run new preremove.sh deconfigure in-favour other 1.0
 cp "$box/run/olivares.pkg-deconfigured" "$box/rec.deconfigured" 2>/dev/null || : >"$box/rec.deconfigured"
 appliance
-run new postinstall.sh configure 26.10.0
+run new postinstall.sh configure 1.0~rc1
 cp "$box/run/olivares.pkg-pending" "$box/rec.pending" 2>/dev/null || : >"$box/rec.pending"
 cp "$box/var/lib/olivares-package/install-state" "$box/rec.install-state" 2>/dev/null || : >"$box/rec.install-state"
 if ! v1ok "$box"/rec.*; then not_ok "$case_id: $(tr '\n' ' ' <"$box/v1check.err" | sed "s|$box||g" | cut -c1-240)"
@@ -1535,12 +1653,12 @@ fi
 case_id="r4 v1: format, old and new come only from their listed sources"
 new_box r4-versions
 seed_install deb new || true
-printf '26.10.0\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade 1.0
 l1="$(lineof preremove)"
-run new postinstall.sh configure 26.10.0
+run new postinstall.sh configure 1.0~rc1
 l2="$(lineof postinstall)"
-run new postinstall.sh configure 26.10.0-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+run new postinstall.sh configure 1.0~rc1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 l3="$(lineof postinstall)"
 new_box r4-versions-apk
 seed_install apk new || true
@@ -1552,8 +1670,8 @@ new_box r4-versions-rpm
 seed_install rpm new || true
 run new postinstall.sh 2
 l6="$(lineof postinstall)"
-if want_fields "$case_id (deb prerm upgrade)" "$l1" format=deb old=26.10.0 new=26.10.1 &&
-	want_fields "$case_id (deb postinst configure)" "$l2" format=deb old=26.10.0 new=unknown &&
+if want_fields "$case_id (deb prerm upgrade)" "$l1" format=deb old=1.0~rc1 new=1.0 &&
+	want_fields "$case_id (deb postinst configure)" "$l2" format=deb old=1.0~rc1 new=unknown &&
 	want_fields "$case_id (a 44-character version)" "$l3" old=unknown &&
 	want_fields "$case_id (apk pre-upgrade)" "$l4" format=apk new=2.0.0-r0 old=1.0.0-r0 &&
 	want_fields "$case_id (apk post-upgrade)" "$l5" format=apk new=2.0.0-r0 old=1.0.0-r0 &&
@@ -1632,11 +1750,11 @@ case_id="r4 v1: a failed record write is loud, and the next script treats the re
 new_box r4-record-fails
 seed_install deb new || true
 set_state enabled active
-printf '26.10.0\n' >"$box/state/dpkg-version"
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
 mkdir -p "$box/run/olivares.pkg-upgrade-state.tmp" "$box/run/olivares.pkg-deconfigured.tmp"
-run new preremove.sh upgrade 26.10.1; r1=$last_rc; e1="$last_out.stderr"
-run new postremove.sh upgrade 26.10.1
-run new postinstall.sh configure 26.10.0; r2=$last_rc
+run new preremove.sh upgrade 1.0; r1=$last_rc; e1="$last_out.stderr"
+run new postremove.sh upgrade 1.0
+run new postinstall.sh configure 1.0~rc1; r2=$last_rc
 pend_after_upgrade="$(pending_field condition)"
 run new preremove.sh deconfigure in-favour other 1.0; r3=$last_rc; e3="$last_out.stderr"
 run new postinstall.sh abort-deconfigure in-favour other 1.0; r4=$last_rc
@@ -1663,8 +1781,8 @@ case_id="r4 v1: upgrade-state and deconfigured are staged as .tmp and moved into
 new_box r4-staged
 seed_install deb new || true
 set_state enabled active
-printf '26.10.0\n' >"$box/state/dpkg-version"
-run new preremove.sh upgrade 26.10.1
+printf '1.0~rc1\n' >"$box/state/dpkg-version"
+run new preremove.sh upgrade 1.0
 run new preremove.sh deconfigure in-favour other 1.0
 if ! grep -Eq "^mv .*$box/run/olivares.pkg-upgrade-state.tmp $box/run/olivares.pkg-upgrade-state\$" "$box/calls"; then not_ok "$case_id: upgrade-state was not moved into place from .tmp"
 elif ! grep -Eq "^mv .*$box/run/olivares.pkg-deconfigured.tmp $box/run/olivares.pkg-deconfigured\$" "$box/calls"; then not_ok "$case_id: deconfigured was not moved into place from .tmp"
@@ -1722,20 +1840,20 @@ env_case() { # ID FORMAT BEFORE WANT ARGS...
 		not_ok "$case_id: the content was replaced"
 	else ok "$case_id: mode $want, root:olivares, content kept"; fi
 }
-env_case "env deb upgrade keeps an operator-edited 0644 file and closes it" deb 644 640 configure 26.10.1
+env_case "env deb upgrade keeps an operator-edited 0644 file and closes it" deb 644 640 configure 1.0
 env_case "env rpm upgrade keeps an operator-edited 0644 file and closes it" rpm 644 640 2
 env_case "env rpm install gives the 0640 payload to the service group" rpm 640 640 1
 env_case "env deb install gives the 0640 payload to the service group" deb 640 640 configure ''
-env_case "env an operator's stricter 0600 is kept" deb 600 600 configure 26.10.1
+env_case "env an operator's stricter 0600 is kept" deb 600 600 configure 1.0
 env_case "env an operator's 0440 is kept" rpm 440 440 2
-env_case "env an operator's 0400 is kept" deb 400 400 configure 26.10.1
-env_case "env a group-writable 0660 is closed" deb 660 640 configure 26.10.1
+env_case "env an operator's 0400 is kept" deb 400 400 configure 1.0
+env_case "env a group-writable 0660 is closed" deb 660 640 configure 1.0
 env_case "env apk install copies the example as 0640 root:olivares" apk none 640 1.0.0-r0
 
 case_id="env an operator who deleted the env file gets none back"
 new_box env-absent
 ship deb
-run new postinstall.sh configure 26.10.1
+run new postinstall.sh configure 1.0
 if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
 elif [[ -e "$box/$E" || -L "$box/$E" ]]; then not_ok "$case_id: an env file was created"
 else ok "$case_id: rc 0, nothing created"; fi
@@ -1745,7 +1863,7 @@ new_box env-chown-fails
 ship deb
 printf 'OLIVARES_EXTRA_ARGS=\n' >"$box/$E"; chmod 0644 "$box/$E"
 : >"$box/state/chown-fails-env"
-run new postinstall.sh configure 26.10.1
+run new postinstall.sh configure 1.0
 if [[ "$last_rc" -eq 0 ]]; then not_ok "$case_id: rc=0"
 elif ! grep -Fq 'refused: env-file-owner-failed' "$last_out.stderr"; then not_ok "$case_id: $(tr '\n' ' ' <"$last_out.stderr")"
 else ok "$case_id: refused: env-file-owner-failed"; fi
@@ -1755,7 +1873,7 @@ new_box env-link
 ship deb
 printf 'victim\n' >"$box/victim-env"; chmod 0644 "$box/victim-env"
 ln -s "$box/victim-env" "$box/$E"
-run new postinstall.sh configure 26.10.1
+run new postinstall.sh configure 1.0
 if [[ "$last_rc" -ne 0 ]]; then not_ok "$case_id: rc=$last_rc"
 elif [[ "$(stat -c %a "$box/victim-env")" != 644 ]] || grep -qE "^ch(own|mod) .*$box/$E\$" "$box/calls"; then
 	not_ok "$case_id: root changed the link's target"

@@ -23,7 +23,8 @@ class ModuleReads(unittest.TestCase):
              '/v1/m/redteam/runs', '/v1/m/redteam/catalog')
 
     def run_upgrade(self, database: str = 'sqlite', published: dict | None = None,
-                    candidate: dict | None = None) -> tuple:
+                    candidate: dict | None = None, calls: list | None = None) -> tuple:
+        calls = [] if calls is None else calls
         disabled = (404, {'error': {'code': 'module_not_enabled'}})
         responses = {'published': published or {path: disabled for path in self.paths},
                      'candidate': candidate or {path: disabled for path in self.paths}}
@@ -38,6 +39,10 @@ class ModuleReads(unittest.TestCase):
 
             def do_POST(self) -> None:
                 self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                # The published Community binary refuses Business authoring (0.1: permission groups).
+                if self.path == '/v1/m/governance/rbac/permission-groups':
+                    self.respond(501, {'error': 'Editing custom policies, roles and grants requires Business.'})
+                    return
                 self.respond(200 if 'work-items' in self.path else 201, {'id': 'workspace'})
 
             def respond(self, status: int, body: object) -> None:
@@ -55,10 +60,16 @@ class ModuleReads(unittest.TestCase):
                 fixture = Upgrade(SimpleNamespace(output=Path(directory) / 'upgrade', database=database,
                                                   published=Path(__file__), candidate=Path(__file__)))
                 fixture.origin = 'http://127.0.0.1:' + str(server.server_port)
+                fixture.database = 'userspace_test'
 
                 def start(binary: Path, label: str, seed: bool = False) -> None:
                     nonlocal phase
                     phase = 'candidate' if label == 'candidate' else 'published'
+                    calls.append(('start', label))
+
+                def command(binary: Path, argv: list) -> dict:
+                    calls.append(('command', tuple(argv[:3])))
+                    return {'exit': 0, 'json': []}
 
                 ceremony = Mock(returncode=0, pid=12345)
                 ceremony.communicate.return_value = ('{"aal":3}', '')
@@ -66,7 +77,7 @@ class ModuleReads(unittest.TestCase):
                 with patch.object(fixture, 'start', side_effect=start) as starts, \
                         patch.object(fixture, 'stop'), patch.object(fixture, 'provision'), \
                         patch.object(fixture, 'login', return_value={'user_id': 'owner'}), \
-                        patch.object(fixture, 'command', return_value={'exit': 0, 'json': []}), \
+                        patch.object(fixture, 'command', side_effect=command), \
                         patch.object(fixture, 'rows', return_value=rows) as snapshots, \
                         patch('upgrade.subprocess.Popen', return_value=ceremony), \
                         patch('upgrade.os.killpg'), contextlib.redirect_stdout(io.StringIO()):
@@ -92,10 +103,33 @@ class ModuleReads(unittest.TestCase):
                     self.assertIn(('published', path), reads)
                     self.assertIn(('candidate', path), reads)
 
+    def test_postgres_installs_the_inventory_before_the_app_owner_restart(self) -> None:
+        # Without --admin-dsn an enforced store opens only through the closed directory
+        # inventory a DBA installs once the tables exist (docs/DIRECTORY-USER-AUTHORITY.md).
+        install = ('command', ('db', 'init', '--install-directory-inventory'))
+        calls = []
+        rc, result, _, _, _ = self.run_upgrade('postgres', calls=calls)
+        self.assertEqual((rc, result['failures']), (0, []))
+        self.assertIn(install, calls)
+        self.assertLess(calls.index(install), calls.index(('start', 'published-app-owner')))
+        calls = []
+        self.run_upgrade('sqlite', calls=calls)
+        self.assertNotIn(install, calls)
+
     def test_enabled_modules_remain_required_to_return_200(self) -> None:
         enabled = {path: (200, []) for path in self.paths}
         rc, result, _, _, _ = self.run_upgrade(published=enabled, candidate=enabled)
         self.assertEqual((rc, result['complete'], result['failures']), (0, True, []))
+
+    def test_the_published_binary_boots_again_before_the_comparison(self) -> None:
+        # A published binary writes at its own boot (0.1 names unnamed provider profiles,
+        # boot_legacy_profiles.go). The snapshot is taken after that boot, on both stores,
+        # so the candidate is not blamed for what the published binary does on restart.
+        for database, restart in (('sqlite', 'published-restart'), ('postgres', 'published-app-owner')):
+            with self.subTest(database=database):
+                rc, _, _, starts, _ = self.run_upgrade(database)
+                self.assertEqual(rc, 0)
+                self.assertEqual(starts[:3], ['published', restart, 'candidate'])
 
     def test_module_status_changes_fail_in_both_directions(self) -> None:
         # Keep the body identical so only the status comparison can catch this.
@@ -172,6 +206,29 @@ class StoredData(unittest.TestCase):
                                 selected=sorted(set(before['modules']['selected']) | {'liveingest'}),
                                 updated_at='new')
         return before, after
+
+    def profile_snapshot(self, account_name=None, home_mode=None, isolation_level=None, display_name='Upgrade profile'):
+        return snapshot_rows([('sessions_provider_profile', ['id'], [{
+            'id': 'ppf', 'driver': 'claude', 'display_name': display_name, 'account_name': account_name,
+            'home_mode': home_mode, 'isolation_level': isolation_level}])])
+
+    def test_boot_naming_fills_only_an_unnamed_profile(self):
+        # 0.1 names unnamed profiles at boot but, on SQLite, its pass ran before the node's
+        # environment was bound and named nothing (#1619); 0.2's first boot names them.
+        unnamed = self.profile_snapshot()
+        for name in ('claude', 'claude-b'):
+            self.assertEqual(row_diff(unnamed, self.profile_snapshot(name, 'adopted', 'shared')), [])
+        named = self.profile_snapshot('claude', 'adopted', 'shared')
+        for after in (self.profile_snapshot('claude-b', 'adopted', 'shared'),
+                      self.profile_snapshot('claude', 'managed', 'shared'),
+                      self.profile_snapshot('claude', 'adopted', 'dedicated')):
+            self.assertTrue(row_diff(named, after))
+        for after in (self.profile_snapshot('claude', 'managed', 'shared'),
+                      self.profile_snapshot('Claude', 'adopted', 'shared'),
+                      self.profile_snapshot('claude', 'adopted', None),
+                      self.profile_snapshot('claude', 'adopted', 'shared', display_name='Renamed')):
+            self.assertTrue(row_diff(unnamed, after))
+        self.assertTrue(row_diff(named, unnamed))
 
     def test_module_profile_v1_upgrade_preserves_settings(self):
         for version in (None, '', 'olivares.module.profile.v1'):

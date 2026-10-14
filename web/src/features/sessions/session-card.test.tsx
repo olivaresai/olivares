@@ -9,6 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from './types'
 
+const featureViews = vi.hoisted(() => [{ id: 'accessMap', hideInNav: true }])
+vi.mock('@/features/registry', () => ({ FEATURE_VIEWS: featureViews }))
+
 const perms = new Set<string>()
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: (p: string) => perms.has(p) }),
@@ -173,6 +176,7 @@ function renderCard(target: {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  featureViews[0]!.hideInNav = true
   perms.clear()
   perms.add('sessions:live:read')
   perms.add('sessions:run:read')
@@ -182,6 +186,28 @@ beforeEach(() => {
     has_more: false,
   })
   vi.mocked(agentOpsApi.getRun).mockResolvedValue(run)
+})
+
+describe('SessionCard — offered routes', () => {
+  it('keeps a hidden access-map view out of session actions', async () => {
+    renderCard({ sessionRef: 'sess-ours' })
+    expect(await screen.findByText('Launched')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Access map' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Inventory' })).toHaveAttribute(
+      'href',
+      '/inventory',
+    )
+  })
+
+  it('offers the access map when the edition view is available', async () => {
+    featureViews[0]!.hideInNav = false
+    renderCard({ sessionRef: 'sess-ours' })
+    expect(
+      await screen.findByRole('link', { name: 'Access map' }),
+    ).toHaveAttribute('href', '/access-map')
+  })
 })
 
 describe('failed session explanation', () => {

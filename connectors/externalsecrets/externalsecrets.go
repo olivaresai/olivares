@@ -101,59 +101,6 @@ func (s *Source) Gather(ctx context.Context, sink sdk.Sink) error {
 	return nil
 }
 
-// Snapshot exposes every SecretStore/ClusterSecretStore the manifests declare as a
-// secret_store NHI, each carrying the single backend it fronts. The
-// store Ref matches the edge OriginRef exactly, so inventory and use converge. With
-// no configured path it returns an empty graph (offline). It never returns a secret
-// value (a CRD has none).
-func (s *Source) Snapshot(_ context.Context) (identitysource.Graph, error) {
-	g := identitysource.Graph{Source: identitysource.SourceExternalSecrets, CapturedAt: s.clock().UTC()}
-	if s.path == "" {
-		return g, nil
-	}
-	docs, err := s.readDocs()
-	if err != nil {
-		return identitysource.Graph{}, err
-	}
-	type storeInfo struct {
-		ref     storeRef
-		backend string
-	}
-	stores := map[string]storeInfo{}
-	for _, d := range docs {
-		if d.Kind != kindSecretStore && d.Kind != kindClusterSecretStore {
-			continue
-		}
-		ref := storeRefForStore(d)
-		backend := ""
-		if p, ok := resolveProvider(d.Spec.Provider); ok {
-			backend = p.backend
-		}
-		stores[ref.ref()] = storeInfo{ref: ref, backend: backend}
-	}
-	refs := make([]string, 0, len(stores))
-	for r := range stores {
-		refs = append(refs, r)
-	}
-	sort.Strings(refs)
-	for _, r := range refs {
-		st := stores[r]
-		g.Identities = append(g.Identities, identitysource.Identity{
-			Ref:         st.ref.ref(),
-			Type:        identitysource.PrincipalNHI,
-			Kind:        identitysource.KindSecretStore,
-			DisplayName: st.ref.displayName(st.backend),
-			Source:      identitysource.SourceExternalSecrets,
-			Attributes: map[string]string{
-				"provider":   "eso",
-				"backend":    st.backend,
-				"store_kind": st.ref.kind,
-			},
-		})
-	}
-	return g, nil
-}
-
 // deriveEdges maps one ExternalSecret to its provisioning edges (one per
 // data/dataFrom entry that names a backend key). It returns nothing when the store
 // reference does not resolve, the target Secret name is empty, or the ExternalSecret

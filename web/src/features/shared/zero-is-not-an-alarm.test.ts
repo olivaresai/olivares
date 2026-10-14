@@ -12,18 +12,20 @@
 //   · SLA: `modules/health/sla.go:44-69` inicializa downtime y degraded a cero y
 //     sólo incrementa el del estado recorrido — una ventana sana llega con dos ceros;
 //   · red-team: las corridas `degraded`/`error` llegan con `failed: 0`.
+//     (Moved to Business in 6210f28b6: the view is no longer in this tree, so its row
+//     left SITIOS; its `run.failed > 0` guard lives in the Business overlay.)
 //
-// ⛔⛔ Y POR QUÉ ESTE FICHERO NO BARRE EL ÁRBOL: lo intenté. Un regex que busque «un
-// color de alarma constante junto a un contador» marcó DIEZ sitios, y al menos dos
-// eran correctos — un badge que sólo se RENDERIZA cuando hay algo que avisar no
-// necesita condicionar su color. Distinguir «siempre rojo» de «sólo aparece si hay
-// causa» exige alcanzabilidad, no texto. Un gate con diez falsos positivos el primer
-// día lo desactiva el siguiente, así que **este caso fija los SEIS sitios medidos y
-// declara que el barrido general está pendiente**, en vez de fingir cobertura.
+// ⛔⛔ AND WHY THIS FILE DOES NOT SWEEP THE TREE: it was tried. A regex looking for «a
+// constant alarm color next to a counter» flagged TEN sites, and at least two were
+// correct — a badge that only RENDERS when there is something to warn about need not
+// condition its color. Telling «always red» from «only appears when there is a cause»
+// needs reachability, not text. A gate with ten false positives on day one is turned
+// off the next, so **this case pins the FOUR measured sites and states that the
+// general sweep is pending**, instead of pretending coverage.
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-/** Los seis sitios, con el contador que puede valer cero. */
+/** Los cuatro sitios, con el contador que puede valer cero. */
 const SITIOS: { fichero: string; contador: string }[] = [
   {
     fichero: 'src/features/governance/agentcore-export-view.tsx',
@@ -41,10 +43,9 @@ const SITIOS: { fichero: string; contador: string }[] = [
     fichero: 'src/features/health/health-view.tsx',
     contador: 'data.degraded_seconds',
   },
-  { fichero: 'src/features/redteam/components.tsx', contador: 'failed' },
 ]
 
-describe('P11 — los seis contadores medidos condicionan su color de alarma', () => {
+describe('P11 — los cuatro contadores medidos condicionan su color de alarma', () => {
   for (const { fichero, contador } of SITIOS) {
     it(`${fichero.split('/').slice(-1)[0]}: ${contador} apaga la alarma a cero`, () => {
       const src = readFileSync(fichero, 'utf8')

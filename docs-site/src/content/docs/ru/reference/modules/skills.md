@@ -15,6 +15,21 @@ Skills (`modules/skills`, `olivares.skills`) — один из 32 модулей
 это **назначение**, закрепляющее ревизию пакета, и каждое закрепление записывается в
 журнал аудита (`skills.assignment.pin`).
 
+
+**Включён по умолчанию** в новых установках, Skills остаётся необязательным и не требует другого модуля. Обновления сохраняют выбранные модули. В **Skills** (`/skills`) установите встроенный пакет с необязательным назначением рабочей области или выберите **Из Git**. CLI использует тот же неизменяемый импорт с проверкой хеша:
+
+```sh
+olivares skills ls --builtin
+olivares skills install --builtin ecc-security
+olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
+olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills update <pack-id>                       # read the recorded source again and review the diff
+olivares skills update <pack-id> --apply --expected-digest <digest>
+olivares skills pin <pack-id> [--revision <older-revision-id>]
+olivares skills enable tdd-workflow code-review --folder <folder-ref>
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
+```
+
 ## Что он поставляет
 
 - **Каталог.** Установленные пакеты под `/v1/m/skills/packs`, каждая неизменяемая
@@ -26,8 +41,7 @@ Skills (`modules/skills`, `olivares.skills`) — один из 32 модулей
   загруженный архив. При установке из него ничего не выполняется.
 - **Назначения.** `GET/POST /v1/m/skills/assignments` и
   `PUT/DELETE /v1/m/skills/assignments/{id}` закрепляют ревизию за целью, в области
-  активного workspace. Два назначенных навыка с одним именем и разным содержимым
-  отклоняются до старта сессии, поэтому каждый запуск детерминирован.
+  активного workspace. Две цели одного вида, закрепляющие разное содержимое под одним именем навыка, отклоняются до старта сессии; более узкая цель (папка, шаблон, агент, сессия) заменяет навык с тем же именем у более широкой цели, поэтому проект переопределяет общий пакет, не редактируя его.
 - **Импорт из Git.** Импортёр с областью оператора может взять пакет навыков из
   Git-источника по закреплённой политике; импорт попадает в каталог как ещё одна
   неизменяемая ревизия, а не как живой checkout, который читает движок.

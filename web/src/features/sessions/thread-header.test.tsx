@@ -416,3 +416,19 @@ describe('thread header — the ⋯ menu', () => {
     expect(onOpenContext).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('thread header — model and effort', () => {
+  it('shows the session model and effort beside the tool', () => {
+    renderThread(run({ effort: 'high' }))
+    expect(screen.getByTestId('thread-tool-model')).toHaveTextContent(
+      'Codex · stub-model · high',
+    )
+  })
+
+  it('says nothing of an effort the session did not set', () => {
+    renderThread(run())
+    expect(screen.getByTestId('thread-tool-model').textContent).toBe(
+      'Codex · stub-model',
+    )
+  })
+})

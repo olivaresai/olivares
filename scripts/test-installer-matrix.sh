@@ -40,6 +40,53 @@ expect_rc() {
 # The first four pairs execute the production installer. curl and cosign are
 # deterministic test doubles, but archive parsing, checksum selection, destination
 # mutation and every fail-closed branch belong to scripts/install.sh itself.
+# PR archives must qualify this head without consulting an unpublished tag.
+pr_payload="$scratch/pr-payload"
+mkdir -p "$pr_payload/scripts" "$pr_payload/packaging/service"
+printf '#!/bin/sh\necho olivares PR archive\n' >"$pr_payload/olivares"
+chmod 0755 "$pr_payload/olivares"
+cp "$root/scripts/install-service.sh" "$pr_payload/scripts/"
+cp "$root/packaging/service/"* "$pr_payload/packaging/service/"
+tar -C "$pr_payload" -czf "$scratch/pr.tar.gz" olivares scripts/install-service.sh packaging/service
+expect_rc 0 "PR archive qualifies this head's binary and bundled service assets" bash "$lib" candidate-archive \
+	"$scratch/pr.tar.gz" "$pr_payload/olivares" "$scratch/pr-extracted"
+cmp "$pr_payload/olivares" "$scratch/pr-extracted/olivares"
+cmp "$root/scripts/install-service.sh" "$scratch/pr-extracted/scripts/install-service.sh"
+printf 'different head\n' >"$scratch/other-head"
+expect_rc 1 "PR archive from another head is rejected" bash "$lib" candidate-archive \
+	"$scratch/pr.tar.gz" "$scratch/other-head" "$scratch/wrong-head"
+tar -C "$pr_payload" -czf "$scratch/pr-missing-service.tar.gz" olivares
+expect_rc 1 "PR archive without its service assets is rejected" bash "$lib" candidate-archive \
+	"$scratch/pr-missing-service.tar.gz" "$pr_payload/olivares" "$scratch/missing-service"
+expect_rc 1 "missing PR archive is a failure, never a published-release fallback" bash "$lib" candidate-archive \
+	"$scratch/missing.tar.gz" "$pr_payload/olivares" "$scratch/missing-archive"
+
+# Exercise the exact payload selector used by the hosted/container entrypoint.
+# curl is only the unavailable external port; archive parsing/install are real.
+mkdir -p "$scratch/pr-fakebin" "$scratch/pr-home/.local/bin"
+cat >"$scratch/pr-fakebin/curl" <<'PRCURL'
+#!/bin/sh
+printf '%s\n' "$*" >>"$MATRIX_CURL_TRACE"
+exit 22
+PRCURL
+chmod 0755 "$scratch/pr-fakebin/curl"
+payload_env=(HOME="$scratch/pr-home" MATRIX_CURL_TRACE="$scratch/pr-curl.trace"
+	PATH="$scratch/pr-fakebin:/usr/bin:/bin")
+expect_rc 0 "PR payload installs even when the published tag is unavailable" \
+	env "${payload_env[@]}" bash "$lib" payload "$pr_payload/olivares" "$scratch/pr.tar.gz" \
+	"$scratch/pr-install" 26.800 linux
+[[ ! -e "$scratch/pr-curl.trace" ]]
+cmp "$pr_payload/olivares" "$scratch/pr-home/.local/bin/olivares"
+expect_rc 1 "bad PR payload never falls back to a published download" \
+	env "${payload_env[@]}" bash "$lib" payload "$scratch/other-head" "$scratch/pr.tar.gz" \
+	"$scratch/pr-bad-install" 26.800 linux
+[[ ! -e "$scratch/pr-curl.trace" ]]
+expect_rc 2 "published payload still fails as unmeasurable for an unavailable tag" \
+	env "${payload_env[@]}" bash "$lib" payload "$pr_payload/olivares" "" \
+	"$scratch/public-install" 26.800 linux
+grep -Fq '/releases/download/26.800/checksums.txt' "$scratch/pr-curl.trace"
+grep -Fq 'COULD NOT LOOK' "$scratch/err"
+
 fixture="$scratch/release"
 payload="$scratch/payload"
 fakebin="$scratch/fakebin"

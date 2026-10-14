@@ -155,6 +155,15 @@ func buildCoreMigrations() []migrate.Migration {
         path.write_text('CREATE TABLE licenses (id TEXT, name TEXT);\n')
         self.assert_rejected('0001_initial.sql')
 
+    def test_never_applied_exemption_is_bound_to_its_content(self):
+        path = self.write('commercial/license-worker/migrations/0063_instance_lease.sql',
+                          'CREATE TABLE other_content (id TEXT);\n')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'd1 baseline')
+        self.git('rm', '-q', str(path.relative_to(self.root)))
+        self.assert_rejected('0063_instance_lease.sql')
+
     def test_new_go_version_passes(self):
         self.go.write_text(self.go.read_text().replace(
             '}, coreSeedMigration())',
@@ -497,6 +506,95 @@ func Open() {
             '\nvar newDescriptor = "new table"\n')
         result = self.gate()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def cited_descriptor(self):
+        # model.None's reason only cites the reader lines (file.go:line) that show no principal;
+        # nothing generates schema from it. pdeclStrings forwards its parameter to model.None.
+        path = self.write('core/internal/store/sqlstore/cited.go', '''package sqlstore
+import "github.com/olivaresai/olivares/core/model"
+var citedDescriptor = model.EntityDescriptor{Fields: []model.FieldSpec{
+ pdecl(field("owner", model.KindUUID, false), model.None("compared: core/auth/binding.go:10")),
+ pdecl(field("scopes", model.KindJSON, false), pdeclStrings("closed set: core/auth/binding.go:20")),
+}}
+func pdeclStrings(reason string) *model.ColumnDecl {
+ return model.Nested([]string(nil), model.ClassEvidence, model.Leaf("[]", model.None(reason)))
+}
+func coreDescriptors() []model.EntityDescriptor { return []model.EntityDescriptor{citedDescriptor} }
+''')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'cited descriptor')
+        return path
+
+    def test_none_citation_line_numbers_are_not_part_of_the_hash(self):
+        path = self.cited_descriptor()
+        path.write_text(path.read_text().replace('binding.go:10', 'binding.go:12')
+                        .replace('binding.go:20', 'other.go:23'))
+        result = self.gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_none_reason_through_an_import_alias_and_a_forwarder_in_another_file_is_blanked(self):
+        self.cited_descriptor()
+        path = self.write('core/internal/store/sqlstore/aliased.go', '''package sqlstore
+import m "github.com/olivaresai/olivares/core/model"
+var aliasedDescriptor = m.EntityDescriptor{Fields: []m.FieldSpec{
+ pdecl(field("a", m.KindUUID, false), m.None("compared: core/auth/a.go:1")),
+ pdecl(field("b", m.KindJSON, false), pdeclStrings("closed set: core/auth/a.go:2")),
+}}
+''')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'aliased descriptor')
+        path.write_text(path.read_text().replace('a.go:1', 'a.go:11').replace('a.go:2', 'a.go:22'))
+        result = self.gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_none_reason_that_is_not_a_literal_is_still_part_of_the_hash(self):
+        self.cited_descriptor()
+        path = self.write('core/internal/store/sqlstore/named.go', '''package sqlstore
+import "github.com/olivaresai/olivares/core/model"
+const why = "compared: core/auth/a.go:1"
+var namedDescriptor = model.EntityDescriptor{Fields: []model.FieldSpec{
+ pdecl(field("a", model.KindUUID, false), model.None(why)),
+}}
+''')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'named reason')
+        path.write_text(path.read_text().replace('a.go:1', 'a.go:11'))
+        self.assert_rejected('core/descriptor/namedDescriptor')
+
+    def test_function_that_also_uses_its_parameter_is_not_a_reason_forwarder(self):
+        self.cited_descriptor()
+        path = self.write('core/internal/store/sqlstore/guarded.go', '''package sqlstore
+import "github.com/olivaresai/olivares/core/model"
+func guarded(reason string) *model.ColumnDecl {
+ if reason == "" {
+  return nil
+ }
+ return model.None(reason)
+}
+var guardedDescriptor = model.EntityDescriptor{Fields: []model.FieldSpec{
+ pdecl(field("a", model.KindUUID, false), guarded("compared: core/auth/a.go:1")),
+}}
+''')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'guarded forwarder')
+        path.write_text(path.read_text().replace('a.go:1', 'a.go:11'))
+        self.assert_rejected('core/descriptor/guardedDescriptor')
+
+    def test_none_declaration_is_still_part_of_the_hash(self):
+        path = self.cited_descriptor()
+        path.write_text(path.read_text().replace(
+            'model.None("compared: core/auth/binding.go:10")', 'model.Scan(model.ClassEvidence)'))
+        self.assert_rejected('core/descriptor/citedDescriptor')
+
+    def test_citation_edit_does_not_hide_a_sibling_change(self):
+        path = self.cited_descriptor()
+        path.write_text(path.read_text().replace('binding.go:10', 'binding.go:12')
+                        .replace('field("owner"', 'field("holder"'))
+        self.assert_rejected('core/descriptor/citedDescriptor')
 
     def test_missing_baseline_refuses(self):
         self.env['OLIVARES_MIGRATION_BASE'] = 'missing-ref'

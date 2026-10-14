@@ -27,12 +27,17 @@ vi.mock('./api', async (orig) => ({
     listWorkspaces: vi.fn(),
     listProfiles: vi.fn(),
     profileLaunchReadiness: vi.fn(),
+    profileModels: vi.fn(),
     input: vi.fn(),
     inputText: vi.fn(),
   },
 }))
 const identities = vi.hoisted(() => ({ nhiLifecycle: vi.fn() }))
 vi.mock('@/features/identity/api', () => ({ identityApi: identities }))
+vi.mock('@/features/extensions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/extensions')>()),
+  LAUNCH_IDENTITY_EXTENSION: undefined,
+}))
 vi.mock('@/features/workspace-templates/api', () => ({
   templatesApi: { list: vi.fn(), apply: vi.fn() },
   templatesKeys: {
@@ -139,6 +144,22 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('RunCreateDialog — a first message and Start', () => {
+  it('Community offers the current human operator without reading Business inventory', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await user.click(screen.getByRole('button', { name: 'Advanced options' }))
+    expect(
+      screen.getByRole('combobox', { name: 'Launch identity' }),
+    ).toHaveValue('')
+    expect(
+      screen.getByRole('option', { name: 'Current human operator' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: /admitted agent/i }),
+    ).not.toBeInTheDocument()
+    expect(identities.nhiLifecycle).not.toHaveBeenCalled()
+  })
+
   it("opens on the only profile and starts with only a first message, on today's defaults", async () => {
     const user = userEvent.setup()
     wrap()
@@ -320,23 +341,6 @@ describe('RunCreateDialog — a first message and Start', () => {
     )
   })
 
-  it('keeps an agent identity in view when Advanced options closes', async () => {
-    const user = userEvent.setup()
-    wrap()
-    const toggle = await screen.findByRole('button', {
-      name: 'Advanced options',
-    })
-    await user.click(toggle)
-    await user.selectOptions(
-      screen.getByLabelText('Launch identity'),
-      '__agent__',
-    )
-    await user.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByLabelText('Name')).toBeNull()
-    expect(screen.getByLabelText('Launch identity')).toHaveValue('__agent__')
-  })
-
   it('when the profiles cannot be read, Start says so and offers to try again', async () => {
     vi.mocked(agentOpsApi.listProfiles)
       .mockRejectedValueOnce(new ApiError(503, 'unavailable', 'down'))
@@ -398,13 +402,14 @@ describe('RunCreateDialog — a first message and Start', () => {
       'Name',
       'Transport',
       'Permission mode',
-      'Effort',
-      'Model',
       'Folder',
       'Template',
       'Forward host env (names)',
     ])
       expect(screen.queryByLabelText(label)).toBeNull()
+    // The most common launch choice is in front: Model and Effort need no Advanced step.
+    expect(screen.getByLabelText('Effort')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Model' })).toBeVisible()
     const toggle = screen.getByRole('button', { name: 'Advanced options' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await user.click(toggle)
@@ -417,8 +422,6 @@ describe('RunCreateDialog — a first message and Start', () => {
     expect(screen.getByLabelText('Permission mode')).toHaveTextContent(
       'default',
     )
-    expect(screen.getByLabelText('Effort')).toHaveTextContent('Model default')
-    expect(screen.getByRole('combobox', { name: 'Model' })).toBeInTheDocument()
     expect(screen.getByLabelText('Folder')).toHaveTextContent(
       'Temporary folder for this session',
     )
@@ -430,44 +433,6 @@ describe('RunCreateDialog — a first message and Start', () => {
     expect(
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
-  })
-
-  it('says under the identity what the chosen identity means', async () => {
-    const user = userEvent.setup()
-    wrap()
-    await user.click(
-      await screen.findByRole('button', { name: 'Advanced options' }),
-    )
-    const human = 'The session runs with your own access.'
-    const agent =
-      'Choose an admitted agent to act on behalf of its human sponsor. Human access alone grants no agent authority.'
-    expect(screen.getByText(human)).toBeInTheDocument()
-    expect(screen.queryByText(agent)).toBeNull()
-    await user.selectOptions(
-      screen.getByLabelText('Launch identity'),
-      '__agent__',
-    )
-    expect(screen.getByText(agent)).toBeInTheDocument()
-    expect(screen.queryByText(human)).toBeNull()
-    await user.selectOptions(screen.getByLabelText('Launch identity'), '')
-    expect(screen.getByText(human)).toBeInTheDocument()
-    expect(screen.queryByText(agent)).toBeNull()
-  })
-
-  it('names the missing admitted agent at Start', async () => {
-    const user = userEvent.setup()
-    wrap()
-    await user.click(
-      await screen.findByRole('button', { name: 'Advanced options' }),
-    )
-    await user.selectOptions(
-      screen.getByLabelText('Launch identity'),
-      '__agent__',
-    )
-    expect(start()).toBeDisabled()
-    expect(start()).toHaveAccessibleDescription(
-      'Choose the admitted agent this session runs as, or run it as yourself.',
-    )
   })
 
   it('with several profiles chooses none, and the disabled Start says to choose one', async () => {

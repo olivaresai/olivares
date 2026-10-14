@@ -56,6 +56,9 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 // sessionsResponses is the whole responses object of every sessions route
 // whose answers differ from the generic envelope.
 func sessionsResponses(method, pattern string) (map[string]any, bool) {
+	if method == http.MethodGet && pattern == "/provider-profiles/{ref}/models" {
+		return sessionsModelCatalogResponses(), true
+	}
 	if sessionsLaunchReadinessRoute(method, pattern) {
 		// A typed contract, not the generic envelope: this route's whole value is
 		// that a console can render causes and pending checks without re-deriving
@@ -75,6 +78,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 		return responses, true
 	}
 	if responses, ok := sessionsRunPreviewResponses(method, pattern); ok {
+		return responses, true
+	}
+	if responses, ok := sessionsRunCommandsResponses(method, pattern); ok {
 		return responses, true
 	}
 	if !sessionsWorkRoute(pattern) && !sessionsProtocolBindingReconcile(method, pattern) &&
@@ -171,6 +177,9 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 // these route/header/query controls are required for a generated client to
 // invoke validate, plan and apply correctly.
 func sessionsParameters(method, pattern string) []map[string]any {
+	if method == http.MethodGet && pattern == "/provider-profiles/{ref}/models" {
+		return []map[string]any{oas.Param("refresh", "query", "Refresh the upstream catalog now.", false, oas.Obj("type", "boolean"))}
+	}
 	if sessionsLaunchReadinessRoute(method, pattern) {
 		return sessionsLaunchReadinessParameters()
 	}

@@ -550,7 +550,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("PUT", "/rbac/permission-groups/{name}", permRBACAdmin, m.handleUpdatePermGroup)
 	reg.Handle("DELETE", "/rbac/permission-groups/{name}", permRBACAdmin, m.handleDeletePermGroup)
 	reg.Handle("GET", "/rbac/grants", permRBACRead, m.handleListScopedGrants)
-	reg.Handle("POST", "/rbac/grants", permRBACAdmin, m.handleCreateScopedGrant)
+	m.registerCreateScopedGrant(reg)
 	reg.Handle("GET", "/rbac/grants/{id}", permRBACRead, m.handleGetScopedGrant)
 	reg.Handle("DELETE", "/rbac/grants/{id}", permRBACAdmin, m.handleRevokeScopedGrant)
 	reg.Handle("GET", "/rbac/inheritance-filters", permRBACRead, m.handleListInheritanceFilters)

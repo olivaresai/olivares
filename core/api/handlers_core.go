@@ -15,7 +15,6 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/residency"
 	"github.com/olivaresai/olivares/core/store"
 )
 
@@ -161,6 +160,11 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request, mc Mo
 	}
 	var dto AgentDTO
 	err := s.st.Mutate(r.Context(), tenant, func(sc store.Scope) error {
+		var err error
+		sc, err = collectionMutationScope(r, sc, mc, in.WorkspaceID)
+		if err != nil {
+			return err
+		}
 		var a model.Agent
 		in.apply(&a)
 		created, err := sc.Agents().Create(r.Context(), a)
@@ -633,29 +637,6 @@ func (s *Server) handleResidencyRegistry(w http.ResponseWriter, r *http.Request,
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleCreateOrg(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	var in createOrgInput
-	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
-		return
-	}
-	// normalize and validate the residency pin against the registry BEFORE
-	// provisioning. Empty = unpinned (allowed). Deny-closed: an unknown region, a
-	// pin on a non-region-scoped instance, or a pin to a region this instance does
-	// not serve is a 400 — the tenant is never created half-pinned.
-	region := string(residency.Normalize(in.DataRegion))
-	if err := s.residency.ValidatePin(region); err != nil {
-		s.badRequest(w, r, err.Error())
-		return
-	}
-	org, err := s.provisionOrg(r.Context(), in.Name, in.Slug, region)
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, toOrgDTO(org))
-}
-
 // provisionOrg is the ONE tenant-provisioning path: POST /v1/system/orgs and
 // first-boot setup both land here, so the first organization of an install is
 // built exactly like every later one. SystemScope.CreateOrg allocates the tenant
@@ -677,143 +658,6 @@ func (s *Server) provisionOrg(ctx context.Context, name, slug, region string) (m
 		return model.Org{}, err
 	}
 	return out, nil
-}
-
-// handleSetOrgRegion sets or clears a tenant's data-residency pin. Superadmin
-// only. The requested region is normalized and validated against the residency
-// registry (deny-closed: known region, and the home region on a region-scoped
-// instance), then persisted via the System path with a version-checked update and an
-// audit event. An empty region clears the pin (the tenant becomes unpinned).
-func (s *Server) handleSetOrgRegion(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	p := mc.Principal
-	if !s.requireStepUp(w, r, p) {
-		return
-	}
-	tenant, err := model.ParseTenantID(chi.URLParam(r, "tenant"))
-	if err != nil || tenant.IsZero() || tenant.IsSystem() {
-		s.badRequest(w, r, "valid tenant required")
-		return
-	}
-	var in setOrgRegionInput
-	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
-		return
-	}
-	region := string(residency.Normalize(in.DataRegion))
-	if err := s.residency.ValidatePin(region); err != nil {
-		s.badRequest(w, r, err.Error())
-		return
-	}
-	var dto OrgDTO
-	err = s.st.System(r.Context(), func(sys store.SystemScope) error {
-		o, oerr := sys.SetOrgRegion(r.Context(), tenant, region)
-		if oerr != nil {
-			return oerr
-		}
-		dto = toOrgDTO(o)
-		return nil
-	})
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, dto)
-}
-
-// handleDropOrg performs the hard, unrecoverable tenant delete used after the
-// cloud control plane's 30-day grace period safety net has expired. It verifies
-// the tenant org exists before invoking DropTenant because DropTenant itself is a
-// destructive purge primitive that treats a missing tenant as a zero-row delete.
-func (s *Server) handleDropOrg(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	tenant, err := model.ParseTenantID(chi.URLParam(r, "tenant"))
-	if err != nil || tenant.IsZero() || tenant.IsSystem() {
-		s.badRequest(w, r, "valid tenant required")
-		return
-	}
-	err = s.st.System(r.Context(), func(sys store.SystemScope) error {
-		if _, err := sys.GetOrg(r.Context(), tenant); err != nil {
-			return err
-		}
-		return sys.DropTenant(r.Context(), tenant)
-	})
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// handleSetOrgStatus withdraws or restores a tenant's SERVICE without
-// touching its data — the intermediate door between "served" and "deleted" that
-// the cloud grace period needs. Superadmin (system:admin), and deliberately NOT
-// AAL3.
-//
-// AAL3 was the first instinct, by analogy with handleSetOrgRegion. It was wrong
-// twice over. It would have made the NON-destructive operation harder to reach
-// than the DESTRUCTIVE one — handleDropOrg, the unrecoverable purge, requires
-// system:admin alone — which is exactly backwards: the safe door must never be
-// the locked one, or operators route around it to the dangerous one. And an
-// AAL3-gated route is human-session-only by construction (a token principal is
-// AAL 0 and can never elevate), so the caller this exists FOR — the cloud control
-// plane, which authenticates with an API key — could not have called it at all.
-//
-// It changes ONE column. It revokes no credential, drops no session and deletes
-// nothing, so restoring service is lossless — which is the point: the normal case
-// is that the customer pays and comes back. Enforcement lives in the store guard
-// (core/suspension), so this handler only records the decision; it does not have
-// to destroy anything to make the decision bite.
-func (s *Server) handleSetOrgStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	tenant, err := model.ParseTenantID(chi.URLParam(r, "tenant"))
-	if err != nil || tenant.IsZero() || tenant.IsSystem() {
-		s.badRequest(w, r, "valid tenant required")
-		return
-	}
-	var in setOrgStatusInput
-	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
-		return
-	}
-	status := model.LifecycleStatus(strings.TrimSpace(in.Status))
-	if status != model.StatusActive && status != model.StatusSuspended {
-		s.badRequest(w, r, `status must be "active" or "suspended"`)
-		return
-	}
-	var dto OrgDTO
-	err = s.st.System(r.Context(), func(sys store.SystemScope) error {
-		o, oerr := sys.SetOrgStatus(r.Context(), tenant, status)
-		if oerr != nil {
-			return oerr
-		}
-		dto = toOrgDTO(o)
-		return nil
-	})
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, dto)
-}
-
-func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	out := listResponse[OrgDTO]{Items: []OrgDTO{}}
-	err := s.st.System(r.Context(), func(sys store.SystemScope) error {
-		orgs, err := sys.ListOrgs(r.Context())
-		if err != nil {
-			return err
-		}
-		for _, o := range orgs {
-			if o.TenantID.IsSystem() {
-				continue // the reserved system tenant is not a customer org
-			}
-			out.Items = append(out.Items, toOrgDTO(o))
-		}
-		return nil
-	})
-	if err != nil {
-		s.writeError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
 }
 
 // --- helpers -----------------------------------------------------------------

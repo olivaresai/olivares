@@ -140,25 +140,63 @@ class MajorMinorRelease(unittest.TestCase):
     def test_first_stable_package_journey_does_not_fetch_a_retired_release(self):
         source = (ROOT / '.github/workflows/pr-ci.yml').read_text()
         metadata = re.search(r'          remove_package\(\) \{.*?^          }\n(.*?)^          for fmt in deb rpm; do', source, re.M | re.S)[1]
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            (root / 'bin').mkdir()
-            (root / 'RELEASE-VERSION').write_text('0.1\n')
-            for name in ('scripts/build-ldflags.sh', 'scripts/lib/git-env.sh', 'scripts/userspace/resolve_baseline.py'):
-                target = root / name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT / name, target)
-            recorder = root / 'requests'
-            for tool in ('curl', 'cosign'):
-                script = root / 'bin' / tool
-                script.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >>"$REQUESTS"\n')
-                script.chmod(0o755)
-            env = dict(os.environ, PATH=str(root / 'bin') + os.pathsep + os.environ['PATH'],
-                       proof=str(root), REQUESTS=str(recorder), OLIVARES_COSIGN_BIN=str(root / 'bin/cosign'))
-            result = subprocess.run(['bash', '-euo', 'pipefail', '-c', metadata], cwd=root, env=env,
-                                    capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertFalse(recorder.exists(), recorder.read_text() if recorder.exists() else '')
+        for published in (False, True):
+            with self.subTest(published=published), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                (root / 'bin').mkdir()
+                (root / 'RELEASE-VERSION').write_text('0.1\n')
+                for name in ('scripts/build-ldflags.sh', 'scripts/lib/git-env.sh', 'scripts/userspace/resolve_baseline.py'):
+                    target = root / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(ROOT / name, target)
+                # Replace only the API transport; run the real resolver and workflow block.
+                # Retired releases are present in both states and must never be downloaded.
+                (root / 'sitecustomize.py').write_text('''
+import io, json, os, urllib.error, urllib.request
+def urlopen(request, timeout):
+    def release(tag):
+        return dict(tag_name=tag, published_at='date', draft=False, prerelease=False)
+    published = os.environ['PUBLISHED'] == 'true'
+    if request.full_url.endswith('/releases/tags/0.1'):
+        if not published:
+            raise urllib.error.HTTPError(request.full_url, 404, 'not published', {}, None)
+        data = release('0.1')
+    elif request.full_url.endswith('/releases?per_page=100&page=1'):
+        data = [release(tag) for tag in ('v26.9.0', '26.10.0', '26.10.1')]
+        if published:
+            data.append(release('0.1'))
+    else:
+        raise AssertionError('unexpected release request: ' + request.full_url)
+    return io.BytesIO(json.dumps(data).encode())
+urllib.request.urlopen = urlopen
+                ''')
+                recorder = root / 'requests'
+                for tool in ('curl', 'cosign'):
+                    script = root / 'bin' / tool
+                    script.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >>"$REQUESTS"\n')
+                    script.chmod(0o755)
+                env = dict(os.environ, PATH=str(root / 'bin') + os.pathsep + os.environ['PATH'],
+                           proof=str(root), REQUESTS=str(recorder), OLIVARES_COSIGN_BIN=str(root / 'bin/cosign'),
+                           PYTHONPATH=str(root), PUBLISHED=str(published).lower())
+                result = subprocess.run(['bash', '-euo', 'pipefail', '-c', metadata], cwd=root, env=env,
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                baseline = json.loads((root / 'baseline.json').read_text())
+                if not published:
+                    self.assertIsNone(baseline)
+                    self.assertFalse(recorder.exists())
+                    continue
+                self.assertEqual(baseline['tag_name'], '0.1')
+                base = 'https://github.com/olivaresai/olivares/releases/download/0.1'
+                expected = [f'-fSL --retry 2 --max-time 90 {base}/{asset} -o {root}/{asset}'
+                            for asset in ('checksums.txt', 'checksums.txt.sig', 'checksums.txt.pem')]
+                expected.append(f'verify-blob --certificate {root}/checksums.txt.pem '
+                                f'--signature {root}/checksums.txt.sig '
+                                '--certificate-identity https://github.com/olivaresai/olivares/'
+                                '.github/workflows/release.yml@refs/tags/0.1 '
+                                '--certificate-oidc-issuer https://token.actions.githubusercontent.com '
+                                f'{root}/checksums.txt')
+                self.assertEqual(recorder.read_text().splitlines(), expected)
 
     def test_native_package_versions_and_asset_names(self):
         builder = load('builder', 'scripts/build-native-release-packages.py')

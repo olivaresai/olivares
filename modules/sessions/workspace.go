@@ -484,6 +484,10 @@ func (m *Module) answerRead(ctx context.Context, tenant model.TenantID, ws *reso
 // writeFile creates/overwrites a file. The write is anchored by content hash in the
 // audit chain BEFORE the filesystem op (deny-closed: no unaudited mutation).
 func (m *Module) writeFile(ctx context.Context, tenant model.TenantID, ref, rel string, content []byte, actor, actorKind string) (writeResponse, error) {
+	return m.writeWorkspaceFile(ctx, tenant, ref, rel, content, actor, actorKind, false)
+}
+
+func (m *Module) writeWorkspaceFile(ctx context.Context, tenant model.TenantID, ref, rel string, content []byte, actor, actorKind string, exclusive bool) (writeResponse, error) {
 	ws, err := m.resolveWorkspace(ctx, tenant, ref)
 	if err != nil {
 		return writeResponse{}, err
@@ -509,7 +513,29 @@ func (m *Module) writeFile(ctx context.Context, tenant model.TenantID, ref, rel 
 	}); serr != nil {
 		return writeResponse{}, &runErr{http.StatusServiceUnavailable, "could not record the write (denied)"}
 	}
-	if err := os.WriteFile(abs, content, 0o644); err != nil {
+	if exclusive {
+		root, err := os.OpenRoot(ws.rootReal)
+		if err != nil {
+			return writeResponse{}, mapFSErr(err)
+		}
+		defer root.Close()
+		f, err := root.OpenFile(rel, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if errors.Is(err, os.ErrExist) {
+			info, statErr := root.Lstat(rel)
+			if statErr != nil || !info.Mode().IsRegular() {
+				return writeResponse{}, conflictErr("wiki path changed")
+			}
+			return writeResponse{Path: normRel(rel), Created: false}, nil
+		}
+		if err != nil {
+			return writeResponse{}, mapFSErr(err)
+		}
+		_, writeErr := f.Write(content)
+		closeErr := f.Close()
+		if err := errors.Join(writeErr, closeErr); err != nil {
+			return writeResponse{}, mapFSErr(err)
+		}
+	} else if err := os.WriteFile(abs, content, 0o644); err != nil {
 		return writeResponse{}, mapFSErr(err)
 	}
 	return writeResponse{Path: normRel(rel), Size: int64(len(content)), SHA256: hash, Created: created}, nil
@@ -665,12 +691,11 @@ func validateWorkspace(p *CreateWorkspaceParams) error {
 	if p.MountMode != mountRW && p.MountMode != mountRO {
 		return badRequest("invalid mount_mode (want rw|ro)")
 	}
-	if p.DLPMode == "" {
-		p.DLPMode = dlpOff
+	dlpMode, err := normalizeDLPMode(p.DLPMode)
+	if err != nil {
+		return err
 	}
-	if p.DLPMode != dlpLabel && p.DLPMode != dlpDeny && p.DLPMode != dlpOff {
-		return badRequest("invalid dlp_mode (want label|deny|off)")
-	}
+	p.DLPMode = dlpMode
 	p.ContainerTarget = strings.TrimSpace(p.ContainerTarget)
 	if p.ContainerTarget == "" {
 		p.ContainerTarget = defaultContainerTarget
@@ -682,9 +707,20 @@ func validateWorkspace(p *CreateWorkspaceParams) error {
 	if p.MaxReadBytes < 0 {
 		return badRequest("max_read_bytes must be non-negative")
 	}
-	var err error
 	p.AllowSubpaths, err = normalizeWorkspaceSubpaths(p.AllowSubpaths)
 	return err
+}
+
+// normalizeDLPMode is the one validation of a workspace's DLP mode, shared by
+// registration and PATCH: empty selects off.
+func normalizeDLPMode(mode string) (string, error) {
+	switch mode {
+	case "":
+		return dlpOff, nil
+	case dlpLabel, dlpDeny, dlpOff:
+		return mode, nil
+	}
+	return "", badRequest("invalid dlp_mode (want label|deny|off)")
 }
 
 // normalizeWorkspaceSubpaths applies only to registration input. Stored entries

@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test, type Page } from '@playwright/test'
-import { assertSessionAccepted, sessionToken } from './live-session'
+import {
+  browserSessionHeaders,
+  journeyNowLink,
+  type BrowserSession,
+} from './browser-session'
 
 // UI tramo of the E2E: the embedded web rendering REAL seeded data from a live
 // olivares (no /v1 mocks). scripts/web-e2e-demo.sh boots `serve --seed-demo`
@@ -13,7 +17,7 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
 
-// loginDemo observes a live bearer response. Never retain it in a failure trace;
+// Login sets a live HttpOnly session. Never retain it in a failure trace;
 // the explicit screenshots below are taken only on authenticated views.
 test.use({ trace: 'off' })
 
@@ -47,14 +51,11 @@ interface LiveDrift {
   unused_count: number
 }
 
-function authHeaders(token: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${token}`,
-    'X-Olivares-Tenant': demoTenant,
-  }
+function authHeaders(session: BrowserSession): Record<string, string> {
+  return browserSessionHeaders(session, demoTenant)
 }
 
-async function loginDemo(page: Page): Promise<string> {
+async function loginDemo(page: Page): Promise<BrowserSession> {
   const loginResponse = page.waitForResponse((response) => {
     const url = new URL(response.url())
     return (
@@ -70,16 +71,14 @@ async function loginDemo(page: Page): Promise<string> {
   expect(response.status(), 'the demo login must reach the real handler').toBe(
     200,
   )
+  const body = (await response.json()) as BrowserSession
   // WHAT A FRESH SIGN-IN PAINTS. The console lands on the root, which belongs to no
   // navigation area, and the sidebar hides a closed area's panel — so the entries on
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Journeys', exact: true })
-      .getByRole('link', { name: 'Now', exact: true }),
-  ).toBeVisible({ timeout: 15_000 })
-  return sessionToken(page)
+  await expect(journeyNowLink(page)).toBeVisible({ timeout: 15_000 })
+  authHeaders(body)
+  return body
 }
 
 function nodeIDs(edges: LiveAccessEdge[]): string[] {
@@ -120,21 +119,19 @@ async function expectFlowMatches(
 
 async function waitForDemoAccessEstate(
   page: Page,
-  token: string,
+  session: BrowserSession,
 ): Promise<void> {
   await expect
     .poll(
       async () => {
         const [graphResponse, driftResponse] = await Promise.all([
           page.request.get('/v1/m/accessmap/graph?limit=500', {
-            headers: authHeaders(token),
+            headers: authHeaders(session),
           }),
           page.request.get('/v1/m/accessmap/drift', {
-            headers: authHeaders(token),
+            headers: authHeaders(session),
           }),
         ])
-        assertSessionAccepted(graphResponse)
-        assertSessionAccepted(driftResponse)
         if (!graphResponse.ok() || !driftResponse.ok()) return false
         const graph = (await graphResponse.json()) as LiveAccessGraph
         const drift = (await driftResponse.json()) as LiveDrift
@@ -208,8 +205,8 @@ test.describe('embedded web over real seeded data', () => {
   test('real graph refresh, filters and drift match live DTOs', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
-    await waitForDemoAccessEstate(page, token)
+    const session = await loginDemo(page)
+    await waitForDemoAccessEstate(page, session)
 
     // The product's visual differentiator, rendering REAL seeded edges.
     const initialGraphResponse = page.waitForResponse((response) => {
@@ -220,9 +217,6 @@ test.describe('embedded web over real seeded data', () => {
         url.searchParams.get('limit') === '500'
       )
     })
-    // The sidebar draws each area folded, so a leaf like Access map is reached by opening
-    // the areas first, as a person would.
-    await page.getByRole('button', { name: 'Expand all areas' }).click()
     await page.getByRole('link', { name: /access map/i }).click()
     await page.waitForURL('**/access-map')
     const initialResponse = await initialGraphResponse
@@ -361,10 +355,9 @@ test.describe('embedded web over real seeded data', () => {
       'the demo seed must expose at least one drift row for this functional check',
     ).toBeGreaterThan(0)
     await expect(page.getByRole('heading', { name: /drift/i })).toBeVisible()
-    // The drift panel is the aside of the page content; the sidebar is an aside too.
-    await expect(
-      page.locator('#main-content aside').getByRole('listitem'),
-    ).toHaveCount(findingCount)
+    await expect(page.locator('aside').getByRole('listitem')).toHaveCount(
+      findingCount,
+    )
     await page.screenshot({
       path: 'playwright-report/demo-access-map-drift.png',
     })
@@ -373,8 +366,8 @@ test.describe('embedded web over real seeded data', () => {
   test('drift finding opens, re-checks and routes to both real owners', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
-    await waitForDemoAccessEstate(page, token)
+    const session = await loginDemo(page)
+    await waitForDemoAccessEstate(page, session)
 
     const openPoolFinding = async (): Promise<LiveAccessEdge> => {
       const graphRead = page.waitForResponse((response) => {
@@ -515,6 +508,124 @@ test.describe('embedded web over real seeded data', () => {
     ).toContainText('svc_pool')
   })
 
+  test('browser request helpers retain cookie and CSRF boundaries', async ({
+    page,
+    playwright,
+  }) => {
+    const session = await loginDemo(page)
+    const headers = authHeaders(session)
+    const anonymous = await playwright.request.newContext({
+      baseURL: new URL(page.url()).origin,
+      ignoreHTTPSErrors: true,
+    })
+    try {
+      const refused = await anonymous.get('/v1/m/governance/identities', {
+        headers: { 'X-Olivares-Tenant': demoTenant },
+      })
+      expect([401, 403]).toContain(refused.status())
+    } finally {
+      await anonymous.dispose()
+    }
+    const before = await page.request.get('/v1/m/recording/config', { headers })
+    expect(before.status()).toBe(200)
+    const config = await before.json()
+    const policy = {
+      namespaces: config.namespaces,
+      consent: config.consent,
+      idle_seconds: config.idle_seconds,
+      retention_days: config.retention_days,
+      ai_summaries: config.ai_summaries,
+    }
+    const accepted = await page.request.put('/v1/m/recording/config', {
+      headers,
+      data: policy,
+    })
+    expect(accepted.status()).toBe(200)
+    const withoutCSRF = { ...headers }
+    delete withoutCSRF['X-CSRF-Token']
+    const refused = await page.request.put('/v1/m/recording/config', {
+      headers: withoutCSRF,
+      data: policy,
+    })
+    expect(refused.status()).toBe(403)
+    const after = await page.request.get('/v1/m/recording/config', { headers })
+    expect(after.status()).toBe(200)
+    expect(await after.json()).toEqual(config)
+  })
+
+  test('shared data and the Community access graph are served together', async ({
+    page,
+  }) => {
+    const session = await loginDemo(page)
+    const headers = authHeaders(session)
+    const info = await page.request.get('/v1/server-info', { headers })
+    expect(info.status()).toBe(200)
+    const { edition } = (await info.json()) as { edition: string }
+    expect(['community', 'enterprise', 'business']).toContain(edition)
+    const graph = await page.request.get('/v1/m/accessmap/graph', { headers })
+    const identities = await page.request.get('/v1/m/governance/identities', {
+      headers,
+    })
+    expect(
+      [200, 501],
+      'graph capability must reject unexpected statuses',
+    ).toContain(graph.status())
+    expect([200, 501], 'identity inventory is probed independently').toContain(
+      identities.status(),
+    )
+    if (edition === 'community') {
+      // The access map and the identity inventory are Community; the Business identity
+      // panels are not offered next to them.
+      expect(graph.status()).toBe(200)
+      expect(identities.status()).toBe(200)
+      await page.goto('/identity?tab=inventory')
+      await expect(
+        page.getByRole('tab', { name: 'Identity inventory', exact: true }),
+      ).toHaveAttribute('aria-selected', 'true')
+      for (const name of [
+        'NHI lifecycle',
+        'WIF graph',
+        'Key & residency posture',
+      ]) {
+        await expect(page.getByRole('tab', { name, exact: true })).toHaveCount(
+          0,
+        )
+      }
+      await page.goto('/permissions?tab=identities')
+      await expect(
+        page.getByRole('tab', { name: 'Identities & groups', exact: true }),
+      ).toHaveAttribute('aria-selected', 'true')
+    }
+    if (graph.status() === 501) {
+      const drift = await page.request.get('/v1/m/accessmap/drift', { headers })
+      expect(drift.status()).toBe(501)
+      await page.goto('/access-map')
+      await expect(page.locator('[data-slot="not-in-edition"]')).toBeVisible()
+      await expect(page.locator('.react-flow__node')).toHaveCount(0)
+    }
+    const catalog = await page.request.get(
+      '/v1/m/inventory/entities?limit=200',
+      { headers },
+    )
+    expect(catalog.status()).toBe(200)
+    expect(Array.isArray((await catalog.json()).items)).toBe(true)
+    const findings = await page.request.get('/v1/m/security/findings', {
+      headers,
+    })
+    expect(findings.status()).toBe(200)
+    expect(Array.isArray((await findings.json()).items)).toBe(true)
+    const ingestion = await page.request.get(
+      '/v1/m/observability/ingestion-health',
+      { headers },
+    )
+    expect(ingestion.status()).toBe(200)
+    expect((await ingestion.json()).engine_scope).toBe(true)
+    await page.goto('/inventory')
+    await expect(
+      page.getByRole('heading', { name: 'Inventory', exact: true }),
+    ).toBeVisible()
+  })
+
   test('executive dashboard mounts its risk and reliability sections', async ({
     page,
   }) => {
@@ -538,8 +649,8 @@ test.describe('embedded web over real seeded data', () => {
   test('resource attack-path analysis sends resource_id to the live exfil handler', async ({
     page,
   }) => {
-    const token = await loginDemo(page)
-    await waitForDemoAccessEstate(page, token)
+    const session = await loginDemo(page)
+    await waitForDemoAccessEstate(page, session)
 
     const graphRead = page.waitForResponse((response) => {
       const url = new URL(response.url())

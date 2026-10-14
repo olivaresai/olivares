@@ -87,6 +87,7 @@ func newCatalogCmd() *cobra.Command {
 	cmd.AddCommand(
 		newCatalogEntriesCmd(client),
 		newCatalogPubkeyCmd(client),
+		newCatalogToolAdmitCmd(client),
 		newCatalogAdmissionCmd(client, "mcp-admission", "mcp-admissions", "MCP server"),
 		newCatalogAdmissionCmd(client, "connector-admission", "connector-admissions", "connector"),
 		newCatalogInstancesCmd(client),
@@ -802,4 +803,32 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 
 	cmd.AddCommand(list, get, transition)
 	return cmd
+}
+
+// newCatalogToolAdmitCmd admits a stored tool declaration through the same
+// catalog entry route; attestation admission remains under entries admit.
+func newCatalogToolAdmitCmd(client datalaneClient) *cobra.Command {
+	return &cobra.Command{
+		Use:   "admit <entry-id>",
+		Short: "Admit a stored CLI or MCP tool declaration",
+		Long: "Admit and approve a catalog entry containing a pinned CLI or MCP tool declaration.\n" +
+			"The declaration must already be stored in the selected tenant. Use catalog entries\n" +
+			"admit with an attestation bundle for attestation admission.",
+		Example: "  olivares catalog admit ce_123",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := datalanePath("entries", args[0], "admit")
+			if err != nil {
+				return err
+			}
+			body, code, err := client.do(cmd, http.MethodPost, path, nil, map[string]any{})
+			if err != nil {
+				return err
+			}
+			if !datalaneOK(code) {
+				return datalaneHTTPError(client.what, code, body)
+			}
+			return datalaneResult(cmd, body, code, "")
+		},
+	}
 }

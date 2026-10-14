@@ -75,8 +75,6 @@
     "session-viewer": "Visor de sesiones",
     "backups": "Copias de seguridad",
     "logs": "Registros",
-    "residency": "Residencia de datos",
-    "tenants": "Tenants",
     "inferenceProxy": "Proxy de inferencia",
     "alerting": "Alertas",
     "agentcoreExport": "Exportación a AgentCore",
@@ -146,8 +144,6 @@
     "audit": "Registro de evidencias cuya manipulación puede detectarse",
     "workspaceDashboard": "Agentes, sesiones, recursos y actividad de un espacio de trabajo",
     "settings": "Ajustes del espacio de trabajo y de la cuenta",
-    "residency": "Fija cada organización a una región, o déjala sin fijar",
-    "tenants": "Retira o restaura el servicio de un tenant",
     "inferenceProxy": "Compuertas del proxy, reglas DLP de egreso y aprobaciones de dispositivos",
     "alerting": "Enruta hallazgos a destinos e inspecciona entregas",
     "reporting": "Genera y descarga informes de gobernanza",
@@ -331,13 +327,32 @@
     "turnPlaceholder": "Envía una frase…",
     "turnAria": "Turno de la sesión",
     "attachedWaiting": "Te necesita",
-    "advanced": "Avanzado",
+    "rawLine": "Línea en bruto",
     "advancedHint": "Envía una línea NDJSON a stdin. El campo de frase es el valor por defecto.",
     "wirePlaceholder": "Envía una línea NDJSON a stdin…",
     "wireAria": "Línea de entrada de la sesión",
     "turnFailed": "La sesión no ha podido aceptar este turno.",
     "sendBackgroundHint": "Ctrl+Entrar envía y deja el borrador listo para la siguiente frase.",
-    "messagePlaceholder": "Mensaje para {{title}}…"
+    "messagePlaceholder": "Mensaje para {{title}}…",
+    "slashLabel": "Comandos y skills",
+    "slashOption": "{{name}}, {{i}} de {{n}}",
+    "slashNoMatch": "Ningún comando coincide con «{{query}}».",
+    "slash": {
+      "loading": "Leyendo los comandos de la herramienta…",
+      "failed": "No se pudieron leer los comandos de la herramienta.",
+      "unreported": "Esta herramienta no informó de comandos para la sesión.",
+      "stale": "No se pudieron actualizar los comandos de la herramienta; esta lista puede estar desactualizada.",
+      "agent": "Agente",
+      "source": {
+        "built-in": "Integrado",
+        "user": "Usuario",
+        "project": "Proyecto",
+        "plugin": "Plugin"
+      }
+    },
+    "modelAria": "Modelo y effort de esta sesión: {{value}}",
+    "sessionKeeps": "Esta sesión sigue con {{value}}. Otro modelo u otro effort inicia una sesión nueva.",
+    "startWithChoice": "Iniciar una sesión nueva con esta elección"
   },
   "shell": {
     "journeysLabel": "Recorridos",

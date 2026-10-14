@@ -5,12 +5,9 @@ package azurekeyvault_test
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/connectors/azurekeyvault"
-	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -70,59 +67,5 @@ func TestGatherEdges(t *testing.T) {
 	}
 	if !sawHSMCaller {
 		t.Error("Managed HSM stringified identity blob was not parsed to its appid")
-	}
-}
-
-// TestNoSecretValueLeaks is the minimal-data negative test (docs/SECURITY-HARDENING.md): a SAS
-// token in the object URI's query string and a bearer-token claim in the identity
-// blob must NEVER reach any emitted edge field or snapshot identity. The query
-// string is stripped (it can carry a SAS credential) and the identity is read
-// through a fixed non-secret claim allow-list (appid/oid/upn only).
-func TestNoSecretValueLeaks(t *testing.T) {
-	s := azurekeyvault.New()
-	if err := s.Open(context.Background(), sdk.Config{Settings: map[string]string{"path": "testdata/leak.json"}}); err != nil {
-		t.Fatal(err)
-	}
-	sk := &sink{}
-	if err := s.Gather(context.Background(), sk); err != nil {
-		t.Fatal(err)
-	}
-	if len(sk.edges) == 0 {
-		t.Fatal("expected an edge")
-	}
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	blob, _ := json.Marshal(struct {
-		Edges []model.EdgeObservation
-		Ids   []identitysource.Identity
-	}{sk.edges, g.Identities})
-	for _, marker := range []string{"SECRETSASSIGNATURE_MUST_NEVER_LEAK", "SECRETBEARERTOKEN_MUST_NEVER_LEAK"} {
-		if strings.Contains(string(blob), marker) {
-			t.Fatalf("a credential (%s) leaked into the emitted data: %s", marker, blob)
-		}
-	}
-	// The object is still named (without its SAS query string).
-	if !strings.Contains(string(blob), "secrets/db-password/abcdef") {
-		t.Fatalf("the object ref was lost entirely: %s", blob)
-	}
-}
-
-func TestSnapshotInventory(t *testing.T) {
-	s := open(t)
-	g, err := s.Snapshot(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	services := map[string]bool{}
-	for _, id := range g.Identities {
-		if id.Kind != identitysource.KindSecretStore || id.Type != identitysource.PrincipalNHI {
-			t.Errorf("bad store NHI: %+v", id)
-		}
-		services[id.Attributes["service"]] = true
-	}
-	if !services["keyvault"] || !services["managedhsm"] {
-		t.Errorf("expected both keyvault and managedhsm custodians, got %v", services)
 	}
 }

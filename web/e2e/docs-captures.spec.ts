@@ -1,20 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
+import { journeyNowLink } from './browser-session'
 import {
   encabezadoDeDialogo,
   encabezadoDelDialogoAbierto,
   encabezadoDePagina,
-  esperarEncabezado,
-  exigirInstanteLimpio,
-  exigirMarcadores,
 } from './capture-target'
+import { tomar } from './docs-capture-helpers'
 import { esperarExportacionDePostura } from './posture-export-terminal'
-import { EXTENSION_ROUTES } from '../src/features/extensions'
+import { EXTENSION_ROUTES } from '../src/features/extension-routes'
 
 // Capture the running console in English, with seeded data and declared response
 // fixtures, in both themes. The runner supplies the engine and tenant; PNGs and
@@ -22,57 +21,11 @@ import { EXTENSION_ROUTES } from '../src/features/extensions'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 
-// Index English locale keys with and without namespaces to identify untranslated text.
-const CLAVES_I18N: string[] = (() => {
-  const salida: string[] = []
-  const recorre = (o: unknown, pre: string[]) => {
-    if (o && typeof o === 'object' && !Array.isArray(o)) {
-      for (const [k, v] of Object.entries(o as Record<string, unknown>)) {
-        recorre(v, [...pre, k])
-      }
-    } else {
-      salida.push(pre.join('.'))
-    }
-  }
-  const dirs = [
-    ...(fs.existsSync('src/features')
-      ? fs
-          .readdirSync('src/features')
-          .map((f) => `src/features/${f}/i18n/en.json`)
-      : []),
-    ...(fs.existsSync('src/lib/i18n/locales/en')
-      ? fs
-          .readdirSync('src/lib/i18n/locales/en')
-          .map((f) => `src/lib/i18n/locales/en/${f}`)
-      : []),
-  ]
-  for (const f of dirs) {
-    if (!fs.existsSync(f) || !f.endsWith('.json')) continue
-    try {
-      const d = JSON.parse(fs.readFileSync(f, 'utf8'))
-      const ns = f.includes('/i18n/')
-        ? f.split('/')[2]
-        : path.basename(f, '.json')
-      recorre(d, [])
-      recorre(d, [ns])
-    } catch {
-      // Warn when a locale cannot be read: the resulting key index is incomplete.
-      console.warn(
-        `[i18n] no pude leer ${f} — la sonda de claves crudas mide de menos`,
-      )
-    }
-  }
-  return salida
-})()
 const DEMO_EMAIL = 'demo@olivares.local'
 const DEMO_PASSWORD = 'olivares-demo-estate'
 
-// The exact Infrastructure link in the Primary sidebar identifies the global account
-// shell without requiring a collapsed child link.
-const navReady = (page: import('@playwright/test').Page) =>
-  page
-    .getByRole('complementary', { name: 'Primary' })
-    .getByRole('link', { name: 'Infrastructure', exact: true })
+// The Journeys landmark is present after account adoption without opening an area.
+const navReady = journeyNowLink
 
 // One entry per view the docs reference. `settle` gives slow views (graph
 // layout, charts) extra time after networkidle before the shot. `live` views
@@ -131,7 +84,7 @@ async function eligeWorkspaceConcretoK3(page: import('@playwright/test').Page) {
   await alguno.click()
 }
 
-// Provision the required tenant role through users and memberships, then sign in
+// Provision a new account and its first tenant membership atomically, then sign in
 // normally. Handoffs uses editor and administration uses admin. Generate a password per
 // run and keep it out of captures, evidence and logs.
 async function provisionaMiembroK3(
@@ -156,25 +109,35 @@ async function provisionaMiembroK3(
   const clave = randomBytes(24).toString('base64url')
   const creado = await api.post('/v1/users', {
     headers: cabeceras,
-    data: JSON.stringify({ email, password: clave }),
-  })
-  expect(
-    creado.status(),
-    'docs-captures: POST /v1/users del actor editor',
-  ).toBe(201)
-  const usuario = ((await creado.json()) as { id: string }).id
-  const alta = await api.post('/v1/memberships', {
-    headers: cabeceras,
     data: JSON.stringify({
-      user_id: usuario,
+      email,
+      password: clave,
       tenant: demoTenant,
       role: rol,
     }),
   })
   expect(
-    alta.status(),
-    'docs-captures: POST /v1/memberships del actor editor',
+    creado.status(),
+    'docs-captures: POST /v1/users del actor editor',
   ).toBe(201)
+  const nuevo = (await creado.json()) as {
+    id: string
+    membership: { user_id: string; tenant: string; role: string }
+  }
+  const usuario = nuevo.id
+  expect(nuevo.membership).toMatchObject({
+    user_id: usuario,
+    tenant: demoTenant,
+    role: rol,
+  })
+  const listado = await api.get('/v1/members', { headers: cabeceras })
+  expect(listado.status()).toBe(200)
+  const padron = (await listado.json()) as {
+    items: { user_id: string; role: string }[]
+  }
+  expect(padron.items).toContainEqual(
+    expect.objectContaining({ user_id: usuario, role: rol }),
+  )
   return {
     email,
     clave,
@@ -184,7 +147,7 @@ async function provisionaMiembroK3(
       tenant: demoTenant,
       user_id: usuario,
       basis:
-        'provisioned through POST /v1/users and POST /v1/memberships with the demo superadmin ' +
+        'provisioned atomically through POST /v1/users with the demo superadmin ' +
         'login, then signed in through the normal login form',
     },
   }
@@ -571,9 +534,8 @@ const VIEWS: {
     id: 'identity',
     path: '/identity',
     settle: 1500,
-    heading: /^Identity & NHI$/,
+    heading: /^Identity & access$/,
   },
-  { id: 'finops', path: '/finops', settle: 1000, heading: /^Cost & FinOps$/ },
   { id: 'stored-budgets', path: '/stored-budgets', heading: /^Budgets$/ },
   { id: 'security', path: '/security', heading: /^Security & forensics$/ },
   {
@@ -748,7 +710,7 @@ const VIEWS: {
     id: 'permissions',
     path: '/permissions',
     settle: 1000,
-    heading: /^Permissions$/,
+    heading: /^Approvals and permissions$/,
   },
   {
     id: 'routine-policies',
@@ -952,13 +914,6 @@ const VIEWS: {
     settle: 1000,
     heading: /^Testing sandbox$/,
   },
-  { id: 'red-team', path: '/red-team', settle: 1000, heading: /^Red-team$/ },
-  {
-    id: 'team-costs',
-    path: '/team-costs',
-    settle: 1000,
-    heading: /^Team Costs$/,
-  },
   { id: 'reporting', path: '/reporting', settle: 1000, heading: /^Reports$/ },
   {
     id: 'platforms',
@@ -1041,19 +996,6 @@ const VIEWS: {
     live: true,
     heading: /^Log Viewer$/,
   },
-  {
-    // Require the view heading rather than inferring identity from the output filename.
-    id: 'tenants',
-    path: '/tenants',
-    heading: /^Tenants$/,
-  },
-  {
-    id: 'residency',
-    path: '/residency',
-    settle: 1000,
-    heading: /^Data residency$/,
-  },
-
   // The guide connector list is the Connectors tab. Its named example connectors are
   // seeded before navigation.
   {
@@ -1082,157 +1024,13 @@ const VIEWS: {
   },
 ]
 
-// Write each image and its evidence separately to avoid concurrent workers overwriting
-// a shared manifest. The runner later combines them.
-async function tomar(
-  page: import('@playwright/test').Page,
-  {
-    id,
-    theme,
-    ruta,
-    objetivo,
-    marcadores,
-    settle,
-    live,
-    recorte,
-    actor,
-    testigo,
-  }: {
-    id: string
-    theme: string
-    ruta: string
-    // The declared target identifies the captured surface.
-    objetivo: import('@playwright/test').Locator
-    // Markers identify state that the heading cannot distinguish.
-    marcadores?: import('@playwright/test').Locator[]
-    settle?: number
-    live?: boolean
-    recorte?: (
-      page: import('@playwright/test').Page,
-    ) => Promise<{ x: number; y: number; width: number; height: number }>
-    // Non-secret provenance of the principal, when the cell is not the demo superadmin.
-    actor?: Record<string, unknown>
-    // What the cell's `despues` proved about the data it photographs (the HTTP 200 read).
-    testigo?: Record<string, unknown>
-  },
-) {
-  // Wait for the declared route or modal heading; the shell heading can appear before
-  // the view mounts.
-  const texto = await esperarEncabezado(page, { id, ruta, objetivo })
-  if (marcadores) await exigirMarcadores(id, marcadores)
-
-  if (!live) await page.waitForLoadState('networkidle')
-  if (settle) await page.waitForTimeout(settle)
-
-  // Check for errors after loading and settling, immediately before the screenshot.
-  await exigirInstanteLimpio(page, id)
-
-  // Record empty-panel counts and main-text size without assigning a cause to empty
-  // content.
-  const vacios = await page.locator('[data-slot="empty-state"]:visible').count()
-  // Check main presence before reading it to avoid waiting on an absent element. Count
-  // data rows separately from empty-state rows, and empty tables separately from
-  // table-free forms.
-  const { filas, tablasVacias } = await page.evaluate(() => {
-    const raiz = document.querySelector('main') ?? document.body
-    const esDato = (tr: Element) =>
-      !tr.querySelector('[data-slot="empty-state"]')
-    const filas = Array.from(raiz.querySelectorAll('tbody tr')).filter(
-      esDato,
-    ).length
-    const tablasVacias = Array.from(raiz.querySelectorAll('table')).filter(
-      (tabla) => {
-        const cabeceras = tabla.querySelectorAll('thead th').length
-        const datos = Array.from(tabla.querySelectorAll('tbody tr')).filter(
-          esDato,
-        ).length
-        return cabeceras > 0 && datos === 0
-      },
-    ).length
-    return { filas, tablasVacias }
-  })
-  // Match untranslated text against known locale keys rather than treating dotted
-  // domain names as keys.
-  const clavesCrudas = await page.evaluate((conocidas: string[]) => {
-    const raiz = document.querySelector('main') ?? document.body
-    const texto = (raiz as HTMLElement).innerText ?? ''
-    const set = new Set(conocidas)
-    // Require both a dot and a known locale key; ordinary translated words can equal
-    // undotted keys.
-    return texto.split(/\s+/).filter((t) => t.includes('.') && set.has(t))
-  }, CLAVES_I18N)
-
-  const hayMain = (await page.locator('main').count()) > 0
-  const textoMain = hayMain
-    ? (
-        (await page
-          .locator('main')
-          .first()
-          .innerText()
-          .catch(() => '')) ?? ''
-      ).trim().length
-    : 0
-
-  // Blur keyboard focus separately from moving the pointer.
-  await page.evaluate(() =>
-    (document.activeElement as HTMLElement | null)?.blur(),
-  )
-
-  const png = `playwright-report/docs/${id}-${theme}.png`
-  // A declared crop preserves the viewport layout; record its rectangle with the image.
-  const clip = recorte ? await recorte(page) : undefined
-  await page.screenshot(clip ? { path: png, clip } : { path: png })
-  const sha = createHash('sha256').update(fs.readFileSync(png)).digest('hex')
-  fs.writeFileSync(
-    path.join('playwright-report', 'docs', `${id}-${theme}.evidence.json`),
-    `${JSON.stringify(
-      {
-        id,
-        theme,
-        route: ruta,
-        h1: texto,
-        vacios,
-        filas,
-        tablas_vacias: tablasVacias,
-        hay_main: hayMain,
-        texto_main: textoMain,
-        claves_crudas: clavesCrudas.length,
-        claves_crudas_vistas: clavesCrudas.slice(0, 8),
-        // Record the crop rectangle so the saved image can be interpreted.
-        recorte_declarado: clip ?? null,
-        ...(actor ? { actor } : {}),
-        ...(testigo ? { testigo_coleccion: testigo } : {}),
-        sha256: sha,
-      },
-      null,
-      2,
-    )}\n`,
-  )
-
-  // The light and dark images must have different hashes.
-  if (theme === 'dark') {
-    const claro = path.join(
-      'playwright-report',
-      'docs',
-      `${id}-light.evidence.json`,
-    )
-    if (fs.existsSync(claro)) {
-      const otro = JSON.parse(fs.readFileSync(claro, 'utf8')) as {
-        sha256?: string
-      }
-      expect(
-        sha,
-        `la toma \`dark\` de \`${id}\` es BYTE A BYTE IGUAL que su \`light\`: el tema no cambio, ` +
-          'asi que el par publicado son dos copias de la misma foto. Mira si esa vista tiene ' +
-          'conmutador de tema y si sus colores salen de tokens (variables CSS) o son fijos.',
-      ).not.toBe(otro.sha256)
-    }
-  }
-}
-
 // Use a 1440×1000 viewport at scale factor two. The height keeps navigation visible;
 // the higher pixel density preserves small text at the cost of larger PNGs.
-test.use({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 2 })
+test.use({
+  viewport: { width: 1440, height: 1000 },
+  deviceScaleFactor: 2,
+  trace: 'off',
+})
 
 // Require a declared target or heading before capturing a view.
 function objetivoDeLaVista(
@@ -1256,13 +1054,24 @@ test.describe('Docs captures over real seeded data', () => {
   for (const view of VIEWS) {
     {
       test(`capture ${view.id}`, async ({ page, request }) => {
-        if (view.id === 'orchestration' || view.id === 'automations') {
+        if (view.id === 'orchestration' || view.path === '/automations') {
           const info = await request.get('/v1/server-info')
           expect(info.ok()).toBe(true)
-          test.skip(
-            (await info.json()).edition === 'Community',
-            'Business Identity & Scale view',
-          )
+          const edition = (await info.json()).edition
+          expect(['community', 'business', 'enterprise']).toContain(edition)
+          const reason = 'Business capability on a Community build'
+          if (edition === 'community') {
+            fs.mkdirSync('playwright-report/docs', { recursive: true })
+            fs.writeFileSync(
+              path.join(
+                'playwright-report',
+                'docs',
+                `${view.id}.evidence.json`,
+              ),
+              JSON.stringify({ id: view.id, skipped: reason }),
+            )
+          }
+          test.skip(edition === 'community', `${view.id}: ${reason}`)
         }
         await page.addInitScript(
           ([tenant]) => {
@@ -1288,12 +1097,20 @@ test.describe('Docs captures over real seeded data', () => {
               view.actor === 'k3-tenant-admin' ? 'admin' : 'editor',
             )
           : undefined
+        const login = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname === '/v1/auth/login',
+        )
         await page.goto('/login')
         await page.locator('#email').fill(actor ? actor.email : DEMO_EMAIL)
         await page
           .locator('#password')
           .fill(actor ? actor.clave : DEMO_PASSWORD)
         await page.getByRole('button', { name: /^sign in$/i }).click()
+        const loginResponse = await login
+        expect(loginResponse.status()).toBe(200)
+
         if (actor) {
           // A member login need not mount the global account sidebar; require departure
           // from the login route.
@@ -1455,7 +1272,7 @@ test.describe('Docs captures over real seeded data', () => {
     }
   }
 
-  // These scenes exercise graph interaction, session panels and workspace browsing.
+  // These scenes exercise session panels and workspace browsing.
   // Invitation provisioning must satisfy any AAL3 policy; an error page cannot
   // substitute for it.
 

@@ -70,6 +70,13 @@ func TestE2E_TenantIsolation(t *testing.T) {
 	if code, _ := h.req("GET", "/v1/m/finops/spend/summary", viewer, h.tenantB, nil); code != http.StatusForbidden {
 		t.Errorf("viewer GET finops in tenant B = %d, want 403", code)
 	}
+	if code, _ := h.req("GET", "/v1/m/inventory/summary", editor, h.tenantB, nil); code != http.StatusForbidden {
+		t.Errorf("editor GET inventory in tenant B = %d, want 403", code)
+	}
+	inv := h.getJSON(editor, h.tenantA, "/v1/m/inventory/summary")
+	if total, _ := inv["total"].(float64); total <= 0 {
+		t.Fatal("editor sees no catalog in own tenant A")
+	}
 
 	// The superadmin CAN scope into B (it has every grant) but B holds none of A's
 	// data — the estate did not leak across the tenant boundary.

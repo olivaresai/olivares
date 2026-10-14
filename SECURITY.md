@@ -31,12 +31,12 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the next release is <!-- release -->`0.1`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the next release is <!-- release -->`0.2`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| Olivares <!-- release -->`0.1`<!-- /release --> (next release) | Yes — fixes ship as the next release |
+| Olivares <!-- release -->`0.2`<!-- /release --> (next release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
@@ -106,6 +106,11 @@ Requirements: Linux amd64 or arm64 with Landlock and unprivileged user and netwo
 namespaces.
 
 - The systemd units shipped in the packages allow exactly those two namespace types.
+- On kernels with AppArmor's unprivileged user namespace restriction, the deb also
+  installs and loads `/etc/apparmor.d/usr.bin.olivares` for `/usr/bin/olivares`.
+  It permits `userns` with an otherwise unconfined profile, without changing the
+  host's global restriction. Package removal unloads and removes this profile.
+  Hosts without that kernel restriction keep their existing AppArmor policy.
 - Docker Compose uses `deploy/seccomp/olivares-sessions.json`: Docker's default
   profile plus those two namespace types.
   AppArmor hosts that mediate user namespace creation also need the shipped
@@ -121,7 +126,7 @@ namespaces.
   through AppArmor or an SELinux domain without the user namespace permission,
   refuses these sessions until the engine is allowed to create one.
 - The proxy socket lives under the engine's `TMPDIR`, which must leave the socket path
-  within the 107-byte Unix limit (about 70 bytes for `TMPDIR`).
+  within the 107-byte Unix limit (up to 82 bytes for `TMPDIR`).
 
 ## Scope
 
@@ -134,7 +139,7 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  Olivares <!-- release -->0.1<!-- /release --> is the next release, not yet published. Once its artifacts are available,
+  Olivares <!-- release -->0.2<!-- /release --> is the next release, not yet published. Once its artifacts are available,
   `scripts/verify-release.sh` verifies their chain before use.
 - **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.
@@ -179,7 +184,7 @@ Actively-exploited vulnerabilities (CISA KEV, or credible in-the-wild reports) a
 **How we keep the clock honest:**
 
 - **Reachability first.** We gate every change on `govulncheck`, whose Go call-graph analysis tells us whether a dependency CVE is actually reachable. Unreachable CVEs are documented in a signed **OpenVEX** statement (`not_affected`, justification `vulnerable_code_not_in_execute_path`) so your scanner isn't lit up by noise — they do not start a remediation clock; reachable ones do.
-- **Scheduled rebuilds.** A weekly job rebuilds the image from the latest patched base, re-scans the result (grype + trivy), refreshes the SBOM and VEX, and opens an internal tracking issue when remediation is due. The base image is pinned by digest and bumped by automation.
+- **Scheduled rebuilds.** A weekly job rebuilds the image from the latest patched base, re-scans the result (grype + trivy, reporting the findings that have a fix available), refreshes the SBOM and VEX, and opens an internal tracking issue when remediation is due. The base image is pinned by digest and bumped by automation.
 - **Verifiable output.** Every release — including a patch release — ships signed (cosign), with an SBOM attestation, an OpenVEX document and SLSA Build L3 provenance (via the `slsa-github-generator` reusable workflows). Verify with `scripts/verify-release.sh`.
 
 The reference bar for this cadence is a continuously-rebuilt image programme (e.g. Chainguard's nightly rebuilds with a 7/14-day SLA); we target the same shape, scaled to a single-maintainer project, and will tighten it as the project matures.

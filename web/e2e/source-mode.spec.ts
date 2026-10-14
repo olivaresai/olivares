@@ -11,7 +11,7 @@ const whoami = {
   actor: 'admin@olivares.ai',
   display_name: 'Admin',
   superadmin: true,
-  grants: [{ tenant: 't1', role: 'owner' }],
+  grants: [{ tenant: 't1', tenant_name: 'Acme Corp', role: 'owner' }],
 }
 
 const serverInfo = {
@@ -64,21 +64,7 @@ async function seed(page: Page) {
 
     if (path.endsWith('/v1/server-info')) body = serverInfo
     else if (path.endsWith('/v1/auth/whoami')) body = whoami
-    else if (path.endsWith('/v1/system/orgs')) {
-      body = {
-        items: [
-          {
-            id: 'o1',
-            tenant_id: 't1',
-            name: 'Acme Corp',
-            slug: 'acme',
-            status: 'active',
-            created_at: '2026-01-01T00:00:00Z',
-          },
-        ],
-        has_more: false,
-      }
-    } else if (path.endsWith('/v1/console/connectors')) {
+    else if (path.endsWith('/v1/console/connectors')) {
       body = {
         connectors: [
           {

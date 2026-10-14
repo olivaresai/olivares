@@ -5,16 +5,12 @@
   "groups": {
     "people": "Personnes",
     "signIn": "Connexion",
-    "machines": "Identités machine",
-    "posture": "Posture"
+    "machines": "Identités machine"
   },
   "tabs": {
     "federation": "SSO & SCIM",
     "inventory": "Inventaire des identités",
-    "lifecycle": "Cycle de vie NHI",
     "mcp": "Auth MCP",
-    "wif": "Graphe WIF",
-    "posture": "Posture des clés et de la résidence",
     "login": "Connexion privilégiée",
     "totp": "Facteur TOTP"
   },
@@ -42,10 +38,7 @@
     "failed": "L’authentification renforcée n’a pas abouti. L’action reste refusée.",
     "relyingPartyUnusable": "Les clés d’accès ne sont pas disponibles sur ce déploiement : le moteur n’a aucune partie utilisatrice exploitable pour l’adresse à laquelle la console est servie. Un opérateur doit configurer un domaine de partie utilisatrice valide — un nom d’hôte comportant un point, ou localhost lorsque cela convient —, accéder à la console à cette origine sécurisée déclarée, puis redémarrer le moteur après la modification. Réessayer à une autre adresse ne suffit pas à le corriger.",
     "actions": {
-      "wif": "Consultation du graphe Workload Identity Federation",
       "identity": "Gestion de l’identité",
-      "nhiLifecycleRotate": "Rotation d’un identifiant d’identité non humaine",
-      "nhiLifecycleFinalize": "Finalisation du retrait d’une identité non humaine",
       "providers": "Enregistrer ou retirer un identifiant de fournisseur",
       "generic": "Cette action",
       "console": "Gestion des connecteurs",
@@ -102,12 +95,6 @@
     "mcpAuth": {
       "title": "Normes d’autorisation MCP"
     },
-    "wif": {
-      "title": "Références Workload Identity Federation"
-    },
-    "posture": {
-      "title": "Références clés et résidence"
-    },
     "login": {
       "title": "Normes de connexion privilégiée"
     }
@@ -155,28 +142,14 @@
     "leaverSeamWhat": "Les preuves d’audit de départ",
     "noLeaver": "Aucun événement de déprovisionnement",
     "noLeaverHint": "Lorsqu’un départ SCIM (delete / prov:delete) est traité, le backend révoque les sessions et les jetons de l’utilisateur et l’enregistre ici.",
+    "leaverTruncated": "{{n}} derniers départs ; il y en a d’anciens",
+    "leaverTruncatedHint": "Il y a plus d’événements de départ que ceux affichés. Cette carte liste les plus récents ; ce qui est coupé, ce sont donc les événements les plus anciens. Un utilisateur absent de cette liste ne prouve pas qu’il n’a jamais été déprovisionné.",
     "revoked": "Sessions + jetons révoqués",
     "col": {
       "userName": "Utilisateur",
       "state": "État",
       "externalId": "External ID",
       "lastModified": "Dernière modification"
-    }
-  },
-  "console": {
-    "title": "Posture de la console Claude",
-    "description": "Ce que l’Admin API Anthropic permet — et ne permet pas — de vérifier sur la posture d’identité de votre organisation. Exposé en toute honnêteté, jamais comme un registre complet.",
-    "seamWhat": "Le constat de posture de la console Claude",
-    "noFindings": "Aucun constat de posture",
-    "noFindingsHint": "Le connecteur claude-console émet un constat de posture structurel lorsqu’il est configuré.",
-    "blindSpotTitle": "Angle mort de l’Admin API (structurel — pas une mauvaise configuration)",
-    "blindSpots": {
-      "ssoEnforcement": "L’état d’application du SSO n’est pas exposé par l’Admin API (inconnu de l’API).",
-      "scimProvisioning": "L’état de provisionnement SCIM n’est pas exposé par l’Admin API (inconnu de l’API).",
-      "members": "Les membres de l’organisation SONT listables via l’Admin API.",
-      "ssoJit": "Le SSO / JIT est une capacité réservée au plan Team et supérieur.",
-      "auditExport": "L’export SCIM / audit est réservé au plan Enterprise.",
-      "continuousAudit": "L’audit continu correspond au Compliance Activity Feed, et non à une API interrogeable (le CSV de 180 jours est un téléchargement de la console réservé au propriétaire)."
     }
   },
   "roster": {
@@ -203,192 +176,10 @@
       "all": "Toutes"
     }
   },
-  "lifecycle": {
-    "loading": "Chargement du cycle de vie NHI…",
-    "unknown": "Inconnu",
-    "notSet": "Non défini",
-    "orphaned": "Orpheline",
-    "forbidden": {
-      "title": "Non autorisé",
-      "description": "Votre rôle n’est pas autorisé à consulter le cycle de vie NHI."
-    },
-    "posture": {
-      "title": "Posture du cycle de vie",
-      "description": "Posture du locataire concernant l’ancienneté, l’application, la responsabilité et la criticité.",
-      "total": "Total",
-      "stale": "Rotations en retard",
-      "blocked": "Bloquées",
-      "alerting": "En alerte",
-      "orphaned": "Orphelines",
-      "critical": "Critiques"
-    },
-    "filters": {
-      "criticality": "Filtrer par criticité",
-      "enforcement": "Filtrer par application",
-      "allCriticality": "Toutes les criticités",
-      "allEnforcement": "Tous les états d’application"
-    },
-    "criticality": {
-      "low": "Faible",
-      "medium": "Moyenne",
-      "high": "Élevée",
-      "critical": "Critique"
-    },
-    "staleness": {
-      "ok": "À jour",
-      "stale": "Rotation en retard",
-      "unknown": "Inconnue"
-    },
-    "enforcement": {
-      "monitor": "Surveillance",
-      "alert": "Alerte",
-      "blocked": "Bloquée"
-    },
-    "offboard": {
-      "none": "Active",
-      "soft_deleted": "Suppression réversible",
-      "finalized": "Finalisée"
-    },
-    "table": {
-      "title": "Identités non humaines gouvernées",
-      "description": "Posture de rotation, application, responsables humains et état de retrait. Sélectionnez une identité pour sa trace et ses actions.",
-      "identity": "Identité",
-      "criticality": "Criticité",
-      "staleness": "Ancienneté",
-      "enforcement": "Application",
-      "ownership": "Propriétaire et parrain",
-      "offboarding": "Retrait",
-      "ownerValue": "Propriétaire : {{ref}}",
-      "sponsorValue": "Parrain : {{ref}}",
-      "openDetail": "Ouvrir le cycle de vie de {{ref}}",
-      "truncated_one": "Affichage de la première {{count}} identité ; davantage correspondent à ce filtre que ce qui est listé. Affinez les filtres pour voir le reste.",
-      "truncated_other": "Affichage des {{count}} premières identités ; davantage correspondent à ce filtre que ce qui est listé. Affinez les filtres pour voir le reste.",
-      "truncated_many": "Affichage des {{count}} premières identités ; davantage correspondent à ce filtre que ce qui est listé. Affinez les filtres pour voir le reste."
-    },
-    "empty": {
-      "title": "Aucun enregistrement de cycle de vie",
-      "description": "Lancez un balayage confirmé pour enregistrer les NHI de l’inventaire et matérialiser leur posture."
-    },
-    "detail": {
-      "description": "État actuel du cycle de vie et trace de gouvernance en ajout seul.",
-      "posture": "Détails du cycle de vie",
-      "enforcementReason": "Motif d’application",
-      "owner": "Propriétaire humain",
-      "sponsor": "Parrain humain",
-      "rotatedAt": "Dernière rotation",
-      "maxAge": "Ancienneté maximale",
-      "seconds": "{{count}} secondes",
-      "inherited": "Héritée de la criticité",
-      "rotationTarget": "Cible de rotation",
-      "recoveryUntil": "Fin de la période de récupération"
-    },
-    "events": {
-      "title": "Trace d’événements en ajout seul",
-      "description": "Changements de cycle de vie et transitions d’application enregistrés par le backend.",
-      "empty": "Aucun événement de cycle de vie enregistré.",
-      "event": "Événement",
-      "actor": "Acteur",
-      "detail": "Détail",
-      "when": "Date"
-    },
-    "actions": {
-      "title": "Actions du cycle de vie",
-      "reason": "Motif",
-      "critical": {
-        "twoAccountsAal3": "Cette action CRITIQUE exige l’approbation de deux comptes utilisateur distincts avant toute exécution. Le moteur impose des COMPTES distincts : il ne peut pas prouver que deux comptes correspondent à deux personnes différentes. Business permet d’abaisser le niveau de risque en vigueur par une politique ; Community conserve son minimum par défaut.",
-        "breakGlassPossible": "Rien ne s’exécute tant que deux comptes utilisateur distincts n’ont pas approuvé. Une autorisation d’urgence break-glass active peut l’autoriser à la place : cet usage est enregistré puis revu. Business permet d’abaisser le niveau de risque en vigueur par une politique ; Community conserve son minimum par défaut.",
-        "noBreakGlass": "Rien ne s’exécute tant que deux comptes utilisateur distincts n’ont pas approuvé. Ici, le break-glass ne peut pas autoriser : aucune voie d’urgence ne contourne le second approbateur. Business permet d’abaisser le niveau de risque en vigueur par une politique ; Community conserve son minimum par défaut."
-      },
-      "ownership": {
-        "button": "Attribuer les responsables",
-        "title": "Attribuer une responsabilité humaine",
-        "description": "Définissez le propriétaire et le parrain responsables à l’aide de références de l’inventaire.",
-        "owner": "Référence du propriétaire",
-        "sponsor": "Référence du parrain",
-        "humanOnly": "Le propriétaire et le parrain doivent être des identités humaines de l’inventaire.",
-        "noChanges": "Modifiez le propriétaire ou le parrain avant d’enregistrer.",
-        "cannotClear": "Les références du propriétaire et du parrain ne peuvent pas être effacées ici. Attribuez plutôt une autre identité humaine.",
-        "confirm": "Enregistrer les responsables",
-        "saved": "Responsabilité de la NHI enregistrée."
-      },
-      "policy": {
-        "button": "Modifier la politique",
-        "title": "Modifier la politique de rotation",
-        "description": "Définissez la criticité, la fenêtre de rotation, la cible et la dernière rotation connue.",
-        "enforcementWarning": "L’enregistrement peut modifier indirectement l’application : la criticité détermine si l’obsolescence alerte ou bloque, et un identifiant CRITIQUE obsolète peut être bloqué au prochain balayage.",
-        "criticality": "Criticité de l’identifiant",
-        "maxAge": "Ancienneté maximale en secondes",
-        "maxAgeHint": "Utilisez zéro pour hériter de la valeur par défaut de la criticité choisie.",
-        "rotationTarget": "Cible de rotation",
-        "rotatedAt": "Dernière rotation connue",
-        "confirm": "Enregistrer la politique",
-        "saved": "Politique de rotation NHI enregistrée.",
-        "partialUpdateNote": "Laisser un champ vide ou à zéro conserve sa valeur actuelle : ces réglages peuvent être modifiés mais pas effacés, donc une fenêtre de rotation ou une cible déjà définie reste jusqu’à ce que vous la remplaciez."
-      },
-      "rotate": {
-        "button": "Effectuer la rotation",
-        "title": "Demander la rotation de l’identifiant",
-        "description": "Ouvre la demande de rotation CRITIQUE gouvernée.",
-        "target": "Cible de l’actionneur",
-        "confirm": "Demander la rotation",
-        "credentialTitle": "Nouvel identifiant — affiché une seule fois",
-        "credentialWarning": "Copiez et stockez cet identifiant en lieu sûr maintenant. Il n’est affiché qu’une fois, n’est pas conservé par Olivares AI et ne pourra pas être récupéré après la fermeture.",
-        "credential": "Nouvel identifiant",
-        "credentialRef": "Référence du nouvel identifiant : {{ref}}",
-        "credentialSaved": "Je l’ai stocké en lieu sûr"
-      },
-      "offboard": {
-        "button": "Retirer",
-        "title": "Appliquer une suppression réversible",
-        "description": "Ouvre la demande de retrait à risque ÉLEVÉ avec un approbateur.",
-        "warning": "Cette étape réversible bloque la NHI et ses agents liés, puis ouvre une période de récupération. AAL3 n’est pas requis.",
-        "confirm": "Demander la suppression réversible"
-      },
-      "finalize": {
-        "button": "Finaliser",
-        "title": "Finaliser le retrait",
-        "description": "Révoque définitivement une NHI préalablement supprimée de façon réversible.",
-        "irreversible": "La finalisation est irréversible. Le break-glass ne s’applique pas ici : le second compte utilisateur distinct ne peut pas être contourné.",
-        "confirm": "Finaliser définitivement"
-      },
-      "restore": {
-        "button": "Restaurer",
-        "title": "Restaurer la NHI",
-        "description": "Annule la suppression pendant la période de récupération. Cette action d’administration est volontairement sans double contrôle.",
-        "confirm": "Restaurer la NHI"
-      },
-      "sweep": {
-        "button": "Lancer le balayage",
-        "title": "Lancer le balayage du cycle de vie",
-        "description": "Recalcule l’ancienneté, la responsabilité et l’application pour ce locataire.",
-        "warning": "Ce balayage est idempotent mais modifie l’état. Il peut placer des identités en état bloqué et refuser leurs actions gouvernées.",
-        "confirm": "Lancer le balayage modifiant",
-        "done": "Balayage du cycle de vie NHI terminé.",
-        "result": "Analysées : {{scanned}} ; nouvellement bloquées : {{blocked}}."
-      },
-      "result": {
-        "title": "État de la demande gouvernée",
-        "done": "L’action du cycle de vie est terminée.",
-        "pending": "La demande attend une approbation ; aucune action n’a encore eu lieu.",
-        "rejected": "La demande a été rejetée ; aucune action n’a eu lieu.",
-        "expired": "La demande a expiré ; soumettez-en une nouvelle si nécessaire.",
-        "noGate": "Aucun mécanisme d’approbation n’est configuré ; l’action reste refusée.",
-        "unavailable": "L’approbation est accordée, mais cette source n’a pas d’actionneur automatique. Suivez la procédure manuelle du fournisseur.",
-        "breakGlass": "L’action s’est achevée par la voie d’urgence auditée.",
-        "received": "Le backend a renvoyé un état de demande gouvernée.",
-        "approval": "Référence d’approbation : {{ref}}"
-      }
-    },
-    "errors": {
-      "mutation": "L’action du cycle de vie n’a pas pu aboutir. Vérifiez la demande et réessayez.",
-      "forbidden": "Non autorisé : votre rôle ne permet pas cette action du cycle de vie.",
-      "humanOwnerRequired": "Le propriétaire et le parrain doivent être des identités humaines de l’inventaire ; une identité non humaine ne peut occuper aucun de ces rôles.",
-      "softDeleteRequired": "La finalisation exige une suppression réversible préalable. Retirez d’abord la NHI, puis finalisez après la décision de récupération.",
-      "gate": {
-        "rejected": "Un relecteur a rejeté cette demande. Ce n’est pas un problème de permission : adressez-vous au relecteur ou ouvrez une nouvelle demande avec le contexte manquant.",
-        "expired": "L’approbation de cette demande a expiré avant son exécution. Ouvrez-en une nouvelle ; la décision précédente n’autorise plus rien.",
-        "no_gate": "Aucune porte d’approbation n’est câblée : cette action ne peut pas être gouvernée et elle est refusée. Un opérateur doit configurer la gouvernance au préalable."
-      }
+  "empty": {
+    "nhiRoster": {
+      "title": "Aucune identité pour l’instant",
+      "description": "Les identités apparaissent ici lorsque des agents accèdent à des ressources ou lorsque vous associez un agent à une identité."
     }
   },
   "mcp": {
@@ -397,6 +188,8 @@
     "seamWhat": "Les constats d’autorisation MCP",
     "noFindings": "Aucun constat d’autorisation MCP",
     "noFindingsHint": "Lorsqu’un serveur MCP protégé par OAuth est découvert, la posture de liaison de son jeton est enregistrée ici.",
+    "truncated": "{{n}} constats chargés ; il y en a plus",
+    "truncatedHint": "Il y a plus de constats d’autorisation MCP que ceux affichés ; cette page ne charge qu’une page de lignes. Un serveur absent de cette liste ne prouve pas qu’il n’a aucun constat.",
     "prmTitle": "Autorisation liée à l’audience (RFC 9728)",
     "prmDescription": "Comment un serveur MCP protégé par OAuth lie un jeton à une ressource concrète unique — afin qu’un jeton émis pour un serveur ne puisse être rejoué sur un autre.",
     "flow": {
@@ -422,105 +215,6 @@
       }
     },
     "noPassthrough": "Le passthrough de jeton est interdit par conception : le panneau observe et introspecte, il ne transmet ni ne rejoue jamais un jeton MCP."
-  },
-  "wif": {
-    "gatedNote": "Le graphe Workload Identity Federation est une vue privilégiée et auditée.",
-    "consoleOnly": "Les objets Workload Identity Federation (émetteurs, règles, comptes de service) sont gérés uniquement dans l’Anthropic Console. Ce panneau les visualise et les analyse — il ne les crée ni ne les modifie jamais.",
-    "openConsole": "Ouvrir dans l’Anthropic Console",
-    "graphTitle": "Graphe d’objets WIF",
-    "graphDescription": "Émetteur de fédération → règle → compte de service → périmètre OAuth, l’analyseur signalant les frontières trop larges.",
-    "empty": "Aucune fédération déclarée",
-    "emptyHint": "Aucun émetteur, règle ou compte de service Workload Identity Federation n’est configuré pour cette organisation. Déclarez la fédération dans l’Anthropic Console pour gouverner l’accès non humain sans clés statiques.",
-    "lintClean": "Analyse propre",
-    "lintErrors": "{{n}} erreur",
-    "lintWarnings": "{{n}} avertissement",
-    "lintInfo": "{{n}} info",
-    "lintNoFindings": "Aucun constat d’analyse — le graphe de fédération semble bien délimité.",
-    "lintLabel": "Constats d’analyse WIF",
-    "lintRulesTitle": "L’analyseur est prêt. Lorsque le graphe se charge, il applique ces règles :",
-    "legend": {
-      "issuer": "Émetteur de fédération (fdis_)",
-      "rule": "Règle de fédération (fdrl_)",
-      "svac": "Compte de service (svac_)",
-      "scope": "Périmètre OAuth"
-    },
-    "lint": {
-      "cel-over-broad": {
-        "title": "Règle de fédération trop large",
-        "detail": "La correspondance de cette règle est trop permissive. Les conditions CEL sont des frontières de sécurité — restreignez subject_prefix, l’audience, les claims ou la condition CEL.",
-        "rule": "signale les règles dont la correspondance subject / audience / claims / CEL est trop permissive."
-      },
-      "key-shadow": {
-        "title": "Une clé statique masque la fédération",
-        "detail": "{{var}} est présente — une clé statique Anthropic a priorité et désactive silencieusement Workload Identity Federation, de sorte qu’une organisation « sans clé » continue d’utiliser la clé à longue durée de vie.",
-        "recommendation": "Exécutez `ant auth status` pour confirmer les identifiants actifs, puis supprimez la clé statique pour utiliser réellement la fédération.",
-        "rule": "signale une clé statique ANTHROPIC_API_KEY / AUTH_TOKEN qui masque le WIF."
-      },
-      "token-lifetime": {
-        "title": "Préoccupation sur la durée de vie du jeton",
-        "detail": "token_lifetime_seconds = {{lifetime}}. Maintenez-la bien en dessous du maximum de {{max}}s et dans la plage prise en charge — des jetons plus courts réduisent le rayon d’impact.",
-        "rule": "signale token_lifetime_seconds en dehors de 60–86400s, ou proche du maximum de 24 h."
-      },
-      "scope-over-broad": {
-        "title": "Périmètre OAuth trop large",
-        "detail": "Le périmètre {{scope}} octroie au-delà d’un seul espace de travail. Préférez workspace:developer sauf si une gestion à l’échelle de l’organisation est réellement requise.",
-        "rule": "signale org:manage_tunnels ou les périmètres non reconnus ; privilégie le moindre privilège."
-      },
-      "jwks-insecure": {
-        "title": "Un JWKS en ligne ne renouvelle pas ses clés",
-        "detail": "Cette règle épingle un JWKS en ligne ({{mode}}). Préférez la découverte afin que les clés de l’émetteur puissent être renouvelées.",
-        "rule": "signale un JWKS en ligne qui ne peut pas renouveler ses clés."
-      },
-      "drift": {
-        "title": "Dérive de la fédération",
-        "detail": "Cet objet diffère de la fédération gouvernée ({{reason}}). Réconciliez les règles déclarées avec la configuration réelle d'Anthropic.",
-        "rule": "signale la dérive déclaré-vs-réel : une règle active non déclarée (non gouvernée), une règle déclarée absente en réel, ou une règle/un émetteur orphelin.",
-        "reason": {
-          "undeclared-rule": "règle active non déclarée",
-          "declared-not-live": "déclarée mais absente en réel",
-          "orphan-rule": "règle orpheline",
-          "orphan-issuer": "émetteur orphelin"
-        }
-      }
-    },
-    "recon": {
-      "declaredOnly": "Affichage de la fédération déclarée. Configurez un jeton OAuth org:admin pour réconcilier avec la configuration réelle d'Anthropic.",
-      "reconciled": "Réconcilié avec la configuration réelle le {{at}}.",
-      "unavailable": "La réconciliation en direct est indisponible — affichage de la base déclarée. Vérifiez le jeton OAuth org:admin."
-    }
-  },
-  "posture": {
-    "ek": {
-      "title": "Clés externes (CMEK)",
-      "description": "Clés de chiffrement gérées par le client et référencées par vos espaces de travail. Posture uniquement — jamais le matériel de clé.",
-      "seamWhat": "La posture des clés externes",
-      "immutable": "En usage — immuable",
-      "never": "Jamais validée",
-      "col": {
-        "id": "Référence de clé",
-        "provider": "Fournisseur",
-        "state": "État",
-        "inUse": "Référencée",
-        "validated": "Dernière validation"
-      }
-    },
-    "residency": {
-      "title": "Résidence des espaces de travail",
-      "description": "Résidence des données et liaison CMEK par espace de travail. La région d’origine et une CMEK référencée sont immuables.",
-      "seamWhat": "La posture de résidence des espaces de travail",
-      "none": "Aucun espace de travail signalé.",
-      "workspace": "Espace de travail",
-      "geo": "Région d’origine",
-      "cmek": "CMEK",
-      "providerManaged": "Géré par le fournisseur (sans CMEK)",
-      "compartment": "Compartiment KMS",
-      "inferenceGeos": "Régions d’inférence autorisées",
-      "unrestricted": "Non restreint / non signalé"
-    },
-    "unavailable": {
-      "badge": "Illisible",
-      "fallback": "Cette posture n'a pas pu être lue sur ce déploiement."
-    }
   },
   "login": {
     "statusTitle": "Assurance de session",
@@ -577,16 +271,6 @@
       "lastCredential": "Impossible de supprimer votre seule passkey. Enregistrez-en une autre d'abord."
     }
   },
-  "empty": {
-    "externalKeys": {
-      "title": "Aucune référence de clé externe signalée",
-      "description": "Aucune clé de chiffrement gérée par le client n'a été signalée pour cette organisation. L'inventaire a bien été lu : c'est un zéro réel, pas un backend absent."
-    },
-    "nhiRoster": {
-      "title": "Aucune identité, humaine ou non humaine",
-      "description": "Une fois une source d’annuaire configurée, resynchronisez le registre d’identités pour y charger les identités humaines et non humaines avec leurs identifiants externes."
-    }
-  },
   "totp": {
     "title": "Second facteur TOTP",
     "description": "Un mot de passe à usage unique temporisé (RFC 6238) comme facteur additionnel de votre compte local. Il s'ajoute à vos passkeys — il ne les remplace jamais.",
@@ -636,6 +320,11 @@
     "refused": {
       "passkey_not_enrolled": "Ajoutez d’abord une passkey à votre compte (Identité et NHI > Passkeys), puis activez-la.",
       "totp_sign_in_required": "Configurez d’abord une application d’authentification et connectez-vous avec son code, puis activez-la."
+    }
+  },
+  "posture": {
+    "unavailable": {
+      "badge": "Illisible"
     }
   }
 }

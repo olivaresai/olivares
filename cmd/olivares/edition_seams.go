@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/dr/opgate"
@@ -17,6 +18,8 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"sync"
+	"time"
 )
 
 // Edition seams for the session cockpit (V269 / docs/contracts/COCKPIT-07-edition-cut.md §4).
@@ -114,6 +117,8 @@ type EditionConfig struct {
 	// DataDir is the resolved data directory: the value the flag chain produced, never a
 	// re-derivation of it.
 	DataDir string
+	// NoIngest keeps offline recovery from activating directory lifecycle.
+	NoIngest bool
 	// CoreDSN is the DSN the SQLite core store was opened with: the resolved --dsn, or the
 	// default file in DataDir when none was given. Empty on PostgreSQL, whose URL carries
 	// credentials and names no file a private store could sit beside.
@@ -153,7 +158,7 @@ func editionConfigFrom(cfg bootConfig, eng store.Engine, coreDSN string) Edition
 	if eng != store.EngineSQLite {
 		coreDSN = ""
 	}
-	return EditionConfig{DataDir: cfg.DataDir, CoreDSN: coreDSN}
+	return EditionConfig{DataDir: cfg.DataDir, CoreDSN: coreDSN, NoIngest: cfg.NoIngest}
 }
 
 // EditionMutationAuthorizer exposes the existing request authorizer's mutation
@@ -184,11 +189,65 @@ type EditionRuntimeLaunchObserverRegistration interface {
 	UseRuntimeLaunchObserver(sessions.RuntimeLaunchObserver) (func(), error)
 }
 
+// EditionPromotionRecovery owns one boot's edition recovery state. Recover runs
+// inside the elector's bootstrap on every acquisition, before the incoming
+// fencing epoch exists. It must be idempotent and return failures to the elector;
+// it must not register another OnPromote callback. Close releases its resources.
+type EditionPromotionRecovery interface {
+	Recover(context.Context) error
+	io.Closer
+}
+
+// ownedEditionRecovery joins recovery and resource release even if the elector's
+// bounded resignation finishes before a canceled callback has unwound.
+type ownedEditionRecovery struct {
+	recovery EditionPromotionRecovery
+	mu       sync.Mutex
+	stopped  bool
+	closed   bool
+}
+
+func (r *ownedEditionRecovery) state() EditionPromotionRecovery {
+	if r == nil {
+		return nil
+	}
+	return r.recovery
+}
+
+func (r *ownedEditionRecovery) Recover(ctx context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stopped || r.closed {
+		return fmt.Errorf("edition promotion recovery is closed")
+	}
+	return r.recovery.Recover(ctx)
+}
+
+func (r *ownedEditionRecovery) stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stopped = true
+}
+
+func (r *ownedEditionRecovery) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	r.closed = true
+	return r.recovery.Close()
+}
+
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
 	// The existing shared producers used by private module wiring.
 	modules *moduleSet
+	// PromotionRecovery is the same instance built before the first election.
+	// Nil means this edition supplied no recovery state. The later binder borrows
+	// it; boot owns its Close, including on a failed construction or binding.
+	PromotionRecovery EditionPromotionRecovery
 
 	// RegisterJobNotRunning registers a job's bounded in-memory status reader
 	// with server-info. Empty reason means running; values follow the public API.
@@ -233,10 +292,29 @@ type EditionProductSettings interface {
 	SaveActivation(ctx context.Context, actor auth.Principal, m *ActivationManifest, owned []string) error
 }
 
-func closeEditionResources(resources []io.Closer, log *slog.Logger) {
+func closeEditionResources(resources []io.Closer, leader store.LeaderElector, log *slog.Logger) error {
+	var resignErr error
+	// Promotion recovery can run on the elector's maintenance goroutine. Drain
+	// that producer before releasing state borrowed by recovery or module wiring.
+	if len(resources) != 0 && leader != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		resignErr = leader.Resign(ctx)
+		if resignErr != nil {
+			log.Error("edition resource shutdown: leader resignation failed", "err", resignErr)
+		}
+		cancel()
+	}
+	// Later bindings may lend additional state to recovery. Join it before
+	// closing any resource, including those constructed after the recovery owner.
+	for _, resource := range resources {
+		if recovery, ok := resource.(*ownedEditionRecovery); ok {
+			recovery.stop()
+		}
+	}
 	for i := len(resources) - 1; i >= 0; i-- {
 		if err := resources[i].Close(); err != nil {
 			log.Error("edition resource close failed", "err", err)
 		}
 	}
+	return resignErr
 }

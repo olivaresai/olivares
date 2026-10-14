@@ -262,7 +262,7 @@ function checkFeaturesWithoutI18n() {
     const namespaceDir = path.join(FEATURES, FEATURE_I18N_DIRECTORIES.get(d.name) ?? d.name)
     if (fs.existsSync(path.join(namespaceDir, 'i18n', `${CANON}.json`))) continue
     if (!hasTsx(dir)) continue
-    if (NO_I18N_ALLOWLIST.has(d.name)) continue
+    if (NO_I18N_ALLOWLIST.has(d.name) && !fs.existsSync(path.join(dir, 'i18n'))) continue
     problems.push(
       `[${d.name}] feature renders UI (.tsx) but has no ${rel(path.join(namespaceDir, 'i18n', `${CANON}.json`))} — ` +
         'every visible string must go through i18n (or allowlist the dir in ' +
@@ -270,6 +270,15 @@ function checkFeaturesWithoutI18n() {
     )
   }
   return problems
+}
+
+/** Additive bundles use the namespace registered alongside their English import. */
+function isRegisteredBundle(dir) {
+  const registration = path.join(dir, 'index.ts')
+  if (!fs.existsSync(registration)) return false
+  const source = fs.readFileSync(registration, 'utf8')
+  return /import\s+en\s+from\s+(['"])\.\/en\.json\1/.test(source) &&
+    /registerTranslations\(\s*(['"])[^'"]+\1\s*,\s*\{\s*en(?:\s*[,}])/.test(source)
 }
 
 /** All namespaces: {id, enPath, pathFor(lang)}. */
@@ -290,6 +299,21 @@ function discoverNamespaces() {
         pathFor: (l) => path.join(FEATURES, d, 'i18n', `${l}.json`),
       })
   }
+  function registeredBundles(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const child = path.join(dir, entry.name)
+      if (entry.name !== 'i18n' && isRegisteredBundle(child)) {
+        out.push({
+          id: path.relative(FEATURES, child),
+          enPath: path.join(child, `${CANON}.json`),
+          pathFor: (l) => path.join(child, `${l}.json`),
+        })
+      }
+      registeredBundles(child)
+    }
+  }
+  registeredBundles(FEATURES)
   return out
 }
 
@@ -302,7 +326,7 @@ if (SINGLE) {
   const abs = path.resolve(SINGLE)
   const dir = path.dirname(abs)
   let enPath, id, theLang
-  if (path.basename(dir) === 'i18n') {
+  if (path.basename(dir) === 'i18n' || isRegisteredBundle(dir)) {
     // feature: features/<feat>/i18n/<lang>.json
     theLang = path.basename(abs, '.json')
     id = path.basename(path.dirname(dir))

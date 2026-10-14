@@ -719,8 +719,42 @@ func TestEveryConsoleClientCallHitsARegisteredRoute(t *testing.T) {
 			"      an operator gets a 404 here. Mount it, or declare it in %s with a reason.", m, consoleSeamsPath)
 	}
 
+	// Las llamadas con `fetch` crudo, comprobadas AGNÓSTICAS DEL MÉTODO (ver consoleFetchRe).
+	rutasRegistradas := map[string]bool{}
+	for k := range routed {
+		if i := strings.Index(k, " "); i >= 0 {
+			rutasRegistradas[k[i+1:]] = true
+		}
+	}
+	declaradas := map[string][]string{}
+	for _, sm := range seams {
+		declaradas[sm.Path] = append(declaradas[sm.Path], sm.Method+" "+sm.Path)
+	}
+	var huerfanas []string
+	for _, f := range rawFetches {
+		if rutasRegistradas[f.path] {
+			continue
+		}
+		if keys := declaradas[f.path]; len(keys) > 0 {
+			// Raw transports are method-agnostic. Count their exact path before
+			// rejecting a seam as unused, just as the orphan check does.
+			for _, key := range keys {
+				used[key] = true
+			}
+			continue
+		}
+		huerfanas = append(huerfanas, f.path+"   llamada con fetch en "+f.file+":"+strconv.Itoa(f.line))
+	}
+	sort.Strings(huerfanas)
+	for _, h := range huerfanas {
+		t.Errorf("la consola llama con `fetch` a una ruta que el motor no registra: %s\n"+
+			"      el operador ve un 404. Móntala, o decláralaen %s con su motivo.", h, consoleSeamsPath)
+	}
+	t.Logf("%d llamada(s) con `fetch` crudo comprobadas (agnósticas del método)", len(rawFetches))
+
 	// A seam that is now MOUNTED must be removed from the register, or the register
-	// rots into a list of things that used to be broken.
+	// rots into a list of things that used to be broken. Both transports have now
+	// contributed their callers; a raw stream is not an imaginary seam.
 	for key, s := range declared {
 		if routed[key] {
 			t.Errorf("%s is declared as an unmounted seam in %s but IS registered now — "+
@@ -734,31 +768,6 @@ func TestEveryConsoleClientCallHitsARegisteredRoute(t *testing.T) {
 	}
 	t.Logf("%d client call(s) checked against %d registered route(s); %d declared seam(s)",
 		len(calls), len(routed), len(seams))
-
-	// Las llamadas con `fetch` crudo, comprobadas AGNÓSTICAS DEL MÉTODO (ver consoleFetchRe).
-	rutasRegistradas := map[string]bool{}
-	for k := range routed {
-		if i := strings.Index(k, " "); i >= 0 {
-			rutasRegistradas[k[i+1:]] = true
-		}
-	}
-	declaradas := map[string]bool{}
-	for _, sm := range seams {
-		declaradas[sm.Path] = true
-	}
-	var huerfanas []string
-	for _, f := range rawFetches {
-		if rutasRegistradas[f.path] || declaradas[f.path] {
-			continue
-		}
-		huerfanas = append(huerfanas, f.path+"   llamada con fetch en "+f.file+":"+strconv.Itoa(f.line))
-	}
-	sort.Strings(huerfanas)
-	for _, h := range huerfanas {
-		t.Errorf("la consola llama con `fetch` a una ruta que el motor no registra: %s\n"+
-			"      el operador ve un 404. Móntala, o decláralaen %s con su motivo.", h, consoleSeamsPath)
-	}
-	t.Logf("%d llamada(s) con `fetch` crudo comprobadas (agnósticas del método)", len(rawFetches))
 
 	logConsoleCoverageByNamespace(t, routed, calls)
 }
@@ -1694,6 +1703,7 @@ func loadConsoleSeams(t *testing.T) []consoleSeam {
 // gate que nadie puede satisfacer, y un gate que nadie puede satisfacer es un gate que alguien
 // apaga — que es como este repositorio perdió cobertura antes.
 func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
 	routed := walkEveryRoute(t)
 	// ⛔ `rawFetches` SE DESCARTABA CON UN `_`, y ese carácter escondía una clase entera: una
 	// llamada con `fetch` crudo NO entraba en `calls`, así que toda ruta que la consola sólo
@@ -1743,7 +1753,7 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 	}
 	deferredTouched := map[string]bool{}
 	isDeferredOperatorSurface := func(key string) (string, bool) {
-		reason, ok := consoleDeferredOperatorSurface[key]
+		reason, ok := deferredSurfaces[key]
 		if ok {
 			deferredTouched[key] = true
 		}
@@ -1805,7 +1815,7 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 				"podrida esconde huecos reales", pref)
 		}
 	}
-	for key := range consoleDeferredOperatorSurface {
+	for key := range deferredSurfaces {
 		if !deferredTouched[key] {
 			t.Errorf("deferred console operation %q is no longer registered: remove or correct the stale declaration", key)
 		}
@@ -1950,7 +1960,9 @@ const consoleUncoveredBudget = 37
 // gap to remain named when it is not delivered in the same lot. Every entry must still be a live
 // route and must have no resolved console caller. Adding a caller or retiring a route turns this
 // declaration red until the stale entry is removed.
-var consoleDeferredOperatorSurface = withCommunityOrchestrationSurfaces(map[string]string{
+// Edition-specific dispositions are added to a clone at test execution, after
+// thisEdition has been initialized; this shared inventory stays immutable.
+var consoleDeferredOperatorSurface = map[string]string{
 	// The first console increment of K3 (I1, web/src/features/communications) delivered the
 	// EIGHT callers of the journey channel → notice → inbox → delivery/message → Ack; the second
 	// (I2, an internal design note (not shipped)) delivered the SEVEN of
@@ -2003,44 +2015,141 @@ var consoleDeferredOperatorSurface = withCommunityOrchestrationSurfaces(map[stri
 	"DELETE /v1/auth/os-account-bindings/{}": "`olivares auth os-account revoke` confirms audited revocation " +
 		"while retaining the permanent account reservation; this increment has no console revocation control",
 
-	// Skills catalog imports, retirement, revision publishing, target-filtered assignment
-	// lists and binding edits remain CLI and REST/SDK surfaces. Remove each entry when its
-	// console flow gains a caller; the existing stale-declaration checks enforce it.
-	"POST /v1/m/skills/packs": "reviewed Git/folder/archive imports use `olivares skills install`; " +
-		"the console has no catalog source-selection or upload flow",
+	// Skills catalog retirement, revision publishing and revision-to-revision diffs remain
+	// CLI and REST/SDK surfaces. Remove each entry when its console flow gains a caller; the
+	// existing stale-declaration checks enforce it.
 	"DELETE /v1/m/skills/packs/{}": "unused pack retirement uses `olivares skills rm`; " +
 		"the console has no catalog retirement confirmation or pack-version state",
 	"POST /v1/m/skills/packs/{}/revisions": "publishing another immutable revision uses `olivares skills update`; " +
 		"the console has no catalog revision import or retry-key flow",
-	"GET /v1/m/skills/assignments": "target-filtered bindings use `olivares skills assignments`; " +
-		"the console has no workspace/template/session catalog-assignment panel",
-	"PUT /v1/m/skills/assignments/{}": "binding changes use `olivares skills assign --assignment --version`; " +
-		"the console has no catalog binding editor with expected-version state",
-	// ARCH.C3: the console and the CLI read every tool's readiness in one answer
-	// (GET provider-profiles/readiness: this preview's rule plus the verdict of the key it
-	// picks). The one-tool preview stays a published REST and SDK read.
-	"GET /v1/m/sessions/provider-profiles/resolve": "the one-tool preview is REST and SDK; the console " +
-		"renders GET provider-profiles/readiness, the same rule for every tool with the key's verdict",
+	"GET /v1/m/skills/packs/{}/diff": "the diff between two chosen revisions uses `olivares skills diff`; " +
+		"the console's update check shows the diff in the POST /packs/{}/update answer and has no revision picker",
 	//-executor.md ships saved Docker setup as REST APIs without console controls.
 	// The deployment console still reads structural readiness through GET /executor.
 	"GET /v1/m/deploy/executor/config": "saved executor setup is a documented administrator REST read; " +
 		"the deployment console reads GET /executor readiness and has no saved-setup form",
 	"PUT /v1/m/deploy/executor/config": "saved executor configuration is a documented administrator REST write; " +
 		"the deployment console has no socket and sealed-secret-reference setup form",
+	// The launch pickers read the profile catalog (GET /v1/m/sessions/provider-profiles/{ref}/models),
+	// which replaced this module's availability read as the list of models a session may pick.
+	// The availability route stays a documented REST/SDK read; no console screen calls it.
+	"GET /v1/m/models/availability": "the models module's availability read ships as REST and SDK; the " +
+		"launch pickers list models from the session profile's live catalog instead",
 	"POST /v1/m/deploy/executor/test": "the documented administrator REST probe tests saved Docker setup; " +
 		"the deployment console has no saved-setup connection-test control",
-	// Departments are Business (docs/editions.md, #966): the Community build answers 501
-	// departments_unavailable on these two, and their console control is a Business panel
-	// (PANEL_EXTENSIONS.scopesCards), not part of web/src.
-	"PUT /v1/workspaces/{}/parent": "Business department move: Community answers 501 " +
-		"departments_unavailable; the department tree is a Business console panel",
-	"PUT /v1/groups/{}/workspace": "Business group placement: Community answers 501 " +
-		"departments_unavailable; placing a group is a Business console panel",
-})
+	"GET /v1/m/orchestration/stream": "the orchestration SSE stream remains REST/SDK; " +
+		"the Business console reads graph, flows and schedules through typed queries",
+}
+
+// Department controls belong to the assembled Business console. Their shared
+// Community refusal must not leave a stale deferral beside those real callers.
+func TestDepartmentRoutesHaveEditionConsoleDisposition(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
+	routed := walkEveryRoute(t)
+	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	called := map[string]bool{}
+	for _, c := range calls {
+		called[c.method+" "+c.path] = true
+	}
+	for _, key := range []string{"PUT /v1/workspaces/{}/parent", "PUT /v1/groups/{}/workspace"} {
+		t.Run(key, func(t *testing.T) {
+			if !routed[key] {
+				t.Fatal("the published department operation must remain registered")
+			}
+			deferred := strings.TrimSpace(deferredSurfaces[key]) != ""
+			if thisEdition.departmentService == nil {
+				if !deferred || called[key] {
+					t.Fatal("the Community refusal must retain its reason and have no console control")
+				}
+			} else if !called[key] || deferred {
+				t.Fatal("the Business department control must have a caller and no stale Community deferral")
+			}
+		})
+	}
+}
+
+// Assembly includes the Business console even when Identity & Scale is not linked.
+// Its callers must not inherit the Community deferrals from the CLI reader seam.
+func TestOrchestrationRoutesHaveEditionConsoleDisposition(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
+	routed := walkEveryRoute(t)
+	calls, _, rawFetches := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	called := map[string]bool{}
+	for _, c := range calls {
+		called[c.method+" "+c.path] = true
+	}
+	for _, c := range rawFetches {
+		if c.path == "/v1/m/orchestration/stream" {
+			called["GET "+c.path] = true
+		}
+	}
+	for _, operation := range []string{
+		"GET graph", "GET graph/neighbors", "GET flows", "GET timeline", "GET stream",
+		"GET schedules", "POST schedules", "GET schedules/{}", "PATCH schedules/{}",
+		"POST schedules/{}/fire", "GET schedules/{}/decisions", "GET schedules/{}/revisions",
+		"POST schedules/{}/restore", "GET decisions", "GET workflows", "POST workflows",
+		"GET workflows/{}", "PATCH workflows/{}", "PUT workflows/{}/steps",
+		"GET workflows/{}/revisions", "POST workflows/{}/restore", "POST workflows/{}/dry-run",
+		"POST workflows/{}/run", "GET workflows/{}/runs", "GET workflows/{}/runs/{}",
+		"POST workflows/{}/runs/{}/reauthorize",
+	} {
+		method, suffix, _ := strings.Cut(operation, " ")
+		path := "/v1/m/orchestration/" + suffix
+		key := method + " " + path
+		t.Run(operation, func(t *testing.T) {
+			if !routed[key] {
+				t.Fatal("the published orchestration operation must remain registered")
+			}
+			deferred := strings.TrimSpace(deferredSurfaces[key]) != ""
+			if thisEdition.name == "community" || suffix == "stream" {
+				if !deferred || called[key] {
+					t.Fatal("the Community refusal or REST stream must retain its reason and have no console control")
+				}
+			} else if !called[key] || deferred {
+				t.Fatal("the assembled Business console must have a caller and no stale Community deferral")
+			}
+		})
+	}
+}
+
+// A private client factory currently hides these calls from the file-local parser.
+// Each operation needs its own disposition even when the aggregate budget has room.
+func TestCockpitRoutesHaveConsoleDisposition(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
+	routed := walkEveryRoute(t)
+	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	called := map[string]bool{}
+	for _, c := range calls {
+		called[c.method+" "+c.path] = true
+	}
+	var keys []string
+	for _, collection := range []string{"terminals", "admin-shells"} {
+		for _, operation := range []struct{ method, suffix string }{
+			{"GET", ""}, {"POST", ""}, {"DELETE", "/{}"},
+			{"POST", "/{}/input"}, {"POST", "/{}/resize"}, {"GET", "/{}/stream"},
+		} {
+			keys = append(keys, operation.method+" /v1/m/session-cockpit/"+collection+operation.suffix)
+		}
+	}
+	keys = append(keys, "POST /v1/m/session-cockpit/previews")
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			deferred := strings.TrimSpace(deferredSurfaces[key]) != ""
+			if !orchestrationReadersLinked() {
+				if routed[key] || deferred {
+					t.Fatal("a build without Identity & Scale must not inherit a private cockpit disposition")
+				}
+			} else if !routed[key] || (!called[key] && !deferred) {
+				t.Fatal("the Business operation must remain registered with a console caller or its exact deferral")
+			}
+		})
+	}
+}
 
 // These detail reads must remain accounted for even when unrelated coverage
 // improvements leave room under the aggregate ratchet.
 func TestRBACDetailRoutesHaveConsoleDisposition(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
 	routed := walkEveryRoute(t)
 	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
 	called := map[string]bool{}
@@ -2057,7 +2166,7 @@ func TestRBACDetailRoutesHaveConsoleDisposition(t *testing.T) {
 			if !called[list] {
 				t.Fatal("the Roles tab must retain its collection read")
 			}
-			if !called[detail] && strings.TrimSpace(consoleDeferredOperatorSurface[detail]) == "" {
+			if !called[detail] && strings.TrimSpace(deferredSurfaces[detail]) == "" {
 				t.Errorf("%s has neither a console caller nor a declared deferral reason", detail)
 			}
 		})
@@ -2065,6 +2174,7 @@ func TestRBACDetailRoutesHaveConsoleDisposition(t *testing.T) {
 }
 
 func TestPreviewAndExecutorRoutesHaveConsoleDisposition(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
 	routed := walkEveryRoute(t)
 	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
 	called := map[string]bool{}
@@ -2097,7 +2207,7 @@ func TestPreviewAndExecutorRoutesHaveConsoleDisposition(t *testing.T) {
 			if !routed[key] {
 				t.Errorf("executor setup must remain registered: %s", key)
 			}
-			if !called[key] && strings.TrimSpace(consoleDeferredOperatorSurface[key]) == "" {
+			if !called[key] && strings.TrimSpace(deferredSurfaces[key]) == "" {
 				t.Errorf("%s has neither a console caller nor a declared deferral reason", key)
 			}
 		}
@@ -2430,8 +2540,69 @@ func TestNullishCoalescingIsNotATernary(t *testing.T) {
 	}
 }
 
-func withCommunityOrchestrationSurfaces(surfaces map[string]string) map[string]string {
-	if !orchestrationReadersLinked() {
+func withEditionConsoleSurfaces(surfaces map[string]string) map[string]string {
+	if !newTenantsCmd().HasSubCommands() {
+		maps.Copy(surfaces, map[string]string{
+			// The collection transports remain in the shared typed client. These
+			// exact operations have no Community console caller; stale registration
+			// or a returned caller still fails the census above.
+			"DELETE /v1/system/orgs/{}":     "Enterprise organization deletion: Community answers 501 organizations_unavailable; its console control is private",
+			"PUT /v1/system/orgs/{}/region": "Enterprise organization residency: Community answers 501 organizations_unavailable; its console control is private",
+			"PUT /v1/system/orgs/{}/status": "Enterprise organization status: Community answers 501 organizations_unavailable; its console control is private",
+			"GET /v1/system/residency":      "the configured-registry read remains an authenticated shared REST/SDK surface; its console selector is private",
+		})
+	}
+	if thisEdition.departmentService == nil {
+		maps.Copy(surfaces, map[string]string{
+			// Departments are Business (docs/editions.md, #966): the Community build answers 501
+			// departments_unavailable on these two, and their console control is a Business panel
+			// (PANEL_EXTENSIONS.scopesCards), not part of web/src.
+			"PUT /v1/workspaces/{}/parent": "Business department move: Community answers 501 " +
+				"departments_unavailable; the department tree is a Business console panel",
+			"PUT /v1/groups/{}/workspace": "Business group placement: Community answers 501 " +
+				"departments_unavailable; placing a group is a Business console panel",
+		})
+	}
+	// The cockpit shares the Identity & Scale cut with these command readers.
+	// The base Business artifact has no cockpit routes even though its name is enterprise.
+	if orchestrationReadersLinked() {
+		maps.Copy(surfaces, map[string]string{
+			// These controls exist: terminalApiAt in session-cockpit/terminal.ts
+			// instantiates the terminals and admin-shells clients, imported by the
+			// terminal panel/pane and admin-shell view. The file-local parser cannot
+			// resolve the imported scoped transport plus the factory's base parameter.
+			// Defer automatic attribution, not the operator's controls. Each exact
+			// declaration turns red when a route retires or the parser resolves it.
+			"GET /v1/m/session-cockpit/terminals": "terminal panel/pane list through terminalApiAt.list " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"POST /v1/m/session-cockpit/terminals": "terminal panel opens through terminalApiAt.open " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"DELETE /v1/m/session-cockpit/terminals/{}": "terminal panel closes through terminalApiAt.close " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"POST /v1/m/session-cockpit/terminals/{}/input": "terminal pane sends bytes through terminalApiAt.input " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"POST /v1/m/session-cockpit/terminals/{}/resize": "terminal pane resizes through terminalApiAt.resize " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"GET /v1/m/session-cockpit/terminals/{}/stream": "terminal pane reads streamTerminal " +
+				"(terminal.ts); raw fetch derives its path from the factory's base option",
+			"GET /v1/m/session-cockpit/admin-shells": "admin-shell view lists through terminalApiAt.list " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"POST /v1/m/session-cockpit/admin-shells": "admin-shell view opens through terminalApiAt.open " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"DELETE /v1/m/session-cockpit/admin-shells/{}": "admin-shell view closes through terminalApiAt.close " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"POST /v1/m/session-cockpit/admin-shells/{}/input": "admin-shell terminal pane sends bytes through terminalApiAt.input " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"POST /v1/m/session-cockpit/admin-shells/{}/resize": "admin-shell terminal pane resizes through terminalApiAt.resize " +
+				"(terminal.ts); imported scoped transport and factory base are not resolved by the census",
+			"GET /v1/m/session-cockpit/admin-shells/{}/stream": "admin-shell terminal pane reads streamTerminal " +
+				"(terminal.ts); raw fetch derives its path from the factory's base option",
+			"POST /v1/m/session-cockpit/previews": "deprecated host-port lease remains REST/SDK; " +
+				"the Preview tab uses the session-bound POST /v1/m/sessions/runs/{}/preview instead",
+		})
+	}
+
+	if thisEdition.name == "community" {
 		maps.Copy(surfaces, map[string]string{
 			// Business orchestration retains these authenticated 501 contracts in Community.
 			// The private console owns their controls; each exact entry is still checked
@@ -2440,7 +2611,6 @@ func withCommunityOrchestrationSurfaces(surfaces map[string]string) map[string]s
 			"GET /v1/m/orchestration/graph/neighbors":                   "Business orchestration: Community answers 501; its console control is private",
 			"GET /v1/m/orchestration/flows":                             "Business orchestration: Community answers 501; its console control is private",
 			"GET /v1/m/orchestration/timeline":                          "Business orchestration: Community answers 501; its console control is private",
-			"GET /v1/m/orchestration/stream":                            "Business orchestration: Community answers 501; its console control is private",
 			"GET /v1/m/orchestration/schedules":                         "Business orchestration: Community answers 501; its console control is private",
 			"POST /v1/m/orchestration/schedules":                        "Business orchestration: Community answers 501; its console control is private",
 			"GET /v1/m/orchestration/schedules/{}":                      "Business orchestration: Community answers 501; its console control is private",

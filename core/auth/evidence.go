@@ -539,7 +539,7 @@ func principalAuthorizationEvidence(
 	tenant model.TenantID,
 ) (store.AuthorizationFactRef, evidenceWindow, bool) {
 	evidence := principal.evidence
-	ref, ok := principal.Ref()
+	ref, ok := principal.evidenceCredential()
 	if !ok || evidence.tenant != tenant || evidence.ref != ref ||
 		!validPrincipalDirectoryEpochFact(tenant, evidence.directoryEpoch) ||
 		evidence.directoryEpoch != (store.AuthorizationFactRef{

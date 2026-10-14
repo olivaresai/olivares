@@ -58,6 +58,31 @@ keep working. A CMEK install needs the Business build to start; with no license 
 build still opens the key and configuration envelopes for `olivares dr backup`, and `olivares keys unseal`
 still prints a sealed configuration file.
 
+## Release cadence
+
+Business and Community share one release numbering (`MAJOR.MINOR`, see
+[versioning](../INSTALL.md#versioning)). A number that exists in both editions is built from one core source
+commit, so a fix in Community's core is in the Business release of the same number.
+
+From the release after 0.1<!-- release-fixed -->:
+
+- Business X.Y is published within 24 hours of Community X.Y, and Community X.Y is not tagged until the Business
+  build of the same core commit is ready to be tagged.
+- Business-only features keep their own pace. They never hold a core fix back, and no Community release waits
+  for them.
+- A hotfix is the next release number, built from the newest release's core and the fix alone. It carries no
+  schema migration, so returning to the release before it needs no data step. It is signed like every release and
+  delivered on the same licensed channel: `stable`, and `security` when it declares an advisory. A core fix ships
+  in both editions under that number; a number that only Business has is a Business hotfix. Every licensee of a
+  set receives it: there is no per-customer build.
+- Business data stays intact across editions: a Community build exports it offline (`olivares dr backup`,
+  `olivares dr verify`) without changing it, unless a protection listed above needs the Business build, and the
+  Business build of a later number reads it again with its stored evidence unchanged. How a Community server
+  behaves on that directory is the last item under "Where the product differs from this page today".
+
+How a hotfix is delivered and rolled back is in
+[Upgrading, rolling back, and reconfiguring](UPGRADE-AND-ROLLBACK.md#hotfix-releases).
+
 ## Placement
 
 | Area | Capability | Edition | Why |
@@ -72,16 +97,17 @@ still prints a sealed configuration file.
 | Sessions | Preview in the session console the app a session serves on a local port: the engine proxies it under a short-lived link, sandboxed away from the console, with reload and open in a new tab | Community | Seeing what one's own session builds is part of running the tools. |
 | Sessions | Session cockpit: the workspace sidebar, live terminals in the console (attach, send input, interrupt, resume), several panes at once, the agent dashboard, the agent listener over mutual TLS, and steering from the CLI (`olivares session send`, `resume`, `peers`; `olivares agent session attach`, `input`, `resume`) | Business: Identity & Scale | The cockpit is a working environment for steering live sessions; launching, watching and stopping them, and interrupting them from the CLI, stay in Community. |
 | Visibility | Inventory of agents, sessions, models, MCP servers and tools; live timelines; health | Community | Governance starts with seeing what runs. |
-| Visibility | Access map, identity inventory | Business: Identity & Scale | Analysis of who reaches what across an organization. |
+| Visibility | Access map (graph, neighbors, permitted-versus-observed drift and attack paths) and identity inventory (identities, the groups mirrored with them, and the agent-to-identity bindings) | Community | Seeing who reaches what is the first job of governance. Filling the inventory from a directory is Business (see Identity sources). |
 | Work | Work items | Community | Part of running AI at any size. |
 | Work | Orchestration, A2A delegation to authorized peers | Business: Identity & Scale | Coordinating agents across systems. |
 | Knowledge | Content sources, governed retrieval, model catalog, inference proxy | Community | Connecting your own data is the core job. |
+| Knowledge | Workspace wiki: built-in olivares-wiki skill, folder initialization, ingest, cited query, and lint through tool sessions | Community | A person or team needs to maintain its own sources and linked pages. |
 | Authorization | Built-in roles, native deny overlay, kill switch | Community | Who reaches what is the safety boundary, and it is never paid. Stored custom permits, forbids, roles and scoped grants keep their existing effect. Read and revoke stay available; create/update returns 501. |
 | Authorization | Custom Cedar policies (permits and forbids), custom roles, permission groups and scoped grants | Business: base line | Policy as code for organizations with their own rules. |
-| Authorization | Approval engine with its fixed floors (re-enabling the kill switch and every critical action need two distinct people) | Community | The floors are fixed in code and guard Community's own safety boundary. |
+| Authorization | Approval engine with its fixed floors (re-enabling the kill switch and every critical action need two distinct people), and any number of approval policies that require review or raise the approval count or the risk tier | Community | The floors are fixed in code and guard Community's own safety boundary. A tenant keeps as many such policies as it needs. When several enabled policies match an action, the earliest created one applies. Only a policy that lowers a tier below the action's default is Business (next row). |
 | Authorization | Tier-lowering approval policies and break-glass | Business: base line | Community keeps the approval engine, the two-human CRITICAL floor, kill-switch dual control, and authoring/enforcement of review, tier-raising and quorum-raising policies. Stored lowering policies remain readable/exportable but cannot lower Community defaults or floors; stored emergency grants are inert there. Business retains lowering and the audited, recorded emergency lifecycle. |
 | Enforcement | Four deny-closed enforcement points: Claude Code hook, inline inference proxy, MCP `tools/call` gate, A2A delegation gate | Community | The deny-closed checks are part of the safety boundary. Without the Business A2A delegation, its gate refuses every delegation. |
-| Data protection | Inline guardrails (PII, prompt injection, jailbreak), DLP on egress, hybrid post-quantum TLS (the Go default key exchange on the product's TLS listeners) | Community | Data that reaches a provider is part of the safety boundary. |
+| Data protection | Inline guardrails (PII, prompt injection, jailbreak), DLP on egress, hybrid post-quantum TLS (the Go default key exchange on the product's TLS listeners) | Community | Data that reaches a provider is part of the safety boundary. The inference proxy is a Community module that a new install leaves off until an administrator turns it on (`olivares modules on inferenceproxy`). Once it is on, and while its request DLP gate is on (the default), it denies a prompt in which its classifier finds a secret (the `secret.credential` class). An administrator edits the DLP rules in the console under Inference proxy, in every edition. |
 | Data protection | Signing keys you provide (`OLIVARES_AUDIT_SIGNING_KEY[_FILE]`, and the catalog and policy keys), the off-box checkpoint signer (`OLIVARES_LEDGER_SIGNER`), the custody assertions `OLIVARES_KEY_CUSTODY=byok` (the audit key must be one you provide, never a minted one) and `OLIVARES_LEDGER_CUSTODY=hyok` (checkpoints must be signed off-box), `olivares keys status` | Community | An HA pair needs one shared ledger key, or the ledger forks at failover; `olivares audit key-transition` needs the off-box signer. |
 | Data protection | CMEK: signing keys and operator configuration files sealed in envelopes that only your key management service opens (`OLIVARES_KEY_WRAP`; `olivares keys wrap`, `rotate`, `rewrap`, `seal`, `unseal`) | Business: base line | Key management for organizations that hold their keys in a key service. A CMEK source is any of `OLIVARES_AUDIT_SIGNING_KEY_WRAPPED_FILE`, `OLIVARES_CATALOG_SIGNING_KEY_WRAPPED_FILE`, `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE`, `OLIVARES_KEY_CUSTODY=cmek`, or a sealed configuration file. From 0.1, a Community binary that finds one refuses to start the server and every command that opens the store (`olivares dr backup` and `olivares audit verify` among them), and never mints a replacement key. The data is kept: a Business build opens the envelopes and backs it up, with no license or an expired one. |
 | Testing and spend | Evals, sandboxes, spend shown per session | Community | Every user tests AI and sees what it costs. |
@@ -108,17 +134,33 @@ still prints a sealed configuration file.
 | Compliance | Scheduled reports, report branding and templates, posture and risk summaries, posture export, evidence bundles (signed once you configure a signing key), NIS 2 incident classification, post-quantum posture check, deployment readiness | Business: base line | Reporting for organizations that answer to auditors and boards. Schedule choices and bundle-signing readiness remain available with base Business, even when Compliance Packs is disabled; generating an on-demand report still requires Compliance Packs. |
 | Platform | One organization with tenant isolation in the store (row-level security on PostgreSQL), API, client SDKs, the open connectors, in-process event bus | Community | Olivares composes with what you already run. |
 | Platform | Core NATS bridge; at-least-once delivery of enforcement events, with deduplication, over your NATS JetStream | Business: Identity & Scale | Event delivery across systems and nodes. |
-| Platform | Several organizations served from one deployment | Enterprise | Hosting several organizations is agreed per contract. |
+| Platform | Several organizations served from one deployment | Enterprise | Organization management uses the private Enterprise implementation. In Community, `/v1/system/orgs` routes answer 501 and `olivares tenants` is hidden from help and exits 9 when invoked. Stored organizations and tenant isolation are retained; Community still exports their data. Hosting several organizations is agreed per contract. |
 | License and support | AGPL-3.0, signed public releases with SBOM and provenance, public security fixes, community support in the public repository | Community | Anyone can read, build and verify it. |
 | License and support | Commercial license (an AGPL exception), signed release channel where you approve every upgrade, business-hours email support (best effort, no response target; details in [SUPPORT.md](../SUPPORT.md)) | Business: base line | For organizations whose policy rules out AGPL, or that need someone to write to. |
 | License and support | More legal entities, deployments and identity providers; LTS; OTA update mirrors; OEM, MSP and redistribution rights; support terms agreed in the contract, with non-binding first-response targets unless the contract says otherwise | Enterprise | Negotiated for each organization. |
+
+## Identity & Scale extraction
+
+Directory snapshot/reconciliation, agent registration and managed lifecycle,
+agent identity federation and the CAEP receiver are private Business source. Community keeps
+their authenticated route contracts with explicit 501 refusal and hides their CLI commands
+and console views. The access map and the identity inventory (identities, mirrored groups, agent bindings)
+stay in Community with the routes, fields and status codes of 0.1. Local login, passkeys, TOTP, one OIDC/SAML
+provider, inbound SCIM and their account standing protections remain in Community.
+
+The shared schema and backup preserve existing identities, bindings, access edges and lifecycle
+records. Business reads those records without a migration. Community continues enforcing stored
+NHI revocation, sponsorship and offboarding decisions. An enabled stored CAEP receiver, a known NHI rotation timestamp,
+a configured rotation window or a pending escalation deadline prevents Community server startup;
+offline backup can still open and export the estate with its existing directory configuration.
+Active directory ingestion, managed lifecycle configuration and WIF opt-in refuse explicitly.
 
 ## Where the product differs from this page today
 
 - Red-team targets, runs and scoring, FinOps budget authoring, and team and project spend analysis are Business base capabilities. Community keeps their published routes with edition refusals, retains their stored data for backup, and keeps enforcing existing budgets while FinOps is on. It can read and remove those budgets. Evals, sandbox execution, and spend shown per session remain Community capabilities.
 
 - Releases before 1.0 shipped some capabilities that this page places in Business or Enterprise in the public
-  build: live terminals in the console, the access map, directory rosters, departments and nested groups, the
+  build: live terminals in the console, directory rosters, departments and nested groups, the
   group list and group-to-role mapping, agent groups, compliance views and reports, the CAEP
   receiver, privileged-action recording, and several organizations, among others. 0.1<!-- release-fixed --> moves them to the
   Business build.
@@ -141,7 +183,13 @@ still prints a sealed configuration file.
   close-loop, regulatory retention floors, legal-hold reconciliation on archives, erasure depth, the computer-use
   gate, MCP tool-definition pinning, the render inspector, the elicitation mediator, the CAEP transmitter and the
   circuit breaker. NIS 2 incident classification and the posture, risk and evidence-bundle reports ignore theirs
-  too, and their routes answer 501. A configured CAEP receiver still runs in the Community binary.
+  too, and their routes answer 501. The CAEP receiver is private Business source. Community refuses its HTTP/configuration operations and refuses server startup while an enabled receiver remains stored; offline backup stays available.
+
+- A Community server may stop at boot on a data directory that a Business build has initialized: its store
+  admission compares the stored guard history with the one it was built with and refuses before login, naming the
+  mismatch. The directory is not changed; `olivares dr backup` and `olivares dr verify` open and export it, and a
+  Business build opens it. The cross-edition check distinguishes safe refusal from a successful operational crossing:
+  a refused startup preserves data but does not qualify Community operation on that directory.
 
 Placement is not maturity. [Honesty and limits](../docs-site/src/content/docs/start/honesty-and-limits.md)
 states what each capability does today. The licenses by directory are in [LICENSING.md](../LICENSING.md).

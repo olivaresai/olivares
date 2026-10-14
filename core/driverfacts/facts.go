@@ -81,9 +81,12 @@ type Facts struct {
 	// `gemini-b`). Empty means the Key, as for every tool whose key is its name.
 	Alias                                   string
 	ConfigDir, ConfigHomeEnv, RuntimeBinEnv string
-	Installer, SignIn                       string
-	Session                                 bool
-	LoginArgs, StatusArgs, AuthFailures     []string
+	// SkillsDir is the documented native discovery folder relative to HOME.
+	// Empty means no documented folder; configuration homes remain separate.
+	SkillsDir                           string
+	Installer, SignIn                   string
+	Session                             bool
+	LoginArgs, StatusArgs, AuthFailures []string
 	// LoginMethods are the official login methods the engine can relay, when a tool
 	// offers more than one. LoginArgs stays the default: a start without a method id
 	// runs it, so a tool that lists none is signed in exactly as before.
@@ -107,6 +110,7 @@ var openCodeHeadlessLogin = []string{"auth", "login", "--provider", "openai", "-
 var rows = []Facts{
 	{
 		Key: "claude", Name: "Claude Code", Program: "claude", Session: true,
+		SkillsDir:   ".claude/skills",
 		EnvPrefixes: []string{"ANTHROPIC_", "CLAUDE_CODE_"},
 		ConfigDir:   ".claude", ConfigHomeEnv: ClaudeConfigHomeEnv, RuntimeBinEnv: ClaudeRuntimeBinEnv,
 		Installer: InstallManifest, SignIn: SignInPaste,
@@ -119,6 +123,7 @@ var rows = []Facts{
 	},
 	{
 		Key: "codex", Name: "Codex", Program: "codex", Session: true,
+		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"CODEX_", "OPENAI_"},
 		ConfigDir:   ".codex", ConfigHomeEnv: CodexConfigHomeEnv, RuntimeBinEnv: CodexRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInDevice,
@@ -131,6 +136,7 @@ var rows = []Facts{
 	},
 	{
 		Key: "grok", Name: "Grok Build", Program: "grok", Session: true,
+		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"GROK_", "XAI_"},
 		ConfigDir:   ".grok", ConfigHomeEnv: GrokConfigHomeEnv, RuntimeBinEnv: GrokRuntimeBinEnv,
 		Installer: InstallPackage, SignIn: SignInDevice,
@@ -142,6 +148,7 @@ var rows = []Facts{
 	},
 	{
 		Key: "opencode", Name: "OpenCode", Program: "opencode", Session: true,
+		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"OPENCODE_"},
 		ConfigDir:   ".config/opencode", ConfigHomeEnv: OpenCodeConfigHomeEnv, RuntimeBinEnv: OpenCodeRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInDevice,
@@ -161,6 +168,7 @@ var rows = []Facts{
 	// GEMINI_CLI_HOME names the home that holds .gemini, not .gemini itself.
 	{
 		Key: "gemini-cli", Alias: "gemini", Name: "Gemini CLI", Program: "gemini", Session: true,
+		SkillsDir:   ".agents/skills",
 		EnvPrefixes: []string{"GEMINI_CLI_"},
 		ConfigDir:   ".gemini", ConfigHomeEnv: GeminiConfigHomeEnv, RuntimeBinEnv: GeminiRuntimeBinEnv,
 		Installer: InstallRelease, SignIn: SignInPaste, LoginArgs: []string{"--acp"},

@@ -864,3 +864,172 @@ describe('a result the tool marked as an error (F1C)', () => {
     expect(item.resultFailed).toBeUndefined()
   })
 })
+
+// #1784 (real use of the released 0.1, Claude Code 2.1.296): the conversation showed two
+// "thinking tokens" rows before the answer and an "allowed · five hour" line after it. Both
+// are the tool's own bookkeeping: a progress counter while the model thinks, and a rate
+// limit report whose status is plain `allowed`. The shapes are the ones that binary's
+// stream-json schema declares. Neither is a turn, so neither is a row; the inspector keeps
+// every raw line.
+const THINKING_TOKENS = (estimated: number) =>
+  JSON.stringify({
+    type: 'system',
+    subtype: 'thinking_tokens',
+    estimated_tokens: estimated,
+    estimated_tokens_delta: estimated,
+    user_message_uuid: '3b3cbd79-7c2a-47f5-8d52-7e7d0a1b5c11',
+    uuid: `u-think-${estimated}`,
+    session_id: '73e15f11-74bc-4174-8593-0193c9d1ad87',
+  })
+const RATE_LIMIT_ALLOWED = JSON.stringify({
+  type: 'rate_limit_event',
+  rate_limit_info: {
+    status: 'allowed',
+    resetsAt: 1760270400,
+    rateLimitType: 'five_hour',
+  },
+  uuid: 'c2f0b6a4-5a8e-4e3c-9d07-2f0b3e3b1c44',
+  session_id: '73e15f11-74bc-4174-8593-0193c9d1ad87',
+})
+const RATE_LIMIT_REJECTED = JSON.stringify({
+  type: 'rate_limit_event',
+  rate_limit_info: {
+    status: 'rejected',
+    resetsAt: 1760270400,
+    rateLimitType: 'five_hour',
+  },
+  uuid: 'a7d1e0f2-0b0c-4b0e-8f55-6a6d6a7a2b10',
+  session_id: '73e15f11-74bc-4174-8593-0193c9d1ad87',
+})
+
+describe('mapConversationFrames — the tool’s own bookkeeping is no row (#1784)', () => {
+  it('shows no row for thinking-token counters or an allowed rate limit', () => {
+    const lines = [
+      INIT,
+      USER,
+      THINKING_TOKENS(120),
+      THINKING_TOKENS(412),
+      ASSISTANT,
+      RATE_LIMIT_ALLOWED,
+      RESULT,
+    ]
+    const items = mapConversationFrames(lines)
+    expect(items.map((i) => i.kind)).toEqual([
+      'system',
+      'operator',
+      'assistant',
+      'result',
+    ])
+    expect(items.map((i) => i.systemKind)).toEqual([
+      'init',
+      undefined,
+      undefined,
+      undefined,
+    ])
+    expect(items.some((i) => /thinking tokens|allowed/i.test(i.summary))).toBe(
+      false,
+    )
+  })
+
+  it('keeps every raw line reachable from some item', () => {
+    const lines = [
+      THINKING_TOKENS(120),
+      INIT,
+      USER,
+      THINKING_TOKENS(412),
+      ASSISTANT,
+      RATE_LIMIT_ALLOWED,
+      RESULT,
+    ]
+    const raws = mapConversationFrames(lines).flatMap((i) => i.raw)
+    expect([...raws].sort()).toEqual([...lines].sort())
+  })
+
+  it('does not split a streamed answer when a counter arrives inside it', () => {
+    const delta = (text: string) =>
+      JSON.stringify({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'text_delta', text },
+        },
+      })
+    const items = mapConversationFrames([
+      delta('Hel'),
+      THINKING_TOKENS(40),
+      delta('lo'),
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0]?.kind).toBe('assistant')
+    expect(items[0]?.text).toBe('Hello')
+  })
+
+  it('keeps a rate limit the person has to act on as a row', () => {
+    const items = mapConversationFrames([RATE_LIMIT, RATE_LIMIT_REJECTED])
+    expect(items.map((i) => i.systemKind)).toEqual(['rate_limit', 'rate_limit'])
+    expect(items[0]?.summary).toMatch(/84%/)
+    expect(items[1]?.summary).toMatch(/rejected/)
+  })
+
+  it('keeps an allowed rate limit that is near its window or on overage as a row', () => {
+    const allowed = (info: Record<string, unknown>) =>
+      JSON.stringify({
+        type: 'rate_limit_event',
+        rate_limit_info: {
+          status: 'allowed',
+          rateLimitType: 'five_hour',
+          ...info,
+        },
+      })
+    for (const info of [
+      { utilization: 0.95 },
+      { isUsingOverage: true },
+      { overageStatus: 'allowed_warning' },
+      { rateLimitType: 'overage' },
+      // the top-level figure is the limiting window; another window may be the news
+      { unifiedWindows: { seven_day: { utilization: 0.97, resetsAt: 1 } } },
+    ])
+      expect(kindsOf([USER, allowed(info)])).toEqual(['operator', 'system'])
+    // a weekly bucket named "overage_included" is not overage, and far from its limit
+    expect(
+      kindsOf([
+        USER,
+        allowed({
+          rateLimitType: 'seven_day_overage_included',
+          utilization: 0.2,
+          unifiedWindows: { five_hour: { utilization: 0.1, resetsAt: 1 } },
+        }),
+      ]),
+    ).toEqual(['operator'])
+  })
+
+  it('starts its own quiet item rather than writing into the tool’s printed output', () => {
+    const items = mapConversationFrames([
+      'error: first',
+      THINKING_TOKENS(40),
+      'error: second',
+    ])
+    expect(items.map((i) => i.systemKind)).toEqual([
+      'output',
+      'quiet',
+      'output',
+    ])
+    expect(items[0]?.raw).toEqual(['error: first'])
+    expect(items[1]?.raw).toEqual([THINKING_TOKENS(40)])
+    expect(items[2]?.raw).toEqual(['error: second'])
+  })
+
+  it('holds a leading counter in a quiet item that the next frame does not join', () => {
+    const items = mapConversationFrames([
+      THINKING_TOKENS(1),
+      THINKING_TOKENS(2),
+      USER,
+    ])
+    expect(items.map((i) => i.systemKind ?? i.kind)).toEqual([
+      'quiet',
+      'operator',
+    ])
+    expect(items[0]?.raw).toEqual([THINKING_TOKENS(1), THINKING_TOKENS(2)])
+  })
+})

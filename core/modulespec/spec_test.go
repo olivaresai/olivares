@@ -9,6 +9,18 @@ import (
 	"testing"
 )
 
+func TestSkillsDefaultIsOptionalAndDoesNotChangePublishedProfile(t *testing.T) {
+	for _, spec := range All() {
+		if spec.Namespace == "skills" {
+			if !spec.Standard || !spec.Selectable || spec.Kind == "kernel" || spec.Published26100 || len(spec.Requires) != 0 {
+				t.Fatalf("skills must be a fresh-install default, independently optional, and absent from the old published profile: %+v", spec)
+			}
+			return
+		}
+	}
+	t.Fatal("skills absent from module catalog")
+}
+
 func TestModuleSpecIsUnambiguous(t *testing.T) {
 	specs := All()
 	if len(specs) == 0 {

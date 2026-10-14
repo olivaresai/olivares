@@ -3,6 +3,10 @@ title: "Connect a source"
 description: "Wire a real observation source into the control plane, understand the connector model, and choose the right signal per system."
 ---
 
+:::note[Edition]
+Directory roster sources (LDAP, Okta/Entra and agent/workload IdPs) and managed identity lifecycle require the Business/Enterprise add-ons. Community keeps generic source ingestion, the resource catalog, security findings, the access map, the identity inventory, single-IdP SSO, inbound SCIM users/groups, local roles and bindings, policies and approvals. Community hides the paid console panels and CLI commands; their published API routes return HTTP `501`. Selecting a module does not add its Business implementation.
+:::
+
 This page explains the general connector model and how to wire a real source into the engine. If you only want to connect a coding agent, start with [Connect Claude Code](/how-to/connect-claude-code/) — that is one specific source on the cooperative path, and this page is the model underneath it.
 
 ## The connector model

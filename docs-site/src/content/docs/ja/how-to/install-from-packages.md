@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-次のリリースは <!-- release -->`0.1`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release --> に記録されています。
+次のリリースは <!-- release -->`0.2`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release --> に記録されています。
 
 :::note[公開されているパッケージ名]
-GitHub の Olivares <!-- release -->0.1<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
+GitHub の Olivares <!-- release -->0.2<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
 あわせて `checksums.txt`、`checksums.txt.sig`、`checksums.txt.pem` を置く。以下のコマンドは
 そのリリースのリテラルな `amd64` 名を使う。64 ビット ARM ホストでは `amd64` を `arm64` に
 置き換える。このガイドでは、それらの検証済みリリース成果物からインストールする。ソースツリー
@@ -76,13 +76,13 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.1_linux_amd64.deb
+sudo dpkg -i olivares_0.2_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.1_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
 ```
 <!-- /release -->
 
