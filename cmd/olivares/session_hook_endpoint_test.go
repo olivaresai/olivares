@@ -115,7 +115,10 @@ func endpointSessionHook(t *testing.T, eng *engine, run string) (string, string,
 	if err != nil {
 		t.Fatal(err)
 	}
-	lease, err := eng.sessionsMod.Claim(ctx, tenant, sid, principal.Actor(), time.Minute)
+	// No process heartbeats this fixture's claim, so its lease must outlive the test: the
+	// first session is checked again after a second engine boots in its own process,
+	// which takes more than a minute under the race detector.
+	lease, err := eng.sessionsMod.Claim(ctx, tenant, sid, principal.Actor(), 10*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
