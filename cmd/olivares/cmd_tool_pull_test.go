@@ -147,7 +147,10 @@ func TestToolPullCancellationStopsWaitingAndDoesNotCancelTheDownload(t *testing.
 			w.WriteHeader(202)
 			_, _ = w.Write([]byte(`{"id":"p1","model":"qwen2.5:0.5b","state":"running"}`))
 		case "GET":
+			// Hold the response until the client has dropped the request, so the
+			// CLI always sees the cancellation and never an empty 200 body.
 			cancel()
+			<-r.Context().Done()
 		case "DELETE":
 			t.Error("the CLI must not claim to cancel a download without a cancel route")
 		}

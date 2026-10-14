@@ -179,7 +179,9 @@ func TestGrokRuntimeHTTPAnsweredRunReadsIdleOnTheRouteAndTheList(t *testing.T) {
 	if !ok {
 		t.Fatal("the run is not live")
 	}
-	read := func() (state, process string) {
+	// The two GETs are separate requests, so they agree only while the state holds
+	// still: compare them at the held points, and wait for both after the release.
+	read := func() (state, listed, process string) {
 		one := fx.h.doJSON(http.MethodGet, "/v1/m/sessions/runs/"+runRef, fx.admin, nil, tenantHdr(fx.tenant))
 		list := fx.h.doJSON(http.MethodGet, "/v1/m/sessions/runs", fx.admin, nil, tenantHdr(fx.tenant))
 		if one.code != http.StatusOK || list.code != http.StatusOK {
@@ -187,31 +189,31 @@ func TestGrokRuntimeHTTPAnsweredRunReadsIdleOnTheRouteAndTheList(t *testing.T) {
 		}
 		items, _ := list.body["items"].([]any)
 		for _, item := range items {
-			if row, _ := item.(map[string]any); row["run_ref"] == runRef && row["state"] != one.body["state"] {
-				t.Fatalf("the list says %v and the run says %v", row["state"], one.body["state"])
+			if row, _ := item.(map[string]any); row["run_ref"] == runRef {
+				listed, _ = row["state"].(string)
 			}
 		}
 		state, _ = one.body["state"].(string)
 		process, _ = one.body["process_state"].(string)
-		return state, process
+		return state, listed, process
 	}
 
-	if state, process := read(); state != stateRunning || process != stateRunning {
-		t.Fatalf("a session that has taken no turn reads %s/%s, want running/running", state, process)
+	if state, listed, process := read(); state != stateRunning || listed != stateRunning || process != stateRunning {
+		t.Fatalf("a session that has taken no turn reads %s (list %s)/%s, want running/running", state, listed, process)
 	}
 	if accepted := fx.input("answer me", runRef); accepted.code != http.StatusAccepted {
 		t.Fatalf("input = %d %s", accepted.code, accepted.raw)
 	}
 	waitFor(t, "the turn is active", func() bool { return lr.session.ActiveTurn() != "" })
-	if state, _ := read(); state != stateRunning {
-		t.Fatalf("a session answering reads %s, want running", state)
+	if state, listed, _ := read(); state != stateRunning || listed != stateRunning {
+		t.Fatalf("a session answering reads %s (list %s), want running", state, listed)
 	}
 	if err := os.WriteFile(release, nil, 0o600); err != nil {
 		t.Fatalf("release the prompt: %v", err)
 	}
 	waitFor(t, "the answered run to read idle on the route and the list", func() bool {
-		state, process := read()
-		return state == stateIdle && process == stateRunning
+		state, listed, process := read()
+		return state == stateIdle && listed == stateIdle && process == stateRunning
 	})
 }
 

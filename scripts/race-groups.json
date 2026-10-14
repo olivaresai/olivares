@@ -1357,7 +1357,7 @@
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. 2026-10-13 rebalance: race-full 38450457336 stopped root-b, root-g and root-l at the 70-minute Go timeout with tests still passing, and root-k used 65 of the 70 minutes. The universe had grown to 3324 tests and one boot cost more. The moves use that run's measured elapsed times. Tests the run never reached are estimated at 1.54 times their elapsed time on main's race-full 38133395001, the median ratio for the tests both runs measured, or 60 seconds when main never ran them. SessionClaude is divided by its next CamelCase word into root-b, root-u and root-v. E2 moves to root-w, and SkillsSession joins root-u. Console moves to root-n, DRBackup to root-s, Community to root-t, and Approval and SkillsAssignment to root-r. TestEveryCatalogModuleTurnsOffAndOnAcrossARestart, the test root-l was running when it stopped, restarts the engine twice for each catalog module on SQLite and then on PostgreSQL. Its SQLite leg was still at the knowledge module after 10 min 17 s, so it gets root-x to itself, and the rest of Every is divided by its next CamelCase word. root-x has no estimate yet: the run never measured the PostgreSQL leg. The minutes_est of every moved shard is that estimate without margin; every other minutes_est is the historical snapshot.",
+  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. 2026-10-13 rebalance: race-full 38450457336 stopped root-b, root-g and root-l at the 70-minute Go timeout with tests still passing, and root-k used 65 of the 70 minutes. The universe had grown to 3324 tests and one boot cost more. The moves use that run's measured elapsed times. Tests the run never reached are estimated at 1.54 times their elapsed time on main's race-full 38133395001, the median ratio for the tests both runs measured, or 60 seconds when main never ran them. SessionClaude is divided by its next CamelCase word into root-b, root-u and root-v. E2 moves to root-w, and SkillsSession joins root-u. Console moves to root-n, DRBackup to root-s, Community to root-t, and Approval and SkillsAssignment to root-r. TestEveryCatalogModuleTurnsOffAndOnAcrossARestart, the test root-l was running when it stopped, restarts the engine twice for each catalog module on SQLite and then on PostgreSQL. Its SQLite leg was still at the knowledge module after 10 min 17 s, so it gets root-x to itself, and the rest of Every is divided by its next CamelCase word. root-x has no estimate yet: the run never measured the PostgreSQL leg. The minutes_est of every moved shard is that estimate without margin; every other minutes_est is the historical snapshot. 2026-10-14 rebalance: race-full 38474331905 stopped root-q at the 70-minute Go timeout with 82 of its 106 tests done in 68.4 min and tests still passing. Its Module family took 35 min, 26 min of it in TestModuleProfileLiveIngestSelectionCompatibility alone, and CommunicationIncoming took 17.4 min. Module is divided by its next CamelCase words. ModuleProfileLive joins root-x, whose catalog off/on test that run measured complete at 22.2 min, and CommunicationIncoming joins root-b, measured at 22.8 min. The 24 root-q tests that run never reached use their elapsed time on race-full 38450457336. Estimates without margin: root-q 37.9, root-b 40.2, root-x 48.1 min; root-x is no longer a single test.",
   "root_shards": [
     {
       "name": "root-a",
@@ -1386,8 +1386,8 @@
     },
     {
       "name": "root-b",
-      "tests_now": 71,
-      "minutes_est": 48.3,
+      "tests_now": 76,
+      "minutes_est": 40.2,
       "families": [
         "Account",
         "Content",
@@ -1415,7 +1415,8 @@
         "RetirementCompletion",
         "SkillsCatalog",
         "SkillsExisting",
-        "AccessMapModeHelp"
+        "AccessMapModeHelp",
+        "CommunicationIncoming"
       ]
     },
     {
@@ -2053,16 +2054,26 @@
     },
     {
       "name": "root-q",
-      "tests_now": 106,
-      "minutes_est": 43.41,
+      "tests_now": 99,
+      "minutes_est": 37.9,
       "families": [
         "Admin",
         "Arming",
         "CommitOutcome",
-        "CommunicationIncoming",
         "CommunicationStore",
         "Default",
-        "Module",
+        "ModuleCatalog",
+        "ModuleContext",
+        "ModuleProfileEventing",
+        "ModuleProfileFresh",
+        "ModuleProfileKeeps",
+        "ModuleProfileNames",
+        "ModuleProfileRefuses",
+        "ModuleProfileRuns",
+        "ModuleProfileServes",
+        "ModuleSelection",
+        "ModuleSpec",
+        "Modules",
         "Production",
         "RetirementHold",
         "Roster",
@@ -2205,9 +2216,11 @@
     },
     {
       "name": "root-x",
-      "tests_now": 1,
+      "tests_now": 3,
+      "minutes_est": 48.1,
       "families": [
-        "EveryCatalog"
+        "EveryCatalog",
+        "ModuleProfileLive"
       ]
     }
   ],
