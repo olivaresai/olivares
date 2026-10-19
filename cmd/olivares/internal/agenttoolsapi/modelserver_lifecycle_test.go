@@ -614,7 +614,7 @@ func TestLastLineWithoutRedactsBeforeCutting(t *testing.T) {
 // rather than leaving bytes that are not text.
 func TestBoundedTextNeverCutsACharacter(t *testing.T) {
 	// one byte, then two-byte characters: the 240th byte is the first half of a character
-	if got := boundedText("x" + strings.Repeat("é", 200)); !utf8.ValidString(got) || len(got) > 240 || len(got) < 238 {
+	if got := boundedText("x" + strings.Repeat("\u00e9", 200)); !utf8.ValidString(got) || len(got) > 240 || len(got) < 238 {
 		t.Fatalf("boundedText = %d bytes, valid=%v", len(got), utf8.ValidString(got))
 	}
 }

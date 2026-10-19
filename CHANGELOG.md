@@ -161,6 +161,11 @@ Community 0.3 release notes, covering changes since 0.2.
   engine refuses it for anyone else).
 - docs.olivares.ai serves `/llms.txt` and `/llms-full.txt`, a summary and the full text of the
   English documentation for AI assistants.
+- A provider profile can declare the hosts its API-key sessions may reach beside their
+  provider: `olivares agent profile update <ref> --egress-host github.com`, or
+  `session_egress_hosts` on the provider profile API. A tenant administrator sets them,
+  each change is in `olivares audit`, no host is added by default, and a session whose
+  declared host resolves to a loopback or private address does not start.
 
 ### Changed
 
@@ -248,6 +253,9 @@ Community 0.3 release notes, covering changes since 0.2.
   `identity_ref` values.
 - Console wording uses plain words instead of internal terms (permission ids, abbreviations), and
   the Russian, Chinese and Spanish text was reviewed.
+- A session confined to its provider trusts the session proxy's certificate authority in
+  git too (`GIT_SSL_CAINFO`; git ignored `SSL_CERT_FILE`), so `git` over HTTPS reaches the
+  hosts a provider profile declares.
 
 ### Security
 
@@ -366,14 +374,6 @@ Community 0.2 release notes, covering changes since 0.1.
   never to its environment, and a session confined to its provider can also reach
   the declared registry hosts. Declaring either needs tenant administration. Limits:
   npm only, native sessions only.
-- A provider profile can declare the hosts its API-key sessions may reach beside their
-  provider: `olivares agent profile update <ref> --egress-host github.com`, or
-  `session_egress_hosts` on the provider profile API. A tenant administrator sets them,
-  each change is in `olivares audit`, no host is added by default, and a session whose
-  declared host resolves to a loopback or private address does not start.
-- A session confined to its provider trusts the session proxy's certificate authority in
-  git too (`GIT_SSL_CAINFO`; git ignored `SSL_CERT_FILE`), so `git` over HTTPS reaches the
-  hosts a provider profile declares.
 - MCP servers can be given to only some sessions: `olivares mcp assign <name>` and
   `mcp unassign` take the skills targets (workspace, folder, template, agent group,
   agent, session), and a server with no targets still serves every session.
@@ -458,6 +458,9 @@ Community 0.2 release notes, covering changes since 0.1.
   migration, and the existing signed channels. Automatic paired publication and
   full cross-edition qualification remain pending. See
   [Editions](docs/editions.md#release-cadence).
+- On SQLite, provider profiles created before account names receive their generated
+  name (such as `claude`) at the first start, as they already did on PostgreSQL;
+  names already set are never changed.
 
 ### Fixed
 

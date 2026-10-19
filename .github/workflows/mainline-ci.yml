@@ -4230,13 +4230,13 @@ jobs:
     # Ese runner corre SIN `$HOME`. Cualquier job de Go que aterrice ahi muere en lo PRIMERO que
     # hace `setup-go` despues de instalar, y el fallo no se parece en nada a su causa.
     #
-    # Se fija con `runner.temp`, POR JOB y POR RUNNER, salvo que el entorno de servicio del runner
-    # defina GOCACHE y GOMODCACHE: entonces se respetan (cache compartida del host, decision de quien
-    # lo configura). El valor por defecto sigue siendo privado: una ruta comun puesta por este fichero
-    # cambiaria un fallo ruidoso por uno silencioso (tres runners colisionando en una GOCACHE, medido).
-    # Esto no TAPA el aprovisionamiento —los runners 4..9 siguen
-    # sin entorno completo y eso sigue escalado (INT-07)—: quita una dependencia IMPLICITA de $HOME
-    # que este job nunca declaro tener.
+    # It is set with `runner.temp`, PER JOB and PER RUNNER, unless the runner's service environment
+    # defines GOCACHE and GOMODCACHE: then they are respected (a cache shared by the host, a decision of
+    # whoever configures it). The default stays private: a common path set by this file would trade a
+    # loud failure for a silent one (three runners colliding in one GOCACHE, measured).
+    # This does not COVER UP the provisioning (runners 4..9 still have
+    # no complete environment and that is still escalated (INT-07)): it removes an IMPLICIT dependency on $HOME
+    # that this job never declared it had.
     steps:
       - name: Go caches under RUNNER_TEMP (this runner has no $HOME)
   # ⛔ Y GOPATH TAMBIEN, porque el primer arreglo se quedo corto y el error nuevo lo dijo exacto:
@@ -4250,8 +4250,8 @@ jobs:
         #
         # POR QUE HACE FALTA: medido dos veces el 2026-08-18 en ci-runner-4, `setup-go` instala bien y el
         # comando siguiente muere con «GOCACHE is not defined and neither $XDG_CACHE_HOME nor $HOME are
-        # defined». Ese runner corre SIN $HOME. RUNNER_TEMP es el valor por defecto, por job y por runner;
-        # un runner que define GOCACHE y GOMODCACHE en su entorno de servicio las conserva (ver arriba).
+        # defined». That runner runs WITHOUT $HOME. RUNNER_TEMP is the default value, per job and per runner;
+        # a runner that defines GOCACHE and GOMODCACHE in its service environment keeps them (see above).
         run: |
           {
             echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"

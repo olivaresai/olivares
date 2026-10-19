@@ -9,9 +9,15 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -90,21 +96,70 @@ func (s harnessStoreSource) resolve(t *testing.T) store.Store {
 	return s.open(t)
 }
 
+// harnessStoreInitializations counts the first initializations (migrations, guard rollout,
+// boot conformance, system tenant) the default harness store has run in this test binary.
+var harnessStoreInitializations atomic.Int64
+
+// harnessStoreTemplate is the closed database file of one initialized store, built once per
+// test binary. A first initialization is most of a harness's cost
+// under -race (5.2 s against 1.0 s to reopen an initialized copy), and nearly every test in
+// this package builds at least one harness, so repeating it per harness took the package past
+// its race binary's timeout. Only these immutable bytes are shared: every harness writes its
+// own copy into its own TempDir and opens it through the same sqlstore.Open, so boot,
+// readiness and guard verification still run per harness. A test whose subject is the first
+// initialization itself opens its own store rather than this one.
+var harnessStoreTemplate = sync.OnceValues(func() ([]byte, error) {
+	harnessStoreInitializations.Add(1)
+	dir, err := os.MkdirTemp("", "api-harness-store-*")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	path := filepath.Join(dir, "store.db")
+	ctx := context.Background()
+	st, err := sqlstore.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: path, Debug: true}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := st.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.EnsureSystemTenant(ctx)
+		return err
+	}); err != nil {
+		return nil, errors.Join(err, st.Close())
+	}
+	if err := st.Close(); err != nil {
+		return nil, err
+	}
+	// A surviving WAL holds pages the main file does not; copying the main file alone would
+	// hand every harness a store missing them.
+	for _, side := range []string{path + "-wal", path + "-shm"} {
+		switch _, err := os.Stat(side); {
+		case err == nil:
+			return nil, fmt.Errorf("%s survived Close", side)
+		case !errors.Is(err, fs.ErrNotExist):
+			return nil, fmt.Errorf("inspect %s: %w", side, err)
+		}
+	}
+	return os.ReadFile(path)
+})
+
 func defaultHarnessStore(t *testing.T) store.Store {
 	t.Helper()
+	tpl, err := harnessStoreTemplate()
+	if err != nil {
+		t.Fatalf("initialize the harness store template: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "store.db")
+	if err := os.WriteFile(path, tpl, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	st, err := sqlstore.Open(context.Background(), store.Config{
-		Engine: store.EngineSQLite, DSN: ":memory:", Debug: true,
+		Engine: store.EngineSQLite, DSN: path, Debug: true,
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	if err := st.System(context.Background(), func(sys store.SystemScope) error {
-		_, err := sys.EnsureSystemTenant(context.Background())
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
 	return st
 }
 

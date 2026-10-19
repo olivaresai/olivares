@@ -148,7 +148,7 @@ describe('names and links', () => {
   it("accepts the secret store's name characters and nothing else", () => {
     for (const ok of ['bank', 'work-2', 'a.b_c'])
       expect(LABEL_RE.test(ok)).toBe(true)
-    for (const bad of ['', 'bank account', 'a/b', 'é', 'x'.repeat(129)])
+    for (const bad of ['', 'bank account', 'a/b', '\u00e9', 'x'.repeat(129)])
       expect(LABEL_RE.test(bad), bad).toBe(false)
   })
 

@@ -151,7 +151,7 @@
         },
         {
           "name": "d",
-          "tests_now": 268,
+          "tests_now": 262,
           "minutes_est": 40.2,
           "families": [
             "A",
@@ -164,15 +164,20 @@
             "Elevate",
             "Evidence",
             "Finalize",
+            "Generate",
             "Group",
+            "Parse",
             "Postgres",
             "Publisher",
+            "Remove",
             "Retry",
             "Revoke",
             "S",
             "Tenant",
             "The",
-            "User"
+            "Totp",
+            "User",
+            "Vault"
           ]
         }
       ]
@@ -186,7 +191,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 356,
+          "tests_now": 375,
           "minutes_est": 30.6,
           "families": [
             "A",
@@ -220,6 +225,7 @@
             "Read",
             "Recover",
             "Reference",
+            "Remove",
             "Request",
             "Residency",
             "Route",
@@ -235,6 +241,7 @@
             "Tracing",
             "Undecided",
             "Unset",
+            "Vault",
             "Verify",
             "Web",
             "Whoami",
@@ -243,7 +250,7 @@
         },
         {
           "name": "b",
-          "tests_now": 321,
+          "tests_now": 330,
           "minutes_est": 30.6,
           "families": [
             "Body",
@@ -352,7 +359,9 @@
             "SQ",
             "SessionPreview",
             "User",
-            "ValidRestored"
+            "ValidRestored",
+            "SessionIdle",
+            "Owns"
           ]
         }
       ]
@@ -525,7 +534,7 @@
         },
         {
           "name": "c",
-          "tests_now": 523,
+          "tests_now": 530,
           "minutes_est": 29.2,
           "families": [
             "ALost",
@@ -536,6 +545,7 @@
             "Budget",
             "Catalog",
             "Classify",
+            "Commercial",
             "Compatibility",
             "Coordination",
             "Credential",
@@ -783,7 +793,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 251,
+          "tests_now": 262,
           "minutes_est": 25.6,
           "families": [
             "ABACAuthorization",
@@ -873,7 +883,16 @@
             "Governance",
             "OPARollback",
             "Stored",
-            "UnbindClears"
+            "UnbindClears",
+            "Classify",
+            "BindLong",
+            "BindRejects",
+            "BindReports",
+            "Change",
+            "Gate",
+            "Shown",
+            "Tree",
+            "Workstation"
           ]
         },
         {
@@ -969,7 +988,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 261,
+          "tests_now": 309,
           "minutes_est": 26.9,
           "families": [
             "ANested",
@@ -1043,12 +1062,15 @@
             "Wiki",
             "WorkAdmission",
             "CopyClaudeSessionState",
-            "PatchWorkspaceDLPMode"
+            "PatchWorkspaceDLPMode",
+            "FileScope",
+            "Relative",
+            "Unguarded"
           ]
         },
         {
           "name": "b",
-          "tests_now": 259,
+          "tests_now": 306,
           "minutes_est": 26.9,
           "families": [
             "CCState",
@@ -1082,12 +1104,17 @@
             "Two",
             "WorkDecode",
             "DeliverFirstTurn",
-            "PatchWorkspaceMatches"
+            "PatchWorkspaceMatches",
+            "ACPResume",
+            "Oversized",
+            "Detect",
+            "MoveClears",
+            "Retained"
           ]
         },
         {
           "name": "c",
-          "tests_now": 262,
+          "tests_now": 310,
           "minutes_est": 26.9,
           "families": [
             "SameSubject",
@@ -1126,12 +1153,17 @@
             "Relay",
             "Unlink",
             "WorkAdmin",
-            "WorkSession"
+            "WorkSession",
+            "Count",
+            "AStop",
+            "Login",
+            "PublicProviders",
+            "Strip"
           ]
         },
         {
           "name": "d",
-          "tests_now": 429,
+          "tests_now": 508,
           "minutes_est": 26.9,
           "families": [
             "Ack",
@@ -1180,12 +1212,19 @@
             "Confined",
             "ExitCause",
             "Unconfined",
-            "Worktree"
+            "Worktree",
+            "Denial",
+            "Allow",
+            "Foreign",
+            "MCPGovernance",
+            "Refusal",
+            "SELinux",
+            "Upload"
           ]
         },
         {
           "name": "e",
-          "tests_now": 265,
+          "tests_now": 314,
           "minutes_est": 26.9,
           "families": [
             "Agent",
@@ -1215,12 +1254,19 @@
             "HintedTenant",
             "Unsupported",
             "WorkValidation",
-            "MoveRun"
+            "MoveRun",
+            "Container",
+            "Image",
+            "Steering",
+            "Checked",
+            "Mounts",
+            "Removing",
+            "Withholds"
           ]
         },
         {
           "name": "f",
-          "tests_now": 269,
+          "tests_now": 318,
           "minutes_est": 26.9,
           "families": [
             "AccountHome",
@@ -1255,7 +1301,15 @@
             "ValidProvider",
             "Adding",
             "Automatic",
-            "UsedProvider"
+            "UsedProvider",
+            "Project",
+            "Delete",
+            "Limit",
+            "AConflict",
+            "AFull",
+            "Egress",
+            "Operator",
+            "Skills"
           ]
         },
         {
@@ -1356,7 +1410,7 @@
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured.",
+  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. Coverage refresh for 0.3: 135 root tests added since 0.2 had no shard (122 on the 0.3 candidate, which does not carry the terminal main menu). Every existing root turn was already at or above its 45-minute estimate at its live test count, so they form a new turn, root-u, estimated at 37.5 minutes from the mean calibrated rate of the root turns; this is an estimate, not a measurement. Recalibrate from the next race-full run.",
   "root_shards": [
     {
       "name": "root-a",
@@ -2148,6 +2202,55 @@
         "SessionWorktree",
         "SkillsDirectory",
         "AccessMapAttackPaths"
+      ]
+    },
+    {
+      "name": "root-u",
+      "tests_now": 135,
+      "minutes_est": 37.5,
+      "families": [
+        "AKey",
+        "AProgram",
+        "ARun",
+        "AccessMapAttackPathAnswers",
+        "AccessMapAttackPathDescriptions",
+        "AccessMapDrift",
+        "AccessMapGraph",
+        "AccessMapModeFlag",
+        "AccessMapPath",
+        "Applied",
+        "CLIChanges",
+        "Chain",
+        "DDILBare",
+        "DDILBusiness",
+        "DDILCommunity",
+        "DDILUnknown",
+        "DoubleQuoted",
+        "ExecProbe",
+        "HandOver",
+        "Harness",
+        "InContainer",
+        "Limit",
+        "MCPMust",
+        "MainMenu",
+        "ProbeCommand",
+        "ProfileAssignment",
+        "RecordRefuses",
+        "SessionActivity",
+        "SessionData",
+        "SessionExplicit",
+        "SessionIdle",
+        "SessionMessages",
+        "SessionPin",
+        "SessionSelf",
+        "SkillsImport",
+        "SkillsProfile",
+        "SkillsRoutes",
+        "UI",
+        "Update",
+        "Vacant",
+        "Vault",
+        "WithContainer"
       ]
     }
   ],

@@ -103,9 +103,11 @@ func TestAProgramLookupForAnInstalledClaudeDoesNotReadItsExecutableAgain(t *test
 
 // When the verified check answers "" (a release that no longer matches its receipt), the
 // host observer cannot answer for Claude either: its verifier is unavailable on purpose, so
-// asking it only reads the whole executable a second time per lookup, and neither engine
-// keeps the result. The lookup hashes once, in the verified check, and falls back to the PATH.
-// The bound is one hash per lookup plus one hash of slack for incidental reads.
+// the lookup falls back to the PATH. Neither engine keeps the damaged verdict, but the
+// verified cache keeps the executable's digest under the release identity for every posture
+// (dev#2609), so the first lookup hashes the executable once and the next lookups of the
+// unchanged file read none of it, whichever engine asks. The bound is under two hashes: one
+// hash plus less than one of incidental reads.
 func TestAProgramLookupForADamagedClaudeHashesItsExecutableOnce(t *testing.T) {
 	const padding = 4 << 20
 	const lookups = 3
@@ -129,11 +131,11 @@ func TestAProgramLookupForADamagedClaudeHashesItsExecutableOnce(t *testing.T) {
 		}
 	}
 	n := processBytesRead(t) - before
-	if n < lookups*padding {
+	if n < padding {
 		t.Fatalf("%d lookups of a damaged Claude read only %d bytes; the verified check no longer hashes its %d-byte executable, so this test measures nothing", lookups, n, padding)
 	}
-	if n >= (lookups+1)*padding {
-		t.Fatalf("%d lookups of a damaged Claude read %d bytes; more than one hash of its %d-byte executable per lookup is the host observer asked after the verified check", lookups, n, padding)
+	if n >= 2*padding {
+		t.Fatalf("%d lookups of a damaged Claude read %d bytes; more than one hash of its unchanged %d-byte executable is the stall of dev#2584 and dev#2609", lookups, n, padding)
 	}
 }
 

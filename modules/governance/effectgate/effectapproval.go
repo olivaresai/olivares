@@ -200,7 +200,7 @@ type Queue interface {
 func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 	request, err := queue.Request(ctx, e.Tenant, e.Principal, e.Request)
 	if err != nil {
-		return Answer{Failed: Open}, err
+		return Answer{Failed: Open}, withCause(ctx, err)
 	}
 	a := Answer{Ref: request.ID, Status: request.Status}
 	withdraw := true
@@ -217,7 +217,7 @@ func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 	if e.Wait != nil {
 		if endWait, err = registerEffectWait(ctx, e, request); err != nil {
 			a.Failed = Register
-			return a, err
+			return a, withCause(ctx, err)
 		}
 	}
 	answer, err := queue.Wait(ctx, e.Tenant, request.ID)
@@ -225,6 +225,7 @@ func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 		endWait()
 	}
 	if err != nil {
+		err = withCause(ctx, err)
 		withdraw = !errors.Is(err, context.DeadlineExceeded)
 		a.Failed = Wait
 		return a, err
@@ -242,16 +243,26 @@ func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 	if e.Recheck != nil {
 		if err := e.Recheck(ctx); err != nil {
 			a.Failed = Recheck
-			return a, err
+			return a, withCause(ctx, err)
 		}
 	}
 	spent, err := queue.Consume(ctx, e.Tenant, request.ID, e.Consumer, e.PolicyVersion)
 	if err != nil {
 		a.Failed = Spend
-		return a, err
+		return a, withCause(ctx, err)
 	}
 	a.Outcome, a.Spent = spendOutcome(spent.Granted, spent.Replay)
 	return a, nil
+}
+
+// withCause keeps the context's cause on a step the context ended. A store call the
+// context interrupts can fail with the driver's own error (SQLite: "interrupted (9)"),
+// and the caller must still tell a cancellation or deadline from a failure.
+func withCause(ctx context.Context, err error) error {
+	if cause := ctx.Err(); cause != nil && !errors.Is(err, cause) {
+		return errors.Join(err, cause)
+	}
+	return err
 }
 
 // registerEffectWait projects the hold onto the run until the earlier of the live

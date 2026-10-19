@@ -719,7 +719,7 @@ mkdir -p "$T/lib12"
 muta_de "$LIBDIR/redaccion.py" "$T/lib12/redaccion.py" \
 	'        print(redactor(f"{etiqueta}' \
 	'        print((f"{etiqueta}'
-# El guion importa tambien la edicion de la libreria: sin ella el proceso muere por otra causa.
+# The script also imports the library's edition: without it the process dies for another cause.
 cp "$LIBDIR/demo_edition.py" "$T/lib12/demo_edition.py"
 if exige_mutante "$T/m12.py" m12 && [ -s "$T/lib12/redaccion.py" ] \
    && ! cmp -s "$LIBDIR/redaccion.py" "$T/lib12/redaccion.py"; then
@@ -981,9 +981,9 @@ else
 	malo "could not build the decoded-form mutant: no artifact means no verdict"
 fi
 
-# ── EDICION · una Community no siembra lo que solo Business sirve (dev#2485) ───────────────────
-# El doble anuncia `community`: las superficies `deploy` y `redteam` no se siembran (ni una peticion
-# a sus rutas) y ninguna aprobacion pide `deploy.promote`. Lo mismo corrido como Business las siembra.
+# ── EDITION · a Community does not seed what only Business serves (dev#2485) ───────────────────
+# The double announces `community`: the `deploy` and `redteam` surfaces are not seeded (not one request
+# to their routes) and no approval asks for `deploy.promote`. The same run as Business seeds them.
 r="$(DOBLE_EDICION=community corre "$GUION" "$OBJETIVOS")"
 if [ "$r" = "0" ] && casa '`deploy` is a Business surface' && casa '`redteam` is a Business surface'; then
 	paso "a Community estate skips the Business surfaces deploy and redteam (rc 0)"
@@ -995,8 +995,8 @@ if casa 'POST /v1/m/(deploy|redteam)/'; then
 else
 	paso "the Community run posts nothing to /v1/m/deploy or /v1/m/redteam"
 fi
-# La fabrica de aprobaciones, llamada con los indices que el bucle usa: en Community ninguna pide
-# `deploy.promote`, y en Business la primera si.
+# The approvals factory, called with the indexes the loop uses: in Community none asks for
+# `deploy.promote`, and in Business the first one does.
 acciones="$(python3 - "$GUION" <<'PYA'
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("volume", sys.argv[1])
