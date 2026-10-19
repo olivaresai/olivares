@@ -361,8 +361,7 @@
       "name": "core-api-protocols",
       "measured": "race-full 36808708564 (2026-10-01): API protocol packages completed in 15.356 s combined. Kept unfiltered to retain the SCIM fuzz seed; 20% scheduling margin and 3 min startup margin estimate 3.4 min.",
       "patterns": [
-        "github.com/olivaresai/olivares/core/api/ratelimit/...",
-        "github.com/olivaresai/olivares/core/api/scim/..."
+        "github.com/olivaresai/olivares/core/api/ratelimit/..."
       ]
     },
     {
