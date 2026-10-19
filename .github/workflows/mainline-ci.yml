@@ -4260,7 +4260,7 @@ jobs:
       # Pin VERIFICADO contra la API el 2026-09-22: v6.0.1, commit de7274f0….
       # El primer SHA que escribi salio de memoria y, aunque existia, era un commit
       # cualquiera y no un tag de release. Un pin de accion no se teclea de memoria.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '17'
