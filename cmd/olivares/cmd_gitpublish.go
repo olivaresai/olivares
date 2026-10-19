@@ -73,8 +73,9 @@ import (
 func newGitpublishCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:   "gitpublish",
-		Short: "Publish through governed git targets: push, pull request, merge",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "gitpublish",
+		Short:       "Publish through governed git targets: push, pull request, merge",
 		Long: "Push commits, open pull requests and merge through approved publication targets,\n" +
 			"exactly as the console does, over the same /v1/m/gitpublish routes. Every request is\n" +
 			"checked against the target's approved bindings and your authority at the moment you\n" +
@@ -289,11 +290,12 @@ func gitpublishRequireNamed(cmd *cobra.Command, what string, flags ...string) er
 
 func newGitpublishTargetsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "targets",
-		Short:   "Read publication targets",
-		Long:    "Read the publication targets you may publish through. Creating and changing targets is target administration (AAL3) in the console.",
-		Example: "  olivares gitpublish targets ls\n  olivares gitpublish targets get gpt_1",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "targets",
+		Short:       "Read publication targets",
+		Long:        "Read the publication targets you may publish through. Creating and changing targets is target administration (AAL3) in the console.",
+		Example:     "  olivares gitpublish targets ls\n  olivares gitpublish targets get gpt_1",
+		Args:        cobra.NoArgs,
 	}
 	cmd.AddCommand(newGitpublishTargetsListCmd(client), newGitpublishTargetsGetCmd(client))
 	return cmd
@@ -301,12 +303,13 @@ func newGitpublishTargetsCmd(client datalaneClient) *cobra.Command {
 
 func newGitpublishTargetsListCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List publication targets",
-		Long:    "List the publication targets the caller can read, with the branch prefix pushes must stay under and the merge bases pull requests may merge into.",
-		Example: "  olivares gitpublish targets ls",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List publication targets",
+		Long:        "List the publication targets the caller can read, with the branch prefix pushes must stay under and the merge bases pull requests may merge into.",
+		Example:     "  olivares gitpublish targets ls",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			raw, status, err := gitpublishRequest(cmd, client, http.MethodGet, "/targets", nil, "")
 			if err != nil {
@@ -324,11 +327,12 @@ func newGitpublishTargetsListCmd(client datalaneClient) *cobra.Command {
 
 func newGitpublishTargetsGetCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "get <target-id>",
-		Short:   "Show one publication target",
-		Long:    "Show one target's push prefix, merge bases and version; its credential and repository binding ids appear to a caller who holds target administration on it.",
-		Example: "  olivares gitpublish targets get gpt_1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <target-id>",
+		Short:       "Show one publication target",
+		Long:        "Show one target's push prefix, merge bases and version; its credential and repository binding ids appear to a caller who holds target administration on it.",
+		Example:     "  olivares gitpublish targets get gpt_1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("targets", args[0])
 			if err != nil {
@@ -364,8 +368,9 @@ func gitpublishFollow(intentID string) string {
 func newGitpublishPushCmd(client datalaneClient) *cobra.Command {
 	var operationID, ref, commit, tree, expectedOld, acknowledge string
 	cmd := &cobra.Command{
-		Use:   "push <target-id>",
-		Short: "Push one exact commit to a branch under the target's prefix",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "push <target-id>",
+		Short:       "Push one exact commit to a branch under the target's prefix",
 		Long: "Push one exact commit to a leased branch under the target's push prefix, as the\n" +
 			"target's approved credential. The default branch and protected branches are refused\n" +
 			"by name; a CI-file change is refused. An empty --expected-old leases an absent branch.",
@@ -408,8 +413,9 @@ func newGitpublishPullRequestCmd(client datalaneClient) *cobra.Command {
 	var operationID, headRef, base, commit, title, body, acknowledge string
 	var draft bool
 	cmd := &cobra.Command{
-		Use:   "pull-request <target-id>",
-		Short: "Open a pull request from a prefixed branch into a merge base",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "pull-request <target-id>",
+		Short:       "Open a pull request from a prefixed branch into a merge base",
 		Long: "Open a pull request (or adopt the matching open one) from a branch under the\n" +
 			"target's push prefix into one of its allowed merge bases, as the target's approved\n" +
 			"credential. A closed pull request never blocks and is never adopted.",
@@ -456,8 +462,9 @@ func newGitpublishMergeCmd(client datalaneClient) *cobra.Command {
 	var operationID, expectedHead, method, acknowledge string
 	var number int
 	cmd := &cobra.Command{
-		Use:   "merge <target-id>",
-		Short: "Merge a pull request whose head is still the reviewed sha",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "merge <target-id>",
+		Short:       "Merge a pull request whose head is still the reviewed sha",
 		Long: "Merge one pull request only while its head is still the --expected-head that was\n" +
 			"reviewed, with the sha guard the host enforces. Requires an admin session at AAL3;\n" +
 			"the launcher of a publication must not also be its merger.",
@@ -498,11 +505,12 @@ func newGitpublishMergeCmd(client datalaneClient) *cobra.Command {
 
 func newGitpublishIntentsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "intents",
-		Short:   "Follow, reconcile and close publication requests",
-		Long:    "Read the publication intents of one target, follow a single intent and its observations, reconcile an uncertain one against the host, and take responsibility for one that cannot resolve.",
-		Example: "  olivares gitpublish intents ls --target gpt_1\n  olivares gitpublish intents get gpi_1",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "intents",
+		Short:       "Follow, reconcile and close publication requests",
+		Long:        "Read the publication intents of one target, follow a single intent and its observations, reconcile an uncertain one against the host, and take responsibility for one that cannot resolve.",
+		Example:     "  olivares gitpublish intents ls --target gpt_1\n  olivares gitpublish intents get gpi_1",
+		Args:        cobra.NoArgs,
 	}
 	cmd.AddCommand(
 		newGitpublishIntentsListCmd(client),
@@ -517,12 +525,13 @@ func newGitpublishIntentsCmd(client datalaneClient) *cobra.Command {
 func newGitpublishIntentsListCmd(client datalaneClient) *cobra.Command {
 	var target string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the publication intents of one target",
-		Long:    "List one target's publication intents: what each requested, the state the engine last settled, and the receipt. The route reads one target at a time.",
-		Example: "  olivares gitpublish intents ls --target gpt_1",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the publication intents of one target",
+		Long:        "List one target's publication intents: what each requested, the state the engine last settled, and the receipt. The route reads one target at a time.",
+		Example:     "  olivares gitpublish intents ls --target gpt_1",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if !cmd.Flags().Changed("target") {
 				return exitcode.New(exitcode.Usage, fmt.Errorf("intents ls reads one target at a time: --target is required"))
@@ -545,12 +554,13 @@ func newGitpublishIntentsListCmd(client datalaneClient) *cobra.Command {
 
 func newGitpublishIntentsGetCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "get <intent-id>",
-		Aliases: []string{"status"},
-		Short:   "Show one publication intent",
-		Long:    "Show one intent: what it requested, what the host was last observed to hold, whether the host acknowledged it, and its state.",
-		Example: "  olivares gitpublish intents get gpi_1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <intent-id>",
+		Aliases:     []string{"status"},
+		Short:       "Show one publication intent",
+		Long:        "Show one intent: what it requested, what the host was last observed to hold, whether the host acknowledged it, and its state.",
+		Example:     "  olivares gitpublish intents get gpi_1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("intents", args[0])
 			if err != nil {
@@ -571,11 +581,12 @@ func newGitpublishIntentsGetCmd(client datalaneClient) *cobra.Command {
 
 func newGitpublishIntentsObservationsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "observations <intent-id>",
-		Short:   "List every observation of one publication intent",
-		Long:    "List every observation recorded for one intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.",
-		Example: "  olivares gitpublish intents observations gpi_1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "observations <intent-id>",
+		Short:       "List every observation of one publication intent",
+		Long:        "List every observation recorded for one intent: each host read, dispatcher outcome and refusal, with its attempt, result and time.",
+		Example:     "  olivares gitpublish intents observations gpi_1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("intents", args[0], "observations")
 			if err != nil {
@@ -597,8 +608,9 @@ func newGitpublishIntentsObservationsCmd(client datalaneClient) *cobra.Command {
 
 func newGitpublishIntentsReconcileCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "reconcile <intent-id>",
-		Short: "Read the host again for one uncertain intent",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "reconcile <intent-id>",
+		Short:       "Read the host again for one uncertain intent",
 		Long: "Read the host again for one publication intent and record what it observed. It\n" +
 			"never dispatches; only the requested effect, once observed, ends an uncertain intent.",
 		Example: "  olivares gitpublish intents reconcile gpi_1",
@@ -621,8 +633,9 @@ func newGitpublishIntentsReconcileCmd(client datalaneClient) *cobra.Command {
 func newGitpublishIntentsAbandonCmd(client datalaneClient) *cobra.Command {
 	var reason string
 	cmd := &cobra.Command{
-		Use:   "abandon <intent-id>",
-		Short: "Take responsibility for an intent that cannot resolve",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "abandon <intent-id>",
+		Short:       "Take responsibility for an intent that cannot resolve",
 		Long: "Record that an administrator takes responsibility for an unresolved publication\n" +
 			"intent. Abandoning proves nothing about the host, and the scope stays held until a\n" +
 			"later request names this intent under --acknowledge-intent. Requires AAL3.",

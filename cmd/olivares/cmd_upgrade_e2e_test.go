@@ -314,7 +314,15 @@ func (f *updFixture) resolveEnterpriseSet(w http.ResponseWriter, r *http.Request
 
 func newUpdFixture(t *testing.T, version, minVersion string, binBytes []byte) *updFixture {
 	t.Helper()
-	pub, priv, _ := ed25519.GenerateKey(nil)
+	_, priv, _ := ed25519.GenerateKey(nil)
+	return newUpdFixtureSignedBy(t, priv, version, minVersion, binBytes)
+}
+
+// newUpdFixtureSignedBy is newUpdFixture with the release signed by priv, so two releases of one
+// deployment can share the key their binaries embed.
+func newUpdFixtureSignedBy(t *testing.T, priv ed25519.PrivateKey, version, minVersion string, binBytes []byte) *updFixture {
+	t.Helper()
+	pub := priv.Public().(ed25519.PublicKey)
 	f := &updFixture{
 		pubB64: base64.StdEncoding.EncodeToString(pub), priv: priv,
 		version: version, minVersion: minVersion,

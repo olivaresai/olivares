@@ -16,7 +16,7 @@
   },
   "forbidden": {
     "title": "Vous ne pouvez pas lire les fournisseurs de ce locataire",
-    "description": "Lire les fournisseurs enregistrés demande sessions:provider:read. Demandez-le à une personne administratrice de ce locataire."
+    "description": "Votre rôle ne peut pas lire les fournisseurs enregistrés. Demandez l’accès à une personne administratrice de cette organisation."
   },
   "columns": {
     "name": "Nom",
@@ -127,7 +127,7 @@
   },
   "vaultUnavailable": {
     "title": "Ce déploiement ne peut pas stocker un identifiant de fournisseur",
-    "description": "Aucun coffre scellé n'est câblé, donc le moteur refuse de stocker une clé plutôt que d'en stocker une qu'il ne peut pas protéger. Une personne administratrice doit configurer le scelleur de secrets."
+    "description": "Aucun coffre scellé n'est configuré, donc le moteur refuse de stocker une clé plutôt que d'en stocker une qu'il ne peut pas protéger. Une personne administratrice doit configurer le scelleur de secrets."
   },
   "truncation": {
     "label": "{{n}} fournisseurs affichés ; il y en a d’autres",

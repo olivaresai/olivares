@@ -224,6 +224,10 @@ func TestRegressionDetectedAndEmitted(t *testing.T) {
 	if d := floatOf(cand.body["drift"]); d < 0.99 {
 		t.Fatalf("drift = %v, want ~1.0", d)
 	}
+	// 0/2 against 2/2 is the smallest wipe-out whose interval excludes zero (#2151).
+	if _, _, _, _, _, lo, _ := passRateDiffOf(t, comparisonOf(cand)); lo <= 0 {
+		t.Fatalf("drop_ci.lo = %v, want > 0: this test depends on the interval excluding zero at n=2", lo)
+	}
 
 	// A core eval_regression Finding was persisted.
 	finds := h.coreFindings(tenant, findingKindRegression)

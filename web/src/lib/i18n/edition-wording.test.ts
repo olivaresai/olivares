@@ -28,11 +28,24 @@ const businessBuildPattern = '(?:business|ビジネス|商[业業]|бизнес)
 const BUSINESS_BUILD = new RegExp(businessBuildPattern, 'i')
 
 /**
+ * Community, Business and Enterprise are names, not words: every language keeps them in
+ * Latin script. Per language, the translated edition word its catalog used to carry
+ * ("community edition", "business edition"). A language joins this list when its
+ * catalog is clean; the pattern is the old translated word and nothing else.
+ */
+const zhEditionNames = '社区版|商业版' // language-data: zh translated edition names, rejected
+const TRANSLATED_EDITION_NAMES: Record<string, RegExp> = {
+  zh: new RegExp(zhEditionNames),
+}
+
+/**
  * Where "enterprise" is the actual word: the tier name in a sample list the operator
- * types, and the SCIM/audit-export gate, whose placement is the owner's to settle
- * (docs/editions.md puts inbound SCIM in Community).
+ * types, the licensed product tier the edition badge names, and the SCIM/audit-export
+ * gate, whose placement is the owner's to settle (docs/editions.md puts inbound SCIM
+ * in Community).
  */
 const ALLOWED = new Set([
+  'settings.edition.badge.enterprise',
   'console.granular.modelGroups.tierSelectorsHint',
   'identity.console.blindSpots.auditExport',
 ])
@@ -83,6 +96,16 @@ describe('edition wording', () => {
     expect(
       offenders,
       'Name Business and its family (docs/editions.md); keep keys and codes.',
+    ).toEqual([])
+  })
+
+  it('keeps the edition names in Latin script', () => {
+    const offenders = all
+      .filter((e) => TRANSLATED_EDITION_NAMES[e.locale]?.test(e.text))
+      .map((e) => `${e.locale} ${e.where}: ${e.text.slice(0, 90)}`)
+    expect(
+      offenders,
+      'Write Community and Business as they are (docs/editions.md).',
     ).toEqual([])
   })
 

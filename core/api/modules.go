@@ -90,9 +90,12 @@ type RouteRegistrar interface {
 // does not bind its reads or mutations that way must not declare this.
 type CollectionScopeRef struct {
 	// WorkspaceQueryParam is the query parameter carrying the workspace id. Exactly
-	// one canonical occurrence is required: absent, repeated or non-canonical is a
-	// client error decided from the request alone, with no row read.
+	// one canonical occurrence is required when supplied. Absent is a client error
+	// unless AllowTenantFallback is set; repeated/non-canonical is always an error.
 	WorkspaceQueryParam string
+	// AllowTenantFallback retains tenant admission only when the query selector is
+	// absent. Confined callers still require explicit workspace admission.
+	AllowTenantFallback bool
 	// WorkspaceBodyField selects the mutation's workspace from its JSON body.
 	// Empty or omitted values retain tenant admission, which refuses confined writes.
 	// A supplied query selector must agree with the admitted body target.

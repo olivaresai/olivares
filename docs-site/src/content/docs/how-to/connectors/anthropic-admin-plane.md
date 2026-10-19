@@ -18,7 +18,7 @@ and summarizes their roster-side companions.
 | Source (`kind`) | What it reads | Credential |
 |---|---|---|
 | `claude-api` | usage & billed cost, model/workspace inventory, Claude Code analytics, API-side MCP/server-tool governance | Admin API key (`admin_key`) |
-| `claude-compliance` | the compliance activity feed (evidence-grade events) + the org directory | activity-feed key + a **distinct** Compliance Access Key |
+| `claude-compliance` | the compliance activity feed (evidence-grade events) + the org directory | activity-feed key + a **distinct** Compliance Access Key (Business) |
 | `claude-console` | org IAM roster (members, roles) → SSO/SCIM posture findings | console credentials |
 | `claude-wif` | non-human identities (service accounts `svac_…`, federated identities) + their **permitted** scope edges | WIF endpoint credentials |
 
@@ -114,12 +114,9 @@ connector never holds it.
 ## What you'll see in the console
 
 Billed and estimated spend, sliced by the dimensions the telemetry carries
-(team and project labels become first-class), in **Cost & FinOps**; org
+(team and project labels become first-class), in **Budgets**; org
 members, non-human identities and their scopes in **Identity & NHI**; posture
-findings (shadow auth, surface degradation, WIF footguns) in **Security**:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="The Cost & FinOps view: spend by model and dimension, with budgets and alerts." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="The Cost & FinOps view: spend by model and dimension, with budgets and alerts." />
+findings (shadow auth, surface degradation, WIF footguns) in **Security**.
 
 ## Honest limits
 

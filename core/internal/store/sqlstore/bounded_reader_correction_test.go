@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/internal/pgtest"
 	"github.com/olivaresai/olivares/core/model"
@@ -78,7 +77,7 @@ func registerBoundedCorrectionEntities(reg store.ExtensionRegistry) error {
 
 func openCorrectionPG(t *testing.T, pg pgtest.DSNs, mode pgExecModeFact) store.Store {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	sep := "?"
 	if strings.Contains(pg.App, "?") {

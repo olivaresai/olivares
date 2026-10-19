@@ -52,7 +52,6 @@ export const ROUTES = [
     '/access-map',
     '/inventory',
     '/security',
-    '/compliance',
     '/health',
     // The onboarding wizard.
     '/onboarding',

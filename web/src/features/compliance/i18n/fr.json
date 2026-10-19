@@ -239,7 +239,7 @@
       "savedPurging": "Calendrier enregistré, et la purge est en vigueur",
       "savedRetaining": "Calendrier enregistré. Il ne supprime rien.",
       "saveUnconfirmed": "Le moteur a accepté la requête mais n'a pas renvoyé le calendrier : il ne peut pas être confirmé",
-      "noGate": "Aucune porte d'approbation n'est câblée : armer une purge est refusé. La purge n'a pas été armée.",
+      "noGate": "Aucune porte d'approbation n'est configurée : armer une purge est refusé. La purge n'a pas été armée.",
       "approvalExpired": "L'approbation a expiré. Enregistrez à nouveau pour en demander une autre.",
       "underFloor": "La fenêtre est plus courte que le plancher réglementaire de cette classe",
       "refused": "L'armement de la purge a été refusé",

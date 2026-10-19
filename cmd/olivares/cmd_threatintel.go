@@ -46,8 +46,9 @@ func resolveThreatIntelSource() (threatIntelSource, error) {
 
 func newThreatIntelCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "threatintel",
-		Short: "Manage the AI threat-intel catalog and its signed catalog releases (Business)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "threatintel",
+		Short:       "Manage the AI threat-intel catalog and its signed catalog releases (Business)",
 		Example: "  olivares threatintel status --crosswalk\n" +
 			"  olivares threatintel verify ./threat-feed.json\n" +
 			"  olivares threatintel apply ./threat-feed.json",
@@ -70,11 +71,12 @@ func newThreatIntelCmd() *cobra.Command {
 
 func threatIntelVerifyCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "verify <catalog-file>",
-		Short:   "Verify a signed catalog release (signature + expiry + schema); does not apply it",
-		Long:    "verify checks a threat-intelligence feed's signature, schema and expiry without changing the active feed.",
-		Example: "  olivares threatintel verify ./threat-feed.json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify <catalog-file>",
+		Short:       "Verify a signed catalog release (signature + expiry + schema); does not apply it",
+		Long:        "verify checks a threat-intelligence feed's signature, schema and expiry without changing the active feed.",
+		Example:     "  olivares threatintel verify ./threat-feed.json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src, err := resolveThreatIntelSource()
 			if err != nil {
@@ -95,11 +97,12 @@ func threatIntelVerifyCmd() *cobra.Command {
 
 func threatIntelApplyCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "apply <catalog-file>",
-		Short:   "Verify and apply a signed catalog release (fail-closed, anti-rollback); persists it for the engine",
-		Long:    "apply verifies a signed threat-intelligence feed, refuses rollback or invalid content, and persists it as the engine's last-known-good feed.",
-		Example: "  olivares threatintel apply ./threat-feed.json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "apply <catalog-file>",
+		Short:       "Verify and apply a signed catalog release (fail-closed, anti-rollback); persists it for the engine",
+		Long:        "apply verifies a signed threat-intelligence feed, refuses rollback or invalid content, and persists it as the engine's last-known-good feed.",
+		Example:     "  olivares threatintel apply ./threat-feed.json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			src, err := resolveThreatIntelSource()
 			if err != nil {
@@ -120,11 +123,12 @@ func threatIntelApplyCmd() *cobra.Command {
 
 func threatIntelPullCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "pull",
-		Short:   "Pull the catalog release from the configured endpoint, then verify and apply it (fail-closed)",
-		Long:    "pull fetches the configured threat-intelligence feed, verifies it, and applies it without replacing the last-known-good feed on any failure.",
-		Example: "  olivares threatintel pull",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "pull",
+		Short:       "Pull the catalog release from the configured endpoint, then verify and apply it (fail-closed)",
+		Long:        "pull fetches the configured threat-intelligence feed, verifies it, and applies it without replacing the last-known-good feed on any failure.",
+		Example:     "  olivares threatintel pull",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			src, err := resolveThreatIntelSource()
 			if err != nil {
@@ -142,8 +146,9 @@ func threatIntelPullCmd() *cobra.Command {
 func threatIntelSignCmd() *cobra.Command {
 	var inPath, keyPath, outPath string
 	cmd := &cobra.Command{
-		Use:   "sign",
-		Short: "Sign an unsigned catalog envelope (publisher side; key minted with `olivares license keygen`)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "sign",
+		Short:       "Sign an unsigned catalog envelope (publisher side; key minted with `olivares license keygen`)",
 		Long: "sign wraps an unsigned feed envelope JSON into a signed feed blob, using a base64-std Ed25519\n" +
 			"private key (mint it with `olivares license keygen`). The key is read from --key (a file) or the\n" +
 			envThreatIntelSigningKey + " env var, and is never logged. Reads the envelope from --in (or stdin),\n" +
@@ -179,11 +184,12 @@ func threatIntelSignCmd() *cobra.Command {
 func threatIntelStatusCmd() *cobra.Command {
 	var crosswalk bool
 	cmd := &cobra.Command{
-		Use:     "status",
-		Short:   "Show the active catalog release (versions, expiry, channels) and the governance crosswalk summary",
-		Long:    "status prints the active threat-intelligence feed's version, expiry and channels, or the Claude/Anthropic governance crosswalk with --crosswalk.",
-		Example: "  olivares threatintel status --crosswalk",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show the active catalog release (versions, expiry, channels) and the governance crosswalk summary",
+		Long:        "status prints the active threat-intelligence feed's version, expiry and channels, or the Claude/Anthropic governance crosswalk with --crosswalk.",
+		Example:     "  olivares threatintel status --crosswalk",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			src, err := resolveThreatIntelSource()
 			if err != nil {

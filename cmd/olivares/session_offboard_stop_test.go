@@ -324,13 +324,10 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	}
 	switch cause {
 	case "scim_delete", "ended_deadline", "ended_fallback":
-		if code, _ := h.req(http.MethodDelete, "/v1/scim/v2/Users/"+owner.UserID.String(), h.adminToken, h.tenantA, nil); code != http.StatusNoContent {
-			t.Fatalf("SCIM DELETE=%d", code)
-		}
+		deprovisionMember(t, h.authr, principalOfToken(t, h.authr, h.adminToken), model.TenantID(h.tenantA), owner.UserID)
 	case "directory_disable":
-		body := map[string]any{"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"}, "Operations": []map[string]any{{"op": "replace", "value": map[string]any{"active": false}}}}
-		if code, _ := h.req(http.MethodPatch, "/v1/scim/v2/Users/"+owner.UserID.String(), h.adminToken, h.tenantA, body); code != http.StatusOK {
-			t.Fatalf("directory disable=%d", code)
+		if err := patchDirectoryUserErr(h.authr, principalOfToken(t, h.authr, h.adminToken), model.TenantID(h.tenantA), owner.UserID, func(in *auth.SCIMUserInput) { in.Active = false }); err != nil {
+			t.Fatalf("directory disable: %v", err)
 		}
 	case "global_directory_disable":
 		// The public auth store is the directory reconciler's resolved account

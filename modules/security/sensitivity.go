@@ -241,26 +241,46 @@ func redactOnce(s string, counts map[string]int) string {
 		counts["key-value-secret"]++
 		return sub[1] + redactionMarker("key-value-secret")
 	})
+	return ReplacePII(out, func(rule, _ string) string {
+		counts[rule]++
+		return redactionMarker(rule)
+	})
+}
+
+// PIIRules lists the rule ids ReplacePII hands to its caller, in pass order: the
+// classes a caller may name in its own configuration.
+func PIIRules() []string {
+	rules := make([]string, 0, len(piiShapes)+1)
 	for _, sh := range piiShapes {
-		if n := len(sh.re.FindAllString(out, -1)); n > 0 {
-			counts[sh.rule] += n
-			out = sh.re.ReplaceAllString(out, redactionMarker(sh.rule))
-		}
+		rules = append(rules, sh.rule)
+	}
+	return append(rules, "credit-card")
+}
+
+// ReplacePII replaces every personal-data value the catalog recognizes (the
+// piiShapes and Luhn-valid cards, never the credential rules) with what replace
+// returns for its rule id and matched value, in one ordered pass: the shapes in
+// catalog order, then cards. RedactSensitive is this pass with a marker; the
+// Business reversible-token flow is the same pass with a token, so both name the
+// same values. The replacement is not rescanned.
+func ReplacePII(text string, replace func(rule, value string) string) string {
+	out := text
+	for _, sh := range piiShapes {
+		out = sh.re.ReplaceAllStringFunc(out, func(m string) string { return replace(sh.rule, m) })
 	}
 	// Cards last and Luhn-checked one candidate at a time, so a long digit run
 	// that is not a card is left exactly as it was.
-	out = ccCandidateRe.ReplaceAllStringFunc(out, func(m string) string {
+	return ccCandidateRe.ReplaceAllStringFunc(out, func(m string) string {
 		if !luhnValid(m) {
 			return m
 		}
-		counts["credit-card"]++
 		// The candidate pattern allows a separator after EVERY digit, including
 		// the last, so a match can swallow the space that follows the number.
 		// Give the trailing separators back rather than eating a character of the
 		// document. (Classification never noticed because it only counts.)
-		return redactionMarker("credit-card") + trailingSeparators(m)
+		sep := trailingSeparators(m)
+		return replace("credit-card", m[:len(m)-len(sep)]) + sep
 	})
-	return out
 }
 
 // cleanMarkerRe matches a value that is EXACTLY a redaction marker and nothing

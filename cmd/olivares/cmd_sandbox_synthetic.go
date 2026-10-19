@@ -18,8 +18,9 @@ func newSandboxGenerateCmd(flags *authClientFlags) *cobra.Command {
 	var count int
 	var subjectKind, seedFile string
 	cmd := &cobra.Command{
-		Use:   "generate",
-		Short: "Generate reproducible scenario inputs from a local template",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "generate",
+		Short:       "Generate reproducible scenario inputs from a local template",
 		Long: "generate asks the engine for bounded local fixtures without contacting a model.\n" +
 			"The server replaces {{index}} and {{subject_kind}}; other text stays literal.\n" +
 			"Use -o json to produce the step array accepted by scenarios create --steps-file.\n" +

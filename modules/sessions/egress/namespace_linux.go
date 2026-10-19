@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,6 +33,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
+	"github.com/olivaresai/olivares/core/runtime/confine"
 	"github.com/olivaresai/olivares/sdk/netbind"
 )
 
@@ -56,7 +58,7 @@ func Wrap(ctx context.Context, cmd *exec.Cmd, policy Policy) (waitReady func() e
 	if err != nil {
 		return nil, nil, "", err
 	}
-	p, err := startProxy(ctx, ds)
+	p, err := startProxy(ctx, ds, withCredential(policy))
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("session egress proxy: %w", err)
 	}
@@ -92,7 +94,12 @@ func Wrap(ctx context.Context, cmd *exec.Cmd, policy Policy) (waitReady func() e
 	cmd.SysProcAttr.GidMappingsEnableSetgroups = false
 	// Preserve only setup capabilities across the namespace helper's exec;
 	// restrictSockets drops the entire bounding/effective set before the tool.
-	cmd.SysProcAttr.AmbientCaps = []uintptr{unix.CAP_NET_ADMIN, unix.CAP_SETPCAP}
+	// Add to any the mount layer already asked for (confine.WrapMounts).
+	for _, capability := range []uintptr{unix.CAP_NET_ADMIN, unix.CAP_SETPCAP} {
+		if !slices.Contains(cmd.SysProcAttr.AmbientCaps, capability) {
+			cmd.SysProcAttr.AmbientCaps = append(cmd.SysProcAttr.AmbientCaps, capability)
+		}
+	}
 	for _, d := range ds {
 		ip := net.ParseIP(d.host)
 		port, err := strconv.Atoi(d.port) // destinations has validated and normalized the port.
@@ -189,30 +196,7 @@ func RunHelper(args []string, next func([]string, *os.File) int) int {
 	var exited *exec.ExitError
 	if errors.As(err, &exited) {
 		if status, ok := exited.Sys().(syscall.WaitStatus); ok && status.Signaled() {
-			// Restore the kernel disposition, not Go's crash/stack-dump handler.
-			// The supported Linux amd64/arm64 rt_sigaction layout uses four words.
-			action := struct {
-				handler, flags, restorer uintptr
-				mask                     uint64
-			}{}
-			sig := status.Signal()
-			// RLIMIT_CORE does not prevent a piped systemd-coredump collector.
-			if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
-				return 126
-			}
-			if sig != syscall.SIGKILL {
-				if _, _, errno := unix.RawSyscall6(unix.SYS_RT_SIGACTION, uintptr(sig), uintptr(unsafe.Pointer(&action)), 0, 8, 0, 0); errno != 0 {
-					return 126
-				}
-			}
-			if err := unix.Kill(os.Getpid(), sig); err != nil {
-				return 126
-			}
-			// Delivery can occur on another runtime thread. Never fall through to
-			// os.Exit(-1), which would turn a signal into the normal exit code 255.
-			for {
-				_ = unix.Pause()
-			}
+			return DieOfSignal(status.Signal())
 		}
 		return code
 	}
@@ -222,6 +206,35 @@ func RunHelper(args []string, next func([]string, *os.File) int) int {
 		return 126
 	}
 	return code
+}
+
+// DieOfSignal ends this process by sig, so the parent that waits on a stage in
+// front of a signalled child reads the signal and not an exit code. It returns
+// only when it cannot (126).
+func DieOfSignal(sig syscall.Signal) int {
+	// Restore the kernel disposition, not Go's crash/stack-dump handler.
+	// The supported Linux amd64/arm64 rt_sigaction layout uses four words.
+	action := struct {
+		handler, flags, restorer uintptr
+		mask                     uint64
+	}{}
+	// RLIMIT_CORE does not prevent a piped systemd-coredump collector.
+	if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
+		return 126
+	}
+	if sig != syscall.SIGKILL {
+		if _, _, errno := unix.RawSyscall6(unix.SYS_RT_SIGACTION, uintptr(sig), uintptr(unsafe.Pointer(&action)), 0, 8, 0, 0); errno != 0 {
+			return 126
+		}
+	}
+	if err := unix.Kill(os.Getpid(), sig); err != nil {
+		return 126
+	}
+	// Delivery can occur on another runtime thread. Never fall through to
+	// os.Exit(-1), which would turn a signal into the normal exit code 255.
+	for {
+		_ = unix.Pause()
+	}
 }
 
 func serveNamespace(req helperSpec, ready *os.File) (int, error) {
@@ -301,7 +314,13 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 	if err != nil {
 		return 126, err
 	}
-	argv := append([]string{"__olivares_confine", execArg, strconv.Itoa(req.ReadyFD)}, req.Args[2:]...)
+	// The mount layer, when the launch asked for one, is applied here: this is
+	// the last stage that holds the capability (the next one drops them all).
+	helperArgs, err := confine.ConsumeMounts(req.Args[2:])
+	if err != nil {
+		return 126, err
+	}
+	argv := append([]string{"__olivares_confine", execArg, strconv.Itoa(req.ReadyFD)}, helperArgs...)
 	child := exec.Command(self, argv...) // #nosec G204 -- reexecutes the engine's existing helper
 	child.Stdin, child.Stdout, child.Stderr = os.Stdin, os.Stdout, os.Stderr
 	var caFile string
@@ -344,11 +363,16 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 	return 126, err
 }
 
+// gitCAInfoEnv is the one variable git's TLS stack reads its CA file from: its
+// libcurl takes no SSL_CERT_FILE, so a session's git would refuse the proxy's
+// certificate under the variables driverfacts.TrustEnv names.
+const gitCAInfoEnv = "GIT_SSL_CAINFO"
+
 func proxyEnvironment(env []string, address, caFile string) []string {
 	var out []string
 	for _, value := range env {
 		key, _, _ := strings.Cut(value, "=")
-		if proxy, trust := driverfacts.NetworkEnv(key); !proxy && (!trust || caFile == "") {
+		if proxy, trust := driverfacts.NetworkEnv(key); !proxy && (!trust || caFile == "") && (key != gitCAInfoEnv || caFile == "") {
 			out = append(out, value)
 		}
 	}
@@ -359,6 +383,7 @@ func proxyEnvironment(env []string, address, caFile string) []string {
 		for _, name := range driverfacts.TrustEnv {
 			out = append(out, name+"="+caFile)
 		}
+		out = append(out, gitCAInfoEnv+"="+caFile)
 	}
 	return out
 }

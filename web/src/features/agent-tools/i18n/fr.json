@@ -204,6 +204,7 @@
     "readFailed": "Lecture impossible : {{message}}",
     "tools": "Outils d’IA",
     "packages": "Programmes et registres",
+    "egressHosts": "Hôtes réseau",
     "skills": "Skills",
     "mcp": "Serveurs MCP",
     "none": "Aucun",

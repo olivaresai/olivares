@@ -72,6 +72,7 @@ function TenantStoredBudgets() {
     <IntelPage icon={Wallet} title={t('budgets.title')}>
       <ListTruncationBadge
         query={budgetsQ}
+        filas={budgets.length}
         label={t('budgets.truncated', { n: budgets.length })}
         hint={t('budgets.truncatedHint')}
       />

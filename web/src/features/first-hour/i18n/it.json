@@ -1,0 +1,133 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI"
+  },
+  "status": {
+    "installed": "Installato",
+    "notInstalled": "Non installato",
+    "signedIn": "Accesso effettuato",
+    "signedInAs": "Accesso effettuato come {{account}}",
+    "notSignedIn": "Accesso non effettuato",
+    "usesKey": "Usa la tua chiave API: {{name}}",
+    "usesLocal": "Usa il server di modelli locale: {{name}}",
+    "keyRefused": "La chiave API {{name}} è stata rifiutata. Sostituiscila in Provider.",
+    "noSignIn": "Questo strumento non ha un accesso ufficiale eseguibile qui. Usa il comando da terminale in Altri modi."
+  },
+  "actions": {
+    "install": "Installa",
+    "installing": "Installazione…",
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "signInClaude": "Accedi con Claude",
+    "signInChatGPT": "Accedi con ChatGPT",
+    "useApiKey": "Usa invece una chiave API",
+    "signInGrok": "Accedi con il tuo account xAI",
+    "signInGoogle": "Accedi con Google",
+    "signIn": "Accedi"
+  },
+  "signIn": {
+    "openLink": "Apri la pagina di accesso",
+    "codeLabel": "Codice dalla pagina di accesso",
+    "codeHint": "Dopo aver approvato l'accesso, la pagina mostra un codice. Incollalo qui.",
+    "continue": "Continua",
+    "enterCode": "Nella pagina di accesso, inserisci questo codice:",
+    "waiting": "In attesa che tu finisca nella pagina di accesso…",
+    "expires": "Il codice vale 15 minuti. Annulla interrompe l'accesso su questo server.",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "starting": "Avvio dell'accesso…",
+    "lostTouch": "Connessione al server persa. L'accesso potrebbe essere ancora in corso."
+  },
+  "errors": {
+    "status": "Non è stato possibile leggere lo stato dello strumento.",
+    "install": "L'installazione non è terminata: {{error}}",
+    "signIn": "L'accesso non è stato completato. Avvialo di nuovo.",
+    "start": "La sessione non è partita: {{error}}",
+    "needsApproval": "Eseguire comandi senza chiedere richiede l'approvazione di una seconda persona in questo deployment. Avvia invece con sole modifiche:"
+  },
+  "steps": {
+    "install": {
+      "title": "Installa uno strumento per agenti",
+      "body": "Olivares esegue su questo server il Claude Code o il Codex ufficiale. Ne basta uno.",
+      "orUse": "Oppure usa una chiave API o un modello locale:",
+      "addKey": "Aggiungi una chiave API",
+      "addLocal": "Aggiungi un modello locale"
+    },
+    "signIn": {
+      "title": "Accedi",
+      "body": "Usa il tuo abbonamento Claude o ChatGPT. Le credenziali restano su questo server, dove lo strumento le conserva.",
+      "waiting": "Prima installa uno strumento."
+    },
+    "start": {
+      "title": "Avvia una sessione",
+      "body": "Scegli uno strumento e, se vuoi, indica cosa fare per prima cosa."
+    },
+    "progress": "{{done}} di 3 completati"
+  },
+  "start": {
+    "tool": "Strumento",
+    "notReady": "{{tool}} non può ancora partire.",
+    "folder": "Cartella",
+    "folderHint": "Una cartella su questo server. Lasciala vuota per partire in una nuova cartella.",
+    "folderNew": "Una nuova cartella per questa sessione",
+    "folderTyped": "Un'altra cartella…",
+    "folderChange": "Cambia cartella",
+    "readingFolder": "Lettura della cartella dell'ultima sessione…",
+    "prompt": "Primo messaggio (facoltativo)",
+    "promptPlaceholder": "Cosa deve fare per prima cosa?",
+    "more": "Altre opzioni",
+    "permission": "Cosa può fare l'agente",
+    "start": "Avvia",
+    "starting": "Avvio…",
+    "needTool": "Prima installa uno strumento e accedi.",
+    "dialogTitle": "Nuova sessione",
+    "dialogDescription": "Scegli uno strumento e indica cosa fare.",
+    "advanced": "Opzioni di avvio avanzate",
+    "secrets": "Secret come variabili d'ambiente",
+    "secretsHint": "La sessione legge ogni secret del vault scelto dalla variabile che indichi. Il valore non viene mai mostrato, registrato nei log né scritto nella cartella.",
+    "secretsNone": "Ancora nessun secret di sessione. Aggiungine uno con un nome che inizia con env/.",
+    "secretUse": "Dai {{name}} a questa sessione",
+    "secretVariable": "Variabile per {{name}}",
+    "secretsManage": "Gestisci i secret di sessione",
+    "openTools": "Apri gli strumenti AI",
+    "model": "Modello",
+    "providerDefault": "Predefinito ({{model}})",
+    "nativeDefault": "Predefinito di {{tool}}",
+    "modelChoice": "Modelli che hanno superato l'ultimo test di connessione di questa chiave.",
+    "chooseModel": "Scegli un modello: questa chiave non ha un modello predefinito.",
+    "noTestedModel": "Nessun modello di questa chiave ha ancora superato il test di connessione: testa la chiave in Provider.",
+    "openProviders": "Apri Provider",
+    "profile": "Profilo",
+    "profileNotSignedIn": "Accesso non effettuato",
+    "profileNeedsKey": "Serve una chiave",
+    "foldersUnreadable": "Non è stato possibile leggere le cartelle registrate. Digita il percorso di una cartella su questo server."
+  },
+  "lists": {
+    "runsTruncated": "Sessioni recenti: {{count}} caricate; ce ne sono altre.",
+    "runsHint": "Le sessioni più vecchie non sono in questo elenco.",
+    "foldersTruncated": "Cartelle registrate: {{count}} caricate; ce ne sono altre.",
+    "foldersHint": "Alcune cartelle registrate non sono in questo elenco."
+  },
+  "permission": {
+    "editsOnly": "Solo modifica dei file",
+    "editsAndCommands": "Modifica dei file ed esecuzione di comandi",
+    "readOnly": "Sola lettura",
+    "ask": "Chiedi prima di ogni azione"
+  },
+  "next": {
+    "title": "Poi, quando ti servono",
+    "invite": "Invita persone",
+    "identity": "Collega un identity provider",
+    "policies": "Imposta le policy",
+    "mcp": "Aggiungi server MCP",
+    "budgets": "Imposta i budget",
+    "cli": "Usa la riga di comando olivares",
+    "cliHint": "Su questo server il comando olivares è già installato. Da un altro computer, installalo con:",
+    "copy": "Copia",
+    "copied": "Copiato"
+  }
+}

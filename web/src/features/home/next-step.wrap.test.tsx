@@ -13,6 +13,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
 import { NextStep } from './next-step'
+import { NEXT_STEPS, stepView } from './next-step-catalog'
 import './i18n'
 
 vi.mock('@tanstack/react-router', () => ({
@@ -38,7 +39,9 @@ describe('a start link shows its whole label', () => {
   it('nothing in a start link truncates; the label wraps, verb first', () => {
     renderIntel(<NextStep />)
     const links = screen.getAllByRole('link')
-    expect(links.length).toBe(3)
+    expect(links.length).toBe(
+      NEXT_STEPS.filter((step) => stepView(step.viewId)).length,
+    )
     for (const link of links) {
       expect(
         link.querySelectorAll('.truncate'),
@@ -51,6 +54,8 @@ describe('a start link shows its whole label', () => {
       expect(label.className.split(/\s+/)).toContain('[overflow-wrap:anywhere]')
       expect(label.className.split(/\s+/)).not.toContain('whitespace-nowrap')
     }
+    // The agent card opens the Business deployment page: only a Business build offers it.
+    if (!stepView('deploy')) return
     const agent = screen.getByTestId('home-next-step-agent')
     expect(agent).toHaveTextContent(/^Deploy an agent · Roll an agent out/)
   })

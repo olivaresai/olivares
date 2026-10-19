@@ -56,11 +56,49 @@ import (
 
 const (
 	signInTimeout   = 15 * time.Minute
-	statusTimeout   = 15 * time.Second
 	maxSignInOutput = 64 << 10
 	maxPastedCode   = 2048
 	maxReason       = 240
 )
+
+// statusTimeout bounds one native status process. A variable so a test can shorten it.
+var statusTimeout = 15 * time.Second
+
+// slowStatusRead is how long a status read may take before the engine log says so: the
+// console's own load target. A read that fails or the tool answers with something the
+// engine cannot read is logged at any speed.
+var slowStatusRead = 5 * time.Second
+
+// statusOutcome names how a status read ended. A caller that left is "canceled"; a tool
+// that answered but not in a form the engine reads is "unrecognized" (the console shows it
+// as signed out), which no error reports.
+func statusOutcome(err error, unrecognized bool) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, exec.ErrWaitDelay):
+		return "timeout"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case err != nil:
+		return "failed"
+	case unrecognized:
+		return "unrecognized"
+	}
+	return "ok"
+}
+
+// logStatusRead says which tool's status read failed, timed out or was slow, and how long
+// it took, so a stalled first hour names its cause (#2575). It never carries the tool's
+// output or the error text: a status line can name an account. A fast read that succeeded,
+// or that its caller abandoned (a closed page), is not a finding; an abandoned one that
+// had already run past the load target is, because that is how a stall looks from a page.
+func logStatusRead(what, driver string, started time.Time, err error, unrecognized bool) {
+	elapsed := time.Since(started)
+	outcome := statusOutcome(err, unrecognized)
+	if elapsed < slowStatusRead && (outcome == "ok" || outcome == "canceled") {
+		return
+	}
+	slog.Warn(what, "driver", driver, "elapsed_ms", elapsed.Milliseconds(), "outcome", outcome)
+}
 
 // SignIn is one login in progress. It never carries the pasted code.
 type SignIn struct {
@@ -411,8 +449,17 @@ func signInMethodRefusal(facts driverfacts.Facts, method string) string {
 	return fmt.Sprintf("%s has no sign-in method %q. Use one of: %s.", facts.Name, method, strings.Join(ids, ", "))
 }
 
-// readStatus asks the installed tool whether it is signed in.
+// readStatus asks the installed tool whether it is signed in. A read that fails or is
+// slow is logged with the whole time it took (the login home, a shared read it waited
+// for, the tool's process); readNativeStatus logs the process alone.
 func (m *Module) readStatus(ctx context.Context, tenant model.TenantID, driver, accountRef string) (SignInStatus, error) {
+	started := time.Now()
+	st, err := m.readStatusUnlogged(ctx, tenant, driver, accountRef)
+	logStatusRead("tool sign-in status read", driver, started, err, st.unrecognized)
+	return st, err
+}
+
+func (m *Module) readStatusUnlogged(ctx context.Context, tenant model.TenantID, driver, accountRef string) (SignInStatus, error) {
 	out := SignInStatus{Driver: driver, AccountRef: accountRef}
 	program := m.program(driver)
 	if program == "" && accountRef == "" {
@@ -442,7 +489,15 @@ func (m *Module) readStatus(ctx context.Context, tenant model.TenantID, driver, 
 	return m.readCachedStatus(ctx, tenant, out, program, configDir, env)
 }
 
+// readNativeStatus runs the tool's own status command, logging it when it fails or is slow.
 func (m *Module) readNativeStatus(ctx context.Context, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
+	started := time.Now()
+	st, err := m.runNativeStatus(ctx, out, program, configDir, env)
+	logStatusRead("tool sign-in status process", out.Driver, started, err, st.unrecognized)
+	return st, err
+}
+
+func (m *Module) runNativeStatus(ctx context.Context, out SignInStatus, program, configDir string, env []string) (SignInStatus, error) {
 	driver := out.Driver
 	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()

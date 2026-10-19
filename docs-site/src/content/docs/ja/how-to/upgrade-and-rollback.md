@@ -22,11 +22,12 @@ description: >-
 
 ## どのアップグレード経路を使うか
 
-バイナリを新しくする方法は 2 つあり、どちらも同じ結果に到達します。
+バイナリを新しくする方法は 3 つあり、いずれも同じ結果に到達します。
 
 | インストール形態 | 経路 |
 |---|---|
-| ホスト上のバイナリ、systemd、Docker Compose | `olivares upgrade` — このページ |
+| ホスト上のバイナリ、systemd | `olivares upgrade` — このページ |
+| Docker または Podman コンテナ | `docker compose exec olivares olivares upgrade` を実行してから、コンテナを再作成します。イメージは変更できないため、リリースはデータボリューム（データディレクトリ配下の `ota/`）に保存され、イメージのバイナリは起動のたびに、そのリリースがイメージより新しい間、または同じバージョンを別にビルドしたものである間はそれを起動します。`ota/` を削除すると、コンテナはイメージのバイナリに戻ります。コマンドは [Docker と Compose](/ja/how-to/install-a-license/#docker-と-compose) にあります。 |
 | Kubernetes / Helm | イメージを設定し、operator にロールアウトさせます。Pod 内で `olivares upgrade` を実行しないでください。デプロイメントは宣言的であり、次の reconcile が変更を取り消します。 |
 
 ## 何より先に計画を確認する
@@ -53,7 +54,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.2
+olivares upgrade --check --current-version 0.3
 ```
 <!-- /release -->
 

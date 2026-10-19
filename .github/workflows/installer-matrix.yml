@@ -3,7 +3,7 @@
 #
 # DIST-24-05. This is an installer/userland qualification, not a native-package
 # repository qualification. Linux uses five real container userlands; macOS uses
-# a hosted runner. A missing public-release network path returns the third answer
+# a hosted runner, on a maintainer dispatch only (it is billed at the macOS rate). A missing public-release network path returns the third answer
 # after a dry-run and never turns into a green content assertion. Pull requests
 # use their own archives, which are unsigned development payloads.
 name: installer-matrix
@@ -132,7 +132,10 @@ jobs:
           bash scripts/installer-matrix-ci.sh "${args[@]}"
 
   macos-installer:
-    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
+    # A hosted macOS runner is the only native macOS machine there is, and it is billed at the
+    # macOS rate, so it runs on a maintainer dispatch only (release.yml dispatches this workflow
+    # after each publication). No pull_request or release event starts it.
+    if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
     runs-on: macos-14
     timeout-minutes: 80
     steps:

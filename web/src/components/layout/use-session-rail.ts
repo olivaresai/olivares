@@ -22,6 +22,7 @@ import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
 import { SESSION_PARAM } from '@/features/sessions/session-address'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RailStatus } from './session-rail'
+import { attentionSnapshots, type AttentionSnapshot } from './session-attention'
 import {
   RAIL_ROWS_PER_GROUP,
   railGroups,
@@ -74,13 +75,15 @@ export interface SessionRailData {
   /** False when this principal may read no source: no rail is drawn. */
   visible: boolean
   groups: RailGroup[]
+  attention: AttentionSnapshot[]
+  attentionReady: boolean
   sessionCounts: { live: number; needsYou: number }
   status: RailStatus
   allTo: '/sessions' | '/agentops' | '/communications/handoffs'
 }
 
 /** Observed sessions, operated runs and handoffs offered to the operator. */
-export function useSessionRail(): SessionRailData {
+export function useSessionRail(background = false): SessionRailData {
   const { navigable } = useViewAccess()
   const { can } = useAuth()
   const boundary = useAuthBoundary()
@@ -112,6 +115,7 @@ export function useSessionRail(): SessionRailData {
       ),
     enabled: readSessions,
     refetchInterval: RAIL_REFRESH_MS,
+    refetchIntervalInBackground: background,
     staleTime: RAIL_REFRESH_MS / 2,
   })
   // The sessions this engine operates: what a person started from New session.
@@ -134,6 +138,7 @@ export function useSessionRail(): SessionRailData {
         signal,
       ),
     enabled: readRuns,
+    refetchIntervalInBackground: background,
     refetchInterval: (query) =>
       query.state.data?.items.some((r) => ACTIVE_RUN_STATES.has(r.state))
         ? RAIL_ACTIVE_REFRESH_MS
@@ -169,19 +174,16 @@ export function useSessionRail(): SessionRailData {
     loading: reads.some((read) => read.isPending),
     error: reads.some((read) => read.isError),
   }
-  const groups = railGroups(
-    {
-      live: readSessions && !live.isError ? (live.data?.items ?? []) : [],
-      handoffs:
-        readHandoffs && !handoffs.isError ? (handoffs.data?.items ?? []) : [],
-      runs: readRuns && !runs.isError ? (runs.data?.items ?? []) : [],
-    },
-    now,
-    {
-      sessionTo: readSessions ? '/sessions' : '/agentops',
-      canOpenApprovals,
-    },
-  )
+  const sources = {
+    live: readSessions && !live.isError ? (live.data?.items ?? []) : [],
+    handoffs:
+      readHandoffs && !handoffs.isError ? (handoffs.data?.items ?? []) : [],
+    runs: readRuns && !runs.isError ? (runs.data?.items ?? []) : [],
+  }
+  const groups = railGroups(sources, now, {
+    sessionTo: readSessions ? '/sessions' : '/agentops',
+    canOpenApprovals,
+  })
   const allTo = readSessions
     ? '/sessions'
     : readRuns
@@ -190,6 +192,13 @@ export function useSessionRail(): SessionRailData {
   return {
     visible: readSessions || readRuns || readHandoffs,
     groups,
+    // The age of a turn end is measured at the poll that read it, not at the minute tick.
+    attention: attentionSnapshots(
+      sources,
+      Math.max(live.dataUpdatedAt, runs.dataUpdatedAt),
+    ),
+    attentionReady:
+      (!readSessions || live.isSuccess) && (!readRuns || runs.isSuccess),
     sessionCounts: {
       live: groups
         .filter((g) => g.id !== 'earlier')

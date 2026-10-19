@@ -52,7 +52,7 @@ casa() { command grep -qE "$1" "$OUTPUT"; }
 
 # ── El doble ──────────────────────────────────────────────────────────────────────────────────
 cat > "$T/doble.py" <<'PY'
-import http.server, json, subprocess, sys, threading, uuid
+import http.server, json, os, subprocess, sys, threading, uuid
 
 # `ruta -> campo de sujeto unico`, tal y como el motor real se comporta (409 sobre un sujeto
 # repetido). Sin esto el doble seria mas permisivo que el motor y el banco mediria una fantasia.
@@ -76,6 +76,13 @@ class H(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         r = self._ruta()
+        if r == "/v1/server-info":
+            # La edicion la fija DOBLE_EDICION; sin ella el doble es Business, que sirve las trece.
+            cuerpo = json.dumps({"edition": os.environ.get("DOBLE_EDICION", "enterprise")}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(cuerpo)))
+            self.end_headers(); self.wfile.write(cuerpo); return
         if forzado.get(r) == 500:
             self.send_response(500); self.end_headers(); self.wfile.write(b"boom"); return
         cuerpo = json.dumps({"items": almacen.get(r, [])}).encode()
@@ -712,6 +719,8 @@ mkdir -p "$T/lib12"
 muta_de "$LIBDIR/redaccion.py" "$T/lib12/redaccion.py" \
 	'        print(redactor(f"{etiqueta}' \
 	'        print((f"{etiqueta}'
+# El guion importa tambien la edicion de la libreria: sin ella el proceso muere por otra causa.
+cp "$LIBDIR/demo_edition.py" "$T/lib12/demo_edition.py"
 if exige_mutante "$T/m12.py" m12 && [ -s "$T/lib12/redaccion.py" ] \
    && ! cmp -s "$LIBDIR/redaccion.py" "$T/lib12/redaccion.py"; then
 	# ⛔ `export`, no un prefijo: una variable delante de una FUNCION de bash no llega al hijo, y
@@ -970,6 +979,43 @@ if muta_de "$RAIZ/scripts/lib/redaccion.py" "$T/lib-pct/redaccion.py" \
 	fi
 else
 	malo "could not build the decoded-form mutant: no artifact means no verdict"
+fi
+
+# ── EDICION · una Community no siembra lo que solo Business sirve (dev#2485) ───────────────────
+# El doble anuncia `community`: las superficies `deploy` y `redteam` no se siembran (ni una peticion
+# a sus rutas) y ninguna aprobacion pide `deploy.promote`. Lo mismo corrido como Business las siembra.
+r="$(DOBLE_EDICION=community corre "$GUION" "$OBJETIVOS")"
+if [ "$r" = "0" ] && casa '`deploy` is a Business surface' && casa '`redteam` is a Business surface'; then
+	paso "a Community estate skips the Business surfaces deploy and redteam (rc 0)"
+else
+	malo "the Community run did not skip the Business surfaces (rc $r): $(command grep -c 'Business surface' "$OUTPUT") lines say so"
+fi
+if casa 'POST /v1/m/(deploy|redteam)/'; then
+	malo "the Community run still posted to a Business surface"
+else
+	paso "the Community run posts nothing to /v1/m/deploy or /v1/m/redteam"
+fi
+# La fabrica de aprobaciones, llamada con los indices que el bucle usa: en Community ninguna pide
+# `deploy.promote`, y en Business la primera si.
+acciones="$(python3 - "$GUION" <<'PYA'
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("volume", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+fabrica = m.GENERADORES["approvals"][2]
+print(json.dumps({e: [fabrica("x", i, {"edition": e})["action"] for i in range(6)]
+                  for e in ("community", "enterprise")}))
+PYA
+)"
+if [ "$(python3 -c 'import json,sys;d=json.loads(sys.argv[1]);print("deploy.promote" not in d["community"] and "deploy.promote" in d["enterprise"])' "$acciones")" = "True" ]; then
+	paso "no Community approval asks for deploy.promote, and a Business estate still does"
+else
+	malo "the approval generator ignores the edition: $acciones"
+fi
+r="$(DOBLE_EDICION=enterprise corre "$GUION" "$OBJETIVOS")"
+if [ "$r" = "0" ] && ! casa 'Business surface'; then
+	paso "the same run as a Business estate seeds every declared surface (rc 0)"
+else
+	malo "the Business run skipped a surface or failed (rc $r)"
 fi
 
 printf '\ntest-seed-estate-volume: %d passed, %d failed\n' "$ok" "$fail"

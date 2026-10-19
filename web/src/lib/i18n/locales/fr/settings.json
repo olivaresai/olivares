@@ -23,7 +23,9 @@
     "about": "À propos",
     "sections": "Sections des réglages",
     "signing": "Signature des rapports",
-    "tracing": "Traces"
+    "tracing": "Traces",
+    "sessionIdle": "Mémoire des sessions",
+    "updates": "Mises à jour"
   },
   "general": {
     "title": "Général",
@@ -33,7 +35,7 @@
     "density": "Densité",
     "densityHint": "Compact affiche plus de lignes ; confortable se lit plus facilement.",
     "language": "Langue",
-    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
     "time": "Heure",
     "timeHint": "Les heures s’affichent dans votre fuseau ({{zone}}). Les enregistrements et les exports restent en UTC.",
     "clock24": "24 heures",
@@ -49,6 +51,15 @@
     "notifications": "Les préférences de notification ne sont pas encore enregistrées sur cette installation.",
     "sessionDefaults": "Les valeurs de session ne sont pas encore enregistrées sur cette installation."
   },
+  "sessionNotifications": {
+    "title": "Notifications de session",
+    "hint": "Me prévenir quand une session a besoin de moi ou se termine pendant que cet onglet est en arrière-plan. S’applique à ce navigateur.",
+    "notifyMe": "Me prévenir",
+    "denied": "Les notifications sont bloquées dans ce navigateur.",
+    "unavailable": "Les notifications du navigateur ne sont pas disponibles ici.",
+    "needsYou": "Cette session a besoin de vous.",
+    "finished": "Le tour est terminé."
+  },
   "keyboard": {
     "title": "Clavier",
     "scope": "Les touches auxquelles cette installation répond. Elles sont les mêmes pour tout le monde."
@@ -57,6 +68,7 @@
     "title": "Édition et modules",
     "scope": "L'édition de ce build, les modules qu'il exécute et ce qu'ajoute Business.",
     "label": "Édition",
+    "licenseAlias": "Licence",
     "unknown": "Non indiquée par ce moteur",
     "editions": {
       "community": "Community",
@@ -70,6 +82,16 @@
       "regulatory": "Opérations réglementaires : registres DORA, classification des incidents NIS 2, profils OSCAL, packs américains et sectoriels, et surveillance continue des contrôles",
       "reports": "Rapports Business et rapports planifiés",
       "toolPins": "Épinglage d'outils"
+    },
+    "badge": {
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "businessShort": "Biz",
+      "enterpriseShort": "Ent",
+      "accessibleName": "Édition {{edition}}",
+      "show": "Afficher le badge d’édition",
+      "loadError": "Impossible de charger la préférence du badge.",
+      "saveError": "Impossible d’enregistrer la préférence du badge. Réessayez."
     }
   },
   "about": {
@@ -286,5 +308,45 @@
     "hours_many": "{{count}} heures",
     "hours_other": "{{count}} heures",
     "ssoInactive": "L’authentification unique est demandée, mais son fournisseur d’identité est inactif. Cette exigence ne bloque pas la connexion par mot de passe."
+  },
+  "sessionIdle": {
+    "minutes": "Arrêter après des minutes d’inactivité",
+    "description": "Désactivé par défaut. Libère la mémoire en arrêtant les sessions terminées qui ne sont plus ouvertes. Reprendre conserve le dossier et la conversation.",
+    "hint": "0 désactive, sinon 6 à 10080 minutes. L’inactivité commence après cinq minutes sans sortie. Les sessions avec des approbations, des processus enfants ou des sessions liées en cours, ou un nouveau message, restent actives.",
+    "saved": "Réglage de mémoire des sessions enregistré."
+  },
+  "updates": {
+    "title": "Mises à jour",
+    "description": "La version que ce moteur exécute, la version signée la plus récente de son canal et une action pour l'installer. Le moteur vérifie la version, remplace son binaire et redémarre une fois ; le redémarrage arrête les sessions en cours.",
+    "check": "Vérifier à nouveau",
+    "install": "Mettre à jour vers {{version}}",
+    "applied": "Mise à jour installée.",
+    "failed": "La mise à jour a échoué. Réessayez.",
+    "restarting": "Redémarrage du moteur…",
+    "stillRestarting": "Le moteur n'est pas encore revenu sur la nouvelle version. Rechargez cette page dans une minute pour vérifier.",
+    "unavailable": "Ce moteur ne peut pas installer de mises à jour depuis la console. Exécutez olivares upgrade sur le serveur.",
+    "loadFailed": "L'état des mises à jour n'a pas pu être lu. Réessayez.",
+    "status": {
+      "available": "Mise à jour disponible",
+      "current": "À jour",
+      "unchecked": "Impossible de vérifier les mises à jour"
+    },
+    "security": "Version de sécurité",
+    "release": "Version",
+    "running": "En cours",
+    "channel": "Canal",
+    "newest": "Version la plus récente",
+    "advisories": "Corrige",
+    "notes": "Notes de version",
+    "confirm": {
+      "title": "Mettre à jour vers {{version}} ?",
+      "stop_one": "{{count}} session en cours s'arrête. Elle pourra être reprise après le redémarrage.",
+      "stop_many": "{{count}} sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
+      "stop_other": "{{count}} sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
+      "none": "Le moteur redémarre une fois sur la nouvelle version.",
+      "confirm": "Installer et redémarrer"
+    },
+    "alreadyCurrent": "Déjà sur la version la plus récente. Rien n'a été installé.",
+    "restartRequired": "Une version plus récente est installée. Redémarrez le moteur avec son gestionnaire de services pour l'exécuter."
   }
 }

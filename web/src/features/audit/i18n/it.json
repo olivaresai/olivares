@@ -1,0 +1,148 @@
+{
+  "title": "Registro di audit",
+  "subtitle": "La catena di evidenze a prova di manomissione. Verificala ed esportala verso il tuo WORM/SIEM.",
+  "subtitleSystem": "La catena del tenant di sistema delle operazioni amministrative tra tenant (sola lettura).",
+  "searchLoaded": "Filtra solo le righe caricate (lato client)…",
+  "filters": {
+    "open": "Filtri",
+    "title": "Filtri del registro lato server",
+    "q": "Cerca nel registro",
+    "qPlaceholder": "Azione, attore, tipo o ID del target",
+    "actor": "Attore",
+    "actorPlaceholder": "Attore esatto",
+    "action": "Prefisso dell'azione",
+    "actionPlaceholder": "es. agent.",
+    "targetKind": "Tipo di target",
+    "targetKindPlaceholder": "Tipo di target esatto",
+    "targetId": "ID del target",
+    "targetIdPlaceholder": "ID del target esatto",
+    "since": "Dal",
+    "until": "Al",
+    "clearOne": "Rimuovi il filtro {{filter}}",
+    "clearAll": "Rimuovi tutti i filtri"
+  },
+  "scan": {
+    "incomplete": "Scansione fino al seq {{seq}}: non è l'intero registro; Carica altri prosegue la scansione."
+  },
+  "scope": {
+    "label": "Ambito del registro",
+    "tenant": "Registro del tenant",
+    "system": "Registro di sistema",
+    "systemHint": "La catena del tenant di sistema registra le operazioni amministrative tra tenant ed è in sola lettura qui. Verifica ed esportazione operano sui registri dei tenant."
+  },
+  "cols": {
+    "seq": "Seq",
+    "occurred": "Quando",
+    "action": "Azione",
+    "actor": "Attore",
+    "target": "Target",
+    "hash": "Hash"
+  },
+  "actorKind": {
+    "user": "Utente",
+    "agent": "Agente",
+    "connector": "Connettore",
+    "system": "Sistema"
+  },
+  "verify": {
+    "action": "Verifica la catena",
+    "failed": "Non è stato possibile completare la verifica.",
+    "chain": "Catena · {{checked}} anelli",
+    "checkpoints": "Checkpoint · {{count}} firmati",
+    "noCheckpoints": "Ancora nessun checkpoint firmato",
+    "attested": "Attestata fino al seq {{seq}}",
+    "chainBreak": "Catena interrotta al seq {{seq}}",
+    "checkpointBreak": "Firma del checkpoint non valida al seq {{seq}}"
+  },
+  "pubkey": {
+    "action": "Chiave di verifica",
+    "label": "Chiave di firma del registro",
+    "key": "chiave",
+    "hint": "Condividi questa chiave pubblica Ed25519 perché una parte esterna possa verificare offline sia gli eventi esportati sia i checkpoint: la stessa chiave firma entrambi.",
+    "failed": "La chiave di verifica non è disponibile."
+  },
+  "export": {
+    "action": "Esporta",
+    "options": "Opzioni di esportazione",
+    "formatLabel": "Formato di esportazione",
+    "fromSeq": "Dal seq",
+    "toSeq": "Al seq",
+    "optional": "Facoltativo",
+    "useCurrent": "Usa filtri e intervallo attuali",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "Richiesta OTLP",
+      "otlp_envelope": "Richiesta OTLP (alias)",
+      "otlp_log_record": "Righe OTLP LogRecord",
+      "ocsf": "OCSF"
+    },
+    "done": "Esportazione scaricata.",
+    "failed": "Esportazione non riuscita.",
+    "forbidden": "Non hai l'autorizzazione per esportare il registro."
+  },
+  "detail": {
+    "title": "Evento di evidenza",
+    "seqTitle": "Evento #{{seq}}",
+    "signed": "Evento firmato: questa riga contiene una propria firma sul proprio hash di catena",
+    "seq": "Sequenza",
+    "occurred": "Avvenuto",
+    "action": "Azione",
+    "actor": "Attore",
+    "actorSystem": "sistema",
+    "target": "Target",
+    "id": "ID evento",
+    "chainTitle": "Integrità della catena",
+    "prevHash": "Hash precedente",
+    "prev": "prec.",
+    "hash": "Hash dell'evento",
+    "this": "questo",
+    "sig": "Firma dell'evento",
+    "checkpoint": "firma",
+    "chainHint": "L'hash di ogni evento si concatena a quello precedente. Dietro un'impronta non c'è alcun payload: l'hash è l'evidenza (dati minimi per progettazione).",
+    "details": "Dettagli",
+    "actorMember": "Un membro"
+  },
+  "empty": {
+    "title": "Ancora nessuna evidenza",
+    "description": "Il registro è vuoto per questo ambito. Le operazioni governate aggiungono eventi a prova di manomissione man mano che avvengono."
+  },
+  "actions": {
+    "governance_approval_create": "Approvazione richiesta",
+    "governance_approval_decision": "Decisione di approvazione registrata",
+    "governance_approval_cancel": "Approvazione annullata",
+    "sessions_run_launched": "Sessione avviata",
+    "sessions_run_stopping": "Arresto della sessione richiesto",
+    "sessions_work_item_create": "Work item creato",
+    "sessions_work_item_ready": "Work item contrassegnato come pronto",
+    "sessions_work_item_complete": "Work item completato",
+    "authorization_decision_record": "Decisione di autorizzazione registrata",
+    "policy_artifact_record": "Evidenza della policy registrata",
+    "governance_policy_create": "Policy creata",
+    "governance_policy_update": "Policy aggiornata",
+    "governance_policy_delete": "Policy eliminata",
+    "auth_login": "Accesso effettuato",
+    "auth_logout": "Uscita effettuata",
+    "auth_login_failed": "Accesso non riuscito",
+    "auth_webauthn_register": "Passkey aggiunta",
+    "auth_webauthn_unregister": "Passkey rimossa",
+    "user_set_password": "Password modificata",
+    "user_create": "Persona aggiunta",
+    "membership_grant": "Ruolo assegnato",
+    "membership_update": "Ruolo modificato",
+    "membership_offboard": "Persona rimossa",
+    "token_issue": "Token API creato",
+    "token_revoke": "Token API revocato",
+    "secret_delete": "Secret eliminato"
+  },
+  "targets": {
+    "core_policy": "Policy"
+  },
+  "internal": {
+    "hidden": "Record interni nascosti: {{count}}",
+    "show": "Mostra i record interni",
+    "hide": "Nascondi i record interni",
+    "allHidden": "Tutto ciò che è stato caricato finora è un record interno."
+  }
+}

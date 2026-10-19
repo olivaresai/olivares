@@ -72,6 +72,7 @@ func TestSessionsDependencySetFromRealBoot(t *testing.T) {
 		"ProviderApprovalPrincipal",
 		"QueuedLaunchAuthorization",
 		"ApprovalGate",
+		"ProfileAccess",
 	}
 	t.Run("empty communication authority", func(t *testing.T) {
 		d := *eng.sessionsMod.Dependencies

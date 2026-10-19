@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -32,9 +33,10 @@ func TestCommunityRouteSurfaces(t *testing.T) {
 		Modules []struct {
 			Namespace string `json:"namespace"`
 			Routes    []struct {
-				Method  string `json:"method"`
-				Pattern string `json:"pattern"`
-				Surface string `json:"surface"`
+				Method     string `json:"method"`
+				Pattern    string `json:"pattern"`
+				Permission string `json:"permission"`
+				Surface    string `json:"surface"`
 			} `json:"routes"`
 		} `json:"modules"`
 	}
@@ -42,10 +44,24 @@ func TestCommunityRouteSurfaces(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := map[string]string{}
+	nhiRoutes := 0
 	for _, m := range inv.Modules {
 		for _, r := range m.Routes {
 			got[m.Namespace+" "+r.Method+" "+r.Pattern] = r.Surface
+			// The Identity & Scale lifecycle was extracted to Business: every route that
+			// requires its permissions refuses with 501 here, and no Community screen
+			// asks for them, so none may be counted as a missing console surface.
+			if strings.HasPrefix(r.Permission, "governance:nhi:") {
+				nhiRoutes++
+			}
+			if strings.HasPrefix(r.Permission, "governance:nhi:") && r.Surface != "edition-refusal" {
+				t.Errorf("%s %s %s requires %s and has surface %q, want edition-refusal",
+					m.Namespace, r.Method, r.Pattern, r.Permission, r.Surface)
+			}
 		}
+	}
+	if nhiRoutes == 0 {
+		t.Fatal("the inventory carries no governance:nhi:* route: the class assertion above checked nothing")
 	}
 	for route := range editionRouteSurfaces {
 		if _, ok := got[route]; !ok {
@@ -61,6 +77,9 @@ func TestCommunityRouteSurfaces(t *testing.T) {
 		"redteam POST /runs":             "edition-refusal",
 		"orchestration GET /graph":       "edition-refusal",
 		"governance POST /breakglass":    "edition-refusal",
+		"governance POST /agents":        "edition-refusal",
+		"governance GET /nhi":            "edition-refusal",
+		"governance GET /bindings":       "console",
 		// Business classifies these two api-only; Community must override them.
 		"finops POST /seats":                  "edition-refusal",
 		"governance POST /breakglass/consume": "edition-refusal",
@@ -70,6 +89,12 @@ func TestCommunityRouteSurfaces(t *testing.T) {
 		"compliance POST /risk/classify":      "console",
 		"reporting GET /reports":              "edition-refusal",
 		"posture GET /export":                 "edition-refusal",
+
+		// Fleet-wide managed settings are Business; validate stays.
+		"claude-policy POST /{surface}/publish":  "edition-refusal",
+		"claude-policy GET /{surface}/artifact":  "edition-refusal",
+		"claude-policy GET /inventory":           "edition-refusal",
+		"claude-policy POST /{surface}/validate": "console",
 	} {
 		if got[route] != want {
 			t.Errorf("%s surface = %q, want %q", route, got[route], want)

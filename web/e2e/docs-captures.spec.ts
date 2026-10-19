@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { randomBytes } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
+import { Aal3Policy } from './aal3-policy'
 import { journeyNowLink } from './browser-session'
 import {
   encabezadoDeDialogo,
@@ -14,6 +15,9 @@ import {
 import { tomar } from './docs-capture-helpers'
 import { esperarExportacionDePostura } from './posture-export-terminal'
 import { EXTENSION_ROUTES } from '../src/features/extension-routes'
+import census from '../src/features/route-census.json' with { type: 'json' }
+import type { ProtocolBindingSpec } from '../src/features/protocol-bindings/types'
+import { newCanonicalId } from '../src/features/communications/intent'
 
 // Capture the running console in English, with seeded data and declared response
 // fixtures, in both themes. The runner supplies the engine and tenant; PNGs and
@@ -105,7 +109,8 @@ async function provisionaMiembroK3(
     'X-Olivares-Tenant': demoTenant,
     'Content-Type': 'application/json',
   }
-  const email = `docs-capture-k3-${rol}-${randomBytes(6).toString('hex')}@olivares.local`
+  // A neutral local part: the account is on screen in the member lists and the audit trail.
+  const email = `${rol}.${randomBytes(4).toString('hex')}@olivares.local`
   const clave = randomBytes(24).toString('base64url')
   const creado = await api.post('/v1/users', {
     headers: cabeceras,
@@ -130,6 +135,8 @@ async function provisionaMiembroK3(
     tenant: demoTenant,
     role: rol,
   })
+  if (rol === 'admin') await grantChannelAdministration(api, cabeceras, usuario)
+  if (rol === 'editor') await seedMemberHandoff(api, cabeceras, usuario)
   const listado = await api.get('/v1/members', { headers: cabeceras })
   expect(listado.status()).toBe(200)
   const padron = (await listado.json()) as {
@@ -153,6 +160,276 @@ async function provisionaMiembroK3(
   }
 }
 
+// The recipient exists only at capture time. Offer real owned work from the
+// dataset's tenant administrator before the new member signs in.
+async function seedMemberHandoff(
+  api: import('@playwright/test').APIRequestContext,
+  ownerHeaders: Record<string, string>,
+  recipient: string,
+) {
+  const login = await api.post('/v1/auth/login', {
+    data: { email: 'r.okafor@olivares.local', password: DEMO_PASSWORD },
+  })
+  expect(login.status(), 'handoff sender login').toBe(200)
+  const headers = {
+    Authorization: `Bearer ${(await login.json()).token as string}`,
+    'X-Olivares-Tenant': demoTenant,
+  }
+  const spaces = await api.get('/v1/workspaces', { headers })
+  expect(spaces.status()).toBe(200)
+  const workspace = ((await spaces.json()) as { items: { id: string }[] })
+    .items[0]
+  expect(workspace, 'handoff workspace').toBeTruthy()
+  const channels = await api.get(
+    `/v1/m/sessions/channels?workspace_id=${workspace.id}&limit=100`,
+    { headers },
+  )
+  expect(channels.status()).toBe(200)
+  const channel = (
+    (await channels.json()) as { items: { id: string; version: number }[] }
+  ).items[0]
+  expect(channel, 'handoff sender channel').toBeTruthy()
+  // The new member needs a current read grant on the carrier's channel. The
+  // dataset owner grants only that access, retaining administration itself.
+  const granted = await api.post(
+    `/v1/m/sessions/channels/${channel.id}/grants`,
+    {
+      headers: {
+        ...ownerHeaders,
+        'Idempotency-Key': newCanonicalId(),
+        'If-Match': `"v${channel.version}"`,
+      },
+      data: {
+        subject: { kind: 'user', ref: recipient },
+        can_read: true,
+        can_write: false,
+        can_admin: false,
+      },
+    },
+  )
+  expect(granted.status(), 'handoff recipient channel read grant').toBe(200)
+  const who = await api.get('/v1/auth/whoami', { headers })
+  expect(who.status()).toBe(200)
+  const input = {
+    workspace_id: workspace.id,
+    work_kind: 'implementation',
+    title: 'Review release readiness',
+    brief_md: 'Review the service checks and record the release decision.',
+    priority: 'p1',
+    owner_kind: 'user',
+    owner_ref: ((await who.json()) as { user_id: string }).user_id,
+    provenance_kind: 'human',
+    provenance_ref: 'release-readiness',
+    context_refs: [],
+    acceptance: [
+      {
+        criterion_key: 'release-decision',
+        ordinal: 0,
+        statement: 'Record the release readiness decision.',
+        required: true,
+      },
+    ],
+  }
+  const workPath = '/v1/m/sessions/work-items'
+  const plan = await api.post(`${workPath}?mode=plan`, { headers, data: input })
+  expect(plan.status(), 'handoff work plan').toBe(200)
+  const planned = (await plan.json()) as { verdict: string; plan_hash: string }
+  expect(planned.verdict).toBe('LIMPIO')
+  expect(planned.plan_hash).toMatch(/^[0-9a-f]{64}$/)
+  const created = await api.post(`${workPath}?mode=apply`, {
+    headers: {
+      ...headers,
+      'Idempotency-Key': randomUUID(),
+      'If-Plan-Hash': planned.plan_hash,
+    },
+    data: input,
+  })
+  expect(created.status(), 'handoff work apply').toBe(200)
+  const work = (await created.json()) as { result_id: string; verdict: string }
+  expect(work.verdict).toBe('LIMPIO')
+  expect(work.result_id).toBeTruthy()
+  const source = await api.get(`${workPath}/${work.result_id}`, { headers })
+  expect(source.status(), 'handoff source work read').toBe(200)
+  const etag = source.headers()['etag']
+  expect(etag, 'handoff source work version').toMatch(/^"v[1-9][0-9]*"$/)
+  const offered = await api.post('/v1/m/sessions/handoffs', {
+    headers: {
+      ...headers,
+      'Idempotency-Key': newCanonicalId(),
+      'If-Match': etag,
+    },
+    data: {
+      channel_id: channel.id,
+      work_item_id: work.result_id,
+      recipient: { kind: 'user', ref: recipient },
+      handoff: {
+        summary: 'Service checks are ready for review.',
+        next_action: 'Record the release decision.',
+      },
+      ack_deadline: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
+  })
+  expect(offered.status(), `handoff offer: ${await offered.text()}`).toBe(201)
+}
+
+async function seedProtocolDraft(page: import('@playwright/test').Page) {
+  const api = page.request
+  const login = await api.post('/v1/auth/login', {
+    data: { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+  })
+  expect(login.status()).toBe(200)
+  const headers = {
+    Authorization: `Bearer ${(await login.json()).token as string}`,
+    'X-Olivares-Tenant': demoTenant,
+  }
+  const spaces = await api.get('/v1/workspaces', { headers })
+  expect(spaces.status()).toBe(200)
+  const workspace = ((await spaces.json()) as { items: { id: string }[] })
+    .items[0]
+  expect(workspace, 'protocol draft workspace').toBeTruthy()
+  const input = {
+    workspace_id: workspace.id,
+    binding_key: 'release-readiness',
+    generation: 1,
+    protocol: 'a2a',
+    protocol_version: '1.0.1',
+    direction: 'outbound',
+    local_kind: 'work_item',
+    local_selector: { work_kind: 'implementation' },
+    peer_authority: 'https://peer.example.invalid',
+    remote_resource_kind: 'agent',
+    remote_resource_ref: 'agent:release-review',
+    mapping_schema: 'olivares.protocol-binding/v1',
+    mapping: [
+      {
+        source: 'work.title',
+        target: 'message.text',
+        cardinality: 'one_to_one',
+        transform: 'text',
+      },
+    ],
+    known_losses: [],
+    rule_refs: ['rule:release-readiness'],
+    permission_profile_ref: 'permission:release-readiness',
+    currency_policy: 'pinned',
+  }
+  const endpoint = '/v1/m/sessions/protocol-binding-specs'
+  const listed = await api.get(
+    `${endpoint}?workspace_id=${workspace.id}&binding_key=${input.binding_key}&generation=1&limit=100`,
+    { headers },
+  )
+  expect(listed.status()).toBe(200)
+  const existing = (
+    (await listed.json()) as { items: ProtocolBindingSpec[] }
+  ).items.find((spec) => spec.generation === input.generation)
+  // A retry after apply reads the same generation rather than creating it again.
+  let spec = existing
+  if (!spec) {
+    const plan = await api.post(`${endpoint}?mode=plan`, {
+      headers,
+      data: input,
+    })
+    expect(plan.status(), `protocol draft plan: ${await plan.text()}`).toBe(200)
+    const planned = (await plan.json()) as { plan_hash: string }
+    expect(planned.plan_hash).toMatch(/^[0-9a-f]{64}$/)
+    const applied = await api.post(`${endpoint}?mode=apply`, {
+      headers: {
+        ...headers,
+        'Idempotency-Key': randomUUID(),
+        'If-Plan-Hash': planned.plan_hash,
+      },
+      data: input,
+    })
+    expect(
+      applied.status(),
+      `protocol draft apply: ${await applied.text()}`,
+    ).toBe(201)
+    spec = ((await applied.json()) as { spec: ProtocolBindingSpec }).spec
+  }
+  expect(spec.state).toBe('draft')
+  expect(spec.validation.verdict).toBe('UNKNOWN')
+  const read = await api.get(`${endpoint}/${spec.id}`, { headers })
+  expect(read.status()).toBe(200)
+  expect(await read.json()).toMatchObject({
+    ...input,
+    id: spec.id,
+    state: 'draft',
+  })
+  return {
+    spec_id: spec.id,
+    workspace_id: workspace.id,
+    validation: spec.validation,
+    binding_property:
+      'A live binding requires reconciliation against a reachable peer; this offline estate authors a draft specification.',
+  }
+}
+
+// The channel administration view is read as a freshly provisioned tenant administrator, who holds no grant on
+// the channels the dataset seeded. The demo owner administers them and grants that person the same, as an
+// administrator would when adding someone to the team.
+async function grantChannelAdministration(
+  api: import('@playwright/test').APIRequestContext,
+  cabeceras: Record<string, string>,
+  usuario: string,
+) {
+  const espacios = await api.get('/v1/workspaces', { headers: cabeceras })
+  expect(espacios.status(), 'docs-captures: /v1/workspaces as the owner').toBe(
+    200,
+  )
+  const lista = (
+    (await espacios.json()) as { items: { id: string; is_default?: boolean }[] }
+  ).items
+  const espacio = lista.find((w) => w.is_default) ?? lista[0]
+  expect(espacio, 'docs-captures: the estate has no workspace').toBeTruthy()
+  const canales = await api.get(
+    `/v1/m/sessions/channels?workspace_id=${espacio!.id}&limit=100`,
+    { headers: cabeceras },
+  )
+  expect(canales.status(), 'docs-captures: the channel list as the owner').toBe(
+    200,
+  )
+  const items = (
+    (await canales.json()) as { items: { id: string; version: number }[] }
+  ).items
+  expect(
+    items.length,
+    'docs-captures: no channels are seeded; the demo dataset did not create the communications plane',
+  ).toBeGreaterThan(0)
+  for (const canal of items) {
+    const concedido = await api.post(
+      `/v1/m/sessions/channels/${canal.id}/grants`,
+      {
+        // A grant is written against the channel version it was read at.
+        headers: {
+          ...cabeceras,
+          'Idempotency-Key': randomUUID(),
+          'If-Match': `"v${canal.version}"`,
+        },
+        data: JSON.stringify({
+          subject: { kind: 'user', ref: usuario },
+          can_read: true,
+          can_write: true,
+          can_admin: true,
+        }),
+      },
+    )
+    expect(
+      concedido.status(),
+      `docs-captures: granting administration of channel ${canal.id}: ${await concedido.text()}`,
+    ).toBeLessThan(300)
+  }
+}
+
+// The card the adoption overview is framed on: the nearest card around the live telemetry title.
+const tarjetaDeTelemetria = (page: import('@playwright/test').Page) =>
+  page
+    .getByText(/Per session \(live telemetry\)/i)
+    .first()
+    .locator('xpath=ancestor::div[contains(@class, "rounded-lg")][1]')
+
+// The deployment-wide AAL3 policy the step-up capture raises; see aal3-policy.ts.
+let aal3Policy: Aal3Policy | undefined
+
 const VIEWS: {
   id: string
   path: string
@@ -166,6 +443,9 @@ const VIEWS: {
   despues?: (
     page: import('@playwright/test').Page,
   ) => Promise<void | Record<string, unknown>>
+  // Runs after the capture, pass or fail, for a view whose `prepara` changed deployment
+  // state that later captures must not inherit.
+  limpia?: () => Promise<void>
   // Use a provisioned tenant member when scoped access excludes the demo global
   // account.
   actor?: 'k3-tenant-editor' | 'k3-tenant-admin'
@@ -318,6 +598,7 @@ const VIEWS: {
     // Choose a concrete workspace after the view mounts; All workspaces cannot supply
     // this scope.
     despues: async (page) => {
+      const draft = await seedProtocolDraft(page)
       // The switcher requires multiple workspaces; its absence is a seed-data
       // precondition.
       const conmutador = page.getByRole('button', { name: 'All workspaces' })
@@ -348,6 +629,11 @@ const VIEWS: {
         )
       }
       await alguno.click()
+      await expect(page.locator('main li button').first()).toBeVisible()
+      await expect(page.locator('main li button').first()).toContainText(
+        'release-readiness',
+      )
+      return draft
     },
   },
   // Require each communications route to show its own heading rather than login or an
@@ -439,6 +725,10 @@ const VIEWS: {
         page.locator('main').getByText(nombre, { exact: true }).first(),
         `docs-captures: la puerta no enseña el workspace ${nombre} para el que leyo su coleccion`,
       ).toBeVisible()
+      expect(
+        cuerpo.items.length,
+        'the member inbox must contain a real offered handoff',
+      ).toBeGreaterThan(0)
       const testigo = {
         read: 'GET /v1/m/sessions/inbox/handoffs',
         status: 200,
@@ -502,7 +792,7 @@ const VIEWS: {
     despues: eligeWorkspaceConcretoK3,
   },
   // These routes are mounted outside the feature registry.
-  { id: 'settings', path: '/settings', heading: /^Settings$/ },
+  { id: 'settings', path: '/settings', heading: /^General$/ },
   {
     id: 'status-page',
     path: '/status-page',
@@ -513,7 +803,8 @@ const VIEWS: {
     path: '/sessions',
     live: true,
     settle: 2500,
-    heading: /^Sessions$/,
+    // The hook below switches to the table, whose page heading is "Table".
+    heading: /^Table$/,
     // Filter to launched sessions, whose run records supply the metrics shown in the
     // guide.
     despues: async (page) => {
@@ -536,6 +827,7 @@ const VIEWS: {
     settle: 1500,
     heading: /^Identity & access$/,
   },
+  { id: 'vault', path: '/vault', heading: /^Vault$/ },
   { id: 'stored-budgets', path: '/stored-budgets', heading: /^Budgets$/ },
   { id: 'security', path: '/security', heading: /^Security & forensics$/ },
   {
@@ -625,6 +917,7 @@ const VIEWS: {
     settle: 1000,
     heading: /^Compliance$/,
   },
+  { id: 'retention', path: '/retention', settle: 1000, heading: /^Retention$/ },
   {
     id: 'workspace',
     path: '/workspace',
@@ -645,7 +938,7 @@ const VIEWS: {
     heading: /^Backup & Restore$/,
   },
   // Parameterized and first-boot routes use their own setup below.
-  { id: 'home', path: '/', settle: 1000, heading: /^Overview$/ },
+  { id: 'home', path: '/', settle: 1000, heading: /^Now$/ },
   // Area directory headings match their registry labels.
   {
     id: 'areas-infrastructure',
@@ -736,17 +1029,41 @@ const VIEWS: {
     settle: 1000,
     heading: /^Git publication$/,
   },
-  { id: 'work', path: '/work', settle: 1000, live: true, heading: /^Work$/ },
+  {
+    id: 'work',
+    path: '/work',
+    settle: 1000,
+    live: true,
+    heading: /^Work$/,
+    // The list stays a skeleton until the live connection opens; a shot before that shows no work.
+    despues: async (page) => {
+      await expect(page.getByText('Live', { exact: true }).first()).toBeVisible(
+        { timeout: 20_000 },
+      )
+    },
+  },
   { id: 'estate', path: '/estate', heading: /^Estate$/ },
   {
     id: 'agentops',
     path: '/agentops',
     settle: 1000,
     live: true,
-    heading: /^Claude Code$/,
+    // /agentops is a second door into Sessions and mounts that screen.
+    heading: /^Sessions$/,
   },
   // Capture the clean-install AI tools state and its next action.
-  { id: 'agent-tools', path: '/agent-tools', heading: /^AI tools$/ },
+  {
+    id: 'agent-tools',
+    path: '/agent-tools',
+    heading: /^AI tools$/,
+    // The tool rows appear only after the host inventory refresh; before that the page body is empty.
+    despues: async (page) => {
+      await page
+        .getByText('Default sign-in')
+        .first()
+        .waitFor({ timeout: 20_000 })
+    },
+  },
   { id: 'mcpServers', path: '/mcp-servers', heading: /^MCP servers$/ },
   {
     id: 'providers',
@@ -851,20 +1168,63 @@ const VIEWS: {
     path: '/adoption',
     settle: 1000,
     heading: /^Claude Code Adoption$/,
-    // Frame the telemetry acceptance card rather than the empty organization analytics
-    // card.
+    // Frame the telemetry acceptance card rather than the empty organization analytics card: pinned just under
+    // the page header, then cropped to the card, so the image starts at its title and stops before the
+    // official-versus-observed comparison below it.
     despues: async (page) => {
-      const viva = page.getByText(/Per session \(live telemetry\)/i).first()
+      const tarjeta = tarjetaDeTelemetria(page)
       try {
-        await viva.waitFor({ timeout: 8_000 })
-        // Align the card at the top even when its heading is already partly visible.
-        await viva.evaluate((el) => el.scrollIntoView({ block: 'start' }))
+        await tarjeta.waitFor({ timeout: 8_000 })
       } catch {
         throw new Error(
           'docs-captures: no encuentro la tarjeta `Per session (live telemetry)` en /adoption ' +
             '(adoption-view.tsx:109). Sin ella la foto encuadra la tarjeta `analytics`, que esta ' +
             'a cero POR DISENO, y se lee como que el producto no mide la aceptacion.',
         )
+      }
+      try {
+        // The tool table and the token chart render after the tiles; the box is read once they have. The
+        // table is found by its Acceptance column, which does not depend on the markup's ARIA roles.
+        await tarjeta
+          .getByText(/^acceptance$/i)
+          .first()
+          .waitFor({ timeout: 8_000 })
+      } catch {
+        throw new Error(
+          'adoption-overview: la tarjeta de telemetria viva no mostro su tabla de herramientas: ' +
+            'sin ella la tarjeta no esta completa y NO se guarda una imagen a medias',
+        )
+      }
+      await tarjeta.evaluate((el) => {
+        // A margin keeps the card clear of the sticky page header whatever its height.
+        el.style.scrollMarginTop = '72px'
+        el.scrollIntoView({ block: 'start' })
+      })
+      // The token chart animates in; the box is read after it.
+      await page.waitForTimeout(800)
+    },
+    recorte: async (page) => {
+      const caja = await tarjetaDeTelemetria(page).boundingBox()
+      const vista = page.viewportSize()
+      if (!caja || !vista) {
+        throw new Error(
+          'adoption-overview: no encuentro la tarjeta de telemetria viva — el recorte no se ' +
+            'puede calcular y NO se guarda una imagen a ciegas',
+        )
+      }
+      const y = Math.max(0, Math.round(caja.y - 12))
+      const alto = Math.round(caja.height + 24)
+      if (y + alto > vista.height) {
+        throw new Error(
+          `adoption-overview: la tarjeta (${Math.round(caja.height)} px) no cabe bajo la cabecera ` +
+            `en una vista de ${vista.height} px: el recorte saldria truncado y NO se guarda`,
+        )
+      }
+      return {
+        x: Math.max(0, Math.round(caja.x - 12)),
+        y,
+        width: Math.round(caja.width + 24),
+        height: alto,
       }
     },
   },
@@ -914,7 +1274,6 @@ const VIEWS: {
     settle: 1000,
     heading: /^Testing sandbox$/,
   },
-  { id: 'reporting', path: '/reporting', settle: 1000, heading: /^Reports$/ },
   {
     id: 'platforms',
     path: '/platforms',
@@ -1005,12 +1364,31 @@ const VIEWS: {
     settle: 800,
   },
   // Under an AAL3 policy, a password session shows the elevated-authentication notice
-  // rather than privileged connector configuration.
+  // rather than privileged connector configuration. The demo estate has no such policy
+  // and the API cannot raise it from a password session, so `prepara` sets it through
+  // the console (aal3-policy.ts) and `limpia` puts it back for the captures after it.
   {
     id: 'guias-config-step-up',
     path: '/console?tab=connectors',
     settle: 800,
     modal: true,
+    prepara: async (page) => {
+      // The passkey ceremony and the restore after it run inside this test's time.
+      test.slow()
+      const browser = page.context().browser()
+      if (!browser)
+        throw new Error('docs-captures: the AAL3 policy needs a browser handle')
+      aal3Policy = new Aal3Policy(browser, new URL(page.url()).origin, {
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
+        tenant: demoTenant,
+      })
+      await aal3Policy.enable()
+    },
+    limpia: async () => {
+      await aal3Policy?.restore()
+      aal3Policy = undefined
+    },
     // The target is the assurance panel heading inside Edit connector.
     objetivo: (page) =>
       encabezadoDeDialogo(page, 'Step-up authentication required'),
@@ -1024,12 +1402,14 @@ const VIEWS: {
   },
 ]
 
-// Use a 1440×1000 viewport at scale factor two. The height keeps navigation visible;
-// the higher pixel density preserves small text at the cost of larger PNGs.
+// Use a 1440×900 viewport at scale factor two: the size every published capture has, so a page and its
+// neighbors line up. The pixel density preserves small text at the cost of larger PNGs.
+// The zone is pinned so a capture does not show where it was taken (Settings prints the viewer's zone).
 test.use({
-  viewport: { width: 1440, height: 1000 },
+  viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 2,
   trace: 'off',
+  timezoneId: 'UTC',
 })
 
 // Require a declared target or heading before capturing a view.
@@ -1044,17 +1424,39 @@ function objetivoDeLaVista(
   )
 }
 
+// The title of a view's test; the afterEach below finds the view by it.
+const tituloDeVista = (id: string) => `capture ${id}`
+
 test.describe('Docs captures over real seeded data', () => {
   test.skip(
     !demoTenant,
     'DEMO_TENANT not set — run via scripts/docs-captures.sh',
   )
 
+  // A view that changed deployment state cleans up even when its capture failed, so one
+  // red view cannot turn every later capture red.
+  // Playwright requires destructuring to reach testInfo, even with no fixtures.
+  // eslint-disable-next-line no-empty-pattern
+  test.afterEach(async ({}, testInfo) => {
+    // lower() can outwait a hook's default 30 s budget; a hook killed mid-restore would
+    // leave the policy raised and blame the next view. The budget is lower()'s own waits
+    // plus margin.
+    testInfo.setTimeout(120_000)
+    const view = VIEWS.find((v) => testInfo.title === tituloDeVista(v.id))
+    if (view) await view.limpia?.()
+    // A renamed test would match no view above and leave the policy raised for the next one.
+    expect(
+      aal3Policy,
+      'docs-captures: a view left the AAL3 policy raised',
+    ).toBeUndefined()
+  })
+
   // Capture both themes from one page load; toggle the theme without navigating again.
   for (const view of VIEWS) {
     {
-      test(`capture ${view.id}`, async ({ page, request }) => {
-        if (view.id === 'orchestration' || view.path === '/automations') {
+      test(tituloDeVista(view.id), async ({ page, request }) => {
+        // The census lists every page docs/editions.md places in Business (business_paths).
+        if (census.business_paths.includes(view.path)) {
           const info = await request.get('/v1/server-info')
           expect(info.ok()).toBe(true)
           const edition = (await info.json()).edition

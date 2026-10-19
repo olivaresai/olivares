@@ -1,6 +1,6 @@
 {
-  "title": "身份与 NHI",
-  "subtitle": "SSO、SCIM、身份清单、NHI 生命周期、WIF 图谱与特权登录——经观测、治理与审计。",
+  "title": "身份与访问",
+  "subtitle": "谁可以登录、可以做什么，以及如何证明身份。",
   "sections": "身份分区",
   "groups": {
     "people": "人员",
@@ -39,10 +39,10 @@
     "relyingPartyUnusable": "本部署无法使用通行密钥：对于当前提供控制台的地址，引擎没有可用的依赖方。运维人员需要配置有效的依赖方域名（含点号的主机名，或在适当情况下使用 localhost），通过该已声明的安全源访问控制台，并在更改后重启引擎。仅在其他地址重试无法修复此问题。",
     "actions": {
       "identity": "管理身份",
-      "providers": "注册或吊销提供方凭据",
+      "providers": "注册或吊销提供商凭据",
       "generic": "此操作",
       "console": "管理连接器",
-      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "stepUpPolicy": "更改管理操作的额外校验",
       "modules": "开启或关闭模块",
       "signing": "开启或关闭报告签名"
     },
@@ -67,8 +67,8 @@
     "cancelHint": "关闭将取消此操作。已发送的注册或认证请求仍可能完成。",
     "registrationUnknownElsewhere": "无法确认注册结果。通行密钥可能已保存。请关闭此对话框并检查你的通行密钥，然后再开始新的注册。",
     "code": {
-      "title": "Sign in with your authenticator code",
-      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "title": "使用验证器代码登录",
+      "body": "{{action}} 需要在此部署上使用验证器代码登录。请重新登录并输入你的验证器代码。",
       "signInAgain": "Sign in again"
     }
   },
@@ -84,7 +84,7 @@
       "webauthn": "NIST SP 800-63B-4（认证器保证）",
       "certManager": "cert-manager（CNCF）",
       "pqc": "NIST SP 800-57 Part 1 r6（密钥管理）",
-      "wifReference": "Anthropic WIF 参考",
+      "wifReference": "Anthropic 工作负载身份引用",
       "workloadIdentity": "Anthropic Workload Identity Federation",
       "externalKeys": "Anthropic External Keys（CMEK）",
       "workspaceUpdate": "Anthropic 工作区驻留"
@@ -103,7 +103,7 @@
     "title": "单点登录（OIDC / SAML）",
     "description": "联合身份登录在 SSO / IdP 中配置，或在启动时按环境配置。本面板记录该配置、校验精确的重定向 URI 并呈现连接状态——它不写入配置。",
     "notConfigured": "未配置",
-    "notConfiguredHint": "未配置任何身份提供方，因此联合身份请求返回 501。请设置下方的环境密钥并重启引擎以启用 SSO。",
+    "notConfiguredHint": "未配置任何身份提供商，因此联合身份请求返回 501。请设置下方的环境密钥并重启引擎以启用 SSO。",
     "seamWhat": "SSO 连接状态摘要",
     "protocol": "协议",
     "state": "连接",
@@ -111,7 +111,7 @@
     "pkce": "PKCE",
     "pkceValue": "Authorization Code + S256（始终）",
     "redirectCheckLabel": "校验您的 IdP 重定向 URI",
-    "redirectCheckHint": "粘贴在您的身份提供方中配置的重定向/ACS URI。它必须与上方的值完全一致（RFC 9700）。",
+    "redirectCheckHint": "粘贴在您的身份提供商中配置的重定向/ACS URI。它必须与上方的值完全一致（RFC 9700）。",
     "redirectMatch": "完全匹配——此重定向 URI 有效。",
     "redirectMismatch": "不完全匹配。IdP 必须逐字符使用上方的重定向 URI。",
     "proto": {
@@ -126,8 +126,9 @@
   },
   "scim": {
     "title": "SCIM 2.0 预配",
-    "description": "用户与组的入站预配。以只读方式呈现服务提供方状态、已同步的用户以及离职证据。",
-    "seamWhat": "SCIM 服务提供方配置",
+    "description": "用户与组的入站预配。以只读方式呈现服务提供商状态、已同步的用户以及离职证据。",
+    "seamWhat": "SCIM 服务提供商配置",
+    "businessOnly": "入站 SCIM 服务器需要 Business。要将某人移出组织，请使用“人员”。",
     "patch": "PATCH",
     "filter": "筛选",
     "filterMax": "支持（最多 {{n}}）",
@@ -179,7 +180,7 @@
   "empty": {
     "nhiRoster": {
       "title": "尚无身份",
-      "description": "当代理访问资源，或您将代理绑定到某个身份时，身份会显示在这里。"
+      "description": "当智能体访问资源，或您将智能体绑定到某个身份时，身份会显示在这里。"
     }
   },
   "mcp": {
@@ -308,7 +309,7 @@
   },
   "stepUpPolicy": {
     "title": "管理操作的额外验证",
-    "description": "默认关闭。开启后，在用户、身份提供方、密钥或工具安装等管理更改之前，要求输入验证器代码或使用通行密钥。",
+    "description": "默认关闭。开启后，在用户、身份提供商、密钥或工具安装等管理更改之前，要求输入验证器代码或使用通行密钥。",
     "options": {
       "none": "关闭",
       "totp": "验证器代码",
@@ -318,7 +319,7 @@
     "loadFailed": "无法读取此设置。请刷新页面重试。",
     "note": "要强制使用通行密钥，请先在此处用通行密钥登录。要强制使用验证器代码，请先用代码登录。要关闭或降低它，请先通过当前的验证。更改会在几秒内对所有服务器生效。",
     "refused": {
-      "passkey_not_enrolled": "请先为您的账户添加通行密钥（身份与 NHI > 通行密钥），然后再开启。",
+      "passkey_not_enrolled": "请先为您的账户添加通行密钥（身份与访问 > 通行密钥），然后再开启。",
       "totp_sign_in_required": "请先设置验证器应用并用其代码登录，然后再开启。"
     }
   },

@@ -43,7 +43,10 @@ vi.mock('./api', async (importOriginal) => {
 import { agentOpsApi } from '@/features/agentops/api'
 import { sessionsApi } from '@/features/sessions/api'
 import GovernanceView from './governance-view'
-import { approvalCommandUnknown } from './approval-preview'
+import {
+  approvalCommandUnknown,
+  approvalExpectsCommand,
+} from './approval-preview'
 import { ApprovalPreview, AskedBy } from './approval-preview'
 import { consoleApi } from '@/features/console/api'
 
@@ -205,6 +208,10 @@ describe('Approvals: what will run, before Approve', () => {
     const note = await screen.findByText('Command not shown for this tool yet')
     const row = note.closest('tr')!
     expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
+    // One line says it, not two (#2269).
+    expect(
+      within(row).queryByText('This request does not include what will run.'),
+    ).toBeNull()
     // Approve and Reject are unchanged.
     expect(
       within(row).getByRole('button', { name: /^approve$/i }),
@@ -216,6 +223,11 @@ describe('Approvals: what will run, before Approve', () => {
       within(dialog).getByText('Command not shown for this tool yet'),
     ).toBeInTheDocument()
     expect(dialog.querySelector('[data-slot="approval-review"]')).toBeNull()
+    expect(
+      within(dialog).queryByText(
+        'This request does not include what will run.',
+      ),
+    ).toBeNull()
   })
 
   // The engine's own shape on RC10: a one-line reason, and a review that lists the
@@ -394,9 +406,10 @@ it('hides cached requester and policy names when their read permissions leave', 
   const mounted = render(content())
   expect(await screen.findByText('Ada')).toBeVisible()
   expect(await screen.findByText('Release policy')).toBeVisible()
+  // A deployment a person raised runs nothing by itself: no command is expected.
   expect(
-    screen.getByText('This request does not include what will run.'),
-  ).toBeVisible()
+    screen.queryByText('This request does not include what will run.'),
+  ).toBeNull()
   auth.can = (permission) =>
     !['user:read', 'governance:policy:read'].includes(permission)
   mounted.rerender(content())
@@ -442,8 +455,8 @@ it('names the launcher of a new session in both requester displays and withdraws
   expect(await screen.findAllByText('Ada for a new session')).toHaveLength(2)
   expect(screen.getByText(request.reason)).toBeVisible()
   expect(
-    screen.getByText('This request does not include what will run.'),
-  ).toBeVisible()
+    screen.queryByText('This request does not include what will run.'),
+  ).toBeNull()
   const details = screen.getByText('Details').closest('details')!
   expect(details).not.toHaveAttribute('open')
   expect(within(details).getByText(request.requested_by)).toBeInTheDocument()
@@ -454,4 +467,129 @@ it('names the launcher of a new session in both requester displays and withdraws
   expect(screen.queryByText('Ada for a new session')).toBeNull()
   expect(screen.getAllByText('A member for a new session')).toHaveLength(2)
   expect(members).toHaveBeenCalledTimes(reads)
+})
+
+// Issue #2269 (permissions capture): the note repeated under every request,
+// including the ones a person raised, where no command is expected. It shows once, and
+// only on a request the engine stores a review for: a tool call, a provider's
+// permission request or a publish.
+describe('the "does not include what will run" note', () => {
+  const NOTE = 'This request does not include what will run.'
+  const { review: _review, ...toolCall } = hookRequest
+  void _review
+  const providerScope =
+    '{"Permissions":["once","reject"],"CommandLine":"npm test","FilePaths":null}'
+  const provider: ApprovalDTO = {
+    ...toolCall,
+    id: 'apr-provider',
+    action: 'sessions.provider.approval',
+    subject_kind: 'session_run',
+    reason: `Provider permission: driver=codex method=session/request_permission kind=tool_call_permission run=r1 turn=4 permissions=${providerScope}`,
+  }
+  const deployment: ApprovalDTO = {
+    ...toolCall,
+    id: 'apr-deploy',
+    action: 'deploy.promote',
+    subject_kind: 'deployment',
+    subject_ref: 'rel-42',
+    requested_by: 'user:u-7',
+    reason: 'Promote the billing connector to production',
+  }
+  const exportRequest: ApprovalDTO = {
+    ...deployment,
+    id: 'apr-export',
+    action: 'evidence.export',
+    subject_kind: 'evidence',
+    reason: 'Export the Q3 ledger for the auditors',
+  }
+
+  it('expects a command for tool calls, provider requests and publishes only', () => {
+    expect(approvalExpectsCommand(toolCall)).toBe(true)
+    expect(approvalExpectsCommand(provider)).toBe(true)
+    expect(
+      approvalExpectsCommand({
+        ...deployment,
+        action: 'gitpublish.push',
+        subject_kind: 'gitpublish.target',
+      }),
+    ).toBe(true)
+    // The engine's other requests that run something when approved.
+    for (const [action, subject_kind] of [
+      ['mcp.tool.call', 'tool'],
+      ['deploy.apply', 'deployment'],
+      ['deploy.retire', 'deployment'],
+      ['agentcore.export.apply', 'agentcore.policy_engine'],
+      ['agentcore.export.apply_weakening', 'agentcore.policy_engine'],
+    ])
+      expect(
+        approvalExpectsCommand({ ...deployment, action, subject_kind }),
+        action,
+      ).toBe(true)
+    expect(approvalExpectsCommand(deployment)).toBe(false)
+    expect(approvalExpectsCommand(exportRequest)).toBe(false)
+    expect(
+      approvalExpectsCommand({
+        ...deployment,
+        action: 'sessions.run.launch',
+        subject_kind: 'sessions.run',
+      }),
+    ).toBe(false)
+  })
+
+  it('shows once, on the rows that expect a command, and not on the ones a person raised', async () => {
+    api.listApprovals.mockResolvedValue({
+      items: [toolCall, provider, deployment, exportRequest],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    const notes = await screen.findAllByText(NOTE)
+    expect(notes).toHaveLength(2)
+    for (const note of notes) {
+      const row = note.closest('tr')!
+      expect(within(row).getAllByText(NOTE), 'one note per row').toHaveLength(1)
+      expect(within(row).queryByText(deployment.reason!)).toBeNull()
+      expect(within(row).queryByText(exportRequest.reason!)).toBeNull()
+    }
+    // The requests a person raised keep their own reason and carry no note.
+    for (const request of [deployment, exportRequest]) {
+      const row = (await screen.findByText(request.reason!)).closest('tr')!
+      expect(within(row).queryByText(NOTE)).toBeNull()
+    }
+  })
+
+  it('is absent from the decision dialog of a request a person raised, and shows once on each request that expects a command', async () => {
+    const user = userEvent.setup()
+    const publish: ApprovalDTO = {
+      ...toolCall,
+      id: 'apr-publish',
+      action: 'gitpublish.push',
+      subject_kind: 'gitpublish.target',
+      reason: 'Push the release branch',
+    }
+    api.listApprovals.mockResolvedValue({
+      items: [deployment, toolCall, provider, publish],
+      has_more: false,
+    })
+    wrap(<GovernanceView />)
+    const person = (await screen.findByText(deployment.reason!)).closest('tr')!
+    await user.click(within(person).getByRole('button', { name: /^approve$/i }))
+    let dialog = await screen.findByRole('dialog')
+    // The reason leads the preview and repeats behind Details.
+    expect(
+      within(dialog).getAllByText(deployment.reason!).length,
+    ).toBeGreaterThan(0)
+    expect(within(dialog).queryByText(NOTE)).toBeNull()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // The tool call, the provider request and the publish each carry one.
+    expect(await screen.findAllByText(NOTE)).toHaveLength(3)
+    for (let i = 0; i < 3; i++) {
+      const row = (await screen.findAllByText(NOTE))[i].closest('tr')!
+      await user.click(within(row).getByRole('button', { name: /^approve$/i }))
+      dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getAllByText(NOTE)).toHaveLength(1)
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    }
+  })
 })

@@ -161,6 +161,16 @@ perfil no (`CHANGELOG.md` `[26.9.0]` Fixed).
    falta. Solo se publica la **referencia** del perfil. El servidor resuelve
    los homes.
 
+Claude Code puede usar su modelo predeterminado nativo.
+
+Cuando uses una clave de proveedor con una herramienta que requiere un modelo, como
+Codex, guarda un valor por defecto en **Providers** antes de ejecutar `session start`
+más abajo. Si ni el proveedor ni el perfil de la herramienta tienen un modelo
+configurado, añade `--model <tested-model-id>` al comando `session start`,
+sustituyendo el marcador por un ID de modelo devuelto por la prueba de conexión. Un
+modelo seleccionado en **New session** se aplica solo a ese lanzamiento desde la
+consola; no establece el modelo de un lanzamiento por CLI.
+
 ### Un worktree Git propio (opcional)
 
 Por defecto la sesión trabaja en la carpeta elegida. Si esta es la raíz de un
@@ -191,6 +201,12 @@ sesiones no comparten archivos. Fusiona la rama desde tu checkout habitual.
   Git (los archivos Git LFS aparecen como punteros) y con límites de tiempo y
   salida. El directorio Git compartido sigue siendo común: un worktree aísla
   archivos, no metadatos Git.
+
+Una carpeta puede guardar un comando de preparación para los nuevos worktrees. Una
+persona debe aprobar su texto exacto, por SHA-256, antes de que se acepte un inicio con
+worktree; cambiar un solo carácter exige aprobarlo de nuevo. Por ahora nada ejecuta el
+comando. Consulta
+[Aprobar el comando de preparación de una carpeta](/es/reference/session-runtime-api/#aprobar-el-comando-de-preparación-de-una-carpeta).
 
 ### Abrir el trabajo nombrado en un traspaso
 

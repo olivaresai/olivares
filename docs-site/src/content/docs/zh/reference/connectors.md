@@ -6,6 +6,10 @@ description: >-
   —— 外加输出目的地。
 ---
 
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出路由和命令返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
+:::
+
 本页是第一方连接器的**目录**，并为每个连接器列出它所能诚实支持的**覆盖层级**。它是
 [connect a source](/zh/how-to/connect-a-source/) 的配套页面，后者解释连接器*模型*
 （observe-only、minimal-data、三种观测类型）——请先阅读那篇。本页回答下一个问题：
@@ -62,7 +66,7 @@ description: >-
 |---|---|---|
 | `claude` | Claude Code OTLP 工具遥测 + MCP 自省 → edges / cost / findings | 进程外插件；存在每个 agent 身份时为 `attributed`，否则为 `approximate` |
 | `claude-api` | Claude Admin-API 成本采样 + 治理态势 findings | 进程内；离线（无 admin key）时为空操作 |
-| `claude-compliance` | Claude Compliance 活动流证据 → findings | 构造上仅 GET；离线时为空操作 |
+| `claude-compliance` | Claude Compliance 活动流证据 → findings | 构造上仅 GET；离线时为空操作 (Business) |
 | `claude-config` | 静态 Claude config 树（subagents / Skills / plugins）→ **声明能力** edges | 仅元数据——一个能力面，而非已观测的访问 |
 | `claude-console` | Claude 组织 IAM → SSO/SCIM 态势 findings（身份名册 + source） | Business: Identity & Scale;  |
 | `claude-wif` | Anthropic 非人类身份 / 工作负载身份名册 + 允许范围 edges | Business: Identity & Scale; 建模运营方声明的 federation；标记静态 key 隐患 |
@@ -204,7 +208,7 @@ source（它们带连字符的 `pg-audit` / `s3-cloudtrail` 别名也可解析�
 | `bigquery-audit` | BigQuery 数据访问审计 |
 | `redshift-audit` | Amazon Redshift 审计 |
 | `mssql-audit` | SQL Server 审计 |
-| `oracle-audit` | Oracle 统一审计 |
+| `oracle-audit` | Oracle 统一审计 (Business) |
 | `gcs-audit` | Google Cloud Storage 数据访问审计 |
 | `azure-blob-audit` | Azure Blob Storage 审计 |
 
@@ -290,7 +294,7 @@ usage API 时，费用由 connector 在 inference path 周围的 Meter 估算，
 | `iceberg-catalog` | Iceberg REST catalog → permitted grant + 下发凭据身份 | permitted |
 | `inference-gateway` | K8s Gateway API Inference-Extension 路由 → permitted 推理路由 | permitted |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | 云 KMS 审计 → key 访问 edge（绝不含 key 材料） | approximate |
-| `external-secrets` / `sops` / `kmip` | 密钥管理清单 / KMIP locate → 预配/托管 edge | approximate（存在性，非使用） |
+| `external-secrets` / `sops` / `kmip` | 密钥管理清单 / KMIP locate → 预配/托管 edge | approximate（存在性，非使用）; `kmip`: Business |
 | `istio-telemetry` | Istio Telemetry CRD → L7 mesh edge | approximate（解析的 CRD，非实时流） |
 | `egress-proxy` | Egress-proxy 裁决日志 → L7 出站 edge | approximate |
 | `kong-audit` | Kong 审计日志 → 配置变更 finding | approximate |
@@ -413,10 +417,10 @@ minimal-data：它携带 source 的 ACL 与来源（绝不含个人邮箱；模�
 | `gdrive` | Google Drive 文档（Docs/Sheets/Slides/文件） |
 | `confluence` | Atlassian Confluence 空间与页面 |
 | `notion` | Notion 工作区、数据库与页面 |
-| `sharepoint` | Microsoft SharePoint / OneDrive 站点与文档 |
+| `sharepoint` | Microsoft SharePoint / OneDrive 站点与文档 (Business) |
 | `s3content` | 对象存储内容（S3 / R2 / GCS 对象） |
-| `sap_odata` | SAP OData service entity，作为 governed document |
-| `salesforce` | Salesforce object/record，作为 governed document |
+| `sap_odata` | SAP OData service entity，作为 governed document (Business) |
+| `salesforce` | Salesforce object/record，作为 governed document (Business) |
 | `snowflake` | Snowflake table/row，作为 governed document（不同于 `snowflake-audit` R/RW observer） |
 | `azure_ai_search` | Azure AI Search index document |
 | `postgres` | PostgreSQL row，作为 governed document——构造上只读、声明 per-row ACL、per-column classification（不同于 `pgaudit` R/RW observer；不是 NL-to-SQL）。见[将 Postgres 用作受治理上下文源](/zh/how-to/govern-postgres-content/)。 |

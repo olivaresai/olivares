@@ -18,6 +18,17 @@ loader returns it, `buildModules` returns it, and every command that builds the 
 set fails with a fixed, actionable message instead of running with authority the
 operator did not choose. This is an intentional compatibility change.
 
+## Edition
+
+An external engine is a Business capability. `boot` calls
+`refuseExternalPDPInCommunity` first when it is serving (`ServeMode`: `serve` and
+`quickstart`): a Community build that finds any engine selected, valid or not, returns an
+error with the Edition exit code (9) that names Business, before it opens anything or
+reads the policy file. Unset, blank or `none` is valid in every edition. Commands that
+do not serve (`db`, `dr`, `audit`, `openapi`) enforce no policy and are not refused, so
+a restore never waits on this setting. The table that follows describes the Business
+build, and the loader for non-serving Community commands.
+
 ## Configuration
 
 | `OLIVARES_PDP_ENGINE` | Other settings | Outcome |

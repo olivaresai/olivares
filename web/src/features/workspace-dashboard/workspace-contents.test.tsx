@@ -55,15 +55,30 @@ describe('WorkspaceContents reads the engine contents read', () => {
       kinds: [
         { kind: 'core.agent', count: 2, capped: false },
         { kind: 'core.session', count: 0, capped: false },
+        { kind: 'core.agent_group', count: 1, capped: false },
         { kind: 'sessions.work_item', count: 1000, capped: true },
+        { kind: 'x.core.y', count: 4, capped: false },
       ],
     })
     show()
     const table = await screen.findByRole('table')
     const rows = within(table).getAllByRole('row').slice(1)
+    // A person reads "Agent", not the engine's address of the kind; the address stays on hover.
     expect(rows.map((row) => row.textContent)).toEqual([
-      'core.agent2',
-      'sessions.work_item≥ 1,000',
+      'Agent2',
+      'Agent group1',
+      'Sessions work item≥ 1,000',
+      'X core y4',
+    ])
+    expect(
+      rows.map((row) =>
+        within(row).getAllByRole('cell')[0].getAttribute('title'),
+      ),
+    ).toEqual([
+      'core.agent',
+      'core.agent_group',
+      'sessions.work_item',
+      'x.core.y',
     ])
     expect(requests).toEqual([
       { url: '/v1/workspaces/ws%2Fone/contents', tenant: 'tenant-a' },

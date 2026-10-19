@@ -58,13 +58,6 @@ func (e *consentEstate) readmit(tenant model.TenantID, email, role string) conse
 	})
 }
 
-// scimCreate provisions an address through the tenant's SCIM connection.
-func (e *consentEstate) scimCreate(tenant model.TenantID, email string) consentResp {
-	e.t.Helper()
-	return e.scim("POST", "/v1/scim/v2/Users", e.scimToken(tenant),
-		`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"`+email+`","active":true}`)
-}
-
 // tryLogin signs in and returns the token, or "" with the status on refusal.
 func (e *consentEstate) tryLogin(email, password string) (string, int) {
 	e.t.Helper()
@@ -84,7 +77,7 @@ func TestRetirementSurvivesRestartAndRetries(t *testing.T) {
 		e.requireRetirementCompletion(t, "the restart case requires the retry to complete before readmission")
 		const email = "restarted@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		failed := false
 		e.pump().beforeStepHook = func(string, auth.RetirementRequest) error {
 			if failed {
@@ -219,7 +212,7 @@ func parkEachWriter(t *testing.T, e *consentEstate, writers []fenceWriter) {
 			case <-time.After(10 * time.Second):
 				t.Fatal("the writer never read the account's standing")
 			}
-			e.scimDelete(e.tT, s.id)
+			e.deprovision(e.tT, s.id)
 			close(release)
 			r := <-result
 			switch {
@@ -270,7 +263,7 @@ func TestABlockedRetirementBacksOffAndWritesNothingUntilItChanges(t *testing.T) 
 		const email = "backoff@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		e.publishCedar(e.tT, `permit(principal == User::"`+user.String()+`", action, resource);`)
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		start := time.Now().Add(time.Minute)
 		at(start)
 		if n, err := p.runOnce(ctx); err != nil || n != 1 {
@@ -325,14 +318,14 @@ func TestABlockedRetirementBacksOffAndWritesNothingUntilItChanges(t *testing.T) 
 			const email = "stale@consent.test"
 			user := e.onboard(e.tT, email, "viewer")
 			e.seedMembership(user, e.tB, "viewer")
-			e.scimDelete(e.tT, user)
+			e.deprovision(e.tT, user)
 			before, _ := e.record(user, e.tT)
 			moved := false
 			p.beforeStepHook = func(_ string, req auth.RetirementRequest) error {
 				if req.User == user && !moved {
 					moved = true
 					// The account's authority moves after the pass read it.
-					e.scimDelete(e.tB, user)
+					e.deprovision(e.tB, user)
 				}
 				return nil
 			}
@@ -388,7 +381,7 @@ func TestTheRetirementPumpRunsOnlyWhileActiveAndWakesOnAnOffboard(t *testing.T) 
 			}
 		}
 		turn(false)
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		turn(false)
 		if rec, _ := e.record(user, e.tT); rec.RetirementState != model.RetirementRetiring || rec.Attempts != 0 {
 			t.Errorf("a pump that is not the active writer ran a pass: %+v", rec)

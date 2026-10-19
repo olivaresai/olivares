@@ -4,6 +4,38 @@
 import { describe, expect, it } from 'vitest'
 import { railGroups } from './session-rail-model'
 
+describe('observed sessions of one tool in the rail (#2266)', () => {
+  const observed = (ref: string) =>
+    ({
+      session_ref: ref,
+      live_ref: `lr-${ref}`,
+      attribution: 'legacy',
+      cc_state: 'active',
+      provider: 'claude',
+      current_action: 'Read',
+      current_resource: 'src/main.go',
+      first_event_at: '2026-10-15T10:00:00Z',
+      last_event_at: '2026-10-15T10:01:00Z',
+    }) as never
+
+  it('names them by the tool, tells twins apart by their tail, and keeps the file out of the title', () => {
+    const [, working] = railGroups(
+      {
+        live: [observed('sess-aaa1'), observed('sess-bbb2')],
+        handoffs: [],
+      },
+      Date.parse('2026-10-15T10:02:00Z'),
+    )
+    const titles = working.rows.map((r) => r.title).sort()
+    expect(titles).toEqual([
+      'Claude Code \u00b7 aaa1',
+      'Claude Code \u00b7 bbb2',
+    ])
+    // The tool is the title: the caption does not say it again.
+    expect(working.rows.every((r) => r.meta === null)).toBe(true)
+  })
+})
+
 describe('operated runs in the rail', () => {
   it('lists a launched run by its name, in the group its state says', () => {
     const now = Date.parse('2026-10-01T11:00:00Z')
@@ -46,7 +78,8 @@ describe('operated runs in the rail', () => {
       title: 'Codex in app',
       meta: 'codex',
     })
-    expect(earlier.rows[0]).toMatchObject({ title: null, reference: 'r3' })
+    // No name and no prompt: the run is called by its tool, never left untitled (#2266).
+    expect(earlier.rows[0]).toMatchObject({ title: 'Codex', reference: 'r3' })
   })
 
   it('a run that answered and waits for input is Idle and listed under Earlier, not Working (#1785)', () => {

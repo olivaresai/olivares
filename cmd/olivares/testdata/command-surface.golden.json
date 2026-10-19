@@ -1,0 +1,103 @@
+{
+  "schema": "olivares.cli-ref/1",
+  "root": "demo",
+  "groups": [
+    {
+      "id": "manage",
+      "title": "Manage:"
+    }
+  ],
+  "commands": [
+    {
+      "path": "demo",
+      "name": "demo",
+      "use": "demo",
+      "short": "Demo CLI",
+      "changes_data": "read",
+      "depth": 0,
+      "runnable": false,
+      "has_subcommands": true,
+      "has_help_flag": true,
+      "flags": [
+        {
+          "name": "config",
+          "type": "string",
+          "default": "default.toml",
+          "usage": "Configuration file",
+          "persistent": true
+        },
+        {
+          "name": "help",
+          "shorthand": "h",
+          "type": "bool",
+          "default": "false",
+          "usage": "help for demo"
+        }
+      ]
+    },
+    {
+      "path": "demo items",
+      "name": "items",
+      "parent": "demo",
+      "use": "items",
+      "short": "Manage items",
+      "changes_data": "read",
+      "group_id": "manage",
+      "depth": 1,
+      "runnable": false,
+      "has_subcommands": true,
+      "has_help_flag": true,
+      "flags": [
+        {
+          "name": "help",
+          "shorthand": "h",
+          "type": "bool",
+          "default": "false",
+          "usage": "help for items"
+        }
+      ]
+    },
+    {
+      "path": "demo items rm",
+      "name": "rm",
+      "parent": "demo items",
+      "use": "rm \u003cid\u003e",
+      "short": "Remove an item",
+      "changes_data": "delete",
+      "long": "Remove the saved item.",
+      "example": "  demo items rm one --yes",
+      "aliases": [
+        "delete",
+        "remove"
+      ],
+      "depth": 2,
+      "runnable": true,
+      "has_subcommands": false,
+      "has_help_flag": true,
+      "flags": [
+        {
+          "name": "help",
+          "shorthand": "h",
+          "type": "bool",
+          "default": "false",
+          "usage": "help for rm"
+        },
+        {
+          "name": "legacy",
+          "type": "string",
+          "default": "",
+          "usage": "Legacy input",
+          "hidden": true,
+          "deprecated": "use the id argument"
+        },
+        {
+          "name": "yes",
+          "type": "bool",
+          "default": "false",
+          "usage": "Confirm removal",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

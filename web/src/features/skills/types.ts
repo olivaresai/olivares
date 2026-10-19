@@ -16,6 +16,8 @@ export interface SkillPack {
 }
 
 export interface SkillMember {
+  /** Absent for portable skills; other names are qualified by kind. */
+  kind?: 'agent' | 'command' | 'rule'
   name: string
   directory: string
   description: string
@@ -49,7 +51,13 @@ export interface SkillPackDetail {
 
 /** Engine target kinds; a workspace is the department until departments have their own node. */
 export type SkillTargetKind =
-  'workspace' | 'folder' | 'template' | 'agent_group' | 'agent' | 'session'
+  | 'workspace'
+  | 'profile'
+  | 'folder'
+  | 'template'
+  | 'agent_group'
+  | 'agent'
+  | 'session'
 
 export interface SkillAssignment {
   id: string
@@ -81,6 +89,8 @@ export interface SkillInstallResult {
 
 /** One skill a new conversation receives (modules/skills SelectedMember). */
 export interface SkillSelectedMember {
+  /** Absent for portable skills; other names are qualified by kind. */
+  kind?: 'agent' | 'command' | 'rule'
   pack_id: string
   pack_revision_id: string
   name: string
@@ -102,6 +112,8 @@ export interface SkillSelection {
 
 /** One skill an update adds, removes or changes (modules/skills MemberChange). */
 export interface SkillMemberChange {
+  /** Absent for portable skills; other names are qualified by kind. */
+  kind?: 'agent' | 'command' | 'rule'
   name: string
   change: 'added' | 'changed' | 'removed'
   description?: string

@@ -95,6 +95,8 @@ type HookDecisionInput struct {
 	PlanHash string
 	Identity HookIdentity
 	At       time.Time
+	// Project is the folder name of the hook's cwd, never the path.
+	Project string
 
 	// rawInput is the untrusted tool_input. It is unexported so it can never be audited;
 	// RewriteBase supplies governed rewrites and redacted human-review facts.
@@ -253,6 +255,7 @@ func (p *HookPEP) inputFrom(ev hookEvent, r *http.Request) HookDecisionInput {
 			Account: strings.TrimSpace(r.Header.Get(hdrHookAccount)),
 		},
 		At:       ev.at,
+		Project:  ev.project,
 		rawInput: ev.input,
 	}
 }

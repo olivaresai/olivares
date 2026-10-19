@@ -9,10 +9,10 @@ description: >-
 draft: false
 ---
 
-La prochaine version est <!-- release -->`0.2`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
+La prochaine version est <!-- release -->`0.3`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
 
 :::note[Noms de paquets publiés]
-La release GitHub d’Olivares <!-- release -->0.2<!-- /release --> publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
+La release GitHub d’Olivares <!-- release -->0.3<!-- /release --> publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
 et `arm64`, avec `checksums.txt`, `checksums.txt.sig` et `checksums.txt.pem`. Les
 commandes ci-dessous utilisent les noms littéraux `amd64` de cette release ;
 remplacez `amd64` par `arm64` sur un hôte ARM 64 bits. Installez depuis ces artefacts
@@ -89,13 +89,13 @@ Linux portent les mêmes adaptateurs de service : `scripts/install-service.sh` e
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -144,8 +144,10 @@ ambiante ni de bornage — et `NoNewPrivileges=true`, de sorte que rien de ce qu
 lance ne peut en gagner. Par-dessus, elle porte `ProtectSystem=full` (`/usr`, `/boot`,
 `/efi` et `/etc` sont en lecture seule), `PrivateDevices=true`, `ProtectClock=true`,
 `ProtectKernelTunables=true`, `ProtectKernelModules=true`, `ProtectKernelLogs=true`,
-`ProtectControlGroups=true`, `RestrictNamespaces=user net` (une session reçoit ses propres
-espaces de noms utilisateur et réseau ; tout autre type est refusé), `RestrictSUIDSGID=true`,
+`ProtectControlGroups=true`, `RestrictNamespaces=user net mnt` (une session reçoit ses propres
+espaces de noms utilisateur et réseau, et l'assistant qui garde en lecture seule les hooks
+et la configuration Git d'un dossier reçoit son propre espace de noms de montage, où le
+filtre d'appels système autorise `mount` ; tout autre type est refusé), `RestrictSUIDSGID=true`,
 `RestrictRealtime=true`, `LockPersonality=true`, `SystemCallArchitectures=native`, un
 filtre d'appels système `@system-service` qui retire en plus `@privileged` et
 `@resources`, et `UMask=0027`.

@@ -86,6 +86,41 @@ func TestManagedMCPLaunchGivesOpenCodeTheSessionServer(t *testing.T) {
 	}
 }
 
+// The shared MCP server reaches every ACP tool the engine launches: Gemini CLI and
+// Grok Build take the same governed connection as OpenCode, and a driver the
+// launch step does not know still gets none.
+func TestManagedMCPLaunchGivesGeminiAndGrokTheSessionServer(t *testing.T) {
+	for driver, want := range map[string]bool{"gemini-cli": true, "grok": true, "unlisted-tool": false} {
+		t.Run(driver, func(t *testing.T) {
+			m, f, p := mcpManagementFixture(t)
+			if _, err := m.store.SetSessionTools(t.Context(), p, f.tenant, 0, true); err != nil {
+				t.Fatal(err)
+			}
+			m.eng.dataDir = t.TempDir()
+			m.UseSessionCredentials(auth.NewSessionCredentials(nil, nil))
+			spec := sessions.LaunchSpec{Env: []sessions.EnvVar{{Name: envHookPEPURL, Value: "http://127.0.0.1:19710/"}, {Name: envHookPEPToken, Value: "fixture-session-secret"}}, Confinement: &confine.Policy{ReadWrite: []string{t.TempDir()}}}
+			if _, err := m.ConfigureSessionMCP(t.Context(), f.tenant, "fixture-run", driver, &spec); err != nil {
+				t.Fatal(err)
+			}
+			got := spec.SessionMCPURL == "http://127.0.0.1:19710/session/mcp" && spec.SessionMCPTokenEnv == envHookPEPToken
+			if got != want {
+				t.Fatalf("session connection delivered = %v, want %v", got, want)
+			}
+			if len(spec.Args) != 0 || len(spec.Confinement.ReadOnly) != 0 {
+				t.Fatal("MCP configuration escaped ACP")
+			}
+			if want {
+				// Keep the PEP address and drop only the bearer, so the refusal is the credential's.
+				spec.Env = []sessions.EnvVar{{Name: envHookPEPURL, Value: "http://127.0.0.1:19710/"}}
+				spec.SessionMCPURL, spec.SessionMCPTokenEnv = "", ""
+				if _, err := m.ConfigureSessionMCP(t.Context(), f.tenant, "other-run", driver, &spec); err == nil || !strings.Contains(err.Error(), "credential") || spec.SessionMCPURL != "" {
+					t.Fatalf("missing session credential did not refuse configuration: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestManagedMCPLocalPolicyKeepsSessionBoundary(t *testing.T) {
 	folder, home, protected, foreign := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 	m := &mcpManagement{eng: &engine{sessionsMod: sessions.New(sessions.WithConfinement([]string{protected}, false))}}

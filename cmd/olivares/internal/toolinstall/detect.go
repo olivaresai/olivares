@@ -190,7 +190,10 @@ func readSmallContents(files smallFileFS, rel string, limit int64) ([]byte, erro
 	return b, nil
 }
 
-func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, driver string) Installed {
+// inspectRelease checks one release. known, when not nil, holds the digest of the executable
+// read under the release's current identity (inspectReleaseCached) once it is set; the v1 check
+// uses it instead of reading the executable again, and fills it after a read.
+func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, driver string, known *exeDigest) Installed {
 	in := Installed{Driver: driver, ReleaseDir: abs, State: StateDamaged}
 	schema, err := readReceiptSchema(root, filepath.Join(rel, ReceiptFile))
 	if err != nil {
@@ -201,7 +204,7 @@ func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, dr
 	case ReceiptSchemaV2:
 		return e.inspectReleaseV2(ctx, root, rel, abs, driver)
 	case ReceiptSchema:
-		return e.inspectReleaseV1(ctx, root, rel, abs, driver)
+		return e.inspectReleaseV1(ctx, root, rel, abs, driver, known)
 	default:
 		in.Reason = fmt.Sprintf("receipt schema %q is not a known installer receipt", schema)
 		return in
@@ -273,7 +276,7 @@ func (e *Engine) inspectReleaseV2(ctx context.Context, root *os.Root, rel, abs, 
 	return in
 }
 
-func (e *Engine) inspectReleaseV1(ctx context.Context, root *os.Root, rel, abs, driver string) Installed {
+func (e *Engine) inspectReleaseV1(ctx context.Context, root *os.Root, rel, abs, driver string, known *exeDigest) Installed {
 	in := Installed{Driver: driver, ReleaseDir: abs, State: StateDamaged}
 	rec, err := readReceipt(root, filepath.Join(rel, ReceiptFile), abs)
 	if err != nil {
@@ -298,7 +301,7 @@ func (e *Engine) inspectReleaseV1(ctx context.Context, root *os.Root, rel, abs, 
 		return in
 	}
 	in.IsExecutable = fi.Mode().Perm()&0o111 != 0
-	sum, size, err := fileSHA256Root(root, exeRel)
+	sum, size, err := known.read(root, exeRel)
 	if err != nil {
 		in.Reason = "executable: " + err.Error()
 		return in
@@ -372,6 +375,10 @@ type DetectOptions struct {
 	Probe   bool
 	// NoAuthObservation omits credential-home observations for executable-only callers.
 	NoAuthObservation bool
+	// NoDigest leaves the sha256 of vendor-default and PATH candidates unread, for
+	// callers that use only a candidate's origin, match and executable bit. Probing and
+	// manifest corroboration need the digest, so it cannot be combined with them.
+	NoDigest bool
 	// ProbePaths are exact absolute paths the operator selected for execution.
 	ProbePaths []string
 	// Material, when set, is verified under the pinned key and used to mark a
@@ -417,6 +424,9 @@ type Candidate struct {
 // still returned together with a probe_failed refusal, so the caller can show
 // them and still exit non-zero.
 func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, error) {
+	if opts.NoDigest && (opts.Probe || len(opts.ProbePaths) > 0 || opts.Material != nil) {
+		return nil, refuse(KindInvalidRequest, "a detection without digests cannot probe or corroborate a manifest: both compare the executable's sha256")
+	}
 	capab, err := e.capabilityOf(opts.Driver)
 	if err != nil {
 		return nil, err
@@ -511,7 +521,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 		}
 	}
 	for _, path := range defaultPaths {
-		if c, ok := observe(opts.Driver, path, "vendor-default"); ok {
+		if c, ok := observe(opts.Driver, path, "vendor-default", !opts.NoDigest); ok {
 			add(c)
 		}
 	}
@@ -520,7 +530,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 			if !filepath.IsAbs(dir) {
 				continue
 			}
-			if c, ok := observe(opts.Driver, filepath.Join(dir, opts.Driver), "path"); ok {
+			if c, ok := observe(opts.Driver, filepath.Join(dir, opts.Driver), "path", !opts.NoDigest); ok {
 				add(c)
 			}
 		}
@@ -547,7 +557,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 		if known {
 			continue
 		}
-		c, ok := observe(opts.Driver, path, "named")
+		c, ok := observe(opts.Driver, path, "named", !opts.NoDigest)
 		if !ok {
 			c = Candidate{Driver: opts.Driver, Path: path, Origin: "named", Match: MatchUnregisteredObserved, Note: "no such file"}
 		}
@@ -627,8 +637,9 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 }
 
 // observe records a path without executing it. Symlinks are followed only to
-// name the target; the reported bytes are the target's.
-func observe(driver, path, origin string) (Candidate, bool) {
+// name the target; the reported bytes are the target's. digest says whether to
+// read them for their sha256.
+func observe(driver, path, origin string, digest bool) (Candidate, bool) {
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return Candidate{}, false
@@ -654,6 +665,9 @@ func observe(driver, path, origin string) (Candidate, bool) {
 	}
 	c.Size = fi.Size()
 	c.Executable = fi.Mode().Perm()&0o111 != 0
+	if !digest {
+		return c, true
+	}
 	if sum, err := fileSHA256(c.Resolved); err == nil {
 		c.SHA256 = sum
 	} else {

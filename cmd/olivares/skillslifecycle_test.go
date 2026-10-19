@@ -420,3 +420,59 @@ func TestSkillsCLIDisableWithAPackChangesOnlyThatPacksPin(t *testing.T) {
 		t.Fatalf("a skill of another pack: %v", err)
 	}
 }
+
+func TestSkillsCLIProfileTargetAcrossAssignmentAndLifecycleVerbs(t *testing.T) {
+	profile := "ppf_" + lifeFolder
+	t.Run("assign", func(t *testing.T) {
+		rec := lifecycleRecorder(t, nil)
+		if _, _, err := execDatalane(t, "", datalaneArgs(rec, "skills", "assign", lifePack, "--revision", lifeRevNew, "--profile", profile)...); err != nil {
+			t.Fatal(err)
+		}
+		if body := rec.jsonBody(t); body["target_kind"] != "profile" || body["target_id"] != profile {
+			t.Fatalf("profile body: %v", body)
+		}
+	})
+	for _, verb := range []string{"assignments", "enable", "disable", "selection"} {
+		t.Run(verb, func(t *testing.T) {
+			pins := `[{"id":"as-profile","target_kind":"profile","target_id":"` + profile + `","pack_id":"` + lifePack + `","pack_revision_id":"` + lifeRevOld + `","members":["tdd","review"],"version":3}]`
+			if verb == "enable" {
+				pins = strings.Replace(pins, `["tdd","review"]`, `["tdd"]`, 1)
+			}
+			rec := lifecycleRecorder(t, map[string]string{"profile:" + profile: pins})
+			recBase := rec.respond
+			rec.respond = func(r datalaneRequest) (int, string) {
+				if r.Path == "/v1/m/skills/selection" {
+					return 200, `{"digest":"one","members":[]}`
+				}
+				return recBase(r)
+			}
+			args := []string{"skills", verb, "--profile", profile}
+			if verb == "enable" {
+				args = append(args, "review", "--pack", lifePack)
+			}
+			if verb == "disable" {
+				args = append(args, "review")
+			}
+			if _, _, err := execDatalane(t, "", datalaneArgs(rec, args...)...); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, req := range rec.sent("GET") {
+				if req.Path == "/v1/m/skills/assignments" {
+					found = req.Query.Get("target_kind") == "profile" && req.Query.Get("target_id") == profile
+				}
+				if req.Path == "/v1/m/skills/selection" {
+					found = req.Query.Get("target") == "profile:"+profile
+				}
+			}
+			if !found {
+				t.Fatalf("no profile query: %+v", rec.sent("GET"))
+			}
+			if verb == "enable" || verb == "disable" {
+				if body := rec.jsonBody(t); body["target_kind"] != "profile" || body["target_id"] != profile {
+					t.Fatalf("profile edit: %v", body)
+				}
+			}
+		})
+	}
+}

@@ -165,6 +165,13 @@ func gitRun(ctx context.Context, dir string, args ...string) (stdout string, cod
 	// No transport: a repository the child configured as a partial clone would make git
 	// fetch a missing object through a remote of the child's choosing, and run the
 	// ssh command it named, as the engine. The engine's git reads local objects only.
+	// #nosec G204 -- git is the exec.LookPath("git") result and runs without a shell. Every
+	// caller in this package names the git subcommand itself; the variable parts are ref,
+	// object-id, branch and path values. Refs are prefixed with refs/heads/ or follow
+	// --end-of-options, object ids are validated, paths are absolute, and a branch name is
+	// the operator-set prefix plus a run-ref suffix, never agent or remote input. The leading
+	// -c settings turn off hooks, fsmonitor and transports; configured filters are refused
+	// beforehand by gitConfigCommand (see the file header).
 	cmd := exec.CommandContext(ctx, git, append([]string{
 		"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.allow=never",
 	}, args...)...)
@@ -251,6 +258,8 @@ func worktreeWorkspaceProblem(ws *resolvedWorkspace, isolation Isolation) string
 		return "a new worktree is available for native sessions only (isolation=native)"
 	case ws.mountMode == mountRO:
 		return "a read-only workspace cannot take a new worktree"
+	case ws.mountMode == mountNoDelete:
+		return "a write-without-delete workspace cannot take a new worktree: the copy would not keep the no-delete rule"
 	case len(ws.readOnlyFolders) > 0:
 		return "a workspace with read-only folders cannot take a new worktree: the copy would not keep them read-only"
 	}

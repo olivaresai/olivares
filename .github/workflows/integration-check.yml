@@ -41,7 +41,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -54,7 +54,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g

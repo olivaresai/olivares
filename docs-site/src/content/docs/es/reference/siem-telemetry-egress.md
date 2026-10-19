@@ -10,7 +10,7 @@ SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and post
 
 
 :::note[Business]
-La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
 :::
 
 Esta página es el **contrato de salida**: qué sale del plano de control, en qué

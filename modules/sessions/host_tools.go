@@ -284,6 +284,10 @@ func (m *Module) handleProfileHostTools(w http.ResponseWriter, r *http.Request, 
 		writeReadinessErr(w, badRequest("this route accepts no query parameters"))
 		return
 	}
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeReadinessErr(w, err)
+		return
+	}
 	out, err := m.EvaluateHostTools(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
 	if err != nil {
 		writeReadinessErr(w, err)

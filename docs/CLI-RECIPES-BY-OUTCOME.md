@@ -29,6 +29,32 @@ control-plane base URL. Commands that take `--data-dir` work **offline against t
 store** and need no running engine; commands that take `--server` are HTTP clients and
 need one.
 
+For scriptable help, see the [installed command surface](#discover-the-commands-in-an-installed-binary).
+
+## Discover the commands in an installed binary
+
+Run `olivares commands -o json` to read the machine-readable command surface.
+It works offline and describes the visible commands in that binary: paths,
+summaries, examples, aliases and flags (type, default, required). Hidden command
+subtrees, including unavailable Business commands, are omitted. The schema is
+`olivares.cli-ref/1`; readers should ignore additional fields. Persistent flags
+appear once at the command that declares them and apply to its descendants.
+
+Each command declares `changes_data`: `read` observes or prints data, `write`
+creates or updates saved data or writes output files, and `delete` removes saved
+data or files, or retires a resource through a deletion verb while retaining its history.
+The marker describes the strongest deliberate effect, including
+optional flags; a dry run may have fewer effects. Groups that only show help are
+`read`. Incidental audit events and temporary files do not change a read marker.
+These declarations describe effects; they do not grant permission to run a command.
+
+```sh
+olivares commands -o json > commands.json
+```
+
+`olivares commands` and `olivares commands -o text` keep the full sorted path-only
+diagnostic, including hidden commands, used to compare release artifacts.
+
 ---
 
 ## 1 · Connect Claude Code — governed, deny-closed
@@ -165,6 +191,14 @@ olivares session follow acme-1
 olivares session stop acme-1
 olivares session rm acme-1
 ```
+
+Inside a governed session, `olivares session show self`, `session events self` and
+`session peers self` address the session identified by `OLIVARES_WORK_SESSION_ID`.
+`current` means the same thing. Without that variable, these aliases return a usage
+error (exit 2). `session peers <id> self` with an `<id>` other than the variable's
+session is refused before any request. A session named `self` or `current` is
+addressed by its id. Credentials and permissions stay the same as for an explicit
+session ID.
 
 ### The expert path: a pinned workspace and profile
 

@@ -224,8 +224,8 @@
     "trailEmptyHint": "Chaque décision sur cette approbation — qui a décidé, quand et pourquoi — est consignée ici. Personne n’a encore décidé.",
     "decisionApprove": "Approuvé",
     "decisionReject": "Rejeté",
-    "reenableNeedsAdmins": "Deux autres comptes administrateur doivent approuver. Créez-les dans Identité et NHI, ou avec `olivares users create`.",
-    "openIdentity": "Ouvrir Identité et NHI",
+    "reenableNeedsAdmins": "Deux autres comptes administrateur doivent approuver. Créez-les dans Identité et accès, ou avec `olivares users create`.",
+    "openIdentity": "Ouvrir Identité et accès",
     "cannotDecideOwn": "Vous ne pouvez pas approuver votre propre demande. Un autre administrateur doit décider."
   },
   "policies": {
@@ -284,7 +284,7 @@
     "matchActionHint": "Vide = correspond à toute action.",
     "matchSubjectKind": "Type de sujet à faire correspondre",
     "matchSubjectKindHint": "Vide = correspond à tout type de sujet.",
-    "needsBusiness": "Abaisser le niveau de risque sous la valeur par défaut de l'action nécessite Business. Désactivez cette politique pour la conserver enregistrée.",
+    "needsBusiness": "Un niveau de risque ou un nombre d'approbations différent de la valeur par défaut de l'action nécessite Business. Désactivez cette politique pour la conserver enregistrée.",
     "create": "Créer la politique",
     "save": "Enregistrer les modifications",
     "confirmCreateBody": "Une politique ABAC activée restreint davantage l’accès immédiatement ; une politique d’approbation activée commence à exiger des approbations humaines pour les actions correspondantes. Prend effet immédiatement.",
@@ -315,7 +315,7 @@
     "empty": "Aucune identité",
     "emptyHint": "Les identités apparaissent ici une fois qu’une source d’annuaire est réconciliée pour ce locataire.",
     "principalTypeHuman": "Humain",
-    "principalTypeNhi": "NHI",
+    "principalTypeNhi": "Non humaine",
     "principalTypeUnknown": "Inconnu"
   },
   "groups": {
@@ -331,6 +331,7 @@
     "emptyHint": "Les groupes, rôles et politiques apparaissent ici à mesure que les sources d’annuaire sont réconciliées."
   },
   "members": {
+    "notFound": "Ce groupe n’existe pas.",
     "title": "Membres du groupe",
     "subtitle": "Membres de « {{group}} ».",
     "direct": "Direct",
@@ -347,7 +348,7 @@
   },
   "bindings": {
     "title": "Liaisons d’agents",
-    "caption": "Comment chaque agent correspond à son identité non humaine (NHI) — le pont qui attribue les actions de l’agent dans la carte des accès.",
+    "caption": "Comment chaque agent correspond à son identité non humaine, qui attribue les actions de l’agent dans la carte des accès.",
     "search": "Rechercher des liaisons…",
     "agent": "Agent",
     "identity": "Identité",
@@ -587,7 +588,7 @@
     },
     "binding": {
       "title": "Aucune liaison d’agent",
-      "description": "Liez un agent à une NHI existante ou nouvellement émise afin d’attribuer ses actions à cette identité dans la carte des accès."
+      "description": "Liez un agent à une identité non humaine existante ou nouvelle afin d’attribuer ses actions à cette identité dans la carte des accès."
     },
     "group": {
       "title": "Aucun groupe pour l’instant",
@@ -655,7 +656,7 @@
     "partialCount": "Échecs : {{failed}} sur {{total}}",
     "partialBody": "L'export a été approuvé et exécuté, mais certaines écritures n'ont pas abouti. Le moteur distant a changé : recalculez le plan pour voir ce qu'il reste.",
     "applyFailed": "L'export n'a pas pu être appliqué.",
-    "notWiredTitle": "L'export AgentCore n'est pas câblé dans ce déploiement",
+    "notWiredTitle": "L'export AgentCore n'est pas configuré dans ce déploiement",
     "notWiredBody": "Aucun exportateur AgentCore n'est configuré pour ce locataire : le moteur refuse donc la requête. Un opérateur l'active sur l'hôte en faisant pointer cette variable vers le fichier de configuration de l'export :",
     "notWiredCredentials": "Ce fichier appartient à l'opérateur et contient des identifiants d'écriture AWS. La console ne l'affiche jamais, ne le demande jamais et ne le modifie jamais.",
     "deniedTitle": "Le moteur a refusé cet export",

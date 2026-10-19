@@ -210,6 +210,10 @@ type Options struct {
 	// secrets into the store and persisting reference-only source rows via).
 	// Superadmin-gated; writes/test need AAL3. nil leaves those endpoints 501.
 	ConnectorOnboarding ConnectorOnboarding
+	// NotifyDestinations is the console surface for Slack and Teams notification
+	// destinations (notify_destinations.go). Superadmin-gated; writes/test need AAL3.
+	// nil leaves those endpoints 501.
+	NotifyDestinations NotifyDestinations
 	// MCPGateway manages tenant-owned upstreams; writes/test require tenant admin and AAL3.
 	MCPGateway        MCPGatewayService
 	MCPGatewayRuntime MCPGatewayRuntime
@@ -237,7 +241,11 @@ type Options struct {
 	// ModuleSelection reads and changes which optional modules the engine runs
 	// (/v1/console/modules). nil = the endpoints answer 501.
 	ModuleSelection ModuleSelectionService
-	TracingSettings TracingSettingsService
+	// Updates is the Updates page (/v1/console/updates): the installed and newest
+	// version, and the apply that runs `olivares upgrade`. nil = the endpoints answer 501.
+	Updates             UpdateService
+	TracingSettings     TracingSettingsService
+	SessionIdleSettings SessionIdleSettingsService
 	// JobsNotRunning lists the background jobs this node does not run and why;
 	// server-info carries them so the console can say so. nil omits the fact.
 	JobsNotRunning func() []JobNotRunning
@@ -352,6 +360,8 @@ type Server struct {
 	// rl: the inbound rate limiter; nil leaves the limiter middleware and the
 	// gRPC rate-limit hook disabled (no metering).
 	rl *ratelimit.Limiter
+	// revealRL meters each person's reveals of vault items (handleRevealSecret); always set.
+	revealRL *ratelimit.Limiter
 	// routeResponseHeaders is the ROUTE-SPECIFIC response metadata declared at
 	// registration, keyed by "METHOD <full router pattern>". It is resolved by
 	// routeResponseMetadata BEFORE the authenticating and rate-limiting middlewares
@@ -359,9 +369,9 @@ type Server struct {
 	// written before chi routes the request. Empty for every route that declares
 	// nothing, which is all of them by default.
 	routeResponseHeaders map[string]map[string]string
-	// routeDescriptors is the ENGINE's private record of every module route it
+	// routeDescriptors is the ENGINE's private record of declared core creations and module routes it
 	// mounted, keyed by "METHOD <full spec path>" (capabilities_registry.go). It is
-	// written ONLY during mountModules, inside New, and read only afterwards from the
+	// written ONLY during router construction, inside New, and read only afterwards from the
 	// self capability projection — so a served request can never give a route a
 	// description it did not declare.
 	routeDescriptors map[string]routeDescriptor
@@ -421,9 +431,11 @@ type Server struct {
 	// the descriptor catalog + sealed-credential CRUD + test under
 	// /v1/console/connectors. nil = those endpoints answer 501.
 	connectorOnboarding ConnectorOnboarding
-	mcpGateway          MCPGatewayService
-	mcpGatewayRuntime   MCPGatewayRuntime
-	sessionPreview      http.Handler
+	// notifyDestinations backs /v1/console/notify-destinations. nil = 501.
+	notifyDestinations NotifyDestinations
+	mcpGateway         MCPGatewayService
+	mcpGatewayRuntime  MCPGatewayRuntime
+	sessionPreview     http.Handler
 	// knowledgeStatus is the no-secret, process-level knowledge-plane posture.
 	knowledgeStatus KnowledgeStatusProvider
 	// updateStatus returns the latest cached OTA update check; nil when
@@ -449,8 +461,10 @@ type Server struct {
 	activation  ActivationService
 	departments DepartmentService
 	// moduleSelection is the module selection surface (nil = 501).
-	moduleSelection ModuleSelectionService
-	tracingSettings TracingSettingsService
+	moduleSelection     ModuleSelectionService
+	updates             UpdateService
+	tracingSettings     TracingSettingsService
+	sessionIdleSettings SessionIdleSettingsService
 	// jobsNotRunning is Options.JobsNotRunning.
 	jobsNotRunning func() []JobNotRunning
 	// emaGrant: the EMA jwt-bearer grant handler; nil = EMA not configured
@@ -554,7 +568,8 @@ func New(opts Options) (*Server, error) {
 		standing:     opts.Standing,
 		census:       opts.Census,
 		sourceRoster: opts.SourceRoster, contentDiff: opts.ContentDiff, connectorOnboarding: opts.ConnectorOnboarding,
-		mcpGateway: opts.MCPGateway, mcpGatewayRuntime: opts.MCPGatewayRuntime,
+		notifyDestinations: opts.NotifyDestinations,
+		mcpGateway:         opts.MCPGateway, mcpGatewayRuntime: opts.MCPGatewayRuntime,
 		sessionPreview:                 opts.SessionPreview,
 		knowledgeStatus:                opts.KnowledgeStatus,
 		updateStatus:                   opts.UpdateStatus,
@@ -564,13 +579,15 @@ func New(opts Options) (*Server, error) {
 		supportBundleRedact:            opts.SupportBundleRedact,
 		supportBundleContainsSensitive: opts.SupportBundleContainsSensitive,
 		license:                        opts.License, emaGrant: opts.EMAGrant,
-		activation:      opts.Activation,
-		departments:     opts.Departments,
-		moduleSelection: opts.ModuleSelection,
-		tracingSettings: opts.TracingSettings,
-		jobsNotRunning:  opts.JobsNotRunning,
-		logBroker:       opts.LogBroker,
-		leaderRouteGate: opts.LeaderRouteGate,
+		activation:          opts.Activation,
+		departments:         opts.Departments,
+		moduleSelection:     opts.ModuleSelection,
+		updates:             opts.Updates,
+		tracingSettings:     opts.TracingSettings,
+		sessionIdleSettings: opts.SessionIdleSettings,
+		jobsNotRunning:      opts.JobsNotRunning,
+		logBroker:           opts.LogBroker,
+		leaderRouteGate:     opts.LeaderRouteGate,
 	}
 	if s.log == nil {
 		s.log = slog.Default()
@@ -610,6 +627,7 @@ func New(opts Options) (*Server, error) {
 		// middleware out of the chain below.
 		s.rl = ratelimit.New(*opts.RateLimit, s.metrics)
 	}
+	s.revealRL = newRevealLimiter()
 	// compile the metrics access-control gate (fail fast on a bad CIDR).
 	mg, merr := buildMetricsGate(opts.MetricsAuth)
 	if merr != nil {
@@ -833,9 +851,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		coreRoute(r, "PUT", "/step-up-policy", s.systemRoute("system:admin"), s.handleStepUpPolicyPut)
 	})
 
-	v1.Route("/agents", func(r chi.Router) {
+	s.coreCreationRoutes(v1, "/agents", "agent:write", CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"}, s.handleCreateAgent, func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.tenantRoute("agent:read"), s.handleListAgents)
-		coreRoute(r, "POST", "/", s.collectionRoute("agent:write", CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"}), s.handleCreateAgent)
 		coreRoute(r, "GET", "/{id}", s.entityRoute("agent:read", "", "id"), s.handleGetAgent)
 		coreRoute(r, "PATCH", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleUpdateAgent)
 		coreRoute(r, "DELETE", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleDeleteAgent)
@@ -860,9 +877,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		// module read by verb tier, so a count reveals nothing its holder cannot list.
 		coreRoute(r, "GET", "/{id}/contents", s.entityRoute("tenant:admin", "", "id"), s.handleWorkspaceContents)
 	})
-	v1.Route("/agent-groups", func(r chi.Router) {
+	s.coreCreationRoutes(v1, "/agent-groups", "agent:write", CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"}, s.handleCreateAgentGroup, func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.tenantRoute("agent:read"), s.handleListAgentGroups)
-		coreRoute(r, "POST", "/", s.collectionRoute("agent:write", CollectionScopeRef{WorkspaceBodyField: "workspace_id", WorkspaceQueryParam: "workspace_id"}), s.handleCreateAgentGroup)
 		coreRoute(r, "GET", "/{id}", s.entityRoute("agent:read", "agent_group", "id"), s.handleGetAgentGroup)
 		coreRoute(r, "PATCH", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleUpdateAgentGroup)
 		coreRoute(r, "DELETE", "/{id}", s.entityRoute("agent:write", "", "id"), s.handleDeleteAgentGroup)
@@ -910,6 +926,12 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		coreRoute(r, "GET", "/", s.secretRoute, s.handleListSecrets)
 		coreRoute(r, "PUT", "/", s.secretRoute, s.handlePutSecret)
 		coreRoute(r, "DELETE", "/", s.secretRoute, s.handleDeleteSecret)
+		// The one read of a stored value: a person's own vault/<user-id>/ item.
+		coreRoute(r, "POST", "/reveal", s.secretRoute, s.handleRevealSecret)
+		// The vault's other two verbs: the current authenticator code of one of those
+		// items, and a generated password.
+		coreRoute(r, "POST", "/totp", s.secretRoute, s.handleVaultTOTP)
+		coreRoute(r, "POST", "/generate", s.secretRoute, s.handleGeneratePassword)
 	})
 	// the durable source roster + live reconfiguration. The source CRUD
 	// authors the connectors the engine ingests from; a write persists then applies
@@ -935,6 +957,16 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handlePutConnector)
 		coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleDeleteConnector)
 		coreRoute(r, "POST", "/test", s.systemRoute("system:admin"), s.handleTestConnector)
+	})
+	// Console notification destinations (Slack, Teams): the webhook is sealed in the
+	// secret store and the definition lives in the deployment settings. Same
+	// superadmin gate as the connectors; the list carries no secret (no AAL3), writes
+	// and the test send do. The name is carried in the body on DELETE.
+	v1.Route("/console/notify-destinations", func(r chi.Router) {
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleListNotifyDestinations)
+		coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handlePutNotifyDestination)
+		coreRoute(r, "DELETE", "/", s.systemRoute("system:admin"), s.handleDeleteNotifyDestination)
+		coreRoute(r, "POST", "/test", s.systemRoute("system:admin"), s.handleTestNotifyDestination)
 	})
 	coreRoute(v1, "POST", "/console/runtime/reload", s.systemRoute("system:admin"), s.handleReloadRuntime)
 	v1.Route("/console/mcp-gateway", func(r chi.Router) {
@@ -964,6 +996,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		coreRoute(r, "POST", "/preview", s.systemRoute("system:admin"), s.handleActivationPreview)
 		coreRoute(r, "POST", "/apply", s.systemRoute("system:admin"), s.handleActivationApply)
 	})
+	coreRoute(v1, "GET", "/system/session-idle", s.systemRoute("system:admin"), s.handleSessionIdleSettings)
+	coreRoute(v1, "PUT", "/system/session-idle", s.systemRoute("system:admin"), s.handleSessionIdleSettings)
 	coreRoute(v1, "GET", "/system/tracing", s.systemRoute("system:admin"), s.handleTracingSettings)
 	coreRoute(v1, "PUT", "/system/tracing", s.systemRoute("system:admin"), s.handleTracingSettings)
 	// The module selection: which optional modules the engine runs. Superadmin;
@@ -971,6 +1005,12 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	v1.Route("/console/modules", func(r chi.Router) {
 		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleModuleSelection)
 		coreRoute(r, "PUT", "/", s.systemRoute("system:admin"), s.handleSelectModules)
+	})
+	// The Updates page: read the installed and newest release; apply runs `olivares
+	// upgrade` and restarts the engine on it. Superadmin; the apply needs the step-up.
+	v1.Route("/console/updates", func(r chi.Router) {
+		coreRoute(r, "GET", "/", s.systemRoute("system:admin"), s.handleUpdateStatus)
+		coreRoute(r, "POST", "/apply", s.systemRoute("system:admin"), s.handleApplyUpdate)
 	})
 	// Operational console endpoints. Effective config is already redacted and the
 	// remaining reads expose no secrets, so they need no AAL3. The support bundle
@@ -1035,7 +1075,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		// internal-superadmin lifecycle. List superadmins (read), and
 		// enable/disable an internal superadmin account (write, AAL3-gated, deny-
 		// closed against total lockout). Disabling is non-destructive and reversible
-		// — the global-principal counterpart to the tenant-scoped SCIM deactivate.
+		// — the global-principal counterpart to the tenant-scoped member removal (DELETE /members/{id}).
 		coreRoute(r, "GET", "/superadmins", s.systemRoute("user:read"), s.handleListSuperadmins)
 		coreRoute(r, "POST", "/{id}/disable", s.systemRoute("user:write"), s.handleDisableSuperadmin)
 		coreRoute(r, "POST", "/{id}/enable", s.systemRoute("user:write"), s.handleEnableSuperadmin)
@@ -1058,10 +1098,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	coreRoute(v1, "GET", "/search", s.authenticatedRoute, s.handleSearch)
 	// the tenant member roster for the console members grid — every user with
 	// a membership in the resolved tenant, enriched with effective role, workspace
-	// scoping and directory groups. Tenant-scoped read (user:read); the enable/
-	// disable actions the grid drives are the existing tenant-scoped SCIM deactivate
-	// (PATCH /scim/v2/Users/{id} active), never a new write here.
+	// scoping and directory groups. Tenant-scoped read (user:read). The grid's remove
+	// action is the tenant-scoped DELETE below (user:write): a scoped offboard in
+	// every edition, independent of the inbound SCIM server, which is Business.
 	coreRoute(v1, "GET", "/members", s.tenantRoute("user:read"), s.handleListMembers)
+	coreRoute(v1, "DELETE", "/members/{id}", s.tenantRoute("user:write"), s.handleRemoveMember)
 	// FASE X /: tenant-scoped console onboarding (distinct from the
 	// superadmin-only POST /v1/users). Onboard a non-federated person into the
 	// resolved tenant (membership:write + AAL3), invite by email or admin-set
@@ -1110,7 +1151,9 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 
 	// SCIM 2.0 inbound service provider (RFC 7643/7644), mounted as a first-party
 	// surface under /v1/scim/v2 (NOT a module — it reaches the auth partition that
-	// modules cannot). Bearer-authed with a tenant-bound admin token.
+	// modules cannot). Bearer-authed with a tenant-bound admin token. Business: the
+	// Community build mounts the same routes and answers 501 after the admission
+	// (handlers_scim_noenterprise.go); the implementation is in the private overlay.
 	v1.Route("/scim/v2", func(r chi.Router) {
 		coreRoute(r, "GET", "/Users", s.scimRoute("user:read"), s.scimListUsers)
 		coreRoute(r, "POST", "/Users", s.scimRoute("user:write"), s.scimCreateUser)
@@ -2283,10 +2326,11 @@ func (s *Server) licenseStatus() LicenseDisplayInfo {
 		return LicenseDisplayInfo{Status: "invalid"}
 	}
 	return LicenseDisplayInfo{
-		Status:      string(v.Status(s.clock.Now().Time())),
-		Licensee:    v.Licensee(),
-		Plan:        v.Plan(),
-		SupportTier: v.SupportTier(),
+		Status:         string(v.Status(s.clock.Now().Time())),
+		Licensee:       v.Licensee(),
+		Plan:           v.Plan(),
+		SupportTier:    v.SupportTier(),
+		SupportProfile: v.SupportProfile(),
 	}
 }
 

@@ -367,6 +367,30 @@ func TestCodexRefusesASubagentNomination(t *testing.T) {
 	}
 }
 
+// The stored history lists every image a person attached as a data URL, and the driver
+// reads none of it: a resume that asked for it would end at the handshake for one
+// screenshot (the pump's line limit), so the request says no.
+func TestCodexResumeAsksForNoStoredTurns(t *testing.T) {
+	peer := newCodexPeer(t, func(c *DriverSessionConfig) { c.ResumeConversationID = "stored-1" })
+	done := make(chan error, 1)
+	go func() {
+		_, err := peer.session.Handshake(context.Background())
+		done <- err
+	}()
+	id, _, _ := peer.nextRequest()
+	peer.reply(id, map[string]any{"userAgent": "f", "codexHome": "/f", "platformFamily": "unix", "platformOs": "linux"})
+	id, _, _ = peer.nextRequest()
+	peer.reply(id, map[string]any{"account": nil, "requiresOpenaiAuth": true})
+	id, method, params := peer.nextRequest()
+	if method != codexMethodThreadResume || params["excludeTurns"] != true {
+		t.Fatalf("resume = %s %v; want thread/resume with excludeTurns true", method, params)
+	}
+	peer.reply(id, map[string]any{"thread": map[string]any{"id": "stored-1"}, "model": "m", "modelProvider": "openai"})
+	if err := <-done; err != nil {
+		t.Fatalf("handshake: %v", err)
+	}
+}
+
 func TestCodexResumeRefusesInsteadOfStartingANewThread(t *testing.T) {
 	peer := newCodexPeer(t, func(c *DriverSessionConfig) { c.ResumeConversationID = "stored-1" })
 	done := make(chan error, 1)

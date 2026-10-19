@@ -16,7 +16,7 @@
   },
   "forbidden": {
     "title": "Sie dürfen die Anbieter dieses Mandanten nicht lesen",
-    "description": "Das Lesen registrierter Anbieter erfordert sessions:provider:read. Bitten Sie eine Administratorin dieses Mandanten darum."
+    "description": "Ihre Rolle kann registrierte Anbieter nicht lesen. Bitten Sie eine Administratorin dieser Organisation um Zugriff."
   },
   "columns": {
     "name": "Name",
@@ -127,7 +127,7 @@
   },
   "vaultUnavailable": {
     "title": "Diese Installation kann keine Anbieter-Zugangsdaten speichern",
-    "description": "Es ist kein versiegelter Tresor verdrahtet, daher verweigert die Engine das Speichern eines Schlüssels, statt einen zu speichern, den sie nicht schützen kann. Eine Administratorin muss den Secret-Sealer konfigurieren."
+    "description": "Es ist kein versiegelter Tresor eingerichtet, daher verweigert die Engine das Speichern eines Schlüssels, statt einen zu speichern, den sie nicht schützen kann. Eine Administratorin muss den Secret-Sealer konfigurieren."
   },
   "truncation": {
     "label": "{{n}} Anbieter angezeigt; es gibt mehr",

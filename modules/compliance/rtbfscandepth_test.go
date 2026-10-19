@@ -83,7 +83,7 @@ func newScanHarness(t *testing.T, standIns func(store.ExtensionRegistry) error, 
 	ctx := context.Background()
 	h := &harness{t: t}
 
-	opts = append([]Option{WithClock(fixedClock{t: time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)})}, opts...)
+	opts = append([]Option{WithBusinessRecords(), WithClock(fixedClock{t: time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)})}, opts...)
 	mod := New(opts...)
 	h.mod = mod
 

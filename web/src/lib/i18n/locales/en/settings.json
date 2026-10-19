@@ -23,7 +23,9 @@
     "about": "About",
     "sections": "Settings sections",
     "signing": "Report signing",
-    "tracing": "Tracing"
+    "tracing": "Tracing",
+    "sessionIdle": "Session memory",
+    "updates": "Updates"
   },
   "general": {
     "title": "General",
@@ -33,7 +35,7 @@
     "density": "Density",
     "densityHint": "Compact shows more rows; comfortable is easier to read.",
     "language": "Language",
-    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
     "time": "Time",
     "timeHint": "Times show in your zone ({{zone}}). Records and exports stay in UTC.",
     "clock24": "24-hour",
@@ -49,6 +51,15 @@
     "notifications": "Notification preferences are not stored on this installation yet.",
     "sessionDefaults": "Session defaults are not stored on this installation yet."
   },
+  "sessionNotifications": {
+    "title": "Session notifications",
+    "hint": "Tell me when a session needs me or finishes while this tab is in the background. Applies to this browser.",
+    "notifyMe": "Notify me",
+    "denied": "Notifications are blocked in this browser.",
+    "unavailable": "Browser notifications are unavailable here.",
+    "needsYou": "This session needs you.",
+    "finished": "The turn finished."
+  },
   "keyboard": {
     "title": "Keyboard",
     "scope": "The keys this installation answers. They are the same for everyone."
@@ -57,6 +68,7 @@
     "title": "Edition & modules",
     "scope": "The edition of this build, the modules it runs, and what Business adds.",
     "label": "Edition",
+    "licenseAlias": "License",
     "unknown": "Not reported by this engine",
     "editions": {
       "community": "Community",
@@ -70,6 +82,16 @@
       "regulatory": "Regulatory operations: DORA registers, NIS 2 incident classification, OSCAL profiles, US and sector packs, and continuous control monitoring",
       "reports": "Business reports and scheduled reports",
       "toolPins": "Tool pins"
+    },
+    "badge": {
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "businessShort": "Biz",
+      "enterpriseShort": "Ent",
+      "accessibleName": "{{edition}} edition",
+      "show": "Show edition badge",
+      "loadError": "Could not load the badge preference.",
+      "saveError": "Could not save the badge preference. Try again."
     }
   },
   "about": {
@@ -282,5 +304,44 @@
     "ssoNotEnforced": "Single sign-on is requested, but this build does not enforce that policy. Check the identity provider settings before signing out.",
     "passwordManaged": "Your organization administrator manages password sign-in.",
     "ssoInactive": "Single sign-on is requested, but its identity provider is inactive. This requirement does not block password sign-in."
+  },
+  "sessionIdle": {
+    "minutes": "Stop after minutes in idle",
+    "description": "Off by default. Free memory by stopping finished sessions that are no longer open. Resume keeps the folder and conversation.",
+    "hint": "Use 0 to turn off, or 6–10080 minutes. The idle window begins after five minutes without output. Sessions with approvals, running children or peers, or a newer message stay running.",
+    "saved": "Session memory setting saved."
+  },
+  "updates": {
+    "title": "Updates",
+    "description": "The version this engine runs, the newest signed release in its channel, and one action to install it. The engine verifies the release, replaces its binary and restarts once; the restart stops the running sessions.",
+    "check": "Check again",
+    "install": "Update to {{version}}",
+    "applied": "Update installed.",
+    "failed": "The update failed. Try again.",
+    "restarting": "Restarting the engine…",
+    "stillRestarting": "The engine has not come back on the new version yet. Reload this page in a minute to check.",
+    "unavailable": "Updates cannot be installed from the console on this engine. Run olivares upgrade on the server.",
+    "loadFailed": "The update status could not be read. Try again.",
+    "status": {
+      "available": "Update available",
+      "current": "Up to date",
+      "unchecked": "Could not check for updates"
+    },
+    "security": "Security release",
+    "release": "Release",
+    "running": "Running",
+    "channel": "Channel",
+    "newest": "Newest release",
+    "advisories": "Fixes",
+    "notes": "Release notes",
+    "confirm": {
+      "title": "Update to {{version}}?",
+      "stop_one": "{{count}} running session stops. It can be resumed after the restart.",
+      "stop_other": "{{count}} running sessions stop. Each one can be resumed after the restart.",
+      "none": "The engine restarts once on the new version.",
+      "confirm": "Install and restart"
+    },
+    "alreadyCurrent": "Already on the newest release. Nothing was installed.",
+    "restartRequired": "A newer version is installed. Restart the engine with its service manager to run it."
   }
 }

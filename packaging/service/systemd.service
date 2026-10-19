@@ -38,8 +38,10 @@ ProtectKernelModules=true
 ProtectKernelLogs=true
 ProtectControlGroups=true
 # Record-bound sessions run in their own user and network namespace (loopback
-# only, egress through the per-session proxy); every other namespace type is denied.
-RestrictNamespaces=user net
+# only, egress through the per-session proxy), and a writable workspace's session
+# helper in its own mount namespace, where it bind-mounts the workspace's git
+# hooks and configuration read-only; every other namespace type is denied.
+RestrictNamespaces=user net mnt
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
@@ -53,6 +55,11 @@ SystemCallFilter=~@privileged @resources
 # (loopback setup), then drops them all before the tool runs. The engine itself
 # keeps no host capability (CapabilityBoundingSet= below).
 SystemCallFilter=capset
+# The session helper's read-only bind mounts of a workspace's git hooks and
+# configuration happen inside its own mount namespace, where it holds only
+# namespace-local capability. The engine keeps no host capability, so a mount
+# outside that namespace still fails.
+SystemCallFilter=mount
 @STATE_DIRECTORY_LINE@
 ReadWritePaths=@DATA_DIR@
 CapabilityBoundingSet=

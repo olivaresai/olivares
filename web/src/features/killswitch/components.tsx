@@ -33,12 +33,15 @@ export function StopScopeCell({ stop }: { stop: KillSwitchDTO }) {
   const isEstate = stop.scope_kind === 'estate'
   const ref = stop.agent_external_id || stop.scope_ref || stop.agent_id
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex flex-col items-start gap-0.5">
       <Badge variant={isEstate ? 'danger' : 'neutral'}>
         {t(`scope.${isEstate ? 'estate' : 'agent'}`)}
       </Badge>
       {!isEstate && ref && (
-        <span className="truncate font-mono text-caption text-muted-foreground">
+        <span
+          className="line-clamp-3 max-w-32 font-mono text-caption break-all whitespace-normal text-muted-foreground"
+          title={ref}
+        >
           {ref}
         </span>
       )}
@@ -51,14 +54,14 @@ export function StopSourceCell({ stop }: { stop: KillSwitchDTO }) {
   const { t } = useTranslation('killswitch')
   const isGuardian = stop.source === 'guardian'
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex flex-col items-start gap-0.5">
       <Badge variant={isGuardian ? 'info' : 'outline'}>
         {t(`source.${isGuardian ? 'guardian' : 'operator'}`)}
       </Badge>
       {isGuardian && stop.rule_ref && (
         <span
-          className="truncate font-mono text-caption text-muted-foreground"
-          title={t('stops.byRule')}
+          className="line-clamp-3 max-w-32 font-mono text-caption break-all whitespace-normal text-muted-foreground"
+          title={`${t('stops.byRule')}: ${stop.rule_ref}`}
         >
           {stop.rule_ref}
         </span>

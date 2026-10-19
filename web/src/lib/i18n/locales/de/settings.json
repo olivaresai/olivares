@@ -23,7 +23,9 @@
     "about": "Info",
     "sections": "Einstellungsbereiche",
     "signing": "Berichtssignierung",
-    "tracing": "Tracing"
+    "tracing": "Tracing",
+    "sessionIdle": "Sitzungsspeicher",
+    "updates": "Updates"
   },
   "general": {
     "title": "Allgemein",
@@ -33,7 +35,7 @@
     "density": "Dichte",
     "densityHint": "Kompakt zeigt mehr Zeilen; bequem lässt sich leichter lesen.",
     "language": "Sprache",
-    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
     "time": "Uhrzeit",
     "timeHint": "Zeiten erscheinen in Ihrer Zone ({{zone}}). Aufzeichnungen und Exporte bleiben in UTC.",
     "clock24": "24 Stunden",
@@ -49,6 +51,15 @@
     "notifications": "Benachrichtigungen werden in dieser Installation noch nicht gespeichert.",
     "sessionDefaults": "Sitzungsstandards werden in dieser Installation noch nicht gespeichert."
   },
+  "sessionNotifications": {
+    "title": "Sitzungsbenachrichtigungen",
+    "hint": "Benachrichtigen, wenn eine Sitzung mich braucht oder fertig ist, während dieser Tab im Hintergrund ist. Gilt für diesen Browser.",
+    "notifyMe": "Benachrichtigen",
+    "denied": "Benachrichtigungen sind in diesem Browser blockiert.",
+    "unavailable": "Browserbenachrichtigungen sind hier nicht verfügbar.",
+    "needsYou": "Diese Sitzung braucht dich.",
+    "finished": "Der Durchgang ist abgeschlossen."
+  },
   "keyboard": {
     "title": "Tastatur",
     "scope": "Die Tasten, die diese Installation beantwortet. Sie gelten für alle gleich."
@@ -57,6 +68,7 @@
     "title": "Edition & Module",
     "scope": "Die Edition dieses Builds, die Module, die er ausführt, und was Business hinzufügt.",
     "label": "Edition",
+    "licenseAlias": "Lizenz",
     "unknown": "Von dieser Engine nicht gemeldet",
     "editions": {
       "community": "Community",
@@ -70,6 +82,16 @@
       "regulatory": "Regulatorischer Betrieb: DORA-Register, NIS-2-Vorfallklassifizierung, OSCAL-Profile, US- und Branchenpakete sowie kontinuierliche Kontrollüberwachung",
       "reports": "Business-Berichte und geplante Berichte",
       "toolPins": "Tool-Pins"
+    },
+    "badge": {
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "businessShort": "Biz",
+      "enterpriseShort": "Ent",
+      "accessibleName": "Edition {{edition}}",
+      "show": "Editionskennzeichnung anzeigen",
+      "loadError": "Die Einstellung für die Editionskennzeichnung konnte nicht geladen werden.",
+      "saveError": "Die Einstellung für die Editionskennzeichnung konnte nicht gespeichert werden. Versuche es erneut."
     }
   },
   "about": {
@@ -282,5 +304,44 @@
     "hours_one": "{{count}} Stunde",
     "hours_other": "{{count}} Stunden",
     "ssoInactive": "Single Sign-on ist angefordert, aber der Identitätsanbieter ist inaktiv. Diese Anforderung blockiert die Passwortanmeldung nicht."
+  },
+  "sessionIdle": {
+    "minutes": "Nach Minuten im Leerlauf stoppen",
+    "description": "Standardmäßig aus. Gibt Speicher frei, indem abgeschlossene, nicht mehr geöffnete Sitzungen gestoppt werden. Fortsetzen behält Ordner und Gespräch.",
+    "hint": "0 schaltet aus, sonst 6–10080 Minuten. Der Leerlauf beginnt nach fünf Minuten ohne Ausgabe. Sitzungen mit Genehmigungen, laufenden Unterprozessen oder verknüpften Sitzungen oder einer neuen Nachricht laufen weiter.",
+    "saved": "Sitzungsspeicher-Einstellung gespeichert."
+  },
+  "updates": {
+    "title": "Updates",
+    "description": "Die Version, die diese Engine ausführt, das neueste signierte Release ihres Kanals und eine Aktion zum Installieren. Die Engine prüft das Release, ersetzt ihre Binärdatei und startet einmal neu; der Neustart beendet die laufenden Sitzungen.",
+    "check": "Erneut prüfen",
+    "install": "Auf {{version}} aktualisieren",
+    "applied": "Update installiert.",
+    "failed": "Das Update ist fehlgeschlagen. Versuchen Sie es erneut.",
+    "restarting": "Engine wird neu gestartet…",
+    "stillRestarting": "Die Engine ist noch nicht auf der neuen Version zurück. Laden Sie diese Seite in einer Minute neu, um das zu prüfen.",
+    "unavailable": "Auf dieser Engine lassen sich Updates nicht über die Konsole installieren. Führen Sie olivares upgrade auf dem Server aus.",
+    "loadFailed": "Der Update-Status konnte nicht gelesen werden. Versuchen Sie es erneut.",
+    "status": {
+      "available": "Update verfügbar",
+      "current": "Aktuell",
+      "unchecked": "Update-Prüfung nicht möglich"
+    },
+    "security": "Sicherheits-Release",
+    "release": "Release",
+    "running": "Läuft",
+    "channel": "Kanal",
+    "newest": "Neuestes Release",
+    "advisories": "Behebt",
+    "notes": "Release-Hinweise",
+    "confirm": {
+      "title": "Auf {{version}} aktualisieren?",
+      "stop_one": "{{count}} laufende Sitzung wird beendet. Sie kann nach dem Neustart fortgesetzt werden.",
+      "stop_other": "{{count}} laufende Sitzungen werden beendet. Jede kann nach dem Neustart fortgesetzt werden.",
+      "none": "Die Engine startet einmal auf der neuen Version neu.",
+      "confirm": "Installieren und neu starten"
+    },
+    "alreadyCurrent": "Bereits auf dem neuesten Release. Es wurde nichts installiert.",
+    "restartRequired": "Eine neuere Version ist installiert. Starten Sie die Engine mit ihrem Service-Manager neu, um sie auszuführen."
   }
 }

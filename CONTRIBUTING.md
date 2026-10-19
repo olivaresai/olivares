@@ -41,6 +41,10 @@ else; the public export runs the same generator. `task lint:release-version`
 refuses a `1.x` version outside a mark unless it is a record (a dated changelog
 entry, an install witness, a compatibility floor, a section citation) or a row
 of `NOT_RELEASES` in `scripts/check-release-version.sh` names what it versions.
+In Markdown documentation, a bare `N.N` with no release word near it (release,
+version, tag, the product's name, in any locale) is a measurement or a label, not
+a release claim; any other file, and anything under `deploy/`, `packaging/` or
+`operator/`, is judged by the number alone.
 Attach `<!-- release-fixed -->` immediately after a fixed historical version
 (such as a deprecation date); it stays fixed and must not exceed the release
 baseline. The annotation applies only to that token, not to other versions on

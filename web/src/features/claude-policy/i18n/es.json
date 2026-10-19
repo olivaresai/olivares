@@ -12,7 +12,7 @@
   },
   "seam": {
     "badge": "Backend pendiente",
-    "body": "{{what}} está cableado al contrato declarado; el endpoint del backend aún no está activo. Puedes componer y validar localmente — esto se activará en cuanto el backend exista. No se finge nada."
+    "body": "{{what}} sigue el contrato declarado; el endpoint del backend aún no está activo. Puedes componer y validar localmente — esto se activará en cuanto el backend exista. No se finge nada."
   },
   "validation": {
     "ok": "Esquema válido.",
@@ -89,7 +89,7 @@
     "postV1": "Diferenciador · candidato post-v1",
     "postV1Hint": "El HITL de Managed Agents es un diferenciador; el corte v1-vs-post-v1 se decide en el gate.",
     "vaultsRisk": "Riesgo lateral: los vaults/credenciales son workspace-scoped — cualquiera con una API key del workspace puede referenciarlos. Los secretos son write-only; archivar purga los secretos pero retiene el registro para auditoría, borrar es un hard delete.",
-    "endpointNote": "Los eventos del thread y la emisión allow/deny están cableados al contrato declarado. La doc viva expone eventos en /v1/sessions/{id}/events; el conector lee la ruta por thread — ninguna está re-expuesta aún por una ruta del motor.",
+    "endpointNote": "Los eventos del thread y la emisión allow/deny siguen el contrato declarado. La doc viva expone eventos en /v1/sessions/{id}/events; el conector lee la ruta por thread — ninguna está re-expuesta aún por una ruta del motor.",
     "listLabel": "Confirmaciones de agente gestionado pendientes",
     "pending": "Pendiente de confirmación",
     "session": "Sesión",

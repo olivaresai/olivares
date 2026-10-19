@@ -365,20 +365,13 @@ func TestCommunicationChannelCatalogFreshHTTP(t *testing.T) {
 
 	t.Run("exchanged agent reader", func(t *testing.T) {
 		sponsorRef := "human:k3-catalog-owner:" + owner.id.String()
-		scimUpdate := communicationHTTPTestRequest(t, eng, http.MethodPut,
-			"/v1/scim/v2/Users/"+owner.id.String(), owner.token, tenant,
-			map[string]any{
-				"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
-				"userName": "owner@k3-catalog.test", "displayName": "K3 catalog owner",
-				"externalId": sponsorRef, "active": true,
-			}, map[string]string{"Content-Type": "application/scim+json"})
-		if scimUpdate.status != http.StatusOK {
-			t.Fatalf("set agent sponsor external identity = %d: %s", scimUpdate.status, scimUpdate.raw)
-		}
+		setDirectoryUser(t, eng, owner.token, tenant, owner.id, auth.SCIMUserInput{
+			UserName: "owner@k3-catalog.test", DisplayName: "K3 catalog owner", ExternalID: sponsorRef, Active: true,
+		})
 		if err := eng.store.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 			_, err := sc.Identities().Create(context.Background(), model.Identity{
 				Name: "K3 catalog owner", Kind: "user", ExternalID: sponsorRef, Provider: "test-roster",
-				Metadata: map[string]any{"principal_type": "human"},
+				Metadata: map[string]any{"principal_type": "human", "disabled": false},
 			})
 			return err
 		}); err != nil {

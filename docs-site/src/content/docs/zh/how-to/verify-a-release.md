@@ -10,7 +10,7 @@ description: >-
 
 > Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
 
-下一个版本是 <!-- release -->`0.2`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->。
+下一个版本是 <!-- release -->`0.3`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->。
 
 控制平面（control plane）是一款安全产品，因此你拿到一个发布后首先应做的，就是 **证明它确实是项目所发布的那一个**。Olivares AI 的发布会随附你做加密验证所需的一切：对校验和的签名、一份 SLSA 来源证明，以及各一份对容器镜像做了证明的 SBOM（SPDX）和 OpenVEX 文档 — 全部 **按 digest 引用，绝不按标签**。
 
@@ -46,7 +46,7 @@ description: >-
 /path/to/olivares/scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-/path/to/olivares/scripts/verify-release.sh --source-tag 0.2
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.3
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.

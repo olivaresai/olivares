@@ -25,7 +25,7 @@ import (
 // are the ones a real operator performs on the closed routine (install, drift
 // it, drop it, reinstall it).
 func TestDirectoryEpochPostgresSplitOwnerNoAdminStatusAndHeal(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 	fixed := model.NewTimestamp(time.Date(2001, time.February, 3, 4, 5, 6, 0, time.UTC))
@@ -395,7 +395,7 @@ func directoryEpochTestInventorySpec(t *testing.T, app *sql.DB) store.PgProvisio
 }
 
 func TestDirectoryEpochPostgresMaxOneRejectsInheritedGeneration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	pg := isolatedPG(t)
 	st, err := Open(ctx, store.Config{
@@ -681,7 +681,7 @@ func TestDirectoryEpochPostgresLockOrderInterleavings(t *testing.T) {
 }
 
 func TestDirectoryEpochPostgresDropPurgesClosedAuthEstate(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 	st, err := Open(ctx, store.Config{
@@ -717,7 +717,7 @@ func TestDirectoryEpochPostgresLifecyclePathsShareGlobalWriterLock(t *testing.T)
 	defer raw.Close() //nolint:errcheck
 	directoryEpochTestDeletePostgresRow(t, raw, missing)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	backfillPaused := make(chan struct{})

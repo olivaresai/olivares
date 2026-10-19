@@ -21,8 +21,8 @@ import (
 	"testing"
 )
 
-// The Community sealed-material leaves — secrets put/rotate/rm, ddil keygen,
-// license keygen — pinned in BOTH directions. The Business key ceremonies retain
+// The sealed-material leaves — secrets put/rotate/rm, license keygen, and ddil keygen
+// (a Business verb, pinned here as the Business edition) — pinned in BOTH directions. The Business key ceremonies retain
 // the same coverage in the private overlay,
 // because they share one risk and it is not a cosmetic one: their text already
 // prints fingerprints, public keys and hints, and `ddil keygen` prints the PRIVATE
@@ -471,6 +471,7 @@ func TestSecretsMutationsHonourTheDeprecatedFormatAliasAndExplicitText(t *testin
 //     render.go already refuses in writing for the empty-map case. It is present,
 //     and it is the same value the text shows.
 func TestDDILKeygenJSONReportsTheFileAndNotTheKeyWhenAskedToWriteOne(t *testing.T) {
+	asEdition(t, "enterprise")
 	dir := t.TempDir()
 
 	// ---- --out: text is the bare public key, byte for byte ---------------

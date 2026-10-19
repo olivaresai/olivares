@@ -41,6 +41,15 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.8"
+      - name: release consumes CI evidence instead of rerunning batteries
+        run: |
+          python3 -m pip install --disable-pip-version-check --require-hashes -r .github/requirements-pyyaml.txt
+          python3 scripts/check-release-gate.py
+          python3 scripts/test-release-gate.py
+          python3 scripts/test-require-green-run.py
       - name: the release version has its dated CHANGELOG section
         run: python3 scripts/render-release-notes.py "$(sed -e '/^#/d' -e '/^$/d' RELEASE-VERSION)" >/dev/null
       - name: DCO required and attribution trailers refused
@@ -65,6 +74,17 @@ jobs:
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         uses: ./.github/actions/olivares-tool-cache
+        with:
+          gitleaks: "true"
+      - name: release scanner canaries and environment policy controls (offline)
+        run: |
+          set -euo pipefail
+          nfpm_bin=$(bash scripts/ensure-nfpm.sh --dest "$RUNNER_TEMP/scanner-nfpm")
+          PATH="$(dirname "$nfpm_bin"):$PATH"
+          export PATH
+          python3 scripts/test-artifact-secrets.py
+          python3 scripts/test-native-package-publication.py
+          bash scripts/test-release-environment-tag-policy.sh
       - name: Third-party license gate
         run: |
           go install github.com/google/go-licenses/v2@v2.0.1
@@ -73,6 +93,8 @@ jobs:
           python3 scripts/license-gate.py --tags release
       - name: licence headers, the AGPL boundary and PR job guards
         run: task lint:spdx lint:boundary lint:pr-ci-regime lint:pr-ci-regime:selftest
+      - name: one release version, stated everywhere or nowhere
+        run: task lint:release-version
       - name: migration history is immutable on the PR head
         env:
           OLIVARES_MIGRATION_BASE: ${{ github.event.pull_request.base.sha }}
@@ -552,7 +574,7 @@ jobs:
       # rest of the suite — which is the report the author needs most at that moment.
       fail-fast: false
       matrix:
-        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
+        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-i, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # The gate pins these ceilings to ci/pr-suite-shards.txt. Hosted root-rest
     # exhausted 35m twice; allow the measured 1.8x variation over its 19.8m cmd group
@@ -576,7 +598,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -588,7 +610,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -823,7 +845,7 @@ jobs:
         ports: ['5432/tcp']
         options: >-
           --health-cmd "pg_isready -U postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 12
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s --health-timeout 5s --health-retries 12
     steps:
       - name: require the existing PR build to succeed
         run: test '${{ needs.pr-build.result }}' = success

@@ -124,6 +124,16 @@ ungültiger oder abgelaufener Zeitstempel wird zu `enforce`. Plattforminvariante
 Identität, Tenant, Kill Switch, Firewall und fail-closed-Fehlern — bleiben durchgesetzt, während
 Business-Regeln beobachtet werden.
 
+Eine Session, die immer wieder abgelehnt wird, wird an eine Person übergeben. Erreicht ein Lauf
+3 Ablehnungen in Folge oder insgesamt 20, durch Policy, Firewall oder Plattformregeln, unterbricht
+Olivares seinen Turn, wenn jemand ihn beobachtet, und stoppt ihn, wenn niemand ihn beobachtet. Der
+Lauf zeigt dann `needs_person` mit den letzten Gründen, und ein Eintrag `sessions.run.denial_budget`
+wird in das Ledger geschrieben. Lehnt eine Person eine Prüfung ab, zählt das nicht, und ein
+erlaubter Tool-Aufruf setzt die Zählung der Ablehnungen in Folge zurück. Eine Eingabe einer
+Person beginnt ein neues Budget. Ändern Sie die Limits pro Tenant mit
+`"denial_budget": {"consecutive": 3, "total": 20}`; ein weggelassenes Feld behält seinen
+Standardwert.
+
 <img class="light:sl-hidden" src="/console/guias-config-step-up-dark.png" alt="Step-up-Authentifizierung erforderlich — AAL3 (Hardware, phishing-resistent)">
 <img class="dark:sl-hidden" src="/console/guias-config-step-up-light.png" alt="Step-up-Authentifizierung erforderlich — AAL3 (Hardware, phishing-resistent)">
 
@@ -220,9 +230,9 @@ dem Empfang des ersten Events können Betreiber die folgenden Ansichten verwende
 | **Observability > Ingestion** (`/observability`) | Datensätze nach Quelle, Typen `edge`, `cost` und `finding`, Signal sowie erstes/letztes Event. | Dies sind prozessweite Zähler seit dem Start; sie werden beim Neustart zurückgesetzt und sind nicht Tenant-spezifisch. |
 | **Sessions** (`/sessions`) | Session, Zustand, Aktion, Modell, Tokens, Kosten, letzte Aktivität sowie Haltung `enforced` oder `observed`. | Die Haltung fasst Event-Evidenz zusammen; sie wird nicht aus der Registrierung des Connectors abgeleitet. |
 | **Access map** (`/access-map`) | Aus beobachteten Tools, MCP und Ressourcen zugeordnete R/RW-Edges. | Eine beobachtete Edge beschreibt Aktivität und entspricht keiner vorherigen Autorisierung. |
-| **Cost & FinOps** (`/finops`) | Aus empfangener Telemetrie abgeleitete Kosten- und Token-Samples. | Die Abdeckung ist auf Exporte der Flotte begrenzt; Aufrufe ohne OTLP lassen sich nicht rekonstruieren. |
+| **Budgets** (`/stored-budgets`) | Verbrauch gegenüber jedem gespeicherten Budgetlimit, berechnet aus Kosten- und Token-Samples, die aus empfangener Telemetrie abgeleitet werden. | Die Abdeckung ist auf Exporte der Flotte begrenzt; Aufrufe ohne OTLP lassen sich nicht rekonstruieren. |
 | **Security** (`/security`) | Telemetrielücken, Sandbox-/MCP-Haltung und andere ausgegebene Findings. | Ein fehlendes Finding macht eine unbeobachtete Oberfläche nicht compliant. |
-| **Claude Policy** (`/claude-policy`) | Authoring, Verteilung, Versionen und Check-in-Status für verwaltete Claude-Code-Oberflächen. | Verteilung und Drift-Verifikation sind getrennte Fakten und werden separat angezeigt. |
+| **Claude Policy** (`/claude-policy`) | Validierung und Vorschau für verwaltete Claude-Code-Oberflächen; Business ergänzt Veröffentlichung, Verteilung, Versionen und Check-in-Status. | Verteilung und Drift-Verifikation sind getrennte Fakten und werden separat angezeigt. |
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Live-Betrieb von Agenten — was jede Sitzung gerade tut, ihre Tokens, Kosten und Taktung, aktualisiert über einen Live-Stream.">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="Live-Betrieb von Agenten — was jede Sitzung gerade tut, ihre Tokens, Kosten und Taktung, aktualisiert über einen Live-Stream.">

@@ -9,7 +9,7 @@ SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and post
 
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
 :::
 
 本页是**出口契约**：什么内容离开控制平面、以何种方言、经由何种传输，以及接收端会如何

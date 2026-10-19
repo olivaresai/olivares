@@ -227,6 +227,14 @@ func datalaneSegment(seg string) (string, error) {
 // diagnosis. The wrap keeps the *apiRefusal (status and code) reachable, so
 // -o json carries them like every other family.
 func datalaneHTTPError(what string, status int, body []byte) error {
+	// Assigning a provider profile or tool is Business: the edition answer, exit code 9
+	// with the sentence the engine gave, as every Business command gives it in Community.
+	if status == http.StatusNotImplemented && what == "sourcescope" {
+		var env apiErrorEnvelope
+		if json.Unmarshal(body, &env) == nil && env.Error.Code == "business_required" && strings.TrimSpace(env.Error.Message) != "" {
+			return exitcode.New(exitcode.Edition, errors.New(strings.TrimSpace(env.Error.Message)))
+		}
+	}
 	if status == http.StatusNotFound {
 		var env apiErrorEnvelope
 		if json.Unmarshal(body, &env) != nil ||

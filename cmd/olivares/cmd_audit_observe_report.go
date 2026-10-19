@@ -180,8 +180,9 @@ func auditObserveReportCmd() *cobra.Command {
 	var fromSeq int64
 	var asJSON, strict bool
 	cmd := &cobra.Command{
-		Use:   "observe-report",
-		Short: "Summarize constrained-observe shadows for an observe→enforce promotion decision",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "observe-report",
+		Short:       "Summarize constrained-observe shadows for an observe→enforce promotion decision",
 		Long: "observe-report reads a tenant's tamper-evident ledger and aggregates the constrained-observe " +
 			"shadows — the would-be deny/ask verdicts that observe mode ALLOWED but recorded — grouped by observe " +
 			"grant, source and would-be decision, and separates calls that PROCEEDED from those that fail-closed to " +

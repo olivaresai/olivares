@@ -46,7 +46,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -93,8 +93,8 @@ jobs:
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"

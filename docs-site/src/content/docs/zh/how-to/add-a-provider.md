@@ -113,10 +113,10 @@ olivares provider bind prv_01J8ABCDEF --profile ppf_01J8ZZZZZZ
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-对于 `anthropic`、`openai` 和 `xai`，OpenCode 只接受提供方自己的端点：请将 `base_url` 留空。`openai_compatible` 提供方请使用 `codex`；`ollama` 请使用 `codex` 或 `opencode`。
+对于 `anthropic`、`openai` 和 `xai`，OpenCode 只接受提供方自己的端点：请将 `base_url` 留空。`openai_compatible` 网关请使用 `codex`；`ollama`，以及 `base_url` 为回环或私有地址上的普通 `http`（例如 `http://127.0.0.1:8080/v1`，vLLM、llama.cpp）的本地 `openai_compatible` 服务器，请使用 `codex` 或 `opencode`。`base_url` 包含 `/v1`。
 
 ## 4. 启动第一次会话
 

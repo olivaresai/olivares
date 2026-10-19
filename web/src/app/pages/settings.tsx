@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Segmented } from '@/components/ui/segmented'
+import { EditionBadgeSetting } from '@/features/console/edition-badge-setting'
 import { Switch } from '@/components/ui/switch'
 import { useAuth } from '@/lib/auth/context'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
@@ -27,7 +28,13 @@ import {
 import { isTypingTarget } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { SignInSettings } from '@/features/settings/sign-in-settings'
+import { SessionNotificationSetting } from '@/features/settings/session-notification-setting'
 import { ModulesSettings } from '@/features/settings/modules-settings'
+import { UpdatesSettings } from '@/features/settings/updates-settings'
+import { LicenseTab } from '@/features/console/license-tab'
+// The license panel's strings: this page registers the namespace itself, the
+// way the console view does for its own tab.
+import '@/features/console/i18n'
 import {
   SETTINGS_SECTIONS,
   settingsSections,
@@ -35,13 +42,15 @@ import {
 } from '@/features/settings/sections'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import { ReportSigningSettings } from '@/features/settings/report-signing-settings'
+import { SessionIdleSettings } from '@/features/settings/session-idle-settings'
 import { TracingSettings } from '@/features/settings/tracing-settings'
 import { useViewAccess } from '@/features/navigation/authorization'
-import { viewById } from '@/features/navigation/model'
+import { fold, viewById } from '@/features/navigation/model'
 import type { FeatureView } from '@/features/registry'
 import {
   CLIENT_SETTING_DEFAULTS,
   localTimeZone,
+  notificationOwner,
   START_PAGE_IDS,
   useClientSettings,
   type ClockFormat,
@@ -55,15 +64,15 @@ const THEMES = ['system', 'light', 'dark'] as const
 /** Samples of the two frames. A child cannot escape `.dark` variable inheritance. */
 const PREVIEW = {
   light: {
-    frame: '#efeee9',
-    canvas: '#ffffff',
-    bar: '#dcdad5',
+    frame: '#f2f2f1',
+    canvas: '#fafaf9',
+    bar: '#d6d6d3',
     accent: '#f08000',
   },
   dark: {
-    frame: '#0a0a0c',
-    canvas: '#111113',
-    bar: '#2a2a2e',
+    frame: '#1b1b1e',
+    canvas: '#28282b',
+    bar: '#343434',
     accent: '#f08000',
   },
 } as const
@@ -208,8 +217,9 @@ function RestoreAll() {
 }
 
 export function SettingsPage() {
-  const { t } = useTranslation(['settings', 'common', 'auth', 'nav'])
-  const { principal, isSuperadmin, activeRole, grants } = useAuth()
+  const { t } = useTranslation(['settings', 'common', 'auth', 'nav', 'console'])
+  const { principal, activeTenant, isSuperadmin, activeRole, grants } =
+    useAuth()
   const serverInfo = useServerInfo()
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
@@ -268,9 +278,11 @@ export function SettingsPage() {
   }, [])
 
   const zone = localTimeZone()
-  const q = query.trim().toLocaleLowerCase()
+  // Folded, like the palette's haystack: a query typed without diacritics
+  // must find the accented label here too, or the two searches disagree.
+  const q = fold(query.trim())
   const rowMatches = (name: string, description: string) =>
-    q.length === 0 || `${name} ${description}`.toLocaleLowerCase().includes(q)
+    q.length === 0 || fold(`${name} ${description}`).includes(q)
 
   const themeName = t('general.theme')
   const themeHint = t('general.themeHint')
@@ -481,9 +493,24 @@ export function SettingsPage() {
         }
       />
     ) : null,
+    rowMatches(
+      t('sessionNotifications.title'),
+      t('sessionNotifications.hint'),
+    ) ? (
+      <SessionNotificationSetting
+        key={
+          notificationOwner(principal?.user_id, activeTenant) ?? 'notifications'
+        }
+        owner={notificationOwner(principal?.user_id, activeTenant)}
+      />
+    ) : null,
   ].filter(Boolean)
 
   const showGeneral = q.length > 0 || section === 'general'
+  const licenseLabel = t('console:license.title')
+  const showLicenseResult =
+    q.length > 0 &&
+    rowMatches(licenseLabel, t('console:license.title', { lng: 'en' }))
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -492,7 +519,7 @@ export function SettingsPage() {
           aria-label={t('nav.sections')}
           className="flex flex-col gap-0.5 border-b border-line p-2.5 md:border-r md:border-b-0"
         >
-          <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2">
+          <label className="mb-2 flex h-8 items-center gap-2 rounded-ctl border border-ctl-border bg-canvas px-2 has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus">
             <span className="sr-only">{t('search')}</span>
             <input
               id="settings-search"
@@ -539,6 +566,7 @@ export function SettingsPage() {
               {t('nav.setup')}
             </a>
             {sectionButton('edition')}
+            {sectionButton('updates')}
             {sectionButton('tracing')}
             {sectionButton('signing')}
             {sectionButton('about')}
@@ -553,11 +581,23 @@ export function SettingsPage() {
                   description={q.length > 0 ? undefined : t('general.scope')}
                   actions={<RestoreAll />}
                 />
-                {generalRows.length > 0 ? (
+                {generalRows.length > 0 || showLicenseResult ? (
                   <div className="flex flex-col">{generalRows}</div>
                 ) : (
                   <p className="text-body text-text-2">{t('noMatches')}</p>
                 )}
+                {showLicenseResult ? (
+                  <a
+                    href="/settings?section=edition"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      setSection('edition')
+                    }}
+                    className="text-body font-medium text-accent-text hover:underline"
+                  >
+                    {licenseLabel}
+                  </a>
+                ) : null}
               </>
             ) : null}
             {q.length === 0 && section === 'notifications' ? (
@@ -580,10 +620,31 @@ export function SettingsPage() {
             ) : null}
             {q.length === 0 && section === 'keyboard' ? <KeyboardList /> : null}
             {q.length === 0 && section === 'edition' ? (
-              <Edition
-                edition={serverInfo.data?.edition}
-                manageModules={isSuperadmin}
-              />
+              <>
+                {/* The section's h1 precedes the license panel's h2: heading
+                    order must read h1 → h2, as it does under the console's h1. */}
+                <PageHeader
+                  title={t('edition.title')}
+                  description={t('edition.scope')}
+                />
+                <LicenseTab />
+                <Edition
+                  edition={serverInfo.data?.edition}
+                  manageModules={isSuperadmin}
+                />
+              </>
+            ) : null}
+            {q.length === 0 && section === 'updates' && isSuperadmin ? (
+              <>
+                <PageHeader
+                  title={t('nav.updates')}
+                  description={t('updates.description')}
+                />
+                <UpdatesSettings key={principal?.user_id} />
+              </>
+            ) : null}
+            {q.length === 0 && section === 'sessionIdle' && isSuperadmin ? (
+              <SessionIdleSettings key={principal?.user_id} />
             ) : null}
             {q.length === 0 && section === 'tracing' && isSuperadmin ? (
               <TracingSettings key={principal?.user_id} />
@@ -748,8 +809,9 @@ const BUSINESS_ADDS = [
 
 /** EDITION & MODULES: the one place that names the build's edition and, on a Community
  * build, what a Business build adds — stated once, with no prompt elsewhere. The edition
- * is the engine's own build fact from server-info, never the license. The engine's paid
- * build string is "enterprise"; the product names that build Business (Enterprise is a
+ * is the engine's own build fact from server-info, never the license. A superadmin
+ * already reads it on the license panel above, so the row is only for everyone else. The
+ * engine's paid build string is "enterprise"; the product names that build Business (Enterprise is a
  * negotiated scope, not a build). */
 function Edition({
   edition,
@@ -766,13 +828,15 @@ function Edition({
       : (edition ?? t('edition.unknown'))
   return (
     <>
-      <PageHeader title={t('edition.title')} description={t('edition.scope')} />
-      <dl className="divide-y divide-line">
-        <div className="flex items-center justify-between gap-4 py-2">
-          <dt className="text-body text-text-2">{t('edition.label')}</dt>
-          <dd className="min-w-0 truncate text-body text-text">{name}</dd>
-        </div>
-      </dl>
+      {!manageModules ? (
+        <dl className="divide-y divide-line">
+          <div className="flex items-center justify-between gap-4 py-2">
+            <dt className="text-body text-text-2">{t('edition.label')}</dt>
+            <dd className="min-w-0 truncate text-body text-text">{name}</dd>
+          </div>
+        </dl>
+      ) : null}
+      <EditionBadgeSetting />
       {/* Every optional module can be turned on and off from the product. */}
       {manageModules ? <ModulesSettings /> : null}
       {edition === 'community' ? (

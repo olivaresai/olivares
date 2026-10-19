@@ -148,7 +148,7 @@ describe('WorkspaceDashboardView', () => {
     granted.add('tenant:admin')
     show()
     expect(
-      await screen.findByRole('row', { name: 'core.agent 7' }),
+      await screen.findByRole('row', { name: 'Agent 7' }),
     ).toBeInTheDocument()
     expect(contentsMock).toHaveBeenCalledWith(
       'w1',

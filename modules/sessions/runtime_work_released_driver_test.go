@@ -36,7 +36,7 @@ func TestRuntimeWorkSubmittedDriverAcceptsOwnerTextInterruptAndStop(t *testing.T
 		return countMethod(readFixtureRecord(t, record).Methods, codexMethodTurnStart) == before+1
 	})
 	interrupt := h.do(http.MethodPost, path+"/interrupt", admin, tenantHdr(tenant))
-	if interrupt.code != http.StatusOK || interrupt.body["state"] != stateRunning {
+	if interrupt.code != http.StatusOK || interrupt.body["state"] != stateIdle || interrupt.body["process_state"] != stateRunning {
 		t.Fatalf("ordinary driver interrupt after submit=%d %s", interrupt.code, interrupt.raw)
 	}
 	stopped := h.do(http.MethodPost, path+"/stop", admin, tenantHdr(tenant))

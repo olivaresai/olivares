@@ -55,26 +55,41 @@ func worktreeGit(t *testing.T, folder string, args ...string) string {
 
 func runWorktreeSession(t *testing.T, folder, data, preset, script string, args ...string) string {
 	t.Helper()
+	out, _ := launchWorktreeSession(t, folder, data, preset, false, script, args...)
+	return out
+}
+
+// launchWorktreeSession runs script as a confined session in folder and returns
+// its output and the confinement the run reports. guarded adds the mounts a
+// real launch adds (gitMounts).
+func launchWorktreeSession(t *testing.T, folder, data, preset string, guarded bool, script string, args ...string) (string, confine.State) {
+	t.Helper()
 	if state := confine.Probe(); state.Mode != confine.ModeLandlock {
 		t.Skip("host cannot confine: " + state.Reason)
 	}
 	m := New(WithConfinement([]string{data}, true))
-	proc, err := NewProcRunner().Launch(t.Context(), LaunchSpec{
+	spec := LaunchSpec{
 		Program: "/bin/sh", Args: append([]string{"-c", script, "sh"}, args...), Dir: folder,
 		Env:         []EnvVar{{Name: "GIT_CONFIG_NOSYSTEM", Value: "1"}, {Name: "GIT_CONFIG_GLOBAL", Value: "/dev/null"}},
 		Confinement: m.sessionConfinement(folder, nil, preset), ConfinementRequired: true, WaitDelay: time.Second,
-	})
+	}
+	if guarded {
+		spec.ConfinementMounts, spec.ConfinementMountsNote = m.GitMounts(folder)
+	}
+	proc, err := NewProcRunner().Launch(t.Context(), spec)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out strings.Builder
 	for frame := range proc.Output() {
 		out.Write(frame.Data)
+		out.WriteByte('\n') // a frame is one line without its newline
 	}
 	if code, err := proc.Wait(); code != 0 || err != nil {
 		t.Fatalf("confined worktree child: exit=%d err=%v\n%s", code, err, out.String())
 	}
-	return out.String()
+	state, _ := confinementOf(proc)
+	return out.String(), state
 }
 
 func TestConfinedSessionCommitsInAGitWorktreeWithoutOpeningItsParent(t *testing.T) {

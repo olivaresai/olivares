@@ -69,13 +69,16 @@ const codexHome: ProviderProfileDTO = {
   operable: false,
 }
 
-function wrap() {
+function wrap(
+  initial: Partial<import('react').ComponentProps<typeof RunCreateDialog>> = {},
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
-      <RunCreateDialog open onOpenChange={vi.fn()} />
+      <RunCreateDialog open onOpenChange={vi.fn()} {...initial} />
     </QueryClientProvider>,
   )
+  return { ...view, queryClient: qc }
 }
 
 const claudeCatalog: ProfileModelCatalogDTO = {
@@ -92,6 +95,8 @@ const claudeCatalog: ProfileModelCatalogDTO = {
       display_name: 'Claude Opus 5.5',
       is_default: true,
       effort_levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      supports_fast_mode: true,
+      service_tiers: ['future-priority'],
     },
     {
       id: 'haiku-5-5',
@@ -135,7 +140,11 @@ beforeEach(() => {
     has_more: false,
   })
   vi.mocked(agentOpsApi.createRun).mockResolvedValue({} as never)
-  vi.mocked(agentOpsApi.profileModels).mockResolvedValue(claudeCatalog)
+  vi.mocked(agentOpsApi.profileModels).mockImplementation(async (ref) => ({
+    ...claudeCatalog,
+    profile_ref: ref,
+    driver: ref === 'ppf_codex' ? 'codex' : 'claude',
+  }))
   vi.mocked(agentOpsApi.profileLaunchReadiness).mockImplementation(
     async (ref: string) =>
       fixtureReadiness({
@@ -146,6 +155,183 @@ beforeEach(() => {
 })
 
 describe('RunCreateDialog — provider profiles', () => {
+  it('launches with a handed-over Codex service tier', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+      items: [{ ...codexHome, operable: true }],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.profileLaunchReadiness).mockResolvedValue(
+      fixtureReadiness({
+        profile_ref: 'ppf_codex',
+        configuration_state: 'ready',
+      }),
+    )
+    wrap({
+      initialProfileRef: 'ppf_codex',
+      initialModel: 'opus-5-5',
+      initialServiceTier: 'future-priority',
+    })
+    await waitReadyToRequest()
+    expect(await screen.findByLabelText('Service tier')).toHaveTextContent(
+      'future-priority',
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody().service_tier).toBe('future-priority')
+  })
+  it.each([true, false])(
+    'launches with handed-over Fast mode %s',
+    async (fastMode) => {
+      const user = userEvent.setup()
+      wrap({
+        initialProfileRef: 'ppf_a',
+        initialModel: 'opus-5-5',
+        initialFastMode: fastMode,
+      })
+      await waitReadyToRequest()
+      expect(await screen.findByLabelText('Fast mode')).toHaveTextContent(
+        fastMode ? 'On' : 'Off',
+      )
+      await user.click(screen.getByRole('button', { name: 'Start' }))
+      await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+      expect(postedBody().fast_mode).toBe(fastMode)
+    },
+  )
+  it('reports a failed discovery while allowing the tool default', async () => {
+    vi.mocked(agentOpsApi.profileModels).mockResolvedValue({
+      profile_ref: homeA.profile_ref,
+      driver: 'claude',
+      state: 'failed',
+      models: [],
+      default_model: '',
+      free_text: true,
+      checked_at: '',
+      refresh_interval_seconds: 120,
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitReadyToRequest()
+    expect(
+      await screen.findByText('Speed options could not be loaded.'),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody()).not.toHaveProperty('fast_mode')
+  })
+  it('keeps Fast mode Off when a catalog refresh fails', async () => {
+    const user = userEvent.setup()
+    const view = wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitReadyToRequest()
+    await user.click(await screen.findByLabelText('Fast mode'))
+    await user.click(await screen.findByRole('option', { name: 'Off' }))
+    vi.mocked(agentOpsApi.profileModels).mockRejectedValue(
+      new Error('discovery failed'),
+    )
+    await view.queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey.at(-1) === 'models',
+    })
+    expect(
+      await screen.findByText('Speed options could not be loaded.'),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Fast mode')).toHaveTextContent('Off')
+    await user.click(screen.getByLabelText('Fast mode'))
+    expect(await screen.findByRole('option', { name: 'On' })).toHaveAttribute(
+      'data-disabled',
+    )
+    await user.keyboard('{Escape}')
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody().fast_mode).toBe(false)
+  })
+  it.each([
+    {
+      label: 'Fast mode',
+      option: 'Off',
+      field: 'fast_mode',
+      expected: false,
+      profile: /Home A/,
+    },
+    {
+      label: 'Service tier',
+      option: 'future-priority',
+      field: 'service_tier',
+      expected: 'future-priority',
+      profile: /Codex home/,
+    },
+  ])(
+    'submits the explicitly selected $label to the launch API',
+    async ({ label, option, field, expected, profile }) => {
+      vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+        items: [homeA, { ...codexHome, operable: true }],
+        has_more: false,
+      })
+      vi.mocked(agentOpsApi.profileLaunchReadiness).mockImplementation(
+        async (ref) =>
+          fixtureReadiness({ profile_ref: ref, configuration_state: 'ready' }),
+      )
+      const user = userEvent.setup()
+      wrap()
+      await user.click(await screen.findByLabelText('Provider profile'))
+      await user.click(await screen.findByRole('option', { name: profile }))
+      await waitReadyToRequest()
+      await user.click(await screen.findByLabelText(label))
+      await user.click(await screen.findByRole('option', { name: option }))
+      await user.click(screen.getByRole('button', { name: 'Start' }))
+      await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+      expect(postedBody()[field]).toBe(expected)
+    },
+  )
+  it('does not carry a speed choice to another profile', async () => {
+    vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+      items: [
+        homeA,
+        { ...homeA, profile_ref: 'ppf_b', display_name: 'Home B' },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitReadyToRequest()
+    await user.click(await screen.findByLabelText('Fast mode'))
+    await user.click(await screen.findByRole('option', { name: 'On' }))
+    await user.click(screen.getByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home B/ }))
+    await waitReadyToRequest()
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody()).not.toHaveProperty('fast_mode')
+  })
+  it('does not carry Fast mode to a model chosen in the new picker', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await user.click(await screen.findByLabelText('Fast mode'))
+    await user.click(await screen.findByRole('option', { name: 'On' }))
+    await user.click(screen.getByRole('button', { name: 'Model' }))
+    await user.click(await screen.findByText('Claude Haiku 5.5'))
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(await screen.findByRole('option', { name: 'high' }))
+    expect(screen.queryByLabelText('Fast mode')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody()).toMatchObject({
+      provider_profile_ref: homeA.profile_ref,
+      model: 'haiku-5-5',
+      effort: 'high',
+    })
+    expect(postedBody()).not.toHaveProperty('fast_mode')
+  })
   it.each([
     {
       label: 'Folder',

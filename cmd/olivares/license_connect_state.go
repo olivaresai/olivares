@@ -258,6 +258,11 @@ func readOwnerOnly(path string, max int64) ([]byte, bool, error) {
 // rename, then fsync of the directory. Before the rename the previous file stands; after it the
 // new bytes are current even if the directory sync reports an error.
 func writeAtomic0600(path string, data []byte) error {
+	return writeAtomicMode(path, data, 0o600)
+}
+
+// writeAtomicMode is writeAtomic0600 with the file mode chosen by the caller.
+func writeAtomicMode(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
@@ -271,7 +276,7 @@ func writeAtomic0600(path string, data []byte) error {
 		}
 		return cause
 	}
-	if err := tmp.Chmod(0o600); err != nil {
+	if err := tmp.Chmod(perm); err != nil {
 		return discard(fmt.Errorf("chmod staged %s: %w", path, err))
 	}
 	if _, err := tmp.Write(data); err != nil {

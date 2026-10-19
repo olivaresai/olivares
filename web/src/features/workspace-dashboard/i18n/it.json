@@ -1,0 +1,48 @@
+{
+  "truncation": {
+    "label": "Caricate {{n}} righe; ce ne sono altre",
+    "hint": "L'anteprima di questo workspace è limitata. Usa Vedi tutto per esaminare l'inventario più ampio.",
+    "hintCapped": "L'anteprima di questo workspace è limitata."
+  },
+  "title": "Panoramica del workspace",
+  "selectTitle": "Nessun workspace selezionato",
+  "selectPrompt": "Seleziona un workspace nella barra di navigazione per aprire questa panoramica, oppure vai all'inventario dell'intero tenant.",
+  "selectPromptWorkspaceOnly": "Seleziona un workspace nella barra di navigazione per aprire questa panoramica.",
+  "viewInventory": "Apri l'inventario",
+  "agents": "Agenti",
+  "sessions": "Sessioni",
+  "resources": "Risorse",
+  "groups": "Gruppi di agenti",
+  "recentAgents": "Agenti nel workspace",
+  "recentGroups": "Gruppi di agenti",
+  "status": "Stato",
+  "kind": "Tipo",
+  "slug": "Slug",
+  "name": "Nome",
+  "noAgents": "Ancora nessun agente in questo workspace.",
+  "noAgentsHint": "Gli agenti compaiono qui man mano che vengono rilevati in questo workspace.",
+  "noGroups": "Ancora nessun gruppo di agenti in questo workspace.",
+  "noGroupsHint": "I gruppi di agenti compaiono qui una volta definiti per questo workspace.",
+  "viewAll": "Vedi tutto",
+  "defaultBadge": "Predefinito",
+  "created": "Creato",
+  "lastUpdated": "Ultimo aggiornamento",
+  "contents": {
+    "title": "Contenuto del workspace",
+    "count": "Conteggio",
+    "loading": "Lettura del contenuto del workspace…",
+    "empty": "Questo workspace è ancora vuoto.",
+    "unavailable": "Il contenuto del workspace non è disponibile."
+  },
+  "sessionFolders": {
+    "wiki": "Apri la wiki di {{folder}}",
+    "title": "Cartelle delle sessioni",
+    "intro": "Cartelle su questo server in cui lavorano le sessioni. Sono separate dai workspace.",
+    "manage": "Gestisci le cartelle",
+    "folder": "Cartella",
+    "empty": "Ancora nessuna cartella di sessione. Una cartella compare qui quando una sessione parte al suo interno.",
+    "loading": "Lettura delle cartelle delle sessioni…",
+    "unavailable": "Le cartelle delle sessioni non sono disponibili.",
+    "truncationHint": "Apri Sessioni per vedere tutte le cartelle."
+  }
+}

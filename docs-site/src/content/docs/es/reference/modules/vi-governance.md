@@ -8,7 +8,7 @@ description: >-
 ---
 
 :::note[Edición]
-Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas) y el ciclo de vida de identidades gestionadas requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, SCIM entrante de usuarios/grupos, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
+Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas), el ciclo de vida de identidades gestionadas y el servidor SCIM entrante requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
 :::
 
 El módulo VI es el **plano de gobernanza sobre el modelo de autorización existente
@@ -119,4 +119,4 @@ nunca un email.
 
 ## Ediciones de aprobación (0.1)
 
-Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen revisión o aumentan el nivel de riesgo o el cuórum. Las políticas que reducen el nivel de riesgo y el acceso de emergencia break-glass pertenecen a la base de Business. Los registros almacenados se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.
+Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen la revisión de una acción. Las políticas de aprobación que cambian el nivel de riesgo o el número de aprobaciones, y el acceso de emergencia break-glass, pertenecen a la base de Business. Las políticas almacenadas que aumentan el nivel de riesgo o el número de aprobaciones siguen aplicándose; las políticas de reducción almacenadas y las concesiones de emergencia se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.

@@ -235,3 +235,58 @@ func TestEvalsGateComparisonRefusalAndExperimentFlags(t *testing.T) {
 		t.Fatalf("comparison diagnostics not rendered: %s", out)
 	}
 }
+
+// A gate whose drop is inside the noise passes (exit 0) and its output shows the
+// interval and both denominators, so a reader can see why it did not block.
+func TestEvalsGateShowsPassRateInterval(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"g2","verdict":"pass","effective_verdict":"pass","reasons":["inconclusive_noise"],"comparison":{"version":1,"status":"comparable","reason":"inconclusive_noise","mode":"same_candidate","pass_rate_diff":{"baseline_passed":10,"baseline_n":10,"passed":9,"n":10,"drop":0.1,"drop_ci":{"lo":-0.1894,"hi":0.4042}}}}`))
+	}))
+	defer srv.Close()
+	err, out := runGateCLI(t, srv, `{"one":"answer"}`, "--suite", "s1", "--outputs", "-")
+	if err != nil {
+		t.Fatalf("noise-level drop blocked the CLI: %v %s", err, out)
+	}
+	for _, want := range []string{
+		"comparison=comparable reason=inconclusive_noise",
+		"pass_rate_drop=+10.0pt ci95=[-18.9,+40.4]pt baseline=10/10 candidate=9/10",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("gate output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// A regression whose interval excludes zero blocks (exit 1) and shows the same line.
+func TestEvalsGateRegressionShowsIntervalAndBlocks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"g3","verdict":"fail","effective_verdict":"fail","reasons":["regression_vs_baseline"],"comparison":{"version":1,"status":"comparable","reason":"comparison_valid","mode":"same_candidate","pass_rate_diff":{"baseline_passed":100,"baseline_n":100,"passed":90,"n":100,"drop":0.1,"drop_ci":{"lo":0.0419,"hi":0.1744}}}}`))
+	}))
+	defer srv.Close()
+	err, out := runGateCLI(t, srv, `{"one":"answer"}`, "--suite", "s1", "--outputs", "-")
+	if !errors.Is(err, errGateFailed) {
+		t.Fatalf("regression did not block the CLI: %v %s", err, out)
+	}
+	if !strings.Contains(out, "pass_rate_drop=+10.0pt ci95=[+4.2,+17.4]pt baseline=100/100 candidate=90/100") {
+		t.Fatalf("interval line missing:\n%s", out)
+	}
+}
+
+// A pass_rate_diff with no denominators (a partial object) prints nothing rather than
+// a plausible-looking 0pt drop.
+func TestEvalsGateOmitsIntervalWithoutDenominators(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"g4","verdict":"pass","effective_verdict":"pass","comparison":{"version":1,"status":"comparable","reason":"comparison_valid","mode":"same_candidate","pass_rate_diff":{}}}`))
+	}))
+	defer srv.Close()
+	err, out := runGateCLI(t, srv, `{"one":"answer"}`, "--suite", "s1", "--outputs", "-")
+	if err != nil {
+		t.Fatalf("gate: %v %s", err, out)
+	}
+	if strings.Contains(out, "pass_rate_drop") {
+		t.Fatalf("interval line printed without denominators:\n%s", out)
+	}
+}

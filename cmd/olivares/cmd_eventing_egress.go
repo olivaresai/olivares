@@ -42,8 +42,9 @@ import (
 
 func newEventingEgressCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "egress",
-		Short: "Inspect and actuate the egress destination control's rollout",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "egress",
+		Short:       "Inspect and actuate the egress destination control's rollout",
 		Long: "The egress destination control governs where a tenant may point its own event\n" +
 			"stream. A deployment that predates the control starts in COMPATIBILITY mode so\n" +
 			"installing the binary is not a breaking change; a fresh install starts ENFORCED.\n" +
@@ -140,8 +141,9 @@ func egressBootRO(cmd *cobra.Command, dataDir, engineName, dsn, adminDSN, ownerD
 func newEventingEgressStatusCmd() *cobra.Command {
 	var dataDir, engine, dsn, adminDSN, ownerDSN string
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Report the rollout disposition and what enforcing would block",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Report the rollout disposition and what enforcing would block",
 		Long: "Reads the deployment's durable disposition for the egress destination control\n" +
 			"and, per tenant, which destinations currently work only because this deployment\n" +
 			"predates the control. Those are exactly what stops working when it is enforced.",
@@ -407,8 +409,9 @@ func newEventingEgressActuateCmd() *cobra.Command {
 	var dataDir, engine, dsn, adminDSN, ownerDSN, mode, reason, actor string
 	var acceptBlocked, assertWritersUpgraded, acceptUnfenced bool
 	cmd := &cobra.Command{
-		Use:   "actuate",
-		Short: "Apply a deliberate rollout decision for the egress destination control",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "actuate",
+		Short:       "Apply a deliberate rollout decision for the egress destination control",
 		Long: "Moves the deployment's durable disposition.\n\n" +
 			"  --mode enforced         the authored policy becomes authoritative and every\n" +
 			"                          grandfathered destination is retired. This is the\n" +

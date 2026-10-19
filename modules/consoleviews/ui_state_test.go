@@ -68,3 +68,40 @@ func TestUIStateValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestUIStateEditionBadge(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	ten := h.createOrg(root, "badge")
+	alice := h.roleToken(root, ten, "alice@badge.io", "viewer")
+	bob := h.roleToken(root, ten, "bob@badge.io", "viewer")
+	path := "/v1/m/consoleviews/ui-state"
+	if r := h.do("PUT", path, alice, map[string]any{"sidebar": "rail"}, ten); r.code != http.StatusOK {
+		t.Fatal(r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"show_edition_badge": false}, ten); r.code != http.StatusOK {
+		t.Fatalf("hide badge: %d %s", r.code, r.raw)
+	}
+	if r := h.do("GET", path, alice, nil, ten); r.body["show_edition_badge"] != false || r.body["sidebar"] != "rail" {
+		t.Fatalf("saved preference: %s", r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"sidebar": "full"}, ten); r.body["show_edition_badge"] != false {
+		t.Fatalf("old sidebar client erased badge choice: %s", r.raw)
+	}
+	if r := h.do("GET", path, bob, nil, ten); r.body["show_edition_badge"] != true {
+		t.Fatalf("other user's default: %s", r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"show_edition_badge": true}, ten); r.body["show_edition_badge"] != true || r.body["sidebar"] != "full" {
+		t.Fatalf("restore badge: %s", r.raw)
+	}
+	if r := h.do("PUT", path, root, map[string]any{"show_edition_badge": false}, ten); r.code != http.StatusOK {
+		t.Fatalf("root preference: %s", r.raw)
+	}
+	other := h.createOrg(root, "other-badge")
+	if r := h.do("GET", path, root, nil, other); r.body["show_edition_badge"] != true {
+		t.Fatalf("other tenant's default: %s", r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"show_edition_badge": "false"}, ten); r.code != http.StatusBadRequest {
+		t.Fatalf("bad boolean: %d", r.code)
+	}
+}

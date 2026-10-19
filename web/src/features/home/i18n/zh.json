@@ -1,18 +1,17 @@
 {
   "title": "概览",
   "description": "你的 AI 智能体在过去 30 天里做了什么，仅限你可以打开的区域。",
-  "openReport": "高管报告",
-  "aside": "环境摘要",
+  "aside": "资产域摘要",
   "range": "最近 30 天",
   "next": {
     "title": "下一步",
     "provider": {
-      "title": "添加供应商",
+      "title": "添加提供商",
       "description": "接入 Claude、Codex 或其他引擎，让它的会话可被归属与治理。"
     },
     "agent": {
-      "title": "部署代理",
-      "description": "把代理发布到工作区，连同它的策略与修订历史。"
+      "title": "部署智能体",
+      "description": "把智能体发布到工作区，连同它的策略与修订历史。"
     },
     "session": {
       "title": "启动会话",
@@ -30,7 +29,15 @@
     "open": "打开会话：{{what}}",
     "untitled": "未命名会话"
   },
+  "live": {
+    "title": "进行中"
+  },
   "tiles": {
+    "today": {
+      "label": "今天",
+      "caption_other": "今天运行的 {{count}} 个会话的费用",
+      "unpriced_other": "{{count}} 个未报告费用"
+    },
     "inventory": {
       "label": "清单",
       "caption": "{{agents}} 个智能体 · {{active}} 个活跃"

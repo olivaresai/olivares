@@ -139,6 +139,7 @@ func TestReconcileModulesFollowsTheRecordAndRestartsOnce(t *testing.T) {
 // the other.
 func TestDeploymentSettingsWritesKeepEachOther(t *testing.T) {
 	_, p := bootForSettings(t)
+	p.used = usedReturns() // a usage reader, as boot wires one: without it every module an edition stops running is kept
 	ctx := context.Background()
 	if err := p.SaveActivation(ctx, operator(t), activationWith(reportingActive), nil); err != nil {
 		t.Fatal(err)

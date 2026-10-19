@@ -107,6 +107,9 @@ type GatedEffect struct {
 // satisfies it.
 type Bridge interface {
 	GateOnceForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error)
+	// GateUnspentForSession is GateOnceForSession that never hands back an approved
+	// grant some consumer already spent.
+	GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error)
 	StatusScoped(ctx context.Context, tenant model.TenantID, ref, planHash, wantAction, wantSubjectKind, wantSubjectRef string) (status, boundHash string, err error)
 	ConsumeApproval(ctx context.Context, tenant model.TenantID, ref, consumerID, policyVersion string) (granted, replay bool, err error)
 }
@@ -114,13 +117,20 @@ type Bridge interface {
 // gateEffect opens or finds the effect's approval (reusing an approved grant
 // inside its time box, or authorizing under an active break-glass grant), or
 // reads the one the caller names, and answers at once: pending is an answer.
+// A single-use spend under a fresh consumer can never match an earlier spend, so
+// it reuses only an approved grant no one has spent: a grant spent earlier opens
+// a new request for a human instead of refusing as replayed.
 func Gate(ctx context.Context, bridge Bridge, e GatedEffect) (Answer, error) {
 	a := Answer{Ref: e.Ref}
 	var err error
 	if e.Ref != "" {
 		a.Status, a.BoundHash, err = bridge.StatusScoped(ctx, e.Tenant, e.Ref, e.PlanHash, e.Action, e.SubjectKind, e.SubjectRef)
 	} else {
-		a.Ref, a.Status, a.BoundHash, err = bridge.GateOnceForSession(ctx, e.Tenant, e.Action, e.SubjectKind, e.SubjectRef, e.PlanHash, e.Reason, e.RequestedBy, e.SessionRef)
+		open := bridge.GateOnceForSession
+		if e.Spend == SpendOnce && e.Consumer == "" {
+			open = bridge.GateUnspentForSession
+		}
+		a.Ref, a.Status, a.BoundHash, err = open(ctx, e.Tenant, e.Action, e.SubjectKind, e.SubjectRef, e.PlanHash, e.Reason, e.RequestedBy, e.SessionRef)
 	}
 	if err != nil {
 		return Answer{Failed: Open}, err
@@ -190,7 +200,7 @@ type Queue interface {
 func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 	request, err := queue.Request(ctx, e.Tenant, e.Principal, e.Request)
 	if err != nil {
-		return Answer{Failed: Open}, withCause(ctx, err)
+		return Answer{Failed: Open}, err
 	}
 	a := Answer{Ref: request.ID, Status: request.Status}
 	withdraw := true
@@ -207,7 +217,7 @@ func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 	if e.Wait != nil {
 		if endWait, err = registerEffectWait(ctx, e, request); err != nil {
 			a.Failed = Register
-			return a, withCause(ctx, err)
+			return a, err
 		}
 	}
 	answer, err := queue.Wait(ctx, e.Tenant, request.ID)
@@ -215,7 +225,6 @@ func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 		endWait()
 	}
 	if err != nil {
-		err = withCause(ctx, err)
 		withdraw = !errors.Is(err, context.DeadlineExceeded)
 		a.Failed = Wait
 		return a, err
@@ -233,26 +242,16 @@ func Hold(ctx context.Context, queue Queue, e HeldEffect) (Answer, error) {
 	if e.Recheck != nil {
 		if err := e.Recheck(ctx); err != nil {
 			a.Failed = Recheck
-			return a, withCause(ctx, err)
+			return a, err
 		}
 	}
 	spent, err := queue.Consume(ctx, e.Tenant, request.ID, e.Consumer, e.PolicyVersion)
 	if err != nil {
 		a.Failed = Spend
-		return a, withCause(ctx, err)
+		return a, err
 	}
 	a.Outcome, a.Spent = spendOutcome(spent.Granted, spent.Replay)
 	return a, nil
-}
-
-// withCause keeps the context's cause on a step the context ended. A store call the
-// context interrupts can fail with the driver's own error (SQLite: "interrupted (9)"),
-// and the caller must still tell a cancellation or deadline from a failure.
-func withCause(ctx context.Context, err error) error {
-	if cause := ctx.Err(); cause != nil && !errors.Is(err, cause) {
-		return errors.Join(err, cause)
-	}
-	return err
 }
 
 // registerEffectWait projects the hold onto the run until the earlier of the live

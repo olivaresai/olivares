@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import type { ParsedEndpoint } from './openapi-parser'
 import { generateSchemaExample } from './openapi-parser'
 import { generateCurl } from './curl-export'
+import { METHOD_COLORS } from './method-colors'
 import { usePlayground, type ResponseState } from './use-playground'
 
 interface RequestPanelProps {
@@ -419,16 +420,7 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
         <span
           className={cn(
             'rounded px-2 py-1 font-mono text-caption font-bold',
-            endpoint.method === 'GET' &&
-              'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-            endpoint.method === 'POST' &&
-              'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-            endpoint.method === 'PUT' &&
-              'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-            endpoint.method === 'PATCH' &&
-              'bg-orange-500/15 text-orange-600 dark:text-orange-400',
-            endpoint.method === 'DELETE' &&
-              'bg-red-500/15 text-red-600 dark:text-red-400',
+            METHOD_COLORS[endpoint.method],
           )}
         >
           {endpoint.method}

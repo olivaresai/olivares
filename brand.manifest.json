@@ -1,142 +1,190 @@
 {
-  "$description": "GENERATED — DO NOT EDIT (node scripts/check-brand-parity.mjs --write). Canonical Olivares brand-token manifest: the shared subset of the brand declared by the console DTCG sources (web/tokens/*.tokens.json — the single source of truth) and mirrored by the stylesheet of the olivares.ai website. `task lint:brand-parity` pins this file to the DTCG sources on every push; the website vendors a byte-identical copy and pins its live palette to it in its own CI — the two surfaces cannot drift apart without one of the two gates going red.",
+  "$description": "GENERATED — DO NOT EDIT (node scripts/check-brand-parity.mjs --write). Canonical Olivares brand-token manifest: the shared subset of the brand the console renders (web/src/styles/tokens.css, emitted from web/tokens/console/*.tokens.json — the single source of truth) and mirrored by the stylesheet of the olivares.ai website. `task lint:brand-parity` pins this file to the emitted console stylesheet on every push; the website vendors a byte-identical copy and pins its live palette to it in its own CI — the two surfaces cannot drift apart without one of the two gates going red.",
   "brand": "brandv4 (2026-06-10)",
   "entries": [
     {
       "id": "orange-dark",
-      "hubFile": "theme.dark.tokens.json",
-      "hubPath": "color.accent",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --accent",
       "webVar": "--color-primary",
       "webTheme": "dark",
       "value": "#f08000"
     },
     {
       "id": "on-orange-dark",
-      "hubFile": "theme.dark.tokens.json",
-      "hubPath": "color.accent-foreground",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --accent-foreground",
       "webVar": "--color-on-primary",
       "webTheme": "dark",
       "value": "#1a1206"
     },
     {
       "id": "canvas-dark",
-      "hubFile": "theme.dark.tokens.json",
-      "hubPath": "color.background",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --background",
       "webVar": "--color-bg",
       "webTheme": "dark",
       "value": "#28282b"
     },
     {
       "id": "text-on-dark",
-      "hubFile": "theme.dark.tokens.json",
-      "hubPath": "color.foreground",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --foreground",
       "webVar": "--color-text",
       "webTheme": "dark",
       "value": "#fafaf9"
     },
     {
       "id": "orange-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.accent",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --accent",
       "webVar": "--color-primary-fill",
       "webTheme": "light",
       "value": "#f08000"
     },
     {
       "id": "on-orange-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.accent-foreground",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --accent-foreground",
       "webVar": "--color-on-primary",
       "webTheme": "light",
       "value": "#1a1206"
     },
     {
       "id": "canvas-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.background",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --background",
       "webVar": "--color-bg",
       "webTheme": "light",
       "value": "#fafaf9"
     },
     {
       "id": "text-on-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.foreground",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --foreground",
       "webVar": "--color-text",
       "webTheme": "light",
       "value": "#28282b"
     },
     {
       "id": "orange-text-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.accent-text",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --accent-text",
       "webVar": "--color-primary",
       "webTheme": "light",
       "value": "#a84f00"
     },
     {
       "id": "surface-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.surface",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --surface",
       "webVar": "--color-surface",
       "webTheme": "light",
       "value": "#ffffff"
     },
     {
       "id": "border-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.border",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --border",
       "webVar": "--color-border",
       "webTheme": "light",
       "value": "#e6e6e4"
     },
     {
       "id": "border-strong-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.border-strong",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --border-strong",
       "webVar": "--color-border-strong",
       "webTheme": "light",
       "value": "#d6d6d3"
     },
     {
       "id": "text-muted-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.muted-foreground",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --muted-foreground",
       "webVar": "--color-text-muted",
       "webTheme": "light",
       "value": "#5c564e"
     },
     {
       "id": "ok-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.success",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --success",
       "webVar": "--color-ok",
       "webTheme": "light",
       "value": "#2f6b2c"
     },
     {
       "id": "warn-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.warning",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --warning",
       "webVar": "--color-warn",
       "webTheme": "light",
-      "value": "#8a5300"
+      "value": "#665c00"
     },
     {
       "id": "danger-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.danger",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --danger",
       "webVar": "--color-danger",
       "webTheme": "light",
       "value": "#b0201b"
     },
     {
       "id": "info-light",
-      "hubFile": "theme.light.tokens.json",
-      "hubPath": "color.info",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ":root --info",
       "webVar": "--color-info",
       "webTheme": "light",
       "value": "#1e5a86"
+    },
+    {
+      "id": "surface-dark",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --surface",
+      "webVar": "--color-surface",
+      "webTheme": "dark",
+      "value": "#343434"
+    },
+    {
+      "id": "border-dark",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --border",
+      "webVar": "--color-border",
+      "webTheme": "dark",
+      "value": "rgba(255, 255, 255, 0.08)"
+    },
+    {
+      "id": "border-strong-dark",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --border-strong",
+      "webVar": "--color-border-strong",
+      "webTheme": "dark",
+      "value": "rgba(255, 255, 255, 0.14)"
+    },
+    {
+      "id": "ok-dark",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --success",
+      "webVar": "--color-ok",
+      "webTheme": "dark",
+      "value": "#9cc79c"
+    },
+    {
+      "id": "warn-dark",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --warning",
+      "webVar": "--color-warn",
+      "webTheme": "dark",
+      "value": "#d9b45c"
+    },
+    {
+      "id": "info-dark",
+      "hubFile": "web/src/styles/tokens.css",
+      "hubPath": ".dark --info",
+      "webVar": "--color-info",
+      "webTheme": "dark",
+      "value": "#9db9cf"
     }
   ]
 }

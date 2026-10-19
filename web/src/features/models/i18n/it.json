@@ -1,0 +1,275 @@
+{
+  "title": "Modelli e provider",
+  "description": "Il parco dei modelli governati: capacità e prezzi dichiarati, policy di routing e riferimenti alle chiavi dei provider. I segreti non vengono mai mostrati, solo riferimenti mascherati.",
+  "tabs": {
+    "catalog": "Catalogo",
+    "estate": "Parco",
+    "routing": "Routing",
+    "keys": "Chiavi dei provider",
+    "gpai": "Posizione GPAI",
+    "access": "Accesso"
+  },
+  "catalog": {
+    "title": "Matrice delle capacità",
+    "description": "Capacità API dichiarate per famiglia di modelli.",
+    "pricingTitle": "Prezzi dichiarati",
+    "pricingDescription": "Prezzi di listino predefiniti: sono un riferimento, non una verità immutabile. Verificali presso ogni provider e sostituiscili per singolo modello.",
+    "family": "Famiglia",
+    "provider": "Provider",
+    "context": "Contesto",
+    "maxOutput": "Output max.",
+    "modality": "Modalità",
+    "inputPrice": "Input / MTok",
+    "outputPrice": "Output / MTok",
+    "cacheRead": "Lettura cache / MTok",
+    "cacheWrite1h": "Scrittura cache 1h / MTok",
+    "residency": "Residenza dei dati",
+    "tiers": "Livelli di servizio",
+    "residencyNotApplicable": "Non applicabile",
+    "tiersNotDeclared": "Non dichiarati",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "Capacità da confermare",
+    "capsToConfirmHint": "Le capacità di questa famiglia non sono ancora verificate rispetto a una model card. Il modello è elencato, ma le sue capacità sono segnalate come non confermate anziché inventate.",
+    "tier": {
+      "standard": "Standard",
+      "batch": "Batch",
+      "priority": "Priorità",
+      "priority_on_demand": "Priorità on demand",
+      "flex": "Flex",
+      "flex_discount": "Sconto Flex"
+    },
+    "asOf": "Al {{date}}",
+    "noPricing": "Nessun prezzo dichiarato",
+    "present": "Supportato",
+    "absent": "Non supportato"
+  },
+  "estate": {
+    "title": "Modelli governati",
+    "description": "I modelli nel parco di questo tenant, arricchiti con i dati del catalogo.",
+    "empty": "Nessun modello nel parco",
+    "emptyHint": "Ogni modello che questo tenant può chiamare è elencato qui con il suo provider e i suoi limiti. Aggiungi un provider per popolare il parco.",
+    "addProvider": "Aggiungi un provider",
+    "columns": {
+      "name": "Modello",
+      "provider": "Provider",
+      "family": "Famiglia",
+      "context": "Contesto",
+      "inputCost": "Input µ$/tok",
+      "outputCost": "Output µ$/tok",
+      "modality": "Modalità",
+      "capabilities": "Capacità",
+      "status": "Stato"
+    },
+    "notEnriched": "Nessuna famiglia dichiarata: nessun prezzo",
+    "costNote": "I µUSD per token sono una cifra indicativa e approssimata; il costo di riferimento dell'uso reale è nel registro FinOps.",
+    "truncated": "Caricati {{n}} modelli; ce ne sono altri",
+    "truncatedHint": "I modelli governati sono più di quelli mostrati; questa pagina prende le righe per id. Ricerca e ordinamento della tabella valgono solo per ciò che è caricato."
+  },
+  "routing": {
+    "title": "Policy di routing",
+    "description": "Le policy si definiscono qui e vengono eseguite dal connettore del gateway: l'interfaccia le configura e le mostra.",
+    "new": "Nuova policy",
+    "empty": "Nessuna policy di routing",
+    "emptyHint": "Una policy di routing sceglie il modello primario e la catena di fallback per una strategia.",
+    "strategy": "Strategia",
+    "requiredCapabilities": "Capacità richieste",
+    "preferredProviders": "Provider preferiti",
+    "minContext": "Finestra di contesto minima",
+    "pinnedModel": "Modello fissato",
+    "allowDeprecated": "Consenti i deprecati",
+    "gateway": "Endpoint del gateway",
+    "viaGateway": "tramite gateway",
+    "resolve": "Risolvi",
+    "resolving": "Risoluzione…",
+    "enabled": "Abilitata",
+    "disabled": "Disabilitata",
+    "strategies": {
+      "cost": "Costo",
+      "latency": "Latenza",
+      "capability": "Capacità",
+      "pinned": "Fissato"
+    },
+    "decision": {
+      "title": "Decisione risolta",
+      "primary": "Primario",
+      "fallbacks": "Catena di fallback",
+      "unresolved": "Nessun modello governato soddisfa questa policy",
+      "reason": "Motivo"
+    },
+    "dialog": {
+      "title": "Policy di routing",
+      "name": "Nome",
+      "listHint": "Separati da virgole.",
+      "create": "Salva policy",
+      "created": "Policy di routing salvata"
+    },
+    "execute": "Esegui",
+    "executeConfirm": "Esegui e spendi",
+    "input": "Input",
+    "executeHint": "Risolvi è gratuito. Esegui chiama il provider e spende sul tuo budget.",
+    "executeWarning": "Questo esegue la catena di modelli risolta sul provider reale e registra un campione di costo. Non è una simulazione: usa Risolvi per vedere in anteprima la decisione senza spendere.",
+    "noExecutor": "Nessun esecutore è configurato. Non è un'interruzione: il control plane risolve le decisioni di routing ma non spende mai su un provider finché un operatore non configura un esecutore.",
+    "budgetDenied": "Un budget FinOps ha negato la spesa PRIMA di qualsiasi chiamata al provider. Il controllo di governance ha funzionato: aumenta o rivedi il budget invece di riprovare.",
+    "fallbackUsed": "fallback usato",
+    "refusal": "rifiuto del provider",
+    "tokens": "{{in}} in · {{out}} out",
+    "outputNotStored": "L'output ti viene restituito e non è salvato da nessuna parte: nel registro arriva solo un campione di costo oscurato.",
+    "truncated": "Caricate {{n}} policy; ce ne sono altre",
+    "truncatedHint": "Le policy di routing sono più di quelle mostrate; questa pagina prende le righe per id. Una policy non elencata qui non dimostra che nessuna policy instrada una data richiesta."
+  },
+  "keys": {
+    "title": "Riferimenti alle chiavi dei provider",
+    "description": "Riferimenti governati a chiavi API e workspace dei provider. Viene salvato solo un suggerimento mascherato, mai il valore del segreto.",
+    "new": "Aggiungi riferimento a una chiave",
+    "empty": "Nessun riferimento a chiavi",
+    "emptyHint": "Un riferimento a una chiave punta a una credenziale che il motore custodisce, mai al segreto stesso. Aggiungine uno per permettere di chiamare un modello.",
+    "maskedOnly": "Solo riferimento: il valore del segreto non viene mai salvato né mostrato.",
+    "columns": {
+      "name": "Nome",
+      "provider": "Provider",
+      "kind": "Tipo",
+      "extId": "ID esterno",
+      "hint": "Suggerimento mascherato",
+      "owner": "Proprietario",
+      "status": "Stato",
+      "created": "Creato"
+    },
+    "kind": {
+      "api_key": "Chiave API",
+      "workspace": "Workspace"
+    },
+    "dialog": {
+      "title": "Aggiungi riferimento a una chiave",
+      "name": "Nome",
+      "provider": "Provider",
+      "kind": "Tipo di riferimento",
+      "extId": "ID esterno",
+      "extIdHint": "L'id della chiave o del workspace presso il provider (ad es. apikey_01). Non il segreto.",
+      "owner": "Proprietario",
+      "noSecretNote": "Questo modulo non accetta mai un segreto. Olivares salva solo un riferimento e un suggerimento mascherato.",
+      "create": "Aggiungi riferimento",
+      "created": "Riferimento alla chiave aggiunto"
+    },
+    "truncated": "Caricate {{n}} chiavi; ce ne sono altre",
+    "truncatedHint": "I riferimenti alle chiavi dei provider sono più di quelli mostrati; questa pagina prende le righe per id. Una chiave non elencata qui non dimostra che non esista alcuna credenziale per quel provider. L'ordinamento della tabella vale solo per ciò che è caricato."
+  },
+  "gpai": {
+    "title": "Posizione GPAI dei provider",
+    "description": "Posizione del fornitore attestata dall'operatore, registrata una volta per provider.",
+    "notice": "Questa è la posizione GPAI del fornitore attestata dall'operatore e alimenta le esigenze di evidenza sui fornitori per ISO/IEC 42001 A.10.3 e NIST AI RMF GOVERN-6.1 / MAP-4.1. Non è una determinazione di compliance da parte di Olivares.",
+    "empty": "Nessuna posizione GPAI di provider registrata",
+    "emptyHint": "Attesta la posizione di un provider quando hai esaminato il materiale pubblicato dal fornitore o quando devi registrare una dichiarazione.",
+    "verifiedMeaning": "Esaminata dall'operatore rispetto al materiale pubblicato dal provider: è un'attestazione dell'operatore, non una verifica svolta da Olivares né una determinazione di compliance.",
+    "actions": {
+      "attest": "Attesta la posizione",
+      "edit": "Modifica la posizione",
+      "editProvider": "Modifica la posizione di {{provider}}"
+    },
+    "columns": {
+      "provider": "Provider",
+      "review": "Stato della revisione",
+      "attestedAt": "Attestata",
+      "actions": "Azioni"
+    },
+    "claims": {
+      "cop_signatory": "Firmatario del Code of Practice",
+      "technical_docs": "Documentazione tecnica pubblicata",
+      "training_data_summary": "Sintesi dei dati di addestramento pubblicata",
+      "copyright_policy": "Policy sul copyright registrata",
+      "downstream_info": "Informazioni a valle fornite",
+      "systemic_risk": "GPAI con rischio sistemico",
+      "safety_report": "Safety & Security Model Report"
+    },
+    "states": {
+      "recorded": "Registrata",
+      "notRecorded": "Dichiarazione non registrata",
+      "reviewed": "Attestazione rivista dall'operatore",
+      "unreviewed": "Dichiarazione dell'operatore: non rivista"
+    },
+    "detail": {
+      "title": "Posizione GPAI: {{provider}}",
+      "description": "Le dichiarazioni registrate dall'operatore e i metadati di attestazione per questo provider.",
+      "claims": "Dichiarazioni del provider",
+      "reviewState": "Stato della revisione",
+      "verificationMethod": "Metodo di verifica",
+      "attestedBy": "Attestata da",
+      "attestedAt": "Attestata il",
+      "note": "Nota",
+      "notProvided": "Non fornito"
+    },
+    "form": {
+      "createTitle": "Attesta la posizione GPAI del provider",
+      "editTitle": "Modifica la posizione GPAI del provider",
+      "description": "Registra le dichiarazioni del provider e l'attestazione di revisione dell'operatore.",
+      "providerRef": "Riferimento al provider",
+      "providerLocked": "Il riferimento al provider è bloccato durante la modifica, perché cambiarlo creerebbe una seconda posizione.",
+      "providerRequired": "Inserisci un riferimento al provider.",
+      "claimsTitle": "Dichiarazioni del provider",
+      "claimsDescription": "Attiva una dichiarazione solo se l'operatore l'ha registrata per questo provider.",
+      "systemicRiskHint": "Classificazione: il modello è classificato come GPAI con rischio sistemico.",
+      "safetyReportHint": "Questo report si applica ai modelli classificati come GPAI con rischio sistemico.",
+      "verified": "Esaminata rispetto al materiale pubblicato dal provider",
+      "verificationMethod": "Metodo di verifica",
+      "verificationMethodHint": "Obbligatorio quando l'operatore segna questa posizione come esaminata.",
+      "verificationMethodRequired": "Descrivi come è stato esaminato il materiale pubblicato dal provider.",
+      "note": "Nota",
+      "requestRejected": "La posizione non è stata salvata. Controlla la risposta del server qui sotto.",
+      "created": "Posizione GPAI del provider attestata",
+      "updated": "Posizione GPAI del provider aggiornata",
+      "save": "Salva l'attestazione",
+      "saving": "Salvataggio…"
+    },
+    "truncated": "Caricate {{n}} posizioni; ce ne sono altre",
+    "truncatedHint": "Le posizioni GPAI sono più di quelle mostrate; questa pagina prende le righe per id. Un provider non elencato qui non dimostra che per lui non sia stato dichiarato nulla. L'ordinamento della tabella vale solo per ciò che è caricato."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "Nessun riferimento a chiavi dei provider aggiunto",
+      "description": "Aggiungi un riferimento a una chiave API o a un workspace tramite l'identificatore del provider; la console non accetta né salva mai il valore della credenziale."
+    },
+    "models": {
+      "title": "Nessun modello governato osservato finora",
+      "description": "I modelli entrano nel parco quando un connettore emette un campione di costo che indica il provider e il modello in uso."
+    }
+  },
+  "residency": {
+    "title": "Residenza dei workspace",
+    "description": "Dove ogni workspace elabora l'inferenza e dove risiedono i suoi dati, secondo quanto riporta il provider.",
+    "empty": "Nessun workspace riporta impostazioni di residenza",
+    "emptyHint": "Le impostazioni di residenza indicano in quali regioni un workspace può chiamare i modelli. Nessun workspace ne ha dichiarate.",
+    "unrestricted": "Il provider non riporta alcuna restrizione",
+    "allowed": "Consentite: {{geos}}",
+    "unreported": "non riportata",
+    "defaultGeo": "predefinita: {{geo}}",
+    "atRest": "a riposo: {{geo}}",
+    "truncated": "Caricati {{n}} workspace; ce ne sono altri",
+    "truncatedHint": "I record di residenza dei workspace sono più di quelli mostrati; questa pagina prende le righe per id, assegnato alla creazione, quindi mancano le righe successive. Un workspace non elencato qui non dimostra che la sua elaborazione sia senza restrizioni: potrebbe semplicemente trovarsi oltre questa pagina."
+  },
+  "access": {
+    "title": "Regole di accesso ai modelli",
+    "description": "Chi può usare quale modello, e dove.",
+    "empty": "Nessuna regola di accesso: ogni soggetto è senza restrizioni",
+    "emptyHint": "Una regola di accesso indica quali soggetti possono chiamare quali modelli. Senza regole, ogni soggetto può chiamare ogni modello del parco.",
+    "groupsTitle": "Gruppi di modelli",
+    "groupsDescription": "Insiemi con nome che una regola può usare come destinazione al posto di un singolo modello.",
+    "groupsEmpty": "Nessun gruppo di modelli",
+    "groupsEmptyHint": "Un gruppo di modelli dà un nome a un insieme di modelli, così una sola regola può governarli tutti. Creane uno per iniziare.",
+    "members": "{{n}} membri",
+    "confinementNotice": "⛔ Un consenso non è solo additivo. Un soggetto NOMINATO da un qualsiasi consenso è CONFINATO ai propri consensi: tutto il resto gli viene negato. Un soggetto nominato da nessuna regola è senza restrizioni. Quindi creare il PRIMO consenso per qualcuno gli TOGLIE il resto del catalogo.",
+    "effect": {
+      "allow": "consenso",
+      "forbid": "divieto"
+    },
+    "tenantWide": "su tutto il tenant",
+    "inWorkspace": "in {{ws}}",
+    "allSurfaces": "tutte le superfici",
+    "onSurfaces": "su {{list}}",
+    "forbidSubtracts": "Questo divieto SOTTRAE: ha la precedenza su qualsiasi consenso che nomina lo stesso soggetto.",
+    "confinedSubject": "{{subject}} è confinato ai propri consensi: tutto ciò che non è elencato gli viene negato.",
+    "readOnlyNote": "Sola lettura: cambiare chi può usare un modello richiede l'amministrazione dell'accesso ai modelli, un livello superiore rispetto alla modifica di una policy di routing.",
+    "truncated": "Caricate {{n}} regole; ce ne sono altre",
+    "truncatedHint": "Le regole di accesso sono più di quelle mostrate; questa pagina prende le righe per id. I contrassegni su queste righe riflettono SOLO le regole caricate: possono mancare consensi che introdurrebbero un confinamento o aggiungerebbero destinazioni consentite, e possono mancare anche divieti che sottraggono accesso. Quindi questa pagina può risultare più ampia O più stretta della realtà, e un soggetto senza regole caricate non compare affatto. Non dedurne l'accesso effettivo: il motore scorre tutte le pagine prima di decidere e risolve un principal tra utente, ruolo e gruppo, cosa che una riga non può mostrare.",
+    "groupsTruncated": "Caricati {{n}} gruppi; ce ne sono altri",
+    "groupsTruncatedHint": "I gruppi di modelli sono più di quelli mostrati; questa pagina prende le righe per id. Un gruppo non elencato qui non dimostra che non esista: una regola potrebbe ancora averlo come destinazione."
+  }
+}

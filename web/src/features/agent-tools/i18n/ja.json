@@ -204,6 +204,7 @@
     "readFailed": "読み取れませんでした: {{message}}",
     "tools": "AI ツール",
     "packages": "プログラムとレジストリ",
+    "egressHosts": "ネットワークホスト",
     "skills": "スキル",
     "mcp": "MCP サーバー",
     "none": "なし",

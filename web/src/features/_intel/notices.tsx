@@ -111,7 +111,7 @@ export function ListTruncationBadge({
    *  estrecho obligaría a castear en el llamante, que es justo donde no quiero decisiones. */
   query: { data?: unknown; error?: unknown }
   label: string
-  hint: string
+  hint: ReactNode
   className?: string
   /** ⛔ FILAS CARGADAS, OPCIONAL A PROPOSITO. Con `{items: [], has_more: true}` el aviso se
    *  pintaba ENCIMA del estado vacio: «No active members» y «Loaded 0 rows; there are more» a la
@@ -127,9 +127,15 @@ export function ListTruncationBadge({
   if (filas !== undefined && filas <= 0) return null
   return (
     <div className={cn('px-3 pt-3', className)}>
-      <Badge variant="warning" title={hint}>
+      <Badge
+        variant="warning"
+        title={typeof hint === 'string' ? hint : undefined}
+      >
         {label}
       </Badge>
+      {typeof hint !== 'string' && (
+        <p className="mt-1 text-caption text-muted-foreground">{hint}</p>
+      )}
     </div>
   )
 }

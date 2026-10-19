@@ -92,6 +92,10 @@ func TestGateBlocksRegression(t *testing.T) {
 	if run == nil || run["regressed"] != true {
 		t.Fatalf("gate run = %v, want regressed", run)
 	}
+	// 0/2 against 2/2 is the smallest wipe-out whose interval excludes zero (#2151).
+	if _, _, _, _, _, lo, _ := passRateDiffOf(t, comparisonOf(r)); lo <= 0 {
+		t.Fatalf("drop_ci.lo = %v, want > 0: this test depends on the interval excluding zero at n=2", lo)
+	}
 	// The run carries its CIs (n_scored=2 → Wilson always, t-interval defined).
 	if run["pass_rate_ci"] == nil || intOf(run["n_scored"]) != 2 {
 		t.Fatalf("run CI surface missing: %v", run)

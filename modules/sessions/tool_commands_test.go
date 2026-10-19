@@ -361,20 +361,39 @@ func TestToolCommands_ALateAnswerIsStillWithheld(t *testing.T) {
 	oldWait, oldRetry := toolCommandsWait, toolCommandsRetry
 	toolCommandsWait, toolCommandsRetry = 100*time.Millisecond, 0
 	t.Cleanup(func() { toolCommandsWait, toolCommandsRetry = oldWait, oldRetry })
-	fr := &fakeRunner{initSID: "sess-commands-late"}
-	m, ctx, ref, lr, p := startCommandsRun(t, fr)
+	fr := &workControlRunner{}
+	recorder := &capturingRecorder{}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
+		WithRecorder(recorder), WithLaunchGate(&recordingLaunchGate{dec: LaunchDecision{Allowed: true, RecordIO: true}}))
+	ctx := context.Background()
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU,
+	})
+	if err != nil {
+		t.Fatalf("createRun: %v", err)
+	}
+	ref := dto.RunRef
+	lr, ok := m.rt.getLive(tenant, ref)
+	if !ok {
+		t.Fatal("the run is not live")
+	}
+	p := fr.lastProc(t)
 	if _, err := m.runToolCommands(ctx, lr.tenant, ref); statusOf(err) != http.StatusGatewayTimeout {
 		t.Fatalf("unanswered read = %v, want 504", err)
 	}
 	// And a caller that gives up while the tool has not answered.
 	leaving, leave := context.WithCancel(ctx)
-	time.AfterFunc(20*time.Millisecond, leave)
+	t.Cleanup(leave)
+	// Only the first read exercises the answer timeout. Keep it out of the
+	// cancellation case, even if scheduling pauses after the write.
+	toolCommandsWait = time.Hour
+	p.setAfterSend(leave)
 	if _, err := m.runToolCommands(leaving, lr.tenant, ref); !errors.Is(err, context.Canceled) {
 		t.Fatalf("a caller that left = %v, want context.Canceled", err)
 	}
 
 	var ids []string
-	p.mu.Lock()
+	p.fakeProc.mu.Lock()
 	for _, line := range p.sent {
 		var req struct {
 			RequestID string `json:"request_id"`
@@ -383,9 +402,12 @@ func TestToolCommands_ALateAnswerIsStillWithheld(t *testing.T) {
 			ids = append(ids, req.RequestID)
 		}
 	}
-	p.mu.Unlock()
+	p.fakeProc.mu.Unlock()
 	if len(ids) != 2 {
-		t.Fatalf("%d requests reached the child, want 2: the timed-out one and the one whose caller had already left (a caller that leaves must not cancel the write)", len(ids))
+		t.Fatalf("%d requests reached the child, want 2: the timed-out one and the one whose caller left after the write", len(ids))
+	}
+	if waiting, abandoned := lr.commandWaitCount(); waiting != 0 || abandoned != 2 {
+		t.Fatalf("before the late answers %d waiters and %d abandoned ids, want 0 and 2", waiting, abandoned)
 	}
 	for _, id := range ids {
 		p.out <- OutputFrame{Stream: streamStdout, Data: claudeInitializeAnswer(id, catalogCommands, catalogAgents)}
@@ -403,6 +425,25 @@ func TestToolCommands_ALateAnswerIsStillWithheld(t *testing.T) {
 	for _, f := range lr.ring.readFrom(0).frames {
 		if bytes.Contains(f.Data, []byte(commandsRequestPrefix)) {
 			t.Fatalf("a late answer reached the attach stream: %.100s", f.Data)
+		}
+	}
+	// The marker is recorded after both answers have passed through the bridge.
+	waitFor(t, "the marker is recorded", func() bool {
+		recorder.mu.Lock()
+		defer recorder.mu.Unlock()
+		for _, f := range recorder.frames {
+			if bytes.Equal(f.Data, marker) {
+				return true
+			}
+		}
+		return false
+	})
+	recorder.mu.Lock()
+	frames := append([]RecordedFrame(nil), recorder.frames...)
+	recorder.mu.Unlock()
+	for _, f := range frames {
+		if bytes.Contains(f.Data, []byte(commandsRequestPrefix)) || bytes.Contains(f.Data, []byte(`"commands"`)) {
+			t.Fatalf("a late answer reached recorded I/O: %.100s", f.Data)
 		}
 	}
 	if waiting, abandoned := lr.commandWaitCount(); waiting != 0 || abandoned != 0 {

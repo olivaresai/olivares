@@ -241,7 +241,9 @@ describe('BindingsTable — listing and revoking', () => {
     grant(BW, BA, PR)
     wrap()
     expect(
-      await screen.findByText(/does not include sessions:profile-binding:read/),
+      await screen.findByText(
+        /Source bindings are not shown: your role cannot read them/,
+      ),
     ).toBeInTheDocument()
     expect(api.listBindings).toHaveBeenCalledOnce()
     expect(api.listProfiles).not.toHaveBeenCalled()

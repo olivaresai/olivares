@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# The observed-session/run join key lives in three languages. If it drifts, the estate still gets a
+# The observed-session/run join key lives in three files. If it drifts, the estate still gets a
 # Launched row, but it is an orphan beside the Discovered row whose telemetry the demo tells the
 # story about. Fail before building or waiting for Playwright, and distinguish drift (1) from an
 # unreadable contract (2).
@@ -15,7 +15,7 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
 }
 
 SEED="$ROOT/cmd/olivares/seed/seed.go"
-AGENT="$ROOT/scripts/demo-agent.sh"
+AGENT="$ROOT/scripts/demo-tools/demo-tool.py"
 SEEDER="$ROOT/scripts/seed-demo-work.py"
 for file in "$SEED" "$AGENT" "$SEEDER"; do
   [ -r "$file" ] || {
@@ -26,12 +26,12 @@ done
 
 # Each extractor is syntax-specific so a matching value in explanatory prose cannot make it green.
 ref_seed="$(sed -n 's/^[[:space:]]*SessionLive[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$SEED" | head -1)"
-ref_agent="$(sed -n 's/^SID="\([^"]*\)".*/\1/p' "$AGENT" | head -1)"
+ref_agent="$(sed -n 's/^LIVE_SESSION = "\([^"]*\)".*/\1/p' "$AGENT" | head -1)"
 ref_seeder="$(sed -n 's/^DEMO_LIVE_SESSION[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$SEEDER" | head -1)"
 
 missing=""
 [ -n "$ref_seed" ] || missing="$missing cmd/olivares/seed/seed.go(SessionLive)"
-[ -n "$ref_agent" ] || missing="$missing scripts/demo-agent.sh(SID)"
+[ -n "$ref_agent" ] || missing="$missing scripts/demo-tools/demo-tool.py(LIVE_SESSION)"
 [ -n "$ref_seeder" ] || missing="$missing scripts/seed-demo-work.py(DEMO_LIVE_SESSION)"
 if [ -n "$missing" ]; then
   echo "test-demo-agent: could not extract:$missing" >&2
@@ -46,19 +46,30 @@ if [ "$ref_seed" != "$ref_agent" ] || [ "$ref_seed" != "$ref_seeder" ]; then
   exit 1
 fi
 
-first="$(printf 'ping\n' | sh "$AGENT" 2>/dev/null | head -1)"
-expected="{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"$ref_seed\"}"
-if [ "$first" != "$expected" ]; then
-  echo "test-demo-agent: fixture did not emit the expected init frame" >&2
-  echo "  expected: $expected" >&2
-  echo "  actual:   $first" >&2
+# The stand-in announces its session id in the first frame, before it reads any input.
+announced() {
+  env "$@" python3 -I "$AGENT" claude 2>/dev/null </dev/null | head -1 |
+    python3 -I -c 'import json,sys; print(json.loads(sys.stdin.readline()).get("session_id", ""))' 2>/dev/null
+}
+fixed="$(announced DEMO_SESSION_UNIQUE=0)"
+if [ "$fixed" != "$ref_seed" ]; then
+  echo "test-demo-agent: the stand-in did not announce the observed session by default" >&2
+  echo "  expected: $ref_seed" >&2
+  echo "  actual:   $fixed" >&2
   exit 1
 fi
 
-resumed="$(printf 'ping\n' | sh "$AGENT" --resume sess-other 2>/dev/null | head -1)"
-case "$resumed" in
-  *'"session_id":"sess-other"'*) ;;
-  *) echo "test-demo-agent: --resume did not override the session id: $resumed" >&2; exit 1 ;;
-esac
+unique="$(announced DEMO_SESSION_UNIQUE=1)"
+if [ -z "$unique" ] || [ "$unique" = "$ref_seed" ]; then
+  echo "test-demo-agent: DEMO_SESSION_UNIQUE=1 did not give the session an id of its own: '$unique'" >&2
+  exit 1
+fi
 
-echo "test-demo-agent: OK — '$ref_seed' agrees and the fixture speaks init/resume."
+resumed="$(env DEMO_SESSION_UNIQUE=1 python3 -I "$AGENT" claude --resume sess-other 2>/dev/null </dev/null | head -1 |
+  python3 -I -c 'import json,sys; print(json.loads(sys.stdin.readline()).get("session_id", ""))' 2>/dev/null)"
+if [ "$resumed" != "sess-other" ]; then
+  echo "test-demo-agent: --resume did not override the session id: '$resumed'" >&2
+  exit 1
+fi
+
+echo "test-demo-agent: OK — '$ref_seed' agrees; the stand-in announces it, takes a unique id and resumes."

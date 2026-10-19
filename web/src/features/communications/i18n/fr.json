@@ -2,23 +2,23 @@
   "doors": {
     "catalog": {
       "title": "Communications",
-      "description": "Canaux de l’espace de travail sélectionné que ce principal peut lire maintenant, les avis directs envoyés par leur intermédiaire et la boîte de réception personnelle. Chaque lecture et chaque acte sont décidés par le moteur sous sa propre permission."
+      "description": "Les canaux du workspace sélectionné que vous pouvez lire maintenant, les avis directs envoyés par eux et votre boîte de réception. Le moteur décide de chaque lecture et de chaque action."
     },
     "inbox": {
       "title": "Boîte de réception des communications",
-      "description": "La boîte personnelle exacte de ce principal dans l’espace de travail sélectionné : les remises qui lui sont adressées, ouvertes à neuf et accusées uniquement par un acte explicite."
+      "description": "Les messages qui vous sont adressés dans le workspace sélectionné : ouvrez et accusez réception de chacun."
     },
     "new": {
       "title": "Nouveau canal",
-      "description": "Crée un canal avec des droits initiaux explicites. Rien n’est accordé par implication, et le reçu de l’acte n’est pas une liste durable de qui pourra le lire ensuite."
+      "description": "Créez un canal et choisissez dès le départ qui peut l’utiliser. Personne n’obtient d’accès implicite, et le reçu n’est pas une liste durable de qui pourra le lire plus tard."
     },
     "administration": {
       "title": "Administration des canaux",
-      "description": "Les canaux que ce principal peut administrer dans le workspace sélectionné : configuration et historique des droits, chaque acte confirmé sous l'ETag actuel du canal. L'administration exige la permission channel:admin et un bit local admin en vigueur ; elle n'exige ni n'accorde le droit de lire le contenu du canal."
+      "description": "Les canaux que vous pouvez administrer dans le workspace sélectionné : configuration et historique des droits. Chaque modification ne s’applique qu’à la version lue. Administrer un canal n’exige ni n’accorde le droit de lire son contenu."
     },
     "handoffs": {
       "title": "Transferts",
-      "description": "Offres de responsabilité de travail adressées à ce principal dans l'espace de travail sélectionné. La liste ne contient pas le contenu de l'offre ; l'ouvrir lit son contexte protégé à neuf, et accepter ou refuser est un acte explicite que le moteur décide."
+      "description": "Les offres de travail qui vous sont adressées dans le workspace sélectionné. La liste n’affiche pas le contenu des offres ; en ouvrir une lit son contexte, et le moteur décide de chaque acceptation ou refus."
     }
   },
   "tabs": {
@@ -104,7 +104,7 @@
       "updated": "Mis à jour"
     },
     "openById": "Ouvrir un canal par ID",
-    "openByIdHint": "Un canal ouvert par ID est lu à neuf avec son ETag ; cette lecture ne rapporte pas vos bits locaux."
+    "openByIdHint": "Un canal ouvert par ID est lu à neuf ; cette lecture ne montre pas votre propre accès."
   },
   "access": {
     "label": "Votre accès local",
@@ -143,7 +143,7 @@
   },
   "channel": {
     "title": "Canal",
-    "description": "Lu à neuf depuis le moteur avec son ETag. Cette lecture ne porte ni droits ni bits locaux.",
+    "description": "Lu à neuf depuis le moteur. Cette lecture ne porte ni droits ni votre propre accès.",
     "fields": {
       "id": "ID du canal",
       "slug": "Slug",
@@ -164,7 +164,7 @@
       "routeRevision": "Révision des routes",
       "subscriptionRevision": "Révision des abonnements",
       "version": "Version",
-      "etag": "ETag",
+      "etag": "Version",
       "created": "Créé",
       "updated": "Mis à jour",
       "workspace": "Espace de travail",
@@ -222,7 +222,7 @@
       "grants": "Droits enregistrés",
       "noGrants": "Aucune ligne de droit n’a été renvoyée.",
       "auditSeq": "Séquence d’audit",
-      "etag": "ETag"
+      "etag": "Version"
     },
     "unknown": {
       "title": "Résultat inconnu",
@@ -360,9 +360,9 @@
     },
     "ack": {
       "title": "Accuser réception de cette remise",
-      "body": "L’acte envoie If-Match {{etag}} — la version que vous avez lue — et une clé qui lui est propre. Si la remise a changé entre-temps, le moteur répond 412 et vous relisez avant de confirmer à nouveau ; la console ne substitue jamais la version.",
+      "body": "Ceci envoie la version que vous avez lue ({{etag}}) et une clé qui lui est propre. Si la remise a changé entre-temps, le moteur refuse et vous relisez avant de confirmer à nouveau ; la console ne substitue jamais la version.",
       "key": "Clé d’idempotence",
-      "ifMatch": "If-Match",
+      "ifMatch": "Version lue",
       "appliedTitle": "Accusée",
       "appliedBody": "Le moteur a enregistré l’accusé de réception.",
       "replayedTitle": "Déjà accusée",
@@ -371,7 +371,7 @@
       "conflictTitle": "La remise a changé depuis votre lecture",
       "conflictBody": "Le moteur a refusé l’accusé : la version lue n’est plus à jour, ou la remise est déjà accusée. Relisez la remise et confirmez de nouveau seulement si cela s’applique encore. Rien n’a été renvoyé.",
       "ambiguousTitle": "Résultat inconnu",
-      "ambiguousBody": "Le transport a échoué avant l’arrivée d’une réponse. Réessayer renvoie la même clé et le même If-Match ; le moteur l’applique une seule fois, le rejoue ou le refuse avec la version actuelle.",
+      "ambiguousBody": "La connexion a échoué avant l’arrivée d’une réponse. Réessayer renvoie la même clé et la même version ; le moteur l’applique une seule fois, le rejoue ou le refuse avec la version actuelle.",
       "refusedTitle": "Accusé refusé",
       "noPermission": "Vous ne détenez pas la permission d’écriture des remises, accuser réception n’est donc pas proposé."
     },
@@ -427,7 +427,7 @@
     "eventId": "ID d’événement",
     "auditSeq": "Séquence d’audit",
     "version": "Version",
-    "etag": "ETag",
+    "etag": "Version",
     "state": "État",
     "verdict": "Verdict",
     "code": "Code",
@@ -484,7 +484,7 @@
       "state": "État",
       "sensitivity": "Sensibilité",
       "protection": "Protection",
-      "etag": "ETag",
+      "etag": "Version",
       "updated": "Mis à jour"
     },
     "openById": "Administrer un canal par ID",
@@ -505,7 +505,7 @@
   },
   "admin": {
     "title": "Administration du canal",
-    "description": "Lu à neuf via l'historique des droits avec l'ETag de précondition du canal ; aucun contenu n'est ouvert.",
+    "description": "Lu à neuf via l’historique des droits avec la version actuelle du canal ; aucun contenu n’est ouvert.",
     "observedAt": "Observé à",
     "tabs": {
       "config": "Configuration",
@@ -552,12 +552,12 @@
     },
     "confirm": {
       "title": "Confirmer la modification de configuration",
-      "body": "Seuls les champs ci-dessous sont envoyés, avec If-Match {{etag}} — l'ETag de la lecture à l'écran. Si le canal a changé entre-temps, le moteur refuse et vous relisez avant de confirmer à nouveau ; la console ne substitue jamais l'ETag.",
+      "body": "Seuls les champs ci-dessous sont envoyés, avec la version à l’écran ({{etag}}). Si le canal a changé entre-temps, le moteur refuse et vous relisez avant de confirmer à nouveau ; la console ne substitue jamais la version.",
       "archiving": "Ceci archive le canal. L'archivage est irréversible : il ne redeviendra pas actif.",
-      "ifMatch": "If-Match"
+      "ifMatch": "Version lue"
     },
     "appliedTitle": "Configuration appliquée",
-    "appliedBody": "Le moteur a validé la modification. La fiche relit le canal ; l'acte suivant utilise l'ETag de cette lecture.",
+    "appliedBody": "Le moteur a enregistré la modification. La fiche relit le canal ; la modification suivante utilise cette version.",
     "conflictTitle": "Le canal a changé depuis votre lecture",
     "conflictBody": "Le moteur a refusé la modification : sa précondition ne correspond plus au canal actuel. Rien n'a été renvoyé. Relisez, comparez vos modifications aux valeurs actuelles et ne confirmez à nouveau que si elles s'appliquent encore.",
     "unknownTitle": "Résultat à vérifier",
@@ -614,7 +614,7 @@
     },
     "confirm": {
       "title": "Confirmer le droit",
-      "body": "Ceci envoie exactement la génération ci-dessous avec l'If-Match de la lecture à l'écran. Le moteur la refuse si le sujet détient déjà une génération active ou si le canal a changé entre-temps ; vous relisez alors et confirmez à nouveau. Rien n'est retenté de lui-même.",
+      "body": "Ceci envoie exactement la génération ci-dessous avec la version à l’écran. Le moteur la refuse si le sujet détient déjà une génération active ou si le canal a changé entre-temps ; vous relisez alors et confirmez à nouveau. Rien n’est retenté de lui-même.",
       "successorOf": "Successeur de la génération révoquée {{id}}. C'est un acte distinct : la révocation ci-dessus est déjà validée."
     },
     "appliedTitle": "Droit enregistré",
@@ -629,7 +629,7 @@
     "refusedTitle": "Droit refusé",
     "revoke": {
       "title": "Révoquer exactement cette génération",
-      "body": "Ceci révoque la génération affichée, par son ID, avec l'If-Match de la lecture à l'écran. Son historique est conservé. Un successeur pour le sujet est un acte distinct après relecture.",
+      "body": "Ceci révoque la génération affichée, par son ID, avec la version à l’écran. Son historique est conservé. Un successeur pour le sujet est un acte distinct après relecture.",
       "bodyThenGrant": "Premier acte sur deux : révoquer la génération affichée. Une fois la réponse du moteur lue, une confirmation distincte vous sera proposée pour une génération successeur ; rien n'est enchaîné automatiquement.",
       "ownAdminWarning": "Cette génération est un droit admin pour votre propre compte. Elle peut être ce qui soutient votre accès administratif à ce canal ; la console ne calcule pas toute votre autorité, et le moteur décide votre prochaine requête.",
       "appliedTitle": "Génération révoquée",
@@ -680,12 +680,12 @@
     "prepareFailedBody": "Rien n'a été avancé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
     "confirm": {
       "title": "Confirmer l'avancement",
-      "body": "Ceci envoie la cible préparée et la remise ci-dessus avec l'If-Match de la version de curseur lue, et une clé propre. Seule la confirmation avance quelque chose. Une nouvelle tentative après un résultat ambigu renvoie exactement ceci."
+      "body": "Ceci envoie la cible préparée et la remise ci-dessus avec la version de curseur lue, et une clé propre. Seule la confirmation avance quelque chose. Une nouvelle tentative après un résultat ambigu renvoie exactement ceci."
     },
     "conflictTitle": "Le curseur a changé depuis sa préparation",
     "conflictBody": "Le moteur a refusé l'avancement : la version du curseur ou la cible ne sont plus actuelles. Rien n'a été renvoyé. Actualisez la boîte et préparez à nouveau depuis une page actuelle.",
     "ambiguousTitle": "Résultat inconnu",
-    "ambiguousBody": "Le transport a échoué avant l'arrivée d'une réponse. Réessayer renvoie la même cible, le même If-Match et la même clé ; le moteur l'applique une fois, le rejoue ou le refuse avec sa version actuelle. Le laisser indéterminé garde le résultat précédent inconnu.",
+    "ambiguousBody": "La connexion a échoué avant l’arrivée d’une réponse. Réessayer renvoie la même cible, la même version et la même clé ; le moteur l’applique une fois, le rejoue ou le refuse avec sa version actuelle. Le laisser indéterminé garde le résultat précédent inconnu.",
     "refusedTitle": "Avancement refusé",
     "refusedBody": "Le moteur n'a pas avancé le curseur. Actualisez la boîte avant de préparer à nouveau.",
     "result": {
@@ -771,13 +771,13 @@
       "currentOwner": "Propriétaire actuel",
       "ownerEpoch": "Époque du propriétaire",
       "itemWorkspace": "Espace de travail de l'élément",
-      "precondition": "Précondition (If-Match)",
+      "precondition": "Version lue",
       "itemMismatch": "La lecture a renvoyé un élément de travail différent de celui demandé. Rien ne peut être proposé sous cette lecture.",
       "workspaceMismatchTitle": "Sélectionnez l'espace de travail de l'élément",
       "workspaceMismatchBody": "Cet élément appartient à l'espace de travail {{itemWorkspace}} et celui sélectionné est {{selected}}. Sélectionnez celui de l'élément dans le sélecteur pour le proposer ; la console n'en choisit jamais un à votre place.",
       "workspaceNone": "Aucun espace de travail explicite n'est sélectionné. Une offre est limitée à un espace de travail : sélectionnez celui de l'élément dans le sélecteur ; la console n'en choisit jamais un à votre place.",
-      "noPrecondition": "La lecture de l'élément ne portait pas d'ETag, il n'y a donc pas de précondition à envoyer. Relisez l'élément ; ici une version n'est pas transformée en validateur.",
-      "noPermission": "Proposer un transfert exige sessions:message-send:write. Le moteur vérifie en plus la propriété de l'élément et l'autorité sur le canal.",
+      "noPrecondition": "L’élément a été lu sans version : il n’y a rien pour vérifier l’offre. Relisez l’élément.",
+      "noPermission": "Votre rôle ne peut pas proposer un transfert. Le moteur vérifie en plus à qui appartient l’élément et qui peut utiliser le canal.",
       "channel": "Canal",
       "channelHint": "L'ID canonique du canal sur lequel le porteur est publié. Il peut toujours être saisi.",
       "channelPick": "Choisir un canal",
@@ -876,8 +876,8 @@
       "deadline": "Délai de réponse",
       "created": "Créé",
       "observed": "Observé",
-      "precondition": "ETag du transfert (If-Match)",
-      "preconditionHint": "Une réponse est liée à l'ETag du transfert ci-dessus, jamais à la version de la livraison porteuse à côté.",
+      "precondition": "Version du transfert",
+      "preconditionHint": "Une réponse s’applique à la version du transfert ci-dessus, jamais à la version de la livraison à côté.",
       "carrierDelivery": "Livraison porteuse",
       "carrierVersion": "Version de la livraison porteuse",
       "channel": "Canal",
@@ -888,7 +888,7 @@
         "terminal": "Cette offre est déjà résolue"
       },
       "notCurrentBody": "Le moteur signale qu'on ne peut pas y répondre maintenant, aucun contrôle de réponse n'est donc proposé. Relisez pour voir son état actuel.",
-      "noRespondPermission": "Répondre exige sessions:handoff-response:write."
+      "noRespondPermission": "Votre rôle ne peut pas répondre aux transferts."
     },
     "respond": {
       "acceptTitle": "Accepter la responsabilité",

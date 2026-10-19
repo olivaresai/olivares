@@ -45,8 +45,18 @@ func probe() State {
 // access are the rights for one ABI: every right on directories the child
 // writes, file-only rights for single files, and read+execute for the rest.
 type access struct {
-	handled, dirRW, fileRW, dirRO, fileRO uint64
+	handled, dirRW, dirNoDelete, fileRW, dirRO, fileRO uint64
 }
+
+// grantKind says how far a path is opened: read and run, change, or change
+// without the rights to remove, rename or move a name.
+type grantKind int
+
+const (
+	grantRead grantKind = iota
+	grantWrite
+	grantNoDelete
+)
 
 func accessFor(abi int) access {
 	fileRW := uint64(unix.LANDLOCK_ACCESS_FS_EXECUTE | unix.LANDLOCK_ACCESS_FS_WRITE_FILE | unix.LANDLOCK_ACCESS_FS_READ_FILE)
@@ -66,12 +76,16 @@ func accessFor(abi int) access {
 		fileRW |= unix.LANDLOCK_ACCESS_FS_IOCTL_DEV
 	}
 	fileRO := uint64(unix.LANDLOCK_ACCESS_FS_EXECUTE | unix.LANDLOCK_ACCESS_FS_READ_FILE)
+	dirRW := handled &^ unix.LANDLOCK_ACCESS_FS_MAKE_BLOCK &^ unix.LANDLOCK_ACCESS_FS_MAKE_CHAR
 	return access{
 		handled: handled,
-		dirRW:   handled &^ unix.LANDLOCK_ACCESS_FS_MAKE_BLOCK &^ unix.LANDLOCK_ACCESS_FS_MAKE_CHAR,
-		fileRW:  fileRW,
-		dirRO:   fileRO | unix.LANDLOCK_ACCESS_FS_READ_DIR,
-		fileRO:  fileRO,
+		dirRW:   dirRW,
+		// Removing a name needs REMOVE_FILE or REMOVE_DIR and moving one needs REFER
+		// (a rename also removes the old name); creating and changing need none.
+		dirNoDelete: dirRW &^ (unix.LANDLOCK_ACCESS_FS_REMOVE_FILE | unix.LANDLOCK_ACCESS_FS_REMOVE_DIR | unix.LANDLOCK_ACCESS_FS_REFER),
+		fileRW:      fileRW,
+		dirRO:       fileRO | unix.LANDLOCK_ACCESS_FS_READ_DIR,
+		fileRO:      fileRO,
 	}
 }
 
@@ -88,17 +102,17 @@ type ruleset struct {
 // recursively, except the protected ones. A protected path itself is never
 // granted; a path under one is granted only when the policy names it (a tool
 // install, an account home). A missing path is skipped.
-func (r *ruleset) grant(path string, write bool) error {
+func (r *ruleset) grant(path string, kind grantKind) error {
 	real := realPath(path)
 	before := len(r.paths)
-	err := r.grantPath(real, write, true)
+	err := r.grantPath(real, kind, true)
 	if err == nil && len(r.paths) > before && path != real {
 		r.paths = append(r.paths, path)
 	}
 	return err
 }
 
-func (r *ruleset) grantPath(real string, write, named bool) error {
+func (r *ruleset) grantPath(real string, kind grantKind, named bool) error {
 	fd, err := unix.Openat2(unix.AT_FDCWD, real, &unix.OpenHow{
 		Flags: unix.O_PATH | unix.O_CLOEXEC, Resolve: unix.RESOLVE_NO_SYMLINKS,
 	})
@@ -131,7 +145,7 @@ func (r *ruleset) grantPath(real string, write, named bool) error {
 	if info.IsDir() {
 		for _, p := range r.protect {
 			if contains(real, p) {
-				return r.grantEntries(real, write)
+				return r.grantEntries(real, kind)
 			}
 		}
 	} else if !named && !info.Mode().IsRegular() {
@@ -139,9 +153,11 @@ func (r *ruleset) grantPath(real string, write, named bool) error {
 	}
 	mask := r.access.dirRO
 	switch {
-	case info.IsDir() && write:
+	case info.IsDir() && kind == grantWrite:
 		mask = r.access.dirRW
-	case !info.IsDir() && write:
+	case info.IsDir() && kind == grantNoDelete:
+		mask = r.access.dirNoDelete
+	case !info.IsDir() && kind != grantRead:
 		mask = r.access.fileRW
 	case !info.IsDir():
 		mask = r.access.fileRO
@@ -149,13 +165,13 @@ func (r *ruleset) grantPath(real string, write, named bool) error {
 	return r.addRuleHandle(int(file.Fd()), real, mask)
 }
 
-func (r *ruleset) grantEntries(dir string, write bool) error {
+func (r *ruleset) grantEntries(dir string, kind grantKind) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
 	for _, e := range entries {
-		if err := r.grantPath(realPath(filepath.Join(dir, e.Name())), write, false); err != nil {
+		if err := r.grantPath(realPath(filepath.Join(dir, e.Name())), kind, false); err != nil {
 			return err
 		}
 	}
@@ -188,6 +204,9 @@ func (r *ruleset) addRuleHandle(fd int, path string, mask uint64) error {
 // restrictAndExec builds the domain for p, enters it and execs argv. Landlock,
 // no_new_privs and capabilities apply to the calling thread, so the thread that
 // restricts itself is the one that calls execve.
+// Helper re-exec only. In the engine process a locked goroutine that exits would
+// fire the parent-death signal of the short-lived children the engine starts (git;
+// modules/sessions/procrunner_pdeathsig_linux.go). A session's guard ends its tree instead.
 func restrictAndExec(p Policy, program string, argv []string) error {
 	runtime.LockOSThread()
 	state := probe()
@@ -228,13 +247,23 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 		}
 	}
 	for _, path := range p.ReadWrite {
-		if err := r.grant(path, true); err != nil {
+		if err := r.grant(path, grantWrite); err != nil {
+			return err
+		}
+	}
+	for _, path := range p.NoDelete {
+		if err := r.grant(path, grantNoDelete); err != nil {
+			return err
+		}
+	}
+	for _, path := range p.KeepWritable {
+		if err := r.grant(path, grantWrite); err != nil {
 			return err
 		}
 	}
 	readOnly := append(append([]string{}, p.ReadOnly...), p.Sealed...)
 	for _, path := range readOnly {
-		if err := r.grant(path, false); err != nil {
+		if err := r.grant(path, grantRead); err != nil {
 			return err
 		}
 	}
@@ -299,6 +328,9 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 // Without CAP_SETPCAP the bounding set cannot change: requireBoundingSet then
 // refuses, otherwise no_new_privs keeps any later exec from regaining the
 // cleared sets. The caller execs from this locked thread.
+// Helper re-exec only. In the engine process a locked goroutine that exits would
+// fire the parent-death signal of the short-lived children the engine starts (git;
+// modules/sessions/procrunner_pdeathsig_linux.go). A session's guard ends its tree instead.
 func DropCapabilities(requireBoundingSet bool) error {
 	runtime.LockOSThread()
 	header := unix.CapUserHeader{Version: unix.LINUX_CAPABILITY_VERSION_3}

@@ -18,7 +18,8 @@ import (
 
 func newMessageDecisionCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use: "decision", Short: "Answer decision requests attached to work",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "decision", Short: "Answer decision requests attached to work",
 		Long:    "Answer a decision request as its currently authorized owner. The engine checks the deadline and records the response with the work decision atomically.",
 		Example: "  olivares message decision respond <request-id> yes --version 1", Args: cobra.NoArgs,
 	}
@@ -26,7 +27,8 @@ func newMessageDecisionCmd() *cobra.Command {
 	var version int64
 	var key, reason string
 	respond := &cobra.Command{
-		Use: "respond <request-id> <choice>", Short: "Resolve a decision request with one offered choice",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "respond <request-id> <choice>", Short: "Resolve a decision request with one offered choice",
 		Long:    "Submit one of the request's offered choice keys using its current version. Retain the idempotency key for an ambiguous retry; an ended credential or an elapsed deadline never grants permission.",
 		Example: "  olivares message decision respond <request-id> yes --version 1 --reason 'Ready to proceed'",
 		Args:    cobra.ExactArgs(2),

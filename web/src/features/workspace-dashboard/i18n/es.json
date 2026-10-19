@@ -35,6 +35,7 @@
     "unavailable": "El contenido del espacio de trabajo no está disponible."
   },
   "sessionFolders": {
+    "wiki": "Abrir wiki de {{folder}}",
     "title": "Carpetas de sesión",
     "intro": "Carpetas de este servidor donde trabajan las sesiones. No son lo mismo que los espacios de trabajo.",
     "manage": "Gestionar carpetas",

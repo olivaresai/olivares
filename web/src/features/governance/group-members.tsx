@@ -118,6 +118,11 @@ export function GroupMembersSheet({
               error={query.error}
               retry={() => query.refetch()}
             />
+          ) : query.data?.not_found ? (
+            <EmptyState
+              title={t('members.title')}
+              description={t('members.notFound')}
+            />
           ) : members.length === 0 ? (
             <EmptyState
               description={t('members.emptyHint')}

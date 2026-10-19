@@ -9,6 +9,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -236,5 +237,38 @@ func TestMCPProtocolAuthDelegationCannotExemptManagement(t *testing.T) {
 		if got.code != 401 || runtime.calls != before {
 			t.Fatalf("exception escaped leaf: %s = %d", refused, got.code)
 		}
+	}
+}
+
+// A second server with a held name is a 409 that names the holder; the first is
+// never replaced, and the same name stays free in another tenant.
+func TestMCPGatewayDuplicateServerNameIs409(t *testing.T) {
+	h := newHarnessOpts(t, func(o *api.Options) {
+		o.MCPGateway = &gatewayServiceFixture{MCPGatewayStore: auth.NewMCPGatewayStore(o.Store)}
+	})
+	root := h.adminLogin()
+	tenant := h.createOrg(root, "mcp-names")
+	other := h.createOrg(root, "mcp-names-other")
+	base := "/v1/console/mcp-gateway/servers"
+	definition := func(url string) map[string]any {
+		return map[string]any{"name": "Files", "transport": "streamable_http", "url": url, "trust": map[string]any{}, "enabled": false}
+	}
+	first := h.do("POST", base, root, map[string]any{"version": 0, "server": definition("https://one.test/mcp")}, tenantHdr(tenant))
+	if first.code != http.StatusCreated {
+		t.Fatalf("first=%d %s", first.code, first.raw)
+	}
+	held := first.body["servers"].([]any)[0].(map[string]any)["id"].(string)
+	dup := h.do("POST", base, root, map[string]any{"version": first.body["version"], "server": definition("https://two.test/mcp")}, tenantHdr(tenant))
+	errBody, _ := dup.body["error"].(map[string]any)
+	if dup.code != http.StatusConflict || errBody["code"] != "mcp_gateway_name_taken" || !strings.Contains(dup.raw, held) {
+		t.Fatalf("duplicate=%d %s", dup.code, dup.raw)
+	}
+	got := h.do("GET", "/v1/console/mcp-gateway", root, nil, tenantHdr(tenant))
+	servers := got.body["servers"].([]any)
+	if len(servers) != 1 || servers[0].(map[string]any)["url"] != "https://one.test/mcp" {
+		t.Fatalf("the duplicate replaced or joined the first server: %s", got.raw)
+	}
+	if free := h.do("POST", base, root, map[string]any{"version": 0, "server": definition("https://two.test/mcp")}, tenantHdr(other)); free.code != http.StatusCreated {
+		t.Fatalf("same name in another tenant=%d %s", free.code, free.raw)
 	}
 }

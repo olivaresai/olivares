@@ -28,8 +28,9 @@ import (
 // while it runs); on Postgres they are safe alongside a running engine.
 func newSourcesCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "sources",
-		Short: "Manage the durable source roster (connectors the engine ingests from)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sources",
+		Short:       "Manage the durable source roster (connectors the engine ingests from)",
 		Example: "  olivares sources ls --data-dir /var/lib/olivares\n" +
 			"  olivares sources plan --name vault-prod --tenant t_abc123\n" +
 			"  olivares sources set --name vault-prod --kind vault --tenant t_abc123 --actor ops-oncall --reason onboarding\n" +
@@ -60,11 +61,12 @@ type sourceListItem struct {
 func sourcesListCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List the source roster (name, kind, tenant, mode, poll, enabled)",
-		Long:    "ls lists every durable source definition, including its connector kind, tenant, mode, polling interval and enabled state.",
-		Example: "  olivares sources ls --data-dir /var/lib/olivares",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List the source roster (name, kind, tenant, mode, poll, enabled)",
+		Long:        "ls lists every durable source definition, including its connector kind, tenant, mode, polling interval and enabled state.",
+		Example:     "  olivares sources ls --data-dir /var/lib/olivares",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := authReadBoot(cmd, dataDir, engine, dsn)
 			if err != nil {
@@ -132,8 +134,9 @@ type sourceGetItem struct {
 func sourcesGetCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	cmd := &cobra.Command{
-		Use:   "get <name>",
-		Short: "Show one source's definition, including the config `ls` cannot render",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <name>",
+		Short:       "Show one source's definition, including the config `ls` cannot render",
 		Long: "get prints a single source definition by name: the roster columns plus its connector\n" +
 			"configuration, with any value the write path would refuse masked as it is in `plan`.\n" +
 			"Use it to audit which secret REFERENCE a source resolves — `ls` does not render config,\n" +
@@ -214,8 +217,9 @@ func sourcesSetCmd() *cobra.Command {
 		e                     sourceEdit
 	)
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Create or update a source (only the flags you pass are changed on an existing source)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Create or update a source (only the flags you pass are changed on an existing source)",
 		Long: "Create a source, or update an existing one by --name. On an EXISTING source only the\n" +
 			"flags you actually pass are changed (so `set --name x --enabled=false` just disables it).\n" +
 			"Pass connector settings as repeated --config key=value; use secret REFERENCES for\n" +
@@ -414,12 +418,13 @@ func sourcesRemoveCmd() *cobra.Command {
 	var actorFlag, reasonFlag string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm",
-		Short:   "Delete a source from the roster",
-		Long:    "rm removes one named connector from the durable source roster; reload a running engine to stop it immediately.",
-		Example: "  olivares sources rm --name vault-prod --yes --actor ops-oncall --reason retired-integration",
-		Args:    cobra.NoArgs,
-		Aliases: []string{"remove", "delete"},
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm",
+		Short:       "Delete a source from the roster",
+		Long:        "rm removes one named connector from the durable source roster; reload a running engine to stop it immediately.",
+		Example:     "  olivares sources rm --name vault-prod --yes --actor ops-oncall --reason retired-integration",
+		Args:        cobra.NoArgs,
+		Aliases:     []string{"remove", "delete"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Removing a source stops the engine ingesting from it — an absence
 			// that is quiet by nature, so make the decision loud.

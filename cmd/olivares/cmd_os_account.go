@@ -27,10 +27,10 @@ const osAccountBindingsPath = "/v1/auth/os-account-bindings"
 
 func newAuthOSAccountCmd() *cobra.Command {
 	var flags authClientFlags
-	cmd := &cobra.Command{Use: "os-account", Short: "Bind a product account to an immutable native OS account", Long: "An administrator begins the binding, then the product user proves control of the native account from their own sign-in. Use get to inspect the binding.", Example: "  olivares auth os-account begin <user-id> <os-account>"}
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "os-account", Short: "Bind a product account to an immutable native OS account", Long: "An administrator begins the binding, then the product user proves control of the native account from their own sign-in. Use get to inspect the binding.", Example: "  olivares auth os-account begin <user-id> <os-account>"}
 	flags.addPersistent(cmd)
 	client := bootstrapClient{flags: &flags, surface: "auth os-account"}
-	begin := &cobra.Command{Use: "begin <user-id> <os-account>", Short: "Start as an administrator; the subject completes its own proof", Long: "Begin a native account binding as an administrator. Give the returned ceremony ID to the product user so they can run complete from their own sign-in.", Example: "  olivares auth os-account begin <user-id> <os-account>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	begin := &cobra.Command{Annotations: map[string]string{"changes_data": "write"}, Use: "begin <user-id> <os-account>", Short: "Start as an administrator; the subject completes its own proof", Long: "Begin a native account binding as an administrator. Give the returned ceremony ID to the product user so they can run complete from their own sign-in.", Example: "  olivares auth os-account begin <user-id> <os-account>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		resolved, err := flags.resolve(cmd)
 		if err != nil {
 			return err
@@ -49,7 +49,7 @@ func newAuthOSAccountCmd() *cobra.Command {
 		return renderOut(cmd, func(w io.Writer) error { _, e := fmt.Fprintln(w, out.ID); return e }, out)
 	}}
 	var passwordFile string
-	complete := &cobra.Command{Use: "complete <ceremony-id>", Short: "Prove native account control from the subject's own sign-in", Long: "Complete a binding from the product user's own sign-in over HTTPS, reading the native password from a file or stdin. An administrator can then inspect the binding with get.", Example: "  olivares auth os-account complete <ceremony-id> --password-file -", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	complete := &cobra.Command{Annotations: map[string]string{"changes_data": "write"}, Use: "complete <ceremony-id>", Short: "Prove native account control from the subject's own sign-in", Long: "Complete a binding from the product user's own sign-in over HTTPS, reading the native password from a file or stdin. An administrator can then inspect the binding with get.", Example: "  olivares auth os-account complete <ceremony-id> --password-file -", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		// Refuse cleartext before reading any credential. The server also enforces TLS.
 		resolved, err := flags.resolve(cmd)
 		if err != nil {
@@ -89,7 +89,7 @@ func newAuthOSAccountCmd() *cobra.Command {
 		return renderOSAccountMapping(cmd, mapping)
 	}}
 	complete.Flags().StringVar(&passwordFile, "password-file", "", "read the native password from a file, or - for stdin")
-	read := &cobra.Command{Use: "get <user-id>", Short: "Read administrative mapping metadata", Long: "Read a product user's native account binding as an administrator. Use revoke to remove its authority while retaining the immutable account reservation.", Example: "  olivares auth os-account get <user-id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	read := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "get <user-id>", Short: "Read administrative mapping metadata", Long: "Read a product user's native account binding as an administrator. Use revoke to remove its authority while retaining the immutable account reservation.", Example: "  olivares auth os-account get <user-id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		raw, err := client.expect(cmd, http.MethodGet, osAccountBindingsPath+"/"+bootstrapPathID(args[0]), nil, http.StatusOK)
 		if err != nil {
 			return err
@@ -97,7 +97,7 @@ func newAuthOSAccountCmd() *cobra.Command {
 		return renderOSAccount(cmd, raw)
 	}}
 	var yes bool
-	revoke := &cobra.Command{Use: "revoke <user-id>", Short: "Revoke authority and retain the immutable account reservation", Long: "Revoke a native account binding's authority as an administrator; its account reservation remains permanent. Use get to inspect the retained metadata.", Example: "  olivares auth os-account revoke <user-id> --yes", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	revoke := &cobra.Command{Annotations: map[string]string{"changes_data": "delete"}, Use: "revoke <user-id>", Short: "Revoke authority and retain the immutable account reservation", Long: "Revoke a native account binding's authority as an administrator; its account reservation remains permanent. Use get to inspect the retained metadata.", Example: "  olivares auth os-account revoke <user-id> --yes", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if err := confirmDestructive(cmd, yes, "revoke this OS-account binding (its account reservation remains permanent)"); err != nil {
 			return err
 		}

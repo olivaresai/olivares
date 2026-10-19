@@ -3,5 +3,3 @@
 # estrecho anterior tapaba diez ficheros de e2e/, e2e-visual/, un .md y un .html.
 # Medida el 2026-08-15 contra origin/main. NO se sube para acomodar un fichero nuevo:
 # sólo BAJA, según se van formateando. scripts/format-ratchet.sh la aplica.
-src/features/identity/identity-deeplink.test.tsx
-src/styles/selection-indicator.test.ts

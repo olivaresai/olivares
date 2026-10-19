@@ -74,6 +74,14 @@ func seedClaudeState(t *testing.T, configHome, sid string) {
 
 func newMoveFixture(t *testing.T, opts ...Option) *moveFixture {
 	t.Helper()
+	return newMoveFixtureWith(t, nil, opts...)
+}
+
+// newMoveFixtureWith runs beforeRun after the profiles exist and before the
+// session is created, for a test whose first launch needs the profile or the
+// vault prepared.
+func newMoveFixtureWith(t *testing.T, beforeRun func(*moveFixture), opts ...Option) *moveFixture {
+	t.Helper()
 	fr := &fakeRunner{initSID: moveTestSID}
 	m := New(append([]Option{WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred())}, opts...)...)
 	m.UseExecutionEnvironmentRef(testEnvRef)
@@ -92,6 +100,9 @@ func newMoveFixture(t *testing.T, opts ...Option) *moveFixture {
 	}
 	f := &moveFixture{m: m, h: h, admin: admin, tenant: tenant, fr: fr, hdr: hdr, homeA: configA, homeB: configB, userB: userB}
 	f.a, f.b = mk(configA, userA, "Account A"), mk(configB, userB, "Account B")
+	if beforeRun != nil {
+		beforeRun(f)
+	}
 	r := h.doJSON("POST", "/v1/m/sessions/runs", admin,
 		map[string]any{"transport": "stream-json", "permission_mode": "default", "isolation": "native", "provider_profile_ref": f.a}, hdr)
 	if r.code != http.StatusCreated {

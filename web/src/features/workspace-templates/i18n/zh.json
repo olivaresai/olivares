@@ -25,7 +25,7 @@
     "sections": {
       "hooks": "Hooks",
       "hooksHint": "在工具和会话前后执行的命令。",
-      "settings": "代理设置",
+      "settings": "智能体设置",
       "settingsHint": "权限模式、努力程度、模型和自定义指令。",
       "connectors": "连接器",
       "connectorsHint": "应用此模板时要附加的连接器 ID。",

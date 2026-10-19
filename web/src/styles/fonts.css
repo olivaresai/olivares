@@ -3,25 +3,46 @@
 
 /*
  * The console's type, self-hosted (same origin, no CDN; works air-gapped and under the
- * console's font-src 'self' policy).
+ * console's font-src 'self' policy). The faces are the website's, so the two surfaces wear
+ * one brand.
  *
- * - Geist Variable (weights 100-900): the interface face. One file carries every weight.
+ * - Inter Variable (weights 100-900), Latin subset: every text of the interface.
+ * - Space Grotesk Variable (weights 300-700), Latin subset: titles and figures.
  * - JetBrains Mono 400 and 500, Latin subset: code, commands, paths and identifiers.
- *   Text outside the Latin range falls back to the system monospace face.
+ *   Text outside the Latin range falls back to the system face of its kind.
  *
- * Both are licensed under the SIL Open Font License 1.1; the license texts ship with the
- * console under /licenses/fonts/ and the repository NOTICE credits them.
+ * All three are licensed under the SIL Open Font License 1.1; the license texts ship with
+ * the console under /licenses/fonts/ and the repository NOTICE credits them.
  *
- * First paint loads two files, Geist and JetBrains Mono 400 (index.html preloads both, so
- * they arrive before the first render and the swap moves no layout). JetBrains Mono 500
- * is declared here only: the browser fetches it when a page first sets mono text at 500.
+ * First paint loads three files, Inter, Space Grotesk and JetBrains Mono 400 (index.html
+ * preloads them, so they arrive before the first render and the swap moves no layout).
+ * JetBrains Mono 500 is declared here only: the browser fetches it when a page first sets
+ * mono text at 500.
  */
 @font-face {
-  font-family: 'Geist';
+  font-family: 'Inter';
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
-  src: url('../assets/fonts/geist/Geist-Variable.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+  src: url('../assets/fonts/inter/inter-latin-wght-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+  src: url('../assets/fonts/space-grotesk/space-grotesk-latin-wght-normal.woff2')
+    format('woff2');
 }
 
 @font-face {

@@ -103,12 +103,12 @@ describe('AreaDirectoryView', () => {
     for (const a of links) expect(a.querySelector('button, a')).toBeNull()
   })
 
-  it('offers the operate door, as Sessions, to a principal who may read only launched runs', () => {
+  it('offers the operate door, as Operate sessions, to a principal who may read only launched runs', () => {
     canMock.mockImplementation((p) => p === 'sessions:run:read')
     renderIntel(<AreaDirectoryView areaId="ai" />)
     const links = screen.getAllByRole('link')
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['/agentops'])
-    expect(links[0]).toHaveTextContent('Sessions')
+    expect(links[0]).toHaveTextContent('Operate sessions')
   })
 
   it('shows only what can() allows, and the sibling door never rides along', () => {
@@ -188,21 +188,15 @@ describe('AreaDirectoryView', () => {
   })
 })
 
-describe('AreaDirectoryView lists a page whose module is off as a calm entry', () => {
-  it('tags it Off and keeps the link', () => {
+// #2240: Settings > Modules is where an off module reads as Off.
+describe('AreaDirectoryView folds a page whose module is off', () => {
+  it('lists the area without it', () => {
     useModulesStore.setState({ off: new Set(['deploy']) })
     renderIntel(<AreaDirectoryView areaId="deployment" />)
-    const link = screen
-      .getAllByRole('link')
-      .find((a) => a.getAttribute('href') === '/deploy')!
-    expect(link).toBeDefined()
-    expect(within(link.closest('li')!).getByText('Off')).toBeInTheDocument()
-    // The tag is part of the link, so its name tells a screen reader the page is off.
-    expect(link).toHaveAccessibleName(/Off$/)
-    const others = screen
-      .getAllByRole('link')
-      .filter((a) => a.getAttribute('href') !== '/deploy')
-    for (const a of others)
-      expect(within(a.closest('li')!).queryByText('Off')).toBeNull()
+    const hrefs = screen
+      .queryAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+    expect(hrefs).not.toContain('/deploy')
+    expect(screen.queryByText('Off')).toBeNull()
   })
 })

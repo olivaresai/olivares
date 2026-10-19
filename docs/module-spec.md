@@ -115,7 +115,8 @@ A console view is registered by its own directory: `web/src/features/<dir>/views
 exports `VIEWS`, the entries of the views whose page lives there (id, path,
 navigation, icon, permission, a `lazy()` element from the same directory and an
 `order`, its place in registry order). `web/src/features/registry.tsx` collects every
-such file; nothing else is edited to add a route. A module's new console view is
+such file; nothing else is edited to add a route. A page docs/editions.md places in Business
+lives in `features/<dir>/business-views.tsx` instead (same `VIEWS`): Community never registers it. A module's new console view is
 also added to its row's `console_entries`; the console tests refuse a Community view
 of a built-in module that no row names. A view no row names (an edition view) follows
 its permission's first segment. A constructor requiring an existing instance declares

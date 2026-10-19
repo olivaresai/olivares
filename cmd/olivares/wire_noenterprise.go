@@ -38,6 +38,7 @@ func editionPortsForBuild() editionPorts {
 		durableBus:                 communityDurableBus,
 		moduleRegistrars:           communityModuleRegistrars,
 		circuitBreakerDeclarations: communityCircuitBreakerDeclarations,
+		sessionDecoys:              communitySessionDecoys,
 	}
 }
 
@@ -53,6 +54,18 @@ func communityDurableBus(getenv func(string) string, _ map[event.Type]natsbus.Pa
 	return nil, fmt.Errorf("%s is set but this is the community edition: the HA durable event-bus "+
 		"(at-least-once + dedup over NATS JetStream) is a Business capability (Identity & Scale) — run the Business "+
 		"edition, or unset %s to use the open in-proc / Core-NATS bridge backend", envDurableBusConfig, envDurableBusConfig)
+}
+
+const envDecoyCredentialsConfig = "OLIVARES_DECOY_CREDENTIALS_CONFIG"
+
+// communitySessionDecoys plants nothing: decoy credentials are a Business capability. A
+// set key is named at boot rather than dropped in silence. It stays accepted, so boot is
+// otherwise unchanged.
+func communitySessionDecoys(getenv func(string) string, _ sessionDecoyDeps, log *slog.Logger) sessionDecoyEngine {
+	if strings.TrimSpace(getenv(envDecoyCredentialsConfig)) != "" {
+		log.Warn("decoy credentials are a Business capability, so the key is ignored in this edition", "key", envDecoyCredentialsConfig, "edition", "community")
+	}
+	return nil
 }
 
 // communityModuleRegistrars registers the AGPL availability descriptor. It declares

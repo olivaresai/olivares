@@ -1,0 +1,204 @@
+{
+  "title": "MCP e skill",
+  "subtitle": "Il catalogo live delle capacità: server MCP, tool, skill e come sono collegati.",
+  "tabs": {
+    "servers": "Server",
+    "tools": "Tool",
+    "skills": "Skill",
+    "wiring": "Collegamenti",
+    "configs": "Configurazioni gestite"
+  },
+  "servers": {
+    "search": "Cerca server…",
+    "name": "Server",
+    "transport": "Trasporto",
+    "version": "Versione",
+    "status": "Stato",
+    "connection": "Connessione",
+    "tools": "Tool",
+    "managed": "Gestito",
+    "managedRev": "Gestito · rev {{rev}}",
+    "discovered": "Rilevato",
+    "empty": "Nessun server MCP rilevato",
+    "emptyHint": "I server compaiono qui quando i piani di inventario e introspezione li rilevano.",
+    "truncated": "Caricati {{n}} server; ce ne sono altri"
+  },
+  "connection": {
+    "connected": "Connesso",
+    "degraded": "Degradato",
+    "down": "Non raggiungibile",
+    "unknown": "Nessun segnale",
+    "caption": "Ultimo segnale di connessione osservato, non un uptime/SLA formale."
+  },
+  "detail": {
+    "title": "Dettaglio del server",
+    "identity": "Identità",
+    "endpoint": "Endpoint",
+    "config": "Configurazione gestita",
+    "health": "Stato della connessione",
+    "healthCaption": "Stato di base della connessione dall'ultimo segnale, non un SLA formale.",
+    "tools": "Tool",
+    "skills": "Skill",
+    "resources": "Risorse",
+    "consumers": "Usato da",
+    "consumersHint": "Sessioni e agenti connessi a questo server.",
+    "noConfig": "Nessuna configurazione gestita",
+    "noConfigHint": "Aggiungi una definizione salvata per documentare il trasporto e i riferimenti ai segreti di questo server.",
+    "manageConfig": "Gestisci configurazione",
+    "editConfig": "Modifica configurazione",
+    "deleteConfig": "Elimina configurazione",
+    "revisionHistory": "Cronologia delle revisioni",
+    "severity": "Gravità",
+    "lastTitle": "Ultimo problema",
+    "statusAt": "Ultimo segnale",
+    "occurrences": "Occorrenze",
+    "detailHash": "Hash del dettaglio"
+  },
+  "tools": {
+    "search": "Cerca tool…",
+    "name": "Tool",
+    "kind": "Tipo",
+    "server": "Server",
+    "annotations": "Annotazioni",
+    "schemaHash": "Hash dello schema",
+    "readOnly": "Sola lettura",
+    "destructive": "Distruttivo",
+    "untrustedNote": "Le annotazioni MCP sono dichiarazioni non verificate del server. Olivares AI le mostra come segnali e non le applica.",
+    "empty": "Nessun tool rilevato",
+    "truncated": "Caricati {{n}} tool; ce ne sono altri"
+  },
+  "skills": {
+    "search": "Cerca skill…",
+    "name": "Skill",
+    "source": "Origine",
+    "version": "Versione",
+    "status": "Stato",
+    "description": "Descrizione",
+    "caption": "I plugin e i subagenti di Claude Code compaiono qui man mano che i connettori li rilevano. I metadati sono volutamente minimi.",
+    "empty": "Nessuna skill rilevata",
+    "truncated": "Caricate {{n}} skill; ce ne sono altre"
+  },
+  "wiring": {
+    "title": "Collegamenti delle capacità",
+    "mobileHint": "Il grafo dei collegamenti ({{count}} connessioni) si legge meglio su uno schermo più grande.",
+    "description": "Cosa è collegato a cosa: agenti e sessioni verso i server MCP, i tool, le skill e le risorse che usano.",
+    "notAccessMap": "Questo è il grafo delle connessioni tra capacità, non la mappa di accesso alle risorse R/RW (vedi Mappa degli accessi).",
+    "observed": "Osservato",
+    "declared": "Dichiarato",
+    "legend": "Provenienza",
+    "partial": "Il grafo mostrato è parziale: affina i filtri per vedere connessioni specifiche.",
+    "occurrences": "Occorrenze",
+    "firstSeen": "Visto per la prima volta",
+    "lastSeen": "Visto l'ultima volta",
+    "via": "tramite",
+    "nodeKinds": {
+      "session": "Sessione",
+      "agent": "Agente",
+      "mcp_server": "Server MCP",
+      "tool": "Tool",
+      "skill": "Skill",
+      "resource": "Risorsa"
+    }
+  },
+  "configs": {
+    "search": "Cerca configurazioni…",
+    "serverRef": "Server",
+    "transport": "Trasporto",
+    "scope": "Ambito",
+    "enabled": "Abilitata",
+    "revision": "Revisione",
+    "secrets": "Riferimenti ai segreti",
+    "secretsCount": "{{count}} riferimento",
+    "secretsCount_one": "{{count}} riferimento",
+    "secretsCount_many": "{{count}} riferimenti",
+    "secretsCount_other": "{{count}} riferimenti",
+    "newConfig": "Nuova configurazione",
+    "empty": "Nessuna configurazione gestita",
+    "emptyHint": "Salva una definizione del trasporto, dell'ambito e dei riferimenti ai segreti di un server MCP per l'osservazione e la cronologia delle revisioni.",
+    "truncated": "Caricate {{n}} configurazioni; ce ne sono altre",
+    "observationNotice": "Le definizioni salvate sono metadati di osservazione. Salvarne, abilitarne o eliminarne una non modifica il gateway MCP né un server in esecuzione."
+  },
+  "editor": {
+    "createTitle": "Nuova configurazione gestita",
+    "editTitle": "Modifica configurazione gestita",
+    "serverRef": "Riferimento al server",
+    "serverRefHint": "Il nome del server MCP descritto da questa definizione. Non modificabile dopo la creazione.",
+    "transport": "Trasporto",
+    "endpoint": "Endpoint",
+    "endpointHint": "Solo un riferimento: non inserire mai una credenziale nell'endpoint.",
+    "scope": "Ambito",
+    "scopeHint": "Etichetta facoltativa di ambito di deployment/tenant (es. team-a).",
+    "enabled": "Abilitata",
+    "note": "Nota",
+    "secretRefs": "Riferimenti ai segreti",
+    "secretRefsHint": "Riferimenti a credenziali conservate fuori dalla console, mai i valori stessi.",
+    "secretName": "Nome",
+    "secretRefKind": "Conservato in",
+    "secretRef": "Posizione",
+    "secretRefPlaceholder": "$GITHUB_TOKEN",
+    "secretHint": "Suggerimento mascherato (facoltativo)",
+    "addSecret": "Aggiungi riferimento",
+    "removeSecret": "Rimuovi",
+    "noSecrets": "Nessun riferimento ai segreti",
+    "credentialWarning": "Sembra il valore di una credenziale. Inserisci un riferimento (es. $GITHUB_TOKEN o un percorso del vault), mai il segreto stesso.",
+    "refKind": {
+      "env": "Variabile d'ambiente",
+      "vault": "Vault",
+      "secret_manager": "Gestore dei segreti",
+      "file": "File",
+      "other": "Altro"
+    },
+    "create": "Crea configurazione",
+    "save": "Salva le modifiche",
+    "confirmCreateTitle": "Creare la configurazione gestita?",
+    "confirmCreateBody": "Crea una configurazione gestita per “{{server}}” e avvia una cronologia delle revisioni immutabile. Registrato nel registro di audit con la tua identità.",
+    "confirmUpdateTitle": "Salvare le modifiche alla configurazione?",
+    "confirmUpdateBody": "Incrementa la revisione e scrive uno snapshot immutabile nella cronologia di “{{server}}”. Registrato in audit con la tua identità. Il riferimento al server non può essere modificato.",
+    "created": "Configurazione gestita creata",
+    "updated": "Configurazione gestita aggiornata"
+  },
+  "remove": {
+    "title": "Eliminare la configurazione gestita?",
+    "body": "Aggiunge uno snapshot finale “delete” alla cronologia immutabile di “{{server}}” e viene registrato in audit con la tua identità. Il server MCP continua a funzionare con le impostazioni rilevate.",
+    "confirm": "Elimina definitivamente",
+    "done": "Configurazione gestita eliminata"
+  },
+  "revisions": {
+    "title": "Cronologia delle revisioni",
+    "subtitle": "Snapshot immutabili di “{{server}}”, dal più recente.",
+    "revision": "Revisione",
+    "action": "Modifica",
+    "actor": "Da",
+    "at": "Quando",
+    "caption": "La cronologia sopravvive all'eliminazione: l'ultima voce è uno snapshot “delete”.",
+    "actions": {
+      "create": "Creata",
+      "update": "Aggiornata",
+      "delete": "Eliminata"
+    },
+    "empty": "Nessuna revisione",
+    "emptyHint": "Ogni modifica a questo server viene conservata come revisione che puoi confrontare e ripristinare. La prima modifica ne crea una.",
+    "truncated": "Caricate {{n}} revisioni; ce ne sono altre",
+    "truncatedHint": "La cronologia è più lunga di questa pagina. Una revisione assente da questo elenco non prova che non sia mai stata registrata."
+  },
+  "empty": {
+    "config": {
+      "title": "Nessuna configurazione gestita creata",
+      "description": "Salva una definizione del trasporto, dell'ambito e dei riferimenti ai segreti di un server MCP per l'osservazione e la cronologia delle revisioni."
+    },
+    "server": {
+      "title": "Nessun server MCP rilevato",
+      "description": "I server MCP compaiono quando le osservazioni dei connettori li identificano nell'inventario del tenant.",
+      "action": "Aggiungi o prova un server in Server MCP"
+    },
+    "skill": {
+      "title": "Nessuna skill rilevata",
+      "description": "Le skill arrivano dall'introspezione dei prompt MCP; una fonte Claude Code riporta subagenti, skill e plugin come risorse dichiarate, non in questa tabella."
+    },
+    "tool": {
+      "title": "Nessun tool MCP rilevato",
+      "description": "I tool compaiono quando l'introspezione MCP o l'attività osservata dei tool li segnala all'inventario del tenant."
+    }
+  },
+  "truncatedHint": "Ci sono più righe di quelle mostrate; questa pagina le prende per id di riga (assegnato alla creazione), quindi mancano le ultime. Un server, tool, skill o configurazione NON elencato qui non prova che non esista."
+}

@@ -4,16 +4,17 @@
 //
 // Console design tokens: DTCG (2025.10) -> Style Dictionary -> src/styles/tokens.css.
 // The .tokens.json files under tokens/console/ are the SINGLE SOURCE OF TRUTH for the
-// console's v26.10 visual system. This pipeline writes the :root{} (light) and .dark{}
+// console's visual system. This pipeline writes the :root{} (light) and .dark{}
 // CSS-variable blocks, the Tailwind 4 @theme inline{} block, and the density and motion
 // blocks from those sources. Run `pnpm tokens` to regenerate; `pnpm tokens:check` fails CI
 // if the committed output drifts from the sources.
 //
 // TWO LAYERS, ON PURPOSE. The files directly under tokens/ are the BRAND source that the
-// transactional emails, the documentation site, the release diagrams and the website
-// parity check read; this generator does not read them, so a console redesign cannot
-// restyle an email or break the website's parity check by accident, and a brand change
-// reaches the console only through a deliberate edit of tokens/console/.
+// transactional emails, the documentation site and the release diagrams read; this
+// generator does not read them, so a console redesign cannot restyle an email by
+// accident. The website parity check (scripts/check-brand-parity.mjs) reads what THIS
+// generator emits, src/styles/tokens.css, so the console and the website are pinned to
+// one brand by the file the browser really loads.
 //
 // Style Dictionary PARSES and RESOLVES the DTCG sources; this file emits them with full
 // control over ordering and format so the output stays byte-stable and readable. An
@@ -113,7 +114,7 @@ function block(selector, entries, sections) {
 }
 
 // --- ordered emit plan (the reading order of the generated file) ---
-// The v26.10 palette, under the names the design gives it.
+// The palette, under the names the design gives it.
 const PALETTE_NEUTRALS = [
   'frame',
   'canvas',
@@ -148,8 +149,16 @@ const PALETTE_STATUS = [
   'diff-add',
   'diff-del',
 ]
-// Depth and atmosphere: plain variables, not Tailwind colors.
-const PALETTE_DEPTH = ['shadow-pop', 'shadow-card', 'ember']
+// The four tool data colours: a fixed order that is the tool, never its rank.
+const PALETTE_TOOLS = [
+  'tool-claude',
+  'tool-codex',
+  'tool-opencode',
+  'tool-gemini',
+]
+// Depth: two neutral shadows for what floats, none for a panel. Plain variables, not
+// Tailwind colors. No glow, blur or halo token.
+const PALETTE_DEPTH = ['shadow-raised', 'shadow-pop', 'shadow-card']
 // The role names the components use, each an alias of a palette token or a measured value.
 const SURFACES = [
   'background',
@@ -274,7 +283,8 @@ const PALETTE = [
   { comment: 'Palette — text', names: PALETTE_TEXT },
   { comment: 'Palette — the brand orange, by role', names: PALETTE_ACCENT },
   { comment: 'Palette — status and diff', names: PALETTE_STATUS },
-  { comment: 'Palette — depth and atmosphere', names: PALETTE_DEPTH },
+  { comment: 'Palette — tool data colours', names: PALETTE_TOOLS },
+  { comment: 'Palette — depth', names: PALETTE_DEPTH },
 ]
 const ROLES = [
   { comment: 'Roles — surfaces and text', names: SURFACES },
@@ -342,6 +352,7 @@ const themeColorNames = [
   ...PALETTE_TEXT,
   ...PALETTE_ACCENT,
   ...PALETTE_STATUS,
+  ...PALETTE_TOOLS,
   ...SURFACES,
   ...ACCENT,
   ...SEMANTIC,
@@ -415,18 +426,20 @@ const header = `/* SPDX-FileCopyrightText: 2026 Olivares.AI */
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares AI console — design tokens (v26.10 visual system).
+ * Olivares AI console — design tokens (the website's B2 system).
  *
  * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
  * (DTCG 2025.10). Regenerate with \`pnpm tokens\`; \`pnpm tokens:check\` guards drift in CI.
  * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the Tailwind 4
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
- * Each theme holds the palette — four layered neutrals, three text tones, the single
- * brand orange #f08000 by role, status colors with soft fills — and the role names the
- * components use, each resolved from the palette. Every text token is at least 4.5:1 and
+ * Each theme holds the palette — four neutrals, three text tones, the single brand
+ * orange #f08000 by role, status colors with soft fills, four tool data colours and two
+ * neutral shadows — and the role names the components use, each resolved from the
+ * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
+ * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
- * of its theme (src/styles/tokens.test.ts measures the 372 pairs).
+ * of its theme (src/styles/tokens.test.ts measures the 500 pairs).
  */
 `
 

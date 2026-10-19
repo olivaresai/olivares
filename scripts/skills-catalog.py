@@ -149,6 +149,7 @@ def build_pack(source: dict, files: dict, pack_id: str, description: str, pack: 
         'file': f'{folder}{pack_id}.tar.gz', 'sha256': hashlib.sha256(archive).hexdigest(),
         'tar_sha256': hashlib.sha256(tar).hexdigest(),
         'skills': sum(1 for n in pack if n.count('/') == 1 and n.endswith('/SKILL.md')),
+        'members': sum(1 for n in pack if n.endswith('/SKILL.md') or n.startswith(('agents/', 'commands/', 'rules/')) and n.endswith('.md')),
         'files': len(pack),
     }
     return entry, {entry['file']: archive}
@@ -168,12 +169,19 @@ def build(pin: dict) -> tuple[dict, dict]:
             files = fetch(source['repository'], source['commit'], source.get('exclude', {}))
         if source_id == 'ecc':
             groups = ecc_groups(files)
-            plain = [('ecc-agents', 'Agent definitions (data).', subtree(files, 'agents')),
-                     ('ecc-rules', 'Rules (data).', subtree(files, 'rules'))]
+            groups.extend([
+                ('ecc-agents', 'Claude Code agents.', {f'agents/{n}': v for n, v in subtree(files, 'agents').items()}),
+                ('ecc-commands', 'Claude Code commands.', {f'commands/{n}': v for n, v in subtree(files, 'commands').items()}),
+            ])
+            rules = subtree(files, 'rules')
+            for rule_set in sorted({n.split('/')[0] for n in rules if '/' in n}):
+                groups.append((f'ecc-rules-{rule_set}', f'Claude Code {rule_set} rules.',
+                               {f'rules/{n}': v for n, v in rules.items() if n.startswith(rule_set + '/')}))
+            plain = []
         else:
             groups = [(pack_id, ('Workspace wiki: ingest, query, and lint.' if source_id == 'olivares' else f'Upstream {path}.'), subtree(files, path)) for pack_id, path in source['select'].items()]
             plain = []
-        # Agents and rules are not skills: pinned and vendored under data/, not embedded.
+        # Every native instruction kind is a pinned, installable pack.
         for into, items, folder in ((packs, groups, ''), (data, plain, 'data/')):
             for pack_id, description, pack in items:
                 if not pack:

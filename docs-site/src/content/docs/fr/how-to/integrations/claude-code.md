@@ -124,6 +124,15 @@ expiré se résout en `enforce`. Les invariants de plateforme — notamment l'id
 kill switch, le pare-feu et les erreurs fail-closed — restent appliqués pendant l'observation des
 règles métier.
 
+Une session qui continue d'être refusée est confiée à une personne. Lorsqu'une même exécution
+atteint 3 refus d'affilée, ou 20 au total, par la politique, le pare-feu ou les règles de la
+plateforme, Olivares interrompt son tour si quelqu'un la suit et l'arrête si personne ne la
+suit. L'exécution affiche alors `needs_person` avec les derniers motifs, et une entrée
+`sessions.run.denial_budget` est écrite dans le ledger. Le refus d'une revue par une personne ne
+compte pas, et un appel d'outil autorisé redémarre le compte des refus d'affilée. Une saisie
+d'une personne ouvre un nouveau budget. Modifiez les limites par tenant avec
+`"denial_budget": {"consecutive": 3, "total": 20}` ; un champ omis conserve sa valeur par défaut.
+
 <img class="light:sl-hidden" src="/console/guias-config-step-up-dark.png" alt="Authentification renforcée requise — AAL3 (matériel, résistant à l’hameçonnage)">
 <img class="dark:sl-hidden" src="/console/guias-config-step-up-light.png" alt="Authentification renforcée requise — AAL3 (matériel, résistant à l’hameçonnage)">
 
@@ -220,9 +229,9 @@ du premier événement, les opérateurs peuvent utiliser les vues suivantes :
 | **Observability > Ingestion** (`/observability`) | Enregistrements par source, types `edge`, `cost` et `finding`, signal et premier/dernier événement. | Ces compteurs couvrent tout le processus depuis le démarrage ; ils sont remis à zéro au redémarrage et ne sont pas propres au tenant. |
 | **Sessions** (`/sessions`) | Session, état, action, modèle, tokens, coût, dernière activité et posture `enforced` ou `observed`. | La posture résume les preuves d'événements ; elle n'est pas déduite de l'enregistrement du connecteur. |
 | **Access map** (`/access-map`) | Arêtes R/RW attribuées à partir des outils, de MCP et des ressources observés. | Une arête observée décrit une activité ; elle n'équivaut pas à une autorisation préalable. |
-| **Cost & FinOps** (`/finops`) | Échantillons de coûts et de tokens dérivés de la télémétrie reçue. | La couverture se limite à ce que la flotte exporte ; les appels qui n'ont jamais émis d'OTLP ne peuvent pas être reconstruits. |
+| **Budgets** (`/stored-budgets`) | Consommation par rapport à chaque limite de budget enregistrée, calculée à partir d'échantillons de coûts et de tokens dérivés de la télémétrie reçue. | La couverture se limite à ce que la flotte exporte ; les appels qui n'ont jamais émis d'OTLP ne peuvent pas être reconstruits. |
 | **Security** (`/security`) | Lacunes de télémétrie, posture sandbox/MCP et autres constats émis. | L'absence de constat ne rend pas conforme une surface non observée. |
-| **Claude Policy** (`/claude-policy`) | Création, distribution, versions et état de check-in des surfaces Claude Code administrées. | La distribution et la vérification de dérive sont des faits distincts affichés séparément. |
+| **Claude Policy** (`/claude-policy`) | Validation et aperçu des surfaces Claude Code administrées ; Business ajoute la publication, la distribution, les versions et l'état de check-in. | La distribution et la vérification de dérive sont des faits distincts affichés séparément. |
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Opération des agents en direct — ce que chaque session fait à l’instant même, ses tokens, son coût et sa cadence, mis à jour via un flux en direct.">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="Opération des agents en direct — ce que chaque session fait à l’instant même, ses tokens, son coût et sa cadence, mis à jour via un flux en direct.">

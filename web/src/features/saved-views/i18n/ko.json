@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "저장된 보기",
+    "myViews": "내 보기",
+    "shared": "공유됨",
+    "empty": "저장된 보기 없음",
+    "loading": "저장된 보기를 불러오는 중…",
+    "loadFailed": "저장된 보기를 불러오지 못했습니다.",
+    "save": "현재 보기 저장…",
+    "delete": "삭제",
+    "deleteAria": "저장된 보기 {{name}} 삭제"
+  },
+  "save": {
+    "title": "현재 보기 저장",
+    "description": "현재 필터와 범위를 저장하여 다시 적용할 수 있습니다.",
+    "name": "이름",
+    "viewDescription": "설명",
+    "share": "이 테넌트와 공유",
+    "shareHint": "이 테넌트에서 저장된 보기 액세스 권한이 있는 사람은 누구나 적용할 수 있습니다.",
+    "cancel": "취소",
+    "submit": "보기 저장",
+    "failed": "저장된 보기를 만들지 못했습니다."
+  },
+  "delete": {
+    "title": "저장된 보기를 삭제하시겠습니까?",
+    "description": "“{{name}}”을(를) 삭제합니다. 되돌릴 수 없습니다.",
+    "confirm": "보기 삭제",
+    "cancel": "취소",
+    "failed": "저장된 보기를 삭제하지 못했습니다."
+  }
+}

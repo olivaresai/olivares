@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -203,4 +204,69 @@ if "$1" --silent --fail --max-time 2 --noproxy '' --proxy "$HTTP_PROXY" "$3"; th
 		t.Fatal(err)
 	}
 	t.Logf("engine sha256=%x; bound requests from tool and subprocess passed; foreign direct/proxied requests=0", sha256.Sum256(body))
+}
+
+// The session's tool reaches its provider through the real namespace, helper and
+// proxy: its own key is forwarded, another key is refused, and the refusal names
+// the header and no value.
+func TestArtifactBoundSessionForwardsOnlyItsKey(t *testing.T) {
+	binary := os.Getenv("OLIVARES_TEST_ENGINE_BIN")
+	if binary == "" {
+		t.Skip("OLIVARES_TEST_ENGINE_BIN is not set")
+	}
+	binary, err := filepath.Abs(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	curl, err := exec.LookPath("curl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reached atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { reached.Add(1); _, _ = io.WriteString(w, "bound") }))
+	defer provider.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	dir := t.TempDir()
+	script := `set -eu
+"$1" --silent --show-error --fail --max-time 3 -H "X-Api-Key: $3" "$2"
+if "$1" --silent --fail --max-time 3 -H "X-Api-Key: $4" "$2"; then exit 90; fi
+if "$1" --silent --fail --max-time 3 -H "Authorization: Bearer $4" "$2"; then exit 91; fi
+"$1" --silent --show-error --fail --max-time 3 "$2"
+`
+	cmd, _, err := confine.Command(ctx, confine.Policy{ReadWrite: []string{dir}}, "/bin/sh", "-c", script, "sh", curl, provider.URL, ownKey, otherKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd.Path, cmd.Args[0] = binary, binary
+	cmd.Dir, cmd.Env = dir, []string{"PATH=/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir}
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	seen := &refusals{}
+	ready, release, _, err := Wrap(ctx, cmd, keyedPolicy(provider.URL, seen))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := ready(); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatal(err)
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("engine boundary: %v: %s", err, output.String())
+	}
+	_, port, _ := net.SplitHostPort(provider.Listener.Addr().String())
+	want := []Refusal{{Host: "127.0.0.1", Header: "X-Api-Key"}, {Host: "127.0.0.1", Header: "Authorization"}}
+	if output.String() != "boundbound" || reached.Load() != 2 || !slices.Equal(seen.all(), want) {
+		t.Fatalf("output=%q provider requests=%d refusals=%v (provider port %s), want boundbound, 2, %v", output.String(), reached.Load(), seen.all(), port, want)
+	}
+	body, err := os.ReadFile(binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("engine sha256=%x; own key forwarded twice, another key refused in X-Api-Key and Authorization", sha256.Sum256(body))
 }

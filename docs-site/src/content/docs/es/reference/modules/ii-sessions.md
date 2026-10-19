@@ -14,7 +14,7 @@ I (inventario) materializa el estate durable, el módulo II mantiene una **capa
 operativa en vivo** por sesión sobre el mismo flujo de observaciones — y muestra
 solo lo que ese flujo lleva honestamente.
 
-Olivares <!-- release -->0.2<!-- /release --> también **lanza** CLI oficiales de proveedor como hijos propios bajo un
+Olivares <!-- release -->0.3<!-- /release --> también **lanza** CLI oficiales de proveedor como hijos propios bajo un
 [perfil de proveedor](/how-to/operate-provider-sessions/). Esa vía gestionada
 es el mismo módulo. No sustituye la capa ni fusiona dos homes que anuncian el
 mismo id de sesión del proveedor (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -91,6 +91,17 @@ en su `PATH`. `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`, `_GROK_BIN` y
 rechaza el lanzamiento. Las demás comprobaciones de preparación, incluida la
 autenticación del perfil y la política de lanzamiento, siguen vigentes. Pasos del operador:
 [Operar una sesión de proveedor](/how-to/operate-provider-sessions/).
+
+Un mensaje puede llevar imágenes. `olivares session send <session> --attach shot.png "what
+is wrong here?"` y el compositor de la consola (pegar, soltar o el clip) almacenan cada
+PNG, JPEG, WebP o GIF con la sesión, hasta cuatro por mensaje y 3.75 MB cada una, y
+luego las envían junto con el texto; un mensaje necesita su texto, así que una imagen
+sola no se envía (la CLI y el compositor lo piden). Claude Code recibe un bloque de
+contenido de imagen y Codex su propia entrada de imagen; una herramienta sin entrada de
+imagen rechaza el mensaje por su nombre antes de enviar nada. La API es
+`POST /v1/m/sessions/runs/{ref}/attachments` (la imagen, en base64),
+`GET .../attachments/{id}` y `attachments` en `.../input`. Las imágenes viven bajo el
+directorio de datos, por tenant y sesión, y se eliminan junto con la sesión.
 
 ## Qué consume (y qué deriva)
 

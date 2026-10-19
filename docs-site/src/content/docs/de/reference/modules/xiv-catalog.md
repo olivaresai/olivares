@@ -112,7 +112,7 @@ Instanziieren sind **privilegiert, RBAC-gegated und selbst-auditiert** zum echte
 :::caution[Ehrliche Grenzen]
 - **Keine Aktuierung, kein Provisioning.** Modul XIV zeichnet die *Anfrage* auf und steuert sie; es
   stellt niemals eine Capability auf. Die Genehmigungsentscheidung gehört der Governance und die
-  Verdrahtung dem Deployment — und ein Live-`apply`/`retire` dort ist selbst eine deny-closed Naht
+  Verdrahtung dem Deployment (eine Business-Funktion; Community antwortet bei der Aktivierung mit `501`) — und ein Live-`apply`/`retire` dort ist selbst eine deny-closed Naht
   (`503`, bis ein Executor bereitgestellt ist). Siehe [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/).
 - **Signieren ist real, aber schlüsselabhängig.** Ed25519-Signieren ist implementiert und der
   Signaturschlüssel wird beim Boot standardmäßig bereitgestellt. Auf einem Knoten mit **keinem

@@ -123,12 +123,12 @@
     "table": "Tabelle"
   },
   "partial": {
-    "noLiveRead": "Beobachtete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:live:read nicht. Die gestarteten unten sind der lesbare Teil, nicht das ganze Bild.",
-    "noRunRead": "Gestartete Sitzungen werden nicht angezeigt: Ihre Rolle enthält sessions:run:read nicht. Eine unten als entdeckt geführte Sitzung kann dennoch von Olivares gestartet worden sein – diese Liste konnte es nicht prüfen.",
+    "noLiveRead": "Beobachtete Sitzungen werden nicht angezeigt: Ihre Rolle kann sie nicht lesen. Die gestarteten unten sind der lesbare Teil, nicht das ganze Bild.",
+    "noRunRead": "Gestartete Sitzungen werden nicht angezeigt: Ihre Rolle kann sie nicht lesen. Eine unten als entdeckt geführte Sitzung kann dennoch von Olivares gestartet worden sein – diese Liste konnte es nicht prüfen.",
     "truncated": "Dies ist die neueste Seite, nicht der gesamte Bestand. Die Herkunft wird hier über das Geladene verknüpft: Eine Sitzung, deren Lauf aus der Seite gefallen ist, kann als entdeckt erscheinen; öffnen Sie die Sitzung, damit die Engine antwortet.",
     "runLookupFailed": "Die gestartete Hälfte konnte nicht gelesen werden: die Lauf-Abfrage schlug fehl. Die Zeilen unten sind, was die beobachtete Hälfte lieferte; die Herkunft wird als nicht gelesen ausgewiesen statt geraten.",
     "liveLookupFailed": "Die beobachtete Hälfte konnte nicht gelesen werden: die Live-Abfrage schlug fehl. Die Zeilen unten sind die gestarteten; die Telemetriespalten sind leer, weil nichts gelesen werden konnte, nicht weil es nichts gibt.",
-    "noProfileRead": "Namen der Anbieterprofile werden nicht angezeigt: Ihre Rolle enthält sessions:profile:read nicht. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile.",
+    "noProfileRead": "Namen der Anbieterprofile werden nicht angezeigt: Ihre Rolle kann Profile nicht lesen. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile.",
     "profileLookupFailed": "Die Namen der Anbieterprofile konnten nicht gelesen werden: die Profil-Abfrage schlug fehl. Die Spalte Instanz führt stattdessen die Profilreferenz jeder Zeile."
   },
   "move": {
@@ -156,7 +156,10 @@
     "firstTurn": "Erste Nachricht",
     "close": "Schließen",
     "profilesFailed": "Die Konten konnten nicht aufgelistet werden.",
-    "profilesDenied": "Sie dürfen Konten nicht auflisten, daher kann keines gewählt werden."
+    "profilesDenied": "Sie dürfen Konten nicht auflisten, daher kann keines gewählt werden.",
+    "stopsFirst": "Diese Sitzung läuft noch: Sie wird zuerst gestoppt und dann verschoben.",
+    "handoffStopsFirst": "Diese Sitzung läuft noch: Sie wird zuerst gestoppt und dann übergeben.",
+    "stoppedNotMoved": "Die Sitzung wurde gestoppt, das Verschieben ist aber fehlgeschlagen. Versuche es erneut."
   },
   "card": {
     "tabs": {
@@ -171,7 +174,7 @@
       "discovered": "Entdeckt",
       "launchedExplain": "Ein Startvorgang verknüpft diese Sitzung mit Olivares: Olivares hat sie gestartet. Was jetzt mit ihr möglich ist, steht unten — gestartet zu haben heißt nicht, einen lebenden Prozess zu halten.",
       "discoveredExplain": "Kein Startvorgang ist mit ihr verknüpft: soweit diese Ebene es belegen kann, hat Olivares sie nicht gestartet. Sie lässt sich lesen und prüfen, nicht steuern.",
-      "unknownExplain": "Ob Olivares diese Sitzung gestartet hat, konnte nicht geprüft werden: Berechtigung sessions:run:read fehlt, oder die Abfrage schlug fehl. Das heißt „nicht gelesen“, nicht „nicht gestartet“.",
+      "unknownExplain": "Ob Olivares diese Sitzung gestartet hat, konnte nicht geprüft werden: Ihre Rolle kann gestartete Sitzungen nicht lesen, oder die Abfrage schlug fehl. Das heißt „nicht gelesen“, nicht „nicht gestartet“.",
       "multipleRuns": "{{n}} Läufe steuern diese Sitzung",
       "unknown": "Herkunft nicht gelesen"
     },
@@ -183,7 +186,7 @@
       "fullExplain": "Olivares hält den Prozess und überbrückt seine E/A: Er lässt sich beobachten, steuern und stoppen.",
       "lifecycleExplain": "Starten und stoppen, nichts dazwischen: entweder hält Olivares den Prozess, aber nicht seine E/A, oder der Prozess ist gestoppt und kann fortgesetzt werden.",
       "observeExplain": "Olivares hält keinen Prozess dieser Sitzung. Sie lässt sich lesen und prüfen; sie zu stoppen kann diese Ebene nicht.",
-      "unknownExplain": "Die Betriebshälfte wurde nicht gelesen (sessions:run:read) – dies ist, was allein aus der beobachteten Hälfte sichtbar ist."
+      "unknownExplain": "Die Betriebshälfte wurde nicht gelesen (Ihre Rolle kann gestartete Sitzungen nicht lesen) – dies ist, was allein aus der beobachteten Hälfte sichtbar ist."
     },
     "cap": {
       "watch": "Live-Telemetrie und Zeitleiste ansehen",
@@ -227,7 +230,7 @@
     "notDeclared": "Nicht angegeben",
     "unclaimed": "Aktivität einer Sitzung ohne aktiven Anspruch. Die Engine meldet das; es ist nicht dasselbe Signal wie eine mögliche Umgehung.",
     "relayedIO": "Ihre E/A wird an Anthropics Cloud weitergereicht, daher kann Olivares sie hier nicht zeigen. Die Lebenszyklus-Steuerung gilt weiterhin.",
-    "observedNotRead": "Die beobachtete Hälfte wurde nicht gelesen: Ihre Rolle enthält sessions:live:read nicht.",
+    "observedNotRead": "Die beobachtete Hälfte wurde nicht gelesen: Ihre Rolle kann beobachtete Sitzungen nicht lesen.",
     "noObservationYet": "Noch keine Aktivität in dieser Sitzung.",
     "failureReasonMissing": "Diese Sitzung ist fehlgeschlagen. Der Server hat keinen Grund angegeben.",
     "hostIsolationRemedy": "Bitte den Serveradministrator, unprivilegierte Benutzer- und Netzwerk-Namensräume sowie Landlock zu erlauben. Starte die Sitzung danach erneut.",
@@ -257,7 +260,8 @@
       "title": "Auch über gebundene Quellen beobachtet",
       "explain": "Diese Zeilen teilen Profil und Provider-Sitzungs-ID dieses Laufs, kamen aber über eine Quelle und nicht über den Prozess, den Olivares hält. Sie werden neben dem Lauf gezeigt, nie mit ihm verschmolzen.",
       "open": "Öffnen"
-    }
+    },
+    "idlePolicyStopped": "Zum Freigeben von Speicher gestoppt."
   },
   "facet": {
     "observed": "Beobachtet: {{state}}",
@@ -287,9 +291,15 @@
     "unpin": "Lösen",
     "pinnedMark": "Angeheftet",
     "rowMenu": "Aktionen für {{name}}",
-    "noObservation": "Für diese Sitzung ist noch keine Telemetrie eingetroffen."
+    "noObservation": "Für diese Sitzung ist noch keine Telemetrie eingetroffen.",
+    "pinFailed": "Das Anheften konnte nicht geändert werden."
   },
   "surface": {
+    "openBeside": "Daneben öffnen",
+    "closeBeside": "Sitzung daneben schließen",
+    "currentSession": "Aktuelle Sitzung",
+    "besideSession": "Sitzung daneben",
+    "switchSession": "Sitzung wechseln",
     "closeContext": "Kontext schließen",
     "backTo": "Zurück zu {{pane}}",
     "pane": {
@@ -310,10 +320,20 @@
     "mode": "Modus: {{mode}}",
     "modeTitle": "{{tool}} meldet: {{mode}}",
     "theTool": "das Tool",
+    "toolWord": {
+      "bypassPermissions": "Fragt nie nach Erlaubnis",
+      "untrusted": "Fragt vor Befehlen, denen es nicht vertraut",
+      "onFailure": "Fragt, wenn ein Befehl fehlschlägt",
+      "onRequest": "Fragt, wenn es nötig ist",
+      "never": "Fragt nie nach Erlaubnis",
+      "granular": "Fragt nach eigenen Regeln"
+    },
     "usageLabel": "Verbrauch dieser Sitzung",
     "tokens": "{{input}} ein / {{output}} aus (Tokens)",
     "costTitle": "Eine Schätzung, keine Rechnung: die eigene Zahl des Tools oder der Listenpreis eines Durchgangs, den es nicht bepreist hat",
     "costUnknown": "Kosten nicht gemeldet",
+    "costPartial": "{{cost}} (teilweise)",
+    "viewCosts": "Kosten ansehen",
     "planLabel": "Nutzungsfenster des Plans der Anmeldung dieser Sitzung",
     "planNotRead": "Plan-Fenster nicht gelesen",
     "resets": "Wird {{when}} zurückgesetzt ({{at}})",
@@ -334,6 +354,7 @@
     "forbiddenDescription": "Ihre Rolle enthält keine Berechtigung, Sitzungstelemetrie zu lesen.",
     "errorTitle": "Die Belege konnten nicht gelesen werden",
     "errorDescription": "Der Zeitleisten-Abruf hat nicht geantwortet. Eine leere Liste hier würde bedeuten, dass die Sitzung nichts getan hat — das ist etwas anderes.",
+    "repeat": "×{{count}}",
     "atLeast_one": "mindestens {{count}}",
     "atLeast_other": "mindestens {{count}}",
     "touches_one": "{{count}} Eintrag",
@@ -371,9 +392,9 @@
     "copyRef": "{{value}} kopieren",
     "identifiersTitle": "Kennungen",
     "identifiersHint": "Referenzen zum Kopieren. Das sind nicht die Namen in der Bereichszeile.",
-    "wireTitle": "Leitung",
-    "wireHint": "Der Rohrahmen der gewählten Zeile. Die Unterhaltung ist die Standardansicht.",
-    "wireEmpty": "Wählen Sie eine Zeile in der Unterhaltung, um ihren Rohrahmen zu sehen.",
+    "wireTitle": "Ausgewählte Zeile",
+    "wireHint": "Die ausgewählte Zeile genau so, wie das Werkzeug sie gesendet hat. Die Unterhaltung ist die Standardansicht.",
+    "wireEmpty": "Wählen Sie eine Zeile in der Unterhaltung, um sie genau so zu sehen, wie das Werkzeug sie gesendet hat.",
     "thisNode": "Dieser Knoten",
     "workTitle": "Arbeitsberechtigung der Sitzung",
     "workHint": "Für den letzten Start aufgezeichnet. Jede Aktion prüft die aktuelle Berechtigung.",
@@ -435,6 +456,9 @@
     "retrying": "Neuer Versuch ({{count}}): {{message}}",
     "keyRefused": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Anbieter.",
     "output": "Ausgabe des Tools ({{count}}): {{first}}",
+    "started": "Sitzung gestartet",
+    "startedTools_one": "{{count}} Tool",
+    "startedTools_other": "{{count}} Tools",
     "notSent": "Nicht gesendet: {{reason}}",
     "waitingApproval": "Wird gesendet, sobald der Start genehmigt ist und die Sitzung läuft.",
     "workingFolder": "Arbeitsordner: {{cwd}}",
@@ -505,6 +529,7 @@
   },
   "list": {
     "group": {
+      "pinned": "Angeheftet",
       "attention": "Braucht Sie",
       "active": "Läuft",
       "settled": "Früher"
@@ -520,6 +545,8 @@
     "terminalHint": "Dieselbe Sitzung im Terminal."
   },
   "activity": {
+    "workflowPhases": "Phasen",
+    "workflowProgress": "{{done}} von {{total}} Agenten fertig",
     "empty": "Noch nichts. Die Aufgabenliste des Werkzeugs, die Agenten, die es startet, die Arbeit, die es im Hintergrund laufen lässt, und die Dateien, die es ändert, erscheinen hier, während es arbeitet.",
     "missing": "Das Transkript dieser Sitzung liegt nicht im Verzeichnis ihres Kontos, daher kann nicht angezeigt werden, was ihr Werkzeug getan hat.",
     "failed": "Die Aktivität konnte nicht gelesen werden.",
@@ -539,8 +566,10 @@
     "context": "Kontext",
     "model": "Modell",
     "tokens": "Im Kontext",
+    "contextUsage": "{{tokens}} Tokens · {{percent}} von {{window}}",
+    "contextUnknown": "{{tokens}} Tokens · Kontextfenster unbekannt",
     "compactions": "Verdichtungen",
-    "compactedTimes_one": "Einmal verdichtet",
+    "compactedTimes_one": "{{n}}-mal verdichtet",
     "compactedTimes_other": "{{n}}-mal verdichtet",
     "neverCompacted": "Nicht verdichtet",
     "skills": "Skills",
@@ -572,5 +601,36 @@
       "tool": "Werkzeug",
       "result": "Ergebnis"
     }
+  },
+  "messages": {
+    "title": "Nachrichten",
+    "rail": "Gesendete Nachrichten",
+    "mark": "Nachricht {{n}}, {{time}}: {{line}}",
+    "search": "Nachrichten der Sitzung durchsuchen",
+    "searchHint": "Ein Wort oder eine Wendung",
+    "goToTime": "Zu Datum und Uhrzeit springen",
+    "go": "Los",
+    "includeAnswers": "Antworten einbeziehen",
+    "count": "{{shown}} von {{total}} Nachrichten",
+    "none": "Keine Nachricht passt.",
+    "loading": "Nachrichten werden gelesen …",
+    "older": "Frühere Nachrichten anzeigen",
+    "answer": "Antwort",
+    "timeNone": "Keine Nachricht ab diesem Zeitpunkt.",
+    "error": "Die Nachrichten konnten nicht gelesen werden.",
+    "pending": "Das Tool hat das Protokoll dieser Sitzung noch nicht geschrieben.",
+    "missing": "Das Protokoll dieser Sitzung liegt nicht im Kontoordner, daher lassen sich ihre Nachrichten nicht anzeigen.",
+    "jumped": "Zu Nachricht {{n}} gesprungen.",
+    "farNotice": "Nachricht {{n}} steht unten: Sie ist älter als die Unterhaltung auf dem Bildschirm.",
+    "farTitle": "Ältere Nachricht",
+    "farBody": "Nachricht {{n}}, {{time}}. Sie ist älter als die Unterhaltung auf dem Bildschirm.",
+    "close": "Schließen",
+    "refused": "Dieser Sitzung wurden Geheimnisse übergeben, daher lassen sich ihre Nachrichten nicht auflisten. Ihre Live-Ausgabe wird weiterhin angezeigt.",
+    "unreadable": "{{n}} Einträge des Protokolls konnten nicht gelesen werden."
+  },
+  "limit": {
+    "usageUntil": "Kontingent aufgebraucht bis {{time}}",
+    "usage": "Kontingent aufgebraucht",
+    "rate": "Der Anbieter begrenzt gerade die Anfragen. Versuche es gleich noch einmal."
   }
 }

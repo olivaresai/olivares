@@ -22,8 +22,9 @@ cd "$ROOT" || cannot "cannot enter $ROOT"
 
 JSON="${OLIVARES_ALC01S2_JSON:-design/alc-01-s2-managed-contract.json}"
 DOC="${OLIVARES_ALC01S2_DOC:-design/ALC-01-S2-MANAGED-CONTRACT-2026-08-20.md}"
-HANDLERS="${OLIVARES_ALC01S2_HANDLERS:-core/api/handlers_scim.go}"
-GROUPH="${OLIVARES_ALC01S2_GROUPH:-core/api/handlers_scim_groups.go}"
+# The inbound SCIM server is Business; the Community build keeps its method names as 501 stubs.
+HANDLERS="${OLIVARES_ALC01S2_HANDLERS:-core/api/handlers_scim_noenterprise.go}"
+GROUPH="${OLIVARES_ALC01S2_GROUPH:-core/api/handlers_scim_noenterprise.go}"
 SERVER="${OLIVARES_ALC01S2_SERVER:-core/api/server.go}"
 AUTHSCIM="${OLIVARES_ALC01S2_AUTHSCIM:-core/auth/scim.go}"
 LOGIN="${OLIVARES_ALC01S2_LOGIN:-core/auth/federation_login.go}"

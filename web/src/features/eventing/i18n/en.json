@@ -86,7 +86,7 @@
       "newrelic": "New Relic"
     },
     "sinkFormat": "Sink format",
-    "sinkFormatHint": "Wire dialect for the sink. Default = OCSF.",
+    "sinkFormatHint": "The format the sink receives. Default: OCSF.",
     "sinkFormatDefault": "Default (OCSF)",
     "sinkCred": "Sink credential",
     "sinkCredHint": "Tower token/key for this sink — sealed at rest, never shown again.",

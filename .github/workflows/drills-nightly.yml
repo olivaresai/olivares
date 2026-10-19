@@ -121,8 +121,13 @@ jobs:
           set -uo pipefail
           # The browser and JavaScript driver must come from the same locked web
           # dependency. A root npx download leaves the walk unable to load its driver.
+          # Self-hosted images must supply system libraries; the runner has no sudo.
+          deps=()
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            deps=(--with-deps)
+          fi
           if ! { task build:web &&
-            pnpm --dir web exec playwright install --with-deps chromium &&
+            pnpm --dir web exec playwright install "${deps[@]}" chromium &&
             go build -o "$RUNNER_TEMP/olivares" ./cmd/olivares;
           } 2>&1 | tee "$RUNNER_TEMP/drill-console-walk.log"; then
             echo "::error::console-walk: console, browser, or engine build failed; nothing was measured."

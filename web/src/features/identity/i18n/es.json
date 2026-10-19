@@ -1,6 +1,6 @@
 {
-  "title": "Identidad y NHI",
-  "subtitle": "SSO, SCIM, inventario de identidades, ciclo de vida de NHI, grafo WIF y acceso privilegiado: observados, gobernados y auditados.",
+  "title": "Identidad y acceso",
+  "subtitle": "Quién puede iniciar sesión, qué puede hacer y cómo lo demuestra.",
   "sections": "Secciones de identidad",
   "groups": {
     "people": "Personas",
@@ -84,7 +84,7 @@
       "webauthn": "NIST SP 800-63B-4 (nivel de garantía del autenticador)",
       "certManager": "cert-manager (CNCF)",
       "pqc": "NIST SP 800-57 Part 1 r6 (gestión de claves)",
-      "wifReference": "Referencia WIF de Anthropic",
+      "wifReference": "Referencia de identidad de carga de trabajo de Anthropic",
       "workloadIdentity": "Workload Identity Federation de Anthropic",
       "externalKeys": "External Keys (CMEK) de Anthropic",
       "workspaceUpdate": "Residencia de workspace de Anthropic"
@@ -128,6 +128,7 @@
     "title": "Aprovisionamiento SCIM 2.0",
     "description": "Aprovisionamiento entrante de usuarios y grupos. Estado de solo lectura del proveedor de servicio, los usuarios sincronizados y la evidencia de baja.",
     "seamWhat": "La configuración del proveedor de servicio SCIM",
+    "businessOnly": "El servidor SCIM entrante requiere Business. Quita a una persona de la organización en Personas.",
     "patch": "PATCH",
     "filter": "Filtro",
     "filterMax": "Soportado (máx. {{n}})",
@@ -318,7 +319,7 @@
     "loadFailed": "No se pudo leer este ajuste. Recarga la página para volver a intentarlo.",
     "note": "Para exigir una passkey, inicia sesión aquí con tu passkey primero. Para exigir un código del autenticador, inicia sesión con tu código primero. Para desactivarla o rebajarla, supera primero la comprobación actual. Un cambio se aplica en pocos segundos en todos los servidores.",
     "refused": {
-      "passkey_not_enrolled": "Añade primero una passkey a tu cuenta (Identidad y NHI > Passkeys) y luego actívala.",
+      "passkey_not_enrolled": "Añade primero una passkey a tu cuenta (Identidad y acceso > Passkeys) y luego actívala.",
       "totp_sign_in_required": "Configura una app de autenticación e inicia sesión con su código primero; luego actívala."
     }
   },

@@ -1,4 +1,35 @@
 {
+  "wiki": {
+    "title": "Wiki",
+    "create": "Wiki erstellen",
+    "created": "Wiki erstellt",
+    "noWiki": "Dieser Ordner enthält kein Wiki.",
+    "loading": "Wiki wird geladen…",
+    "ingest": "Einlesen",
+    "ask": "Fragen",
+    "lint": "Prüfen",
+    "question": "Frage",
+    "source": "Quelle",
+    "chooseSource": "Eine Quelle unter raw/ wählen",
+    "upload": "Quelle hochladen",
+    "raw": "Zurück zu raw/",
+    "tool": "KI-Werkzeug",
+    "chooseTool": "Ein KI-Werkzeug wählen",
+    "needTool": "Melden Sie ein KI-Werkzeug an, um das Wiki zu nutzen.",
+    "tools": "KI-Werkzeuge",
+    "ingestSource": "Quelle einlesen",
+    "askWiki": "Wiki fragen",
+    "started": "Wiki-Sitzung gestartet",
+    "openSession": "Sitzung öffnen",
+    "index": "Index",
+    "page": "Wiki-Seite",
+    "recent": "Letzte Aktivitäten",
+    "noEntries": "Noch keine Einträge.",
+    "truncated": "Datei nur teilweise gelesen. Erhöhen Sie das Leselimit des Ordners, um die vollständige Datei zu sehen.",
+    "notText": "Diese Datei ist kein UTF-8-Markdown.",
+    "working": "Wird verarbeitet…",
+    "tooLarge": "Die Quelle überschreitet das Upload-Limit des Ordners. Wählen Sie eine kleinere Datei."
+  },
   "listTruncation": {
     "label": "{{n}} Vorlagen geladen; es gibt weitere",
     "hint": "Für diesen Start können nur geladene Vorlagen gewählt werden. Eine fehlende Vorlage kann auf einer späteren Seite liegen."
@@ -90,6 +121,13 @@
     "hint": "Wird entfernt, wenn der Branch gemergt und der Worktree sauber ist. Anhaken, um nicht gemergte oder nicht committete Arbeit zu verwerfen."
   },
   "create": {
+    "fastMode": "Schnellmodus",
+    "serviceTier": "Servicestufe",
+    "speedOn": "Ein",
+    "speedOff": "Aus",
+    "speedUnavailable": "Die Geschwindigkeitsoptionen haben sich geändert. Verwende den Werkzeugstandard oder wähle ein anderes Modell.",
+    "speedDefault": "Werkzeugstandard verwenden",
+    "speedLoadFailed": "Die Geschwindigkeitsoptionen konnten nicht geladen werden.",
     "title": "Neue Sitzung",
     "titleTool": "Neue {{tool}}-Sitzung",
     "description": "Sagen Sie, was zuerst zu tun ist. Alle weiteren Startoptionen stehen unter Erweiterte Optionen.",
@@ -109,7 +147,7 @@
     "worktreeHint": "Startet einen neuen Branch in einem eigenen Worktree, damit Sitzungen im selben Repository keine Dateien teilen. Der Ordner muss der oberste Ordner des Repositorys sein.",
     "worktreeFrom": "Startet bei",
     "isolation": "Isolation",
-    "isolationNativeOnly": "In dieser Version ist nur nativ verkabelt; Container/Sandbox werden abgelehnt.",
+    "isolationContainerHint": "Container führt die Sitzung mit Podman oder Docker auf diesem Server aus. Eine Sitzung mit einem Provider aus „Provider“ braucht native.",
     "envAllow": "Host-Umgebung weiterleiten (Namen)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Zulassungsliste der NAMEN von Host-Umgebungsvariablen, die durchgereicht werden (Werte werden niemals gesendet).",
@@ -135,7 +173,7 @@
       "required": "Ein Orchestrierungsprofil erfordert eine separat authentifizierte Agentenidentität."
     },
     "blocked": {
-      "profilesForbidden": "Ihre Rolle kann keine Provider-Profile lesen (sessions:profile:read), daher kann hier keine Sitzung starten.",
+      "profilesForbidden": "Ihre Rolle kann keine Provider-Profile lesen, daher kann hier keine Sitzung starten.",
       "profilesFailed": "Die Provider-Profile konnten nicht gelesen werden.",
       "profilesLoading": "Provider-Profile werden gelesen…",
       "noProfile": "Noch kein Provider-Profil. Fügen Sie zuerst einen Anbieter hinzu.",
@@ -234,6 +272,7 @@
       "notLive": "Starten Sie die Sitzung oder setzen Sie sie fort, um zu senden.",
       "approval": "Der Start wartet auf eine Freigabe; Senden ist möglich, sobald er freigegeben ist.",
       "sending": "Wird gesendet… Warten Sie, bis die Sitzung es annimmt.",
+      "uploading": "Das Bild wird gespeichert… Senden geht, sobald es angehängt ist.",
       "empty": "Geben Sie etwas zum Senden ein."
     }
   },
@@ -433,14 +472,14 @@
     "empty": {
       "title": "Keine Anbieterprofile",
       "registerHint": "Registrieren Sie ein Profil, um eine Werkzeuginstallation hinzuzufügen, die auf diesem Server bereits existiert. Sitzungen laufen dann mit ihren Einstellungen und ihrer Anmeldung.",
-      "noWrite": "Zum Hinzufügen eines Profils ist die Berechtigung sessions:profile:write nötig, die Ihre Rolle nicht enthält."
+      "noWrite": "Ihre Rolle kann keine Profile hinzufügen."
     },
     "filteredEmpty": {
       "title": "Keine Profile entsprechen diesem Zustand",
       "description": "Es werden nur Profile im Zustand „{{state}}“ aufgeführt. Zeigen Sie alle Zustände an, um diesen Filter zu entfernen.",
       "clear": "Alle Zustände anzeigen"
     },
-    "noRead": "Anbieterprofile werden nicht angezeigt: Ihre Rolle enthält sessions:profile:read nicht.",
+    "noRead": "Anbieterprofile werden nicht angezeigt: Ihre Rolle kann sie nicht lesen.",
     "listTruncation": {
       "label": "{{n}} Profile geladen; es gibt weitere",
       "hint": "Hier können nur die geladenen Profile ausgewählt werden. Ein nicht angezeigtes Profil kann jenseits dieser Seite existieren."
@@ -539,7 +578,7 @@
         "title": "Keine Quellenbindungen",
         "description": "Binden Sie eine konfigurierte Quelle an ein Profil, um ihm die beobachteten Sitzungen zuzuordnen."
       },
-      "noRead": "Quellenbindungen werden nicht angezeigt: Ihre Rolle enthält sessions:profile-binding:read nicht.",
+      "noRead": "Quellenbindungen werden nicht angezeigt: Ihre Rolle kann sie nicht lesen.",
       "notBindable": "Nur ein aktives Profil auf diesem Server kann gebunden werden.",
       "revoke": {
         "title": "Bindung widerrufen",
@@ -572,7 +611,7 @@
         "title": "Details der Bindung",
         "description": "Aktuelle Bindungsdetails für den ausgewählten Mandanten. Aktualisieren Sie, um Änderungen zu prüfen.",
         "loading": "Bindung wird von der Engine gelesen…",
-        "forbidden": "Die Engine hat diese Bindung Ihrem Konto soeben verweigert (sessions:profile-binding:read im aktiven Mandanten); das hat die Engine jetzt entschieden, nicht eine zwischengespeicherte Antwort. Nichts davon wird angezeigt.",
+        "forbidden": "Ihre Rolle kann diese Bindung in dieser Organisation nicht lesen; die Engine hat es soeben geprüft. Nichts davon wird angezeigt.",
         "missing": "Die Engine hält derzeit keine Bindung mit dieser Referenz für den aktiven Mandanten. Sie wurde möglicherweise entfernt, seit die Liste gelesen wurde; aktualisieren Sie die Liste, um die aktuellen Zeilen zu sehen.",
         "error": "Die Bindung konnte nicht gelesen werden: {{message}}",
         "ended": "Das Lesen wurde beendet, weil sich Ihre Berechtigung, Ihr Mandant oder Ihre Sitzung geändert hat. Öffnen Sie Details erneut, um unter der aktuellen Berechtigung zu lesen.",
@@ -676,7 +715,7 @@
     "empty": {
       "title": "Keine Anbieterkonten",
       "adoptHint": "Erstellen Sie ein Konto, oder benennen Sie ein vorhandenes Profil als Konto.",
-      "noWrite": "Zum Benennen eines Profils als Konto ist die Berechtigung sessions:account:write nötig, die Ihre Rolle nicht enthält."
+      "noWrite": "Ihre Rolle kann kein Profil als Konto benennen."
     },
     "more": "Bisher angezeigt: {{shown}}. Es gibt weitere Konten; laden Sie mehr, um sie zu sehen.",
     "moreFailed": "Die nächste Seite der Konten konnte nicht gelesen werden. Die angezeigten Konten sind nicht die vollständige Liste.",
@@ -794,7 +833,7 @@
     "title": "Lokale Startanforderungen",
     "loading": "Lokale Anforderungen des gewählten Profils werden geprüft…",
     "unavailable": "Anforderungen konnten nicht gelesen werden. Das ist keine Startentscheidung.",
-    "forbidden": "Ihre Rolle darf die Anforderungen dieses Profils nicht lesen (sessions:profile:read).",
+    "forbidden": "Ihre Rolle darf die Anforderungen dieses Profils nicht lesen.",
     "notFound": "Dieses Profil ist im aktuellen Mandanten nicht verfügbar. Das vorherige Ergebnis wurde verworfen.",
     "unauthenticated": "Die Sitzung ist nicht mehr authentifiziert. Das vorherige Ergebnis wurde verworfen.",
     "conflict": "Das Profil hat sich während der Prüfung geändert. Die Beobachtung wurde verworfen.",
@@ -805,10 +844,10 @@
     "requestHintReady": "Eine Startanforderung durchläuft weiterhin Autorisierung, Mint und Prozessstart. Das belegt keine Anbieteranmeldung.",
     "requestHintUnknown": "Die Prüfung ist unvollständig. Sie können den Start trotzdem anfordern; der Server prüft alles erneut. Das ist kein „bereit“.",
     "requestBlocked": "Dieses Profil kann hier keine Sitzung starten. Seine Anforderungen unter Erweiterte Optionen sagen, warum.",
-    "noWrite": "Zum Starten einer Sitzung ist die Berechtigung sessions:run:write nötig.",
+    "noWrite": "Ihre Rolle kann keine Sitzungen starten.",
     "waitingPreview": "Die Vorlage wird gelesen, bevor das Profil geprüft wird…",
     "providerAuth": "Die Anbieteranmeldung wird hier nicht beobachtet. Ein gültiges Home oder Programm ist kein authentifiziertes Konto.",
-    "launchAuth": "Die Startautorisierung wird beim Senden entschieden und braucht sessions:run:write.",
+    "launchAuth": "Ob Ihre Rolle diese Sitzung starten darf, wird beim Senden geprüft.",
     "remoteControl": "Nur Lebenszyklus — die Unterhaltung bleibt beim Anbieter; es gibt keine gebrückte Turn-Konsole.",
     "managedInjectionUnused": "Dieser Transport wendet die gewählte verwaltete Injektion nicht an. Er stellt kein Inferenz-Secret aus und belegt keine Kontoauthentifizierung.",
     "codexProtocol": "Codex-App-Server-Protokoll; Eingabe ist ein Textzug, nicht Claude-NDJSON.",
@@ -841,12 +880,12 @@
       "program": "Programm",
       "homes": "Homes",
       "auth_source": "Authentifizierungsquelle",
-      "credential_source": "Credencial-Verdrahtung",
+      "credential_source": "Quelle der Anmeldedaten",
       "runtime_credentials": "Laufzeit-Anmeldedaten"
     },
     "code": {
       "profile_active": "Das Profil ist aktiv.",
-      "profile_disabled": "Das Profil ist deaktiviert. Aktivieren erfordert sessions:profile:write; ein stillgelegtes Profil kann nicht reaktiviert werden.",
+      "profile_disabled": "Das Profil ist deaktiviert. Zum Aktivieren braucht es eine Rolle, die Profile ändern darf; ein stillgelegtes Profil kann nicht reaktiviert werden.",
       "profile_retired": "Das Profil ist stillgelegt und kann nicht für einen neuen Start verwendet werden.",
       "environment_local": "Dieses Profil gehört zu diesem Knoten.",
       "other_environment": "Dieses Profil gehört zu einem anderen Server. Wählen Sie ein Profil auf diesem Server, oder nutzen Sie den Server, der es verwaltet. Sitzungen werden nie automatisch auf einem anderen Server gestartet.",
@@ -856,8 +895,8 @@
       "transport_unsupported": "Dieser Transport ist kein Vertrag des gewählten Treibers.",
       "runner_ready": "Der Sitzungs-Runner kann geprüft werden.",
       "runner_not_configured": "Der Sitzungs-Runner ist in dieser Runtime nicht konfiguriert.",
-      "isolation_unsupported": "Der native Runner kann diese Isolierung nicht bereitstellen. Behalten Sie native bei oder verwenden Sie einen Runner, der die angeforderte Eindämmung nachweist.",
-      "runner_inspection_unavailable": "Der verdrahtete Runner kann ohne Start nicht geprüft werden. Das ist keine fehlende Installation.",
+      "isolation_unsupported": "Dieser Server kann diese Isolierung nicht bereitstellen. Behalten Sie native bei oder installieren Sie Podman oder Docker auf dem Server für Container.",
+      "runner_inspection_unavailable": "Der konfigurierte Runner kann ohne Start nicht geprüft werden. Das ist keine fehlende Installation.",
       "program_present": "Das aufgelöste Programm ist vorhanden und für diese Identität ausführbar.",
       "program_missing": "Das aufgelöste Programm ist nicht vorhanden. Konfigurieren Sie die offizielle CLI über das bestehende Verfahren; für Claude kann das OLIVARES_SESSION_RUNTIME_CLAUDE_BIN nennen. Dieser Lesevorgang installiert nichts.",
       "program_not_executable": "Das aufgelöste Programm ist für diese Identität nicht ausführbar.",
@@ -869,15 +908,15 @@
       "auth_source_legacy_claude": "Die autorisierte Quelle ist der historische Claude-Credencial-Pfad.",
       "auth_source_required": "Dieser Treiber braucht eine explizite Authentifizierungsquelle: account-home oder verwaltete Injektion. Diese Wahl erfolgt am Profil, nicht durch diese Prüfung.",
       "managed_injection_not_applied_for_transport": "Verwaltete Injektion ist gewählt, aber dieser Transport wendet sie nicht an.",
-      "claude_credential_source_configured": "Die Claude-Inferenz-Credencial-Quelle ist verdrahtet.",
-      "claude_credential_source_not_configured": "Die Claude-Inferenz-Credencial-Quelle ist nicht verdrahtet. Konfigurieren Sie OLIVARES_SESSION_RUNTIME_WIF oder OLIVARES_SESSION_RUNTIME_TOKEN_FILE. Nur Namen, niemals Werte.",
-      "provider_credential_adapter_configured": "Der Credencial-Adapter dieses Treibers ist verdrahtet.",
-      "provider_credential_adapter_not_configured": "Der gesteuerte Credencial-Adapter dieses Treibers ist nicht verdrahtet. Verwenden Sie nicht den Bearer eines anderen Anbieters und fallen Sie nicht auf account-home zurück.",
+      "claude_credential_source_configured": "Die Anmeldedaten-Quelle für die Claude-Inferenz ist konfiguriert.",
+      "claude_credential_source_not_configured": "Hier gibt es keine Anmeldedaten für Claude Code: Melden Sie es mit seinem eigenen Login unter KI-Werkzeuge an oder verwenden Sie einen unter Anbieter gespeicherten API-Schlüssel. Eine Installation mit eigenem Inferenz-Gateway setzt OLIVARES_SESSION_RUNTIME_WIF oder OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
+      "provider_credential_adapter_configured": "Der Anmeldedaten-Adapter dieses Treibers ist konfiguriert.",
+      "provider_credential_adapter_not_configured": "Der gesteuerte Anmeldedaten-Adapter dieses Treibers ist nicht konfiguriert. Verwenden Sie nicht den Bearer eines anderen Anbieters und fallen Sie nicht auf account-home zurück.",
       "credential_source_not_injected": "Diese Kombination injiziert keine Inferenz-Credencial.",
       "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
-      "runtime_credentials_wired": "Die work/K3-Runtime-Anmeldedaten sind verdrahtet.",
+      "runtime_credentials_wired": "Die work/K3-Runtime-Anmeldedaten sind konfiguriert.",
       "runtime_credentials_not_requested": "Diese Zusammensetzung fordert keine work/K3-Runtime-Anmeldedaten an.",
-      "runtime_credential_wiring_incomplete": "Die Verdrahtung der work/K3-Runtime-Anmeldedaten ist unvollständig. Ein Operator prüft diese Zusammensetzung; dieser Lesevorgang fordert keine kommerziellen Anmeldedaten an.",
+      "runtime_credential_wiring_incomplete": "Die Einrichtung der work/K3-Runtime-Anmeldedaten ist unvollständig. Ein Operator prüft diese Zusammensetzung; dieser Lesevorgang fordert keine kommerziellen Anmeldedaten an.",
       "runtime_readiness_unavailable": "Die work/K3-Runtime-Readiness konnte nicht beobachtet werden.",
       "inspection_unavailable": "Diese Anforderung konnte nicht geprüft werden. Lesen Sie erneut oder bitten Sie um eine Umgebungsprüfung. Unsicherheit ist nicht „nicht installiert“.",
       "not_checked_in_this_environment": "Diese Anforderung wurde auf diesem Knoten nicht geprüft, weil das Profil woanders hingehört. Das ist nicht „fehlende Homes“."
@@ -890,9 +929,9 @@
       "configure_session_runner": "Konfigurieren Sie den Sitzungs-Runner.",
       "configure_provider_program": "Konfigurieren Sie die offizielle Anbieter-CLI in dieser Runtime.",
       "review_profile_homes": "Prüfen Sie die gespeicherten Homes über die Administrations-Konfigurationslesung.",
-      "authorize_auth_source": "Autorisieren Sie account-home oder verwaltete Injektion am Profil (sessions:profile:write).",
-      "configure_claude_credential_source": "Verdrahten Sie OLIVARES_SESSION_RUNTIME_WIF oder OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
-      "configure_provider_credential_adapter": "Verdrahten Sie den gesteuerten Credencial-Adapter dieses Treibers.",
+      "authorize_auth_source": "Autorisieren Sie account-home oder verwaltete Injektion am Profil.",
+      "configure_claude_credential_source": "Melden Sie Claude Code unter KI-Werkzeuge an oder verwenden Sie einen API-Schlüssel aus Anbieter.",
+      "configure_provider_credential_adapter": "Richten Sie den Anmeldedaten-Adapter dieses Werkzeugs ein.",
       "review_runtime_credential_composition": "Prüfen Sie die work/K3-Runtime-Anmeldedaten-Zusammensetzung.",
       "select_supported_selection": "Wählen Sie einen Transport und eine Isolierung, die diese Runtime nachweist.",
       "retry_inspection": "Lesen Sie die Anforderungen erneut."
@@ -930,7 +969,7 @@
     "mismatch": "Die Antwort gehörte zu einer anderen Profilversion, einem anderen Treiber oder einer anderen Umgebung und wurde verworfen.",
     "conflict": "Das Profil hat sich während der Beobachtung geändert. Die Beobachtung wurde verworfen.",
     "unavailable": "Die Beobachtung der Host-Werkzeuge konnte nicht gelesen werden. Das ist kein Befund über das Werkzeug.",
-    "forbidden": "Ihre Rolle darf die Host-Werkzeug-Beobachtung dieses Profils nicht lesen (sessions:profile:read).",
+    "forbidden": "Ihre Rolle darf nicht lesen, welche Werkzeuge der Host dieses Profils hat.",
     "notFound": "Dieses Profil ist im aktuellen Mandanten nicht verfügbar. Frühere Beobachtungen wurden verworfen.",
     "unauthenticated": "Die Sitzung ist nicht mehr authentifiziert. Frühere Beobachtungen wurden verworfen.",
     "state": {
@@ -963,5 +1002,23 @@
       "different": "Nicht das konfigurierte Programm",
       "unknown": "Vergleich mit dem konfigurierten Programm unbekannt"
     }
+  },
+  "attach": {
+    "add": "Bild anhängen",
+    "tray": "Angehängte Bilder",
+    "remove": "{{name}} entfernen",
+    "uploading": "Wird gespeichert…",
+    "pasted": "Eingefügtes Bild",
+    "failed": "{{name}} wurde nicht angehängt: {{reason}}",
+    "notImage": "es ist kein PNG-, JPEG-, WebP- oder GIF-Bild",
+    "tooLarge": "es ist {{size}} MB groß, das Limit ist {{limit}} MB",
+    "tooMany": "eine Nachricht nimmt bis zu {{count}} Bilder auf",
+    "notStored": "das Bild konnte nicht gespeichert werden",
+    "sent": "Angehängte Bilder",
+    "imageN": "Bild {{n}}",
+    "open": "{{name}} in voller Größe öffnen",
+    "fullSize": "Das angehängte Bild in voller Größe",
+    "unavailable": "Bild nicht verfügbar",
+    "movedOn": "Sie haben die Sitzung gewechselt, bevor es gespeichert war"
   }
 }

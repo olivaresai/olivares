@@ -25,19 +25,54 @@ unset _olivares_git_env
 # Use the shared build flags from scripts/lib/build-bin.sh.
 . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/build-bin.sh"
 . "$ROOT/scripts/lib/select-console-modules.sh"
+# A view whose capture cannot be published yet keeps its published image and is listed in
+# scripts/docs-captures-held.txt (`id reason`, one per line). Every run leaves those views out, so the one
+# command never overwrites a held image; delete the line once the view passes the shutter checks.
+_held="$(sed -E 's/[[:space:]]*#.*$//; s/^[[:space:]]+//; /^$/d' "$ROOT/scripts/docs-captures-held.txt" | awk '{ print $1 }' | paste -sd'|' -)"
+[ -z "$_held" ] || DOCS_CAPTURE_SKIP="$_held${DOCS_CAPTURE_SKIP:+|$DOCS_CAPTURE_SKIP}"
+# Fail before any engine starts when a view to leave out does not exist: a typo would otherwise be reported
+# as "left out" while the view is still captured.
+if [ -n "${DOCS_CAPTURE_SKIP:-}" ]; then
+  [[ "$DOCS_CAPTURE_SKIP" =~ ^[A-Za-z0-9-]+(\|[A-Za-z0-9-]+)*$ ]] || { echo "ERROR: DOCS_CAPTURE_SKIP must be ids joined with |" >&2; exit 2; }
+  IFS='|' read -ra _skip_ids <<<"$DOCS_CAPTURE_SKIP"
+  for _id in "${_skip_ids[@]}"; do
+    grep -qE "(^|[^_A-Za-z])id: '$_id'," "$ROOT/web/e2e/docs-captures.spec.ts" || { echo "ERROR: DOCS_CAPTURE_SKIP names an unknown view: $_id" >&2; exit 2; }
+  done
+fi
 PORT="${E2E_PORT:-8466}"
 GRPC_PORT="$((PORT + 1))"
-DATA="$(mktemp -d)"
-BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
-# Disposable host tree for the governed sessions.workspace shown by video scene 10. The harness
-# owns both its creation and cleanup; the API seeder only registers it.
-WS_ROOT="$(mktemp -d)"
-
+# A folder the capture shows is named demo- and six lowercase letters: a mktemp suffix carries digits and capitals,
+# which the shutter check reads as a name only this harness knows.
+demo_dir() {
+  local d
+  for _ in $(seq 1 20); do
+    # head closes the pipe once it has six letters; under pipefail tr's SIGPIPE must not end the script.
+    d="${TMPDIR:-/tmp}/demo-$(LC_ALL=C tr -dc 'a-z' </dev/urandom | head -c 6 || true)"
+    mkdir -m 700 "$d" 2>/dev/null && { printf '%s\n' "$d"; return 0; }
+  done
+  echo "docs-captures: cannot create a demo directory under ${TMPDIR:-/tmp}" >&2
+  return 1
+}
+# The trap is installed before the first directory exists: a later demo_dir that fails must not leak the earlier ones.
+DATA="" WS_PARENT="" DATASET_ROOT=""
 cleanup() {
   [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true
-  rm -rf "$DATA" "$WS_ROOT" ${EXEC_TMP:+"$EXEC_TMP"}
+  [ -n "${OLLAMA_PID:-}" ] && kill "$OLLAMA_PID" 2>/dev/null || true
+  for d in "$DATA" "$WS_PARENT" "$DATASET_ROOT" ${EXEC_TMP:+"$EXEC_TMP"}; do
+    [ -z "$d" ] || rm -rf "$d"
+  done
 }
 trap cleanup EXIT
+DATA="$(demo_dir)"
+BIN="${OLIVARES_BIN:-$ROOT/bin/olivares}"
+# Disposable host tree for the governed sessions.workspace shown by video scene 10. The harness
+# owns both its creation and cleanup; the API seeder only registers it. Session cards show the folder's
+# own name, and the workspace sheet its whole path, so neither is a bare mktemp name.
+WS_PARENT="$(demo_dir)"
+WS_ROOT="$WS_PARENT/acme-platform"
+
+# The demo dataset's repositories and tool homes live outside the engine's data directory.
+DATASET_ROOT="$(demo_dir)"
 
 # The observed-session/run join is a three-file contract. Check it before paying for the web and Go
 # builds so a renamed demo session fails at its source rather than much later as a missing tab.
@@ -80,7 +115,7 @@ else
   exit 2
 fi
 
-# This synthetic token is valid only with demo-agent.sh, which makes no provider calls.
+# This synthetic token is valid only with the demo tools, which make no provider calls.
 # A real runtime needs a real credential; this fixture cannot qualify vendor
 # authentication.
 printf 'demo-harness-inference-token-not-a-real-credential\n' >"$DATA/demo-inference-token"
@@ -125,11 +160,42 @@ escribe("cursor-keyring.json", {
 PYCUSTODIA
 
 # Use only the deterministic fixture runtime; admission, lifecycle and workspace confinement stay active.
+# The four AI tools of the demo estate: self-contained executables (a confined session child can read only
+# its own program) that speak each tool's wire protocol and answer from recorded transcripts, and a loopback
+# endpoint for the local model. No vendor account and no network.
+# Built where connector plugins already run: a temporary directory may be mounted noexec.
+DEMO_TOOLS="${EXEC_TMP:-$DATA}/demo-tools"
+python3 -I "$ROOT/scripts/demo-tools/build-demo-tools.py" "$DEMO_TOOLS"
+OLLAMA_PORT="$((PORT + 40))"
+python3 -I "$ROOT/scripts/demo-tools/demo-ollama.py" "$OLLAMA_PORT" >"$DATA/demo-ollama.log" 2>&1 &
+OLLAMA_PID=$!
+# The endpoint must be OURS: another server on the port would satisfy the engine's probe with other models. Our
+# process writes its line only after it bound the port, so that line, and not an answer, proves the ownership.
+for _ in $(seq 1 100); do
+  grep -q "^demo-ollama: listening on 127.0.0.1:$OLLAMA_PORT\$" "$DATA/demo-ollama.log" 2>/dev/null && break
+  kill -0 "$OLLAMA_PID" 2>/dev/null || break
+  sleep 0.1
+done
+if ! grep -q "^demo-ollama: listening on 127.0.0.1:$OLLAMA_PORT\$" "$DATA/demo-ollama.log" 2>/dev/null \
+    || ! kill -0 "$OLLAMA_PID" 2>/dev/null; then
+  echo "docs-captures: ⛔ the local model endpoint could not start on port $OLLAMA_PORT:" >&2
+  cat "$DATA/demo-ollama.log" >&2
+  exit 2
+fi
+
 # Disable WIF for this engine so inherited configuration cannot replace the synthetic token issuer.
 # Both boots use the same activation and file-based custody settings.
 # Keep & on the engine command so $! identifies the engine.
+# The engine runs with a minimal PATH and an empty HOME: a capture must not show the tools or the paths of the
+# machine that took it, and a clean install is what the guides describe.
+mkdir -p "$DATA/home"
 arranca_motor() {
-  OLIVARES_SESSION_RUNTIME_CLAUDE_BIN="$ROOT/scripts/demo-agent.sh" \
+  PATH=/usr/local/bin:/usr/bin:/bin \
+  HOME="$DATA/home" \
+  OLIVARES_SESSION_RUNTIME_CLAUDE_BIN="$DEMO_TOOLS/claude" \
+  OLIVARES_SESSION_RUNTIME_CODEX_BIN="$DEMO_TOOLS/codex" \
+  OLIVARES_SESSION_RUNTIME_GEMINI_BIN="$DEMO_TOOLS/gemini" \
+  OLIVARES_SESSION_RUNTIME_OPENCODE_BIN="$DEMO_TOOLS/opencode" \
   OLIVARES_SESSION_RUNTIME_TOKEN_FILE="$DATA/demo-inference-token" \
   OLIVARES_SESSION_RUNTIME_WIF=0 \
   OLIVARES_COMMUNICATION_ACTIVATION=on \
@@ -160,6 +226,18 @@ if [ "$ARRIBA" -ne 1 ]; then
   exit 2
 fi
 
+# Select the console modules while the first engine is up. The ceremony below stops it anyway, so the engine
+# that serves the captures starts with them selected. A module switched on in a running engine is not wired to
+# the sessions module: a skills import answers 503 (measured on the released 0.1 image) and
+# the communications evidence is unavailable until a restart. This order needs no restart of its own.
+TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
+  -H 'Content-Type: application/json' --data-binary @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')"
+TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["tenant"])')"
+[ -n "$TENANT" ] || { echo "ERROR: could not resolve the demo tenant on the first engine" >&2; exit 1; }
+enable_console_modules "http://127.0.0.1:$PORT" accessmap adoption catalog claude-agents compliance deploy evals finops gitpublish health inferenceproxy inventory knowledge models notify observability orchestration posture recording redteam reporting sandbox security sessions skills voice
+
 echo "==> K3 activation ceremony on the STOPPED store"
 kill "$PID" 2>/dev/null || true
 PARADO=0
@@ -182,6 +260,8 @@ if ! OLIVARES_COMMUNICATION_ACTIVATION=on \
   OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE="$K3_CUSTODY/content-keyring.json" \
   OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE="$K3_CUSTODY/cursor-keyring.json" \
   OLIVARES_KEY_WRAP= \
+  PATH=/usr/local/bin:/usr/bin:/bin \
+  HOME="$DATA/home" \
   TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
   "$BIN" db activate-directory-writer --data-dir "$DATA" --expected-generation 1 \
   --writers-upgraded --writers-drained --actor docs-captures \
@@ -207,6 +287,11 @@ if [ "$ARRIBA" -ne 1 ]; then
   tail -20 "$DATA/engine.log" >&2 2>/dev/null || echo "  (no log)" >&2
   exit 2
 fi
+# The executable that really serves the captures, read from the running process and not from the path that was asked for.
+DOCS_CAPTURE_BINARY_SHA256="$(sha256sum "/proc/$PID/exe" 2>/dev/null | cut -d' ' -f1)" || true
+[[ "$DOCS_CAPTURE_BINARY_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "docs-captures: cannot read the sha256 of the running engine" >&2; exit 2; }
+export DOCS_CAPTURE_BINARY_SHA256
+echo "==> Engine executable sha256 $DOCS_CAPTURE_BINARY_SHA256"
 
 TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "http://127.0.0.1:$PORT/v1/auth/login" \
   -H 'Content-Type: application/json' \
@@ -235,8 +320,6 @@ case "$K3_PROBE" in
   ;;
 esac
 
-# Enable the optional shared readers before connector/work seeding and captures.
-enable_console_modules "http://127.0.0.1:$PORT" accessmap adoption catalog claude-agents compliance deploy evals finops gitpublish health inferenceproxy inventory knowledge models notify observability orchestration posture recording redteam reporting sandbox security sessions skills voice
 
 # Seed the three guide connectors after resolving the tenant and before capturing their
 # views.
@@ -283,8 +366,9 @@ OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-demo-work.py" \
 # de la llamada, y aqui NO hay sitio de llamada.
 #
 echo "==> Filling the estate to the per-surface target"
+# --prefijo: the rows are on screen in the lists; a name only this harness knows would date and mark the image.
 OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-estate-volume.py" \
-  "http://127.0.0.1:$PORT" - "$TENANT" || {
+  "http://127.0.0.1:$PORT" - "$TENANT" --prefijo acme || {
   echo "    (some surfaces remain below their targets; the distribution above identifies them)"
 }
 
@@ -332,7 +416,7 @@ OTLP_PORT="$((PORT + 30))"
 echo "==> Registering the claude connector for the OTLP plane on 127.0.0.1:$OTLP_PORT"
 # Use the guide's claude-code-prod row for OTLP too; only one source may own
 # olivares.claude.
-if "$BIN" sources set --name claude-code-prod --kind claude --tenant "$TENANT" \
+if PATH=/usr/local/bin:/usr/bin:/bin HOME="$DATA/home" "$BIN" sources set --name claude-code-prod --kind claude --tenant "$TENANT" \
   --actor "docs-captures" --reason "seed the adoption plane for documentation captures" \
   --data-dir "$DATA" \
   --config "http_addr=127.0.0.1:$OTLP_PORT" --config enable_grpc=false \
@@ -357,9 +441,13 @@ if "$BIN" sources set --name claude-code-prod --kind claude --tenant "$TENANT" \
   if [ "$OTLP_UP" = "1" ]; then
     echo "==> Seeding the adoption plane through the connector receiver"
     # resource_labels must be set at registration so team labels reach adoption data.
+    # Every session id the receiver sees is also a row of the Sessions list, with one event
+    # and no name, so the volume is a team's, not a fleet's: four teams of two sessions
+    # (the default of six teams of eight put 48 identical rows on the Sessions and
+    # AgentOps views, #2268).
     OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-adoption-otlp.py" \
       "http://127.0.0.1:$PORT" - "$TENANT" \
-      --otlp "http://127.0.0.1:$OTLP_PORT/v1/metrics" || {
+      --otlp "http://127.0.0.1:$OTLP_PORT/v1/metrics" --equipos 4 --por-equipo 2 || {
       echo "    (adoption seeding failed; captures will show zero adoption)"
     }
   else
@@ -381,7 +469,9 @@ cleanup_setup() {
 trap 'cleanup; cleanup_setup' EXIT
 
 echo "==> Booting a SECOND engine, UNSEEDED, on 127.0.0.1:$SETUP_PORT (first-boot wizard)"
-"$BIN" serve --insecure --listen "127.0.0.1:$SETUP_PORT" \
+mkdir -p "$SETUP_DATA/home"
+PATH=/usr/local/bin:/usr/bin:/bin HOME="$SETUP_DATA/home" \
+  "$BIN" serve --insecure --listen "127.0.0.1:$SETUP_PORT" \
   --grpc-listen "127.0.0.1:$((SETUP_PORT + 1))" --data-dir "$SETUP_DATA" >"$SETUP_DATA/engine.log" 2>&1 &
 SETUP_PID=$!
 # Check that the owned engine remains alive so another service cannot satisfy readiness.
@@ -412,37 +502,18 @@ else
   cat "$SETUP_DATA/engine.log" >&2 || true
 fi
 
-# Launch five sessions through the deterministic runtime; launched rows need linked
-# runs.
-# Resolve the recording-session ID from the API and omit its viewer when none exists.
-echo "==> Launching governed sessions so /sessions is a table, not one row"
-WS_REF="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/m/sessions/workspaces" \
-  -H @- -H "X-Olivares-Tenant: $TENANT" \
-  | python3 -c 'import sys,json;i=(json.load(sys.stdin).get("items") or []);print(i[0].get("workspace_ref","") if i else "")' 2>/dev/null || true)"
-# Receipts live outside $DATA so cleanup cannot erase the refusal or the five
-# corroborated identities. playwright-report/ is gitignored; callers may override.
-SEED_RECEIPTS="${DOCS_CAPTURE_SEED_RECEIPTS:-$ROOT/web/playwright-report/docs-session-seed}"
-mkdir -p "$SEED_RECEIPTS"
-if [ -z "$WS_REF" ]; then
-  echo "docs-captures: ⛔ no workspace ref: refusing the capture phase (the five governed sessions were not launched)" >&2
-  printf 'workspace_ref=\nrefused=missing-workspace\n' >"$SEED_RECEIPTS/refused.txt"
-  exit 1
-fi
-# OLIVARES_TOKEN is prefixed for this helper only (not exported to Playwright).
-# The helper registers a disposable profile, launches through the real CLI with
-# --provider-profile, and corroborates five distinct run/live/canonical identities.
-if ! OLIVARES_TOKEN="$TOKEN" python3 "$ROOT/scripts/seed-docs-capture-sessions.py" \
-    --server "http://127.0.0.1:$PORT" \
-    --tenant "$TENANT" \
-    --workspace "$WS_REF" \
-    --olivares-bin "$BIN" \
-    --scratch "$DATA/capture-profile-fixture" \
-    --receipts "$SEED_RECEIPTS"; then
-  echo "docs-captures: ⛔ governed session seed failed; refusing the capture phase" >&2
-  echo "   sanitized receipts: $SEED_RECEIPTS" >&2
+# The demo dataset: providers, profiles and accounts for every tool, git repositories as folders, templates,
+# policies, people, approvals, a skills pack and finished conversations, all through the product API.
+# Budgets are seeded only where the build serves FinOps; the seeder says so when it does not.
+echo "==> Seeding the demo dataset through the product API"
+if ! OLIVARES_TOKEN="$TOKEN" python3 -I "$ROOT/scripts/seed-demo-dataset.py" \
+    "http://127.0.0.1:$PORT" - "$TENANT" "$DATASET_ROOT" \
+    --ollama-url "http://127.0.0.1:$OLLAMA_PORT"; then
+  echo "docs-captures: ⛔ the demo dataset could not be seeded; refusing the capture phase" >&2
   exit 1
 fi
 
+# Resolve the recording-session ID from the API and omit its viewer when none exists.
 DEMO_SESSION_ID="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "http://127.0.0.1:$PORT/v1/m/recording/sessions" \
   -H @- -H "X-Olivares-Tenant: $TENANT" \
   | python3 -c 'import sys,json;d=json.load(sys.stdin);i=(d.get("items") or []);print(i[0]["id"] if i else "")' 2>/dev/null || echo "")"
@@ -467,12 +538,19 @@ SPECS=(e2e/docs-captures.spec.ts)
 if [ "$BUILD_EDITION" != community ] && [ "$GRAPH_STATUS" = 200 ]; then
   [ -f e2e/docs-captures-business.spec.ts ] || { echo 'ERROR: available Business graph requires its private capture suite' >&2; exit 1; }
 fi
+SKIP_IDS="${DOCS_CAPTURE_SKIP:-}"
+export DOCS_CAPTURE_SKIP_IDS="$SKIP_IDS" DOCS_CAPTURE_EDITION="$BUILD_EDITION"
+SKIP_ARGS=()
+if [ -n "$SKIP_IDS" ]; then
+  SKIP_ARGS=(--grep-invert "capture ($SKIP_IDS)( —| \\(|\$)")
+  echo "==> Leaving out: $SKIP_IDS"
+fi
 if [ -f e2e/docs-captures-business.spec.ts ]; then
   SPECS+=(e2e/docs-captures-business.spec.ts)
 fi
 # Playwright's request client sends Secure browser-session cookies on localhost.
 PLAYWRIGHT_BASE_URL="http://localhost:$PORT" DEMO_TENANT="$TENANT" \
-  pnpm exec playwright test "${SPECS[@]}" "$@" || RC=$?
+  pnpm exec playwright test "${SPECS[@]}" "${SKIP_ARGS[@]}" "$@" || RC=$?
 
 # Merge per-capture evidence even after a failed run so missing captures remain visible.
 echo "==> Merging evidence from each capture into manifest.json"
@@ -481,7 +559,8 @@ import glob, json, os, subprocess, time
 
 d = os.environ["DOCS_DIR"]
 tomas = []
-skipped = {}
+skipped = {i: "Excluded by DOCS_CAPTURE_SKIP"
+           for i in os.environ.get("DOCS_CAPTURE_SKIP_IDS", "").split("|") if i}
 for f in sorted(glob.glob(os.path.join(d, "*.evidence.json"))):
     with open(f, encoding="utf8") as fh:
         evidence = json.load(fh)
@@ -511,6 +590,9 @@ descabalados = sorted(k for k, v in por_vista.items() if v != {"light", "dark"})
 man = {
     "taken_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     "commit": git("rev-parse", "HEAD"),
+    "release_image": os.environ.get("DOCS_CAPTURE_IMAGE"),
+    "binary_sha256": os.environ.get("DOCS_CAPTURE_BINARY_SHA256"),
+    "edition": os.environ.get("DOCS_CAPTURE_EDITION"),
     "tree_dirty": bool(sucio),
     "views": len(por_vista),
     "captures": len(tomas),
@@ -596,6 +678,15 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
     echo "       images. Commit or clean the changes, then run it again." >&2
     exit 2
   fi
+  # Without the manifest that records where the captures come from, nothing is copied over the published images.
+  manifiesto=0
+  for art in "$SRC"/*; do
+    if [ -f "$art" ] && [ "${art##*/}" = "manifest.json" ]; then manifiesto=1; fi
+  done
+  if [ "$manifiesto" -eq 0 ]; then
+    echo "==> ⛔ NOT publishing: no manifest.json next to the captures, so their provenance is missing. Rerun the harness." >&2
+    exit 2
+  fi
   DEST="$ROOT/docs-site/public/console"
   mkdir -p "$DEST"
   # Publish current output by directory glob, excluding intermediate evidence files.
@@ -603,7 +694,6 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
   # reason stays in the manifest. Keep capture eligibility distinct from publication.
   no_publicar=""
   n=0
-  manifiesto=0
   retenidas=0
   sin_pagina=0
   # The site serves only captures that a docs page, a README or a launch post names. Every take stays in $SRC and
@@ -616,7 +706,6 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
     base="$(basename "$art")"
     case "$base" in
     *.evidence.json) continue ;;
-    manifest.json) manifiesto=1 ;;
     *.png)
       # Here-string, not a pipe: an early `grep -q` exit would SIGPIPE the writer under pipefail.
       if ! grep -qxF "$base" <<<"$referenciadas"; then
@@ -635,11 +724,6 @@ if [ "${PUBLICAR:-0}" = "1" ]; then
     cp -f "$art" "$DEST/$base"
     n=$((n + 1))
   done
-  if [ "$manifiesto" -eq 0 ]; then
-    # Refuse publication without the manifest that records source provenance.
-    echo "==> ⛔ $n artifact(s) copied WITHOUT a manifest: provenance is missing. Rerun the harness." >&2
-    exit 2
-  fi
   echo "==> PUBLISHED $n artifact(s) in docs-site/public/console/ (including the manifest)"
   [ "$retenidas" -gt 0 ] && echo "==> WITHHELD $retenidas capture(s) because their declared state is not representative: $no_publicar" >&2
   [ "$sin_pagina" -gt 0 ] && echo "==> NOT PUBLISHED $sin_pagina capture(s) that no docs page, README or launch post names; they stay in $SRC and in the manifest" >&2

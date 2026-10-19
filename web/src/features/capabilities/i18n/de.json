@@ -1,6 +1,6 @@
 {
   "title": "MCP & Skills",
-  "subtitle": "Der Live-Katalog der Fähigkeiten — MCP-Server, Werkzeuge, Skills und deren Verkabelung.",
+  "subtitle": "Der Live-Katalog der Fähigkeiten — MCP-Server, Werkzeuge, Skills und ihre Verbindungen.",
   "tabs": {
     "servers": "Server",
     "tools": "Werkzeuge",
@@ -40,7 +40,7 @@
     "tools": "Werkzeuge",
     "skills": "Skills",
     "resources": "Ressourcen",
-    "consumers": "Verkabelt mit",
+    "consumers": "Verwendet von",
     "consumersHint": "Sitzungen und Agenten, die mit diesem Server verbunden sind.",
     "noConfig": "Keine verwaltete Konfiguration",
     "noConfigHint": "Fügen Sie eine gespeicherte Definition hinzu, um den Transport und die Geheimnisreferenzen dieses Servers zu dokumentieren.",

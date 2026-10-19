@@ -89,7 +89,7 @@ OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental
 ## コンソールで見えるもの
 
 計装済みセッションは **Sessions** にライブアクティビティとして表示され、
-発行元のエージェントに帰属される。そのモデル呼び出しは **Cost & FinOps** に
+発行元のエージェントに帰属される。そのモデル呼び出しは **Budgets** に
 供給され、MCP およびツールのスパンは、他の協調ソースと同様に **Access map**
 へエッジを寄与する:
 

@@ -10,7 +10,7 @@ description: >-
 
 > Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
 
-下一个版本是 <!-- release -->`0.2`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->。
+下一个版本是 <!-- release -->`0.3`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->。
 
 Olivares AI 是 **自托管优先（self-host-first）** 的。整个产品就是一个内嵌了 Web UI 的静态二进制文件，因此最简单的部署方式就是一个文件；Compose 与
 Kubernetes 路径则用于多节点和生产环境。每条路径都共享相同的安全默认配置 — 无默认凭据、一次性安装令牌、默认启用 TLS —，没有强制遥测，控制平面默认也不产生出站流量。只有你明确配置为跨越边界的内容才会跨越你的边界——对你的模型 API 的调用、你接入的 SIEM/webhook 输出，以及你配置时使用的外部嵌入提供商。

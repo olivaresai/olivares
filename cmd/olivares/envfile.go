@@ -329,8 +329,14 @@ func (p installPlan) renderEnvFile() string {
 	}
 	w("#\n")
 	if p.AuditSigningKeyFile != "" {
-		w("# External audit-signing key (declared BYOK; boot fails if the file is absent):\n")
-		w("%s=byok\n", envKeyCustody)
+		// The key file is Community; declaring it as BYOK custody is Business, and a
+		// Community build refuses to start with that assertion set.
+		if thisEdition.name == "community" {
+			w("# External audit-signing key (boot fails if the file is absent):\n")
+		} else {
+			w("# External audit-signing key (declared BYOK; boot fails if the file is absent):\n")
+			w("%s=byok\n", envKeyCustody)
+		}
 		w("%s=%s\n#\n", envAuditKeyFile, p.AuditSigningKeyFile)
 	}
 	if p.MaxConns > 0 {

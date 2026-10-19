@@ -83,7 +83,9 @@ func TestClaudePricingForCurrentRates(t *testing.T) {
 		cost                                  int64
 	}{
 		{"claude-opus-5-5", 4, 20, 5, 8, 0.20, 47000},
-		{"claude-sonnet-5-5", 2, 10, 2.50, 4, 0.20, 23600},
+		// Sonnet 5.5 cache hits are 0.05x input ($0.10): genai-prices v0.1.11 added the
+		// explicit row; v0.1.9 priced it through the generic claude-sonnet-5 pattern at $0.20.
+		{"claude-sonnet-5-5", 2, 10, 2.50, 4, 0.10, 23500},
 		{"claude-haiku-4-5-20251001", 1, 5, 1.25, 2, 0.10, 11800},
 		{"claude-fable-5-1", 10, 50, 12.50, 20, 0.25, 117250},
 	} {

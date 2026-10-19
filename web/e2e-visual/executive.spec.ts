@@ -7,8 +7,9 @@
 // the leadership dashboard — KPIs, trends, compliance bars, the risk gauge — renders
 // deterministically (a marketing asset). Captures light + dark on desktop AND a
 // mobile viewport, so the responsive degradation is part of the regression set.
-import { test, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { fixtureFor } from './fixtures'
+import { PANEL_EXTENSIONS } from '../src/features/extensions'
 
 const SHOTS = 'e2e-visual/__shots__'
 
@@ -31,17 +32,6 @@ async function mockApi(page: Page) {
   })
   await page.addInitScript(() => {
     localStorage.setItem(
-      'olivares.session',
-      JSON.stringify({
-        state: {
-          token: 'olvs_demo',
-          sessionId: 's1',
-          expiresAt: '2030-01-01T00:00:00Z',
-        },
-        version: 0,
-      }),
-    )
-    localStorage.setItem(
       'olivares.tenant',
       JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
     )
@@ -61,13 +51,50 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page)
 })
 
-test('executive dashboard — KPIs + trends + compliance, light + dark (marketing asset)', async ({
+async function openDashboard(page: Page) {
+  const requests: string[] = []
+  page.on('request', (request) =>
+    requests.push(new URL(request.url()).pathname),
+  )
+  await page.goto('/dashboards')
+  await page
+    .getByRole('heading', {
+      level: 1,
+      name: 'Executive overview',
+      exact: true,
+    })
+    .waitFor({ state: 'visible' })
+  await expect(page.getByText('Active agents', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Reliability', exact: true }),
+  ).toBeVisible()
+  // The composition, not a synthetic license string, decides which panels exist.
+  if (PANEL_EXTENSIONS.useDashboardCost) {
+    await page.getByText('Spend trend').first().waitFor({ state: 'visible' })
+  } else {
+    await expect(page.getByText('Spend trend', { exact: true })).toHaveCount(0)
+    expect(
+      requests.filter((path) => path.startsWith('/v1/m/finops/spend')),
+    ).toEqual([])
+  }
+  if (PANEL_EXTENSIONS.complianceView) {
+    await page
+      .getByText('Control coverage')
+      .first()
+      .waitFor({ state: 'visible' })
+  } else {
+    await expect(
+      page.getByText('Control coverage', { exact: true }),
+    ).toHaveCount(0)
+    expect(requests).not.toContain('/v1/m/compliance/summary')
+    expect(requests).not.toContain('/v1/m/compliance/risk')
+  }
+}
+
+test('executive dashboard — shared KPIs and composed panels, light + dark (marketing asset)', async ({
   page,
 }) => {
-  await page.goto('/dashboards')
-  // Wait for the rollups to resolve and the headline + a chart to render.
-  await page.getByText('Spend trend').first().waitFor({ state: 'visible' })
-  await page.getByText('Control coverage').first().waitFor({ state: 'visible' })
+  await openDashboard(page)
   await page.waitForTimeout(900)
   await page.screenshot({
     path: `${SHOTS}/dashboards-light.png`,
@@ -86,8 +113,7 @@ test('executive dashboard — mobile (responsive degradation)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/dashboards')
-  await page.getByText('Spend trend').first().waitFor({ state: 'visible' })
+  await openDashboard(page)
   await page.waitForTimeout(900)
   await page.screenshot({
     path: `${SHOTS}/dashboards-mobile.png`,

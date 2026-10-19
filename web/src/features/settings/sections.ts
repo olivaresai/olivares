@@ -3,6 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { TFunction } from 'i18next'
 import {
+  Download,
   Info,
   Keyboard,
   KeyRound,
@@ -19,6 +20,8 @@ export const SETTINGS_SECTIONS = [
   { id: 'keyboard', icon: Keyboard, adminOnly: false },
   { id: 'signIn', icon: Shield, adminOnly: false },
   { id: 'edition', icon: Package, adminOnly: false },
+  { id: 'updates', icon: Download, adminOnly: true },
+  { id: 'sessionIdle', icon: Server, adminOnly: true },
   { id: 'tracing', icon: Server, adminOnly: true },
   { id: 'signing', icon: KeyRound, adminOnly: true },
   { id: 'about', icon: Info, adminOnly: false },
@@ -50,7 +53,17 @@ export function settingsSearchEntries(
       order,
       haystack: {
         label: fold(label),
-        aliases: [fold(t(`settings:nav.${s.id}`, { lng: 'en' }))],
+        aliases: [
+          fold(t(`settings:nav.${s.id}`, { lng: 'en' })),
+          // The palette builds its haystack from eagerly loaded namespaces only,
+          // so the license word lives here — not in the console bundle.
+          ...(s.id === 'edition'
+            ? [
+                fold(t('settings:edition.licenseAlias')),
+                fold(t('settings:edition.licenseAlias', { lng: 'en' })),
+              ]
+            : []),
+        ],
         path: fold(path),
         context: [fold(context)],
         description: '',

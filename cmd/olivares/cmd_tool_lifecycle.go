@@ -36,7 +36,8 @@ func newToolRemoveCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var version string
 	cmd := &cobra.Command{
-		Use: "rm <tool> --version <version>", Aliases: []string{"remove"},
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <tool> --version <version>", Aliases: []string{"remove"},
 		Short:   "Remove an installed tool version when no session uses it",
 		Long:    "Remove an installed tool version from the engine.\nRemoval is refused while a session uses that version.",
 		Example: "  olivares tool rm codex --version 0.134.0",
@@ -74,11 +75,12 @@ func newToolPinCmd() *cobra.Command {
 	var version, workspace, agent string
 	var clear bool
 	cmd := &cobra.Command{
-		Use:     "pin <tool> --workspace <ref> --version <version>",
-		Short:   "Select a session tool version for a workspace or agent",
-		Long:    "Select an installed version for this organization's workspace or agent.\nAn agent selection takes precedence. Use --clear to return to the default.",
-		Example: "  olivares tool pin codex --workspace default --version 0.134.0\n  olivares tool pin codex --agent my-agent --version 0.134.0\n  olivares tool pin codex --workspace default --clear",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "pin <tool> --workspace <ref> --version <version>",
+		Short:       "Select a session tool version for a workspace or agent",
+		Long:        "Select an installed version for this organization's workspace or agent.\nAn agent selection takes precedence. Use --clear to return to the default.",
+		Example:     "  olivares tool pin codex --workspace default --version 0.134.0\n  olivares tool pin codex --agent my-agent --version 0.134.0\n  olivares tool pin codex --workspace default --clear",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if workspace == "" && agent == "" {
 				return fmt.Errorf("choose --workspace or --agent")

@@ -30,9 +30,10 @@ func auditListCmd() *cobra.Command {
 		system, all bool
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list", "recent"},
-		Short:   "Show the most recent audit events, newest first",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list", "recent"},
+		Short:       "Show the most recent audit events, newest first",
 		Long: "ls prints the latest events of your organization's audit ledger, newest first: time,\n" +
 			"who, what and on which object. --system shows the deployment's own ledger (installs,\n" +
 			"sign-ins). Use it to see what happened recently.",

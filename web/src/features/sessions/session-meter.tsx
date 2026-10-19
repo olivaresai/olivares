@@ -7,7 +7,8 @@
 // ⛔ EVERY FIGURE IS ONE THE ENGINE SENT, AS THE TOOL SAID IT.
 //    - The mode is `tool_mode`, the tool's own word (Claude Code's permission mode,
 //      Codex's approval policy and sandbox). It is shown in the console's own words
-//      for a permission (see SessionMode); only an absent `tool_mode` shows nothing.
+//      for a permission, or in a person's words for a known tool word (see
+//      SessionMode); only an absent `tool_mode` shows nothing.
 //    - The usage is the run's own counters (an observed session's, its live row's).
 //      Absent tokens are unknown, and a cost the tool did not report is said to be
 //      unknown, never printed as $0.
@@ -23,6 +24,8 @@ import type { PermissionChoice } from '@/features/agentops/session-launch'
 import type { RunDTO } from '@/features/agentops/types'
 import { toolName } from '@/features/agentops/tool-names'
 import { useAuth } from '@/lib/auth/context'
+import { COST_VIEW } from '@/features/registry'
+import { useViewAccess } from '@/features/navigation/authorization'
 import {
   formatDateTime,
   formatMicroUsd,
@@ -50,6 +53,25 @@ const PERMISSION_WORDS: Record<string, PermissionChoice> = {
 /** Codex joins its approval policy and sandbox with this ("on-request · workspaceWrite"). */
 const CODEX_MODE_JOINER = ' · '
 
+/** The tool's own words a person is told in plain words (sessions meter.toolWord): Claude
+ * Code's bypassPermissions and Codex's approval policies (driver_codex.go toolMode). Codex's
+ * sandbox word is never said: Olivares confines the session from outside, so that sandbox
+ * is not the session's boundary. */
+const TOOL_WORDS: Record<string, string> = {
+  bypassPermissions: 'bypassPermissions',
+  untrusted: 'untrusted',
+  'on-failure': 'onFailure',
+  'on-request': 'onRequest',
+  never: 'never',
+  granular: 'granular',
+}
+
+/** The plain-words key of a run's mode, or undefined to show the tool's word as it said it. */
+function toolWord(toolMode: string): string | undefined {
+  const word = toolMode.split(CODEX_MODE_JOINER)[0]
+  return Object.hasOwn(TOOL_WORDS, word) ? TOOL_WORDS[word] : undefined
+}
+
 /**
  * The New session permission a run's mode is worded as, or undefined to show the tool's
  * word as it said it. A tool's own single word (Claude Code's permission mode) is worded
@@ -72,8 +94,9 @@ function permissionChoice(
  * The session's permission in the words New session offers, with the tool's own word for
  * it one hover away. A tool's mode that is one of those permission modes (Claude Code's)
  * is worded as the console words it; Codex's approval policy and sandbox are the tool's
- * private names, so the permission the launch asked for is worded instead. A mode with no
- * console wording stays as the tool said it, never guessed.
+ * private names, so the permission the launch asked for is worded instead. Without a
+ * permission to word, a known tool word is said plainly (TOOL_WORDS); any other mode stays
+ * as the tool said it, never guessed.
  */
 export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
   const { t } = useTranslation(['sessions', 'firstHour'])
@@ -103,6 +126,7 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
   if (templateId && template.isPending) return null
   const worded =
     choice && (choice !== 'editsAndCommands' || builtin) ? choice : undefined
+  const plain = worded ? undefined : toolWord(toolMode)
   return (
     <Badge
       variant="outline"
@@ -114,7 +138,9 @@ export function SessionMode({ run }: { run: RunDTO | null | undefined }) {
     >
       {worded
         ? t(`firstHour:permission.${worded}`)
-        : t('sessions:meter.mode', { mode: toolMode })}
+        : t('sessions:meter.mode', {
+            mode: plain ? t(`sessions:meter.toolWord.${plain}`) : toolMode,
+          })}
     </Badge>
   )
 }
@@ -134,7 +160,23 @@ export function SessionMeter({
   where?: 'header' | 'context'
 }) {
   const { t, i18n } = useTranslation('sessions')
+  const access = useViewAccess()
   const lang = i18n.language
+  const amount =
+    usage?.costMicroUsd != null
+      ? formatMicroUsd(usage.costMicroUsd, { locale: lang })
+      : t('meter.costUnknown')
+  const costText = usage?.costPartial
+    ? t('meter.costPartial', { cost: amount })
+    : amount
+  const cost = (
+    <span
+      className={usage?.costMicroUsd != null ? 'text-foreground' : undefined}
+      title={usage?.costMicroUsd != null ? t('meter.costTitle') : undefined}
+    >
+      {costText}
+    </span>
+  )
   return (
     <>
       {usage ? (
@@ -148,12 +190,16 @@ export function SessionMeter({
             output: formatTokens(usage.output, lang),
           })}
           {' · '}
-          {usage.costMicroUsd != null ? (
-            <span className="text-foreground" title={t('meter.costTitle')}>
-              {formatMicroUsd(usage.costMicroUsd, { locale: lang })}
-            </span>
+          {access.navigable(COST_VIEW) ? (
+            <a
+              href={COST_VIEW.path}
+              aria-label={`${t('meter.viewCosts')}: ${costText}`}
+              className="rounded-sm underline decoration-text-3 underline-offset-2 hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              {cost}
+            </a>
           ) : (
-            <span>{t('meter.costUnknown')}</span>
+            cost
           )}
         </span>
       ) : null}

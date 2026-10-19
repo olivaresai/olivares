@@ -96,7 +96,7 @@ mutación con el actor real.
 `olivares_deployment` gestiona una **definición** de despliegue —estado deseado declarativo y
 versionado—. Se corresponde con el módulo VII (deploy), cuya actuación en vivo es un **seam
 deny-closed**: hasta que se aprovisione un ejecutor, el motor *planifica y gobierna* un despliegue
-pero **`apply`/`retire` devuelven `503`** en lugar de actuar sobre la infraestructura. Así, un
+pero **`apply`/`retire` devuelven `503`** (Business; Community responde `501` en cada ruta de deploy) en lugar de actuar sobre la infraestructura. Así, un
 recurso `olivares_deployment` registra y gobierna la intención hoy; por sí mismo no
 reconcilia infraestructura real. Consulta [módulo VII](/es/reference/modules/vii-deploy/) y
 [Honestidad y límites](/es/start/honesty-and-limits/).

@@ -228,7 +228,7 @@
   },
   "forbiddenResolve": {
     "title": "无权解决",
-    "description": "解决事件需要 check-admin 权限（health:check:admin）。"
+    "description": "你的角色无法解决事件。"
   },
   "connectors": {
     "autoRefresh": "每15秒自动刷新。",

@@ -35,6 +35,7 @@
     "unavailable": "Der Inhalt des Arbeitsbereichs ist nicht verfügbar."
   },
   "sessionFolders": {
+    "wiki": "Wiki für {{folder}} öffnen",
     "title": "Sitzungsordner",
     "intro": "Ordner auf diesem Server, in denen Sitzungen arbeiten. Sie sind von Arbeitsbereichen getrennt.",
     "manage": "Ordner verwalten",

@@ -82,6 +82,7 @@ func TestLoadDDILEvidenceNameValidation(t *testing.T) {
 }
 
 func TestDDILKeygen(t *testing.T) {
+	asEdition(t, "enterprise")
 	ctx := context.Background()
 	keyPath := filepath.Join(t.TempDir(), "ddil.key")
 	stdout, stderr, err := runDDILCommand(ctx, "keygen", "--out", keyPath)

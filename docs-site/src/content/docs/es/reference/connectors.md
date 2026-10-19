@@ -7,6 +7,10 @@ description: >-
   — además de los destinos de salida.
 ---
 
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
+:::
+
 Esta página es el **catálogo** de conectores de primera parte y, para cada uno, el **nivel de
 cobertura honesto** que puede admitir. Es el complemento de
 [conectar una fuente](/es/how-to/connect-a-source/), que explica el *modelo* de conector
@@ -99,7 +103,7 @@ honestamente en lugar de parecer sano).
 |---|---|---|
 | `claude` | Telemetría OTLP de herramientas de Claude Code + introspección MCP → aristas / coste / hallazgos | Plugin fuera de proceso; `attributed` cuando hay una identidad por agente presente, si no `approximate` |
 | `claude-api` | Muestras de coste de la Admin-API de Claude + hallazgos de postura de gobernanza | En proceso; no-op offline (sin admin key) |
-| `claude-compliance` | Evidencia del activity-feed de Claude Compliance → hallazgos | Solo GET por construcción; no-op offline |
+| `claude-compliance` | Evidencia del activity-feed de Claude Compliance → hallazgos | Solo GET por construcción; no-op offline (Business) |
 | `claude-config` | Árbol estático de config de Claude (subagents / Skills / plugins) → aristas de **capacidad-declarada** | Solo metadatos — una superficie de capacidad, no un acceso observado |
 | `claude-console` | IAM de la org de Claude → hallazgos de postura SSO/SCIM (roster de identidad + fuente) | Business: Identity & Scale;  |
 | `claude-wif` | Roster de identidad no humana / workload-identity de Anthropic + aristas de scope permitido | Business: Identity & Scale; Modela la federación declarada por el operador; señala los footguns de claves estáticas |
@@ -261,7 +265,7 @@ alias con guion `pg-audit` / `s3-cloudtrail` también resuelven).
 | `bigquery-audit` | Auditoría de acceso a datos de BigQuery |
 | `redshift-audit` | Auditoría de Amazon Redshift |
 | `mssql-audit` | Auditoría de SQL Server |
-| `oracle-audit` | Auditoría unificada de Oracle |
+| `oracle-audit` | Auditoría unificada de Oracle (Business) |
 | `gcs-audit` | Auditoría de acceso a datos de Google Cloud Storage |
 | `azure-blob-audit` | Auditoría de Azure Blob Storage |
 
@@ -355,7 +359,7 @@ rol / proceso / credencial compartida en lugar de a un agente resuelto.
 | `iceberg-catalog` | Catálogo REST de Iceberg → grants permitidos + identidades de credencial servida | permitido |
 | `inference-gateway` | Enrutamiento de K8s Gateway API Inference-Extension → rutas de inferencia permitidas | permitido |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | Auditoría de KMS cloud → aristas de acceso a claves (nunca material de clave) | approximate |
-| `external-secrets` / `sops` / `kmip` | Manifiestos de gestión de secretos / locate KMIP → aristas de aprovisionamiento/custodia | approximate (existencia, no uso) |
+| `external-secrets` / `sops` / `kmip` | Manifiestos de gestión de secretos / locate KMIP → aristas de aprovisionamiento/custodia | approximate (existencia, no uso); `kmip`: Business |
 | `istio-telemetry` | CRDs de Istio Telemetry → aristas de mesh L7 | approximate (CRDs parseados, no flujos en vivo) |
 | `egress-proxy` | Log de veredicto de egress-proxy → aristas de egress L7 | approximate |
 | `kong-audit` | Logs de auditoría de Kong → hallazgos de cambio de config | approximate |
@@ -489,10 +493,10 @@ personal; el módulo expurga el cuerpo antes de persistir).
 | `gdrive` | Documentos de Google Drive (Docs/Sheets/Slides/ficheros) |
 | `confluence` | Espacios y páginas de Atlassian Confluence |
 | `notion` | Workspaces, bases de datos y páginas de Notion |
-| `sharepoint` | Sitios y documentos de Microsoft SharePoint / OneDrive |
+| `sharepoint` | Sitios y documentos de Microsoft SharePoint / OneDrive (Business) |
 | `s3content` | Contenido de object-storage (objetos S3 / R2 / GCS) |
-| `sap_odata` | Entidades de servicios SAP OData como documentos gobernados |
-| `salesforce` | Objetos/registros de Salesforce como documentos gobernados |
+| `sap_odata` | Entidades de servicios SAP OData como documentos gobernados (Business) |
+| `salesforce` | Objetos/registros de Salesforce como documentos gobernados (Business) |
 | `snowflake` | Tablas/filas de Snowflake como documentos gobernados (distinto del observador R/RW `snowflake-audit`) |
 | `azure_ai_search` | Documentos de índices de Azure AI Search |
 | `postgres` | Filas de PostgreSQL como documentos gobernados — solo lectura por construcción, ACL declarada por fila, clasificación por columna (distinto del observador R/RW `pgaudit`; no es NL-to-SQL). Consulta [Postgres como fuente de contexto gobernada](/es/how-to/govern-postgres-content/). |

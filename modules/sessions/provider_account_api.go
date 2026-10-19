@@ -85,6 +85,9 @@ type providerAccountDTO struct {
 	PendingRelease    string `json:"pending_release,omitempty"`
 	AuthSource        string `json:"auth_source"`
 	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
+	// SessionEgressHosts are the hosts an administrator declared this account's
+	// confined sessions may reach beside their provider.
+	SessionEgressHosts []string `json:"session_egress_hosts,omitempty"`
 	// Identity is who the vendor says is signed in, and IdentitySource says where
 	// that came from. Nothing asks the vendor yet, so the source is "none" and the
 	// identity is empty rather than guessed.
@@ -130,7 +133,7 @@ func toProviderAccountDTO(a ProviderAccount) providerAccountDTO {
 		HomeRelative:   accountHomeRelative(a),
 		IsolationLevel: a.IsolationLevel, OSUser: a.OSUser,
 		ReleaseRef: a.ReleaseRef, PendingRelease: a.PendingRelease,
-		AuthSource: a.AuthSource, ProviderRecordRef: a.ProviderRecordRef,
+		AuthSource: a.AuthSource, ProviderRecordRef: a.ProviderRecordRef, SessionEgressHosts: a.SessionEgressHosts,
 		IdentitySource: accountIdentityNone, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 	}
 }
@@ -138,11 +141,16 @@ func toProviderAccountDTO(a ProviderAccount) providerAccountDTO {
 // handleListProviderAccounts lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
 func (m *Module) handleListProviderAccounts(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	query := r.URL.Query()
-	accounts, page, err := m.ListProviderAccounts(r.Context(), mc.Tenant, ProviderAccountFilter{
+	filter := ProviderAccountFilter{
 		EnvironmentRef: strings.TrimSpace(query.Get("environment")),
 		Driver:         strings.TrimSpace(query.Get("driver")),
 		State:          strings.TrimSpace(query.Get("state")),
-	}, listQuery(r))
+	}
+	accounts, page, err := listVisible(r.Context(), m, mc, listQuery(r),
+		func(q model.Query) ([]ProviderAccount, model.Page, error) {
+			return m.ListProviderAccounts(r.Context(), mc.Tenant, filter, q)
+		},
+		func(a ProviderAccount) (string, string) { return a.Ref, a.Driver })
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -157,6 +165,10 @@ func (m *Module) handleListProviderAccounts(w http.ResponseWriter, r *http.Reque
 
 // handleGetProviderAccount returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
 func (m *Module) handleGetProviderAccount(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if err := m.requireAccountAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	account, err := m.GetProviderAccount(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
 	if err != nil {
 		writeRunErr(w, err)
@@ -188,6 +200,10 @@ func (m *Module) handlePatchProviderAccountMetadata(w http.ResponseWriter, r *ht
 	}
 	if name == nil && displayName == nil && accent == nil {
 		writeRunErr(w, badRequest("provide name, display_name and/or accent"))
+		return
+	}
+	if err := m.requireAccountAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
 		return
 	}
 	account, err := m.PatchProviderAccountMetadata(r.Context(), mc.Principal, mc.Tenant, chi.URLParam(r, "ref"), ProviderAccountMetadataPatch{Name: name, DisplayName: displayName, Accent: accent})
@@ -222,6 +238,10 @@ func (m *Module) handleCreateProviderAccount(w http.ResponseWriter, r *http.Requ
 	if validAccountRetryKey(body.IdempotencyKey) {
 		w.Header().Set("Idempotency-Key", body.IdempotencyKey)
 	}
+	if err := m.requireNamedTool(r.Context(), mc, body.Driver); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	account, err := m.CreateProviderAccount(r.Context(), mc.Principal, mc.Tenant, CreateProviderAccountInput{
 		Driver: body.Driver, Name: body.Name, IdempotencyKey: body.IdempotencyKey,
 	})
@@ -237,6 +257,10 @@ func (m *Module) handleCreateProviderAccount(w http.ResponseWriter, r *http.Requ
 func (m *Module) handleAdoptProviderAccount(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var body adoptProviderAccountRequest
 	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
 		return
 	}
 	account, err := m.AdoptProviderAccount(r.Context(), mc.Principal, mc.Tenant, chi.URLParam(r, "ref"), body.Name)

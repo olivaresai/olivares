@@ -115,14 +115,14 @@
       "opened": "Geöffnet.",
       "approval": "Freigabe angefordert — mit dieser Referenz erneut senden:",
       "denied": "Durch Richtlinie abgelehnt: keine erlaubt diese Kombination (Agent, Modell, Anbieter). Das ist eine Default-Deny-Entscheidung, kein Fehler.",
-      "noGate": "In dieser Installation ist kein Freigabe-Gate verdrahtet, daher bleibt das Öffnen abgelehnt. Das ist eine Lücke im Bestand, keine Richtlinien-Ablehnung.",
+      "noGate": "In dieser Installation ist kein Freigabe-Gate eingerichtet, daher bleibt das Öffnen abgelehnt. Das ist eine Lücke im Bestand, keine Richtlinien-Ablehnung.",
       "unavailable": "Das Freigabe-Gate hat nicht geantwortet, es wurde also nichts entschieden."
     }
   },
   "ledger": {
     "title": "Protokoll der Öffnungsentscheidungen",
     "description": "Jede Entscheidung, eine Sprachsitzung im Bestand zu öffnen — reines Anhängen, neueste zuerst, einschließlich der VERWEIGERTEN, die deshalb nie zu einer Sitzung wurden.",
-    "caveat": "Ein verweigertes Öffnen erzeugt selbst keine Sitzungszeile, daher ist dies die erste eigene Ansicht, die es vollständig und allein mit `voice:session:read` zeigt. Andere Wege zeigen es nur teilweise oder verlangen eine andere Berechtigung: das API-Playground (Tenant-Admin), der Audit-Explorer (die Aktion, ohne ihren Grund) und die Security-Findings (nur einzelne Pfade).",
+    "caveat": "Ein verweigertes Öffnen erzeugt selbst keine Sitzungszeile, daher ist dies die erste eigene Ansicht, die es vollständig und allein mit dem Recht zum Lesen von Sprachsitzungen zeigt. Andere Wege zeigen es nur teilweise oder verlangen eine andere Berechtigung: das API-Playground (Tenant-Admin), der Audit-Explorer (die Aktion, ohne ihren Grund) und die Security-Findings (nur einzelne Pfade).",
     "empty": "Noch keine Öffnungsentscheidungen",
     "emptyHint": "Hier stehen die Entscheidungen, die die Engine persistieren konnte. Der Evidenz-Schreibvorgang ist absichtlich best-effort — eine Verweigerung gilt auch dann, wenn ihre Zeile verloren geht —, ein leeres Protokoll ist also kein Beweis dafür, dass nichts verweigert wurde.",
     "truncated": "Angezeigt werden die {{count}} neuesten Entscheidungen, und die Engine meldet mehr: diese Liste ist GEKÜRZT. Lies sie als Stichprobe, nicht als das vollständige Protokoll.",

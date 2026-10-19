@@ -9,6 +9,8 @@ Chaque effet exige une cible, un dépôt et des identifiants approuvés, ainsi q
 
 L’espace de noms de l’API est `/v1/m/gitpublish`. Il expose les cibles, les intentions de push, de pull request et de fusion, le rapprochement et les observations.
 
+Les lectures de cible (`GET /targets` et `GET /targets/{id}`) incluent un `host` en lecture seule (`github`, `gitlab` ou `git`), déterminé à partir de la liaison d’identifiants approuvée. La console ne propose les pull requests et les fusions que pour GitHub et GitLab, y compris la pull request en brouillon proposée après un push de session. Si une liaison n’est plus approuvée, ou si un moteur plus ancien omet l’hôte, la console ne propose que le push ; le moteur vérifie néanmoins la custody et l’autorisation pour chaque effet. Un échec de recherche de liaison renvoie une réponse d’indisponibilité.
+
 Un push peut nommer une exécution de session (`session_run`). Olivares récupère alors le commit depuis le dossier de cette exécution dans le dépôt du serveur avant de publier, uniquement par le protocole de fichiers local. L’exécution doit appartenir à l’espace de travail de la cible ; une requête ne nomme jamais un chemin.
 
 Un résultat distant incertain n’autorise pas une nouvelle tentative. Le module conserve séparément les demandes, les observations et les accusés de réception. Une opération distante déjà envoyée peut coïncider avec une révocation locale ultérieure.

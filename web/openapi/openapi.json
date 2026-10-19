@@ -1660,6 +1660,72 @@
         ],
         "type": "object"
       },
+      "EngineUpdate": {
+        "properties": {
+          "advisories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "available": {
+            "description": "The newest release in the channel, when the check reached it.",
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "check_error": {
+            "description": "Why the channel could not be checked, in the words `olivares upgrade` uses.",
+            "type": "string"
+          },
+          "edition": {
+            "enum": [
+              "community",
+              "enterprise"
+            ],
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "released_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "restart_required": {
+            "description": "A newer binary than the running one is already installed; the engine runs the old version until it restarts.",
+            "type": "boolean"
+          },
+          "restarting": {
+            "description": "The engine is restarting itself on the new version.",
+            "type": "boolean"
+          },
+          "running_sessions": {
+            "description": "Sessions this engine runs now. The restart that applies an update stops every one of them; each can be resumed.",
+            "type": "integer"
+          },
+          "security": {
+            "description": "The release fixes a published advisory.",
+            "type": "boolean"
+          },
+          "update_available": {
+            "description": "The newest release is newer than the running version.",
+            "type": "boolean"
+          },
+          "version": {
+            "description": "The version this engine runs now; after an apply it stays the old one until the engine has restarted.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "edition",
+          "version",
+          "update_available",
+          "running_sessions"
+        ],
+        "type": "object"
+      },
       "Error": {
         "properties": {
           "error": {
@@ -2075,6 +2141,10 @@
             "type": "integer"
           },
           "plan": {
+            "type": "string"
+          },
+          "support_profile": {
+            "description": "Signed v3 product profile; separate from the legacy support relationship. Display only.",
             "type": "string"
           },
           "support_tier": {
@@ -2718,6 +2788,97 @@
         ],
         "type": "object"
       },
+      "NotifyDestination": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "live": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "console",
+              "file"
+            ],
+            "type": "string"
+          },
+          "webhook_host": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "source",
+          "live"
+        ],
+        "type": "object"
+      },
+      "NotifyDestinationInput": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "slack",
+              "teams"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "webhook_url": {
+            "description": "The vendor's incoming-webhook URL. Sealed on save and never returned. Blank keeps the stored value.",
+            "format": "password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "NotifyDestinationList": {
+        "properties": {
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/NotifyDestination"
+            },
+            "type": "array"
+          },
+          "kinds": {
+            "items": {
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "title"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sealer_available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "destinations",
+          "kinds",
+          "sealer_available"
+        ],
+        "type": "object"
+      },
       "OSAccountBeginInput": {
         "additionalProperties": false,
         "properties": {
@@ -2989,6 +3150,33 @@
         "required": [
           "presented"
         ],
+        "type": "object"
+      },
+      "PasswordOptions": {
+        "properties": {
+          "digits": {
+            "default": true,
+            "type": "boolean"
+          },
+          "length": {
+            "default": 20,
+            "maximum": 128,
+            "minimum": 8,
+            "type": "integer"
+          },
+          "lower": {
+            "default": true,
+            "type": "boolean"
+          },
+          "symbols": {
+            "default": true,
+            "type": "boolean"
+          },
+          "upper": {
+            "default": true,
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "PublicStatus": {
@@ -3531,6 +3719,9 @@
               "status": {
                 "type": "string"
               },
+              "support_profile": {
+                "type": "string"
+              },
               "support_tier": {
                 "type": "string"
               }
@@ -3606,6 +3797,21 @@
           "version",
           "engine",
           "setup_required"
+        ],
+        "type": "object"
+      },
+      "SessionIdleSettings": {
+        "properties": {
+          "idle_stop_minutes": {
+            "default": 0,
+            "description": "0 disables auto-stop; enabled values are 6..10080 minutes after the five-minute idle projection. Finished sessions are stopped only with no open view, approval, child, peer or newer message.",
+            "maximum": 10080,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "idle_stop_minutes"
         ],
         "type": "object"
       },
@@ -4308,6 +4514,30 @@
           "status",
           "is_superadmin",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "VaultCode": {
+        "properties": {
+          "code": {
+            "format": "password",
+            "type": "string"
+          },
+          "digits": {
+            "type": "integer"
+          },
+          "period": {
+            "type": "integer"
+          },
+          "seconds_left": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "seconds_left",
+          "period",
+          "digits"
         ],
         "type": "object"
       },
@@ -15248,6 +15478,418 @@
         "x-stability": "stable"
       }
     },
+    "/v1/console/notify-destinations": {
+      "delete": {
+        "description": "Removes one console notification destination by the name carried in the body, closes it in the running engine and deletes its sealed webhook URL. A destination provisioned in the operator file is refused with 404.",
+        "operationId": "deleteNotifyDestination",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Remove a console notification destination",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      },
+      "get": {
+        "description": "Lists every notification destination, console and operator file, with whether it is open and the host its webhook points at, plus the kinds the console can create. A webhook URL is never returned.",
+        "operationId": "listNotifyDestinations",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotifyDestinationList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "List notification destinations and the kinds the console can create",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      },
+      "put": {
+        "description": "Creates or updates a Slack or Teams destination: the webhook URL is checked against the vendor's hosts, sealed, stored in the deployment settings and opened without a restart. A blank URL keeps the stored one.",
+        "operationId": "putNotifyDestination",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyDestinationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotifyDestination"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Create or update a Slack or Teams notification destination",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/notify-destinations/test": {
+      "post": {
+        "description": "Sends one real test message through a candidate destination without saving it. A blank URL tests the stored one. Returns 422 when the destination does not accept it.",
+        "operationId": "testNotifyDestination",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyDestinationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Send a test message through a candidate notification destination",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
     "/v1/console/runtime/reload": {
       "post": {
         "description": "Reconciles the durable source roster against the running engine without a restart and re-resolves the licence; the report names what applied and which configuration domains still need a restart. Step-up required.",
@@ -15342,7 +15984,7 @@
     },
     "/v1/console/secrets": {
       "delete": {
-        "description": "Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.",
+        "description": "Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/ and env/ names, and every member only their own vault/\u003cuser-id\u003e/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.",
         "operationId": "deleteSecret",
         "responses": {
           "204": {
@@ -15425,7 +16067,7 @@
         "x-stability": "stable"
       },
       "get": {
-        "description": "Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and returns only that tenant's mcp/ handles.",
+        "description": "Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/ and env/ names to its admins only, and to every member only their own vault/\u003cuser-id\u003e/ items, whose hint is the item's kind (login, login+totp, note or totp).",
         "operationId": "listSecrets",
         "responses": {
           "200": {
@@ -15516,7 +16158,7 @@
       },
       "parameters": [
         {
-          "description": "Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope.",
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
           "in": "query",
           "name": "scope",
           "required": false,
@@ -15539,7 +16181,7 @@
         }
       ],
       "put": {
-        "description": "Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.",
+        "description": "Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/ and env/ names, and every member only their own vault/\u003cuser-id\u003e/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.",
         "operationId": "putSecret",
         "requestBody": {
           "content": {
@@ -15644,6 +16286,398 @@
           "console"
         ],
         "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/secrets/generate": {
+      "parameters": [
+        {
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "in": "query",
+          "name": "scope",
+          "required": false,
+          "schema": {
+            "enum": [
+              "tenant"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Target tenant in explicit tenant mode.",
+          "in": "header",
+          "name": "X-Olivares-Tenant",
+          "required": false,
+          "schema": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Returns a random password for the signed-in member: 8 to 128 characters (20 by default) with at least one character of every chosen kind (lowercase, uppercase, digits, symbols). Nothing is stored or recorded; any option left out keeps its default.",
+        "operationId": "generatePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordOptions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "password": {
+                      "format": "password",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Generate a random password for the signed-in member; nothing is stored",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "tenant:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/secrets/reveal": {
+      "parameters": [
+        {
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "in": "query",
+          "name": "scope",
+          "required": false,
+          "schema": {
+            "enum": [
+              "tenant"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Target tenant in explicit tenant mode.",
+          "in": "header",
+          "name": "X-Olivares-Tenant",
+          "required": false,
+          "schema": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Returns the plaintext of one item of the caller's own vault/\u003cuser-id\u003e/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/ and env/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.",
+        "operationId": "revealSecret",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Reveal one item of the caller's own personal vault (step-up, audited, rate limited)",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "tenant:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/secrets/totp": {
+      "parameters": [
+        {
+          "description": "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/\u003cuser-id\u003e/ items for that member alone. Writes require the deployment's step-up in either scope.",
+          "in": "query",
+          "name": "scope",
+          "required": false,
+          "schema": {
+            "enum": [
+              "tenant"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Target tenant in explicit tenant mode.",
+          "in": "header",
+          "name": "X-Olivares-Tenant",
+          "required": false,
+          "schema": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/\u003cuser-id\u003e/ namespace, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, owner only, rate limited per person), never cached, and recorded in the audit ledger without the code.",
+        "operationId": "getVaultCode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultCode"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Current authenticator code of one of the caller's own vault items (step-up, audited, rate limited; never the seed)",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "tenant:read",
         "x-stability": "stable"
       }
     },
@@ -18303,6 +19337,190 @@
         "x-stability": "stable"
       }
     },
+    "/v1/console/updates": {
+      "get": {
+        "description": "Checks the instance's release channel now and returns the running version, the newest signed release with its notes and advisories, whether it is newer, and the sessions an update would stop; a channel that cannot be checked is reported in check_error with the running version still present.",
+        "operationId": "getEngineUpdate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineUpdate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "The running version, the newest signed release in the instance's channel with its notes, and whether it is newer",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/updates/apply": {
+      "post": {
+        "description": "Installs the newest release in the channel as the olivares upgrade command does (signed, verified, atomic) and restarts the engine on it; requires the administrative step-up, and the restart stops running sessions. Nothing newer installs and restarts nothing.",
+        "operationId": "applyEngineUpdate",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngineUpdate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Install the newest release as the olivares upgrade command does and restart the engine on it (AAL3 step-up)",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
     "/v1/groups": {
       "get": {
         "description": "Lists the tenant's provisioned groups with their mapped roles and member counts: the operator's view of what the IdP pushed and what each group confers, including the effective-role provenance an admin needs when a member's direct and acting roles differ.",
@@ -18420,7 +19638,7 @@
     },
     "/v1/groups/{id}/parent": {
       "put": {
-        "description": "Nests (or, with an empty parent_id, un-nests) a group under another group of the same tenant: a member of the child is then also a member of the parent for authorization, so a scoped grant on the parent reaches the child's members. Requires owner authority; a cycle is a 409. Operator-only, never SCIM.",
+        "description": "Nests (or, with an empty parent_id, un-nests) a group under another group of the same tenant: a member of the child is then also a member of the parent for authorization, so a scoped grant on the parent reaches the child's members. Requires owner authority; a cycle is a 409. Operator-only, never SCIM. Business edition: a Community build answers 501 departments_unavailable.",
         "operationId": "setGroupParent",
         "parameters": [
           {
@@ -19472,6 +20690,113 @@
           "system"
         ],
         "x-required-permission": "user:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/members/{id}": {
+      "delete": {
+        "description": "Removes one member from the resolved tenant: a scoped offboard that leaves the account and its other organizations in place; 404 when the id is not a member; 409 when the caller removes itself or the last active owner; 403 when the member outranks the caller or the caller is confined to a workspace; a signed-in person also needs the administrative step-up.",
+        "operationId": "removeMember",
+        "parameters": [
+          {
+            "description": "Resource identifier (UUIDv7).",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Remove a member from the resolved tenant: a scoped offboard that leaves the account and its other organizations alone (404 when the id is not a member; 409 when the caller removes itself or the last active owner; 403 when the member outranks the caller or the caller is confined to a workspace; a signed-in person also needs the administrative step-up)",
+        "tags": [
+          "system"
+        ],
+        "x-required-permission": "user:write",
         "x-stability": "stable"
       }
     },
@@ -20663,6 +21988,218 @@
           }
         ],
         "summary": "Get the configured data-residency registry (superadmin)",
+        "tags": [
+          "system"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/system/session-idle": {
+      "get": {
+        "description": "Returns the saved instance idle-stop window in minutes; zero means off. Requires system administration.",
+        "operationId": "getSessionIdleSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionIdleSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Session idle settings unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Read instance session idle-stop settings (superadmin)",
+        "tags": [
+          "system"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      },
+      "put": {
+        "description": "Saves the instance idle-stop window: zero turns it off, and 6 to 10080 minutes enables it after the five-minute idle projection. Requires system administration and configured step-up; the change is audited before it applies.",
+        "operationId": "saveSessionIdleSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionIdleSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionIdleSettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Session idle settings unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Save instance session idle-stop settings (superadmin, configured step-up)",
         "tags": [
           "system"
         ],

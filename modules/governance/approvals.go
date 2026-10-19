@@ -71,8 +71,14 @@ type createApprovalRequest struct {
 	ExpiresInSeconds  int64                      `json:"expires_in_seconds,omitempty"`
 	EscalateInSeconds int64                      `json:"escalate_in_seconds,omitempty"`
 	// LaunchedBy is the audit actor of the person who launched the session an engine
-	// launch approval is for. Internal only, never wire input, display only.
+	// launch approval is for. Internal only, never wire input. Display, and the
+	// person a policy that requires someone other than the launcher excludes.
 	LaunchedBy string `json:"-"`
+	// ChangeClass and ChangePaths are the class of the change a publication
+	// proposes and the paths that decided it, set by the engine from the
+	// proposal's own commit. Internal only: a requester never picks its class.
+	ChangeClass string   `json:"-"`
+	ChangePaths []string `json:"-"`
 }
 
 // approvalDTO is the request view. Status is the EFFECTIVE status (expiry derived
@@ -100,6 +106,14 @@ type approvalDTO struct {
 	EscalateAt        string          `json:"escalate_at,omitempty"`
 	Escalated         bool            `json:"escalated"`
 	DecidedAt         string          `json:"decided_at,omitempty"`
+	// Consumed is set once a caller has spent this approval's single use. A caller
+	// that must not reuse a spent grant (a privileged launch) reads it, never who
+	// spent it.
+	Consumed bool `json:"consumed,omitempty"`
+	// ChangeClass and ChangePaths: what the publication this request is for
+	// touches, when an approval policy asked for it.
+	ChangeClass string   `json:"change_class,omitempty"`
+	ChangePaths []string `json:"change_paths,omitempty"`
 }
 
 func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) approvalDTO {
@@ -114,7 +128,23 @@ func toApprovalDTO(rec model.Record, now model.Timestamp, tier ActionRiskTier) a
 		Review:    storedApprovalReview(rec),
 		ExpiresAt: rec.String(colExpiresAt), EscalateAt: rec.String(colEscalateAt),
 		Escalated: rec.String(colEscalatedAt) != "", DecidedAt: rec.String(colDecidedAt),
+		Consumed:    rec.String(colConsumedBy) != "",
+		ChangeClass: rec.String(colChangeClass), ChangePaths: storedChangePaths(rec),
 	}
+}
+
+// storedChangePaths decodes the paths a request recorded; a row without any
+// (every request before this column, or one no policy classified) has none.
+func storedChangePaths(rec model.Record) []string {
+	text := rec.String(colChangePaths)
+	if text == "" {
+		return nil
+	}
+	var paths []string
+	if json.Unmarshal([]byte(text), &paths) != nil {
+		return nil
+	}
+	return paths
 }
 
 // approvalGrantStatus leaves terminal decision history untouched while exposing
@@ -217,7 +247,7 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	expiresIn, escalateIn := in.ExpiresInSeconds, in.EscalateInSeconds
 	policyRef := ""
 	spec, matched := approvalSpec{}, false
-	if pid, s, ok, err := matchApprovalPolicy(ctx, sc, in.Action, in.SubjectKind); err != nil {
+	if pid, s, ok, err := matchApprovalPolicy(ctx, sc, in.Action, in.SubjectKind, in.ChangeClass); err != nil {
 		return approvalDTO{}, err
 	} else if ok {
 		policyRef, spec, matched = pid, s, true
@@ -248,6 +278,13 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	if in.LaunchedBy != "" {
 		rec[colLaunchedBy] = in.LaunchedBy
 	}
+	if in.ChangeClass != "" {
+		encoded, err := json.Marshal(in.ChangePaths)
+		if err != nil {
+			return approvalDTO{}, err
+		}
+		rec[colChangeClass], rec[colChangePaths] = in.ChangeClass, string(encoded)
+	}
 	if in.Review != nil {
 		encoded, err := json.Marshal(in.Review)
 		if err != nil {
@@ -275,11 +312,22 @@ func (m *Module) openApprovalRecord(ctx context.Context, sc store.Scope, actor, 
 	_, err = sc.Audit().Append(ctx, model.AuditDraft{
 		Actor: actor, ActorKind: actorKind,
 		Action: "governance.approval.create", TargetKind: approvalKind, TargetID: model.ID(created.String(model.ColID)),
-		Meta: map[string]any{
-			"action": in.Action, "subject_kind": in.SubjectKind, "required_approvals": required, "risk_tier": string(tier),
-		},
+		Meta: approvalCreateMeta(in, required, tier),
 	})
 	return out, err
+}
+
+// approvalCreateMeta is the immutable audit Meta of a new request. A
+// classified publication also carries its class and the paths that decided it,
+// never diff content.
+func approvalCreateMeta(in createApprovalRequest, required int64, tier ActionRiskTier) map[string]any {
+	meta := map[string]any{
+		"action": in.Action, "subject_kind": in.SubjectKind, "required_approvals": required, "risk_tier": string(tier),
+	}
+	if in.ChangeClass != "" {
+		meta["change_class"], meta["change_paths"] = in.ChangeClass, in.ChangePaths
+	}
+	return meta
 }
 
 // loadApprovalPolicies returns every enabled approval policy in store order
@@ -303,28 +351,58 @@ func loadApprovalPolicies(ctx context.Context, sc store.Scope) ([]model.Policy, 
 // matchApprovalSpec returns the first policy of pols that governs the
 // (action, subjectKind): an empty match field is a wildcard, a set field must
 // equal. pols must be in store order (id) for determinism.
-func matchApprovalSpec(pols []model.Policy, action, subjectKind string) (string, approvalSpec, bool) {
+//
+// changeClass is the class of the change a publication proposes, or "" for a
+// request no policy classified. A policy that names a class governs only a
+// request of that class and is preferred over one that names none; a request
+// without a class is governed by the policies that name none, as before.
+func matchApprovalSpec(pols []model.Policy, action, subjectKind, changeClass string) (string, approvalSpec, bool) {
+	fallbackID, fallback, found := "", approvalSpec{}, false
 	for _, p := range pols {
 		spec, perr := parseApprovalSpec(p.Spec)
 		if perr != nil {
 			continue // a corrupt approval policy is skipped here (it cannot grant); abac corruption is the fail-closed path
 		}
-		if (spec.Match.Action == "" || spec.Match.Action == action) &&
-			(spec.Match.SubjectKind == "" || spec.Match.SubjectKind == subjectKind) {
+		if !spec.appliesToAction(action) || (spec.Match.SubjectKind != "" && spec.Match.SubjectKind != subjectKind) {
+			continue
+		}
+		switch {
+		case spec.Match.ChangeClass != "" && spec.Match.ChangeClass == changeClass:
 			return p.ID.String(), spec, true
+		case spec.Match.ChangeClass == "" && !found:
+			fallbackID, fallback, found = p.ID.String(), spec, true
 		}
 	}
-	return "", approvalSpec{}, false
+	return fallbackID, fallback, found
+}
+
+// requiresOtherThanLauncher reports whether any enabled approval policy that
+// governs the request asks for someone other than the launcher. Unlike the
+// threshold, which one policy sets, this restriction is the sum of the policies
+// that apply: a policy that names a class never lifts it from one that names
+// none.
+func requiresOtherThanLauncher(pols []model.Policy, action, subjectKind, changeClass string) bool {
+	for _, p := range pols {
+		spec, err := parseApprovalSpec(p.Spec)
+		if err != nil || !spec.RequireOtherThanLauncher || !spec.appliesToAction(action) ||
+			(spec.Match.SubjectKind != "" && spec.Match.SubjectKind != subjectKind) {
+			continue
+		}
+		if spec.Match.ChangeClass == "" || spec.Match.ChangeClass == changeClass {
+			return true
+		}
+	}
+	return false
 }
 
 // matchApprovalPolicy returns the first enabled approval policy that governs the
-// (action, subjectKind) — loadApprovalPolicies + matchApprovalSpec in one call.
-func matchApprovalPolicy(ctx context.Context, sc store.Scope, action, subjectKind string) (string, approvalSpec, bool, error) {
+// (action, subjectKind, changeClass) — loadApprovalPolicies + matchApprovalSpec in one call.
+func matchApprovalPolicy(ctx context.Context, sc store.Scope, action, subjectKind, changeClass string) (string, approvalSpec, bool, error) {
 	pols, err := loadApprovalPolicies(ctx, sc)
 	if err != nil {
 		return "", approvalSpec{}, false, err
 	}
-	id, spec, ok := matchApprovalSpec(pols, action, subjectKind)
+	id, spec, ok := matchApprovalSpec(pols, action, subjectKind, changeClass)
 	return id, spec, ok, nil
 }
 
@@ -333,14 +411,14 @@ func matchApprovalPolicy(ctx context.Context, sc store.Scope, action, subjectKin
 // tier this way — a stored snapshot could be invalidated by a later policy
 // change, and the live derivation is the deny-closed one.
 func liveRiskTier(pols []model.Policy, rec model.Record) ActionRiskTier {
-	_, spec, matched := matchApprovalSpec(pols, rec.String(colAction), rec.String(colSubjectKind))
+	_, spec, matched := matchApprovalSpec(pols, rec.String(colAction), rec.String(colSubjectKind), rec.String(colChangeClass))
 	return resolveRiskTier(spec, matched, rec.String(colAction))
 }
 
 // handleListApprovals filters by the same effective status used by every decision.
 // Lazy expiry is skipped before the matching page and its continuation are formed.
 func (m *Module) handleListApprovals(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	status := r.URL.Query().Get("status")
 	if v := r.URL.Query().Get("action"); v != "" {
 		q.Filters = append(q.Filters, eq(colAction, v))
@@ -626,6 +704,19 @@ func (m *Module) decideApproval(ctx context.Context, data approvalData, mc api.M
 				return err
 			}
 			tier := liveRiskTier(pols, rec)
+			// A policy that requires someone other than the launcher: the person
+			// who launched the session that proposed this change does not approve
+			// it (rejecting is the safe direction and stays open to them).
+			// Re-derived live like the tier, from the launcher the request
+			// recorded; a launcher the request never named excludes no one.
+			if launcher := rec.String(colLaunchedBy); decision == decisionApprove && launcher != "" &&
+				requiresOtherThanLauncher(pols, rec.String(colAction), rec.String(colSubjectKind), rec.String(colChangeClass)) {
+				if distinct, _ := auth.TwoDistinctPeople(auth.PersonRefFromActor(launcher), deciderRef, auth.AcceptWhenUndetermined); !distinct {
+					clientErr = "separation of duty: the person who launched this session cannot approve its change"
+					clientCode = http.StatusForbidden
+					return nil
+				}
+			}
 			// a CRITICAL decision is a privileged human act — it demands a
 			// session whose hardware step-up (WebAuthn/PIV) is fresh. Tokens
 			// carry no human assurance (AAL 0) and are equally refused. The
@@ -1087,6 +1178,16 @@ func normalizeApprovalRequest(in *createApprovalRequest) error {
 		in.ExpiresInSeconds < 0 || in.ExpiresInSeconds > maxSeconds ||
 		in.EscalateInSeconds < 0 || in.EscalateInSeconds > maxSeconds {
 		return errors.New("approval window or count out of range")
+	}
+	if in.ChangeClass == "" {
+		in.ChangePaths = nil
+	} else if !validChangeClass(in.ChangeClass) || len(in.ChangePaths) > maxChangePaths {
+		return errors.New("invalid change class or too many change paths")
+	}
+	for _, p := range in.ChangePaths {
+		if p == "" || len(p) > maxNoteLen {
+			return errors.New("invalid change path")
+		}
 	}
 	return nil
 }

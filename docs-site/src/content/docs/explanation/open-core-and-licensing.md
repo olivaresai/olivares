@@ -8,8 +8,8 @@ description: >-
 ---
 
 Olivares AI is **open core**. The complete Community product is released under the GNU
-Affero General Public License. Its AGPL build is the whole governance platform,
-with unlimited users and one active identity provider (IdP). The commercial
+Affero General Public License. Its AGPL build is the complete product for one person
+or one team, with unlimited users and one active identity provider (IdP). The commercial
 `enterprise/` line adds new code, built only with `-tags enterprise` and absent
 from the public binary. Business includes four capability families in one
 subscription. Enterprise covers negotiated scope. A commercial license provides
@@ -56,7 +56,7 @@ not repeat it.
 | Edition | Price | Scope |
 | --- | --- | --- |
 | Community | Free, AGPL-3.0-only | Unlimited users; one active identity provider (IdP). |
-| Business | USD 129/month or USD 1,290/year | Unlimited users; one legal entity; one active instance at a time. |
+| Business | USD 99/month or USD 990/year | Unlimited users; one legal entity; one active instance at a time. |
 | Enterprise | Contact us | Terms agreed in a contract and the capabilities that depend on them: multi-entity scope, additional deployments or IdPs, air-gap mirrors, custom LTS, and scoped upstream credentials minted by OAuth 2.0 token exchange (RFC 8693). |
 
 Business includes **Regulated Operations**, **AI Runtime Security**,
@@ -78,13 +78,17 @@ instance as often as you need. Enterprise covers several active instances.
 
 ## What is open vs commercial
 
-The open binary is the whole governance platform; the commercial (`enterprise/`) line is
-**additive**. Two boundaries are worth calling out because the open build answers
-for them honestly rather than faking them:
+The open binary is the complete product for one person or one team; the commercial
+(`enterprise/`) line is **additive**. FinOps budgets and spend analysis, compliance
+frameworks and reports, SIEM push and active-passive HA leader routing are Business: the
+open build refuses them and names Business (an API route answers `501`, a CLI command exits
+with code 9, an HA leader-routing switch stops the server from starting). Two boundaries are
+worth calling out because the open build answers for them honestly rather than faking them:
 
-- **SSO** — single-IdP login (OIDC + SAML 2.0) and inbound SCIM are **open** in the
-  default binary: real login, no `-tags enterprise`. Several active IdPs (per-tenant /
-  by-domain), login-time group mapping and require-SSO are Business (Identity & Scale);
+- **SSO** — single-IdP login (OIDC + SAML 2.0) is **open** in the default binary:
+  real login, no `-tags enterprise`. Several active IdPs (per-tenant /
+  by-domain), login-time group mapping, require-SSO and the inbound SCIM server are
+  Business (Identity & Scale);
   activating a second active IdP returns `multi_idp_requires_enterprise`.
 - **User accounts** — **unlimited in every edition**. The community build has no user
   cap, and neither has the commercial one: no license state (valid, expired, absent)
@@ -106,14 +110,14 @@ which is why the open product works air-gapped. The one place the license is
 *consumed* rather than displayed is the closed commercial build, and only to entitle
 the modules the commercial agreement covers, evaluated per module — a local decision
 in the commercial edition, never a check in the open binary. It never caps users: accounts are unlimited in every edition. So the open
-build is genuinely whole and uncapped-by-license; what differs in the commercial
+build is complete for one person or one team and uncapped-by-license; what differs in the commercial
 edition is the additive commercial (`enterprise/`) modules, not a license key flipping features
 on inside the same binary.
 
 ## Why this model
 
-Crippling the core was rejected: the open edition does the whole job — the full
-governance loop on one node — so capping it would make it a worse product and erode
+Crippling the core was rejected: the open edition does the whole job for one person or
+one team, so capping it would make it a worse product and erode
 trust. Permissive-everything (MIT/Apache on the core) would give the core away with
 no commercial footing. Source-available, non-OSS licenses (BSL, SSPL and similar)
 would kill the open-source adoption that is the whole point of an extensible

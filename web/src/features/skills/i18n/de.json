@@ -15,13 +15,14 @@
     "truncatedHint": "Mit olivares skills ls --cursor listest du den Rest."
   },
   "detail": {
-    "skills": "Skills in diesem Paket",
+    "skills": "Skills, Agenten, Befehle und Regeln",
     "revisions": "Revisionen",
     "revision": "Revision {{n}}",
     "revisionLine": "Revision {{n}} aus {{source}}",
     "activeContent": "wirkt beim Laden: {{items}}"
   },
   "kind": {
+    "profile": "Profil",
     "workspace": "Abteilung",
     "agent_group": "Agentengruppe",
     "agent": "Agent",
@@ -56,7 +57,9 @@
     "submit": "Zuweisen",
     "done": "Skill-Paket zugewiesen",
     "directoryFailed": "Die Ziele konnten nicht geladen werden. Schließe das Paket und öffne es erneut, um es noch einmal zu versuchen.",
-    "approve": "Ich habe diese Skills geprüft und gebe frei, dass ihr Tool beim Laden auf sie reagiert: {{skills}}"
+    "approve": "Ich habe diese Skills geprüft und gebe frei, dass ihr Tool beim Laden auf sie reagiert: {{skills}}",
+    "members": "Mitglieder",
+    "membersHint": "Wählen Sie bis zu 64 Mitglieder. Skills, Agenten, Befehle und Regeln können einzeln ausgewählt werden."
   },
   "install": {
     "title": "Skill-Paket installieren",

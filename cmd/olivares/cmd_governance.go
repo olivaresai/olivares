@@ -46,8 +46,9 @@ const governanceNS = "governance"
 func newGovernanceCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:   "governance",
-		Short: "Inspect the governance plane: what is stopped, and why",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "governance",
+		Short:       "Inspect the governance plane: what is stopped, and why",
 		Long: "governance is the enforcement plane: kill switches, approvals and\n" +
 			"policy decisions. This command reads it. The namespace is the same word the API uses\n" +
 			"(/v1/m/governance), so a route and its verb are always one translation apart.",
@@ -62,8 +63,9 @@ func newGovernanceCmd() *cobra.Command {
 
 func governanceKillSwitchCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "killswitch",
-		Short: "The estate-wide and per-scope stops that deny work while they are active",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "killswitch",
+		Short:       "The estate-wide and per-scope stops that deny work while they are active",
 		Example: "  olivares governance killswitch state\n" +
 			"  olivares governance killswitch ls --status active",
 		Long: "A kill switch is the hard stop: while one is active for a scope, the enforcement plane\n" +
@@ -109,8 +111,9 @@ type cliKillSwitchList struct {
 // active switches could see an empty list while the entire estate is halted.
 func governanceKillSwitchStateCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "state",
-		Short: "Whether the estate is stopped, and every kill switch active right now",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "state",
+		Short:       "Whether the estate is stopped, and every kill switch active right now",
 		Long: "Report the enforcement plane's stop state in one call: whether the WHOLE estate is\n" +
 			"halted, and the kill switches currently active. The estate flag is not derivable from\n" +
 			"the list — an estate-wide stop is a property of the plane, not a row in it.",
@@ -149,9 +152,10 @@ func governanceKillSwitchListCmd(flags *authClientFlags) *cobra.Command {
 	var status string
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List kill switches, active and historical",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List kill switches, active and historical",
 		Long: "List the kill switches this tenant has, newest first, with paging. Without --status the\n" +
 			"set includes the ones already re-enabled, which is what an audit of the incident needs;\n" +
 			"pass --status active for the ones denying work right now.",
@@ -247,9 +251,10 @@ func governanceStatusRole(status string) termrender.Role {
 // one action in this plane whose whole point is that a person did it deliberately.
 func governanceApprovalsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "approvals",
-		Short:   "The approval queue: what is waiting on a human, and who decided what",
-		Example: "  olivares governance approvals ls",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "approvals",
+		Short:       "The approval queue: what is waiting on a human, and who decided what",
+		Example:     "  olivares governance approvals ls",
 		Long: "An approval is a gate that a person has to pass before an action runs. Reading it\n" +
 			"answers what is pending and on whom, and — through `decisions` — who voted which way\n" +
 			"and why, which is the record an audit actually asks for.",
@@ -257,6 +262,10 @@ func governanceApprovalsCmd(flags *authClientFlags) *cobra.Command {
 	cmd.AddCommand(governanceApprovalsListCmd(flags), governanceApprovalsGetCmd(flags),
 		governanceApprovalsDecisionsCmd(flags),
 		governanceApprovalsDecideCmd(flags, "approve"), governanceApprovalsDecideCmd(flags, "reject"))
+	// Business adds `review-quality`; Community's hook returns nil and the group is unchanged.
+	if reviewQuality := governanceApprovalsReviewQualityCmd(flags); reviewQuality != nil {
+		cmd.AddCommand(reviewQuality)
+	}
 	return cmd
 }
 
@@ -275,8 +284,9 @@ func governanceApprovalsDecideCmd(flags *authClientFlags, decision string) *cobr
 		verb, done = "Reject", "Rejected"
 	}
 	cmd := &cobra.Command{
-		Use:   decision + " <approval-id>",
-		Short: verb + " a request that waits for a person",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         decision + " <approval-id>",
+		Short:       verb + " a request that waits for a person",
 		Long: decision + " shows the request and its whole reason, asks once (--yes skips it) and records\n" +
 			"your vote. It prints where the request stands: decided, or how many more votes it\n" +
 			"needs. Use it where there is no browser; the console's approvals page does the same.",
@@ -378,9 +388,10 @@ func governanceApprovalsListCmd(flags *authClientFlags) *cobra.Command {
 	var status, action string
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List approvals, pending and decided",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List approvals, pending and decided",
 		Long: "List this tenant's approvals with paging. Two filters, both read by the engine:\n" +
 			"--status narrows to a state (pending is the one an operator wants first) and --action\n" +
 			"narrows to the operation being gated.",
@@ -430,11 +441,12 @@ func governanceApprovalsListCmd(flags *authClientFlags) *cobra.Command {
 
 func governanceApprovalsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <approval-id>",
-		Short:   "Show one approval",
-		Long:    "Show a single approval: what it gates, who asked, how many votes it needs and has.",
-		Example: "  olivares governance approvals get 01890000-0000-7000-8000-000000000001",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <approval-id>",
+		Short:       "Show one approval",
+		Long:        "Show a single approval: what it gates, who asked, how many votes it needs and has.",
+		Example:     "  olivares governance approvals get 01890000-0000-7000-8000-000000000001",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := observeCall{
 				flags: flags, ns: governanceNS, method: http.MethodGet,
@@ -463,8 +475,9 @@ func governanceApprovalsGetCmd(flags *authClientFlags) *cobra.Command {
 // the same reason it is checked per HANDLER rather than per family.
 func governanceApprovalsDecisionsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "decisions <approval-id>",
-		Short: "Who voted which way on one approval, and why",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "decisions <approval-id>",
+		Short:       "Who voted which way on one approval, and why",
 		Long: "List the votes cast on one approval. The counts on the approval itself say HOW MANY\n" +
 			"approved; only this says WHO and on what grounds, which is what an audit asks for.\n" +
 			"The set is returned complete, without paging.",
@@ -589,9 +602,10 @@ func writeApprovalTable(out io.Writer, rows []cliApproval) error {
 // that moment on — the one class of change that has no business riding in behind a listing.
 func governanceGuardianCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "guardian",
-		Short:   "The rules that act on findings without a human, and what they have done",
-		Example: "  olivares governance guardian rules",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "guardian",
+		Short:       "The rules that act on findings without a human, and what they have done",
+		Example:     "  olivares governance guardian rules",
 		Long: "Guardian turns a finding into an action — an approval, a kill switch — under a rule and\n" +
 			"a mode. `rules` is what it is allowed to do; `actions` is what it actually did.",
 	}
@@ -643,8 +657,9 @@ type cliGuardianActionList struct {
 func governanceGuardianRulesCmd(flags *authClientFlags) *cobra.Command {
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:   "rules",
-		Short: "List the guardian rules and whether each is armed",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "rules",
+		Short:       "List the guardian rules and whether each is armed",
 		Long: "List what guardian is allowed to do on its own: which finding kinds each rule matches,\n" +
 			"from which severity, what it then does, and in which mode. `enabled` is the difference\n" +
 			"between a rule that is written down and a rule that will fire.",
@@ -696,8 +711,9 @@ func governanceGuardianActionsCmd(flags *authClientFlags) *cobra.Command {
 	var status string
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:   "actions",
-		Short: "What guardian actually did, rule by rule",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "actions",
+		Short:       "What guardian actually did, rule by rule",
 		Long: "List the actions guardian took on its own: which finding triggered which rule, what it\n" +
 			"did to what, and whether that produced an approval or a kill switch. This is the only\n" +
 			"place the unattended decisions of the plane are visible as a list.",

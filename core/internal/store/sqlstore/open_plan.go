@@ -325,7 +325,7 @@ func (b *storePreparation) verifyReadiness(ctx context.Context) error {
 	if err := verifyAuditTreeGuard(ctx, b.db, b.dia, false); err != nil {
 		return err
 	}
-	if _, err := verifyGuardEditionHistory(ctx, b.db, b.dia, b.guardManifest); err != nil {
+	if _, err := guardAdmissionVerifyHistory(ctx, b.db, b.dia, b.guardManifest); err != nil {
 		return fmt.Errorf("sqlstore: the guard control plane no longer matches its own attribution at the end of boot; its receipts, inventory and gate do not form one supported edition history: %w", err)
 	}
 

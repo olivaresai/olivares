@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import {
-  desajustesPorFichero,
+  mismatchesByFile,
   etiquetasConLiteral,
   leer,
   nombresDeLista,
@@ -34,7 +34,7 @@ describe('evals · paginated lists ask for a ceiling and declare truncation', ()
     const listas = nombresDeLista(leer('features/evals/api.ts')).filter(
       (n) => !(n in NO_PAGINAN),
     )
-    const { total, desajustes } = desajustesPorFichero(
+    const { total, desajustes } = mismatchesByFile(
       [{ nombre: VISTA, src: leer(VISTA) }],
       listas,
       'evalsApi',

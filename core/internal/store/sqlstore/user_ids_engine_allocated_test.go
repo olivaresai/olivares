@@ -15,7 +15,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/internal/pgtest"
 	"github.com/olivaresai/olivares/core/model"
@@ -30,7 +29,7 @@ import (
 func TestUserIDsAreEngineAllocatedAndUsersAreNeverDeleted(t *testing.T) {
 	for _, engine := range []store.Engine{store.EngineSQLite, store.EnginePostgres} {
 		t.Run(string(engine), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 			defer cancel()
 			cfg := store.Config{Engine: engine, DSN: ":memory:", Debug: true}
 			if engine == store.EnginePostgres {

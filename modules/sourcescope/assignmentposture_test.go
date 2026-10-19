@@ -341,10 +341,10 @@ func TestFirstAllowOnUNassignedSourceStillAppliesImmediately(t *testing.T) {
 }
 
 // TestAssignmentGateKeysOnRefNotSourceType pins C-2: there is no `connector` source_type
-// (validSourceTypes is mcp|model|provider|knowledge|data) and the resolver hands
-// ConnectorAssigned the source REF alone. So the E-2 gate must fire for ANY source type
-// whose ref carries assignment rows — keying it on a type would silently exempt four of the
-// five kinds.
+// (validSourceTypes is mcp|model|provider|knowledge|data, and profile|tool, which only a
+// Business engine writes) and the resolver hands ConnectorAssigned the source REF alone. So
+// the E-2 gate must fire for ANY source type whose ref carries assignment rows — keying it
+// on a type would silently exempt four of the five kinds.
 func TestAssignmentGateKeysOnRefNotSourceType(t *testing.T) {
 	h, admin, _, tenant := assignHarness(t)
 	h.createWorkspace(tenant, "engineering")

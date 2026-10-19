@@ -26,8 +26,9 @@ import (
 // offline from a saved checkpoint and the signing public key.
 func auditTreeCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "tree",
-		Short: "Publish and verify C2SP Merkle checkpoints of the audit ledger",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tree",
+		Short:       "Publish and verify C2SP Merkle checkpoints of the audit ledger",
 		Long: "tree is the audit ledger's second, independent proof beside the hash chain: a signed C2SP\n" +
 			"checkpoint (origin, size, RFC 6962 root) an operator saves, and an inclusion proof for one event.\n" +
 			"From a saved checkpoint and the signing public key, `tree verify` proves offline that the\n" +
@@ -42,8 +43,9 @@ func auditTreeCmd() *cobra.Command {
 func auditTreeCheckpointCmd() *cobra.Command {
 	var dataDir, engine, dsn, ownerDSN, tenant string
 	cmd := &cobra.Command{
-		Use:   "checkpoint",
-		Short: "Print the signed C2SP checkpoint of a tenant's Merkle tree",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "checkpoint",
+		Short:       "Print the signed C2SP checkpoint of a tenant's Merkle tree",
 		Long: "checkpoint prints the tenant's current tree head as a C2SP signed note (origin, size, root,\n" +
 			"Ed25519 signature) on standard output. Save it: it is what `tree verify` checks later.\n" +
 			"With -o json it also reports the public key and the C2SP verifier key to publish.\n" +
@@ -104,8 +106,9 @@ func auditTreeProveCmd() *cobra.Command {
 	var dataDir, engine, dsn, ownerDSN, tenant, checkpointPath, pubkey string
 	var seq int64
 	cmd := &cobra.Command{
-		Use:   "prove",
-		Short: "Prove one event is inside a saved checkpoint (JSON proof on standard output)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "prove",
+		Short:       "Prove one event is inside a saved checkpoint (JSON proof on standard output)",
 		Long: "prove prints the inclusion proof of the event with --seq in the tree a saved checkpoint\n" +
 			"commits to. The checkpoint is verified against --pubkey first. Give the proof, the checkpoint and\n" +
 			"the public key to an auditor: `tree verify --proof` needs no access to this installation.",
@@ -161,8 +164,9 @@ func auditTreeProveCmd() *cobra.Command {
 func auditTreeVerifyCmd() *cobra.Command {
 	var dataDir, engine, dsn, ownerDSN, tenant, checkpointPath, pubkey, proofPath string
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify a saved checkpoint, offline, against the ledger or an inclusion proof",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Verify a saved checkpoint, offline, against the ledger or an inclusion proof",
 		Long: "verify checks a saved C2SP checkpoint with the signing public key and then one of two things.\n" +
 			"With --proof it checks that one event was inside the checkpoint's tree, using nothing but the\n" +
 			"checkpoint, the proof and the key. Without it, it recomputes the root from the events of the ledger\n" +

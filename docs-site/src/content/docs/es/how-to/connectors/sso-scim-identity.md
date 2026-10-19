@@ -10,7 +10,7 @@ sidebar:
 ---
 
 :::note[Edición]
-Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas) y el ciclo de vida de identidades gestionadas requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, SCIM entrante de usuarios/grupos, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
+Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas), el ciclo de vida de identidades gestionadas y el servidor SCIM entrante requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
 :::
 
 La identidad es la dependencia dura bajo todo el mapa de accesos: la auditoría
@@ -46,12 +46,19 @@ exacto esperado y muestra el estado de la conexión — y allí donde el backend
 un panel es un contrato declarado pero aún no operativo, dice "backend pending"
 en lugar de renderizar datos fabricados:
 
-<img class="light:sl-hidden" src="/console/identity-dark.png" alt="La vista Identity & NHI: configuración SSO con comprobación de redirect-URI exacta, el roster de NHI y pestañas clave de postura." />
-<img class="dark:sl-hidden" src="/console/identity-light.png" alt="La vista Identity & NHI: configuración SSO con comprobación de redirect-URI exacta, el roster de NHI y pestañas clave de postura." />
+<img class="light:sl-hidden" src="/console/identity-dark.png" alt="La vista Identity & access: usuarios y grupos, inicio de sesión SSO, identidades de máquina (NHI) y postura de claves." />
+<img class="dark:sl-hidden" src="/console/identity-light.png" alt="La vista Identity & access: usuarios y grupos, inicio de sesión SSO, identidades de máquina (NHI) y postura de claves." />
 
-## 2. Aprovisionamiento SCIM (entrante)
+## 2. Aprovisionamiento SCIM (entrante) — Business
 
-El control plane es un proveedor de servicio SCIM 2.0 (RFC 7644) estándar en:
+El servidor SCIM entrante es una capacidad Business (Identity & Scale). Un
+servidor Community monta las mismas URL, autentica el token y después responde
+HTTP `501` con el formato de error de SCIM, nombrando Business; no se lee ni se
+escribe nada. En Community quitas a una persona de la organización en la consola
+(Personas) o con `DELETE /v1/members/{id}`.
+
+Con Business, el control plane es un proveedor de servicio SCIM 2.0 (RFC 7644)
+estándar en:
 
 ```
 /v1/scim/v2/Users
@@ -60,9 +67,9 @@ El control plane es un proveedor de servicio SCIM 2.0 (RFC 7644) estándar en:
 
 - **Auth:** un **token de API de admin/owner** ligado al tenant en la
   integración SCIM — el mismo modelo de token opaco que el resto de la API, sin
-  un tipo de secreto SCIM aparte. El endpoint está siempre presente (no está
-  detrás de un feature gate).
-- **Users** aprovisiona y desaprovisiona identidades en todas las ediciones, Community incluida.
+  un tipo de secreto SCIM aparte. Las URL están siempre montadas (no están
+  detrás de un feature gate); Community responde `501` ahí.
+- **Users** aprovisiona y desaprovisiona identidades.
   Los cambios dependen de la entrega y del procesamiento correcto de la solicitud
   SCIM; comprueba su respuesta y el acceso afectado, en lugar de considerar un
   evento de RRHH como prueba de una revocación completada. SCIM no elimina

@@ -112,7 +112,7 @@ instanciar son acciones **privilegiadas, gated por RBAC y autoauditadas** al pri
 :::caution[Límites honestos]
 - **Sin actuación, sin aprovisionamiento.** El módulo XIV registra y gobierna la *petición*;
   nunca levanta una capacidad. La decisión de aprobación es de la gobernanza y el cableado del
-  despliegue — y el `apply`/`retire` vivo allí es en sí una costura deny-closed (`503` hasta
+  despliegue (una función Business; Community responde `501` en la activación) — y el `apply`/`retire` vivo allí es en sí una costura deny-closed (`503` hasta
   que se aprovisiona un executor). Consulta [Honestidad y límites](/es/start/honesty-and-limits/).
 - **La firma es real pero depende de la clave.** La firma Ed25519 está implementada y la clave
   de firma se aprovisiona en el arranque activada por defecto. En un nodo **sin clave

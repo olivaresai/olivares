@@ -115,14 +115,14 @@
       "opened": "Opened.",
       "approval": "Approval requested — re-send with this approval reference:",
       "denied": "Denied by policy: no voice policy permits this (agent, model, provider). This is a default-deny decision, not a failure.",
-      "noGate": "No approval gate is wired in this deployment, so the open stays denied. This is an estate gap, not a policy denial.",
+      "noGate": "No approval gate is set up in this deployment, so the open stays denied. This is an estate gap, not a policy denial.",
       "unavailable": "The approval gate did not answer, so nothing was decided."
     }
   },
   "ledger": {
     "title": "Open decision ledger",
     "description": "Every decision to open a voice session across the estate, append-only and newest first — including the ones that were DENIED and therefore never became a session.",
-    "caveat": "A denied open does not create a session row of its own, so this is the first dedicated view that shows it in full with only `voice:session:read`. Other paths show it partially or need another permission: the API playground (tenant admin), the audit explorer (the action, without its reason) and Security findings (some paths only).",
+    "caveat": "A denied open does not create a session row of its own, so this is the first dedicated view that shows it in full with only permission to read voice sessions. Other paths show it partially or need another permission: the API playground (tenant admin), the audit explorer (the action, without its reason) and Security findings (some paths only).",
     "empty": "No open decisions yet",
     "emptyHint": "This records the decisions the engine managed to persist. The evidence write is best-effort by design — a denial stands even if its ledger row is lost — so an empty ledger is not proof that nothing was refused.",
     "truncated": "Showing the most recent {{count}} decisions and the engine reports more: this list is TRUNCATED. Read it as a sample, not as the whole ledger.",

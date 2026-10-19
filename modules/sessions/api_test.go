@@ -152,13 +152,22 @@ func (h *harness) createOrg(_ string, slug string) model.TenantID {
 }
 
 func (h *harness) viewerToken(admin string, tenant model.TenantID, email string) string {
+	return h.userToken(admin, tenant, email, auth.RoleViewer)
+}
+
+// userToken creates a user with the given role in tenant and returns its login token.
+func (h *harness) userToken(admin string, tenant model.TenantID, email, role string) string {
 	h.t.Helper()
-	r := h.doJSON("POST", "/v1/users", admin, map[string]any{"email": email, "password": "viewerpass1", "tenant": tenant.String(), "role": auth.RoleViewer}, nil)
+	r := h.doJSON("POST", "/v1/users", admin, map[string]any{"email": email, "password": "userpass12", "tenant": tenant.String(), "role": role}, nil)
 	if r.code != http.StatusCreated {
 		h.t.Fatalf("user = %d %s", r.code, r.raw)
 	}
-	r = h.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "viewerpass1"}, nil)
-	return r.body["token"].(string)
+	r = h.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": email, "password": "userpass12"}, nil)
+	token, _ := r.body["token"].(string)
+	if r.code != http.StatusOK || token == "" {
+		h.t.Fatalf("login %s = %d %s", email, r.code, r.raw)
+	}
+	return token
 }
 
 func TestSessionsAPI(t *testing.T) {

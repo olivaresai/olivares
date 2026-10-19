@@ -314,7 +314,7 @@ export function RoutinePolicyEditorDialog({
     // not choose — the empty-list mode exists precisely so that choice is named.
     // Two messages, not one: an empty ALLOWLIST denies every cron, an empty
     // BLOCKLIST blocks nothing. A single shared string told the operator the
-    // wrong thing about one of the two controls, in all seven languages.
+    // wrong thing about one of the two controls, in all nine languages.
     if (cronState === 'listed' && parseEntries(cronEntries).length === 0) {
       out.cronEntries = t('routines.editor.cronEntriesRequired')
     }

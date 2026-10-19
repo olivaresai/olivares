@@ -18,8 +18,9 @@ import (
 // of `olivares codex managed-config` and `olivares agent managed-settings`.
 func newGrokCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "grok",
-		Short: "Author Grok Build governance artifacts (managed requirements)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "grok",
+		Short:       "Author Grok Build governance artifacts (managed requirements)",
 		Long: "grok renders the system-tier requirements.toml that Grok Build clamps as its\n" +
 			"highest configuration layer (sandbox profile and MCP allowlist). It writes a file;\n" +
 			"it does not talk to an engine.\n\n" +
@@ -36,8 +37,9 @@ func newGrokManagedConfigCmd() *cobra.Command {
 	var policyPath, requirementsOut string
 	var validateOnly bool
 	cmd := &cobra.Command{
-		Use:   "managed-config",
-		Short: "Render /etc/grok/requirements.toml from a governance Policy JSON",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "managed-config",
+		Short:       "Render /etc/grok/requirements.toml from a governance Policy JSON",
 		Long: "managed-config renders Grok Build requirements.toml from {\"sandbox_profile\": \"strict\",\n" +
 			"\"allowed_mcp_servers\": []}. An empty allowed_mcp_servers array is a lockdown (no MCP\n" +
 			"servers). Omit the key to leave MCP unauthored. Unknown sandbox profiles fail closed.",

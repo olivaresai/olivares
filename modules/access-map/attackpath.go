@@ -513,7 +513,9 @@ func weakerConfidence(a, b sdkmodel.Confidence) string {
 	return string(b)
 }
 
-// handleReachability serves GET /attack-paths/reachability?agent_id=...
+// handleReachability lists the resources one agent can reach through its access
+// edges, one path per resource, with the weakest attribution along each path.
+// agent_id is required; an unknown agent answers 404.
 func (m *Module) handleReachability(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	agentID := model.ID(r.URL.Query().Get("agent_id"))
 	if agentID.IsZero() {
@@ -528,7 +530,9 @@ func (m *Module) handleReachability(w http.ResponseWriter, r *http.Request, mc a
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleEscalation serves GET /attack-paths/escalation?agent_id=...
+// handleEscalation lists the chains by which one agent shares a resource with
+// another agent that holds more write access. agent_id is required; an unknown
+// agent answers 404, and a cut-short answer says so in truncated.
 func (m *Module) handleEscalation(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	agentID := model.ID(r.URL.Query().Get("agent_id"))
 	if agentID.IsZero() {
@@ -543,7 +547,10 @@ func (m *Module) handleEscalation(w http.ResponseWriter, r *http.Request, mc api
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleExfil serves GET /attack-paths/exfil?resource_id=...
+// handleExfil lists the routes by which data in one resource could leave: the
+// agents that reach it and each other resource they can write. resource_id is
+// required; an unknown resource answers 404, and a cut-short answer says so in
+// truncated.
 func (m *Module) handleExfil(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	resourceID := model.ID(r.URL.Query().Get("resource_id"))
 	if resourceID.IsZero() {
@@ -558,7 +565,9 @@ func (m *Module) handleExfil(w http.ResponseWriter, r *http.Request, mc api.Modu
 	writeJSON(w, http.StatusOK, out)
 }
 
-// handleAttackPathSummary serves GET /attack-paths/summary
+// handleAttackPathSummary counts the estate's agents, edges, escalation chains and
+// exfil routes out of resources that carry a sensitivity, plus its critical agents
+// and sensitive targets. truncated marks incomplete counts.
 func (m *Module) handleAttackPathSummary(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	// The escalation and exfil counts are what the per-agent and per-resource
 	// routes return, summed over every agent and every labeled-sensitive resource,

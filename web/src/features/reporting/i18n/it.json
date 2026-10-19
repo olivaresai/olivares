@@ -1,0 +1,34 @@
+{
+  "title": "Report",
+  "description": "Genera e scarica report di governance su richiesta e gestisci le consegne pianificate.",
+  "catalog": {
+    "title": "Report su richiesta",
+    "empty": "Nessun tipo di report disponibile.",
+    "emptyHint": "Il catalogo elenca i tipi di report che questa build può produrre. Nessuno è disponibile in questa edizione.",
+    "colReport": "Report",
+    "colFormats": "Formati",
+    "colActions": "Azioni",
+    "generate": "Genera"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "Genera {{title}}",
+    "subtitle": "Scegli il formato e l'intervallo di tempo; il report viene scaricato quando è pronto.",
+    "format": "Formato",
+    "from": "Da",
+    "to": "A",
+    "framework": "Framework",
+    "frameworkHint": "Facoltativo: limita le evidenze a un singolo framework di compliance.",
+    "frameworkPlaceholder": "es. soc2",
+    "team": "Team",
+    "teamHint": "Facoltativo: limita la ripartizione della spesa a un singolo team.",
+    "teamPlaceholder": "es. platform",
+    "download": "Scarica",
+    "done": "Report generato: {{title}}.",
+    "failed": "Generazione del report non riuscita.",
+    "pdfUnavailable": "La generazione di PDF non è disponibile in questa build. Scegli invece HTML."
+  }
+}

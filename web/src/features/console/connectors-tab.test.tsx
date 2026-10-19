@@ -323,7 +323,7 @@ describe('ConnectorsTab', () => {
     api.listSources.mockResolvedValue(sourcesTwoOfOneKind.both_running)
     wrap(<ConnectorsTab />)
     expect(
-      await screen.findByText(/did not wire connector onboarding/i),
+      await screen.findByText(/does not include connector onboarding/i),
     ).toBeInTheDocument()
     expect(screen.queryByText(/no connectors yet/i)).not.toBeInTheDocument()
     expect(
@@ -1007,7 +1007,7 @@ describe('ConnectorsTab — catalog and roster are independent authorities', () 
     api.listConnectors.mockRejectedValue(UNWIRED())
     wrapReal(() => <ConnectorsTab />)
     expect(
-      await screen.findByText(/did not wire connector onboarding/i),
+      await screen.findByText(/does not include connector onboarding/i),
     ).toBeInTheDocument()
     // The failure this lot corrects: `unavailable` replaced the roster branch, so
     // two admitted rows were painted nowhere.
@@ -1026,13 +1026,13 @@ describe('ConnectorsTab — catalog and roster are independent authorities', () 
     api.listSources.mockRejectedValue(UNWIRED())
     wrapReal(() => <ConnectorsTab />)
     // A build with no source roster service is a different fact from a build that
-    // did not wire connector ONBOARDING; saying the second when the first happened
+    // does not include connector ONBOARDING; saying the second when the first happened
     // sends the operator to the boot file for a catalog that is working.
     expect(
       await screen.findByText(/does not serve the source roster/i),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(/did not wire connector onboarding/i),
+      screen.queryByText(/does not include connector onboarding/i),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByText(/no connectors yet/i)).not.toBeInTheDocument()

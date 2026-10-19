@@ -55,7 +55,7 @@ El sitio de documentación que estás leyendo forma parte del producto AGPL. Qu�
 | Edición | Precio | Alcance |
 | --- | --- | --- |
 | Community | Gratis, AGPL-3.0-only | Usuarios ilimitados; un proveedor de identidad (IdP) activo. |
-| Business | 129 USD/mes o 1.290 USD/año | Usuarios ilimitados; una entidad jurídica; una instancia activa a la vez. |
+| Business | 99 USD/mes o 990 USD/año | Usuarios ilimitados; una entidad jurídica; una instancia activa a la vez. |
 | Enterprise | Contacta con nosotros | Condiciones pactadas en un contrato y las capacidades que dependen de ellas: varias entidades, más despliegues o IdP, mirrors air-gap, LTS personalizado y credenciales upstream acotadas emitidas por intercambio de tokens OAuth 2.0 (RFC 8693). |
 
 Business incluye **Regulated Operations**, **AI Runtime Security**,
@@ -83,10 +83,10 @@ El binario abierto es la plataforma de gobierno al completo; la línea comercial
 es **aditiva**. Merece la pena destacar dos fronteras, porque el binario abierto
 responde por ellas con honestidad en vez de fingirlas:
 
-- **SSO** — el login de un solo IdP (OIDC + SAML 2.0) y el SCIM entrante son
-  **abiertos** en el binario por defecto: login real, sin `-tags enterprise`. Varios
-  IdP activos (por tenant / por dominio), el mapeo de grupos al iniciar sesión y la
-  exigencia de SSO son de Business (Identity & Scale); activar un segundo IdP activo devuelve
+- **SSO** — el login de un solo IdP (OIDC + SAML 2.0) es
+  **abierto** en el binario por defecto: login real, sin `-tags enterprise`. Varios
+  IdP activos (por tenant / por dominio), el mapeo de grupos al iniciar sesión, la
+  exigencia de SSO y el servidor SCIM entrante son de Business (Identity & Scale); activar un segundo IdP activo devuelve
   `multi_idp_requires_enterprise`.
 - **Cuentas de usuario** — **ilimitadas en todas las ediciones**. El binario de
   comunidad no tiene tope de usuarios, y el comercial tampoco: ningún estado de

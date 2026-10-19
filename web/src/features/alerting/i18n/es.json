@@ -1,10 +1,62 @@
 {
   "title": "Alertas",
-  "description": "Enruta hallazgos a destinos e inspecciona el registro de entregas. Una ruta referencia un destino por nombre; la credencial vive en el transporte cableado.",
+  "description": "Enruta hallazgos a destinos e inspecciona el registro de entregas. Una ruta referencia un destino por nombre; la credencial vive en el transporte configurado.",
   "tabs": {
     "routes": "Rutas",
+    "destinations": "Destinos",
     "deliveries": "Entregas",
     "outbox": "Mensajes muertos"
+  },
+  "destinations": {
+    "adminOnly": "Los destinos los gestiona un administrador",
+    "adminOnlyHint": "Añadir o cambiar un destino requiere un administrador de la instancia. Pídele que lo añada o aprovisiónalo en el archivo del operador.",
+    "intro": "Un destino es adonde una ruta envía las alertas. Añade aquí Slack o Microsoft Teams; la URL del webhook se sella y no se vuelve a mostrar.",
+    "add": "Añadir destino",
+    "empty": "Aún no hay destinos",
+    "emptyHint": "Añade un destino de Slack o Teams y apunta una ruta hacia él.",
+    "noSealer": "Guardar está desactivado: este despliegue no tiene sellador de secretos, así que una URL de webhook no puede guardarse de forma segura.",
+    "fileNote": "Los destinos del archivo del operador (OLIVARES_NOTIFY_CONFIG) se muestran en solo lectura. Los demás tipos se aprovisionan allí.",
+    "colName": "Nombre",
+    "colKind": "Tipo",
+    "colHost": "Host del webhook",
+    "colSource": "Origen",
+    "colStatus": "Estado",
+    "colActions": "Acciones",
+    "sourceConsole": "Consola",
+    "sourceFile": "Archivo del operador",
+    "open": "Abierto",
+    "notOpen": "No abierto",
+    "testAction": "Enviar un mensaje de prueba a {{name}}",
+    "editAction": "Editar el destino {{name}}",
+    "deleteAction": "Eliminar el destino {{name}}",
+    "tested": "Mensaje de prueba enviado a {{name}}",
+    "testSent": "Mensaje de prueba enviado",
+    "testFailed": "El destino no aceptó el mensaje de prueba. Comprueba la URL del webhook.",
+    "saved": "Destino guardado",
+    "savedNotOpen": "Destino guardado, pero no está abierto. Comprueba la URL del webhook y envía un mensaje de prueba.",
+    "deleted": "Destino eliminado",
+    "deleteDialog": {
+      "title": "¿Eliminar el destino?",
+      "description": "Esto elimina «{{name}}» y su URL de webhook guardada. Las rutas que apuntan a él registrarán un destino desconocido hasta que elijas otro.",
+      "confirm": "Eliminar destino"
+    },
+    "dialog": {
+      "title": "Añadir destino",
+      "editTitle": "Editar destino",
+      "subtitle": "Envía alertas a Slack o Microsoft Teams. Envía un mensaje de prueba antes de guardar.",
+      "kind": "Tipo",
+      "name": "Nombre",
+      "nameHint": "Minúsculas, dígitos, punto, guion o guion bajo. Las rutas se refieren a este nombre.",
+      "url": "URL del webhook",
+      "urlHint": {
+        "slack": "La URL del webhook entrante de tu app de Slack (hooks.slack.com).",
+        "teams": "La URL del webhook de Workflows para «Cuando se recibe una solicitud de webhook de Teams».",
+        "default": "La URL del webhook entrante."
+      },
+      "urlKeep": "Déjalo en blanco para conservar la URL guardada ({{host}}).",
+      "urlStored": "Guardada — escribe para reemplazarla",
+      "test": "Enviar mensaje de prueba"
+    }
   },
   "severities": {
     "any": "Cualquier severidad",

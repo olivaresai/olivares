@@ -14,12 +14,13 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // The Community binary wires no department service (wire_noenterprise.go): placing
-// a department and filing a group in a workspace answer 501 departments_unavailable
-// from the booted engine, and `olivares workspaces` has no tree verbs. The Business
-// build serves them. Group nesting is published Community API and keeps working.
+// a department, filing a group in a workspace and nesting a group under another
+// answer 501 departments_unavailable from the booted engine, and `olivares
+// workspaces` has no tree verbs. The Business build serves them.
 func TestCommunityBuildAnswers501ForDepartments(t *testing.T) {
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	dir := t.TempDir()
@@ -47,13 +48,18 @@ func TestCommunityBuildAnswers501ForDepartments(t *testing.T) {
 	sales := do("POST", "/v1/workspaces", root, tenant, map[string]any{"name": "Sales", "slug": "sales"}, 201)["id"].(string)
 	emea := do("POST", "/v1/workspaces", root, tenant, map[string]any{"name": "EMEA", "slug": "emea"}, 201)["id"].(string)
 	group := func(name string) string {
-		return do("POST", "/v1/scim/v2/Groups", root, tenant, map[string]any{"schemas": []string{"urn:ietf:params:scim:schemas:core:2.0:Group"}, "displayName": name}, 201)["id"].(string)
+		g, err := eng.authr.SCIMCreateGroup(context.Background(), principalOfToken(t, eng.authr, root), model.TenantID(tenant), auth.SCIMGroupInput{DisplayName: name})
+		if err != nil {
+			t.Fatalf("create group %s: %v", name, err)
+		}
+		return g.Group.ID.String()
 	}
 	staff, team := group("Staff"), group("Team")
 
 	for _, c := range []struct{ path, field, value string }{
 		{"/v1/workspaces/" + emea + "/parent", "parent_id", sales},
 		{"/v1/groups/" + team + "/workspace", "workspace_id", sales},
+		{"/v1/groups/" + team + "/parent", "parent_id", staff},
 	} {
 		out := do("PUT", c.path, root, tenant, map[string]any{c.field: c.value}, http.StatusNotImplemented)
 		if e, _ := out["error"].(map[string]any); e["code"] != "departments_unavailable" {
@@ -63,15 +69,12 @@ func TestCommunityBuildAnswers501ForDepartments(t *testing.T) {
 	if got := do("GET", "/v1/workspaces/"+emea, root, tenant, nil, 200)["parent_id"]; got != nil {
 		t.Errorf("a refused move set parent_id %v", got)
 	}
-	if got := do("PUT", "/v1/groups/"+team+"/parent", root, tenant, map[string]any{"parent_id": staff}, 200)["parent_group_id"]; got != staff {
-		t.Errorf("Community nesting answered parent_group_id %v, want %s", got, staff)
-	}
 	listed := false
 	for _, g := range do("GET", "/v1/groups", root, tenant, nil, 200)["groups"].([]any) {
 		if g := g.(map[string]any); g["id"] == team {
 			listed = true
-			if g["parent_group_id"] != staff || g["workspace_id"] != "" {
-				t.Errorf("group %s = %v, want nested under %s and a refused placement not stored", team, g, staff)
+			if g["parent_group_id"] != "" || g["workspace_id"] != "" {
+				t.Errorf("group %s = %v, want a refused nesting and a refused placement not stored", team, g)
 			}
 		}
 	}

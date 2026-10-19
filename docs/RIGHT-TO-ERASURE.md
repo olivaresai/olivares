@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 How to fulfill a GDPR Art. 17 / CCPA §1798.105 request over the control plane's own stores
 without breaking the append-only ledger.
 **Retention/holds:** `docs/RECORDS-MANAGEMENT.md` (the hold ALWAYS vetoes erasure, §6.1).
+**Edition:** right to erasure and legal holds require Business Regulated Operations; Community answers their routes `501 business_required`. See [edition placement](editions.md).
 
 ## 1. Before registering the DSR
 

@@ -169,10 +169,12 @@ func (s *SecretStore) List(ctx context.Context, scope model.TenantID) ([]SecretV
 // never forces re-entering the secret); an empty value on a NEW secret is refused.
 // Deny-closed: a write with no sealer wired is refused (never cleartext).
 func (s *SecretStore) Put(ctx context.Context, actor Principal, scope model.TenantID, name, value, description string) (SecretView, error) {
-	return s.put(ctx, actor, scope, name, value, description, nil)
+	return s.put(ctx, actor, scope, name, value, description, nil, "")
 }
 
-func (s *SecretStore) put(ctx context.Context, actor Principal, scope model.TenantID, name, value, description string, authority *configurationAuthority) (SecretView, error) {
+// put is Put with two more inputs: the configuration authority a guarded write pins, and a
+// non-secret hint to store in place of the value's fingerprint (a vault item's kind).
+func (s *SecretStore) put(ctx context.Context, actor Principal, scope model.TenantID, name, value, description string, authority *configurationAuthority, hint string) (SecretView, error) {
 	name = strings.TrimSpace(name)
 	if msg := ValidateSecretName(name); msg != "" {
 		return SecretView{}, fmt.Errorf("%w: %s", ErrBadSecretName, msg)
@@ -194,6 +196,9 @@ func (s *SecretStore) put(ctx context.Context, actor Principal, scope model.Tena
 			return SecretView{}, serr
 		}
 		next.ValueSealed, next.Hint = sealed, fingerprint(value)
+		if hint != "" {
+			next.Hint = hint
+		}
 	} else if !found {
 		return SecretView{}, ErrEmptySecretValue
 	}
@@ -252,26 +257,67 @@ func (s *SecretStore) Delete(ctx context.Context, actor Principal, scope model.T
 	})
 }
 
+// PersonalVaultPrefix opens a person's own namespace in a tenant scope:
+// vault/<user-id>/<item>. Such an item is read back by its owner through Reveal and
+// is never a `store:` reference. The deployment-wide scope has no such rule: an
+// operator's own `vault/token` is an ordinary global secret.
+const PersonalVaultPrefix = "vault/"
+
+// open loads a secret and opens its sealed value. It fails closed: a missing sealer is
+// ErrNoSecretSealer, a bad name ErrBadSecretName, a missing secret ErrSecretNotFound, a
+// value that does not open is the sealer's error. The returned bytes are a fresh copy
+// the caller owns.
+func (s *SecretStore) open(ctx context.Context, scope model.TenantID, name string) (model.SecretEntry, []byte, error) {
+	if s.sealer == nil {
+		return model.SecretEntry{}, nil, ErrNoSecretSealer
+	}
+	name = strings.TrimSpace(name)
+	if msg := ValidateSecretName(name); msg != "" {
+		return model.SecretEntry{}, nil, fmt.Errorf("%w: %s", ErrBadSecretName, msg)
+	}
+	row, ok, err := s.load(ctx, scope, name)
+	if err != nil {
+		return model.SecretEntry{}, nil, err
+	}
+	if !ok {
+		return model.SecretEntry{}, nil, fmt.Errorf("%w: %q", ErrSecretNotFound, name)
+	}
+	value, err := s.sealer.Open(ctx, scope, row.ValueSealed)
+	return row, value, err
+}
+
 // Resolve opens a secret's sealed value to its plaintext — the hot path the
 // engine's reference resolver calls at Open for a `store:<name>` reference. It
-// fails closed: a missing secret is ErrSecretNotFound, a missing sealer is
-// ErrNoSecretSealer, a value that does not open is the sealer's error. The
-// returned bytes are a fresh copy the caller owns.
+// fails closed like open. A tenant's personal vault item is refused: connectors, the
+// deploy executor and providers resolve names a tenant administrator chose, and
+// only the item's owner may read it back (Reveal).
 func (s *SecretStore) Resolve(ctx context.Context, scope model.TenantID, name string) ([]byte, error) {
-	if s.sealer == nil {
-		return nil, ErrNoSecretSealer
+	if scope != GlobalSecretScope && strings.HasPrefix(strings.TrimSpace(name), PersonalVaultPrefix) {
+		return nil, fmt.Errorf("%w: a personal vault item is not a store reference", ErrBadSecretName)
 	}
-	if msg := ValidateSecretName(strings.TrimSpace(name)); msg != "" {
-		return nil, fmt.Errorf("%w: %s", ErrBadSecretName, msg)
-	}
-	row, ok, err := s.load(ctx, scope, strings.TrimSpace(name))
+	_, value, err := s.open(ctx, scope, name)
+	return value, err
+}
+
+// Reveal opens a secret's sealed value for a person and records the reveal on the
+// ledger. It is the one path that hands a stored value to a human; Resolve stays the
+// engine's own path to a connector. The ledger entry names the actor and the secret
+// entry and never carries the value, and the value is returned only when that entry
+// was written: an audit failure refuses the reveal. Like Resolve it fails closed
+// (ErrNoSecretSealer, ErrSecretNotFound, the sealer's own error). Whether the actor
+// may see this secret is the caller's decision; the API admits only a vault owner.
+func (s *SecretStore) Reveal(ctx context.Context, actor Principal, scope model.TenantID, name string) ([]byte, error) {
+	row, value, err := s.open(ctx, scope, name)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, fmt.Errorf("%w: %q", ErrSecretNotFound, name)
+	if err := s.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		return auditAct(ctx, as, actor, "secret.reveal", secretEntryKind, row.ID)
+	}); err != nil {
+		clear(value)
+		return nil, err
 	}
-	return s.sealer.Open(ctx, scope, row.ValueSealed)
+	return value, nil
 }
 
 func toSecretView(e model.SecretEntry) SecretView {

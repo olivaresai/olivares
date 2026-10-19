@@ -37,8 +37,9 @@ const capabilitiesNS = "capabilities"
 func newCapabilitiesCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:   "capabilities",
-		Short: "What this estate can do: connected servers, and the tools and skills they bring",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "capabilities",
+		Short:       "What this estate can do: connected servers, and the tools and skills they bring",
 		Long: "capabilities is the discovered surface — the MCP servers this estate talks to and the\n" +
 			"tools and skills each one contributes. The namespace is the same word the API uses\n" +
 			"(/v1/m/capabilities), so a route and its verb are one translation apart.\n\n" +
@@ -118,8 +119,9 @@ type cliMCPToolList struct {
 
 func capabilitiesServersCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "servers",
-		Short: "The MCP servers this estate talks to",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "servers",
+		Short:       "The MCP servers this estate talks to",
 		Long: "The MCP servers registered for this tenant: what each one is, whether the plane can\n" +
 			"currently reach it, and which tools it advertises. `ls` answers which servers exist;\n" +
 			"`get` answers what one of them offers.",
@@ -133,9 +135,10 @@ func capabilitiesServersCmd(flags *authClientFlags) *cobra.Command {
 func capabilitiesServersListCmd(flags *authClientFlags) *cobra.Command {
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the connected MCP servers",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the connected MCP servers",
 		Long: "List every MCP server this tenant has, with its transport, declared status and the\n" +
 			"DERIVED connection state. Those two are not the same fact: `status` is what the record\n" +
 			"says, `connection` is what the plane last observed.",
@@ -187,8 +190,9 @@ func capabilitiesServersListCmd(flags *authClientFlags) *cobra.Command {
 
 func capabilitiesServersGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <server-id>",
-		Short: "Show one MCP server and what it brings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <server-id>",
+		Short:       "Show one MCP server and what it brings",
 		Long: "Show a single server with the counts of what it contributes. The full document —\n" +
 			"every tool, skill and consumer — is what `-o json` emits; the text view is the summary\n" +
 			"an operator reads first.",
@@ -230,8 +234,9 @@ func capabilitiesSkillsCmd(flags *authClientFlags) *cobra.Command {
 	var serverID string
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:   "skills",
-		Short: "The skills the connected servers contribute",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "skills",
+		Short:       "The skills the connected servers contribute",
 		Long: "List the skills available in this tenant and which server each came from. Use\n" +
 			"--server-id to narrow to one server, which is the filter the engine reads.",
 		Example: "  olivares capabilities skills\n" +
@@ -285,8 +290,9 @@ func capabilitiesToolsCmd(flags *authClientFlags) *cobra.Command {
 	var serverID string
 	page := &observePageFlags{}
 	cmd := &cobra.Command{
-		Use:   "tools",
-		Short: "The tools the connected servers expose, with their destructive hints",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tools",
+		Short:       "The tools the connected servers expose, with their destructive hints",
 		Long: "List the tools available in this tenant. The two hint columns are the point: READ-ONLY\n" +
 			"and DESTRUCTIVE are the server's own declaration about what a tool does, and TRUST says\n" +
 			"how much weight the plane gives that declaration. Read them before wiring an agent.",
@@ -385,8 +391,9 @@ type cliWiringGraph struct {
 func capabilitiesWiringCmd(flags *authClientFlags) *cobra.Command {
 	var originKind, originRef, capabilityKind, capabilityRef string
 	cmd := &cobra.Command{
-		Use:   "wiring",
-		Short: "Who is actually using which capability, as observed edges",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "wiring",
+		Short:       "Who is actually using which capability, as observed edges",
 		Long: "The capability-connection graph: one edge per origin→capability pair the plane has\n" +
 			"observed, with its signal sources, first and last sighting and occurrence count. This\n" +
 			"is a different question from `servers`/`tools`, which say what EXISTS, and from the\n" +

@@ -228,7 +228,7 @@
   },
   "forbiddenResolve": {
     "title": "Resolver no autorizado",
-    "description": "Resolver un incidente requiere el permiso de administración de checks (health:check:admin)."
+    "description": "Tu rol no puede resolver incidentes."
   },
   "connectors": {
     "autoRefresh": "Se actualiza automáticamente cada 15 segundos.",

@@ -22,12 +22,16 @@
 //    navigation per keystroke, which on this screen would be a request per keystroke.
 //    That is the `aria-selected` / focus split a listbox is FOR, so the rail is one:
 //    `role="listbox"` with roving tabindex, one tab stop for the whole rail.
+//    The pointer's Open beside button is not in that tab order or that tree.
 //
-// ⛔ AND A ROW SAYS WHAT IT IS DOING, NOT WHAT IT IS. `workLine` is the front door's ladder —
-//    summary, then goal, then the action and resource the connector reported, then the
-//    session's own reference — and it is imported rather than re-derived, so the rail
-//    and the front door can never tell the same session two different ways.
-import { Pin, SquareTerminal } from 'lucide-react'
+// ⛔ AND A ROW IS CALLED BY WHAT IT IS, NOT BY ITS LAST FILE. `sessionNaming` is the list's
+//    one policy over the front door's ladder — the operator's name, then the summary or
+//    goal the engine sent, then the session's tool and folder, then "untitled" with the
+//    distinguishing tail — and it is imported rather than re-derived, so the rail, the
+//    table and the sidebar can never tell the same session two different ways. The action
+//    and resource a connector reported are the secondary fact: on the row's hover and in
+//    the thread, never the title (#2266).
+import { Columns2, Pin, SquareTerminal } from 'lucide-react'
 import {
   useCallback,
   useRef,
@@ -36,24 +40,26 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { runFolder } from './folder'
 import { EmptyState } from '@/components/ui/empty-state'
+import { runFolder } from './folder'
 import { workLine } from '@/features/home/work-line'
 import { RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
-import { toolName } from '@/features/agentops/tool-names'
+import { Button } from '@/components/ui/button'
+import { usePreferencesStore, type Density } from '@/stores/preferences'
+import { IconTip } from './icon-tip'
 import { StateDot } from './session-state-dot'
 import {
   primaryRun,
   sessionNaming,
+  sessionPlace,
   sharedNames,
   type UnifiedSession,
 } from './provenance'
 import { addressOf } from './session-address'
-import { pinnedAddress } from './session-pins'
-import { WorkClause } from './work-clause'
+import { isPinnable } from './session-pins'
 import { groupSessions, railOrder, WORK_GROUPS } from './session-groups'
 
 export interface WorkRailProps {
@@ -61,24 +67,30 @@ export interface WorkRailProps {
   /** The address of the session on screen, or null. */
   selected: string | null
   onOpen: (session: UnifiedSession) => void
+  onOpenBeside?: (session: UnifiedSession) => void
   pinned: ReadonlySet<string>
-  /** null when this principal has nowhere to store a preference — then no pin is offered. */
+  /** Pin or unpin the session at this address; null offers no pin at all. */
   onTogglePin: ((address: string) => void) | null
   /** Rendered when the estate has no sessions at all. One action, already authorized. */
   emptyAction?: ReactNode
   loading?: boolean
 }
 
-/** The tool a session runs, by its product name; null when nothing declared one. */
-function toolLabel(session: UnifiedSession): string | null {
-  const run = primaryRun(session.runs)
-  const driver = run?.provider_driver || session.live?.provider
-  return driver ? toolName(driver) : null
+/**
+ * THE LIST'S ONE ROW HEIGHT: the `h-*` token of `DENSITY_ROW` for the operator's density
+ * (stores/preferences.ts; work-rail.test.tsx pins the two together), from the shell's
+ * breakpoint up. Below it the row keeps a 44 px touch target. A literal per density so
+ * the class is in the stylesheet.
+ */
+const ROW_HEIGHT: Record<Density, string> = {
+  compact: 'h-11 min-[761px]:h-8',
+  comfortable: 'h-11 min-[761px]:h-9',
 }
 
 /**
- * ONE ROW: what it is called, what state it is in, how long it has been at it, and
- * what it is doing now — in one clause.
+ * ONE ROW, ONE LINE: tool icon, what the session is called, and on the right its state
+ * as a dot and the time as a relative figure. The tool, the folder, how long it has been
+ * at it and what it is doing now are on the row's hover and in the thread it opens.
  */
 function RailRow({
   session,
@@ -88,6 +100,7 @@ function RailRow({
   onOpen,
   registerRef,
   shared,
+  onOpenBeside,
 }: {
   session: UnifiedSession
   selected: boolean
@@ -97,11 +110,12 @@ function RailRow({
   registerRef: (address: string, el: HTMLDivElement | null) => void
   /** Names another row of this rail also carries: those rows show their tail. */
   shared: ReadonlySet<string>
+  onOpenBeside?: (session: UnifiedSession) => void
 }) {
   const { t } = useTranslation('sessions')
+  const density = usePreferencesStore((s) => s.density)
   const address = addressOf(session)
   const run = primaryRun(session.runs)
-  const folder = runFolder(run)
   // The clause comes from the OBSERVED half, through that same ladder. With no observed
   // half there is no sentence to tell — a launched run whose telemetry has not arrived
   // is a real state, and saying so beats printing its reference twice.
@@ -120,99 +134,129 @@ function RailRow({
   const nameTitle = [naming.name, naming.shortId, naming.reference]
     .filter((part, i, all) => part && all.indexOf(part) === i)
     .join(' · ')
-  // The hover text: the elapsed time and the observed clause, i.e. exactly the two facts
-  // the row used to spend two extra lines on. `undefined` and not an empty string when
-  // there is neither — a tooltip that says nothing is worse than no tooltip.
+  // The hover text: the tool and folder when the name is not already them, the folder's
+  // full path, the elapsed time and the observed clause — the facts the row used to spend
+  // a second line on, which was blank for every observed session. `undefined` and not an
+  // empty string when there is none: a tooltip that says nothing is worse than no tooltip.
+  const place = sessionPlace(session)
   const rowTitle =
-    [seconds > 0 ? humanDurationSeconds(seconds) : null, line]
+    [
+      place && place !== naming.name ? place : null,
+      // The folder Olivares made for the run is named by the run's id and is no place
+      // an operator chose (`runFolder`): its path is not painted either.
+      runFolder(run) ? run?.workspace_path : null,
+      seconds > 0 ? humanDurationSeconds(seconds) : null,
+      line,
+    ]
       .filter(Boolean)
       .join(' · ') || undefined
 
-  const tool = toolLabel(session)
-  const folderPart = folder ? (
-    <span title={run?.workspace_path} data-testid="rail-row-folder">
-      {folder}
-    </span>
-  ) : null
-
   return (
-    <div
-      ref={(el) => registerRef(address, el)}
-      role="option"
-      aria-selected={selected}
-      tabIndex={focused ? 0 : -1}
-      data-testid="rail-row"
-      data-address={address}
-      onClick={() => onOpen(session)}
-      /* ⛔ A ROW IS 52 px: tool icon, a one-line title, a second line, and on the right the
-         state as a dot and the time as a relative figure. The title is cut with an
+    <div className="group/row relative">
+      <div
+        ref={(el) => registerRef(address, el)}
+        role="option"
+        aria-selected={selected}
+        tabIndex={focused ? 0 : -1}
+        data-testid="rail-row"
+        data-address={address}
+        onClick={() => onOpen(session)}
+        /* ⛔ A ROW IS ONE LINE AT THE LIST'S STANDARD ROW HEIGHT: tool icon, the name, and
+         on the right the state as a dot and the time as a relative figure. It was a
+         52 px row with a second line that was blank for every observed session (#2266:
+         half the screen empty, fifty rows of the same shape). The name is cut with an
          ellipsis and its whole text (name, tail, reference) is on the name's hover; the
-         elapsed duration and the observed clause are on the row's own hover and are
-         painted in full by the thread this row opens. What stays on the row is what a
+         tool, folder, elapsed duration and observed clause are on the row's own hover and
+         are painted in full by the thread this row opens. What stays on the row is what a
          person picks a row BY. The dot has no width to lose in German, which is what the
          old 146 px state badge did to the name.
 
          ⛔ SELECTED IS NEUTRAL. The orange marks the one action, the focus ring and the
          brand; "this is open" is a tonal fill, and "working" is the dot. */
-      title={rowTitle}
-      className={cn(
-        'group relative flex h-14 cursor-pointer min-[761px]:h-[52px] items-center gap-2.5 px-3 outline-none transition-colors',
-        selected ? 'bg-active' : 'hover:bg-hover',
-        'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
-      )}
-    >
-      <SquareTerminal
-        aria-hidden="true"
-        className="size-4 shrink-0 text-text-3"
-      />
-      <span className="flex min-w-0 flex-1 flex-col justify-center">
-        <span
-          data-testid="rail-row-name"
-          title={nameTitle}
-          className="min-w-0 truncate text-body font-medium text-text"
-        >
-          {pinned ? (
-            <>
-              {/* An `aria-label` on a bare <svg> is not reliably announced: the icon is
+        title={rowTitle}
+        className={cn(
+          'group relative flex cursor-pointer items-center gap-2.5 px-3 outline-none transition-colors',
+          ROW_HEIGHT[density],
+          selected ? 'bg-active' : 'hover:bg-hover',
+          'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+          // The pointer's Open beside button takes the time's place on hover (below), so the
+          // name keeps the room: reserving 48 px for it on every row left a title 103 px.
+          // On a phone, or with a coarse pointer (a tablet has no hover to reveal it), the
+          // button is always painted and keeps its own column.
+          onOpenBeside && 'max-[760px]:pr-12 pointer-coarse:pr-12',
+        )}
+      >
+        <SquareTerminal
+          aria-hidden="true"
+          className="size-4 shrink-0 text-text-3"
+        />
+        <span className="flex min-w-0 flex-1 items-center">
+          <span
+            data-testid="rail-row-name"
+            title={nameTitle}
+            className="min-w-0 truncate text-body font-medium text-text"
+          >
+            {pinned ? (
+              <>
+                {/* An `aria-label` on a bare <svg> is not reliably announced: the icon is
                   hidden and the WORD joins the row's accessible name, which for a
                   `role="option"` is composed from its contents. A pin is a state the
                   operator put the row in, so it is painted in the muted register: the
-                  accent is not a second meaning in a 300 px list. */}
-              <Pin
-                className="mr-1 inline size-3 align-[-1px] text-muted-foreground"
-                aria-hidden="true"
-              />
-              <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
-            </>
-          ) : null}
-          <WorkClause text={naming.name} live={session.live} />
-          {naming.shortId ? (
-            <span className="font-mono text-caption text-text-3">
-              {' '}
-              {naming.shortId}
-            </span>
+                  accent is not a second meaning in a 360 px list. */}
+                <Pin
+                  className="mr-1 inline size-3 align-[-1px] text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <span className="sr-only">{t('rail.pinnedMark')}</span>{' '}
+              </>
+            ) : null}
+            {naming.name}
+            {naming.shortId ? (
+              <span className="font-mono text-caption text-text-3">
+                {' '}
+                {naming.shortId}
+              </span>
+            ) : null}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <StateDot session={session} />
+          {session.lastActivityMs > 0 ? (
+            <RelTimeLabel
+              ts={new Date(session.lastActivityMs).toISOString()}
+              className={cn(
+                'shrink-0 whitespace-nowrap text-overline font-normal tabular-nums text-text-3',
+                // Faded, not hidden: it keeps its place in the layout and in the row's
+                // accessible name. Hover only: a focused row is not asking for the button.
+                onOpenBeside && 'min-[761px]:group-hover/row:opacity-0',
+              )}
+            />
           ) : null}
         </span>
-        {tool || folderPart ? (
-          <span
-            data-testid="rail-row-meta"
-            className="min-w-0 truncate text-overline font-normal text-text-3"
+      </div>
+      {onOpenBeside ? (
+        <IconTip label={t('surface.openBeside')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('surface.openBeside')}
+            // A POINTER SHORTCUT, not a second control in the listbox: a listbox owns
+            // options, and a button per row would add a tab stop per row. Keyboard and
+            // screen-reader users have the declared command (Alt+Shift+O on the row)
+            // and the palette; this stays for the mouse and the touch screen.
+            // Painted on hover (always on a phone or with a coarse pointer, which has no
+            // hover) and never on focus: a clicked or arrowed-to row is focus-within with
+            // the pointer elsewhere, and the button sits over the time's end, which only a
+            // hover fades out.
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => onOpenBeside(session)}
+            className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 group-hover/row:opacity-100 max-[760px]:opacity-100 pointer-coarse:opacity-100"
           >
-            {tool}
-            {tool && folderPart ? ' · ' : null}
-            {folderPart}
-          </span>
-        ) : null}
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5">
-        <StateDot session={session} />
-        {session.lastActivityMs > 0 ? (
-          <RelTimeLabel
-            ts={new Date(session.lastActivityMs).toISOString()}
-            className="shrink-0 whitespace-nowrap text-overline font-normal tabular-nums text-text-3"
-          />
-        ) : null}
-      </span>
+            <Columns2 aria-hidden="true" />
+          </Button>
+        </IconTip>
+      ) : null}
     </div>
   )
 }
@@ -225,6 +269,7 @@ export function WorkRail({
   onTogglePin,
   emptyAction,
   loading,
+  onOpenBeside,
 }: WorkRailProps) {
   const { t } = useTranslation('sessions')
   const groups = groupSessions(sessions, pinned)
@@ -266,6 +311,8 @@ export function WorkRail({
    * anywhere else.
    */
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    // Row action buttons keep their native Enter/Space activation.
+    if (e.target instanceof Element && e.target.closest('button')) return
     if (order.length === 0) return
     const command = resolveBinding(KEYBINDINGS, e, { railFocused: true })
     if (!command) return
@@ -295,7 +342,8 @@ export function WorkRail({
     if (command === 'rail.pin' && onTogglePin) {
       e.preventDefault()
       const row = order[at]
-      if (row) onTogglePin(pinnedAddress(pinned, row) ?? addressOf(row))
+      // A session with no run has nothing to keep a pin on (`isPinnable`): not offered.
+      if (row && isPinnable(row)) onTogglePin(addressOf(row))
     }
   }
 
@@ -350,8 +398,11 @@ export function WorkRail({
                 session={s}
                 selected={addressOf(s) === selected}
                 focused={addressOf(s) === focused}
-                pinned={pinnedAddress(pinned, s) !== undefined}
+                pinned={pinned.has(s.key)}
                 onOpen={onOpen}
+                onOpenBeside={
+                  addressOf(s) !== selected ? onOpenBeside : undefined
+                }
                 registerRef={registerRef}
                 shared={shared}
               />

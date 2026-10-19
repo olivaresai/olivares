@@ -63,14 +63,14 @@
   },
   "policy": {
     "title": "录制策略",
-    "subtitle": "此控制平面上录制什么，以及如何对证据进行分类。编辑需要 recording:config:admin 权限；此处的每次更改本身也是被录制的特权操作。",
+    "subtitle": "此控制平面上录制什么，以及如何对证据进行分类。编辑需要可管理录制策略的角色；此处的每次更改本身也是被录制的特权操作。",
     "loading": "正在加载录制策略…",
     "saved": "录制策略已保存",
     "save": "保存策略",
     "saveFailed": "策略未保存。",
     "forbidden": {
-      "title": "编辑录制策略需要 recording:config:admin",
-      "description": "你的角色可以管理录制会话，但更改录制策略需要单独的 recording:config:admin 权限。请管理员授予该权限。"
+      "title": "你的角色无法编辑录制策略",
+      "description": "你的角色可以管理录制会话，但更改录制策略需要单独的权限。请管理员授予该权限。"
     },
     "error": {
       "title": "无法加载录制策略",

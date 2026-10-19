@@ -197,6 +197,11 @@ type fakeGit struct {
 	fetches      []string
 	fetchErr     error
 	fetchBlocks  bool // the fetch runs until the deadline, then git is killed
+	// changed is the answer to ChangedPaths; changedAsked records each
+	// "from..to" it was asked.
+	changed      []string
+	changedErr   error
+	changedAsked []string
 }
 
 func (g *fakeGit) Fetch(ctx context.Context, repo, source, commit string) error {
@@ -229,6 +234,20 @@ func (g *fakeGit) PathsChanged(_ context.Context, _, _, _ string, paths []string
 	defer g.mu.Unlock()
 	g.checkedPaths = append(g.checkedPaths, paths...)
 	return g.workflows, nil
+}
+
+func (g *fakeGit) ChangedPaths(_ context.Context, _, from, to string, sinceMergeBase bool) ([]string, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	dots := ".."
+	if sinceMergeBase {
+		dots = "..."
+	}
+	g.changedAsked = append(g.changedAsked, from+dots+to)
+	if g.changedErr != nil {
+		return nil, g.changedErr
+	}
+	return g.changed, nil
 }
 
 func (g *fakeGit) apply(r gp.PushRequest) gp.Result {

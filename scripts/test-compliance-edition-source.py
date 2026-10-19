@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Keep Compliance Packs implementation out of the Community source distribution."""
+"""Keep Business implementation (Compliance Packs, fleet managed settings, the inbound SCIM server) out of the Community source distribution."""
 from pathlib import Path
 import re
 import unittest
@@ -38,6 +38,36 @@ class CommunitySourceTests(unittest.TestCase):
                 if forbidden.search(path.read_text()):
                     leaks.append(str(path.relative_to(ROOT)))
         self.assertEqual(leaks, [], 'paid implementation must live in the private overlay')
+
+    def test_no_fleet_managed_settings_implementation(self):
+        forbidden = re.compile(
+            r'type PolicyArtifactDistributor struct|type PolicyObservedStore struct|'
+            r'func \(c \*PolicyConsole\) handle(?:Publish|ListVersions|GetVersion|Artifact|Checkin|Distribution)\('
+        )
+        leaks = []
+        for path in (ROOT / 'modules' / 'governance').glob('*.go'):
+            if not path.name.endswith('_test.go') and forbidden.search(path.read_text()):
+                leaks.append(str(path.relative_to(ROOT)))
+        self.assertEqual(leaks, [], 'fleet managed settings belong in the private overlay')
+
+    def test_no_inbound_scim_server_implementation(self):
+        # The SCIM protocol layer (codecs, filter and PATCH parsers, discovery documents, the
+        # Security Event Token codec) and its HTTP handlers are Business; Community keeps the
+        # error envelope, the admission and the 501 stubs.
+        leaks = []
+        for name in ('events', 'filter', 'group', 'grouppatch', 'list', 'patch', 'scim', 'user'):
+            path = ROOT / 'core' / 'api' / 'scim' / (name + '.go')
+            if path.exists():
+                leaks.append(str(path.relative_to(ROOT)))
+        for name in ('handlers_scim', 'handlers_scim_groups', 'handlers_scim_events'):
+            path = ROOT / 'core' / 'api' / (name + '.go')
+            if path.exists():
+                leaks.append(str(path.relative_to(ROOT)))
+        forbidden = re.compile(r'\bscim\.(?:ParseFilter|ApplyPatch|ApplyGroupPatch|DecodeSET|ParseCompactJWS|EncodeUser|EncodeGroup)\(')
+        for path in (ROOT / 'core' / 'api').glob('*.go'):
+            if not path.name.endswith('_test.go') and forbidden.search(path.read_text()):
+                leaks.append(str(path.relative_to(ROOT)))
+        self.assertEqual(leaks, [], 'the inbound SCIM server belongs in the private overlay')
 
 
 if __name__ == '__main__':

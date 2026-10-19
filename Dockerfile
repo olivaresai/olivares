@@ -22,6 +22,7 @@ RUN npm install -g corepack@0.34.6 && corepack enable pnpm
 COPY web/package.json web/pnpm-lock.yaml ./web/
 RUN cd web && pnpm install --frozen-lockfile
 COPY web/ ./web/
+COPY docs/editions.md ./docs/editions.md
 # Vite creates core/internal/webui/dist from source, including its parent directories.
 RUN cd web && pnpm run build
 
@@ -65,6 +66,7 @@ FROM node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
+       vim less procps curl jq iproute2 tar gzip \
     && npm install --global --ignore-scripts npm@11.21.0 \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /usr/local/include/node \
@@ -73,6 +75,8 @@ RUN apt-get update \
     && install -d -o 65532 -g 65532 -m 0700 /var/lib/olivares /var/lib/olivares/home
 COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /usr/local/bin/
 COPY packaging/container/uv-LICENSE-MIT.txt /usr/share/doc/uv/LICENSE-MIT
+COPY packaging/container/bashrc.sh /etc/olivares-bashrc
+RUN sed -i '1i . /etc/olivares-bashrc' /etc/bash.bashrc
 # A writable home is required for npm/npx and uvx on Compose's read-only rootfs.
 # Per-account homes are set by the product when launching subscription tools.
 ENV HOME=/var/lib/olivares/home

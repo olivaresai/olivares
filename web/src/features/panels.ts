@@ -6,6 +6,29 @@ import type { RBACCatalogDTO, CustomRoleDTO, PermGroupDTO } from './console/api'
 import type { PdpPublishResult, PdpRollbackResult } from './claude-policy/types'
 import type { StepUpAttempt } from '@/stores/step-up'
 import { useAuth } from '@/lib/auth/context'
+import type { FeatureCapability, FeatureView } from './registry'
+import type { CapabilityAccess } from '@/lib/auth/capabilities'
+import type { RequestOptions } from '@/lib/api/client'
+
+/** Optional edition authority for a shared room. Default builds keep their reflection. */
+export interface ConsoleAccessExtension {
+  readonly capability: FeatureCapability
+  readonly continuity: FeatureView['continuity']
+  readonly useOperation: (
+    operation: string,
+    permission: string,
+  ) => {
+    current: boolean
+    workspace: string | null
+    access: CapabilityAccess | null
+  }
+  readonly usePreflight: (
+    operation: string,
+    workspace?: string | null,
+  ) => (
+    authority: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) => Promise<Pick<RequestOptions, 'signal' | 'dispatchGuard'>>
+}
 
 /**
  * A panel that a build-time extension adds inside a public page: a tab or a card. The
@@ -106,6 +129,7 @@ export interface AuthorizationForms {
     roles: CustomRoleDTO[]
     workspaces: { slug: string; name: string }[]
     agentGroups: { slug: string; name: string }[]
+    department?: { id: string; slug: string; name: string }
     onClose: () => void
   }>
   readonly RoleForm: ComponentType<{
@@ -129,6 +153,8 @@ export interface CedarPolicyAuthoring {
 export interface DashboardCostPanels {
   readonly permitted: boolean
   readonly loading: boolean
+  /** Unread since Now dropped its report button (#2245); kept because the edition
+   * overlay sets it, and removing it there and here is one change. */
   readonly hasActivity: boolean
   readonly headline: ReactNode
   readonly homeTile: ReactNode
@@ -153,6 +179,7 @@ export interface DashboardRedteamPanels {
 }
 
 export interface PanelExtensions {
+  readonly consoleAccess?: ConsoleAccessExtension
   readonly identityTabs: readonly IdentityTabExtension[]
   readonly executiveRiskCards: readonly PanelExtension[]
   /** Edition-owned estate selection and organization provisioning. */

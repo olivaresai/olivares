@@ -171,7 +171,7 @@ describe('RecordingPolicyPanel — recording-policy authoring', () => {
     renderPanel()
 
     expect(
-      await screen.findByText(/requires recording:config:admin/i),
+      await screen.findByText(/Your role cannot edit the recording policy/i),
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /save policy/i })).toBeNull()
     expect(api.getConfig).not.toHaveBeenCalled()

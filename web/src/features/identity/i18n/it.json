@@ -1,0 +1,331 @@
+{
+  "title": "Identità e accesso",
+  "subtitle": "Chi può accedere, che cosa può fare e come lo dimostra.",
+  "sections": "Sezioni dell'identità",
+  "groups": {
+    "people": "Persone",
+    "signIn": "Accesso",
+    "machines": "Identità delle macchine"
+  },
+  "tabs": {
+    "federation": "SSO e SCIM",
+    "inventory": "Inventario delle identità",
+    "mcp": "Autenticazione MCP",
+    "login": "Accesso privilegiato",
+    "totp": "Fattore TOTP"
+  },
+  "seam": {
+    "badge": "Backend in arrivo",
+    "body": "{{what}} è un contratto dichiarato: l'endpoint del backend non è ancora attivo, quindi non c'è nulla da mostrare. Questo pannello si popolerà non appena sarà disponibile e non inventa mai dati."
+  },
+  "assurance": {
+    "address": {
+      "addressTitle": "Le passkey non sono disponibili a questo indirizzo.",
+      "ipBody": "Una relying party per le passkey deve essere un nome di dominio accettato dal verificatore di questo deployment, e un indirizzo IP non lo è. Raggiungi questa console tramite un nome host per registrare o usare una passkey.",
+      "nameBody": "Una relying party per le passkey deve essere un nome di dominio accettato dal verificatore di questo deployment, e questo nome host non lo è: richiede un punto e solo lettere ASCII, cifre e trattini.",
+      "insecureTitle": "Questa pagina non è un contesto sicuro.",
+      "insecureBody": "I browser eseguono l'API delle passkey solo in un contesto sicuro, quindi qui non si può registrare né usare alcuna passkey. Raggiungi questa console tramite HTTPS o sull'host locale.",
+      "unsupportedTitle": "Questo browser non supporta le passkey.",
+      "unsupportedBody": "Questo browser non espone alcuna API WebAuthn, quindi qui non si può registrare né usare una passkey. Usa un browser con supporto per le passkey.",
+      "sameDevice": "Su questo dispositivo la stessa console risponde anche a:"
+    },
+    "stepUpTitle": "Autenticazione rafforzata richiesta",
+    "stepUpBody": "{{action}} richiede {{required}}. La tua sessione è {{current}}. Per continuare usa una passkey sul tuo dispositivo o una chiave di sicurezza.",
+    "authenticate": "Autenticati con la passkey",
+    "authenticating": "In attesa del tuo autenticatore…",
+    "seamWhat": "Accesso privilegiato con autenticazione rafforzata WebAuthn",
+    "unsupported": "Questo browser non supporta WebAuthn. Per le azioni privilegiate serve una piattaforma che supporti autenticatori resistenti al phishing.",
+    "failed": "L'autenticazione rafforzata non è stata completata. L'azione resta negata.",
+    "relyingPartyUnusable": "Le passkey non sono disponibili su questo deployment: il motore non ha una relying party utilizzabile per l'indirizzo da cui viene servita la console. Un operatore deve configurare un dominio di relying party valido (un nome host con punto, oppure localhost dove appropriato), raggiungere la console a quell'origine sicura dichiarata e riavviare il motore dopo la modifica. Riprovare da un altro indirizzo non basta a risolvere.",
+    "actions": {
+      "identity": "La gestione delle identità",
+      "providers": "La registrazione o il ritiro di una credenziale di provider",
+      "generic": "Questa azione",
+      "console": "La gestione dei connettori",
+      "stepUpPolicy": "La modifica del controllo aggiuntivo per le azioni amministrative",
+      "modules": "L'attivazione o disattivazione dei moduli",
+      "signing": "L'attivazione o disattivazione della firma dei report"
+    },
+    "aal": {
+      "aal1": "AAL1 (password)",
+      "aal2": "AAL2 (multifattore)",
+      "aal3": "AAL3 (resistente al phishing)"
+    },
+    "unenrolled": "Nessuna passkey è ancora registrata per il tuo account. Registra una passkey sul tuo dispositivo o una chiave di sicurezza nella scheda Accesso privilegiato, poi autenticati.",
+    "unenrolledInline": "Nessuna passkey è ancora registrata per il tuo account. Registrane una qui sotto.",
+    "enrollHint": "Registra la tua prima passkey su questo dispositivo o su una chiave di sicurezza. La sola registrazione non autentica la sessione né completa l'azione in sospeso.",
+    "passkeyName": "Nome della passkey",
+    "enrollUnsupported": "Questo browser non può registrare una passkey. Usa un browser con supporto per le passkey.",
+    "registered": "Passkey registrata. Autenticati per verificare questa sessione, poi controlla e completa l'azione in sospeso.",
+    "registrationUnknown": "Non è stato possibile confermare la registrazione. La passkey potrebbe essere stata salvata. Seleziona Autenticati per verificare; la registrazione non verrà inviata di nuovo in automatico.",
+    "authenticationUnknown": "Non è stato possibile confermare l'autenticazione. La tua sessione potrebbe essere già elevata. Controlla la sessione prima di riprovare.",
+    "needsAuthentication": "Una passkey esistente deve autenticare questa sessione prima che se ne possa registrare un'altra. Seleziona Autenticati.",
+    "checkSession": "Controlla la sessione",
+    "sessionExpired": "Questa sessione è stata rifiutata. Chiudi questa azione e accedi di nuovo prima di riprovare.",
+    "verificationFailed": "Non è stato possibile verificare la sessione per questa azione. L'autenticazione potrebbe essersi completata; l'azione non è proseguita.",
+    "cancelled": "L'operazione con la passkey è stata annullata o è scaduta. Puoi avviare un nuovo tentativo. L'azione non è proseguita.",
+    "cancelHint": "Chiudere annulla questa azione. Una registrazione o un'autenticazione già inviata potrebbe comunque completarsi.",
+    "registrationUnknownElsewhere": "Non è stato possibile confermare la registrazione. La passkey potrebbe essere stata salvata. Chiudi questa finestra e controlla le tue passkey prima di avviare un'altra registrazione.",
+    "code": {
+      "title": "Accedi con il codice del tuo autenticatore",
+      "body": "{{action}} richiede su questo deployment un accesso con il codice del tuo autenticatore. Accedi di nuovo e inserisci il codice.",
+      "signInAgain": "Accedi di nuovo"
+    }
+  },
+  "references": {
+    "note": "Standard che questo pannello rispecchia. Il pannello osserva e verifica; non dichiara alcuna certificazione.",
+    "labels": {
+      "scim": "SCIM 2.0 (RFC 7644)",
+      "prm": "Protected Resource Metadata (RFC 9728)",
+      "asMetadata": "Authorization Server Metadata (RFC 8414)",
+      "resourceIndicators": "Resource Indicators (RFC 8707)",
+      "pkce": "PKCE (RFC 7636)",
+      "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
+      "webauthn": "NIST SP 800-63B-4 (garanzia dell'autenticatore)",
+      "certManager": "cert-manager (CNCF)",
+      "pqc": "NIST SP 800-57 Part 1 r6 (gestione delle chiavi)",
+      "wifReference": "Riferimento Anthropic per le identità dei workload",
+      "workloadIdentity": "Anthropic Workload Identity Federation",
+      "externalKeys": "Anthropic External Keys (CMEK)",
+      "workspaceUpdate": "Residenza dei workspace Anthropic"
+    },
+    "sso": {
+      "title": "Standard SSO e SCIM"
+    },
+    "mcpAuth": {
+      "title": "Standard di autorizzazione MCP"
+    },
+    "login": {
+      "title": "Standard per l'accesso privilegiato"
+    }
+  },
+  "sso": {
+    "title": "Single sign-on (OIDC / SAML)",
+    "description": "L'accesso federato si configura in SSO / IdP, oppure tramite ambiente all'avvio. Questo pannello documenta la configurazione, verifica l'URI di reindirizzamento esatto e mostra lo stato della connessione: non scrive la configurazione.",
+    "notConfigured": "Non configurato",
+    "notConfiguredHint": "Nessun identity provider è configurato, quindi le richieste di federazione restituiscono 501. Imposta le chiavi di ambiente qui sotto e riavvia il motore per abilitare l'SSO.",
+    "seamWhat": "Il riepilogo dello stato della connessione SSO",
+    "protocol": "Protocollo",
+    "state": "Connessione",
+    "redirectUri": "URI di reindirizzamento (esatto)",
+    "pkce": "PKCE",
+    "pkceValue": "Authorization Code + S256 (sempre)",
+    "redirectCheckLabel": "Verifica l'URI di reindirizzamento del tuo IdP",
+    "redirectCheckHint": "Incolla l'URI di reindirizzamento/ACS configurato nel tuo identity provider. Deve coincidere esattamente con il valore qui sopra (RFC 9700).",
+    "redirectMatch": "Corrispondenza esatta: questo URI di reindirizzamento è valido.",
+    "redirectMismatch": "Non corrisponde esattamente. L'IdP deve usare l'URI di reindirizzamento qui sopra, carattere per carattere.",
+    "proto": {
+      "common": "Comune",
+      "oidc": "OIDC",
+      "saml": "SAML"
+    },
+    "required": "Obbligatorio",
+    "secret": "Secret",
+    "envNote": "La configurazione viene letta una sola volta all'avvio dall'ambiente; non esiste un'API di scrittura della configurazione. I secret non vengono mai riletti.",
+    "testLogin": "Avvia un accesso di prova"
+  },
+  "scim": {
+    "title": "Provisioning SCIM 2.0",
+    "description": "Provisioning in ingresso di utenti e gruppi. Stato in sola lettura del service provider, degli utenti sincronizzati e delle evidenze di uscita.",
+    "seamWhat": "La configurazione del service provider SCIM",
+    "businessOnly": "Il server SCIM in ingresso richiede Business. Rimuovi una persona dall'organizzazione in Persone.",
+    "patch": "PATCH",
+    "filter": "Filtro",
+    "filterMax": "Supportato (max {{n}})",
+    "auth": "Autenticazione",
+    "bearerName": "bearer SCIM del tenant",
+    "bearerNote": "L'autenticazione è un token bearer legato al tenant. Il valore del token non viene mai mostrato, solo il suo riferimento.",
+    "usersTitle": "Utenti sincronizzati",
+    "noUsers": "Nessun utente sincronizzato",
+    "noUsersHint": "Quando il tuo IdP effettua il provisioning di utenti tramite SCIM, compaiono qui. Un utente disattivato (mover/leaver) risulta inattivo.",
+    "groupsSupported": "Il provisioning dei gruppi è supportato in ingresso (gruppi e appartenenze). Associare un gruppo della directory a un ruolo resta riservato all'operatore, in Identità → Gruppi.",
+    "leaverTitle": "Evidenze di uscita",
+    "leaverSeamWhat": "Le evidenze di audit delle uscite",
+    "noLeaver": "Nessun evento di deprovisioning",
+    "noLeaverHint": "Quando viene elaborata un'uscita SCIM (delete / prov:delete), il backend revoca le sessioni e i token dell'utente e la registra qui.",
+    "leaverTruncated": "Gli ultimi {{n}} eventi di uscita; ne esistono di più vecchi",
+    "leaverTruncatedHint": "Gli eventi di uscita sono più di quelli mostrati. Questa scheda elenca i più recenti, quindi gli eventi tagliati sono i più vecchi; un utente assente da questo elenco non è la prova che non sia mai stato deprovisionato.",
+    "revoked": "Sessioni e token revocati",
+    "col": {
+      "userName": "Utente",
+      "state": "Stato",
+      "externalId": "ID esterno",
+      "lastModified": "Ultima modifica"
+    }
+  },
+  "roster": {
+    "label": "Identità non umane e umane",
+    "search": "Cerca identità…",
+    "convergenceNote": "Questa identità converge tramite il suo ID esterno, lo stesso usato dal lato osservato, così la mappa degli accessi può confrontare ciò che le è CONSENTITO con ciò che le si OSSERVA fare.",
+    "openInAccessMap": "Vedi nella mappa degli accessi",
+    "col": {
+      "name": "Nome",
+      "externalId": "ID esterno",
+      "kind": "Tipo",
+      "principalType": "Principal",
+      "source": "Origine",
+      "state": "Stato"
+    },
+    "principal": {
+      "nhi": "Non umano",
+      "human": "Umano",
+      "unknown": "Sconosciuto"
+    },
+    "filter": {
+      "principalType": "Filtra per principal",
+      "kind": "Filtra per tipo",
+      "all": "Tutti"
+    }
+  },
+  "empty": {
+    "nhiRoster": {
+      "title": "Ancora nessuna identità",
+      "description": "Le identità compaiono qui quando gli agenti raggiungono le risorse o quando associ un agente a un'identità."
+    }
+  },
+  "mcp": {
+    "title": "Autorizzazione MCP",
+    "description": "Se il legame dei token OAuth di ciascun server MCP è stato verificato. Solo postura difensiva: il pannello non fa mai da proxy né riproduce un token.",
+    "seamWhat": "I rilevamenti sull'autorizzazione MCP",
+    "noFindings": "Nessun rilevamento sull'autorizzazione MCP",
+    "noFindingsHint": "Quando viene individuato un server MCP protetto con OAuth, la sua postura di legame dei token viene registrata qui.",
+    "truncated": "Caricati {{n}} rilevamenti; ce ne sono altri",
+    "truncatedHint": "I rilevamenti sull'autorizzazione MCP sono più di quelli mostrati; questa pagina carica una sola pagina di righe. Un server assente da questo elenco non è la prova che non esistano rilevamenti per esso.",
+    "prmTitle": "Autorizzazione legata al destinatario (RFC 9728)",
+    "prmDescription": "Come un server MCP protetto con OAuth lega un token a una sola risorsa concreta, così un token emesso per un server non può essere riprodotto su un altro.",
+    "flow": {
+      "prm": {
+        "title": "Protected Resource Metadata",
+        "body": "Il server pubblica i propri authorization server in /.well-known/oauth-protected-resource (RFC 9728)."
+      },
+      "asDiscovery": {
+        "title": "Individuazione dell'authorization server",
+        "body": "Vengono recuperati i metadati dell'authorization server pubblicato (RFC 8414)."
+      },
+      "pkce": {
+        "title": "PKCE S256",
+        "body": "Il flusso authorization code usa una challenge S256 (RFC 7636), mai plain."
+      },
+      "resourceBound": {
+        "title": "Token legato alla risorsa",
+        "body": "Il resource indicator (RFC 8707) è l'URI canonico del server, quindi il destinatario del token è un solo server concreto."
+      },
+      "introspect": {
+        "title": "Introspezione in sola lettura",
+        "body": "Il legame del token si verifica con un'introspezione in sola lettura; il pannello non chiama mai strumenti né fa da proxy al token."
+      }
+    },
+    "noPassthrough": "Il token passthrough è vietato per scelta progettuale: il pannello osserva e fa introspezione, non inoltra né riproduce mai un token MCP."
+  },
+  "login": {
+    "statusTitle": "Garanzia della sessione",
+    "statusDescription": "Come hai effettuato l'accesso a questa sessione.",
+    "currentAal": "Livello attuale",
+    "methods": "Metodi",
+    "methodsUnknown": "Non segnalati",
+    "policy": {
+      "none": "Questo deployment non richiede alcun controllo aggiuntivo prima delle azioni amministrative. Un amministratore di sistema può attivarlo in Impostazioni › Accesso e sicurezza.",
+      "totp": "Le azioni amministrative su questo deployment richiedono un accesso con un codice dell'autenticatore.",
+      "passkey": "Le azioni amministrative su questo deployment richiedono una passkey."
+    },
+    "passkeyTitle": "Registra una passkey",
+    "passkeyDescription": "Registra una chiave di sicurezza hardware o un autenticatore di piattaforma (WebAuthn / FIDO2) per un accesso privilegiato resistente al phishing.",
+    "registerPasskey": "Registra una passkey",
+    "registering": "Segui le istruzioni del tuo autenticatore…",
+    "passkeySeamWhat": "Registrazione della passkey WebAuthn",
+    "registered": "Passkey registrata.",
+    "unsupported": "Questo browser non supporta WebAuthn.",
+    "registerFailed": "La registrazione non è stata completata.",
+    "ocsp": {
+      "good": "Valido",
+      "revoked": "Revocato",
+      "unknown": "Sconosciuto"
+    },
+    "passkeys": {
+      "title": "Passkey registrate",
+      "description": "Gestisci i tuoi autenticatori FIDO2/WebAuthn. Ogni passkey offre un accesso resistente al phishing e legato all'hardware.",
+      "register": "Registra passkey",
+      "registerTitle": "Registra una nuova passkey",
+      "registerHint": "Facoltativo. Lascia vuoto per usare il nome di questo dispositivo.",
+      "nameLabel": "Nome della passkey",
+      "namePlaceholder": "ad es. YubiKey 5C, MacBook Touch ID",
+      "defaultName": "Passkey su {{device}}",
+      "defaultNameNoDevice": "Passkey",
+      "registering": "Registrazione della passkey…",
+      "registered": "Passkey registrata.",
+      "registerFailed": "Registrazione della passkey non riuscita. Il browser potrebbe non supportare WebAuthn, oppure la registrazione è stata annullata.",
+      "unsupported": "Questo browser non supporta WebAuthn/FIDO2.",
+      "none": "Nessuna passkey registrata",
+      "noneHint": "Registra una passkey per abilitare l'accesso resistente al phishing e legato all'hardware (AAL3).",
+      "colName": "Nome",
+      "colCreated": "Registrata",
+      "colBackup": "Backup",
+      "backupEligible": "Multi-dispositivo",
+      "backupBound": "Legata all'hardware",
+      "rename": "Rinomina",
+      "renameTitle": "Rinomina la passkey",
+      "renamed": "Passkey rinominata.",
+      "delete": "Elimina",
+      "deleteTitle": "Elimina la passkey",
+      "deleteBody": "Eliminare la passkey \"{{name}}\"? L'operazione è permanente. Ti servirà un'altra passkey registrata per mantenere l'accesso AAL3.",
+      "deleted": "Passkey eliminata.",
+      "lastCredential": "Non puoi eliminare la tua unica passkey. Registrane prima un'altra."
+    }
+  },
+  "totp": {
+    "title": "Secondo fattore TOTP",
+    "description": "Una password monouso basata sul tempo (RFC 6238) come fattore aggiuntivo del tuo account locale. Si aggiunge alle tue passkey, non le sostituisce mai.",
+    "state": "Fattore",
+    "enrolled": "Registrato",
+    "notEnrolled": "Non registrato",
+    "algorithm": "Parametri",
+    "everySeconds": "Codici da {{period}} s",
+    "activatedAt": "Attivato",
+    "recoveryRemaining": "Codici di recupero",
+    "recoveryCount": "{{count}} rimanenti",
+    "enrol": "Registra un fattore",
+    "replace": "Sostituisci il fattore",
+    "remove": "Rimuovi il fattore",
+    "confirmRemove": "Rimuovere davvero?",
+    "activate": "Attiva",
+    "scanPrompt": "Scansiona il QR con la tua app di autenticazione, oppure inserisci il secret a mano, poi inserisci il codice mostrato.",
+    "qrAlt": "Codice QR con l'URI di provisioning TOTP",
+    "manualEntry": "Secret per l'inserimento manuale",
+    "codeLabel": "Codice dalla tua app",
+    "recoveryWarning": "Questi codici di recupero vengono mostrati una sola volta. Conservali ora: ciascuno può essere usato una sola volta se perdi il dispositivo.",
+    "savedCodes": "Ho salvato i codici",
+    "stepUpRequired": "Questa azione richiede il controllo aggiuntivo per le azioni amministrative previsto da questo deployment. Completalo prima.",
+    "sealerUnavailable": "Il sealer del seed TOTP non è disponibile su questo deployment; la registrazione resta disabilitata finché un operatore non lo sistema.",
+    "loadFailed": "Non è stato possibile caricare lo stato del fattore.",
+    "policyTitle": "Richiedi il TOTP per gli amministratori",
+    "policyDescription": "Se attivo, gli amministratori (superadmin e qualsiasi admin o owner del tenant) devono registrare un fattore prima che il loro accesso con password si completi.",
+    "policyState": "Policy",
+    "policyOn": "Obbligatorio",
+    "policyOff": "Disattivato",
+    "policyEnable": "Richiedi per gli amministratori",
+    "policyConfirmOn": "Conferma: richiedi",
+    "policyDisable": "Disattiva",
+    "policyAal3Note": "Agli account senza codice viene chiesto di configurarne uno al prossimo accesso; non vengono mai bloccati."
+  },
+  "stepUpPolicy": {
+    "title": "Controllo aggiuntivo per le azioni amministrative",
+    "description": "Disattivato per impostazione predefinita. Attivalo per chiedere un codice dell'autenticatore o una passkey prima delle modifiche amministrative, come utenti, identity provider, secret o installazioni di strumenti.",
+    "options": {
+      "none": "Disattivato",
+      "totp": "Codice dell'autenticatore",
+      "passkey": "Passkey"
+    },
+    "saved": "Salvato.",
+    "loadFailed": "Non è stato possibile leggere questa impostazione. Aggiorna la pagina per riprovare.",
+    "note": "Per richiedere una passkey, accedi prima qui con la tua passkey. Per richiedere un codice dell'autenticatore, accedi prima con il tuo codice. Per disattivarlo o abbassarlo, supera prima il controllo attuale. Una modifica ha effetto entro pochi secondi su ogni server.",
+    "refused": {
+      "passkey_not_enrolled": "Aggiungi prima una passkey al tuo account (Identità > Passkey), poi attiva questa opzione.",
+      "totp_sign_in_required": "Configura prima un'app di autenticazione e accedi con il suo codice, poi attiva questa opzione."
+    }
+  },
+  "posture": {
+    "unavailable": {
+      "badge": "Non leggibile"
+    }
+  }
+}

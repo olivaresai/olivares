@@ -61,6 +61,12 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	for _, event := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure"} {
 		// Even stalled stdin must yield the denial schema this invocation honors.
 		eventCommand := command + " --hook-event " + quote(event)
+		if spec.Isolation == IsolationContainer {
+			// Claude Code lets a tool call proceed when a hook fails for any reason but exit 2.
+			// A container whose image cannot run the program (another architecture, no shell)
+			// would then run its tool calls ungoverned; here that blocks them.
+			eventCommand += " || exit 2"
+		}
 		hooks[event] = []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": eventCommand, "timeout": int(ClaudeHookPEPCommandTimeout / time.Second)}}}}
 	}
 	settings := map[string]any{"disableAllHooks": false, "hooks": hooks}

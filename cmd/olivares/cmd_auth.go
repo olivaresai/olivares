@@ -125,8 +125,9 @@ type authUseContextResult struct {
 
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "auth",
-		Short: "Sign-in details: status, saved contexts, first-boot setup",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "auth",
+		Short:       "Sign-in details: status, saved contexts, first-boot setup",
 		Long: "Manage credentials and saved sign-ins (contexts) for engines.\n\n" +
 			"Client values resolve in this order: explicit flag > OLIVARES_SERVER_URL,\n" +
 			"OLIVARES_TOKEN, or OLIVARES_TENANT environment variable > current context in\n" +
@@ -194,8 +195,9 @@ func newAuthBootstrapCmd() *cobra.Command {
 		save                                            bool
 	)
 	cmd := &cobra.Command{
-		Use:   "bootstrap",
-		Short: "Redeem the one-time first-boot token: create the first organization and superadmin",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "bootstrap",
+		Short:       "Redeem the one-time first-boot token: create the first organization and superadmin",
 		Long: "Complete first-boot setup against a running engine, without opening the console. It\n" +
 			"redeems the single-use token `olivares serve` prints on a fresh data directory and\n" +
 			"creates BOTH halves an install needs to be usable: the first organization and the\n" +
@@ -304,8 +306,9 @@ func newAuthLoginCmd() *cobra.Command {
 		email, password, passwordFile string
 	)
 	cmd := &cobra.Command{
-		Use:   "login",
-		Short: "Sign in to an engine and keep the sign-in for the next commands",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "login",
+		Short:       "Sign in to an engine and keep the sign-in for the next commands",
 		Long: "Sign in and save the sign-in as a client context that the next commands use.\n" +
 			"On the engine's own host, run it with no flags: it finds the engine and its\n" +
 			"certificate, and asks for your email and password.\n\n" +
@@ -648,8 +651,9 @@ func newAuthLogoutCmd() *cobra.Command {
 		purge       bool
 	)
 	cmd := &cobra.Command{
-		Use:   "logout",
-		Short: "Sign out: remove the saved sign-in from this computer",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "logout",
+		Short:       "Sign out: remove the saved sign-in from this computer",
 		Long: "Remove the token from the selected or named client context while preserving its\n" +
 			"server, tenant and TLS trust settings. Pass --purge to delete the whole context;\n" +
 			"purging the current context leaves no context selected.",
@@ -708,8 +712,9 @@ func newAuthLogoutCmd() *cobra.Command {
 func newAuthStatusCmd() *cobra.Command {
 	var flags authClientFlags
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show the effective CLI identity and authentication context",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show the effective CLI identity and authentication context",
 		Long: "Resolve the effective server, token and tenant, call GET /v1/auth/whoami, and\n" +
 			"print the actor, effective tenant, role, server and active context. The bearer\n" +
 			"token is always redacted and is never written in full to command output.",
@@ -783,8 +788,9 @@ func newAuthStatusCmd() *cobra.Command {
 
 func newAuthUseContextCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "use-context <name>",
-		Short: "Select the current CLI client context",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "use-context <name>",
+		Short:       "Select the current CLI client context",
 		Long: "Select a named client context for subsequent commands. This command is intentionally\n" +
 			"under auth: the top-level `olivares config` tree owns engine configuration and\n" +
 			"cannot also represent saved sign-in state without a command collision.",

@@ -61,6 +61,16 @@ import {
 import { NamedRef } from '@/features/shared'
 import { FormError } from './roles-shared'
 import { FillingTable, TableRegion } from '@/components/data/filling-table'
+import {
+  useConsoleDraft,
+  useDiscardConsoleDraft,
+  useConsoleDraftDispatch,
+} from './console-drafts'
+import {
+  AGENT_CREATION,
+  useConsoleOperation,
+  useConsolePreflight,
+} from './console-authority'
 
 /** ⛔ EL 200 ERA UN NÚMERO A MANO por debajo del techo real del motor: ni pedía lo que da, ni
  *  decía nada al quedarse corto. `maxLimit` es 1000 (`sqlstore/generic.go:29`). */
@@ -72,9 +82,22 @@ export function AgentsTab() {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant, can } = useAuth()
   const canRead = can('agent:read')
-  const canWrite = can('agent:write')
+  const creation = useConsoleOperation(AGENT_CREATION, 'agent:write')
+  const canWrite = can('agent:write') && creation.current
+  const canCreate = creation.current
+  const agentParams = creation.workspace
+    ? { ...AGENT_LIST_PARAMS, workspace_id: creation.workspace }
+    : AGENT_LIST_PARAMS
   const canReadWorkspaces = can('tenant:read')
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useConsoleDraft(
+    'agent:create:open',
+    false,
+  )
+  const discardDraft = useDiscardConsoleDraft()
+  const closeCreate = () => {
+    setCreateOpen(false)
+    discardDraft('agent:create:')
+  }
   const [editing, setEditing] = useState<AgentDTO | null>(null)
   const [deactivateTarget, setDeactivateTarget] = useState<AgentDTO | null>(
     null,
@@ -82,8 +105,8 @@ export function AgentsTab() {
   const [deleteTarget, setDeleteTarget] = useState<AgentDTO | null>(null)
 
   const agents = useQuery({
-    queryKey: consoleKeys.agents(activeTenant, AGENT_LIST_PARAMS),
-    queryFn: () => consoleApi.listAgents(AGENT_LIST_PARAMS),
+    queryKey: consoleKeys.agents(activeTenant, agentParams),
+    queryFn: () => consoleApi.listAgents(agentParams),
     enabled: canRead,
   })
   const workspaceParams = { limit: 1000 }
@@ -139,7 +162,7 @@ export function AgentsTab() {
 
   return (
     <div className="flex flex-col gap-2">
-      {canWrite ? (
+      {canCreate ? (
         <PagePrimaryAction>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus />
@@ -221,13 +244,17 @@ export function AgentsTab() {
         )}
       </section>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen && canCreate}
+        onOpenChange={(open) => (open ? setCreateOpen(true) : closeCreate())}
+      >
         <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
-          {createOpen ? (
+          {createOpen && canCreate ? (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <AgentForm
                 workspaces={workspaces.data?.items ?? []}
-                onClose={() => setCreateOpen(false)}
+                department={creation.workspace}
+                onClose={closeCreate}
               />
             </RequireAssurance>
           ) : null}
@@ -411,31 +438,57 @@ function AgentsTable({
 function AgentForm({
   agent,
   workspaces,
+  department,
   onClose,
 }: {
   agent?: AgentDTO
   workspaces: WorkspaceDTO[]
+  department?: string | null
   onClose: () => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const isEdit = !!agent
-  const [name, setName] = useState(agent?.name ?? '')
-  const [kind, setKind] = useState(agent?.kind ?? '')
-  const [externalId, setExternalId] = useState(agent?.external_id ?? '')
-  const [identityId, setIdentityId] = useState(agent?.identity_id ?? '')
-  const [workspaceId, setWorkspaceId] = useState(
-    agent?.workspace_id ?? WORKSPACE_NONE,
+  const preflight = useConsolePreflight(AGENT_CREATION, department)
+  const draftDispatch = useConsoleDraftDispatch('agent:create:')
+  const [name, setName] = useConsoleDraft(
+    isEdit ? null : 'agent:create:name',
+    agent?.name ?? '',
   )
-  const [status, setStatus] = useState<AgentStatus>(
+  const [kind, setKind] = useConsoleDraft(
+    isEdit ? null : 'agent:create:kind',
+    agent?.kind ?? '',
+  )
+  const [externalId, setExternalId] = useConsoleDraft(
+    isEdit ? null : 'agent:create:externalId',
+    agent?.external_id ?? '',
+  )
+  const [identityId, setIdentityId] = useConsoleDraft(
+    isEdit ? null : 'agent:create:identityId',
+    agent?.identity_id ?? '',
+  )
+  const [workspaceId, setWorkspaceId] = useState(
+    agent?.workspace_id ?? department ?? WORKSPACE_NONE,
+  )
+  const [status, setStatus] = useConsoleDraft<AgentStatus>(
+    isEdit ? null : 'agent:create:status',
     (agent?.status as AgentStatus | undefined) ?? 'active',
   )
-  const [labels, setLabels] = useState(formatRecord(agent?.labels))
-  const [metadata, setMetadata] = useState(formatRecord(agent?.metadata))
-  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [labels, setLabels] = useConsoleDraft(
+    isEdit ? null : 'agent:create:labels',
+    formatRecord(agent?.labels),
+  )
+  const [metadata, setMetadata] = useConsoleDraft(
+    isEdit ? null : 'agent:create:metadata',
+    formatRecord(agent?.metadata),
+  )
+  const [jsonError, setJsonError] = useConsoleDraft<string | null>(
+    isEdit ? null : 'agent:create:jsonError',
+    null,
+  )
 
   const mutation = usePrivilegedMutation<void, AgentDTO>({
-    mutationFn: () => {
+    mutationFn: async (_vars, authority) => {
       const parsedLabels = parseRecord(labels)
       const parsedMetadata = parseRecord(metadata)
       const input: AgentInput = {
@@ -453,7 +506,12 @@ function AgentForm({
       }
       return isEdit && agent
         ? consoleApi.updateAgent(agent.id, input)
-        : consoleApi.createAgent(input)
+        : department
+          ? consoleApi.createAgent(
+              input,
+              draftDispatch(await preflight(authority)),
+            )
+          : consoleApi.createAgent(input)
     },
     invalidateKeys: (data) => [
       consoleKeys.agents(activeTenant),
@@ -538,7 +596,11 @@ function AgentForm({
             label={t('console:agents.workspace')}
             htmlFor="agent-workspace"
           >
-            <Select value={workspaceId} onValueChange={setWorkspaceId}>
+            <Select
+              value={workspaceId}
+              onValueChange={setWorkspaceId}
+              disabled={!!department}
+            >
               <SelectTrigger
                 id="agent-workspace"
                 aria-label={t('console:agents.workspace')}

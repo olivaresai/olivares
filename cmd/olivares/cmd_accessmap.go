@@ -36,7 +36,7 @@ var accessMapEdgeFilters = []struct {
 	{"origin-kind", "origin_kind", "filter by origin kind (agent, session, identity)"},
 	{"origin-id", "origin_id", "filter by origin id"},
 	{"resource-id", "resource_id", "filter by resource id"},
-	{"mode", "mode", "filter by access mode (read, write, readwrite, unknown)"},
+	{"mode", "mode", "filter by access mode (read, write, readwrite, unknown); r, w and rw are accepted aliases"},
 	{"confidence", "confidence", "filter by attribution confidence"},
 	{"signal-source", "signal_source", "filter by the signal that produced the edge"},
 }
@@ -44,6 +44,16 @@ var accessMapEdgeFilters = []struct {
 type accessMapFilterFlags struct {
 	values map[string]*string
 	page   observePageFlags
+	// pagesIgnored marks a view whose engine route reads no limit or cursor (drift
+	// reconciles the whole window): the flags stay accepted, deprecated, and are not sent.
+	pagesIgnored bool
+}
+
+// accessMapModes maps what --mode accepts to the engine's access-mode wire values
+// (sdk/model/enums.go): the short forms the help has always shown, and the wire values.
+var accessMapModes = map[string]string{
+	"r": "read", "w": "write", "rw": "readwrite",
+	"read": "read", "write": "write", "readwrite": "readwrite", "unknown": "unknown",
 }
 
 func addAccessMapFilterFlags(cmd *cobra.Command, f *accessMapFilterFlags) {
@@ -63,6 +73,12 @@ func (f accessMapFilterFlags) query() (url.Values, error) {
 			q.Set(param, *v)
 		}
 	}
+	if wire, ok := accessMapModes[q.Get("mode")]; ok {
+		q.Set("mode", wire)
+	}
+	if f.pagesIgnored {
+		return q, nil
+	}
 	if err := f.page.apply(q); err != nil {
 		return nil, err
 	}
@@ -72,9 +88,10 @@ func (f accessMapFilterFlags) query() (url.Values, error) {
 func newAccessMapCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:     "accessmap",
-		Aliases: []string{"access-map"},
-		Short:   "Query the access graph, least-privilege drift and attack paths",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "accessmap",
+		Aliases:     []string{"access-map"},
+		Short:       "Query the access graph, least-privilege drift and attack paths",
 		Long: "accessmap answers reachability questions over the observed access graph:\n" +
 			"which origins touch which resources, where OBSERVED access has diverged from\n" +
 			"what was PERMITTED, and which chains an attacker could walk from an agent to\n" +
@@ -182,8 +199,9 @@ func renderAccessMapGraph(cmd *cobra.Command, raw []byte, g accessMapGraph, empt
 func newAccessMapGraphCmd(flags *authClientFlags) *cobra.Command {
 	var f accessMapFilterFlags
 	cmd := &cobra.Command{
-		Use:   "graph",
-		Short: "List the access graph as nodes and edges",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "graph",
+		Short:       "List the access graph as nodes and edges",
 		Long: "graph returns the observed access graph: one edge per origin→resource pair the\n" +
 			"engine has evidence for, with the signal that produced it and how confident the\n" +
 			"attribution is. Filters narrow it by any supported edge column; unlisted columns\n" +
@@ -217,8 +235,9 @@ func newAccessMapGraphCmd(flags *authClientFlags) *cobra.Command {
 func newAccessMapNeighborsCmd(flags *authClientFlags) *cobra.Command {
 	var id, kind, direction string
 	cmd := &cobra.Command{
-		Use:   "neighbors",
-		Short: "List the edges touching one node",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "neighbors",
+		Short:       "List the edges touching one node",
 		Long: "neighbors returns the edges incident to a single node, in a direction. It is the\n" +
 			"drill-down for a node found in `graph`: what does this agent reach, or who\n" +
 			"reaches this resource.\n\n" +
@@ -282,10 +301,11 @@ type accessMapDrift struct {
 }
 
 func newAccessMapDriftCmd(flags *authClientFlags) *cobra.Command {
-	var f accessMapFilterFlags
+	f := accessMapFilterFlags{pagesIgnored: true}
 	cmd := &cobra.Command{
-		Use:   "drift",
-		Short: "Show permitted-vs-observed least-privilege drift",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "drift",
+		Short:       "Show permitted-vs-observed least-privilege drift",
 		Long: "drift is the reconciliation between what was GRANTED and what was OBSERVED.\n" +
 			"Unexpected accesses — observed but never permitted — are the headline; unused\n" +
 			"grants are the cleanup list.\n\n" +
@@ -344,6 +364,10 @@ func newAccessMapDriftCmd(flags *authClientFlags) *cobra.Command {
 		},
 	}
 	addAccessMapFilterFlags(cmd, &f)
+	cmd.Long += "\n\nThe published --limit and --cursor flags are deprecated no-ops; omit them.\n"
+	const ignored = "drift reconciles the whole window, so the engine reads no paging; the flag has no effect"
+	_ = cmd.Flags().MarkDeprecated("limit", ignored)
+	_ = cmd.Flags().MarkDeprecated("cursor", ignored)
 	return cmd
 }
 
@@ -373,26 +397,21 @@ type accessMapAttackPath struct {
 }
 
 type accessMapAttackPaths struct {
-	Paths []accessMapAttackPath `json:"paths"`
-	// Truncated is set by the engine when a read or path cap cut the analysis.
-	Truncated bool `json:"truncated,omitempty"`
+	Paths     []accessMapAttackPath `json:"paths"`
+	Truncated bool                  `json:"truncated,omitempty"`
 }
 
 type accessMapAttackSummary struct {
-	TotalAgents      int `json:"total_agents"`
-	ReachablePaths   int `json:"reachable_paths"`
-	EscalationPaths  int `json:"escalation_paths"`
-	ExfilRoutes      int `json:"exfil_routes"`
-	CriticalAgents   int `json:"critical_agents"`
-	SensitiveTargets int `json:"sensitive_targets"`
-	// Truncated is set by the engine when a cap cut a read, so the counts are floors.
-	Truncated bool `json:"truncated,omitempty"`
+	TotalAgents      int  `json:"total_agents"`
+	ReachablePaths   int  `json:"reachable_paths"`
+	EscalationPaths  int  `json:"escalation_paths"`
+	ExfilRoutes      int  `json:"exfil_routes"`
+	CriticalAgents   int  `json:"critical_agents"`
+	SensitiveTargets int  `json:"sensitive_targets"`
+	Truncated        bool `json:"truncated,omitempty"`
 }
 
-// accessMapTruncationNote is what an operator reads when the engine capped an
-// analysis. An under-count of attack paths reads as good news, which is the one
-// direction this command must never fail in.
-const accessMapTruncationNote = "TRUNCATED: the engine capped this analysis, so what is shown is a FLOOR, not the whole answer"
+const accessMapTruncationNote = "TRUNCATED: the engine capped this analysis, so what is shown is a PARTIAL answer"
 
 // accessMapStepName names one node of a path, preferring the human name over the id.
 func accessMapStepName(s accessMapAttackStep) string {
@@ -462,9 +481,10 @@ func renderAccessMapTruncation(w io.Writer, truncated bool) error {
 
 func newAccessMapAttackPathsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "attack-paths",
-		Aliases: []string{"attackpaths"},
-		Short:   "Reachability, privilege-escalation and exfiltration analyses",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "attack-paths",
+		Aliases:     []string{"attackpaths"},
+		Short:       "Reachability, privilege-escalation and exfiltration analyses",
 		Long: "attack-paths runs the four graph analyses over the same AccessEdge data the\n" +
 			"`graph` view shows: what one agent can reach, where it could escalate, which\n" +
 			"routes could carry data out of one resource, and the estate-wide summary.\n\n" +
@@ -493,11 +513,12 @@ func newAccessMapAttackPathsCmd(flags *authClientFlags) *cobra.Command {
 func newAttackPathAgentCmd(flags *authClientFlags, name, path, short, long string) *cobra.Command {
 	var agentID string
 	cmd := &cobra.Command{
-		Use:     name,
-		Short:   short,
-		Long:    long + "\n\n--agent-id is required by the route and is checked before the request is sent.",
-		Example: "  olivares accessmap attack-paths " + name + " --agent-id ag-7\n  olivares accessmap attack-paths " + name + " --agent-id ag-7 -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         name,
+		Short:       short,
+		Long:        long + "\n\n--agent-id is required by the route and is checked before the request is sent.",
+		Example:     "  olivares accessmap attack-paths " + name + " --agent-id ag-7\n  olivares accessmap attack-paths " + name + " --agent-id ag-7 -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if agentID != "" {
@@ -524,8 +545,9 @@ func newAttackPathAgentCmd(flags *authClientFlags, name, path, short, long strin
 func newAttackPathExfilCmd(flags *authClientFlags) *cobra.Command {
 	var resourceID string
 	cmd := &cobra.Command{
-		Use:   "exfil",
-		Short: "List the exfiltration routes out of one resource",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "exfil",
+		Short:       "List the exfiltration routes out of one resource",
 		Long: "exfil lists the routes by which data in one resource could leave — the readers\n" +
 			"of that resource and where each of them can write.\n\n" +
 			"--resource-id is required by the route and is checked before the request is sent.",
@@ -559,8 +581,9 @@ func newAttackPathExfilCmd(flags *authClientFlags) *cobra.Command {
 
 func newAttackPathSummaryCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "summary",
-		Short: "Show the estate-wide attack-surface counts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "summary",
+		Short:       "Show the estate-wide attack-surface counts",
 		Long: "summary counts the estate: agents, reachable paths, escalation chains, exfil\n" +
 			"routes, and how many agents and targets are in the critical/sensitive classes.\n" +
 			"It is the number to trend, not to act on — the per-agent verbs say what to do.",
@@ -588,7 +611,11 @@ func newAttackPathSummaryCmd(flags *authClientFlags) *cobra.Command {
 				if err := tw.Flush(); err != nil {
 					return err
 				}
-				return renderAccessMapTruncation(w, s.Truncated)
+				if s.Truncated {
+					_, err := fmt.Fprintln(w, "TRUNCATED: the estate is larger than the engine reads in one pass, so the counts above are INCOMPLETE")
+					return err
+				}
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}

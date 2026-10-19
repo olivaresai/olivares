@@ -50,7 +50,7 @@ func TestSubjectExcludedInAgreesWithSubjectExcluded(t *testing.T) {
 			}
 		}
 		want(e.tT, false)
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		if rec, found := e.record(user, e.tT); !found || rec.RetirementState != model.RetirementRetiring {
 			t.Fatal("offboard did not enter retiring")
 		}

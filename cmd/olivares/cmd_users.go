@@ -51,8 +51,9 @@ const (
 func newUsersCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:   "users",
-		Short: "User accounts: list, create, disable, enable",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "users",
+		Short:       "User accounts: list, create, disable, enable",
 		Long: "Manage the global user accounts of this installation. A user is an identity; what it\n" +
 			"may DO comes from the tenant memberships granted to it with `olivares members grant`.\n" +
 			"Every verb here is superadmin-gated by the engine.\n\n" +
@@ -78,8 +79,9 @@ func newUsersCmd() *cobra.Command {
 func usersDisableCmd(client bootstrapClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "disable <user-id>",
-		Short: "Disable a superadmin account (reversible)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "disable <user-id>",
+		Short:       "Disable a superadmin account (reversible)",
 		Long: "Withdraw a superadmin account's access without deleting anything: sessions and tokens\n" +
 			"stop authenticating and `users enable` restores it exactly. The engine refuses to\n" +
 			"disable the LAST active superadmin — check how many are left with `users superadmins`\n" +
@@ -102,8 +104,9 @@ func usersDisableCmd(client bootstrapClient) *cobra.Command {
 
 func usersEnableCmd(client bootstrapClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "enable <user-id>",
-		Short: "Re-enable a disabled superadmin account",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "enable <user-id>",
+		Short:       "Re-enable a disabled superadmin account",
 		Long: "Restore a superadmin account that `users disable` withdrew. It is the safe direction\n" +
 			"and asks for no confirmation; it needs the same signed-in session as `users disable`,\n" +
 			"because granting access back is as privileged as withdrawing it.",
@@ -153,9 +156,10 @@ func usersListCmd(client bootstrapClient) *cobra.Command {
 	var limit int
 	var cursor string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the global user accounts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the global user accounts",
 		Long: "List every user account known to this installation, with its status and whether it is\n" +
 			"a superadmin. The engine authorizes this as a system read (user:read); a caller without\n" +
 			"it is refused there, not here.",
@@ -178,8 +182,9 @@ func usersListCmd(client bootstrapClient) *cobra.Command {
 
 func usersSuperadminsCmd(client bootstrapClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "superadmins",
-		Short: "List the superadmin accounts and whether each is active",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "superadmins",
+		Short:       "List the superadmin accounts and whether each is active",
 		Long: "List every superadmin account with its active/inactive status — the read side of the\n" +
 			"superadmin lifecycle. Use it before `users disable`: the engine refuses to disable the\n" +
 			"last active superadmin, and this is how you see how many are left.",
@@ -199,8 +204,9 @@ func usersCreateCmd(client bootstrapClient) *cobra.Command {
 	var email, displayName, password, passwordFile, memberOf, role string
 	var superadmin bool
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Create a global user account (superadmin)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Create a global user account (superadmin)",
 		Long: "Create a user account. Give it a password with --password-file (a file, or - to read\n" +
 			"stdin) so the secret never appears in the process table or the shell history; --password\n" +
 			"exists for parity with the rest of the CLI and warns when used. --member-of grants the\n" +

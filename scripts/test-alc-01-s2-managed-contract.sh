@@ -25,8 +25,7 @@ stage() {
 	chmod +x "$TMP/tree/scripts/check-alc-01-s2-managed-contract.sh"
 	cp "$ROOT/design/alc-01-s2-managed-contract.json" "$TMP/tree/design/"
 	cp "$ROOT/design/ALC-01-S2-MANAGED-CONTRACT-2026-08-20.md" "$TMP/tree/design/"
-	cp "$ROOT/core/api/handlers_scim.go" "$TMP/tree/core/api/"
-	cp "$ROOT/core/api/handlers_scim_groups.go" "$TMP/tree/core/api/"
+	cp "$ROOT/core/api/handlers_scim_noenterprise.go" "$TMP/tree/core/api/"
 	cp "$ROOT/core/api/server.go" "$TMP/tree/core/api/"
 	cp "$ROOT/core/auth/scim.go" "$TMP/tree/core/auth/"
 	cp "$ROOT/core/auth/federation_login.go" "$TMP/tree/core/auth/"
@@ -52,7 +51,7 @@ else
 fi
 
 stage
-python3 - "$TMP/tree/core/api/handlers_scim.go" <<'PY'
+python3 - "$TMP/tree/core/api/handlers_scim_noenterprise.go" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
@@ -70,7 +69,7 @@ else
 fi
 
 stage
-printf '\n_ = r.Header.Get("Idempotency-Key")\n' >>"$TMP/tree/core/api/handlers_scim.go"
+printf '\n_ = r.Header.Get("Idempotency-Key")\n' >>"$TMP/tree/core/api/handlers_scim_noenterprise.go"
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
 	ok "firing: inbound Idempotency-Key is FAIL"

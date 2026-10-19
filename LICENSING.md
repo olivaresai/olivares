@@ -15,7 +15,7 @@ license to turn a capability on or off.
 
 The self-hosted editions are **Community**, **Business** and **Enterprise**.
 Community is free under AGPL-3.0-only, with unlimited users and one active identity
-provider (IdP). Business costs **USD 129/month or USD 1,290/year**, with unlimited
+provider (IdP). Business costs **USD 99/month or USD 990/year**, with unlimited
 users, one legal entity, and one active instance at a time: you release the license
 from one instance and activate it on another as often as you need. Enterprise covers
 terms agreed in a contract and the capabilities that depend on them: additional entities,

@@ -220,7 +220,7 @@
     "specHash": "Specification hash",
     "mappingHash": "Mapping hash",
     "lossesHash": "Losses hash",
-    "etag": "ETag",
+    "etag": "Version",
     "priorActive": "Prior active specification",
     "bindingSpec": "Pinned specification"
   },
@@ -287,7 +287,7 @@
       "applied": "The returned specification is disabled."
     },
     "phase": {
-      "refreshing": "Reading the latest specification and ETag…",
+      "refreshing": "Neueste Spezifikation und Version werden gelesen…",
       "validating": "Validating without writing…",
       "planning": "Computing the exact transition plan…",
       "applying": "Applying the approved plan…"
@@ -312,7 +312,7 @@
     "title": "Reconcile binding instance",
     "description": "Validate and plan locally, test the peer without writing, then record the exact observed result.",
     "phase": {
-      "refreshing": "Reading the latest instance and ETag…",
+      "refreshing": "Neueste Instanz und Version werden gelesen…",
       "validating": "Validating reconciliation without writing…",
       "planning": "Computing the canonical reconciliation plan…",
       "testing": "Reading remote state without changing local state…",

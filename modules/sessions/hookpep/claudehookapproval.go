@@ -244,9 +244,11 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 	case effectgate.Wait:
 		switch {
 		case errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded):
+			declinedByPerson(ctx)
 			return deny("tool-call interrupted while waiting for human approval", actor, tier, version)
 		case errors.Is(err, context.DeadlineExceeded):
-			// Wait owns the audited expiry transition, including rollback recovery.
+			// Wait owns the audited expiry transition, including rollback recovery. Nobody
+			// answered, which is not a person declining: the denial counts.
 			return deny("human approval did not arrive before the tool-call deadline; retry after review", actor, tier, version)
 		}
 		return deny("human approval could not be read", actor, tier, version)
@@ -262,6 +264,9 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 	case effectgate.Replay, effectgate.Unspendable:
 		return deny("human approval is no longer valid for this tool-call", actor, tier, version)
 	default: // not approved, or an answer about another effect
+		if a.Status == governance.GateStatusRejected {
+			declinedByPerson(ctx)
+		}
 		return deny("human review did not approve this tool-call ("+a.Status+")", actor, tier, version)
 	}
 }

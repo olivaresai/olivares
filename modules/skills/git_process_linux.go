@@ -17,6 +17,11 @@ import (
 // Own the full Git helper group until its pipes have drained; cancellation must
 // never remove staging beneath a live helper.
 func boundedGitCommand(ctx context.Context, executable string, args ...string) (*exec.Cmd, error) {
+	// #nosec G204 -- the only production caller (GitImporter.Import in git.go) passes the
+	// prlimit path it resolved with exec.LookPath and an argv it builds itself: fixed
+	// resource limits, "--", the git path it resolved, fixed -c settings, then its own
+	// subcommand; the only values from outside (ref, loopback URL, subdir, commit) are
+	// validated and follow "--" or are 40-hex. No shell is involved.
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = 2 * time.Second

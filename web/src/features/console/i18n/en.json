@@ -83,7 +83,6 @@
     "activeUsers": "Active user accounts",
     "noUserLimit": "self-hosted: no limit",
     "expires": "Expires",
-    "paidThrough": "Paid through",
     "leaseUntil": "Lease until",
     "leaseNote": "Provisional lease (refund window). Renew before this date to stay valid through the paid date.",
     "issued": "Issued",
@@ -96,6 +95,9 @@
       "data-dir": "data directory"
     },
     "communityNote": "Community edition: applying a verified license displays its details here; it does not change this build.",
+    "buildMismatch": "Your license is for {{edition}}; this installation runs the Community build.",
+    "switchBuild": "Switch to {{edition}}",
+    "editionAdds": "{{edition}} adds (from the edition documentation):",
     "expiredBanner": "This commercial license has expired: the Business modules are inactive and the deployment behaves as the community edition. Your data and your user accounts are intact — no account was capped, disabled or deleted. Install a renewed license to restore the modules.",
     "managedExternally": "The license is managed out-of-band (source: {{source}}). Edit that source to change it — installing from the console is disabled to avoid a shadowed file.",
     "installTitle": "Install or update the license",
@@ -281,7 +283,7 @@
     "title": "Secret store",
     "caption": "Named secrets in the deployment-wide sealed store. Reference one from a connector config as store:<name>; the value is resolved at connection time, so you reconfigure without restarting. The value is never shown — only a short fingerprint confirms a secret is set or changed.",
     "superadminOnly": "The secret store is a deployment-wide setting; only a superadmin can view or change it.",
-    "sealerUnavailable": "This build can list secrets but has no sealer wired, so values cannot be stored. Configure a sealer backend to enable the store.",
+    "sealerUnavailable": "This build can list secrets but has no sealer set up, so values cannot be stored. Configure a sealer backend to enable the store.",
     "create": "New secret",
     "colName": "Name",
     "rotate": "Rotate",
@@ -340,7 +342,7 @@
     "title": "Connectors",
     "caption": "Add and configure the connectors the engine ingests from, with their credentials sealed at rest. A change is applied to the running engine without a restart. Deployment-wide and superadmin-only.",
     "superadminOnly": "Connectors are a deployment-wide setting; only a superadmin can view or change them.",
-    "unavailable": "This build did not wire connector onboarding; connectors are configured from the boot file instead.",
+    "unavailable": "This build does not include connector onboarding; connectors are configured from the boot file instead.",
     "sourcesUnavailable": "This build does not serve the source roster; the connectors it runs cannot be listed here.",
     "catalogForbidden": "Not authorized to view the connector catalog",
     "catalogForbiddenHint": "The kinds this build supports are not available to you, so a connector cannot be added or edited here. Ask an administrator for access.",
@@ -359,7 +361,7 @@
       "failed": "Failed",
       "stopped": "Stopped",
       "disabled": "Disabled",
-      "not_wired": "Not wired"
+      "not_wired": "Not set up"
     },
     "edit": "Edit",
     "delete": "Delete",
@@ -458,7 +460,7 @@
       "restartBody": "These configuration domains are read once at boot and are NOT applied by this reload. A restart is required for them to take effect:"
     },
     "catalog": {
-      "caption": "Every connector this build can wire, read from the engine — {{count}} in total. Browsing is read-only.",
+      "caption": "Every connector this build can set up, read from the engine — {{count}} in total. Browsing is read-only.",
       "noMatch": "No connector matches “{{query}}”.",
       "noMatchHint": "The catalog lists every connector this build can install. Clear the search to see all of them.",
       "search": "Filter by name or kind",
@@ -913,7 +915,7 @@
     "addon": "Module",
     "state": "State",
     "tier": "Preset",
-    "restartNote": "Activation applies at the next engine restart (modules are wired at boot).",
+    "restartNote": "Activation applies at the next engine restart (modules load at boot).",
     "promote": "Activate",
     "promoted": "{{addon}} activated.",
     "promoteFailed": "Could not activate the module.",
@@ -938,7 +940,9 @@
       "model": "Model",
       "provider": "Provider",
       "knowledge": "Knowledge",
-      "data": "Data"
+      "data": "Data",
+      "profile": "Provider profile",
+      "tool": "AI tool"
     },
     "sourceRef": "Source reference",
     "sourceRefHint": "Use the exact source ref. There is no single catalog for every source kind.",
@@ -1075,7 +1079,7 @@
         "rw": "Read/write",
         "ro": "Read-only",
         "disabled": "Disabled",
-        "forbidden": "not resolved — you lack sourcescope:assignment:read",
+        "forbidden": "not resolved — your role cannot read source assignments",
         "unknown": "not resolved — the assignment list did not load in full",
         "notFound": "no matching assignment",
         "notApplicable": "not an assignment target — this resolver does not apply"

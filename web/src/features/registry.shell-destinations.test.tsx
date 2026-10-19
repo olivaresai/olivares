@@ -202,13 +202,15 @@ describe('the shell destinations come from the registry', () => {
   })
 
   it('hides a destination the principal may not open, and never shows a hand-made one', () => {
-    canMock.mockImplementation((p) => p !== viewOf('deploy')?.permission)
+    canMock.mockImplementation(
+      (p) => p !== viewOf('gitPublication')?.permission,
+    )
     renderIntel(<JourneyNav />)
     const nav = screen.getByRole('navigation', { name: 'Journeys' })
     const hrefs = within(nav)
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'))
-    expect(hrefs).not.toContain('/deploy')
+    expect(hrefs).not.toContain('/git-publication')
     expect(hrefs).toContain('/')
   })
 })
@@ -463,7 +465,7 @@ describe('a destination stays current on the pages of its section', () => {
   })
 
   it('marks All areas as the branch when no offered destination holds the page', () => {
-    routerState.pathname = '/compliance'
+    routerState.pathname = '/evals'
     const denied = viewOf('audit')!.permission
     canMock.mockImplementation((p) => p !== denied)
     renderIntel(<AreasEntry open={false} onOpen={() => {}} />)
@@ -584,11 +586,16 @@ describe('the top bar trail names the same place', () => {
     ])
     // A deep-link detail reads through its parent.
     const items = enNav.items as Record<string, string>
-    expect(trail('/session-viewer/s-1')).toEqual([
-      'Observability & evidence </areas/observation>',
-      `${items.recordings} </recordings>`,
-      items['session-viewer'],
-    ])
+    // (Recordings and its viewer are Business pages: Community has neither.)
+    expect(trail('/session-viewer/s-1')).toEqual(
+      viewOf('recordings')
+        ? [
+            'Observability & evidence </areas/observation>',
+            `${items.recordings} </recordings>`,
+            items['session-viewer'],
+          ]
+        : [],
+    )
   })
 })
 

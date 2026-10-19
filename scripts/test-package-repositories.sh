@@ -356,4 +356,236 @@ expect_rc mutant-real-key-absent 2 env \
 checks=$((checks + 1))
 printf 'ok %02d - missing-key failure left no unsigned output\n' "$checks"
 
+# A host adds the repository with the two files the publish tree carries, then takes releases
+# from it with the package manager. The tree is assembled as the publisher assembles it (the
+# canonical origin), the publisher's user-file check must accept it, and a real apt (rootless, a private
+# state tree) then reads the deb822 file for a local copy of the same tree. The rpm file is checked
+# as text, because dnf runs in the clean-client legs.
+for tool in apt-get apt-cache gpgv; do
+	command -v "$tool" >/dev/null 2>&1 || {
+		printf 'test-package-repositories: COULD NOT CHECK — %s is required for the apt host checks\n' "$tool" >&2
+		exit 2
+	}
+done
+served="$scratch/served"
+# apt refuses metadata that is not yet valid or already expired, so this block signs for now.
+epoch=$(($(date -u +%s) - 3600))
+valid_until=$((epoch + 31536000))
+
+# release_tree VERSION: stable and security for VERSION, assembled as the publisher would.
+release_tree() {
+	local release="$1" channel
+	for channel in stable security; do
+		python3 "$repo_root/scripts/package_repository_test_fixtures.py" \
+			--out "$scratch/rel-$release-$channel" --variant "$channel" --version "$release" || return 1
+		env OLIVARES_PACKAGE_REPO_TEST_ONLY=1 TMPDIR="$s3_tmpdir" \
+			bash "$repo_root/scripts/test-rpm-repository.sh" --fixture-publish-tree \
+			--assets "$scratch/rel-$release-$channel" --version "$release" --key-dir "$scratch/key-one" \
+			--out "$scratch/rel-$release-$channel-rpm" || return 1
+		version="$release" render "$scratch/key-one" "$scratch/rel-$release-$channel" "$channel" \
+			"$scratch/rel-$release-$channel-repo" "$scratch/rel-$release-$channel-rpm" || return 1
+	done
+	python3 "$repo_root/scripts/assemble-package-repository-publish-tree.py" \
+		--stable "$scratch/rel-$release-stable-repo" --security "$scratch/rel-$release-security-repo" \
+		--key-dir "$key_view" --out "$served"
+}
+# user_files_check TREE: the check the publisher runs on a tree before any R2 access (its own
+# tests cover that call; this tree is signed with a test key, so the full plan does not apply).
+user_files_check() {
+	python3 "$repo_root/scripts/assemble-package-repository-publish-tree.py" --check-user-files "$1"
+}
+# canonical_user_files_ok TREE: the files name the one production origin and its key.
+canonical_user_files_ok() {
+	grep -qxF 'URIs: https://packages.olivares.ai/stable/apt' "$1/olivares.sources" &&
+		grep -qxF "baseurl=https://packages.olivares.ai/stable/rpm/\$basearch" "$1/olivares.repo" &&
+		grep -qxF 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository' "$1/olivares.repo"
+}
+# localize_user_files TREE: the same two files for a copy of the tree that is served from TREE
+# itself, made with the assembler's own renderers, so a real apt can read it without a network.
+localize_user_files() {
+	python3 - "$repo_root/scripts/assemble-package-repository-publish-tree.py" "$1" <<'PY'
+import importlib.util
+import pathlib
+import sys
+
+spec = importlib.util.spec_from_file_location("assemble", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+tree = pathlib.Path(sys.argv[2])
+origin = "file://" + str(tree)
+key = (tree / "olivares-packages.asc").read_text(encoding="utf-8")
+(tree / "olivares.sources").write_text(module.sources_file(origin, key), encoding="utf-8")
+template = module.REPO_TEMPLATE.read_text(encoding="utf-8")
+(tree / "olivares.repo").write_text(module.repo_file(origin, template), encoding="utf-8")
+PY
+}
+
+# apt_host DIR SOURCES [INSTALLED]: a private apt state that reads SOURCES and, when INSTALLED
+# is given, holds olivares at that version as installed.
+apt_host() {
+	local dir="$1" sources="$2" installed="${3:-}"
+	mkdir -p "$dir/apt.conf.d" "$dir/sources.list.d" "$dir/trusted.gpg.d" "$dir/lists/partial" "$dir/archives/partial"
+	cp -- "$sources" "$dir/sources.list.d/olivares.sources"
+	: >"$dir/status"
+	if [[ -n "$installed" ]]; then
+		printf 'Package: olivares\nStatus: install ok installed\nPriority: optional\nSection: admin\nInstalled-Size: 1\nMaintainer: Olivares AI <release@olivares.ai>\nArchitecture: amd64\nVersion: %s\nDescription: installed fixture\n\n' \
+			"$installed" >"$dir/status"
+	fi
+	cat >"$dir/apt.conf" <<CONF
+Dir::Etc::parts "$dir/apt.conf.d";
+Dir::Etc::sourcelist "/dev/null";
+Dir::Etc::sourceparts "$dir/sources.list.d";
+Dir::Etc::trusted "/dev/null";
+Dir::Etc::trustedparts "$dir/trusted.gpg.d";
+Dir::State::lists "$dir/lists";
+Dir::State::status "$dir/status";
+Dir::Cache::archives "$dir/archives";
+Dir::Cache::pkgcache "";
+Dir::Cache::srcpkgcache "";
+Dir::Log "$dir/log";
+Debug::NoLocking "true";
+APT::Architecture "amd64";
+APT::Architectures "amd64";
+Acquire::Languages "none";
+APT::Sandbox::User "";
+CONF
+}
+apt_in() {
+	local dir="$1"
+	shift
+	env APT_CONFIG="$dir/apt.conf" "$@"
+}
+apt_candidate_is() {
+	[[ "$(apt_in "$1" apt-cache policy olivares | awk '$1 == "Candidate:" {print $2}')" == "$2" ]]
+}
+# apt_download_is DIR ASSET: the package apt downloads is the release asset, byte for byte.
+apt_download_is() {
+	local dir="$1" asset="$2" got="$1.download"
+	mkdir -p "$got"
+	(cd "$got" && apt_in "$dir" apt-get download olivares) || return 1
+	cmp -s "$got"/olivares_*.deb "$asset"
+}
+# user_repo_file_ok FILE ORIGIN: the dnf file sets exactly the three signature checks, once each
+# (DNF 4 reads gpgcheck, DNF5 pkg_gpgcheck; a later line would win), keeps $basearch for dnf to
+# expand, and names the key file the host stores (never an address the repository answers) and
+# both architectures' metadata this tree serves.
+user_repo_file_ok() {
+	local file="$1" origin="$2" arch
+	[[ "$(grep -E '^[[:space:]]*(pkg_|repo_)?gpgcheck[[:space:]]*=' "$file" | LC_ALL=C sort)" == \
+		$'gpgcheck=1\npkg_gpgcheck=1\nrepo_gpgcheck=1' ]] || return 1
+	grep -qxF "baseurl=$origin/stable/rpm/\$basearch" "$file" || return 1
+	[[ "$(grep -Ec '^[[:space:]]*gpgkey[[:space:]]*=' "$file")" -eq 1 ]] || return 1
+	! grep -Eq '^[[:space:]]+[^[:space:]#]' "$file" || return 1
+	grep -qxF 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository' "$file" || return 1
+	! grep -q '{{' "$file" || return 1
+	cmp -s "$served/olivares-packages.asc" "$served/keys/olivares-package-repository.asc" || return 1
+	for arch in x86_64 aarch64; do
+		[[ -s "$served/stable/rpm/$arch/repodata/repomd.xml" && -s "$served/stable/rpm/$arch/repodata/repomd.xml.asc" ]] || return 1
+	done
+}
+# wrong_key_sources OUT: the same deb822 file carrying key two instead of the repository key.
+wrong_key_sources() {
+	python3 - "$repo_root/scripts/assemble-package-repository-publish-tree.py" \
+		"$scratch/key-two/openpgp-public.asc" "file://$served" "$1" <<'PY'
+import importlib.util
+import pathlib
+import sys
+
+spec = importlib.util.spec_from_file_location("assemble", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+text = module.sources_file(sys.argv[3], pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+pathlib.Path(sys.argv[4]).write_text(text, encoding="utf-8")
+PY
+}
+same_user_files() {
+	cmp -s "$1/olivares.sources" "$2/olivares.sources" && cmp -s "$1/olivares.repo" "$2/olivares.repo"
+}
+# upgrade_is_offered FILE FROM TO: FILE is an apt upgrade simulation (no dpkg) with one upgrade,
+# FROM to TO.
+upgrade_is_offered() {
+	grep -qF "Inst olivares [$2] ($3 " "$1" && grep -q '^1 upgraded' "$1"
+}
+
+expect_rc release-1-tree 0 release_tree 26.900
+expect_rc user-files-are-published 0 test -s "$served/olivares.sources" -a -s "$served/olivares.repo"
+# The tree exactly as the production assembler writes it: the one canonical origin, the
+# check accepts it, and a file that differs from what the assembler writes is refused.
+expect_rc canonical-user-files-name-the-origin 0 canonical_user_files_ok "$served"
+expect_rc user-files-check-accepts-assembled-tree 0 user_files_check "$served"
+# Mutant 10: the dnf file gains a line that reopens a package check.
+cp -a "$served" "$scratch/served-reopened"
+printf 'gpgcheck = 0\n' >>"$scratch/served-reopened/olivares.repo"
+expect_rc mutant-check-repo-file-reopens-a-check 1 user_files_check "$scratch/served-reopened"
+grep -q 'is not what the assembler writes for https://packages.olivares.ai' "$scratch/mutant-check-repo-file-reopens-a-check.stderr" || {
+	printf '%s\n' 'test-package-repositories: HALLAZGO — the reopened repo file was refused for another reason' >&2
+	exit 1
+}
+# Mutant 11: the apt file names a local origin, as a tree assembled for a test would.
+cp -a "$served" "$scratch/served-local-origin"
+localize_user_files "$scratch/served-local-origin"
+expect_rc mutant-check-sources-file-other-origin 1 user_files_check "$scratch/served-local-origin"
+
+# From here the tree is served from its own path, as a host with a local mirror would see it.
+expect_rc localize-release-1 0 localize_user_files "$served"
+expect_rc user-repo-file-is-closed 0 user_repo_file_ok "$served/olivares.repo" "file://$served"
+# Positive control for the next three: a host with the published file updates and sees release 1.
+apt_host "$scratch/host-new" "$served/olivares.sources"
+expect_rc apt-update-verifies-release-1 0 apt_in "$scratch/host-new" apt-get update
+expect_rc apt-candidate-is-release-1 0 apt_candidate_is "$scratch/host-new" 26.900
+expect_rc apt-package-is-release-1-asset 0 apt_download_is "$scratch/host-new" "$scratch/rel-26.900-stable/olivares_26.900_linux_amd64.deb"
+
+# Mutant 12: the dnf file loses the package check DNF 4 reads, or has another one appended.
+sed '/^gpgcheck=1$/d' "$served/olivares.repo" >"$scratch/repo-no-gpgcheck"
+expect_rc mutant-repo-file-without-gpgcheck 1 user_repo_file_ok "$scratch/repo-no-gpgcheck" "file://$served"
+{ cat "$served/olivares.repo"; printf 'repo_gpgcheck = 0\n'; } >"$scratch/repo-appended"
+expect_rc mutant-repo-file-appended-override 1 user_repo_file_ok "$scratch/repo-appended" "file://$served"
+# Mutant 12b: the dnf file fetches its key from the repository address, as it did before #2576.
+sed "s#^gpgkey=.*#gpgkey=file://$served/olivares-packages.asc#" "$served/olivares.repo" >"$scratch/repo-key-from-address"
+expect_rc mutant-repo-file-key-from-repository-address 1 user_repo_file_ok "$scratch/repo-key-from-address" "file://$served"
+# Mutants 12c, 12d: dnf reads gpgkey as a list, so a second line, spaced or continued, adds a key address.
+{ cat "$served/olivares.repo"; printf 'gpgkey = file://%s/olivares-packages.asc\n' "$served"; } >"$scratch/repo-second-key"
+expect_rc mutant-repo-file-second-gpgkey-line 1 user_repo_file_ok "$scratch/repo-second-key" "file://$served"
+{ cat "$served/olivares.repo"; printf '\tfile://%s/olivares-packages.asc\n' "$served"; } >"$scratch/repo-key-continued"
+expect_rc mutant-repo-file-gpgkey-continuation 1 user_repo_file_ok "$scratch/repo-key-continued" "file://$served"
+# Mutant 13: the apt file carries a key that did not sign the repository.
+expect_rc wrong-key-sources 0 wrong_key_sources "$scratch/wrong-key.sources"
+apt_host "$scratch/host-wrong-key" "$scratch/wrong-key.sources"
+expect_rc mutant-apt-wrong-key 100 apt_in "$scratch/host-wrong-key" apt-get update
+grep -q 'NO_PUBKEY\|not signed' "$scratch/mutant-apt-wrong-key.stderr" || {
+	printf '%s\n' 'test-package-repositories: HALLAZGO — the wrong-key host was refused for another reason' >&2
+	exit 1
+}
+
+# Release 2 lands in the same place. A host that holds release 1 sees one upgrade, with the
+# files it already has.
+apt_host "$scratch/host-old" "$served/olivares.sources" 26.900
+expect_rc apt-old-host-updates-release-1 0 apt_in "$scratch/host-old" apt-get update
+expect_rc apt-old-host-simulates-upgrade-1 0 apt_in "$scratch/host-old" apt-get -s upgrade
+grep -q '^0 upgraded' "$scratch/apt-old-host-simulates-upgrade-1.stdout" || {
+	printf '%s\n' 'test-package-repositories: HALLAZGO — a host at the latest release was offered an upgrade' >&2
+	exit 1
+}
+mv -- "$served" "$scratch/served-release-1"
+epoch=$((epoch + 60))
+valid_until=$((epoch + 31536000))
+expect_rc release-2-tree 0 release_tree 26.901
+expect_rc user-files-check-accepts-release-2-tree 0 user_files_check "$served"
+expect_rc localize-release-2 0 localize_user_files "$served"
+expect_rc user-files-same-across-releases 0 same_user_files "$served" "$scratch/served-release-1"
+expect_rc apt-old-host-updates-release-2 0 apt_in "$scratch/host-old" apt-get update
+expect_rc apt-old-host-simulates-upgrade-2 0 apt_in "$scratch/host-old" apt-get -s upgrade
+expect_rc apt-offers-release-1-to-2 0 upgrade_is_offered "$scratch/apt-old-host-simulates-upgrade-2.stdout" 26.900 26.901
+expect_rc apt-package-is-release-2-asset 0 apt_download_is "$scratch/host-old" "$scratch/rel-26.901-stable/olivares_26.901_linux_amd64.deb"
+
+# Mutant 14: the signed Packages index changes after signing; apt must refuse the update.
+printf 'x' >>"$served/stable/apt/dists/stable/main/binary-amd64/Packages.gz"
+apt_host "$scratch/host-tampered" "$served/olivares.sources"
+expect_rc mutant-apt-tampered-index 100 apt_in "$scratch/host-tampered" apt-get update
+grep -q 'Hash Sum mismatch\|unexpected size' "$scratch/mutant-apt-tampered-index.stderr" || {
+	printf '%s\n' 'test-package-repositories: HALLAZGO — the tampered index was refused for another reason' >&2
+	exit 1
+}
+
+printf 'test-package-repositories: hosts — the assembled tree passes the user-file check; a real apt verified it, was offered release 2 and refused a wrong key and a tampered index\n'
 printf 'test-package-repositories: OK — %d checks; 9/9 mutants red with positive controls\n' "$checks"

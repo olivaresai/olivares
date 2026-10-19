@@ -12,6 +12,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // The provider-record administration surface, under /v1/m/sessions/providers.
@@ -121,7 +122,10 @@ func toProviderRecordDTO(r ProviderRecord) providerRecordDTO {
 func (m *Module) handleListProviderRecords(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
 	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
-	records, page, err := m.ListProviderRecords(r.Context(), mc.Tenant, state, kind, listQuery(r))
+	// A key the caller may use no profile on is not listed (the model path stays with the assignment).
+	records, page, err := listVisibleBy(m, listQuery(r), func(q model.Query) ([]ProviderRecord, model.Page, error) {
+		return m.ListProviderRecords(r.Context(), mc.Tenant, state, kind, q)
+	}, func(rec ProviderRecord) error { return m.requireRecordAccess(r.Context(), mc, rec.Ref) })
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -158,7 +162,12 @@ func (m *Module) handleCreateProviderRecord(w http.ResponseWriter, r *http.Reque
 
 // handleGetProviderRecord returns one registered provider by its reference, without its credential.
 func (m *Module) handleGetProviderRecord(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	rec, err := m.GetProviderRecord(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	ref, err := m.addressedRecord(r.Context(), mc, chi.URLParam(r, "ref"))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	rec, err := m.GetProviderRecord(r.Context(), mc.Tenant, ref)
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -184,7 +193,12 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	rec, err := m.PatchProviderRecord(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProviderRecordPatch{
+	ref, err := m.addressedRecord(r.Context(), mc, chi.URLParam(r, "ref"))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	rec, err := m.PatchProviderRecord(r.Context(), mc.Tenant, ref, ProviderRecordPatch{
 		DisplayName: body.DisplayName, BaseURL: body.BaseURL, APIKey: body.APIKey,
 		DefaultModel: body.DefaultModel,
 		Actor:        mc.Principal,
@@ -198,7 +212,12 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 
 // handleTestProviderRecord asks the provider which models it serves with the registered credential; it sends no completion and spends nothing.
 func (m *Module) handleTestProviderRecord(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	rec, err := m.TestProviderRecord(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	ref, err := m.addressedRecord(r.Context(), mc, chi.URLParam(r, "ref"))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	rec, err := m.TestProviderRecord(r.Context(), mc.Tenant, ref)
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -212,7 +231,12 @@ func (m *Module) handleTestProviderRecord(w http.ResponseWriter, r *http.Request
 
 // handleRevokeProviderRecord withdraws a provider credential for good; the record keeps its id so the sessions it authorized still read truthfully.
 func (m *Module) handleRevokeProviderRecord(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	rec, err := m.RevokeProviderRecord(r.Context(), mc.Principal, mc.Tenant, chi.URLParam(r, "ref"))
+	ref, err := m.addressedRecord(r.Context(), mc, chi.URLParam(r, "ref"))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	rec, err := m.RevokeProviderRecord(r.Context(), mc.Principal, mc.Tenant, ref)
 	if err != nil {
 		writeRunErr(w, err)
 		return

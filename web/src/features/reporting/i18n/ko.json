@@ -1,0 +1,34 @@
+{
+  "title": "보고서",
+  "description": "거버넌스 보고서를 필요할 때 생성 및 다운로드하고 예약 전달을 관리합니다.",
+  "catalog": {
+    "title": "온디맨드 보고서",
+    "empty": "사용 가능한 보고서 유형이 없습니다.",
+    "emptyHint": "카탈로그에는 이 빌드가 생성할 수 있는 보고서 유형이 나열됩니다. 이 에디션에서는 사용할 수 있는 유형이 없습니다.",
+    "colReport": "보고서",
+    "colFormats": "형식",
+    "colActions": "작업",
+    "generate": "생성"
+  },
+  "formats": {
+    "html": "HTML",
+    "pdf": "PDF"
+  },
+  "generate": {
+    "title": "{{title}} 생성",
+    "subtitle": "형식과 기간을 선택하십시오. 준비되면 보고서가 다운로드됩니다.",
+    "format": "형식",
+    "from": "시작",
+    "to": "종료",
+    "framework": "프레임워크",
+    "frameworkHint": "선택 사항 — 증거를 단일 컴플라이언스 프레임워크로 제한합니다.",
+    "frameworkPlaceholder": "예: soc2",
+    "team": "팀",
+    "teamHint": "선택 사항 — 지출 분석을 단일 팀으로 제한합니다.",
+    "teamPlaceholder": "예: platform",
+    "download": "다운로드",
+    "done": "{{title}}을(를) 생성했습니다.",
+    "failed": "보고서 생성에 실패했습니다.",
+    "pdfUnavailable": "이 빌드에서는 PDF 렌더링을 사용할 수 없습니다. 대신 HTML을 선택하십시오."
+  }
+}

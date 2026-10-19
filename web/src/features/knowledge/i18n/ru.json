@@ -10,7 +10,7 @@
     "dataProducts": "Продукты данных",
     "dlp": "DLP",
     "integrity": "Якоря реестра",
-    "scans": "Scans"
+    "scans": "Сканирования"
   },
   "common": {
     "classification": "Классификация",
@@ -156,11 +156,11 @@
     "modeAll": "Все",
     "modeFilter": "Режим",
     "noModeResults": "Нет фрагментов, соответствующих этому режиму источника.",
-    "contextTruncated": "⛔ The context did not fit: {{n}} chunks were dropped. This answer was built on less evidence than the list below suggests.",
-    "excludedChunks": "{{n}} chunks excluded by the source floor ({{sources}})",
-    "sourceFloorNoEffect": "source floor applied, excluded nothing",
-    "redactedItems": "{{n}} items redacted",
-    "redactionNoEffect": "redaction required, nothing matched"
+    "contextTruncated": "⛔ Контекст не поместился: отброшено фрагментов — {{n}}. Этот ответ построен на меньшем объёме доказательств, чем предполагает список ниже.",
+    "excludedChunks": "Фрагментов, исключённых порогом источников: {{n}} ({{sources}})",
+    "sourceFloorNoEffect": "порог источников применён, ничего не исключил",
+    "redactedItems": "Замаскировано элементов: {{n}}",
+    "redactionNoEffect": "маскирование требовалось, совпадений нет"
   },
   "lineage": {
     "search": "Поиск по происхождению…",
@@ -256,7 +256,7 @@
     "caption": "Управляемая память агентов. Содержимое маскируется перед сохранением; истёкшие записи отфильтровываются при чтении.",
     "empty": "Нет записей памяти",
     "emptyHint": "Запишите запись памяти для агента или отфильтруйте по ссылке на агента.",
-    "withheld": "⛔ {{n}} entries are NOT in this list: the read path withheld them because they failed the integrity check. The list is not the whole picture, and what is missing is what most needs looking at — run the memory verification to see them."
+    "withheld": "⛔ В этом списке НЕТ записей: {{n}}. Путь чтения скрыл их, потому что они не прошли проверку целостности. Список — не вся картина, а больше всего внимания требует именно то, чего в нём нет: запустите проверку памяти, чтобы увидеть эти записи."
   },
   "memoryEditor": {
     "title": "Записать память",
@@ -463,12 +463,12 @@
     "empty": "Правил DLP нет",
     "emptyHint": "Без правил шлюз ничего не применяет. Одно правило включает DLP для этого арендатора.",
     "anyScope": "соответствует любому ПОМЕЧЕННОМУ классу — не охватывает непроверенное содержимое",
-    "newRule": "New DLP rule",
-    "newRuleHint": "A rule binds one content class to allow or deny on egress.",
-    "class": "Class",
-    "action": "Action",
-    "deleteRule": "Delete the rule for {{class}}",
-    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — this is an upsert by class, not an addition. Replacing a deny with an allow opens egress for that class immediately.",
+    "newRule": "Новое правило DLP",
+    "newRuleHint": "Правило связывает один класс содержимого с разрешением или запретом на выход данных.",
+    "class": "Класс",
+    "action": "Действие",
+    "deleteRule": "Удалить правило для {{class}}",
+    "willReplace": "⛔ Правило для «{{class}}» уже существует. Сохранение ЗАМЕНЯЕТ его — это upsert по классу, а не добавление. Замена запрета на разрешение немедленно открывает выход данных для этого класса.",
     "mayReplace": "Список правил отображается не полностью: за пределами этой страницы может уже существовать правило для «{{class}}». Если оно существует, при сохранении оно будет ЗАМЕНЕНО, поскольку выполняется upsert по классу.",
     "truncated": "Загружено правил DLP: {{n}}; есть ещё",
     "truncatedHint": "Этот список показывает первую загруженную страницу; есть и другие правила DLP."
@@ -488,34 +488,34 @@
     "allHealthyHint": "Проверка целостности сверяет каждую сохранённую строку с записанным дайджестом. Все проверенные строки совпали."
   },
   "scans": {
-    "empty": "No scans yet",
+    "empty": "Сканирований пока нет",
     "emptyHint": "Сканирование обходит источник и записывает найденное. Запустите сканирование, чтобы увидеть результаты здесь.",
-    "sourceName": "Source name",
-    "scanSource": "Scan source",
-    "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",
-    "basisNotice": "A scan records what it looked AT. \"stored\" is the post-scrub form kept after ingestion; \"raw\" is the body before redaction. The two are not comparable.",
+    "sourceName": "Имя источника",
+    "scanSource": "Сканировать источник",
+    "scanSourceHint": "Читает источник БЕЗ загрузки. Тела классифицируются в памяти и никогда не сохраняются, не записываются в журнал и не встраиваются.",
+    "basisNotice": "Сканирование фиксирует то, НА ЧТО оно смотрело. «Сохранённое» — форма после очистки, которая остаётся после загрузки; «исходное» — тело до маскирования. Их нельзя сравнивать.",
     "basis": {
-      "raw": "raw bodies",
-      "stored": "stored (post-scrub)"
+      "raw": "исходные тела",
+      "stored": "сохранённое (после очистки)"
     },
-    "counts": "{{docs}} docs · {{hits}} with hits · {{markers}} redaction markers",
+    "counts": "документов: {{docs}} · с совпадениями: {{hits}} · маркеров маскирования: {{markers}}",
     "truncated": "Загружено сканов: {{n}}; есть ещё",
     "truncatedHint": "Этот список показывает первую загруженную страницу; есть и другие записи сканирования.",
-    "zeroOnStored": "⛔ Zero hits here means the redaction worked, NOT that the corpus holds no sensitive data — anything scrubbed at ingestion is already gone. Scan the SOURCE to ask that question.",
-    "zeroOnRaw": "Zero hits on the raw bodies: the source itself carried nothing the detectors recognise."
+    "zeroOnStored": "⛔ Ноль совпадений здесь означает, что маскирование сработало, а НЕ что в корпусе нет чувствительных данных — всё, что было очищено при загрузке, уже исчезло. Чтобы ответить на этот вопрос, просканируйте ИСТОЧНИК.",
+    "zeroOnRaw": "Ноль совпадений в исходных телах: в самом источнике нет ничего, что распознают детекторы."
   },
   "portability": {
-    "title": "Portability",
-    "export": "Export bundle",
-    "bundle": "Bundle to import",
-    "bundlePlaceholder": "Paste a signed bundle",
-    "import": "Import bundle",
-    "exported": "{{n}} entries in the bundle",
-    "excluded": "⛔ {{n}} entries were LEFT OUT because they failed the integrity check. This bundle is not a complete copy — say so if you hand it to a data subject.",
-    "nothingExcluded": "Nothing was excluded for integrity.",
-    "noManifest": "The bundle carries no readable manifest, so its completeness cannot be stated.",
-    "imported": "{{n}} entries imported",
-    "rejectedCount": "{{n}} rows were REJECTED individually. The import partly succeeded — these rows are not in."
+    "title": "Переносимость",
+    "export": "Экспортировать бандл",
+    "bundle": "Бандл для импорта",
+    "bundlePlaceholder": "Вставьте подписанный бандл",
+    "import": "Импортировать бандл",
+    "exported": "Записей в бандле: {{n}}",
+    "excluded": "⛔ Исключено записей: {{n}} — они не прошли проверку целостности. Этот бандл не является полной копией: скажите об этом, если передаёте его субъекту данных.",
+    "nothingExcluded": "Ничего не исключено по результатам проверки целостности.",
+    "noManifest": "В бандле нет читаемого манифеста, поэтому о его полноте ничего нельзя утверждать.",
+    "imported": "Импортировано записей: {{n}}",
+    "rejectedCount": "Строк ОТКЛОНЕНО по отдельности: {{n}}. Импорт удался частично — этих строк в данных нет."
   },
   "contextPolicies": {
     "truncated": "Загружено политик контекста: {{n}}; есть ещё",

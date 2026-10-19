@@ -3,7 +3,7 @@
 Skills is on by default on fresh installations and remains optional. Upgrades
 preserve the saved module selection; if Skills is off, enable it with
 `olivares modules on skills`. Install a reviewed pack and assign its revision
-with `olivares skills assign`. Workspace, registered folder, template,
+with `olivares skills assign`. Workspace, provider profile, registered folder, template,
 agent, agent group and session assignments deliver the selected `SKILL.md` files
 and their supporting files when a native Claude Code, Codex, Gemini CLI, Grok
 Build or OpenCode session starts.
@@ -11,6 +11,11 @@ Installing a pack alone delivers nothing.
 
 Use `--folder <workspace-ref>` to assign to one registered session folder.
 `--workspace` assigns to the organizational workspace.
+Use `--profile <profile-ref>` to enable skills for new sessions launched with that
+provider profile, across folders. The profile reference is the `ppf_…` value shown
+by `olivares agent profile ls`. The profile keeps its native read/write
+permissions. Reading profile pins also requires permission to manage that
+profile; a caller without those rights receives not found.
 [Workspace wiki](workspace-wiki.md) initializes a folder and pins its bundled skill.
 
 Claude Code discovers them at `$HOME/.claude/skills/<name>/SKILL.md` through the
@@ -41,7 +46,7 @@ prevent retirement of the referenced pack.
 ## Precedence
 
 A skill name has one owner in a launch. Targets are ordered from the broadest to the
-narrowest: workspace, folder, template, agent group, agent, session. When two targets pin
+narrowest: workspace, provider profile, folder, template, agent group, agent, session. When two targets pin
 different content under one skill name, the narrower target's skill replaces the
 broader one's, so a project overrides a generic pack by installing its own skill of that
 name and pinning it to its folder, without editing the generic pack. Two targets of the
@@ -67,7 +72,8 @@ session's own approvals. Installation and delivery never execute pack content.
 Of the built-in ECC packs, two carry such a skill, both through `allowed-tools`:
 `videodb` in `ecc-media-generation` and `inherit-legacy-style` in
 `ecc-workflow-quality`. Pinning a whole one of those packs needs the approval; pinning
-any other skill of them, or any skill of another built-in pack, does not. Pins made
+any other skill of them does not. Agent and command packs use the same approval,
+including agent tool declarations. Pins made
 before this rule keep working unchanged.
 
 Before spawning, the engine verifies the revision's original manifest and file
@@ -92,6 +98,9 @@ olivares skills ls --builtin
 olivares skills install --builtin ecc-security --idempotency-key security-install-1
 olivares skills install --git https://github.com/owner/skills --ref <commit> --subdir skills
 olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>
+olivares skills enable tdd-workflow verification-loop --profile <profile-ref>
+olivares skills selection --workspace <workspace-id> --profile <profile-ref>
+olivares skills disable tdd-workflow --profile <profile-ref>
 ```
 
 Built-in archives are checked against their pinned SHA-256 digest. Git refs are
@@ -142,3 +151,58 @@ skill of the same name on the narrower one. `selection` resolves the tree you na
 the launch's own rules, so it shows what a new session there gets and from which target.
 The same read is `GET /v1/m/skills/selection?target=workspace:<id>&target=folder:<ref>`.
 
+## Agents, commands and rules
+
+A pack can also contain `agents/<name>.md`, `commands/<name>.md` and
+`rules/<set>/<name>.md` beside its skill directories. The revision records each
+member's kind, original bytes and digest. Their catalog names are qualified:
+`agent:review`, `command:review` and `rule:common/testing`. A skill named `review`
+is a separate member. Agent frontmatter requires a matching name and description;
+commands and rules may be plain Markdown. Import never executes any of them.
+
+The built-in ECC catalog includes `ecc-agents`, `ecc-commands`, and one
+`ecc-rules-<set>` pack per upstream rule set. Install and select their members
+with the same verbs as skills:
+
+```sh
+olivares skills install --builtin ecc-agents
+olivares skills install --builtin ecc-commands
+olivares skills install --builtin ecc-rules-common
+olivares skills enable agent:code-reviewer command:code-review rule:common/testing --folder <folder-ref> --approve-active-content
+olivares skills get <pack-id>
+olivares skills diff <pack-id> --diff
+olivares skills selection --workspace <workspace-id> --folder <folder-ref>
+```
+
+Agents and commands are delivered only to Claude Code, in the session plugin's
+`agents/` and `commands/` directories. Claude reports them under the `olivares:`
+namespace in its own catalog and the session's `/` menu. Rules have no plugin
+slot: the engine places them in Claude Code's user rules directory within the
+session's private HOME. It passes that HOME as an explicit additional memory
+directory, using
+[Claude Code's documented discovery mechanism](https://code.claude.com/docs/en/memory#load-from-additional-directories).
+The account configuration and governed settings restrictions stay in effect.
+A launch using another tool refuses these kinds by tool name.
+
+Rules without path scopes or file imports are supported. Path-scoped rules
+(`paths` frontmatter) and rules containing `@file` imports refuse
+a governed Claude Code launch: the additional-directory route cannot preserve
+their scope or source-relative import paths against the session's workspace. Their bytes remain installable and
+reviewable in the catalog. Rules do not enforce behavior outside the tool's
+instruction context.
+
+Precedence uses the qualified member name. A folder's `rule:common/testing`
+replaces the workspace's member of that name before delivery, so the conflicting
+generic rule is absent. Other rules compose, once each, in target order in one native Markdown rule file; discovery order between files does not decide precedence. Agents and commands
+use the same replacement rule; same-rank conflicts refuse. No upstream pack is
+edited. Agent `tools`, `permissionMode`, MCP declarations, hooks and command tool
+pre-approvals require the same explicit assignment approval as active skill
+content. Updates, pins, rollback and conversation snapshots use the same
+immutable revision path for every kind.
+
+Rule `@file` imports require approval in the catalog, including metadata and examples
+in code blocks, and refuse launch because composition cannot preserve their paths.
+Copy the referenced instructions into the rule to use it in a governed session. A skill and command with the same native slash name refuse
+a Claude launch rather than hiding either member. The console assignment form lets
+you choose individual members; packs above the 64-member assignment limit require
+a choice.

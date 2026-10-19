@@ -159,7 +159,8 @@ func grokInitializeResult(methods []any) map[string]any {
 	return map[string]any{
 		"protocolVersion": 1,
 		"agentCapabilities": map[string]any{
-			"loadSession": true,
+			"loadSession":     true,
+			"mcpCapabilities": map[string]any{"http": true, "sse": true},
 			"sessionCapabilities": map[string]any{
 				"list": map[string]any{}, "resume": map[string]any{}, "close": map[string]any{},
 			},

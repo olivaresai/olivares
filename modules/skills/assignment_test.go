@@ -240,3 +240,52 @@ func TestSkillsAssignmentNeedsApprovalAgainAtANewRevision(t *testing.T) {
 		t.Fatalf("a new revision with approval: %d %s", approved.Code, approved.Body.String())
 	}
 }
+
+// A skill pack can carry an MCP server three ways: an agent's mcpServers key, a
+// Codex skill's agents/openai.yaml dependency and a Claude plugin file. Each is
+// content the tool acts on, so each needs approval before a session can see it,
+// and none of them writes the tenant's MCP registry. What a tool does with a
+// server bundled inside it is the tool's own business and is not tested here.
+func TestSkillsBundlingAnMCPServerNeedsApprovalAndNeverWritesTheRegistry(t *testing.T) {
+	h := catalogOptions(t, skills.Options{Targets: workspaceAuthority{}})
+	reply := h.upload(t, "mcp-pack", "mcp", "", archive(t,
+		[]string{"plain/SKILL.md", "agents/browser.md", "codex-mcp/SKILL.md", "codex-mcp/agents/openai.yaml", "plugin-mcp/SKILL.md", "plugin-mcp/.claude-plugin/plugin.json"},
+		[]string{
+			skillText("plain", "", "Read it.\n"),
+			"---\nname: browser\ndescription: Drive a browser.\nmcpServers:\n  olivares:\n    command: bundled-server\n---\nAgent body\n",
+			skillText("codex-mcp", "", "Use the bundled tool.\n"),
+			"dependencies:\n  tools:\n    - type: mcp\n      value: olivares\n      url: https://bundled.example.test/mcp\n",
+			skillText("plugin-mcp", "", "Use the plugin tool.\n"),
+			`{"name":"plugin-mcp","mcpServers":{"olivares":{"command":"bundled-server"}}}`,
+		}))
+	var pack skills.InstallResult
+	if err := json.Unmarshal(reply.Body.Bytes(), &pack); err != nil || reply.Code != http.StatusCreated {
+		t.Fatalf("install: %d %s", reply.Code, reply.Body.String())
+	}
+	active := map[string][]string{}
+	for _, m := range pack.Revision.Members {
+		active[m.Name] = m.Active
+	}
+	for member, want := range map[string]string{"agent:browser": "mcpServers", "codex-mcp": "agents/openai.yaml", "plugin-mcp": ".claude-plugin/plugin.json"} {
+		if len(active[member]) != 1 || active[member][0] != want {
+			t.Fatalf("%s shows %v as the content its tool acts on, want [%s]; all: %v", member, active[member], want, active)
+		}
+	}
+	if len(active["plain"]) != 0 {
+		t.Fatalf("a plain skill needs no approval: %v", active["plain"])
+	}
+	target := h.workspace(t, false)
+	post := func(approve bool) *httptest.ResponseRecorder {
+		return h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: target, RevisionID: pack.Revision.ID, ApproveActiveContent: approve}, "")
+	}
+	if refused := post(false); refused.Code != http.StatusBadRequest || !strings.Contains(refused.Body.String(), "active_content_unapproved") {
+		t.Fatalf("bundled MCP servers without approval: %d %s", refused.Code, refused.Body.String())
+	}
+	if approved := post(true); approved.Code != http.StatusCreated {
+		t.Fatalf("bundled MCP servers with approval: %d %s", approved.Code, approved.Body.String())
+	}
+	gateway, err := auth.NewMCPGatewayStore(h.store).Get(context.Background(), h.tenant)
+	if err != nil || len(gateway.Servers) != 0 {
+		t.Fatalf("assigning skills changed the MCP registry: %+v %v", gateway.Servers, err)
+	}
+}

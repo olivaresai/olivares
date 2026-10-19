@@ -24,7 +24,7 @@
 //	          TypeScript compiler (stage 1, console-dump.mjs). The English label and
 //	          one-line description are the CONSOLE'S OWN strings from
 //	          web/src/lib/i18n/locales/en/nav.json — the product's words, already
-//	          translated into seven locales, not a second description invented here.
+//	          translated into eight locales, not a second description invented here.
 //
 //	grpc      GENERATED, 28 of 28. The roster is the grpc.ServiceDesc literals in the
 //	          generated *_grpc.pb.go — the registration table the server actually hands

@@ -6,9 +6,16 @@
 // work surface (2026-09-18), which measured the second case painting a half read under
 // an admission that had already left.
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { fakeRouter } from '@/test/fake-router'
 import {
   createSessionRowLocator,
@@ -68,20 +75,26 @@ vi.mock('@/features/agentops/run-create-dialog', () => ({
 vi.mock('./session-card', () => ({
   SessionCard: ({
     resolution,
+    open,
   }: {
+    open: boolean
     resolution: {
       target: { sessionRef?: string; runRef?: string; liveRef?: string } | null
       live?: { current_action?: string }
       observeUnknown: boolean
     }
-  }) =>
-    resolution.target ? (
-      <div data-testid="rev-card">
-        sess:{resolution.target.sessionRef ?? ''}|paint:
-        {resolution.live?.current_action ?? 'none'}|unknown:
-        {String(resolution.observeUnknown)}
-      </div>
-    ) : null,
+  }) => (
+    <>
+      <span data-testid="rev-card-open" data-open={String(open)} />
+      {resolution.target ? (
+        <div data-testid="rev-card">
+          sess:{resolution.target.sessionRef ?? ''}|paint:
+          {resolution.live?.current_action ?? 'none'}|unknown:
+          {String(resolution.observeUnknown)}
+        </div>
+      ) : null}
+    </>
+  ),
 }))
 
 vi.mock('./api', async (importOriginal) => ({
@@ -212,6 +225,41 @@ beforeEach(() => {
 })
 
 describe('the address contract keeps the one-way retirement — A → B → A', () => {
+  it('reads both narratives independently and retires the second when authority leaves', async () => {
+    fakeRouter.reset('/sessions?session=sess%3Arev-a&beside=sess%3Arev-b')
+    harness.liveOne.mockImplementation(async (ref: string) => ({
+      ...(ref === 'rev-a' ? LIVE_A : LIVE_B),
+      summary: `Read ${ref} independently`,
+    }))
+    const { qc, again } = renderView(undefined, false)
+    const first = await screen.findByRole('region', { name: 'Current session' })
+    const second = await screen.findByRole('region', { name: 'Session beside' })
+    await waitFor(() =>
+      expect(first).toHaveTextContent('Read rev-a independently'),
+    )
+    await waitFor(() =>
+      expect(second).toHaveTextContent('Read rev-b independently'),
+    )
+    expect(first).not.toHaveTextContent('Read rev-b independently')
+    harness.liveOne.mockImplementation(async (ref: string) => ({
+      ...(ref === 'rev-a' ? LIVE_A : LIVE_B),
+      summary: `Updated ${ref}`,
+    }))
+    await act(async () => {
+      await qc.invalidateQueries()
+    })
+    await waitFor(() => expect(first).toHaveTextContent('Updated rev-a'))
+    await waitFor(() => expect(second).toHaveTextContent('Updated rev-b'))
+    grant('sessions:run:read')
+    again()
+    await waitFor(() => expect(fakeRouter.url()).not.toContain('beside='))
+    expect(screen.queryByRole('region', { name: 'Session beside' })).toBeNull()
+    grant('sessions:live:read', 'sessions:run:read')
+    again()
+    expect(screen.queryByRole('region', { name: 'Session beside' })).toBeNull()
+    expect(within(first).queryByText('Updated rev-b')).toBeNull()
+  })
+
   it('walks A → B → A by clicks and by Back, and the card follows the address', async () => {
     const user = userEvent.setup()
     renderView()
@@ -378,5 +426,89 @@ describe('a RETIRED address that comes back through Back', () => {
     })
     const narrative = screen.getByTestId('session-narrative')
     expect(narrative).not.toHaveTextContent('rev-a-resolved')
+  })
+})
+
+describe('opening the session that is beside', () => {
+  const BESIDE_URL =
+    '/sessions?session=sess%3Arev-a&beside=sess%3Arev-b&pane=beside'
+
+  it('leaves no beside pane behind when the rail opens that session', async () => {
+    const user = userEvent.setup()
+    // A wide screen (80rem and up): the rail leaves the pane alone there, so the pane
+    // that named the beside slot has to be cleared with it. Below that the rail writes
+    // `pane=narrative` itself, which hides the defect.
+    const wide = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList,
+    )
+    onTestFinished(() => wide.mockRestore())
+    fakeRouter.reset(BESIDE_URL)
+    renderView(undefined, false)
+    await screen.findByRole('region', { name: 'Session beside' })
+    const option = document.querySelector(
+      `[role="option"][data-address="${B_ADDRESS}"]`,
+    ) as HTMLElement
+    expect(option).not.toBeNull()
+    await user.click(option)
+    // The old URL kept `pane=beside` with no `beside`: the decoder refuses that pair,
+    // so the person saw a "link partly ignored" notice for a click they made.
+    await waitFor(() =>
+      expect(fakeRouter.url()).toContain('session=sess%3Arev-b'),
+    )
+    expect(fakeRouter.url()).not.toContain('beside')
+    expect(screen.queryByRole('region', { name: 'Session beside' })).toBeNull()
+    expect(screen.queryByTestId('url-state-notice')).toBeNull()
+  })
+
+  it('leaves no beside pane behind when a table row opens that session', async () => {
+    const user = userEvent.setup()
+    fakeRouter.reset(`${BESIDE_URL}&tab=table`)
+    renderView(undefined, false)
+    await user.click(await rowFor(B_ADDRESS, 'rev/beside/table-row-b'))
+    await waitFor(() =>
+      expect(fakeRouter.url()).toContain('session=sess%3Arev-b'),
+    )
+    expect(fakeRouter.url()).not.toContain('beside')
+    expect(screen.queryByTestId('url-state-notice')).toBeNull()
+  })
+
+  it('closes the detail sheet of the beside session when that session goes', async () => {
+    fakeRouter.reset('/sessions?session=sess%3Arev-a&beside=sess%3Arev-b')
+    renderView(undefined, false)
+    const beside = await screen.findByRole('region', { name: 'Session beside' })
+    act(() => {
+      fireEvent.keyDown(within(beside).getByTestId('narrative-menu'), {
+        key: 'Enter',
+      })
+    })
+    act(() => {
+      fireEvent.click(screen.getByTestId('narrative-open-detail'))
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('rev-card-open')).toHaveAttribute(
+        'data-open',
+        'true',
+      ),
+    )
+    act(() => {
+      fireEvent.click(
+        within(beside).getByRole('button', { name: 'Close session beside' }),
+      )
+    })
+    await waitFor(() => expect(fakeRouter.url()).not.toContain('beside='))
+    expect(screen.getByTestId('rev-card-open')).toHaveAttribute(
+      'data-open',
+      'false',
+    )
   })
 })

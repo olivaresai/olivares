@@ -12,15 +12,23 @@
     <link rel="apple-touch-icon" href="/favicon-48.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <!--
-      The two faces of the first paint (Geist and JetBrains Mono 400, 90.8 KB together),
-      requested with the document so they are ready before the first render and swapping
-      them in moves no layout. JetBrains Mono 500 is not preloaded: it loads on demand.
+      The three faces of the first paint (Inter, Space Grotesk and JetBrains Mono 400,
+      91.7 KB together), requested with the document so they are ready before the first
+      render and swapping them in moves no layout. JetBrains Mono 500 is not preloaded: it
+      loads on demand.
     -->
     <link
       rel="preload"
       as="font"
       type="font/woff2"
-      href="/src/assets/fonts/geist/Geist-Variable.woff2"
+      href="/src/assets/fonts/inter/inter-latin-wght-normal.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/src/assets/fonts/space-grotesk/space-grotesk-latin-wght-normal.woff2"
       crossorigin
     />
     <link
@@ -103,9 +111,11 @@
           es: 'Recargando la consola…',
           de: 'Die Konsole wird neu geladen…',
           fr: 'Rechargement de la console…',
+          it: 'Ricaricamento della console…',
           ja: 'コンソールを再読み込みしています…',
           ru: 'Консоль перезагружается…',
           zh: '正在重新加载控制台…',
+          ko: '콘솔을 다시 불러오는 중…',
         }
         function line() {
           var lang = ''

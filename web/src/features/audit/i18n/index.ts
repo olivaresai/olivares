@@ -4,7 +4,7 @@
 //
 // Registers the `audit` i18n namespace. Imported by the view (so the strings
 // are present when the lazy chunk loads) and by the tests. Languages: en/es plus
-// zh/ja/de/ru/fr (the console multilingual set). Key parity across all seven is
+// zh/ja/de/ru/fr/it/ko (the console multilingual set). Key parity across all nine is
 // enforced by scripts/check-i18n-parity.mjs (push gate + CI) and parity.test.ts.
 import { registerTranslations } from '@/lib/i18n'
 import en from './en.json'
@@ -14,7 +14,9 @@ import ja from './ja.json'
 import de from './de.json'
 import ru from './ru.json'
 import fr from './fr.json'
+import it from './it.json'
+import ko from './ko.json'
 
-registerTranslations('audit', { en, es, zh, ja, de, ru, fr })
+registerTranslations('audit', { en, es, zh, ja, de, ru, fr, it, ko })
 
-export { en, es, zh, ja, de, ru, fr }
+export { en, es, zh, ja, de, ru, fr, it, ko }

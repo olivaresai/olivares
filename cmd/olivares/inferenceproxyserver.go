@@ -194,7 +194,7 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger, consoleURL st
 		Egress: thisEdition.serverToolEgressGate.get(osGetenv, log), Approvals: proxyApprovalsFor(eng.approvalBridge),
 		// Content firewall (P1): the real inspector under -tags enterprise WITH a firewall
 		// config, else nil (no deep inspection, unchanged). Reuses the same approval bridge.
-		Inspector: thisEdition.contentInspector.get(osGetenv, log),
+		Inspector: chainInspectors(thisEdition.contentInspector.get(osGetenv, log), eng.sessionDecoys),
 		// Computer-use governance: the real gate under -tags enterprise WITH a
 		// computer-use config, else nil (ungoverned, unchanged).
 		ComputerUse: thisEdition.computerUseGate.get(osGetenv, log),

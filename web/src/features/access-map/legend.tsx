@@ -56,7 +56,7 @@ export function AccessLegend({
   return (
     <div
       className={cn(
-        'pointer-events-none flex flex-col gap-1.5 rounded-md border border-border bg-surface/90 px-2.5 py-2 shadow-sm backdrop-blur',
+        'pointer-events-none flex flex-col gap-1.5 rounded-md border border-border bg-surface px-2.5 py-2 shadow-sm',
         className,
       )}
     >

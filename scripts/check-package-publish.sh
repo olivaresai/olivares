@@ -139,7 +139,8 @@ assert workflow.index("--mode stage --apply") < workflow.index("clean rpm client
 assert workflow.index("clean rpm client verifies staged HTTPS repository") < workflow.index("--mode promote --apply")
 assert workflow.index("--mode promote --apply") < workflow.index("clean rpm client verifies promoted HTTPS repository")
 assert "pkg_gpgcheck=1" in dnf_template and "repo_gpgcheck=1" in dnf_template
-assert not re.search(r"(?m)^\s*gpgcheck=", dnf_template)
+# DNF 4 (AlmaLinux 10, RHEL 10) checks package signatures only through gpgcheck.
+assert re.findall(r"(?m)^\s*gpgcheck=(.*)$", dnf_template) == ["1"]
 for token in ("REVIEWED_BASEURL", "render_repo_file", "repo_file_is_closed", "--evidence-file", "--staging-id"):
     assert token in dnf_client, token
 for token in ("publish_rpm()", "check_tool_identity \"$image_id\"", "--init --rm --network none --security-opt no-new-privileges",
@@ -164,6 +165,12 @@ for token in (
 ):
     assert token in publisher, token
 assert publisher.index('for rel in "${content_files[@]}"') < publisher.index('for rel in "${root_files[@]}"')
+# The two files a host adds the repository with: one canonical origin in the assembler, and the
+# publisher refuses a tree whose files differ from what the assembler writes before any R2 access.
+assert 'CANONICAL_ORIGIN = "https://packages.olivares.ai"' in assembler
+assert publisher.index("--check-user-files") < publisher.index("DRY-RUN")
+for name in ("olivares.sources", "olivares.repo"):
+    assert name in publisher, name
 # The pacman checks run before the dry-run exit, so an unsigned database never stages.
 assert publisher.index("\tpacman_verify_tree\n\tfamilies+=(pacman)") < publisher.index("DRY-RUN")
 # S3's rpm delivery.json and checksums.txt name the rpms and the signed repomd:

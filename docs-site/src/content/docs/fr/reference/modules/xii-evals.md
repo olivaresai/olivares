@@ -39,12 +39,16 @@ persiste trois choses : une preuve par cas en ajout seul, un agrégat d'exécuti
 `Score`, `Passed`, `OccurredAt`, `Metrics`) que la conformité (XIII) et l'interface lisent
 **sans connaître les propres tables de XII**. Les exécutions s'effectuent de façon synchrone ; le flux SSE d'une
 exécution *rejoue l'exécution persistée* (trames par cas, puis un résumé), il n'actionne rien.
-Une régression est une comparaison de score ponctuelle avec une exécution de référence.
-Quand la baisse de score dépasse le `regression_threshold` de la suite, l'exécution
-positionne `regressed` et écrit un **`Finding`** central (`Kind = eval_regression`).
-Cette comparaison n'a pas d'intervalle. La référence automatique est la dernière
+Une régression est une comparaison avec une exécution de référence.
+Quand la baisse de score dépasse le `regression_threshold` de la suite et que l'intervalle
+à 95 % de la différence de taux de réussite (Newcombe, différence d'intervalles de Wilson)
+exclut zéro, l'exécution positionne `regressed` et écrit un **`Finding`** central
+(`Kind = eval_regression`). Une baisse au-dessus du seuil dont l'intervalle contient zéro
+est marquée `inconclusive_noise`, pas comme une régression ; la comparaison montre
+l'intervalle et les deux dénominateurs, donc les petites suites lèvent moins de findings.
+La référence automatique est la dernière
 exécution terminée pour la même suite et le même sujet, et pour la même variante
-lorsqu'il y en a une. Cette exécution peut utiliser une autre version de suite, un
+lorsqu'il y en a une, hors exécutions marquées `inconclusive_noise`. Cette exécution peut utiliser une autre version de suite, un
 autre modèle ou un autre scorer, et la comparaison ne dit pas lequel a changé. Après
 un changement de version de suite, passez une référence explicite ou épinglez-en une
 (`POST /baselines`). Le constat est émis au mieux sur le bus sous la forme
@@ -95,8 +99,8 @@ Quand le stockage des budgets ne peut pas être lu, la barrière refuse la dépe
 échoue avec `budget_blocked`. Un budget qui bloque ou limite arrête la dépense. La
 seule échappatoire à une barrière échouée est le **contournement gouverné** — niveau admin, raison
 écrite, audité — qui change le verdict *effectif* que la CI revérifie, jamais celui qui est
-enregistré. Chaque taux rapporté est livré avec son dénominateur et son intervalle à 95 % ; la
-comparaison de régression, non. Voir
+enregistré. Chaque taux rapporté est livré avec son dénominateur et son intervalle à 95 %, et la
+comparaison de régression aussi. Voir
 `docs/EVAL-METHODOLOGY.md` dans le dépôt pour la méthodologie complète et les sources.
 
 :::caution[Limites honnêtes]

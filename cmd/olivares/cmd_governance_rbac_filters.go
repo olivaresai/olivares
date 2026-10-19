@@ -52,8 +52,9 @@ func decodeInheritanceFilter(res observeResult) (cliInheritanceFilter, error) {
 
 func rbacFiltersCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "filters",
-		Short: "Inheritance filters: where rights from above a node stop applying",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "filters",
+		Short:       "Inheritance filters: where rights from above a node stop applying",
 		Long: "An inheritance filter sits on a workspace, agent group or folder and names one\n" +
 			"resource class. Rights that reach the node from above it (a tenant-wide role, a grant\n" +
 			"anchored higher) no longer apply to that class there; grants at or below the node\n" +
@@ -70,8 +71,9 @@ func rbacFiltersCmd(flags *authClientFlags) *cobra.Command {
 
 func rbacFiltersLsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls",
-		Short: "List every inheritance filter",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List every inheritance filter",
 		Long: "ls lists the inheritance filters of the tenant: the id get and rm take, the node, its\n" +
 			"ref, the class each one stops and who set it. No filter means every node inherits\n" +
 			"every right from above it.",
@@ -116,8 +118,9 @@ func rbacFiltersLsCmd(flags *authClientFlags) *cobra.Command {
 
 func rbacFiltersGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <filter-id>",
-		Short: "One inheritance filter",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <filter-id>",
+		Short:       "One inheritance filter",
 		Long: "get shows one inheritance filter by the id `filters ls` prints. An unknown id\n" +
 			"exits 4 (not found).",
 		Example: "  olivares governance rbac filters get <filter-id>",
@@ -145,8 +148,9 @@ func rbacFiltersGetCmd(flags *authClientFlags) *cobra.Command {
 func rbacFiltersSetCmd(flags *authClientFlags) *cobra.Command {
 	var class string
 	cmd := &cobra.Command{
-		Use:   "set <workspace|agent_group|folder> <ref> --class <kind>",
-		Short: "Stop rights from above a node for one resource class",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <workspace|agent_group|folder> <ref> --class <kind>",
+		Short:       "Stop rights from above a node for one resource class",
 		Long: "set stores a filter on a node: a workspace slug, an agent-group slug or a folder\n" +
 			"resource id. --class is a resource kind of the scope tree (`governance rbac catalog`\n" +
 			"lists them as tree-kinds); an agent group takes only `agent`.\n\n" +
@@ -181,9 +185,10 @@ func rbacFiltersSetCmd(flags *authClientFlags) *cobra.Command {
 func rbacFiltersRmCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <filter-id>",
-		Aliases: []string{"remove", "delete"},
-		Short:   "Remove an inheritance filter",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <filter-id>",
+		Aliases:     []string{"remove", "delete"},
+		Short:       "Remove an inheritance filter",
 		Long: "rm removes a filter, so rights from above its node apply there again. That widens\n" +
 			"access, so it asks for confirmation and needs --yes in a non-interactive session.",
 		Example: "  olivares governance rbac filters rm <filter-id> --yes",

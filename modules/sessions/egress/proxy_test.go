@@ -222,6 +222,118 @@ func TestProxyPublicOnlyRefusesPrivateResolution(t *testing.T) {
 	}
 }
 
+// A listed host that resolves to a reserved address refuses the launch by name,
+// even when the address and port are one a loopback bound provider is allowed at:
+// the proxy's allowed-address list is address-global, so the name would pass.
+func TestProxyListedHostAtAReservedAddressRefusesTheLaunch(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	defer provider.Close()
+	port := strings.TrimPrefix(provider.URL, "http://127.0.0.1:")
+	for _, tc := range []struct {
+		name string
+		ip   string
+		url  string
+	}{
+		{"the bound provider's own address and port", "127.0.0.1", "http://listed.example:" + port},
+		{"another loopback port", "127.0.0.1", "https://listed.example/"},
+		{"a private address", "10.1.2.3", "https://listed.example/"},
+		{"the metadata address", "169.254.169.254", "https://listed.example/"},
+		{"a documentation range", "192.0.2.7", "https://listed.example/"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ds, err := destinations(Policy{Providers: []string{provider.URL}, PublicProviders: []string{tc.url}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := startProxyWithResolver(context.Background(), ds, hostResolver{"listed.example": net.ParseIP(tc.ip), "127.0.0.1": net.ParseIP("127.0.0.1")})
+			if err == nil {
+				p.close()
+				t.Fatal("the launch started with a listed host at a reserved address")
+			}
+			if !strings.Contains(err.Error(), "listed.example") {
+				t.Fatalf("the refusal does not name the host: %v", err)
+			}
+		})
+	}
+}
+
+// A listed host at a public address starts beside a loopback bound provider: the
+// provider is admitted, an unlisted name is not.
+func TestProxyListedHostAtAPublicAddressStartsBesideALoopbackProvider(t *testing.T) {
+	var providerHits, otherHits atomic.Int32
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { providerHits.Add(1) }))
+	defer provider.Close()
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { otherHits.Add(1) }))
+	defer other.Close()
+	ds, err := destinations(Policy{Providers: []string{provider.URL}, PublicProviders: []string{"https://listed.example/"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := startProxyWithResolver(context.Background(), ds, hostResolver{"listed.example": net.ParseIP("93.184.216.34"), "127.0.0.1": net.ParseIP("127.0.0.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.close()
+	u, _ := url.Parse("http://proxy")
+	transport := &http.Transport{Proxy: http.ProxyURL(u), DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", p.socket)
+	}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
+	resp, err := client.Get(provider.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || providerHits.Load() != 1 {
+		t.Fatalf("the loopback provider: status %d hits %d, want 200 and 1", resp.StatusCode, providerHits.Load())
+	}
+	resp, err = client.Get(strings.Replace(other.URL, "127.0.0.1", "unlisted.example", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden || otherHits.Load() != 0 {
+		t.Fatalf("an unlisted host beside the listed one: status %d hits %d, want 403", resp.StatusCode, otherHits.Load())
+	}
+}
+
+// Listed hosts are never the keyed provider, and they count against the 16.
+func TestPublicProvidersAreNotKeyedAndAreBounded(t *testing.T) {
+	policy := Policy{Providers: []string{"https://api.z.ai/"}, PublicProviders: []string{"https://github.com/"}, CredentialSHA256: [32]byte{1}}
+	ds, err := destinations(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ds) != 2 || !ds[0].keyed || ds[1].keyed || ds[0].public || !ds[1].public {
+		t.Fatalf("destinations = %+v, want the bound provider keyed and open, the listed host public and unkeyed", ds)
+	}
+	many := Policy{Providers: []string{"https://api.z.ai/"}}
+	for i := 0; i < 16; i++ {
+		many.PublicProviders = append(many.PublicProviders, fmt.Sprintf("https://h%d.example/", i))
+	}
+	if _, err := destinations(many); err == nil {
+		t.Fatal("17 endpoints were admitted")
+	}
+	if _, err := destinations(Policy{Offline: true, PublicProviders: []string{"https://github.com/"}}); err == nil {
+		t.Fatal("an offline policy granted a listed host")
+	}
+}
+
+// hostResolver answers each name from its own table, like the engine's resolver
+// answers for a bound provider and an administrator's host differently.
+type hostResolver map[string]net.IP
+
+func (r hostResolver) LookupIP(_ context.Context, _, host string) ([]net.IP, error) {
+	if ip, ok := r[host]; ok {
+		return []net.IP{ip}, nil
+	}
+	return nil, errors.New("no such host")
+}
+func (hostResolver) LookupPort(ctx context.Context, network, port string) (int, error) {
+	return net.DefaultResolver.LookupPort(ctx, network, port)
+}
+
 type changingResolver struct {
 	ip    net.IP
 	first net.IP

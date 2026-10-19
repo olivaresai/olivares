@@ -713,9 +713,7 @@ describe('tracking limits', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     // The host keeps tracking and offers the way back.
-    expect(
-      screen.getByText('A handoff operation is on the wire.'),
-    ).toBeVisible()
+    expect(screen.getByText('A handoff operation is being sent.')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Show the operation' }))
     expect(await screen.findByRole('dialog')).toBeVisible()
     // The classification did not change while hidden.

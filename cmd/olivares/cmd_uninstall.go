@@ -20,8 +20,9 @@ func newUninstallCmd() *cobra.Command {
 	var dataDir, manifestPath, offlineRoot string
 	var plan, preserve, purge, yes bool
 	cmd := &cobra.Command{
-		Use:   "uninstall (--plan|--preserve|--purge)",
-		Short: "Plan or remove a local installation without crossing its signed-release layout",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "uninstall (--plan|--preserve|--purge)",
+		Short:       "Plan or remove a local installation without crossing its signed-release layout",
 		Long: "uninstall consumes the local ownership manifest and validates every listed path against\n" +
 			"the install_layout published in the release distribution index before touching anything.\n" +
 			"--plan only reports. --preserve removes managed software and service files while retaining\n" +

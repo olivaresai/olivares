@@ -219,10 +219,10 @@ func TestRunCommandsRoute(t *testing.T) {
 		}
 	})
 
-	t.Run("a provider with an owned driver is not asked with Claude's request", func(t *testing.T) {
+	t.Run("a provider without a catalog reader is not asked with Claude's request", func(t *testing.T) {
 		owned := &commandsAnsweringProc{previewTestProc: &previewTestProc{pid: 4712}, lr: lr, commands: catalogCommands}
 		f.m.rt.dropLive(f.tenant, f.runRef)
-		f.m.rt.putLive(&liveRun{tenant: f.tenant, runRef: f.runRef, transport: TransportStreamJSON, proc: owned, ring: newOutputRing(8, 1024), session: &codexSession{}})
+		f.m.rt.putLive(&liveRun{tenant: f.tenant, runRef: f.runRef, transport: TransportStreamJSON, proc: owned, ring: newOutputRing(8, 1024), session: &grokSession{}})
 		r := f.do("GET", path, f.editor, tenantHdr(f.tenant))
 		cmds, isList := r.body["commands"].([]any)
 		if r.code != http.StatusOK || r.body["reported"] != false || !isList || len(cmds) != 0 {

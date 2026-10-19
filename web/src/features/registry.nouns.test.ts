@@ -77,6 +77,8 @@ describe('the thirteen nouns', () => {
       audit: 'evidence',
       security: 'evidence',
       compliance: 'evidence',
+      // How long the records of the estate are kept: the record OF the things, like compliance.
+      retention: 'evidence',
       attestation: 'evidence',
       reporting: 'evidence',
       ...(viewIds.has('postureExport')
@@ -107,7 +109,7 @@ describe('the thirteen nouns', () => {
     )
   })
 
-  it('translates every noun in all seven languages', () => {
+  it('translates every noun in all nine languages', () => {
     const missing: string[] = []
     for (const lng of LANGUAGE_CODES) {
       const nav = JSON.parse(

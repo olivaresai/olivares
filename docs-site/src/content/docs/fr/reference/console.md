@@ -8,7 +8,7 @@ description: >-
 ---
 
 :::note[Édition]
-Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges) et le cycle de vie des identités gérées nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, SCIM entrant utilisateurs/groupes, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
+Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges), le cycle de vie des identités gérées et le serveur SCIM entrant nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
 :::
 
 Cette page est la carte de la console. Elle répertorie **toutes les routes montées par
@@ -70,7 +70,7 @@ Sécurité & identité, Déploiement, Observabilité & preuves, puis Système & 
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **75 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **73 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
 ### Accueil
@@ -92,13 +92,13 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Outils des agents | `/agent-tools` | Détectez, installez et mettez à jour les outils des agents sur cet hôte et suivez chaque installation ; réservé aux administrateurs du déploiement | `system:admin` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
-| Sessions | `/agentops` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
+| Opérer les sessions | `/agentops` | Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
 | Serveurs MCP | `/mcp-servers` | Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser | `tenant:admin` | [how-to/connectors/mcp-governance](/fr/how-to/connectors/mcp-governance/) |
 | Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
 | Modèles | `/models` | Modèles, routage et clés de fournisseur | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
 | Plateformes | `/platforms` | Surfaces de déploiement, matrice de conformité et cycle de vie des modèles par plateforme | `models:platforms:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
 | Comptes de fournisseur | `/provider-accounts` | Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte | `sessions:account:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Liaisons de sources | `/provider-bindings` | Dédiez des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Liaisons de sources | `/provider-bindings` | Lier des sources configurées à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Limites de débit | `/rate-limits` | Inventaire des limites de débit Anthropic (lecture seule) | `models:ratelimits:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
@@ -122,9 +122,9 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Communications | `/communications` | Canaux, avis directs et boîte de réception personnelle de l'espace de travail sélectionné | `sessions:channel:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Administration des canaux | `/communications/administration` | Administrer les canaux : configuration et historique des droits, chaque acte sous l'ETag actuel du canal | `sessions:channel:admin` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Administration des canaux | `/communications/administration` | Administrer les canaux : configuration et historique des droits | `sessions:channel:admin` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Transferts | `/communications/handoffs` | Offres de responsabilité de travail qui vous sont adressées : lisez le contexte, puis acceptez ou refusez | `sessions:delivery:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
-| Boîte de réception des communications | `/communications/inbox` | Votre boîte exacte : les remises qui vous sont adressées, lues à neuf et accusées explicitement | `sessions:delivery:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Boîte de réception des communications | `/communications/inbox` | Les messages qui vous sont adressés : ouvrez et accusez réception de chacun | `sessions:delivery:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Nouveau canal | `/communications/new` | Créez un canal avec des droits initiaux explicites | `sessions:channel:write` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Liaisons de protocole | `/communications/protocol-bindings` | Composez et réconciliez les liaisons A2A et MCP gouvernées | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Travail | `/work` | Travail partagé : unités, dépendances, acceptation et décisions | `sessions:work:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
@@ -143,18 +143,18 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Carte des accès | `/access-map` | Ce que chaque agent lit et écrit (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
 | Export AgentCore | `/agentcore-export` | Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Gouvernance de Claude Code | `/claude-policy` | Politique gérée, hooks, MCP, bac à sable et policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/fr/how-to/connectors/claude-code-hooks-pep/) |
-| Identité et NHI | `/identity` | SSO, SCIM, le répertoire des NHI et le graphe WIF | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
+| Identité et accès | `/identity` | SSO, SCIM et les identités qu’utilisent vos agents | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Proxy d'inférence | `/inference-proxy` | Gates du proxy, règles DLP de sortie et approbations d'appareils | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/fr/reference/modules/inferenceproxy/) |
 | Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identité, rôles et approbations | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Politiques de routines | `/routine-policies` | Planchers de cadence, plafonds de concurrence, exigences d'approbation et listes d'autorisation cron pour les routines Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Sécurité | `/security` | Garde-fous, investigation et anomalies | `security:finding:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
+| Coffre-fort | `/vault` | Vos mots de passe, notes et codes d’authentification | `tenant:read` | [reference/console](/fr/reference/console/) |
 
 ### Déploiement
 
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
-| Déploiement | `/deploy` | Provisionnez et câblez les agents à l'infrastructure | `deploy:deployment:read` | [reference/modules/vii-deploy](/fr/reference/modules/vii-deploy/) |
 | Publication Git | `/git-publication` | Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées | `gitpublish:target:read` | [reference/modules/gitpublish](/fr/reference/modules/gitpublish/) |
 
 ### Observabilité & preuves
@@ -164,13 +164,11 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Adoption de Claude Code | `/adoption` | Productivité, acceptation et répartition des modèles | `adoption:metrics:read` | [reference/modules/claudeadoption](/fr/reference/modules/claudeadoption/) |
 | Chaîne d'approvisionnement | `/attestation` | Attestation de version : SLSA, SBOM, VEX et Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/fr/how-to/verify-a-release/) |
 | Registre d'audit | `/audit` | Registre de preuves à altération détectable | `audit:read` | [reference/modules/ix-security](/fr/reference/modules/ix-security/) |
-| Conformité | `/compliance` | Référentiels, contrôles et preuves | `compliance:framework:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Tableaux de bord | `/dashboards` | Indicateurs clés et reporting pour la direction | tout utilisateur connecté | [reference/modules/xxi-executive-dashboards](/fr/reference/modules/xxi-executive-dashboards/) |
 | Évaluations | `/evals` | Qualité, évaluations et régression | `evals:run:read` | [reference/modules/xii-evals](/fr/reference/modules/xii-evals/) |
 | Santé et SLA | `/health` | Disponibilité et SLA des agents et des MCP | `health:status:read` | [reference/modules/xxii-health](/fr/reference/modules/xxii-health/) |
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
-| Enregistrements | `/recordings` | Enregistrement et relecture des sessions privilégiées | `recording:session:admin` | [reference/modules/recording](/fr/reference/modules/recording/) |
-| Visionneuse de sessions | `/session-viewer/$id` (lien profond uniquement) | Chronologie complète d'une session enregistrée, atteinte depuis une ligne des Enregistrements et non depuis la barre latérale. | `recording:session:admin` | [reference/modules/recording](/fr/reference/modules/recording/) |
+| Conservation | `/retention` | Durée de conservation de chaque classe d’enregistrements, balayage qui l’applique et ses certificats scellés | `compliance:retention:read` | [reference/modules/xiii-compliance](/fr/reference/modules/xiii-compliance/) |
 | Budgets | `/stored-budgets` | Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite. | `finops:budget:read` | [reference/modules/xi-finops](/fr/reference/modules/xi-finops/) |
 
 ### Système & paramètres

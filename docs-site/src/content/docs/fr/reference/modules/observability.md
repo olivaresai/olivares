@@ -49,6 +49,41 @@ elle.
   [`/metrics`](/fr/how-to/monitor-with-prometheus/) ; ce module sert des réponses
   structurées, pas des séries.
 
+## Reproduire le parcours du modèle de lecture
+
+Sur une **installation Compose SQLite Enterprise neuve et jetable**, exécutez
+`scripts/qualify-observability.py` avec Python 3.11 ou ultérieur. Fournissez le binaire
+installé, l'adresse HTTPS, le nom du conteneur, le commit source complet et un nouveau
+répertoire de preuves :
+
+```sh
+python3 scripts/qualify-observability.py /path/to/olivares \
+  https://127.0.0.1:8443 olivares <source-sha> /path/to/new-evidence
+```
+
+La sonde utilise la gestion d'organisation d'Enterprise pour provisionner un second tenant
+destiné à ses contrôles d'isolation. Les surfaces ingestion-health, les modèles de lecture de
+trace et l'attestation restent disponibles dans Community.
+
+La sonde crée des comptes et des agents de test par l'API, active les modules observability et
+security existants, et redémarre physiquement le conteneur. Elle compare le SHA-256 de
+l'exécutable démarré à celui du binaire fourni, vérifie l'ingestion à partir d'un finding
+first-party, contrôle les refus entre tenants, et contrôle la conservation du détail de trace
+du ledger et de l'export à travers le redémarrage et la désactivation puis la réactivation du
+module. Elle vérifie aussi que les compteurs d'ingestion se réinitialisent et que l'attestation
+sépare l'identité mesurée du binaire de l'état déclaré du pipeline et de la version non
+publiée. Les contrôles CLI utilisent la sortie JSON. Les identifiants restent en mémoire ou
+dans l'environnement des processus enfants ; les journaux conservés du moteur expurgent les
+jetons de configuration.
+
+Suivez les étapes d'installation du README avec une image candidate explicitement choisie.
+N'exécutez jamais la sonde contre une installation existante. L'optimisation de Python est
+refusée parce qu'elle désactive les assertions. Supprimez la pile Compose jetable et ses
+volumes après l'exécution. La sonde laisse ce nettoyage à l'appelant et écrit son résultat et
+le journal du moteur dans le répertoire de preuves. Elle n'exerce ni les actions de la
+console, ni PostgreSQL, ni les collecteurs de fournisseurs, ni la vérification de signature
+des versions.
+
 ## Voir aussi
 
 - [Superviser avec Prometheus](/fr/how-to/monitor-with-prometheus/) — les

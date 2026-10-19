@@ -18,14 +18,21 @@
 # ⛔ LA LECTURA DE LOS WORKFLOWS VIVE EN `scripts/ci-timeouts.py`, Y NO ES UN REFACTOR (2026-08-23).
 # Este guion tenia `import yaml` como unica via y salia 2 en cuanto PyYAML faltaba. Medido hoy en la
 # un contenedor de desarrollo SIN PyYAML, sobre `origin/main` puro: `rc=2`, y
-# `task lint:ci-timeout-arithmetic` -> 201. `.githooks/pre-push:1205` invoca esa tarea y la 1218 de
-# ese mismo fichero es `# --- FAST LOCAL GATE ENDS HERE ---`, o sea que el gate vive en el carril
-# RAPIDO ⇒ **rechazaba cualquier push, de cualquier rama, desde una caja sin PyYAML**, y aqui no hay
-# `pip` en ninguna forma. Es el MISMO defecto que `taskfile-shape.py:14-27` diagnostico y cerro el
-# 2026-08-20, dos dias antes de que naciera este gate; la leccion estaba escrita y no se aplico.
+# `task lint:ci-timeout-arithmetic` -> 201. The pre-push hook of that day ran the task in its fast
+# lane, which ran for every branch, so it refused every push from a box without PyYAML, and there
+# was no `pip` here in any form. That hook was rewritten on 2026-10-05 (8dfa44cb0) and no longer
+# runs the task; see "Where it runs" below. It is the SAME defect that `taskfile-shape.py:14-27`
+# diagnosed and closed on 2026-08-20, two days before this gate existed: the lesson was written
+# down and not applied.
 # Y no se veia porque el gate NO ES REPRODUCIBLE ENTRE CAJAS: el mismo commit da CLEAN donde PyYAML
 # esta y 2 donde no — el 2026-08-23 el integrador publico `CLEAN` mientras esta caja daba `rc=2`
 # sobre el mismo arbol.
+#
+# WHERE IT RUNS (dev#2633). On every development pull request, in the `ci-timeouts` job of
+# `.github/workflows/main-suite.yml`, which installs PyYAML first; and in `integration-check`
+# through `ci/kept-checks.txt`, on a manual dispatch only. The pre-push hook does not run it. That
+# hook and `pr-ci` are not a placement: the hook stopped calling the task in 8dfa44cb0, and
+# `pr-ci` is skipped on development pull requests.
 #
 # Tres respuestas: 0 limpio · 1 hallazgo · 2 NO PUDE MIRAR.
 set -uo pipefail

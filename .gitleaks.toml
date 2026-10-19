@@ -868,7 +868,7 @@ regexes = [
   regexes = ['''^85E26470357A6391DBA1BC9E0739B8027BF939EF$''', '''^b4a55c9bfb197702bbeda3cd261c0c2f6f4dd273b43b9bc8510b10caa9e0a083$''']
 
 # Public repository signing identifiers, pinned by production-key-descriptor.json
-# and the appliance Fedora repository metadata. They identify public keys and
+# and the appliance AlmaLinux repository metadata. They identify public keys and
 # cannot authorize an operation. Other values, paths and rules remain findings.
 [[allowlists]]
   description = "appliance recipe tests: exact public signing fingerprints and key-file digest"
@@ -878,8 +878,13 @@ regexes = [
   regexTarget = "secret"
   regexes = [
     '''^AE27B5B818C9BCFE485B4D8B155E5EC6550A6EF8$''',
+    # History only: the Fedora 44 key constants the first commits of the recipe carried, before the AlmaLinux base.
     '''^93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a$''',
     '''^36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6$''',
+    '''^de57c3c0a2dcde88ff5b894e74335f55a0ec074815f36d472270d937c16f077b$''',
+    '''^EE6DB7B98F5BF5EDD9DA0DE5DEE5C11CC2A1E572$''',
+    '''^de390fc168eae5ab2852e9e93d34a0b9ddf05cf9ce90ee28d97de26a4b1f6b93$''',
+    '''^7D8D15CBFC4E62688591FB2633D98517E37ED158$''',
   ]
 
 # ── 2026-10-02 · generic-api-key · cmd/olivares/cli_error_safety_invalid_json_test.go:32,79
@@ -972,6 +977,17 @@ regexes = [
 # Each block requires the rule AND anchored path AND complete captured bytes.
 # Other values, other paths, and other rules remain findings. The unchanged
 # admission wrapper consumes these rules; no commit or file is exempted.
+
+# Release-test coverage prose, not a credential: "API failure, published/existing"
+# describes tag cases. The generic rule captures the slash-joined words after
+# "API". Match only those complete bytes on this path; export rewrites commit IDs.
+[[allowlists]]
+  description = "Release README: exact published/existing tag-coverage prose"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^scripts/release/README\.md$''']
+  regexTarget = "secret"
+  regexes = ['''^published/existing$''']
 
 # c7286878a07a · generic-api-key · cmd/olivares/cmd_setup_existing_env_test.go
 # The capture is a database connection-count assignment, not a key. The map

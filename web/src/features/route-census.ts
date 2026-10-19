@@ -10,7 +10,7 @@
 // eliminar una función" — forbids the outcome; this module is how we can TELL.
 //
 // Why a committed census and not a cross-file guard. registry.nav-labels.test.ts
-// compares the registry against the seven nav.json. It is RELATIVE — it proves two
+// compares the registry against the nine nav.json. It is RELATIVE — it proves two
 // files agree. Delete a view from both in one commit and it stays green, because the
 // thing it measures against moved too. #680 hit precisely this and had to verify
 // "0 routes deleted" BY HAND, counting its own diff; a hand-count does not survive the

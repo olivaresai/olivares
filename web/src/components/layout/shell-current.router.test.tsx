@@ -82,13 +82,20 @@ describe('the router marks no second current link', () => {
   it.each([
     ['/communications/inbox', [], ['/communications/inbox']],
     ['/console/sources/diff', [], ['/console/sources/diff']],
-    // A page in the section of a pin marks that pin.
-    ['/provider-profiles', ['/agent-tools'], ['/provider-profiles']],
+    // A page folded into a pin (#2240) marks that pin, in the sidebar and in its row.
+    ['/provider-profiles', ['/agent-tools'], ['/agent-tools']],
+    ['/provider-bindings', ['/agent-tools'], ['/agent-tools']],
+    ['/provider-accounts', ['/agent-tools'], ['/agent-tools']],
     // A page whose section holds no pin marks none; its row still moves between its section.
     ['/mcp-servers', ['/agent-tools'], ['/mcp-servers']],
     ['/inventory', [], ['/inventory']],
     // A deep-link detail reads as its parent's page.
-    ['/session-viewer/s-1', [], ['/recordings']],
+    // (Recordings is a Business page: Community has no parent row to mark.)
+    [
+      '/session-viewer/s-1',
+      [],
+      FEATURE_VIEWS.some((v) => v.id === 'recordings') ? ['/recordings'] : [],
+    ],
     ['/sessions?session=s-1', ['/sessions'], []],
     ['/', ['/'], []],
   ])('at %s', async (address, sidebar, row) => {

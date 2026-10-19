@@ -46,8 +46,9 @@ func newCollectorCmd() *cobra.Command {
 		insecureTL bool
 	)
 	cmd := &cobra.Command{
-		Use:   "collector",
-		Short: "Run as an edge collector: push local source observations to a remote core over gRPC+mTLS",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "collector",
+		Short:       "Run as an edge collector: push local source observations to a remote core over gRPC+mTLS",
 		Long: "collector loads the source connectors named in OLIVARES_SOURCES_CONFIG and pushes their\n" +
 			"observations to a remote core's ingest endpoint. It opens no inbound listener.\n" +
 			"It presents a collector mTLS client certificate (when the core enforces --grpc-client-ca)\n" +
@@ -55,6 +56,14 @@ func newCollectorCmd() *cobra.Command {
 		Example: "  olivares collector --core-addr core.internal:9443 --token-file /run/secrets/ingest.token \\\n" +
 			"    --ca /etc/olivares/core-ca.pem --client-cert /etc/olivares/collector.crt --client-key /etc/olivares/collector.key",
 		Args: cobra.NoArgs,
+		// PreRunE runs before cobra checks the required --core-addr, so a bare
+		// `olivares collector` in Community gets the Business sentence, not a usage error.
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			if thisEdition.name == "community" {
+				return editionRefusal(cmd)
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			log := slog.Default()
@@ -92,6 +101,9 @@ func newCollectorCmd() *cobra.Command {
 				return fmt.Errorf("load sources operator config: %w", err)
 			}
 			if err := validateIdentitySourcesConfig(srcCfg); err != nil {
+				return err
+			}
+			if err := validateBusinessSourcesConfig(srcCfg); err != nil {
 				return err
 			}
 			// a sealed sources config that could not be opened is a custody

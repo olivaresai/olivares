@@ -23,13 +23,13 @@ const (
 func comparisonDeclaration() *model.ColumnDecl {
 	identity := model.None("comparison identity hashed for equality, never principal resolution: comparison_identity.go:166")
 	projection := model.None("immutable receipt provenance projected as JSON, never principal resolution: comparison_store.go:78")
-	decision := model.None("typed comparison diagnostics consumed by gate verdict selection: gate.go:389, gate.go:394")
+	decision := model.None("typed comparison diagnostics consumed by gate verdict selection: gate.go:389, gate.go:394, gate.go:423")
 	mode := model.None("experiment mode selects candidate equality rules: comparison_identity.go:169")
-	selection := model.None("selection label controls explicit or pinned baseline resolution: comparison.go:117")
-	baseline := model.None("evaluation run reference resolved only in the scoped run repository: comparison.go:131")
-	population := model.None("scored population digest compared to the selected fixture population: comparison.go:274")
-	observed := model.None("observed provider model compared only to the declared scoring model: comparison.go:282")
-	seed := model.None("sampling seed hashes fixture keys to select cases: gate.go:445")
+	selection := model.None("selection label controls explicit or pinned baseline resolution: comparison.go:136")
+	baseline := model.None("evaluation run reference resolved only in the scoped run repository: comparison.go:150")
+	population := model.None("scored population digest compared to the selected fixture population: comparison.go:293")
+	observed := model.None("observed provider model compared only to the declared scoring model: comparison.go:301")
+	seed := model.None("sampling seed hashes fixture keys to select cases: gate.go:448")
 	leaves := []model.LeafDecl{
 		model.Leaf("status", decision),
 		model.Leaf("reason", decision),
@@ -65,7 +65,7 @@ func registerComparisonSchema(reg store.ExtensionRegistry) error {
 	return reg.Register(model.EntityDescriptor{Kind: comparisonKind, Table: "evals_comparison", AppendOnly: true,
 		Fields: []model.FieldSpec{
 			{Name: colRunRef, Kind: model.KindUUID, Principal: pdeclNoneRunRef},
-			{Name: colComparisonKey, Kind: model.KindText, Principal: model.None("an identity digest used only as a bounded lookup key: comparison.go:154")},
+			{Name: colComparisonKey, Kind: model.KindText, Principal: model.None("an identity digest used only as a bounded lookup key: comparison.go:173")},
 			{Name: colEligible, Kind: model.KindBool},
 			{Name: colFinishedAt, Kind: model.KindTimestamp},
 			{Name: colComparisonEvidence, Kind: model.KindJSON, Principal: comparisonDeclaration()},
@@ -83,7 +83,10 @@ func persistComparison(ctx context.Context, sc store.Scope, runRef, finished, ke
 	if err != nil {
 		return err
 	}
-	_, err = repo.Create(ctx, model.Record{colRunRef: runRef, colFinishedAt: finished, colComparisonKey: key, colEligible: c.Known && c.Complete, colComparisonEvidence: string(b)})
+	// A run whose drop was noise-level is not the next automatic baseline: a slide of
+	// sub-noise drops would otherwise ratchet the baseline down and never fire.
+	eligible := c.Known && c.Complete && c.Reason != ComparisonInconclusiveNoise
+	_, err = repo.Create(ctx, model.Record{colRunRef: runRef, colFinishedAt: finished, colComparisonKey: key, colEligible: eligible, colComparisonEvidence: string(b)})
 	return err
 }
 func decodeComparison(rec model.Record) (ComparisonEvidence, error) {

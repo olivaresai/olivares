@@ -32,8 +32,10 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { AUDIT_PAGE_MAX } from '@/lib/api/endpoints'
+import { ApiError } from '@/lib/api/errors'
 import type { ListResponse } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
+import { useCommunityBuild } from '@/lib/hooks/use-server-info'
 import { cn } from '@/lib/utils'
 import {
   identityApi,
@@ -334,15 +336,20 @@ async function newestLeavers(
 function ScimSection() {
   const { t } = useTranslation(['identity', 'common'])
   const { activeTenant } = useAuth()
+  // The inbound SCIM server is Business: a Community build is not asked for it (a 501), and no
+  // build is asked before server-info has said which it is.
+  const community = useCommunityBuild()
   const spConfig = useQuery({
     queryKey: identityKeys.scimConfig(activeTenant),
     queryFn: () => identityApi.scimServiceProviderConfig(),
     retry: false,
+    enabled: community === false,
   })
   const users = useQuery({
     queryKey: identityKeys.scimUsers(activeTenant),
     queryFn: () => identityApi.scimUsers({ count: 200 }),
     retry: false,
+    enabled: community === false,
   })
   const leaver = useQuery({
     queryKey: identityKeys.audit(activeTenant, LEAVER_ACTION),
@@ -350,94 +357,117 @@ function ScimSection() {
     retry: false,
   })
   const columns = useMemo(() => scimUserColumns(t), [t])
+  // A Community server answers the whole inbound SCIM server with 501: it is Business.
+  // Say so once, in place of two "backend pending" seams and a promise of inbound groups.
+  const businessOnly =
+    community === true ||
+    (spConfig.error instanceof ApiError && spConfig.error.status === 501)
 
   return (
     <SectionCard title={t('scim.title')} description={t('scim.description')}>
       <div className="flex flex-col gap-4">
-        {/* Service-provider posture + bearer scheme (never the token). */}
-        <DeclaredSection
-          query={spConfig}
-          what={t('scim.seamWhat')}
-          skeletonHeight={80}
-        >
-          {(cfg) => (
-            <KvList>
-              <KvRow label={t('scim.patch')}>
-                {cfg.patch.supported
-                  ? t('common:status.enabled')
-                  : t('common:status.disabled')}
-              </KvRow>
-              <KvRow label={t('scim.filter')}>
-                {cfg.filter.supported
-                  ? t('scim.filterMax', { n: cfg.filter.maxResults })
-                  : t('common:status.disabled')}
-              </KvRow>
-              <KvRow label={t('scim.auth')} align="start">
-                <span className="flex flex-col gap-1">
-                  <Badge variant="neutral">
-                    {cfg.authenticationSchemes[0]?.type ?? 'oauthbearertoken'}
-                  </Badge>
-                  <SecretRef name={t('scim.bearerName')} />
-                  <span className="text-caption text-muted-foreground">
-                    {t('scim.bearerNote')}
-                  </span>
-                </span>
-              </KvRow>
-            </KvList>
-          )}
-        </DeclaredSection>
-
-        {/* Provisioned Users (joiner/mover/leaver — active:false = disabled).
-            A pending status routes to the honest seam (consistent with the config
-            section above) instead of a red error; DataTable still handles 403 and
-            genuine 5xx errors. */}
-        {/* ⛔ h3, NO h4. Los dos títulos de esta tarjeta cuelgan del h2 «SCIM 2.0
-            provisioning» y no hay ningún h3 entre medias, así que el nivel 4 producía un
-            salto 2→4: un lector de pantalla anuncia una jerarquía que la página no tiene.
-            Estaba SIN DETECTAR porque /identity caía al error boundary, y el boundary
-            puntúa h1=1 skips=0 —idéntico a una vista limpia—, así que el arnés lo contaba
-            como evidencia buena. El tamaño visual lo pone la clase, no la etiqueta:
-            `text-sm` se queda igual. */}
-        <div>
-          <h3 className="mb-1.5 text-body font-medium text-foreground">
-            {t('scim.usersTitle')}
-          </h3>
-          {users.isError && isContractPending(users.error) ? (
-            <ContractPendingNotice what={t('scim.seamWhat')} />
-          ) : (
-            <DataTable
-              columns={columns}
-              data={users.data?.Resources ?? []}
-              isLoading={users.isLoading}
-              error={users.error}
-              onRetry={() => void users.refetch()}
-              getRowId={(u) => u.id}
-              label={t('scim.usersTitle')}
-              empty={
-                <EmptyState
-                  title={t('scim.noUsers')}
-                  description={t('scim.noUsersHint')}
-                />
-              }
+        {businessOnly ? (
+          <div
+            className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
+            role="note"
+          >
+            <CircleAlert
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+              aria-hidden
             />
-          )}
-        </div>
+            <p className="text-caption text-muted-foreground">
+              {t('scim.businessOnly')}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Service-provider posture + bearer scheme (never the token). */}
+            <DeclaredSection
+              query={spConfig}
+              what={t('scim.seamWhat')}
+              skeletonHeight={80}
+            >
+              {(cfg) => (
+                <KvList>
+                  <KvRow label={t('scim.patch')}>
+                    {cfg.patch.supported
+                      ? t('common:status.enabled')
+                      : t('common:status.disabled')}
+                  </KvRow>
+                  <KvRow label={t('scim.filter')}>
+                    {cfg.filter.supported
+                      ? t('scim.filterMax', { n: cfg.filter.maxResults })
+                      : t('common:status.disabled')}
+                  </KvRow>
+                  <KvRow label={t('scim.auth')} align="start">
+                    <span className="flex flex-col gap-1">
+                      <Badge variant="neutral">
+                        {cfg.authenticationSchemes[0]?.type ??
+                          'oauthbearertoken'}
+                      </Badge>
+                      <SecretRef name={t('scim.bearerName')} />
+                      <span className="text-caption text-muted-foreground">
+                        {t('scim.bearerNote')}
+                      </span>
+                    </span>
+                  </KvRow>
+                </KvList>
+              )}
+            </DeclaredSection>
 
-        {/* Groups — provisionable inbound since the role mapping is
-            deliberately operator-only (core/api/server.go wires /Groups and
-            core/api/scim advertises the Group resource type). */}
-        <div
-          className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
-          role="note"
-        >
-          <CircleAlert
-            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-            aria-hidden
-          />
-          <p className="text-caption text-muted-foreground">
-            {t('scim.groupsSupported')}
-          </p>
-        </div>
+            {/* Provisioned Users (joiner/mover/leaver — active:false = disabled).
+                A pending status routes to the honest seam (consistent with the config
+                section above) instead of a red error; DataTable still handles 403 and
+                genuine 5xx errors. */}
+            {/* ⛔ h3, NOT h4. The two titles of this card hang off the h2 "SCIM 2.0
+                provisioning" and there is no h3 in between, so level 4 produced a
+                2→4 skip: a screen reader announces a hierarchy the page does not have.
+                It went UNDETECTED because /identity fell into the error boundary, and the
+                boundary scores h1=1 skips=0 (identical to a clean view), so the harness
+                counted it as good evidence. The class sets the visual size, not the tag:
+                `text-sm` stays the same. */}
+            <div>
+              <h3 className="mb-1.5 text-body font-medium text-foreground">
+                {t('scim.usersTitle')}
+              </h3>
+              {users.isError && isContractPending(users.error) ? (
+                <ContractPendingNotice what={t('scim.seamWhat')} />
+              ) : (
+                <DataTable
+                  columns={columns}
+                  data={users.data?.Resources ?? []}
+                  isLoading={users.isLoading || community === undefined}
+                  error={users.error}
+                  onRetry={() => void users.refetch()}
+                  getRowId={(u) => u.id}
+                  label={t('scim.usersTitle')}
+                  empty={
+                    <EmptyState
+                      title={t('scim.noUsers')}
+                      description={t('scim.noUsersHint')}
+                    />
+                  }
+                />
+              )}
+            </div>
+
+            {/* Groups — provisionable inbound since the role mapping is
+                deliberately operator-only (core/api/server.go wires /Groups and
+                core/api/scim advertises the Group resource type). */}
+            <div
+              className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"
+              role="note"
+            >
+              <CircleAlert
+                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                aria-hidden
+              />
+              <p className="text-caption text-muted-foreground">
+                {t('scim.groupsSupported')}
+              </p>
+            </div>
+          </>
+        )}
 
         {/* Leaver evidence from the audit ledger. */}
         <div>

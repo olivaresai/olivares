@@ -68,8 +68,8 @@ EOF
 	printf '%s' "$case_dir"
 }
 
-run_gate() { # run_gate <case_dir> ; sets OUT and RC
-	OUT="$(cd "$1" && bash scripts/sast.sh 2>&1)"
+run_gate() { # run_gate <case_dir> [sast.sh args...] ; sets OUT and RC
+	OUT="$(cd "$1" && bash scripts/sast.sh "${@:2}" 2>&1)"
 	RC=$?
 }
 
@@ -248,6 +248,103 @@ func main() {
 EOF
 run_gate "$C"
 green "a justified #nosec suppression still passes" "sast: clean"
+
+# ------------------------------------------------------------ --packages rows
+#
+# Why they exist: the pre-push hook runs `sast.sh --packages` over the packages a push changes
+# (#2313: four G204 sites first met the gate in a full CI dispatch, because nothing earlier
+# ran it). One module, three packages: a has a finding, b is clean, c is a multi-line call whose
+# justification sits on the line ABOVE the statement — the form the repository uses for a call
+# gosec cites by its first line.
+C="$(begin pk)"
+mkdir -p "$C/pk/a" "$C/pk/b" "$C/pk/c"
+cat >"$C/pk/a/a.go" <<'EOF'
+package a
+
+import "os/exec"
+
+func Run() error {
+	prog, _ := exec.LookPath("tool")
+	return exec.Command(prog).Run()
+}
+EOF
+cat >"$C/pk/b/b.go" <<'EOF'
+package b
+
+func B() int { return 1 }
+EOF
+mkdir -p "$C/pk/d"
+cat >"$C/pk/c/c.go" <<'EOF'
+package c
+
+import "os/exec"
+
+func Run(args ...string) error {
+	prog, _ := exec.LookPath("tool")
+	// #nosec G204 -- the fixture names a program it trusts; the test is where the comment sits
+	cmd := exec.Command(prog, append([]string{
+		"-x",
+	}, args...)...)
+	return cmd.Run()
+}
+EOF
+# d is c without the comment: the same call must be named, or c's pass proves nothing.
+sed '/#nosec/d; s/^package c$/package d/' "$C/pk/c/c.go" >"$C/pk/d/d.go"
+# The module root, a nested module and a package that does not build, for the rows below.
+cat >"$C/pk/root.go" <<'EOF'
+package pk
+
+import "os/exec"
+
+func Root() error {
+	prog, _ := exec.LookPath("tool")
+	return exec.Command(prog).Run()
+}
+EOF
+mkdir -p "$C/pk/nest" "$C/pk/broken"
+printf 'module example.com/nest\n\ngo 1.24\n' >"$C/pk/nest/go.mod"
+sed 's/^package pk$/package nest/; s/Root/Nest/' "$C/pk/root.go" >"$C/pk/nest/n.go"
+printf '\nuse ./pk/nest\n' >>"$C/go.work"
+printf 'package broken\n\nthis is not valid go\n' >"$C/pk/broken/x.go"
+
+run_gate "$C" --packages ./pk/a
+red "--packages names a finding in the package it was given" 1 "pk/a/a.go"
+run_gate "$C" --packages ./pk/b
+green "--packages scans only the named package, not the module's other findings" "0 blocking findings in 1 package(s), 1 files"
+run_gate "$C" --packages ./pk/c
+green "--packages honours a justification on the line above a multi-line call" "sast: clean"
+run_gate "$C" --packages ./pk/d
+red "--packages names the same multi-line call once its justification is gone" 1 "pk/d/d.go"
+# A package equal to its module's root is that package alone, not the whole module (the 4 GiB
+# scan this mode exists to avoid), and `/...` is the subtree, as in Go.
+run_gate "$C" --packages ./pk
+red "--packages on a module root scans that package" 1 "pk/root.go"
+case "$OUT" in
+*"pk/a/a.go"*)
+	printf 'FAIL  --packages on a module root also scanned the subpackages\n'
+	fail=$((fail + 1))
+	;;
+*)
+	printf 'ok    --packages on a module root scanned only its own package\n'
+	pass=$((pass + 1))
+	;;
+esac
+run_gate "$C" --packages ./pk/a/...
+red "--packages takes a /... subtree" 1 "pk/a/a.go"
+# go.work holds ./pk and its nested module ./pk/nest: the longest module wins, in one call too.
+run_gate "$C" --packages ./pk/nest
+red "--packages maps a package to the nested module that holds it" 1 "pk/nest/n.go"
+run_gate "$C" --packages ./pk/b ./pk/nest
+red "--packages scans packages of two modules in one call" 1 "pk/nest/n.go"
+# Fail closed per package: one that gosec did not scan cannot hide behind one that it did.
+run_gate "$C" --packages ./pk/b ./pk/nowhere
+red "--packages refuses a package gosec scans nothing of, next to a clean one" 2 "refusing"
+run_gate "$C" --packages ./pk/b ./pk/broken
+red "--packages refuses a package that does not build, next to a clean one" 2 "did not compile for gosec"
+run_gate "$C" --packages ./nowhere/x
+red "--packages refuses a directory no workspace module holds" 2 "is in no workspace module"
+run_gate "$C" --packages
+red "--packages with no directory is refused" 1 "needs at least one"
 
 printf '\ntest-sast-gate: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

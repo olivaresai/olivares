@@ -1,0 +1,5 @@
+"Group","Title","Username","Password","URL","Notes","TOTP","Icon","Last Modified","Created"
+"Root/Email","Mail","ann@mail.example","pw-kp-mail-2388","https://mail.example","","","0","2026-01-02T03:04:05Z","2026-01-02T03:04:05Z"
+"Root","Backup 2FA","","","","kept offline","GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ","0","2026-01-02T03:04:05Z","2026-01-02T03:04:05Z"
+"Root","Wi-Fi","","pw-kp-wifi-2388","","guest network","","0","2026-01-02T03:04:05Z","2026-01-02T03:04:05Z"
+"Root","","","pw-kp-notitle-2388","","","","0","2026-01-02T03:04:05Z","2026-01-02T03:04:05Z"

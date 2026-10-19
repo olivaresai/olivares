@@ -24,11 +24,30 @@ type SessionMCPLaunchSource interface {
 	ConfigureSessionMCP(context.Context, model.TenantID, string, string, *LaunchSpec) (func(), error)
 }
 
+// sessionMCPServerName is the name the one session MCP server goes by in a tool.
+// A tool that qualifies MCP tool names with their server (Gemini CLI: mcp_<server>_<tool>)
+// shows it in every call to one of ours.
+const sessionMCPServerName = "olivares"
+
+// sessionMCPOverACP names the drivers whose session MCP server travels in ACP
+// session setup, as the one HTTP server openCodeSessionMCP builds.
+func sessionMCPOverACP(driver string) bool {
+	return driver == providerDriverOpenCode || driver == providerDriverGemini || driver == providerDriverGrok
+}
+
+// SessionMCPDriver says whether ConfigureSessionMCP connects the session MCP
+// endpoint for driver at all. A caller that gates on a driver asks here, so there
+// is one list of the tools that receive it.
+func SessionMCPDriver(driver string) bool {
+	return driver == providerDriverClaude || driver == providerDriverCodex || sessionMCPOverACP(driver)
+}
+
 // ConfigureSessionMCP writes only public connection settings under run/runRef.
 // Claude reads its generated JSON; Codex receives the equivalent mcp_servers
 // config overrides without changing the account's config.toml. The generated
-// TOML records those same overrides. OpenCode receives the connection through
-// ACP session setup. Credentials are sourced from the launch environment.
+// TOML records those same overrides. OpenCode, Gemini CLI and Grok Build receive
+// the connection through ACP session setup. Credentials are sourced from the
+// launch environment.
 // Formats: code.claude.com/docs/en/mcp,
 // learn.chatgpt.com/docs/config-file/config-reference (bearer_token_env_var) and
 // agentclientprotocol.com/protocol/session-setup (HTTP MCP servers).
@@ -59,11 +78,11 @@ func ConfigureSessionMCP(spec *LaunchSpec, driver, dataDir, runRef, endpoint, to
 	if spec.NetworkPolicy != nil {
 		spec.NetworkPolicy.Controls = append(spec.NetworkPolicy.Controls, endpoint)
 	}
-	if driver == providerDriverOpenCode {
+	if sessionMCPOverACP(driver) {
 		spec.SessionMCPURL, spec.SessionMCPTokenEnv = endpoint, tokenEnv
 		return noop, nil
 	}
-	if driver != "claude" && driver != "codex" {
+	if driver != providerDriverClaude && driver != providerDriverCodex {
 		return noop, nil
 	}
 	dir := filepath.Join(dataDir, "run", runRef)

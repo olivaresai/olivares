@@ -29,13 +29,17 @@ func resolveMessageClientConfig(cfg *agentClientConfig) error {
 }
 
 func newMessageCmd() *cobra.Command {
-	root := &cobra.Command{Use: "message", Short: "Exchange exact-session messages through governed channels", Long: "Read, send and acknowledge messages as the authenticated session through operator-authorized channels. Uses the session communication credential from OLIVARES_COMMUNICATION_TOKEN; it does not substitute human or work authority.", Example: "  olivares message inbox --workspace-id <workspace-id>", Args: cobra.NoArgs}
-	for _, action := range []string{"inbox", "get", "send", "ack"} {
-		root.AddCommand(newMessageActionCmd(action))
+	root := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "message", Short: "Exchange exact-session messages through governed channels", Long: "Read, send and acknowledge messages as the authenticated session through operator-authorized channels. Uses the session communication credential from OLIVARES_COMMUNICATION_TOKEN; it does not substitute human or work authority.", Example: "  olivares message inbox --workspace-id <workspace-id>", Args: cobra.NoArgs}
+	for _, action := range []struct{ name, changesData string }{
+		{"inbox", "read"}, {"get", "read"}, {"send", "write"}, {"ack", "write"},
+	} {
+		root.AddCommand(newMessageActionCmd(action.name, action.changesData))
 	}
-	handoff := &cobra.Command{Use: "handoff", Short: "Offer and respond to exact-session work handoffs", Long: "Offer owned work to one exact session and inspect or answer incoming handoffs. Protected context is read through the carrier delivery; accepting a handoff uses the current handoff version and an idempotency key.", Example: "  olivares message handoff inbox --workspace-id <workspace-id>", Args: cobra.NoArgs}
-	for _, action := range []string{"inbox", "get", "offer", "respond"} {
-		handoff.AddCommand(newMessageActionCmd("handoff-" + action))
+	handoff := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "handoff", Short: "Offer and respond to exact-session work handoffs", Long: "Offer owned work to one exact session and inspect or answer incoming handoffs. Protected context is read through the carrier delivery; accepting a handoff uses the current handoff version and an idempotency key.", Example: "  olivares message handoff inbox --workspace-id <workspace-id>", Args: cobra.NoArgs}
+	for _, action := range []struct{ name, changesData string }{
+		{"inbox", "read"}, {"get", "read"}, {"offer", "write"}, {"respond", "write"},
+	} {
+		handoff.AddCommand(newMessageActionCmd("handoff-"+action.name, action.changesData))
 	}
 	root.AddCommand(handoff, newMessageDecisionCmd())
 	return root
@@ -64,7 +68,7 @@ func readMessageInput(cmd *cobra.Command, path string) ([]byte, error) {
 	return data, nil
 }
 
-func newMessageActionCmd(action string) *cobra.Command {
+func newMessageActionCmd(action, changesData string) *cobra.Command {
 	cfg := &agentClientConfig{}
 	var workspace, channel, sid, subject, textFile, key, continuation string
 	var item, deadline, contextFile, transition, reasonFile, state string
@@ -80,7 +84,7 @@ func newMessageActionCmd(action string) *cobra.Command {
 		use += " handoff-id"
 		args = cobra.ExactArgs(1)
 	}
-	cmd := &cobra.Command{Use: use, Short: map[string]string{"inbox": "Read this authenticated session's inbox", "get": "Read this exact session's delivery", "send": "Send plain-text content to one canonical session SID", "ack": "Acknowledge this exact session's delivery", "handoff-inbox": "List this exact session's incoming handoffs", "handoff-get": "Read protected handoff context by carrier delivery", "handoff-offer": "Offer owned work to one exact canonical session SID", "handoff-respond": "Accept or reject this exact session's incoming handoff"}[action], Args: args,
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": changesData}, Use: use, Short: map[string]string{"inbox": "Read this authenticated session's inbox", "get": "Read this exact session's delivery", "send": "Send plain-text content to one canonical session SID", "ack": "Acknowledge this exact session's delivery", "handoff-inbox": "List this exact session's incoming handoffs", "handoff-get": "Read protected handoff context by carrier delivery", "handoff-offer": "Offer owned work to one exact canonical session SID", "handoff-respond": "Accept or reject this exact session's incoming handoff"}[action], Args: args,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := resolveMessageClientConfig(cfg); err != nil {
 				return redactCoded(err, cfg.token)

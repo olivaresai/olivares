@@ -49,7 +49,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 | Data minimization | By construction for the CONTROL PLANE: it stores **relations and hashes, not payloads**; fields declared `Redact` are SHA-256-hashed at write. Governed CONTENT is stored (that is the point of a knowledge base) and is **minimized, not omitted**: the product's deterministic sensitivity catalog removes credentials and key material, email, IBAN, Luhn-valid cards, US SSN, ES NIF/NIE, IPv4, colon-form MAC and Bitcoin-like wallet addresses before the text is chunked, embedded or persisted. It does **not** remove what it cannot recognize — a name, a postal address, a free-text phone number or a national id outside the US/ES shapes will persist. |
 | Data classification / DLP | Deterministic PII/sensitivity scanning with persistent labels; deny-closed DLP egress gate; append-only enforcement events. |
 | Data residency | Region-pinned tenants with deny-closed cross-region guard (403 `residency_violation`); residency attestation + egress scan. `docs/MULTI-REGION-RESIDENCY.md` |
-| Privacy / data subject rights | RTBF runbook with dual-control, legal-hold veto, sealed erasure receipts, honest limits documented (`docs/RIGHT-TO-ERASURE.md`); retention + legal hold + WORM archival (`docs/RECORDS-MANAGEMENT.md`). |
+| Privacy / data subject rights | Business (Regulated Operations): RTBF runbook with dual-control, legal-hold veto, sealed erasure receipts, honest limits documented (`docs/RIGHT-TO-ERASURE.md`); legal hold + WORM archival (`docs/RECORDS-MANAGEMENT.md`). Retention schedules are Community. |
 
 ## C. IT operations & business resilience
 

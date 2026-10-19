@@ -1,0 +1,437 @@
+{
+  "search": "Cerca…",
+  "nouns": {
+    "sessions": "Sessioni",
+    "agents": "Agenti",
+    "connections": "Connessioni",
+    "identities": "Identità",
+    "models": "Modelli",
+    "rules": "Regole",
+    "automations": "Automazioni",
+    "groups": "Gruppi",
+    "states": "Stati",
+    "workflows": "Workflow",
+    "tasks": "Attività",
+    "protocols": "Protocolli",
+    "infrastructure": "Infrastruttura"
+  },
+  "filter": {
+    "placeholder": "Filtra la navigazione…",
+    "label": "Filtra la navigazione",
+    "clear": "Cancella filtro",
+    "results": "Risultati: {{n}}",
+    "empty": "Nessuna vista corrisponde a “{{query}}”"
+  },
+  "items": {
+    "estate": "Parco",
+    "home": "Adesso",
+    "onboarding": "Configurazione guidata",
+    "inventory": "Inventario",
+    "sessions": "Sessioni",
+    "accessMap": "Mappa degli accessi",
+    "health": "Stato e SLA",
+    "capabilities": "MCP e skill",
+    "skills": "Catalogo skill",
+    "protocolBindings": "Binding di protocollo",
+    "communications": "Comunicazioni",
+    "communicationsInbox": "Posta in arrivo",
+    "communicationsNew": "Nuovo canale",
+    "communicationsAdministration": "Amministrazione dei canali",
+    "communicationsHandoffs": "Passaggi di consegne",
+    "console": "Amministrazione",
+    "sourceDiff": "Diff dei sorgenti",
+    "permissions": "Permessi",
+    "identity": "Identità e accesso",
+    "vault": "Cassaforte",
+    "claudePolicy": "Governance di Claude Code",
+    "routinePolicies": "Policy delle routine",
+    "deploy": "Deployment",
+    "gitPublication": "Pubblicazione Git",
+    "knowledge": "Conoscenza",
+    "catalog": "Catalogo",
+    "killswitch": "Kill switch",
+    "work": "Lavoro",
+    "agentops": "Gestisci sessioni",
+    "agentArtifacts": "Artefatti degli agenti",
+    "models": "Modelli",
+    "modelOps": "Operazioni sui modelli",
+    "adoption": "Adozione di Claude Code",
+    "evals": "Eval",
+    "security": "Sicurezza",
+    "recordings": "Registrazioni",
+    "compliance": "Compliance",
+    "voice": "Voce",
+    "sandbox": "Sandbox",
+    "dashboards": "Dashboard",
+    "observability": "Osservabilità",
+    "platforms": "Piattaforme",
+    "rateLimits": "Limiti di frequenza",
+    "attestation": "Supply chain",
+    "apiPlayground": "API Playground",
+    "audit": "Registro di audit",
+    "retention": "Conservazione",
+    "workspaceDashboard": "Workspace",
+    "settings": "Impostazioni",
+    "workspace-templates": "Template di workspace",
+    "eventing": "Webhook ed eventi",
+    "session-viewer": "Visualizzatore di sessioni",
+    "backups": "Backup",
+    "logs": "Log",
+    "inferenceProxy": "Proxy di inferenza",
+    "alerting": "Avvisi",
+    "agentcoreExport": "Esportazione AgentCore",
+    "providers": "Provider",
+    "providerProfiles": "Profili provider",
+    "providerBindings": "Binding delle sorgenti",
+    "providerAccounts": "Account provider",
+    "agent-tools": "Strumenti IA",
+    "mcpServers": "Server MCP",
+    "storedBudgets": "Budget"
+  },
+  "workspace": {
+    "open": "Apri {{workspace}}",
+    "switch": "Cambia workspace",
+    "all": "Tutti i workspace",
+    "allHint": "Nessun filtro per workspace",
+    "default": "predefinito",
+    "tenantWide": "Tutti i workspace",
+    "unresolved": "Workspace non presente nell'elenco",
+    "truncated": "L'elenco è incompleto: esistono più workspace di quelli caricati"
+  },
+  "descriptions": {
+    "estate": "Esamina le risorse configurate e le loro relazioni, incluse le dipendenze tra gli elementi di lavoro.",
+    "home": "Panoramica e stato di salute del parco a colpo d'occhio",
+    "onboarding": "Configurazione guidata del deployment",
+    "inventory": "Individua e cataloga gli agenti, i server MCP e i modelli osservati dai connettori.",
+    "sessions": "Avvia sessioni e segui che cosa fa ciascuna, comprese quelle che Olivares trova",
+    "accessMap": "Che cosa legge e scrive ogni agente (R/RW)",
+    "health": "Uptime e SLA di agenti e MCP",
+    "capabilities": "Governa server MCP, skill e strumenti",
+    "skills": "Sfoglia i pacchetti di skill e assegnali a reparti, gruppi di agenti e agenti",
+    "protocolBindings": "Componi e riconcilia i binding A2A e MCP governati",
+    "communications": "Canali, avvisi diretti e posta personale del workspace selezionato",
+    "communicationsInbox": "Messaggi indirizzati a te: aprili e conferma la lettura di ciascuno",
+    "communicationsNew": "Crea un canale con permessi iniziali espliciti",
+    "communicationsAdministration": "Amministra i canali: configurazione e storico dei permessi",
+    "communicationsHandoffs": "Proposte di presa in carico di un lavoro indirizzate a te: leggi il contesto e accetta o rifiuta",
+    "console": "Utenti, SSO/IdP, workspace, gruppi di agenti, ruoli, secret, connettori, chiavi API e licenza di questa installazione",
+    "permissions": "Identità, ruoli e approvazioni",
+    "identity": "SSO, SCIM e le identità usate dai tuoi agenti",
+    "vault": "Le tue password, note e codici di autenticazione",
+    "claudePolicy": "Policy gestite, hook, MCP, sandbox e policy-as-code",
+    "deploy": "Effettua il provisioning degli agenti e collegali all'infrastruttura",
+    "gitPublication": "Esegui push dei commit, apri pull request e fai merge tramite target Git approvati",
+    "knowledge": "Basi di conoscenza, RAG e data lineage",
+    "catalog": "Agenti e capacità selezionati e approvati",
+    "killswitch": "Arresto di emergenza, ripristino a doppio controllo e contenimento da parte del guardiano",
+    "work": "Lavoro condiviso: elementi, dipendenze, accettazione e decisioni",
+    "agentops": "Avvia sessioni e segui che cosa fa ciascuna, comprese quelle che Olivares trova",
+    "agentArtifacts": "Skill, estensioni MCP e file di istruzioni: registro, postura e BOM della supply chain",
+    "models": "Modelli, instradamento e chiavi dei provider",
+    "agent-tools": "Rileva, installa e aggiorna gli strumenti per agenti su questo host e segui ogni installazione; solo per gli amministratori del deployment",
+    "mcpServers": "Collega server MCP remoti a questa organizzazione, provali e scegli quali strumenti possono usare le sessioni",
+    "modelOps": "Modelli di proprietà, ammissione e deployment",
+    "finops": "Costo dei token, budget e spesa",
+    "adoption": "Produttività, accettazione e mix di modelli",
+    "evals": "Qualità, eval e regressioni",
+    "security": "Guardrail, analisi forense e anomalie",
+    "recordings": "Registrazione e riproduzione privilegiata delle sessioni",
+    "compliance": "Framework, controlli ed evidenze",
+    "voice": "Sessioni vocali e in tempo reale",
+    "sandbox": "Test isolati e replay degli agenti",
+    "redteam": "Test avversariali dei tuoi agenti",
+    "dashboards": "KPI direzionali e reportistica",
+    "observability": "Stato dell'ingestione per standard e analisi dettagliata delle trace",
+    "platforms": "Superfici delle piattaforme dei provider, matrice di compliance e ciclo di vita dei modelli per piattaforma: riferimento, non i tuoi server",
+    "rateLimits": "Inventario dei limiti di frequenza di Anthropic e relativa disponibilità (riferimento in sola lettura)",
+    "attestation": "Attestazione della release: SLSA, SBOM, VEX e Scorecard",
+    "apiPlayground": "Esplora e prova in modo interattivo l'API del control plane",
+    "audit": "Registro di evidenze con rilevazione delle manomissioni",
+    "retention": "Per quanto tempo si conserva ogni classe di record, la scansione che la applica e i suoi certificati sigillati",
+    "workspaceDashboard": "Agenti, sessioni, risorse e attività limitati a un workspace",
+    "settings": "Impostazioni del workspace e dell'account",
+    "inferenceProxy": "Gate del proxy, regole DLP in uscita e approvazioni dei dispositivi",
+    "alerting": "Instrada i rilevamenti verso le destinazioni e controlla le consegne",
+    "reporting": "Genera e scarica i report di governance",
+    "postureExport": "Esporta la postura di riferimento per una control tower",
+    "providers": "Registra le chiavi API e gli endpoint con cui si avviano le sessioni; provale, ruotale e revocale",
+    "providerProfiles": "Registra e amministra le home dei provider con cui si avviano le sessioni e leggine la configurazione su richiesta",
+    "providerBindings": "Collega le sorgenti configurate ai profili provider",
+    "providerAccounts": "Elenca gli account provider con nome e adotta un profilo provider esistente come account",
+    "routinePolicies": "Frequenze minime, limiti di concorrenza, requisiti di approvazione, allowlist cron e ambienti bloccati per le routine di Claude Code",
+    "agentcoreExport": "Pianifica, verifica e applica la proiezione delle regole di governance di questo tenant su AWS AgentCore come policy Cedar; la pianificazione non scrive nulla",
+    "workspace-templates": "Snapshot riutilizzabili di hook, impostazioni, connettori e policy per le sessioni del workspace",
+    "eventing": "Sottoscrizioni webhook in uscita, log degli eventi acquisiti, consegne e dead-letter queue",
+    "team-costs": "Attribuzione dei costi per team: sessioni, token e spesa, con andamento giornaliero e dettaglio per progetto e per modello",
+    "backups": "Snapshot cifrati di disaster recovery del control plane: crea, pianifica, scarica e ripristina",
+    "logs": "Il flusso di log del motore in tempo reale, con filtri per livello e modulo, ricerca e pausa",
+    "sourceDiff": "Confronta una revisione base e una revisione head di un repository Git collegato, file per file",
+    "storedBudgets": "Consumo rispetto a ciascun limite salvato. La capacità riservata conta ai fini del limite."
+  },
+  "commandActions": {
+    "eventing": {
+      "createSubscription": "Nuova sottoscrizione a eventi"
+    },
+    "alerting": {
+      "createRoute": "Nuova route di avviso"
+    },
+    "orchestration": {
+      "createSchedule": "Nuova pianificazione"
+    },
+    "killswitch": {
+      "engage": "Ferma tutti gli agenti"
+    },
+    "identity": {
+      "invite": "Invita persone"
+    }
+  },
+  "aliases": {
+    "sessions": "Sessioni · Osserva sessioni · Gestisci sessioni · Claude Code · agentops",
+    "agentops": "Gestisci sessioni · Claude Code · agentops · Portale operativo di Claude Code",
+    "console": "Console di controllo · Amministrazione del tenant"
+  },
+  "areas": {
+    "infrastructure": {
+      "label": "Infrastruttura",
+      "question": "Quali risorse e workspace ho?",
+      "sections": {
+        "estate": "Inventario e workspace"
+      }
+    },
+    "ai": {
+      "label": "IA",
+      "question": "Quali sessioni, profili e modelli osservo o gestisco?",
+      "sections": {
+        "sessions": "Sessioni",
+        "environments": "Profili e ambienti",
+        "models": "Modelli",
+        "execution": "Esecuzione specializzata",
+        "provider-reference": "Riferimento dei provider"
+      }
+    },
+    "data-context": {
+      "label": "Dati e contesto",
+      "question": "Quali conoscenze, capacità e artefatti collego o riutilizzo?",
+      "sections": {
+        "capabilities": "Capacità",
+        "knowledge": "Conoscenza e artefatti"
+      }
+    },
+    "work-communications": {
+      "label": "Lavoro e comunicazioni",
+      "question": "Quale lavoro coordino e come comunica?",
+      "sections": {
+        "work": "Lavoro e comunicazioni"
+      }
+    },
+    "automation": {
+      "label": "Automazione",
+      "question": "Quali flussi, eventi e notifiche automatizzo?",
+      "sections": {
+        "workflows": "Flussi e orchestrazione",
+        "events": "Eventi e notifiche"
+      }
+    },
+    "security-identity": {
+      "label": "Sicurezza e identità",
+      "question": "Chi ha accesso, con quali regole e come proteggo l'ambiente?",
+      "sections": {
+        "access": "Identità e accesso",
+        "policy": "Policy e confini di governance",
+        "defense": "Protezione e risposta"
+      }
+    },
+    "deployment": {
+      "label": "Deployment",
+      "question": "Come preparo e controllo un deployment?",
+      "sections": {
+        "deployments": "Deployment"
+      }
+    },
+    "observation": {
+      "label": "Osservabilità ed evidenze",
+      "question": "Che cosa sta succedendo, quanto costa e che cosa posso dimostrare?",
+      "sections": {
+        "operations": "Stato e attività",
+        "cost-adoption": "Costi e adozione",
+        "audit-recordings": "Audit, valutazione ed evidenze"
+      }
+    },
+    "system": {
+      "label": "Sistema e impostazioni",
+      "question": "Come amministro l'organizzazione, l'installazione e le mie preferenze?",
+      "sections": {
+        "administration": "Amministrazione",
+        "maintenance": "Installazione e manutenzione",
+        "development": "Strumenti per sviluppatori",
+        "preferences": "Preferenze personali"
+      }
+    }
+  },
+  "directory": {
+    "areas": "Aree",
+    "expand": "Mostra i moduli di {{area}}",
+    "collapse": "Nascondi i moduli di {{area}}",
+    "expandAll": "Espandi tutte le aree",
+    "collapseAll": "Comprimi tutte le aree",
+    "modulesOf": "Moduli di {{area}}",
+    "empty": "Nessuna voce di quest'area è disponibile per te",
+    "emptyHint": "Le voci compaiono qui quando il tuo ruolo nell'organizzazione corrente dà accesso a un modulo di quest'area.",
+    "backHome": "Vai ad Adesso",
+    "area": "Area"
+  },
+  "personal": {
+    "favorites": "Preferiti",
+    "add": "Aggiungi {{name}} ai preferiti",
+    "remove": "Rimuovi {{name}} dai preferiti",
+    "viewAll": "Mostra tutti ({{count}})",
+    "manage": "Gestisci i preferiti",
+    "empty": "Aggiungi un modulo ai preferiti per tenerlo qui.",
+    "scope": "Salvati nel tuo account, in ogni browser.",
+    "saveFailed": "Non è stato possibile salvare i preferiti nel tuo account. Restano in questo browser e vengono salvati di nuovo alla prossima modifica o al prossimo accesso.",
+    "temporary": "Per ora i preferiti restano in memoria.",
+    "clear": "Cancella i preferiti",
+    "recents": "Recenti",
+    "recentManage": "Gestisci i moduli recenti",
+    "recentViewAll": "Mostra recenti ({{count}})",
+    "recentEmpty": "I moduli che apri compaiono qui.",
+    "recentScope": "Aperti in questa scheda. Vengono cancellati al ricaricamento, all'uscita o al cambio di account e organizzazione.",
+    "recentRemove": "Rimuovi {{name}} dai moduli recenti",
+    "recentClear": "Cancella i moduli recenti",
+    "pinRow": "Aggiungi {{name}} ai preferiti (p)",
+    "unpinRow": "Rimuovi {{name}} dai preferiti (p)"
+  },
+  "scope": {
+    "tenant": "Organizzazione",
+    "workspace": "Workspace",
+    "environment": "Ambiente",
+    "noTenant": "nessuna",
+    "noWorkspace": "Nessun workspace",
+    "noEnvironment": "Non dichiarato",
+    "thisNode": "Questo nodo",
+    "hint": "Ciò con cui verrà eseguita la prossima sessione."
+  },
+  "launcher": {
+    "label": "Dai un nome alla sessione da avviare",
+    "placeholder": "Dai un nome a questa sessione…",
+    "profile": "Profilo provider",
+    "profilePlaceholder": "Scegli un profilo",
+    "workspace": "Workspace da montare",
+    "start": "Avvia",
+    "backgroundHint": "Ctrl+Invio la avvia e ti lascia qui, pronto per la successiva.",
+    "noProfiles": "Nessun profilo provider è registrato e senza di esso non si può avviare una sessione.",
+    "addProvider": "Aggiungi un profilo provider",
+    "startedBackground": "Sessione avviata. La bozza è libera per la prossima.",
+    "startFailed": "Non è stato possibile avviare la sessione.",
+    "noTenant": "Seleziona un'organizzazione prima di avviare una sessione.",
+    "noProfileRead": "Una sessione viene eseguita come profilo provider e il tuo ruolo non include il permesso di leggerli.",
+    "readFailed": "Non è stato possibile leggere i profili provider, quindi da qui non si può avviare una sessione.",
+    "send": "Invia",
+    "turnPlaceholder": "Invia una frase…",
+    "turnAria": "Turno della sessione",
+    "attachedWaiting": "Ti aspetta",
+    "rawLine": "Riga grezza",
+    "advancedHint": "Invia una riga NDJSON a stdin. Il campo della frase è quello predefinito.",
+    "wirePlaceholder": "Invia una riga NDJSON a stdin…",
+    "wireAria": "Riga di input della sessione",
+    "turnFailed": "La sessione non ha potuto accettare questo turno.",
+    "draftSaveFailed": "Non è stato possibile salvare la bozza in questa scheda. Tieni aperta questa pagina o copia il messaggio prima di uscire.",
+    "sendBackgroundHint": "Ctrl+Invio invia e tiene pronta la bozza per la frase successiva.",
+    "messagePlaceholder": "Scrivi a {{title}}…",
+    "slashLabel": "Comandi e skill",
+    "slashOption": "{{name}}, {{i}} di {{n}}",
+    "slashNoMatch": "Nessun comando corrisponde a “{{query}}”.",
+    "slash": {
+      "loading": "Lettura dei comandi dello strumento…",
+      "failed": "Non è stato possibile leggere i comandi dello strumento.",
+      "unreported": "Questo strumento non ha segnalato comandi per la sessione.",
+      "stale": "Non è stato possibile aggiornare i comandi dello strumento; l'elenco potrebbe essere obsoleto.",
+      "agent": "Agente",
+      "source": {
+        "built-in": "Integrato",
+        "user": "Utente",
+        "project": "Progetto",
+        "plugin": "Plugin"
+      }
+    },
+    "modelAria": "Modello e livello di impegno di questa sessione: {{value}}",
+    "sessionKeeps": "Questa sessione mantiene {{value}}. Una scelta diversa avvia una nuova sessione.",
+    "startWithChoice": "Avvia una nuova sessione con questa scelta"
+  },
+  "shell": {
+    "journeysLabel": "Percorsi",
+    "journeys": {
+      "home": "Adesso",
+      "sessions": "Sessioni",
+      "approvals": "Approvazioni",
+      "storedBudgets": "Budget",
+      "agent-tools": "Strumenti IA"
+    },
+    "phoneBarLabel": "Principale",
+    "newSession": "Nuova sessione",
+    "searchCommands": "Cerca e comandi",
+    "brandHome": "Olivares AI, home",
+    "allAreas": "Tutte le aree",
+    "more": "Altro",
+    "moreLabel": "Altro: tutte le aree",
+    "workspaceSwitch": "Cambia workspace. Corrente: {{name}}",
+    "workspaceCount": "Workspace: {{count}}",
+    "rail": {
+      "title": "Sessioni",
+      "all": "Tutte",
+      "groups": {
+        "needsYou": "Ti aspetta",
+        "working": "In corso",
+        "earlier": "Precedenti"
+      },
+      "empty": {
+        "needsYou": "Nulla ti aspetta."
+      },
+      "state": {
+        "need": "Ti aspetta",
+        "live": "In corso",
+        "ended": "Terminata",
+        "idle": "Inattiva"
+      },
+      "workItem": "Elemento di lavoro",
+      "handoffFrom": "Passaggio di consegne a te · da {{from}}",
+      "session": "Sessione",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} h",
+      "days": "{{count}} g",
+      "loading": "Lettura delle sessioni…",
+      "error": "Non è stato possibile leggere le sessioni.",
+      "approvalsError": "Non è stato possibile caricare le approvazioni."
+    },
+    "engine": {
+      "checking": "Verifica del motore in corso",
+      "ready": "Motore pronto",
+      "unreachable": "Motore non raggiungibile",
+      "offline": "Offline dalle {{time}}"
+    },
+    "panel": {
+      "show": "Mostra {{title}}",
+      "hide": "Nascondi {{title}}",
+      "close": "Chiudi il pannello"
+    },
+    "keys": {
+      "command": {
+        "session": {
+          "new": "Nuova sessione"
+        }
+      },
+      "when": {
+        "outsideField": "non in un campo"
+      }
+    },
+    "killswitch": {
+      "estateStopped": "TUTTI GLI AGENTI SONO FERMI",
+      "estateBody": "Gli agenti non possono agire finché due account utente non approvano la ripartenza.",
+      "agentStops": "{{count}} arresto di agenti attivo",
+      "agentStops_one": "{{count}} arresto di agenti attivo",
+      "agentStops_many": "{{count}} arresti di agenti attivi",
+      "agentStops_other": "{{count}} arresti di agenti attivi",
+      "none": "Nulla è fermo. Sessioni e agenti funzionano normalmente."
+    }
+  }
+}

@@ -83,6 +83,9 @@ const (
 	// colLiveRunRef is the run a MANAGED row belongs to, written by the bridge in
 	// the transaction that proved the run owns the announced id. NULL elsewhere.
 	colLiveRunRef = "run_ref"
+	// colProject is the project an observed session works in, the folder name a hook's
+	// cwd named. NULL until a hook says.
+	colProject = "project"
 )
 
 // sessions.timeline columns: one replayable event in a session's history.
@@ -169,6 +172,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colLiveEnvRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneEnvRef},
 			{Name: colLiveBindingRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneBindingRef},
 			{Name: colLiveRunRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneRunRef},
+			{Name: colProject, Kind: model.KindText, Nullable: true, Principal: model.None("the folder name an observed session's hook cwd named, shown only: live.go:397, dto.go:109")},
 		},
 		// B1: the historical UNIQUE (tenant_id, session_ref) index is deliberately
 		// NOT declared any more. Its successor is UNIQUE (tenant_id,
@@ -226,6 +230,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	}
 	// the OPERATE entities (managed run + lifecycle ledger).
 	if err := m.registerRuntimeSchema(reg); err != nil {
+		return err
+	}
+	// #2130: a person's own pins on operated sessions.
+	if err := m.registerRunPinSchema(reg); err != nil {
 		return err
 	}
 	// SG-00: the canonical session identity and its provider aliases.

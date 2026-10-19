@@ -37,7 +37,7 @@ afterEach(async () => {
 describe('authentication translations', () => {
   it('keeps inactive auth languages out of the initial resource store', () => {
     expect(i18n.hasResourceBundle('en', 'auth')).toBe(true)
-    for (const language of ['es', 'zh', 'ja', 'de', 'ru', 'fr']) {
+    for (const language of ['es', 'zh', 'ja', 'de', 'ru', 'fr', 'it', 'ko']) {
       expect(i18n.hasResourceBundle(language, 'auth'), language).toBe(false)
     }
   })
@@ -49,6 +49,8 @@ describe('authentication translations', () => {
     ['de', 'Anmelden'],
     ['ru', 'Вход'],
     ['fr', 'Se connecter'],
+    ['it', 'Accedi'],
+    ['ko', '로그인'],
   ])(
     'loads persisted %s without unrelated auth dictionaries',
     async (code, title) => {

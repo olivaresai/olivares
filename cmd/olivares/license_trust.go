@@ -198,8 +198,9 @@ func resolveCommandDataDir(dataDir string) (string, error) {
 
 func licenseTrustCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "trust",
-		Short: "Show or change which license signing keys this deployment trusts (current, verify-only, revoked, epoch fence)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "trust",
+		Short:       "Show or change which license signing keys this deployment trusts (current, verify-only, revoked, epoch fence)",
 		Long: "trust manages the license trust keyring of a data directory: the key embedded in this build plus\n" +
 			"the optional administrative document <data-dir>/" + licenseTrustFileName + ". Boot, reload, license\n" +
 			"install, the Business upgrade and bundle gates and the connected client all verify licenses with\n" +
@@ -214,8 +215,9 @@ func licenseTrustCmd() *cobra.Command {
 func licenseTrustStatusCmd() *cobra.Command {
 	var dataDir string
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show the effective license trust keyring of a data directory",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show the effective license trust keyring of a data directory",
 		Long: "status prints every trusted license key with its derived key id, state, pinned epoch, retirement\n" +
 			"window and source (embedded or data-dir), and the key_epoch fence. An unusable trust document is an\n" +
 			"error that names the file.",
@@ -255,8 +257,9 @@ func licenseTrustSetCmd() *cobra.Command {
 	var dataDir, publicKey, kid, state, retiredAt, verifyUntil string
 	var epoch int
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Add a license public key or change a trusted key's state, epoch or retirement window",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Add a license public key or change a trusted key's state, epoch or retirement window",
 		Long: "set writes one key into <data-dir>/" + licenseTrustFileName + " (mode 0600, replaced atomically).\n" +
 			"Name the key by --public-key (base64, or @file) to add it, or by --kid to change a key that is already\n" +
 			"trusted, including the embedded one. --state is current, verify_only or revoked. A verify_only key\n" +
@@ -337,8 +340,9 @@ func licenseTrustFenceCmd() *cobra.Command {
 	var dataDir string
 	var minEpoch int
 	cmd := &cobra.Command{
-		Use:   "fence",
-		Short: "Set the minimum key_epoch this deployment accepts in license credentials",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "fence",
+		Short:       "Set the minimum key_epoch this deployment accepts in license credentials",
 		Long: "fence writes min_key_epoch into <data-dir>/" + licenseTrustFileName + ". Credentials whose signed\n" +
 			"key_epoch is below it are refused, and a flat legacy license is accepted only through a key pinned at\n" +
 			"or above it. 0 removes the fence. A current key pinned below the new fence is refused as a\n" +

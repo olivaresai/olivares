@@ -39,7 +39,7 @@ export function rutaWeb(relativa: string): string {
 export function nombresDeLista(apiSrc: string): string[] {
   const fuera: string[] = []
   for (const m of apiSrc.matchAll(
-    /^\s{2}(\w+):(?:(?!^\s{2}\w+:)[\s\S]){0,400}?http\.get<ListResponse</gm,
+    /^\s{2}(\w+):(?:(?!^\s{2}\w+:)[\s\S]){0,400}?http\.get<\s*ListResponse</gm,
   )) {
     fuera.push(m[1])
   }
@@ -47,7 +47,7 @@ export function nombresDeLista(apiSrc: string): string[] {
   //    contraste construyó ese falso negativo. Sin esto, una ruta nueva escrita así no entra en el
   //    inventario y la vista que la pinte se queda fuera del trinquete.
   for (const m of apiSrc.matchAll(
-    /^\s{2}(\w+)\((?:(?!^\s{2}\w+[:(]) [\s\S]){0,400}?http\.get<ListResponse</gm,
+    /^\s{2}(\w+)\((?:(?!^\s{2}\w+[:(])[\s\S]){0,400}?http\.get<\s*ListResponse</gm,
   )) {
     if (!fuera.includes(m[1])) fuera.push(m[1])
   }
@@ -93,15 +93,17 @@ export function rutasSinTecho(
   const sinTecho: string[] = []
   for (const nombre of rutas) {
     if (nombre in noPaginan) continue
-    const i = apiSrc.indexOf(`${nombre}:`)
-    const j = apiSrc.indexOf('http.get<ListResponse<', i)
+    const property = apiSrc.indexOf(`${nombre}:`)
+    const i = property >= 0 ? property : apiSrc.indexOf(`${nombre}(`)
+    const call = /http\.get<\s*ListResponse</.exec(apiSrc.slice(i))
+    const j = call ? i + call.index : -1
     if (j < 0 || !pideTecho(apiSrc, j)) sinTecho.push(nombre)
   }
   return { rutas, sinTecho }
 }
 
 /** Consultas y avisos comparados POR FICHERO: la concatenación deja escapar un desvío compuesto. */
-export function desajustesPorFichero(
+export function mismatchesByFile(
   vistas: Array<{ nombre: string; src: string }>,
   listas: string[],
   cliente: string,

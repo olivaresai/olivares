@@ -34,8 +34,9 @@ const voiceModule = "voice"
 func newVoiceCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "voice",
-		Short: "Inspect governed voice sessions and set the per-agent voice policy",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "voice",
+		Short:       "Inspect governed voice sessions and set the per-agent voice policy",
 		Long: "voice exercises the governed voice plane: the sessions themselves, the policy\n" +
 			"that constrains which model and provider an agent may speak through, and the\n" +
 			"append-only ledger of every open decision.\n\n" +
@@ -68,10 +69,11 @@ var voiceDecisionColumns = []string{
 
 func newVoiceSessionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "sessions",
-		Short:   "List, follow and open governed voice sessions",
-		Long:    "A voice session is one governed audio conversation: which agent spoke, through which model and provider, for how long, and under what policy.",
-		Example: "  olivares voice sessions ls --limit 20",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sessions",
+		Short:       "List, follow and open governed voice sessions",
+		Long:        "A voice session is one governed audio conversation: which agent spoke, through which model and provider, for how long, and under what policy.",
+		Example:     "  olivares voice sessions ls --limit 20",
 	}
 	cmd.AddCommand(
 		newVoiceSessionsListCmd(flags),
@@ -86,8 +88,9 @@ func newVoiceSessionsCmd(flags *authClientFlags) *cobra.Command {
 func newVoiceSessionsListCmd(flags *authClientFlags) *cobra.Command {
 	var page agentExecPageFlags
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List voice sessions with their derived state",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List voice sessions with their derived state",
 		Long: "ls lists sessions. `state` is derived at read time — live, idle or ended — and\n" +
 			"`governed` says whether a policy was in force when the session opened.",
 		Example: "  olivares voice sessions ls\n  olivares voice sessions ls --limit 50 -o json",
@@ -113,11 +116,12 @@ func newVoiceSessionsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newVoiceSessionsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <session-ref>",
-		Short:   "Show one voice session",
-		Long:    "get returns one session with its turn counts, latency figures and the policy that governed it.",
-		Example: "  olivares voice sessions get vs-1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <session-ref>",
+		Short:       "Show one voice session",
+		Long:        "get returns one session with its turn counts, latency figures and the policy that governed it.",
+		Example:     "  olivares voice sessions get vs-1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: voiceModule,
@@ -133,8 +137,9 @@ func newVoiceSessionsGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newVoiceSessionsStreamCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "stream <session-ref>",
-		Short: "Follow one live voice session as NDJSON (one object per event)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "stream <session-ref>",
+		Short:       "Follow one live voice session as NDJSON (one object per event)",
 		Long: "stream follows the engine's server-sent session events and prints ONE JSON\n" +
 			"OBJECT PER LINE on stdout. Keep-alives and notices go to stderr.",
 		Example: "  olivares voice sessions stream vs-1",
@@ -149,11 +154,12 @@ func newVoiceSessionsStreamCmd(flags *authClientFlags) *cobra.Command {
 func newVoiceSessionsDecisionsCmd(flags *authClientFlags) *cobra.Command {
 	var page agentExecPageFlags
 	cmd := &cobra.Command{
-		Use:     "decisions <session-ref>",
-		Short:   "List one session's governance decisions",
-		Long:    "decisions narrows the tenant ledger to one session: every open request, the policy verdict, the gate status and what was actuated.",
-		Example: "  olivares voice sessions decisions vs-1 --limit 50",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "decisions <session-ref>",
+		Short:       "List one session's governance decisions",
+		Long:        "decisions narrows the tenant ledger to one session: every open request, the policy verdict, the gate status and what was actuated.",
+		Example:     "  olivares voice sessions decisions vs-1 --limit 50",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -182,8 +188,9 @@ func newVoiceSessionsOpenCmd(flags *authClientFlags) *cobra.Command {
 		approvalRef string
 	)
 	cmd := &cobra.Command{
-		Use:   "open",
-		Short: "Open a governed voice session through the approval gate (two-phase)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "open",
+		Short:       "Open a governed voice session through the approval gate (two-phase)",
 		Long: "open asks to start a governed voice session. It is deny-closed and two-phase:\n\n" +
 			"  without --approval-ref  the policy is evaluated, an approval is opened and NO\n" +
 			"                          session starts. This command exits 7 with the reference.\n" +
@@ -239,10 +246,11 @@ var voicePolicyColumns = []string{
 
 func newVoicePoliciesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "policies",
-		Short:   "Read and replace the per-agent voice policy",
-		Long:    "A voice policy constrains one agent: which model and provider it may speak through, how long a session may last and what latency is tolerated.",
-		Example: "  olivares voice policies ls",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "policies",
+		Short:       "Read and replace the per-agent voice policy",
+		Long:        "A voice policy constrains one agent: which model and provider it may speak through, how long a session may last and what latency is tolerated.",
+		Example:     "  olivares voice policies ls",
 	}
 	cmd.AddCommand(newVoicePoliciesListCmd(flags), newVoicePoliciesSetCmd(flags))
 	return cmd
@@ -251,11 +259,12 @@ func newVoicePoliciesCmd(flags *authClientFlags) *cobra.Command {
 func newVoicePoliciesListCmd(flags *authClientFlags) *cobra.Command {
 	var page agentExecPageFlags
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List the voice policies in force",
-		Long:    "ls lists every per-agent policy with who set it and when.",
-		Example: "  olivares voice policies ls\n  olivares voice policies ls --limit 50 -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List the voice policies in force",
+		Long:        "ls lists every per-agent policy with who set it and when.",
+		Example:     "  olivares voice policies ls\n  olivares voice policies ls --limit 50 -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -285,8 +294,9 @@ func newVoicePoliciesSetCmd(flags *authClientFlags) *cobra.Command {
 		callsFile   string
 	)
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Replace one agent's voice policy (PUT — the whole policy)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Replace one agent's voice policy (PUT — the whole policy)",
 		Long: "set REPLACES the policy for one agent. It is a PUT, not a patch: read\n" +
 			"`policies ls` first and pass the whole policy you intend, because a limit you\n" +
 			"do not pass is not carried over from the stored one.\n\n" +
@@ -341,8 +351,9 @@ func newVoicePoliciesSetCmd(flags *authClientFlags) *cobra.Command {
 func newVoiceDecisionsCmd(flags *authClientFlags) *cobra.Command {
 	var page agentExecPageFlags
 	cmd := &cobra.Command{
-		Use:   "decisions",
-		Short: "List the append-only voice decision ledger for the tenant",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "decisions",
+		Short:       "List the append-only voice decision ledger for the tenant",
 		Long: "decisions is the record of every open request across all sessions: the policy\n" +
 			"verdict, the approval gate's answer, and what was actuated.",
 		Example: "  olivares voice decisions --limit 100\n  olivares voice decisions -o json",

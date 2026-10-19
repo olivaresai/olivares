@@ -569,6 +569,12 @@ function callableOrigins(expr, seen = new Set()) {
   if (ts.isConditionalExpression(expr)) {
     return [...callableOrigins(expr.whenTrue, next), ...callableOrigins(expr.whenFalse, next)]
   }
+  // `PANEL_EXTENSIONS.consoleAccess?.useOperation ?? reflected`: where the installed
+  // composition omits the edition hook, the fallback is the only callable there is.
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+      carriesNoInstalledExtension(expr.left)) {
+    return callableOrigins(expr.right, next)
+  }
   if (ts.isCallExpression(expr)) {
     return callableOrigins(expr.expression, next).flatMap((fn) =>
       typeof fn !== 'symbol' && isFunctionLike(fn)
@@ -600,21 +606,6 @@ function callableOrigins(expr, seen = new Set()) {
   }
   return [UNKNOWN_CALLABLE]
 }
-// Monotonic edges; the small bound is an inspection limit, never permission credit.
-for (let round = 0; ; round++) {
-  let changed = false
-  for (const call of permissionCalls) {
-    for (const fn of callableOrigins(call.expression)) {
-      if (typeof fn === 'symbol' || !isFunctionLike(fn)) continue
-      let callers = permissionCallers.get(fn)
-      if (!callers) permissionCallers.set(fn, callers = new Set())
-      if (!callers.has(call)) { callers.add(call); changed = true }
-    }
-  }
-  if (!changed) break
-  if (round === 12) die('local permission call graph did not converge; nothing was verified')
-}
-
 function combineValues(parts) {
   return parts.some((p) => p === null) ? null : [...new Set(parts.flat())]
 }
@@ -927,6 +918,16 @@ function panelParts(parts, composition = false) {
   if (parts.some((p) => p === null)) return null
   return { nodes: parts.flatMap((p) => p.nodes), composition: composition || parts.length > 0 && parts.every((p) => p.composition) }
 }
+// An optional edition seam (`PANEL_EXTENSIONS.consoleAccess?.capability`) that the INSTALLED
+// composition leaves out, so nothing flows through it. This is the same sealed-literal proof
+// the panel collections get: the composition must be a frozen literal, and a producer this
+// guard cannot read, an unfrozen literal or a prototype trick is NOT an omission.
+function carriesNoInstalledExtension(expr) {
+  expr = unwrapExpr(expr)
+  if (!expr || !ts.isPropertyAccessExpression(expr)) return false
+  const producer = panelProducer(expr)
+  return !!producer?.composition && producer.nodes.length === 0
+}
 // Select the stricter composition resolver only for collections flowing from
 // the installed panel registry. Ordinary typed navigation targets retain their
 // existing contextual-property resolver. This trace does not grant permission
@@ -1079,6 +1080,21 @@ function resolve(expr, depth = 0, seen = new Set(), bindings = new Map(), projec
     return combineValues(writes.map((w) => resolve(w, depth + 1, new Set(next), bindings)))
   }
   return null
+}
+
+// Monotonic edges; the small bound is an inspection limit, never permission credit.
+for (let round = 0; ; round++) {
+  let changed = false
+  for (const call of permissionCalls) {
+    for (const fn of callableOrigins(call.expression)) {
+      if (typeof fn === 'symbol' || !isFunctionLike(fn)) continue
+      let callers = permissionCallers.get(fn)
+      if (!callers) permissionCallers.set(fn, callers = new Set())
+      if (!callers.has(call)) { callers.add(call); changed = true }
+    }
+  }
+  if (!changed) break
+  if (round === 12) die('local permission call graph did not converge; nothing was verified')
 }
 
 // Walk every can() call.
@@ -1318,7 +1334,7 @@ function recordConsumedCapabilityQuestionSite(operation, node) {
   capabilityQuestions.push({ operation, node })
 }
 
-// FeatureCapability.surface/deepLink are the registry's actual consumer path
+// FeatureCapability.surface/deepLink/navigation are the registry's actual consumer path
 // (authorization.ts calls them; the five builders are the values written there).
 // Nested `{ surface, deepLink }` literals do not take FeatureCapability as a
 // contextual type, so writesTo() on those members is empty; FeatureView.capability
@@ -1332,7 +1348,7 @@ for (const sf of sourceFiles) {
         if (
           ts.isPropertySignature(m) &&
           ts.isIdentifier(m.name) &&
-          (m.name.text === 'surface' || m.name.text === 'deepLink')
+          (m.name.text === 'surface' || m.name.text === 'deepLink' || m.name.text === 'navigation')
         ) {
           featureCapFields.set(m.name.text, m)
         }
@@ -1636,6 +1652,10 @@ function resolveFeatureCapabilityField(fieldName, depth, seen) {
   for (const w of writes) {
     const obj = unwrapExpr(w)
     if (obj && ts.isObjectLiteralExpression(obj)) {
+      // A spread, shorthand, method or computed key may carry the field under a form the
+      // lookup below does not see; that is unreadable, not an absent field.
+      if (obj.properties.some((p) => ts.isSpreadAssignment(p) || (p.name && ts.isComputedPropertyName(p.name)) ||
+          (!ts.isPropertyAssignment(p) && p.name?.text === fieldName))) return null
       const prop = obj.properties.find(
         (p) =>
           ts.isPropertyAssignment(p) &&
@@ -1660,6 +1680,11 @@ function resolveQuestionExpr(expr, depth = 0, seen = new Set()) {
   if (!expr || depth > 16) return null
   if (expr.kind === ts.SyntaxKind.NullKeyword) return []
   if (ts.isIdentifier(expr) && (expr.text === 'undefined' || expr.text === 'null')) return []
+  if (carriesNoInstalledExtension(expr)) return []
+  // `landing?.[0]`: one element of a collection of questions. Every element is credited, so a
+  // sibling that is never read is counted as asked too: the access is as readable as the
+  // collection and no more precise.
+  if (ts.isElementAccessExpression(expr)) return resolveQuestionExpr(expr.expression, depth + 1, seen)
   const memo = memoizedCallable(expr)
   if (memo) return extractOperationsFromFunction(memo.fn, depth + 1, seen)
   if (ts.isConditionalExpression(expr)) {

@@ -67,9 +67,10 @@ has() { # has <grep-args...>  -> 0 match, 1 no match, exit 2 on tool failure
 has -q '| Module | Actuate | Purpose |' "$OVERVIEW" \
   || fail "overview.md lost the '| Module | Actuate | Purpose |' catalog layout — the honest Actuate column must not disappear (C3)"
 # VII deploy and X models must NOT claim live actuation: apply/retire and model
-# execution return 503 until an operator provisions them.
-has -Eq '^\| \[Deployment & integration\][^|]*\| on-demand \(503\) \|' "$OVERVIEW" \
-  || fail "overview.md row VII (deploy) must mark Actuate as 'on-demand (503)' — the executor is built but deploy apply/retire returns 503 until it is provisioned (C3)"
+# execution return 503 until an operator provisions them. Deploy is Business:
+# Community answers 501, and the row must say so.
+has -Eq '^\| \[Deployment & integration\][^|]*\| Business, on-demand \(503\) \|[^|]*Community answers `501`' "$OVERVIEW" \
+  || fail "overview.md row VII (deploy) must mark Actuate as 'Business, on-demand (503)' and say 'Community answers \`501\`' — deploy is a Business feature, and in Business apply/retire returns 503 until an executor is provisioned (C3)"
 has -Eq '^\| \[Model & provider management\][^|]*\| on-demand \(503\) \|' "$OVERVIEW" \
   || fail "overview.md row X (models) must mark Actuate as 'on-demand (503)' — model execution 503s until an inference credential is provisioned (C3)"
 # IV orchestration fire and XVI voice dispatch are deny-closed until a

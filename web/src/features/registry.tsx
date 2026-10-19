@@ -19,6 +19,7 @@ import {
   Telescope,
 } from 'lucide-react'
 import type { RouteAlias } from './route-census'
+import { BUSINESS_BUILD } from './business-build'
 import { FEATURE_EXTENSIONS } from './extensions'
 
 /**
@@ -80,7 +81,7 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
       'sessions',
       'agentops',
       'workspace-templates',
-      // AI tools: the tools a session runs (install, sign in), beside API keys.
+      // AI tools: the tools a session runs (install, sign in), beside Providers.
       'agent-tools',
       'providers',
       'providerProfiles',
@@ -147,7 +148,8 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
   },
   {
     id: 'identities',
-    views: ['identity', 'permissions', 'console', 'accessMap'],
+    // The vault holds a person's own credentials: logins, notes and authenticator keys.
+    views: ['identity', 'permissions', 'console', 'accessMap', 'vault'],
   },
   // `finops` is here because it owns the MODEL RATE CATALOG, not merely because it
   // reports on models (features/finops/api.ts model-rates CRUD); `evals` because it
@@ -416,9 +418,10 @@ export interface FeatureView {
    * filter it. */
   hideInNav?: boolean
   /** The registry id of the view whose screen this one mounts under its own permission
-   * (agentops is a second door into Sessions). Navigation lists the door only to a
-   * principal who cannot open that view, so one screen is one entry; the route stays open
-   * to deep links, and the top bar reads it as that view. */
+   * (agentops is a second door into Sessions), or whose screen it folds into (#2240:
+   * the provider profile, binding and account pages into AI tools). Navigation lists the
+   * door only to a principal who cannot open that view, so one screen is one entry; the
+   * route stays open to deep links, and the top bar reads it as that view. */
   doorTo?: string
   /** Docs-site page for this view, as a site-relative slug (`/reference/…`).
    * The topbar renders it as the contextual help link (docs.olivares.ai + slug);
@@ -515,6 +518,25 @@ export interface FeatureView {
  * workspace selected, no valid entity in the url); null is not a permission.
  */
 export interface FeatureCapability {
+  /** Some routes of a shared room retain their tenant-wide permission gate. */
+  reflectedRoute?: (
+    search: string,
+    confined: string | null,
+    tenantAdmin: boolean,
+    globalAccount: boolean,
+  ) => boolean | null
+  /** An edition may bind this room to the credential's explicit confinement. */
+  scope?: (selected: string | null, confined: string | null) => string | null
+  /** Independent sibling collections that may also make the shared room reachable. */
+  navigation?: (
+    workspace: string | null,
+    search?: string,
+  ) =>
+    | readonly [
+        NormalizedCapabilityQuestion | null,
+        NormalizedCapabilityQuestion | null,
+      ]
+    | undefined
   surface: (workspace: string | null) => NormalizedCapabilityQuestion | null
   deepLink?: (
     workspace: string | null,
@@ -532,16 +554,48 @@ export interface ViewEntry extends FeatureView {
   order: number
 }
 
-/** Every `features/<dir>/views.tsx`, so a new view is registered by its own directory
- * (and its module row, core/modulespec/modules.json `console_entries`), never here. */
-const BUILTIN_VIEWS = Object.values(
-  import.meta.glob<readonly ViewEntry[]>('./*/views.tsx', {
+/**
+ * Pages docs/editions.md places in Business whose source is shared with the Business build:
+ * their `features/<dir>/business-views.tsx` exports `VIEWS` like a views.tsx, and Community
+ * never registers them. Its navigation, router and palette omit them, and the census
+ * (route-census.json `business_paths`) answers their bookmarks with the Business notice.
+ * A Business build is the one that carries edition views; it serves them unless its own
+ * extension already registers the id.
+ * ponytail: a build is Business when it has any extension view; drop this bridge once
+ * the Business extension registers these pages itself.
+ */
+const SHARED_BUSINESS_VIEWS = Object.values(
+  import.meta.glob<readonly ViewEntry[]>('./*/business-views.tsx', {
     eager: true,
     import: 'VIEWS',
   }),
-)
-  .flat()
-  .sort((a, b) => a.order - b.order)
+).flat()
+
+/** Ids of those pages, served or not: their labels ship with their source (locales nav.json). */
+export const BUSINESS_ONLY_VIEW_IDS: readonly string[] =
+  SHARED_BUSINESS_VIEWS.map((view) => view.id)
+
+const BUSINESS_ONLY_VIEWS = !BUSINESS_BUILD
+  ? []
+  : SHARED_BUSINESS_VIEWS.filter(
+      (view) =>
+        !FEATURE_EXTENSIONS.some(
+          (extension) =>
+            extension.id === view.id || extension.path === view.path,
+        ),
+    )
+
+/** Every `features/<dir>/views.tsx`, so a new view is registered by its own directory
+ * (and its module row, core/modulespec/modules.json `console_entries`), never here. */
+const BUILTIN_VIEWS = [
+  ...Object.values(
+    import.meta.glob<readonly ViewEntry[]>('./*/views.tsx', {
+      eager: true,
+      import: 'VIEWS',
+    }),
+  ).flat(),
+  ...BUSINESS_ONLY_VIEWS,
+].sort((a, b) => a.order - b.order)
 
 // Consumers share these permission-bearing records. Seal both the registry and
 // each record before export so an alias cannot replace an authority declaration.
@@ -582,23 +636,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = DECLARED_PRODUCT_NOUNS.map(
  * checker with synthetic fixtures, so this list being empty today does not leave the
  * alias path unverified.
  */
-export const ROUTE_ALIASES: readonly RouteAlias[] = [
-  {
-    from: '/finops',
-    to: '/stored-budgets',
-    note: 'Business feature; Community keeps stored-budget reads and export.',
-  },
-  {
-    from: '/red-team',
-    to: '/areas/security-identity',
-    note: 'Red team is a Business feature.',
-  },
-  {
-    from: '/team-costs',
-    to: '/areas/observation',
-    note: 'Team cost analysis is a Business feature.',
-  },
-].filter((alias) => !FEATURE_VIEWS.some((view) => view.path === alias.from))
+export const ROUTE_ALIASES: readonly RouteAlias[] = []
 
 /**
  * The visible (non-hidden) views of one area, grouped by section in the area's section order

@@ -19,12 +19,18 @@ import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { loadConfigFromFile, type Plugin } from 'vite'
 import model from './whisper-model.json'
 
+// The fixture mirrors the repository layout: vite.config.ts quotes ../docs/editions.md,
+// so the config lives in <root>/web and the document in <root>/docs, never in tmpdir().
+let root: string
 let fixture: string
 let generate: (...args: unknown[]) => Promise<void>
 
 beforeAll(async () => {
-  fixture = await mkdtemp(join(tmpdir(), 'dictation-build-'))
+  root = await mkdtemp(join(tmpdir(), 'dictation-build-'))
+  fixture = join(root, 'web')
   const web = resolve(__dirname, '../../..')
+  await mkdir(join(root, 'docs'))
+  await cp(join(web, '../docs/editions.md'), join(root, 'docs/editions.md'))
   const target = join(fixture, 'src/features/dictation')
   await mkdir(target, { recursive: true })
   await cp(join(web, 'vite.config.ts'), join(fixture, 'vite.config.ts'))
@@ -52,7 +58,7 @@ async function loadGenerator(): Promise<typeof generate> {
 }
 
 afterAll(async () => {
-  if (fixture) await rm(fixture, { recursive: true, force: true })
+  if (root) await rm(root, { recursive: true, force: true })
 })
 
 async function emitModel(generator = generate): Promise<Map<string, Buffer>> {

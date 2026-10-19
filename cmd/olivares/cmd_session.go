@@ -6,10 +6,12 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -54,9 +56,10 @@ var runRefPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-
 
 func newSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "session",
-		Aliases: []string{"sessions"},
-		Short:   "Start, follow, send to, stop and resume agent sessions",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "session",
+		Aliases:     []string{"sessions"},
+		Short:       "Start, follow, send to, stop and resume agent sessions",
 		Long: "Run an agent tool (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI) in a folder on the engine's\n" +
 			"host and talk to it from here. Sessions keep running when this terminal closes. Refer to\n" +
 			"a session by its name or its id.",
@@ -71,9 +74,12 @@ func newSessionCmd() *cobra.Command {
 		newSessionFollowCmd(),
 		newSessionListCmd(),
 		newSessionShowCmd(),
+		newSessionMessagesCmd(),
 		newSessionPeersCmd(),
 		newSessionLifecycleCmd("stop", "Stop a session", "/stop", "Stopped"),
 		newSessionLifecycleCmd("resume", "Resume a stopped session", "/resume", "Resumed"),
+		newSessionPinCmd("pin", "Pin a session to the top of your list", http.MethodPost, "Pinned"),
+		newSessionPinCmd("unpin", "Unpin a session", http.MethodDelete, "Unpinned"),
 		newSessionMoveCmd(),
 		newSessionHandoffCmd(),
 		newSessionInterruptCmd(),
@@ -95,12 +101,14 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 		account                       string
 		model, effort, permission     string
 		dlp                           string
-		detach, worktree              bool
+		detach, worktree, noSetup     bool
 		worktreeFrom                  string
+		isolation                     string
 	)
 	cmd := &cobra.Command{
-		Use:   "start [folder] [prompt]",
-		Short: "Start an agent session in a folder, optionally with a first prompt",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "start [folder] [prompt]",
+		Short:       "Start an agent session in a folder, optionally with a first prompt",
 		Long: "start runs the agent tool in the folder (default: the current folder) and names the\n" +
 			"session after it. With a prompt, it sends the prompt and shows the reply.\n\n" +
 			"The first time, it registers the folder for sessions; a folder it registers carries no\n" +
@@ -113,12 +121,21 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			"folder's repository, so two sessions on one repository do not share files. The folder\n" +
 			"must be the repository's top folder. --worktree-from <commit or branch> starts that\n" +
 			"worktree at a commit or a local branch of the repository instead of its current\n" +
-			"commit, which is how you open the work a handoff names (it implies --worktree).",
+			"commit, which is how you open the work a handoff names (it implies --worktree).\n\n" +
+			"--isolation container runs the tool in a container of its own, with the folder and the\n" +
+			"tool's account home mounted, when this server has podman or Docker. A session bound to a\n" +
+			"provider's endpoint from Providers needs native isolation; the engine says so.\n\n" +
+			"--permission full runs every tool without asking, as the console's full permissions do.\n" +
+			"Only an administrator can start it; the engine refuses anyone else with one sentence and\n" +
+			"no session is created. A saved template supplies its own mode, so full does not go with\n" +
+			"--template.",
 		Example: "  olivares session start\n" +
 			"  olivares session start ~/code/my-app \"explain this repository\"\n" +
 			"  olivares session start . --tool codex --name review\n" +
 			"  olivares session start . --account work\n" +
 			"  olivares session start . --worktree --name feature\n" +
+			"  olivares session start . --isolation container\n" +
+			"  olivares session start . \"fix the failing test\" --permission full\n" +
 			"  olivares session start . --worktree-from 0123456789abcdef0123456789abcdef01234567 --name review",
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -141,8 +158,16 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			if templateID != "" && permission == "edits-and-commands" {
 				return sentence(exitcode.Usage, "A saved template cannot replace the edits-and-commands preset. Choose read-only, edits-only or ask, or omit --permission to use the template's mode.")
 			}
+			// The engine lets a template's mode win over a narrower or equal named one, so full
+			// with a template could start narrower than asked, with no word about it.
+			if templateID != "" && permission == "full" {
+				return sentence(exitcode.Usage, "A saved template supplies its own mode and can narrow full permissions. Omit --permission to use the template's mode, or omit --template to run in full.")
+			}
+			if isolation != "native" && isolation != "container" {
+				return sentence(exitcode.Usage, "Unknown isolation %q. Use native or container.", isolation)
+			}
 			if _, ok := permissionModes[permission]; !ok && !(templateID != "" && permission == "") {
-				return sentence(exitcode.Usage, "Unknown permission %q. Use edits-and-commands, edits-only, read-only or ask.", permission)
+				return sentence(exitcode.Usage, "Unknown permission %q. Use edits-and-commands, edits-only, read-only, ask or full.", permission)
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -191,7 +216,7 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			body := map[string]any{
 				"name": runName, "transport": "stream-json", "permission_mode": "",
 				"effort": effort, "model": model, "workspace_ref": str(ws, "workspace_ref"),
-				"isolation": "native", "provider_profile_ref": profileRef,
+				"isolation": isolation, "provider_profile_ref": profileRef,
 			}
 			// The preset goes with every tool: the engine applies it in the tool's
 			// own settings, or refuses one the tool cannot honour with a sentence printed as
@@ -206,6 +231,9 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			}
 			if worktreeFrom != "" {
 				body["worktree_from"] = worktreeFrom
+			}
+			if noSetup {
+				body["no_setup"] = true
 			}
 			// 202: the launch needs a person's approval; the session exists and waits.
 			_, b, err := cfg.do(ctx, "POST", sessionRunsPath, body, http.StatusCreated, http.StatusAccepted)
@@ -231,9 +259,9 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 				return nil
 			}
 			if outputIsJSON(cmd) {
-				return cfg.postTurn(cmd.Context(), run, args[1])
+				return cfg.postTurn(cmd.Context(), run, args[1], nil)
 			}
-			return cfg.sendTurn(cmd, run, args[1], detach)
+			return cfg.sendTurn(cmd, run, args[1], nil, detach)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -245,16 +273,18 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 	cmd.Flags().StringVar(&effort, "effort", "", "low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&template, "template", "", "saved session template ID; its terms apply at launch and resume")
 	cmd.Flags().StringVar(&permission, "permission", "edits-and-commands",
-		"what the agent may do without asking: edits-and-commands, edits-only, read-only, or ask")
+		"what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only)")
 	cmd.Flags().StringVar(&dlp, "dlp", "off", "DLP posture for a folder this command registers: off, label or deny")
+	cmd.Flags().StringVar(&isolation, "isolation", "native", "native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor)")
 	cmd.Flags().BoolVar(&detach, "detach", false, "with a prompt, send it and return without showing the reply")
+	cmd.Flags().BoolVar(&noSetup, "no-setup", false, "skip the folder's setup command for this start")
 	cmd.Flags().BoolVar(&worktree, "worktree", false, "work in a git worktree of its own, on a new branch (the folder must be a git repository's top folder)")
 	cmd.Flags().StringVar(&worktreeFrom, "worktree-from", "", "start the worktree at this commit id or local branch instead of the current commit (implies --worktree)")
 	_ = cmd.RegisterFlagCompletionFunc("tool", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"claude", "codex", "grok", "opencode", "gemini-cli"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = cmd.RegisterFlagCompletionFunc("permission", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return []string{"edits-and-commands", "edits-only", "read-only", "ask"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"edits-and-commands", "edits-only", "read-only", "ask", "full"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = cmd.RegisterFlagCompletionFunc("dlp", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"off", "label", "deny"}, cobra.ShellCompDirectiveNoFileComp
@@ -479,12 +509,15 @@ func profileRefOf(stderr io.Writer, tool string, status int, b []byte, err error
 	return ref, nil
 }
 
-// The permission choices of a Claude Code session, as the console's New session
+// The permission choices of a session, as the console's New session
 // offers them: the default is the engine's built-in "Edits and
 // commands" template (an allowlist under dontAsk, so the agent can edit and run
-// commands and every other tool is refused); the others are plain modes.
+// commands and every other tool is refused); the others are plain modes. "full" is
+// bypassPermissions, as the console sends it: the engine refuses it to anyone who is
+// not a run administrator (sessions refuseUnrestrictedFor), and that stays the one gate.
 var permissionModes = map[string]string{
 	"edits-and-commands": "", "edits-only": "acceptEdits", "read-only": "plan", "ask": "default",
+	"full": "bypassPermissions",
 }
 
 const editsAndCommandsTemplate = "Edits and commands"
@@ -522,7 +555,7 @@ func (c *agentClientConfig) builtinTemplate(ctx context.Context, name string) (s
 // freeSessionName returns base, or base-2, base-3 … when a session that is not
 // cleaned already carries the name: a name must pick one session.
 func (c *agentClientConfig) freeSessionName(ctx context.Context, base string) (string, error) {
-	runs, err := c.listRuns(ctx)
+	runs, err := c.listRuns(ctx, nil)
 	if err != nil {
 		return "", err
 	}
@@ -577,14 +610,19 @@ func newSessionSendCmd() *cobra.Command {
 	var (
 		cfg    agentClientConfig
 		detach bool
+		attach []string
 	)
 	cmd := &cobra.Command{
-		Use:   "send <session> [text]",
-		Short: "Send a message to a session and show the reply",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "send <session> [text]",
+		Short:       "Send a message to a session and show the reply",
 		Long: "send gives the session one turn of input. Without text, it reads the message from\n" +
 			"standard input. For Claude Code and Codex it shows the reply until the turn ends; for\n" +
-			"other tools it returns once the engine accepts the message (follow shows the output).",
+			"other tools it returns once the engine accepts the message (follow shows the output).\n\n" +
+			"--attach adds an image (PNG, JPEG, WebP or GIF) to the message, up to four. The tool must take\n" +
+			"images (Claude Code and Codex do); another tool refuses, and nothing is sent.",
 		Example: "  olivares session send my-app \"run the tests and fix what fails\"\n" +
+			"  olivares session send my-app --attach shot.png \"what is wrong here?\"\n" +
 			"  cat prompt.md | olivares session send my-app",
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: completeSessions,
@@ -612,11 +650,22 @@ func newSessionSendCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return cfg.sendTurn(cmd, run, text, detach || outputIsJSON(cmd))
+			var images []string
+			if len(attach) > 0 {
+				// Every image is stored, and the tool's refusal heard, before the message goes.
+				if err := cfg.sendable(run); err != nil {
+					return err
+				}
+				if images, err = cfg.uploadImages(cmd.Context(), run, attach); err != nil {
+					return err
+				}
+			}
+			return cfg.sendTurn(cmd, run, text, images, detach || outputIsJSON(cmd))
 		},
 	}
 	cfg.addFlags(cmd)
 	cmd.Flags().BoolVar(&detach, "detach", false, "return once the message is accepted, without showing the reply")
+	cmd.Flags().StringArrayVar(&attach, "attach", nil, "attach an image file (PNG, JPEG, WebP or GIF) to the message; repeat for several")
 	return cmd
 }
 
@@ -663,14 +712,63 @@ func (c *agentClientConfig) sendable(run map[string]any) error {
 	}
 }
 
-// postTurn sends one turn of input to a live run.
-func (c *agentClientConfig) postTurn(ctx context.Context, run map[string]any, text string) error {
+// sessionImageReadMax stops the CLI reading a file that no tool would take. It is
+// not the limit: the engine states that, with the tool's own number.
+const sessionImageReadMax = 16 << 20
+
+// uploadImages stores each image file with the session and returns their ids, in the
+// order given. The type is read from the bytes, as the engine will check it.
+func (c *agentClientConfig) uploadImages(ctx context.Context, run map[string]any, paths []string) ([]string, error) {
+	ids := make([]string, 0, len(paths))
+	for _, path := range paths {
+		f, err := os.Open(path)
+		if err != nil {
+			reason := err.Error()
+			var pathErr *fs.PathError
+			if errors.As(err, &pathErr) {
+				reason = pathErr.Err.Error()
+			}
+			return nil, sentence(exitcode.Usage, "Cannot read %s: %s", path, reason)
+		}
+		data, err := io.ReadAll(io.LimitReader(f, sessionImageReadMax+1))
+		_ = f.Close()
+		if err != nil {
+			return nil, sentence(exitcode.Usage, "Cannot read %s: %s", path, err)
+		}
+		if len(data) > sessionImageReadMax {
+			return nil, sentence(exitcode.Usage, "%s is too large to attach", path)
+		}
+		_, body, err := c.do(ctx, "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/attachments", map[string]any{
+			"media_type": http.DetectContentType(data),
+			"data":       base64.StdEncoding.EncodeToString(data),
+		}, http.StatusCreated)
+		if err != nil {
+			return nil, err
+		}
+		var stored struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(body, &stored); err != nil || stored.ID == "" {
+			return nil, sentence(exitcode.Err, "The engine did not store %s", path)
+		}
+		ids = append(ids, stored.ID)
+	}
+	return ids, nil
+}
+
+// postTurn sends one turn of input to a live run, with the stored images attached to
+// it by id.
+func (c *agentClientConfig) postTurn(ctx context.Context, run map[string]any, text string, images []string) error {
 	if err := c.sendable(run); err != nil {
 		return err
 	}
 	body, err := sessionTurnBody(run, text)
 	if err != nil {
 		return err
+	}
+	if len(images) > 0 {
+		// The engine encodes the message for the run's tool; no raw frame is sent.
+		body = map[string]any{"text": text, "attachments": images}
 	}
 	if _, _, err := c.do(ctx, "POST", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/input", body, http.StatusAccepted); err != nil {
 		return err
@@ -681,12 +779,12 @@ func (c *agentClientConfig) postTurn(ctx context.Context, run map[string]any, te
 // sendTurn sends one turn and, unless detached, shows the reply. It opens the
 // output stream first and lets the replay settle, so only frames written after the
 // turn was sent are shown.
-func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, text string, detach bool) error {
+func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, text string, images []string, detach bool) error {
 	if err := c.sendable(run); err != nil {
 		return err
 	}
 	if detach || !sessionShowsTurns(run) {
-		if err := c.postTurn(cmd.Context(), run, text); err != nil {
+		if err := c.postTurn(cmd.Context(), run, text, images); err != nil {
 			return err
 		}
 		return renderOut(cmd, func(w io.Writer) error {
@@ -710,7 +808,7 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 	if err != nil {
 		return err
 	}
-	if err := c.postTurn(ctx, run, text); err != nil {
+	if err := c.postTurn(ctx, run, text, images); err != nil {
 		return err
 	}
 	view := newSessionView(cmd.OutOrStdout())
@@ -892,8 +990,9 @@ func newSessionFollowCmd() *cobra.Command {
 		from int64
 	)
 	cmd := &cobra.Command{
-		Use:   "follow <session>",
-		Short: "Show a session's output as it happens",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "follow <session>",
+		Short:       "Show a session's output as it happens",
 		Long: "follow shows what the session has written so far and keeps showing new output\n" +
 			"until the session ends or you press Ctrl-C. -o json prints the raw frames.",
 		Example:           "  olivares session follow my-app\n  olivares session follow my-app -o json",
@@ -946,35 +1045,60 @@ func newSessionFollowCmd() *cobra.Command {
 
 func newSessionListCmd() *cobra.Command {
 	var (
-		cfg   agentClientConfig
-		all   bool
-		state string
+		cfg     agentClientConfig
+		all     bool
+		state   string
+		account string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List sessions, newest first",
-		Long: "ls prints one row per session: name, state, tool, folder, when it started and its id,\n" +
-			"newest first. Stopped and failed sessions are listed until you remove them. Use the name,\n" +
-			"the start of the name or the id with the other session commands.",
-		Example: "  olivares session ls\n  olivares session ls --state running -o json",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List sessions, pinned first, then newest first",
+		Long: "ls prints one row per session: name, state, tool, folder, when it started and its id.\n" +
+			"Sessions you pinned come first, in the order you pinned them (-o json carries pinned and\n" +
+			"pinned_at; the table shows the order), then the rest newest first.\n" +
+			"Stopped and failed sessions are listed until you remove them. Use the name, the start of\n" +
+			"the name or the id with the other session commands.",
+		Example: "  olivares session ls\n  olivares session ls --state running -o json\n  olivares session ls --state running --account work-2 -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			runs, err := cfg.listRuns(cmd.Context())
+			// The engine applies both filters before it pages. An engine older than
+			// this CLI ignores the account, so what it answers is checked again here:
+			// a list that says "this account" must never hold another's sessions.
+			filter := url.Values{}
+			if state != "" {
+				filter.Set("state", state)
+			}
+			accountRef := ""
+			if strings.TrimSpace(account) != "" {
+				target, err := cfg.findToolAccount(cmd.Context(), account)
+				if err != nil {
+					return err
+				}
+				accountRef = target.Ref
+				filter.Set("provider_profile_ref", accountRef)
+			}
+			runs, err := cfg.listRuns(cmd.Context(), filter)
 			if err != nil {
 				return err
 			}
 			shown := make([]map[string]any, 0, len(runs))
 			for _, r := range runs {
 				s := str(r, "state")
-				if (state != "" && s != state) || (state == "" && !all && s == "cleaned") {
+				if (state != "" && s != state) || (state == "" && !all && s == "cleaned") ||
+					(accountRef != "" && str(r, "provider_profile_ref") != accountRef) {
 					continue
 				}
 				shown = append(shown, r)
 			}
+			// The caller's own pins first, in the order they were pinned, then the
+			// rest newest first (#2130). Stable, so the newest-first order survives
+			// among the unpinned, and JSON keeps the order the table shows.
+			sort.SliceStable(shown, func(i, j int) bool { return pinnedBefore(shown[i], shown[j]) })
 			table := termrender.Table{
 				Header: []string{"name", "state", "tool", "folder", "started", "id"},
 				Empty:  "No sessions yet. Start one: olivares session start <folder>",
@@ -1023,6 +1147,7 @@ func newSessionListCmd() *cobra.Command {
 	cfg.addFlags(cmd)
 	cmd.Flags().BoolVar(&all, "all", false, "include released (cleaned) sessions")
 	cmd.Flags().StringVar(&state, "state", "", "only sessions in this state (pending|waiting_approval|running|idle|stopped|failed|cleaned)")
+	cmd.Flags().StringVar(&account, "account", "", "only sessions of this account (its name or profile reference; see olivares provider account ls)")
 	return cmd
 }
 
@@ -1030,11 +1155,13 @@ func newSessionShowCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var activity bool
 	cmd := &cobra.Command{
-		Use:     "show <session>",
-		Aliases: []string{"get"},
-		Short:   "Show one session",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "show <session>",
+		Aliases:     []string{"get"},
+		Short:       "Show one session",
 		Long: "show prints one session's details: name, state, tool, folder, start time, cost so far\n" +
 			"and its id. Use it to check a session before you send to it, stop it or remove it.\n\n" +
+			"Inside a session, self or current names the session in OLIVARES_WORK_SESSION_ID.\n\n" +
 			"With --activity it prints what the session's tool is doing instead, as the console's side\n" +
 			"panel shows it: the agents it spawned, its background tasks, the files it changed, its own\n" +
 			"task list and its context. It is read from the tool's own transcript (Claude Code).",
@@ -1042,10 +1169,7 @@ func newSessionShowCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeSessions,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := cfg.resolve(); err != nil {
-				return err
-			}
-			run, err := cfg.findSession(cmd.Context(), args[0])
+			run, err := cfg.findSessionTarget(cmd.Context(), args)
 			if err != nil {
 				return err
 			}
@@ -1081,6 +1205,10 @@ func printSessionFields(w io.Writer, run map[string]any) {
 		fields = append(fields, termrender.Field{Key: "reason", Value: reason})
 	}
 	fields = append(fields, termrender.Field{Key: "tool", Value: sessionDriver(run)})
+	// A turn the tool ended on a usage or rate limit says so, and until when.
+	if sentence := limitSentence(run, time.Now()); sentence != "" {
+		fields = append(fields, termrender.Field{Key: "limit", Value: sentence, Role: termrender.RoleWarn})
+	}
 	// The mode as the tool itself last reported it (plan, acceptEdits, on-request · …).
 	if mode := termSafe(str(run, "tool_mode")); mode != "" {
 		fields = append(fields, termrender.Field{Key: "mode", Value: mode})
@@ -1117,6 +1245,7 @@ var sessionLifecycleLong = map[string]string{
 func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "write"},
 		Use:               use + " <session>",
 		Short:             short,
 		Long:              sessionLifecycleLong[use],
@@ -1149,11 +1278,76 @@ func newSessionLifecycleCmd(use, short, suffix, done string) *cobra.Command {
 	return cmd
 }
 
+// sessionPinLong is the Long of pin and unpin.
+var sessionPinLong = map[string]string{
+	"pin": "pin keeps a session first in YOUR list: the console's rail and \"olivares session ls\" put it\n" +
+		"above the usual order, in the order you pinned. The pin is stored on the server, follows you\n" +
+		"to another browser or machine, and changes no one else's list. It prints \"Pinned <name>.\"",
+	"unpin": "unpin removes your pin; the session returns to the usual order. It prints \"Unpinned <name>.\"",
+}
+
+// newSessionPinCmd is pin and unpin: the caller's own mark, one call, one
+// sentence. The pin lives on the server, so it follows the person to the console
+// and other machines (#2130).
+func newSessionPinCmd(use, short, method, done string) *cobra.Command {
+	var cfg agentClientConfig
+	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "write"},
+		Use:               use + " <session>",
+		Short:             short,
+		Long:              sessionPinLong[use],
+		Example:           "  olivares session " + use + " my-app",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSessions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			run, err := cfg.findSession(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			_, b, err := cfg.do(cmd.Context(), method, sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/pin", nil, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			pinState := map[string]any{}
+			if err := json.Unmarshal(b, &pinState); err != nil {
+				return fmt.Errorf("%s %s, but the engine's answer was unreadable: %w", strings.ToLower(done), sessionLabel(run), err)
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "%s %s.\n", done, sessionLabel(run))
+				return err
+			}, pinState)
+		},
+	}
+	cfg.addFlags(cmd)
+	return cmd
+}
+
+// runIsPinned reads a run read's per-caller pinned flag (#2130); absent means
+// the server did not say, which is not pinned.
+func runIsPinned(run map[string]any) bool {
+	pinned, _ := run["pinned"].(bool)
+	return pinned
+}
+
+// pinnedBefore is the list order of two runs: a pinned run before an unpinned one,
+// and two pinned runs by when the caller pinned them, oldest first (the server's
+// RFC 3339 UTC stamps compare as text).
+func pinnedBefore(a, b map[string]any) bool {
+	if runIsPinned(a) != runIsPinned(b) {
+		return runIsPinned(a)
+	}
+	return runIsPinned(a) && str(a, "pinned_at") < str(b, "pinned_at")
+}
+
 func newSessionInterruptCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "interrupt <session>",
-		Short: "Cancel the current turn and keep the session running",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "interrupt <session>",
+		Short:       "Cancel the current turn and keep the session running",
 		Long: "interrupt stops what the tool is doing now and keeps the session and its conversation.\n" +
 			"It prints \"Interrupted the current turn of <name>.\" Use it when a turn goes the wrong\n" +
 			"way; then send a new message. If the session's tool cannot interrupt a turn, it says so\n" +
@@ -1217,9 +1411,10 @@ func newSessionRemoveCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var discardWorktree bool
 	cmd := &cobra.Command{
-		Use:     "rm <session>",
-		Aliases: []string{"delete", "remove"},
-		Short:   "Remove a stopped session",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <session>",
+		Aliases:     []string{"delete", "remove"},
+		Short:       "Remove a stopped session",
 		Long: "rm releases a session that stopped, failed or never started (its launch was rejected or\n" +
 			"expired) and deletes its record. A folder you gave the session is kept; a folder the\n" +
 			"engine created for it is removed.\n\n" +
@@ -1276,19 +1471,18 @@ func newSessionRemoveCmd() *cobra.Command {
 func newSessionEventsCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "events <session>",
-		Short: "Show a session's lifecycle record (start, stop, failures)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "events <session>",
+		Short:       "Show a session's lifecycle record (start, stop, failures)",
 		Long: "events prints the engine's record of the session as JSON: when it was launched, stopped\n" +
 			"and resumed, and why it failed if it did. It does not show the conversation (use\n" +
-			"olivares session follow). Use it to find out why a session stopped.",
+			"olivares session follow). Use it to find out why a session stopped.\n\n" +
+			"Inside a session, self or current names the session in OLIVARES_WORK_SESSION_ID.",
 		Example:           "  olivares session events my-app",
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeSessions,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := cfg.resolve(); err != nil {
-				return err
-			}
-			run, err := cfg.findSession(cmd.Context(), args[0])
+			run, err := cfg.findSessionTarget(cmd.Context(), args)
 			if err != nil {
 				return err
 			}
@@ -1305,9 +1499,76 @@ func newSessionEventsCmd() *cobra.Command {
 
 // --- lookup and formatting -----------------------------------------------------
 
-// listRuns reads the newest runs (the API sorts by creation, newest first).
-func (c *agentClientConfig) listRuns(ctx context.Context) ([]map[string]any, error) {
-	_, b, err := c.do(ctx, "GET", fmt.Sprintf("%s?limit=%d", sessionRunsPath, sessionListLimit), nil)
+// findSessionTarget adds child-session aliases only to show, events and peers.
+// The child carries a canonical session ID, not necessarily a run reference;
+// resolve it exactly, without the name/prefix fallbacks used for explicit targets.
+func (c *agentClientConfig) findSessionTarget(ctx context.Context, args []string) (map[string]any, error) {
+	arg := strings.TrimSpace(args[0])
+	self := arg == "self" || arg == "current"
+	sid := strings.TrimSpace(os.Getenv("OLIVARES_WORK_SESSION_ID"))
+	if self && sid == "" {
+		return nil, sentence(exitcode.Usage, "Self or current requires OLIVARES_WORK_SESSION_ID inside a session.")
+	}
+	if !self && (runRefPattern.MatchString(arg) || strings.HasPrefix(arg, "osn_")) {
+		for _, peer := range args[1:] {
+			if (peer == "self" || peer == "current") && arg != sid {
+				return nil, sentence(exitcode.Usage, "Self or current cannot be combined with a different session id.")
+			}
+		}
+	}
+	if err := c.resolve(); err != nil {
+		return nil, err
+	}
+	if !self {
+		return c.findSession(ctx, arg)
+	}
+	if runRefPattern.MatchString(sid) {
+		return c.findSession(ctx, sid)
+	}
+	return c.findSessionBySID(ctx, sid)
+}
+
+// findSessionBySID scans the session pages for the run whose canonical session ID
+// is sid; the API has no lookup by it.
+func (c *agentClientConfig) findSessionBySID(ctx context.Context, sid string) (map[string]any, error) {
+	cursor := ""
+	for {
+		query := url.Values{"pagination": {"cursor"}, "limit": {fmt.Sprint(sessionListLimit)}, "cursor": {cursor}}
+		_, b, err := c.do(ctx, "GET", sessionRunsPath+"?"+query.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Items   []map[string]any `json:"items"`
+			Cursor  string           `json:"cursor"`
+			HasMore bool             `json:"has_more"`
+		}
+		if err := json.Unmarshal(b, &page); err != nil {
+			return nil, err
+		}
+		for _, run := range page.Items {
+			if str(run, "canonical_sid") == sid {
+				return run, nil
+			}
+		}
+		if !page.HasMore {
+			return nil, sentence(exitcode.NotFound, "The current session was not found on this engine.")
+		}
+		if page.Cursor == "" || page.Cursor == cursor {
+			return nil, sentence(exitcode.Server, "The engine did not provide the next session page.")
+		}
+		cursor = page.Cursor
+	}
+}
+
+// listRuns reads the newest runs (the API sorts by creation, newest first). The
+// engine applies filter (state, provider_profile_ref) before it pages.
+func (c *agentClientConfig) listRuns(ctx context.Context, filter url.Values) ([]map[string]any, error) {
+	query := url.Values{"limit": {fmt.Sprint(sessionListLimit)}}
+	for k, v := range filter {
+		query[k] = v
+	}
+	_, b, err := c.do(ctx, "GET", sessionRunsPath+"?"+query.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1335,7 +1596,7 @@ func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[st
 		run := map[string]any{}
 		return run, json.Unmarshal(b, &run)
 	}
-	runs, err := c.listRuns(ctx)
+	runs, err := c.listRuns(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

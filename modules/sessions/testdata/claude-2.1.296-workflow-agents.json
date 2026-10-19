@@ -1,0 +1,46 @@
+{
+  "runId": "wf_49722316-c08",
+  "timestamp": "2026-10-13T23:19:25.183Z",
+  "taskId": "w1qul42xn",
+  "agentCount": 2,
+  "durationMs": 32124,
+  "summary": "Two phase local progress measurement",
+  "workflowName": "activity-live-probe",
+  "status": "completed",
+  "phases": [
+    {
+      "title": "Prepare",
+      "detail": "First 15 second wait"
+    },
+    {
+      "title": "Finish",
+      "detail": "Second 15 second wait"
+    }
+  ],
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Prepare"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Finish"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "phaseIndex": 1,
+      "phaseTitle": "Prepare",
+      "state": "done"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "phaseIndex": 2,
+      "phaseTitle": "Finish",
+      "state": "done"
+    }
+  ]
+}

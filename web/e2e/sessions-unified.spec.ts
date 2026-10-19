@@ -23,6 +23,8 @@ test('Claude Code portal: setup → login → navigate → create form → works
     !setupToken,
     'PLAYWRIGHT_SETUP_TOKEN not set — run via scripts/web-e2e.sh',
   )
+  test.setTimeout(90_000)
+  page.setDefaultTimeout(10_000)
 
   // First boot → setup, which signs the superadmin in (it sees every nav group).
   await page.goto('/setup')
@@ -42,8 +44,10 @@ test('Claude Code portal: setup → login → navigate → create form → works
   // asserted, and still clicked.
   await page.goto('/agentops')
 
-  // The operate door opens the one Sessions screen, and navigation names it Sessions
-  // too (26.10.1 review: "Operate sessions" opened a page titled "Claude Code").
+  // The operate door opens the one Sessions screen, and the sidebar destination, the top
+  // bar and the page title name it Sessions (26.10.1 review: "Operate sessions" opened a
+  // page titled "Claude Code"). Only the directory and palette entry for the door read
+  // "Operate sessions".
   // `exact` is load-bearing: neighbouring entries mention sessions. The top bar's
   // current-page crumb is a link of the same name, so the entry is read in Journeys.
   const navLink = page
@@ -58,13 +62,42 @@ test('Claude Code portal: setup → login → navigate → create form → works
     page.getByRole('heading', { name: 'Sessions', level: 1 }),
   ).toBeVisible()
   await expect(page.getByText('No sessions yet')).toBeVisible()
-  // The origin facet is the whole point of the merge: one place to look, whether the
-  // session was discovered or launched.
-  await expect(page.getByLabel('All sources')).toBeVisible()
+  // Source facets belong to the Table view, reached through the list's own menu.
+  // An empty estate needs no fabricated session to reach or use that view.
+  await expect(page.getByLabel('All sources')).toHaveCount(0)
+  await page.getByTestId('sessions-list-menu').click()
+  await page
+    .getByRole('menuitem', { name: 'Show as table', exact: true })
+    .click()
+  const source = page.getByRole('combobox', { name: 'All sources' })
+  await expect(source).toBeVisible()
+  for (const name of ['Launched', 'Discovered', 'All sources']) {
+    await source.click()
+    await page.getByRole('option', { name, exact: true }).click()
+    await expect(source).toContainText(name)
+    await expect(page.getByText('No sessions yet')).toBeVisible()
+  }
+  await page
+    .getByRole('button', { name: 'Back to sessions', exact: true })
+    .click()
 
   // The create form is the visual equivalent of the CLI launch.
-  await page.getByRole('button', { name: /New session/i }).click()
-  await expect(page.getByText('New Claude Code session')).toBeVisible()
+  await page
+    .getByRole('main')
+    .getByRole('button', { name: 'New session', exact: true })
+    .first()
+    .click()
+  const launcher = page.getByRole('dialog')
+  await launcher
+    .getByRole('button', { name: 'Advanced launch options', exact: true })
+    .click()
+  const dialog = page.getByRole('dialog')
+  await expect(
+    dialog.getByRole('heading', { name: 'New session', exact: true }),
+  ).toBeVisible()
+  await dialog
+    .getByRole('button', { name: 'Advanced options', exact: true })
+    .click()
   // The privileged-mode warning must be honest BEFORE launch, so this actually
   // PICKS bypassPermissions and asserts the warning — the previous version only
   // clicked at the control and asserted nothing, and it clicked at a role that does
@@ -83,7 +116,7 @@ test('Claude Code portal: setup → login → navigate → create form → works
   // that follows — which is how this reads as "the Workspaces tab is missing".
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
-  await expect(page.getByText('New Claude Code session')).toBeHidden()
+  await expect(dialog).toBeHidden()
 
   // The workspaces tab is the governed file plane.
   await page.getByTestId('sessions-list-menu').click()

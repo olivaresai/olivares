@@ -87,6 +87,9 @@ for rel in \
 	stable/apt/pool/main/o/olivares/olivares.deb; do
 	make_file "$rel"
 done
+# The two files a host adds the repository with come from the assembler, with the tree's one key.
+cp -- "$scratch/tree/olivares-packages.asc" "$scratch/tree/keys/olivares-package-repository.asc"
+python3 "$root/scripts/assemble-package-repository-publish-tree.py" --write-user-files "$scratch/tree"
 
 # The publisher runs the wrangler docs-site/package.json pins (publish-packages.yml installs it
 # with npm ci), so the fake reports that pin.
@@ -111,6 +114,56 @@ run_publish --mode stage >"$scratch/out"
 [[ "$(find "$scratch/store" -type f | wc -l)" -eq 0 ]]
 grep -F 'DRY-RUN' "$scratch/out" >/dev/null
 ok 'dry-run writes zero R2 objects'
+
+# The two files a host adds the repository with are required objects: a tree without
+# either is refused before any R2 read or write.
+for rel in olivares.sources olivares.repo; do
+	mv -- "$scratch/tree/$rel" "$scratch/tree/$rel.held"
+	set +e
+	run_publish --mode stage >"$scratch/out" 2>&1
+	rc=$?
+	set -e
+	mv -- "$scratch/tree/$rel.held" "$scratch/tree/$rel"
+	[[ "$rc" -eq 1 ]]
+	grep -F "publish tree lacks required object: $rel" "$scratch/out" >/dev/null
+done
+ok 'a tree without olivares.sources or olivares.repo is refused'
+
+# Present is not enough: each file must be what the assembler writes for the canonical origin
+# and the tree's own key. A stale origin, an extra setting that reopens a check, and a key that
+# is not the one the metadata is signed with are all refused before any R2 access.
+append_line() { printf '%s\n' "$2" >>"$1"; }
+replace_with() { printf '%s\n' "$2" >"$1"; }
+refuse_changed() {
+	local rel="$1" label="$2"
+	shift 2
+	cp -- "$scratch/tree/$rel" "$scratch/tree/$rel.held"
+	"$@"
+	set +e
+	run_publish --mode stage >"$scratch/out" 2>&1
+	rc=$?
+	set -e
+	mv -- "$scratch/tree/$rel.held" "$scratch/tree/$rel"
+	[[ "$rc" -eq 1 ]] || { printf 'test-package-publish: %s exited %s, want 1\n' "$label" "$rc" >&2; exit 1; }
+	grep -F 'is not what the assembler writes for the canonical origin' "$scratch/out" >/dev/null ||
+		grep -F 'is not the key of' "$scratch/out" >/dev/null || {
+		printf 'test-package-publish: %s was refused for another reason\n' "$label" >&2
+		exit 1
+	}
+}
+refuse_changed olivares.sources 'a sources file for another origin' \
+	sed -i 's#https://packages.olivares.ai#file:///var/tmp/tree#' "$scratch/tree/olivares.sources"
+refuse_changed olivares.repo 'a repo file with a later gpgcheck=0' \
+	append_line "$scratch/tree/olivares.repo" 'gpgcheck=0'
+refuse_changed olivares.repo 'a repo file for another key URL' \
+	sed -i 's#^gpgkey=.*#gpgkey=https://example.org/key.asc#' "$scratch/tree/olivares.repo"
+refuse_changed olivares.repo 'a repo file that fetches its key from the repository address' \
+	sed -i 's#^gpgkey=.*#gpgkey=https://packages.olivares.ai/olivares-packages.asc#' "$scratch/tree/olivares.repo"
+refuse_changed keys/olivares-package-repository.asc 'a published key that differs from the one in the files' \
+	replace_with "$scratch/tree/keys/olivares-package-repository.asc" 'another key'
+run_publish --mode stage >"$scratch/out"
+grep -F 'DRY-RUN' "$scratch/out" >/dev/null
+ok 'a changed olivares.sources, olivares.repo or published key is refused; the restored tree plans again'
 
 set +e
 FAKE_WRANGLER_VERSION=0.0.0 run_publish --mode stage --apply >"$scratch/out" 2>&1

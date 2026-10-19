@@ -19,6 +19,9 @@ import (
 // params set it, a no for an in-process launch, which has no caller to ask.
 type callerAsks struct {
 	runUnrestricted, secretEnv func() bool
+	// profileAccess asks whether the caller may use a tool and one profile of it
+	// (provider_profile_access.go). A launch with no caller to ask, a recovery, leaves it nil.
+	profileAccess func(profileRef, driver string) error
 }
 
 // askCallerQuestions settles MayRunUnrestricted and MayUseSecretEnv for the terms
@@ -48,6 +51,13 @@ func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, 
 	}
 	if p.resuming {
 		if p.ProviderHome != nil {
+			// A resume runs under the profile it was launched under: a withdrawn assignment
+			// stops it too. (A new launch is asked in resolveLaunchProfileInto.)
+			if p.asks.profileAccess != nil {
+				if err := p.asks.profileAccess(p.ProviderHome.ProfileID, p.ProviderHome.Driver); err != nil {
+					return templateDTO{}, nil, err
+				}
+			}
 			if err := applySessionPolicy(p, p.ProviderHome.Driver, resumePolicy); err != nil {
 				return templateDTO{}, nil, err
 			}
@@ -64,6 +74,9 @@ func (m *Module) prepareLaunchTerms(ctx context.Context, tenant model.TenantID, 
 		if err := m.resolveLaunchProfileInto(ctx, tenant, p); err != nil {
 			return templateDTO{}, nil, err
 		}
+	}
+	if err := m.validateLaunchSpeed(ctx, tenant, p); err != nil {
+		return templateDTO{}, nil, err
 	}
 	return tpl, conflicts, nil
 }

@@ -353,7 +353,12 @@ func (m *Module) ServePreviewHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("Content-Security-Policy", previewCSP)
 	token, rest, slash := strings.Cut(strings.TrimPrefix(r.URL.EscapedPath(), api.SessionPreviewPathPrefix), "/")
 	grant := m.previews.get(token, m.clock.Now().Time())
-	if grant == nil || !m.previewLive(grant) {
+	var lr *liveRun
+	var live bool
+	if grant != nil {
+		lr, live = m.previewRun(grant)
+	}
+	if grant == nil || !live {
 		if grant != nil {
 			m.previews.drop(token)
 		}
@@ -385,6 +390,19 @@ func (m *Module) ServePreviewHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "The preview path is not a valid URL path.", http.StatusBadRequest)
 		return
 	}
+	// A person using the app holds the run open like an attach does: the request
+	// (a live-reload stream or WebSocket lasts as long as the page) pins it against
+	// the idle policy, until the URL expires at the latest, and its end restarts
+	// the window. The window restarts before the pin is released, so a sweep never
+	// sees the run unpinned with the window of the request's start.
+	lr.noteIdleActivity(m.now())
+	release := lr.pinPreview()
+	expiry := time.AfterFunc(grant.expires.Sub(m.now()), release)
+	defer func() {
+		expiry.Stop()
+		lr.noteIdleActivity(m.now())
+		release()
+	}()
 	out := r.Clone(context.WithValue(r.Context(), previewAddressKey{}, address))
 	out.URL.Path, out.URL.RawPath = "/"+p, "/"+rest
 	// A dev server's live-reload stream or a long download outlives the engine's
@@ -398,8 +416,17 @@ type previewAddressKey struct{}
 
 // previewLive reports whether the grant's process is still the run's live one.
 func (m *Module) previewLive(g *previewGrant) bool {
+	_, live := m.previewRun(g)
+	return live
+}
+
+// previewRun returns the live run the grant's process belongs to.
+func (m *Module) previewRun(g *previewGrant) (*liveRun, bool) {
 	lr, live := m.rt.getLive(g.tenant, g.runRef)
-	return live && lr.proc == g.proc
+	if !live || lr.proc != g.proc {
+		return nil, false
+	}
+	return lr, true
 }
 
 // previewAddress re-reads the session's ports at most every previewRecheck, so

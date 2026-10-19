@@ -824,6 +824,9 @@ func (m *Module) persistResumeRuntimeCredentials(
 		setClaimStamp(record, lease)
 		setOrNull(record, colRunAgentRef, agentRef)
 		setRuntimeCredentialStamp(record, lease, credentials)
+		// This mandatory resume transaction runs before spawning the tool. Its
+		// previous incarnation's window says nothing about the new launch.
+		record[colRunContextWindows] = nil
 		if err := setRunWorkScope(record, credentials); err != nil {
 			return err
 		}
@@ -1185,11 +1188,14 @@ func (m *Module) RecoverRuntimeCredentials(ctx context.Context, tenant model.Ten
 				continue
 			}
 			var recoveryErr error
+			// A process this module never held belonged to the engine that died.
+			detail := engineDiedDetail
 			if state == statePending || state == stateRunning {
 				// A quick demotion/re-promotion can leave this same Module holding
 				// the old process. Recovery is a process boundary too: remove it from
 				// attach visibility, stop/cancel it, and only then revoke authority.
 				if live, ok := m.rt.getLive(tenant, record.String(colRunRef)); ok {
+					detail = orphanedDetail
 					recoveryErr = m.recoverLocalRuntimeProcess(ctx, live)
 					if recoveryErr != nil {
 						recoveryErrs = append(recoveryErrs, fmt.Errorf(
@@ -1211,7 +1217,7 @@ func (m *Module) RecoverRuntimeCredentials(ctx context.Context, tenant model.Ten
 			if state == statePending || state == stateRunning {
 				_, err = m.reconcileTerminal(
 					ctx, tenant, record.String(colRunRef), record,
-					model.ActorSystem, model.ActorSystem,
+					model.ActorSystem, model.ActorSystem, detail,
 				)
 			} else {
 				err = m.revokeStoredRuntimeCredentials(ctx, tenant, record)

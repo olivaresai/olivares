@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -23,9 +24,9 @@ import (
 // authorization is the composition root's; this adapter reads the real rows
 // through the request's own scope. Templates and sessions are named statically,
 // as in the session fixture, so a launch can name the whole tree.
-type directoryAuthority struct{}
+type directoryAuthority struct{ folderID string }
 
-func (directoryAuthority) ResolveSkillsTarget(ctx context.Context, sc store.Scope, p auth.Principal, target skills.Target, write bool) (skills.StoredTarget, error) {
+func (a directoryAuthority) ResolveSkillsTarget(ctx context.Context, sc store.Scope, p auth.Principal, target skills.Target, write bool) (skills.StoredTarget, error) {
 	id := model.ID(target.ID)
 	switch target.Kind {
 	case "agent_group":
@@ -50,7 +51,12 @@ func (directoryAuthority) ResolveSkillsTarget(ctx context.Context, sc store.Scop
 			}
 		}
 		return skills.StoredTarget{Target: target, Version: row.Version, WorkspaceID: row.WorkspaceID}, nil
-	case "template", "session":
+	case "folder":
+		if target.ID != a.folderID {
+			return skills.StoredTarget{}, store.ErrNotFound
+		}
+		return skills.StoredTarget{Target: target, Version: 1}, nil
+	case "profile", "template", "session":
 		return skills.StoredTarget{Target: target, Version: 1}, nil
 	}
 	return workspaceAuthority{}.ResolveSkillsTarget(ctx, sc, p, target, write)
@@ -257,7 +263,8 @@ func TestSkillsGroupAssignmentRecordsAndChecksItsWorkspaceLineage(t *testing.T) 
 // origin in tree order (workspace, template, groups by ID, agent, session), so
 // the same launch always digests the same whatever order the caller lists them.
 func TestSkillsSelectionCarriesTheWholeTreeInOrder(t *testing.T) {
-	h := catalogOptions(t, skills.Options{Targets: directoryAuthority{}})
+	folder := skills.Target{Kind: "folder", ID: model.NewID().String()}
+	h := catalogOptions(t, skills.Options{Targets: directoryAuthority{folderID: folder.ID}})
 	pack := h.install(t, "tree-order", "fixture")
 	workspace := h.workspace(t, false)
 	home := workspaceOf(workspace)
@@ -268,15 +275,16 @@ func TestSkillsSelectionCarriesTheWholeTreeInOrder(t *testing.T) {
 	if groups[0].ID > groups[1].ID {
 		groups[0], groups[1] = groups[1], groups[0]
 	}
-	want := []skills.Target{workspace, template, groups[0], groups[1], agent, session}
+	profile := skills.Target{Kind: "profile", ID: "ppf_" + model.NewID().String()}
+	want := []skills.Target{workspace, profile, folder, template, groups[0], groups[1], agent, session}
 	for _, target := range want {
 		h.assign(t, target, pack.Revision.ID)
 	}
-	selected, err := h.selection(session, agent, groups[1], workspace, groups[0], template)
+	selected, err := h.selection(session, agent, groups[1], folder, workspace, profile, groups[0], template)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	reversed, err := h.selection(template, groups[0], workspace, groups[1], agent, session)
+	reversed, err := h.selection(template, profile, groups[0], workspace, groups[1], agent, folder, session)
 	if err != nil || reversed.Digest != selected.Digest {
 		t.Fatalf("selection depends on the caller's order: %v %s vs %s", err, reversed.Digest, selected.Digest)
 	}
@@ -371,4 +379,17 @@ func TestSkillsSelectionBoundsAndDeduplicatesTargets(t *testing.T) {
 	if _, err := h.selection(skills.Target{Kind: "department", ID: model.NewID().String()}); !refusedAtTheCeiling(err) {
 		t.Fatalf("an unknown kind: %v", err)
 	}
+}
+
+func TestSkillsProfileReferencesAreCanonical(t *testing.T) {
+	h := catalogOptions(t, skills.Options{Targets: directoryAuthority{}})
+	pack := h.install(t, "profile-format", "fixture")
+	id := model.NewID().String()
+	for _, ref := range []string{id, "ppf_" + strings.ToUpper(id), "PPF_" + id, "ppf_00000000-0000-0000-0000-000000000000", "ppf_" + id + "-extra"} {
+		reply := h.request("POST", "/v1/m/skills/assignments", skills.AssignmentRequest{Target: skills.Target{Kind: "profile", ID: ref}, RevisionID: pack.Revision.ID}, "")
+		if reply.Code != http.StatusBadRequest {
+			t.Fatalf("noncanonical profile %q = %d %s", ref, reply.Code, reply.Body.String())
+		}
+	}
+	h.assign(t, skills.Target{Kind: "profile", ID: "ppf_" + id}, pack.Revision.ID)
 }

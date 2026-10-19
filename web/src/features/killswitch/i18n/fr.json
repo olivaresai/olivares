@@ -17,26 +17,33 @@
     "revoked_other": "{{count}} demandes d'approbation en attente annulées"
   },
   "engage": {
-    "title": "Arrêt d’urgence",
-    "caption": "Arrête tous les agents, ou un seul : les sessions en cours se terminent, et les appels d'outils, MCP, planifications et workflows, voix, appels de modèles, déploiements et la livraison d'événements sont refusés. Les demandes d'approbation en attente pour ces actions sont annulées. L'arrêt ne demande aucune approbation ; le redémarrage, si. La console, la piste d'audit et la connexion continuent de fonctionner.",
-    "scope": "Périmètre",
-    "scopeEstate": "Tous les agents",
-    "scopeAgent": "Agent unique",
     "agentRef": "Agent",
     "agentRefHint": "UUID de l’agent ou référence externe. Une référence inconnue active tout de même — l’arrêt s’applique alors à cette chaîne exacte.",
     "reason": "Motif",
-    "reasonHint": "Obligatoire : dites pourquoi. La revue de cet arrêt et les audits ultérieurs le lisent.",
-    "button": "Arrêt d’urgence",
+    "reasonHint": "Facultatif : dites pourquoi. La revue de cet arrêt et les audits ultérieurs le lisent.",
     "confirmTitleEstate": "Arrêter tous les agents ?",
     "confirmBodyEstate": "Tous les agents s'arrêtent immédiatement : les sessions en cours se terminent, leurs actions sont refusées et les demandes d'approbation en attente pour ces actions sont annulées. Pour redémarrer, deux comptes utilisateur différents doivent approuver, et l'arrêt doit être revu ensuite. Aucune voie d'urgence ne permet de l'éviter.",
     "confirmBodyEstateNoRestart": "Tous les agents s'arrêtent immédiatement : les sessions en cours se terminent, leurs actions sont refusées et les demandes d'approbation en attente pour ces actions sont annulées. Aucune voie d'urgence ne permet de l'éviter.",
     "confirmTitleAgent": "Arrêter cet agent ?",
     "confirmBodyAgent": "Cet agent s'arrête immédiatement : ses actions sont refusées et ses demandes d'approbation en attente sont annulées. Pour le redémarrer, deux comptes utilisateur différents doivent approuver, et l'arrêt doit être revu ensuite.",
-    "confirm": "Activer le coupe-circuit",
     "done": "Coupe-circuit activé",
     "doneBody": "L’arrêt {{id}} est actif. La réactivation exige un double contrôle.",
     "alreadyStopped": "Un arrêt actif existe déjà pour ce périmètre",
-    "restartNeedsAdmins": "Redémarrer exige l’approbation de deux autres comptes administrateur, et que l’un d’eux le revoie ensuite."
+    "restartNeedsAdmins": "Redémarrer exige l’approbation de deux autres comptes administrateur, et que l’un d’eux le revoie ensuite.",
+    "stopAll": "Arrêter tous les agents",
+    "more": "Plus",
+    "stopOne": "Arrêter un agent…",
+    "stopAgent": "Arrêter cet agent"
+  },
+  "runs": {
+    "title": "Sessions",
+    "caption": "Sessions en cours. La liste se met à jour d’elle-même.",
+    "captionStopped": "Sessions en cours et celles terminées depuis le début de l’arrêt. La liste se met à jour d’elle-même.",
+    "empty": "Aucune session en cours.",
+    "error": "La liste des sessions n’a pas pu être lue. L’arrêt lui-même n’est pas affecté.",
+    "truncated": "Les {{n}} premières sessions chargées",
+    "truncatedHint": "Il y a plus de sessions qu’affiché : une session en cours peut manquer dans cette liste. L’arrêt s’applique quand même à toutes.",
+    "status": "{{live}} en cours, {{ended}} terminées."
   },
   "stops": {
     "title": "Arrêts",
@@ -148,7 +155,7 @@
     },
     "actionLabel": {
       "stop_agent": "Arrêter l’agent",
-      "quarantine_nhi": "Mettre en quarantaine la NHI",
+      "quarantine_nhi": "Mettre l’identité en quarantaine",
       "stop_estate": "Arrêter tous les agents"
     },
     "modeLabel": {

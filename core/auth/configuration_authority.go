@@ -53,7 +53,7 @@ func (s *SecretStore) PutWithAuthority(ctx context.Context, authority RouteMutat
 	if s == nil || s.st == nil {
 		return SecretView{}, ErrRouteUndecided
 	}
-	return s.put(ctx, guard.request.Principal, guard.request.Tenant, name, value, description, guard)
+	return s.put(ctx, guard.request.Principal, guard.request.Tenant, name, value, description, guard, "")
 }
 
 type configurationAuthority struct {

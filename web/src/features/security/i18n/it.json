@@ -1,0 +1,259 @@
+{
+  "title": "Sicurezza e forensics",
+  "description": "Segnalazioni dei guardrail, postura di enforcement, coda delle anomalie e forensics degli incidenti a prova di manomissione. Per impostazione predefinita la piattaforma è in sola rilevazione: registra, non blocca da sola a meno che l'enforcement sia attivato e governato.",
+  "tabs": {
+    "safety": "Postura di sicurezza",
+    "findings": "Segnalazioni",
+    "guardrails": "Guardrail",
+    "anomalies": "Anomalie",
+    "forensics": "Forensics"
+  },
+  "findings": {
+    "title": "Segnalazioni",
+    "description": "Segnalazioni di guardrail, anomalie e forensics. L'evidenza è un'impronta: non c'è nessun contenuto da espandere.",
+    "empty": "Nessuna segnalazione",
+    "emptyHint": "Le segnalazioni compaiono man mano che guardrail, rilevamento delle anomalie e forensics registrano evidenze.",
+    "namesUnread": "Alcuni nomi di sessione non si sono potuti leggere, quindi quelle righe mostrano il loro riferimento.",
+    "export": {
+      "action": "Esporta SARIF",
+      "busy": "Esportazione…",
+      "done": "Esportazione SARIF scaricata.",
+      "truncated": "Esportazione SARIF scaricata, ma si è fermata al limite di risultati del server: è un'esecuzione valida, non l'insieme completo."
+    },
+    "search": "Cerca segnalazioni",
+    "fingerprint": "fp",
+    "columns": {
+      "severity": "Gravità",
+      "kind": "Tipo",
+      "source": "Origine",
+      "title": "Segnalazione",
+      "evidence": "Evidenza",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "kind": {
+      "guardrail": "Guardrail",
+      "anomaly": "Anomalia",
+      "forensic": "Forensics"
+    },
+    "status": {
+      "open": "Aperta",
+      "triaged": "Valutata",
+      "resolved": "Risolta",
+      "dismissed": "Scartata"
+    },
+    "triage": {
+      "action": "Valuta",
+      "title": "Valuta la segnalazione",
+      "description": "La valutazione cambia solo lo stato del flusso. L'evidenza (tipo, gravità e impronta del dettaglio) è immutabile.",
+      "statusLabel": "Stato",
+      "submit": "Aggiorna stato",
+      "updated": "Stato della segnalazione aggiornato",
+      "immutableNote": "Gravità, tipo e impronta del dettaglio non si possono modificare, solo lo stato del flusso."
+    },
+    "subjectKinds": {
+      "local_residency": "Modello locale residente"
+    },
+    "truncated": "Mostrate le prime {{n}} acquisite",
+    "truncatedHint": "Ci sono più segnalazioni di quelle mostrate e questa pagina è ordinata per id di acquisizione, NON per quando si è verificato il problema, quindi le segnalazioni recenti possono mancare. Che le altre non siano visibili non prova che non ne sia stata trovata nessun'altra."
+  },
+  "safetyPosture": {
+    "title": "Postura di sicurezza dei provider",
+    "description": "Postura di sicurezza AI in sola lettura, acquisita dai controlli dei provider stessi: OpenAI Moderation, AWS Bedrock Guardrails e Azure Responsible AI. La piattaforma la legge e la registra; l'enforcement resta al provider.",
+    "empty": "Nessuna segnalazione sulla postura di sicurezza",
+    "emptyHint": "Collega i connettori OpenAI, AWS o Azure con le letture di sicurezza abilitate per popolare questa vista.",
+    "countsPartial": "Mostrato un riepilogo parziale: questo tenant ha più segnalazioni sulla postura di sicurezza di quante ne copra la scansione di riepilogo.",
+    "columns": {
+      "open": "Aperte"
+    }
+  },
+  "guardrails": {
+    "title": "Ispezione guardrail",
+    "description": "Esegui il servizio di ispezione dei guardrail su una superficie. Il testo viene sottoposto a hash dopo la redazione e non viene mai conservato: il risultato è un verdetto più un'evidenza minima, già redatta.",
+    "verdictTitle": "Verdetto",
+    "clean": "Nessun rilevamento: pulito.",
+    "detectiveNote": "Questo verdetto viene dalla modalità di sola rilevazione: la violazione è stata rilevata e registrata, non bloccata. Un blocco è possibile solo quando l'enforcement è attivato e governato.",
+    "wouldBlock": "Bloccherebbe (enforcement)",
+    "detectOnly": "Solo rilevazione",
+    "findingsRecorded": "{{count}} segnalazioni registrate",
+    "findingsRecorded_one": "{{count}} segnalazione registrata",
+    "findingsRecorded_many": "{{count}} segnalazioni registrate",
+    "findingsRecorded_other": "{{count}} segnalazioni registrate",
+    "enforcement": {
+      "detective": "Solo rilevazione",
+      "enforced": "Enforcement attivo"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "Prompt injection",
+      "jailbreak": "Jailbreak",
+      "content": "Contenuto",
+      "output_validation": "Validazione dell'output",
+      "owasp_agentic": "OWASP agentic"
+    },
+    "form": {
+      "surface": "Superficie",
+      "text": "Testo da ispezionare",
+      "textHint": "Ispezionato e sottoposto a hash dopo la redazione: non viene mai conservato né restituito.",
+      "enforce": "Richiedi enforcement",
+      "enforceHint": "Blocca solo se la policy di enforcement ha questa classe attivata e governata; altrimenti il verdetto è una segnalazione.",
+      "submit": "Ispeziona",
+      "running": "Ispezione in corso…",
+      "surfaceLabel": "Superficie"
+    },
+    "surface": {
+      "input": "Input",
+      "output": "Output",
+      "tool_args": "Argomenti dello strumento"
+    }
+  },
+  "enforcement": {
+    "title": "Postura di enforcement",
+    "description": "L'unica azione che tocca la produzione. Ogni classe di guardrail è in sola rilevazione per impostazione predefinita; attivare l'enforcement inline è un'azione da amministratore, governata dove è configurato un gate.",
+    "defaultDetectiveNote": "La modalità predefinita è la sola rilevazione: le classi bloccano solo se attivate qui in modo esplicito e governate.",
+    "fullyDetective": "Nessun enforcement attivo: la piattaforma è in sola rilevazione, l'impostazione predefinita sicura. Nulla blocca da solo.",
+    "detective": "Solo rilevazione",
+    "enforced": "Enforcement attivo",
+    "governed": "Governata",
+    "ungoverned": "Attivata senza governance umana",
+    "wildcard": "Tutte le classi",
+    "change": "Modifica",
+    "columns": {
+      "class": "Classe",
+      "posture": "Postura",
+      "minSeverity": "Gravità minima",
+      "governance": "Governance",
+      "updated": "Aggiornata",
+      "actions": "Azioni"
+    },
+    "dialog": {
+      "title": "Modifica l'enforcement",
+      "description": "Disattivare (tornare alla sola rilevazione) è sempre consentito. Attivare l'enforcement inline è governato dove è configurato un gate: un rifiuto della governance viene mostrato come motivo.",
+      "enabledLabel": "Attiva l'enforcement inline",
+      "minSeverity": "Gravità minima",
+      "reason": "Motivo",
+      "reasonHint": "Registrato con la modifica nel registro di audit.",
+      "submit": "Applica",
+      "applied": "Postura di enforcement aggiornata",
+      "ungovernedWarning": "Attivare questa classe senza un gate di governance la lascia non governata: la modifica è consentita ma viene segnalata.",
+      "deniedTitle": "La governance ha negato questa modifica"
+    }
+  },
+  "anomalies": {
+    "title": "Coda delle anomalie",
+    "description": "Drift e segnalazioni correlate, ordinati per priorità. Le voci approssimate sono drift non riconciliato, mai una violazione certa.",
+    "empty": "Nessuna anomalia in coda",
+    "emptyHint": "Un'anomalia è un comportamento segnalato dai rilevatori perché lo giudichi una persona. La coda è vuota.",
+    "orderNote": "Ordinate per priorità, dalla più alta.",
+    "priority": "Priorità",
+    "approximate": "Approssimata",
+    "suspectedTitle": "Sospetta: {{title}}",
+    "unreconciledNote": "Drift non riconciliato: l'autorità riconciliata è la mappa degli accessi. La priorità è ridotta; non è una violazione confermata.",
+    "kind": {
+      "access_drift": "Drift degli accessi",
+      "egress_exfil_suspected": "Esfiltrazione in uscita (sospetta)",
+      "anti_evasion_correlated": "Elusione correlata"
+    }
+  },
+  "forensics": {
+    "title": "Casi forensics",
+    "description": "Risposta agli incidenti: ogni caso congela il proprio stato di integrità all'apertura, così una manomissione successiva è rilevabile. La cronologia viene ricostruita dal registro in sola aggiunta.",
+    "empty": "Nessun caso forensics",
+    "emptyHint": "Un caso forensics raccoglie le evidenze di un'indagine. Apri un caso per iniziarne una.",
+    "openCase": "Apri caso",
+    "back": "Torna ai casi",
+    "summary": "Riepilogo",
+    "openedBy": "Aperto da",
+    "opened": "Aperto",
+    "closed": "Chiuso",
+    "integrity": "Integrità della catena di custodia",
+    "timeline": "Cronologia ricostruita",
+    "timelineNote": "Ogni evento porta seq · hash · prev_hash, così chi legge può riverificare il collegamento in modo indipendente. Dietro un evento non c'è mai alcun contenuto.",
+    "columns": {
+      "severity": "Gravità",
+      "title": "Caso",
+      "status": "Stato",
+      "opened": "Aperto"
+    },
+    "status": {
+      "open": "Aperto",
+      "investigating": "In indagine",
+      "contained": "Contenuto",
+      "closed": "Chiuso"
+    },
+    "truncated": "Mostrati i primi {{n}} aperti",
+    "truncatedHint": "Ci sono più casi di quelli mostrati e questa pagina è ordinata per id di apertura, quindi i casi recenti possono mancare. Un'indagine che non vedi qui non è un'indagine che non esiste."
+  },
+  "integrity": {
+    "title": "Integrità del registro",
+    "description": "Due verdetti: la catena di hash è internamente coerente, e i checkpoint firmati. La verifica è a sua volta registrata nella catena che controlla.",
+    "chain": "Catena di hash",
+    "chainChecked": "{{count}} eventi verificati",
+    "chainChecked_one": "{{count}} evento verificato",
+    "chainChecked_many": "{{count}} eventi verificati",
+    "chainChecked_other": "{{count}} eventi verificati",
+    "checkpoints": "Checkpoint firmati",
+    "checkpointsCount": "{{count}} checkpoint verificati",
+    "checkpointsCount_one": "{{count}} checkpoint verificato",
+    "checkpointsCount_many": "{{count}} checkpoint verificati",
+    "checkpointsCount_other": "{{count}} checkpoint verificati",
+    "signingUnavailable": "Nessuna chiave di firma configurata: l'attestazione firmata non viene simulata.",
+    "checkpointsPendingNote": "Nessun checkpoint scritto finora: a provare questo registro è il verdetto sulla catena.",
+    "signingSeam": "Firma dei checkpoint non configurata",
+    "attestedSeq": "Seq attestata",
+    "headSeq": "seq di testa del registro {{seq}}",
+    "reverifyNote": "Ogni evento porta seq · hash · prev_hash, così chi legge può riverificare il collegamento offline rispetto a uno store WORM esterno.",
+    "chainEmptyNote": "Ancora nulla da verificare: il registro non contiene eventi."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "Nessuna classe di enforcement configurata",
+      "description": "Le righe compaiono solo dopo che è stata impostata la postura di una classe di guardrail; fino ad allora ogni classe resta in sola rilevazione e nulla blocca inline."
+    },
+    "findings": {
+      "title": "Ancora nessuna segnalazione di sicurezza registrata",
+      "description": "Le segnalazioni compaiono quando l'ispezione dei guardrail, i controlli di drift osservato o la postura di sicurezza dei provider registrano un segnale, o quando un altro modulo ne segnala uno di gravità alta."
+    }
+  },
+  "cases": {
+    "new": "Nuovo caso",
+    "newHint": "Apre un caso forensics. Il motore ne imposta lo stato su “aperto”.",
+    "title": "Titolo",
+    "severity": "Gravità",
+    "create": "Crea",
+    "cancel": "Annulla",
+    "created": "Caso aperto",
+    "status": "Stato",
+    "save": "Salva le modifiche",
+    "updated": "Caso aggiornato",
+    "statusName": {
+      "open": "Aperto",
+      "investigating": "In indagine",
+      "contained": "Contenuto",
+      "closed": "Chiuso"
+    },
+    "exportFormat": "Formato di esportazione",
+    "export": "Esporta",
+    "exported": "Esportazione richiesta",
+    "links": "Catena di custodia",
+    "linksHint": "A cosa è collegato questo caso: segnalazioni, sequenze del registro, anomalie o note.",
+    "noLinks": "Ancora nulla di collegato",
+    "noLinksHint": "Collega segnalazioni, sessioni ed evidenze a questo caso così tutta la storia è in un unico posto. Per ora non c'è nulla di collegato.",
+    "link": "Collega",
+    "linked": "Collegato",
+    "linkKindLabel": "Tipo",
+    "linkRef": "Riferimento",
+    "linkKind": {
+      "finding": "Segnalazione",
+      "audit_seq": "Sequenza del registro",
+      "anomaly": "Anomalia",
+      "note": "Nota"
+    }
+  },
+  "severity": {
+    "low": "Bassa",
+    "medium": "Media",
+    "high": "Alta",
+    "critical": "Critica"
+  }
+}

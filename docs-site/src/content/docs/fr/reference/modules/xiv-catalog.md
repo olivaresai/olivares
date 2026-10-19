@@ -114,7 +114,7 @@ instancier sont des actions **privilégiées, sous barrière RBAC et auto-audit�
 :::caution[Limites honnêtes]
 - **Aucun actionnement, aucun provisionnement.** Le module XIV enregistre et gouverne la *requête* ; il
   ne met jamais une capacité en place. La décision d'approbation est celle de la gouvernance et le câblage est
-  celui du déploiement — et l'`apply`/`retire` live là-bas est lui-même une jointure deny-closed (`503`
+  celui du déploiement (une fonction Business ; Community répond `501` à l'activation) — et l'`apply`/`retire` live là-bas est lui-même une jointure deny-closed (`503`
   jusqu'à ce qu'un exécuteur soit provisionné). Voir [Honnêteté & limites](/fr/start/honesty-and-limits/).
 - **La signature est réelle mais dépendante de la clé.** La signature Ed25519 est implémentée et la clé de
   signature est provisionnée au démarrage, activée par défaut. Sur un nœud avec **aucune clé configurée** (ou une

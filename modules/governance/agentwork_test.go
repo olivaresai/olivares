@@ -140,6 +140,63 @@ func TestAgentEligibleForWorkFailsClosedWhenLifecycleUnavailable(t *testing.T) {
 	}
 }
 
+func TestAgentWorkSponsorRequiresReportedEnabledState(t *testing.T) {
+	h := newHarness(t)
+	tenant, tok := h.nhiTenant()
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name     string
+		metadata map[string]any
+		want     bool
+	}{
+		{"absent", map[string]any{"principal_type": "human"}, false},
+		{"disabled", map[string]any{"principal_type": "human", "disabled": true}, false},
+		{"enabled", map[string]any{"principal_type": "human", "disabled": false}, true},
+		{"null", map[string]any{"principal_type": "human", "disabled": nil}, false},
+		{"string_false", map[string]any{"principal_type": "human", "disabled": "false"}, false},
+		{"number_zero", map[string]any{"principal_type": "human", "disabled": 0}, false},
+		{"nil_metadata", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agentRef, sponsorRef := "agent:state:"+tc.name, "human:state:"+tc.name
+			h.seedIdentity(tenant, sponsorRef, "user", "test", "human", false)
+			registerWorkAgent(t, h, tenant, tok, agentRef, sponsorRef)
+			sponsorID := h.identityID(tenant, sponsorRef)
+			if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+				identity, err := sc.Identities().Get(ctx, sponsorID)
+				if err != nil {
+					return err
+				}
+				identity.Metadata = tc.metadata
+				_, err = sc.Identities().Update(ctx, identity)
+				return err
+			}); err != nil {
+				t.Fatalf("set sponsor account state: %v", err)
+			}
+			eligible, err := h.gov.AgentEligibleForWork(ctx, tenant, agentRef)
+			if err != nil || eligible != tc.want {
+				t.Errorf("work eligibility = %v, %v; want %v, nil", eligible, err, tc.want)
+			}
+			if err := h.st.View(ctx, tenant, func(sc store.Scope) error {
+				eligible, facts, err := h.gov.AgentWorkAuthorityFactsInScope(ctx, sc, agentRef)
+				if err != nil || eligible != tc.want {
+					t.Errorf("authority eligibility = %v, %v; want %v, nil", eligible, err, tc.want)
+				}
+				if tc.want {
+					if len(facts) != 2 || facts[0].Version < 1 || facts[1].Version < 1 {
+						t.Errorf("enabled sponsor facts = %#v; want sponsor+lifecycle versions", facts)
+					}
+				} else if len(facts) != 0 {
+					t.Errorf("ineligible sponsor returned authority facts: %#v", facts)
+				}
+				return err
+			}); err != nil {
+				t.Fatalf("read work authority facts: %v", err)
+			}
+		})
+	}
+}
+
 func setWorkSponsorPrincipalType(t *testing.T, h *harness, tenant model.TenantID, ref, principalType string) {
 	t.Helper()
 	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {

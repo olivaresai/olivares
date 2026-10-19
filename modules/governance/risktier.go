@@ -14,8 +14,8 @@ import "strings"
 // type: the auth.PolicyEvaluator seam is binary deny-only by contract, so risk
 // classification rides the approval policy ("approval" kind) where the
 // threshold already lives. An explicit `risk_tier` on a matching approval policy
-// is subject to the edition boundary (Community permits raising; Business also
-// permits lowering); with no explicit classification the built-in default
+// is subject to the edition boundary (Community authors neither, though a
+// stored raise still applies there; Business authors and applies both); with no explicit classification the built-in default
 // below applies. The tier is NEVER stored on the approval row: it is re-derived
 // from the CURRENT policy + default at every security decision, so a policy
 // change (or removal) takes effect immediately and a stale snapshot can never
@@ -68,13 +68,13 @@ func validRiskTier(s string) bool {
 // matches for the gate actions that exist today, domain prefixes for the decided
 // families whose actions land later (kill-switch secrets/PKI), and
 // destructive trailing verbs for the data-deletion family. An approval policy
-// with an explicit risk_tier can raise it; Business can also lower it.
+// with an explicit risk_tier can raise it, and in Business lower it; Community only keeps a stored raise.
 //
 // Not in the default CRITICAL set: "sessions.run.launch" (the privileged
 // launch, now only bypassPermissions or an unconfined dontAsk) and
 // "mcp.tool.call" (a destructive MCP tool call). Both default to HIGH: one human
 // approval, which a single administrator can give; a policy with an explicit
-// risk_tier raises either one back to CRITICAL.
+// risk_tier raises either one back to CRITICAL (authoring that policy is Business).
 var (
 	criticalDefaultActions = map[string]struct{}{
 		"deploy.apply":                {}, // production deploy

@@ -103,7 +103,7 @@
     "empty": "No hay actividad por desarrollador en este intervalo.",
     "emptyHint": "La actividad por desarrollador aparece aquí cuando se ejecutan sesiones en este intervalo. Amplía el intervalo para cubrir más días.",
     "locked": "Vista por desarrollador restringida",
-    "lockedHint": "Ver la productividad de cada desarrollador requiere el permiso adoption:developer:read (denegado por defecto).",
+    "lockedHint": "Tu rol no puede ver la productividad de cada desarrollador.",
     "columns": {
       "developer": "Desarrollador"
     }

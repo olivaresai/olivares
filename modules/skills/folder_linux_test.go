@@ -154,3 +154,69 @@ func TestSkillsFolderRefusesFilesChangedAfterTheirRead(t *testing.T) {
 		t.Fatalf("file changed after read was published: %v", err)
 	}
 }
+
+func TestNativeComponentFolderSnapshotsMatchArchives(t *testing.T) {
+	for name, paths := range map[string][]string{
+		"native": {"agents/review.md", "commands/review.md", "rules/common/testing.md"},
+		"mixed":  {"skills/research/SKILL.md", "commands/review.md"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			bodies := make([]string, len(paths))
+			for i, name := range paths {
+				body := "# Instructions\nReview the project.\n"
+				if name == "agents/review.md" {
+					body = "---\nname: review\ndescription: Review changes.\n---\nRead changes.\n"
+				} else if name == "skills/research/SKILL.md" {
+					body = harmless
+				}
+				bodies[i] = body
+				file := filepath.Join(root, filepath.FromSlash(name))
+				if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(file, []byte(body), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			folder, err := skills.ImportFolder(t.Context(), root)
+			if err != nil {
+				t.Fatalf("native component folder refused: %v", err)
+			}
+			zipPack, err := skills.ImportArchive(t.Context(), bytes.NewReader(archive(t, paths, bodies)), "zip", "")
+			if err != nil || folder.ManifestDigest != zipPack.ManifestDigest {
+				t.Fatalf("folder/archive manifests differ: %+v %v", zipPack, err)
+			}
+		})
+	}
+}
+
+func TestNativeComponentFoldersRefuseAccountFilesBeforeReading(t *testing.T) {
+	for _, name := range []string{"rules/account/token", "agents/account/token", "commands/token", "skills/account/token"} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			file := filepath.Join(root, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(file, []byte("private fixture"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			watch, err := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer unix.Close(watch)
+			if _, err := unix.InotifyAddWatch(watch, file, unix.IN_ACCESS); err != nil {
+				t.Fatal(err)
+			}
+			if pack, err := skills.ImportFolder(t.Context(), root); pack != nil || err == nil {
+				t.Fatal("native namespace admitted a non-instruction account file")
+			}
+			var events [4096]byte
+			if n, err := unix.Read(watch, events[:]); n != 0 && !errors.Is(err, unix.EAGAIN) {
+				t.Fatalf("account bytes were read before refusal: %d %v", n, err)
+			}
+		})
+	}
+}

@@ -17,7 +17,7 @@ Claude Code テレメトリは、開発者マシン上で何が実行される�
 | ソース（`kind`） | 読むもの | 認証情報 |
 |---|---|---|
 | `claude-api` | 使用量と請求コスト、モデル/ワークスペースインベントリ、Claude Code アナリティクス、API 側 MCP/サーバーツールガバナンス | Admin API キー（`admin_key`） |
-| `claude-compliance` | コンプライアンス活動フィード（証拠グレードのイベント）+ 組織ディレクトリ | 活動フィードキー + **別個の** Compliance Access Key |
+| `claude-compliance` | コンプライアンス活動フィード（証拠グレードのイベント）+ 組織ディレクトリ | 活動フィードキー + **別個の** Compliance Access Key (Business) |
 | `claude-console` | 組織 IAM 名簿（メンバー、ロール）→ SSO/SCIM 態勢の finding | console 認証情報 |
 | `claude-wif` | 非人間アイデンティティ（サービスアカウント `svac_…`、フェデレーテッドアイデンティティ）+ それらの **permitted** スコープエッジ | WIF エンドポイント認証情報 |
 
@@ -107,11 +107,8 @@ dual-control でゲートされます — この読み取りコネクタは決�
 ## console で見えるもの
 
 請求済みおよび推定の支出を、テレメトリが運ぶ次元（チームとプロジェクトのラベルが第一級になる）で
-切り分けたものが **Cost & FinOps** に。組織メンバー、非人間アイデンティティとそのスコープが
-**Identity & NHI** に。態勢 finding（シャドウ認証、面の劣化、WIF の落とし穴）が **Security** に:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Cost & FinOps ビュー: モデルと次元別の支出、予算とアラート付き。" />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Cost & FinOps ビュー: モデルと次元別の支出、予算とアラート付き。" />
+切り分けたものが **Budgets** に。組織メンバー、非人間アイデンティティとそのスコープが
+**Identity & NHI** に。態勢 finding（シャドウ認証、面の劣化、WIF の落とし穴）が **Security** に。
 
 ## 正直な限界
 

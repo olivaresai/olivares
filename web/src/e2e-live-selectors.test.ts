@@ -47,6 +47,12 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
   for (const signIn of src.matchAll(/name: \/\^sign in\$\/i \}\)/g)) {
     const after = src.slice((signIn.index ?? 0) + signIn[0].length)
     const link = /getByRole\(\s*'link',\s*\{([^}]*)\}/.exec(after)
+    // The shared locator is the same scoped overview wait, not a later journey link.
+    const sharedOverview =
+      /await\s+expect\(\s*journeyNowLink\(\s*page\s*\)\s*\)\s*\.toBeVisible\s*\(/.exec(
+        after,
+      )
+    if (sharedOverview && (!link || sharedOverview.index < link.index)) continue
     if (!link) continue
     const body = link[1].replace(/\s+/g, ' ').trim()
     if (body === overview) continue
@@ -97,16 +103,19 @@ describe('live end-to-end specs name what the console paints', () => {
   it('the operate portal is reached by its nav name and its heading', () => {
     // Read as one line: the formatter may wrap a locator's options over several lines.
     const src = spec('sessions-unified.spec.ts').replace(/\s+/g, ' ')
-    expect(src).toContain(`getByRole('link', { name: '${nav.items.agentops}'`)
+    // The sidebar has one Sessions destination, and /agentops is its second door: the
+    // spec reads the destination, which is what the sidebar paints for either door.
+    const destination = nav.shell.journeys.sessions
+    expect(src).toContain(`getByRole('link', { name: '${destination}'`)
     // The entry lives inside a nav AREA, and a fresh sign-in leaves the console at
     // the root with every area but the active one closed. The spec must reach the
     // portal by its own address before it can assert the entry that opens it.
     expect(src.indexOf(`goto('/agentops')`)).toBeGreaterThan(-1)
     expect(src.indexOf(`goto('/agentops')`)).toBeLessThan(
-      src.indexOf(`getByRole('link', { name: '${nav.items.agentops}'`),
+      src.indexOf(`getByRole('link', { name: '${destination}'`),
     )
-    // Whichever door opened it, the page is titled as navigation names it.
-    expect(nav.items.agentops).toBe(sessions.title)
+    // The destination opens the Sessions screen, titled as the destination reads.
+    expect(destination).toBe(sessions.title)
     expect(src).toContain(`getByRole('heading', { name: '${sessions.title}'`)
     expect(src).not.toContain(`name: 'Claude Code'`)
   })
@@ -136,6 +145,56 @@ describe('live end-to-end specs name what the console paints', () => {
       waits.push(...waitsASignInCannotPaint(file, spec(file)))
     }
     expect(waits).toEqual([])
+  })
+
+  it('the shared overview locator names the exact link inside Journeys', () => {
+    const src = spec('browser-session.ts').replace(/\s+\./g, '.')
+    expect(src).toContain(
+      `getByRole('navigation', { name: '${nav.shell.journeysLabel}', exact: true }).getByRole('link', { name: '${nav.items.home}', exact: true })`,
+    )
+  })
+
+  it.each(['console-func-l4.spec.ts', 'demo-graph.spec.ts'])(
+    '%s stops at the shared overview assertion before later journey links',
+    (file) => {
+      expect(waitsASignInCannotPaint(file, spec(file))).toEqual([])
+    },
+  )
+
+  it('recognizes a wrapped shared overview assertion before a later leaf', () => {
+    const src = [
+      "await page.getByRole('button', { name: /^sign in$/i }).click()",
+      'await expect(\n journeyNowLink(page)\n ).toBeVisible({ timeout: 15_000 })',
+      `await page.getByRole('link', { name: '${nav.items.inventory}', exact: true }).click()`,
+    ].join(' ')
+    expect(waitsASignInCannotPaint('shared.spec.ts', src)).toEqual([])
+  })
+
+  it.each([
+    'await expect(journeyNowLink(page)).toBeVisible()',
+    'journeyNowLink(page)',
+  ])('still rejects a leaf wait before %s', (later) => {
+    const body = `name: '${nav.items.inventory}', exact: true`
+    const src = [
+      "await page.getByRole('button', { name: /^sign in$/i }).click()",
+      `await expect(page.getByRole('link', { ${body} })).toBeVisible()`,
+      later,
+    ].join(' ')
+    expect(waitsASignInCannotPaint('unsafe.spec.ts', src)).toEqual([
+      `unsafe.spec.ts: ${body}`,
+    ])
+  })
+
+  it('a bare shared locator does not exempt a later leaf wait', () => {
+    const body = `name: '${nav.items.inventory}', exact: true`
+    const src = [
+      "await page.getByRole('button', { name: /^sign in$/i }).click()",
+      'journeyNowLink(page)',
+      `await expect(page.getByRole('link', { ${body} })).toBeVisible()`,
+    ].join(' ')
+    expect(waitsASignInCannotPaint('unsafe.spec.ts', src)).toEqual([
+      `unsafe.spec.ts: ${body}`,
+    ])
   })
 
   it('the overview link is read inside the Journeys navigation, never at page level', () => {

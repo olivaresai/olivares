@@ -140,6 +140,9 @@ func requireKnownOnboardKind(kind string) error {
 	if connectorKindKnown(kind) {
 		return nil
 	}
+	if businessKindUnavailable(kind) {
+		return errBusinessSourceKind(kind)
+	}
 	return fmt.Errorf("%w: unknown connector kind %q (not offered by this build)", auth.ErrBadSourceDef, strings.TrimSpace(kind))
 }
 

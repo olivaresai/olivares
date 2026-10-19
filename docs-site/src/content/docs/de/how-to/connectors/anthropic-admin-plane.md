@@ -18,7 +18,7 @@ und fasst ihre Roster-seitigen Begleiter zusammen.
 | Quelle (`kind`) | Was sie liest | Credential |
 |---|---|---|
 | `claude-api` | Nutzung & abgerechnete Kosten, Modell-/Workspace-Inventar, Claude Code Analytics, API-seitige MCP-/Server-Tool-Governance | Admin API Key (`admin_key`) |
-| `claude-compliance` | der Compliance-Activity-Feed (Evidenz-grade Events) + das Org-Directory | Activity-Feed-Key + ein **eigener** Compliance Access Key |
+| `claude-compliance` | der Compliance-Activity-Feed (Evidenz-grade Events) + das Org-Directory | Activity-Feed-Key + ein **eigener** Compliance Access Key (Business) |
 | `claude-console` | Org-IAM-Roster (Mitglieder, Rollen) → SSO/SCIM-Posture-Findings | Console-Credentials |
 | `claude-wif` | nicht-menschliche Identitäten (Service-Accounts `svac_…`, föderierte Identitäten) + ihre **erlaubten** Scope-Edges | WIF-Endpoint-Credentials |
 
@@ -114,12 +114,9 @@ Connector hält ihn niemals.
 ## Was du in der Console sehen wirst
 
 Abgerechneter und geschätzter Spend, aufgeschlüsselt nach den Dimensionen, die die Telemetrie trägt
-(Team- und Projekt-Labels werden erstklassig), in **Cost & FinOps**; Org-
+(Team- und Projekt-Labels werden erstklassig), in **Budgets**; Org-
 Mitglieder, nicht-menschliche Identitäten und ihre Scopes in **Identity & NHI**; Posture-
-Findings (Shadow Auth, Surface-Degradation, WIF-Footguns) in **Security**:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Die Cost-&-FinOps-Ansicht: Spend nach Modell und Dimension, mit Budgets und Alerts." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Die Cost-&-FinOps-Ansicht: Spend nach Modell und Dimension, mit Budgets und Alerts." />
+Findings (Shadow Auth, Surface-Degradation, WIF-Footguns) in **Security**.
 
 ## Ehrliche Grenzen
 

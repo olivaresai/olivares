@@ -1,0 +1,166 @@
+{
+  "title": "프로바이더",
+  "subtitle": "에이전트 도구가 실행되는 클라우드 프로바이더 자격 증명 또는 로컬 모델 엔드포인트입니다.",
+  "nav": "프로바이더",
+  "add": "프로바이더 추가",
+  "rowMenu": "{{name}}의 행 작업",
+  "empty": {
+    "title": "아직 등록된 프로바이더 없음",
+    "description": "API 키로 Anthropic, OpenAI 또는 xAI를 연결하거나 키 없이 로컬 Ollama 엔드포인트를 추가한 뒤 연결을 테스트하십시오.",
+    "action": "첫 프로바이더 추가"
+  },
+  "emptyFiltered": {
+    "title": "이 필터와 일치하는 프로바이더 없음",
+    "description": "필터를 지워 등록된 모든 프로바이더를 보십시오.",
+    "action": "전체 표시"
+  },
+  "forbidden": {
+    "title": "이 테넌트의 프로바이더를 읽을 수 없습니다",
+    "description": "역할에 등록된 프로바이더를 읽을 권한이 없습니다. 이 조직의 관리자에게 접근 권한을 요청하십시오."
+  },
+  "columns": {
+    "name": "이름",
+    "kind": "종류",
+    "key": "키",
+    "state": "상태",
+    "connection": "연결"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "gemini": "Gemini",
+    "openai_compatible": "OpenAI 호환",
+    "ollama": "Ollama"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. ANTHROPIC_API_KEY를 주입합니다.",
+    "openai": "Codex. OPENAI_API_KEY를 주입합니다.",
+    "xai": "Grok. XAI_API_KEY를 주입합니다.",
+    "gemini": "Google 자체 API 주소의 Gemini CLI. Gemini API 키를 사용합니다.",
+    "openai_compatible": "OpenAI 형태의 모든 엔드포인트. OPENAI_API_KEY와 OPENAI_BASE_URL을 주입하며 엔드포인트가 필요합니다.",
+    "ollama": "OpenCode용 로컬 모델. API 키가 없습니다. 네이티브 Ollama 엔드포인트를 사용하며 테스트는 모델 메타데이터를 읽습니다."
+  },
+  "states": {
+    "active": "활성",
+    "revoked": "철회됨"
+  },
+  "probe": {
+    "never": "테스트 안 됨",
+    "ok": "수락됨",
+    "refused": "거부됨",
+    "unreachable": "연결 불가",
+    "neverHint": "아무도 이 자격 증명을 테스트하지 않았습니다. 등록은 작동한다는 증거가 아닙니다.",
+    "okHint": "프로바이더가 응답했고 이 자격 증명을 수락했습니다.",
+    "refusedHint": "프로바이더가 응답했고 이 자격 증명을 거부했습니다. 교체하십시오.",
+    "unreachableHint": "엔드포인트가 응답하지 않았습니다. 자격 증명에 대해서는 아무것도 말해주지 않습니다.",
+    "models": "모델 {{n}}개",
+    "latency": "{{ms}} ms",
+    "at": "{{when}} 테스트됨",
+    "local": {
+      "neverHint": "이 엔드포인트는 테스트되지 않았습니다. 등록은 작동한다는 증거가 아닙니다.",
+      "okHint": "로컬 엔드포인트가 응답했고 모델을 나열했습니다.",
+      "refusedHint": "엔드포인트가 메타데이터 요청을 거부했습니다. 접근 설정을 확인하십시오.",
+      "unreachableHint": "로컬 엔드포인트가 응답하지 않았습니다. 주소와 가용성을 확인하십시오."
+    }
+  },
+  "actions": {
+    "test": "연결 테스트",
+    "testing": "테스트 중…",
+    "rotate": "키 교체",
+    "revoke": "철회",
+    "details": "세부 정보"
+  },
+  "create": {
+    "title": "프로바이더 추가",
+    "description": "엔진이 키를 봉인하며 절대 반환하지 않습니다. 네 글자 힌트만 볼 수 있습니다.",
+    "kind": "프로바이더",
+    "kindPlaceholder": "프로바이더 선택",
+    "name": "이름",
+    "nameHint": "선택 사항. 비워 두면 프로바이더 이름을 사용합니다.",
+    "namePlaceholder": "Anthropic (프로덕션)",
+    "baseURL": "엔드포인트",
+    "baseURLHint": "프로바이더의 공식 엔드포인트를 사용하려면 비워 두십시오. https여야 합니다.",
+    "baseURLLocalHint": "프로바이더의 공식 엔드포인트를 사용하려면 비워 두십시오. 그렇지 않으면 https 또는 루프백이나 사설 네트워크 주소의 일반 http여야 합니다.",
+    "baseURLPlaceholder": "https://llm.example.com",
+    "apiKey": "API 키",
+    "apiKeyHint": "한 번 전송되며 엔진이 봉인하고 이 브라우저로 절대 반환하지 않습니다.",
+    "apiKeyPlaceholder": "키 붙여넣기",
+    "submit": "프로바이더 추가",
+    "submitting": "봉인 중…",
+    "cancel": "취소",
+    "success": "프로바이더가 추가되었습니다.",
+    "testNext": "지금 연결 테스트",
+    "registering": "등록 중…",
+    "localNameHint": "선택 사항. 비워 두면 프로바이더 이름을 사용합니다.",
+    "advanced": "고급: 사용자 지정 엔드포인트",
+    "missingFields": "누락된 필드를 입력하십시오: {{fields}}.",
+    "requiredEndpointHint": "서비스 엔드포인트를 입력하십시오: https 또는 루프백이나 사설 네트워크 주소의 일반 http."
+  },
+  "rotate": {
+    "title": "이 프로바이더의 키 교체",
+    "description": "새 키가 같은 참조 아래에서 기존 키를 대체하므로 바인딩된 모든 프로파일이 계속 작동합니다. 이미 실행 중인 세션은 시작할 때 사용한 자격 증명을 유지합니다.",
+    "verdictCleared": "이전 연결 테스트가 지워집니다: 더 이상 존재하지 않는 자격 증명으로 측정한 판정은 이를 대체하는 자격 증명에 대한 증거가 아닙니다.",
+    "submit": "키 교체",
+    "submitting": "봉인 중…",
+    "success": "키가 교체되었습니다. 새 키가 작동하는지 연결을 테스트하십시오."
+  },
+  "revoke": {
+    "title": "이 프로바이더 철회",
+    "description": "봉인된 자격 증명을 파기합니다. 이 참조에 대해서는 되돌릴 수 없습니다.",
+    "consequence": "바인딩된 모든 프로바이더 프로파일이 실행을 거부하며 이 프로바이더를 지목합니다. 자격 증명은 프로바이더 자체에서 철회되지 않으므로 해당 콘솔에서 직접 철회하십시오.",
+    "confirm": "철회",
+    "success": "프로바이더가 철회되었고 봉인된 자격 증명이 파기되었습니다.",
+    "localDescription": "엔드포인트 등록을 철회합니다. 바인딩된 프로파일은 새 실행을 거부합니다. Ollama 서비스와 모델은 호스트에 그대로 남습니다.",
+    "localSuccess": "엔드포인트 등록이 철회되었습니다."
+  },
+  "detail": {
+    "title": "프로바이더",
+    "reference": "참조",
+    "endpoint": "엔드포인트",
+    "officialEndpoint": "프로바이더의 공식 엔드포인트",
+    "created": "등록됨",
+    "revoked": "철회됨",
+    "models": "마지막 테스트가 나열한 모델",
+    "noModels": "아직 모델 목록 없음. 연결을 테스트하십시오.",
+    "close": "닫기"
+  },
+  "vaultUnavailable": {
+    "title": "이 배포는 프로바이더 자격 증명을 저장할 수 없습니다",
+    "description": "봉인된 자격 증명 볼트가 설정되지 않아 엔진이 보호할 수 없는 키를 저장하는 대신 저장을 거부합니다. 관리자가 비밀 봉인자를 구성해야 합니다."
+  },
+  "truncation": {
+    "label": "프로바이더 {{n}}개를 표시하며 더 있습니다",
+    "hint": "이 목록은 한 페이지입니다. 범위를 좁히거나 `olivares provider ls`로 전체 집합을 확인하십시오."
+  },
+  "bind": {
+    "title": "프로파일 바인딩",
+    "description": "선택한 프로파일의 다음 실행은 {{name}}을(를) 사용합니다. 기존 세션은 현재 프로바이더를 유지합니다.",
+    "profile": "프로파일",
+    "choose": "호환되는 프로파일 선택",
+    "empty": "호환되는 활성 프로파일이 없습니다. 프로바이더 프로파일에서 생성하십시오.",
+    "more": "프로파일 더 불러오기",
+    "unavailable": "프로파일 권한 또는 호환되는 활성 프로파일을 사용할 수 없습니다.",
+    "loadError": "프로파일을 불러오지 못했습니다.",
+    "success": "프로바이더가 프로파일에 바인딩되었습니다."
+  },
+  "defaultModel": {
+    "title": "기본 모델",
+    "model": "모델",
+    "hint": "다른 모델을 선택하지 않으면 새 세션이 이 모델을 사용합니다.",
+    "modelsHint": "이 프로바이더의 마지막 연결 테스트가 나열한 모델입니다.",
+    "native": "저장된 기본값 없음",
+    "save": "저장",
+    "success": "기본 모델이 저장되었습니다.",
+    "createHint": "선택 사항. 연결 테스트 후 기본값을 선택하려면 비워 두십시오."
+  },
+  "prepare": {
+    "pending": "첫 세션을 위해 {{tool}}을(를) 준비하는 중…",
+    "installing": "첫 세션을 위해 {{tool}} 설치 중: {{progress}}",
+    "ready": "세션을 시작할 준비가 되었습니다.",
+    "start": "새 세션",
+    "failed": "프로바이더가 저장되었습니다. 세션 설정 실패: {{error}}",
+    "retry": "설정 재시도",
+    "incomplete": "도구 설치가 {{state}}입니다. AI 도구를 확인하고 다시 시도하십시오."
+  }
+}

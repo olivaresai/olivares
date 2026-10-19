@@ -325,7 +325,7 @@ describe('estate list and inspector', () => {
       name: 'Workspace contents',
     })
     expect(
-      await within(region).findByRole('row', { name: 'wsc.item 3' }),
+      await within(region).findByRole('row', { name: 'Wsc item 3' }),
     ).toBeInTheDocument()
     expect(contents).toHaveBeenCalledWith(
       'ws-a',

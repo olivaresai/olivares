@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-Следующий выпуск — <!-- release -->`0.2`<!-- /release -->; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
+Следующий выпуск — <!-- release -->`0.3`<!-- /release -->; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
 
 :::note[Опубликованные имена пакетов]
-Выпуск Olivares <!-- release -->0.2<!-- /release --> на GitHub публикует артефакты `.deb`, `.rpm` и `.apk` для `amd64` и
+Выпуск Olivares <!-- release -->0.3<!-- /release --> на GitHub публикует артефакты `.deb`, `.rpm` и `.apk` для `amd64` и
 `arm64`, вместе с `checksums.txt`, `checksums.txt.sig` и `checksums.txt.pem`. Команды
 ниже используют буквальные имена `amd64` этого выпуска; на 64-битном ARM-узле замените
 `amd64` на `arm64`. Устанавливайте из этих проверенных артефактов выпуска.
@@ -84,13 +84,13 @@ Init Alpine по умолчанию — **OpenRC**, не systemd. Для кон�
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -139,8 +139,10 @@ bounding capabilities — и `NoNewPrivileges=true`, так что ничто и
 может их получить. Сверху он несёт `ProtectSystem=full` (`/usr`, `/boot`, `/efi` и `/etc`
 только для чтения), `PrivateDevices=true`, `ProtectClock=true`, `ProtectKernelTunables=true`,
 `ProtectKernelModules=true`, `ProtectKernelLogs=true`, `ProtectControlGroups=true`,
-`RestrictNamespaces=user net` (сессия получает собственные пространства имён пользователя и
-сети; все прочие типы запрещены), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`RestrictNamespaces=user net mnt` (сессия получает собственные пространства имён
+пользователя и сети, а помощник, держащий хуки и настройки Git папки только для чтения,
+получает собственное пространство имён монтирования, где фильтр системных вызовов
+разрешает `mount`; все прочие типы запрещены), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
 `LockPersonality=true`, `SystemCallArchitectures=native`, фильтр системных вызовов
 `@system-service`, дополнительно отбрасывающий `@privileged` и `@resources`, и
 `UMask=0027`.

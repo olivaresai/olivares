@@ -204,7 +204,7 @@ go() { test -f "$RUNNER_TEMP/index.html" || return 91; test "$FAIL_STAGE" != eng
 export -f task pnpm go
 '''
                 env = dict(os.environ, RUNNER_TEMP=tmp, GITHUB_OUTPUT=tmp + "/outputs",
-                           FAIL_STAGE=mode)
+                           FAIL_STAGE=mode, RUNNER_ENVIRONMENT="self-hosted")
                 result = subprocess.run(["bash", "-euo", "pipefail", "-c", prelude + setup],
                                         env=env, text=True, capture_output=True, timeout=10)
                 if mode != "good":
@@ -219,20 +219,21 @@ export -f task pnpm go
         workflow = (ROOT / ".github/workflows/mainline-ci.yml").read_text()
         jobs = dict(re.findall(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)",
                                workflow, re.M | re.S))
-        self.assertIn("actions/upload-artifact@", jobs["web"])
-        self.assertIn("capture-web-generation.py", jobs["web"])
+        self.assertIn("actions/upload-artifact@", jobs["web-bundle"])
+        self.assertIn("capture-web-generation.py", jobs["web-bundle"])
         for name in ["functional-shard", "control-plane", "race-rest", "race-hot-manifest"]:
             with self.subTest(job=name):
                 job = jobs[name]
-                self.assertRegex(job, r"needs: \[[^\n]*\bweb\b")
+                self.assertRegex(job, r"needs: \[[^\n]*\bweb-bundle\b")
                 self.assertIn("actions/download-artifact@", job)
                 self.assertIn("sha256sum -c SHA256SUMS", job)
                 self.assertIn('tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"', job)
                 self.assertRegex(job, r'(?m)^    env:\n      OLIVARES_REQUIRE_WEB_BUNDLE: "1"$')
-                self.assertIn('name: ${{ needs.web.outputs.bundle-artifact }}', job)
+                self.assertIn('name: ${{ needs.web-bundle.outputs.bundle-artifact }}', job)
                 self.assertLess(job.index('tar -xzf dist.tar.gz'), job.index('run: task test:')
                                 if 'run: task test:' in job else job.index('task test:functional:shard'))
-        self.assertRegex(jobs['web'], r'(?m)^    outputs:\n      bundle-artifact: web-generation-')
+        self.assertRegex(jobs['web-bundle'], r'(?m)^    outputs:\n      bundle-artifact: web-generation-')
+        self.assertNotIn('bundle-artifact', jobs['web'])
 
     def test_pr_tests_require_the_producers_bundle(self):
         workflow = (ROOT / ".github/workflows/pr-ci.yml").read_text()
@@ -318,6 +319,29 @@ if mode != 'missing-assets':
         fast = subprocess.run(["bash", "scripts/check-web-bundle-freshness.sh"],
                               cwd=self.repo, env=self.env, capture_output=True, text=True)
         self.assertEqual(fast.returncode, 0, fast.stdout + fast.stderr)
+
+    def test_edition_summary_document_is_a_bundle_input(self):
+        # web/vite.config.ts quotes docs/editions.md into the bundle, so editing it must
+        # change the source digest in the working tree and in a commit; otherwise a bundle
+        # built from an older copy keeps a fresh stamp.
+        def digest(*ref):
+            return subprocess.check_output(["bash", "scripts/web-bundle-source-digest.sh", *ref],
+                                           cwd=self.repo, env=self.env, text=True)
+
+        def commit():
+            self.git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                     "-c", "commit.gpgsign=false", "commit", "-qam", "edition summary")
+
+        doc = self.repo / "docs/editions.md"
+        doc.parent.mkdir()
+        doc.write_text("- Session cockpit.\n")
+        self.git("add", "docs/editions.md")
+        commit()
+        committed, worktree = digest("HEAD"), digest()
+        doc.write_text("- Session cockpit and fleet deployment.\n")
+        self.assertNotEqual(digest(), worktree)
+        commit()
+        self.assertNotEqual(digest("HEAD"), committed)
 
     def test_golden_path_autobuild_includes_console_and_propagates_failure(self):
         # Execute the real harness up to engine setup, with the real builders.

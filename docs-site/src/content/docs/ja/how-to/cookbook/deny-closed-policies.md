@@ -8,7 +8,7 @@ sidebar:
   order: 1
 ---
 
-**エディション:** permit と forbid を含むカスタム Cedar ポリシーの作成・編集には Business が必要です。Community は保存済みポリシー、カスタムロール、スコープ付き権限の適用を維持し、閲覧と取り消しを許可します。`DELETE /v1/m/governance/pdp/active?engine=cedar` は作成済み Cedar ポリシーだけを無効化し、履歴、管理対象の権限、採用済みポリシーを保持します。組み込みロール、ネイティブ拒否ルール、緊急停止は Community に残ります。このレシピの外部 PDP はアクセスを制限するだけですが、作成した Cedar permit はスコープ内のアクセスを付与できます。
+**エディション:** permit と forbid を含むカスタム Cedar ポリシーの作成・編集には Business が必要です。Community は保存済みポリシー、カスタムロール、スコープ付き権限の適用を維持し、閲覧と取り消しを許可します。`DELETE /v1/m/governance/pdp/active?engine=cedar` は作成済み Cedar ポリシーだけを無効化し、履歴、管理対象の権限、採用済みポリシーを保持します。組み込みロール、ネイティブ拒否ルール、緊急停止は Community に残ります。このレシピの外部 PDP はアクセスを制限するだけですが、作成した Cedar permit はスコープ内のアクセスを付与できます。 この外部エンジン（`OLIVARES_PDP_ENGINE`、Cedar ファイルまたは OPA）の選択には Business が必要です。Community はエンジンが選択されていると起動を拒否します。
 
 **目的:** deny-by-default の RBAC の上に属性ベースの制限を追加する —
 たとえば「ロールが何と言おうと、`secret` とタグ付けされたリソースには誰も触れない」。

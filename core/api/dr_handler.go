@@ -394,6 +394,31 @@ func (s *Server) handleTriggerBackup(w http.ResponseWriter, r *http.Request, mc 
 
 func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor string) {
 	svc := s.drSvc
+	// Deferred before any cleanup below, so it runs after all of it: a client that reads a terminal
+	// status finds no snapshot or scratch file left in the backup directory. Failure is the default, so a
+	// panic publishes failed, never completed; only the success path clears it.
+	failure := fmt.Errorf("backup stopped before the bundle was written")
+	var bundleID, bundleFile string
+	defer func() {
+		if failure != nil {
+			svc.jobs.update(jobID, func(j *drJob) {
+				j.Status = drJobFailed
+				j.Error = failure.Error()
+				j.DoneAt = time.Now().UTC().Format(time.RFC3339)
+			})
+			s.log.Error("dr: backup failed", "job", jobID, "err", failure)
+			return
+		}
+		svc.jobs.update(jobID, func(j *drJob) {
+			j.Status = drJobCompleted
+			j.Phase = "complete"
+			j.Progress = 100
+			j.BundlePath = bundleFile
+			j.BundleID = bundleID
+			j.DoneAt = time.Now().UTC().Format(time.RFC3339)
+		})
+		s.log.Info("dr: backup completed", "job", jobID, "bundle", bundleID, "actor", actor)
+	}()
 	update := func(phase string, progress int) {
 		svc.jobs.update(jobID, func(j *drJob) {
 			j.Status = drJobRunning
@@ -403,12 +428,9 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 	}
 
 	fail := func(err error) {
-		svc.jobs.update(jobID, func(j *drJob) {
-			j.Status = drJobFailed
-			j.Error = err.Error()
-			j.DoneAt = time.Now().UTC().Format(time.RFC3339)
-		})
-		s.log.Error("dr: backup failed", "job", jobID, "err", err)
+		if err != nil {
+			failure = err
+		}
 	}
 
 	update("preparing", 5)
@@ -601,17 +623,7 @@ func (s *Server) runBackup(ctx context.Context, jobID, passphrase, notes, actor 
 	}
 
 	update("complete", 100)
-
-	svc.jobs.update(jobID, func(j *drJob) {
-		j.Status = drJobCompleted
-		j.Phase = "complete"
-		j.Progress = 100
-		j.BundlePath = bundlePath
-		j.BundleID = bundleName
-		j.DoneAt = time.Now().UTC().Format(time.RFC3339)
-	})
-
-	s.log.Info("dr: backup completed", "job", jobID, "bundle", bundleName, "actor", actor)
+	failure, bundleID, bundleFile = nil, bundleName, bundlePath
 }
 
 func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request, mc ModuleContext) {

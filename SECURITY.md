@@ -31,12 +31,12 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the next release is <!-- release -->`0.2`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the next release is <!-- release -->`0.3`<!-- /release -->. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| Olivares <!-- release -->`0.2`<!-- /release --> (next release) | Yes — fixes ship as the next release |
+| Olivares <!-- release -->`0.3`<!-- /release --> (next release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
@@ -99,26 +99,39 @@ package registries, pages fetched by the tool and SSH included, so such a sessio
 cannot use a `git_read` binding. It cannot reach host Unix
 sockets such as ssh-agent, gpg-agent or the Docker socket. Clients that pin
 certificates, speak only HTTP/2 or upgrade the protocol (WebSocket) are refused.
-An allowed upstream can itself forward data elsewhere; this boundary does not
-constrain the provider's own services.
+The provider's endpoint accepts any key, so the proxy forwards only the session's
+own: a request whose `Authorization` bearer, `X-Api-Key` or `Api-Key` header carries
+another key is refused with 403 before it is forwarded, and the refusal is recorded
+once per host and header as a finding on the session, without the value. A request
+with no key header is forwarded unchanged. This covers Claude Code and Codex sessions
+on an Anthropic, OpenAI or OpenAI-compatible key. A key in a query string, a body or
+another header, and Gemini CLI sessions, are not checked. An allowed upstream can
+itself forward data elsewhere, and a request that carries the session's own key reaches
+the provider's own services; this boundary does not constrain them.
 
 Requirements: Linux amd64 or arm64 with Landlock and unprivileged user and network
 namespaces.
 
-- The systemd units shipped in the packages allow exactly those two namespace types.
+- The systemd units shipped in the packages allow exactly those two namespace types and a
+  mount namespace, with the `mount` system call. The session helper uses it only inside
+  its own user and mount namespace, to keep a folder's Git hooks and configuration
+  read-only; the engine itself holds no capability, so a mount outside that namespace fails.
 - On kernels with AppArmor's unprivileged user namespace restriction, the deb also
   installs and loads `/etc/apparmor.d/usr.bin.olivares` for `/usr/bin/olivares`.
   It permits `userns` with an otherwise unconfined profile, without changing the
   host's global restriction. Package removal unloads and removes this profile.
   Hosts without that kernel restriction keep their existing AppArmor policy.
 - Docker Compose uses `deploy/seccomp/olivares-sessions.json`: Docker's default
-  profile plus those two namespace types.
+  profile plus those two namespace types, a mount namespace and the `mount` system call
+  with the bind or private-propagation flag only, so a mount that creates a filesystem
+  stays denied (the container drops every capability, so a mount outside the session
+  helper's own namespace still fails).
   AppArmor hosts that mediate user namespace creation also need the shipped
   `deploy/apparmor/olivares-sessions.conf` profile loaded and selected, as the
   [README install](README.md#install) shows. It retains Docker default restrictions
-  and permits `userns` for the engine container.
+  and permits `userns` and `mount` for the engine container.
 - Both settings apply to every process the engine starts, including sessions outside
-  this boundary and stdio MCP servers, so those may also create user and network
+  this boundary and stdio MCP servers, so those may also create user, network and mount
   namespaces. Inside a bound session the seccomp filter denies it again.
 - Kubernetes `RuntimeDefault` refuses them; Business chart documentation shows how to use
   the same profile.
@@ -139,7 +152,7 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  Olivares <!-- release -->0.2<!-- /release --> is the next release, not yet published. Once its artifacts are available,
+  Olivares <!-- release -->0.3<!-- /release --> is the next release, not yet published. Once its artifacts are available,
   `scripts/verify-release.sh` verifies their chain before use.
 - **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.
@@ -185,7 +198,7 @@ Actively-exploited vulnerabilities (CISA KEV, or credible in-the-wild reports) a
 
 - **Reachability first.** We gate every change on `govulncheck`, whose Go call-graph analysis tells us whether a dependency CVE is actually reachable. Unreachable CVEs are documented in a signed **OpenVEX** statement (`not_affected`, justification `vulnerable_code_not_in_execute_path`) so your scanner isn't lit up by noise — they do not start a remediation clock; reachable ones do.
 - **Scheduled rebuilds.** A weekly job rebuilds the image from the latest patched base, re-scans the result (grype + trivy, reporting the findings that have a fix available), refreshes the SBOM and VEX, and opens an internal tracking issue when remediation is due. The base image is pinned by digest and bumped by automation.
-- **Verifiable output.** Every release — including a patch release — ships signed (cosign), with an SBOM attestation, an OpenVEX document and SLSA Build L3 provenance (via the `slsa-github-generator` reusable workflows). Verify with `scripts/verify-release.sh`.
+- **Verifiable output.** Every release — including a patch release — ships signed (cosign), with an SBOM attestation, an OpenVEX document and SLSA Build L3 provenance (via the `slsa-github-generator` reusable workflows). `scripts/verify-release.sh` verifies the signature, the checksums and the provenance; the SBOM and OpenVEX attestations verify against the container image by digest.
 
 The reference bar for this cadence is a continuously-rebuilt image programme (e.g. Chainguard's nightly rebuilds with a 7/14-day SLA); we target the same shape, scaled to a single-maintainer project, and will tighten it as the project matures.
 

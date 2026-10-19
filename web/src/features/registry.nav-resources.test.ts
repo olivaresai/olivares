@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import i18n, { i18nReady, LANGUAGE_CODES } from '@/lib/i18n'
-import { FEATURE_VIEWS } from './registry'
+import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from './registry'
 
 await i18nReady
 
@@ -15,8 +15,15 @@ describe('edition navigation resources before lazy views load', () => {
       string,
       unknown
     >
+    // The pages of Business-only source keep their labels here, served or not.
     expect(Object.keys(items).sort()).toEqual(
-      [...FEATURE_VIEWS.map(({ id }) => id), 'settings'].sort(),
+      [
+        ...new Set([
+          ...FEATURE_VIEWS.map(({ id }) => id),
+          ...BUSINESS_ONLY_VIEW_IDS,
+          'settings',
+        ]),
+      ].sort(),
     )
   })
 })

@@ -67,7 +67,7 @@
     "retentionDescription": "早于此时间的备份会自动清理。",
     "dualControlAria": "恢复需要双人控制",
     "dualControlLabel": "恢复需要双人控制",
-    "dualControlDescription": "启用后，从本控制台发起的恢复必须由第二位不同的管理员批准后才会运行。关闭该开关会被记录，并在一小时后才生效——无法在执行恢复的同一次操作中移除这道关卡；重新启用会取消待生效的关闭。它不涵盖主机上的 `olivares dr restore`：该路径在本关卡之外替换 estate，转而记录一位申报的操作者（Postgres estate 只能通过该路径恢复）。单人运维时请保持关闭。",
+    "dualControlDescription": "启用后，从本控制台发起的恢复必须由第二位不同的管理员批准后才会运行。关闭该开关会被记录，并在一小时后才生效——无法在执行恢复的同一次操作中移除这道关卡；重新启用会取消待生效的关闭。它不涵盖主机上的 `olivares dr restore`：该路径在本关卡之外替换资产域，转而记录一位申报的操作者（Postgres 资产域只能通过该路径恢复）。单人运维时请保持关闭。",
     "dualControlDisarmPending": "已请求关闭——已记录，将于 {{when}} 生效。在此之前，恢复仍需第二位管理员批准。重新启用即可取消。",
     "dualControlDisarmRequestedBy": "请求者：{{who}}。",
     "save": "保存计划"

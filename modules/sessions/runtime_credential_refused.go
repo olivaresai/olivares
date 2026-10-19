@@ -26,7 +26,7 @@ const credentialRefusedActor = "engine:credential-refused"
 
 // credentialRefusedReason is the run's reason after the interrupt.
 func credentialRefusedReason(status int) string {
-	return fmt.Sprintf("the provider refused the credential (HTTP %d): replace the API key in AI tools › API keys, "+
+	return fmt.Sprintf("the provider refused the credential (HTTP %d): replace the API key in AI tools › Providers, "+
 		"or sign the tool in (olivares tool login claude)", status)
 }
 

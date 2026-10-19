@@ -45,6 +45,8 @@ import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { ToolReadinessDTO, WorkspaceDTO } from '@/features/agentops/types'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { ModelEffortFields } from '@/features/agentops/model-effort-picker'
+import { useModelChoices } from '@/features/agentops/model-choices'
+import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
 import type { ProviderKind } from '@/features/providers/types'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
@@ -821,6 +823,43 @@ export function StartSessionForm({
     toolReady && !profileRef && !key && canReadProfiles,
   )
   const catalogProfile = profileRef || reuse.data?.profile?.profile_ref || ''
+  const modelChoices = useModelChoices({
+    profileRef: catalogProfile,
+    driver: tool ?? '',
+    model,
+    enabled: toolReady,
+    fallbackModel: saved,
+  })
+  const account = profileList.data?.accounts.find(
+    (a) => a.account_ref === catalogProfile,
+  )
+  const speedScope = JSON.stringify([
+    scope,
+    catalogProfile,
+    model,
+    saved,
+    account?.updated_at,
+    account?.auth_source,
+    account?.provider_record_ref,
+    reuse.data?.profile?.updated_at,
+    reuse.data?.profile?.provider_record_ref,
+  ])
+  const [speedChoice, setSpeedChoice] = useState<{
+    scope: string
+    fastMode?: boolean
+    serviceTier?: string
+  }>()
+  const speed = speedChoice?.scope === speedScope ? speedChoice : undefined
+  const speedModel =
+    key ||
+    account?.provider_record_ref ||
+    reuse.data?.profile?.provider_record_ref
+      ? undefined
+      : modelChoices.start
+  const speedUnavailable =
+    (speed?.fastMode === true && speedModel?.supports_fast_mode !== true) ||
+    (!!speed?.serviceTier &&
+      !speedModel?.service_tiers?.includes(speed.serviceTier))
   // A key with no tested model, for a tool that needs one, can start nothing yet: its remedy
   // is a connection test in Providers.
   const untested = noDefault && tested.length === 0
@@ -850,6 +889,10 @@ export function StartSessionForm({
             secretEnv,
             ...(model ? { model } : {}),
             ...(effort ? { effort } : {}),
+            ...(speed?.fastMode !== undefined
+              ? { fastMode: speed.fastMode }
+              : {}),
+            ...(speed?.serviceTier ? { serviceTier: speed.serviceTier } : {}),
             ...(profileRef ? { profileRef } : {}),
           },
           message: prompt,
@@ -883,7 +926,7 @@ export function StartSessionForm({
       onSubmit={(e) => {
         e.preventDefault()
         // A second Start would retire the launch in flight and leave its run unopened.
-        if (start.isPending || !toolReady) return
+        if (start.isPending || !toolReady || speedUnavailable) return
         const owner = captureOwner()
         start.mutate({ tenant: owner.tenant, attempt: owner.begin() })
       }}
@@ -998,6 +1041,34 @@ export function StartSessionForm({
           fallbackModel={key ? saved : ''}
           withModel={!key}
         />
+      ) : null}
+      {tool && toolReady ? (
+        <LaunchSpeedFields
+          driver={tool}
+          model={speedModel}
+          fastMode={speed?.fastMode}
+          serviceTier={speed?.serviceTier}
+          onFastMode={(fastMode) =>
+            setSpeedChoice({ scope: speedScope, fastMode })
+          }
+          onServiceTier={(serviceTier) =>
+            setSpeedChoice({ scope: speedScope, serviceTier })
+          }
+        />
+      ) : null}
+      {speedUnavailable ? (
+        <>
+          <p role="alert" className="text-caption text-text-2">
+            {t('agentops:create.speedUnavailable')}
+          </p>
+          <Button
+            type="button"
+            variant="link"
+            onClick={() => setSpeedChoice(undefined)}
+          >
+            {t('agentops:create.speedDefault')}
+          </Button>
+        </>
       ) : null}
       {untested && canReadProviders ? (
         <Button
@@ -1202,7 +1273,18 @@ export function StartSessionForm({
           onClick={() =>
             onAdvanced(
               catalogProfile
-                ? { driver: tool, profileRef: catalogProfile, model, effort }
+                ? {
+                    driver: tool,
+                    profileRef: catalogProfile,
+                    model,
+                    effort,
+                    ...(speed?.fastMode !== undefined
+                      ? { fastMode: speed.fastMode }
+                      : {}),
+                    ...(speed?.serviceTier
+                      ? { serviceTier: speed.serviceTier }
+                      : {}),
+                  }
                 : { driver: tool },
             )
           }
@@ -1244,13 +1326,17 @@ export function StartSessionForm({
         {/* A tool that cannot start says why under the tool choice; a key that needs a
             model says it here, beside Start. */}
         <DisabledReason
-          disabled={!current || (toolReady && noDefault && !model)}
+          disabled={
+            !current || speedUnavailable || (toolReady && noDefault && !model)
+          }
           reason={
-            !current
-              ? t('start.readingFolder')
-              : untested
-                ? t('start.noTestedModel')
-                : t('start.chooseModel')
+            speedUnavailable
+              ? t('agentops:create.speedUnavailable')
+              : !current
+                ? t('start.readingFolder')
+                : untested
+                  ? t('start.noTestedModel')
+                  : t('start.chooseModel')
           }
           mode="native"
         >
@@ -1260,7 +1346,11 @@ export function StartSessionForm({
             size="lg"
             aria-describedby={tool && !toolReady ? notReadyId : undefined}
             disabled={
-              !current || start.isPending || !toolReady || (noDefault && !model)
+              !current ||
+              start.isPending ||
+              !toolReady ||
+              speedUnavailable ||
+              (noDefault && !model)
             }
           >
             {start.isPending ? (

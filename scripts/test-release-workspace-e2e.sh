@@ -895,15 +895,24 @@ reset_tree
 # Every `gh release upload` in this workflow carried --clobber, which OVERWRITES an asset the
 # release already has. On a draft that is untidy; on a second pass over a release whose bytes
 # somebody may already hold it rewrites delivered evidence, and that is the one property of a
-# supply chain that cannot be undone. Five sites, which does not make it milder — it makes it
-# systematic.
+# supply chain that cannot be undone. Custody now runs in its own helper, where the mutable
+# draft and rollback guards are witnessed separately. This check covers the four direct
+# phase-1 uploads: stable manifest, its pipeline pair, security manifest, and VEX/SBOM.
 #
 # TWO CHECKS, because either alone is weak. The static one is the guard: no upload may carry the
 # flag. The behavioural one CALIBRATES THE STUB, and without it the static check would be the
 # only thing holding the property while a stub that always succeeds quietly agreed with
 # everything — which is exactly how the download leg's own refusal went unmodelled for so long.
 _uploads="$(command grep -cE 'gh release upload' "$WF_REAL" || true)"
-[ "${_uploads:-0}" -ge 5 ]
+# A count alone could pass after a required upload was replaced with an unrelated one.
+# Require the actual artifact routes as well as a nonempty denominator.
+_pair_upload="$(command grep -A2 -F 'gh release upload "${RELEASE_TAG}" \' "$WF_REAL" || true)"
+[ "${_uploads:-0}" -ge 4 ] &&
+	command grep -qF 'gh release upload "${RELEASE_TAG}" dist/stable-manifest.json' "$WF_REAL" &&
+	command grep -qF 'gh release upload "${RELEASE_TAG}" dist/security-manifest.json' "$WF_REAL" &&
+	command grep -qF 'gh release upload "${RELEASE_TAG}" olivares.vex.openvex.json olivares.spdx.sbom.json' "$WF_REAL" &&
+	contains_literal "$_pair_upload" 'dist/stable-manifest.json.pipeline.sig' &&
+	contains_literal "$_pair_upload" 'dist/stable-manifest.json.pipeline.pem'
 check "the workflow still has the upload sites this case is about ($_uploads)" "denominator is real" $?
 _clob="$(command grep -E 'gh release upload' "$WF_REAL" | command grep -c -- '--clobber' || true)"
 [ "${_clob:-1}" -eq 0 ]

@@ -28,7 +28,7 @@
     "clear": "Clear",
     "drift": "Permitted vs observed",
     "driftHint": "Overlay the least-privilege diff: highlight unexpected access (observed, not permitted) and unused grants.",
-    "driftForbidden": "Requires the drift permission (accessmap:drift:read)."
+    "driftForbidden": "Your role cannot see drift."
   },
   "legend": {
     "read": "Read",
@@ -51,7 +51,7 @@
     "unusedTitle": "Unused grants",
     "unusedHint": "Permitted but never observed — over-provisioning to tighten.",
     "forbiddenTitle": "Drift not authorized",
-    "forbiddenHint": "Your role can see the graph but not the permitted-vs-observed diff (accessmap:drift:read).",
+    "forbiddenHint": "Your role can see the graph but not the difference between what is permitted and what was observed.",
     "partial": "Partial result: the engine reconciled this diff over a truncated drift window, so these counts are not the whole estate and an edge missing here may simply be past the bound.",
     "emptyWindowTitle": "No findings in the scanned window",
     "emptyWindowHint": "The scan stopped at its page bound, so this is not a statement about the whole estate.",
@@ -104,9 +104,9 @@
     },
     "target": {
       "sourceBindings": "Open source bindings",
-      "nhiRoster": "Open the NHI roster"
+      "nhiRoster": "Open identities"
     },
-    "needsPermission": "{{action}} needs the {{permission}} permission, which this role does not hold.",
+    "needsPermission": "{{action}} needs {{permission}} for this; this role does not hold it.",
     "recheck": "Re-check the drift",
     "verdict": {
       "clear": "Re-checked: this edge is no longer in the drift set. The explanation above describes the state before that check.",
@@ -137,12 +137,12 @@
     "mixed": "Mixed fidelity across signals."
   },
   "attributionTier": {
-    "firm": "Firm",
+    "firm": "Exact",
     "approximate": "Approximate",
     "unknown": "Unknown"
   },
   "attributionTierHint": {
-    "firm": "Tied to a concrete agent/NHI via an SVID, WIF or dedicated credential.",
+    "firm": "Tied to one agent through its own identity or a dedicated credential.",
     "approximate": "A shared account — the identity is known, but not a single agent.",
     "unknown": "No per-identity audit (e.g. Redis/SQLite/D1) — attribution not possible."
   },
@@ -180,7 +180,7 @@
       "exfil": "Exfiltration routes"
     },
     "attribution": {
-      "firm": "firm",
+      "firm": "exact",
       "approximate": "approximate",
       "unknown": "not attributed"
     },

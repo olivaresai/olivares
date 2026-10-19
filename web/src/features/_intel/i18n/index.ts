@@ -17,7 +17,9 @@ import ja from './ja.json'
 import de from './de.json'
 import ru from './ru.json'
 import fr from './fr.json'
+import it from './it.json'
+import ko from './ko.json'
 
-registerTranslations('intel', { en, es, zh, ja, de, ru, fr })
+registerTranslations('intel', { en, es, zh, ja, de, ru, fr, it, ko })
 
-export { en, es, zh, ja, de, ru, fr }
+export { en, es, zh, ja, de, ru, fr, it, ko }

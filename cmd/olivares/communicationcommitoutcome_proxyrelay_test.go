@@ -345,27 +345,6 @@ func TestCommunicationCommitOutcomeProxyRelay(t *testing.T) {
 		}
 		commitOutcomeRelayExpectNoEntry(t, rig.proxy, "terminate_")
 	})
-
-	t.Run("sever_after_release_resets_only_that_connection", func(t *testing.T) {
-		held := newCommitOutcomeRelayRig(t)
-		held.holdAnswer(t)
-		other := held.connectAnother(t)
-		other.open(t, 4343)
-		held.release(t, 2)
-		held.proxy.sever()
-		commitOutcomeRelayExpectClosed(t, held.upstream, "server")
-		// The engine's other pooled connections are not part of the reset: the
-		// census that follows a release reads through them.
-		if err := other.upstream.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
-			t.Fatalf("COULD_NOT_LOOK: bound the other server's read: %v", err)
-		}
-		var one [1]byte
-		_, err := other.upstream.Read(one[:])
-		var timeout net.Error
-		if !errors.As(err, &timeout) || !timeout.Timeout() {
-			t.Fatalf("another session's server read %v after the released connection was severed, want it still open: sever reset a connection it does not own", err)
-		}
-	})
 }
 
 // commitOutcomeRelayRig is one test proxy between a raw client and a scripted

@@ -39,20 +39,20 @@ export interface ChartTheme {
 // operator palette. In a real browser getComputedStyle wins; here we stay truthful
 // instead of handing Recharts empty strings.
 export const FALLBACK: ChartTheme = {
-  text: '#f3f2ef',
-  mutedText: '#b0aea8',
+  text: '#fafaf9',
+  mutedText: '#b4aeaa',
   grid: 'rgba(255, 255, 255, 0.08)',
   accent: '#f08000',
-  success: '#52c98f',
-  warning: '#e8c14a',
-  danger: '#f47a70',
-  info: '#72aef5',
+  success: '#9cc79c',
+  warning: '#d9b45c',
+  danger: '#eb9999',
+  info: '#9db9cf',
   teal: '#5be0d8',
   slate: '#9aa3b0',
-  surface: '#17171a',
-  elevated: '#1d1d21',
+  surface: '#343434',
+  elevated: '#343434',
   border: 'rgba(255, 255, 255, 0.08)',
-  series: ['#f08000', '#5be0d8', '#72aef5', '#e8c14a', '#52c98f', '#9c9ca3'],
+  series: ['#f08000', '#5be0d8', '#9db9cf', '#d9b45c', '#9cc79c', '#9c9ca3'],
 }
 
 function readVar(

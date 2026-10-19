@@ -179,42 +179,83 @@ func TestGrokRuntimeHTTPAnsweredRunReadsIdleOnTheRouteAndTheList(t *testing.T) {
 	if !ok {
 		t.Fatal("the run is not live")
 	}
-	// The two GETs are separate requests, so they agree only while the state holds
-	// still: compare them at the held points, and wait for both after the release.
-	read := func() (state, listed, process string) {
+	read := func() (state, process string) {
 		one := fx.h.doJSON(http.MethodGet, "/v1/m/sessions/runs/"+runRef, fx.admin, nil, tenantHdr(fx.tenant))
 		list := fx.h.doJSON(http.MethodGet, "/v1/m/sessions/runs", fx.admin, nil, tenantHdr(fx.tenant))
 		if one.code != http.StatusOK || list.code != http.StatusOK {
 			t.Fatalf("read run = %d %s, list = %d", one.code, one.raw, list.code)
 		}
 		items, _ := list.body["items"].([]any)
+		found := false
 		for _, item := range items {
-			if row, _ := item.(map[string]any); row["run_ref"] == runRef {
-				listed, _ = row["state"].(string)
+			row, _ := item.(map[string]any)
+			if row["run_ref"] != runRef {
+				continue
 			}
+			found = true
+			if row["state"] == one.body["state"] {
+				continue
+			}
+			// The answer's running->idle transition can land between the two reads: the
+			// list, read second, is then simply the newer one. A disagreement that
+			// survives a re-read of the run is a real divergence between the routes.
+			again := fx.h.doJSON(http.MethodGet, "/v1/m/sessions/runs/"+runRef, fx.admin, nil, tenantHdr(fx.tenant))
+			if again.code != http.StatusOK {
+				t.Fatalf("re-read run = %d %s", again.code, again.raw)
+			}
+			if row["state"] != again.body["state"] {
+				t.Fatalf("the list says %v and the run says %v (re-read %v)", row["state"], one.body["state"], again.body["state"])
+			}
+		}
+		// A list that omits the run entirely is not agreement.
+		if !found {
+			t.Fatalf("the list does not carry the run %s", runRef)
 		}
 		state, _ = one.body["state"].(string)
 		process, _ = one.body["process_state"].(string)
-		return state, listed, process
+		return state, process
 	}
 
-	if state, listed, process := read(); state != stateRunning || listed != stateRunning || process != stateRunning {
-		t.Fatalf("a session that has taken no turn reads %s (list %s)/%s, want running/running", state, listed, process)
+	if state, process := read(); state != stateRunning || process != stateRunning {
+		t.Fatalf("a session that has taken no turn reads %s/%s, want running/running", state, process)
 	}
 	if accepted := fx.input("answer me", runRef); accepted.code != http.StatusAccepted {
 		t.Fatalf("input = %d %s", accepted.code, accepted.raw)
 	}
 	waitFor(t, "the turn is active", func() bool { return lr.session.ActiveTurn() != "" })
-	if state, listed, _ := read(); state != stateRunning || listed != stateRunning {
-		t.Fatalf("a session answering reads %s (list %s), want running", state, listed)
+	if state, _ := read(); state != stateRunning {
+		t.Fatalf("a session answering reads %s, want running", state)
 	}
 	if err := os.WriteFile(release, nil, 0o600); err != nil {
 		t.Fatalf("release the prompt: %v", err)
 	}
 	waitFor(t, "the answered run to read idle on the route and the list", func() bool {
-		state, listed, process := read()
-		return state == stateIdle && listed == stateIdle && process == stateRunning
+		state, process := read()
+		return state == stateIdle && process == stateRunning
 	})
+	// The same held-answer transition again and again: every answer is a fresh
+	// running->idle change that can land between the probe's two reads, and input on
+	// the idle run opens the next turn. Both routes must agree on the settled state on
+	// either side of every transition.
+	for cycle := 2; cycle <= 25; cycle++ {
+		if err := os.Remove(release); err != nil {
+			t.Fatalf("cycle %d: remove the release file: %v", cycle, err)
+		}
+		if accepted := fx.input("answer me again", runRef); accepted.code != http.StatusAccepted {
+			t.Fatalf("cycle %d: input = %d %s", cycle, accepted.code, accepted.raw)
+		}
+		waitFor(t, "the turn is active again", func() bool { return lr.session.ActiveTurn() != "" })
+		if state, _ := read(); state != stateRunning {
+			t.Fatalf("cycle %d: a reopened turn reads %s, want running", cycle, state)
+		}
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Fatalf("cycle %d: release the prompt: %v", cycle, err)
+		}
+		waitFor(t, "the answered run to read idle on the route and the list", func() bool {
+			state, process := read()
+			return state == stateIdle && process == stateRunning
+		})
+	}
 }
 
 // TestRuntime_IdleWindowStillIdlesASilentSession keeps the old rule beside the new one: a

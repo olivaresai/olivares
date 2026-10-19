@@ -1,6 +1,6 @@
 {
   "title": "MCP & skills",
-  "subtitle": "The live capability catalog — MCP servers, tools, skills and how they are wired.",
+  "subtitle": "The live capability catalog — MCP servers, tools, skills and how they are connected.",
   "tabs": {
     "servers": "Servers",
     "tools": "Tools",
@@ -40,7 +40,7 @@
     "tools": "Tools",
     "skills": "Skills",
     "resources": "Resources",
-    "consumers": "Wired to",
+    "consumers": "Used by",
     "consumersHint": "Sessions and agents connected to this server.",
     "noConfig": "No managed config",
     "noConfigHint": "Add a saved definition to document this server’s transport and secret references.",

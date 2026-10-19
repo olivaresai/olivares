@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { test, type Page } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { fixtureFor } from './fixtures'
 
 const SHOTS = 'e2e-visual/__shots__'
@@ -34,12 +34,26 @@ async function mockApi(page: Page) {
   })
 }
 
-async function toDark(page: Page) {
+async function toDark(page: Page, rail = false) {
+  if (rail) {
+    await page
+      .getByRole('button', { name: 'Expand sidebar', exact: true })
+      .click()
+    await expect(
+      page.getByRole('dialog', { name: 'Primary', exact: true }),
+    ).toBeVisible()
+  }
   await page.getByRole('button', { name: /toggle theme/i }).click()
   await page.getByRole('menuitem', { name: /^dark$/i }).click()
   await page.waitForFunction(() =>
     document.documentElement.classList.contains('dark'),
   )
+  if (rail) {
+    await page.keyboard.press('Escape')
+    await expect(
+      page.getByRole('dialog', { name: 'Primary', exact: true }),
+    ).toBeHidden()
+  }
 }
 
 test.beforeEach(async ({ page }) => {
@@ -83,9 +97,12 @@ test('inventory — catalog, light + dark', async ({ page }) => {
 
 test('sessions — live operation, light + dark', async ({ page }) => {
   await page.goto('/sessions')
+  await page
+    .getByRole('heading', { level: 1, name: 'Sessions', exact: true })
+    .waitFor({ state: 'visible' })
   await page.waitForTimeout(900)
   await page.screenshot({ path: `${SHOTS}/sessions-light.png`, fullPage: true })
-  await toDark(page)
+  await toDark(page, true)
   await page.waitForTimeout(400)
   await page.screenshot({ path: `${SHOTS}/sessions-dark.png`, fullPage: true })
 })
@@ -94,6 +111,9 @@ test('health — status + SLA + dependency map, light + dark', async ({
   page,
 }) => {
   await page.goto('/health')
+  await page
+    .getByRole('heading', { level: 1, name: 'Health & SLA', exact: true })
+    .waitFor({ state: 'visible' })
   await page.waitForTimeout(900)
   await page.screenshot({ path: `${SHOTS}/health-light.png`, fullPage: true })
   await toDark(page)

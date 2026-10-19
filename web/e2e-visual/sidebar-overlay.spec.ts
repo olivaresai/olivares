@@ -41,7 +41,13 @@ test.beforeEach(async ({ page }) => {
 test('real settings, favorite, account, brand and All areas links retire the work overlay, including back', async ({
   page,
 }) => {
-  for (const target of ['Settings', 'Audit', 'Account', 'brand', 'All areas']) {
+  for (const target of [
+    'Settings',
+    'Audit ledger',
+    'Account',
+    'brand',
+    'All areas',
+  ]) {
     await page.goto('/sessions')
     const primary = page.getByRole('complementary', { name: 'Primary' })
     await primary.getByRole('button', { name: 'Expand sidebar' }).click()
@@ -57,17 +63,23 @@ test('real settings, favorite, account, brand and All areas links retire the wor
     } else if (target === 'brand')
       await overlay.locator('a[href="/"]').first().click()
     else if (target === 'All areas') {
-      await overlay.getByRole('button', { name: 'All areas' }).click()
-      await page
-        .getByRole('dialog', { name: 'All areas' })
-        .getByRole('link', { name: /Audit/ })
-        .first()
+      // The overlay's own Areas directory is the all-areas list; the "All areas"
+      // sheet opens from the rail and the phone bar (covered below), not from here.
+      await overlay
+        .getByRole('button', { name: 'Expand all areas', exact: true })
         .click()
-    } else
+      await overlay
+        .getByRole('navigation', { name: 'Areas', exact: true })
+        .getByRole('link', { name: 'Audit ledger', exact: true })
+        .click()
+    } else if (target === 'Audit ledger')
+      await overlay.locator('[data-favorite="audit"]').click()
+    else
       await overlay
         .getByRole('link', { name: target, exact: true })
         .first()
         .click()
+    await expect(page).not.toHaveURL(/\/sessions$/)
     await expect(overlay).toHaveCount(0)
     await page.goBack()
     await expect(page).toHaveURL(/\/sessions$/)
@@ -112,4 +124,22 @@ test('palette unfold returns Escape focus to the control that opened the palette
   await page.keyboard.press('Escape')
   await expect(overlay).toHaveCount(0)
   await expect(opener).toBeFocused()
+})
+
+test('rail All areas opens the areas sheet and a link in it leaves the page and closes it', async ({
+  page,
+}) => {
+  await page.goto('/sessions')
+  await page
+    .getByRole('complementary', { name: 'Primary' })
+    .getByRole('button', { name: 'All areas', exact: true })
+    .click()
+  const sheet = page.getByRole('dialog', { name: 'All areas' })
+  await expect(sheet).toBeVisible()
+  await sheet
+    .getByRole('link', { name: 'Audit ledger', exact: true })
+    .first()
+    .click()
+  await expect(page).toHaveURL(/\/audit$/)
+  await expect(sheet).toHaveCount(0)
 })

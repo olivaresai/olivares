@@ -71,8 +71,11 @@ func TestSkillsMutationDocumentation(t *testing.T) {
 				if len(properties) != 5 || !reflect.DeepEqual(schema["required"], []string{"target_kind", "target_id", "pack_revision_id"}) {
 					t.Fatal("assignment fields differ from its wire contract")
 				}
-				if !reflect.DeepEqual(properties["target_kind"].(map[string]any)["enum"], []string{"workspace", "folder", "template", "agent_group", "agent", "session"}) || properties["members"] == nil || properties["target_id"] == nil || properties["pack_revision_id"] == nil {
+				if !reflect.DeepEqual(properties["target_kind"].(map[string]any)["enum"], []string{"workspace", "profile", "folder", "template", "agent_group", "agent", "session"}) || properties["members"] == nil || properties["target_id"] == nil || properties["pack_revision_id"] == nil {
 					t.Fatal("assignment target or member selection is missing")
+				}
+				if properties["target_id"].(map[string]any)["format"] == "uuid" {
+					t.Fatal("profile refs cannot satisfy a UUID-only target contract")
 				}
 				return
 			}

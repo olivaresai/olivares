@@ -8,11 +8,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -23,9 +25,12 @@ import (
 // DeliveryFile is a verified regular file relative to the native skills folder.
 // The runtime writes these original bytes without interpreting or executing them.
 type DeliveryFile struct {
-	Path  string
-	Bytes []byte
-	Mode  fs.FileMode
+	Kind    string
+	Scoped  bool
+	Imports bool
+	Path    string
+	Bytes   []byte
+	Mode    fs.FileMode
 }
 
 // ReadSelectionFiles reads only an admitted immutable selection. Every revision
@@ -39,6 +44,14 @@ func (m *Module) ReadSelectionFiles(ctx context.Context, sc store.Scope, selecti
 	packs := map[string]*ValidatedPack{}
 	packIDs := map[string]string{}
 	files := map[string]DeliveryFile{}
+	ruleRank := map[string]int{}
+	for _, member := range selection.Members {
+		if member.Kind == "rule" {
+			for _, origin := range member.Origins {
+				ruleRank[member.Name] = max(ruleRank[member.Name], targetRank[origin.Kind])
+			}
+		}
+	}
 	total := int64(0)
 	for _, selected := range selection.Members {
 		if !canonicalID(selected.PackID) || !canonicalID(selected.RevisionID) {
@@ -69,12 +82,14 @@ func (m *Module) ReadSelectionFiles(ctx context.Context, sc store.Scope, selecti
 			packIDs[selected.RevisionID] = rev.PackID
 		}
 		matched := false
+		var verified Member
 		if pack.ManifestDigest != selected.ManifestDigest || packIDs[selected.RevisionID] != selected.PackID {
 			return nil, refuse("source_changed", "revision")
 		}
 		for _, member := range pack.Members {
-			if member.Name == selected.Name && member.Directory == selected.Directory && member.SkillDigest == selected.SkillDigest && member.ContentDigest == selected.ContentDigest {
+			if member.Kind == selected.Kind && member.Name == selected.Name && member.Directory == selected.Directory && member.SkillDigest == selected.SkillDigest && member.ContentDigest == selected.ContentDigest {
 				matched = true
+				verified = member
 				break
 			}
 		}
@@ -82,10 +97,18 @@ func (m *Module) ReadSelectionFiles(ctx context.Context, sc store.Scope, selecti
 			return nil, refuse("source_changed", "member")
 		}
 		for _, entry := range pack.Manifest {
-			if !strings.HasPrefix(entry.Path, selected.Directory+"/") {
+			if !verified.owns(entry.Path) {
 				continue
 			}
 			name := path.Join(selected.Name, strings.TrimPrefix(entry.Path, selected.Directory+"/"))
+			if verified.Kind != "" {
+				name = strings.TrimPrefix(selected.Name, verified.Kind+":") + ".md"
+				if verified.Kind == "rule" {
+					// Sort surviving rules by effective target rank, deduplicating
+					// identical revisions before native Markdown composition.
+					name = fmt.Sprintf("%02d/%s", ruleRank[selected.Name], name)
+				}
+			}
 			body, ok := pack.File(entry.Path)
 			if !ok {
 				return nil, refuse("source_changed", "artifact file")
@@ -94,10 +117,11 @@ func (m *Module) ReadSelectionFiles(ctx context.Context, sc store.Scope, selecti
 			if entry.Mode&0111 != 0 {
 				mode = 0555
 			}
-			if prior, ok := files[name]; ok && (!bytes.Equal(prior.Bytes, body) || prior.Mode != mode) {
+			key := verified.Kind + "\x00" + name
+			if prior, ok := files[key]; ok && (!bytes.Equal(prior.Bytes, body) || prior.Mode != mode) {
 				return nil, refuse("skill_name_conflict", selected.Name)
 			}
-			files[name] = DeliveryFile{Path: name, Bytes: body, Mode: mode}
+			files[key] = DeliveryFile{Kind: verified.Kind, Scoped: verified.Kind == "rule" && slices.Contains(verified.Extensions, "paths"), Imports: verified.Kind == "rule" && fileImport.Match(body), Path: name, Bytes: body, Mode: mode}
 		}
 	}
 	if len(files) > MaxFiles {
@@ -107,8 +131,27 @@ func (m *Module) ReadSelectionFiles(ctx context.Context, sc store.Scope, selecti
 	for _, file := range files {
 		out = append(out, file)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, nil
+	sort.Slice(out, func(i, j int) bool { return out[i].Kind+"/"+out[i].Path < out[j].Kind+"/"+out[j].Path })
+	// Claude recursively discovers rule files without promising directory order.
+	// One native rule document gives the selected bodies an explicit order. The
+	// immutable catalog, revision diff and approval still bind the original bytes.
+	var rules bytes.Buffer
+	var scoped, imports bool
+	kept := out[:0]
+	for _, file := range out {
+		if file.Kind != "rule" {
+			kept = append(kept, file)
+			continue
+		}
+		fmt.Fprintf(&rules, "\n\n# %s\n\n", file.Path[3:])
+		rules.Write(file.Bytes)
+		scoped = scoped || file.Scoped
+		imports = imports || file.Imports
+	}
+	if rules.Len() > 0 {
+		kept = append(kept, DeliveryFile{Kind: "rule", Scoped: scoped, Imports: imports, Path: "selection.md", Bytes: rules.Bytes(), Mode: 0444})
+	}
+	return kept, nil
 }
 
 func (m *Module) readArtifact(ctx context.Context, tenant model.TenantID, rev Revision, total *int64) (*ValidatedPack, error) {

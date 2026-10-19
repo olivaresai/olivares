@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
@@ -47,6 +48,7 @@ import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { killswitchApi, killswitchKeys } from './api'
+import { WRAP_HEADER } from './columns'
 import { GuardianStatusBadge } from './components'
 import './i18n'
 import {
@@ -64,7 +66,6 @@ import type {
   GuardianRuleDTO,
   GuardianAgentTier,
 } from './types'
-import { PagePrimaryAction } from '@/components/ui/page-actions'
 
 // The containment trail is a live feed (the loop fires on findings, the sweep
 // executes approvals) — poll it gently; rules change only by operator action.
@@ -177,7 +178,7 @@ export function GuardianSection() {
         header: t('guardian.name'),
         cell: ({ row }) => (
           <span
-            className="font-mono text-caption font-medium text-foreground"
+            className="line-clamp-3 max-w-48 font-mono text-caption font-medium break-all whitespace-normal text-foreground"
             title={row.original.note || undefined}
           >
             {row.original.name}
@@ -189,7 +190,10 @@ export function GuardianSection() {
         header: t('guardian.kinds'),
         cell: ({ row }) =>
           row.original.match_kinds ? (
-            <span className="truncate font-mono text-caption text-muted-foreground">
+            <span
+              className="line-clamp-2 font-mono text-caption break-all whitespace-normal text-muted-foreground"
+              title={row.original.match_kinds}
+            >
               {row.original.match_kinds}
             </span>
           ) : (
@@ -206,6 +210,7 @@ export function GuardianSection() {
         // `types.ts:182-185` describe. Enviar sin poder LEER no cierra el hueco: lo mueve.
         accessorKey: 'agent_tier',
         header: t('guardian.agentTier'),
+        meta: WRAP_HEADER,
         cell: ({ row }) =>
           row.original.agent_tier ? (
             <span className="font-mono text-caption">
@@ -220,6 +225,7 @@ export function GuardianSection() {
       {
         accessorKey: 'min_severity',
         header: t('guardian.minSeverity'),
+        meta: WRAP_HEADER,
         cell: ({ row }) => (
           <SeverityBadge severity={row.original.min_severity} />
         ),
@@ -302,7 +308,10 @@ export function GuardianSection() {
         accessorKey: 'rule_name',
         header: t('guardian.trail.rule'),
         cell: ({ row }) => (
-          <span className="font-mono text-caption text-foreground">
+          <span
+            className="line-clamp-3 max-w-48 font-mono text-caption break-all whitespace-normal text-foreground"
+            title={row.original.rule_name}
+          >
             {row.original.rule_name}
           </span>
         ),
@@ -311,7 +320,7 @@ export function GuardianSection() {
         id: 'finding',
         header: t('guardian.trail.finding'),
         cell: ({ row }) => (
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <span className="truncate font-mono text-caption text-muted-foreground">
               {row.original.finding_kind}
             </span>
@@ -323,10 +332,13 @@ export function GuardianSection() {
         id: 'target',
         header: t('guardian.trail.target'),
         cell: ({ row }) => (
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <Badge variant="neutral">{row.original.target_kind}</Badge>
             {row.original.target_ref && (
-              <span className="truncate font-mono text-caption text-muted-foreground">
+              <span
+                className="line-clamp-3 max-w-40 font-mono text-caption break-all whitespace-normal text-muted-foreground"
+                title={row.original.target_ref}
+              >
                 {row.original.target_ref}
               </span>
             )}
@@ -337,7 +349,7 @@ export function GuardianSection() {
         id: 'containment',
         header: t('guardian.trail.action'),
         cell: ({ row }) => (
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <Badge variant="neutral">
               {t(`guardian.actionLabel.${row.original.action}`, {
                 defaultValue: row.original.action,
@@ -355,11 +367,11 @@ export function GuardianSection() {
         accessorKey: 'status',
         header: t('guardian.trail.status'),
         cell: ({ row }) => (
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             <GuardianStatusBadge status={row.original.status} />
             {row.original.approval_id && (
               <span
-                className="truncate font-mono text-caption text-muted-foreground"
+                className="max-w-32 font-mono text-caption break-all whitespace-normal text-muted-foreground"
                 title={t('guardian.trail.approval')}
               >
                 {row.original.approval_id}
@@ -383,7 +395,7 @@ export function GuardianSection() {
         header: t('guardian.trail.detail'),
         cell: ({ row }) => (
           <span
-            className="truncate text-caption text-muted-foreground"
+            className="line-clamp-2 text-caption break-words whitespace-normal text-muted-foreground"
             title={row.original.detail || undefined}
           >
             {row.original.detail || '—'}
@@ -396,25 +408,26 @@ export function GuardianSection() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-heading">{t('guardian.title')}</h2>
-        <p className="text-caption text-muted-foreground">
-          {t('guardian.caption')}
-        </p>
-      </div>
-
-      {canAdmin && (
-        <PagePrimaryAction>
+      {/* New rule belongs to this section: the page's one verb is Stop all agents. */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-heading">{t('guardian.title')}</h2>
+          <p className="text-caption text-muted-foreground">
+            {t('guardian.caption')}
+          </p>
+        </div>
+        {canAdmin && (
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
+            className="shrink-0"
             onClick={() => setCreateOpen(true)}
           >
             <Plus />
             {t('guardian.newRule')}
           </Button>
-        </PagePrimaryAction>
-      )}
+        )}
+      </div>
 
       <ListTruncationBadge
         query={rules}
@@ -451,7 +464,7 @@ export function GuardianSection() {
       <ListTruncationBadge
         query={actions}
         label={t('guardian.trailTruncated', { n: GUARDIAN_PAGE })}
-        hint={t('guardian.trailTruncatedHint')}
+        hint={withInlineCommands(t('guardian.trailTruncatedHint'), 'code')}
       />
 
       <DataTable

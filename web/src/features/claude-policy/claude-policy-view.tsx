@@ -9,7 +9,7 @@
 // wired to the DECLARED contract with an honest pending seam; drift is real.
 import { useNavigate } from '@tanstack/react-router'
 import { ScrollText } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { PageHeader } from '@/components/ui/page-header'
@@ -84,8 +84,15 @@ export default function ClaudePolicyView() {
   const canRead = can('governance:claude-policy:read')
   const navigate = useNavigate()
   const [tab, setTabState] = useState<TabKey>(initialTab)
+  const pendingTab = useRef<TabKey | null>(null)
+  useEffect(() => {
+    pendingTab.current = null
+  }, [tab])
 
   function setTab(value: TabKey) {
+    if (value === pendingTab.current) return
+    // Radix focus and mouse-down can request the same tab before state commits.
+    pendingTab.current = value
     setTabState(value)
     // REPLACE, so Back leaves the view instead of undoing a tab click.
     void navigate({

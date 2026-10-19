@@ -33,7 +33,11 @@ command, which downloads the next signed release for your **channel**, verifies 
 rollback covers a failed executable version probe, not database recovery (§7). The
 Kubernetes/Helm path is **declarative** — you set the image and the
 Business operator source rolls it — so you do not run `olivares upgrade` inside a pod; the
-command is for binary/systemd/compose installs.
+command is for binary/systemd/compose installs. In a Docker or Podman container the image
+cannot change, so `olivares upgrade` stores the release in the data volume (`ota/` under the
+data directory) and every start of the image binary runs it while it is newer than the image or the same version built differently;
+there is no swap and no `.bak-*` backup there, and removing `ota/` returns to the image's
+binary ([Docker and Compose](https://docs.olivares.ai/how-to/install-a-license/#docker-and-compose)).
 
 > **No hot-patching — ever.** A Go binary is **not** live-patched in place. An upgrade
 > always installs a new binary and restarts the process. "Zero downtime" is a graceful
@@ -45,7 +49,7 @@ command is for binary/systemd/compose installs.
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.2`<!-- /release -->, image tags <!-- release -->`:0.2`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.3`<!-- /release -->, image tags <!-- release -->`:0.3`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -63,11 +67,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.2 \
+cosign verify docker.io/olivaresai/olivares:0.3 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.2   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.3   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -392,6 +396,8 @@ Keep the original configuration backup, TLS material and sealer keys.
 Once the store is compatible with the old release, redeploy the digest recorded in §3:
 
 - Docker / Compose: recreate with the *previous* `@sha256:` digest (§4 with the old digest).
+  If this container ever ran `olivares upgrade`, remove `<data-dir>/ota` first, or the applied
+  release outranks the older image.
 - systemd: install the previous package using the package manager's downgrade procedure,
   then restart the service.
 - Helm: use `helm rollback olivares <previous-revision>` only if that revision's DSNs and
@@ -526,6 +532,9 @@ it.
 **The upgrade community → commercial build is therefore: stop, swap the binary (same version),
 start — one restart.** The license itself needs no restart (below).
 
+After Community has started successfully, stop it cleanly and start Business with the same data directory.
+Business keeps your accounts, settings and audit history and initializes its additional store tables automatically.
+
 ### Self-serve upgrades: `olivares upgrade`
 
 `olivares upgrade` is the self-serve OTA path for **both editions**. It moves the running
@@ -537,7 +546,19 @@ it never installs from the public channel, because that channel is signed by the
 Community release would replace the Business binary. Without a license it refuses and says to
 install one. With `--endpoint` and no `--enterprise` it refuses too, because the licensed download
 token must not travel to a host nobody chose for it. The default follows the edition of the binary
-that runs `upgrade`, not the one named by `--target`. Installing from `--bundle` requires the Enterprise binary (§10); Community refuses before reading a license or bundle.
+that runs `upgrade`, not the one named by `--target`. Business is cut from the same version as
+Community, so `upgrade --enterprise` on a Community binary installs the Business build of the
+version it already runs: the plan prints `edition: community -> enterprise`, `status: upgrade available`,
+and `-o json` carries `edition_current` and `edition_available`. A Business binary over the same
+Business version is up to date. Anti-rollback and `min_version` read versions, so they apply
+unchanged to this move. The running binary answers for itself; another `--target` is asked with
+`<target> version -o json`. A target that does not report its edition (a build from before this
+check) cannot be told from Community, so the licensed route installs the Business build over it
+(`edition:   unknown -> enterprise`, `edition_current` is `unknown`); the same command run again
+finds the Business build and is up to date, provided that build reports its edition (every build
+from this change on does; a Business build cut before it does not, and is moved again by every run
+that names it with `--target` until a newer build replaces it). `edition_current` and `edition_available` are empty
+off the licensed route (public channel, `--bundle`). Installing from `--bundle` requires the Enterprise binary (§10); Community refuses before reading a license or bundle.
 `--bundle --check` is never gated because it installs nothing.
 
 ```bash
@@ -572,7 +593,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.2
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.3
   ```
   <!-- /release -->
 
@@ -584,6 +605,8 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
   binary fails its post-swap `version` probe it is **rolled back automatically**. This
   does not test engine startup or restore the database. The running process is untouched
   until you restart it. Before a later rollback, follow the data recovery procedure in §5.
+  This describes a host install; a container keeps the release in `ota/` with no backup
+  (see the start of this document).
 - **One upgrade agent per binary, and the guards are re-checked against the file that is
   still there.** The command takes an exclusive lock on the target across the whole
   prepare → download → swap sequence, so a second concurrent run **exits `5` (Conflict)**
@@ -915,6 +938,33 @@ A transient configured check failure remains visible and retryable. The check ve
 the embedded OTA key exactly as `olivares upgrade` does, so "an update is available"
 identifies a verified newer release. Installation still requires the upgrade CLI's
 eligibility and artifact integrity checks.
+
+### The Updates page (Settings → Updates)
+
+A system administrator can also install the update from the console. **Settings → Updates**
+shows the version the engine runs, the newest signed release in the instance's channel with its
+release notes (and its security advisories), and **Update to X**. The page adds no update
+mechanism: the engine runs `olivares upgrade --check` for the status and `olivares upgrade --yes`
+for the install, so the console verifies, swaps atomically and refuses exactly as the CLI does,
+and `olivares upgrade --check` shows the same facts. It reads the same channel settings as the
+indicator above (`OLIVARES_UPDATE_CHANNEL`, `OLIVARES_UPDATE_ENDPOINT`); with neither set it reads
+the public releases channel that `olivares upgrade` uses by default. A Business build runs
+`olivares upgrade --enterprise --connect`.
+
+- The page checks the channel only while an administrator has it open or presses **Check again**;
+  the engine still makes no background calls (above). When the channel cannot be reached or
+  verified the page keeps the running version and shows the reason `olivares upgrade` gives.
+- **Update to X** needs the administrative step-up, asks first (naming how many running sessions
+  the restart stops; each can be resumed), installs, restarts the engine on the new binary and
+  waits for it to answer. The install is recorded in the audit ledger as
+  `deployment.update.apply`.
+- A binary the engine's user cannot replace (an install directory it cannot write, such as an
+  image-baked container or a root-owned package path) is refused with `olivares upgrade`'s own
+  reason and installs nothing: update those by their own route (§4). A platform that cannot restart the process
+  in place reports that the new version is installed and must be restarted by its service manager.
+- Forward only: there is no rollback control. The previous binary stays next to the new one
+  (`olivares.bak-*`; none in a container, where `ota/` holds the release); §5 describes
+  restoring it.
 
 ---
 

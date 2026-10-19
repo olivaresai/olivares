@@ -241,6 +241,19 @@ var pathFnRe = regexp.MustCompile("(?ms)^\\s*(?:export\\s+)?(?:const\\s+([A-Za-z
 // supply a path for this call, and an import alone never supplies coverage.
 var consoleSiblingImportRe = regexp.MustCompile(`(?m)^[ \t]*import\s*\{([^}]+)\}\s*from\s*'(\./[A-Za-z_$][\w$-]*)'`)
 
+// consoleDoubleQuotedPathRe matches an absolute engine path written as a double-quoted
+// literal. Every call regex of this census reads single-quoted and template literals, which
+// is what web/.prettierrc.json (singleQuote) produces. The Business overlay is not formatted
+// by it, and its `http.get("/v1/system/residency")` was never read, so a console call that
+// exists counted as a route without surface (dev#2263).
+var consoleDoubleQuotedPathRe = regexp.MustCompile(`"(/v1/[^"'\x60\\\n]*)"`)
+
+// singleQuoteConsolePaths spells those literals with single quotes: the same length, so
+// offsets and line numbers hold, and one rewrite serves every regex below.
+func singleQuoteConsolePaths(src string) string {
+	return consoleDoubleQuotedPathRe.ReplaceAllString(src, "'$1'")
+}
+
 func consolePathConsts(text string) map[string]string {
 	consts := map[string]string{}
 	for _, m := range constRe.FindAllStringSubmatchIndex(text, -1) {
@@ -278,6 +291,7 @@ func consoleImportedPathFn(t *testing.T, file, text, name string) (string, bool)
 			if err != nil {
 				t.Fatalf("reading imported console path module %s: %v", module, err)
 			}
+			src = []byte(singleQuoteConsolePaths(string(src)))
 			consts := consolePathConsts(string(src))
 			resolveConsts(consts)
 			for _, loc := range pathFnRe.FindAllStringSubmatchIndex(string(src), -1) {
@@ -972,11 +986,12 @@ var consoleMachineFacing = map[string]string{
 	// medido ruta a ruta, y las de SCIM que la consola no llama vuelven al hueco: que algunas se
 	// llamen prueba que ese namespace SÍ tiene superficie, así que las demás son trabajo abierto,
 	// no infraestructura.
-	// ── SCIM, ruta a ruta y CON EL MÉTODO, porque declarar el namespace entero ya me lo tumbó la
-	// guarda: la consola llama `GET /Users`, `PATCH /Users/{}` y `GET /ServiceProviderConfig`.
-	// Su modelo de pertenencia es invitar → censo → activar (`/v1/invites`, `/v1/members` y ese
-	// PATCH). El APROVISIONAMIENTO —crear, reemplazar y borrar usuarios y grupos— es del IdP por
-	// RFC 7644, y los documentos de descubrimiento los lee un cliente SCIM.
+	// ── SCIM, route by route and WITH THE METHOD, because declaring the whole namespace was
+	// already refused by the guard: the console calls `GET /Users` and `GET /ServiceProviderConfig`,
+	// and removes a member with `DELETE /v1/members/{id}`. Its membership model is invite →
+	// roster → remove (`/v1/invites`, `/v1/members` and its DELETE). PROVISIONING (creating,
+	// replacing and deleting users and groups) belongs to the IdP under RFC 7644, and a SCIM
+	// client reads the discovery documents.
 	//
 	// ⚠ Y SE DEJAN FUERA LAS LECTURAS a propósito: `GET /Users/{}`, `GET /Groups` y `GET /Groups/{}`
 	// siguen contando como hueco, porque una vista de detalle o un censo de grupos SÍ son pantalla
@@ -985,7 +1000,8 @@ var consoleMachineFacing = map[string]string{
 	"GET /v1/scim/v2/ResourceTypes": "documento de descubrimiento SCIM (RFC 7644 §4): lo lee un cliente SCIM",
 	"POST /v1/scim/v2/Users":        "aprovisionamiento: lo escribe el IdP; la consola invita por /v1/invites",
 	"PUT /v1/scim/v2/Users":         "aprovisionamiento: lo escribe el IdP",
-	"DELETE /v1/scim/v2/Users":      "desaprovisionamiento: lo escribe el IdP; la consola desactiva por PATCH",
+	"PATCH /v1/scim/v2/Users":       "provisioning: written by the IdP; the console removes the member with DELETE /v1/members/{id}",
+	"DELETE /v1/scim/v2/Users":      "deprovisioning: written by the IdP; the console removes the member with DELETE /v1/members/{id}",
 	"POST /v1/scim/v2/Groups":       "aprovisionamiento de grupos: lo escribe el IdP",
 	"PUT /v1/scim/v2/Groups":        "aprovisionamiento de grupos: lo escribe el IdP",
 	"PATCH /v1/scim/v2/Groups":      "aprovisionamiento de grupos: lo escribe el IdP",
@@ -1221,7 +1237,7 @@ func parseConsoleClientCalls(t *testing.T, root string) (calls []clientCall, unr
 		if err != nil {
 			return err
 		}
-		text, scopedUnresolved := scopedTransportsAsHTTP(string(src))
+		text, scopedUnresolved := scopedTransportsAsHTTP(singleQuoteConsolePaths(string(src)))
 		for _, call := range scopedUnresolved {
 			call.file, _ = filepath.Rel(filepath.Join("..", ".."), path)
 			unresolved = append(unresolved, call)
@@ -1996,6 +2012,30 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"has no decision-detail screen that would show a reconstruction yet",
 	"GET /v1/m/sessions/providers/{}": "the providers screen lists, adds, tests, rotates and revokes; " +
 		"list and get return the same record, and there is no detail route that would read one",
+	"PUT /v1/m/sessions/workspaces/{}/setup-command": "the folder setup command ships as API and " +
+		"`olivares agent workspace setup`; this increment is engine and CLI only, and no console screen stores it yet",
+	"POST /v1/m/sessions/workspaces/{}/setup-command/approve": "approval of the exact setup command text ships as " +
+		"API and `olivares agent workspace approve-setup`; the console has no folder screen that would approve it yet",
+	// Tool version rings are Business: Community answers 501 business_required, and the Business
+	// build is driven from the CLI (`olivares tool ring ls|start|promote|rollback`). Neither build
+	// has a console caller in this increment; the console panel adds its callers and removes these.
+	"GET /v1/m/sessions/tool-rings": "version rings are read with `olivares tool ring ls`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"PUT /v1/m/sessions/tool-rings/{}": "a ring is started with `olivares tool ring start`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"POST /v1/m/sessions/tool-rings/{}/promote": "a ring is promoted with `olivares tool ring promote`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	"POST /v1/m/sessions/tool-rings/{}/rollback": "a ring is rolled back with `olivares tool ring rollback`; " +
+		"no console panel yet, and Community answers 501 business_required",
+	// llama.cpp and vLLM run as managed model servers of the engine (#2568). That increment is
+	// engine, CLI and generated clients; the AI tools page has the Ollama service panel but no
+	// panel for these two yet. The panel that adds the callers removes these lines.
+	"GET /v1/m/agenttools/model-servers": "`olivares tool start llama-cpp|vllm` reads each server's state " +
+		"while it waits for the server to answer; the AI tools page has no llama.cpp or vLLM panel yet",
+	"POST /v1/m/agenttools/model-servers/{}/start": "`olivares tool start llama-cpp|vllm --model` starts " +
+		"the server; the AI tools page has no llama.cpp or vLLM panel with a model field yet",
+	"POST /v1/m/agenttools/model-servers/{}/stop": "`olivares tool stop llama-cpp|vllm` stops the server; " +
+		"the AI tools page has no llama.cpp or vLLM panel yet",
 	// The Roles tab reads complete records from the collection endpoints. Individual
 	// lookups remain REST/CLI surfaces until a console detail view needs them.
 	"GET /v1/m/governance/rbac/roles/{}": "`olivares governance rbac roles get` reads one role; " +
@@ -2014,16 +2054,26 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"this increment has no console binding-detail screen",
 	"DELETE /v1/auth/os-account-bindings/{}": "`olivares auth os-account revoke` confirms audited revocation " +
 		"while retaining the permanent account reservation; this increment has no console revocation control",
+	// #2179's repo-resident agent configuration approval shipped its operator
+	// surface as CLI and REST/SDK: the report of what a folder's repository
+	// carries and the person's approval of that exact flagged-subset hash. The
+	// increment that builds the console approval screen removes these lines.
+	"GET /v1/m/sessions/workspaces/{}/project-config": "`olivares agent workspace project-config` lists the " +
+		"flagged repo-resident agent configuration and the SHA-256 a start waits for; this increment " +
+		"has no console workspace-approval screen",
+	"POST /v1/m/sessions/workspaces/{}/project-config/approve": "`olivares agent workspace " +
+		"approve-project-config` records the person's approval of the exact hash; this increment " +
+		"has no console approval control",
 
-	// Skills catalog retirement, revision publishing and revision-to-revision diffs remain
-	// CLI and REST/SDK surfaces. Remove each entry when its console flow gains a caller; the
+	// Skills catalog retirement, revision publishing and comparisons remain CLI and
+	// REST/SDK surfaces. Remove each entry when its console flow gains a caller; the
 	// existing stale-declaration checks enforce it.
 	"DELETE /v1/m/skills/packs/{}": "unused pack retirement uses `olivares skills rm`; " +
 		"the console has no catalog retirement confirmation or pack-version state",
 	"POST /v1/m/skills/packs/{}/revisions": "publishing another immutable revision uses `olivares skills update`; " +
 		"the console has no catalog revision import or retry-key flow",
-	"GET /v1/m/skills/packs/{}/diff": "the diff between two chosen revisions uses `olivares skills diff`; " +
-		"the console's update check shows the diff in the POST /packs/{}/update answer and has no revision picker",
+	"GET /v1/m/skills/packs/{}/diff": "published revision comparisons use `olivares skills diff`; " +
+		"the console checks candidate updates through POST /packs/{}/update and has no published-revision comparison",
 	//-executor.md ships saved Docker setup as REST APIs without console controls.
 	// The deployment console still reads structural readiness through GET /executor.
 	"GET /v1/m/deploy/executor/config": "saved executor setup is a documented administrator REST read; " +
@@ -2039,6 +2089,36 @@ var consoleDeferredOperatorSurface = map[string]string{
 		"the deployment console has no saved-setup connection-test control",
 	"GET /v1/m/orchestration/stream": "the orchestration SSE stream remains REST/SDK; " +
 		"the Business console reads graph, flows and schedules through typed queries",
+}
+
+// Keep the console's pin edit and the CLI-only revision comparison accounted for
+// even when unrelated coverage improvements leave room under the route ratchet.
+func TestSkillsRoutesHaveConsoleDisposition(t *testing.T) {
+	deferredSurfaces := withEditionConsoleSurfaces(maps.Clone(consoleDeferredOperatorSurface))
+	routed := walkEveryRoute(t)
+	calls, _, _ := parseConsoleClientCalls(t, filepath.Join("..", "..", "web", "src"))
+	called := map[string]bool{}
+	for _, c := range calls {
+		called[c.method+" "+c.path] = true
+	}
+	for _, key := range []string{
+		"PUT /v1/m/skills/assignments/{}",
+		"GET /v1/m/skills/packs/{}/diff",
+	} {
+		t.Run(key, func(t *testing.T) {
+			if !routed[key] {
+				t.Fatal("the published skills operation must remain registered")
+			}
+			deferred := strings.TrimSpace(deferredSurfaces[key]) != ""
+			if key == "PUT /v1/m/skills/assignments/{}" {
+				if !called[key] || deferred {
+					t.Fatal("the console pin edit must retain its caller and have no stale deferral")
+				}
+			} else if !called[key] && !deferred {
+				t.Fatal("the revision comparison must have a console caller or an exact deferral reason")
+			}
+		})
+	}
 }
 
 // Department controls belong to the assembled Business console. Their shared
@@ -2632,6 +2712,9 @@ func withEditionConsoleSurfaces(surfaces map[string]string) map[string]string {
 			"GET /v1/m/orchestration/workflows/{}/runs":                 "Business orchestration: Community answers 501; its console control is private",
 			"GET /v1/m/orchestration/workflows/{}/runs/{}":              "Business orchestration: Community answers 501; its console control is private",
 			"POST /v1/m/orchestration/workflows/{}/runs/{}/reauthorize": "Business orchestration: Community answers 501; its console control is private",
+
+			// Registered as a Business seam (38d3e1027): Community answers 501 business_required.
+			"GET /v1/m/governance/approvals/review-quality": "Business approval review quality: Community answers 501 business_required; its console control is private",
 		})
 	}
 	return surfaces

@@ -126,6 +126,8 @@ vi.mock('./command-menu', () => ({
   CommandMenu: () => <div data-testid="palette" />,
 }))
 vi.mock('./shortcuts', () => ({ GlobalShortcuts: () => null }))
+// Session notifications are their own unit (session-notifications.test.tsx).
+vi.mock('./session-notifications', () => ({ SessionNotifications: () => null }))
 // The destination's section row is its own unit (registry.shell-destinations.test.tsx).
 vi.mock('./destination-sections', () => ({ DestinationSections: () => null }))
 vi.mock('./tenant-gate', () => ({

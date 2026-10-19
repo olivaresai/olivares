@@ -5,6 +5,7 @@ import { lazy } from 'react'
 import { PlugZap, SlidersHorizontal } from 'lucide-react'
 import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 
 // Control console (FASE X): user onboarding, SSO/IdP, workspaces &
 // agent-groups, scoped admin — the configure surface hang panels off.
@@ -31,6 +32,8 @@ export const VIEWS = [
     helpHref: '/reference/modules/xx-multi-tenancy',
     icon: SlidersHorizontal,
     permission: 'tenant:admin',
+    capability: PANEL_EXTENSIONS.consoleAccess?.capability,
+    continuity: PANEL_EXTENSIONS.consoleAccess?.continuity,
     element: lazyView(ConsoleView),
   },
   {

@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useMemo, useState } from 'react'
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Gavel, History, Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +19,8 @@ import {
   attributesCurrentState,
   buildIntent,
   listDecisions,
+  listWorkItems,
+  WORK_PAGE_MAX,
   workKeys,
   type DecisionView,
   type WorkIntent,
@@ -22,6 +28,7 @@ import {
 import type { WorkDecision, WorkPage } from './types'
 import { ApplyFlow } from './apply-flow'
 import { WorkSection } from './work-section'
+import { useOwnerLabel } from './owner-label'
 
 /**
  * THE DECISION LEDGER — and the one screen in this feature that can tell a lie the
@@ -52,6 +59,20 @@ export function DecisionsPanel({ workItemId }: { workItemId?: string }) {
   const [revokeIntent, setRevokeIntent] = useState<WorkIntent | null>(null)
 
   const canRevoke = can('sessions:decision:admin')
+  const ownerLabel = useOwnerLabel()
+  // The item list names the item a decision is about. It is its own read, not /work's (that one carries the
+  // operator's filters): up to one engine page, and only for a caller who may read work items. An item past the
+  // page, or a list that cannot be read, leaves the row with the engine's own kind:ref, never a guess.
+  const items = useQuery({
+    queryKey: workKeys.items(activeTenant, { limit: WORK_PAGE_MAX }),
+    queryFn: ({ signal }) =>
+      listWorkItems({ limit: WORK_PAGE_MAX }, { tenant: activeTenant }, signal),
+    enabled: can('sessions:work:read'),
+  })
+  const titleOf = useMemo(
+    () => new Map((items.data?.items ?? []).map((i) => [i.id, i.title])),
+    [items.data],
+  )
 
   const params = { view, work_item_id: workItemId, limit: 50 }
   // ⛔ ACUMULA, NO REEMPLAZA. Antes esto era un `useQuery` con el cursor DENTRO de la clave: al
@@ -172,6 +193,8 @@ export function DecisionsPanel({ workItemId }: { workItemId?: string }) {
                     key={d.id}
                     decision={d}
                     canRevoke={canRevoke}
+                    titleOf={titleOf}
+                    ownerLabel={ownerLabel}
                     onRevoke={() =>
                       setRevokeIntent(
                         buildIntent({
@@ -215,16 +238,35 @@ export function DecisionsPanel({ workItemId }: { workItemId?: string }) {
   )
 }
 
+/** `kind:ref` is the engine's own address. It stays the label only when nothing names it. */
+const address = (kind: string, ref: string) => `${kind}:${ref}`
+
 function DecisionRow({
   decision,
   canRevoke,
+  titleOf,
+  ownerLabel,
   onRevoke,
 }: {
   decision: WorkDecision
   canRevoke: boolean
+  titleOf: ReadonlyMap<string, string>
+  ownerLabel: (kind: string, ref: string) => string
   onRevoke: () => void
 }) {
   const { t } = useTranslation('work')
+  const itemTitle =
+    decision.subject_kind === 'work.scope'
+      ? titleOf.get(decision.subject_ref)
+      : undefined
+  const subject = itemTitle
+    ? t('decisions.scopeOf', { item: itemTitle })
+    : address(decision.subject_kind, decision.subject_ref)
+  const named = ownerLabel(decision.decided_by_kind, decision.decided_by_ref)
+  const actor =
+    named === decision.decided_by_ref
+      ? address(decision.decided_by_kind, decision.decided_by_ref)
+      : named
   // The engine's own projection marker — NOT the open tab, and NOT a local guess.
   const attributed = attributesCurrentState(decision)
 
@@ -251,10 +293,17 @@ function DecisionRow({
           )}
         </div>
         <p className="text-body">{decision.statement_md}</p>
-        <p className="text-caption text-muted-foreground">
+        <p
+          className="text-caption text-muted-foreground"
+          title={t('decisions.meta', {
+            subject: address(decision.subject_kind, decision.subject_ref),
+            actor: address(decision.decided_by_kind, decision.decided_by_ref),
+            at: decision.effective_at,
+          })}
+        >
           {t('decisions.meta', {
-            subject: `${decision.subject_kind}:${decision.subject_ref}`,
-            actor: `${decision.decided_by_kind}:${decision.decided_by_ref}`,
+            subject,
+            actor,
             at: decision.effective_at,
           })}
         </p>

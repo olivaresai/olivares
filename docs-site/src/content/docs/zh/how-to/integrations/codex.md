@@ -271,7 +271,7 @@ printf '%s\n' '{"hook_event_name":"PreToolUse","session_id":"019fc4c3-40c5-7371-
 | **Control console > Connectors**（`/console`） | source、mode、频率、非 secret 配置，以及 Test/Save/Reload action。 | 已持久化的 source 立即显示，但数据不会。 |
 | **Health > Connectors**（`/health`） | 连接器状态、消息、趋势和最近 activity。 | roster 重新加载后。 |
 | **Observability > Ingestion**（`/observability`） | `olivares.codex` 的 counter、observation type，以及首次/末次接收。 | `Gather` 发出数据后。这些 process 全局 counter 从 boot 开始，并在重启时归零。 |
-| **Cost & FinOps**（`/finops`） | 估算的 Analytics usage，以及启用时的日结成本。 | 需要有效 credential、`workspace_id` 和已授权 API；`costs` 要求明确 opt-in。 |
+| **Budgets**（`/stored-budgets`） | 各已保存预算限额的消耗情况，由估算的 Analytics usage 以及启用时的日结成本计算得出。 | 需要有效 credential、`workspace_id` 和已授权 API；`costs` 要求明确 opt-in。 |
 | **Security**（`/security`） | adoption finding、不可用的企业 surface，以及对 Compliance data 的 opt-in 结构化分析。 | collection 后；企业 surface 的 403/404 response 会成为 posture evidence，而不是成功。 |
 | **Sessions**（`/sessions`） | 包含 action、model、identity、cost 和 posture 的 session 与 timeline。 | 来自受治理的 hook。仅有 batch source 不会创建 live session。 |
 | **Audit**（`/audit`） | 已导入的 activity evidence 和锚定在 ledger 中的 PEP 决策。 | 收到可归属的 log 或 decision 后。 |
@@ -281,8 +281,6 @@ printf '%s\n' '{"hook_event_name":"PreToolUse","session_id":"019fc4c3-40c5-7371-
 
 <img class="light:sl-hidden" src="/console/health-dark.png" alt="覆盖整个资产域的存活性、可靠性与依赖关系——基于观测到的活动与陈旧性扫描推导得出，从不主动探测基础设施。">
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="覆盖整个资产域的存活性、可靠性与依赖关系——基于观测到的活动与陈旧性扫描推导得出，从不主动探测基础设施。">
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="覆盖整个资产域的 token 成本——趋势、分摊计费、对账、预算与预测。各项数字与 FinOps 账本所报告的完全一致。">
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="覆盖整个资产域的 token 成本——趋势、分摊计费、对账、预算与预测。各项数字与 FinOps 账本所报告的完全一致。">
 <img class="light:sl-hidden" src="/console/security-dark.png" alt="护栏发现项、强制执行态势、异常队列以及防篡改的事件取证。该平面默认仅作探测——它进行记录，除非已启用并受治理的强制执行，否则不会自行阻断。">
 <img class="dark:sl-hidden" src="/console/security-light.png" alt="护栏发现项、强制执行态势、异常队列以及防篡改的事件取证。该平面默认仅作探测——它进行记录，除非已启用并受治理的强制执行，否则不会自行阻断。">
 

@@ -129,6 +129,9 @@ func TestTheStatusDTOCarriesTheCredentialFacts(t *testing.T) {
 	if info.Status != "valid" || info.Licensee != "DODO-10 Sub A" {
 		t.Fatalf("server-info display = %+v, want valid/DODO-10 Sub A", info)
 	}
+	if info.SupportProfile != "business" {
+		t.Fatalf("product tier = %q, want business", info.SupportProfile)
+	}
 	// The two labels a v3 credential does not carry stay EMPTY rather than being filled from the
 	// nearest-looking field. The vector's `support_profile` is "business" — a product tier, not a
 	// support relationship — and mapping it by name would render "Support: business" in a console
@@ -216,6 +219,70 @@ func TestTheStatusDTONamesPaidThroughApartFromTheLease(t *testing.T) {
 	// expires_at is a published field: it keeps reporting the right's effective boundary.
 	if got.ExpiresAt == nil || !got.ExpiresAt.Equal(wantLease) {
 		t.Fatalf("expires_at = %v, want %v unchanged (published contract)", got.ExpiresAt, wantLease)
+	}
+}
+
+func TestTheStatusDTONamesTheCredentialProductProfile(t *testing.T) {
+	pub := license.DefaultPublicKey()
+	if len(pub) == 0 {
+		t.Skip("this build embeds no verification key")
+	}
+	svc, _, _ := newTestLicenseService(t)
+	svc.holder = newLicenseHolder(pub, licenseSource{Blob: signTestCredentialV3(t), Kind: licenseSourceDataDir},
+		func() time.Time { return insideTheBaseTerm }, discardLogger())
+	got, err := svc.LicenseStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(b, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "valid" || got.Edition != "community" {
+		t.Fatalf("premise: status=%q edition=%q, want valid/community", got.Status, got.Edition)
+	}
+	if wire["support_profile"] != "business" {
+		t.Fatalf("support_profile = %v, want business (the credential's product tier)", wire["support_profile"])
+	}
+	if got.SupportTier != "" {
+		t.Fatalf("support_tier = %q: product profile must not become a support relationship", got.SupportTier)
+	}
+	// The signed Enterprise profile must travel unchanged too. Re-sign the test
+	// vector after changing that display fact, using only the public development key.
+	parts := strings.Split(signTestCredentialV3(t), ".")
+	payload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = bytes.Replace(payload, []byte(`"support_profile":"business"`), []byte(`"support_profile":"enterprise"`), 1)
+	blob := base64.RawURLEncoding.EncodeToString(payload) + "." +
+		base64.RawURLEncoding.EncodeToString(ed25519.Sign(license.DevPrivateKey(), payload))
+	svc.holder.set(licenseSource{Blob: blob, Kind: licenseSourceDataDir})
+	got, err = svc.LicenseStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "valid" || got.SupportProfile != "enterprise" {
+		t.Fatalf("Enterprise profile: status=%q profile=%q, want valid/enterprise", got.Status, got.SupportProfile)
+	}
+	svc.holder.set(licenseSource{Blob: blob + "x", Kind: licenseSourceDataDir})
+	got, err = svc.LicenseStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "invalid" || got.SupportProfile != "" {
+		t.Fatalf("tampered credential: status=%q profile=%q, want invalid/empty", got.Status, got.SupportProfile)
+	}
+	// An unverified credential shows no profile at all: the key is omitted, not sent empty.
+	if b, err = json.Marshal(got); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "support_profile") {
+		t.Fatalf("tampered credential: support_profile must be omitted on the wire, got %s", b)
 	}
 }
 

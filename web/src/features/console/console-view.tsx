@@ -24,6 +24,13 @@ import { ScopesTab } from './scopes-tab'
 import { MCPGatewayTab } from './mcp-gateway-tab'
 import { SecretsTab } from './secrets-tab'
 import { WorkspaceConnectorsTab } from './workspace-connectors-tab'
+import {
+  AGENT_CREATION,
+  GROUP_CREATION,
+  GRANT_CREATION,
+  useConsoleOperation,
+} from './console-authority'
+import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher'
 
 /**
  * ConsoleView is the FASE X control console: the single hub an enterprise
@@ -66,24 +73,45 @@ const TAB_VALUES = [
 const TAB_URL_KEYS = ['tab'] as const
 const FALLBACK_TAB = 'people'
 
-function decodeConsoleTab(raw: UrlState): UrlStateDecoded<string> {
+function decodeConsoleTab(
+  raw: UrlState,
+  fallback = FALLBACK_TAB,
+): UrlStateDecoded<string> {
   const want = raw.tab
   if (want === undefined) {
-    return { value: FALLBACK_TAB, issues: [] }
+    return { value: fallback, issues: [] }
   }
   if ((TAB_VALUES as readonly string[]).includes(want)) {
     return { value: want, issues: [] }
   }
   // Named so the hook can drop it from the address bar (a refused value must
   // not stay in a copied link) without rewriting any other key.
-  return { value: FALLBACK_TAB, issues: ['tab'] }
+  return { value: fallback, issues: ['tab'] }
 }
 
 export default function ConsoleView() {
   const { t } = useTranslation(['console', 'common'])
+  const authority = useConsoleOperation('', 'tenant:admin')
+  const tenantAdmin = authority.current
+  const agents = useConsoleOperation(AGENT_CREATION, 'agent:write')
+  const groups = useConsoleOperation(GROUP_CREATION, 'agent:write')
+  const grants = useConsoleOperation(GRANT_CREATION, 'governance:rbac:admin')
+  const fallback = tenantAdmin
+    ? FALLBACK_TAB
+    : agents.current
+      ? 'agents'
+      : groups.current
+        ? 'scopes'
+        : grants.current
+          ? 'roles'
+          : 'agents'
+  const decode = useCallback(
+    (raw: UrlState) => decodeConsoleTab(raw, fallback),
+    [fallback],
+  )
   const [tab, patchTab] = useValidatedUrlState(
     TAB_URL_KEYS,
-    decodeConsoleTab,
+    decode,
     // NOT a page change, so the router takes no part in scroll restoration for it.
     // With `scrollRestoration: true` (app/router.tsx) every navigation otherwise
     // restores, after render, the cached offsets of every element that ever fired a
@@ -104,6 +132,15 @@ export default function ConsoleView() {
     [patchTab],
   )
 
+  if (!tenantAdmin && authority.access !== null && !authority.workspace) {
+    return (
+      <>
+        <PageHeader title={t('console:title')} icon={SlidersHorizontal} />
+        <WorkspaceSwitcher variant="card" />
+      </>
+    )
+  }
+
   return (
     <Tabs value={tab} onValueChange={setTab}>
       {/* Title and the one control line share a 36 px row so the first table
@@ -118,26 +155,40 @@ export default function ConsoleView() {
           icon={SlidersHorizontal}
         />
         <TabsList className="min-w-0">
-          <TabsTrigger value="people">{t('console:tabs.people')}</TabsTrigger>
+          {tenantAdmin && (
+            <TabsTrigger value="people">{t('console:tabs.people')}</TabsTrigger>
+          )}
           <TabsTrigger value="agents">{t('console:tabs.agents')}</TabsTrigger>
-          <TabsTrigger value="sso">{t('console:tabs.sso')}</TabsTrigger>
+          {tenantAdmin && (
+            <TabsTrigger value="sso">{t('console:tabs.sso')}</TabsTrigger>
+          )}
           <TabsTrigger value="scopes">{t('console:tabs.scopes')}</TabsTrigger>
           <TabsTrigger value="roles">{t('console:tabs.roles')}</TabsTrigger>
-          <TabsTrigger value="bindings">
-            {t('console:tabs.bindings')}
-          </TabsTrigger>
-          <TabsTrigger value="mcpGateway">
-            {t('console:tabs.mcpGateway')}
-          </TabsTrigger>
-          <TabsTrigger value="secrets">{t('console:tabs.secrets')}</TabsTrigger>
-          <TabsTrigger value="connectors">
-            {t('console:tabs.connectors')}
-          </TabsTrigger>
-          <TabsTrigger value="wsConnectors">
-            {t('console:tabs.wsConnectors', 'Workspace Connectors')}
-          </TabsTrigger>
-          <TabsTrigger value="apiKeys">{t('console:tabs.apiKeys')}</TabsTrigger>
-          <TabsTrigger value="license">{t('console:tabs.license')}</TabsTrigger>
+          {tenantAdmin && (
+            <>
+              <TabsTrigger value="bindings">
+                {t('console:tabs.bindings')}
+              </TabsTrigger>
+              <TabsTrigger value="mcpGateway">
+                {t('console:tabs.mcpGateway')}
+              </TabsTrigger>
+              <TabsTrigger value="secrets">
+                {t('console:tabs.secrets')}
+              </TabsTrigger>
+              <TabsTrigger value="connectors">
+                {t('console:tabs.connectors')}
+              </TabsTrigger>
+              <TabsTrigger value="wsConnectors">
+                {t('console:tabs.wsConnectors', 'Workspace Connectors')}
+              </TabsTrigger>
+              <TabsTrigger value="apiKeys">
+                {t('console:tabs.apiKeys')}
+              </TabsTrigger>
+              <TabsTrigger value="license">
+                {t('console:tabs.license')}
+              </TabsTrigger>
+            </>
+          )}
         </TabsList>
       </div>
       <TabsContent value="people" className="pt-0">

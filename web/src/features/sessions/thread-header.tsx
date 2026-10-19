@@ -41,6 +41,7 @@ import type { Capability, UnifiedSession } from './provenance'
 import { hostIsolationUnavailable } from './provenance'
 import { IconTip } from './icon-tip'
 import { RunActions } from './run-actions'
+import { LimitNotice } from './session-limit'
 import { StateDot } from './session-state-dot'
 import { SessionMeter } from './session-meter'
 import { sessionModelRef, sessionUsage } from './session-usage'
@@ -128,7 +129,7 @@ export function ThreadHeader({
   const tool = driver ? toolName(driver) : null
   const model = sessionModelRef(run, live)
   const toolModel = [tool, model, run?.effort].filter(Boolean).join(' · ')
-  const usage = sessionUsage(run, live)
+  const usage = sessionUsage(session.runs, live)
 
   return (
     <header
@@ -164,6 +165,7 @@ export function ThreadHeader({
           {toolModel}
         </span>
       ) : null}
+      {run ? <LimitNotice run={run} caps={caps} /> : null}
       <span className="hidden min-w-0 flex-1 items-center gap-2 truncate min-[1100px]:flex">
         <SessionMeter run={run} usage={usage} />
       </span>

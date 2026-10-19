@@ -1,0 +1,31 @@
+{
+  "menu": {
+    "trigger": "Viste salvate",
+    "myViews": "Le mie viste",
+    "shared": "Condivise",
+    "empty": "Nessuna vista salvata",
+    "loading": "Caricamento delle viste salvate…",
+    "loadFailed": "Non è stato possibile caricare le viste salvate.",
+    "save": "Salva la vista attuale…",
+    "delete": "Elimina",
+    "deleteAria": "Elimina la vista salvata {{name}}"
+  },
+  "save": {
+    "title": "Salva la vista attuale",
+    "description": "Memorizza i filtri e l'ambito attuali per poterli applicare di nuovo.",
+    "name": "Nome",
+    "viewDescription": "Descrizione",
+    "share": "Condividi con questo tenant",
+    "shareHint": "Chiunque in questo tenant abbia accesso alle viste salvate può applicarla.",
+    "cancel": "Annulla",
+    "submit": "Salva vista",
+    "failed": "Non è stato possibile creare la vista salvata."
+  },
+  "delete": {
+    "title": "Eliminare la vista salvata?",
+    "description": "Elimina “{{name}}”. L’operazione non può essere annullata.",
+    "confirm": "Elimina vista",
+    "cancel": "Annulla",
+    "failed": "Non è stato possibile eliminare la vista salvata."
+  }
+}

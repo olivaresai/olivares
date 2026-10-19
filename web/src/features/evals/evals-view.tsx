@@ -7,7 +7,7 @@
 // results), and RBAC gating, then composes the pure pieces inside <IntelPage>. It
 // computes nothing about quality — Does; this presents. The candidate output is
 // never fetched or shown — only outcomes, scores, labels and hash fingerprints.
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -52,17 +52,12 @@ import {
   AbComparison,
   CaseOutcomeBar,
   CaseResultsTable,
+  ComparisonDiffLine,
   DriftChart,
   RunsTable,
   ScorecardGrid,
 } from './components'
-import type {
-  AbRequest,
-  EvalRun,
-  GateEvaluation,
-  Scorecard,
-  Suite,
-} from './types'
+import type { AbRequest, EvalRun, GateEvaluation } from './types'
 import './i18n'
 
 const GROUP_BY: ScorecardGroupBy[] = [
@@ -910,8 +905,16 @@ function RunDetailDialog({
           <DialogDescription>{t('cases.description')}</DialogDescription>
         </DialogHeader>
         {run ? (
-          <div className="flex flex-col gap-4">
+          // min-w-0: DialogContent is a grid, so without it the case table's
+          // min-content width widens the track past a phone viewport and clips
+          // the interval line (and its denominators) at the right edge.
+          <div className="flex min-w-0 flex-col gap-4">
             <CaseOutcomeBar run={run} />
+            {/* The verdict's evidence rides the same run payload the table row
+                came on (the engine attaches the comparison receipt to every run
+                read, list included) — no second request, and nothing to show
+                when no baseline was compared. */}
+            <ComparisonDiffLine comparison={run.comparison} />
             <CaveatNotice>{t('cases.noPayload')}</CaveatNotice>
             <AsyncSection query={resultsQ} skeletonHeight={200}>
               {(list) =>
@@ -1240,20 +1243,6 @@ function DriftTab({ tenant }: { tenant: string | null }) {
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
-  const suites = suitesQ.data?.items ?? []
-  const thresholdFor = useMemo(
-    () =>
-      (sc: Scorecard): number | undefined => {
-        const suite: Suite | undefined =
-          suites.find(
-            (s) =>
-              s.subject_kind === sc.subject_kind && s.name.includes(sc.key),
-          ) ?? suites[0]
-        return suite?.pass_threshold
-      },
-    [suites],
-  )
-
   return (
     <>
       <ListTruncationBadge
@@ -1298,11 +1287,8 @@ function DriftTab({ tenant }: { tenant: string | null }) {
                     </SelectTrigger>
                     <SelectContent>
                       {list.items.map((sc) => (
-                        <SelectItem
-                          key={`${sc.subject_kind}:${sc.key}`}
-                          value={sc.key}
-                        >
-                          {sc.key}
+                        <SelectItem key={sc.key} value={sc.key}>
+                          {sc.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1311,7 +1297,14 @@ function DriftTab({ tenant }: { tenant: string | null }) {
               >
                 <CaveatNotice>{t('drift.note')}</CaveatNotice>
               </SectionCard>
-              <DriftChart scorecard={active} threshold={thresholdFor(active)} />
+              <DriftChart
+                scorecard={active}
+                threshold={
+                  suitesQ.data?.items.find(
+                    (suite) => suite.id === active.suite_ref,
+                  )?.pass_threshold
+                }
+              />
             </>
           )
         }}

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -186,7 +187,19 @@ func (c *sessionHookCredentials) mintForPrincipalContext(ctx context.Context, p 
 		ctx = context.WithValue(ctx, freshStopEpochKey{}, freshStopEpoch{tenant, intent.AgentRef, epoch})
 	}
 	return c.Mint(ctx, p, auth.SessionScope{TenantID: tenant, WorkspaceID: workspace, FolderRef: firstNonEmptyStr(intent.WorkspaceRef, intent.RunRef), FolderPath: intent.FolderPath, SessionRef: intent.ClaimSID, RunRef: intent.RunRef, AgentRef: intent.AgentRef, Holder: intent.Holder, Fence: intent.Fence, StopEpoch: epoch, Preset: intent.Preset(), AllowedTools: intent.AllowedTools,
-		SecretEnv: strings.Join(secretEnvNames(intent.SecretEnv), ",")})
+		SecretEnv: strings.Join(redactedSecretNames(intent), ",")})
+}
+
+// redactedSecretNames names every secret the run's redactor withholds: the vault
+// secrets given as environment, the package registry tokens, and the repository
+// read credential. The hook and the approval apply that redactor to a tool input
+// only when this is not empty.
+func redactedSecretNames(intent sessions.LaunchIntent) []string {
+	names := secretEnvNames(slices.Concat(intent.SecretEnv, intent.RegistrySecrets))
+	if intent.GitRead != "" {
+		names = append(names, "git_read<-"+intent.GitRead)
+	}
+	return names
 }
 
 func (c *sessionHookCredentials) Authenticate(ctx context.Context, token string) (auth.Principal, error) {

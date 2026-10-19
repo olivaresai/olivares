@@ -103,7 +103,7 @@
     "empty": "Keine Aktivität pro Entwickler in diesem Zeitraum.",
     "emptyHint": "Aktivität pro Entwickler erscheint hier, sobald in diesem Zeitraum Sitzungen laufen. Erweitern Sie den Zeitraum, um mehr Tage abzudecken.",
     "locked": "Ansicht pro Entwickler eingeschränkt",
-    "lockedHint": "Das Anzeigen der Produktivität einzelner Entwickler erfordert die Berechtigung adoption:developer:read (deny-closed).",
+    "lockedHint": "Ihre Rolle kann die Produktivität einzelner Entwickler nicht sehen.",
     "columns": {
       "developer": "Entwickler"
     }

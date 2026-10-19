@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -188,7 +189,7 @@ export function BackupSchedule() {
           </label>
         </div>
         <p className="text-caption text-muted-foreground">
-          {t('schedule.dualControlDescription')}
+          {withInlineCommands(t('schedule.dualControlDescription'))}
         </p>
         {/* A requested disarm is not immediate, so the toggle snapping back to ON
             after a save would otherwise read as "the save failed". Say what is

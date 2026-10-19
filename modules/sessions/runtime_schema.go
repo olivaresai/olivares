@@ -37,9 +37,17 @@ const (
 	colRunQueuedCredentialSeal    = "queued_credential_seal"
 	colRunQueuedActor             = "queued_actor"
 	colRunQueuedActorKind         = "queued_actor_kind"
+	// The launcher's credential, kept on every run so the engine's own resume can
+	// revalidate that exact login after a restart (runtime_engine_stop_resume.go). Unlike the
+	// queued_* columns, which end with the approval wait, these stay for the life of the run.
+	colRunResumeCredentialID      = "resume_credential_id"
+	colRunResumeCredentialKind    = "resume_credential_kind"
+	colRunResumeCredentialVersion = "resume_credential_version"
+	colRunResumeCredentialSeal    = "resume_credential_seal"
 	colRunEnvAllow                = "env_allow_names"
 	colRunSecretEnv               = "secret_env_names"
 	colRunGitRead                 = "git_read"
+	colRunRegistrySecrets         = "registry_secret_names"
 	colRunQueuedIntent            = "queued_intent"
 	colRunRef                     = "run_ref"
 	colRunPeers                   = "peers"
@@ -48,6 +56,8 @@ const (
 	colTransport                  = "transport"
 	colPermissionMode             = "permission_mode"
 	colEffort                     = "effort"
+	colRunFastMode                = "fast_mode"
+	colRunServiceTier             = "service_tier"
 	colRunModelRef                = "model_ref"
 	colWorkspaceRef               = "workspace_ref"
 	// colRunWorkspacePath is the EFFECTIVE working directory this run's child was
@@ -125,6 +135,13 @@ const (
 	colClaimHolder = "claim_holder"
 	colClaimFence  = "claim_fence"
 	colRunClaimSID = "claim_sid"
+	// colRunLauncherUserID is the account that launched the run, written once when the row is
+	// created and never changed by a resume (claim_holder is re-stamped by each resume). It is
+	// the account behind a token launch too, which the actor string does not carry. Evidence,
+	// not authority: the edition gate on steering reads it (steering_edition.go), and the engine's
+	// resume names it beside the launch credential, whose own owner must be that account
+	// (runtime_engine_stop_resume.go), so it adds no authority.
+	colRunLauncherUserID = "launcher_user_id"
 
 	// P2/W2: the CORE workspace whose authority governs this run, resolved from
 	// the run's own session identity at creation. It is the run's authorization
@@ -217,6 +234,14 @@ const (
 	colRunOutputTokens  = "output_tokens"
 	colRunCostMicroUSD  = "cost_micro_usd"
 	colRunUsageModelRef = "usage_model_ref"
+	// Native result-frame window metadata only. NULL on older sessions means
+	// unknown; reconcileColumns adds this nullable field without a backfill.
+	colRunContextWindows = "context_windows"
+
+	// colRunUsageLimit is the usage or rate limit the TOOL ended a turn with
+	// (runtime_limit.go): kind, reset time and the account that hit it. NULL means
+	// the last turn did not end on a limit; a later successful turn writes NULL again.
+	colRunUsageLimit = "usage_limit"
 
 	// colRunToolMode is the session's mode as the TOOL last reported it
 	// (runtime_tool_mode.go): Claude Code's permission mode, Codex's approval
@@ -268,15 +293,27 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunQueuedCredentialVersion, Kind: model.KindInt, Nullable: true},
 			{Name: colRunQueuedCredentialSeal, Kind: model.KindText, Nullable: true, Principal: model.None("irreversible SHA-256 of a credential verifier; never bearer material or an identity: runtime.go:1253")},
 			{Name: colRunQueuedActorKind, Kind: model.KindText, Nullable: true, Principal: model.None("actor kind of the queued launch, not a principal reference: runtime_approval_wait.go:57")},
+			// Nullable for the expand-contract reason: an existing sessions_run gains them on the
+			// next boot, and a run that predates them records no credential to resume with.
+			{Name: colRunResumeCredentialID, Kind: model.KindUUID, Nullable: true, Principal: model.Ref(model.EncodeCredentialID, model.ClassAuthority)},
+			{Name: colRunResumeCredentialKind, Kind: model.KindText, Nullable: true, Principal: model.None("credential discriminator: user session or API token, no identity: runtime.go:3085, runtime_engine_stop_resume.go:188")},
+			{Name: colRunResumeCredentialVersion, Kind: model.KindInt, Nullable: true},
+			{Name: colRunResumeCredentialSeal, Kind: model.KindText, Nullable: true, Principal: model.None("irreversible SHA-256 of a credential verifier; never bearer material or an identity: runtime.go:3087, runtime_engine_stop_resume.go:189")},
 			{Name: colRunEnvAllow, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of permitted environment variable names; never their values: runtime.go:1332-1333")},
 			{Name: colRunSecretEnv, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets a run is given; never their values: session_secret_env.go:151, session_secret_env.go:165, runtime.go:1499")},
 			{Name: colRunGitRead, Kind: model.KindText, Nullable: true, Principal: model.None("the approved repository binding id a run gets a GitHub read credential for; never the token: session_git_read.go:144-157, runtime_dto.go:173")},
+			// Nullable for the expand-contract reason: an existing sessions_run gains it on the
+			// next boot. A launch records "[]" when it opens none, so a row with no value
+			// predates it and is unknown (usedRegistryTokens).
+			{Name: colRunRegistrySecrets, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets holding the package registry tokens a launch of the run used; never their values: provider_profile_packages.go:331, provider_profile_packages.go:345, runtime.go:2908, runtime.go:1673")},
 			{Name: colRunQueuedIntent, Kind: model.KindText, Nullable: true, Principal: model.None("references-only launch question pinned to the original approval: runtime_approval_wait.go:53")},
 			{Name: colRunName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen run label, shown only: runtime_dto.go:119")},
 			{Name: colTransport, Kind: model.KindText, Principal: model.None("a run transport, a closed set: runtime_ports.go:39-49, runtime_dto.go:120")},
 			{Name: colPermissionMode, Kind: model.KindText, Principal: pdeclNonePermissionMode},
 			{Name: colEffort, Kind: model.KindText, Nullable: true, Principal: model.None("an effort level, a closed set: runtime_ports.go:98-100, runtime_dto.go:122")},
 			{Name: colRunModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("a model id the launch passes to the child, shown only: runtime_dto.go:123")},
+			{Name: colRunFastMode, Kind: model.KindBool, Nullable: true},
+			{Name: colRunServiceTier, Kind: model.KindText, Nullable: true, Principal: model.None("a provider service tier passed to the owned tool, not an identity: driver_codex.go:349")},
 			{Name: colWorkspaceRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of a registered host workspace, never an account: workspace.go:82, runtime_dto.go:124")},
 			// Nullable for the expand-contract reason every stamp below gives: an
 			// existing sessions_run gains it on the next boot (reconcileColumns) and a
@@ -331,6 +368,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// current fence and comparing it with itself. Nullable: NULL means a run that
 			// predates the control, which the next launch adopts and stamps once.
 			{Name: colClaimHolder, Kind: model.KindText, Nullable: true, Principal: pdeclActorRef},
+			{Name: colRunLauncherUserID, Kind: model.KindUUID, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassEvidence)},
 			{Name: colClaimFence, Kind: model.KindInt, Nullable: true},
 			{Name: colRunClaimSID, Kind: model.KindText, Nullable: true, Principal: pdeclNoneSID},
 			// Nullable for the same expand-contract reason as the stamp above: an
@@ -373,6 +411,8 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			{Name: colRunOutputTokens, Kind: model.KindInt, Nullable: true},
 			{Name: colRunCostMicroUSD, Kind: model.KindInt, Nullable: true},
 			{Name: colRunUsageModelRef, Kind: model.KindText, Nullable: true, Principal: model.None("the model id reported with the run's usage, shown only: runtime_usage.go:374, runtime_dto.go:160")},
+			{Name: colRunContextWindows, Kind: model.KindJSON, Nullable: true, Principal: model.None("model/window numbers reported by Claude Code, shown only: runtime_usage.go:411, session_activity.go:375")},
+			{Name: colRunUsageLimit, Kind: model.KindJSON, Nullable: true, Principal: model.None("the limit kind, reset time and profile reference the tool reported, shown only: runtime_limit.go:51, runtime_limit.go:198, runtime_dto.go:231")},
 			{Name: colRunToolMode, Kind: model.KindText, Nullable: true, Principal: model.None("the session's mode as the tool reported it, shown only: runtime_tool_mode.go:29-39, runtime_tool_mode.go:45-51, runtime_dto.go:211")},
 		},
 		// The run's authorization lineage. Unset is HIDDEN, never the tenant

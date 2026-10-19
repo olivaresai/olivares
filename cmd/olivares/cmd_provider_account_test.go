@@ -330,3 +330,25 @@ func TestProviderAccountCommands_AddExitCodes(t *testing.T) {
 		}
 	})
 }
+
+// dev#2154: `provider account get` lists the hosts an administrator declared for
+// the account's sessions, and an account that declares none shows no line.
+func TestProviderAccountGetListsTheDeclaredEgressHosts(t *testing.T) {
+	with := strings.TrimSuffix(providerAccountJSON, "}") + `,"session_egress_hosts":["api.github.com","github.com"]}`
+	for name, tc := range map[string]struct {
+		body string
+		want bool
+	}{"declared": {with, true}, "none": {providerAccountJSON, false}} {
+		t.Run(name, func(t *testing.T) {
+			p := newAccountProbeServer(t, http.StatusOK, tc.body)
+			out, stderr, err := execRootStdin(t, "", "provider", "account", "get", "ppf_fixture",
+				"--server", p.URL, "--token", "t", "--tenant", "tenant-a")
+			if err != nil {
+				t.Fatalf("get: %v %s", err, stderr)
+			}
+			if got := strings.Contains(strings.ToLower(out), "egress hosts") && strings.Contains(out, "api.github.com, github.com"); got != tc.want {
+				t.Fatalf("egress hosts shown=%v, want %v: %s", got, tc.want, out)
+			}
+		})
+	}
+}

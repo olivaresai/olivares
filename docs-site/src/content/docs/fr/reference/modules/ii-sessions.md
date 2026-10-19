@@ -14,7 +14,7 @@ en direct, un état Claude Code dérivé, et une chronologie reconstructible. L�
 opérationnelle en direct** par session au-dessus du même flux d'observations — et ne montre
 que ce que ce flux porte honnêtement.
 
-Olivares <!-- release -->0.2<!-- /release --> **lance** aussi les CLI officielles de fournisseur comme enfants
+Olivares <!-- release -->0.3<!-- /release --> **lance** aussi les CLI officielles de fournisseur comme enfants
 détenus sous un [profil fournisseur](/how-to/operate-provider-sessions/). Ce
 chemin géré est le même module. Il ne remplace pas la surcouche et ne fusionne
 pas deux homes qui annoncent le même id de session fournisseur
@@ -90,6 +90,17 @@ la CLI dans son `PATH`. `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN`,
 le lancement est refusé. Les autres vérifications, dont l’authentification du profil
 et la politique de lancement, s’appliquent toujours. Étapes opérateur :
 [Exploiter une session de fournisseur](/how-to/operate-provider-sessions/).
+
+Un message peut porter des images. `olivares session send <session> --attach shot.png "what
+is wrong here?"` et le composeur de la console (coller, déposer ou le trombone) stockent chaque
+image PNG, JPEG, WebP ou GIF avec la session, à raison de quatre au plus par message et de
+3,75 Mo chacune, puis les envoient avec le texte ; un message a besoin de son texte, donc une
+image seule n'est pas envoyée (la CLI et le composeur le demandent). Claude Code reçoit un
+bloc de contenu image et Codex sa propre entrée d'image ; un outil sans entrée d'image refuse
+le message en le nommant avant que rien ne soit envoyé. L'API est
+`POST /v1/m/sessions/runs/{ref}/attachments` (l'image, en base64),
+`GET .../attachments/{id}` et `attachments` sur `.../input`. Les images résident sous le
+répertoire de données, par tenant et par session, et sont supprimées avec la session.
 
 ## Ce qu'il consomme (et ce qu'il dérive)
 

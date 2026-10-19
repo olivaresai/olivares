@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { readFileSync } from 'node:fs'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
@@ -86,6 +87,24 @@ const validLicense = {
   active_users: 12,
 }
 
+const NEXT_STEP =
+  'https://docs.olivares.ai/how-to/install-a-license/#3--community--business-in-place'
+const PAID_THROUGH = '2026-11-13T12:00:00Z'
+const LEASE_UNTIL = '2026-10-16T12:00:00Z'
+const day = (iso: string) => new Date(iso).toLocaleDateString('en')
+const editionsDoc = readFileSync('../docs/editions.md', 'utf8')
+
+/** The lines the console quotes from docs/editions.md between a summary's markers. */
+function quotedSummary(edition: 'business' | 'enterprise'): string[] {
+  const block = new RegExp(
+    `<!-- console-${edition}-summary:start -->([\\s\\S]*?)<!-- console-${edition}-summary:end -->`,
+  ).exec(editionsDoc)![1]
+  return block
+    .split('\n')
+    .map((line) => line.trim().replace(/^- /, ''))
+    .filter(Boolean)
+}
+
 afterEach(() => {
   panels.licenseCards = []
   authState.can = () => true
@@ -105,6 +124,182 @@ beforeEach(() => {
 })
 
 describe('LicenseTab', () => {
+  it.each([
+    ['business', 'Business'],
+    ['enterprise', 'Enterprise'],
+  ])(
+    'explains a valid %s credential on Community with one next step',
+    async (profile, edition) => {
+      api.getLicense.mockResolvedValue({
+        ...validLicense,
+        edition: 'community',
+        support_profile: profile,
+        paid_through: PAID_THROUGH,
+        expires_at: LEASE_UNTIL,
+        lease_until: LEASE_UNTIL,
+      })
+      wrap(<LicenseTab />)
+      expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          `Your license is for ${edition}; this installation runs the Community build.`,
+        ),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('link', { name: `Switch to ${edition}` }),
+      ).toHaveAttribute('href', NEXT_STEP)
+      // What the edition adds is quoted from docs/editions.md, all of it, in order.
+      expect(
+        within(screen.getByRole('list'))
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual(quotedSummary('business'))
+      for (const sentence of quotedSummary('enterprise')) {
+        if (profile === 'enterprise') {
+          expect(screen.getByText(sentence)).toBeInTheDocument()
+        } else {
+          expect(screen.queryByText(sentence)).toBeNull()
+        }
+      }
+      // The license term is "Expires"; the 72 h instance lease is its own row.
+      const expiry = screen.getByText('Expires').parentElement!
+      expect(within(expiry).getByText(day(PAID_THROUGH))).toBeInTheDocument()
+      expect(within(expiry).queryByText(day(LEASE_UNTIL))).toBeNull()
+      const lease = screen.getByText('Lease until').parentElement!
+      expect(within(lease).getByText(day(LEASE_UNTIL))).toBeInTheDocument()
+      expect(api.getActivation).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(['none', 'invalid', 'expired'])(
+    'stays silent about an edition move for a %s license',
+    async (status) => {
+      api.getLicense.mockResolvedValue({
+        ...validLicense,
+        edition: 'community',
+        status,
+        support_profile: 'business',
+      })
+      wrap(<LicenseTab />)
+      expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /^Switch to / })).toBeNull()
+      expect(
+        screen.getByText(/^Community edition: applying a verified license/),
+      ).toBeInTheDocument()
+    },
+  )
+
+  it('also guides a perpetual commercial license, which is valid with no expiry', async () => {
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      edition: 'community',
+      status: 'perpetual',
+      support_profile: 'business',
+    })
+    wrap(<LicenseTab />)
+    expect(
+      await screen.findByRole('link', { name: 'Switch to Business' }),
+    ).toHaveAttribute('href', NEXT_STEP)
+  })
+
+  it('stays silent on the Business build, which reports the enterprise edition', async () => {
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      edition: 'enterprise',
+      support_profile: 'business',
+    })
+    wrap(<LicenseTab />)
+    expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^Switch to / })).toBeNull()
+    expect(
+      screen.queryByText(/^Community edition: applying a verified license/),
+    ).toBeNull()
+  })
+
+  it('withdraws build guidance when the license refresh fails', async () => {
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      edition: 'community',
+      support_profile: 'business',
+    })
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <LicenseTab />
+      </QueryClientProvider>,
+    )
+    expect(
+      await screen.findByRole('link', { name: 'Switch to Business' }),
+    ).toBeInTheDocument()
+    api.getLicense.mockRejectedValue(new ApiError(500, 'internal', 'later'))
+    await act(() => qc.refetchQueries({ queryKey: consoleKeys.license() }))
+    expect(
+      await screen.findByText(/could not be refreshed/i),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^Switch to / })).toBeNull()
+  })
+
+  it.each([
+    [
+      'a signed profile beats the legacy plan',
+      { support_profile: 'business', plan: 'enterprise' },
+      'Business',
+    ],
+    [
+      'case and spaces do not matter',
+      { support_profile: ' Enterprise ' },
+      'Enterprise',
+    ],
+    [
+      'an empty profile falls back to the plan',
+      { support_profile: '', plan: 'enterprise' },
+      'Enterprise',
+    ],
+    ['a legacy business plan', { plan: 'business' }, 'Business'],
+    ['a legacy enterprise plan', { plan: 'enterprise' }, 'Enterprise'],
+    [
+      'a free-form plan is not guessed',
+      { plan: 'commercial' },
+      'Business/Enterprise',
+    ],
+    ['no plan at all', { plan: undefined }, 'Business/Enterprise'],
+    [
+      'an unknown signed profile is not replaced by the plan',
+      { support_profile: 'trial', plan: 'enterprise' },
+      'Business/Enterprise',
+    ],
+  ])('names the edition: %s', async (_case, claims, edition) => {
+    api.getLicense.mockResolvedValue({
+      ...validLicense,
+      edition: 'community',
+      ...claims,
+    })
+    wrap(<LicenseTab />)
+    expect(
+      await screen.findByText(
+        `Your license is for ${edition}; this installation runs the Community build.`,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('links to the docs heading it names, and the Docker section exists', () => {
+    const page = readFileSync(
+      '../docs-site/src/content/docs/how-to/install-a-license.md',
+      'utf8',
+    )
+    const heading = /^## (3 · Community → Business, in place)$/m.exec(page)![1]
+    const slug = heading
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, '')
+      .replace(/\s/g, '-')
+    expect(NEXT_STEP).toBe(
+      `https://docs.olivares.ai/how-to/install-a-license/#${slug}`,
+    )
+    expect(page).toMatch(/^### Docker and Compose$/m)
+  })
+
   it('keeps apply-versus-build detail in a closed, keyboard-openable disclosure', async () => {
     api.getLicense.mockResolvedValue(validLicense)
     const user = userEvent.setup()
@@ -232,12 +427,12 @@ describe('LicenseTab', () => {
       lease_until: '2026-10-15T12:00:00Z',
     })
     wrap(<LicenseTab />)
-    expect(await screen.findByText('Paid through')).toBeInTheDocument()
+    expect(await screen.findByText('Expires')).toBeInTheDocument()
     expect(screen.getByText(/10\/12\/2027/)).toBeInTheDocument()
     expect(screen.getByText('Lease until')).toBeInTheDocument()
     expect(screen.getByText(/10\/15\/2026/)).toBeInTheDocument()
     expect(screen.getByText(/Renew before this date/)).toBeInTheDocument()
-    expect(screen.queryByText('Expires')).not.toBeInTheDocument()
+    expect(screen.queryByText('Paid through')).not.toBeInTheDocument()
   })
 
   it('does not claim a paid term for an expired licence: its lease end stays the one "Expires" date', async () => {
@@ -264,7 +459,7 @@ describe('LicenseTab', () => {
       paid_through: '2027-10-12T12:00:00Z',
     })
     const { unmount } = wrap(<LicenseTab />)
-    expect(await screen.findByText('Paid through')).toBeInTheDocument()
+    expect(await screen.findByText('Expires')).toBeInTheDocument()
     expect(screen.queryByText('Lease until')).not.toBeInTheDocument()
     unmount()
 
@@ -576,4 +771,19 @@ describe('Business activation — an apply that restarts the engine', () => {
       expect(screen.queryByText('Restarting the engine…')).toBeNull(),
     )
   })
+})
+
+const badgeFixture = vi.hoisted(() => ({ edition: null as string | null }))
+vi.mock('./use-edition-badge', () => ({
+  useEditionBadge: () => ({ edition: badgeFixture.edition, shown: true }),
+}))
+it('includes the commercial badge in Edition and license', async () => {
+  badgeFixture.edition = 'business'
+  api.getLicense.mockResolvedValue(validLicense)
+  wrap(<LicenseTab />)
+  expect(await screen.findByLabelText('Business edition')).toBeInTheDocument()
+})
+
+afterEach(() => {
+  badgeFixture.edition = null
 })

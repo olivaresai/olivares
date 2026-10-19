@@ -118,11 +118,21 @@ describe('Guardián — reglas y rastro de contención', () => {
     expect(api.listGuardianActions).toHaveBeenCalledWith({ limit: 1000 })
   })
 
+  it('renders the execution field as code without a Copy button or backticks', async () => {
+    api.listGuardianActions.mockResolvedValue({ items: [], has_more: true })
+    wrap(<KillswitchView />)
+    const field = await screen.findByText('executed_at')
+    expect(field.tagName).toBe('CODE')
+    const hint = field.closest('p')!
+    expect(hint.textContent).not.toContain('`')
+    expect(hint.querySelector('button')).toBeNull()
+  })
+
   it('el rastro cortado se declara, y dice que no significa «no pasó nada»', async () => {
     api.listGuardianActions.mockResolvedValue({ items: [], has_more: true })
     wrap(<KillswitchView />)
     const aviso = await screen.findByText(/Loaded the first 1000 actions/i)
-    const title = aviso.getAttribute('title') ?? ''
+    const title = aviso.parentElement?.querySelector('p')?.textContent ?? ''
     // ⛔ ESTE ASERTO FIJABA UNA FRASE FALSA. Decía «una acción que no ves aquí no es una
     //    acción que no ocurriera» — y el rastro lleva `pending`, `rejected`, `expired` y
     //    `failed`: una fila omitida PUEDE ser justamente una acción que no ocurrió. Lo
@@ -130,7 +140,10 @@ describe('Guardián — reglas y rastro de contención', () => {
     expect(title).toMatch(/does not demonstrate that it does not exist/i)
     expect(title).toMatch(/pending, executed, rejected, expired or failed/i)
     // Y dice QUÉ mil son, que es lo que faltaba en los avisos del guardián.
-    expect(title).toMatch(/by id, not by `executed_at`/i)
+    expect(title).toMatch(/by id, not by executed_at/i)
+    expect(aviso.parentElement?.querySelector('code')?.textContent).toBe(
+      'executed_at',
+    )
   })
 })
 

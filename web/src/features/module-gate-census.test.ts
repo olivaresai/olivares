@@ -86,10 +86,10 @@ function apiMethods(): Map<string, Set<string>> {
   return out
 }
 
-/** Each view entry's directory (features/<dir>/views.tsx) and the module its page gate
+/** Each view entry's directory (features/<dir>/views.tsx or business-views.tsx) and the module its page gate
  * checks (stores/modules.ts moduleOfView). */
 const VIEW_FILES = import.meta.glob<readonly FeatureView[]>(
-  ['./*/views.tsx', './*/view-entries.tsx'],
+  ['./*/views.tsx', './*/business-views.tsx', './*/view-entries.tsx'],
   {
     eager: true,
     import: 'VIEWS',

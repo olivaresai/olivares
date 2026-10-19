@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { groupOf } from './session-groups'
+import { sessionDisplayState } from './session-display-state'
 import {
   useQuery,
   useQueryClient,
@@ -50,6 +50,7 @@ import {
   SESSION_PARAM,
   addressFromTarget,
   addressOf,
+  BESIDE_PARAM,
   decodeSessionAddress,
   targetFromAddress,
   type EvidenceBlock,
@@ -67,7 +68,12 @@ import {
 } from './provenance'
 import { SessionCard } from './session-card'
 import { chooseDefaultAddress } from './default-selection'
-import { groupSessions, railOrder } from './session-groups'
+import {
+  WORKING_SET_PAGE_LIMIT,
+  groupSessions,
+  railOrder,
+  workingCount,
+} from './session-groups'
 import { sessionModelRef } from './session-usage'
 import { useSessionPins } from './use-session-pins'
 import { useSessionResolution } from './use-session-resolution'
@@ -82,8 +88,8 @@ import type { CcState, LiveDTO } from './types'
 import './i18n'
 import { ActionName } from './action-name'
 
-const LIVE_LIMIT = 200
-const RUNS_LIMIT = 200
+const LIVE_LIMIT = WORKING_SET_PAGE_LIMIT
+const RUNS_LIMIT = WORKING_SET_PAGE_LIMIT
 const ALL = '__all__'
 
 /**
@@ -456,6 +462,7 @@ function Inner({
    * evidence — is in the URL; "and a modal was open" is not.
    */
   const [detailOpen, setDetailOpen] = useState(false)
+  const [detailBeside, setDetailBeside] = useState(false)
 
   /**
    * WHICH SESSION IS ON SCREEN — IN THE ADDRESS BAR.
@@ -478,6 +485,12 @@ function Inner({
     decodeSessionAddress,
     { history: 'push' },
   )
+  // The sheet for the beside session goes when that session does: left open, it would
+  // appear over the surface by itself the next time anything is opened beside.
+  if (detailBeside && !urlAddress.beside) {
+    setDetailBeside(false)
+    setDetailOpen(false)
+  }
 
   const queryClient = useQueryClient()
 
@@ -1003,6 +1016,28 @@ function Inner({
     }
   }
 
+  const [seenBeside, setSeenBeside] = useState<string | undefined>()
+  const [besideSelection, setBesideSelection] = useState<Selection | null>(null)
+  if (seenBeside !== urlAddress.beside) {
+    setSeenBeside(urlAddress.beside)
+    const intent = urlAddress.beside
+      ? targetFromAddress(urlAddress.beside)
+      : null
+    const row = sessions.find((s) => addressOf(s) === urlAddress.beside)
+    setBesideSelection(
+      intent
+        ? {
+            episode: episodio,
+            needsLive: !!row?.live || !!intent.liveRef || !!intent.sessionRef,
+            needsRun: (row?.runs.length ?? 0) > 0 || !!intent.runRef,
+            liveGen: admission.liveGen,
+            runGen: admission.runGen,
+            target: intent,
+          }
+        : null,
+    )
+  }
+
   const rows = useMemo(
     () =>
       sessions.filter((s) => {
@@ -1024,7 +1059,7 @@ function Inner({
   const counts = useMemo(
     () => ({
       total: sessions.length,
-      running: sessions.filter((s) => groupOf(s) === 'active').length,
+      running: workingCount(sessions),
     }),
     [sessions],
   )
@@ -1107,8 +1142,8 @@ function Inner({
              one of `sess:`/`live:`/`run:` plus the reference — which is the same string
              the URL carries and the rail paints as `data-address` (work-rail.tsx:106).
              It exists because once the label became a NAME, nothing in the row's DOM
-             named which session the row is: every unnamed observed row paints the same
-             `Untitled session`, so a test (or any other reader) locating a row by its
+             named which session the row is: every observed row of one tool paints the
+             same name (`Claude Code`, or `Untitled session` with no tool), so a test (or any other reader) locating a row by its
              text can no longer tell two of them apart — and an assertion that a row
              LEFT would hold for a row that never announced itself. The address is the
              one name that covers all three row kinds: `sessionRef` alone is undefined
@@ -1199,7 +1234,10 @@ function Inner({
         // Two badges on one line, and they never wrap: the width is what the pair
         // needs, not a share of the table — above the breakpoint, where it fits.
         size: phone ? undefined : 140,
-        accessorFn: (s) => primaryRun(s.runs)?.state ?? s.live?.cc_state ?? '',
+        accessorFn: (s) => {
+          const display = sessionDisplayState(s)
+          return display.runState ?? display.observedState ?? ''
+        },
         header: t('cols.state'),
         cell: ({ row }) => {
           const s = row.original
@@ -1292,7 +1330,7 @@ function Inner({
       {
         id: 'lastSeen',
         // The phrase is a relative time, and 8 rem is what it takes in the longest
-        // of the seven languages. It used to be written as a `max-width` on the
+        // of the console languages. It used to be written as a `max-width` on the
         // cell, which fixed layout never consults — the column's own size is the
         // declaration that reaches the layout, above the breakpoint.
         size: phone ? undefined : 128,
@@ -1346,6 +1384,29 @@ function Inner({
       (runAdmitted && selection.runGen === admission.runGen))
       ? selection.target
       : null
+  const besideTarget =
+    besideSelection &&
+    besideSelection.episode === episodio &&
+    (!besideSelection.needsLive ||
+      (liveAdmitted && besideSelection.liveGen === admission.liveGen)) &&
+    (!besideSelection.needsRun ||
+      (runAdmitted && besideSelection.runGen === admission.runGen))
+      ? besideSelection.target
+      : null
+
+  const besideToClear = urlAddress.beside && !besideTarget
+  useEffect(() => {
+    if (besideToClear)
+      patchAddress(
+        {
+          [BESIDE_PARAM]: undefined,
+          ...(urlAddress.pane === 'beside'
+            ? { [PANE_PARAM]: 'narrative' }
+            : {}),
+        },
+        { history: 'replace' },
+      )
+  }, [besideToClear, patchAddress, urlAddress.pane])
 
   /**
    * THE ADDRESS OUTLIVED THE AUTHORITY THAT CHOSE IT — SAY SO, AND CLEAR IT.
@@ -1380,7 +1441,11 @@ function Inner({
     // The pane goes with the session it was showing: a narrow screen that opened the
     // retired session's work returns to the list instead of an empty work pane.
     patchAddress(
-      { [SESSION_PARAM]: undefined, [PANE_PARAM]: undefined },
+      {
+        [SESSION_PARAM]: undefined,
+        [BESIDE_PARAM]: undefined,
+        [PANE_PARAM]: undefined,
+      },
       { history: 'replace' },
     )
   }, [addressToClear, patchAddress])
@@ -1424,6 +1489,39 @@ function Inner({
    * and handed down, rather than each surface asking the engine for the same row.
    */
   const resolution = useSessionResolution(shownTarget)
+  const besideResolution = useSessionResolution(besideTarget)
+
+  /** Opening the session that is beside takes it out of the beside slot, and the pane
+   * that named that slot goes with it: `pane=beside` without a `beside` is refused. */
+  const leaveBesideFor = useCallback(
+    (address: string) =>
+      address === urlAddress.beside
+        ? {
+            [BESIDE_PARAM]: undefined,
+            ...(urlAddress.pane === 'beside'
+              ? { [PANE_PARAM]: 'narrative' }
+              : {}),
+          }
+        : {},
+    [urlAddress.beside, urlAddress.pane],
+  )
+  const openBeside = useCallback(
+    (s: UnifiedSession) => {
+      if (!shownAddress || addressOf(s) === shownAddress) return
+      patchAddress({
+        [SESSION_PARAM]: shownAddress,
+        [BESIDE_PARAM]: addressOf(s),
+        [PANE_PARAM]: 'narrative',
+      })
+    },
+    [shownAddress, patchAddress],
+  )
+  const closeBeside = useCallback(() => {
+    patchAddress({
+      [BESIDE_PARAM]: undefined,
+      ...(urlAddress.pane === 'beside' ? { [PANE_PARAM]: 'narrative' } : {}),
+    })
+  }, [patchAddress, urlAddress.pane])
 
   /**
    * OPENING A SESSION IS A NAVIGATION, and the address is the only thing written here.
@@ -1442,10 +1540,11 @@ function Inner({
         !window.matchMedia('(min-width: 80rem)').matches
       patchAddress({
         [SESSION_PARAM]: addressOf(s),
+        ...leaveBesideFor(addressOf(s)),
         ...(narrow ? { [PANE_PARAM]: 'narrative' } : {}),
       })
     },
-    [patchAddress],
+    [patchAddress, leaveBesideFor],
   )
 
   /**
@@ -1455,10 +1554,14 @@ function Inner({
    */
   const abrirFila = useCallback(
     (s: UnifiedSession) => {
-      patchAddress({ [SESSION_PARAM]: addressOf(s) })
+      patchAddress({
+        [SESSION_PARAM]: addressOf(s),
+        ...leaveBesideFor(addressOf(s)),
+      })
+      setDetailBeside(false)
       setDetailOpen(true)
     },
-    [patchAddress],
+    [patchAddress, leaveBesideFor],
   )
 
   /** Which pane is in front below `xl`, and which evidence block is open. Both are
@@ -1493,16 +1596,21 @@ function Inner({
   const navegarDesdeTarjeta = useCallback(
     (next: SessionTarget) => {
       const to = addressFromTarget(next)
-      if (to) patchAddress({ [SESSION_PARAM]: to })
+      if (to)
+        patchAddress(
+          detailBeside
+            ? { [BESIDE_PARAM]: to }
+            : { [SESSION_PARAM]: to, ...leaveBesideFor(to) },
+        )
     },
-    [patchAddress],
+    [patchAddress, detailBeside, leaveBesideFor],
   )
 
   /** Closing the SHEET leaves the session on screen: the panes are still reading it,
    * and clearing the address would send the operator back to an empty surface. */
   const cerrarTarjeta = useCallback(() => setDetailOpen(false), [])
 
-  const pins = useSessionPins()
+  const pins = useSessionPins(sessions, runAdmitted && runsQuery.isSuccess)
 
   const showWorkspaces = canRunRead
   // The provider-profile plane has its OWN read tier, independent of runs — the
@@ -1717,13 +1825,23 @@ function Inner({
                 loading={liveQuery.isLoading || runsQuery.isLoading}
                 address={address}
                 resolution={resolution}
+                besideResolution={besideResolution}
+                onOpenBeside={openBeside}
+                onCloseBeside={closeBeside}
+                onOpenBesideDetail={() => {
+                  setDetailBeside(true)
+                  setDetailOpen(true)
+                }}
                 pinned={pins.pinned}
                 onTogglePin={pins.toggle}
                 onOpen={openFromRail}
                 onPane={elegirPanel}
                 onPanel={elegirPanelTab}
                 onEvidence={elegirEvidencia}
-                onOpenDetail={() => setDetailOpen(true)}
+                onOpenDetail={() => {
+                  setDetailBeside(false)
+                  setDetailOpen(true)
+                }}
                 emptyAction={emptyActionVisible ? emptyNewSession : undefined}
                 listHeader={
                   <SessionsListHeader
@@ -1901,7 +2019,7 @@ function Inner({
 
         <SessionCard
           open={detailOpen}
-          resolution={resolution}
+          resolution={detailBeside ? besideResolution : resolution}
           onClose={cerrarTarjeta}
           onNavigate={navegarDesdeTarjeta}
         />

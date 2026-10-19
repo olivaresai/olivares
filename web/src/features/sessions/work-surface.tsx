@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { ArrowLeft, PanelRight, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WorkComposer } from '@/components/layout/work-composer'
+import { COMPOSER_INPUT_ID } from '@/components/layout/work-composer-id'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
@@ -25,7 +26,7 @@ import {
   type WorkPane,
 } from './session-address'
 import { SessionContextPane } from './session-context-pane'
-import { pinnedAddress } from './session-pins'
+import { isPinnable, isPinned } from './session-pins'
 import { IconTip } from './icon-tip'
 import { FILTER_FROM, filterSessions } from './session-filter'
 import { groupOf } from './session-groups'
@@ -39,8 +40,12 @@ export interface WorkSurfaceProps {
   loading: boolean
   address: SessionAddress
   resolution: SessionResolution
+  besideResolution?: SessionResolution
+  onOpenBeside?: (session: UnifiedSession) => void
+  onCloseBeside?: () => void
+  onOpenBesideDetail?: () => void
   pinned: ReadonlySet<string>
-  onTogglePin: ((address: string) => void) | null
+  onTogglePin: ((address: string, session?: UnifiedSession) => void) | null
   onOpen: (session: UnifiedSession) => void
   onPane: (pane: WorkPane) => void
   onEvidence: (block: EvidenceBlock) => void
@@ -55,6 +60,11 @@ export interface WorkSurfaceProps {
 }
 
 const paneId = (pane: WorkPane) => `work-pane-${pane}`
+
+function focusColumn(column: HTMLElement | null) {
+  const field = column?.querySelector<HTMLTextAreaElement>('textarea')
+  ;(field && !field.disabled ? field : column)?.focus()
+}
 
 /** Where this browser remembers whether the side pane is open. */
 const PANEL_OPEN_KEY = 'olivares.sessions.sidePane'
@@ -87,6 +97,10 @@ export function WorkSurface({
   loading,
   address,
   resolution,
+  besideResolution,
+  onOpenBeside,
+  onCloseBeside,
+  onOpenBesideDetail,
   pinned,
   onTogglePin,
   onOpen,
@@ -99,10 +113,16 @@ export function WorkSurface({
 }: WorkSurfaceProps) {
   const { t } = useTranslation('sessions')
   const selected = address.address
-  const run = primaryRun(resolution.session.runs)
-  const pinAt = pinnedAddress(pinned, resolution.session)
+  const split = !!address.beside && !!besideResolution?.target
+  const primaryColumn = useRef<HTMLElement>(null)
+  const besideColumn = useRef<HTMLElement>(null)
+  const focusedColumn = address.pane === 'beside' ? 'beside' : 'narrative'
   const [inspected, setInspected] = useState<ConversationItem | null>(null)
   const [frameCwd, setFrameCwd] = useState<string | null>(null)
+  const closeBeside = useCallback(() => {
+    onCloseBeside?.()
+    requestAnimationFrame(() => focusColumn(primaryColumn.current))
+  }, [onCloseBeside])
 
   // Keep all panes mounted; the URL selects the visible pane on narrow screens.
   // THE SIDE PANE IS CLOSED BY DEFAULT up to 1440 px, where the thread needs the width, and
@@ -193,20 +213,72 @@ export function WorkSurface({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return
+      if (
+        e.defaultPrevented ||
+        document.querySelector(
+          '[role="dialog"][data-state="open"], [role="menu"][data-state="open"]',
+        )
+      )
+        return
       const command = resolveBinding(KEYBINDINGS, e, { workSurface: true })
+      if (command === 'surface.focusBeside' && split) {
+        e.preventDefault()
+        const next = primaryColumn.current?.contains(document.activeElement)
+          ? 'beside'
+          : 'narrative'
+        onPane(next)
+        const column =
+          next === 'beside' ? besideColumn.current : primaryColumn.current
+        // The narrow-screen column becomes visible after the URL navigation.
+        requestAnimationFrame(() => focusColumn(column))
+        // A visible desktop column can take focus immediately.
+        focusColumn(column)
+        return
+      }
+      if (command === 'surface.closeBeside' && split && onCloseBeside) {
+        e.preventDefault()
+        closeBeside()
+        return
+      }
+      if (isTypingTarget(e.target)) return
+      if (command === 'surface.openBeside' && onOpenBeside && selected) {
+        const focusedAddress = (document.activeElement as HTMLElement | null)
+          ?.closest('[data-address]')
+          ?.getAttribute('data-address')
+        // The command names the row the person is on. Anywhere else it does nothing:
+        // it never picks a session they did not point at.
+        const row = sessions.find(
+          (s) => s.key === focusedAddress && s.key !== selected,
+        )
+        if (row) {
+          e.preventDefault()
+          onOpenBeside(row)
+        }
+        return
+      }
       if (command !== 'surface.nextPane' && command !== 'surface.previousPane')
         return
       e.preventDefault()
-      const at = WORK_PANES.indexOf(address.pane)
+      const panes: readonly WorkPane[] = split
+        ? ['rail', 'narrative', 'beside', 'context']
+        : WORK_PANES
+      const at = panes.indexOf(address.pane)
       const step = command === 'surface.nextPane' ? 1 : -1
-      const next =
-        WORK_PANES[(at + step + WORK_PANES.length) % WORK_PANES.length]
+      const next = panes[(at + step + panes.length) % panes.length]
       onPane(next)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [address.pane, onPane])
+  }, [
+    address.pane,
+    onPane,
+    split,
+    onCloseBeside,
+    closeBeside,
+    onOpenBeside,
+    selected,
+    sessions,
+  ])
 
   // THE FILTER FIELD appears when the list is long enough to need it, and narrows what the
   // rows show: by name, tool or folder, in this browser, with no request.
@@ -223,12 +295,74 @@ export function WorkSurface({
       sessions={shown}
       selected={selected}
       onOpen={onOpen}
+      onOpenBeside={selected ? onOpenBeside : undefined}
       pinned={pinned}
       onTogglePin={onTogglePin}
       emptyAction={emptyAction}
       loading={loading}
     />
   )
+
+  const column = (current: SessionResolution, beside: boolean) => {
+    const currentRun = primaryRun(current.session.runs)
+    const pinnedHere = isPinned(pinned, current.session)
+    return (
+      <>
+        <SessionNarrative
+          resolution={current}
+          pinned={pinnedHere}
+          onTogglePin={
+            onTogglePin && isPinnable(current.session)
+              ? (address) => onTogglePin(address, current.session)
+              : null
+          }
+          onOpenDetail={
+            beside ? (onOpenBesideDetail ?? (() => {})) : onOpenDetail
+          }
+          evidence={address.evidence}
+          onExpandEvidence={onEvidence}
+          inspectedId={beside ? null : (inspected?.id ?? null)}
+          onInspect={beside ? undefined : setInspected}
+          contextToggle={
+            beside ? (
+              <IconTip label={t('surface.closeBeside')}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden min-[1280px]:inline-flex"
+                  aria-label={t('surface.closeBeside')}
+                  onClick={closeBeside}
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </IconTip>
+            ) : (
+              contextToggle
+            )
+          }
+          contextPaneButton={beside ? undefined : contextPaneButton}
+          onOpenContext={beside ? undefined : () => onPane('context')}
+          onFolder={beside ? undefined : setFrameCwd}
+          back={beside ? undefined : back}
+          peerSessions={sessions}
+        />
+        {currentRun && !hostIsolationUnavailable(currentRun) ? (
+          <WorkComposer
+            key={currentRun.run_ref}
+            inputId={beside ? `${COMPOSER_INPUT_ID}-beside` : COMPOSER_INPUT_ID}
+            frame="docked"
+            attached={{
+              run: currentRun,
+              group: groupOf(current.session),
+              title:
+                operatorName(current.session) ??
+                sessionShortId(current.session),
+            }}
+          />
+        ) : null}
+      </>
+    )
+  }
 
   // NOTHING TO LIST IS ONE FACT. With no session listed and none open, the rail's empty
   // state is the whole surface. A work pane saying "Select a session" beside it said the
@@ -260,9 +394,12 @@ export function WorkSurface({
       <div
         data-context={contextOpen ? 'open' : 'closed'}
         className={cn(
-          // The list is 300 px wide, 280 px at 1360 px and below; the thread takes the rest
-          // and the context pane (20 rem) joins them only on a wide screen.
-          'grid min-h-0 flex-1 [--list-w:300px] max-[1360px]:[--list-w:280px]',
+          // The list is 360 px wide, 280 px at 1360 px and below; the thread takes the rest
+          // and the context pane (20 rem) joins them only on a wide screen. A row spends
+          // 161 px on the icon, padding, state and time, and a title like "Claude Code ·
+          // billing-api" or "Claude Code" with a session tail needs 163 to 181 px of text:
+          // measured at 1440 px, the title had 103 px at 300 and 179 at 340.
+          'grid min-h-0 flex-1 [--list-w:360px] max-[1360px]:[--list-w:280px]',
           'min-[761px]:grid-cols-[var(--list-w)_minmax(0,1fr)]',
           contextOpen &&
             'xl:grid-cols-[var(--list-w)_minmax(0,1fr)_var(--console-inspector-width)]',
@@ -273,7 +410,8 @@ export function WorkSurface({
           aria-label={t('surface.pane.rail')}
           className={cn(
             'flex min-h-0 min-w-0 flex-col border-line min-[761px]:border-r',
-            address.pane === 'narrative' && 'hidden min-[761px]:flex',
+            (address.pane === 'narrative' || address.pane === 'beside') &&
+              'hidden min-[761px]:flex',
             address.pane === 'context' && 'hidden xl:flex',
           )}
         >
@@ -306,46 +444,104 @@ export function WorkSurface({
           </div>
         </section>
 
-        <section
-          id={paneId('narrative')}
-          aria-label={t('surface.pane.narrative')}
+        <div
           className={cn(
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
             address.pane === 'rail' && 'hidden min-[761px]:flex',
             address.pane === 'context' && 'hidden xl:flex',
           )}
         >
-          <SessionNarrative
-            resolution={resolution}
-            pinned={pinAt !== undefined}
-            onTogglePin={
-              onTogglePin && ((address) => onTogglePin(pinAt ?? address))
-            }
-            onOpenDetail={onOpenDetail}
-            evidence={address.evidence}
-            onExpandEvidence={onEvidence}
-            inspectedId={inspected?.id ?? null}
-            onInspect={setInspected}
-            contextToggle={contextToggle}
-            contextPaneButton={contextPaneButton}
-            onOpenContext={() => onPane('context')}
-            onFolder={setFrameCwd}
-            back={back}
-            peerSessions={sessions}
-          />
-          {run && !hostIsolationUnavailable(run) ? (
-            <WorkComposer
-              frame="docked"
-              attached={{
-                run,
-                group: groupOf(resolution.session),
-                title:
-                  operatorName(resolution.session) ??
-                  sessionShortId(resolution.session),
-              }}
-            />
+          {split ? (
+            <div
+              role="group"
+              className="flex h-12 shrink-0 items-center gap-1 border-b border-line px-2 min-[1280px]:hidden"
+              aria-label={t('surface.switchSession')}
+            >
+              <div className="flex min-w-0 flex-1 gap-1">
+                {(['narrative', 'beside'] as const).map((value) => (
+                  <Button
+                    key={value}
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={
+                      (address.pane === 'beside' ? 'beside' : 'narrative') ===
+                      value
+                    }
+                    aria-controls={paneId(value)}
+                    onClick={() => onPane(value)}
+                    className="min-w-0 truncate aria-pressed:bg-active"
+                  >
+                    {t(
+                      value === 'beside'
+                        ? 'surface.besideSession'
+                        : 'surface.currentSession',
+                    )}
+                  </Button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto"
+                aria-label={t('surface.closeBeside')}
+                onClick={closeBeside}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </div>
           ) : null}
-        </section>
+          <div
+            className={cn(
+              'grid min-h-0 min-w-0 flex-1',
+              split && 'min-[1280px]:grid-cols-2',
+            )}
+          >
+            <section
+              id={paneId('narrative')}
+              ref={primaryColumn}
+              tabIndex={split ? -1 : undefined}
+              aria-label={t(
+                split ? 'surface.currentSession' : 'surface.pane.narrative',
+              )}
+              onFocusCapture={() => {
+                if (split && address.pane !== 'narrative') onPane('narrative')
+              }}
+              data-focused={focusedColumn === 'narrative'}
+              className={cn(
+                'flex min-h-0 min-w-0 flex-col overflow-hidden',
+                // The ring says which of two columns takes the keys; one narrative has no
+                // such question.
+                split &&
+                  'outline-none focus-within:ring-1 focus-within:ring-focus focus-within:ring-inset',
+                address.pane === 'rail' && 'hidden min-[761px]:flex',
+                address.pane === 'context' && 'hidden xl:flex',
+                split &&
+                  address.pane === 'beside' &&
+                  'hidden min-[1280px]:flex',
+              )}
+            >
+              {column(resolution, false)}
+            </section>
+            {split && besideResolution ? (
+              <section
+                id={paneId('beside')}
+                ref={besideColumn}
+                tabIndex={-1}
+                aria-label={t('surface.besideSession')}
+                onFocusCapture={() => {
+                  if (address.pane !== 'beside') onPane('beside')
+                }}
+                data-focused={focusedColumn === 'beside'}
+                className={cn(
+                  'flex min-h-0 min-w-0 flex-col overflow-hidden border-line outline-none focus-within:ring-1 focus-within:ring-focus focus-within:ring-inset min-[1280px]:border-l',
+                  address.pane !== 'beside' && 'hidden min-[1280px]:flex',
+                )}
+              >
+                {column(besideResolution, true)}
+              </section>
+            ) : null}
+          </div>
+        </div>
 
         <section
           id={paneId('context')}

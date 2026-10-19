@@ -4,7 +4,7 @@ description: "Olivares AI を支える secure-by-design のポスチャ——な
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
 :::
 
 Olivares AI は**顧客自身のインフラ内**で動作し、すべての AI エージェントが何に

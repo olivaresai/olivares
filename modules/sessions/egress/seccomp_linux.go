@@ -20,6 +20,9 @@ import (
 // The bridge alone may open host Unix sockets. The tool can create IP sockets
 // inside its empty network namespace, and anonymous stream pairs for child IPC.
 // Namespace entry, descriptor theft and alternate syscall paths are denied.
+// Helper re-exec only. In the engine process a locked goroutine that exits would
+// fire the parent-death signal of the short-lived children the engine starts (git;
+// modules/sessions/procrunner_pdeathsig_linux.go). A session's guard ends its tree instead.
 func restrictSockets() error {
 	runtime.LockOSThread() // the existing Landlock helper execs from this thread
 	var arch uint32

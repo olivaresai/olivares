@@ -1,0 +1,158 @@
+{
+  "title": "Osservabilità e interoperabilità",
+  "description": "Salute dell'ingestione basata su standard e approfondimento delle trace correlate al registro. I valori sono a livello di motore (globali al processo), non per tenant; gli standard sono fissati alle versioni e alle maturità dichiarate dagli enti di origine.",
+  "tabs": {
+    "ingestion": "Salute dell'ingestione",
+    "traces": "Approfondimento trace"
+  },
+  "engineScope": {
+    "badge": "A livello di motore",
+    "note": "Questi valori sono a livello di motore (globali al processo), non per tenant. I contatori del read model si accumulano dall'avvio del motore e si azzerano al riavvio, con lo stesso ciclo di vita del /metrics Prometheus del motore, mai per tenant."
+  },
+  "ingestion": {
+    "title": "Salute dell'ingestione per standard",
+    "description": "Ogni standard di interoperabilità che il motore ingerisce o emette, con la versione fissata, la maturità dichiarata e lo stato del canale.",
+    "liveNote": "Read model live: il motore conta i record per sorgente del bus dall'avvio del motore. La riga di uno standard riporta un contatore solo dove l'attribuzione è affidabile: un valore non viene mai inventato, e un valore assente significa \"non attribuibile con certezza\", non zero.",
+    "columns": {
+      "standard": "Standard",
+      "direction": "Direzione",
+      "version": "Versione",
+      "maturity": "Maturità",
+      "status": "Stato",
+      "records": "Record",
+      "lastSeen": "Ultima rilevazione"
+    },
+    "direction": {
+      "in": "Ingestione",
+      "out": "Emissione"
+    },
+    "status": {
+      "active": "Attivo",
+      "available": "Disponibile",
+      "opt_in_off": "Opt-in disattivato",
+      "blocked": "Bloccato",
+      "unavailable": "Richiede Business"
+    },
+    "optInOff": "Convenzione in sviluppo: disattivata per impostazione predefinita; abilitala tramite il gate del connettore.",
+    "gate": "Gate",
+    "gateOff": "disattivato",
+    "gateOn": "attivo",
+    "gateNoEvidence": "nessuna evidenza finora",
+    "blockedNote": "Il trasporto push è bloccato sul seam del collector esterno; l'esportazione pull resta il percorso di riverifica offline.",
+    "recordsPending": "—"
+  },
+  "sources": {
+    "title": "Contatori live per sorgente del bus",
+    "description": "Una riga per sorgente del bus (connettore/modulo) con i suoi record per tipo di osservazione e, per gli edge, per segnale del collector.",
+    "columns": {
+      "source": "Sorgente",
+      "records": "Record",
+      "kinds": "Per tipo",
+      "signals": "Per segnale",
+      "firstSeen": "Prima rilevazione",
+      "lastSeen": "Ultima rilevazione"
+    },
+    "kind": {
+      "edge": "Edge",
+      "cost": "Costo",
+      "finding": "Rilevamento"
+    },
+    "empty": "Nessun record osservato sul bus dall'avvio del motore",
+    "emptyHint": "I contatori partono da zero a ogni avvio del motore; non è ancora passato nulla. È un'osservazione, non un errore.",
+    "sinceNote": "I contatori sono globali al processo e si accumulano dall'avvio del motore ({{since}}); si azzerano al riavvio, come /metrics."
+  },
+  "maturity": {
+    "title": "Maturità",
+    "development": "In sviluppo",
+    "ga": "GA",
+    "pre_1_0": "Pre-1.0",
+    "stable": "Stabile",
+    "developmentHint": "convenzione in sviluppo",
+    "preReleaseHint": "schema pre-1.0"
+  },
+  "traces": {
+    "title": "Approfondimento W3C Trace Context",
+    "description": "Trace correlate tramite gli id di trace W3C impressi sugli eventi del registro di audit, raggruppate per span del motore.",
+    "listTitle": "Trace recenti",
+    "listDescription": "Seleziona una trace per aprire la sua vista degli span derivata dal registro.",
+    "empty": "Nessuna trace",
+    "emptyHint": "Nessun evento del registro di audit nella finestra di scansione (ultimi 20.000 eventi) riporta un id di trace W3C: i chiamanti non propagano traceparent, oppure la finestra li ha superati.",
+    "noResults": "Nessuna trace corrisponde alla ricerca.",
+    "filterNoResults": "Nessuna trace corrisponde ai filtri attivi.",
+    "searchPlaceholder": "Cerca per ID trace…",
+    "filters": {
+      "service": "Filtra per servizio",
+      "servicePlaceholder": "Servizio (esatto)…",
+      "status": "Filtra per stato",
+      "allStatuses": "Tutti gli stati",
+      "from": "Da",
+      "to": "A"
+    },
+    "loadMore": "Carica altro",
+    "loadingMore": "Caricamento…",
+    "waterfallTitle": "Cascata degli span",
+    "selectPrompt": "Seleziona una trace per vedere la sua cascata degli span.",
+    "selectPromptHint": "Scegli una trace dall'elenco per vedere ogni span prodotto, con i suoi tempi e i suoi errori.",
+    "exportBtn": "Esporta OTLP",
+    "exportTitle": "Scarica questa trace come OTLP/JSON. Non testato su un backend specifico.",
+    "legend": "Legenda degli attori",
+    "liveNote": "Read model di correlazione con il registro: le righe derivano dagli id di trace W3C impressi sugli eventi del registro di audit (finestra di scansione: gli ultimi 20.000 eventi). Le barre sono finestre di EVENTI DEL REGISTRO raggruppate per id di span del motore: il motore non memorizza span OTel; gli span esportati, soggetti al rapporto di campionamento e senza conteggio delle perdite, si trovano nel collector OTLP dell'operatore.",
+    "columns": {
+      "trace": "Trace",
+      "started": "Avviata",
+      "duration": "Durata",
+      "spans": "Span",
+      "agents": "Agenti",
+      "services": "Servizi",
+      "status": "Stato",
+      "span": "Span",
+      "actor": "Attore",
+      "service": "Servizio",
+      "kind": "Tipo",
+      "timing": "Tempi"
+    },
+    "detail": {
+      "title": "Dettaglio dello span",
+      "spanId": "ID dello span",
+      "name": "Nome",
+      "timing": "Tempi",
+      "actor": "Attore",
+      "actorKind": "Tipo di attore",
+      "entityRef": "Entità",
+      "kind": "Tipo",
+      "status": "Stato",
+      "attributes": "Attributi"
+    },
+    "chartSummary": "Cascata degli span: {{count}} span su {{duration}}, indentati per profondità padre-figlio e dimensionati per durata.",
+    "level1Note": "W3C Trace Context è convalidato solo al suo Level 1 Stable (traceparent / tracestate v00). Non si dichiara alcuna semantica Level 2.",
+    "status": {
+      "ok": "OK",
+      "error": "Errore",
+      "unset": "Non impostato"
+    },
+    "exportFailed": "Esportazione della trace non riuscita"
+  },
+  "empty": {
+    "ingestionHealth": {
+      "title": "Nessuno standard di ingestione dichiarato",
+      "description": "Queste righe devono provenire dall'inventario degli standard compilato nel motore; gli operatori non le aggiungono dalla console."
+    },
+    "ingestionSources": {
+      "title": "Nessuna sorgente del bus osservata dall'avvio del motore",
+      "description": "Un connettore o un modulo deve pubblicare un edge, un campione di costo o un rilevamento sul bus eventi prima che i suoi contatori live compaiano qui."
+    },
+    "trace": {
+      "title": "Nessuna trace W3C osservata",
+      "description": "I chiamanti devono propagare il W3C trace context perché gli eventi del registro di audit tra gli ultimi 20.000 riportino gli ID di trace."
+    },
+    "traceWaterfallChart": {
+      "title": "Nessun tempo di span registrato per questa trace",
+      "description": "Gli eventi del registro devono riportare gli ID di span del motore prima che questa vista possa mostrare, per ogni span, offset di inizio, durata, attore e stato."
+    }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "Vengono conservati solo i metadati dell'inferenza. Il contesto di lavoro del provider non può essere ricostruito.",
+    "provider_context_may_change": "Sono stati richiesti compattazione o modifiche del contesto. I metadati conservati non possono ricostruire il contesto di lavoro del provider.",
+    "provider_context_unknown": "La modifica del contesto da parte del provider è sconosciuta per questa inferenza. I metadati conservati non possono ricostruire il contesto di lavoro del provider."
+  }
+}

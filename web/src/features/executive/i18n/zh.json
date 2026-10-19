@@ -70,7 +70,7 @@
     "samples": "成本记录",
     "models": "活跃模型",
     "breakdownTitle": "支出明细",
-    "breakdownDescription": "了解支出去向——按团队、项目、智能体、模型或提供方汇总。",
+    "breakdownDescription": "了解支出去向——按团队、项目、智能体、模型或提供商汇总。",
     "noAttribution": "所选时间范围内此维度无归因数据。"
   },
   "dimensions": {
@@ -78,7 +78,7 @@
     "project": "按项目",
     "agent": "按智能体",
     "model": "按模型",
-    "provider": "按提供方"
+    "provider": "按提供商"
   },
   "risk": {
     "title": "风险态势",

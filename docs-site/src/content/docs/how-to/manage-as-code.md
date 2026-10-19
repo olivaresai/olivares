@@ -96,7 +96,7 @@ mutation with the real actor.
 `olivares_deployment` manages a deployment **definition** — declarative, versioned
 desired state. It maps to module VII (deploy), whose live actuation is a **deny-closed
 seam**: until an executor is provisioned, the engine *plans and governs* a deployment but
-**`apply`/`retire` return `503`** rather than acting on infrastructure. So a
+**`apply`/`retire` return `503`** (Business; Community answers `501` on every deploy route) rather than acting on infrastructure. So a
 `olivares_deployment` resource records and governs intent today; it does not by itself
 reconcile real infrastructure. See [module VII](/reference/modules/vii-deploy/) and
 [Honesty & limits](/start/honesty-and-limits/).

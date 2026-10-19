@@ -24,7 +24,7 @@ import (
 
 // What the session's tool is doing (#1861): the agents it spawned, its background
 // tasks, the files it changed, its own task list and what its context holds. Each
-// item is a record Claude Code wrote in the transcript it keeps for the session;
+// item is a record the tool wrote in the transcript it keeps for the session;
 // the engine stores nothing of it and infers nothing beyond it, and reads it again
 // whenever it is asked. The state therefore lives on the server, survives a reload
 // and is the same for the console, the API and the CLI.
@@ -64,7 +64,9 @@ const (
 
 var (
 	errActivityOtherTool = &runErr{http.StatusUnprocessableEntity,
-		"activity is read from Claude Code's transcript; this session's tool keeps its record another way"}
+		"activity is read from Claude Code or Codex native records; this session's tool keeps its record another way"}
+	errActivityAgentTool = &runErr{http.StatusUnprocessableEntity,
+		"subagent transcripts are read from Claude Code native records"}
 	errActivityTooLarge = &runErr{http.StatusUnprocessableEntity,
 		"the session's transcript is larger than the activity reads"}
 	errActivityNoAgent = &runErr{http.StatusNotFound, "this session has no subagent transcript by that id"}
@@ -73,6 +75,12 @@ var (
 	// and a stored Codex conversation, it is not shown; the attach stream still is.
 	errActivitySecretBearing = conflictErr("this session was given vault secrets or a repository credential; " +
 		"its transcript cannot be proven free of them, so its activity is not shown (its live output is)")
+	// A package registry token is withheld by the redactor of a live session, which
+	// holds the tokens of its own launch only. One that is not live in this engine
+	// (after a restart, or once its handle is released) has no redactor, and a
+	// resumed one has not the tokens an earlier launch opened (a secret rotated since).
+	errActivityRegistryToken = conflictErr("this session used a package registry token; " +
+		"its transcript cannot be proven free of one an earlier launch printed, so its activity is not shown")
 )
 
 // activityDTO is what GET /runs/{ref}/activity answers.
@@ -82,20 +90,25 @@ type activityDTO struct {
 	Transcript string `json:"transcript"`
 	Model      string `json:"model,omitempty"`
 	Effort     string `json:"effort,omitempty"`
-	// ContextTokens is what the latest request of the main conversation sent:
-	// input plus cached input, as the provider counted it.
-	ContextTokens int64                `json:"context_tokens"`
-	Compactions   []activityCompaction `json:"compactions"`
-	Agents        []activityAgent      `json:"agents"`
-	Tasks         []activityTask       `json:"tasks"`
-	Files         []activityFile       `json:"files"`
-	Todos         []activityTodo       `json:"todos"`
-	Skills        []string             `json:"skills"`
-	MCPServers    []string             `json:"mcp_servers"`
+	// ContextTokens is the latest request usage the tool reports: Claude input
+	// plus cached input; Codex input plus output, with cached input counted once.
+	ContextTokens int64 `json:"context_tokens"`
+	// Null means the tool has not reported a matching, unambiguous window.
+	ContextWindow  *int64               `json:"context_window"`
+	ContextPercent *float64             `json:"context_percent"`
+	Compactions    []activityCompaction `json:"compactions"`
+	Agents         []activityAgent      `json:"agents"`
+	Tasks          []activityTask       `json:"tasks"`
+	Files          []activityFile       `json:"files"`
+	Todos          []activityTodo       `json:"todos"`
+	Skills         []string             `json:"skills"`
+	MCPServers     []string             `json:"mcp_servers"`
 	// Unreadable counts records the read could not decode, so a panel says what it
 	// leaves out instead of silently being shorter.
-	Unreadable int    `json:"unreadable,omitempty"`
-	UpdatedAt  string `json:"updated_at,omitempty"`
+	backgroundActive bool
+	Incomplete       bool   `json:"-"` // A changing or partial native transcript cannot authorize idle reclamation.
+	Unreadable       int    `json:"unreadable,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
 }
 
 type activityCompaction struct {
@@ -124,16 +137,17 @@ type activityAgent struct {
 // activityTask is work the tool left running beside the conversation: a shell
 // command, a monitor, a workflow, or a wakeup it scheduled.
 type activityTask struct {
-	ToolUseID   string `json:"tool_use_id"`
-	TaskID      string `json:"task_id,omitempty"`
-	Kind        string `json:"kind"`
-	Description string `json:"description,omitempty"`
-	Command     string `json:"command,omitempty"`
-	State       string `json:"state"`
-	StartedAt   string `json:"started_at,omitempty"`
-	EndedAt     string `json:"ended_at,omitempty"`
-	DueAt       string `json:"due_at,omitempty"`
-	Summary     string `json:"summary,omitempty"`
+	ToolUseID   string            `json:"tool_use_id"`
+	TaskID      string            `json:"task_id,omitempty"`
+	Kind        string            `json:"kind"`
+	Description string            `json:"description,omitempty"`
+	Command     string            `json:"command,omitempty"`
+	State       string            `json:"state"`
+	StartedAt   string            `json:"started_at,omitempty"`
+	EndedAt     string            `json:"ended_at,omitempty"`
+	DueAt       string            `json:"due_at,omitempty"`
+	Summary     string            `json:"summary,omitempty"`
+	Workflow    *activityWorkflow `json:"workflow,omitempty"`
 }
 
 // activityFile is a file the tool's own edit tools changed, with the lines the
@@ -169,9 +183,11 @@ type activityTurnDTO struct {
 
 // activitySource is the transcript of a session the activity may read, and the
 // redactor its records pass through: the live session's, which also withholds the
-// registry tokens no row records. A session given vault secrets or a repository
-// credential is refused.
-func (m *Module) activitySource(ctx context.Context, tenant model.TenantID, runRef string) (model.Record, activitySession, *secretRedactor, bool, error) {
+// package registry tokens of its profile. A session given vault secrets or a
+// repository credential is refused; so is one that used a registry token and is
+// not live, or is live after a launch an earlier one preceded, because only the
+// first launch's redactor is known to hold every token the transcript may quote.
+func (m *Module) activitySource(ctx context.Context, tenant model.TenantID, runRef string, agent bool) (model.Record, activitySession, *secretRedactor, bool, error) {
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return rec, activitySession{}, nil, false, err
@@ -180,16 +196,33 @@ func (m *Module) activitySource(ctx context.Context, tenant model.TenantID, runR
 	if src.ProfileID == "" {
 		return rec, activitySession{}, nil, false, conflictErr("legacy session has no proven provider home; its activity cannot be read")
 	}
-	if src.Driver != providerDriverClaude {
+	if agent && src.Driver != providerDriverClaude {
+		return rec, activitySession{}, nil, false, errActivityAgentTool
+	}
+	if src.Driver != providerDriverClaude && src.Driver != providerDriverCodex {
 		return rec, activitySession{}, nil, false, errActivityOtherTool
 	}
-	if refuseSecretBearing(rec, "shown") != nil {
+	if refuseGivenSecrets(rec, "shown") != nil {
 		return rec, activitySession{}, nil, false, errActivitySecretBearing
 	}
 	lr, live := m.rt.getLive(tenant, runRef)
+	// A session with no conversation id has printed nothing to read yet: it keeps
+	// answering that its transcript is pending. The redactor of a live launch holds
+	// the registry tokens that launch opened, so it covers the transcript only when
+	// no earlier launch could have printed one it does not hold.
+	covered := live && lr.redactsEveryEarlierValue
+	if !covered && rec.String(colClaudeSessionID) != "" && m.usedRegistryTokens(ctx, tenant, rec) {
+		return rec, activitySession{}, nil, false, errActivityRegistryToken
+	}
 	var redact *secretRedactor
+	var ring *outputRing
 	if live {
 		redact = lr.redact
+		ring = lr.ring
+	}
+	if src.Driver == providerDriverCodex {
+		tr, err := m.openCodexActivityTranscript(ctx, tenant, rec, src)
+		return rec, activitySession{claudeTranscript: tr}, redact, live, err
 	}
 	tr, err := m.openClaudeTranscript(ctx, tenant, rec, src)
 	if err != nil {
@@ -200,13 +233,14 @@ func (m *Module) activitySource(ctx context.Context, tenant model.TenantID, runR
 		tr.Close()
 		return rec, activitySession{}, redact, live, err
 	}
-	return rec, activitySession{claudeTranscript: tr, agents: agents}, redact, live, nil
+	return rec, activitySession{claudeTranscript: tr, agents: agents, ring: ring}, redact, live, nil
 }
 
 // activitySession is a session's open transcript and its subagents' directory.
 type activitySession struct {
 	claudeTranscript
-	agents *os.Root // nil: the session spawned no subagent
+	agents *os.Root    // nil: the session spawned no subagent
+	ring   *outputRing // the same live, redacted stream the attach path reads
 }
 
 func (s activitySession) Close() {
@@ -221,6 +255,12 @@ func (s activitySession) Close() {
 // directories: a link there would hand this session another one's records. An
 // absent one is not refused: a session that spawned no subagent has none.
 func openAgentsDir(home *os.Root, transcript string) (*os.Root, error) {
+	return openActivityDir(home, transcript, "subagents")
+}
+
+// openActivityDir applies the same opened-once directory rule to each native
+// state directory; an absent one is expected before the tool writes it.
+func openActivityDir(home *os.Root, transcript, name string) (*os.Root, error) {
 	session, err := openRealDir(home, activitySessionDir(transcript))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -229,7 +269,7 @@ func openAgentsDir(home *os.Root, transcript string) (*os.Root, error) {
 		return nil, err
 	}
 	defer session.Close()
-	agents, err := openRealDir(session, "subagents")
+	agents, err := openRealDir(session, name)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -264,9 +304,12 @@ func openRealDir(root *os.Root, name string) (*os.Root, error) {
 }
 
 // runActivity reads the activity of a session.
-func (m *Module) runActivity(ctx context.Context, tenant model.TenantID, runRef string) (activityDTO, error) {
-	rec, tr, redact, live, err := m.activitySource(ctx, tenant, runRef)
+func (m *Module) runActivity(ctx context.Context, tenant model.TenantID, runRef string) (out activityDTO, err error) {
+	rec, tr, redact, live, err := m.activitySource(ctx, tenant, runRef, false)
 	fold := newActivityFold(false, redact)
+	if rec.String(colRunProfileDriver) == providerDriverCodex {
+		fold.dto.Driver = providerDriverCodex
+	}
 	switch {
 	case errors.Is(err, errNoClaudeSessionID):
 		fold.dto.Transcript = activityTranscriptPending
@@ -282,6 +325,52 @@ func (m *Module) runActivity(ctx context.Context, tenant model.TenantID, runRef 
 		return activityDTO{}, err
 	}
 	defer tr.Close()
+	defer func() {
+		info, e := tr.f.Stat()
+		if e != nil || info.Size() != tr.info.Size() || !info.ModTime().Equal(tr.info.ModTime()) {
+			out.Incomplete = true
+		}
+	}()
+	if fold.dto.Driver == providerDriverCodex {
+		if tr.info.Size() > activityFileMax {
+			return activityDTO{}, errActivityTooLarge
+		}
+		codex := newCodexActivityFold(fold)
+		if err := codex.read(ctx, io.LimitReader(tr.f, tr.info.Size()), rec.String(colClaudeSessionID)); err != nil {
+			return activityDTO{}, err
+		}
+		// Prefer the latest native plan notification when the rollout does not
+		// carry it (Code Mode). It passes the same live redactor as the file.
+		if lr, ok := m.rt.getLive(tenant, runRef); ok {
+			if session, ok := lr.session.(*codexSession); ok {
+				plan, at, seen, unreadable := session.activityPlanSnapshot(rec.String(colClaudeSessionID))
+				fold.dto.Unreadable += unreadable
+				if seen && !at.Before(codex.planAt) {
+					data, err := json.Marshal(plan)
+					var safe []activityTodo
+					if err != nil || json.Unmarshal(redact.apply(data), &safe) != nil {
+						fold.dto.Unreadable++
+					} else {
+						fold.dto.Todos = safe
+					}
+				}
+			}
+		}
+		if !live || !activityRunState(rec.String(colState)) {
+			if fold.dto.Transcript == activityTranscriptPending {
+				fold.dto.Transcript = activityTranscriptMissing
+			}
+			fold.close()
+		}
+		return fold.dto, nil
+	}
+	workflows, err := openActivityDir(tr.home, tr.rel, "workflows")
+	if err != nil {
+		return activityDTO{}, err
+	}
+	if workflows != nil {
+		defer workflows.Close()
+	}
 	if err := readActivityFile(ctx, fold, tr.f, tr.info); err != nil {
 		return activityDTO{}, err
 	}
@@ -303,7 +392,8 @@ func (m *Module) runActivity(ctx context.Context, tenant model.TenantID, runRef 
 			continue
 		}
 		sub := newActivityFold(true, redact)
-		if err := readActivityState(ctx, tr.agents, e.Name(), sub.read); err != nil {
+		changed, err := readActivityState(ctx, tr.agents, e.Name(), sub.read)
+		if err != nil {
 			if ctx.Err() != nil {
 				return activityDTO{}, ctx.Err()
 			}
@@ -312,14 +402,53 @@ func (m *Module) runActivity(ctx context.Context, tenant model.TenantID, runRef 
 		}
 		fold.mergeFiles(sub.dto.Files)
 		fold.dto.Unreadable += sub.dto.Unreadable
+		fold.dto.Incomplete = fold.dto.Incomplete || sub.dto.Incomplete || changed
+		fold.dto.backgroundActive = fold.dto.backgroundActive || activityHasLiveWork(sub.dto)
+	}
+	if tr.ring != nil {
+		if err := fold.workflowFrames(ctx, tr.ring); err != nil {
+			return activityDTO{}, err
+		}
+	}
+	if err := fold.workflowFiles(ctx, workflows); err != nil {
+		return activityDTO{}, err
 	}
 	if !live || !activityRunState(rec.String(colState)) {
 		fold.close()
 	}
+	activityContextWindow(&fold.dto, rec)
 	// ponytail: each read folds the whole transcript again (bounded at 64 MiB); keep
 	// the fold per run and read only the bytes appended since when sessions that
 	// large are common.
 	return fold.dto, nil
+}
+
+func activityContextWindow(dto *activityDTO, rec model.Record) {
+	raw := rec.String(colRunContextWindows)
+	if raw == "" || dto.Model == "" {
+		return
+	}
+	var windows map[string]int64
+	if json.Unmarshal([]byte(raw), &windows) != nil {
+		dto.Unreadable++
+		return
+	}
+	var window int64
+	for id, size := range windows {
+		// The transcript names the API id; result frames can retain [1m]. If
+		// both variants were used, do not guess which sent the latest request.
+		if strings.TrimSuffix(id, "[1m]") != dto.Model {
+			continue
+		}
+		if size <= 0 || window > 0 && window != size {
+			return
+		}
+		window = size
+	}
+	if window > 0 {
+		percent := float64(dto.ContextTokens) / float64(window) * 100
+		dto.ContextWindow, dto.ContextPercent = &window, &percent
+	}
 }
 
 // activityRunState is whether a session in state may still be at work.
@@ -337,7 +466,7 @@ func (m *Module) runAgentTranscript(ctx context.Context, tenant model.TenantID, 
 	if !claudeSessionIDPattern.MatchString(agentID) {
 		return activityAgentDTO{}, errActivityNoAgent
 	}
-	_, tr, redact, _, err := m.activitySource(ctx, tenant, runRef)
+	_, tr, redact, _, err := m.activitySource(ctx, tenant, runRef, true)
 	switch {
 	case errors.Is(err, errNoClaudeSessionID), errors.Is(err, errClaudeTranscriptMissing):
 		return activityAgentDTO{}, errActivityNoAgent
@@ -349,7 +478,7 @@ func (m *Module) runAgentTranscript(ctx context.Context, tenant model.TenantID, 
 		return activityAgentDTO{}, errActivityNoAgent
 	}
 	var conv handoffConversation
-	err = readActivityState(ctx, tr.agents, "agent-"+agentID+".jsonl",
+	_, err = readActivityState(ctx, tr.agents, "agent-"+agentID+".jsonl",
 		func(ctx context.Context, r io.Reader) error {
 			var err error
 			conv, err = readClaudeAgentConversation(ctx, r, redact)
@@ -410,23 +539,32 @@ func activitySessionDir(transcript string) string {
 
 // readActivityState reads a file of the session's state under the transcript's
 // rules: inside the home, not a link, one name, a regular file, within the bound.
-func readActivityState(ctx context.Context, home *os.Root, rel string, read func(context.Context, io.Reader) error) error {
+// It reads up to the size the file had when opened, as a live write may continue,
+// and reports whether the file changed meanwhile; that is not an error.
+func readActivityState(ctx context.Context, home *os.Root, rel string, read func(context.Context, io.Reader) error) (changed bool, err error) {
 	f, err := openStateFile(home, rel)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !info.Mode().IsRegular() || !singleLink(info) {
-		return errClaudeStateSpecial
+		return false, errClaudeStateSpecial
 	}
 	if info.Size() > activityFileMax {
-		return errActivityTooLarge
+		return false, errActivityTooLarge
 	}
-	return read(ctx, io.LimitReader(f, info.Size()))
+	if err := read(ctx, io.LimitReader(f, info.Size())); err != nil {
+		return false, err
+	}
+	after, err := f.Stat()
+	if err != nil {
+		return true, nil
+	}
+	return after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()), nil
 }
 
 // readActivityFile folds an open transcript, up to the size it had when opened: a
@@ -462,10 +600,11 @@ func (m *Module) handleRunAgentTranscript(w http.ResponseWriter, r *http.Request
 }
 
 // auditActivityRead records a read of the session's activity, which names what its
-// conversation did, once per person, session and window. The window starts only
-// once the record is written, so a failed write is tried again on the next read.
+// conversation did, once per person, session, kind of read and window. The window
+// starts only once the record is written, so a failed write is tried again on the next
+// read.
 func (m *Module) auditActivityRead(r *http.Request, mc api.ModuleContext, ref, action string) {
-	key := string(mc.Tenant) + "\x00" + ref + "\x00" + mc.Principal.Actor()
+	key := string(mc.Tenant) + "\x00" + ref + "\x00" + mc.Principal.Actor() + "\x00" + action
 	now := time.Now()
 	if last, ok := m.rt.activityAudits.Load(key); ok && now.Sub(last.(time.Time)) < activityAuditWindow {
 		return

@@ -34,17 +34,27 @@ import frCommon from './locales/fr/common.json'
 import frNav from './locales/fr/nav.json'
 import frErrors from './locales/fr/errors.json'
 import frSettings from './locales/fr/settings.json'
+import itCommon from './locales/it/common.json'
+import itNav from './locales/it/nav.json'
+import itErrors from './locales/it/errors.json'
+import itSettings from './locales/it/settings.json'
+import koCommon from './locales/ko/common.json'
+import koNav from './locales/ko/nav.json'
+import koErrors from './locales/ko/errors.json'
+import koSettings from './locales/ko/settings.json'
 // The auth dictionaries other than English, by URL (fetched on demand, see authBackend).
 import deAuthUrl from './locales/de/auth.json?url'
 import esAuthUrl from './locales/es/auth.json?url'
 import frAuthUrl from './locales/fr/auth.json?url'
+import itAuthUrl from './locales/it/auth.json?url'
 import jaAuthUrl from './locales/ja/auth.json?url'
+import koAuthUrl from './locales/ko/auth.json?url'
 import ruAuthUrl from './locales/ru/auth.json?url'
 import zhAuthUrl from './locales/zh/auth.json?url'
 
 /**
  * i18n foundation. The console shipped EN + ES from day one (ES = Spain)
- * added ZH (Simplified) / JA / DE / RU / FR for the public launch. The console bundles
+ * added ZH (Simplified) / JA / DE / RU / FR for the public launch, then IT and KO. The console bundles
  * the foundation namespaces below; a feature-module adds its OWN
  * namespace (no key collisions) by calling `registerTranslations('<module>', …)`
  * from its feature registration, so its strings live beside its code.
@@ -64,6 +74,8 @@ export const SUPPORTED_LANGUAGES = [
   { code: 'de', label: 'Deutsch' },
   { code: 'ru', label: 'Русский' },
   { code: 'fr', label: 'Français' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'ko', label: '한국어' },
 ] as const
 
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code']
@@ -91,6 +103,8 @@ const authUrls = {
   de: deAuthUrl,
   ru: ruAuthUrl,
   fr: frAuthUrl,
+  it: itAuthUrl,
+  ko: koAuthUrl,
 }
 
 async function fetchDictionary(url: string): Promise<ResourceKey> {
@@ -169,6 +183,18 @@ const resources = {
     nav: frNav,
     errors: frErrors,
     settings: frSettings,
+  },
+  it: {
+    common: itCommon,
+    nav: itNav,
+    errors: itErrors,
+    settings: itSettings,
+  },
+  ko: {
+    common: koCommon,
+    nav: koNav,
+    errors: koErrors,
+    settings: koSettings,
   },
 }
 

@@ -43,8 +43,9 @@ const defaultDeployRetireTimeout = time.Minute
 func newDeployCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "deploy",
-		Short: "Declare, plan, apply, retire and roll back governed agent deployments",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "deploy",
+		Short:       "Declare, plan, apply, retire and roll back governed agent deployments",
 		Long: "deploy exercises the only plane that acts on customer infrastructure. Its\n" +
 			"discipline is plan-before-apply and deny-by-default: a definition is versioned,\n" +
 			"a plan is computed and hashed, and nothing is actuated until an approval bound\n" +
@@ -80,10 +81,11 @@ var deployDefinitionColumns = []string{
 
 func newDeployDefinitionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "definitions",
-		Short:   "Declare and version deployment definitions",
-		Long:    "A definition is the desired state of one deployment: its subject, environment, runtime, target and versioned spec. Every change mints a revision.",
-		Example: "  olivares deploy definitions ls",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "definitions",
+		Short:       "Declare and version deployment definitions",
+		Long:        "A definition is the desired state of one deployment: its subject, environment, runtime, target and versioned spec. Every change mints a revision.",
+		Example:     "  olivares deploy definitions ls",
 	}
 	cmd.AddCommand(
 		newDeployDefinitionsListCmd(flags),
@@ -99,8 +101,9 @@ func newDeployDefinitionsCmd(flags *authClientFlags) *cobra.Command {
 func newDeployDefinitionsListCmd(flags *authClientFlags) *cobra.Command {
 	var page agentExecPageFlags
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List deployment definitions with their drift",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List deployment definitions with their drift",
 		Long: "ls lists definitions. `up_to_date` is the column to read: false means the\n" +
 			"applied version is behind the current one — a declared change nobody applied.",
 		Example: "  olivares deploy definitions ls\n  olivares deploy definitions ls --limit 50 -o json",
@@ -126,11 +129,12 @@ func newDeployDefinitionsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newDeployDefinitionsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one definition with its current spec and real state",
-		Long:    "get returns the desired spec and, when the deployment is applied, the real state snapshot the engine last observed.",
-		Example: "  olivares deploy definitions get dep-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one definition with its current spec and real state",
+		Long:        "get returns the desired spec and, when the deployment is applied, the real state snapshot the engine last observed.",
+		Example:     "  olivares deploy definitions get dep-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: deployModule,
@@ -156,8 +160,9 @@ func newDeployDefinitionsCreateCmd(flags *authClientFlags) *cobra.Command {
 		specFile    string
 	)
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Declare a deployment definition from a JSON spec",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Declare a deployment definition from a JSON spec",
 		Long: "create declares desired state. It does NOT deploy anything: the definition is\n" +
 			"recorded at version 1 with nothing applied, and `plan` then `apply` are what\n" +
 			"actuate it.\n\n" +
@@ -215,8 +220,9 @@ func newDeployDefinitionsUpdateCmd(flags *authClientFlags) *cobra.Command {
 		specFile  string
 	)
 	cmd := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Publish a new revision of a definition (PUT)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "update <id>",
+		Short:       "Publish a new revision of a definition (PUT)",
 		Long: "update mints a NEW REVISION of the desired state. It does not apply it: the\n" +
 			"definition's current_version advances while applied_version stays put, so `ls`\n" +
 			"reports up_to_date=false until somebody applies it.\n\n" +
@@ -257,8 +263,9 @@ func newDeployDefinitionsUpdateCmd(flags *authClientFlags) *cobra.Command {
 func newDeployDefinitionsRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "rm <id>",
-		Short: "Delete a definition and its revisions (destructive; needs --yes when unattended)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <id>",
+		Short:       "Delete a definition and its revisions (destructive; needs --yes when unattended)",
 		Long: "rm deletes the definition. The engine refuses while the deployment is still\n" +
 			"applied (exit 5): retire it first, so nothing is ever left running with no\n" +
 			"declaration describing it.\n\n" +
@@ -288,8 +295,9 @@ func newDeployDefinitionsRemoveCmd(flags *authClientFlags) *cobra.Command {
 
 func newDeployDefinitionsRevisionsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "revisions <id>",
-		Short: "List a definition's revision history",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "revisions <id>",
+		Short:       "List a definition's revision history",
 		Long: "revisions lists every published version with its spec hash, note and author.\n" +
 			"It is NOT paginated by the engine: the whole history comes back in one answer.",
 		Example: "  olivares deploy definitions revisions dep-1",
@@ -317,8 +325,9 @@ var deployOperationColumns = []string{
 
 func newDeployPlanCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "plan <id>",
-		Short: "Compute the change set an apply WOULD make (nothing is actuated)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "plan <id>",
+		Short:       "Compute the change set an apply WOULD make (nothing is actuated)",
 		Long: "plan computes and hashes the change set between the applied version and the\n" +
 			"current one. Nothing is actuated. The plan_hash it prints is what an approval\n" +
 			"binds to, so an apply carrying an approval for a DIFFERENT plan is refused.",
@@ -339,11 +348,12 @@ func newDeployPlanCmd(flags *authClientFlags) *cobra.Command {
 
 func newDeployVerifyCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "verify <id>",
-		Short:   "Check the real deployment against its declared spec",
-		Long:    "verify asks the runtime what is actually deployed and compares it to the declared spec, reporting drift. Nothing is actuated.",
-		Example: "  olivares deploy verify dep-1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "verify <id>",
+		Short:       "Check the real deployment against its declared spec",
+		Long:        "verify asks the runtime what is actually deployed and compares it to the declared spec, reporting drift. Nothing is actuated.",
+		Example:     "  olivares deploy verify dep-1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: deployModule,
@@ -395,8 +405,9 @@ func deployMutation(cmd *cobra.Command, flags *authClientFlags, id, verb, approv
 func newDeployApplyCmd(flags *authClientFlags) *cobra.Command {
 	var approvalRef string
 	cmd := &cobra.Command{
-		Use:   "apply <id>",
-		Short: "Actuate the current version through the approval gate (two-phase)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "apply <id>",
+		Short:       "Actuate the current version through the approval gate (two-phase)",
 		Long: "apply is the verb that touches customer infrastructure, and it is deny-closed.\n\n" +
 			"  without --approval-ref  an approval is opened and NOTHING is deployed;\n" +
 			"                          this command exits 7 with the reference to repeat with.\n" +
@@ -422,8 +433,9 @@ func newDeployRetireCmd(flags *authClientFlags) *cobra.Command {
 		yes         bool
 	)
 	cmd := &cobra.Command{
-		Use:   "retire <id>",
-		Short: "Take a live deployment down (destructive POST; needs --yes when unattended)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "retire <id>",
+		Short:       "Take a live deployment down (destructive POST; needs --yes when unattended)",
 		Long: "retire tears down the running deployment. It is a POST and there is no DELETE\n" +
 			"anywhere near it, which is exactly why it is gated here: counting HTTP verbs\n" +
 			"would have found this family's only DELETE on `definitions rm` and left the\n" +
@@ -455,8 +467,9 @@ func newDeployRollbackCmd(flags *authClientFlags) *cobra.Command {
 		yes       bool
 	)
 	cmd := &cobra.Command{
-		Use:   "rollback <id>",
-		Short: "Revert a definition to an earlier version (destructive POST; needs --yes when unattended)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rollback <id>",
+		Short:       "Revert a definition to an earlier version (destructive POST; needs --yes when unattended)",
 		Long: "rollback republishes an earlier revision as the current desired state. It\n" +
 			"discards the state that was current, which is why it is gated like a delete.\n\n" +
 			"A --to-version that is not a real revision is a conflict (exit 5), not a silent\n" +
@@ -497,8 +510,9 @@ func newDeployOperationsCmd(flags *authClientFlags) *cobra.Command {
 		status       string
 	)
 	cmd := &cobra.Command{
-		Use:   "operations",
-		Short: "List the append-only ledger of plan/apply/retire/rollback operations",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "operations",
+		Short:       "List the append-only ledger of plan/apply/retire/rollback operations",
 		Long: "operations is the record of what was actuated, by whom, under which approval,\n" +
 			"and what the gate said. It is the answer to \"who deployed this and who approved\n" +
 			"it\".",
@@ -537,8 +551,9 @@ func newDeployWiringsCmd(flags *authClientFlags) *cobra.Command {
 		status       string
 	)
 	cmd := &cobra.Command{
-		Use:   "wirings",
-		Short: "List what each deployment is wired to, and how that was attributed",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "wirings",
+		Short:       "List what each deployment is wired to, and how that was attributed",
 		Long: "wirings lists the resources a deployment is connected to — the identity it runs\n" +
 			"as, the secrets it can reach — with the attribution that says how each wiring\n" +
 			"was established.",

@@ -118,7 +118,7 @@ func (m *Module) refuseUnsupportedIsolation(ctx context.Context, isolation Isola
 		return nil
 	}
 	return &codedRunErr{&runErr{http.StatusUnprocessableEntity,
-		"the configured runner does not support the requested isolation; the built-in runner requires isolation=native"},
+		"the configured runner does not support the requested isolation; this server runs isolation=native, and isolation=container where podman or Docker is installed"},
 		codeIsolationUnsupported}
 }
 

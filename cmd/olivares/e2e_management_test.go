@@ -99,47 +99,6 @@ func TestE2E_Governance_HITLApprovalAndBinding(t *testing.T) {
 	}
 }
 
-func TestE2E_Deploy_ControlPlaneAndFailClosed(t *testing.T) {
-	h := newHarness(t)
-
-	var def struct {
-		ID             string  `json:"id"`
-		CurrentVersion float64 `json:"current_version"`
-		AppliedVersion float64 `json:"applied_version"`
-	}
-	if code := h.reqInto("POST", "/v1/m/deploy/definitions", h.adminToken, h.tenantA, map[string]any{
-		"subject_kind": "agent", "subject_ref": seed.AgentCoder,
-		"name": "billing-svc", "environment": "prod", "target": "docker://host", "runtime": "docker",
-		"spec": map[string]any{"image": "billing:1", "replicas": 1},
-	}, &def); code != http.StatusCreated || def.ID == "" {
-		t.Fatalf("create definition = %d", code)
-	}
-	assertEq(t, "current_version", def.CurrentVersion, float64(1))
-	assertEq(t, "applied_version (never applied)", def.AppliedVersion, float64(0))
-
-	// A new revision bumps the version; rollback declares another.
-	if code, raw := h.req("PUT", "/v1/m/deploy/definitions/"+def.ID, h.adminToken, h.tenantA, map[string]any{
-		"spec": map[string]any{"image": "billing:2", "replicas": 1},
-	}); code != http.StatusOK {
-		t.Fatalf("update definition = %d: %s", code, raw)
-	}
-	if code, raw := h.req("POST", "/v1/m/deploy/definitions/"+def.ID+"/rollback", h.adminToken, h.tenantA, map[string]any{
-		"to_version": 1,
-	}); code != http.StatusCreated && code != http.StatusOK {
-		t.Fatalf("rollback = %d: %s", code, raw)
-	}
-	revs := h.getJSON(h.adminToken, h.tenantA, "/v1/m/deploy/definitions/"+def.ID+"/revisions")
-	if len(items(revs)) < 3 {
-		t.Errorf("revisions = %d, want >=3 (create, update, rollback)", len(items(revs)))
-	}
-
-	// HONEST FAIL-CLOSED: no executor is wired in the composition root, so plan
-	// returns 503, never a faked success. (Gap reported to composition root.)
-	if code, _ := h.req("POST", "/v1/m/deploy/definitions/"+def.ID+"/plan", h.adminToken, h.tenantA, nil); code != http.StatusServiceUnavailable {
-		t.Errorf("plan = %d, want 503 (no executor wired — deny-closed by design)", code)
-	}
-}
-
 func TestE2E_Knowledge_RAGAndLineage(t *testing.T) {
 	h := newHarness(t)
 

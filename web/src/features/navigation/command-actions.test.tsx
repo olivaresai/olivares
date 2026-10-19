@@ -40,18 +40,22 @@ import deNav from '@/lib/i18n/locales/de/nav.json'
 import enNav from '@/lib/i18n/locales/en/nav.json'
 import esNav from '@/lib/i18n/locales/es/nav.json'
 import frNav from '@/lib/i18n/locales/fr/nav.json'
+import itNav from '@/lib/i18n/locales/it/nav.json'
 import jaNav from '@/lib/i18n/locales/ja/nav.json'
+import koNav from '@/lib/i18n/locales/ko/nav.json'
 import ruNav from '@/lib/i18n/locales/ru/nav.json'
 import zhNav from '@/lib/i18n/locales/zh/nav.json'
 import { commandActionOf, usePendingCommandAction } from './command-actions'
 
-/** The seven catalogs the console ships. */
+/** The nine catalogs the console ships. */
 const NAV_CATALOGS = {
   en: enNav,
   es: esNav,
   de: deNav,
   fr: frNav,
+  it: itNav,
   ja: jaNav,
+  ko: koNav,
   ru: ruNav,
   zh: zhNav,
 } as Record<string, { commandActions?: Record<string, Record<string, string>> }>
@@ -153,10 +157,10 @@ describe('the registry declares each verb with its own mutation permission', () 
     expect(view?.permission).not.toBe(permission)
   })
 
-  // ⛔ THE KEY DID NOT MOVE, IN ANY OF THE SEVEN. The descriptor replaced a bare string,
+  // ⛔ THE KEY DID NOT MOVE, IN ANY OF THE NINE. The descriptor replaced a bare string,
   //    and `id` is still the segment the label hangs off — so a translation that used to
   //    resolve must still resolve. Derived from the registry rather than from a list
-  //    written here: a verb added without its seven translations fails this cell.
+  //    written here: a verb added without its nine translations fails this cell.
   it.each(Object.keys(NAV_CATALOGS))(
     'keeps a label for every declared verb in %s',
     (language) => {

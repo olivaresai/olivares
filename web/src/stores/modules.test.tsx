@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { act, renderIntel, screen, waitFor } from '@/test/intel'
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { CONSOLE_ENTRIES } from '@/features/module-spec.gen'
-import { FEATURE_VIEWS } from '@/features/registry'
+import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from '@/features/registry'
 import {
   moduleEnabled,
   moduleOfPermission,
@@ -121,13 +121,20 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
   it('every Community view of a built-in module takes its module from the spec', () => {
     const named = new Set(Object.values(CONSOLE_ENTRIES).flat())
     expect(
-      [...named].filter((id) => !FEATURE_VIEWS.some((v) => v.id === id)),
+      [...named].filter((id) => !FEATURE_VIEWS.some((v) => v.id === id)).sort(),
     ).toEqual(
       // docs/editions.md: FinOps analysis, red-team execution and reporting moved
       // to Business. Their spec entries remain for the paid console extensions.
-      ['finops', 'team-costs', 'redteam', 'reporting'].filter(
-        (id) => !FEATURE_EXTENSIONS.some((v) => v.id === id),
-      ),
+      // Deployment, recordings and compliance are Business pages of shared source:
+      // a build that does not serve them leaves their entries unused too.
+      [
+        ...['finops', 'team-costs', 'redteam', 'reporting'].filter(
+          (id) => !FEATURE_EXTENSIONS.some((v) => v.id === id),
+        ),
+        ...BUSINESS_ONLY_VIEW_IDS.filter(
+          (id) => !FEATURE_VIEWS.some((v) => v.id === id),
+        ),
+      ].sort(),
     )
     const unnamed = FEATURE_VIEWS.filter(
       (v) =>

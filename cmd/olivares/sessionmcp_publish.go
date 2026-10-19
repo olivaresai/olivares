@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -37,6 +38,9 @@ const (
 	// publishSpendWindow bounds the launcher lookup and the spend after a
 	// person decides.
 	publishSpendWindow = 10 * time.Second
+	// maxPublishReview bounds the review text with its change class, below the
+	// approval service's own limit.
+	maxPublishReview = 60 << 10
 )
 
 type sessionPublishPushArgs struct {
@@ -69,6 +73,10 @@ type sessionPublisher interface {
 type publisherModule interface {
 	Push(context.Context, gitpublish.Caller, gitpublish.PushInput) (gitpublish.Receipt, error)
 	OpenPullRequest(context.Context, gitpublish.Caller, gitpublish.PullRequestInput) (gitpublish.Receipt, error)
+	// PushChanges and PullRequestChanges list the paths a proposal would
+	// change on the host, in the session's workspace.
+	PushChanges(context.Context, gitpublish.Caller, model.ID, gitpublish.PushInput) ([]string, error)
+	PullRequestChanges(context.Context, gitpublish.Caller, model.ID, gitpublish.PullRequestInput) ([]string, error)
 	PublicationBudget() time.Duration
 }
 
@@ -140,6 +148,8 @@ type publication struct {
 	action, tool, summary, review string
 	target                        model.ID
 	run                           func(context.Context, gitpublish.Caller, gitpublish.Proposal) (gitpublish.Receipt, error)
+	// changes lists the paths the proposal would change, as the launcher.
+	changes func(context.Context, gitpublish.Caller, model.ID) ([]string, error)
 }
 
 // singleLine refuses control and invisible format characters (line breaks,
@@ -188,6 +198,9 @@ func (s sessionPublications) publication(p auth.Principal, tool string, raw json
 			run: func(ctx context.Context, c gitpublish.Caller, pr gitpublish.Proposal) (gitpublish.Receipt, error) {
 				in.OperationID, in.Proposal = "proposal:"+pr.Approval, pr
 				return s.module.Push(ctx, c, in)
+			},
+			changes: func(ctx context.Context, c gitpublish.Caller, workspace model.ID) ([]string, error) {
+				return s.module.PushChanges(ctx, c, workspace, in)
 			}}, nil
 	case publishPullRequestTool:
 		var a sessionPublishPullRequestArgs
@@ -212,6 +225,9 @@ func (s sessionPublications) publication(p auth.Principal, tool string, raw json
 			run: func(ctx context.Context, c gitpublish.Caller, pr gitpublish.Proposal) (gitpublish.Receipt, error) {
 				in.OperationID, in.Proposal = "proposal:"+pr.Approval, pr
 				return s.module.OpenPullRequest(ctx, c, in)
+			},
+			changes: func(ctx context.Context, c gitpublish.Caller, workspace model.ID) ([]string, error) {
+				return s.module.PullRequestChanges(ctx, c, workspace, in)
 			}}, nil
 	}
 	return publication{}, errors.New("unknown publish tool")
@@ -282,6 +298,10 @@ func (s sessionPublications) proposePublication(ctx context.Context, w http.Resp
 		publishRefusal(w, http.StatusConflict, "proposal_pending", "This session already has a publication waiting for a person; wait for its answer.")
 		return nil
 	}
+	class, launchedBy, ok := s.classify(ctx, w, p, tenant, workspace, &pub)
+	if !ok {
+		return nil
+	}
 	waitCtx, cancel := context.WithTimeout(ctx, managedMCPApprovalWait)
 	defer cancel()
 	subject := approvalbridge.EncodeSubjectRef(pub.target.String(), hexSHA(pub.action+"\x00"+pub.review))
@@ -289,6 +309,7 @@ func (s sessionPublications) proposePublication(ctx context.Context, w http.Resp
 		SessionRef: p.SessionIdentity, Action: pub.action, SubjectKind: publishSubjectKind, SubjectRef: subject,
 		Reason: pub.summary, Review: &governance.ApprovalReview{Tool: pub.tool, Text: pub.review},
 		ExpiresInSeconds: int64(managedMCPApprovalWait / time.Second),
+		LaunchedBy:       launchedBy, ChangeClass: class.Class, ChangePaths: class.Paths,
 	})
 	if err != nil {
 		return unavailable("the approval could not be queued", err, "session", p.SessionIdentity, "action", pub.action)
@@ -390,6 +411,66 @@ func (s sessionPublications) proposePublication(ctx context.Context, w http.Resp
 	s.log.Info("session publish: approved proposal carried out", "approval_ref", approval.ID, "session_run", p.SessionRunRef, "action", pub.action, "state", rc.Answer, "err", err)
 	gitpublish.WriteReceipt(w, rc, err)
 	return nil
+}
+
+// classify is the change class of a proposal, when an approval policy of the
+// tenant matches by it: the commit's changed paths are read as the session's
+// launcher, classified by the tenant's sensitive globs and appended to what a
+// person reviews, so the approval is bound to the class it was asked under.
+// With no such policy it reads nothing and changes nothing. A refused or failed
+// read answers the agent and reports false: an unclassified change is never
+// proposed in place of a classified one.
+func (s sessionPublications) classify(ctx context.Context, w http.ResponseWriter, p auth.Principal, tenant model.TenantID, workspace model.ID, pub *publication) (governance.ChangeClassification, string, bool) {
+	unavailable := func(what string, err error) (governance.ChangeClassification, string, bool) {
+		s.log.Warn("session publish: "+what, "session", p.SessionIdentity, "action", pub.action, "err", err)
+		publishRefusal(w, http.StatusServiceUnavailable, "approval_unavailable", "The approval service could not answer; ask again later.")
+		return governance.ChangeClassification{}, "", false
+	}
+	active, err := s.approvals.ChangeClassPolicyActive(ctx, tenant, pub.action)
+	if err != nil {
+		return unavailable("change class policy unreadable", err)
+	}
+	if !active {
+		return governance.ChangeClassification{}, "", true
+	}
+	launcher, err := s.launcher(ctx, p)
+	if err != nil {
+		if !errors.Is(err, auth.ErrUnauthenticated) {
+			return unavailable("launcher unresolved", err)
+		}
+		publishRefusal(w, http.StatusForbidden, "session_access_ended", "This session's launcher can no longer publish; nothing was proposed.")
+		return governance.ChangeClassification{}, "", false
+	}
+	paths, err := pub.changes(ctx, gitpublish.Caller{Principal: launcher, Tenant: tenant}, workspace)
+	if err != nil {
+		// The module's own refusal, as the publication itself would answer it.
+		gitpublish.WriteReceipt(w, gitpublish.Receipt{}, err)
+		return governance.ChangeClassification{}, "", false
+	}
+	class, err := s.approvals.ClassifyChange(ctx, tenant, pub.action, paths)
+	if err != nil {
+		return unavailable("change classification failed", err)
+	}
+	// The class leads what a reviewer reads, before any text the agent wrote,
+	// one path to a line; the paths are already printable and bounded.
+	var head strings.Builder
+	head.WriteString("change class: " + class.Class + "\nchanged paths:")
+	for _, path := range class.Paths {
+		head.WriteString("\n- " + path)
+	}
+	if class.More > 0 {
+		head.WriteString("\n- and " + strconv.Itoa(class.More) + " more")
+	}
+	if len(head.String())+len(pub.review)+1 > maxPublishReview {
+		publishRefusal(w, http.StatusUnprocessableEntity, "not_reviewable", "The request is too large to review together with its change class; shorten it and ask again.")
+		return governance.ChangeClassification{}, "", false
+	}
+	pub.review = head.String() + "\n" + pub.review
+	launchedBy := launcher.Actor()
+	if !launcher.UserID.IsZero() {
+		launchedBy = "user:" + launcher.UserID.String()
+	}
+	return class, launchedBy, true
 }
 
 func publishRefusal(w http.ResponseWriter, status int, code, message string) {

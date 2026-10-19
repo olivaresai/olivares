@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/olivaresai/olivares/connectors/contentsource"
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/api"
@@ -74,14 +75,18 @@ type editionPorts struct {
 	loginPolicy func(getenv func(string) string, fed *auth.FederationService, log *slog.Logger) auth.LoginPolicy
 	// nil pushes no CAEP event; the receiver is separately wired by the Identity & Scale edition seam.
 	caepTransmitter func(getenv func(string) string, log *slog.Logger) (caepTransmitter, error)
-	// nil makes "conjur" an unknown source kind.
+	// nil makes "conjur" an unknown source kind. The Business observation kinds (claude-compliance,
+	// kmip, oracle-audit, servicenow-cmdb) are refused at startup, naming Business: sources_business.go.
 	inProcSource func(kind string) (sdk.SourceConnector, bool)
+	// nil: a configured Business document kind (sharepoint, sap_odata, salesforce) refuses startup, naming Business.
+	contentSource func(kind string) (contentsource.Source, bool)
 	// nil makes "conjur" an unknown identity connector kind.
 	rosterProvider func(kind string) (identitysource.GraphProvider, sdk.SourceConnector, bool)
 	// nil ignores a Conjur credential in OLIVARES_NHI_ACTUATORS_CONFIG; rotation degrades to manual.
 	nhiActuator func(nhiActuatorTenant, string, *slog.Logger) (governance.LifecycleActuatorBinding, bool)
 	// nil makes placing a department and filing a group in a workspace answer 501
 	// departments_unavailable; the tree and places already stored stay readable.
+	// Nesting a group under another (PUT /v1/groups/{id}/parent) answers 501 the same way.
 	departmentService func(store.Store, *auth.Authenticator) api.DepartmentService
 	// nil adds no department verbs (`tree`, `set-parent`, `place`) to `olivares workspaces`.
 	workspaceCommands func(bootstrapClient) []*cobra.Command
@@ -102,6 +107,9 @@ type editionPorts struct {
 	circuitBreakerDeclarations func() circuitBreakerRuleDecls
 	// nil makes hooks attest and conform answer that the capability is not in this edition.
 	hookHardening editionPort[hookHardeningEngine]
+	// nil plants no decoy credentials and watches for none. An edition that has the add-on
+	// returns a nil engine when the operator has not opted in: the same posture.
+	sessionDecoys func(getenv func(string) string, deps sessionDecoyDeps, log *slog.Logger) sessionDecoyEngine
 	// nil subscribes no feed, and the CLI answers honestly that the add-on is not in this edition.
 	threatIntelSource editionEnvPort[threatIntelSource]
 	// Every edition fills it; Community sends the operator-configured upstream credential to every target.
@@ -118,6 +126,9 @@ type editionPorts struct {
 	mcpRenderInspector editionEnvPort[mcpc.RenderInspector]
 	// nil skips elicitation and sampling mediation; surface.go still inventories the capability advertisement.
 	mcpElicitationMediator editionEnvPort[mcpc.ElicitationMediator]
+	// nil leaves session tool arguments and results untouched; otherwise it makes the
+	// reversible-token flow of one session launch (mcpManagement.sessionDataFlow).
+	mcpToolDataFlow editionEnvPort[func() mcpc.ToolDataFlow]
 
 	// Compliance, records and reporting.
 	// nil makes ingestion answer 501; Business OSCAL export includes all stored controls.
@@ -134,7 +145,7 @@ type editionPorts struct {
 	complianceDepthPackager editionPort[compliance.ComplianceDepthPackager]
 	// nil makes the /nis2/incidents classification endpoints answer 501.
 	nis2IncidentPackager editionEnvPort[compliance.NIS2IncidentPackager]
-	// nil: the open-core workflow still performs real per-subject crypto-shredding, legal-hold gating and ledger verification.
+	// nil: the Business erasure workflow still performs real per-subject crypto-shredding, legal-hold gating and ledger verification.
 	cryptoShredCoordinator editionEnvPort[any]
 	// nil binds nothing: there is no coordinator to bind.
 	bindCryptoShredPorts func(coordinator any, sink audit.ArchiveSink, sinkKind string, comp *compliance.Module, log *slog.Logger)

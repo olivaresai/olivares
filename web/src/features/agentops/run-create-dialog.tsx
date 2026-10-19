@@ -48,6 +48,7 @@ import { profileOwnedEnvNames } from './provider-contract'
 import { SESSION_TOOLS, toolName } from './tool-names'
 import { useReadyTools } from '@/features/first-hour/first-hour'
 import { useReuseProfile } from '@/features/first-hour/session-profiles'
+import { LaunchSpeedFields } from './launch-speed-fields'
 import { useAuthBoundary } from './auth-boundary'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { LaunchIdentityFields, useLaunchIdentities } from './launch-identity'
@@ -65,6 +66,7 @@ import {
   readinessObservationIsUnusable,
   stoppedAtStartReason,
   launchRequestPermission,
+  type LaunchReadinessIsolation,
   type SessionLaunchReadiness,
 } from './launch-readiness'
 import {
@@ -77,6 +79,7 @@ import {
   type Transport,
 } from './types'
 import { ModelEffortFields } from './model-effort-picker'
+import { startModel } from './model-catalog'
 import './i18n'
 
 const NONE = '__none__'
@@ -100,6 +103,8 @@ export function RunCreateDialog({
   initialProfileRef,
   initialModel,
   initialEffort,
+  initialFastMode,
+  initialServiceTier,
   onCloseAutoFocus,
 }: {
   open: boolean
@@ -118,6 +123,8 @@ export function RunCreateDialog({
   initialProfileRef?: string
   initialModel?: string
   initialEffort?: string
+  initialFastMode?: boolean
+  initialServiceTier?: string
   /** Where focus goes on close, for an opener that is gone by then (the New session
    * form hands over to this dialog and unmounts its own button). */
   onCloseAutoFocus?: (event: Event) => void
@@ -148,8 +155,27 @@ export function RunCreateDialog({
     model: initialModel ?? '',
     effort: initialEffort ?? '',
   })
+  const [speedChoice, setSpeedChoice] = useState<{
+    scope: string
+    fastMode?: boolean
+    serviceTier?: string
+  }>()
+  const [speedPreset, setSpeedPreset] = useState(
+    initialFastMode !== undefined || !!initialServiceTier
+      ? {
+          authority: boundary.key,
+          profile: initialProfileRef,
+          model: initialModel ?? '',
+          fastMode: initialFastMode,
+          serviceTier: initialServiceTier,
+        }
+      : undefined,
+  )
   const [workspaceRef, setWorkspaceRef] = useState<string>(NONE)
   const [worktree, setWorktree] = useState(!!initialWorktreeFrom)
+  const [isolation, setIsolation] = useState<LaunchReadinessIsolation>(
+    DEFAULT_READINESS_ISOLATION,
+  )
   const [envAllow, setEnvAllow] = useState('')
   const [templateId, setTemplateId] = useState<string>(
     initialTemplateId ?? NONE,
@@ -257,6 +283,52 @@ export function RunCreateDialog({
   const selectedProfile = profiles.find((p) => p.profile_ref === profileRef)
   const model = modelPick.profile === profileRef ? modelPick.model : ''
   const effort = modelPick.profile === profileRef ? modelPick.effort : ''
+  const speedScope = JSON.stringify([
+    boundary.key,
+    profileRef,
+    model,
+    selectedProfile?.updated_at,
+    selectedProfile?.auth_source,
+    selectedProfile?.provider_record_ref,
+  ])
+  // Consume the handoff once the named profile is known. The existing scope then
+  // retires it on any model, profile, credential or profile-configuration change.
+  if (speedPreset && selectedProfile) {
+    setSpeedPreset(undefined)
+    if (
+      speedPreset.authority === boundary.key &&
+      speedPreset.profile === profileRef &&
+      speedPreset.model === model
+    )
+      setSpeedChoice({
+        scope: speedScope,
+        fastMode: speedPreset.fastMode,
+        serviceTier: speedPreset.serviceTier,
+      })
+  }
+  const speed = speedChoice?.scope === speedScope ? speedChoice : undefined
+  const canReadModels = open && canReadProfiles && profileRef !== NONE
+  const modelsQuery = useQuery({
+    queryKey: agentOpsKeys.profileModels(
+      activeTenant,
+      boundary.epoch,
+      profileRef,
+    ),
+    queryFn: ({ signal }) => agentOpsApi.profileModels(profileRef, { signal }),
+    enabled: canReadModels,
+    staleTime: 120_000,
+    retry: false,
+  })
+  const catalog =
+    canReadModels && !modelsQuery.isError && modelsQuery.data?.state === 'fresh'
+      ? modelsQuery.data
+      : undefined
+  const selectedSpeedModel = startModel(catalog, model.trim())
+  const speedUnavailable =
+    (speed?.fastMode === true &&
+      selectedSpeedModel?.supports_fast_mode !== true) ||
+    (speed?.serviceTier &&
+      !selectedSpeedModel?.service_tiers?.includes(speed.serviceTier))
   const requiresAgent =
     selectedProfile?.session_work_grant?.role === 'orchestrator'
   const agentReady =
@@ -334,7 +406,7 @@ export function RunCreateDialog({
     enabled: open && profileRef !== NONE && previewReady,
     profileRef: profileRef === NONE ? null : profileRef,
     transport: effectiveTransport,
-    isolation: DEFAULT_READINESS_ISOLATION,
+    isolation,
     profileState: selectedProfile?.state,
     authSource: selectedProfile?.auth_source,
     updatedAt: selectedProfile?.updated_at,
@@ -342,7 +414,7 @@ export function RunCreateDialog({
   const currentReadiness = currentLaunchReadinessObservation(readinessQuery, {
     profileRef,
     transport: effectiveTransport,
-    isolation: DEFAULT_READINESS_ISOLATION,
+    isolation,
   })
   const requestPermission = launchRequestPermission(currentReadiness)
 
@@ -356,7 +428,7 @@ export function RunCreateDialog({
   const isClassifiedRw =
     !!selectedWs &&
     selectedWs.dlp_mode !== 'off' &&
-    selectedWs.mount_mode === 'rw'
+    selectedWs.mount_mode !== 'ro' // write_no_delete still writes
 
   /** The requirement that stops this profile, in the panel's own words. */
   function readinessCause(data: SessionLaunchReadiness): string {
@@ -410,6 +482,20 @@ export function RunCreateDialog({
       }
     if (profileRef === NONE)
       return { reason: t('create.blocked.chooseProfile') }
+    if (speedUnavailable)
+      return {
+        reason: t('create.speedUnavailable'),
+        action: (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            onClick={() => setSpeedChoice(undefined)}
+          >
+            {t('create.speedDefault')}
+          </Button>
+        ),
+      }
     if (worktree && !selectedWs)
       return { reason: t('create.blocked.worktreeFolder') }
     if (requiresAgent && agentRef === '')
@@ -446,8 +532,10 @@ export function RunCreateDialog({
     setTransport('stream-json')
     setPermissionMode('default')
     setModelPick({ profile: NONE, model: '', effort: '' })
+    setSpeedChoice(undefined)
     setWorkspaceRef(NONE)
     setWorktree(false)
+    setIsolation(DEFAULT_READINESS_ISOLATION)
     setEnvAllow('')
     setTemplateId(NONE)
     setChosenProfile(NONE)
@@ -461,8 +549,10 @@ export function RunCreateDialog({
     permission_mode: permissionMode,
     effort,
     model,
+    ...(speed?.fastMode !== undefined ? { fast_mode: speed.fastMode } : {}),
+    ...(speed?.serviceTier ? { service_tier: speed.serviceTier } : {}),
     workspace_ref: workspaceRef === NONE ? '' : workspaceRef,
-    isolation: 'native',
+    isolation,
     env_allow: envAllow
       .split(',')
       .map((s) => s.trim())
@@ -644,6 +734,28 @@ export function RunCreateDialog({
               </Field>
             )}
 
+            <LaunchSpeedFields
+              driver={selectedProfile?.driver ?? ''}
+              model={
+                selectedProfile?.provider_record_ref
+                  ? undefined
+                  : selectedSpeedModel
+              }
+              fastMode={speed?.fastMode}
+              serviceTier={speed?.serviceTier}
+              onFastMode={(fastMode) =>
+                setSpeedChoice({ ...speed, scope: speedScope, fastMode })
+              }
+              onServiceTier={(serviceTier) =>
+                setSpeedChoice({ ...speed, scope: speedScope, serviceTier })
+              }
+            />
+            {canReadModels &&
+            (modelsQuery.isError || modelsQuery.data?.state === 'failed') ? (
+              <p role="status" className="text-caption text-text-2">
+                {t('create.speedLoadFailed')}
+              </p>
+            ) : null}
             <Field label={t('create.prompt')} htmlFor={promptId}>
               <Textarea
                 id={promptId}
@@ -892,9 +1004,33 @@ export function RunCreateDialog({
                   </div>
                 )}
 
-                <p className="text-caption text-muted-foreground">
-                  {t('create.isolationNativeOnly')}
-                </p>
+                <Field
+                  label={t('create.isolation')}
+                  description={
+                    isolation === 'container'
+                      ? t('create.isolationContainerHint')
+                      : undefined
+                  }
+                >
+                  <Select
+                    value={isolation}
+                    onValueChange={(v) =>
+                      setIsolation(v as LaunchReadinessIsolation)
+                    }
+                  >
+                    <SelectTrigger aria-label={t('create.isolation')}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="native">
+                        {t('isolation.native')}
+                      </SelectItem>
+                      <SelectItem value="container">
+                        {t('isolation.container')}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
 
                 {/* The chosen profile's requirements in full; what stops the launch is
                     also said beside Start. */}
@@ -909,7 +1045,7 @@ export function RunCreateDialog({
                     query={readinessQuery}
                     profileRef={profileRef}
                     transport={effectiveTransport}
-                    isolation={DEFAULT_READINESS_ISOLATION}
+                    isolation={isolation}
                     compact
                   />
                 )}

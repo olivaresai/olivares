@@ -26,9 +26,8 @@ spec.loader.exec_module(check)
 
 # Approved edition move; all stored rows remain covered by row_diff.
 REDTEAM_EDITION_ROUTES = frozenset(('/v1/m/redteam/targets', '/v1/m/redteam/runs', '/v1/m/redteam/catalog'))
-# The boot naming of provider profiles that predate account names (AdoptUnnamedProfiles):
-# it fills these three empty columns of an unnamed profile and never rewrites a set one.
-PROFILE_NAMING = ('account_name', 'home_mode', 'isolation_level')
+# Privileged-session recording is a Business capability: a Community candidate answers 501 business_required.
+RECORDING_EDITION_ROUTES = frozenset(('/v1/m/recording/sessions',))
 
 
 def digest(value):
@@ -84,17 +83,9 @@ def snapshot_rows(tables):
             entry = entries.setdefault(identity, {'count': 0, 'values': values})
             if table == 'deployment_settings' and 'doc' in row:
                 entry['module_profile'] = module_profile_snapshot(row['doc'])
-            if table == 'sessions_provider_profile':
-                entry['naming'] = [row.get(name) for name in PROFILE_NAMING]
             entry['count'] += 1
         result[table] = entries
     return result
-
-
-def boot_named(before, after):
-    """An unnamed profile that boot named: empty before, a generated adopted shared account after."""
-    return (before == [None, None, None] and isinstance(after, list) and after[1:] == ['adopted', 'shared']
-            and isinstance(after[0], str) and re.fullmatch(r'[a-z][a-z0-9-]{0,31}', after[0]) is not None)
 
 
 def row_diff(before, after):
@@ -113,9 +104,6 @@ def row_diff(before, after):
                     upgraded = row.get('module_profile', {}).get('v2')
                     if (table == 'deployment_settings' and field == 'doc' and upgraded is not None
                             and upgraded == other.get('module_profile', {}).get('doc')):
-                        continue
-                    if (table == 'sessions_provider_profile' and field in PROFILE_NAMING
-                            and boot_named(row.get('naming'), other.get('naming'))):
                         continue
                     failures.append(table + '.' + field + ': stored value changed ' + key)
     return failures
@@ -173,8 +161,9 @@ class Upgrade:
     def read(self, path: str) -> tuple[int, object]:
         status, data = self.call('GET', path)
         error = data.get('error') if isinstance(data, dict) else None
-        edition_refusal = (status == 501 and path in REDTEAM_EDITION_ROUTES
-                           and isinstance(error, str) and 'Business' in error)
+        edition_refusal = status == 501 and (
+            (path in REDTEAM_EDITION_ROUTES and isinstance(error, str) and 'Business' in error) or
+            (path in RECORDING_EDITION_ROUTES and isinstance(error, dict) and error.get('code') == 'business_required'))
         if status != 200 and not edition_refusal and not (
                 status == 404 and path.startswith('/v1/m/') and
                 isinstance(error, dict) and error.get('code') == 'module_not_enabled'):
@@ -261,7 +250,7 @@ class Upgrade:
         self.secrets.append(urllib.parse.unquote(url.password or ''))
         suffix = uuid.uuid4().hex[:12]
         self.database = 'userspace_' + suffix
-        roles = [self.database + '_' + role for role in ('app', 'owner', 'admin')]
+        roles = ['userspace_' + suffix + '_' + role for role in ('app', 'owner', 'admin')]
         password = self.home / 'db-password'
         password.write_text(self.password)
         password.chmod(0o600)
@@ -275,13 +264,6 @@ class Upgrade:
                      '--database', self.database, '--app-role', roles[0], '--app-password-file', str(password),
                      '--owner-role', roles[1], '--owner-password-file', str(password),
                      '--admin-role', roles[2], '--admin-password-file', str(password), '-o', 'json'])
-
-    def install_inventory(self):
-        # Without --admin-dsn the engine reads the tenant inventory only through the closed
-        # routine a DBA installs once the tables exist (docs/DIRECTORY-USER-AUTHORITY.md).
-        self.command(self.args.published, ['db', 'init', '--install-directory-inventory',
-                     '--superuser-dsn', 'env:USERSPACE_MAINTENANCE_DSN', '--database', self.database,
-                     '--app-role', self.database + '_app', '--owner-role', self.database + '_owner', '-o', 'json'])
 
     def rows(self):
         tables = []
@@ -353,15 +335,8 @@ class Upgrade:
                       'brief_md': 'Upgrade data', 'priority': 'p1', 'owner_kind': 'user', 'owner_ref': who['user_id'],
                       'provenance_kind': 'human', 'provenance_ref': 'fixture:upgrade', 'context_refs': [],
                       'acceptance': [{'criterion_key': 'retain', 'ordinal': 0, 'statement': 'Retain data', 'required': True}]}, 200)
-            if self.args.database == 'sqlite':
-                # The published binary writes at boot too (0.1 names unnamed provider profiles:
-                # boot_legacy_profiles.go). Boot it again, as the PostgreSQL app-owner restart
-                # does, so the snapshot is its settled state and not the candidate's first boot.
-                self.stop()
-                self.start(self.args.published, 'published-restart')
             if self.args.database == 'postgres':
                 self.stop()
-                self.install_inventory()
                 self.start(self.args.published, 'published-app-owner')
             paths = ['/v1/users', '/v1/workspaces', '/v1/m/governance/rbac/permission-groups',
                      '/v1/m/sessions/provider-profiles', '/v1/m/sessions/templates', '/v1/m/governance/policies',
@@ -376,7 +351,7 @@ class Upgrade:
             self.login()
             for path, (old_status, old) in before_reads.items():
                 status, new = self.read(path)
-                if path in REDTEAM_EDITION_ROUTES and old_status in (200, 501) and status == 501:
+                if path in REDTEAM_EDITION_ROUTES | RECORDING_EDITION_ROUTES and old_status in (200, 501) and status == 501:
                     continue
                 if status != old_status:
                     self.result['failures'].append(f'{path}: HTTP status changed from {old_status} to {status}')

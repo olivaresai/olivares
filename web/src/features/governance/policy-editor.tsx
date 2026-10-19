@@ -125,7 +125,7 @@ function PolicyForm({
   const [name, setName] = useState(policy?.name ?? '')
   const [kind, setKind] = useState<PolicyKind>(policy?.kind ?? 'abac')
   const [enabled, setEnabled] = useState(policy?.enabled ?? true)
-  // The server refused a tier below the action's default: Community keeps that in Business.
+  // The server refused a risk tier or an approval count other than the action's default: Community keeps that in Business.
   const [needsBusiness, setNeedsBusiness] = useState(false)
 
   // ABAC draft rules.

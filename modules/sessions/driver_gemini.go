@@ -100,9 +100,6 @@ func (geminiDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 }
 
 func (geminiDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
-	if cfg.sessionMCP == nil {
-		cfg.sessionMCP = []json.RawMessage{}
-	}
 	s := &geminiSession{acpSession: newACPSession(cfg, providerDriverGemini)}
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
@@ -143,6 +140,9 @@ type geminiSetModeParams struct {
 func (s *geminiSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	init, err := s.initialize(ctx)
 	if err != nil {
+		return DriverHandshake{}, err
+	}
+	if err := acpRequireSessionMCP("Gemini CLI", s.cfg.sessionMCP, init.AgentCapabilities.MCP.HTTP); err != nil {
 		return DriverHandshake{}, err
 	}
 	s.mu.Lock()
@@ -212,10 +212,10 @@ func (s *geminiSession) newConversation(ctx context.Context) (DriverHandshake, e
 func (s *geminiSession) resumeConversation(ctx context.Context, resume string) (DriverHandshake, error) {
 	s.mu.Lock()
 	loadable := s.caps.LoadSession
-	s.replayFor = resume
+	s.beginReplay(resume)
 	s.mu.Unlock()
 	if !loadable {
-		s.endReplay()
+		s.answerReplay() // nothing was asked, so nothing can replay
 		return DriverHandshake{}, &runErr{
 			http.StatusConflict,
 			"the provider does not advertise session load; refusing to start a different conversation",

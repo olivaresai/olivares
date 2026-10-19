@@ -30,8 +30,9 @@ const productModule = "github.com/olivaresai/olivares/cmd/olivares"
 // without trusting an unauthenticated feed and without any network at check time.
 func newSecurityCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "security",
-		Short: "Security self-checks (advisory feed verification and affected-version reporting)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "security",
+		Short:       "Security self-checks (advisory feed verification and affected-version reporting)",
 		Long: "security is the product's own PSIRT surface. check asks a signed advisory feed\n" +
 			"whether THIS version is affected and exits 7 when it is, so a fleet can be\n" +
 			"swept without a human reading release notes. advisories and rulepack are the\n" +
@@ -58,8 +59,9 @@ func newSecurityCheckCmd() *cobra.Command {
 		quiet          bool
 	)
 	cmd := &cobra.Command{
-		Use:   "check",
-		Short: "Check a product version against a signed advisories feed",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "check",
+		Short:       "Check a product version against a signed advisories feed",
 		Long: strings.TrimSpace(`
 Verify a signed security-advisories feed (OSV format) against the release key and report
 which advisories affect a selected product version (the running version by default). The

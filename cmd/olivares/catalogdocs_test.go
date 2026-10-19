@@ -35,6 +35,12 @@ func wiredCatalogKinds(t *testing.T) map[string]bool {
 	for _, k := range switchCaseKinds(t, "sources.go", "buildContentSource") {
 		kinds[k] = true
 	}
+	// The Business document kinds come from the edition port, not the switch.
+	for k := range businessSourceKinds {
+		if !businessKindUnavailable(k) {
+			kinds[k] = true
+		}
+	}
 	for _, k := range switchCaseKinds(t, "notifydispatch.go", "buildOutputConnector") {
 		kinds[k] = true
 	}
@@ -107,6 +113,10 @@ func TestConnectorDocsListNoUnwiredKind(t *testing.T) {
 			continue
 		}
 		if len(editionRosterCatalogKinds(t)) == 0 && strings.Contains(m[0], "Business: Identity & Scale") {
+			continue
+		}
+		// A Business connector this build does not construct stays in the catalog, marked Business.
+		if strings.Contains(m[0], "Business") && businessKindUnavailable(kind) {
 			continue
 		}
 		t.Errorf("docs table row names %q but this build wires no such kind — remove the row or wire the connector (%s)", kind, connectorsDocPath)

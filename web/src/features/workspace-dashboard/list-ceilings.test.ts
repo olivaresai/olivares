@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import {
-  desajustesPorFichero,
+  mismatchesByFile,
   etiquetasConLiteral,
   leer,
   nombresDeLista,
@@ -23,7 +23,7 @@ describe('workspace dashboard · both paginated lists declare truncation', () =>
 
   it('both live queries have their own badge', () => {
     const listas = nombresDeLista(leer('features/workspace-dashboard/api.ts'))
-    const { total, desajustes } = desajustesPorFichero(
+    const { total, desajustes } = mismatchesByFile(
       [{ nombre: VISTA, src: leer(VISTA) }],
       listas,
       'workspaceDashboardApi',

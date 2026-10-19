@@ -65,7 +65,11 @@ assert '      actions: write' in publication_job
 assert 'gh workflow run installer-matrix.yml --repo "$GITHUB_REPOSITORY"' in publication_job
 assert '--ref "refs/tags/$MATRIX_RELEASE_TAG" -f "release_version=$MATRIX_RELEASE_TAG"' in publication_job
 guard = "if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'"
-assert workflow.count(guard) == 2
+assert workflow.count(guard) == 1
+# The macOS leg is billed at the macOS rate: same repository guard, maintainer dispatch only.
+macos_guard = ("if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares'"
+               " || vars.OLIVARES_RELEASE_PROFILE == 'preprod')")
+assert workflow.split("macos-installer:")[1].split("runs-on:")[0].count(macos_guard) == 1
 for family, image in (
     ("debian", "debian:stable-slim"), ("ubuntu", "ubuntu:24.04"),
     ("fedora", "fedora:latest"), ("opensuse-leap", "opensuse/leap:latest"),

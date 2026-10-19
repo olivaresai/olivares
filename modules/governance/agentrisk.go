@@ -470,7 +470,7 @@ func (m *Module) handleGetAgentRiskProfile(w http.ResponseWriter, r *http.Reques
 
 // handleListAgentRiskProfiles lists profiles, optionally filtered by tier.
 func (m *Module) handleListAgentRiskProfiles(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	if v := r.URL.Query().Get("effective_tier"); v != "" {
 		q.Filters = append(q.Filters, eq(colARPEffectiveTier, v))
 	}

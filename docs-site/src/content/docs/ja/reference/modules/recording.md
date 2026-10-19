@@ -7,6 +7,8 @@ description: >-
   PayloadHash によって署名済みの監査台帳にアンカーされる。PAM 準拠、LIVE。
 ---
 
+特権セッションの記録は **[Business](https://olivares.ai/pricing)** の機能です。Community は `/v1/m/recording/` のすべてのルートに 501 `business_required` を返し、何も記録せず、コマンドグループを表示しません。すでに保存されたセッションはストアに残ります。
+
 Recording（`modules/recording`）は **特権セッション記録** プレーンである ——
 高保証を求めるバイヤーがコンソールや緊急アクセスに期待する、PAM 準拠のコントロールである。
 これは、特権オペレータのセッションが最も機微なモジュールサーフェス上で実際に何を行ったかを

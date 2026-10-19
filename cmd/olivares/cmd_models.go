@@ -23,8 +23,9 @@ import (
 func newModelsCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:   "models",
-		Short: "Govern the model estate, routing, registry and model access",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "models",
+		Short:       "Govern the model estate, routing, registry and model access",
 		Long: "Govern the models this engine knows about: the live estate and the declared\n" +
 			"reference catalog, routing policies and their resolution, the own-model registry with\n" +
 			"its versions, datasets and AIBOM evidence, and the access grants that decide who may\n" +
@@ -186,8 +187,9 @@ func newModelsReferenceCmds(c modelstackClient) []*cobra.Command {
 
 func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "routing",
-		Short: "Author routing policies and resolve or execute them",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "routing",
+		Short:       "Author routing policies and resolve or execute them",
 		Long: "Author the policies that select a model, resolve one against the governed estate to\n" +
 			"see the decision the gateway would take, or execute it through the governed executor.\n\n" +
 			"resolve is read-tier and performs no inference; execute is admin-tier and SPENDS.",
@@ -222,8 +224,9 @@ func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/routing-policies", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "create",
-			Short: "Create a routing policy",
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Create a routing policy",
 			Long: "Create a routing policy from a JSON document. The document is the policy DTO the\n" +
 				"engine publishes (name, enabled, and the selection spec); it is sent unmodified.",
 			Example: `  olivares models routing create --data @policy.json
@@ -233,8 +236,9 @@ func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 			Body:   modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "update <policy-id>",
-			Short: "Replace a routing policy in place",
+			ChangesData: "write",
+			Use:         "update <policy-id>",
+			Short:       "Replace a routing policy in place",
 			Long: "Replace one routing policy with the supplied document. This is a full replacement,\n" +
 				"not a merge: fields absent from the document are absent from the stored policy.",
 			Example: `  olivares models routing update 018f2a10-0000-7000-8000-000000000001 --data @policy.json`,
@@ -253,8 +257,9 @@ func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 			Blast:   "live traffic selected by this policy will be routed by whatever remains",
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "resolve <policy-id>",
-			Short: "Resolve a policy to the routing decision it would produce",
+			ChangesData: "read",
+			Use:         "resolve <policy-id>",
+			Short:       "Resolve a policy to the routing decision it would produce",
 			Long: "Resolve one policy against the governed estate and print the decision: the primary\n" +
 				"target, the fallback chain, and — when nothing is selectable — why. A governance deny\n" +
 				"exits 3 and names the deny kind; an enforcing budget at its cap exits 5. It performs\n" +
@@ -265,8 +270,9 @@ func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 			Body:    modelstackBodyNone,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "execute <policy-id>",
-			Short: "Execute a routing policy through the governed executor (SPENDS)",
+			ChangesData: "write",
+			Use:         "execute <policy-id>",
+			Short:       "Execute a routing policy through the governed executor (SPENDS)",
 			Long: "Resolve the policy and act on the decision through the governed executor, emitting a\n" +
 				"cost sample. This is an admin-tier spend, not a preview. When no executor is\n" +
 				"provisioned the route is deny-closed and answers 503, which exits 6 and says so.",
@@ -283,8 +289,9 @@ func newModelsRoutingCmd(c modelstackClient) *cobra.Command {
 
 func newModelsKeysCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "keys",
-		Short: "Govern provider API-key and workspace references",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "keys",
+		Short:       "Govern provider API-key and workspace references",
 		Long: "Govern the references to provider API keys and workspaces. These are minimal-data\n" +
 			"REFERENCES — an external id, a name, an owner, a status and a hint. No secret value is\n" +
 			"stored here or printed by these verbs.",
@@ -319,22 +326,24 @@ func newModelsKeysCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Register a provider key or workspace reference",
-			Long:    "Register one reference from a JSON document. The document carries no secret value.",
-			Example: `  olivares models keys create --data @key-ref.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/keys"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Register a provider key or workspace reference",
+			Long:        "Register one reference from a JSON document. The document carries no secret value.",
+			Example:     `  olivares models keys create --data @key-ref.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/keys"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "update <ref-id>",
-			Short:   "Replace a key or workspace reference",
-			Long:    "Replace one reference with the supplied document. Full replacement, not a merge.",
-			Example: `  olivares models keys update 018f2a10-0000-7000-8000-000000000001 --data @key-ref.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/keys", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "update <ref-id>",
+			Short:       "Replace a key or workspace reference",
+			Long:        "Replace one reference with the supplied document. Full replacement, not a merge.",
+			Example:     `  olivares models keys update 018f2a10-0000-7000-8000-000000000001 --data @key-ref.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/keys", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <ref-id>",
@@ -352,8 +361,9 @@ func newModelsKeysCmd(c modelstackClient) *cobra.Command {
 
 func newModelsResidencyCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "residency",
-		Short: "Govern per-workspace inference-geo residency",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "residency",
+		Short:       "Govern per-workspace inference-geo residency",
 		Long: "Read and set the permitted inference geographies per workspace — the PERMITTED side\n" +
 			"of the compliance geo-drift scan.",
 		Example: `  olivares models residency ls
@@ -384,8 +394,9 @@ func newModelsResidencyCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "set",
-			Short: "Declare a workspace's permitted inference geographies",
+			ChangesData: "write",
+			Use:         "set",
+			Short:       "Declare a workspace's permitted inference geographies",
 			Long: "Upsert the residency record for one workspace from a JSON document. This declares\n" +
 				"what is PERMITTED; the drift scan compares it against what is observed.",
 			Example: `  olivares models residency set --data @residency.json`,
@@ -399,8 +410,9 @@ func newModelsResidencyCmd(c modelstackClient) *cobra.Command {
 
 func newModelsEntitlementsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "entitlements",
-		Short: "Attest provider entitlement state for restricted access tiers",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "entitlements",
+		Short:       "Attest provider entitlement state for restricted access tiers",
 		Long: "Read and attest the operator-declared entitlement state for restricted provider\n" +
 			"access tiers. A suspended tier is what makes the routing chain drop its candidates.",
 		Example: `  olivares models entitlements ls
@@ -430,13 +442,14 @@ func newModelsEntitlementsCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "set",
-			Short:   "Attest the entitlement state of one access tier",
-			Long:    "Upsert one access-tier entitlement attestation from a JSON document.",
-			Example: `  olivares models entitlements set --data @tier.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/access-tier-entitlements"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "set",
+			Short:       "Attest the entitlement state of one access tier",
+			Long:        "Upsert one access-tier entitlement attestation from a JSON document.",
+			Example:     `  olivares models entitlements set --data @tier.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/access-tier-entitlements"},
+			Body:        modelstackBodyRequired,
 		}),
 	)
 	return cmd
@@ -446,8 +459,9 @@ func newModelsEntitlementsCmd(c modelstackClient) *cobra.Command {
 
 func newModelsOwnedCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "owned",
-		Short: "Govern the own-model registry",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "owned",
+		Short:       "Govern the own-model registry",
 		Long: "Govern the models this organization owns or fine-tunes: the registry entry, its\n" +
 			"visibility and status. Versions, deployments and evidence hang off these entries.",
 		Example: `  olivares models owned ls
@@ -485,22 +499,24 @@ func newModelsOwnedCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/owned-models", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Register an owned model",
-			Long:    "Register one own-model from a JSON document. Registering governs it; it trains nothing.",
-			Example: `  olivares models owned create --data @owned.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/owned-models"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Register an owned model",
+			Long:        "Register one own-model from a JSON document. Registering governs it; it trains nothing.",
+			Example:     `  olivares models owned create --data @owned.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/owned-models"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "update <owned-id>",
-			Short:   "Replace an owned-model entry",
-			Long:    "Replace one own-model entry with the supplied document. Full replacement, not a merge.",
-			Example: `  olivares models owned update 018f2a10-0000-7000-8000-000000000001 --data @owned.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/owned-models", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "update <owned-id>",
+			Short:       "Replace an owned-model entry",
+			Long:        "Replace one own-model entry with the supplied document. Full replacement, not a merge.",
+			Example:     `  olivares models owned update 018f2a10-0000-7000-8000-000000000001 --data @owned.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/owned-models", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <owned-id>",
@@ -518,8 +534,9 @@ func newModelsOwnedCmd(c modelstackClient) *cobra.Command {
 
 func newModelsVersionsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "versions",
-		Short: "Govern owned-model versions and their signed admission",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "versions",
+		Short:       "Govern owned-model versions and their signed admission",
 		Long: "Register and retire the versions of an owned model, and run the deny-closed\n" +
 			"verify-before-admit ceremony that records a signature verdict against one.",
 		Example: `  olivares models versions ls --owned-ref 018f2a10-0000-7000-8000-000000000001
@@ -549,17 +566,19 @@ func newModelsVersionsCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Register an owned-model version",
-			Long:    "Register one version of an owned model from a JSON document.",
-			Example: `  olivares models versions create --data @version.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/model-versions"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Register an owned-model version",
+			Long:        "Register one version of an owned model from a JSON document.",
+			Example:     `  olivares models versions create --data @version.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/model-versions"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "admit <version-id>",
-			Short: "Run the signed-model admission ceremony against a version",
+			ChangesData: "write",
+			Use:         "admit <version-id>",
+			Short:       "Run the signed-model admission ceremony against a version",
 			Long: "Verify a version's signature against this tenant's admission trust root and record\n" +
 				"the verdict. The gate is deny-closed: a document that does not verify produces a\n" +
 				"recorded refusal, not an admission.",
@@ -584,8 +603,9 @@ func newModelsVersionsCmd(c modelstackClient) *cobra.Command {
 
 func newModelsDeploymentsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "deployments",
-		Short: "Govern local inference deployments",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "deployments",
+		Short:       "Govern local inference deployments",
 		Long: "Govern the inference deployments that serve owned models: their runtime, endpoint\n" +
 			"reference, status and whether they are governed by this engine.",
 		Example: `  olivares models deployments ls
@@ -617,22 +637,24 @@ func newModelsDeploymentsCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Register an inference deployment",
-			Long:    "Register one inference deployment from a JSON document.",
-			Example: `  olivares models deployments create --data @deployment.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/inference-deployments"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Register an inference deployment",
+			Long:        "Register one inference deployment from a JSON document.",
+			Example:     `  olivares models deployments create --data @deployment.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/inference-deployments"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "update <deployment-id>",
-			Short:   "Replace an inference deployment",
-			Long:    "Replace one deployment with the supplied document. Full replacement, not a merge.",
-			Example: `  olivares models deployments update 018f2a10-0000-7000-8000-000000000003 --data @deployment.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/inference-deployments", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "update <deployment-id>",
+			Short:       "Replace an inference deployment",
+			Long:        "Replace one deployment with the supplied document. Full replacement, not a merge.",
+			Example:     `  olivares models deployments update 018f2a10-0000-7000-8000-000000000003 --data @deployment.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/inference-deployments", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:     "rm <deployment-id>",
@@ -649,8 +671,9 @@ func newModelsDeploymentsCmd(c modelstackClient) *cobra.Command {
 
 func newModelsFinetuneCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "finetune",
-		Short: "Record fine-tune jobs and their outcome",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "finetune",
+		Short:       "Record fine-tune jobs and their outcome",
 		Long: "Record the fine-tune jobs this organization runs: base model, dataset, runtime,\n" +
 			"status and the version they produced. The engine INVENTORIES these jobs; it\n" +
 			"does not run them.",
@@ -689,22 +712,24 @@ func newModelsFinetuneCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/finetune-jobs", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Record a fine-tune job",
-			Long:    "Record one fine-tune job from a JSON document.",
-			Example: `  olivares models finetune create --data @job.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/finetune-jobs"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Record a fine-tune job",
+			Long:        "Record one fine-tune job from a JSON document.",
+			Example:     `  olivares models finetune create --data @job.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/finetune-jobs"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "update <job-id>",
-			Short:   "Replace a fine-tune job record",
-			Long:    "Replace one job record with the supplied document — typically to record its outcome.",
-			Example: `  olivares models finetune update 018f2a10-0000-7000-8000-000000000004 --data @job.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/finetune-jobs", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "update <job-id>",
+			Short:       "Replace a fine-tune job record",
+			Long:        "Replace one job record with the supplied document — typically to record its outcome.",
+			Example:     `  olivares models finetune update 018f2a10-0000-7000-8000-000000000004 --data @job.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/finetune-jobs", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 	)
 	return cmd
@@ -714,8 +739,9 @@ func newModelsFinetuneCmd(c modelstackClient) *cobra.Command {
 
 func newModelsGPAICmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gpai",
-		Short: "Attest per-provider GPAI compliance posture",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "gpai",
+		Short:       "Attest per-provider GPAI compliance posture",
 		Long: "Read and attest the per-provider GPAI posture (code-of-practice signature, technical\n" +
 			"documentation, training-data summary, copyright policy, systemic-risk and safety\n" +
 			"reporting). It is an OPERATOR ATTESTATION and records claim vs verified separately.",
@@ -746,13 +772,14 @@ func newModelsGPAICmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "attest",
-			Short:   "Attest one provider's GPAI posture",
-			Long:    "Upsert the GPAI posture attestation for one provider from a JSON document.",
-			Example: `  olivares models gpai attest --data @posture.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/gpai-posture"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "attest",
+			Short:       "Attest one provider's GPAI posture",
+			Long:        "Upsert the GPAI posture attestation for one provider from a JSON document.",
+			Example:     `  olivares models gpai attest --data @posture.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/gpai-posture"},
+			Body:        modelstackBodyRequired,
 		}),
 	)
 	return cmd
@@ -760,8 +787,9 @@ func newModelsGPAICmd(c modelstackClient) *cobra.Command {
 
 func newModelsAdmissionCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "admission",
-		Short: "Govern the signed-model admission trust root and read its verdicts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "admission",
+		Short:       "Govern the signed-model admission trust root and read its verdicts",
 		Long: "Read and set the per-tenant admission policy — the trust root the verify-before-admit\n" +
 			"ceremony evaluates against — and read the verdicts it has recorded.\n\n" +
 			"Setting the policy is admin-tier: it decides what this tenant will ever admit.",
@@ -778,8 +806,9 @@ func newModelsAdmissionCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/admission-policy"},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "set-policy",
-			Short: "Replace the admission trust root",
+			ChangesData: "write",
+			Use:         "set-policy",
+			Short:       "Replace the admission trust root",
 			Long: "Replace this tenant's admission policy with the supplied document. It governs every\n" +
 				"future admission, so it is a full replacement and admin-tier.",
 			Example: `  olivares models admission set-policy --data @admission-policy.json`,
@@ -818,8 +847,9 @@ func newModelsAdmissionCmd(c modelstackClient) *cobra.Command {
 
 func newModelsDatasetsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "datasets",
-		Short: "Govern dataset lineage components",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "datasets",
+		Short:       "Govern dataset lineage components",
 		Long: "Govern the datasets that appear as lineage components in an AIBOM: their\n" +
 			"classification, governance status, content hash and attestation.",
 		Example: `  olivares models datasets ls
@@ -849,13 +879,14 @@ func newModelsDatasetsCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Register a dataset",
-			Long:    "Register one dataset lineage component from a JSON document.",
-			Example: `  olivares models datasets create --data @dataset.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/datasets"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Register a dataset",
+			Long:        "Register one dataset lineage component from a JSON document.",
+			Example:     `  olivares models datasets create --data @dataset.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/datasets"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <dataset-id>",
@@ -873,8 +904,9 @@ func newModelsDatasetsCmd(c modelstackClient) *cobra.Command {
 
 func newModelsAIBOMCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "aibom",
-		Short: "Generate, seal and list AI bills of materials",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "aibom",
+		Short:       "Generate, seal and list AI bills of materials",
 		Long: "Generate the CycloneDX AIBOM for an owned model (or its SPDX 3.0.1 AI-Profile form),\n" +
 			"seal a content hash of it to the append-only ledger as evidence, list the seals, and\n" +
 			"render the model card built from the same governed inventory.\n\n" +
@@ -899,8 +931,9 @@ func newModelsAIBOMCmd(c modelstackClient) *cobra.Command {
 			Raw: true,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "seal <owned-id>",
-			Short: "Seal the current AIBOM to the ledger as evidence",
+			ChangesData: "write",
+			Use:         "seal <owned-id>",
+			Short:       "Seal the current AIBOM to the ledger as evidence",
 			Long: "Compute the AIBOM for one owned model and anchor its content hash to the append-only\n" +
 				"ledger. The seal is evidence: it records what the inventory was at this moment and\n" +
 				"cannot be withdrawn.",
@@ -950,9 +983,10 @@ func newModelsAIBOMCmd(c modelstackClient) *cobra.Command {
 
 func newModelsAgentArtifactsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "agent-artifacts",
-		Aliases: []string{"artifacts"},
-		Short:   "Govern the agent-artifact supply chain",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "agent-artifacts",
+		Aliases:     []string{"artifacts"},
+		Short:       "Govern the agent-artifact supply chain",
 		Long: "Govern the four agent-artifact classes (skill, mcpb_extension, mcp_app_template,\n" +
 			"agents_md) as registry entries with provenance and a posture verdict, and the dedicated\n" +
 			"agent-supply-chain CycloneDX BOM built from them.\n\n" +
@@ -985,13 +1019,14 @@ func newModelsAgentArtifactsCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Register an agent artifact",
-			Long:    "Register one agent artifact with its provenance and content hash, from a JSON document.",
-			Example: `  olivares models agent-artifacts create --data @artifact.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/agent-artifacts"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Register an agent artifact",
+			Long:        "Register one agent artifact with its provenance and content hash, from a JSON document.",
+			Example:     `  olivares models agent-artifacts create --data @artifact.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/agent-artifacts"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <artifact-id>",
@@ -1012,8 +1047,9 @@ func newModelsAgentArtifactsCmd(c modelstackClient) *cobra.Command {
 			Raw:     true,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "seal",
-			Short: "Seal the agent-supply-chain BOM to the ledger",
+			ChangesData: "write",
+			Use:         "seal",
+			Short:       "Seal the agent-supply-chain BOM to the ledger",
 			Long: "Anchor the content hash of the current agent-supply-chain BOM to the append-only\n" +
 				"ledger as its own evidence kind. It cannot be withdrawn.",
 			Example: `  olivares models agent-artifacts seal`,
@@ -1046,9 +1082,10 @@ func newModelsAgentArtifactsCmd(c modelstackClient) *cobra.Command {
 
 func newModelsGroupsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "groups",
-		Aliases: []string{"model-groups"},
-		Short:   "Author named model groups",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "groups",
+		Aliases:     []string{"model-groups"},
+		Short:       "Author named model groups",
 		Long: "Author the named sets that model-access grants point at: explicit model references\n" +
 			"plus family and tier selectors. A group is a reference set; it grants nothing on its own.",
 		Example: `  olivares models groups ls
@@ -1081,17 +1118,19 @@ func newModelsGroupsCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/model-groups", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Create a model group",
-			Long:    "Create one model group from a JSON document.",
-			Example: `  olivares models groups create --data @group.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/model-groups"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Create a model group",
+			Long:        "Create one model group from a JSON document.",
+			Example:     `  olivares models groups create --data @group.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/model-groups"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "update <group-id>",
-			Short: "Replace a model group",
+			ChangesData: "write",
+			Use:         "update <group-id>",
+			Short:       "Replace a model group",
 			Long: "Replace one model group with the supplied document. Grants that point at this group\n" +
 				"immediately cover the new membership.",
 			Example: `  olivares models groups update 018f2a10-0000-7000-8000-000000000007 --data @group.json`,
@@ -1115,9 +1154,10 @@ func newModelsGroupsCmd(c modelstackClient) *cobra.Command {
 
 func newModelsAccessCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "access",
-		Aliases: []string{"model-access"},
-		Short:   "Author model-access grants (who may use which model)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "access",
+		Aliases:     []string{"model-access"},
+		Short:       "Author model-access grants (who may use which model)",
 		Long: "Author the grants that decide which subject (user, role or agent group) may use which\n" +
 			"model or model group, in which workspace and on which surface. They are enforced\n" +
 			"deny-closed in the routing select/execute chain.\n\n" +
@@ -1153,8 +1193,9 @@ func newModelsAccessCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "create",
-			Short: "Create a model-access grant",
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Create a model-access grant",
 			Long: "Create one grant from a JSON document. A forbid grant narrows; an allow grant widens\n" +
 				"who may spend against a model — which is why this is admin-tier in the engine.",
 			Example: `  olivares models access create --data @grant.json`,
@@ -1163,13 +1204,14 @@ func newModelsAccessCmd(c modelstackClient) *cobra.Command {
 			Body:    modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "update <grant-id>",
-			Short:   "Replace a model-access grant",
-			Long:    "Replace one grant with the supplied document. Full replacement, not a merge.",
-			Example: `  olivares models access update 018f2a10-0000-7000-8000-000000000008 --data @grant.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/model-access", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "update <grant-id>",
+			Short:       "Replace a model-access grant",
+			Long:        "Replace one grant with the supplied document. Full replacement, not a merge.",
+			Example:     `  olivares models access update 018f2a10-0000-7000-8000-000000000008 --data @grant.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/model-access", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <grant-id>",

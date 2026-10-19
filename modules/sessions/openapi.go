@@ -56,6 +56,15 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 // sessionsResponses is the whole responses object of every sessions route
 // whose answers differ from the generic envelope.
 func sessionsResponses(method, pattern string) (map[string]any, bool) {
+	if (method == http.MethodPut && pattern == "/workspaces/{ref}/setup-command") || (method == http.MethodPost && pattern == "/workspaces/{ref}/setup-command/approve") || (method == http.MethodGet && pattern == "/workspaces/{ref}") {
+		responses := api.GenericModuleResponses()
+		approval := sessionsClosureClosedObject(oas.Obj("sha256", oas.Obj("type", "string", "pattern", "^[0-9a-f]{64}$"), "actor", oas.Obj("type", "string"), "at", sessionsTimestampSchema()), "sha256", "actor", "at")
+		responses["200"] = oas.JSONRespSchema("Registered folder, exact setup text, last approval as evidence, and setup_approved, true only while that approval covers the current text", oas.Obj("type", "object", "properties", oas.Obj("setup_command", oas.Obj("type", "string"), "setup_command_sha256", oas.Obj("type", "string"), "setup_approval", approval, "setup_approved", oas.Obj("type", "boolean"))))
+		if method == http.MethodPost {
+			responses["409"] = oas.JSONResp("The setup command changed or is empty; review its current text and hash")
+		}
+		return responses, true
+	}
 	if method == http.MethodGet && pattern == "/provider-profiles/{ref}/models" {
 		return sessionsModelCatalogResponses(), true
 	}
@@ -80,8 +89,24 @@ func sessionsResponses(method, pattern string) (map[string]any, bool) {
 	if responses, ok := sessionsRunPreviewResponses(method, pattern); ok {
 		return responses, true
 	}
+	if responses, ok := sessionsRunAttachmentResponses(method, pattern); ok {
+		return responses, true
+	}
 	if responses, ok := sessionsRunCommandsResponses(method, pattern); ok {
 		return responses, true
+	}
+	if responses, ok := sessionsProjectConfigResponses(method, pattern); ok {
+		return responses, true
+	}
+	if sessionsRunPinRoute(method, pattern) {
+		// The caller's own pin state (run_pin.go): a closed answer, because the
+		// handlers write exactly these fields and nothing else.
+		resp := api.GenericModuleResponses()
+		resp["200"] = oas.Obj(
+			"description", "the run's pin state for the caller",
+			"content", oas.Obj("application/json", oas.Obj("schema", sessionsRunPinStateSchema())),
+		)
+		return resp, true
 	}
 	if !sessionsWorkRoute(pattern) && !sessionsProtocolBindingReconcile(method, pattern) &&
 		!sessionsProtocolBindingSpecMutation(method, pattern) &&
@@ -184,9 +209,13 @@ func sessionsParameters(method, pattern string) []map[string]any {
 		return sessionsLaunchReadinessParameters()
 	}
 	if method == http.MethodGet && (pattern == "/live" || pattern == "/runs") {
+		limit := "Page size; default and maximum follow the store's list contract."
+		if pattern == "/runs" {
+			limit += " Without pagination=cursor, the caller's own pinned sessions outside the page are added to it, at most 20 more rows; a list narrowed by state or provider_profile_ref answers the narrowed page alone."
+		}
 		return []map[string]any{
 			oas.Param("pagination", "query", "Optional cursor mode traverses every row in stable ID order; absent keeps the recency-ordered page and ignores cursor.", false, oas.Obj("type", "string", "enum", oas.Enum("cursor"))),
-			oas.Param("limit", "query", "Page size; default and maximum follow the store's list contract.", false, oas.Obj("type", "integer", "minimum", 1, "maximum", 1000)),
+			oas.Param("limit", "query", limit, false, oas.Obj("type", "integer", "minimum", 1, "maximum", 1000)),
 			oas.Param("cursor", "query", "Opaque cursor returned by the previous page; used only with pagination=cursor.", false, oas.Obj("type", "string")),
 		}
 	}
@@ -375,6 +404,9 @@ func sessionsRequestBody(method, pattern string) (map[string]any, bool) {
 					"line", oas.Obj("type", "string", "minLength", 1),
 					"message", oas.Obj("type", "object", "additionalProperties", true),
 					"text", oas.Obj("type", "string", "minLength", 1),
+					"attachments", oas.Obj("type", "array", "maxItems", maxTurnAttachments,
+						"items", oas.Obj("type", "string"),
+						"description", "Ids of images stored with this session (POST /runs/{ref}/attachments), sent with text as one message. The engine encodes the message for the session's tool; a tool that takes no images refuses it. Not accepted with line, message or work_lease_fence."),
 					"work_lease_fence", oas.Obj("type", "integer", "format", "int64", "minimum", 1),
 				),
 			)
@@ -464,6 +496,28 @@ func sessionsRunControlRoute(method, pattern string) bool {
 		return true
 	}
 	return false
+}
+
+// sessionsRunPinRoute is the caller's own pin toggle (run_pin.go).
+func sessionsRunPinRoute(method, pattern string) bool {
+	if pattern != "/runs/{ref}/pin" {
+		return false
+	}
+	return method == http.MethodPost || method == http.MethodDelete
+}
+
+// sessionsRunPinStateSchema is the exact body both pin routes answer with. It is
+// closed because the handlers write this one shape and nothing else.
+func sessionsRunPinStateSchema() map[string]any {
+	return oas.Obj(
+		"type", "object", "additionalProperties", false,
+		"required", oas.Enum("run_ref", "pinned"),
+		"properties", oas.Obj(
+			"run_ref", oas.Obj("type", "string", "description", "The operated session's stable reference."),
+			"pinned", oas.Obj("type", "boolean", "description", "Whether THIS caller has the session pinned; both directions are idempotent."),
+			"pinned_at", oas.Obj("type", "string", "description", "When this caller pinned it; present when pinned is true. Run list and get reads carry the same per-caller fields."),
+		),
+	)
 }
 
 // sessionsRunInputAcceptedSchema is the exact body POST /runs/{ref}/input returns on

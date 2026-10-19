@@ -15,6 +15,7 @@ const SID = 'sid-fixed'
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
   useSessionStore.setState({
     csrfToken: 'csrf_first',
     sessionId: SID,
@@ -24,6 +25,25 @@ beforeEach(() => {
 })
 
 const generation = () => useSessionStore.getState().credentialGeneration
+
+describe('session store — tab drafts', () => {
+  const draftA = 'olivares.draft.v1.["tenant-a","alice","run-a"]'
+  it('retains drafts when cookie recovery clears the in-memory credential', () => {
+    sessionStorage.setItem(draftA, 'draft A')
+    useSessionStore.getState().clear()
+    expect(sessionStorage.getItem(draftA)).toBe('draft A')
+  })
+
+  it('retains drafts through credential refresh and reauthentication after expiry', () => {
+    sessionStorage.setItem(draftA, 'draft A')
+    useSessionStore
+      .getState()
+      .setSession({ csrfToken: 'rotated', sessionId: SID, expiresAt: LATER })
+    expect(sessionStorage.getItem(draftA)).toBe('draft A')
+    useSessionStore.getState().ended()
+    expect(sessionStorage.getItem(draftA)).toBe('draft A')
+  })
+})
 
 describe('session store — credential generation', () => {
   it('a renewal that rotates the CSRF token under the SAME session id is a new credential', () => {

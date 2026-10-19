@@ -8,7 +8,7 @@ sidebar:
   order: 2
 ---
 
-FinOps の予算と支出分析は **[Business](https://olivares.ai/pricing)** の機能です。Community はセッションごとのコスト追跡とデータのエクスポートを提供します。<!-- release -->0.2<!-- /release --> より前に保存された予算は引き続き参照・削除でき、FinOps モジュールが有効な間は適用されます。Community では予算の作成・変更はできません。評価とサンドボックスは Community に残ります。
+FinOps の予算と支出分析は **[Business](https://olivares.ai/pricing)** の機能です。Community はセッションごとのコスト追跡とデータのエクスポートを提供します。<!-- release -->0.3<!-- /release --> より前に保存された予算は引き続き参照・削除でき、FinOps モジュールが有効な間は適用されます。Community では予算の作成・変更はできません。評価とサンドボックスは Community に残ります。
 
 
 **目標:** 「このチームのエージェントは月 $500 で支出を止める」——一度宣言すれば
@@ -82,11 +82,8 @@ curl -ks "$BASE/v1/m/finops/alerts" \
 [デスティネーション](/ja/how-to/forward-audit-to-splunk/)が 100% の拒否より前に
 80% の到達を知る。
 
-コンソールでは、**Cost & FinOps** が dimension 別の支出を予算ステータスと
-インラインで表示する:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="支出トレンドと予算態勢を表示する Cost & FinOps ビュー。" />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="支出トレンドと予算態勢を表示する Cost & FinOps ビュー。" />
+コンソールでは、**Budgets** が各上限に対する消費量を、消費ペースに基づく
+予測とともに表示する。
 
 ## 支出に分母を与える: アウトカム
 

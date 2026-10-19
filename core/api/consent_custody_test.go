@@ -193,10 +193,8 @@ func TestCreationStampsCustodyOnce(t *testing.T) {
 		want(t, deployment, model.CustodyDeployment, "")
 
 		// Later writes leave custody as it was stamped.
-		scimTok := h.scimToken(super, tT)
-		if r := h.scim("PATCH", "/v1/scim/v2/Users/"+provisioned.ID.String(), scimTok,
-			`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"Renamed"}]}`); r.code != http.StatusOK {
-			t.Fatalf("SCIM attribute change = %d %s", r.code, r.raw)
+		if _, err := h.authr.SCIMUpdateUser(ctx, super, tT, provisioned.ID, auth.SCIMUserInput{DisplayName: "Renamed", Active: true}); err != nil {
+			t.Fatalf("directory attribute change: %v", err)
 		}
 		want(t, provisioned.ID, model.CustodyTenant, tT)
 		if err := h.authr.SetPassword(ctx, super, deployment, "yetanotherpass1"); err != nil {

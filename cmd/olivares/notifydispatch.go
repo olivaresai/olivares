@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -93,7 +94,13 @@ type notifyDestinationSpec struct {
 // sink is never left half-open; the durable outbox's at-least-once retry
 // covers the single attempt that may be in flight at the instant of the swap.
 type connectorDispatcher struct {
-	specs []notifyDestinationSpec
+	// specs are the operator file's destinations; stored are the console's (deployment
+	// settings, set before openAll). The file wins a name in both.
+	specs  []notifyDestinationSpec
+	stored []notifyDestinationSpec
+	// consoleOwned names the destinations the console added (guarded by mu): the only
+	// ones it may replace or remove. Everything else open is the operator file's.
+	consoleOwned map[string]struct{}
 	// mu guards conns/names/ext against a post-Start live reload. Deliver
 	// holds it only across the map LOOKUP, never across the connector's Notify, so a
 	// slow/hung destination can never block a reload of another destination.
@@ -182,6 +189,7 @@ func newConnectorDispatcher(specs []notifyDestinationSpec, trust *connectorTrust
 		conns:          make(map[string]sdk.OutputConnector, len(specs)),
 		ext:            make(map[string]*extDest),
 		resolvedFP:     make(map[string]string, len(specs)),
+		consoleOwned:   make(map[string]struct{}),
 		tenantScope:    buildTenantScope(specs, log),
 		connectorTrust: trust,
 		trustFP:        hashTrust(trust),
@@ -328,7 +336,13 @@ func (d *connectorDispatcher) openAll(ctx context.Context, r *secret.Resolver, l
 	if d.dispenseVerified == nil && d.rt != nil {
 		d.dispenseVerified = d.rt.DispenseOutputPluginVerified
 	}
-	for _, spec := range d.specs {
+	for i, spec := range slices.Concat(d.specs, d.stored) {
+		// The console's destinations (after the file's) get a connector that does not
+		// follow redirects; the operator file keeps the transport it always had.
+		build := buildOutputConnector
+		if i >= len(d.specs) {
+			build = buildConsoleConnector
+		}
 		// The duplicate check runs BEFORE any work so a shadowed later definition
 		// never opens a connection (or launches a subprocess) that is then dropped.
 		if d.has(spec.Name) {
@@ -346,26 +360,131 @@ func (d *connectorDispatcher) openAll(ctx context.Context, r *secret.Resolver, l
 			d.openPlugin(ctx, spec, bin, r, log)
 			continue
 		}
-		conn, err := buildOutputConnector(spec.Kind)
-		if err != nil {
-			log.Warn("notify: destination has unknown connector kind; skipped", "name", spec.Name, "kind", spec.Kind)
+		conn, fp, skipped := openInProcessDestination(ctx, spec, r, build)
+		if skipped != "" {
+			log.Warn(skipped, "name", spec.Name, "kind", spec.Kind)
 			continue
 		}
-		// Resolve the destination's secret references (Slack webhook URL, PagerDuty
-		// routing key, …) against the secret store / backends, enforcing the strict
-		// no-inline-secret rule on the connector's declared secret fields.
-		resolved, rerr := resolveConfig(ctx, r, conn.Descriptor(), sdk.Config{Settings: spec.Config})
-		if rerr != nil {
-			log.Warn("notify: destination secret reference could not be resolved; skipped", "name", spec.Name, "kind", spec.Kind)
+		d.put(spec.Name, conn, fp)
+	}
+}
+
+// openInProcessDestination builds, resolves and opens one in-process destination. A
+// non-empty skipped is the (non-sensitive) reason it cannot be opened, ready to log
+// with the name and kind. It never returns or logs an error value: a connector's
+// Open error can embed the configured endpoint/credential.
+func openInProcessDestination(ctx context.Context, spec notifyDestinationSpec, r *secret.Resolver, build func(kind string) (sdk.OutputConnector, error)) (conn sdk.OutputConnector, fingerprint, skipped string) {
+	conn, err := build(spec.Kind)
+	if err != nil {
+		return nil, "", "notify: destination has unknown connector kind; skipped"
+	}
+	// Resolve the destination's secret references (Slack webhook URL, PagerDuty
+	// routing key, …) against the secret store / backends, enforcing the strict
+	// no-inline-secret rule on the connector's declared secret fields.
+	resolved, rerr := resolveConfig(ctx, r, conn.Descriptor(), sdk.Config{Settings: spec.Config})
+	if rerr != nil {
+		return nil, "", "notify: destination secret reference could not be resolved; skipped"
+	}
+	if oerr := conn.Open(ctx, resolved); oerr != nil {
+		return nil, "", "notify: destination failed to open (configuration error); skipped"
+	}
+	return conn, connectorResolvedDigest(spec.Kind, resolved, nil), ""
+}
+
+// setStored records the destinations the console defined (deployment settings), to
+// be opened by openAll after the operator file's. A name the operator file also
+// defines belongs to the file, whether or not the file's destination opens, so the
+// console's definition of it is dropped here (and warned about) rather than opening
+// under the file's name when the file's own fails.
+func (d *connectorDispatcher) setStored(specs []notifyDestinationSpec, log *slog.Logger) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.stored = d.stored[:0]
+	for _, s := range specs {
+		if _, file := d.fileSpec(s.Name); file {
+			log.Warn("notify: a destination added in the console has the name of one in the operator file; the file's is used and the console's is ignored", "name", s.Name)
 			continue
 		}
-		// Never log err here — a connector's Open error can embed the configured
-		// endpoint/credential; only the non-sensitive name/kind is logged.
-		if oerr := conn.Open(ctx, resolved); oerr != nil {
-			log.Warn("notify: destination failed to open (configuration error); skipped", "name", spec.Name, "kind", spec.Kind)
-			continue
+		d.stored = append(d.stored, s)
+		d.consoleOwned[s.Name] = struct{}{}
+	}
+}
+
+// fileSpec returns the operator-file destination of that name, if any.
+func (d *connectorDispatcher) fileSpec(name string) (notifyDestinationSpec, bool) {
+	for _, s := range d.specs {
+		if s.Name == name {
+			return s, true
 		}
-		d.put(spec.Name, conn, connectorResolvedDigest(spec.Kind, resolved, nil))
+	}
+	return notifyDestinationSpec{}, false
+}
+
+// notConsoleOwned reports whether a name belongs to something other than the console:
+// the operator file, or a destination a SIGHUP reload added from it (which is not in
+// d.specs but is open and not the console's). The console may neither replace nor
+// remove such a destination.
+func (d *connectorDispatcher) notConsoleOwned(name string) bool {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.notConsoleOwnedLocked(name)
+}
+
+// notConsoleOwnedLocked is notConsoleOwned for a caller that holds d.mu: applyStored
+// and removeStored check and change under one lock section, so a SIGHUP reload cannot
+// add the name in between.
+func (d *connectorDispatcher) notConsoleOwnedLocked(name string) bool {
+	if _, file := d.fileSpec(name); file {
+		return true
+	}
+	_, console := d.consoleOwned[name]
+	_, open := d.conns[name]
+	return open && !console
+}
+
+// applyStored opens a console-defined destination in the running engine and swaps it
+// in for the connector of the same name, if any. The new connector is fully opened
+// BEFORE the swap, so a destination that fails to open leaves the old one serving;
+// the old connector is closed after. A console destination is addressable by every
+// tenant, like an operator-file destination that declares no tenants.
+func (d *connectorDispatcher) applyStored(ctx context.Context, spec notifyDestinationSpec, r *secret.Resolver, log *slog.Logger) error {
+	conn, fp, skipped := openInProcessDestination(ctx, spec, r, buildConsoleConnector)
+	if skipped != "" {
+		log.Warn(skipped, "name", spec.Name, "kind", spec.Kind)
+		return errors.New(skipped)
+	}
+	d.mu.Lock()
+	if d.notConsoleOwnedLocked(spec.Name) {
+		d.mu.Unlock()
+		_ = conn.Close(ctx)
+		return errors.New("notify: the name belongs to the operator file")
+	}
+	old := d.conns[spec.Name]
+	d.conns[spec.Name] = conn
+	d.resolvedFP[spec.Name] = fp
+	d.consoleOwned[spec.Name] = struct{}{}
+	d.mu.Unlock()
+	if old != nil {
+		_ = old.Close(ctx)
+	}
+	return nil
+}
+
+// removeStored closes and forgets a console destination, if open. A name the console
+// does not own is left alone.
+func (d *connectorDispatcher) removeStored(ctx context.Context, name string) {
+	d.mu.Lock()
+	if d.notConsoleOwnedLocked(name) {
+		d.mu.Unlock()
+		return
+	}
+	old := d.conns[name]
+	delete(d.conns, name)
+	delete(d.resolvedFP, name)
+	delete(d.consoleOwned, name)
+	d.mu.Unlock()
+	if old != nil {
+		_ = old.Close(ctx)
 	}
 }
 

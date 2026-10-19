@@ -7,9 +7,11 @@ package accessmap
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"sync"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/api/oas"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
@@ -50,9 +52,10 @@ type Module struct {
 // Compile-time proof the module satisfies the SDK lifecycle, the API
 // route/permission seam and the data-consumer seam.
 var (
-	_ sdk.Module       = (*Module)(nil)
-	_ api.Module       = (*Module)(nil)
-	_ api.DataConsumer = (*Module)(nil)
+	_ sdk.Module                    = (*Module)(nil)
+	_ api.Module                    = (*Module)(nil)
+	_ api.DataConsumer              = (*Module)(nil)
+	_ api.ModuleOperationDocumenter = (*Module)(nil)
 )
 
 // New returns an access-map module with a system clock and no data handle; the
@@ -159,4 +162,23 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/attack-paths/escalation", permGraphRead, m.handleEscalation)
 	reg.Handle("GET", "/attack-paths/exfil", permGraphRead, m.handleExfil)
 	reg.Handle("GET", "/attack-paths/summary", permGraphRead, m.handleAttackPathSummary)
+}
+
+// OperationDocumentation describes query errors and the accepted filter values.
+func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+	if method != http.MethodGet {
+		return api.ModuleOperationDocumentation{}, false
+	}
+	var description string
+	switch pattern {
+	case "/graph", "/drift":
+		description = "Bad request. Accepted non-empty values are mode: unknown, read, write, readwrite; confidence: attributed, approximate. Empty mode and confidence mean no filter."
+	case "/neighbors":
+		description = "Bad request: id is required; direction: outgoing, incoming, both. Empty direction defaults to both."
+	default:
+		return api.ModuleOperationDocumentation{}, false
+	}
+	responses := api.GenericModuleResponses()
+	responses["400"] = oas.JSONResp(description)
+	return api.ModuleOperationDocumentation{Responses: responses}, true
 }

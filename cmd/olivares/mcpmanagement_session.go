@@ -289,7 +289,8 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 	}
 	input, _ := json.Marshal(row.MCPGatewayServerInput)
 	digest := sha256.Sum256(input)
-	server, err := mcpc.NewSessionToolServer(mcpc.SessionToolServerConfig{Tenant: tenant.String(), ServerID: row.ID, Descriptor: "managed-session:" + hex.EncodeToString(digest[:]), Toolset: toolset, Upstream: guarded, Gate: gate, Auditor: mcpgateway.GateAuditor{Log: m.eng.log, Store: m.eng.store, Tenant: tenant}})
+	server, err := mcpc.NewSessionToolServer(mcpc.SessionToolServerConfig{Tenant: tenant.String(), ServerID: row.ID, Descriptor: "managed-session:" + hex.EncodeToString(digest[:]), Toolset: toolset, Upstream: guarded, Gate: gate, Auditor: mcpgateway.GateAuditor{Log: m.eng.log, Store: m.eng.store, Tenant: tenant},
+		DataFlow: m.sessionDataFlow(tenant.String()+"/"+p.SessionRunRef+"/"+companion.LaunchID.String(), companion.Context)})
 	if err != nil {
 		return nil, err
 	}
@@ -308,6 +309,31 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 	})
 	failed = false
 	return entry, nil
+}
+
+// sessionDataFlow is the one reversible-token flow of an exact session launch,
+// shared by every managed server the launch calls, so a token issued by one
+// server's result can be restored into another's call. It lives in memory only
+// and is dropped when the launch ends; a resumed launch starts with none. The
+// caller holds cacheMu.
+func (m *mcpManagement) sessionDataFlow(launch string, lifetime context.Context) mcpc.ToolDataFlow {
+	if m.newToolDataFlow == nil {
+		return nil
+	}
+	if flow, ok := m.sessionFlows[launch]; ok {
+		return flow
+	}
+	flow := m.newToolDataFlow()
+	if m.sessionFlows == nil {
+		m.sessionFlows = map[string]mcpc.ToolDataFlow{}
+	}
+	m.sessionFlows[launch] = flow
+	context.AfterFunc(lifetime, func() {
+		m.cacheMu.Lock()
+		defer m.cacheMu.Unlock()
+		delete(m.sessionFlows, launch)
+	})
+	return flow
 }
 
 type managedSessionUpstream struct {

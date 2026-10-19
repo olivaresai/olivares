@@ -211,7 +211,7 @@
     "fromTo": "v{{from}} → v{{to}}",
     "planHash": "Plan-Hash",
     "changes": "Änderungen",
-    "noExecutor": "Abgleich ist nicht verfügbar — für diese Bereitstellung ist noch kein Laufzeit-Executor verkabelt.",
+    "noExecutor": "Abgleich ist nicht verfügbar — für diese Bereitstellung ist noch kein Laufzeit-Executor eingerichtet.",
     "done": "Plan berechnet"
   },
   "verify": {
@@ -239,7 +239,7 @@
     "blockedHint": "Die Governance hat diese Aktion zurückgehalten. Der Bestand wurde nicht geändert.",
     "applied": "Bereitstellung angewendet",
     "noop": "Nichts anzuwenden — bereits aktuell.",
-    "noExecutor": "Abgleich ist nicht verfügbar — für diese Bereitstellung ist noch kein Laufzeit-Executor verkabelt.",
+    "noExecutor": "Abgleich ist nicht verfügbar — für diese Bereitstellung ist noch kein Laufzeit-Executor eingerichtet.",
     "retired": "Diese Bereitstellung ist außer Betrieb — rollen Sie zurück oder bearbeiten Sie den Soll-Zustand, bevor Sie anwenden."
   },
   "retire": {

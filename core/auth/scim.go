@@ -244,7 +244,7 @@ func (a *Authenticator) SCIMUpdateUser(ctx context.Context, actor Principal, ten
 		return auditAct(ctx, as, actor, "scim.user.update", "core.user", id)
 	})
 	if err == nil && left {
-		a.recordSCIMLeaver(ctx, actor, tenant, id, scimDeactivateCause)
+		a.recordLeaver(ctx, actor, tenant, id, scimDeactivateCause)
 	}
 	return out, err
 }
@@ -278,7 +278,7 @@ func (a *Authenticator) SCIMDeprovisionUser(ctx context.Context, actor Principal
 		return nil
 	})
 	if err == nil && left {
-		a.recordSCIMLeaver(ctx, actor, tenant, id, scimDeprovisionCause)
+		a.recordLeaver(ctx, actor, tenant, id, scimDeprovisionCause)
 	}
 	return err
 }
@@ -386,7 +386,7 @@ func membershipOf(ctx context.Context, as store.AuthScope, userID model.ID, tena
 // fields (employeeNumber, department, manager) — from in onto u. It does NOT touch
 // email/userName: the match key is owned by the provision (create by email) and
 // update (conditional rename) paths, which differ on create vs replace. PATCH
-// reaches here too, having pre-merged the current state into in (handlers_scim.go),
+// reaches here too, having pre-merged the current state into in (the Business SCIM PATCH handler),
 // so an attribute the PATCH did not mention keeps its current value rather than
 // being cleared.
 func applyDirectoryAttrs(u *model.User, in SCIMUserInput) {

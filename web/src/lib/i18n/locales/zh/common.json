@@ -96,7 +96,7 @@
     "searchResults": "数据中的结果",
     "searchTruncated": "还有更多匹配项 — 请细化搜索。",
     "searchDegraded": "部分来源无法搜索 — 此列表不完整。",
-    "deniedReason": "需要 {{permission}}。",
+    "deniedReason": "对此需要 {{permission}}。",
     "deniedHelp": "请向可以授予该权限的管理员申请。",
     "noTargetReason": "需要一个可在其中运行的组织。",
     "noTargetHelp": "请选择组织，然后重试。",
@@ -107,6 +107,12 @@
     "footerMove": "移动",
     "footerOpen": "打开",
     "footerCommands": "仅命令"
+  },
+  "permissionWords": {
+    "read": "读取权限",
+    "write": "写入权限",
+    "admin": "管理员权限",
+    "other": "更高权限"
   },
   "status": {
     "active": "活跃",
@@ -227,7 +233,7 @@
       "killswitchReleased": "{{actor}} 解除了紧急停止",
       "killswitchReleased_you": "你解除了紧急停止",
       "killswitchDenied": "紧急停止已停止一个会话",
-      "toolInstalled": "已安装代理工具",
+      "toolInstalled": "已安装智能体工具",
       "secretStored": "已保存一个密钥",
       "viewSaved": "{{actor}} 保存了视图",
       "viewSaved_you": "你保存了视图",
@@ -293,7 +299,13 @@
     },
     "command": {
       "palette": {
-        "open": "打开命令面板"
+        "open": "打开命令面板",
+        "recent1": "打开最近的会话 1",
+        "recent2": "打开最近的会话 2",
+        "recent3": "打开最近的会话 3",
+        "recent4": "打开最近的会话 4",
+        "recent5": "打开最近的会话 5",
+        "recent6": "打开最近的会话 6"
       },
       "help": {
         "toggle": "显示这些快捷键"
@@ -304,6 +316,9 @@
         "startBackground": "启动并留在此处"
       },
       "surface": {
+        "openBeside": "在旁边打开",
+        "closeBeside": "关闭旁边的会话",
+        "focusBeside": "在会话之间移动焦点",
         "nextPane": "下一个面板",
         "previousPane": "上一个面板"
       },
@@ -328,7 +343,8 @@
         "pin": "固定或取消固定此模块"
       },
       "session": {
-        "new": "新建会话"
+        "new": "新建会话",
+        "previous": "返回上一个会话"
       },
       "sourceDiff": {
         "nextFile": "下一个文件",
@@ -340,7 +356,9 @@
     "when": {
       "railFocused": "在会话栏中",
       "launcherFocused": "在启动输入框中",
-      "workSurface": "在会话页面"
+      "workSurface": "在会话页面",
+      "sessionHistory": "有上一个会话时",
+      "paletteRecent": "在查询为空的命令面板结果中"
     },
     "precedence": "当两行使用相同按键时，以最后一条适用的为准。",
     "modNote": "在 Windows 和 Linux 上，⌘ 即 Control。",

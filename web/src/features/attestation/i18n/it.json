@@ -1,0 +1,202 @@
+{
+  "title": "Attestazione della supply chain",
+  "description": "Verità misurata sul binario in esecuzione, più il contratto dichiarato di verifica delle release — cosa viene distribuito con ogni release e come verificarlo esattamente. Nulla viene riverificato nel browser.",
+  "forbiddenTitle": "Non autorizzato",
+  "forbidden": "Per vedere il contratto di attestazione serve il permesso compliance:read.",
+  "disclaimer": {
+    "tag": "Beta",
+    "body": "Il progetto è in beta: non esistono ancora release e la pipeline di release è scritta ma non attivata. Il pannello del binario in esecuzione è MISURATO da questo processo; le schede del contratto sono il contratto dichiarato, non una release pubblicata né una verifica crittografica in tempo reale — questa console non riverifica mai le firme nel browser.",
+    "declaredRef": "Riferimento dichiarato — AsOf {{date}}. Tratto alla lettera da docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml e dai workflow di release / scorecard / patch-velocity. Il motore non può osservare lo stato del repository né della CI, quindi questa metà non viene servita in tempo reale."
+  },
+  "live": {
+    "title": "Binario in esecuzione (misurato)",
+    "description": "Ciò che QUESTO processo del motore può provare su di sé — letto in tempo reale dal binario (ldflags, debug.ReadBuildInfo, crypto/fips140, un hash dell'eseguibile stesso) — e lo stato onesto della release: nulla è pubblicato o verificato finché un tag v* non fa partire la pipeline.",
+    "status": {
+      "measured": "Misurato"
+    },
+    "fields": {
+      "commit": "Commit",
+      "buildDate": "Data della build",
+      "goVersion": "Versione di Go",
+      "platform": "OS / arch",
+      "mainModule": "Modulo principale",
+      "moduleSums": "Somme dei moduli",
+      "vcsStamp": "Marca VCS",
+      "selfHash": "Self-SHA256",
+      "capturedAt": "Acquisito il",
+      "releaseReason": "Stato della release",
+      "signature": "Firma",
+      "verifier": "Verificatore",
+      "transparencyLog": "Log di trasparenza",
+      "workflows": "Workflow della pipeline"
+    },
+    "fipsOn": "FIPS 140-3: attivo",
+    "fipsOff": "FIPS 140-3: disattivo",
+    "sums": "{{n}} dipendenze esterne hanno hash in go.sum",
+    "sumsAbsent": "nessuna somma di dipendenze registrata",
+    "vcsAvailable": "Impostazioni VCS marcate dalla toolchain Go",
+    "vcsUnavailable": "Nessuna marca VCS",
+    "selfHashHint": "Il self-SHA256 è un hash in streaming dell'eseguibile in esecuzione, calcolato una sola volta alla prima lettura. Confrontalo OFFLINE con un futuro checksums.txt firmato — il browser non verifica mai le firme, e un hash da solo prova l'identità, non la provenienza.",
+    "published": "Pubblicata",
+    "notPublished": "Non pubblicata",
+    "verifierAvailable": "Verificatore nativo compilato (core/secure/modelsign)",
+    "verifierUnavailable": "Nessun verificatore disponibile",
+    "pipelineStatus": {
+      "declared": "Dichiarata."
+    }
+  },
+  "status": {
+    "declared": "Dichiarato",
+    "skip_when_absent": "Salta se assente",
+    "not_run": "Non ancora eseguito"
+  },
+  "trust": {
+    "keyless": "Senza chiavi (Fulcio/Rekor)",
+    "key_based": "Basata su chiavi (air-gap)",
+    "both": "Senza chiavi + basata su chiavi",
+    "transitive": "Transitiva (checksum firmati)"
+  },
+  "tabs": {
+    "artifacts": "Artefatti",
+    "provenance": "Provenienza e VEX",
+    "sbom": "SBOM",
+    "scorecard": "Scorecard",
+    "remediation": "SLA di remediation",
+    "airgap": "Air-gap e chart"
+  },
+  "artifacts": {
+    "title": "Artefatti della release",
+    "description": "Cosa viene distribuito con una release e come si stabilisce la fiducia in ogni artefatto. La firma senza chiavi (Fulcio/Rekor) e quella basata su chiavi (air-gap) sono entrambe di prima classe — nessuna delle due è canonica.",
+    "identityNote": "Identità di firma senza chiavi (dichiarata): emittente OIDC {{issuer}} · identità del certificato cosign {{regexp}}",
+    "columns": {
+      "artifact": "Artefatto",
+      "producedBy": "Prodotto da",
+      "signatureTrust": "Firma / fiducia",
+      "mechanism": "Meccanismo",
+      "status": "Stato",
+      "control": "Controllo"
+    }
+  },
+  "slsa": {
+    "title": "Provenienza della build SLSA",
+    "description": "Provenienza in-toto / ITE-6 generata da slsa-github-generator e verificata con slsa-verifier.",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "Tipo di predicato",
+    "generator": "Generatore",
+    "pin": "Pin del workflow riutilizzabile",
+    "pinKind": {
+      "semver_tag": "Tag semver",
+      "sha": "SHA"
+    },
+    "verifyCommand": "Comando di verifica",
+    "honesty": "L3 per costruzione: la firma gira in un contesto isolato che i passi della build non possono raggiungere. Il workflow riutilizzabile è fissato con un tag semver (non con uno SHA) — slsa-verifier convalida l'ID del builder rispetto al tag, quindi fissarlo con uno SHA interromperebbe la verifica. Non tutte le dipendenze sono fissate con uno SHA."
+  },
+  "sbom": {
+    "title": "Distinta base del software (SBOM)",
+    "description": "SPDX 2.3 e CycloneDX 1.6 per ogni archivio e per l'immagine del container, allegati come attestazione in-toto firmata.",
+    "attestation": "Predicato di attestazione",
+    "linter": "Linter CISA",
+    "cisa": {
+      "title": "Checklist degli elementi minimi CISA",
+      "draftTag": "Bozza",
+      "draft": "Gli \"elementi minimi\" SBOM CISA 2025 sono una bozza (pre-decisionale, in consultazione pubblica) — NON una legge né un requisito federale definitivo. Il linter fallisce quando un tipo di campo è del tutto assente (hard) e avvisa per le omissioni per singolo componente che la bozza stessa consente (soft).",
+      "columns": {
+        "element": "Elemento",
+        "enforcement": "Applicazione",
+        "carriedBy": "Riportato da"
+      },
+      "enforcement": {
+        "hard": "Hard",
+        "soft": "Soft"
+      }
+    }
+  },
+  "vex": {
+    "title": "Dichiarazioni OpenVEX",
+    "description": "Dichiarazioni di sfruttabilità basate sulla raggiungibilità (govulncheck), allegate come attestazione in-toto firmata.",
+    "columns": {
+      "vuln": "Vulnerabilità",
+      "status": "Stato",
+      "justification": "Motivazione",
+      "author": "Autore"
+    },
+    "status": {
+      "not_affected": "Non interessato",
+      "affected": "Interessato",
+      "fixed": "Corretto",
+      "under_investigation": "In analisi"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "I quattro controlli di supply chain più importanti per un prodotto di sicurezza self-hosted.",
+    "checksTitle": "Controlli monitorati",
+    "schedule": "Pianificazione",
+    "gauge": {
+      "title": "Controlli Scorecard dichiarati",
+      "summary": "{{declared}} di {{total}} controlli OpenSSF Scorecard monitorati sono dichiarati nel contratto. È un conteggio di copertura dei controlli dichiarati, non un punteggio numerico di Scorecard.",
+      "caption": "dichiarati"
+    },
+    "columns": {
+      "check": "Controllo",
+      "what": "Cosa valuta",
+      "evidence": "Evidenza"
+    }
+  },
+  "sla": {
+    "title": "SLA di remediation delle CVE",
+    "description": "Obiettivi di remediation dal momento in cui una correzione è disponibile a monte per una vulnerabilità raggiungibile negli artefatti che distribuiamo. Hanno effetto dalla prima release con tag.",
+    "cadenceTitle": "Cadenza della patch-velocity",
+    "schedule": "Pianificazione",
+    "columns": {
+      "severity": "Gravità (CVSS v3.1)",
+      "cvss": "Intervallo di punteggio",
+      "target": "Obiettivo per la release corretta e firmata"
+    },
+    "severity": {
+      "critical": "Critica",
+      "high": "Alta",
+      "medium": "Media",
+      "low": "Bassa"
+    }
+  },
+  "airgap": {
+    "title": "Bundle offline e pacchetto Helm Business",
+    "description": "Contratti di deployment privato: un bundle offline e un pacchetto chart Business firmato. La pubblicazione resta non verificata.",
+    "bundleTitle": "Bundle offline",
+    "bundleIntro": "Il percorso basato su chiavi non richiede Rekor né Fulcio. I maintainer costruiscono una sola volta, online, un bundle autonomo dalla distribuzione privata assemblata; il sito disconnesso lo verifica e lo replica.",
+    "buildCommand": "Build (una volta, online)",
+    "mirrorCommand": "Mirror (senza internet)",
+    "chartTitle": "Pacchetto Helm Business",
+    "distribution": "Distribuzione",
+    "cosignPackage": "cosign (pacchetto)",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "Comando di verifica"
+  },
+  "empty": {
+    "artifact": {
+      "title": "Nessun artefatto della release dichiarato",
+      "description": "Questa tabella è compilata dal contratto dichiarato di verifica delle release; le righe compaiono solo quando quel contratto elenca artefatti di release."
+    },
+    "checkChart": {
+      "title": "Nessun controllo Scorecard dichiarato",
+      "description": "La copertura dei controlli dichiarati compare solo quando il contratto di release compilato elenca controlli OpenSSF Scorecard monitorati."
+    },
+    "sbom": {
+      "title": "Nessun elemento della checklist SBOM dichiarato",
+      "description": "Questa checklist è compilata dal contratto SBOM dichiarato; le righe compaiono solo quando quel contratto elenca gli elementi minimi della bozza CISA."
+    },
+    "scorecard": {
+      "title": "Nessun controllo Scorecard monitorato dichiarato",
+      "description": "Questa tabella è compilata dal contratto di release dichiarato; le righe compaiono solo quando quel contratto elenca controlli OpenSSF Scorecard monitorati."
+    },
+    "sla": {
+      "title": "Nessun obiettivo di remediation dichiarato",
+      "description": "Questa tabella è compilata dal contratto patch-velocity dichiarato; le righe compaiono solo quando assegna obiettivi di remediation alle fasce di gravità delle CVE."
+    },
+    "vex": {
+      "title": "Nessuna dichiarazione OpenVEX nel contratto",
+      "description": "Questa tabella è compilata dal contratto di release dichiarato; le righe compaiono solo quando quel contratto include dichiarazioni OpenVEX illustrative."
+    }
+  }
+}

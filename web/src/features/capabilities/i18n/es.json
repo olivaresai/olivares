@@ -40,7 +40,7 @@
     "tools": "Herramientas",
     "skills": "Skills",
     "resources": "Recursos",
-    "consumers": "Conectado con",
+    "consumers": "Usado por",
     "consumersHint": "Sesiones y agentes conectados a este servidor.",
     "noConfig": "Sin configuración gestionada",
     "noConfigHint": "Añade una definición guardada para documentar el transporte y las referencias a secretos de este servidor.",

@@ -26,9 +26,10 @@ import (
 func newInferenceProxyCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:     "inference-proxy",
-		Aliases: []string{"inferenceproxy"},
-		Short:   "Govern the inference gateway: gates, DLP rules and device grants",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "inference-proxy",
+		Aliases:     []string{"inferenceproxy"},
+		Short:       "Govern the inference gateway: gates, DLP rules and device grants",
 		Long: "Govern the inference proxy that fronts the model estate: which gates it enforces\n" +
 			"(model access, budget, residency, context window, request and response DLP), the\n" +
 			"per-class DLP rules applied to egress, and the approval of pending device grants.\n\n" +
@@ -51,8 +52,9 @@ func newInferenceProxyCmd() *cobra.Command {
 
 func newInferenceProxyFirewallCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "firewall",
-		Short: "Read the Messages proxy's startup content-inspector attachment",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "firewall",
+		Short:       "Read the Messages proxy's startup content-inspector attachment",
 		Long: "Read which content inspector this engine process attached to the inline Messages\n" +
 			"proxy at startup. The state describes composition only: it does not report whether\n" +
 			"the proxy listener is serving, whether a tenant policy loaded, or whether any request\n" +
@@ -81,8 +83,9 @@ func newInferenceProxyFirewallCmd(c modelstackClient) *cobra.Command {
 
 func newInferenceProxyConfigCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "config",
-		Short: "Read and replace the gateway's gate configuration",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "config",
+		Short:       "Read and replace the gateway's gate configuration",
 		Long: "Read and replace the singleton configuration that decides which gates the proxy\n" +
 			"enforces, whether it fails open, its response-DLP mode and its per-request ceilings.\n\n" +
 			"An unconfigured tenant reads the secure DEFAULT with configured=false: that is not the\n" +
@@ -101,8 +104,9 @@ func newInferenceProxyConfigCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/config"},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "set",
-			Short: "Replace the gateway's gate configuration",
+			ChangesData: "write",
+			Use:         "set",
+			Short:       "Replace the gateway's gate configuration",
 			Long: "Replace the singleton configuration with the supplied document. This is admin-tier\n" +
 				"and self-audited: turning a gate off changes what the gateway will let through, and\n" +
 				"the change is recorded against the caller.",
@@ -118,8 +122,9 @@ func newInferenceProxyConfigCmd(c modelstackClient) *cobra.Command {
 
 func newInferenceProxyDLPCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dlp",
-		Short: "Govern the per-class DLP rules applied to inference egress",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dlp",
+		Short:       "Govern the per-class DLP rules applied to inference egress",
 		Long: "Govern the DLP rules the gateway applies to inference egress: one action per detected\n" +
 			"class. An exact tenant rule overrides the seeded default for its class; removing the\n" +
 			"override restores that secure default rather than removing the rule.",
@@ -146,8 +151,9 @@ func newInferenceProxyDLPCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "set",
-			Short: "Set the action for one DLP class",
+			ChangesData: "write",
+			Use:         "set",
+			Short:       "Set the action for one DLP class",
 			Long: "Upsert the rule for one detected class from a JSON document carrying its class and\n" +
 				"action. Authorizing egress is privileged: the change is admin-tier and self-audited.",
 			Example: `  olivares inference-proxy dlp set --data '{"class":"secret","action":"block"}'`,
@@ -178,8 +184,9 @@ func newInferenceProxyDLPCmd(c modelstackClient) *cobra.Command {
 // that matters — approve or deny — inside a string.
 func newInferenceProxyDeviceCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "device",
-		Short: "Approve or deny a pending device grant",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "device",
+		Short:       "Approve or deny a pending device grant",
 		Long: "Resolve a pending device-authorization grant by its user code. Approving it mints the\n" +
 			"credential the waiting device is polling for; denying it closes the grant.",
 		Example: `  olivares inference-proxy device approve --user-code ABCD-EFGH
@@ -197,8 +204,9 @@ func newInferenceProxyDeviceApproveCmd(c modelstackClient) *cobra.Command {
 		yes      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "approve",
-		Short: "Resolve a pending device grant by its user code",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "approve",
+		Short:       "Resolve a pending device grant by its user code",
 		Long: "Resolve one pending device grant. Without --deny it APPROVES the grant, which mints a\n" +
 			"credential for the waiting device; with --deny it refuses it.\n\n" +
 			"Approving is destructive in the sense that matters — it hands out a credential — so it\n" +

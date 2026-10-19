@@ -22,7 +22,6 @@ DELETE	/v1/m/compliance/depth/fedramp/{id}	Deletes one stored FedRAMP key securi
 DELETE	/v1/m/compliance/depth/sector/{id}	Deletes one stored sector compliance pack by id.
 DELETE	/v1/m/compliance/depth/us-law/{id}	Deletes one stored US state law pack by id.
 DELETE	/v1/m/compliance/nis2/incidents/{id}	Deletes one classified NIS2 incident by id.
-DELETE	/v1/m/deploy/definitions/{id}	Deletes one deployment definition by id, and refuses while a live deployment still uses it.
 DELETE	/v1/m/finops/budgets/{id}	Deletes one budget by id; a policy of any other kind is refused.
 DELETE	/v1/m/finops/cost-centers/{id}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 DELETE	/v1/m/finops/cost-centers/{id}/mappings/{mid}	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
@@ -117,6 +116,7 @@ GET	/v1/m/finops/statements/{id}	Returns HTTP 501 because FinOps is a Business f
 GET	/v1/m/finops/statements/{id}/export	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/value	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 GET	/v1/m/finops/value/summary	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
+GET	/v1/m/governance/approvals/review-quality	Returns HTTP 501 with business_required because approval review quality requires Business; no report is produced.
 GET	/v1/m/governance/breakglass	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
 GET	/v1/m/governance/breakglass/{id}	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
 GET	/v1/m/governance/breakglass/{id}/uses	Returns HTTP 501 with business_required because break-glass access requires Business; no break-glass action is performed.
@@ -202,7 +202,8 @@ GET	/v1/m/sessions/runs/{ref}/activity	Returns what one Claude Code session's to
 GET	/v1/m/sessions/runs/{ref}/activity/agents/{agent}	Returns what one subagent of a Claude Code session was asked, the tools it called and what it answered, from the subagent's own transcript; read-only.
 GET	/v1/m/sessions/runs/{ref}/events	Lists the events of one session run in sequence order.
 GET	/v1/m/sessions/runs/{ref}/git	Returns the current branch, local branches, working-tree status and write policy in the session's folder.
-GET	/v1/m/sessions/runs/{ref}/handoff	Returns the summary a handoff of one stopped Claude Code session would start from, generated from its stored conversation without a model, for review; it starts nothing.
+GET	/v1/m/sessions/runs/{ref}/handoff	Returns the summary a handoff of one Claude Code, Codex, Gemini CLI or OpenCode session would start from, generated from its stored conversation without a model, for review; a running session is read as it is and nothing starts.
+GET	/v1/m/sessions/runs/{ref}/messages	Lists, searches and anchors by time the messages of one Claude Code or Codex session, read from the transcript its tool keeps: the person's own messages (the tool's answers with role=all), each with its id, time and first line, in pages from either end, narrowed by a phrase or a start time; one message whole by id; read-only.
 GET	/v1/m/sessions/templates	Lists the session templates, optionally narrowed to built-in ones and optionally including archived ones.
 GET	/v1/m/sessions/templates/{id}	Returns one session template with its full detail.
 GET	/v1/m/sessions/work-items	Lists the work items with keyset paging, narrowed by the allowlisted filters, which combine with AND; any other query parameter is refused.
@@ -229,7 +230,6 @@ POST	/v1/m/compliance/data-subjects/{id}/erase	Opens an erasure request for one 
 POST	/v1/m/compliance/holds/{id}/release	Releases one legal hold under dual control; the approval gate runs before any store write.
 POST	/v1/m/compliance/nis2/incidents/classify	Classifies an operator incident against the NIS 2 significance thresholds; the operator reference is required and is refused rather than truncated when it is too long.
 POST	/v1/m/compliance/risk/{id}/review	Records a review of one risk entry, setting its tier to one of unacceptable, high, limited or minimal.
-POST	/v1/m/deploy/definitions/{id}/plan	Plans one deployment definition through its executor and records the resulting plan, without applying it.
 POST	/v1/m/evals/gate/{id}/override	Overrides one eval gate verdict; a written reason is required.
 POST	/v1/m/finops/budgets	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
 POST	/v1/m/finops/cost-centers	Returns HTTP 501 because FinOps is a Business feature; no FinOps action is performed.
@@ -284,6 +284,23 @@ POST	/v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize	Returns HTTP 501 
 POST	/v1/m/redteam/runs	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
 POST	/v1/m/redteam/targets	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
 POST	/v1/m/redteam/targets/{id}/authorize	Returns HTTP 501 because red team is a Business feature; no red team action is performed.
+GET	/v1/m/deploy/definitions	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/definitions	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+GET	/v1/m/deploy/definitions/{id}	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+PUT	/v1/m/deploy/definitions/{id}	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+DELETE	/v1/m/deploy/definitions/{id}	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+GET	/v1/m/deploy/definitions/{id}/revisions	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/definitions/{id}/rollback	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/definitions/{id}/plan	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/definitions/{id}/verify	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/definitions/{id}/apply	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/definitions/{id}/retire	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+GET	/v1/m/deploy/wirings	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+GET	/v1/m/deploy/operations	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+GET	/v1/m/deploy/executor	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+GET	/v1/m/deploy/executor/config	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+PUT	/v1/m/deploy/executor/config	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
+POST	/v1/m/deploy/executor/test	Returns HTTP 501 because deployment is a Business feature; no deployment action is performed.
 POST	/v1/m/reporting/schedules	Creates one report schedule, and answers 501 when report scheduling is not wired.
 POST	/v1/m/sessions/decisions	Records a work decision as a validate, plan or apply command.
 POST	/v1/m/sessions/decisions/{id}/revoke	Revokes one recorded work decision as a validate, plan or apply command.
@@ -293,7 +310,7 @@ POST	/v1/m/sessions/runs/{ref}/git/branch	Switches the session's folder to the n
 POST	/v1/m/sessions/runs/{ref}/git/commit	Commits the staged changes in the session's folder with the supplied message and authenticated author.
 POST	/v1/m/sessions/runs/{ref}/git/stage	Stages the selected paths in the session's folder for the next commit.
 POST	/v1/m/sessions/runs/{ref}/git/unstage	Removes the selected paths from the session's Git index while keeping their working-tree changes.
-POST	/v1/m/sessions/runs/{ref}/handoff	Starts a new session in the chosen provider profile, linked to one stopped Claude Code session, from a reviewed summary and the attached transcript; the answer says whether the first turn arrived.
+POST	/v1/m/sessions/runs/{ref}/handoff	Starts a new session in the chosen provider profile, linked to one Claude Code, Codex, Gemini CLI or OpenCode session, from a reviewed summary and the attached transcript; a running session is stopped first and the answer says whether the first turn arrived.
 POST	/v1/m/sessions/runs/{ref}/input	Sends one input line or message to a live session run.
 POST	/v1/m/sessions/runs/{ref}/move	Moves one stopped or failed Claude Code session to another profile of the same tool, carrying that conversation's own files, without starting a process.
 POST	/v1/m/sessions/runs/{ref}/resume	Resumes one suspended session run.
@@ -373,9 +390,16 @@ GET	/v1/console/keys	Returns the non-secret custody inventory of the signing key
 DELETE	/v1/console/license	Removes the installed license and reverts the deployment to the community build.
 GET	/v1/console/license	Returns the current license status and the entitlements it grants.
 POST	/v1/console/license	Installs a commercial license from the posted document.
-DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.
-GET	/v1/console/secrets	Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and returns only that tenant's mcp/ handles.
-PUT	/v1/console/secrets	Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.
+DELETE	/v1/console/notify-destinations	Removes one console notification destination by the name carried in the body, closes it in the running engine and deletes its sealed webhook URL. A destination provisioned in the operator file is refused with 404.
+GET	/v1/console/notify-destinations	Lists every notification destination, console and operator file, with whether it is open and the host its webhook points at, plus the kinds the console can create. A webhook URL is never returned.
+PUT	/v1/console/notify-destinations	Creates or updates a Slack or Teams destination: the webhook URL is checked against the vendor's hosts, sealed, stored in the deployment settings and opened without a restart. A blank URL keeps the stored one.
+POST	/v1/console/notify-destinations/test	Sends one real test message through a candidate destination without saving it. A blank URL tests the stored one. Returns 422 when the destination does not accept it.
+DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/ and env/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+GET	/v1/console/secrets	Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/ and env/ names to its admins only, and to every member only their own vault/<user-id>/ items, whose hint is the item's kind (login, login+totp, note or totp).
+PUT	/v1/console/secrets	Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/ and env/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+POST	/v1/console/secrets/reveal	Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/ and env/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
+POST	/v1/console/secrets/totp	Returns the current RFC 6238 authenticator code and the seconds it stays valid for one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only; the seed is never returned. Guarded and limited exactly like reveal (signed-in person with the deployment's step-up, owner only, rate limited per person), never cached, and recorded in the audit ledger without the code.
+POST	/v1/console/secrets/generate	Returns a random password for the signed-in member: 8 to 128 characters (20 by default) with at least one character of every chosen kind (lowercase, uppercase, digits, symbols). Nothing is stored or recorded; any option left out keeps its default.
 GET	/v1/console/setup-status	Returns which first-run setup steps the deployment has completed, so the console wizard can resume onboarding at the right step.
 DELETE	/v1/console/sources	Removes one configured source connector.
 GET	/v1/console/sources	Lists the configured source connectors with the live status of each.
@@ -387,6 +411,7 @@ POST	/v1/console/sso/test	Validates a candidate SSO configuration by running dis
 POST	/v1/console/support-bundle	Builds and returns a redacted support archive from in-process data only; it invokes no host tooling and makes no loopback request.
 POST	/v1/console/update-check	Runs a check now against the configured signed update channel. An air-gapped or unconfigured deployment answers 501 rather than reporting no update.
 GET	/v1/members	Lists the members of the resolved tenant with the effective role, workspace scoping and directory groups of each.
+DELETE	/v1/members/{id}	Removes one member from the resolved tenant: a scoped offboard that leaves the account and its other organizations in place; 404 when the id is not a member; 409 when the caller removes itself or the last active owner; 403 when the member outranks the caller or the caller is confined to a workspace; a signed-in person also needs the administrative step-up.
 POST	/v1/memberships	Grants one user a role in a tenant.
 GET	/v1/search	Fans one query out across every searchable kind and returns the matches. Each kind is gated on its own read permission, so the result only narrows what the caller could already list.
 GET	/v1/server-info	Returns the non-sensitive server facts: version, engine, whether first-run setup is still required, and the informational license status.
@@ -450,6 +475,7 @@ POST	/v1/console/runtime/reload	Reconciles the durable source roster against the
 POST	/v1/console/sso/idps/{alias}/test	Validates a candidate additional-IdP config (OIDC discovery or SAML metadata fetch) without persisting it. 501 when no SSO provider service is wired.
 POST	/v1/console/sso/tenants/{tenant}/idps/{alias}/test	Validates a candidate tenant-scoped IdP config without persisting it. 501 when no SSO provider service is wired.
 POST	/v1/console/sso/tenants/{tenant}/test	Tests the tenant's primary IdP connectivity (OIDC discovery or SAML metadata fetch) against a candidate config without persisting it.
+POST	/v1/console/updates/apply	Installs the newest release in the channel as the olivares upgrade command does (signed, verified, atomic) and restarts the engine on it; requires the administrative step-up, and the restart stops running sessions. Nothing newer installs and restarts nothing.
 POST	/v1/invites/accept	Redeems an invitation token: sets the password, activates the account and mints a session. Unauthenticated — the single-use token is the gate; a browser session additionally receives the cookie envelope.
 POST	/v1/invites/{id}/resend	Rotates a pending invitation's secret and mails the new link to the invitee (202); the token travels only in the mail. 409 when no mailer is configured.
 POST	/v1/onboard	Creates-or-reuses an account and grants its tenant membership (membership:write, AAL3 step-up). Mode password sets the initial password; mode invite emails a single-use token. An account that exists and is not a member of the tenant answers 202 consent_required and writes nothing.
@@ -488,6 +514,7 @@ GET	/v1/console/sso/idps/{alias}	Returns one additional IdP's configuration by a
 GET	/v1/console/sso/tenants/{tenant}	Returns the tenant's primary ("default") IdP configuration; the per-tenant surface Business: Identity & Scale resolves at login.
 GET	/v1/console/sso/tenants/{tenant}/idps	Lists every IdP configured under the tenant's scope, default first: configuration hints, never secrets.
 GET	/v1/console/sso/tenants/{tenant}/idps/{alias}	Returns one of the tenant's additional IdPs by alias; a malformed alias is a 400 before the store is touched.
+GET	/v1/console/updates	Checks the instance's release channel now and returns the running version, the newest signed release with its notes and advisories, whether it is newer, and the sessions an update would stop; a channel that cannot be checked is reported in check_error with the running version still present.
 GET	/v1/groups	Lists the tenant's provisioned groups with their mapped roles and member counts: the operator's view of what the IdP pushed and what each group confers, including the effective-role provenance an admin needs when a member's direct and acting roles differ.
 GET	/v1/invites	Lists the tenant's pending (unaccepted, unexpired) invitations without any token material.
 GET	/v1/workspaces/{id}/contents	Counts every kind that declares workspace lineage in the workspace, sorted by kind; a kind joins by declaring lineage in its descriptor, with no handler code. A capped count is a floor. 501 when no store census is wired.
@@ -499,7 +526,9 @@ PUT	/v1/console/modules	Sets which optional modules the engine runs, by name. Th
 PUT	/v1/console/sso/idps/{alias}	Creates or updates one additional IdP by alias within the global scope. Step-up required; secrets are sealed at rest and never returned.
 PUT	/v1/console/sso/tenants/{tenant}	Creates or updates the tenant's primary IdP configuration. Step-up required; secrets are sealed at rest and never returned.
 PUT	/v1/console/sso/tenants/{tenant}/idps/{alias}	Creates or updates one of the tenant's additional IdPs by alias. Step-up required; secrets are sealed at rest and never returned.
-PUT	/v1/groups/{id}/parent	Nests (or, with an empty parent_id, un-nests) a group under another group of the same tenant: a member of the child is then also a member of the parent for authorization, so a scoped grant on the parent reaches the child's members. Requires owner authority; a cycle is a 409. Operator-only, never SCIM.
+PUT	/v1/groups/{id}/parent	Nests (or, with an empty parent_id, un-nests) a group under another group of the same tenant: a member of the child is then also a member of the parent for authorization, so a scoped grant on the parent reaches the child's members. Requires owner authority; a cycle is a 409. Operator-only, never SCIM. Business edition: a Community build answers 501 departments_unavailable.
 PUT	/v1/groups/{id}/role	Sets (or clears, with an empty role) the role a group's members are elevated to in the group's tenant. Ceiling-checked against the CALLER's authority in the group's stored tenant, and audited.
 PUT	/v1/groups/{id}/workspace	Places or moves a user group in a workspace of the same tenant; an explicit empty workspace_id clears placement. Requires an unconfined admin. Membership, role mapping and group hierarchy are unchanged. Business edition: a Community build answers 501 departments_unavailable.
 PUT	/v1/workspaces/{id}/parent	Places a workspace (a department) under another workspace of the same tenant, or with an empty parent_id makes it a root; the whole subtree moves with it. Requires the tenant owner and the administrative step-up, because a grant on a department reaches its sub-departments. A cycle is a 409 workspace_cycle and the default workspace stays a root. Business edition: a Community build answers 501 departments_unavailable.
+GET	/v1/system/session-idle	Returns the saved instance idle-stop window in minutes; zero means off. Requires system administration.
+PUT	/v1/system/session-idle	Saves the instance idle-stop window: zero turns it off, and 6 to 10080 minutes enables it after the five-minute idle projection. Requires system administration and configured step-up; the change is audited before it applies.

@@ -19,6 +19,15 @@
 // instead of skipped, and compose() then requires the set it produced to EQUAL the
 // operation set of the committed beta document.
 //
+// IT READS THE BUILD THE DOCUMENTS DESCRIBE. A file the build excludes registers nothing,
+// so files are selected by their `//go:build` line for linux/amd64 without cgo plus the
+// tags the caller gives (-tags, OLIVARES_BUILD_TAGS). With none that is the Community
+// binary, which is what the committed documents are dumped from; an assembled Business
+// tree holds both editions of a method side by side, and reading both made whichever
+// sorted last hide the other. A provider that wraps a module (`struct{ *governance.Module }`)
+// mounts its extra routes under the namespace Go promotes from it: that one level is
+// read, and any other shape is still refused by name.
+//
 // IT READS EVERY DOOR THE RECORDING REGISTRAR ANSWERS. core/api's recording registrar
 // publishes Handle, HandleEntity and the two governed doors, HandlePolicy and
 // HandleSealed, which a module reaches through a registrar found by type assertion
@@ -30,6 +39,7 @@ package main
 
 import (
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"os"
@@ -119,9 +129,25 @@ func enumerateModuleRoutes(root string) ([]moduleRoute, error) {
 	} else if err != nil && !os.IsNotExist(err) {
 		return nil, blind("listing composition-root packages: %v", err)
 	}
-	var out []moduleRoute
+	// Every package is read before any is resolved: a provider mounts routes under the
+	// namespace of the module it embeds, and that module is another package.
+	peers := map[string]*pkg{}
+	var loaded []*pkg
 	for _, d := range dirs {
-		rs, err := routesInPackage(d, root)
+		p, err := loadPackage(d, root)
+		if err != nil {
+			return nil, err
+		}
+		peers[filepath.ToSlash(p.rel(d))] = p
+		loaded = append(loaded, p)
+	}
+	var out []moduleRoute
+	for _, p := range loaded {
+		p.peers = peers
+		if len(p.apiRoutes) == 0 {
+			continue // not a module package
+		}
+		rs, err := p.routes()
 		if err != nil {
 			return nil, err
 		}
@@ -173,16 +199,38 @@ type pkg struct {
 	apiRoutes []*ast.FuncDecl            // the APIRoutes methods
 	apiNS     []*ast.FuncDecl            // the APINamespace methods
 	nsByRecv  map[string]string          // receiver type name → API namespace
+	embeds    map[string][]embedded      // struct type name → its anonymous fields
+	topConsts map[*ast.ValueSpec]bool    // package-level const specs
+	peers     map[string]*pkg            // every walked package by repo-relative directory
 	files     map[*ast.FuncDecl]string   // decl → repo-relative file
 	registrar map[*ast.FuncDecl][]string // decl → the RouteRegistrar parameter names
 }
 
-func routesInPackage(dir, root string) ([]moduleRoute, error) {
+// embedded is one anonymous field of a struct: the type its method set is promoted from.
+type embedded struct {
+	importPath string // "" for a type of the same package
+	name       string
+}
+
+// selected reports whether the build the published documents describe compiles the
+// file: linux/amd64 without cgo (the product is one static binary) plus buildTags. A
+// file outside that build registers nothing, so two files that declare the same method
+// for different editions are never both read.
+func selected(dir, name string) (bool, error) {
+	ctx := build.Default
+	ctx.GOOS, ctx.GOARCH, ctx.CgoEnabled = "linux", "amd64", false
+	ctx.BuildTags = buildTags
+	return ctx.MatchFile(dir, name)
+}
+
+func loadPackage(dir, root string) (*pkg, error) {
 	p := &pkg{
 		dir: dir, root: root, fset: token.NewFileSet(),
 		consts: map[string]string{}, methods: map[string]*ast.FuncDecl{},
 		funcs: map[string]*ast.FuncDecl{}, nsByRecv: map[string]string{},
-		files: map[*ast.FuncDecl]string{}, registrar: map[*ast.FuncDecl][]string{},
+		embeds:    map[string][]embedded{},
+		topConsts: map[*ast.ValueSpec]bool{},
+		files:     map[*ast.FuncDecl]string{}, registrar: map[*ast.FuncDecl][]string{},
 	}
 	names, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {
@@ -193,14 +241,18 @@ func routesInPackage(dir, root string) ([]moduleRoute, error) {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
 		}
+		ok, err := selected(dir, filepath.Base(name))
+		if err != nil {
+			return nil, blind("%s: reading its build constraint: %v", p.rel(name), err)
+		}
+		if !ok {
+			continue
+		}
 		f, err := parser.ParseFile(p.fset, name, nil, parser.ParseComments)
 		if err != nil {
 			return nil, blind("%s does not parse: %v", name, err)
 		}
 		p.collect(f, p.rel(name))
-	}
-	if len(p.apiRoutes) == 0 {
-		return nil, nil // not a module package
 	}
 	// Namespaces are resolved only after EVERY file of the package is parsed: the
 	// constant an APINamespace returns is routinely declared in another file of the
@@ -212,7 +264,7 @@ func routesInPackage(dir, root string) ([]moduleRoute, error) {
 			p.nsByRecv[recvType(fd)] = ns
 		}
 	}
-	return p.routes()
+	return p, nil
 }
 
 // rel renders a path relative to the repository root, so every message this gate
@@ -226,12 +278,21 @@ func (p *pkg) rel(name string) string {
 
 func (p *pkg) collect(f *ast.File, file string) {
 	for _, d := range f.Decls {
+		if gd, ok := d.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+			for _, spec := range gd.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					p.collectEmbeds(f, ts)
+				}
+			}
+			continue
+		}
 		if gd, ok := d.(*ast.GenDecl); ok && gd.Tok == token.CONST {
 			for _, spec := range gd.Specs {
 				vs, ok := spec.(*ast.ValueSpec)
 				if !ok {
 					continue
 				}
+				p.topConsts[vs] = true
 				for i, name := range vs.Names {
 					if i < len(vs.Values) {
 						if s, ok := stringLit(vs.Values[i]); ok {
@@ -285,13 +346,162 @@ func (p *pkg) namespaceOf(fd *ast.FuncDecl) (string, bool) {
 	return "", false
 }
 
+// collectEmbeds records the anonymous fields of a struct type, with the import path of
+// the package each one is written against.
+func (p *pkg) collectEmbeds(f *ast.File, ts *ast.TypeSpec) {
+	st, ok := ts.Type.(*ast.StructType)
+	if !ok {
+		return
+	}
+	for _, field := range st.Fields.List {
+		if len(field.Names) != 0 {
+			continue
+		}
+		t := field.Type
+		if star, ok := t.(*ast.StarExpr); ok {
+			t = star.X
+		}
+		switch t := t.(type) {
+		case *ast.Ident:
+			p.embeds[ts.Name.Name] = append(p.embeds[ts.Name.Name], embedded{name: t.Name})
+		case *ast.SelectorExpr:
+			alias, ok := t.X.(*ast.Ident)
+			if !ok {
+				continue
+			}
+			for _, imp := range f.Imports {
+				path, err := strconv.Unquote(imp.Path.Value)
+				if err != nil {
+					continue
+				}
+				local := path[strings.LastIndex(path, "/")+1:]
+				if imp.Name != nil {
+					local = imp.Name.Name
+				}
+				if local == alias.Name {
+					p.embeds[ts.Name.Name] = append(p.embeds[ts.Name.Name], embedded{importPath: path, name: t.Sel.Name})
+				}
+			}
+		}
+	}
+}
+
+// peer returns the walked package an import path names: the one whose directory, under
+// the module path its go.mod declares, spells exactly that path. A path that merely ends
+// in the same directory names another module's package and is not resolved.
+func (p *pkg) peer(importPath string) *pkg {
+	for rel, q := range p.peers {
+		if want, ok := importPathOf(p.root, rel); ok && want == importPath {
+			return q
+		}
+	}
+	return nil
+}
+
+// importPathOf derives the import path of the package at repo-relative directory rel from
+// the nearest go.mod at or above it, inside root.
+func importPathOf(root, rel string) (string, bool) {
+	rel = filepath.ToSlash(rel)
+	for dir := rel; ; dir = pathDir(dir) {
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dir), "go.mod"))
+		if err == nil {
+			for _, line := range strings.Split(string(raw), "\n") {
+				if f := strings.Fields(line); len(f) == 2 && f[0] == "module" {
+					mod := strings.Trim(f[1], `"`)
+					if dir == "." {
+						return mod + "/" + rel, true
+					}
+					return mod + strings.TrimPrefix(rel, dir), true
+				}
+			}
+			return "", false
+		}
+		if dir == "." {
+			return "", false
+		}
+	}
+}
+
+func pathDir(d string) string {
+	if i := strings.LastIndex(d, "/"); i >= 0 {
+		return d[:i]
+	}
+	return "."
+}
+
+// namespace returns the API namespace a receiver mounts under: the one it declares, or
+// else the one of the single module type it embeds. Go promotes APINamespace through an
+// embedded field and the engine asks the outer value, so a provider that wraps a module
+// to add routes mounts them beside the module's own. One level, and only a namespace
+// the embedded type declares itself; two candidates or none stay unread and are refused.
+func (p *pkg) namespace(recv string) (string, bool) {
+	typ := strings.TrimPrefix(recv, "*")
+	// The type's own APINamespace shadows any embedded one (either receiver form is in
+	// its method set), so a declaration this gate could not read stays unread.
+	for _, fd := range p.apiNS {
+		if strings.TrimPrefix(recvType(fd), "*") == typ {
+			ns, ok := p.nsByRecv[recvType(fd)]
+			return ns, ok
+		}
+	}
+	var found []string
+	for _, e := range p.embeds[typ] {
+		q := p
+		if e.importPath != "" {
+			if q = p.peer(e.importPath); q == nil {
+				continue
+			}
+		}
+		for _, key := range []string{"*" + e.name, e.name} {
+			if ns, ok := q.nsByRecv[key]; ok {
+				found = append(found, ns)
+				break
+			}
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	return found[0], true
+}
+
+// stringValue folds what a registration spells for a method or a pattern: a literal, a
+// package constant, or a `+` of those (`cbAPIPath+"/rules"`). Anything else is computed.
+func (p *pkg) stringValue(e ast.Expr) (string, bool) {
+	switch x := e.(type) {
+	case *ast.BasicLit:
+		return stringLit(x)
+	case *ast.ParenExpr:
+		return p.stringValue(x.X)
+	case *ast.Ident:
+		if x.Obj != nil {
+			// Resolved inside this file: only a package-level const spec is the constant
+			// p.consts holds. A parameter, a variable or a const local to a function that
+			// shadows the package name is a computed value.
+			if vs, ok := x.Obj.Decl.(*ast.ValueSpec); !ok || !p.topConsts[vs] || x.Obj.Kind != ast.Con {
+				return "", false
+			}
+		}
+		s, ok := p.consts[x.Name]
+		return s, ok
+	case *ast.BinaryExpr:
+		if x.Op != token.ADD {
+			return "", false
+		}
+		l, lok := p.stringValue(x.X)
+		r, rok := p.stringValue(x.Y)
+		return l + r, lok && rok
+	}
+	return "", false
+}
+
 func (p *pkg) routes() ([]moduleRoute, error) {
 	var out []moduleRoute
 	reached := map[*ast.FuncDecl]bool{}
 	read := map[*ast.CallExpr]bool{}
 	for _, fd := range p.apiRoutes {
 		recv := recvType(fd)
-		ns, ok := p.nsByRecv[recv]
+		ns, ok := p.namespace(recv)
 		if !ok {
 			return nil, blind("%s:%d: %s.APIRoutes registers routes but this gate could not read %s.APINamespace()",
 				p.files[fd], p.fset.Position(fd.Pos()).Line, recv, recv)
@@ -495,11 +705,11 @@ func (p *pkg) route(ns, recvName, recvType string, call *ast.CallExpr) (moduleRo
 		return moduleRoute{}, blind("%s:%d: a route registration with %d arguments is not the shape this gate reads",
 			pos.Filename, pos.Line, len(call.Args))
 	}
-	method, ok := stringLit(call.Args[0])
+	method, ok := p.stringValue(call.Args[0])
 	if !ok {
 		return moduleRoute{}, blind("%s:%d: the HTTP method is computed, so the operation key cannot be derived", pos.Filename, pos.Line)
 	}
-	pattern, ok := stringLit(call.Args[1])
+	pattern, ok := p.stringValue(call.Args[1])
 	if !ok {
 		return moduleRoute{}, blind("%s:%d: the route pattern is computed, so the operation key cannot be derived", pos.Filename, pos.Line)
 	}

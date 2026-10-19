@@ -53,6 +53,14 @@ const acpErrAuthRequired = -32000
 // unanswered request stalls the agent's turn for ever.
 const acpErrMethodNotSupported = -32601
 
+// acpErrInvalidParams is the JSON-RPC code for a request this client understood and
+// refused: a file write the session may not make, now or at all.
+const acpErrInvalidParams = -32602
+
+// acpErrInternal is the JSON-RPC code for a request this client accepted and could
+// not carry out.
+const acpErrInternal = -32603
+
 // The ACP permission option kinds.
 const (
 	acpPermissionAllowOnce    = "allow_once"
@@ -67,8 +75,12 @@ const (
 	acpOutcomeCancelled = "cancelled"
 )
 
-// acpReqRequestPermission is the only agent→client request with an answer here.
-const acpReqRequestPermission = "session/request_permission"
+// The agent→client requests with an answer here: the permission request, and the
+// one file request OpenCode makes after an approved edit.
+const (
+	acpReqRequestPermission = "session/request_permission"
+	acpReqWriteTextFile     = "fs/write_text_file"
+)
 
 // acpKindToolCallPermission is the codec family carried to the governed
 // authority. ACP has ONE permission surface, so there is one kind — inventing a
@@ -112,14 +124,26 @@ type acpSession struct {
 	// response. Classifying against sessionID would file a session's own history as
 	// somebody else's, which is what it did until this was measured.
 	replayFor string
-	updates   acpUpdateCounts
-	pending   map[string]*acpServerRequest
-	closed    bool
+	// replayHeld is true from the request that asks the tool to replay until that
+	// request's correlated response has been read on the pump. replayFor ends with
+	// the call whatever its outcome, a timeout included, so a tool that answers late
+	// still has its replay in the pipe when it is gone; the bridge keeps that replay
+	// out of the stream until the answer is read or the child is gone (replaying).
+	replayHeld bool
+
+	commands acpCommandCatalog
+	updates  acpUpdateCounts
+	pending  map[string]*acpServerRequest
+	closed   bool
 }
 
 // newACPSession is the shared state for a driver session; the driver wires the
 // connection's request and notification handlers.
 func newACPSession(cfg DriverSessionConfig, driver string) acpSession {
+	// mcpServers is required by ACP, so the list is an empty array, never null.
+	if cfg.sessionMCP == nil {
+		cfg.sessionMCP = []json.RawMessage{}
+	}
 	return acpSession{cfg: cfg, driver: driver, conn: newRPCConn(cfg.Send, true), pending: map[string]*acpServerRequest{}}
 }
 
@@ -139,9 +163,12 @@ type acpClientInfo struct {
 }
 
 // acpFSCapabilities is advertised FALSE on both members, and each driver's client
-// capabilities advertise no terminal, because this client implements neither handler. An
-// agent that is told the client can read files will ask it to, and a client that
-// then answers a protocol error has advertised a capability it does not have.
+// capabilities advertise no terminal, because this client implements no read handler
+// and no terminal. An agent that is told the client can read files will ask it to, and a
+// client that then answers a protocol error has advertised a capability it does not
+// have. fs/write_text_file is served all the same (acp_fs.go): OpenCode asks for it
+// after an approved edit whatever was advertised, and advertising it would also send
+// every other agent's writes through the engine.
 type acpFSCapabilities struct {
 	ReadTextFile  bool `json:"readTextFile"`
 	WriteTextFile bool `json:"writeTextFile"`
@@ -225,10 +252,39 @@ func (s *acpSession) Deliver(frame OutputFrame) {
 	s.conn.deliver(frame.Data)
 }
 
+// beginReplay is called, with s.mu held, before the request that asks the tool to
+// replay conversation id: its notifications arrive while the request is in flight.
+func (s *acpSession) beginReplay(id string) {
+	s.replayFor = id
+	s.replayHeld = true
+}
+
+// endReplay stops filing the conversation's updates as history. The request's
+// caller runs it whatever the outcome; the bridge's hold ends only with the answer.
 func (s *acpSession) endReplay() {
 	s.mu.Lock()
 	s.replayFor = ""
 	s.mu.Unlock()
+}
+
+// answerReplay is endReplay for the pump, on the correlated response: everything
+// before it was replay and everything after it is live.
+func (s *acpSession) answerReplay() {
+	s.mu.Lock()
+	s.replayFor = ""
+	s.replayHeld = false
+	s.mu.Unlock()
+}
+
+// replaying reports whether the stdout the bridge reads now may be the stored
+// conversation being replayed: a request asked for it and its answer has not been
+// read. The bridge calls it on the goroutine that delivers the answer, which ends
+// the hold, so a frame is never judged against a hold that ended before it. An
+// error response or a timeout leaves it set: that launch is then torn down.
+func (s *acpSession) replaying() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.replayHeld
 }
 
 // Interrupt cancels the ACTIVE turn and leaves the owned process alive.
@@ -394,6 +450,7 @@ func (s *acpSession) onNotification(method string, params json.RawMessage) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.observeCommands(n)
 	switch {
 	case s.replayFor != "" && n.SessionID == s.replayFor:
 		// The conversation this launch ASKED to continue, replaying itself before its

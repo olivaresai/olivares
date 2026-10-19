@@ -205,6 +205,8 @@ type Module struct {
 	timelineResolver TimelineResolver
 	// Distinguishes a successfully empty wired timeline from the default noop.
 	timelineResolverConfigured bool
+	// business is the Business edition (WithBusinessEdition, edition.go).
+	business bool
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe (break-glass post-review seal)
@@ -284,6 +286,9 @@ func (m *Module) UseKnownNamespaces(ns []string) {
 func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	m.log = host.Logger()
 	m.host = host
+	if !m.business {
+		m.log.Warn("recording: privileged-session recording is a Business capability; this engine records nothing and its stored policy is not enforced")
+	}
 	cancel, err := host.Subscribe([]event.Type{event.TypeFindingReported}, func(ctx context.Context, e event.Event) error {
 		m.onFinding(ctx, e)
 		return nil
@@ -332,6 +337,9 @@ func (m *Module) Permissions() []auth.Permission {
 
 // APIRoutes mounts the module's routes.
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
+	if !m.business {
+		reg = businessOnly{reg}
+	}
 	reg.Handle("GET", "/notice", permNoticeRead, m.handleNotice)
 	reg.Handle("POST", "/ack", permNoticeRead, m.handleAck)
 	reg.Handle("GET", "/sessions", permSessionAdmin, m.handleListSessions)

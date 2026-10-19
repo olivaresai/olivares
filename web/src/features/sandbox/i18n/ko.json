@@ -1,0 +1,188 @@
+{
+  "truncation": {
+    "label": "행 {{n}}개를 불러왔으며 더 있습니다",
+    "hint": "이 샌드박스 목록은 제한되어 있습니다. 불러온 행만 표시됩니다."
+  },
+  "title": "테스트 샌드박스",
+  "description": "모킹된 리소스에 대한 격리되고 일시적인 실행 — 시나리오 시뮬레이션, 결정적 재생 및 배포 전후 비교입니다. 출력은 합성이며 실제 대상 텍스트는 절대 저장되지 않습니다.",
+  "tabs": {
+    "runs": "실행",
+    "comparisons": "비교",
+    "scenarios": "시나리오"
+  },
+  "kind": {
+    "scenario": "시나리오",
+    "replay": "재생",
+    "compare": "비교"
+  },
+  "runner": {
+    "inproc-mock": "인프로세스 모의",
+    "container": "컨테이너",
+    "microvm": "마이크로VM"
+  },
+  "subjectKind": {
+    "agent": "에이전트",
+    "model": "모델",
+    "prompt": "프롬프트",
+    "session": "세션",
+    "sandbox_run": "샌드박스 실행"
+  },
+  "verdict": {
+    "improved": "개선됨",
+    "regressed": "퇴행함",
+    "unchanged": "변화 없음",
+    "inconclusive": "판단 불가"
+  },
+  "run": {
+    "isolated": "격리됨",
+    "isolatedHint": "러너가 격리를 보장합니다: 이그레스 없음, 비밀 없음, 프로덕션 없음. 추론이 아니라 러너가 보고한 대로 기록됩니다.",
+    "notIsolated": "격리되지 않음",
+    "notIsolatedHint": "이 백엔드는 격리를 보장하지 않습니다 — 숨기지 않고 그대로 표시합니다.",
+    "destroyed": "파기됨",
+    "destroyedHint": "실행 후 일시적 환경의 상태가 폐기되었습니다.",
+    "notScored": "실행됨, 채점 안 됨",
+    "pass": "통과",
+    "fail": "실패"
+  },
+  "runs": {
+    "title": "실행",
+    "description": "모든 격리 실행과 이를 실행한 백엔드 및 채점 여부입니다.",
+    "isolationNote": "격리는 가짜가 아니라 실제입니다: 러너와 격리 플래그는 기록된 그대로 표시됩니다. 성능 저하 실행은 실행되었지만 채점되지 않았습니다 — 통과가 아닙니다.",
+    "empty": "아직 실행 없음",
+    "emptyHint": "모든 시나리오 실행이 판정과 출력과 함께 여기에 나열됩니다. 시나리오를 실행하여 첫 기록을 만드십시오.",
+    "errored": "오류 {{count}}개",
+    "errored_other": "오류 {{count}}개",
+    "columns": {
+      "kind": "종류",
+      "subject": "주체",
+      "runner": "러너",
+      "isolation": "격리",
+      "status": "상태",
+      "steps": "단계",
+      "score": "점수",
+      "started": "시작됨"
+    }
+  },
+  "outputs": {
+    "title": "단계 출력",
+    "empty": "기록된 출력 없음",
+    "emptyHint": "시나리오 단계가 쓰는 내용이 여기에 캡처됩니다. 이 실행은 출력을 기록하지 않았습니다.",
+    "syntheticNote": "모의 러너의 제한된 합성 출력이며 프로덕션 출력이 아닙니다. 모의 미스는 결정적 마커이며 실제 리소스에 닿지 않았습니다.",
+    "mockHit": "모의 적중",
+    "mockMiss": "모의 미스"
+  },
+  "stream": {
+    "replayNote": "엔진이 이 실행의 기록된 단계 출력을 하나의 연결로 재생한 뒤 닫습니다. 샌드박스 실행은 시작 시 동기적으로 실행되므로 이는 점진적으로 도착하는 커밋된 증거이며 아직 진행 중인 실행의 보기가 아닙니다.",
+    "waiting": "첫 단계 출력을 기다리는 중 — 연결 상태는 위에 표시됩니다.",
+    "connecting": "연결 중…",
+    "receiving": "재생 수신 중",
+    "complete": "재생 완료",
+    "completePartial": "재생이 끝났지만 전체 기록이 아닙니다",
+    "unreadable": "이 보기가 읽지 못한 프레임: {{n}}개. 도착했지만 폐기되어 그 증거가 여기에 없습니다 — 깨끗한 재생이 아닙니다.",
+    "emptyUnreadable": "단계 출력을 읽을 수 없습니다",
+    "emptyUnreadableHint": "단계 출력은 실행이 진행되는 동안 샌드박스에서 스트리밍됩니다. 이 단계에 대해 읽어낼 수 있는 것이 없습니다.",
+    "disconnected": "연결 안 됨",
+    "lost": "연결 끊김 — 이 실행을 더 이상 보지 못하고 있습니다.",
+    "lostHint": "실행 종료가 아닙니다: 엔진이 재생 종료를 알리기 전에 연결이 끝났습니다. 실행 상태는 엔진이 기록한 상태이며 실행 표에 표시됩니다 — 이 연결에서 도출되지 않습니다. 재연결하면 재개하며 이미 표시된 출력은 반복되지 않습니다.",
+    "reconnect": "다시 연결",
+    "snapshot": "스트림이 아무것도 전달하지 않아 JSON API로 읽은 저장된 출력입니다 — 라이브 보기가 아니라 스냅샷입니다.",
+    "summary": "엔진 요약: {{total}}개 단계 중 {{ok}}개가 모의에 대해 해석되었고 모의 미스 {{error}}개입니다."
+  },
+  "comparisons": {
+    "title": "배포 전후 비교",
+    "description": "동일한 스위트에 대해 채점된 기준선 대 후보 — 배포를 게이트하는 판정입니다.",
+    "empty": "아직 비교 없음",
+    "emptyHint": "비교를 실행하여 후보 변형을 기준선에 대해 평가하십시오.",
+    "baseline": "기준선",
+    "candidate": "후보",
+    "delta": "델타",
+    "decidedBy": "결정 주체",
+    "scoredAgainst": "채점 기준",
+    "noSuite": "스위트 없음 — 채점된 기준선과 후보 없이는 판정이 불가능합니다."
+  },
+  "scenarios": {
+    "title": "시나리오",
+    "description": "합성 단계 입력과 모킹된 MCP/리소스 응답의 재사용 가능한 명세입니다.",
+    "empty": "아직 시나리오 없음",
+    "emptyHintAuthor": "첫 합성 픽스처를 기록하십시오: 주체가 받는 단계 입력과 해석 기준이 되는 모킹된 응답입니다.",
+    "emptyHintReadOnly": "시나리오는 샌드박스 시나리오 쓰기 권한을 가진 호출자가 작성합니다. 권한이 없으면 존재하는 시나리오와 그 실행을 읽을 수 있습니다.",
+    "emptyHintConfined": "멤버십이 워크스페이스로 제한되어 있습니다. 시나리오는 테넌트 수준 픽스처이므로 엔진은 제한된 멤버십에서 기록을 거부합니다 — 테넌트 전체 멤버가 작성해야 합니다.",
+    "columns": {
+      "name": "이름",
+      "subjectKind": "주체",
+      "steps": "단계",
+      "status": "상태",
+      "actions": "작업"
+    },
+    "create": {
+      "action": "새 시나리오",
+      "title": "새 시나리오",
+      "description": "시나리오는 합성 픽스처입니다: 주체가 받는 단계 입력과 해석 기준이 되는 모킹된 MCP/리소스 응답입니다. 여기의 어떤 것도 실제 리소스에 닿지 않습니다.",
+      "name": "이름",
+      "namePlaceholder": "체크아웃 에이전트 — 정상 경로",
+      "subjectKind": "주체",
+      "subjectKindHint": "시나리오가 실행하는 대상 — 에이전트, 모델, 프롬프트 또는 세션. 자유 텍스트이며 다듬어서 최대 200자까지 저장합니다.",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "설명",
+      "descriptionPlaceholder": "이 픽스처가 실행하는 내용과 존재 이유입니다.",
+      "steps": "단계",
+      "stepsHint": "주체가 받는 입력을 순서대로 지정합니다. 키를 비워 두면 엔진이 step-1, step-2 등을 할당합니다.",
+      "stepsEmpty": "아직 단계 없음 — 이 시나리오를 실행하면 출력이 생성되지 않습니다.",
+      "addStep": "단계 추가",
+      "removeStep": "{{index}}단계 제거",
+      "stepKey": "{{index}}단계 키",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "{{index}}단계 입력",
+      "stepInputPlaceholder": "이 환불 요청을 분류하십시오.",
+      "mocks": "모의",
+      "mocksHint": "각 모킹된 MCP/리소스가 반환하는 응답입니다. 모의를 찾지 못한 단계는 결정적 모의 미스 마커를 기록하며 외부로 호출하지 않습니다.",
+      "mocksEmpty": "아직 모의 없음 — 모든 단계가 모의 미스 마커를 기록합니다.",
+      "addMock": "모의 추가",
+      "removeMock": "{{index}}번 모의 제거",
+      "mockResource": "{{index}}번 모의 리소스",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "{{index}}번 모의 응답",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "합성 텍스트만 입력하십시오: 여기의 어떤 것도 분류, 마스킹 또는 거부되지 않으므로 붙여넣은 비밀은 저장된 비밀입니다. 엔진은 길이만 제한하며 — 이름 200자, 설명 1024자, 각 단계 또는 모의 본문 8192자 — 잘라낼 때 말줄임표를 붙입니다.",
+      "submit": "시나리오 생성",
+      "submitting": "생성 중…",
+      "success": "시나리오가 생성되었습니다",
+      "failed": "시나리오가 생성되지 않았습니다."
+    },
+    "archive": {
+      "action": "보관",
+      "alreadyArchived": "이미 보관됨",
+      "confirmTitle": "이 시나리오를 보관하시겠습니까?",
+      "confirmBody": "“{{name}}”이(가) 보관됨으로 표시되고 그 결정이 감사 원장에 기록됩니다. 이미 이를 사용한 실행과 비교는 유지됩니다 — 보관은 증거를 삭제하지 않습니다. 차단이 아니라 상태 변경입니다: 무언가 요청하면 엔진은 이 상태의 시나리오도 여전히 실행합니다.",
+      "success": "시나리오가 보관되었습니다"
+    }
+  },
+  "seam": {
+    "synthetic": "로컬 데이터 생성",
+    "syntheticData": "제한된 로컬 템플릿을 사용하여 샌드박스 API를 통해 재현 가능한 시나리오 입력을 생성합니다. 모델이나 네트워크 요청은 발생하지 않습니다."
+  },
+  "empty": {
+    "runs": {
+      "title": "아직 기록된 샌드박스 실행 없음",
+      "description": "승인된 호출자가 샌드박스 API를 통해 저장된 시나리오, 재생 또는 비교를 시작하면 실행이 표시됩니다."
+    },
+    "scenarios": {
+      "title": "아직 정의된 샌드박스 시나리오 없음",
+      "description": "시나리오는 운영자가 작성한 합성 픽스처이며 샌드박스 시나리오 쓰기 권한을 가진 호출자가 이 화면 또는 샌드박스 API를 통해 기록합니다."
+    }
+  },
+  "actions": {
+    "replay": "세션 재생",
+    "compare": "변형 비교",
+    "run": "재생",
+    "compareRun": "비교",
+    "sessionRef": "세션 참조",
+    "scenarioRef": "시나리오 참조(선택 사항)",
+    "baseline": "기준선 변형",
+    "candidate": "후보 변형",
+    "replayHint": "과거 세션을 모의에 대해 결정적으로 재실행합니다. 타임라인을 재구성할 수 없으면 재생은 단계 0개로 DEGRADED로 돌아옵니다 — 아무것도 하지 않은 세션이 아니라 재구성할 수 없는 타임라인입니다.",
+    "compareHint": "비교는 배포 전후 DECISION 증거이며 추가 전용으로 저장되므로 단순히 실행하는 계층이 아니라 관리자 계층이 필요합니다.",
+    "liveRef": "세션 인스턴스 참조",
+    "legacySessionRef": "레거시 세션 참조(대안)"
+  }
+}

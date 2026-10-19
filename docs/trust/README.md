@@ -81,7 +81,7 @@ Two facts make this honest rather than evasive:
 | Reference architecture (topologies, trust zones, HA/DR, sizing, integrations) | [reference-architecture.md](./reference-architecture.md) |
 | Support & response-target model (best-effort, non-binding) | [`SUPPORT.md`](../../SUPPORT.md) §Support by edition and response targets |
 | Accessibility conformance report (VPAT 2.5Rev INT) | `docs/accessibility/VPAT-olivares-admin.md` |
-| i18n posture & roadmap (7-locale console, docs-site in EN + 6 locales) | [i18n-roadmap.md](./i18n-roadmap.md) |
+| i18n posture & roadmap (9-locale console, docs-site in EN + 6 locales) | [i18n-roadmap.md](./i18n-roadmap.md) |
 | EU AI Act Annex IV technical-documentation template | [eu-ai-act-annex-iv.md](./eu-ai-act-annex-iv.md) |
 | MCC-AI (EU model contractual clauses) crosswalk | [mcc-ai-crosswalk.md](./mcc-ai-crosswalk.md) |
 | Machine-readable evidence (FedRAMP-20x-style, from the product API) | [machine-readable-evidence.md](./machine-readable-evidence.md) |

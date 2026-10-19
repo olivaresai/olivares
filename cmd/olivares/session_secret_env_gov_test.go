@@ -67,3 +67,41 @@ func TestSessionCredentialCarriesTheVaultSecretNames(t *testing.T) {
 		t.Fatalf("session scope secret_env = %v, want %v", scope.SecretEnv, want)
 	}
 }
+
+// A profile's package registry token and the repository read credential are not
+// the child's environment: they must not change the approval a launch was opened
+// for, but the credential names them, so a session whose only secret is one of
+// them is still known to hold one.
+func TestSessionCredentialNamesRegistryTokensAndGitReadWithoutChangingThePlan(t *testing.T) {
+	plain := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Actor: "user:a", PermissionMode: "default"}
+	withToken := plain
+	withToken.RegistrySecrets = []sessions.SecretEnvRef{{Env: "env/npm-acme", Secret: "env/npm-acme"}}
+	if sessionLaunchPlanHash(plain) != sessionLaunchPlanHash(withToken) {
+		t.Fatal("a registry token must not change the hash of an approval opened before it")
+	}
+
+	h := newHarness(t)
+	ctx := context.Background()
+	tenant := model.TenantID(h.tenantA)
+	p, err := h.authr.Authenticate(ctx, h.adminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newSessionHookCredentials(h.authr, h.st, h.set.sessions, h.set.gov)
+	intent := claimHookTestSession(t, h, p, tenant, "registry-token-scope")
+	intent.LauncherPrincipal = p
+	intent.SecretEnv = []sessions.SecretEnvRef{{Env: "GITHUB_TOKEN", Secret: "env/github"}}
+	intent.RegistrySecrets = []sessions.SecretEnvRef{{Env: "env/npm-acme", Secret: "env/npm-acme"}}
+	intent.GitRead = "repo-binding"
+	token, err := c.mint(ctx, tenant, intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, scope, err := c.Resolve(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "GITHUB_TOKEN<-env/github,env/npm-acme<-env/npm-acme,git_read<-repo-binding"; scope.SecretEnv != want {
+		t.Fatalf("session scope secret_env = %v, want %v", scope.SecretEnv, want)
+	}
+}

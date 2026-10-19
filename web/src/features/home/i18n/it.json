@@ -1,0 +1,115 @@
+{
+  "title": "Adesso",
+  "description": "Che cosa hanno fatto i tuoi agenti AI negli ultimi 30 giorni, nelle aree che puoi aprire.",
+  "aside": "Riepilogo del parco",
+  "range": "ultimi 30 giorni",
+  "next": {
+    "title": "Prossimo passo",
+    "provider": {
+      "title": "Aggiungi un provider",
+      "description": "Collega Claude, Codex o un altro motore, così le sue sessioni vengono attribuite e governate."
+    },
+    "agent": {
+      "title": "Esegui il deploy di un agente",
+      "description": "Distribuisci un agente in un workspace, con la sua policy e la sua cronologia delle revisioni."
+    },
+    "session": {
+      "title": "Avvia una sessione",
+      "description": "Lancia un'esecuzione governata e guarda le sue chiamate agli strumenti mentre avvengono."
+    }
+  },
+  "recent": {
+    "title": "Lavoro recente",
+    "description": "Le cinque sessioni più recenti osservate da questa installazione.",
+    "openAll": "Tutte le sessioni",
+    "emptyTitle": "Ancora nessuna sessione",
+    "emptyDescription": "Ogni esecuzione di un motore collegato compare qui, con ciò che ha fatto, quanto è durata e quanto è costata.",
+    "unavailableTitle": "Impossibile caricare il lavoro recente",
+    "unavailableDescription": "La lettura delle sessioni non ha risposto. Le cifre del parco qui sopra non sono influenzate.",
+    "open": "Apri la sessione: {{what}}",
+    "untitled": "Sessione senza titolo"
+  },
+  "live": {
+    "title": "Live ora"
+  },
+  "tiles": {
+    "today": {
+      "label": "Oggi",
+      "caption_one": "Costo della sessione che ha lavorato oggi",
+      "caption_many": "Costo delle {{count}} sessioni che hanno lavorato oggi",
+      "caption_other": "Costo delle {{count}} sessioni che hanno lavorato oggi",
+      "unpriced_one": "{{count}} senza costo segnalato",
+      "unpriced_many": "{{count}} senza costo segnalato",
+      "unpriced_other": "{{count}} senza costo segnalato"
+    },
+    "inventory": {
+      "label": "Inventario",
+      "caption": "{{agents}} agenti · {{active}} attivi"
+    },
+    "sessions": {
+      "label": "Sessioni live",
+      "caption": "{{idle}} inattive ora",
+      "silent": "{{count}} in silenzio (possibile elusione)"
+    },
+    "security": {
+      "label": "Sicurezza",
+      "caption": "{{count}} critiche o alte",
+      "clear": "Nessun finding aperto"
+    },
+    "compliance": {
+      "label": "Compliance",
+      "caption": "{{gap}} lacune · {{unmapped}} non mappati",
+      "noControls": "Ancora nessun controllo mappato"
+    },
+    "spend": {
+      "label": "Spesa",
+      "caption": "{{range}}",
+      "projected": "{{amount}} previsti al ritmo attuale",
+      "projectedOver": "{{amount}} previsti al ritmo attuale: oltre la spesa finora"
+    },
+    "health": {
+      "label": "Stato e SLA",
+      "value": "{{healthy}}/{{total}} in salute",
+      "caption": "{{breaches}} violazioni SLA · {{incidents}} incidenti aperti",
+      "noChecks": "Ancora nessun controllo di salute"
+    },
+    "budgets": {
+      "label": "Budget",
+      "none": "Ancora nessun budget",
+      "nonePartial": "Nessuno attivo in questa pagina; ce ne sono altri",
+      "over_one": "{{count}} oltre il limite",
+      "over_many": "{{count}} oltre il limite",
+      "over_other": "{{count}} oltre il limite",
+      "unknown_one": "{{count}} con importo sconosciuto",
+      "unknown_many": "{{count}} con importo sconosciuto",
+      "unknown_other": "{{count}} con importo sconosciuto",
+      "within": "Nessuno oltre il limite",
+      "partial": "Caricati {{n}} budget; ce ne sono altri"
+    }
+  },
+  "state": {
+    "unavailable": "Impossibile caricare: apri per riprovare",
+    "pendingIdle": "Query non avviata: apri per caricare",
+    "pendingPaused": "Query in pausa: in attesa di riprendere"
+  },
+  "availability": {
+    "loading": "{{source}}: caricamento in corso.",
+    "pendingIdle": "{{source}}: query non avviata.",
+    "pendingPaused": "{{source}}: query in pausa, in attesa di riprendere.",
+    "unavailable": "{{source}}: impossibile caricare.",
+    "partial": "{{source}}: cifre disponibili, dati parziali.",
+    "current": "{{source}}: cifre disponibili."
+  },
+  "empty": {
+    "title": "Ancora niente da mostrare",
+    "description": "Il tuo ruolo non concede l'accesso in lettura a nessun modulo del parco. Chiedi a un amministratore un permesso di lettura per vedere il riepilogo."
+  },
+  "start": {
+    "ready": "{{tool}} è pronto.",
+    "signIn": "Accedi a {{tool}} per avviare una sessione.",
+    "signInAction": "Accedi",
+    "install": "Installa Claude Code o Codex per avviare una sessione.",
+    "installAction": "Configura uno strumento",
+    "newSession": "Nuova sessione"
+  }
+}

@@ -4,7 +4,7 @@
 //
 // THE GAP THIS CLOSES.
 //
-// `lint:i18n` proves that a t('key') RESOLVES, that the seven catalogs agree, and
+// `lint:i18n` proves that a t('key') RESOLVES, that the nine catalogs agree, and
 // that a chunk registers the namespace it renders. All three start FROM THE CONSOLE,
 // so none of them can see the defect that opened: a user-facing sentence that
 // never reaches a catalog at all.
@@ -20,12 +20,12 @@
 // So this gate starts from the ENGINE and asks three questions the others cannot:
 //
 //   1. PARITY — every key declared in web/src/features/_intel/disclaimers.ts exists,
-//      non-empty, in all seven `intel` catalogs, and no non-English catalog is a
+//      non-empty, in all nine `intel` catalogs, and no non-English catalog is a
 //      byte-identical copy of the English (a copy is an untranslated string wearing a
 //      translation's clothes, and it defeats the check above it).
 //   2. ANCHORING — every canonical English string in that file still appears VERBATIM
 //      in the engine sources. Edit the Go wording without touching the catalogs and
-//      six translations would go on asserting a sentence the product no longer says.
+//      eight translations would go on asserting a sentence the product no longer says.
 //   3. THE RESIDUE, COUNTED — every disclaimer the engine can emit that has NO
 //      translation is counted against a pinned baseline. A NEW English-only legal
 //      notice fails this gate; what remains undone is a number printed on every run
@@ -45,7 +45,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const LOCALES = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh']
+const LOCALES = ['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko']
 // Shorter than this is a field name or a fragment, not a notice to a reader.
 const MIN_DISCLAIMER_LENGTH = 20
 
@@ -267,7 +267,7 @@ function runChecks({ mapFile, catalogDir, engineRoots, baseline }) {
     )
   }
 
-  // --- 1. parity across the seven catalogs -----------------------------------
+  // --- 1. parity across the nine catalogs ------------------------------------
   const catalogs = new Map()
   for (const loc of LOCALES) {
     const file = path.join(catalogDir, `${loc}.json`)
@@ -307,7 +307,7 @@ function runChecks({ mapFile, catalogDir, engineRoots, baseline }) {
     if (!emitted.has(text.replace(/"/g, '\\"'))) {
       problems.push(
         `disclaimers.${key}: its canonical English is not among the strings the engine ` +
-          `declares. Either the wording changed and seven translations now assert ` +
+          `declares. Either the wording changed and eight translations now assert ` +
           `something the product does not say, or the key is dead. Text sought:\n` +
           `      ${text}`,
       )
@@ -332,7 +332,7 @@ function runChecks({ mapFile, catalogDir, engineRoots, baseline }) {
     problems.push(
       `${untranslated} engine disclaimers have no translation, baseline is ${baseline}. ` +
         `A user-facing legal notice was added in English only. Translate it in ` +
-        `web/src/features/_intel/disclaimers.ts plus the seven intel catalogs, or raise ` +
+        `web/src/features/_intel/disclaimers.ts plus the nine intel catalogs, or raise ` +
         `the baseline in this script and say why.\n${sample}`,
     )
   } else if (untranslated < baseline) {
@@ -392,7 +392,7 @@ function selfTest() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'i18n-disclaimers-selftest-'))
   const cases = [
     {
-      name: 'GREEN: anchored canonical, seven locales translated, residue at baseline',
+      name: 'GREEN: anchored canonical, all locales translated, residue at baseline',
       baseline: 0,
       build: (d) => writeFixture(d, { catalogs: translatedCatalogs }),
       wantRed: false,

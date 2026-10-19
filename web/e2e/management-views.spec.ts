@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test, type Page } from '@playwright/test'
+import { fixtureFor } from '../e2e-visual/fixtures'
+import { FEATURE_EXTENSIONS } from '../src/features/extensions'
 
 /**
  * Visual e2e for the management views (capabilities, catalog, permissions,
- * deploy, knowledge), in light AND dark. This is HERMETIC: it seeds a session in
- * localStorage and intercepts every /v1 call with fixtures, so it renders the real
+ * deploy, knowledge), in light AND dark. This is HERMETIC: it answers browser-session
+ * recovery and intercepts every /v1 call with fixtures, so it renders the real
  * views with representative data WITHOUT a backend or a login round-trip. Run it via
- * scripts/web-visual-e2e.sh (boots `vite dev` and points PLAYWRIGHT_BASE_URL at it).
+ * scripts/web-visual-e2e.sh (boots `vite preview` and points PLAYWRIGHT_BASE_URL at it).
  *
  * It captures a screenshot per view per theme into playwright-report/ — the visual
  * record that all four management areas render correctly in both schemes.
  */
-
-const TOKEN = 'olvs_e2e_token'
 
 const whoami = {
   kind: 'user',
@@ -131,37 +131,32 @@ const FIXTURES: Record<string, unknown> = {
 const VIEWS: {
   id: string
   path: string
+  heading: string
 }[] = [
-  { id: 'capabilities', path: '/capabilities' },
-  { id: 'catalog', path: '/catalog' },
-  { id: 'permissions', path: '/permissions' },
-  { id: 'deploy', path: '/deploy' },
-  { id: 'knowledge', path: '/knowledge' },
+  { id: 'capabilities', path: '/capabilities', heading: 'MCP & skills' },
+  { id: 'catalog', path: '/catalog', heading: 'Catalog' },
+  {
+    id: 'permissions',
+    path: '/permissions',
+    heading: 'Approvals and permissions',
+  },
+  // Deployment is a Business page: only a build that carries edition views registers it.
+  ...(FEATURE_EXTENSIONS.length > 0
+    ? [{ id: 'deploy', path: '/deploy', heading: 'Deployment & integration' }]
+    : []),
+  { id: 'knowledge', path: '/knowledge', heading: 'Data, knowledge & context' },
 ]
 
 async function seed(page: Page, theme: 'light' | 'dark') {
-  await page.addInitScript(
-    ({ token, theme }) => {
-      localStorage.setItem(
-        'olivares.session',
-        JSON.stringify({
-          state: {
-            token,
-            sessionId: 's-e2e',
-            expiresAt: '2999-01-01T00:00:00Z',
-          },
-          version: 0,
-        }),
-      )
-      localStorage.setItem(
-        'olivares.tenant',
-        JSON.stringify({ state: { activeTenant: 't1' }, version: 0 }),
-      )
-      // theme store reads this RAW (no JSON) before first paint.
-      localStorage.setItem('olivares.theme', theme)
-    },
-    { token: TOKEN, theme },
-  )
+  await page.addInitScript((theme) => {
+    localStorage.setItem(
+      'olivares.tenant',
+      JSON.stringify({ state: { activeTenant: 't1' }, version: 0 }),
+    )
+    // theme store reads this RAW (no JSON) before first paint.
+    localStorage.setItem('olivares.theme', theme)
+    localStorage.setItem('olivares.lang', 'en')
+  }, theme)
 
   await page.route('**/v1/**', async (route) => {
     const url = new URL(route.request().url())
@@ -173,7 +168,9 @@ async function seed(page: Page, theme: 'light' | 'dark') {
       const hit = Object.keys(FIXTURES).find((p) => path.includes(p))
       // Default to a valid empty list envelope so any unmocked list endpoint the
       // shell or a view calls degrades to an empty state, never an undefined.map.
-      body = hit ? FIXTURES[hit] : { items: [], has_more: false }
+      body = hit
+        ? FIXTURES[hit]
+        : (fixtureFor(path) ?? { items: [], has_more: false })
     }
     await route.fulfill({
       status: 200,
@@ -190,11 +187,13 @@ for (const theme of ['light', 'dark'] as const) {
       await page.goto(view.path)
       // The authenticated shell + a view heading prove the route rendered (not the
       // Suspense spinner / login redirect).
-      await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible(
-        {
-          timeout: 15_000,
-        },
-      )
+      await expect(
+        page.getByRole('heading', {
+          level: 1,
+          name: view.heading,
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: 15_000 })
       await expect(page.locator('html')).toHaveClass(
         theme === 'dark' ? /dark/ : /^(?!.*dark).*$/,
       )

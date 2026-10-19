@@ -182,7 +182,7 @@ describe('las reglas de acceso a modelos', () => {
     const user = userEvent.setup()
     await abrirAcceso(user)
     expect(
-      await screen.findByText(/requires models:model-access:admin/i),
+      await screen.findByText(/needs model access administration/i),
     ).toBeInTheDocument()
   })
   /**

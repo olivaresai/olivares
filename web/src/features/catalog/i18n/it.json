@@ -1,0 +1,330 @@
+{
+  "title": "Catalogo",
+  "subtitle": "Il catalogo curato delle capacità approvate (agenti, MCP, skill, template, modelli e connettori) più le istanze self-service governate.",
+  "tabs": {
+    "entries": "Voci",
+    "instances": "Istanze",
+    "policy": "Policy di ammissione"
+  },
+  "kind": {
+    "agent": "Agente",
+    "mcp": "MCP",
+    "skill": "Skill",
+    "template": "Template",
+    "model": "Modello",
+    "connector": "Connettore"
+  },
+  "entries": {
+    "search": "Cerca voci…",
+    "name": "Nome",
+    "kind": "Tipo",
+    "slug": "Slug",
+    "version": "Versione",
+    "status": "Stato",
+    "owner": "Responsabile",
+    "signing": "Firma",
+    "verification": "Verifica",
+    "newEntry": "Nuova voce",
+    "empty": "Nessuna voce di catalogo",
+    "emptyHint": "Crea una voce in bozza, inviala in revisione e approvala per pubblicare una versione congelata e fissata da hash.",
+    "filters": {
+      "kind": "Tipo",
+      "status": "Stato",
+      "all": "Tutti"
+    },
+    "truncated": "Caricate {{n}} voci di catalogo; ce ne sono altre",
+    "truncatedHint": "Le voci di catalogo sono più di quelle mostrate; questa pagina prende le righe per ID. Una voce assente da questo elenco non è la prova che non esista."
+  },
+  "signing": {
+    "signed": "Firmata",
+    "unsigned": "Non firmata",
+    "signedHint": "Firmata con Ed25519; impronta del firmatario {{fingerprint}}.",
+    "unsignedHint": "Fissata da hash e attestata nel registro, ma non firmata (all'approvazione non era configurata alcuna chiave di firma del catalogo).",
+    "notPinned": "—"
+  },
+  "verify": {
+    "title": "Integrità",
+    "caption": "Ricalcolata all'apertura. La chiave di firma non lascia mai il motore: viene mostrata solo la sua impronta.",
+    "verified": "Firma verificata",
+    "verifiedHashOnly": "Fissata da hash",
+    "notVerified": "Non verificata",
+    "pending": "Non ancora fissata",
+    "verifiedHint": "L'hash del contenuto corrisponde all'hash fissato e la firma è valida.",
+    "verifiedHashOnlyHint": "L'hash del contenuto corrisponde all'hash fissato. Questa versione è fissata da hash e attestata nel registro, ma non è firmata.",
+    "notVerifiedHint": "L'hash o la firma ricalcolati non corrispondono a quanto fissato all'approvazione. Non considerare approvata questa versione.",
+    "pendingHint": "Nulla viene fissato finché la voce non è approvata. La verifica riguarda le versioni approvate e deprecate.",
+    "contentHash": "Hash fissato",
+    "recomputedHash": "Hash ricalcolato",
+    "signedBy": "Impronta del firmatario",
+    "reason": "Motivo",
+    "reverify": "Verifica di nuovo"
+  },
+  "posture": {
+    "title": "Stato della firma del catalogo",
+    "enabled": "Firma attiva",
+    "disabled": "Firma non configurata",
+    "algorithm": "Algoritmo",
+    "fingerprint": "Impronta della chiave",
+    "publicKey": "Chiave pubblica",
+    "publicKeyHint": "La chiave pubblica Ed25519 per la verifica esterna: è pubblica di proposito, non è un segreto.",
+    "disabledNote": "Non è configurata alcuna chiave di firma del catalogo. Le voci approvate sono fissate da hash e attestate nel registro, ma non firmate."
+  },
+  "detail": {
+    "title": "Dettaglio della voce",
+    "identity": "Identità",
+    "kind": "Tipo",
+    "slug": "Slug",
+    "version": "Versione",
+    "status": "Stato",
+    "summary": "Riepilogo",
+    "owner": "Responsabile",
+    "spec": "Specifica",
+    "specCaption": "Definizione in sola lettura. I segreti sono richiamati nella specifica per nome o locator, mai come valori. Le credenziali inline vengono rifiutate in scrittura.",
+    "specEmpty": "Nessuna specifica",
+    "specEmptyHint": "La specifica dell'interfaccia di questa voce compare qui quando la voce ne pubblica una. Questa non ne pubblica.",
+    "integrity": "Integrità e approvazione",
+    "contentHash": "Hash del contenuto",
+    "signed": "Firmata",
+    "sigAlg": "Algoritmo di firma",
+    "signedBy": "Impronta del firmatario",
+    "approvedBy": "Approvata da",
+    "approvedAt": "Approvata il",
+    "notApprovedYet": "Non ancora approvata: nulla è fissato o firmato.",
+    "actions": {
+      "edit": "Modifica bozza",
+      "delete": "Elimina bozza",
+      "submit": "Invia in revisione",
+      "approve": "Approva",
+      "deprecate": "Depreca",
+      "instantiate": "Crea istanza"
+    }
+  },
+  "editor": {
+    "createTitle": "Nuova voce di catalogo",
+    "editTitle": "Modifica voce in bozza",
+    "kind": "Tipo",
+    "name": "Nome visualizzato",
+    "slug": "Slug",
+    "slugHint": "Lettere minuscole, cifre, “-” e “_”, fino a 64 caratteri.",
+    "version": "Versione",
+    "versionHint": "Versione semantica, ad es. 1.2.3 o 1.0.0-beta.1.",
+    "summary": "Riepilogo",
+    "ownerRef": "Riferimento del responsabile",
+    "ownerRefHint": "Etichetta facoltativa del responsabile, ad es. platform-team.",
+    "spec": "Specifica (JSON)",
+    "specHint": "Oggetto JSON facoltativo. Richiama i segreti per nome o locator, senza mai incorporare una credenziale. Le credenziali inline vengono rifiutate.",
+    "specPlaceholder": "{\n  \"command\": \"npx\",\n  \"token_ref\": \"$GITHUB_TOKEN\"\n}",
+    "specInvalid": "La specifica deve essere un oggetto JSON valido.",
+    "credentialWarning": "Sembra il valore di una credenziale. Richiama i segreti per nome o locator (ad es. $GITHUB_TOKEN o un percorso vault), mai il segreto stesso.",
+    "draftNotice": "Le nuove voci nascono come bozza. I campi di ciclo di vita e integrità (stato, hash, firma, approvatore) sono gestiti dal motore e non si impostano qui.",
+    "create": "Crea bozza",
+    "save": "Salva modifiche",
+    "created": "Voce in bozza creata",
+    "updated": "Voce in bozza aggiornata",
+    "admissionStaleWarning": "Questa voce {{kind}} ha un verdetto di ammissione registrato. Salvare una specifica modificata lo invalida: devi ammettere una nuova attestazione prima di poterla approvare."
+  },
+  "admission": {
+    "title": "Ammissione dell'attestazione",
+    "caption": "Il verdetto registrato su provenienza/SBOM che condiziona l'approvazione nel catalogo servito: la traccia duratura del perché questa voce è stata ammessa o rifiutata.",
+    "verified": "Attestazione verificata",
+    "signedUnbound": "Firma verificata, digest non legato",
+    "notVerified": "Non verificata",
+    "none": "Nessun verdetto di ammissione registrato",
+    "noneHint": "Con una policy di ammissione in vigore, questa voce non può essere approvata finché non viene ammessa un'attestazione verificata.",
+    "reason": "Motivo",
+    "noReason": "Nessun motivo registrato.",
+    "subjectDigest": "Digest del soggetto",
+    "subjectName": "Soggetto",
+    "method": "Metodo",
+    "signer": "Firmatario",
+    "transparencyLog": "Log di trasparenza",
+    "tlogVerified": "Inclusione verificata",
+    "tlogPresent": "Presente, non verificata",
+    "tlogAbsent": "Non presente",
+    "coverage": "Copertura",
+    "attestedBy": "Attestata da",
+    "attestedAt": "Attestata il",
+    "admit": "Ammetti attestazione",
+    "admitTitle": "Ammetti un'attestazione",
+    "admitBodyMcp": "Verifica un bundle di attestazione Sigstore (cosign download attestation / gh attestation download) per questo server MCP rispetto alla radice di fiducia del tenant. Solo un verdetto verificato permette a una policy in vigore di approvarlo nel registry servito.",
+    "admitBodyConnector": "Verifica un bundle di attestazione Sigstore per l'artefatto di questo connettore rispetto alla radice di fiducia del tenant. Il digest atteso è preso per impostazione predefinita da spec.artifact_digest; solo un verdetto verificato permette a una policy in vigore di approvarlo come connettore verificato.",
+    "bundle": "Bundle di attestazione (JSON)",
+    "bundleHint": "Incolla il JSON del bundle Sigstore. Viene verificato lato server; nulla viene registrato finché non è stato analizzato.",
+    "bundleInvalid": "Il bundle deve essere un JSON valido.",
+    "bundlePlaceholder": "{ \"mediaType\": \"application/vnd.dev.sigstore.bundle.v0.3+json\", … }",
+    "expectedDigest": "Digest atteso dell'artefatto",
+    "expectedDigestHint": "sha256 facoltativo a cui deve corrispondere il soggetto attestato (ad es. sha256:…). Per i connettori è preso per impostazione predefinita da spec.artifact_digest.",
+    "note": "Nota",
+    "admitSubmit": "Verifica e ammetti",
+    "admitted": "Attestazione ammessa",
+    "recordedNotAdmitted": "Registrata, ma l'attestazione non soddisfa la policy: vedi il verdetto."
+  },
+  "confirm": {
+    "deleteTitle": "Eliminare questa bozza?",
+    "deleteBody": "Eliminare definitivamente questa bozza? L'operazione non si può annullare. Si possono eliminare solo le bozze; le voci approvate vanno invece deprecate.",
+    "deleteConfirm": "Elimina definitivamente",
+    "deletePhrase": "DELETE",
+    "deleted": "Voce in bozza eliminata",
+    "submitTitle": "Inviare questa bozza in revisione?",
+    "submitBody": "Passa a “in sospeso” e non è più modificabile come bozza finché non viene decisa.",
+    "submitConfirm": "Invia in revisione",
+    "submitted": "Voce inviata in revisione",
+    "approveTitle": "Approvare questa voce?",
+    "approveBody": "L'approvazione è DEFINITIVA: la versione viene congelata e resa immutabile, il suo hash del contenuto viene fissato (e firmato se la firma è attiva) e diventa disponibile per la creazione di istanze self-service. Per ritirarla in seguito devi deprecarla, non eliminarla.",
+    "approveConfirm": "Approva e congela",
+    "approvePhrase": "APPROVE",
+    "approved": "Voce approvata e congelata",
+    "deprecateTitle": "Deprecare questa voce approvata?",
+    "deprecateBody": "Sarà ritirata e nascosta dalle nuove istanze, ma cronologia e firma restano, così rimane verificabile. L'operazione non si può annullare: pubblica invece una nuova versione.",
+    "deprecateConfirm": "Depreca",
+    "deprecated": "Voce deprecata"
+  },
+  "instantiate": {
+    "title": "Richiedi un'istanza",
+    "body": "Crea una richiesta di governance (stato “richiesta”) a tuo nome: per ora NON effettua alcun provisioning. La decisione di approvazione spetta alla governance e il provisioning al deployment; un amministratore deve approvarla e attivarla.",
+    "name": "Nome dell'istanza",
+    "nameHint": "Un nome univoco per questa istanza della voce.",
+    "targetRef": "Riferimento di destinazione",
+    "targetRefHint": "Destinazione di deployment facoltativa, ad es. env:prod.",
+    "note": "Nota",
+    "submit": "Richiedi istanza",
+    "requested": "Istanza richiesta",
+    "notApproved": "Si può creare un'istanza solo da una voce approvata."
+  },
+  "instances": {
+    "search": "Cerca istanze…",
+    "name": "Nome",
+    "entry": "Voce di origine",
+    "kind": "Tipo",
+    "version": "Versione",
+    "status": "Stato",
+    "target": "Destinazione",
+    "requestedBy": "Richiesta da",
+    "decidedBy": "Decisa da",
+    "note": "Nota",
+    "empty": "Nessuna richiesta di istanza",
+    "emptyHint": "Le istanze self-service delle voci approvate compaiono qui con il loro stato di governance.",
+    "filters": {
+      "status": "Stato",
+      "all": "Tutti"
+    },
+    "liveNote": "In diretta: aggiornamento continuo finché ci sono richieste in attesa di una decisione di governance.",
+    "truncated": "Caricate {{n}} istanze; ce ne sono altre",
+    "truncatedHint": "Le istanze sono più di quelle mostrate; questa pagina prende le righe per ID. Un'istanza assente da questo elenco non è la prova che non esista."
+  },
+  "instanceDetail": {
+    "title": "Dettaglio dell'istanza",
+    "provenance": "Provenienza",
+    "entryId": "ID della voce",
+    "entryKind": "Tipo di voce",
+    "entrySlug": "Slug della voce",
+    "entryVersion": "Versione della voce",
+    "governance": "Governance",
+    "note": "Nota",
+    "governanceCaption": "Le transizioni seguono il flusso consentito e sono registrate con la tua identità. La policy/HITL è governance; il provisioning vero e proprio è deployment.",
+    "actions": {
+      "approve": "Approva",
+      "reject": "Rifiuta",
+      "activate": "Attiva"
+    }
+  },
+  "transition": {
+    "approveTitle": "Approvare questa richiesta di istanza?",
+    "rejectTitle": "Rifiutare questa richiesta di istanza?",
+    "activateTitle": "Attivare questa istanza?",
+    "body": "Approvare, rifiutare o attivare viene registrato con la tua identità nel registro di audit e segue il flusso consentito (richiesta → approvata/rifiutata, approvata → attiva/rifiutata).",
+    "noteLabel": "Nota sulla decisione (facoltativa)",
+    "notePlaceholder": "Motivo di questa decisione…",
+    "approveConfirm": "Approva",
+    "rejectConfirm": "Rifiuta",
+    "activateConfirm": "Attiva",
+    "done": "Decisione di governance applicata"
+  },
+  "status": {
+    "draft": "Bozza",
+    "pending": "In sospeso",
+    "approved": "Approvata",
+    "deprecated": "Deprecata",
+    "requested": "Richiesta",
+    "rejected": "Rifiutata",
+    "active": "Attiva"
+  },
+  "empty": {
+    "entry": {
+      "title": "Ancora nessuna voce di catalogo creata",
+      "description": "Crea una voce in bozza, inviala in revisione e approvala per pubblicare una versione di catalogo congelata e fissata da hash."
+    },
+    "instance": {
+      "title": "Ancora nessuna richiesta di istanza",
+      "description": "Approva una voce di catalogo, poi richiedi un'istanza per creare qui il suo record di istanza governato."
+    }
+  },
+  "policy": {
+    "kind": {
+      "mcp": {
+        "title": "Voci MCP",
+        "body": "Trust anchor che condizionano l'ingresso delle voci MCP federate nel sotto-registry servito.",
+        "editTitle": "Modifica la policy di ammissione MCP"
+      },
+      "connector": {
+        "title": "Voci connettore",
+        "body": "Trust anchor che condizionano le voci di connettori di terze parti prima dell'approvazione.",
+        "editTitle": "Modifica la policy di ammissione dei connettori"
+      }
+    },
+    "state": {
+      "unconfigured": {
+        "title": "Nessuna policy: ogni voce viene ammessa",
+        "body": "Senza una policy configurata, le voci vengono ammesse SENZA alcun controllo della firma. Configura un trust anchor per condizionare l'ammissione."
+      },
+      "observe": {
+        "title": "Configurata: solo osservazione",
+        "body": "Le firme vengono verificate e registrate, ma un errore non blocca l’ammissione. Attiva “Richiedi voci firmate” per applicarla."
+      },
+      "enforce": {
+        "title": "In vigore",
+        "body": "Le voci che non risultano verificate rispetto a questi trust anchor vengono rifiutate all'ammissione."
+      }
+    },
+    "modeName": {
+      "keyless": "Keyless (legata all'identità)",
+      "certificate-pki": "PKI a certificati",
+      "bare-key": "Chiave semplice",
+      "empty": "Nessun anchor"
+    },
+    "mode": "Metodo di fiducia",
+    "derivedMode": "Metodo di fiducia derivato",
+    "on": "Attivo",
+    "off": "Disattivo",
+    "requireSigned": "Richiedi voci firmate",
+    "requireSignedHint": "Se attivo, una voce che non risulta verificata viene rifiutata.",
+    "requireSubjectDigest": "Richiedi il digest del soggetto",
+    "requireSubjectDigestHint": "Lega l’attestazione al digest della voce, non solo al suo nome.",
+    "identities": "Identità consentite",
+    "identitiesHint": "Una per riga. Vanno impostate insieme agli issuer.",
+    "issuers": "Issuer consentiti",
+    "issuersHint": "Uno per riga. Vanno impostati insieme alle identità.",
+    "predicates": "Predicati consentiti",
+    "predicatesHint": "Uno per riga, ad es. il tipo di predicato di provenienza. Le righe vuote vengono rifiutate.",
+    "trustedRoots": "Radici di fiducia",
+    "trustedRootsHint": "Certificati CA in PEM. Vengono salvati solo blocchi BEGIN…END completi.",
+    "trustedKeys": "Chiavi di fiducia",
+    "trustedKeysHint": "Chiavi PUBBLICHE in PEM. Vengono salvati solo blocchi BEGIN…END completi.",
+    "note": "Nota",
+    "attestedBy": "Ultima modifica di",
+    "attestedAt": "Ultima modifica",
+    "edit": "Modifica policy",
+    "editBody": "Le modifiche hanno effetto alla prossima ammissione.",
+    "saved": "Policy di ammissione salvata",
+    "loadFailed": "Impossibile caricare la policy di ammissione.",
+    "confirmTitle": "Conferma la modifica della fiducia",
+    "confirmBody": "Questo rende l'ammissione più restrittiva o rimuove un trust anchor. Le voci ammesse con la vecchia policy non vengono ricontrollate, ma le nuove ammissioni potrebbero non riuscire finché non vengono firmate di nuovo.",
+    "err": {
+      "privateKey": "Il materiale di fiducia deve essere pubblico: rimuovi ogni blocco PRIVATE KEY.",
+      "pemResidual": "Vengono salvati solo blocchi BEGIN…END completi; rimuovi il testo rimasto.",
+      "emptyPredicate": "I predicati non devono contenere voci vuote.",
+      "anchorMissing": "Per applicare la policy serve almeno una radice o una chiave di fiducia, altrimenti non verrebbe ammesso nulla.",
+      "identityIssuer": "Identità e issuer vanno impostati insieme, oppure nessuno dei due."
+    }
+  }
+}

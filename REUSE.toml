@@ -79,9 +79,15 @@ SPDX-License-Identifier = "MIT"
 # Fonts shipped with the console, vendored verbatim. NOTICE credits them and their
 # license texts ship under web/public/licenses/fonts/.
 [[annotations]]
-path = ["web/src/assets/fonts/geist/**"]
+path = ["web/src/assets/fonts/inter/**"]
 precedence = "override"
-SPDX-FileCopyrightText = "2023 Vercel, in collaboration with basement.studio"
+SPDX-FileCopyrightText = "2016 The Inter Project Authors (https://github.com/rsms/inter)"
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = ["web/src/assets/fonts/space-grotesk/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2020 The Space Grotesk Project Authors (https://github.com/floriankarsten/space-grotesk)"
 SPDX-License-Identifier = "OFL-1.1"
 
 [[annotations]]
@@ -176,8 +182,9 @@ SPDX-FileCopyrightText = "OCSF contributors (https://github.com/ocsf/ocsf-schema
 SPDX-License-Identifier = "Apache-2.0"
 
 # Docker's default seccomp profile (github.com/moby/profiles, seccomp v0.2.3,
-# Apache-2.0) with one change, stated in its two "comment" fields: the clone
-# rule also allows the user and network namespaces of a session.
+# Apache-2.0) with changes stated in their "comment" fields: the clone rule also
+# allows the user, network and mount namespaces of a session, and mount is allowed
+# with the bind or private-propagation flag.
 [[annotations]]
 path = ["deploy/seccomp/olivares-sessions.json"]
 precedence = "override"
@@ -189,7 +196,7 @@ SPDX-License-Identifier = "Apache-2.0"
 # archives cannot carry inline headers; each holds the upstream LICENSE it ships
 # under.
 [[annotations]]
-path = ["modules/skills/builtin/ecc-*.tar.gz", "modules/skills/builtin/data/ecc-*.tar.gz"]
+path = ["modules/skills/builtin/ecc-*.tar.gz"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Affaan Mustafa (https://github.com/affaan-m/ECC)"
 SPDX-License-Identifier = "MIT"
@@ -265,3 +272,22 @@ path = ["modules/skills/builtin/olivares-wiki.tar.gz"]
 precedence = "override"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "AGPL-3.0-only"
+
+# Data extracted from the internal design instruments and synthetic legal tests.
+[[annotations]]
+path = [
+  "design/utillaje-mutacion-export-closure/testdata/legacy-tool-inputs.json",
+  "design/utillaje-mutacion-export-closure/testdata/integration-claim-refs.txt",
+  "design/legal/F2/admission/testdata/synthetic-documents.json",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Olivares.AI"
+SPDX-License-Identifier = "LicenseRef-Olivares-Internal"
+
+# The EPEL 10 public signing key the image builder verifies EPEL packages with. Published by the Fedora Project, kept
+# byte for byte and pinned by sha256 in the recipe's lock; it is not Olivares code.
+[[annotations]]
+path = ["appliance/images/toolchain/almalinux10/RPM-GPG-KEY-EPEL-10"]
+precedence = "override"
+SPDX-FileCopyrightText = "The Fedora Project (EPEL 10 public signing key, unmodified)"
+SPDX-License-Identifier = "LicenseRef-Third-Party-Public-Key"

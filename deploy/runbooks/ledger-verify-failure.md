@@ -80,6 +80,6 @@ olivares audit verify --tenant <TENANT_ID> --data-dir <DIR> --strict \
 
 ## Prevent
 - **Pin off-box now:** fetch `GET /v1/audit/pubkey` while healthy and store the key + the current `LatestAttestedSeq` outside the box; that pair is what makes verification attacker-resistant and rollback-detecting.
-- **Off-box checkpoint signing:** set `OLIVARES_LEDGER_SIGNER=aws-kms|gcp-kms|azure-kv` (+ the provider vars in `cmd/olivares/ledgersigner.go`) so the anchor is signed by a key the host doesn't hold. Note a KMS outage makes checkpoints silently fail (logged WARN, retried) — the anchor goes stale without a metric today (instrumentation roadmap, `docs/17 §5`).
+- **Off-box checkpoint signing (Business):** set `OLIVARES_LEDGER_SIGNER=aws-kms|gcp-kms|azure-kv` (+ the provider vars in `cmd/olivares/ledgersigner.go`) so the anchor is signed by a key the host doesn't hold. Note a KMS outage makes checkpoints silently fail (logged WARN, retried) — the anchor goes stale without a metric today (instrumentation roadmap, `docs/17 §5`).
 - **Schedule the strict check** (cron) and alert on its non-zero exit.
 - **Back up `<data-dir>/audit-signing.key`** off-box at provisioning — see [key-rotation.md](key-rotation.md); losing it makes history unverifiable.

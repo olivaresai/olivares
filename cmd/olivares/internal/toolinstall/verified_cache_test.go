@@ -333,6 +333,83 @@ func TestVerifiedEntryHoldsOnlyForItsVerifierPosture(t *testing.T) {
 	}
 }
 
+// describedUnavailable is UnavailableVerifier under another name: a different posture.
+type describedUnavailable struct {
+	UnavailableVerifier
+	name string
+}
+
+func (d describedUnavailable) Describe() string { return d.name }
+
+// dev#2609: an engine whose verifier is unavailable (the host observer) can never call a
+// Claude release installed, so only the executable's digest can be kept. An executable
+// that has not changed is read once; the verdict is still decided at every read, the
+// observer asking first leaves the verifying engine's own check intact, and a rewrite of
+// the same size, with the modification time put back, is damaged.
+func TestAnUnverifiedReleaseIsReadOnceWhileItsExecutableIsUnchanged(t *testing.T) {
+	f := newFixture(t)
+	f.engine.verified = NewVerifiedCache()
+	f.publish(fxVersion)
+	rec, _, err := f.install(fxVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unavailable := NewClaudeWithTrust(ClaudeOptions{Verifier: UnavailableVerifier{}}, f.key.Public, f.key.Fingerprint)
+	observer := NewEngine(NewCatalog(unavailable), EngineOptions{Verified: f.engine.verified})
+	if n := hashesDuring(t, func() {
+		if in := claudeState(t, observer, f.root); in.State != StateUnverified {
+			t.Fatalf("first read: %s", in.State)
+		}
+	}); n == 0 {
+		t.Fatal("the first read did not read the executable")
+	}
+	for i := 0; i < 3; i++ {
+		if n := hashesDuring(t, func() {
+			if in := claudeState(t, observer, f.root); in.State != StateUnverified || in.Provenance != nil {
+				t.Fatalf("read %d: %s %+v", i, in.State, in.Provenance)
+			}
+		}); n != 0 {
+			t.Fatalf("read %d of an unchanged executable hashed %d files", i, n)
+		}
+	}
+	// The digest is a fact about the bytes: an engine that differs only in posture reuses it
+	// and still answers by its own verdict.
+	other := NewEngine(NewCatalog(NewClaudeWithTrust(ClaudeOptions{Verifier: describedUnavailable{name: "another verifier"}}, f.key.Public, f.key.Fingerprint)), EngineOptions{Verified: f.engine.verified})
+	if n := hashesDuring(t, func() {
+		if in := claudeState(t, other, f.root); in.State != StateUnverified {
+			t.Fatalf("an engine of another posture: %s", in.State)
+		}
+	}); n != 0 {
+		t.Fatalf("an engine of another posture hashed %d files of an executable already read", n)
+	}
+	if in := claudeState(t, f.engine, f.root); in.State != StateInstalled || in.Provenance == nil {
+		t.Fatalf("the verifying engine, asked after the observer: %s %+v", in.State, in.Provenance)
+	}
+	exe := rec.Destination.Executable
+	fi, err := os.Stat(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b[len(b)-2] ^= 1
+	rewrite(t, exe, b)
+	if err := os.Chtimes(exe, fi.ModTime(), fi.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if n := hashesDuring(t, func() {
+			if in := claudeState(t, observer, f.root); in.State != StateDamaged {
+				t.Fatalf("read %d after a same-size rewrite: %s", i, in.State)
+			}
+		}); i == 0 && n == 0 {
+			t.Fatal("a rewritten executable was not read again")
+		}
+	}
+}
+
 // A check reads the executable through a directory link the tools root contains,
 // and the identity walk does not descend into a link: such a release is checked in
 // full at every read, so a changed byte behind the link is refused.

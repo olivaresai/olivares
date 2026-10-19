@@ -69,6 +69,15 @@ transmis, même pour en compter les tokens. Le proxy est l'un des **quatre PEP q
   par défaut une posture **fermée en cas d'échec** (un proxy incapable de décider
   ne doit pas transférer), et n'est monté que si un opérateur le provisionne.
 
+Le défaut reste le point de terminaison publié 26.10.1<!-- release-fixed --> ; les configurations et
+les URL de client existantes n'exigent aucune migration. Les hooks Codex adoptent aussi par
+défaut `127.0.0.1:8448` lorsqu'ils sont utilisés seuls. Pour activer les deux écouteurs,
+donnez explicitement à l'un une adresse différente : par exemple, réglez `listen` sur
+`127.0.0.1:8450` dans le fichier choisi par `OLIVARES_CODEX_HOOK_PEP_CONFIG` et réglez
+`OLIVARES_CODEX_HOOK_URL` du client de hook sur `http://127.0.0.1:8450/`. Le moteur refuse
+les adresses qui se chevauchent avant de se lier, au lieu de déplacer silencieusement l'un ou
+l'autre des points de terminaison.
+
 Ce module **ne décide rien** d'une requête en direct. C'est la politique durable,
 rédigeable depuis la console, que la racine de composition lit via `Policy()` ;
 la décision est composée à partir de coutures existantes (`EvaluateModelAccess`,

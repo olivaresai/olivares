@@ -113,6 +113,10 @@ func (b brokenBridge) GateOnceForSession(context.Context, model.TenantID, string
 	return "appr-1", b.status, "", nil
 }
 
+func (b brokenBridge) GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (string, string, string, error) {
+	return b.GateOnceForSession(ctx, tenant, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef)
+}
+
 func (b brokenBridge) StatusScoped(context.Context, model.TenantID, string, string, string, string, string) (string, string, error) {
 	return b.status, "", b.openErr
 }

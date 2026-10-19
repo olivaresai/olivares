@@ -1,0 +1,301 @@
+{
+  "acceptance": {
+    "draftNotice": "이 항목은 초안이므로 기준을 아직 수정할 수 있습니다. 기준 키는 영구 식별자이며 절대 재할당되지 않습니다.",
+    "lockedNotice": "이 항목은 초안을 벗어났으므로 기준은 더 이상 편집할 수 없고 평가만 가능합니다. 기준 키는 영구 식별자입니다.",
+    "none": "수용 기준이 없습니다.",
+    "required": "필수",
+    "state": {
+      "pending": "대기 중",
+      "passed": "통과",
+      "failed": "실패",
+      "waived": "면제됨"
+    }
+  },
+  "apply": {
+    "planning": "변경을 계획 중입니다. 이 단계에서는 아무것도 기록되지 않습니다.",
+    "planTitle": "계획",
+    "command": "명령",
+    "permission": "권한",
+    "eventType": "이벤트",
+    "rowEffects": "이 작업이 기록할 행",
+    "noRowEffects": "이 명령은 어떤 행도 기록하지 않습니다.",
+    "externalCalls": "외부 호출",
+    "planHash": "계획 해시",
+    "keyTitle": "이 변경의 멱등성 키",
+    "keyHelp": "이 의도에 대해 한 번 생성되고 모든 재시도에서 재사용됩니다. 보관하십시오: 적용 중 네트워크가 끊기면 이 정확한 키로 재시도해야 하나의 변경이 둘이 되지 않습니다.",
+    "confirm": "적용",
+    "applying": "적용 중…",
+    "cancel": "취소",
+    "close": "닫기",
+    "appliedTitle": "적용됨",
+    "replayedTitle": "이미 적용됨",
+    "replayedBody": "엔진이 이 멱등성 키를 인식하고 원래 결과를 재생했습니다. 아무것도 두 번째로 기록되지 않았습니다.",
+    "commandId": "명령 id",
+    "resultId": "결과 id",
+    "status": "새 상태",
+    "etag": "새 버전 태그",
+    "auditSeq": "감사 시퀀스",
+    "reread": "다시 읽고 비교",
+    "retrySameKey": "같은 키로 재시도",
+    "failure": {
+      "conflict-version": "다른 사람이 이 항목을 변경했습니다",
+      "version-required": "버전 사전 조건 누락",
+      "conflict-idempotency": "이 키는 이미 다른 변경에 사용되었습니다",
+      "conflict-domain": "엔진이 이 명령을 거부했습니다",
+      "unknown": "조회할 수 없음",
+      "other": "변경에 실패했습니다",
+      "plan-changed": "계획이 더 이상 최신이 아닙니다"
+    },
+    "conflictVersionBody": "항목을 읽은 뒤 이 변경을 적용하는 사이에 항목이 이동했으므로 변경이 위에 적용되는 대신 거부되었습니다. 결정하기 전에 다시 읽고 비교하십시오 — 다시 보내면 다른 변경이 수행한 것을 덮어씁니다.",
+    "versionRequiredBody": "이 명령은 항목의 현재 버전을 요구하지만 아무것도 전송되지 않았습니다. 항목을 다시 열어 버전 태그를 다시 읽으십시오.",
+    "conflictIdempotencyBody": "이 멱등성 키는 이미 다른 본문, 버전 또는 계획과 사용되었습니다. 엔진이 어느 쪽인지 추측하는 대신 거부했습니다. 변경을 다시 시작하여 새 키를 받으십시오.",
+    "conflictDomainBody": "커널 자체 규칙이 이 명령을 거부했습니다 — 예를 들어 잘못된 전이 또는 의존성 순환입니다. 다시 읽어도 답은 바뀌지 않으며 명령이 바뀌어야 합니다.",
+    "otherBody": "변경이 수행되지 않았습니다.",
+    "continue": "계속",
+    "inputIntro": "엔진은 변경을 계획하기 전에 이를 요구합니다. 없으면 명령을 즉시 거부합니다.",
+    "planChangedBody": "계획을 표시한 뒤 적용하는 사이에 계획이 바뀌었으므로 아무것도 기록되지 않았습니다. 작업을 다시 열어 다시 계획하고 새 계획을 읽은 뒤 확인하십시오.",
+    "field": {
+      "code": {
+        "label": "코드",
+        "hint": "짧은 기계 토큰: 소문자, 숫자, 점, 대시 또는 밑줄.",
+        "placeholder": "예: blocked_on_review"
+      },
+      "reason": {
+        "label": "사유",
+        "hint": "변경과 함께 기록되는 자유 텍스트입니다. 다른 세션이 읽을 내용입니다.",
+        "placeholder": "이 일이 일어나는 이유"
+      },
+      "evidence_ref": {
+        "label": "증거 참조",
+        "hint": "이 판정의 증거가 있는 곳입니다. 통과 또는 실패를 기록하려면 필요합니다.",
+        "placeholder": "예: run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "증거 해시",
+        "hint": "그 증거의 sha256 다이제스트입니다. 통과를 기록하려면 필요합니다.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "면제 결정",
+        "hint": "이 기준 면제를 승인하는 결정이 있다면 그것입니다.",
+        "placeholder": "결정 id(선택 사항)"
+      },
+      "holder_sid": {
+        "label": "보유 세션",
+        "hint": "임대를 보유할 정식 세션 id입니다. 엔진은 그렇지 않은 것은 거부합니다.",
+        "placeholder": "보유 세션 id"
+      },
+      "fence": {
+        "label": "펜스",
+        "hint": "귀하가 작업 중인 임대 펜스입니다. 엔진은 1 미만을 거부하며 오래된 것은 현재 보유자에게 집니다.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "결정",
+        "hint": "이 작업의 근거가 되는 결정입니다. 시계를 리베이스하는 것은 증거를 수반하므로 엔진은 이름 없이 받아들이지 않습니다.",
+        "placeholder": "결정 id"
+      }
+    },
+    "details": "세부 정보",
+    "readyTitle": "'{{title}}'을(를) 준비 상태로 표시",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "'{{title}}'은(는) '{{dependency}}'이(가) 완료되기를 기다립니다.",
+    "dependencyWaiting": "이 항목은 의존성이 완료되기를 기다립니다."
+  },
+  "checks": {
+    "evidence": "증거 {{ref}}"
+  },
+  "common": {
+    "refresh": "새로 고침",
+    "loadMore": "더 불러오기"
+  },
+  "create": {
+    "action": "새 항목",
+    "title": "새 작업 항목",
+    "description": "귀하가 소유한 작업 항목을 기록합니다. 아무것도 기록되기 전에 계획이 표시되며, 존재하게 되면 인계로 제공할 수 있습니다.",
+    "workspace": "워크스페이스",
+    "workspaceNone": "여기서 사용할 수 있는 워크스페이스가 없습니다. 워크스페이스 전환기에서 선택하거나 관리자에게 요청하십시오.",
+    "workspaceError": "워크스페이스 목록을 읽을 수 없습니다. 닫고 다시 시도하십시오.",
+    "itemTitle": "제목",
+    "brief": "브리프",
+    "briefHint": "무엇을 해야 하는지와 이유입니다.",
+    "doneWhen": "완료 조건",
+    "doneWhenHint": "항목이 끝났다고 말하는 수용 기준입니다."
+  },
+  "decisions": {
+    "title": "결정",
+    "subtitle": "기록된 그대로의 모든 결정과 현재 효력이 있는 결정입니다.",
+    "view": {
+      "effective": "효력 있음",
+      "revoked": "철회됨",
+      "history": "전체 이력"
+    },
+    "historyNotice": "이것은 추가 전용 이력입니다. 엔진은 현재 상태를 이 행들에 귀속하지 않으므로 어느 것도 효력 있음 또는 철회됨으로 표시되지 않습니다 — 그 질문을 하려면 다른 보기로 전환하십시오.",
+    "state": {
+      "effective": "효력 있음",
+      "revoked": "철회됨",
+      "notAttributed": "이 보기에서는 상태가 귀속되지 않음"
+    },
+    "scopeOf": "“{{item}}”의 범위",
+    "meta": "{{subject}} · {{actor}} 결정 · {{at}}",
+    "revoke": "철회",
+    "revokeTitle": "결정 철회",
+    "revokeBody": "철회는 새 항목으로 기록되며 원래 결정은 절대 삭제되지 않습니다.",
+    "empty": {
+      "effective": {
+        "title": "효력 있는 결정 없음",
+        "body": "효력 있는 결정이 없습니다."
+      },
+      "revoked": {
+        "title": "철회된 결정 없음",
+        "body": "철회된 결정이 없습니다."
+      },
+      "history": {
+        "title": "기록된 결정 없음",
+        "body": "여기서 아직 결정된 것이 없습니다."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "의존성 없음."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · 버전 {{version}}",
+    "applyTitle": "변경 적용",
+    "owner": "소유자",
+    "provenance": "출처",
+    "priority": "우선순위",
+    "blocked": "차단됨",
+    "terminal": "결과",
+    "etag": "버전 태그",
+    "tabs": {
+      "overview": "개요",
+      "acceptance": "수용",
+      "dependencies": "의존성",
+      "events": "이벤트",
+      "lease": "임대"
+    }
+  },
+  "events": {
+    "none": "이 항목에 기록된 이벤트가 없습니다."
+  },
+  "filters": {
+    "status": "상태",
+    "allStatus": "모든 상태",
+    "priority": "우선순위",
+    "allPriority": "모든 우선순위",
+    "archived": {
+      "label": "보관됨",
+      "any": "보관됨과 아님",
+      "false": "보관되지 않은 것만",
+      "true": "보관된 것만"
+    },
+    "clear": "필터 지우기"
+  },
+  "items": {
+    "title": "작업 항목",
+    "subtitle": "필터는 이 페이지뿐 아니라 모든 작업 항목을 검색합니다.",
+    "empty": {
+      "title": "일치하는 작업 항목 없음",
+      "body": "이 필터와 일치하는 작업 항목이 없습니다.",
+      "allTitle": "아직 작업 항목 없음",
+      "allBody": "세션, 에이전트 및 사람이 기록하는 대로 작업 항목이 여기에 표시됩니다.",
+      "start": "세션 시작"
+    }
+  },
+  "lease": {
+    "none": "이 항목에 임대가 없습니다.",
+    "holder": "보유자",
+    "state": "상태",
+    "fence": "펜스",
+    "expires": "만료",
+    "renewals": "갱신",
+    "liveness": "활성 상태",
+    "live": "활성",
+    "notLive": "비활성",
+    "unknown": "조회할 수 없음",
+    "reason": "사유",
+    "ttl": "TTL(초)",
+    "noWrite": "귀하의 역할은 이 임대를 변경할 수 없습니다.",
+    "noAdmin": "인수, 철회 및 리베이스에는 임대 관리 권한이 필요합니다.",
+    "actions": {
+      "acquire": "획득",
+      "renew": "갱신",
+      "release": "해제",
+      "takeover": "인수",
+      "revoke": "철회",
+      "clockRebase": "시계 리베이스"
+    },
+    "noRead": "귀하의 역할은 이 임대를 읽을 수 없습니다."
+  },
+  "status": {
+    "draft": "초안",
+    "ready": "준비됨",
+    "active": "활성",
+    "blocked": "차단됨",
+    "review": "검토 중",
+    "completed": "완료됨",
+    "failed": "실패",
+    "canceled": "취소됨",
+    "dependencyBlocked": "의존성 열림",
+    "archived": "보관됨"
+  },
+  "stream": {
+    "open": "라이브",
+    "connecting": "다시 연결 중…",
+    "closed": "스트리밍 안 함",
+    "error": "스트림 중단됨",
+    "unavailableBody": "화면의 목록이 오래되었을 수 있으며 다른 어떤 것도 이를 알려주지 않습니다. 새로 고침하여 저장소를 직접 읽으십시오."
+  },
+  "subtitle": "세션과 사람이 공유하는 작업: 항목, 소유자, 의존성, 수용 기준 및 결정입니다. 각 변경은 적용되기 전에 표시됩니다.",
+  "tabs": {
+    "items": "작업 항목",
+    "decisions": "결정"
+  },
+  "title": "작업",
+  "transition": {
+    "item.ready": "준비로 표시",
+    "item.block": "차단",
+    "item.unblock": "차단 해제",
+    "item.submit": "검토 제출",
+    "item.complete": "완료",
+    "item.fail": "실패",
+    "item.cancel": "취소",
+    "item.archive": "보관",
+    "noWrite": "귀하의 역할은 이 항목을 변경할 수 없습니다.",
+    "noAdmin": "귀하의 역할은 항목을 실패시키거나 보관할 수 없습니다."
+  },
+  "truncation": {
+    "label": "행 {{n}}개를 불러왔으며 더 있습니다",
+    "hint": "이 목록은 키셋으로 페이지되며 엔진은 페이지를 200으로 제한합니다. 불러온 행만 표시되므로 필터로 좁히십시오."
+  },
+  "unavailable": {
+    "title": "조회할 수 없음",
+    "body": "엔진이 이 관측을 완료할 수 없어 결과 대신 알 수 없는 결과를 보고합니다. 이 패널의 어떤 것도 확인된 것으로 취급하지 마십시오.",
+    "retryHint": "변경이 기록되었는지 여부는 결정되지 않았습니다. 같은 멱등성 키로 재시도하십시오 — 엔진이 이를 두 번째 의도가 아닌 같은 의도로 인식하므로 재시도가 안전해집니다.",
+    "code": "엔진 코드: {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "깨끗함",
+      "help": "엔진이 확인했고 잘못된 것을 찾지 못했습니다."
+    },
+    "ROTO": {
+      "label": "고장",
+      "help": "엔진이 확인했고 규칙 위반을 찾았습니다."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "조회할 수 없음",
+      "help": "엔진이 관측을 완료할 수 없었습니다. 통과도 빈 결과도 아니며 답은 알 수 없습니다."
+    }
+  },
+  "handoff": {
+    "offer": "인계 제공",
+    "offerHint": "채널을 통해 수신자에게 이 항목에 대한 책임을 제공합니다. 수락할 때까지 소유권은 이동하지 않습니다.",
+    "noPermission": "귀하의 역할은 인계를 제공할 수 없습니다."
+  },
+  "url": {
+    "invalidItem": "주소가 이 화면이 사용할 수 없는 항목 id를 지정하여 무시되었습니다.",
+    "invalidFilter": "주소가 이 화면이 제공하지 않는 필터를 지정하여 모든 항목이 표시됩니다."
+  }
+}

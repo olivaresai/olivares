@@ -127,8 +127,9 @@ type knowledgeValidateBody struct {
 func newKnowledgeCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:   "knowledge",
-		Short: "Govern knowledge bases, data products, memory and DLP",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "knowledge",
+		Short:       "Govern knowledge bases, data products, memory and DLP",
 		Long: "Govern the tenant's knowledge plane: knowledge bases and their documents,\n" +
 			"governed retrieval and its lineage, the prompt registry, agent memory, context\n" +
 			"policies, PII discovery, the DLP egress rules and the data-product catalog.\n\n" +
@@ -161,8 +162,9 @@ func newKnowledgeCmd() *cobra.Command {
 
 func newKnowledgeKBsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "kbs",
-		Short: "Declare, inspect and operate knowledge bases",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "kbs",
+		Short:       "Declare, inspect and operate knowledge bases",
 		Long: "A knowledge base is the governed collection: its classification, residency\n" +
 			"region, embed policy and default ACL are the perimeter every ingest and every\n" +
 			"retrieval is checked against.",
@@ -187,9 +189,10 @@ func newKnowledgeKBsListCmd(client datalaneClient) *cobra.Command {
 		status string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the tenant's knowledge bases",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the tenant's knowledge bases",
 		Long: datalaneListLong("List every knowledge base visible to the caller, with its classification,\n" +
 			"residency region, embed policy and document counts."),
 		Example: `  olivares knowledge kbs ls
@@ -220,8 +223,9 @@ func newKnowledgeKBsListCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeKBsGetCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <kb-id>",
-		Short: "Show one knowledge base",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <kb-id>",
+		Short:       "Show one knowledge base",
 		Long: "Show one knowledge base, including the embed model actually wired — the field\n" +
 			"that says whether its vectors are semantic or the local-hash fallback.",
 		Example: "  olivares knowledge kbs get kb_123",
@@ -276,8 +280,9 @@ func (f *knowledgeKBFlags) body() knowledgeKBBody {
 func newKnowledgeKBsCreateCmd(client datalaneClient) *cobra.Command {
 	var fields knowledgeKBFlags
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Declare a knowledge base",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Declare a knowledge base",
 		Long: "Declare a governed knowledge base. The engine validates the\n" +
 			"embed-policy/egress and residency/egress gates before it exists: a region-locked\n" +
 			"corpus cannot be declared while an egressing embedder is wired.",
@@ -308,8 +313,9 @@ func newKnowledgeKBsSetCmd(client datalaneClient) *cobra.Command {
 		replace bool
 	)
 	cmd := &cobra.Command{
-		Use:   "set <kb-id>",
-		Short: "Replace a knowledge base's authored fields",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <kb-id>",
+		Short:       "Replace a knowledge base's authored fields",
 		Long: "Replace the authored fields of a knowledge base.\n\n" +
 			"THIS REPLACES, IT DOES NOT PATCH. The engine rewrites classification,\n" +
 			"residency region, embed policy, default ACL and status from the request, so a\n" +
@@ -347,9 +353,10 @@ func newKnowledgeKBsSetCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeKBsRemoveCmd(client datalaneClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <kb-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete a knowledge base and cascade its documents",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <kb-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete a knowledge base and cascade its documents",
 		Long: "Delete a knowledge base. The engine cascades its documents, chunks and\n" +
 			"sensitivity labels in one transaction; the append-only lineage and PII scan\n" +
 			"evidence are retained deliberately. An active legal hold vetoes the delete.\n\n" +
@@ -388,8 +395,9 @@ func newKnowledgeKBsIngestCmd(client datalaneClient) *cobra.Command {
 		docFile   string
 	)
 	cmd := &cobra.Command{
-		Use:   "ingest <kb-id>",
-		Short: "Ingest documents into a knowledge base",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "ingest <kb-id>",
+		Short:       "Ingest documents into a knowledge base",
 		Long: "Ingest into a knowledge base, either by pulling a registered content source or\n" +
 			"by supplying documents inline. Content is chunked, REDACTED and only then\n" +
 			"embedded and indexed. Supply exactly one of --source or --documents/--documents-file.",
@@ -428,8 +436,9 @@ func newKnowledgeKBsIngestCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeKBsReindexCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "reindex <kb-id>",
-		Short: "Embed and index the knowledge base's pending chunks",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "reindex <kb-id>",
+		Short:       "Embed and index the knowledge base's pending chunks",
 		Long: "Embed and index every chunk of a knowledge base that is not indexed yet. It is\n" +
 			"the repair path after an embedder outage, and it re-applies the current embed\n" +
 			"policy rather than the one in force at ingest time.",
@@ -455,8 +464,9 @@ func newKnowledgeKBsReindexCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeKBsSyncCmd(client datalaneClient) *cobra.Command {
 	var source string
 	cmd := &cobra.Command{
-		Use:   "sync <kb-id>",
-		Short: "Delta-sync a knowledge base from its content source",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "sync <kb-id>",
+		Short:       "Delta-sync a knowledge base from its content source",
 		Long: "Run a delta synchronization against a registered content source: new and changed\n" +
 			"documents are ingested, removed ones are deleted and ACLs are refreshed. The\n" +
 			"response reports what was synced, deleted, skipped and held.",
@@ -490,8 +500,9 @@ func newKnowledgeKBsDocumentsCmd(client datalaneClient) *cobra.Command {
 		status string
 	)
 	cmd := &cobra.Command{
-		Use:   "documents <kb-id>",
-		Short: "List a knowledge base's documents",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "documents <kb-id>",
+		Short:       "List a knowledge base's documents",
 		Long: datalaneListLong("List the documents of one knowledge base with their source, classification\n" +
 			"and indexing status."),
 		Example: `  olivares knowledge kbs documents kb_123
@@ -531,8 +542,9 @@ func newKnowledgeKBsQueryCmd(client datalaneClient) *cobra.Command {
 		sessionRef string
 	)
 	cmd := &cobra.Command{
-		Use:   "query <kb-id>",
-		Short: "Run a governed retrieval against a knowledge base",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "query <kb-id>",
+		Short:       "Run a governed retrieval against a knowledge base",
 		Long: "Run governed retrieval: identity, classification and residency are filtered\n" +
 			"BEFORE ranking, and the call writes an append-only lineage record naming the\n" +
 			"chunks it returned. The effective agent is the authenticated identity — a caller\n" +
@@ -576,8 +588,9 @@ func newKnowledgeKBsQueryCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeKBsScanCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "scan <kb-id>",
-		Short: "Run PII discovery over a knowledge base",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "scan <kb-id>",
+		Short:       "Run PII discovery over a knowledge base",
 		Long: "Scan a knowledge base at rest for personal data, writing sensitivity labels and\n" +
 			"append-only scan evidence. With no classifier wired the engine REFUSES\n" +
 			"(409) rather than reporting a clean corpus it never inspected.",
@@ -604,15 +617,17 @@ func newKnowledgeKBsScanCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeDocumentsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "documents",
-		Short:   "Inspect an individual knowledge document",
-		Long:    "Read one governed document by id, across knowledge bases.",
-		Example: "  olivares knowledge documents get doc_123",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "documents",
+		Short:       "Inspect an individual knowledge document",
+		Long:        "Read one governed document by id, across knowledge bases.",
+		Example:     "  olivares knowledge documents get doc_123",
+		Args:        cobra.NoArgs,
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get <document-id>",
-		Short: "Show one knowledge document",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <document-id>",
+		Short:       "Show one knowledge document",
 		Long: "Show one document: its source, classification, ACL and indexing state. The body\n" +
 			"is the redacted form, the only one that ever existed in the store.",
 		Example: "  olivares knowledge documents get doc_123",
@@ -639,8 +654,9 @@ func newKnowledgeDocumentsCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeLineageCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "lineage",
-		Short: "Read the append-only retrieval lineage",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "lineage",
+		Short:       "Read the append-only retrieval lineage",
 		Long: "Every governed retrieval writes a lineage record: who asked, which chunks were\n" +
 			"returned and whether the request was allowed or denied. It is append-only\n" +
 			"evidence and survives the deletion of the corpus it describes.",
@@ -654,9 +670,10 @@ func newKnowledgeLineageCmd(client datalaneClient) *cobra.Command {
 		decision string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List retrieval lineage records",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List retrieval lineage records",
 		Long: datalaneListLong("List lineage records, optionally narrowed to one knowledge base, one agent or\n" +
 			"one decision (allowed or denied)."),
 		Example: `  olivares knowledge lineage ls
@@ -688,8 +705,9 @@ func newKnowledgeLineageCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&decision, "decision", "", "allowed or denied")
 
 	get := &cobra.Command{
-		Use:   "get <lineage-id>",
-		Short: "Show one lineage record",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <lineage-id>",
+		Short:       "Show one lineage record",
 		Long: "Show one lineage record in full, including the chunk references that let an\n" +
 			"auditor reconstruct origin to answer in a single read.",
 		Example: "  olivares knowledge lineage get ln_123",
@@ -717,8 +735,9 @@ func newKnowledgeLineageCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgePromptsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "prompts",
-		Short: "Manage the versioned prompt registry",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "prompts",
+		Short:       "Manage the versioned prompt registry",
 		Long: "The prompt registry keeps every revision immutable: a change appends a revision\n" +
 			"and a rollback moves the current pointer. Nothing is ever rewritten in place.",
 		Example: "  olivares knowledge prompts ls",
@@ -726,10 +745,11 @@ func newKnowledgePromptsCmd(client datalaneClient) *cobra.Command {
 	}
 	var page datalanePageFlags
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List registered prompts",
-		Long:    datalaneListLong("List prompts with their current revision and latest content hash."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List registered prompts",
+		Long:        datalaneListLong("List prompts with their current revision and latest content hash."),
 		Example: `  olivares knowledge prompts ls
   olivares knowledge prompts ls --limit 50 -o json`,
 		Args: cobra.NoArgs,
@@ -753,11 +773,12 @@ func newKnowledgePromptsCmd(client datalaneClient) *cobra.Command {
 	page.add(list)
 
 	get := &cobra.Command{
-		Use:     "get <prompt-id>",
-		Short:   "Show one prompt",
-		Long:    "Show one prompt: its name, current revision pointer and latest content hash.",
-		Example: "  olivares knowledge prompts get pr_123",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <prompt-id>",
+		Short:       "Show one prompt",
+		Long:        "Show one prompt: its name, current revision pointer and latest content hash.",
+		Example:     "  olivares knowledge prompts get pr_123",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("prompts", args[0])
 			if err != nil {
@@ -782,8 +803,9 @@ func newKnowledgePromptsCmd(client datalaneClient) *cobra.Command {
 		note         string
 	)
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Register a prompt and its first revision",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Register a prompt and its first revision",
 		Long: "Register a prompt. The template is its first immutable revision; supply it with\n" +
 			"--template or, for anything multi-line, --template-file (- reads stdin).",
 		Example: `  olivares knowledge prompts create --name triage --template "You are a triage agent"
@@ -823,8 +845,9 @@ func newKnowledgePromptsCmd(client datalaneClient) *cobra.Command {
 		rollbackYes bool
 	)
 	rollback := &cobra.Command{
-		Use:   "rollback <prompt-id>",
-		Short: "Point a prompt at an earlier revision",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rollback <prompt-id>",
+		Short:       "Point a prompt at an earlier revision",
 		Long: "Move the prompt's current revision pointer back to an existing revision. No\n" +
 			"revision is rewritten or removed, but every agent resolving this prompt changes\n" +
 			"behavior at once — which is why it asks for confirmation.",
@@ -862,18 +885,20 @@ func newKnowledgePromptsCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgePromptRevisionsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "revisions",
-		Short:   "List, read and append immutable prompt revisions",
-		Long:    "Every prompt revision is immutable; a change appends a new one.",
-		Example: "  olivares knowledge prompts revisions ls pr_123",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "revisions",
+		Short:       "List, read and append immutable prompt revisions",
+		Long:        "Every prompt revision is immutable; a change appends a new one.",
+		Example:     "  olivares knowledge prompts revisions ls pr_123",
+		Args:        cobra.NoArgs,
 	}
 	var page datalanePageFlags
 	list := &cobra.Command{
-		Use:     "ls <prompt-id>",
-		Aliases: []string{"list"},
-		Short:   "List a prompt's revisions",
-		Long:    datalaneListLong("List every revision of one prompt with its label, hash and author."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls <prompt-id>",
+		Aliases:     []string{"list"},
+		Short:       "List a prompt's revisions",
+		Long:        datalaneListLong("List every revision of one prompt with its label, hash and author."),
 		Example: `  olivares knowledge prompts revisions ls pr_123
   olivares knowledge prompts revisions ls pr_123 --limit 20`,
 		Args: cobra.ExactArgs(1),
@@ -901,11 +926,12 @@ func newKnowledgePromptRevisionsCmd(client datalaneClient) *cobra.Command {
 	page.add(list)
 
 	get := &cobra.Command{
-		Use:     "get <prompt-id> <rev>",
-		Short:   "Show one prompt revision",
-		Long:    "Show one immutable revision of a prompt, including its template text and hash.",
-		Example: "  olivares knowledge prompts revisions get pr_123 4",
-		Args:    cobra.ExactArgs(2),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <prompt-id> <rev>",
+		Short:       "Show one prompt revision",
+		Long:        "Show one immutable revision of a prompt, including its template text and hash.",
+		Example:     "  olivares knowledge prompts revisions get pr_123 4",
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if _, err := strconv.ParseInt(args[1], 10, 64); err != nil {
 				return exitcode.New(exitcode.Usage,
@@ -933,8 +959,9 @@ func newKnowledgePromptRevisionsCmd(client datalaneClient) *cobra.Command {
 		note         string
 	)
 	add := &cobra.Command{
-		Use:   "add <prompt-id>",
-		Short: "Append an immutable revision to a prompt",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "add <prompt-id>",
+		Short:       "Append an immutable revision to a prompt",
 		Long: "Append a revision. The prompt's current pointer moves to it; the previous\n" +
 			"revisions stay readable and verifiable by hash.",
 		Example: `  olivares knowledge prompts revisions add pr_123 --template-file ./v2.txt --label v2
@@ -999,8 +1026,9 @@ func (f *knowledgeMemoryScopeFlags) query(q url.Values) url.Values {
 
 func newKnowledgeMemoryCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "memory",
-		Short: "Govern agent memory: read, write, verify, export and purge",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "memory",
+		Short:       "Govern agent memory: read, write, verify, export and purge",
 		Long: "Governed agent memory with retention, quota and ledger-anchored integrity.\n" +
 			"Reads are scoped to the DECLARED user/session context; the cross-scope view and\n" +
 			"the integrity verification are admin-tier.",
@@ -1029,10 +1057,11 @@ func newKnowledgeMemoryListCmd(client datalaneClient, path, use, short, long str
 		scope knowledgeMemoryScopeFlags
 	)
 	cmd := &cobra.Command{
-		Use:     use,
-		Aliases: []string{"list"},
-		Short:   short,
-		Long:    datalaneListLong(long),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         use,
+		Aliases:     []string{"list"},
+		Short:       short,
+		Long:        datalaneListLong(long),
 		Example: fmt.Sprintf("  olivares knowledge memory %s\n  olivares knowledge memory %s --agent-ref agent-1 --limit 50",
 			use, use),
 		Args: cobra.NoArgs,
@@ -1065,8 +1094,9 @@ func newKnowledgeMemoryListCmd(client datalaneClient, path, use, short, long str
 func newKnowledgeMemoryGetCmd(client datalaneClient) *cobra.Command {
 	var scope knowledgeMemoryScopeFlags
 	cmd := &cobra.Command{
-		Use:   "get <entry-id>",
-		Short: "Show one memory entry",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <entry-id>",
+		Short:       "Show one memory entry",
 		Long: "Show one memory entry. The engine answers 404 for an entry outside the\n" +
 			"declared scope or above the caller's clearance: absence and refusal are the same\n" +
 			"answer here on purpose, so a probe cannot enumerate what it may not read.",
@@ -1105,8 +1135,9 @@ func newKnowledgeMemoryPutCmd(client datalaneClient) *cobra.Command {
 		sessionRef     string
 	)
 	cmd := &cobra.Command{
-		Use:   "put",
-		Short: "Write one governed memory entry",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "put",
+		Short:       "Write one governed memory entry",
 		Long: "Write a memory entry for an agent. The content goes through the same fail-closed\n" +
 			"write path the module uses everywhere; use --content-file (- for stdin) to keep\n" +
 			"the value out of the process table.\n\n" +
@@ -1168,9 +1199,10 @@ func newKnowledgeMemoryPutCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeMemoryRemoveCmd(client datalaneClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <entry-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete one memory entry",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <entry-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete one memory entry",
 		Long: "Delete one memory entry. An active legal hold over the agent or the memory class\n" +
 			"vetoes the delete.\n\nJSON output is the raw API response.",
 		Example: "  olivares knowledge memory rm mem_123 --yes",
@@ -1205,8 +1237,9 @@ func newKnowledgeMemoryPurgeCmd(client datalaneClient) *cobra.Command {
 		yes      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "purge",
-		Short: "Purge expired memory entries",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "purge",
+		Short:       "Purge expired memory entries",
 		Long: "Purge expired memory entries, optionally for one agent. This deletes rows: it is\n" +
 			"destructive even though the method is POST, so it asks for confirmation and\n" +
 			"refuses an unattended session without --yes. Entries under an active legal hold\n" +
@@ -1241,8 +1274,9 @@ func newKnowledgeMemoryPurgeCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeMemoryVerifyCmd(client datalaneClient) *cobra.Command {
 	var scope knowledgeMemoryScopeFlags
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify memory integrity against the ledger anchor",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Verify memory integrity against the ledger anchor",
 		Long: "Recompute each entry's canonical hash and check it against the ledger anchor.\n" +
 			"This is the verify-before-trust contract: a tampered entry is reported, never\n" +
 			"silently served.",
@@ -1270,8 +1304,9 @@ func newKnowledgeMemoryExportCmd(client datalaneClient) *cobra.Command {
 		outFile string
 	)
 	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Export a signed, portable memory bundle",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "export",
+		Short:       "Export a signed, portable memory bundle",
 		Long: "Export the caller's memory as a signed portability bundle (the anti-lock-in\n" +
 			"copy). It applies the SAME clearance-filtered predicate as `ls`, never the\n" +
 			"admin cross-scope view.\n\n" +
@@ -1301,8 +1336,9 @@ func newKnowledgeMemoryExportCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeMemoryImportCmd(client datalaneClient) *cobra.Command {
 	var bundleFile string
 	cmd := &cobra.Command{
-		Use:   "import",
-		Short: "Import a signed portability bundle",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "import",
+		Short:       "Import a signed portability bundle",
 		Long: "Import a memory bundle produced by `memory export`. The engine verifies\n" +
 			"the manifest signature before writing anything and applies the same fail-closed\n" +
 			"write path as `put`, entry by entry. Without a verify key wired it answers 501\n" +
@@ -1341,11 +1377,12 @@ func newKnowledgeMemoryImportCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeContextPoliciesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "context-policies",
-		Short:   "Read and set context/compaction policies",
-		Long:    "Context policies bound the token budget and redaction posture of governed retrieval.",
-		Example: "  olivares knowledge context-policies ls",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "context-policies",
+		Short:       "Read and set context/compaction policies",
+		Long:        "Context policies bound the token budget and redaction posture of governed retrieval.",
+		Example:     "  olivares knowledge context-policies ls",
+		Args:        cobra.NoArgs,
 	}
 	var (
 		page      datalanePageFlags
@@ -1353,9 +1390,10 @@ func newKnowledgeContextPoliciesCmd(client datalaneClient) *cobra.Command {
 		scopeRef  string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List context policies",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List context policies",
 		Long: datalaneListLong("List context/compaction policies, optionally narrowed to one scope kind or\n" +
 			"scope reference."),
 		Example: `  olivares knowledge context-policies ls
@@ -1396,8 +1434,9 @@ func newKnowledgeContextPoliciesCmd(client datalaneClient) *cobra.Command {
 		effect       string
 	)
 	put := &cobra.Command{
-		Use:   "put",
-		Short: "Create or replace a context policy",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "put",
+		Short:       "Create or replace a context policy",
 		Long: "Create or replace the context policy of one scope. The floors it declares —\n" +
 			"token budget and redaction — are applied by governed retrieval, and the response\n" +
 			"reports what they actually did rather than only that they were set.",
@@ -1446,11 +1485,12 @@ func newKnowledgeContextPoliciesCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeLabelsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "labels",
-		Short:   "Read the sensitivity labels PII discovery wrote",
-		Long:    "Sensitivity labels are the current-state metadata a PII scan attaches to its subjects.",
-		Example: "  olivares knowledge labels ls",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "labels",
+		Short:       "Read the sensitivity labels PII discovery wrote",
+		Long:        "Sensitivity labels are the current-state metadata a PII scan attaches to its subjects.",
+		Example:     "  olivares knowledge labels ls",
+		Args:        cobra.NoArgs,
 	}
 	var (
 		page        datalanePageFlags
@@ -1458,10 +1498,11 @@ func newKnowledgeLabelsCmd(client datalaneClient) *cobra.Command {
 		kbID        string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List sensitivity labels",
-		Long:    datalaneListLong("List sensitivity labels, optionally narrowed to one subject kind or knowledge base."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List sensitivity labels",
+		Long:        datalaneListLong("List sensitivity labels, optionally narrowed to one subject kind or knowledge base."),
 		Example: `  olivares knowledge labels ls
   olivares knowledge labels ls --kb-id kb_123 --limit 100`,
 		Args: cobra.NoArgs,
@@ -1493,11 +1534,12 @@ func newKnowledgeLabelsCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeScansCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "scans",
-		Short:   "Read the append-only PII scan evidence",
-		Long:    "Every discovery run leaves an append-only evidence row; scans are never rewritten.",
-		Example: "  olivares knowledge scans ls",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "scans",
+		Short:       "Read the append-only PII scan evidence",
+		Long:        "Every discovery run leaves an append-only evidence row; scans are never rewritten.",
+		Example:     "  olivares knowledge scans ls",
+		Args:        cobra.NoArgs,
 	}
 	var (
 		page      datalanePageFlags
@@ -1505,10 +1547,11 @@ func newKnowledgeScansCmd(client datalaneClient) *cobra.Command {
 		scopeRef  string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List PII scan runs",
-		Long:    datalaneListLong("List discovery runs and what each found, optionally narrowed to one scope."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List PII scan runs",
+		Long:        datalaneListLong("List discovery runs and what each found, optionally narrowed to one scope."),
 		Example: `  olivares knowledge scans ls
   olivares knowledge scans ls --scope-kind kb --scope-ref kb_123`,
 		Args: cobra.NoArgs,
@@ -1542,8 +1585,9 @@ func newKnowledgeScansCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeDLPCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dlp",
-		Short: "Read and set the DLP egress rules",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dlp",
+		Short:       "Read and set the DLP egress rules",
 		Long: "DLP rules decide, per sensitivity class, whether content may leave the perimeter.\n" +
 			"The retrieval and ingest gates enforce them deny-closed.",
 		Example: "  olivares knowledge dlp ls",
@@ -1551,10 +1595,11 @@ func newKnowledgeDLPCmd(client datalaneClient) *cobra.Command {
 	}
 	var page datalanePageFlags
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the DLP egress rules",
-		Long:    datalaneListLong("List the tenant's DLP rules: one action (allow or deny) per sensitivity class."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the DLP egress rules",
+		Long:        datalaneListLong("List the tenant's DLP rules: one action (allow or deny) per sensitivity class."),
 		Example: `  olivares knowledge dlp ls
   olivares knowledge dlp ls -o json`,
 		Args: cobra.NoArgs,
@@ -1583,8 +1628,9 @@ func newKnowledgeDLPCmd(client datalaneClient) *cobra.Command {
 		note   string
 	)
 	put := &cobra.Command{
-		Use:   "put",
-		Short: "Create or replace one DLP rule",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "put",
+		Short:       "Create or replace one DLP rule",
 		Long: "Create or replace the rule for one sensitivity class. The action must be allow\n" +
 			"or deny; anything else is refused by the engine rather than defaulted.",
 		Example: `  olivares knowledge dlp put --class pii.email --action deny
@@ -1611,9 +1657,10 @@ func newKnowledgeDLPCmd(client datalaneClient) *cobra.Command {
 
 	var yes bool
 	remove := &cobra.Command{
-		Use:     "rm <rule-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete one DLP rule",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <rule-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete one DLP rule",
 		Long: "Delete a DLP rule. Removing a DENY rule WIDENS what may leave the perimeter for\n" +
 			"that class, so it asks for confirmation.\n\n" +
 			"An endpoint answering 204 has no body: JSON output is then the CLI's own\n" +
@@ -1651,15 +1698,17 @@ func newKnowledgeDLPCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeSourcesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "sources",
-		Short:   "Run discovery over a registered content source",
-		Long:    "Scan a registered document source for personal data WITHOUT ingesting it.",
-		Example: "  olivares knowledge sources scan confluence",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sources",
+		Short:       "Run discovery over a registered content source",
+		Long:        "Scan a registered document source for personal data WITHOUT ingesting it.",
+		Example:     "  olivares knowledge sources scan confluence",
+		Args:        cobra.NoArgs,
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "scan <source-name>",
-		Short: "Scan a content source for personal data without ingesting",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "scan <source-name>",
+		Short:       "Scan a content source for personal data without ingesting",
 		Long: "Pull a registered DOCUMENT content source and classify it in place. Audit and\n" +
 			"inventory feeds are refused: they are not knowledge, and labeling them as source\n" +
 			"documents would be wrong. With no classifier wired the engine refuses\n" +
@@ -1688,8 +1737,9 @@ func newKnowledgeSourcesCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeDataProductsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "data-products",
-		Short: "Govern data products and their versioned contracts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "data-products",
+		Short:       "Govern data products and their versioned contracts",
 		Long: "A data product publishes a knowledge base under a contract: a schema, a freshness\n" +
 			"SLA and an enforcement mode. Once published it governs the ingest and retrieval\n" +
 			"of the corpus behind it.",
@@ -1730,9 +1780,10 @@ func newKnowledgeDataProductsListCmd(client datalaneClient) *cobra.Command {
 		kbRef    string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List data products",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List data products",
 		Long: datalaneListLong("List data products with their status, owner, backing knowledge base and\n" +
 			"enforcement mode."),
 		Example: `  olivares knowledge data-products ls
@@ -1767,11 +1818,12 @@ func newKnowledgeDataProductsListCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeDataProductsGetCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <product-id>",
-		Short:   "Show one data product",
-		Long:    "Show one data product: its status, owner, backing corpus, SLA and enforcement mode.",
-		Example: "  olivares knowledge data-products get dp_123",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <product-id>",
+		Short:       "Show one data product",
+		Long:        "Show one data product: its status, owner, backing corpus, SLA and enforcement mode.",
+		Example:     "  olivares knowledge data-products get dp_123",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("data-products", args[0])
 			if err != nil {
@@ -1849,8 +1901,9 @@ func (f *knowledgeDataProductFlags) body(cmd *cobra.Command) (knowledgeDataProdu
 func newKnowledgeDataProductsCreateCmd(client datalaneClient) *cobra.Command {
 	var fields knowledgeDataProductFlags
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Declare a data product",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Declare a data product",
 		Long: "Declare a data product over a knowledge base. It starts unpublished: nothing is\n" +
 			"enforced until `publish` and an active contract exist.",
 		Example: `  olivares knowledge data-products create --name support-kb --kb-ref kb_123 --owner-ref team-support
@@ -1881,8 +1934,9 @@ func newKnowledgeDataProductsCreateCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeDataProductsSetCmd(client datalaneClient) *cobra.Command {
 	var fields knowledgeDataProductFlags
 	cmd := &cobra.Command{
-		Use:   "set <product-id>",
-		Short: "Update a data product's authored fields",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <product-id>",
+		Short:       "Update a data product's authored fields",
 		Long: "Update a data product. This endpoint is a genuine PATCH — the engine\n" +
 			"applies only the fields present in the request — so an unset flag leaves its\n" +
 			"stored value alone. That is why this verb carries no --replace guard while\n" +
@@ -1916,9 +1970,10 @@ func newKnowledgeDataProductsSetCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeDataProductsRemoveCmd(client datalaneClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <product-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete a data product",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <product-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete a data product",
 		Long: "Delete a data product and the contracts attached to it. The knowledge base it\n" +
 			"published is not deleted.\n\nJSON output is the raw API response.",
 		Example: "  olivares knowledge data-products rm dp_123 --yes",
@@ -1952,11 +2007,12 @@ func newKnowledgeDataProductsRemoveCmd(client datalaneClient) *cobra.Command {
 func newKnowledgeDataProductLifecycleCmd(client datalaneClient, verb, short, long string, destructive bool, confirmFmt string) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     verb + " <product-id>",
-		Short:   short,
-		Long:    long,
-		Example: fmt.Sprintf("  olivares knowledge data-products %s dp_123", verb),
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         verb + " <product-id>",
+		Short:       short,
+		Long:        long,
+		Example:     fmt.Sprintf("  olivares knowledge data-products %s dp_123", verb),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if destructive {
 				if err := confirmDestructive(cmd, yes,
@@ -1989,8 +2045,9 @@ func newKnowledgeDataProductLifecycleCmd(client datalaneClient, verb, short, lon
 
 func newKnowledgeDataProductsHealthCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "health <product-id>",
-		Short: "Report a data product's freshness and quality",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "health <product-id>",
+		Short:       "Report a data product's freshness and quality",
 		Long: "Report the product's measured freshness against its SLA and its quality score.\n" +
 			"It is a measurement of the corpus, not a restatement of the declared targets.",
 		Example: "  olivares knowledge data-products health dp_123",
@@ -2020,8 +2077,9 @@ func newKnowledgeDataProductsValidateCmd(client datalaneClient) *cobra.Command {
 		metadataFile string
 	)
 	cmd := &cobra.Command{
-		Use:   "validate <product-id>",
-		Short: "Validate a payload against the product's active contract",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "validate <product-id>",
+		Short:       "Validate a payload against the product's active contract",
 		Long: "Validate a candidate payload against the data product's ACTIVE contract and\n" +
 			"report whether it conforms, in which validation mode and against which contract\n" +
 			"version. It writes no data.",
@@ -2065,8 +2123,9 @@ func newKnowledgeDataProductsEventsCmd(client datalaneClient) *cobra.Command {
 		eventType string
 	)
 	cmd := &cobra.Command{
-		Use:   "events <product-id>",
-		Short: "List a data product's enforcement events",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "events <product-id>",
+		Short:       "List a data product's enforcement events",
 		Long: datalaneListLong("List the enforcement events recorded for one data product: what the contract\n" +
 			"admitted, what it rejected and why."),
 		Example: `  olivares knowledge data-products events dp_123
@@ -2100,8 +2159,9 @@ func newKnowledgeDataProductsEventsCmd(client datalaneClient) *cobra.Command {
 
 func newKnowledgeDataContractsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "contracts",
-		Short: "Read and add a data product's versioned contracts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "contracts",
+		Short:       "Read and add a data product's versioned contracts",
 		Long: "A data contract is versioned and immutable: adding one supersedes the previous\n" +
 			"active version rather than editing it.",
 		Example: "  olivares knowledge data-products contracts ls dp_123",
@@ -2109,10 +2169,11 @@ func newKnowledgeDataContractsCmd(client datalaneClient) *cobra.Command {
 	}
 	var page datalanePageFlags
 	list := &cobra.Command{
-		Use:     "ls <product-id>",
-		Aliases: []string{"list"},
-		Short:   "List a data product's contract versions",
-		Long:    datalaneListLong("List every contract version of one data product with its validation mode and status."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls <product-id>",
+		Aliases:     []string{"list"},
+		Short:       "List a data product's contract versions",
+		Long:        datalaneListLong("List every contract version of one data product with its validation mode and status."),
 		Example: `  olivares knowledge data-products contracts ls dp_123
   olivares knowledge data-products contracts ls dp_123 --limit 20`,
 		Args: cobra.ExactArgs(1),
@@ -2140,8 +2201,9 @@ func newKnowledgeDataContractsCmd(client datalaneClient) *cobra.Command {
 	page.add(list)
 
 	active := &cobra.Command{
-		Use:   "active <product-id>",
-		Short: "Show the contract version currently in force",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "active <product-id>",
+		Short:       "Show the contract version currently in force",
 		Long: "Show the data product's ACTIVE contract — the one enforcement actually applies,\n" +
 			"which is not necessarily the highest version number.",
 		Example: "  olivares knowledge data-products contracts active dp_123",
@@ -2163,11 +2225,12 @@ func newKnowledgeDataContractsCmd(client datalaneClient) *cobra.Command {
 	}
 
 	get := &cobra.Command{
-		Use:     "get <product-id> <version>",
-		Short:   "Show one contract version",
-		Long:    "Show one immutable contract version, including its schema definition.",
-		Example: "  olivares knowledge data-products contracts get dp_123 2",
-		Args:    cobra.ExactArgs(2),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <product-id> <version>",
+		Short:       "Show one contract version",
+		Long:        "Show one immutable contract version, including its schema definition.",
+		Example:     "  olivares knowledge data-products contracts get dp_123 2",
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if _, err := strconv.ParseInt(args[1], 10, 64); err != nil {
 				return exitcode.New(exitcode.Usage,
@@ -2197,8 +2260,9 @@ func newKnowledgeDataContractsCmd(client datalaneClient) *cobra.Command {
 		note         string
 	)
 	add := &cobra.Command{
-		Use:   "add <product-id>",
-		Short: "Add a new contract version to a data product",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "add <product-id>",
+		Short:       "Add a new contract version to a data product",
 		Long: "Add a contract version. It supersedes the previous active version; nothing is\n" +
 			"rewritten, so every earlier version stays readable as the record of what was\n" +
 			"enforced at the time.",

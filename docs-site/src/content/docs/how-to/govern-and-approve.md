@@ -4,7 +4,7 @@ description: "How an operator governs the estate: identity and permissions, the 
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL air-gap transfer also require Business.
 :::
 
 This page is for the operator who has connected at least one source and now needs
@@ -70,6 +70,8 @@ attribute-based rules. You choose the engine with a single environment variable:
 # Choose one. Cedar is the embedded, pure-Go primary; OPA is an over-HTTP adapter.
 OLIVARES_PDP_ENGINE=cedar   # or: opa | none
 ```
+
+The external engine is a Business capability. A Community build refuses to start with `cedar`, `opa` or any other engine selected; unset, blank or `none` runs the native engine alone.
 
 Both engines sit behind one seam, and the seam has one invariant that governs how you
 must reason about it:
@@ -213,4 +215,4 @@ everything else, which is why reading it is an editor-and-up action.
 
 ## Approval editions (0.1)
 
-Community retains the approval engine, the two-distinct-human CRITICAL floor, kill-switch dual control, and policies that require review or raise tier or quorum. Tier-lowering approval policies and break-glass belong to the Business base line. Stored lowering policies and emergency grants remain readable/exportable, but cannot lower Community defaults or authorize emergency access.
+Community retains the approval engine, the two-distinct-human CRITICAL floor, kill-switch dual control, and policies that require a review of an action. Approval policies that change the risk tier or the approval count, and break-glass, belong to the Business base line. Stored policies that raise the tier or the approval count keep applying; stored lowering policies and emergency grants remain readable/exportable, but cannot lower Community defaults or authorize emergency access.

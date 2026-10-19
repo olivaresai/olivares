@@ -30,8 +30,8 @@ test('no Settings link lands on a not-enabled notice on a fresh installation (#4
   }
   const notEnabled = page.locator('[data-slot="module-not-enabled"]')
 
-  // Control: this engine leaves deploy off, and the check sees its notice.
-  await open('/deploy')
+  // Control: this engine leaves the inference proxy off, and the check sees its notice.
+  await open('/inference-proxy')
   await expect(notEnabled).toHaveCount(1)
 
   await open('/settings')

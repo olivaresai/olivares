@@ -465,7 +465,7 @@ func TestAnEditionsContributionIsExpectedWhetherOrNotItIsLinked(t *testing.T) {
 func TestARetirementWithoutADeclaredModulesStepIsIncomplete(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		user := e.onboard(e.tT, "missing-step@consent.test", "viewer")
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		var partial []declaredModule
 		for _, d := range e.pump().modules {
 			if d.name != "eventing" {

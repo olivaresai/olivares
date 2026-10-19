@@ -168,7 +168,7 @@ func TestIR3CoordinationLossBeforeFinalDecisionRefuses(t *testing.T) {
 	cfg.MaxConns = 1
 	cfg.AuditSpoolMaxBytes = 0
 	super := drOpenSuper(t, pg.Superuser)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	var other *drCoordination
@@ -227,7 +227,7 @@ func TestIR3NoLossSuccessSingleAcquisition(t *testing.T) {
 	cfg.MaxConns = 1
 	cfg.AuditSpoolMaxBytes = 0
 	super := drOpenSuper(t, pg.Superuser)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	drCoordinationAcquisitions.Store(0)
@@ -292,7 +292,7 @@ func TestIR3MaxConns1NoLeakedSessionOnFinalFailure(t *testing.T) {
 	cfg.AuditSpoolMaxBytes = 0
 	super := drOpenSuper(t, pg.Superuser)
 	before := ir3ClientBackends(t, super, pg.Database)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	old := publicationFinalDecisionTestHook
@@ -333,7 +333,7 @@ func TestIR3PreLUnknownDistinctFromPostLCleanup(t *testing.T) {
 		cfg := drPGConfig(pg)
 		cfg.MaxConns = 1
 		cfg.AuditSpoolMaxBytes = 0
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 		defer cancel()
 		old := publicationFinalDecisionTestHook
 		t.Cleanup(func() { publicationFinalDecisionTestHook = old })
@@ -361,7 +361,7 @@ func TestIR3PreLUnknownDistinctFromPostLCleanup(t *testing.T) {
 		cfg.MaxConns = 1
 		cfg.AuditSpoolMaxBytes = 0
 		super := drOpenSuper(t, pg.Superuser)
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 		defer cancel()
 		var afterL, confirmed bool
 		var cleanupErr error
@@ -436,7 +436,7 @@ func TestIR3SchemaOnlyLossBeforeCompletionRefuses(t *testing.T) {
 	cfg.MaxConns = 1
 	cfg.AuditSpoolMaxBytes = 0
 	super := drOpenSuper(t, pg.Superuser)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	before := drRelationNames(t, super)
 	old := publicationFinalDecisionTestHook
@@ -480,7 +480,7 @@ func TestIR3LiveSessionDroppingTheExactKeyRefuses(t *testing.T) {
 	cfg.MaxConns = 1
 	cfg.AuditSpoolMaxBytes = 0
 	super := drOpenSuper(t, pg.Superuser)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	var other *drCoordination
@@ -553,7 +553,7 @@ func TestIR3UnrelatedAdvisoryKeyIsNotTheFence(t *testing.T) {
 	cfg := drPGConfig(pg)
 	cfg.MaxConns = 1
 	cfg.AuditSpoolMaxBytes = 0
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	var hookErr error
@@ -616,7 +616,9 @@ func TestIR3DirectoryMaintenanceAdmissionDecides(t *testing.T) {
 	// the admin pool branch to read the directory inventory at all.
 	cfg.AdminDSN = pg.Admin
 	super := drOpenSuper(t, pg.Superuser)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// The baseline Open and both maintenance runs below boot; each maintenance run
+	// opens the store and then runs ActivateDirectoryWriter.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 
 	s0, err := Open(ctx, cfg, nil)
@@ -701,13 +703,16 @@ func TestIR3RequireMutatingRefusesAfterLiveFenceLoss(t *testing.T) {
 
 // TestIR3FinalObservationHasItsOwnFiniteBound is the causal for the bound.
 //
-// The caller's budget is six times the observation's own, and the case asserts the
-// caller's context never expired — so the refusal can only have come from the bound
-// decide owns. The stall is a real one: a supervisor session holds ACCESS EXCLUSIVE
-// on the control relation, which is what the final verification must read, so the
-// last readiness observation blocks on the server exactly as a wedged destination
-// would make it block. Without the bound this boot would wait indefinitely WHILE
-// HOLDING the shared publication fence.
+// The caller's budget is the larger of six observation windows and the boot
+// budget, and the case asserts the caller's context never expired — so the
+// refusal can only have come from the bound decide owns. That bound is asserted
+// on its own scale: elapsed is measured from the stall, after the boot reached
+// the final decision, so the boot budget widens the caller's context but never
+// the limit on elapsed. The stall is a real one: a supervisor session holds
+// ACCESS EXCLUSIVE on the control relation, which is what the final verification
+// must read, so the last readiness observation blocks on the server exactly as a
+// wedged destination would make it block. Without the bound this boot would wait
+// indefinitely WHILE HOLDING the shared publication fence.
 func TestIR3FinalObservationHasItsOwnFiniteBound(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
@@ -716,7 +721,7 @@ func TestIR3FinalObservationHasItsOwnFiniteBound(t *testing.T) {
 	super := drOpenSuper(t, pg.Superuser)
 
 	// POSITIVE CONTROL: with nothing stalling the final read, this fixture publishes.
-	cctx, ccancel := context.WithTimeout(context.Background(), 90*time.Second)
+	cctx, ccancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer ccancel()
 	observed := drObservationFor(t, keyset)
 	control, err := drOpenUnderBootAdmission(cctx, t, cfg, observed)
@@ -727,7 +732,7 @@ func TestIR3FinalObservationHasItsOwnFiniteBound(t *testing.T) {
 		t.Fatalf("close the control store: %v", err)
 	}
 
-	callerBudget := 6 * drCoordinationTimeout
+	callerBudget := max(6*drCoordinationTimeout, postgresBootBudget)
 	ctx, cancel := context.WithTimeout(context.Background(), callerBudget)
 	defer cancel()
 	blocker, err := super.BeginTx(ctx, nil)
@@ -771,8 +776,8 @@ func TestIR3FinalObservationHasItsOwnFiniteBound(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Fatalf("the caller's context expired, so this proves nothing about the observation's own bound: %v", ctx.Err())
 	}
-	if elapsed >= callerBudget/2 {
-		t.Fatalf("the final observation was not bounded by its own budget: %s elapsed against a caller budget of %s", elapsed, callerBudget)
+	if elapsed >= 3*drCoordinationTimeout {
+		t.Fatalf("the final observation was not bounded by its own budget: %s elapsed against an observation bound of %s", elapsed, drCoordinationTimeout)
 	}
 	if elapsed < drCoordinationTimeout/2 {
 		t.Fatalf("the refusal came back in %s, too early to have been the stalled observation; it is not the behaviour under test", elapsed)
@@ -820,7 +825,7 @@ func TestIR3ReleaseUncertaintyIsDiagnosed(t *testing.T) {
 		cfg.AuditSpoolMaxBytes = 0
 		super := drOpenSuper(t, pg.Superuser)
 		password := ir3DSNPassword(t, cfg.DSN)
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 		defer cancel()
 		old := publicationFinalDecisionTestHook
 		t.Cleanup(func() { publicationFinalDecisionTestHook = old })
@@ -859,7 +864,7 @@ func TestIR3ReleaseUncertaintyIsDiagnosed(t *testing.T) {
 		cfg.AuditSpoolMaxBytes = 0
 		super := drOpenSuper(t, pg.Superuser)
 		password := ir3DSNPassword(t, cfg.DSN)
-		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 		defer cancel()
 		old := publicationAfterLinearizationTestHook
 		t.Cleanup(func() { publicationAfterLinearizationTestHook = old })

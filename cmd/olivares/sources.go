@@ -31,7 +31,6 @@ import (
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	claudeappsgateway "github.com/olivaresai/olivares/connectors/claude-apps-gateway"
 	claudebatch "github.com/olivaresai/olivares/connectors/claude-batch"
-	claudecompliance "github.com/olivaresai/olivares/connectors/claude-compliance"
 	claudeconfig "github.com/olivaresai/olivares/connectors/claude-config"
 	claudemanagedagents "github.com/olivaresai/olivares/connectors/claude-managed-agents"
 	claudeprojects "github.com/olivaresai/olivares/connectors/claude-projects"
@@ -80,7 +79,6 @@ import (
 	inferencegateway "github.com/olivaresai/olivares/connectors/inference-gateway"
 	istiotelemetry "github.com/olivaresai/olivares/connectors/istio-telemetry"
 	"github.com/olivaresai/olivares/connectors/kerberos"
-	"github.com/olivaresai/olivares/connectors/kmip"
 	kongagw "github.com/olivaresai/olivares/connectors/kong-agent-gateway"
 	kongaudit "github.com/olivaresai/olivares/connectors/kong-audit"
 	"github.com/olivaresai/olivares/connectors/litellm"
@@ -102,7 +100,6 @@ import (
 	"github.com/olivaresai/olivares/connectors/openidfed"
 	"github.com/olivaresai/olivares/connectors/openlineage"
 	"github.com/olivaresai/olivares/connectors/openrouter"
-	oracleaudit "github.com/olivaresai/olivares/connectors/oracle-audit"
 	"github.com/olivaresai/olivares/connectors/paperclip"
 	"github.com/olivaresai/olivares/connectors/pgaudit"
 	"github.com/olivaresai/olivares/connectors/pgcontent"
@@ -110,10 +107,6 @@ import (
 	runtimesource "github.com/olivaresai/olivares/connectors/runtime"
 	"github.com/olivaresai/olivares/connectors/s3cloudtrail"
 	"github.com/olivaresai/olivares/connectors/s3content"
-	"github.com/olivaresai/olivares/connectors/salesforce"
-	"github.com/olivaresai/olivares/connectors/sapodata"
-	"github.com/olivaresai/olivares/connectors/servicenow"
-	"github.com/olivaresai/olivares/connectors/sharepoint"
 	snowflakecontent "github.com/olivaresai/olivares/connectors/snowflake"
 	snowflakeaudit "github.com/olivaresai/olivares/connectors/snowflake-audit"
 	"github.com/olivaresai/olivares/connectors/sops"
@@ -137,8 +130,8 @@ import (
 // It is also the kind→connector registry for the R/RW access-map DIFFERENTIAL
 // connectors: pgaudit/s3cloudtrail/ebpf/runtime/mcp are wired
 // here as in-process observation sources (buildInProcSource), and the knowledge
-// document sources (gdrive/confluence/notion/sharepoint/s3content/sap_odata/
-// salesforce/snowflake/azure_ai_search) — which are contentsource.Source, not
+// document sources (gdrive/confluence/notion/s3content/snowflake/azure_ai_search;
+// sharepoint/sap_odata/salesforce are Business) — which are contentsource.Source, not
 // sdk.SourceConnector — are resolved by knowledgeContentOptions for the knowledge
 // module (VIII) to drive, from the SAME operator config.
 //
@@ -169,7 +162,7 @@ type sourcesConfig struct {
 	// (the NHI roster), and which may additionally stream permitted-access edges.
 	Identity []identitySpec `json:"identity"`
 	// Documents are knowledge document-source connectors (gdrive/confluence/notion/
-	// sharepoint/s3content/sap_odata/salesforce/snowflake/azure_ai_search). They
+	// s3content/snowflake/azure_ai_search; sharepoint/sap_odata/salesforce are Business). They
 	// are NOT observation sources: they emit no bus
 	// observation and produce no R/RW edge — the knowledge module (VIII) PULLS them
 	// (List/Fetch) on an ingest request — so they are wired into that module at
@@ -239,8 +232,8 @@ type identitySpec struct {
 
 // documentSpec provisions one knowledge document source. Name is the source name an
 // operator references in POST /v1/m/knowledge/kbs/{id}/ingest {"source":"<name>"};
-// Kind selects a first-party connector (gdrive/confluence/notion/sharepoint/
-// s3content/sap_odata/salesforce/snowflake/azure_ai_search). Plugin provisions an
+// Kind selects a first-party connector (gdrive/confluence/notion/s3content/
+// snowflake/azure_ai_search; sharepoint/sap_odata/salesforce are Business). Plugin provisions an
 // EXTERNAL (third-party) content-source plugin binary instead, using the same
 // trust/admission shape as sourceSpec.Plugin. Config carries connector settings —
 // an export path and/or a secret-store credential REFERENCE
@@ -338,7 +331,6 @@ var inProcSourceFactories = map[string]func() sdk.SourceConnector{
 	"claude-api":            func() sdk.SourceConnector { return claudeapi.New() },
 	"claude-apps-gateway":   func() sdk.SourceConnector { return claudeappsgateway.New() },
 	"claude-batch":          func() sdk.SourceConnector { return claudebatch.New() },
-	"claude-compliance":     func() sdk.SourceConnector { return claudecompliance.New() },
 	"claude-config":         func() sdk.SourceConnector { return claudeconfig.New() },
 	"claude-managed-agents": func() sdk.SourceConnector { return claudemanagedagents.New() },
 	"claude-projects":       func() sdk.SourceConnector { return claudeprojects.New() },
@@ -382,7 +374,6 @@ var inProcSourceFactories = map[string]func() sdk.SourceConnector{
 	"inference-gateway":     func() sdk.SourceConnector { return inferencegateway.New() },
 	"istio-telemetry":       func() sdk.SourceConnector { return istiotelemetry.New() },
 	"kerberos":              func() sdk.SourceConnector { return kerberos.New() },
-	"kmip":                  func() sdk.SourceConnector { return kmip.New() },
 	"kong-agent-gateway":    func() sdk.SourceConnector { return kongagw.New() },
 	"kong-audit":            func() sdk.SourceConnector { return kongaudit.New() },
 	"litellm":               func() sdk.SourceConnector { return litellm.New() },
@@ -403,13 +394,11 @@ var inProcSourceFactories = map[string]func() sdk.SourceConnector{
 	"openidfed":             func() sdk.SourceConnector { return openidfed.New() },
 	"openlineage":           func() sdk.SourceConnector { return openlineage.New() },
 	"openrouter":            func() sdk.SourceConnector { return openrouter.New() },
-	"oracle-audit":          func() sdk.SourceConnector { return oracleaudit.New() },
 	"paperclip":             func() sdk.SourceConnector { return paperclip.New() },
 	"pgaudit":               func() sdk.SourceConnector { return pgaudit.New() },
 	"redshift-audit":        func() sdk.SourceConnector { return redshiftaudit.New() },
 	"runtime":               func() sdk.SourceConnector { return runtimesource.New() },
 	"s3cloudtrail":          func() sdk.SourceConnector { return s3cloudtrail.New() },
-	"servicenow-cmdb":       func() sdk.SourceConnector { return servicenow.NewCMDBSource() },
 	"snowflake-audit":       func() sdk.SourceConnector { return snowflakeaudit.New() },
 	"sops":                  func() sdk.SourceConnector { return sops.New() },
 	"ssf":                   func() sdk.SourceConnector { return ssf.New() },
@@ -485,8 +474,7 @@ func rosterSettings(kind string, settings map[string]string) map[string]string {
 }
 
 // buildContentSource constructs a knowledge DOCUMENT source by kind: the
-// gdrive/confluence/notion/sharepoint/s3content/sap_odata/salesforce/snowflake/
-// azure_ai_search connectors. Unlike buildInProcSource these implement
+// gdrive/confluence/notion/s3content/snowflake/azure_ai_search connectors. Unlike buildInProcSource these implement
 // contentsource.Source, NOT sdk.SourceConnector — they emit no bus observation and
 // produce no R/RW edge. The knowledge module (VIII) drives their List/Fetch on an
 // ingest request (knowledge.WithSource), so they are NEVER registered with the
@@ -494,6 +482,8 @@ func rosterSettings(kind string, settings map[string]string) map[string]string {
 // Each is read-only and minimal-data (it carries ACL/provenance, and the module —
 // not the connector — redacts the body before persisting). ok=false for an unknown
 // kind so the caller WARNS rather than silently dropping a configured source.
+// sharepoint, sap_odata and salesforce are Business: only the Business edition's
+// contentSource port builds them (sources_business.go names them in Community).
 func buildContentSource(kind string, richDoc contentsource.RichDocExtractor) (contentsource.Source, bool) {
 	switch kind {
 	case "gdrive":
@@ -502,14 +492,8 @@ func buildContentSource(kind string, richDoc contentsource.RichDocExtractor) (co
 		return confluence.New(), true
 	case "notion":
 		return notion.New(), true
-	case "sharepoint":
-		return sharepoint.New(), true
 	case "s3content":
 		return s3content.New(), true
-	case "sap_odata":
-		return sapodata.New(), true
-	case "salesforce":
-		return salesforce.New(), true
 	case "snowflake":
 		return snowflakecontent.New(), true
 	case "azure_ai_search":
@@ -534,7 +518,10 @@ func buildContentSource(kind string, richDoc contentsource.RichDocExtractor) (co
 		// text-only walk — rich documents are then a counted skip, never a failure.
 		return fscontent.New(fscontent.WithExtractor(richDoc)), true
 	default:
-		return nil, false
+		if thisEdition.contentSource == nil {
+			return nil, false
+		}
+		return thisEdition.contentSource(kind)
 	}
 }
 
@@ -655,7 +642,7 @@ func knowledgeContentSources(cfg sourcesConfig, log *slog.Logger) []pendingConte
 		}
 		src, ok := buildContentSource(d.Kind, richDoc)
 		if !ok {
-			log.Warn("knowledge: unknown or unsupported document source kind; not wired", "name", name, "kind", d.Kind)
+			log.Warn("knowledge: unknown or unsupported document source kind; not wired", "name", name, "kind", d.Kind, "reason", unsupportedSourceKindReason(d.Kind))
 			continue
 		}
 		src = wrapContentSourceMode(src, d.Config["mode"])
@@ -756,7 +743,7 @@ func wireSources(ctx context.Context, rt *runtime.Runtime, cfg sourcesConfig, em
 		}
 		conn, ok := buildInProcSource(s.Kind)
 		if !ok {
-			log.Warn("ingest: unknown or unsupported source kind; not wired", "name", s.Name, "kind", s.Kind)
+			log.Warn("ingest: unknown or unsupported source kind; not wired", "name", s.Name, "kind", s.Kind, "reason", unsupportedSourceKindReason(s.Kind))
 			continue
 		}
 		// resolve references and enforce the strict no-inline-secret rule on

@@ -33,7 +33,7 @@ var pdeclSkillsSelection = func() *model.ColumnDecl {
 	text := model.Scan(model.ClassThirdPartyText)
 	return model.Nested(skills.Selection{}, model.ClassEvidence,
 		model.Leaf("digest", none), model.Leaf("members[].pack_id", none), model.Leaf("members[].pack_revision_id", none), model.Leaf("members[].manifest_digest", none),
-		model.Leaf("members[].name", text), model.Leaf("members[].directory", text), model.Leaf("members[].skill_digest", none), model.Leaf("members[].content_digest", none),
+		model.Leaf("members[].kind", none), model.Leaf("members[].name", text), model.Leaf("members[].directory", text), model.Leaf("members[].skill_digest", none), model.Leaf("members[].content_digest", none),
 		model.Leaf("members[].origins[].target_kind", none), model.Leaf("members[].origins[].target_id", none), model.Leaf("members[].origins[].assignment_id", none),
 		model.Leaf("members[].overrides[].target_kind", none), model.Leaf("members[].overrides[].target_id", none), model.Leaf("members[].overrides[].pack_id", none), model.Leaf("members[].overrides[].pack_revision_id", none))
 }()
@@ -145,6 +145,13 @@ func (m *Module) runSkillsTargets(ctx context.Context, sc store.Scope, rec model
 		}
 		out = append(out, skills.StoredTarget{Target: skills.Target{Kind: "workspace", ID: workspaceID.String()}, Version: workspace.Version, WorkspaceID: workspaceID})
 	}
+	if profile := rec.String(colRunProfileID); profile != "" {
+		stored, err := m.ReadSkillsTarget(ctx, sc, "profile", profile, false)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, skills.StoredTarget{Target: skills.Target{Kind: "profile", ID: profile}, Version: stored.Version})
+	}
 	if folder := rec.String(colWorkspaceRef); folder != "" {
 		stored, err := m.ReadSkillsTarget(ctx, sc, "folder", folder, false)
 		if err != nil {
@@ -231,6 +238,21 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		return err
 	}
 	driver := rec.String(colRunProfileDriver)
+	if driver == providerDriverClaude {
+		// Skills and commands share Claude's slash namespace; agents do not.
+		// Refuse an ambiguous native alias instead of letting the tool hide one.
+		slashNames := map[string]string{}
+		for _, member := range selection.Members {
+			if member.Kind != "" && member.Kind != "command" {
+				continue
+			}
+			name := strings.TrimPrefix(member.Name, "command:")
+			if kind, exists := slashNames[name]; exists && kind != member.Kind {
+				return &runErr{503, fmt.Sprintf("assigned skill and command use the same Claude Code slash name %q", name)}
+			}
+			slashNames[name] = member.Kind
+		}
+	}
 	facts, known := driverfacts.Lookup(driver)
 	if !known || facts.SkillsDir == "" {
 		name := facts.Name
@@ -251,6 +273,27 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 	}
 	if len(files) == 0 {
 		return errors.New("assigned skills have no verified files")
+	}
+	hasRules := false
+	for _, file := range files {
+		switch file.Kind {
+		case "": // portable skills keep their documented driver-specific folder
+		case "agent", "command", "rule":
+			if driver != providerDriverClaude {
+				return &runErr{503, fmt.Sprintf("assigned %s content cannot be delivered to %q: no documented native delivery", file.Kind, facts.Name)}
+			}
+			if file.Kind == "rule" {
+				if file.Imports {
+					return &runErr{503, "assigned rules with file imports cannot be delivered to Claude Code in a governed session; copy the referenced instructions into the rule"}
+				}
+				if file.Scoped {
+					return &runErr{503, "assigned path-scoped rules cannot be delivered to Claude Code in a governed session"}
+				}
+				hasRules = true
+			}
+		default:
+			return errors.New("invalid verified instruction kind")
+		}
 	}
 	root, err := validateSessionWorkspaceRoot(m.rt.sessionSkillHomesRoot, m.dirOwnerCheck())
 	if err != nil {
@@ -308,7 +351,12 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 		if !fs.ValidPath(file.Path) || strings.Contains(file.Path, "\\") || file.Mode&0222 != 0 {
 			return errors.New("invalid verified skill file")
 		}
-		name := filepath.Join(destination, filepath.FromSlash(file.Path))
+		base := destination
+		if file.Kind != "" {
+			folder := map[string]string{"agent": "agents", "command": "commands", "rule": "rules"}[file.Kind]
+			base = filepath.Join(native, folder)
+		}
+		name := filepath.Join(base, filepath.FromSlash(file.Path))
 		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
 			return err
 		}
@@ -331,6 +379,14 @@ func (m *Module) prepareSessionSkills(ctx, runCtx context.Context, tenant model.
 			return err
 		}
 		spec.Args = append(spec.Args, "--plugin-dir", native)
+		if hasRules {
+			// Rules have no plugin slot. Claude's explicit additional-directory
+			// memory discovery reads this private HOME's .claude/rules, without
+			// enabling mutable project settings or changing the account config.
+			// https://code.claude.com/docs/en/memory#load-from-additional-directories
+			spec.Args = append(spec.Args, "--add-dir", home)
+			spec.Env = append(spec.Env, EnvVar{Name: "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD", Value: "1"})
+		}
 	}
 	for i := range spec.Env {
 		if spec.Env[i].Name == envUserHome || driver == providerDriverGemini && spec.Env[i].Name == facts.ConfigHomeEnv {

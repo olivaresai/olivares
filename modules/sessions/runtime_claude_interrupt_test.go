@@ -15,7 +15,7 @@ import (
 // claudeProtocolStub answers the first interrupt control request it sees on the
 // fake child's stdin the way Claude Code does, with answer (or not at all when
 // answer is ""). It returns the request it saw.
-func claudeProtocolStub(t *testing.T, p *fakeProc, answer string) <-chan map[string]any {
+func claudeProtocolStub(t *testing.T, p *fakeProc, answer string, beforeAnswer ...func()) <-chan map[string]any {
 	t.Helper()
 	seen := make(chan map[string]any, 1)
 	go func() {
@@ -30,6 +30,9 @@ func claudeProtocolStub(t *testing.T, p *fakeProc, answer string) <-chan map[str
 					continue
 				}
 				seen <- req
+				for _, hook := range beforeAnswer {
+					hook()
+				}
 				if answer != "" {
 					id, _ := req["request_id"].(string)
 					resp := map[string]any{"subtype": answer, "request_id": id}
@@ -74,8 +77,8 @@ func TestClaudeInterrupt_ControlRequestStopsTheTurnNotTheSession(t *testing.T) {
 	if id, _ := req["request_id"].(string); id == "" {
 		t.Fatalf("control request carries no request_id: %v", req)
 	}
-	if got.State != stateRunning {
-		t.Fatalf("after interrupt the session is %q, want running", got.State)
+	if got.State != stateIdle || got.ProcessState != stateRunning {
+		t.Fatalf("after interrupt the session is %q, want idle with a running process", got.State)
 	}
 	p.mu.Lock()
 	done := p.done

@@ -421,7 +421,7 @@ describe('RunCreateDialog — selected-profile launch readiness', () => {
       await screen.findByText('Local requirements checked'),
     ).toBeInTheDocument()
     expect(start()).toHaveAccessibleDescription(
-      'Starting a session needs the sessions:run:write permission.',
+      'Your role cannot start sessions.',
     )
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()

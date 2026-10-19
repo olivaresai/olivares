@@ -281,7 +281,7 @@ describe('the response controls exist only for a CURRENT offer', () => {
     api.getHandoffDetail.mockResolvedValue(handoffDetailOf())
     mount({ canRespond: false })
     expect(
-      await screen.findByText(/requires sessions:handoff-response:write/i),
+      await screen.findByText(/Your role cannot respond to handoffs/i),
     ).toBeVisible()
     expect(
       screen.getByRole('button', { name: 'Accept responsibility' }),

@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/stores/session'
+import {
+  readSessionDraft,
+  sessionDraftKey,
+  writeSessionDraft,
+} from '@/lib/session-drafts'
 import { restoreBrowserSession, restoreOnPageLoad } from './browser-session'
 
 const fetcher = vi.fn()
@@ -12,10 +17,30 @@ const metadata = {
 }
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
   useSessionStore.getState().clear()
   useSessionStore.setState({ ready: false })
   fetcher.mockReset()
   vi.stubGlobal('fetch', fetcher)
+})
+
+it('an expired-cookie reload retains the same principal draft through reauthentication', async () => {
+  const key = sessionDraftKey(
+    'tenant',
+    { kind: 'user', actor: 'user:alice', user_id: 'alice' },
+    'run',
+  )
+  writeSessionDraft(key, 'Keep my unsent message')
+  fetcher.mockResolvedValue(new Response(null, { status: 401 }))
+  await restoreOnPageLoad(async () => ({ setup_required: false }))
+  expect(useSessionStore.getState().sessionId).toBeNull()
+  expect(readSessionDraft(key)).toBe('Keep my unsent message')
+  useSessionStore.getState().setSession({
+    csrfToken: metadata.csrf_token,
+    sessionId: metadata.session_id,
+    expiresAt: metadata.expires_at,
+  })
+  expect(readSessionDraft(key)).toBe('Keep my unsent message')
 })
 
 it('restores an HttpOnly session on reload without readable browser credentials', async () => {

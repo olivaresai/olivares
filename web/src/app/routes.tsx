@@ -18,8 +18,13 @@ import { AcceptInvitePage } from './pages/accept-invite'
 import { LoginPage } from './pages/login'
 import { NotFoundPage } from './pages/not-found'
 import { RouteErrorPage } from './pages/route-error'
-import { SettingsPage } from './pages/settings'
 import { SetupPage } from './pages/setup'
+
+// Settings embeds the console's license panel, and that graph (with its locale
+// bundles) must not load on first paint: code-split it like the feature views.
+const SettingsPage = lazy(() =>
+  import('./pages/settings').then((m) => ({ default: m.SettingsPage })),
+)
 
 const AppLayout = lazyRouteComponent(
   () => import('@/components/layout/app-layout'),
@@ -117,7 +122,11 @@ const appRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
-  component: SettingsPage,
+  component: () => (
+    <Suspense fallback={<ViewLoading />}>
+      <SettingsPage />
+    </Suspense>
+  ),
 })
 
 /**

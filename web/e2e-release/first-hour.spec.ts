@@ -14,6 +14,7 @@ import {
   openToolInstall,
   READY_MS,
   RELEASE_VERSION,
+  recordSlowLoads,
   SLOW_MS,
   surfaceOptions,
   watchSurface,
@@ -57,9 +58,9 @@ const TOOLS = [
   },
 ] as const
 // Every planned stage: setup, then provider, install and session per tool, then
-// seven settings sections and four pages. A run that stops early never passes.
+// seven settings sections and three pages. A run that stops early never passes.
 const JOURNEY_STAGES = 1 + 3 * TOOLS.length
-const ALL_STAGES = JOURNEY_STAGES + 7 + 4
+const ALL_STAGES = JOURNEY_STAGES + 7 + 3
 
 test('release container: a fresh administrator reaches a first answer and the console pages', async ({
   page,
@@ -93,11 +94,9 @@ test('release container: a fresh administrator reaches a first answer and the co
     secrets.reduce((out, secret) => out.replaceAll(secret, '<redacted>'), text)
   const record = (message: string) => failures.add(redact(message))
   await page.exposeFunction('__firstHourFinding', record)
-  // Loads past the console's 5 s target: evidence, not a failure (#1177).
-  const slow: string[] = []
-  await page.exposeFunction('__firstHourSlow', (message: string) => {
-    slow.push(message)
-  })
+  // Loads past the console's 5 s target: evidence, not a failure (#1177), each with the
+  // requests the page made while it waited, so a slow load names what it waited on (#2608).
+  const slowLoads = await recordSlowLoads(page, redact)
   await page.addInitScript(watchSurface, surfaceOptions(version!))
   page.on('console', (message) => {
     if (message.type() === 'error')
@@ -373,7 +372,6 @@ test('release container: a fresh administrator reaches a first answer and the co
         ).toHaveCount(0)
       })
     }
-    await stage('06-deploy', () => visit('/deploy'))
     await stage('07-workspaces', async () => {
       await visit('/sessions')
       await page.getByTestId('sessions-list-menu').click()
@@ -399,9 +397,16 @@ test('release container: a fresh administrator reaches a first answer and the co
     }
   } finally {
     for (const failure of failures) console.log(`FAIL ${failure}`)
-    for (const load of slow) console.log(`SLOW ${load}`)
+    for (const { load, requests, omitted } of slowLoads) {
+      console.log(`SLOW ${load}`)
+      for (const request of requests)
+        console.log(
+          `SLOW   ${request.method} ${request.path} (${request.type}) ${request.status ?? request.error ?? 'no response'}${request.pending ? ' (still open)' : ''} from ${request.startedAt} for ${request.ms} ms${request.requestId ? ` request_id=${request.requestId}` : ''}`,
+        )
+      if (omitted) console.log(`SLOW   and ${omitted} more requests`)
+    }
     console.log(
-      `SLOW loads over the console's ${SLOW_MS / 1000} s target: ${slow.length}`,
+      `SLOW loads over the console's ${SLOW_MS / 1000} s target: ${slowLoads.length}`,
     )
     console.log(
       `O1 J1-release-container: ${journeyFailures.size === 0 && completed.filter((name) => /^0[1-4]-/.test(name)).length === JOURNEY_STAGES ? 'PASS' : 'FAIL'}`,
@@ -414,7 +419,13 @@ test('release container: a fresh administrator reaches a first answer and the co
     writeFileSync(
       failureList,
       JSON.stringify(
-        { release: version, completed, failures: [...failures], slow },
+        {
+          release: version,
+          completed,
+          failures: [...failures],
+          slow: slowLoads.map(({ load }) => load),
+          slowDetail: slowLoads,
+        },
         null,
         2,
       ),

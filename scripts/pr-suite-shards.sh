@@ -23,7 +23,10 @@
 #                           job-ceiling-minutes
 #   run [shard]             `go test` over that shard's packages, then its name groups,
 #                           then its legs. The shard may come from OLIVARES_TEST_SHARD
-#                           instead of the argument.
+#                           instead of the argument. Every `go test` is given the declared
+#                           go-timeout-minutes, times OLIVARES_SHARD_CLOCK_FACTOR (a positive
+#                           whole number, default 1: only the scheduled batteries set it), or
+#                           what is left of the step ceiling times the factor, whichever is less.
 #
 # A NAME GROUP splits ONE package across shards by test NAME, for the case no package-level
 # split reaches: a single package longer than the job that carries it. A named group is a
@@ -44,6 +47,11 @@
 # battery, which must be able to build a tree with a package in two shards, or a test in
 # none, without creating either. `run` PRINTS which universe it used: an override that
 # stayed quiet is an override nobody notices.
+#
+# `partition <package>` prints the shards that split one package by name, in declaration
+# order, so a caller builds a matrix from this file instead of typing the shard names a
+# second time. OLIVARES_SHARD_JSON=1 makes `run` pass -json to every `go test` and send its
+# own progress to stderr, so its stdout is exactly the event stream a scheduled report reads.
 set -uo pipefail
 
 ROOT="${OLIVARES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -62,6 +70,15 @@ RUN_EXPR_LIMIT=100000
 GOLIST_ERR=""
 fail()   { printf 'pr-suite-shards: FAIL — %s\n' "$*" >&2; exit 1; }
 cannot() { printf 'pr-suite-shards: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
+# In JSON mode the caller's stdout is the report's event stream, so progress goes to stderr:
+# one prose line there is one artifact error in scripts/main-suite-report.py.
+say() {
+  if [ "${OLIVARES_SHARD_JSON:-0}" = 1 ]; then
+    printf '%s\n' "$*" >&2
+  else
+    printf '%s\n' "$*"
+  fi
+}
 
 [ -r "$SPEC" ] || cannot "cannot read $SPEC"
 command -v python3 >/dev/null 2>&1 || cannot "python3 is not on PATH"
@@ -77,7 +94,7 @@ universe() {
   fi
   [ -f go.work ] || cannot "go.work is not at $ROOT and no package file was given"
   command -v go >/dev/null 2>&1 || cannot "no Go toolchain: the packages cannot be enumerated"
-  local m mods raw
+  local m mods raw rc=0
   mods="$(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\1/p')" ||
     cannot "go work edit could not say which modules this workspace has"
   [ -n "$mods" ] || cannot "go.work names no module: there is no universe to enumerate"
@@ -92,8 +109,13 @@ universe() {
     ( cd "$m" && go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./... ) >> "$raw" ||
       { rm -f "$raw"; cannot "go list failed in $m: the universe cannot be finished, so none of it can be certified"; }
   done <<< "$mods"
-  grep -v '^[[:space:]]*$' "$raw" | LC_ALL=C sort -u
+  # ⛔ THE WRITE IS NOT THE LAST COMMAND. `rm` used to return 0 and swallow a failed sort:
+  # some packages reached the caller, the shard ran them and said success. rc 1 is grep's
+  # "no lines", which the empty check below reports as its own refusal.
+  grep -v '^[[:space:]]*$' "$raw" | LC_ALL=C sort -u || rc=$?
   rm -f "$raw"
+  [ "$rc" -le 1 ] ||
+    cannot "writing the universe failed (the pipeline exited $rc): a partial universe cannot be certified"
 }
 
 universe_source() {
@@ -141,10 +163,11 @@ golist_reason() {
 }
 
 package_tests() {
-  local pkg="$1" dir files out cannots bads
+  local pkg="$1" dir files out cannots bads grc
   if [ -n "$SPEC_TESTS" ]; then
     [ -r "$SPEC_TESTS" ] || cannot "OLIVARES_PR_SUITE_TESTS=$SPEC_TESTS is not readable"
-    awk -v p="$pkg" '$1 == p && $2 != "TestMain" { print $2 }' "$SPEC_TESTS" | LC_ALL=C sort -u
+    awk -v p="$pkg" '$1 == p && $2 != "TestMain" { print $2 }' "$SPEC_TESTS" | LC_ALL=C sort -u ||
+      cannot "cannot read OLIVARES_PR_SUITE_TESTS=$SPEC_TESTS for $pkg"
     return 0
   fi
   command -v go >/dev/null 2>&1 ||
@@ -161,7 +184,16 @@ package_tests() {
 {{end}}{{range .XTestGoFiles}}{{.}}
 {{end}}' "$pkg" 2>"$GOLIST_ERR")" ||
     cannot "go list could not read the test files of $pkg$(golist_reason)"
-  files="$(printf '%s\n' "$files" | grep -v '^[[:space:]]*$')" || files=""
+  # grep says 1 for "every line was blank" and 2 or more for "could not look". The second
+  # used to be folded into the first and then into `return 0`: a failed read was reported
+  # as a package with no tests.
+  grc=0
+  files="$(printf '%s\n' "$files" | grep -v '^[[:space:]]*$')" || grc=$?
+  case "$grc" in
+    0) ;;
+    1) files="" ;;
+    *) cannot "cannot filter the test files of $pkg: grep exited $grc, so a failed read would call the package testless" ;;
+  esac
   [ -n "$files" ] || return 0
 
   out="$(PKG_DIR="$dir" PKG_FILES="$files" python3 - <<'PY'
@@ -207,9 +239,11 @@ for nm in sorted(names):
 PY
   )" || cannot "the test enumerator failed to run over $pkg"
 
-  cannots="$(printf '%s\n' "$out" | sed -n 's/^CANNOT //p')"
+  cannots="$(printf '%s\n' "$out" | sed -n 's/^CANNOT //p')" ||
+    cannot "cannot inspect the test enumeration of $pkg: a failed read would call an unreadable file clean"
   [ -z "$cannots" ] || cannot "$(printf '%s\n' "$cannots" | head -1)"
-  bads="$(printf '%s\n' "$out" | sed -n 's/^BAD //p')"
+  bads="$(printf '%s\n' "$out" | sed -n 's/^BAD //p')" ||
+    cannot "cannot inspect the test enumeration of $pkg for refused names: a failed read would call a refused name absent"
   if [ -n "$bads" ]; then
     printf 'pr-suite-shards: FAIL — %s declares a test this reader will not guess at:\n' "$pkg" >&2
     printf '%s\n' "$bads" | sed 's/^/  · /' >&2
@@ -251,7 +285,11 @@ with open(path, encoding="utf-8") as fh:
         f = line.split()
         kind = f[0]
         if kind == "shard" and len(f) == 2:
-            if f[1] in shards:
+            # A name is not just a label: it becomes a job matrix value, an artifact path
+            # and a sed pattern. A slash or a sed command would leave the file's meaning.
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", f[1]):
+                bad.append(f"line {n}: shard name {f[1]!r} is not a plain name: it reaches a job matrix, an artifact path and a sed program")
+            elif f[1] in shards:
                 bad.append(f"line {n}: shard {f[1]!r} is declared twice")
             else:
                 shards.append(f[1])
@@ -318,7 +356,9 @@ PY
 }
 
 RECORDS="$(spec_records)" || cannot "the spec reader failed to run"
-BADS="$(printf '%s\n' "$RECORDS" | sed -n 's/^BAD //p')"
+# The findings are themselves a read: if it fails, an empty list would call a bad spec clean.
+BADS="$(printf '%s\n' "$RECORDS" | sed -n 's/^BAD //p')" ||
+  cannot "cannot inspect the spec records for findings, so a bad record would read as a clean spec"
 if [ -n "$BADS" ]; then
   printf 'pr-suite-shards: FAIL — %s cannot be read as a partition:\n' "$SPEC" >&2
   printf '%s\n' "$BADS" | sed 's/^/  · /' >&2
@@ -345,8 +385,10 @@ group_families() {
     }'
 }
 known_shard() {
-  local s
-  while IFS= read -r s; do [ "$s" = "$1" ] && return 0; done < <(shard_names)
+  local s names
+  names="$(shard_names)" ||
+    cannot "cannot read the shard names from $SPEC, so the shard '$1' cannot be checked"
+  while IFS= read -r s; do [ "$s" = "$1" ] && return 0; done <<< "$names"
   return 1
 }
 
@@ -424,8 +466,9 @@ PY
 # element, a selected test runs with every subtest it has, which is the behaviour the whole
 # suite has today.
 run_expression() {
-  local pkg="$1" g="$2" fams tests
-  fams="$(group_families "$pkg" "$g")"
+  local pkg="$1" g="$2" fams tests named
+  fams="$(group_families "$pkg" "$g")" ||
+    cannot "cannot read the families of group $g of $pkg, so its -run expression cannot be built"
   [ -n "$fams" ] || fail "the package $pkg declares no group called $g"
   if [ "$fams" != "*" ]; then
     printf '%s' "$fams" | python3 -c '
@@ -436,7 +479,11 @@ print("^Test(" + "|".join(fams) + ")")
     return
   fi
   tests="$(package_tests "$pkg")" || exit $?
-  printf '%s\n' "$tests" | NAMED="$(named_of "$pkg")" python3 -c '
+  # The substitution used to sit in the environment assignment of the pipeline, where its status
+  # was thrown away: a failed family read left NAMED empty and every test looked unnamed.
+  named="$(named_of "$pkg")" ||
+    cannot "cannot read the named families of $pkg, so its remainder cannot be computed"
+  printf '%s\n' "$tests" | NAMED="$named" python3 -c '
 import os, sys
 named = [f.split() for f in os.environ["NAMED"].splitlines() if f.strip()]
 tests = sys.stdin.read().split()
@@ -488,6 +535,33 @@ case "${1:-}" in
     # and refuses on any difference. This subcommand is a convenience for a person reading
     # the partition; the gate is the guarantee.
     shard_names | python3 -c 'import json,sys;print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))'
+    ;;
+
+  partition)
+    # The shards that split ONE package by test name, in shard declaration order. The
+    # scheduled workflow derives its matrix from this instead of naming the groups a second
+    # time, and a package no group splits has no partition to derive: that is a refusal,
+    # not an empty matrix that would start no job and report success.
+    P="${2:-}"; [ -n "$P" ] || cannot "usage: $0 partition <package>"
+    ALL_SHARDS="$(shard_names)" || cannot "cannot read the shard names from $SPEC"
+    # A shard whose groups cannot be read is NOT a shard that does not split the package:
+    # omitting it would derive a smaller matrix that starts no job for its tests and still
+    # exits 0. Only an awk status of 1 (no match) is a legitimate no.
+    OWNERS="$(while IFS= read -r s; do
+      [ -n "$s" ] || continue
+      ROWS="$(shard_groups "$s")" ||
+        cannot "cannot read the name groups of shard $s, so its ownership of $P cannot be decided"
+      match=0
+      printf '%s\n' "$ROWS" | awk -v p="$P" '$1 == p { found = 1 } END { exit !found }' ||
+        match=$?
+      case "$match" in
+        0) printf '%s\n' "$s" ;;
+        1) ;;
+        *) cannot "counting the name groups of shard $s for $P failed (awk exited $match)" ;;
+      esac
+    done <<< "$ALL_SHARDS")" || exit $?
+    [ -n "$OWNERS" ] || fail "$P is split by no name group: there is no partition to derive"
+    printf '%s\n' "$OWNERS"
     ;;
 
   packages)
@@ -552,34 +626,87 @@ case "${1:-}" in
     S="${2:-${OLIVARES_TEST_SHARD:-}}"
     [ -n "$S" ] || cannot "no shard given: pass one as an argument or set OLIVARES_TEST_SHARD"
     known_shard "$S" || fail "unknown shard: $S (declared: $(shard_names | paste -sd, -))"
+    JSON_ARGS=()
+    case "${OLIVARES_SHARD_JSON:-0}" in
+      1) JSON_ARGS=(-json) ;;
+      0) ;;
+      *) cannot "OLIVARES_SHARD_JSON=${OLIVARES_SHARD_JSON} is not 0 or 1" ;;
+    esac
+    LEG_OUT=1
+    [ "${#JSON_ARGS[@]}" -eq 0 ] || LEG_OUT=2
     need_universe
     PKGS="$(assign "$S" "$UNIVERSE_FILE" | cut -f2)" || exit 1
     TO="$(printf '%s\n' "$RECORDS" | sed -n 's/^NUM go-timeout-minutes //p')"
-    mapfile -t LEGS < <(printf '%s\n' "$RECORDS" | sed -n "s/^LEG $S //p")
+    STEPC="$(printf '%s\n' "$RECORDS" | sed -n 's/^NUM step-ceiling-minutes //p')"
+    # ⛔ THE BATTERIES' CLOCKS ARE A MULTIPLE OF THE DECLARED ONES, NEVER A SECOND SET. The
+    # batteries run off the merge path (merge-gate-check), where a clock is a hang detector and
+    # not a speed gate, and the same shards swung 2x with host load (dev#2503). The workflow
+    # that wants more time sets this factor and a step ceiling that is the declared one times
+    # it; a pull request's own run sets nothing and keeps the declared clocks.
+    # 1 to 99: a longer number wraps the arithmetic below into a clock nobody declared. The spec
+    # reader accepts `045`, which bash would read as octal, so both numbers are read as decimal.
+    FACTOR="${OLIVARES_SHARD_CLOCK_FACTOR:-1}"
+    case "$FACTOR" in *[!0-9]*) FACTOR=0 ;; esac
+    [ "${#FACTOR}" -le 2 ] || FACTOR=0
+    FACTOR=$((10#$FACTOR))
+    [ "$FACTOR" -gt 0 ] ||
+      cannot "OLIVARES_SHARD_CLOCK_FACTOR=${OLIVARES_SHARD_CLOCK_FACTOR} is not a whole number from 1 to 99"
+    TO=$((10#$TO)); STEPC=$((10#$STEPC))
+    # ⛔ A go test IS GIVEN THE LESS OF ITS CLOCK AND WHAT THE STEP HAS LEFT. Go's timeout is the
+    # one that dumps the goroutines and names the test that hung; the step ceiling only cancels.
+    # A shard that runs its whole packages and then a name group gave the group a fresh clock, so
+    # 19 minutes of packages and 45 of group outlived the 55-minute step and the cut named
+    # nothing (root-a, 2026-10-17). The grace leaves the step its own start and the witness.
+    # A run far from the limit is given exactly the declared clock; one that would have finished
+    # inside the grace before the ceiling now panics at the grace line, with the test named.
+    #
+    # ponytail: Go starts `-timeout` per test BINARY, when that binary starts. This bounds the
+    # first binary of an invocation and every single-binary name group, which is where the cut
+    # was measured; a binary that starts late in an invocation of many packages still gets a
+    # whole clock. Upgrade trigger: a step cut with no panic on a shard of many packages.
+    STEP_GRACE_SECONDS=120
+    clock() {
+      local own=$((TO * FACTOR * 60)) left=$((STEPC * FACTOR * 60 - STEP_GRACE_SECONDS - SECONDS))
+      if [ "$left" -ge "$own" ]; then printf '%sm' $((TO * FACTOR)); return; fi
+      [ "$left" -ge 60 ] || left=60
+      printf '%ss' "$left"
+    }
+    # ⛔ A FAILED READ IS NOT AN EMPTY LIST. `mapfile < <(...)` discards the producer's exit
+    # status, so a shard that owns whole packages would silently skip its name group and
+    # still exit 0. Capture first, refuse on failure, and only then fill the arrays.
+    LEGS_TXT="$(printf '%s\n' "$RECORDS" | sed -n "s/^LEG $S //p")" ||
+      cannot "cannot read the legs of shard $S"
+    LEGS=()
+    [ -z "$LEGS_TXT" ] || mapfile -t LEGS <<< "$LEGS_TXT"
     # ⛔ NOT `GROUPS`. That name is a special variable of the shell — the caller's Unix group
     # ids — and bash IGNORES an assignment to it, so `mapfile -t GROUPS` left the group ids in
     # place and every shard ran its name groups over numbers instead of over its groups.
-    mapfile -t SHARD_GROUP_LIST < <(shard_groups "$S")
+    GROUPS_TXT="$(shard_groups "$S")" || cannot "cannot read the name groups of shard $S"
+    SHARD_GROUP_LIST=()
+    [ -z "$GROUPS_TXT" ] || mapfile -t SHARD_GROUP_LIST <<< "$GROUPS_TXT"
     rc=0
-    echo "pr-suite-shards: shard ${S} — universe from $(universe_source)"
+    say "pr-suite-shards: shard ${S} — universe from $(universe_source)"
+    [ "$FACTOR" -eq 1 ] ||
+      say "pr-suite-shards: shard ${S} — clock factor ${FACTOR}: every go test is given ${FACTOR} times the declared clock"
     [ "${#SHARD_GROUP_LIST[@]}" -eq 0 ] ||
-      echo "pr-suite-shards: shard ${S} — ${#SHARD_GROUP_LIST[@]} name group(s), tests from $(tests_source)"
+      say "pr-suite-shards: shard ${S} — ${#SHARD_GROUP_LIST[@]} name group(s), tests from $(tests_source)"
     if [ -z "$PKGS" ]; then
       # A shard with no packages is not a fast shard: it is a job that starts a database
       # to run nothing and reports success. It is only acceptable when the shard has legs
       # or name groups to run instead, and even then it says so out loud.
       { [ "${#LEGS[@]}" -gt 0 ] || [ "${#SHARD_GROUP_LIST[@]}" -gt 0 ]; } ||
         fail "shard ${S} owns no package in this tree and declares no group and no leg: it would exit 0 having run nothing"
-      echo "pr-suite-shards: shard ${S} owns no whole package in THIS tree"
+      say "pr-suite-shards: shard ${S} owns no whole package in THIS tree"
     else
       mapfile -t PKG_ARGS <<< "$PKGS"
-      echo "pr-suite-shards: shard ${S} — ${#PKG_ARGS[@]} package(s), go test -timeout ${TO}m"
+      CLOCK="$(clock)"
+      say "pr-suite-shards: shard ${S} — ${#PKG_ARGS[@]} package(s), go test -timeout ${CLOCK}"
       # ⛔ A RED HERE DOES NOT CANCEL THE REST OF THE SHARD. It used to `exit 1`, so one red
       # package took the shard's name groups and legs with it and they published nothing —
       # the very shape `fail-fast: false` exists to avoid one level up, where a red shard
       # must not cancel its siblings. The author of the change needs the whole shard's
       # report at that moment, not the first thing that broke.
-      bash scripts/with-pg-env.sh go test -count=1 -timeout "${TO}m" "${PKG_ARGS[@]}" || rc=1
+      bash scripts/with-pg-env.sh go test -count=1 "${JSON_ARGS[@]}" -timeout "${CLOCK}" "${PKG_ARGS[@]}" || rc=1
     fi
     # ⛔ ONE `go test` PER GROUP, AFTER the whole packages and never beside them. `-run` is an
     # option of the COMMAND and not of a package, so a group cannot share an invocation with
@@ -616,18 +743,21 @@ case "${1:-}" in
       [ "$GSEL" -gt 0 ] ||
         fail "shard ${S}: group ${GNAME} of ${GPKG} selects no test of the ${GTOTAL} this tree has for that package. \`go test -run\` over an expression that matches nothing exits 0, so this shard would report success having run none of them."
       RE_BYTES="$(printf '%s' "$RE" | wc -c)"
-      echo "pr-suite-shards: shard ${S} — group ${GNAME} of ${GPKG}: ${GSEL} of ${GTOTAL} test(s), go test -timeout ${TO}m -run (${RE_BYTES} bytes)"
-      bash scripts/with-pg-env.sh go test -count=1 -timeout "${TO}m" -run "$RE" "$GPKG" || rc=1
+      CLOCK="$(clock)"
+      say "pr-suite-shards: shard ${S} — group ${GNAME} of ${GPKG}: ${GSEL} of ${GTOTAL} test(s), go test -timeout ${CLOCK} -run (${RE_BYTES} bytes)"
+      bash scripts/with-pg-env.sh go test -count=1 "${JSON_ARGS[@]}" -timeout "${CLOCK}" -run "$RE" "$GPKG" || rc=1
     done
     for leg in "${LEGS[@]}"; do
       [ -n "$leg" ] || continue
-      echo "pr-suite-shards: shard ${S} — leg ${leg}"
-      task "${leg}" || rc=1
+      say "pr-suite-shards: shard ${S} — leg ${leg}"
+      # A leg's task output is not a Go test event; in JSON mode it goes where the rest of
+      # the progress went.
+      task "${leg}" >&"$LEG_OUT" || rc=1
     done
     exit "$rc"
     ;;
 
   *)
-    cannot "usage: $0 {shards|matrix|packages <shard>|groups <shard>|partitioned|tests <package>|run-expr <package> <group>|legs <shard>|number <key>|run <shard>}"
+    cannot "usage: $0 {shards|matrix|partition <package>|packages <shard>|groups <shard>|partitioned|tests <package>|run-expr <package> <group>|legs <shard>|number <key>|run <shard>}"
     ;;
 esac

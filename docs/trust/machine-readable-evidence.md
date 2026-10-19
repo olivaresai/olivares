@@ -43,10 +43,11 @@ themselves audited (reading evidence leaves evidence).
 | Inventory/posture export (control towers) | `GET /v1/m/posture/export` | JSON |
 | Least-privilege drift | `GET /v1/m/accessmap/drift` | JSON |
 
-Release-side machine-readable evidence (per release, offline-verifiable):
-SBOM (SPDX + CycloneDX, in-toto attestation) · OpenVEX · SLSA Build L3 (SLSA v1.2) provenance ·
-cosign signatures · checksums — verified end-to-end by `scripts/verify-release.sh`
-(keyless or air-gapped modes).
+Release-side machine-readable evidence (per release):
+SBOM (SPDX, in-toto attestation) · OpenVEX · SLSA Build L3 (SLSA v1.2) provenance ·
+cosign signatures · checksums. `scripts/verify-release.sh` (keyless or air-gapped modes) verifies
+the signature, the checksums and the SLSA provenance; the SBOM and OpenVEX attestations verify
+against the container image by digest (`cosign verify-attestation`; `docs/RELEASE-VERIFICATION.md`).
 
 ## Continuous-validation pattern (KSI-style)
 

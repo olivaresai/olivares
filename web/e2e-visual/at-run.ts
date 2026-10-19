@@ -370,10 +370,9 @@ const TOKEN_PAIRS: {
  *
  * Deriving the pairings turned up real AA failures the hand-written list never
  * looked at. The ones with an unambiguous fix were fixed in the same change; the
- * ones below need a call this session is not the one to make — either a palette
- * decision (the API-playground method badges are raw Tailwind ramp colours, not
- * brand tokens) or a brand-token boundary that belongs to the palette itself
- * (`--accent-text` over `--muted`, a pairing no token list had ever measured).
+ * ones below need a call this session is not the one to make — a brand-token
+ * boundary that belongs to the palette itself (the orange fill on light grounds).
+ * The API-playground ramp badges that were here took status tokens (dev#2543).
  *
  * THIS IS NOT A RECLASSIFICATION, AND IT CANNOT ROT. Each entry names ONE origin
  * and ONE pairing with the ratio measured the day it was written, and the gate
@@ -384,8 +383,6 @@ const TOKEN_PAIRS: {
  * Everything else stays under the full 4.5:1 rule. The three directions are
  * covered by mutants M4/M5, M7 and M8 respectively.
  */
-const RAMP =
-  'raw Tailwind ramp; needs a brand-token decision for the method badges'
 // ⛔ POR QUÉ `--accent` NO ALCANZA 3:1 CONTRA LOS FONDOS CLAROS Y AUN ASÍ NO ES UN DEFECTO.
 //    Medido el 2026-08-18: `--accent` es `rgb(240,128,0)` —el naranja de marca— y contra
 //    `background` da 2,58, contra `surface` 2,69 y contra `accent-soft` 2,37, los tres por debajo del
@@ -415,79 +412,35 @@ const CONTRAST_DEBT: {
   ratio: number
   why: string
 }[] = [
+  // Re-measured with the B2 palette (dev#2543): the light canvas is the website's #fafaf9
+  // (it was #ffffff) and the card surface white again (it was #f8f7f4), so the same orange
+  // fill measures 2.58 on the canvas, 2.69 on the surface and 2.31 on its soft fill over
+  // the canvas. The fill still carries only ink (--accent-foreground, 6.88:1); the orange
+  // BOUNDARY is --accent-border (--accent-strong), held to 3:1 by the contract below.
   {
     origin: 'tokens.css',
     pair: 'accent/background',
     theme: 'light',
-    ratio: 2.69,
+    ratio: 2.58,
     why: ACCENT_FILL,
   },
-  // 2.69 until the v26.10 palette: the light card surface is now #f8f7f4 (it was white),
-  // so the same orange fill measures 2.52 on it. The fill still carries only ink
-  // (--accent-foreground, 6.88:1); the orange BOUNDARY is --accent-border (--accent-strong),
-  // 3.95:1 on this surface and held to 3:1 by the contract below.
   {
     origin: 'tokens.css',
     pair: 'accent/surface',
     theme: 'light',
-    ratio: 2.52,
+    ratio: 2.69,
     why: ACCENT_FILL,
   },
   {
     origin: 'tokens.css',
     pair: 'accent/accent-soft',
     theme: 'light',
-    ratio: 2.4,
+    ratio: 2.31,
     why: ACCENT_FILL,
   },
-  // The api-playground badges: SIX HTTP-method badges plus the BETA marker on an
-  // endpoint tag group (`endpoint-tree.tsx:105`) — same ramp, but "choose brand
-  // tokens for the methods" does not reach the beta marker, so do not read this
-  // as one fix. The `-600`/`-400` Tailwind ramp is off-brand to begin with.
-  {
-    origin: 'web/src/features/api-playground/request-panel.tsx:419',
-    pair: 'emerald-600 on emerald-500/15',
-    theme: 'light',
-    ratio: 3.17,
-    why: RAMP,
-  },
-  {
-    origin: 'web/src/features/api-playground/request-panel.tsx:419',
-    pair: 'blue-600 on blue-500/15',
-    theme: 'light',
-    ratio: 4.39,
-    why: RAMP,
-  },
-  {
-    origin: 'web/src/features/api-playground/request-panel.tsx:419',
-    pair: 'amber-600 on amber-500/15',
-    theme: 'light',
-    ratio: 2.85,
-    why: RAMP,
-  },
-  {
-    origin: 'web/src/features/api-playground/request-panel.tsx:419',
-    pair: 'orange-600 on orange-500/15',
-    theme: 'light',
-    ratio: 3.05,
-    why: RAMP,
-  },
-  {
-    origin: 'web/src/features/api-playground/request-panel.tsx:419',
-    pair: 'red-600 on red-500/15',
-    theme: 'light',
-    ratio: 3.85,
-    why: RAMP,
-  },
-  {
-    origin: 'web/src/features/api-playground/endpoint-tree.tsx:105',
-    pair: 'amber-600 on amber-500/15',
-    theme: 'light',
-    ratio: 2.66,
-    why: RAMP,
-  },
-  // `--accent-text` over `--elevated` (dark, 4.33) left the ledger with the v26.10
-  // palette: the orange as text is #ff9b3d there and passes on every dark surface.
+  // The api-playground method badges and the BETA marker left the ledger with dev#2543:
+  // they are status tokens on their soft fills now (method-colors.ts), not the raw
+  // Tailwind ramp. `--accent-text` over `--elevated` (dark, 4.33) left it with v26.10.
 ]
 
 async function serve(

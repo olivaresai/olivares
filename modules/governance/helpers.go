@@ -6,6 +6,8 @@ package governance
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strconv"
@@ -14,6 +16,13 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
+
+// hashHexOf is the module-local detail hash (the module cannot import
+// connectors/internal/redact — it hashes directly, like toolFingerprint).
+func hashHexOf(detail string) string {
+	sum := sha256.Sum256([]byte(detail))
+	return hex.EncodeToString(sum[:])
+}
 
 // listCap bounds an internal List page; it matches the store's own maximum.
 const listCap = 1000
@@ -76,16 +85,20 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	return true
 }
 
-// listQuery builds a List query from ?limit and ?cursor.
-func listQuery(r *http.Request) model.Query {
+// listQuery builds a List query from ?limit and ?cursor. Invalid limits retain
+// the published default-page behavior with a deprecation warning.
+func listQuery(w http.ResponseWriter, r *http.Request) model.Query {
 	q := model.Query{}
 	if c := r.URL.Query().Get("cursor"); c != "" {
 		q.Cursor = c
 	}
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil {
-			q.Limit = n
+		n, err := strconv.Atoi(l)
+		if err != nil || n < 0 {
+			w.Header().Add("Warning", `299 olivares "Invalid limit is deprecated; use a non-negative integer. The default page is returned."`)
+			return q
 		}
+		q.Limit = n
 	}
 	return q
 }

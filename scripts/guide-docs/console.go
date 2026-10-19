@@ -44,7 +44,7 @@ type consoleMounted struct {
 }
 
 // navCatalog is the console's own English strings — the product's words, already
-// translated into seven locales. The guide reuses them instead of inventing a second
+// translated into eight locales. The guide reuses them instead of inventing a second
 // description per screen, because two descriptions of one screen drift and the operator
 // then reads one sentence in the sidebar and a different one in the docs.
 type navCatalog struct {

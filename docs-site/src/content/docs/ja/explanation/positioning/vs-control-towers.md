@@ -9,6 +9,10 @@ sidebar:
   order: 4
 ---
 
+:::note[Business]
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートのルートとコマンドは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
+:::
+
 **AI コントロールタワー**とは、AI ガバナンスのための組織全体のダッシュボードと
 ワークフローのレイヤーです。登録されたエージェントを一望し、承認をルーティングし、
 チケットを起票し、ポスチャを経営層に報告する単一の場所です。例として

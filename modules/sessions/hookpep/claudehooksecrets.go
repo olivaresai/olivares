@@ -196,5 +196,6 @@ func (d *Decider) retainedHookInput(ctx context.Context, in claude.HookDecisionI
 	in.Tool = clean(in.Tool)
 	in.ToolUseID = clean(in.ToolUseID)
 	in.ResourceRef = clean(in.ResourceRef)
+	in.Project = clean(in.Project)
 	return in
 }

@@ -96,7 +96,7 @@
     "searchResults": "Resultados en tus datos",
     "searchTruncated": "Hay más coincidencias — afina la búsqueda.",
     "searchDegraded": "Algunas fuentes no se han podido consultar — esta lista está incompleta.",
-    "deniedReason": "Necesita {{permission}}.",
+    "deniedReason": "Necesita {{permission}} para esto.",
     "deniedHelp": "Pida a un administrador que pueda concederlo.",
     "noTargetReason": "Necesita una organización en la que ejecutarse.",
     "noTargetHelp": "Seleccione una organización y vuelva a intentarlo.",
@@ -107,6 +107,12 @@
     "footerMove": "mover",
     "footerOpen": "abrir",
     "footerCommands": "solo comandos"
+  },
+  "permissionWords": {
+    "read": "acceso de lectura",
+    "write": "acceso de escritura",
+    "admin": "acceso de administración",
+    "other": "más acceso"
   },
   "status": {
     "active": "Activo",
@@ -293,7 +299,13 @@
     },
     "command": {
       "palette": {
-        "open": "Abrir la paleta de comandos"
+        "open": "Abrir la paleta de comandos",
+        "recent1": "Abrir la sesión reciente 1",
+        "recent2": "Abrir la sesión reciente 2",
+        "recent3": "Abrir la sesión reciente 3",
+        "recent4": "Abrir la sesión reciente 4",
+        "recent5": "Abrir la sesión reciente 5",
+        "recent6": "Abrir la sesión reciente 6"
       },
       "help": {
         "toggle": "Ver estos atajos"
@@ -304,6 +316,9 @@
         "startBackground": "Iniciarla y quedarte aquí"
       },
       "surface": {
+        "openBeside": "Abrir al lado",
+        "closeBeside": "Cerrar la sesión de al lado",
+        "focusBeside": "Mover el foco entre sesiones",
         "nextPane": "Panel siguiente",
         "previousPane": "Panel anterior"
       },
@@ -328,7 +343,8 @@
         "pin": "Fijar o quitar este módulo de favoritos"
       },
       "session": {
-        "new": "Nueva sesión"
+        "new": "Nueva sesión",
+        "previous": "Volver a la sesión anterior"
       },
       "sourceDiff": {
         "nextFile": "Fichero siguiente",
@@ -340,7 +356,9 @@
     "when": {
       "railFocused": "en el carril de sesiones",
       "launcherFocused": "en el campo del lanzador",
-      "workSurface": "en la pantalla de sesiones"
+      "workSurface": "en la pantalla de sesiones",
+      "sessionHistory": "cuando hay una sesión anterior",
+      "paletteRecent": "en los resultados de la paleta con la búsqueda vacía"
     },
     "precedence": "Cuando dos filas comparten teclas, gana la última que aplica.",
     "modNote": "⌘ es Control en Windows y Linux.",

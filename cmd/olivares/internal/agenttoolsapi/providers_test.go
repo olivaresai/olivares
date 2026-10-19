@@ -555,3 +555,25 @@ esac
 		}
 	}
 }
+
+// The reset time a run's usage limit falls back to: the latest reset among the windows of
+// the instance that are used up, from the last answer, never a probe of its own.
+func TestLimitResetsAtIsWhenTheUsedUpWindowsLift(t *testing.T) {
+	call, m, _ := newProvidersServer(t)
+	ctx := context.Background()
+	if _, ok := m.LimitResetsAt(ctx, "", "codex"); ok {
+		t.Fatal("a login that has not answered yet reported a reset")
+	}
+	providers(t, call, "")
+	// The stub's codex has its weekly window at 100 percent and its 5-hour one at 12.5.
+	at, ok := m.LimitResetsAt(ctx, "", "codex")
+	if want := time.Unix(1791756824, 0); !ok || !at.Equal(want) {
+		t.Fatalf("codex reset = %v %v, want %v", at, ok, want)
+	}
+	if _, ok := m.LimitResetsAt(ctx, "", "claude"); ok {
+		t.Fatal("an instance with no window used up reported a reset")
+	}
+	if _, ok := m.LimitResetsAt(ctx, "", "nobody"); ok {
+		t.Fatal("an unknown instance reported a reset")
+	}
+}

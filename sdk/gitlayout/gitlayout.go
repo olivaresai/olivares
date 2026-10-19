@@ -36,7 +36,7 @@ func (l Layout) Linked() bool { return l.GitDir != l.CommonDir }
 
 // Read returns the layout of the worktree root folder, or false when its .git
 // is not git's own. A .git directory is the repository itself and names no
-// other common directory. A .git file must name an entry in its common
+// other common directory than itself. A .git file must name an entry in its common
 // directory's worktrees/ whose gitdir file links back to this .git: git
 // worktree's own two-way link, so neither a rewritten or copied pointer nor an
 // entry forged inside the folder reaches another repository's metadata.
@@ -51,7 +51,10 @@ func Read(folder string) (Layout, bool) {
 	case err != nil:
 		return Layout{}, false
 	case st.IsDir():
-		if _, err := os.Lstat(filepath.Join(dotgit, "commondir")); !errors.Is(err, fs.ErrNotExist) {
+		// A commondir that names the directory itself is what session
+		// confinement writes (a name the session must not create); another one
+		// redirects git to another repository's metadata.
+		if _, err := os.Lstat(filepath.Join(dotgit, "commondir")); !errors.Is(err, fs.ErrNotExist) && !NamesItself(dotgit) {
 			return Layout{}, false
 		}
 		return Layout{GitDir: dotgit, CommonDir: dotgit}, true
@@ -68,6 +71,20 @@ func Read(folder string) (Layout, bool) {
 		return Layout{}, false
 	}
 	return Layout{GitDir: gitDir, CommonDir: commonDir}, true
+}
+
+// NamesItself reports whether gitDir/commondir is a plain file that says "." and
+// nothing else: git then takes gitDir as its own common directory, which is what
+// it does without the file. Any other content is not resolved here: git follows
+// symbolic links before it applies "..", a path join does not.
+func NamesItself(gitDir string) bool {
+	file := filepath.Join(gitDir, "commondir")
+	st, err := os.Lstat(file)
+	if err != nil || !st.Mode().IsRegular() || st.Size() > 4 {
+		return false
+	}
+	raw, err := os.ReadFile(file)
+	return err == nil && strings.TrimRight(string(raw), "\r\n") == "."
 }
 
 // readPointer returns the resolved path a git pointer file names after

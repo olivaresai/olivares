@@ -64,7 +64,9 @@ func TestCommunityCMEKBootRefusesBeforeCreatingAnything(t *testing.T) {
 	}
 }
 
-func TestCommunityOperatorKeysAndCustodyRemainAvailable(t *testing.T) {
+// An operator-provided audit key stays Community. The custody assertion that
+// requires one (OLIVARES_KEY_CUSTODY=byok) is Business: custody_edition_test.go.
+func TestCommunityOperatorKeysRemainAvailable(t *testing.T) {
 	clearOlivaresEnv(t)
 	for _, file := range []bool{false, true} {
 		t.Run(map[bool]string{false: "env", true: "file"}[file], func(t *testing.T) {
@@ -83,7 +85,6 @@ func TestCommunityOperatorKeysAndCustodyRemainAvailable(t *testing.T) {
 				value = path
 			}
 			t.Setenv(key, value)
-			t.Setenv(envKeyCustody, "byok")
 			for node := 0; node < 2; node++ {
 				dir := t.TempDir()
 				eng, err := boot(context.Background(), bootConfig{DataDir: dir, Logger: discardLog(), NoIngest: true})
@@ -98,27 +99,8 @@ func TestCommunityOperatorKeysAndCustodyRemainAvailable(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(dir, "audit-signing.key")); !os.IsNotExist(err) {
 					t.Fatal("BYOK boot minted a replacement audit key")
 				}
-				cmd := newKeysCmd()
-				cmd.SetOut(io.Discard)
-				cmd.SetErr(io.Discard)
-				cmd.SetArgs([]string{"status"})
-				if err := cmd.Execute(); err != nil {
-					t.Fatal(err)
-				}
 			}
 		})
-	}
-	t.Setenv(envKeyCustody, "byok")
-	t.Setenv(envLedgerCustody, "hyok")
-	assertions, err := loadCustodyAssertions()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := assertions.verify(custodyModeBYOKFile, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := assertions.verify(custodyModeBYOKFile, false); err == nil {
-		t.Fatal("HYOK accepted an on-box signer")
 	}
 }
 

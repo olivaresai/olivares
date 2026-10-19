@@ -110,6 +110,59 @@ func TestSecretStoreListAndDelete(t *testing.T) {
 	}
 }
 
+// A personal vault item is never a `store:` reference: connectors, the deploy
+// executor and providers resolve tenant names they are handed, so Resolve refuses
+// the vault/ namespace in a tenant scope and only Reveal opens it. The deployment-wide
+// scope keeps its own vault/ names (an operator's `store:vault/token`).
+func TestSecretStoreResolveRefusesPersonalVaultItems(t *testing.T) {
+	st := testStore(t)
+	svc := auth.NewSecretStore(st, secretTestSealer{})
+	ctx := context.Background()
+	tenant := model.TenantID("tenant-vault-2386")
+	owner := model.NewID().String()
+	item := "vault/" + owner + "/bank"
+
+	if _, err := svc.Put(ctx, adminActor(), tenant, item, "tenant-vault-value", ""); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if v, err := svc.Resolve(ctx, tenant, item); !errors.Is(err, auth.ErrBadSecretName) || len(v) != 0 {
+		t.Fatalf("Resolve of a tenant vault item = (%q, %v), want ErrBadSecretName and no value", v, err)
+	}
+	if v, err := svc.Reveal(ctx, adminActor(), tenant, item); err != nil || string(v) != "tenant-vault-value" {
+		t.Fatalf("Reveal = (%q, %v)", v, err)
+	}
+
+	if _, err := svc.Put(ctx, adminActor(), auth.GlobalSecretScope, "vault/token", "global-vault-value", ""); err != nil {
+		t.Fatalf("Put global: %v", err)
+	}
+	if v, err := svc.Resolve(ctx, auth.GlobalSecretScope, "vault/token"); err != nil || string(v) != "global-vault-value" {
+		t.Fatalf("Resolve of a global vault/ name = (%q, %v), want its value", v, err)
+	}
+}
+
+// A reveal is recorded or it does not happen, and it never opens without a sealer.
+func TestSecretStoreRevealFailsClosed(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	tenant := model.TenantID("tenant-vault-2386")
+	item := "vault/" + model.NewID().String() + "/bank"
+	svc := auth.NewSecretStore(st, secretTestSealer{})
+	if _, err := svc.Put(ctx, adminActor(), tenant, item, "never-returned-value", ""); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	// An actor the ledger cannot attribute: the audit entry is refused, so is the value.
+	if v, err := svc.Reveal(ctx, auth.Principal{Kind: auth.KindUser}, tenant, item); err == nil || len(v) != 0 {
+		t.Fatalf("Reveal with an unattributable actor = (%q, %v), want an error and no value", v, err)
+	}
+	if v, err := auth.NewSecretStore(st, nil).Reveal(ctx, adminActor(), tenant, item); !errors.Is(err, auth.ErrNoSecretSealer) || len(v) != 0 {
+		t.Fatalf("Reveal with no sealer = (%q, %v), want ErrNoSecretSealer", v, err)
+	}
+	if _, err := svc.Reveal(ctx, adminActor(), tenant, "vault/"+model.NewID().String()+"/absent"); !errors.Is(err, auth.ErrSecretNotFound) {
+		t.Fatalf("Reveal of an absent item = %v, want ErrSecretNotFound", err)
+	}
+}
+
 func TestSecretStoreFailClosed(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()

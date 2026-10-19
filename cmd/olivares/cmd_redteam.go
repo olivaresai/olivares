@@ -49,8 +49,9 @@ const redteamModule = "redteam"
 func newRedteamCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "redteam",
-		Short: "Run the consent-gated adversarial battery against your own agents",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "redteam",
+		Short:       "Run the consent-gated adversarial battery against your own agents",
 		Long: "redteam scores YOUR OWN agents against an adversarial probe battery — prompt\n" +
 			"injection, jailbreak, exfiltration, tool poisoning — mapped to OWASP and MITRE\n" +
 			"ATLAS. Red-team execution requires Business.\n\n" +
@@ -75,8 +76,9 @@ func newRedteamCmd() *cobra.Command {
 func newRedteamCatalogCmd(flags *authClientFlags) *cobra.Command {
 	var suite string
 	cmd := &cobra.Command{
-		Use:   "catalog",
-		Short: "List the probe battery and its OWASP/ATLAS coverage",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "catalog",
+		Short:       "List the probe battery and its OWASP/ATLAS coverage",
 		Long: "catalog reports every probe the build carries, grouped by attack family, with\n" +
 			"the OWASP and MITRE ATLAS identifiers each one maps to and the taxonomy version\n" +
 			"those identifiers came from.\n\n" +
@@ -132,8 +134,9 @@ var redteamTargetColumns = []string{
 
 func newRedteamTargetsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "targets",
-		Short: "Register agents as red-team targets and grant or withdraw consent",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "targets",
+		Short:       "Register agents as red-team targets and grant or withdraw consent",
 		Long: "A target is an agent in YOUR inventory that may be probed. Registering it is\n" +
 			"not consent: `authorize` is the separate decision that lets a run touch it, and\n" +
 			"`revoke` withdraws it again.",
@@ -155,11 +158,12 @@ func newRedteamTargetsListCmd(flags *authClientFlags) *cobra.Command {
 		status string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List registered red-team targets and their consent state",
-		Long:    "ls lists targets. `authorized` is the column that decides whether a run may touch one; `authorized_by` and `authorized_at` say who consented and when.",
-		Example: "  olivares redteam targets ls\n  olivares redteam targets ls --status authorized --limit 50",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List registered red-team targets and their consent state",
+		Long:        "ls lists targets. `authorized` is the column that decides whether a run may touch one; `authorized_by` and `authorized_at` say who consented and when.",
+		Example:     "  olivares redteam targets ls\n  olivares redteam targets ls --status authorized --limit 50",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -183,11 +187,12 @@ func newRedteamTargetsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newRedteamTargetsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one target and its consent record",
-		Long:    "get returns one target with the full consent record: who authorized it, when, and for what scope.",
-		Example: "  olivares redteam targets get rt-1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one target and its consent record",
+		Long:        "get returns one target with the full consent record: who authorized it, when, and for what scope.",
+		Example:     "  olivares redteam targets get rt-1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: redteamModule,
@@ -209,8 +214,9 @@ func newRedteamTargetsRegisterCmd(flags *authClientFlags) *cobra.Command {
 		scope    string
 	)
 	cmd := &cobra.Command{
-		Use:   "register",
-		Short: "Register an agent from your inventory as a red-team target",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "register",
+		Short:       "Register an agent from your inventory as a red-team target",
 		Long: "register records a target. IT DOES NOT AUTHORIZE ANYTHING: the target starts\n" +
 			"unauthorized and the engine refuses every run against it until `authorize`.\n\n" +
 			"--agent-ref must resolve to an agent in THIS tenant's inventory. Anything else\n" +
@@ -257,8 +263,9 @@ func newRedteamTargetsAuthorizeCmd(flags *authClientFlags) *cobra.Command {
 		yes   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "authorize <id>",
-		Short: "Consent to red-teaming this target (confirmed; needs --yes when unattended)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "authorize <id>",
+		Short:       "Consent to red-teaming this target (confirmed; needs --yes when unattended)",
 		Long: "authorize is the consent ceremony. After it, the battery may run real\n" +
 			"adversarial probes against a live agent — that is the dual-use line this\n" +
 			"product draws, so the CLI asks before crossing it.\n\n" +
@@ -288,8 +295,9 @@ func newRedteamTargetsAuthorizeCmd(flags *authClientFlags) *cobra.Command {
 
 func newRedteamTargetsRevokeCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "revoke <id>",
-		Short: "Withdraw consent to red-team this target",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "revoke <id>",
+		Short:       "Withdraw consent to red-team this target",
 		Long: "revoke withdraws consent. Every subsequent run against the target is refused,\n" +
 			"and a run already in flight discards its assessment rather than scoring it.\n\n" +
 			"It needs no --yes: refusing consent is the safe direction, and a ceremony in\n" +
@@ -329,10 +337,11 @@ var redteamRunColumns = []string{
 
 func newRedteamRunsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "runs",
-		Short:   "Launch and inspect scored red-team runs",
-		Long:    "A run is one execution of the battery against one authorized target, scored per attack family and mapped to OWASP failures.",
-		Example: "  olivares redteam runs ls --target-ref rt-1",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "runs",
+		Short:       "Launch and inspect scored red-team runs",
+		Long:        "A run is one execution of the battery against one authorized target, scored per attack family and mapped to OWASP failures.",
+		Example:     "  olivares redteam runs ls --target-ref rt-1",
 	}
 	cmd.AddCommand(
 		newRedteamRunsListCmd(flags),
@@ -350,11 +359,12 @@ func newRedteamRunsListCmd(flags *authClientFlags) *cobra.Command {
 		suite     string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List red-team runs and their scores",
-		Long:    "ls lists runs newest-first with their pass/fail counters and aggregate score.",
-		Example: "  olivares redteam runs ls\n  olivares redteam runs ls --target-ref rt-1 --suite injection --limit 20",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List red-team runs and their scores",
+		Long:        "ls lists runs newest-first with their pass/fail counters and aggregate score.",
+		Example:     "  olivares redteam runs ls\n  olivares redteam runs ls --target-ref rt-1 --suite injection --limit 20",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -380,11 +390,12 @@ func newRedteamRunsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newRedteamRunsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one run's scorecard",
-		Long:    "get returns the run with its per-family scores and OWASP failure counts. Use -o json for the full breakdown.",
-		Example: "  olivares redteam runs get run-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one run's scorecard",
+		Long:        "get returns the run with its per-family scores and OWASP failure counts. Use -o json for the full breakdown.",
+		Example:     "  olivares redteam runs get run-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: redteamModule,
@@ -400,8 +411,9 @@ func newRedteamRunsGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newRedteamRunsResultsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "results <id>",
-		Short: "List one run's per-probe results",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "results <id>",
+		Short:       "List one run's per-probe results",
 		Long: "results returns every probe's outcome for one run, with the OWASP and ATLAS\n" +
 			"identifiers it maps to.\n\n" +
 			"It is NOT paginated by the engine: the whole result set comes back in one\n" +
@@ -428,8 +440,9 @@ func newRedteamRunsLaunchCmd(flags *authClientFlags) *cobra.Command {
 		suite     string
 	)
 	cmd := &cobra.Command{
-		Use:   "launch",
-		Short: "Run the battery against an authorized target",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "launch",
+		Short:       "Run the battery against an authorized target",
 		Long: "launch runs the probes and records a scorecard.\n\n" +
 			"It carries no confirmation of its own, and that is deliberate: this is the\n" +
 			"verb CI calls, and the decision that matters was already made and recorded by\n" +

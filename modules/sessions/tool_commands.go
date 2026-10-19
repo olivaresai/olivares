@@ -30,8 +30,10 @@ package sessions
 // tool gets the authority checks of any other write to it (guardToolAsk): a launch whose
 // Claim moved, whose profile was retired or whose work lease needs a fence is not asked.
 //
-// Codex, Gemini CLI and OpenCode report their catalogs through their own interfaces;
-// until each is read here, their sessions answer reported=false and the console says so.
+// Codex reads skills/list on its live app-server; Gemini CLI and OpenCode publish
+// available_commands_update on their live ACP connection. Their readers and measured
+// limits are in tool_commands_drivers.go and TOOL-COMMANDS.md. No file catalog is
+// reconstructed by Olivares, and a tool that has not reported answers reported=false.
 
 import (
 	"bytes"
@@ -90,6 +92,7 @@ type toolCommand struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	ArgumentHint string `json:"argument_hint,omitempty"`
+	InsertText   string `json:"insert_text,omitempty"`
 	Source       string `json:"source"`
 	Kind         string `json:"kind"`
 }
@@ -175,6 +178,13 @@ func (c *toolCommandCache) abandon(id string) {
 	}
 }
 
+// outstanding reports whether any request, waited for or abandoned, still covers its answer.
+func (c *toolCommandCache) outstanding() bool {
+	c.waitMu.Lock()
+	defer c.waitMu.Unlock()
+	return len(c.waits) > 0
+}
+
 // commandWaitCount is the number of requests a caller still waits for, and the number
 // whose answer is only to be withheld.
 func (lr *liveRun) commandWaitCount() (waiting, abandoned int) {
@@ -193,30 +203,123 @@ func (lr *liveRun) commandWaitCount() (waiting, abandoned int) {
 // other frame, including one that merely claims an id this engine never issued, is the
 // child's output and keeps its way to the ring.
 func (lr *liveRun) takeCommandsResponse(data []byte) bool {
-	if !bytes.Contains(data, []byte(`"`+commandsRequestPrefix)) {
+	// An issued id is in the line literally, or through an escape: without
+	// either, nothing here can be an answer and the line is not parsed.
+	if !lr.commands.outstanding() || (!bytes.Contains(data, []byte(commandsRequestPrefix)) && !bytes.Contains(data, []byte{'\\'})) {
 		return false
 	}
-	var f struct {
-		Type     string `json:"type"`
-		Response struct {
-			RequestID string `json:"request_id"`
-		} `json:"response"`
-	}
-	if json.Unmarshal(data, &f) != nil || f.Type != "control_response" || !strings.HasPrefix(f.Response.RequestID, commandsRequestPrefix) {
+	ids := toolResponseFields(data, "response", "request_id")
+	if len(ids) == 0 {
 		return false
 	}
-	c := &lr.commands
-	c.waitMu.Lock()
-	ch, ok := c.waits[f.Response.RequestID]
-	delete(c.waits, f.Response.RequestID)
-	c.waitMu.Unlock()
-	if !ok {
-		return false
+	var frame struct {
+		Type string `json:"type"`
 	}
-	if ch != nil {
-		ch <- append([]byte(nil), data...)
+	decodeErr := json.Unmarshal(data, &frame)
+	consumed := false
+	for _, raw := range ids {
+		var id string
+		if json.Unmarshal(raw, &id) != nil || !strings.HasPrefix(id, commandsRequestPrefix) {
+			continue
+		}
+		c := &lr.commands
+		c.waitMu.Lock()
+		ch, issued := c.waits[id]
+		delete(c.waits, id)
+		c.waitMu.Unlock()
+		if !issued {
+			continue
+		}
+		consumed = true
+		if ch != nil {
+			reply := data
+			if decodeErr != nil || frame.Type != "control_response" || len(ids) != 1 {
+				quoted, _ := json.Marshal(id)
+				reply = []byte(`{"type":"control_response","response":{"request_id":` + string(quoted) +
+					`,"subtype":"error","error":"Claude Code command catalog response is malformed"}}`)
+			}
+			ch <- append([]byte(nil), reply...)
+		}
 	}
-	return true
+	return consumed
+}
+
+// maxJSONDepth is encoding/json's own nesting limit; the token reader has none.
+const maxJSONDepth = 10000
+
+// skipJSONValue consumes the rest of a value whose first token was already read.
+func skipJSONValue(d *json.Decoder, first json.Token) error {
+	depth := 0
+	for token := first; ; {
+		if delim, ok := token.(json.Delim); ok {
+			if delim == '[' || delim == '{' {
+				depth++
+			} else {
+				depth--
+			}
+		}
+		if depth <= 0 {
+			return nil
+		}
+		if depth > maxJSONDepth {
+			return errors.New("sessions: JSON nested too deeply")
+		}
+		var err error
+		if token, err = d.Token(); err != nil {
+			return err
+		}
+	}
+}
+
+// toolResponseFields reads correlation fields even when the later payload is
+// incomplete. Follow only the named object path, never an id embedded in text.
+// Keep duplicate fields so that an issued id cannot hide behind a foreign one;
+// callers reject ambiguous replies rather than choosing an id for the RPC pump.
+func toolResponseFields(data []byte, path ...string) []json.RawMessage {
+	d := json.NewDecoder(bytes.NewReader(data))
+	var values []json.RawMessage
+	var read func([]string) bool
+	read = func(path []string) bool {
+		token, err := d.Token()
+		if err != nil {
+			return false
+		}
+		if token != json.Delim('{') {
+			// Not the object we descend into: skip it whole so a later duplicate key still counts.
+			return skipJSONValue(d, token) == nil
+		}
+		for d.More() {
+			token, err := d.Token()
+			if err != nil {
+				return false
+			}
+			key, _ := token.(string)
+			if strings.EqualFold(key, path[0]) {
+				if len(path) > 1 {
+					if !read(path[1:]) {
+						return false
+					}
+					continue
+				}
+				var value json.RawMessage
+				if d.Decode(&value) != nil {
+					return false
+				}
+				values = append(values, value)
+			} else {
+				var skip json.RawMessage
+				if d.Decode(&skip) != nil {
+					return false
+				}
+			}
+		}
+		_, err = d.Token()
+		return err == nil
+	}
+	if len(path) > 0 {
+		read(path) // A truncated suffix does not erase fields already read.
+	}
+	return values
 }
 
 // oversizedResponse recognizes the header Claude writes before its catalog.
@@ -224,49 +327,11 @@ func (lr *liveRun) takeCommandsResponse(data []byte) bool {
 // the replacement follows the ordinary bridge and stale/error catalog paths.
 // Nothing from the tool's oversized payload is published or kept.
 func (c *toolCommandCache) oversizedResponse(prefix []byte) []byte {
-	d := json.NewDecoder(bytes.NewReader(prefix))
-	if token, err := d.Token(); err != nil || token != json.Delim('{') {
-		return nil
-	}
+	kinds := toolResponseFields(prefix, "type")
+	ids := toolResponseFields(prefix, "response", "request_id")
 	var kind, id string
-	for d.More() {
-		key, err := d.Token()
-		if err != nil {
-			break
-		}
-		if key == "type" {
-			if d.Decode(&kind) != nil {
-				return nil
-			}
-		} else if key == "response" {
-			if token, err := d.Token(); err != nil || token != json.Delim('{') {
-				return nil
-			}
-			for d.More() {
-				key, err := d.Token()
-				if err != nil {
-					break
-				}
-				if key == "request_id" {
-					if d.Decode(&id) != nil {
-						return nil
-					}
-				} else {
-					var skip json.RawMessage
-					if d.Decode(&skip) != nil {
-						break // the catalog exceeds the retained prefix
-					}
-				}
-			}
-			break
-		} else {
-			var skip json.RawMessage
-			if d.Decode(&skip) != nil {
-				return nil
-			}
-		}
-	}
-	if kind != "control_response" || !strings.HasPrefix(id, commandsRequestPrefix) {
+	if len(kinds) != 1 || len(ids) != 1 || json.Unmarshal(kinds[0], &kind) != nil || kind != "control_response" ||
+		json.Unmarshal(ids[0], &id) != nil || !strings.HasPrefix(id, commandsRequestPrefix) {
 		return nil
 	}
 	c.waitMu.Lock()
@@ -275,8 +340,6 @@ func (c *toolCommandCache) oversizedResponse(prefix []byte) []byte {
 	if !issued {
 		return nil
 	}
-	// id was decoded as a string: quote it again rather than interpolating bytes
-	// controlled by the child into a protocol record.
 	quoted, _ := json.Marshal(id)
 	return []byte(`{"type":"control_response","response":{"request_id":` + string(quoted) +
 		`,"subtype":"error","error":"Claude Code command catalog exceeds the session output line limit"}}`)
@@ -308,13 +371,25 @@ func (m *Module) runToolCommands(ctx context.Context, tenant model.TenantID, run
 	if err != nil {
 		return none, err
 	}
-	if !claudeFrameRun(lr, rec) {
-		none.Tool = rec.String(colRunProfileDriver)
-		return none, nil
+	none.Tool = rec.String(colRunProfileDriver)
+	if claudeFrameRun(lr, rec) {
+		none.Tool = providerDriverClaude
 	}
-	none.Tool = providerDriverClaude
 	if lr.toolEnded() || rec.String(colState) != stateRunning {
 		return none, nil
+	}
+	switch s := lr.session.(type) {
+	case *geminiSession:
+		none.Commands, none.Reported, err = s.commandCatalog(ctx)
+		return none, err
+	case *openCodeSession:
+		none.Commands, none.Reported, err = s.commandCatalog(ctx)
+		return none, err
+	case *codexSession:
+	default:
+		if !claudeFrameRun(lr, rec) {
+			return none, nil
+		}
 	}
 	c := &lr.commands
 	if err := c.acquire(ctx); err != nil {
@@ -328,7 +403,7 @@ func (m *Module) runToolCommands(ctx context.Context, tenant model.TenantID, run
 		return none, err
 	}
 	return toolCommandsDTO{
-		Tool: providerDriverClaude, Reported: true, Stale: c.stale, Commands: append([]toolCommand{}, c.items...),
+		Tool: none.Tool, Reported: true, Stale: c.stale, Commands: append([]toolCommand{}, c.items...),
 	}, nil
 }
 
@@ -384,7 +459,15 @@ func (m *Module) refreshToolCommands(ctx context.Context, lr *liveRun, rec model
 			}
 		}
 		var items []toolCommand
-		if items, err = m.askClaudeCommands(ctx, lr); err == nil {
+		if codex, ok := lr.session.(*codexSession); ok {
+			if p, ok := lr.proc.(*procProcess); ok {
+				p.catalogResponses.Store(codex)
+			}
+			items, _, err = codex.commandCatalog(ctx)
+		} else {
+			items, err = m.askClaudeCommands(ctx, lr)
+		}
+		if err == nil {
 			c.items, c.at, c.ok, c.stale, c.failure = items, time.Now(), true, false, nil
 			return nil
 		}
@@ -537,7 +620,7 @@ func parseClaudeCommands(raw []byte) (items []toolCommand, dropped int, err erro
 
 // errToolEnded: the session ended while its tool was being asked; there is no tool left,
 // so the read reports nothing rather than an old catalog as current.
-var errToolEnded = &runErr{http.StatusConflict, "the session ended before Claude Code reported its commands"}
+var errToolEnded = &runErr{http.StatusConflict, "the session ended before its tool reported its commands"}
 
 func errNotACatalog(cause string) error {
 	if cause = clipCause(cause); cause != "" {
@@ -627,6 +710,7 @@ func sessionsRunCommandsResponses(method, pattern string) (map[string]any, bool)
 						"name", str("What follows the slash, without it."),
 						"description", str("One line, as the tool wrote it."),
 						"argument_hint", str("How the tool shows the arguments, when it does."),
+						"insert_text", str("Native invocation when it is not /name, without trailing space (Codex skills use $name)."),
 						"source", oas.Obj("type", "string", "enum", oas.Enum("", "built-in", "user", "project", "plugin"),
 							"description", "Where the command comes from, when the tool says so."),
 						"kind", oas.Obj("type", "string", "enum", oas.Enum("command", "agent"),

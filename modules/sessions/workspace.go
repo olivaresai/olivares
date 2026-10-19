@@ -41,6 +41,8 @@ const (
 // resolvedWorkspace is a workspace row resolved for use: its canonical root and the
 // governed policy. rootReal is EvalSymlinks-resolved so the jail compares real paths.
 type resolvedWorkspace struct {
+	setupCommand    string
+	setupApproval   *workspaceSetupApproval
 	id              model.ID
 	ref             string
 	rootReal        string
@@ -90,7 +92,7 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 	if err != nil || !info.IsDir() {
 		return workspaceDTO{}, badRequest(fmt.Sprintf("%s is a file, not a folder.", p.RootPath))
 	}
-	if p.MountMode == mountRW {
+	if p.MountMode != mountRO {
 		// Probe as the engine user: mode bits alone miss ACLs and read-only mounts.
 		probe, err := os.MkdirTemp(rootReal, ".olivares-write-check-")
 		if err != nil {
@@ -262,6 +264,8 @@ func (m *Module) resolveWorkspace(ctx context.Context, tenant model.TenantID, re
 		tgt = defaultContainerTarget
 	}
 	return &resolvedWorkspace{
+		setupCommand:    rec.String(colWsSetupCommand),
+		setupApproval:   storedSetupApproval(rec),
 		id:              model.ID(rec.String(model.ColID)),
 		ref:             ref,
 		rootReal:        rootReal,
@@ -306,6 +310,16 @@ func (m *Module) resolveLaunchWorkspace(ctx context.Context, tenant model.Tenant
 		}
 	}
 	return ws, nil
+}
+
+// noDeleteIsolationRefusal is why a write-without-delete folder cannot serve a
+// session: the rule is a native Landlock grant, and a container or sandbox mount would
+// be plain read-write. Deny closed, never a promise nothing enforces.
+func (ws *resolvedWorkspace) noDeleteIsolationRefusal(isolation Isolation) error {
+	if ws == nil || ws.mountMode != mountNoDelete || isolation == IsolationNative || isolation == "" {
+		return nil
+	}
+	return &runErr{http.StatusUnprocessableEntity, "a write-without-delete folder is enforced for native sessions only (isolation=native)"}
 }
 
 func (ws *resolvedWorkspace) closeReadOnlyHandles() {
@@ -582,6 +596,9 @@ func (m *Module) moveFile(ctx context.Context, tenant model.TenantID, ref, from,
 	if ws.mountMode == mountRO {
 		return forbiddenErr("workspace is read-only")
 	}
+	if ws.mountMode == mountNoDelete {
+		return forbiddenErr("workspace does not allow moving or renaming files")
+	}
 	fromAbs, err := ws.jail(from, true)
 	if err != nil {
 		return mapFSErr(err)
@@ -614,6 +631,9 @@ func (m *Module) deleteFile(ctx context.Context, tenant model.TenantID, ref, rel
 	}
 	if ws.mountMode == mountRO {
 		return forbiddenErr("workspace is read-only")
+	}
+	if ws.mountMode == mountNoDelete {
+		return forbiddenErr("workspace does not allow deleting files")
 	}
 	abs, err := ws.jail(rel, true)
 	if err != nil {
@@ -676,6 +696,21 @@ func findWorkspaceRec(ctx context.Context, repo store.GenericRepo, ref string) (
 	return recs[0], nil
 }
 
+// lockWorkspaceRec reads the folder row by ref under its row lock. Update writes
+// the whole record, so every read-modify-write of this row takes the lock first;
+// a concurrent writer then waits and applies on top instead of being refused.
+func lockWorkspaceRec(ctx context.Context, repo store.GenericRepo, ref string) (model.Record, error) {
+	rec, err := findWorkspaceRec(ctx, repo, ref)
+	if err != nil {
+		return nil, err
+	}
+	locker, ok := repo.(store.RowLocker[model.Record])
+	if !ok {
+		return nil, &runErr{http.StatusServiceUnavailable, "workspace registry cannot lock the folder record"}
+	}
+	return locker.Lock(ctx, model.ID(rec.String(model.ColID)))
+}
+
 // validateWorkspace normalizes and validates a registration.
 func validateWorkspace(p *CreateWorkspaceParams) error {
 	p.RootPath = strings.TrimSpace(p.RootPath)
@@ -688,8 +723,8 @@ func validateWorkspace(p *CreateWorkspaceParams) error {
 	if p.MountMode == "" {
 		p.MountMode = mountRW
 	}
-	if p.MountMode != mountRW && p.MountMode != mountRO {
-		return badRequest("invalid mount_mode (want rw|ro)")
+	if p.MountMode != mountRW && p.MountMode != mountRO && p.MountMode != mountNoDelete {
+		return badRequest("invalid mount_mode (want rw|ro|write_no_delete)")
 	}
 	dlpMode, err := normalizeDLPMode(p.DLPMode)
 	if err != nil {

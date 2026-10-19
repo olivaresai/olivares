@@ -20,6 +20,16 @@
 // version, who approved it, and the result — to the append-only/hash-chain
 // ledger (docs/SECURITY-HARDENING.md) and to an append-only operation log this module owns.
 //
+// # Edition
+//
+// Deployment is a Business capability. This package keeps what every edition needs:
+// the schema and stored tables, the ports and options the composition root injects,
+// the typed spec and the published OpenAPI. The Community build (routes_noenterprise.go)
+// registers the published routes and answers each with 501 and a sentence that names
+// Business; the handlers, the executor setup and the wiring ledger are private source
+// that the Business build adds under the enterprise tag. The sections below describe
+// that Business behavior.
+//
 // # Bounded context (what this module is, and is not)
 //
 // This module ORCHESTRATES; it does not re-implement its neighbors:

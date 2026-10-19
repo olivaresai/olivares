@@ -67,5 +67,11 @@ func addMCPGatewayContracts(paths, schemas map[string]any) {
 	paths["/v1/console/mcp-gateway/session-tools"] = oas.Obj("put", operation("setMCPGatewaySessionTools", "Set the default-off session MCP switch for this tenant (AAL3).", "MCPGatewaySessionWrite", false))
 	// The same sealed manager has two explicit scopes; tenant mode serves mcp/ handles only.
 	secretItem := paths["/v1/console/secrets"].(map[string]any)
-	secretItem["parameters"] = []any{oas.Param("scope", "query", "Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope.", false, oas.Obj("type", "string", "enum", []string{"tenant"})), oas.Param("X-Olivares-Tenant", "header", "Target tenant in explicit tenant mode.", false, oas.Obj("type", "string", "format", "uuid"))}
+	secretParams := []any{oas.Param("scope", "query", "Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope.", false, oas.Obj("type", "string", "enum", []string{"tenant"})), oas.Param("X-Olivares-Tenant", "header", "Target tenant in explicit tenant mode.", false, oas.Obj("type", "string", "format", "uuid"))}
+	secretItem["parameters"] = secretParams
+	// Reveal, the authenticator code and the generator answer only in the tenant scope; reveal
+	// and the code only for the caller's own vault/<user-id>/ items.
+	for _, path := range []string{"/v1/console/secrets/reveal", "/v1/console/secrets/totp", "/v1/console/secrets/generate"} {
+		paths[path].(map[string]any)["parameters"] = secretParams
+	}
 }

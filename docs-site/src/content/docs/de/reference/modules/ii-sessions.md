@@ -14,7 +14,7 @@ Estate materialisiert, hält Modul II ein **Live-Betriebs-Overlay** pro Session
 über demselben Beobachtungsstrom — und zeigt nur, was dieser Strom ehrlich
 trägt.
 
-Olivares <!-- release -->0.2<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
+Olivares <!-- release -->0.3<!-- /release --> **startet** auch offizielle Anbieter-CLIs als eigene Kinder unter einem
 [Anbieterprofil](/how-to/operate-provider-sessions/). Dieser verwaltete Pfad
 ist dasselbe Modul. Er ersetzt das Overlay nicht und führt zwei Homes, die
 dieselbe Anbieter-Session-ID bekanntgeben, nicht zusammen
@@ -94,6 +94,42 @@ die CLI im `PATH` der Engine. `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`, `_CODEX_BIN
 gefunden, wird der Start verweigert. Weitere Bereitschaftsprüfungen, einschließlich
 Profil-Authentifizierung und Startrichtlinie, gelten weiterhin. Operator-Schritte:
 [Eine Provider-Session betreiben](/how-to/operate-provider-sessions/).
+
+## Lebenszyklus verwalteter Läufe und Neustartgrenzen
+
+Sessions ist ein Kernmodul: Es läuft auch dann weiter, wenn es nicht in der gespeicherten
+Modulauswahl steht. Das Ausschalten eines optionalen Moduls setzt keine Sitzungsdaten zurück.
+
+Die Managed-Run-API unter `/v1/m/sessions/runs` und `olivares session` verwenden dieselbe
+Runtime. Das Lesen von Läufen erfordert `sessions:run:read`; Start, Eingabe, Stopp und Resume
+erfordern `sessions:run:write`. Ein Viewer kann einen Lauf lesen, ohne ihn stoppen zu dürfen.
+Mandanten- und Workspace-Autorität gelten weiterhin für jeden Lauf.
+
+```sh
+olivares session ls -o json
+olivares session show <session> -o json
+olivares session send <session> "continue the task"
+olivares session stop <session>
+olivares session resume <session>
+```
+
+Eine Nachricht kann Bilder enthalten. `olivares session send <session> --attach shot.png "what
+is wrong here?"` und das Eingabefeld der Konsole (Einfügen, Ablegen oder die Büroklammer)
+speichern jedes PNG, JPEG, WebP oder GIF bei der Sitzung, bis zu vier pro Nachricht und je
+3.75 MB, und senden sie dann mit dem Text; eine Nachricht braucht ihren Text, daher wird ein
+Bild allein nicht gesendet (die CLI und das Eingabefeld fordern ihn an). Claude Code erhält
+einen Bild-Content-Block und Codex seine eigene Bildeingabe; ein Tool ohne Bildeingabe lehnt
+die Nachricht namentlich ab, bevor etwas gesendet wird. Die API ist
+`POST /v1/m/sessions/runs/{ref}/attachments` (das Bild, base64), `GET .../attachments/{id}` und
+`attachments` auf `.../input`. Bilder liegen unter dem Datenverzeichnis, je Mandant und Sitzung,
+und werden mit der Sitzung entfernt.
+
+Gestoppte Läufe, ihre Referenzen auf Provider-Profil und Workspace sowie Lebenszyklus-Events
+überstehen einen Neustart der Engine. Resume startet einen neuen eigenen Kindprozess für den
+bestehenden Lauf. Die Live-Attach-Ausgabe ist ein begrenzter In-Memory-Ring; gespeicherte
+Lauf-Metadaten und Lebenszyklus-Events versprechen kein persistiertes Gesprächsprotokoll.
+Aufzeichnungsrichtlinie und die eigene Resume-Unterstützung des Tools bleiben getrennte
+Anforderungen.
 
 ## Was es konsumiert (und was es ableitet)
 

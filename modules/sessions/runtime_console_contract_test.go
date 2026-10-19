@@ -102,8 +102,8 @@ func TestConsoleSendContractOnADriverRunIsTextNotLine(t *testing.T) {
 	}
 	waitFor(t, "active turn before console interrupt", func() bool { return live.session.ActiveTurn() != "" })
 	interrupted := h.doJSON(http.MethodPost, "/v1/m/sessions/runs/"+runRef+"/interrupt", admin, nil, tenantHdr(tenant))
-	if interrupted.code != http.StatusOK || interrupted.body["state"] != stateRunning {
-		t.Fatalf("console interrupt = %d %s, want 200 and running", interrupted.code, interrupted.raw)
+	if interrupted.code != http.StatusOK || interrupted.body["state"] != stateIdle || interrupted.body["process_state"] != stateRunning {
+		t.Fatalf("console interrupt = %d %s, want 200 and idle with a running process", interrupted.code, interrupted.raw)
 	}
 	peer := readFixtureRecord(t, record)
 	if countMethod(peer.Methods, codexMethodTurnInterrupt) != 1 {

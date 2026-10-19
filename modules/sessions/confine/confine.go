@@ -251,6 +251,14 @@ func RunHelper(args []string) int {
 
 // RunHelperWithReady reports readiness to the network supervisor after Landlock.
 func RunHelperWithReady(args []string, ready *os.File) int {
+	if coreconfine.IsMountsProbe(args) {
+		return coreconfine.RunMountsProbe(args)
+	}
+	// The mount layer, when a launch asked for one, comes before any policy.
+	args, err := coreconfine.ConsumeMounts(args)
+	if err != nil {
+		return refuse(ready, err)
+	}
 	if coreconfine.IsExplicitPolicy(args) {
 		return coreconfine.RunHelperWithReady(args, ready)
 	}
@@ -275,6 +283,11 @@ func RunHelperWithReady(args []string, ready *os.File) int {
 			err = coreconfine.Exec(policy, argv[0], argv)
 		}
 	}
+	return refuse(ready, err)
+}
+
+// refuse reports that the program never ran: to the launcher over ready, and to stderr.
+func refuse(ready *os.File, err error) int {
 	if ready != nil {
 		_, _ = fmt.Fprintln(ready, "filesystem confinement failed:", err)
 	}

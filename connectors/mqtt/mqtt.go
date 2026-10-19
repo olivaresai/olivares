@@ -27,7 +27,9 @@ type Publish struct {
 	Topic       string
 	UserProps   map[string]string
 	ContentType string
-	Payload     []byte
+	// Retain is the RETAIN flag of the PUBLISH: set when the broker sends a stored message.
+	Retain  bool
+	Payload []byte
 }
 
 // mqttClient is the narrow TRANSPORT SEAM for the wire client. The real

@@ -38,6 +38,8 @@
 #   scripts/check-openapi-op-descriptions.sh --list       print the composed roster (key, source, description);
 #                                                        exits 1, not 0, when any operation has none
 #   scripts/check-openapi-op-descriptions.sh --self-test  build throwaway trees and prove it can fail
+#   OLIVARES_BUILD_TAGS="enterprise ..." scripts/check-openapi-op-descriptions.sh --list
+#                                                        read the files that build tag set compiles
 #
 # THREE ANSWERS: 0 clean / 1 the documents and the code disagree, every operation
 # printed / 2 CANNOT LOOK. Never two: "I could not enumerate" is not "in sync".
@@ -107,12 +109,18 @@ build_err="$(cd "$SRC" && GOWORK=off go build -o "$BIN" . 2>&1)" || {
 # Run it ONCE and read the shell's own verdict. 126/127 mean the shell could not execute
 # the file at all — which in this container means /tmp is mounted noexec, and the bare
 # message for that is "permission denied" on a file whose exec bit is set.
+#
+# OLIVARES_BUILD_TAGS selects the files the walk reads, the way `go build -tags` does. Unset
+# it reads the Community binary, which is what the committed documents describe. An assembled
+# Business tree holds both editions of the same method side by side, and the tags say which
+# one is meant (the gate reads the tags it is given; `--list` shows what they select).
+tags=(-tags "${OLIVARES_BUILD_TAGS:-}")
 case "${1:-}" in
 --self-test) "$BIN" --self-test ;;
---write) "$BIN" -root "$ROOT" -write ;;
---missing) "$BIN" -root "$ROOT" -missing ;;
---list) "$BIN" -root "$ROOT" -list ;;
-"") "$BIN" -root "$ROOT" ;;
+--write) "$BIN" -root "$ROOT" "${tags[@]}" -write ;;
+--missing) "$BIN" -root "$ROOT" "${tags[@]}" -missing ;;
+--list) "$BIN" -root "$ROOT" "${tags[@]}" -list ;;
+"") "$BIN" -root "$ROOT" "${tags[@]}" ;;
 *)
 	echo "check-openapi-op-descriptions: CANNOT LOOK — unknown argument '$1' (want --write, --missing, --list, --self-test or nothing)." >&2
 	exit 2

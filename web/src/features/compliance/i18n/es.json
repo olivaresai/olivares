@@ -239,7 +239,7 @@
       "savedPurging": "Calendario guardado, y el purgado está en vigor",
       "savedRetaining": "Calendario guardado. No borra nada.",
       "saveUnconfirmed": "El motor ha aceptado la petición pero no ha devuelto el calendario, así que no se puede confirmar",
-      "noGate": "No hay ninguna puerta de aprobación cableada, así que armar un purgado se deniega. El purgado no se ha armado.",
+      "noGate": "No hay ninguna puerta de aprobación configurada, así que armar un purgado se deniega. El purgado no se ha armado.",
       "approvalExpired": "La aprobación ha caducado. Guarda otra vez para solicitar una nueva.",
       "underFloor": "La ventana es más corta que el mínimo regulatorio de esta clase",
       "refused": "Armar el purgado se ha rechazado",
@@ -518,7 +518,7 @@
     },
     "empty": {
       "title": "Ningún fichero enumerado",
-      "body": "La costura está conectada y el almacén no reporta ficheros para este tenant."
+      "body": "La costura está configurada y el almacén no reporta ficheros para este tenant."
     },
     "confirm": {
       "title": "¿Borrar este fichero?",
@@ -538,7 +538,7 @@
       "pending": "Pendiente de aprobación",
       "denied": "Denegado",
       "failed": "Fallido",
-      "not_wired": "Costura sin conectar",
+      "not_wired": "Costura sin configurar",
       "error": "Error del motor"
     }
   },

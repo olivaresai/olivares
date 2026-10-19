@@ -52,6 +52,10 @@ const (
 	distributionTable            = "governance_policy_distribution" // 30 chars (< 40-char cap)
 	observedKind      model.Kind = "governance.policy_observed"     //
 	observedTable                = "governance_policy_observed"     // 26 chars
+	// The workstation tool inventory: the latest report per (scope, driver), written
+	// by the Business fleet check-in and never by Community (workstation_inventory.go).
+	workstationToolKind  model.Kind = "governance.workstation_tool"
+	workstationToolTable            = "governance_workstation_tool" // 27 chars (< 40-char cap)
 	// the estate kill switch — one mutable lifecycle row per emergency stop
 	// (active → reenabled, with a forced post-review closing the incident), plus
 	// the guardian-agent rule set (operator-authored auto-containment) and the
@@ -221,6 +225,14 @@ const (
 	colObsDriftAt     = "last_drift_at" // when drift was last computed for this scope
 )
 
+// workstation_tool columns. scope and checked_in_at are policy_observed's: the scope
+// is the host the check-in names, so the inventory joins the drift view on it.
+const (
+	colToolDriver  = "driver"       // the provider driver key of the tool
+	colToolVersion = "tool_version" // the installed version, when the tool reports one (the API field is version; version is a reserved base column)
+	colToolState   = "state"        // ready|not_signed_in|not_installed|unknown|error; never an account detail
+)
+
 // collection columns (a directory group/role/policy mirrored from a source).
 const (
 	colSource      = "source"
@@ -252,6 +264,8 @@ const (
 	colRejectCount        = "reject_count"
 	colReason             = "reason"
 	colApprovalReview     = "review"
+	colChangeClass        = "change_class"
+	colChangePaths        = "change_paths"
 	colPolicyRef          = "policy_ref"
 	colExpiresAt          = "expires_at"
 	colEscalateAt         = "escalate_at"
@@ -547,6 +561,12 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 				model.Leaf("tool", model.None("a reviewed tool's display name, never resolved to a principal: approval_review.go:51")),
 				model.Leaf("text", model.None("bounded masked display facts, never execution or authority input: approval_review.go:51")))},
 			{Name: colPolicyRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the matched approval policy, rendered only: approvals.go:94")},
+			// The class of the change a publication proposes and the paths that
+			// decided it: set once at the request, matched against approval
+			// policies and rendered. Added nullable like the consume markers.
+			{Name: colChangeClass, Kind: model.KindText, Nullable: true, Principal: model.None("a change class from a closed set, matched against approval policies and rendered only: approvals.go:365, approvals.go:127, changeclass.go:57")},
+			{Name: colChangePaths, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
+				model.Leaf("[]", model.None("bounded repository paths of a proposed change, rendered only and never resolved to an account: approvals.go:133, approvals.go:281, changeclass.go:124")))},
 			{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colEscalateAt, Kind: model.KindTimestamp, Nullable: true},
 			{Name: colEscalatedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -554,7 +574,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// (F-02): single-use consume markers, NULL until first consume. Added
 			// nullable so the store's additive reconcile materializes them on an existing
 			// table without a hand-authored migration (sqlstore reconcileColumns).
-			{Name: colConsumedBy, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("the consuming caller's tool-use id, compared only with a later consumer id: approvals.go:840")},
+			{Name: colConsumedBy, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("the consuming caller's tool-use id, compared only with a later consumer id: approvals.go:1023, and shown only as a spent flag: approvals.go:131")},
 			{Name: colConsumedAt, Kind: model.KindTimestamp, Nullable: true},
 		},
 	}); err != nil {
@@ -824,6 +844,30 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			// One observed row per (surface, scope): check-ins upsert the latest state.
 			Name:    "governance_policy_observed_uniq",
 			Columns: []string{model.ColTenantID, colObsSurface, colObsScope},
+			Unique:  true,
+		}},
+	}); err != nil {
+		return err
+	}
+
+	// The workstation tool inventory: the latest report per (scope, driver). Latest
+	// state by design; the chronology is the audit trail of the check-in. Business
+	// writes it; Community registers the table so lint:schema-parity holds.
+	if err := reg.Register(model.EntityDescriptor{
+		Kind:  workstationToolKind,
+		Table: workstationToolTable,
+		Fields: []model.FieldSpec{
+			// A workstation id can carry a person's login or name, so it is scanned like any text.
+			{Name: colObsScope, Kind: model.KindText, Indexed: true, Principal: model.Scan(model.ClassEvidence)},
+			{Name: colToolDriver, Kind: model.KindText, Principal: model.None("a provider driver key of lowercase letters, digits and - _ . only: workstation_inventory.go:19-20")},
+			{Name: colToolVersion, Kind: model.KindText, Nullable: true, Principal: model.None("a version string of at most 64 letters, digits and . + _ ~ - only, shown only: workstation_inventory.go:21-22")},
+			{Name: colToolState, Kind: model.KindText, Principal: model.None("a closed sign-in state set: workstation_inventory.go:25-26")},
+			{Name: colObsCheckedInAt, Kind: model.KindTimestamp},
+		},
+		Indexes: []model.IndexSpec{{
+			// One row per (scope, driver): a check-in replaces the latest report.
+			Name:    "governance_workstation_tool_uniq",
+			Columns: []string{model.ColTenantID, colObsScope, colToolDriver},
 			Unique:  true,
 		}},
 	}); err != nil {

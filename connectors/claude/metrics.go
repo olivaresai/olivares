@@ -8,6 +8,8 @@ import (
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
+
+	"github.com/olivaresai/olivares/connectors/internal/otlptime"
 )
 
 // This file maps the VALUES of the Claude Code productivity/adoption metrics.
@@ -126,6 +128,35 @@ func numberDataPoints(m *metricspb.Metric) []*metricspb.NumberDataPoint {
 	}
 }
 
+// dataPointTimes returns the TimeUnixNano of every datapoint of a metric, of any
+// aggregation: a batch of histograms (the gen_ai client metrics) reports its time too.
+func dataPointTimes(m *metricspb.Metric) []uint64 {
+	var out []uint64
+	switch d := m.GetData().(type) {
+	case *metricspb.Metric_Sum:
+		for _, dp := range d.Sum.GetDataPoints() {
+			out = append(out, dp.GetTimeUnixNano())
+		}
+	case *metricspb.Metric_Gauge:
+		for _, dp := range d.Gauge.GetDataPoints() {
+			out = append(out, dp.GetTimeUnixNano())
+		}
+	case *metricspb.Metric_Histogram:
+		for _, dp := range d.Histogram.GetDataPoints() {
+			out = append(out, dp.GetTimeUnixNano())
+		}
+	case *metricspb.Metric_ExponentialHistogram:
+		for _, dp := range d.ExponentialHistogram.GetDataPoints() {
+			out = append(out, dp.GetTimeUnixNano())
+		}
+	case *metricspb.Metric_Summary:
+		for _, dp := range d.Summary.GetDataPoints() {
+			out = append(out, dp.GetTimeUnixNano())
+		}
+	}
+	return out
+}
+
 // metricIsAdditive reports whether a metric's datapoints are DELTA increments (each one
 // added into the day bucket) vs a snapshot/level. Claude Code exports its counters with
 // DELTA temporality by default (VERIFIED 2026-06-20, monitoring-usage docs); an operator
@@ -174,10 +205,35 @@ func roundToInt(f float64) int64 {
 // dpTime returns the datapoint's instant (TimeUnixNano) as UTC, falling back to the
 // receiver clock when the producer left it zero.
 func dpTime(dp *metricspb.NumberDataPoint, fallback time.Time) time.Time {
-	if t := dp.GetTimeUnixNano(); t != 0 {
-		return time.Unix(0, int64(t)).UTC()
+	if t, ok := otlptime.Sender(dp.GetTimeUnixNano()); ok {
+		return t
 	}
 	return fallback
+}
+
+// batchTime is the instant a resource-metrics batch reports: its newest datapoint
+// time, or fallback when no datapoint carries one that can be believed. It is the
+// session's liveness evidence, so a batch a collector buffered or a producer
+// back-filled reads as the moment it describes and not as the moment it arrived
+// (#2268: 48 sessions of one event, all "seen 43 seconds ago"). A datapoint that
+// claims a time after fallback (clock skew, or a lie) or one a signed instant
+// cannot hold is skipped, so one bad point does not discard the valid ones.
+func batchTime(rm *metricspb.ResourceMetrics, fallback time.Time) time.Time {
+	var newest time.Time
+	for _, sm := range rm.GetScopeMetrics() {
+		for _, m := range sm.GetMetrics() {
+			for _, ns := range dataPointTimes(m) {
+				t, ok := otlptime.Sender(ns)
+				if ok && !t.After(fallback) && t.After(newest) {
+					newest = t
+				}
+			}
+		}
+	}
+	if newest.IsZero() {
+		return fallback
+	}
+	return newest
 }
 
 // ingestMetricValues walks a resource-metrics batch and feeds each recognized adoption
@@ -207,7 +263,7 @@ func (r *receiver) ingestMetricValues(rm *metricspb.ResourceMetrics, id claudeId
 					session:  id.sessionID,
 					dims:     adoptionMetricDimensions(name, merged),
 					labels:   labelsFromAttrs(merged, r.labelKeys),
-					at:       dpTime(dp, r.now()),
+					at:       r.stamp(dpTime(dp, time.Time{})),
 				})
 			}
 		}

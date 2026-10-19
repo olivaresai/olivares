@@ -1,4 +1,35 @@
 {
+  "wiki": {
+    "title": "Wiki",
+    "create": "Create wiki",
+    "created": "Wiki created",
+    "noWiki": "No wiki in this folder.",
+    "loading": "Loading wiki…",
+    "ingest": "Ingest",
+    "ask": "Ask",
+    "lint": "Lint",
+    "question": "Question",
+    "source": "Source",
+    "chooseSource": "Choose a source under raw/",
+    "upload": "Upload source",
+    "raw": "Back to raw/",
+    "tool": "AI tool",
+    "chooseTool": "Choose an AI tool",
+    "needTool": "Sign in an AI tool to run wiki operations.",
+    "tools": "AI tools",
+    "ingestSource": "Ingest source",
+    "askWiki": "Ask wiki",
+    "started": "Wiki session started",
+    "openSession": "Open session",
+    "index": "Index",
+    "page": "Wiki page",
+    "recent": "Recent activity",
+    "noEntries": "No entries yet.",
+    "truncated": "File read truncated. Increase the folder's read limit to see the complete file.",
+    "notText": "This file is not UTF-8 Markdown.",
+    "working": "Working…",
+    "tooLarge": "Source exceeds the folder's upload limit. Choose a smaller file."
+  },
   "listTruncation": {
     "label": "Loaded {{n}} templates; there are more",
     "hint": "Only the loaded templates can be selected for this launch. A template not shown here may exist beyond this page."
@@ -90,6 +121,13 @@
     "hint": "Removed when the branch is merged and the worktree is clean. Tick to discard unmerged or uncommitted work."
   },
   "create": {
+    "fastMode": "Fast mode",
+    "serviceTier": "Service tier",
+    "speedOn": "On",
+    "speedOff": "Off",
+    "speedUnavailable": "Speed options changed. Use the tool default or select another model.",
+    "speedDefault": "Use tool default",
+    "speedLoadFailed": "Speed options could not be loaded.",
     "title": "New session",
     "titleTool": "New {{tool}} session",
     "description": "Say what to do first. Every other launch choice is under Advanced options.",
@@ -109,7 +147,7 @@
     "worktreeHint": "Starts a new branch in a worktree of its own, so sessions on one repository don't share files. The folder must be the repository's top folder.",
     "worktreeFrom": "Starts at",
     "isolation": "Isolation",
-    "isolationNativeOnly": "Only native is wired this release; container/sandbox are refused.",
+    "isolationContainerHint": "Container runs the session in podman or Docker on this server. A session on a provider from Providers needs native.",
     "envAllow": "Forward host env (names)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Allowlist of host env var NAMES to pass through (values are never sent).",
@@ -135,7 +173,7 @@
       "required": "An orchestration profile requires an independently authenticated agent identity."
     },
     "blocked": {
-      "profilesForbidden": "Your role cannot read provider profiles (sessions:profile:read), so no session can start here.",
+      "profilesForbidden": "Your role cannot read provider profiles, so no session can start here.",
       "profilesFailed": "Provider profiles could not be read.",
       "profilesLoading": "Reading provider profiles…",
       "noProfile": "No provider profile yet. Add a provider first.",
@@ -234,6 +272,7 @@
       "notLive": "Start or resume the session to send.",
       "approval": "The launch waits for an approval; Send works once it is approved.",
       "sending": "Sending… Wait for the session to accept it.",
+      "uploading": "Storing the image… Send works once it is attached.",
       "empty": "Type something to send."
     }
   },
@@ -433,14 +472,14 @@
     "empty": {
       "title": "No provider profiles",
       "registerHint": "Register a profile to add a tool installation that already exists on this server. Sessions then run with its settings and sign-in.",
-      "noWrite": "Adding a profile needs the sessions:profile:write permission, which your role does not include."
+      "noWrite": "Your role cannot add profiles."
     },
     "filteredEmpty": {
       "title": "No profiles match this state",
       "description": "Only profiles in the state “{{state}}” are listed. Show all states to remove this filter.",
       "clear": "Show all states"
     },
-    "noRead": "Provider profiles are not shown: your role does not include sessions:profile:read.",
+    "noRead": "Provider profiles are not shown: your role cannot read them.",
     "listTruncation": {
       "label": "Loaded {{n}} profiles; there are more",
       "hint": "Only the loaded profiles can be selected here. A profile not shown may exist beyond this page."
@@ -539,7 +578,7 @@
         "title": "No source bindings",
         "description": "Bind a configured source to a profile to attribute the sessions it observes."
       },
-      "noRead": "Source bindings are not shown: your role does not include sessions:profile-binding:read.",
+      "noRead": "Source bindings are not shown: your role cannot read them.",
       "notBindable": "Only an active profile on this server can be linked.",
       "revoke": {
         "title": "Revoke binding",
@@ -572,7 +611,7 @@
         "title": "Binding details",
         "description": "Current binding details for the selected tenant. Refresh to check for changes.",
         "loading": "Reading the binding from the engine…",
-        "forbidden": "The engine refused this binding to your account just now (sessions:profile-binding:read on the active tenant); the engine decided this now, not a cached answer. Nothing of it is shown.",
+        "forbidden": "Your role cannot read this binding in this organization; the engine checked just now. Nothing of it is shown.",
         "missing": "The engine holds no binding with this reference for the active tenant right now. It may have been removed since the list was read; refresh the list to see the current rows.",
         "error": "The binding could not be read: {{message}}",
         "ended": "The read ended because your permission, tenant or session changed. Open Details again to read under the current authority.",
@@ -676,7 +715,7 @@
     "empty": {
       "title": "No provider accounts",
       "adoptHint": "Create an account, or name a profile you already have as an account.",
-      "noWrite": "Naming a profile as an account needs the sessions:account:write permission, which your role does not include."
+      "noWrite": "Your role cannot name a profile as an account."
     },
     "more": "Shown so far: {{shown}}. More accounts exist; load more to see them.",
     "moreFailed": "The next page of accounts could not be read. The accounts shown are not the complete list.",
@@ -794,7 +833,7 @@
     "title": "Local launch requirements",
     "loading": "Checking the selected profile’s local requirements…",
     "unavailable": "Requirements could not be read. This is not a launch decision.",
-    "forbidden": "Your role cannot read this profile’s requirements (sessions:profile:read).",
+    "forbidden": "Your role cannot read this profile’s requirements.",
     "notFound": "This profile is not available in the current tenant. Previous results were discarded.",
     "unauthenticated": "The session is no longer authenticated. Previous results were discarded.",
     "conflict": "The profile changed during inspection. The observation was discarded.",
@@ -805,10 +844,10 @@
     "requestHintReady": "Requesting a launch still runs every authorization, mint and process check. This is not proof the provider is signed in.",
     "requestHintUnknown": "Inspection is incomplete. You may still request a launch; the server will re-validate everything. This is not a ready verdict.",
     "requestBlocked": "This profile cannot start a session here. Its requirements under Advanced options say why.",
-    "noWrite": "Starting a session needs the sessions:run:write permission.",
+    "noWrite": "Your role cannot start sessions.",
     "waitingPreview": "Reading the template before checking the profile…",
     "providerAuth": "Provider sign-in is not observed here. A valid home or binary is not an authenticated account.",
-    "launchAuth": "Launch authorization is decided when you submit, and needs sessions:run:write.",
+    "launchAuth": "Whether your role may start this session is checked when you submit.",
     "remoteControl": "Lifecycle only — conversation I/O stays with the provider; there is no bridged turn console.",
     "managedInjectionUnused": "This transport does not apply the selected managed injection. It does not mint an inference credential and does not prove account authentication.",
     "codexProtocol": "Codex app-server protocol; input is a turn of text, not Claude NDJSON.",
@@ -841,12 +880,12 @@
       "program": "Program",
       "homes": "Homes",
       "auth_source": "Authentication source",
-      "credential_source": "Credential wiring",
+      "credential_source": "Credential source",
       "runtime_credentials": "Runtime credentials"
     },
     "code": {
       "profile_active": "The profile is active.",
-      "profile_disabled": "The profile is disabled. Enable requires sessions:profile:write; a retired profile cannot be reactivated.",
+      "profile_disabled": "The profile is disabled. Enabling it needs a role that can change profiles; a retired profile cannot be reactivated.",
       "profile_retired": "The profile is retired and cannot be used for a new launch.",
       "environment_local": "This profile belongs to this node.",
       "other_environment": "This profile belongs to another server. Choose a profile on this server, or use the server that manages it. Sessions are never started on another server automatically.",
@@ -856,8 +895,8 @@
       "transport_unsupported": "This transport is not a contract of the selected driver.",
       "runner_ready": "The session runner can be inspected.",
       "runner_not_configured": "The session runner is not configured on this runtime.",
-      "isolation_unsupported": "The native runner cannot provide this isolation. Keep native, or use a runner that demonstrates the requested containment.",
-      "runner_inspection_unavailable": "The wired runner cannot be inspected without launching. That is not a missing installation.",
+      "isolation_unsupported": "This server cannot provide this isolation. Keep native, or install podman or Docker on the server for container.",
+      "runner_inspection_unavailable": "The configured runner cannot be inspected without launching. That is not a missing installation.",
       "program_present": "The resolved program is present and executable for this identity.",
       "program_missing": "The resolved program is not present. Configure the official CLI through the existing procedure; for Claude that may name OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Nothing is installed from this read.",
       "program_not_executable": "The resolved program is not executable for this identity.",
@@ -869,15 +908,15 @@
       "auth_source_legacy_claude": "The authorized source is the historical Claude credential path.",
       "auth_source_required": "This driver needs an explicit authentication source: account-home or managed injection. That choice is made on the profile, not from this inspection.",
       "managed_injection_not_applied_for_transport": "Managed injection is selected, but this transport does not apply it.",
-      "claude_credential_source_configured": "The Claude inference credential source is wired.",
+      "claude_credential_source_configured": "The Claude inference credential source is configured.",
       "claude_credential_source_not_configured": "No credential for Claude Code here: sign it in with its own login on AI tools, or use an API key saved in Providers. A deployment with its own inference gateway sets OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
-      "provider_credential_adapter_configured": "This driver’s credential adapter is wired.",
-      "provider_credential_adapter_not_configured": "This driver’s governed credential adapter is not wired. Do not reuse another provider’s bearer or fall back to account-home.",
+      "provider_credential_adapter_configured": "This driver’s credential adapter is configured.",
+      "provider_credential_adapter_not_configured": "This driver’s governed credential adapter is not configured. Do not reuse another provider’s bearer or fall back to account-home.",
       "credential_source_not_injected": "This combination does not inject an inference credential.",
       "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
-      "runtime_credentials_wired": "Work and K3 runtime credentials are wired.",
+      "runtime_credentials_wired": "Work and K3 runtime credentials are configured.",
       "runtime_credentials_not_requested": "This composition does not request work/K3 runtime credentials.",
-      "runtime_credential_wiring_incomplete": "Work/K3 runtime credential wiring is incomplete. An operator reviews that composition; this read does not request commercial credentials.",
+      "runtime_credential_wiring_incomplete": "Work/K3 runtime credential setup is incomplete. An operator reviews that composition; this read does not request commercial credentials.",
       "runtime_readiness_unavailable": "Work/K3 runtime readiness could not be observed.",
       "inspection_unavailable": "This requirement could not be inspected. Retry the read or ask for an environment review. Uncertainty is not “not installed”.",
       "not_checked_in_this_environment": "This requirement was not checked on this node because the profile belongs elsewhere. That is not “homes missing”."
@@ -890,9 +929,9 @@
       "configure_session_runner": "Configure the session runner.",
       "configure_provider_program": "Configure the official provider CLI on this runtime.",
       "review_profile_homes": "Review the stored homes through the admin configuration read.",
-      "authorize_auth_source": "Authorize account-home or managed injection on the profile (sessions:profile:write).",
+      "authorize_auth_source": "Authorize account-home or managed injection on the profile.",
       "configure_claude_credential_source": "Sign Claude Code in on AI tools, or use an API key from Providers.",
-      "configure_provider_credential_adapter": "Wire this driver’s governed credential adapter.",
+      "configure_provider_credential_adapter": "Set up this tool’s credential adapter.",
       "review_runtime_credential_composition": "Review the work/K3 runtime credential composition.",
       "select_supported_selection": "Choose a transport and isolation this runtime demonstrates.",
       "retry_inspection": "Read the requirements again."
@@ -930,7 +969,7 @@
     "mismatch": "The answer belonged to another profile version, driver or environment and was discarded.",
     "conflict": "The profile changed during observation. The observation was discarded.",
     "unavailable": "Host tool observation could not be read. This is not a finding about the tool.",
-    "forbidden": "Your role cannot read this profile’s host tool observation (sessions:profile:read).",
+    "forbidden": "Your role cannot read which tools this profile’s host has.",
     "notFound": "This profile is not available in the current tenant. Previous observations were discarded.",
     "unauthenticated": "The session is no longer authenticated. Previous observations were discarded.",
     "state": {
@@ -963,5 +1002,23 @@
       "different": "Not the configured program",
       "unknown": "Comparison with the configured program is unknown"
     }
+  },
+  "attach": {
+    "add": "Attach an image",
+    "tray": "Attached images",
+    "remove": "Remove {{name}}",
+    "uploading": "Storing…",
+    "pasted": "Pasted image",
+    "failed": "{{name}} was not attached: {{reason}}",
+    "notImage": "it is not a PNG, JPEG, WebP or GIF image",
+    "tooLarge": "it is {{size}} MB and the limit is {{limit}} MB",
+    "tooMany": "a message takes up to {{count}} images",
+    "notStored": "the image could not be stored",
+    "sent": "Attached images",
+    "imageN": "Image {{n}}",
+    "open": "Open {{name}} full size",
+    "fullSize": "The attached image at full size",
+    "unavailable": "Image not available",
+    "movedOn": "you moved to another session before it was stored"
   }
 }

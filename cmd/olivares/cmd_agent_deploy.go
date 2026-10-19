@@ -51,8 +51,9 @@ func newAgentDeployCmd() *cobra.Command {
 		yes                        bool
 	)
 	cmd := &cobra.Command{
-		Use:   "deploy <claude|codex|grok|opencode>",
-		Short: "Find an official CLI on this host and register the profile a session launches under",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "deploy <claude|codex|grok|opencode>",
+		Short:       "Find an official CLI on this host and register the profile a session launches under",
 		Long: "deploy is the short path from an installed CLI to a session that can launch: it detects\n" +
 			"the driver's executable, registers a provider profile for the homes it runs under, and —\n" +
 			"with --provider — binds the credential that profile's launches use.\n\n" +

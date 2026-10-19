@@ -558,6 +558,9 @@ func buildOpenAPI() map[string]any {
 		"/v1/members", obj("get", op("listMembers", "List the resolved tenant's member roster (role, workspace scoping, groups)", tagSystem, true,
 			jsonResp("OK", listOf(ref("RosterMember"))),
 			nil, tenantParam)),
+		"/v1/members/{id}", obj("delete", op204("removeMember",
+			"Remove a member from the resolved tenant: a scoped offboard that leaves the account and its other organizations alone (404 when the id is not a member; 409 when the caller removes itself or the last active owner; 403 when the member outranks the caller or the caller is confined to a workspace; a signed-in person also needs the administrative step-up)",
+			tagSystem, true, idParam, tenantParam)),
 
 		// ── Directory: provisioned groups, invitations, onboarding ────
 		"/v1/groups", obj("get", op("listGroups",
@@ -679,6 +682,9 @@ func buildOpenAPI() map[string]any {
 			nil, idParam, tenantParam)),
 
 		// ── System (orgs) ──────────────────────────────────────────────
+		"/v1/system/session-idle", obj(
+			"get", op("getSessionIdleSettings", "Read instance session idle-stop settings (superadmin)", tagSystem, true, jsonResp("OK", ref("SessionIdleSettings")), nil),
+			"put", op("saveSessionIdleSettings", "Save instance session idle-stop settings (superadmin, configured step-up)", tagSystem, true, jsonResp("OK", ref("SessionIdleSettings")), body(ref("SessionIdleSettings")))),
 		"/v1/system/tracing", obj(
 			"get", op("getTracingSettings", "Read saved and effective tracing settings (superadmin)", tagSystem, true,
 				jsonResp("OK", ref("TracingStatus")), nil),
@@ -731,6 +737,15 @@ func buildOpenAPI() map[string]any {
 				jsonResp("OK", obj("type", "object", "properties", obj("name", obj("type", "string"), "action", obj("type", "string")))),
 				body(ref("SecretInput"))),
 			"delete", op204("deleteSecret", "Delete a sealed secret", tagConsole, true)),
+		"/v1/console/secrets/reveal", obj("post", op("revealSecret", "Reveal one item of the caller's own personal vault (step-up, audited, rate limited)", tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("name", obj("type", "string"), "value", obj("type", "string")))),
+			body(ref("SecretInput")))),
+		"/v1/console/secrets/totp", obj("post", op("getVaultCode", "Current authenticator code of one of the caller's own vault items (step-up, audited, rate limited; never the seed)", tagConsole, true,
+			jsonResp("OK", ref("VaultCode")),
+			body(ref("SecretInput")))),
+		"/v1/console/secrets/generate", obj("post", op("generatePassword", "Generate a random password for the signed-in member; nothing is stored", tagConsole, true,
+			jsonResp("OK", obj("type", "object", "properties", obj("password", obj("type", "string", "format", "password")))),
+			body(ref("PasswordOptions")))),
 		"/v1/console/license", obj(
 			"get", op("getLicenseStatus", "Current license status and entitlements", tagConsole, true,
 				jsonResp("OK", ref("LicenseStatus")), nil),
@@ -762,6 +777,20 @@ func buildOpenAPI() map[string]any {
 					"message", obj("type", "string"),
 				))),
 				body(ref("ConnectorOnboardInput")))),
+		"/v1/console/notify-destinations", obj(
+			"get", op("listNotifyDestinations", "List notification destinations and the kinds the console can create", tagConsole, true,
+				jsonResp("OK", ref("NotifyDestinationList")), nil),
+			"put", op("putNotifyDestination", "Create or update a Slack or Teams notification destination", tagConsole, true,
+				jsonResp("OK", ref("NotifyDestination")),
+				body(ref("NotifyDestinationInput"))),
+			"delete", op("deleteNotifyDestination", "Remove a console notification destination", tagConsole, true,
+				jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")))),
+				body(obj("type", "object", "properties", obj("name", obj("type", "string")), "required", arr("name"))))),
+		// SUBPATH, not the parent: chi registers POST on /console/notify-destinations/test.
+		"/v1/console/notify-destinations/test", obj(
+			"post", op("testNotifyDestination", "Send a test message through a candidate notification destination", tagConsole, true,
+				jsonResp("OK", obj("type", "object", "properties", obj("ok", obj("type", "boolean")))),
+				body(ref("NotifyDestinationInput")))),
 		"/v1/console/sources", obj(
 			"get", op("listSources", "List configured source connectors and their status", tagConsole, true,
 				jsonResp("OK", obj("type", "object", "properties", obj(
@@ -982,6 +1011,17 @@ func buildOpenAPI() map[string]any {
 					"required", arr("selected"),
 					"properties", obj("selected", obj("type", "array", "items", obj("type", "string"),
 						"description", "The modules to run, by name.")))))),
+		// ── Updates: the installed and newest release, and the apply ───
+		"/v1/console/updates", obj(
+			"get", op("getEngineUpdate",
+				"The running version, the newest signed release in the instance's channel with its notes, and whether it is newer",
+				tagConsole, true,
+				jsonResp("OK", ref("EngineUpdate")), nil)),
+		"/v1/console/updates/apply", obj(
+			"post", op("applyEngineUpdate",
+				"Install the newest release as the olivares upgrade command does and restart the engine on it (AAL3 step-up)",
+				tagConsole, true,
+				jsonResp("OK", ref("EngineUpdate")), nil)),
 		// ── Engine log viewer: SSE stream + ring-buffer snapshot ──
 		"/v1/console/logs/stream", obj("get", func() map[string]any {
 			o := rawOp("streamLogs",
@@ -1007,10 +1047,14 @@ func buildOpenAPI() map[string]any {
 	for _, method := range []string{"get", "put"} {
 		operation := paths["/v1/system/tracing"].(map[string]any)[method].(map[string]any)
 		operation["responses"].(map[string]any)["503"] = jsonResp("Tracing settings or collector configuration unavailable", ref("Error"))
+		operation = paths["/v1/system/session-idle"].(map[string]any)[method].(map[string]any)
+		operation["responses"].(map[string]any)["503"] = jsonResp("Session idle settings unavailable", ref("Error"))
 	}
 	applyStability(paths)
 
 	schemas := obj(
+		"SessionIdleSettings", obj("type", "object", "required", []string{"idle_stop_minutes"}, "properties", obj(
+			"idle_stop_minutes", obj("type", "integer", "minimum", 0, "maximum", 10080, "default", 0, "description", "0 disables auto-stop; enabled values are 6..10080 minutes after the five-minute idle projection. Finished sessions are stopped only with no open view, approval, child, peer or newer message."))),
 		"TracingSettings", obj("type", "object", "properties", obj(
 			"enabled", obj("type", "boolean"),
 			"endpoint", obj("type", "string", "maxLength", 4096, "description", "Collector host or HTTP(S) URL without credentials, query or fragment."),
@@ -1420,6 +1464,7 @@ func buildOpenAPI() map[string]any {
 				"licensee", obj("type", "string"),
 				"plan", obj("type", "string"),
 				"support_tier", obj("type", "string"),
+				"support_profile", obj("type", "string"),
 			)),
 			"protocol_currency", obj("type", "object", "properties", obj(
 				"mcp_revision", obj("type", "string"),
@@ -1508,6 +1553,23 @@ func buildOpenAPI() map[string]any {
 			"value", obj("type", "string", "format", "password"),
 			"description", obj("type", "string"),
 		), "required", arr("name", "value")),
+
+		// The vault's authenticator code: the code and its window, never the seed.
+		"VaultCode", obj("type", "object", "properties", obj(
+			"code", obj("type", "string", "format", "password"),
+			"seconds_left", obj("type", "integer"),
+			"period", obj("type", "integer"),
+			"digits", obj("type", "integer"),
+		), "required", arr("code", "seconds_left", "period", "digits")),
+
+		// A generated password: any option left out keeps its default.
+		"PasswordOptions", obj("type", "object", "properties", obj(
+			"length", obj("type", "integer", "minimum", 8, "maximum", 128, "default", 20),
+			"lower", obj("type", "boolean", "default", true),
+			"upper", obj("type", "boolean", "default", true),
+			"digits", obj("type", "boolean", "default", true),
+			"symbols", obj("type", "boolean", "default", true),
+		)),
 
 		// ── Console: setup/health ───────────────────────────────────
 		"SetupStatus", obj("type", "object", "properties", obj(
@@ -1641,6 +1703,7 @@ func buildOpenAPI() map[string]any {
 			"licensee", obj("type", "string"),
 			"plan", obj("type", "string"),
 			"support_tier", obj("type", "string"),
+			"support_profile", obj("type", "string", "description", "Signed v3 product profile; separate from the legacy support relationship. Display only."),
 			"max_users", obj("type", "integer"),
 			"expires_at", obj("type", "string", "format", "date-time"),
 			"holder", obj("type", "string"),
@@ -1682,6 +1745,31 @@ func buildOpenAPI() map[string]any {
 			"applied", obj("type", "boolean"),
 			"note", obj("type", "string"),
 		)),
+
+		// ── Console: notification destinations ──────────────────────
+		"NotifyDestinationInput", obj("type", "object", "properties", obj(
+			"name", obj("type", "string"),
+			"kind", obj("type", "string", "enum", arr("slack", "teams")),
+			"webhook_url", obj("type", "string", "format", "password",
+				"description", "The vendor's incoming-webhook URL. Sealed on save and never returned. Blank keeps the stored value."),
+		), "required", arr("name", "kind")),
+
+		"NotifyDestination", obj("type", "object", "properties", obj(
+			"name", obj("type", "string"),
+			"kind", obj("type", "string"),
+			"source", obj("type", "string", "enum", arr("console", "file")),
+			"live", obj("type", "boolean"),
+			"webhook_host", obj("type", "string"),
+		), "required", arr("name", "kind", "source", "live")),
+
+		"NotifyDestinationList", obj("type", "object", "properties", obj(
+			"destinations", obj("type", "array", "items", ref("NotifyDestination")),
+			"kinds", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"kind", obj("type", "string"),
+				"title", obj("type", "string"),
+			), "required", arr("kind", "title"))),
+			"sealer_available", obj("type", "boolean"),
+		), "required", arr("destinations", "kinds", "sealer_available")),
 
 		// ── Console: sources ────────────────────────────────────────
 		"SourceRosterInput", obj("type", "object", "properties", obj(
@@ -2122,6 +2210,24 @@ func buildOpenAPI() map[string]any {
 			"running_sessions", obj("type", "integer",
 				"description", "Sessions this engine runs now. The restart that applies a change stops every one of them; each can be resumed."),
 		), "required", arr("modules", "running_sessions")),
+
+		// ── Updates ─────────────────────────────────────────────────
+		"EngineUpdate", obj("type", "object", "properties", obj(
+			"edition", obj("type", "string", "enum", arr("community", "enterprise")),
+			"version", obj("type", "string", "description", "The version this engine runs now; after an apply it stays the old one until the engine has restarted."),
+			"channel", obj("type", "string"),
+			"available", obj("type", "string", "description", "The newest release in the channel, when the check reached it."),
+			"update_available", obj("type", "boolean", "description", "The newest release is newer than the running version."),
+			"released_at", obj("type", "string", "format", "date-time"),
+			"notes", obj("type", "string"),
+			"security", obj("type", "boolean", "description", "The release fixes a published advisory."),
+			"advisories", obj("type", "array", "items", obj("type", "string")),
+			"check_error", obj("type", "string", "description", "Why the channel could not be checked, in the words `olivares upgrade` uses."),
+			"restart_required", obj("type", "boolean", "description", "A newer binary than the running one is already installed; the engine runs the old version until it restarts."),
+			"restarting", obj("type", "boolean", "description", "The engine is restarting itself on the new version."),
+			"running_sessions", obj("type", "integer",
+				"description", "Sessions this engine runs now. The restart that applies an update stops every one of them; each can be resumed."),
+		), "required", arr("edition", "version", "update_available", "running_sessions")),
 
 		// ── Engine log buffer ───────────────────────────────────────
 		"LogBuffer", obj("type", "object", "properties", obj(

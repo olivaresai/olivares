@@ -10,6 +10,7 @@ import {
   type TenantRequestOptions,
 } from '@/lib/api/client'
 import type { ListResponse } from '@/lib/api/types'
+import { agentOpsKeys } from '@/features/agentops/api'
 import type {
   BuiltinPack,
   SkillUpdateCheck,
@@ -65,16 +66,23 @@ export const skillsApi = {
     return { ...page, pack: first.pack, revisions }
   },
   /** Every target the caller can read that this pack is pinned to. */
-  packAssignments: (packId: string) =>
+  packAssignments: (packId: string, opts?: { signal?: AbortSignal }) =>
     http.get<ListResponse<SkillAssignment>>(
       `${BASE}/packs/${encodeURIComponent(packId)}/assignments`,
-      { query: { limit: LIST_CEILING } },
+      { query: { limit: LIST_CEILING }, signal: opts?.signal },
     ),
   /** What a new conversation pinned to this target receives: the launch's own
    * resolution (GET /selection), its refusals included. */
-  selection: (kind: SkillTargetKind, id: string, signal?: AbortSignal) =>
+  selection: (
+    kind: SkillTargetKind,
+    id: string,
+    signal?: AbortSignal,
+    profileRef?: string,
+  ) =>
     http.get<SkillSelection>(`${BASE}/selection`, {
-      query: { target_kind: kind, target_id: id },
+      query: profileRef
+        ? { target: [`${kind}:${id}`, `profile:${profileRef}`] }
+        : { target_kind: kind, target_id: id },
       signal,
     }),
   /** Read the pack's recorded source again: current, or available with its diff. */
@@ -119,6 +127,7 @@ export const skillsApi = {
       target_kind: SkillTargetKind
       target_id: string
       pack_revision_id: string
+      members?: string[]
       approve_active_content?: boolean
     },
     request: TenantRequestOptions,
@@ -185,8 +194,21 @@ export const skillsKeys = {
   builtins: (t: string | null) => ['skills', t, 'builtins'] as const,
   packs: (t: string | null) => ['skills', t, 'packs'] as const,
   pack: (t: string | null, id: string) => ['skills', t, 'pack', id] as const,
-  packAssignments: (t: string | null, id: string) =>
-    ['skills', t, 'pack', id, 'assignments'] as const,
-  selection: (t: string | null, kind: SkillTargetKind, id: string) =>
-    ['skills', t, 'selection', kind, id] as const,
+  packAssignments: (t: string | null, id: string, epoch: number) =>
+    [
+      ...agentOpsKeys.boundaryScope(t, epoch),
+      'skills',
+      'pack',
+      id,
+      'assignments',
+    ] as const,
+  selection: (
+    t: string | null,
+    kind: SkillTargetKind,
+    id: string,
+    profileRef?: string,
+  ) =>
+    profileRef
+      ? (['skills', t, 'selection', kind, id, 'profile', profileRef] as const)
+      : (['skills', t, 'selection', kind, id] as const),
 }

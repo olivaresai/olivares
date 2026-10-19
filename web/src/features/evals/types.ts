@@ -45,9 +45,14 @@ export interface TrendPoint {
   pass_rate: number
 }
 
-/** GET /scorecards — an on-read aggregate per (suite|agent|model|prompt_variant). */
+/** GET /scorecards — an on-read aggregate per (suite, subject, prompt variant). */
 export interface Scorecard {
+  /** Stable identity, independent of the display name and sibling cards. */
   key: string
+  name: string
+  suite_ref: string
+  subject_ref: string
+  prompt_variant?: string
   subject_kind: SubjectKind
   /**
    * ⛔ `pass_rate` ES LA MEDIA DE LAS CORRIDAS, NO LA TASA DE APROBACIÓN.
@@ -85,6 +90,37 @@ export interface Suite {
   judge_model?: string | null
   suite_version: number
   status: 'active' | 'archived'
+}
+
+/** The engine's bounded comparison diagnostic (`modules/evals/comparison.go`
+ *  ComparisonReason — "consumers must not parse prose"). The console branches on
+ *  `inconclusive_noise` only; the union stays open like ScorerId because the
+ *  engine keeps adding bounded reasons the console does not read. */
+export type ComparisonReason = 'inconclusive_noise' | string
+
+/** The 95% Newcombe interval of the pass-rate difference against the baseline,
+ *  with BOTH denominators (engine `comparison.go` PassRateDiff). Drop is baseline
+ *  minus this run, so a positive drop is a worse run; `drop_ci` including zero is
+ *  what makes a drop over the threshold `inconclusive_noise` instead of a
+ *  regression — a rate without its n is not a defensible claim. */
+export interface PassRateDiff {
+  baseline_passed: number
+  baseline_n: number
+  passed: number
+  n: number
+  drop: number
+  drop_ci: { lo: number; hi: number }
+}
+
+/** The part of the engine's immutable comparison receipt
+ *  (`modules/evals/comparison.go` ComparisonEvidence) the console reads. The
+ *  engine attaches the receipt to EVERY run read — list, get, launch, stream and
+ *  gate (`runs.go` runDTO.Comparison) — so the verdict never needs a second
+ *  request. Only the fields the console consumes are declared; the engine's
+ *  receipt carries more (identity, cache basis, …). */
+export interface ComparisonEvidence {
+  reason: ComparisonReason
+  pass_rate_diff?: PassRateDiff
 }
 
 /** GET /runs · /runs/{id} — a run lifecycle aggregate (created already terminal). */
@@ -128,6 +164,15 @@ export interface EvalRun {
   /** A regression vs baseline emits a Finding (Kind=eval_regression) handled by the
    *  security view — here we only mark the run. */
   regressed: boolean
+  /**
+   * ⛔ `regressed: false` with `baseline_ref` present is not simply "no regression":
+   * since the interval of #2151, a drop over the threshold whose pass-rate-difference
+   * interval includes zero leaves `regressed` false with
+   * `comparison.reason = "inconclusive_noise"` ("measured drift, unproven
+   * regression"). The receipt, which the engine attaches to EVERY run read, the list
+   * included, is what separates that case from a true "no regression".
+   */
+  comparison?: ComparisonEvidence | null
   /** Δ vs baseline (baseline.score − run.score). */
   drift: number
   started_at: string

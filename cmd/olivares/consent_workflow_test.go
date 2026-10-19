@@ -43,7 +43,7 @@ func TestWorkflowObligationInAnotherTenantDoesNotBlockRetirement(t *testing.T) {
 		if !strings.Contains(stored, subject.id.String()) {
 			t.Fatalf("the other tenant's workflow does not name the account: %q", stored)
 		}
-		e.scimDelete(e.tT, subject.id)
+		e.deprovision(e.tT, subject.id)
 		e.runPump()
 		e.wantRetired(t, subject.id, e.tT)
 		if got := e.rowColumn(e.tB, "orchestration.workflow", id, "steps"); got != stored {

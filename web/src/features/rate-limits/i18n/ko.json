@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "{{n}}개 발견 사항을 불러왔으며 더 있습니다",
+    "hint": "요청 한도 요약은 불러온 발견 사항에서만 검색되었습니다. 이 페이지 뒤에 누락된 요약이 있을 수 있습니다."
+  },
+  "title": "요청 한도",
+  "description": "게이트웨이 또는 프록시가 동기화 상태를 유지해야 하는 조직 및 Workspace 범위 요청 한도의 읽기 전용 인벤토리입니다. Anthropic Rate Limits API(읽기 전용)에서 제공되며, 이 보기는 한도를 변경하지 않습니다.",
+  "caveats": {
+    "keepInSync": "게이트웨이/프록시는 동기화를 유지해야 합니다. 이 한도는 업스트림 게이트웨이 또는 프록시가 미러링해야 하는 인벤토리입니다. 여기서 강제되지 않으며, 변경은 콘솔이 아니라 프로바이더에서 수행합니다.",
+    "managedAgents": "관리형 에이전트는 Rate Limits API에 포함되지 않습니다. 해당 한도는 값이 0이 아니라 문서화된 공백입니다. API가 보고하지 않으므로 관리형 에이전트 행은 표시되지 않습니다."
+  },
+  "summary": {
+    "title": "동기화 상태",
+    "description": "읽기 전용 거버넌스 인제스트가 보고한 대로 게이트웨이 또는 프록시가 동기화 상태를 유지해야 하는 요청 한도 수입니다."
+  },
+  "count": {
+    "label": "동기화할 한도",
+    "observedAt": "{{at}}에 관찰됨",
+    "unknown": "개수를 사용할 수 없음"
+  },
+  "degraded": {
+    "title": "관리 API 거버넌스 인제스트를 사용할 수 없음",
+    "hint": "이 배포 표면(예: Bedrock, Vertex 또는 Foundry 게이트웨이)은 Anthropic Admin API를 노출하지 않으므로 여기서 요청 한도 인벤토리를 읽을 수 없습니다. 이는 빈 인벤토리가 아니라 정직한 사용 불가입니다."
+  },
+  "inventory": {
+    "title": "리미터별 인벤토리",
+    "description": "프로바이더가 보고한 각 리미터를 범위별로 그룹화합니다. 조직 전체 그룹이 먼저, 그다음 Workspace 재정의 그룹입니다.",
+    "unavailable": "인벤토리를 사용할 수 없음",
+    "unavailableHint": "읽기 전용 관리 커넥터가 설정되지 않아 여기서 리미터별 인벤토리를 읽을 수 없습니다. 이는 빈 인벤토리가 아니라 정직한 사용 불가입니다.",
+    "tableLabel": "요청 한도 인벤토리",
+    "empty": "보고된 요청 한도 없음",
+    "emptyHint": "프로바이더가 이 조직에 대한 리미터별 항목을 반환하지 않았습니다.",
+    "scope": {
+      "org": "조직"
+    },
+    "columns": {
+      "scope": "범위",
+      "groupType": "그룹",
+      "models": "모델",
+      "limiterType": "리미터",
+      "value": "값",
+      "orgLimit": "조직 한도"
+    }
+  },
+  "groupType": {
+    "model_group": "모델 그룹",
+    "batch": "배치",
+    "token_count": "토큰 수",
+    "files": "파일",
+    "skills": "스킬",
+    "web_search": "웹 검색"
+  },
+  "limitType": {
+    "requests_per_minute": "분당 요청 수",
+    "input_tokens_per_minute": "분당 입력 토큰",
+    "output_tokens_per_minute": "분당 출력 토큰",
+    "enqueued_batch_requests": "대기열에 있는 배치 요청"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "아직 보고된 요청 한도 없음",
+      "description": "읽기 전용 Anthropic Rate Limits API가 이 조직의 리미터별 한도를 반환하면 항목이 표시됩니다."
+    }
+  },
+  "effectiveState": {
+    "label": "여기서 변경할 수 있는 항목:",
+    "proxy": "추론 프록시",
+    "finops": "지출"
+  }
+}

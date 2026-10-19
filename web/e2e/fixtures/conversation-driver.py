@@ -15,6 +15,10 @@ It also answers Claude Code's `initialize` control request with a command catalo
 the real tool does for the console's "/" menu, and pushes system/commands_changed when
 the catalog file (.fixture-commands.json in the session folder, a JSON object
 {"commands": [...], "agents": [...]}) changes. The shapes are the ones measured on Claude Code 2.1.296.
+
+When the session folder holds a file named .fixture-echo-user, each turn also echoes the
+person's message as a user record, as Claude Code does with --replay-user-messages (#2129:
+the message navigator reaches the row of a message the tool has taken).
 """
 from __future__ import annotations
 
@@ -36,6 +40,8 @@ def emit(obj: dict[str, object]) -> None:
         sys.stdout.write(json.dumps(obj, separators=(",", ":")) + "\n")
         sys.stdout.flush()
 
+
+ECHO_USER_FILE = os.path.join(CWD, ".fixture-echo-user")
 
 # Like the real tool, the catalog comes from the session's own folder.
 CATALOG_FILE = os.environ.get("FIXTURE_COMMANDS_FILE") or os.path.join(CWD, ".fixture-commands.json")
@@ -111,6 +117,14 @@ while True:
                 }
             )
         continue
+    if os.path.exists(ECHO_USER_FILE):
+        emit(
+            {
+                "type": "user",
+                "session_id": SID,
+                "message": {"role": "user", "content": (request.get("message") or {}).get("content", "")},
+            }
+        )
     for estimated in (120, 412):
         emit(
             {

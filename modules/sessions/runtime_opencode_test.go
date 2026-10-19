@@ -565,7 +565,7 @@ func TestOpenCodeRuntimeRefusesAnUnadvertisedCapabilityRequest(t *testing.T) {
 	m, _, tenant, prof := openCodeHarness(t, AuthSourceAccountHome)
 	record := setOpenCodeFixture(t, prof, openCodeFixture{
 		SessionID: "ses-cap", PromptMode: "hold",
-		PromptReleasePath: filepath.Join(t.TempDir(), "never"), UnsupportedRequest: "fs/write_text_file",
+		PromptReleasePath: filepath.Join(t.TempDir(), "never"), UnsupportedRequest: "terminal/create",
 	})
 	dto, err := openCodeLaunch(t, m, tenant, prof)
 	if err != nil {

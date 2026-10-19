@@ -6,6 +6,8 @@ description: >-
   PayloadHash 锚定进已签名的审计账本。与 PAM 对齐，LIVE。
 ---
 
+特权会话录制是 **[Business](https://olivares.ai/pricing)** 功能。Community 对 `/v1/m/recording/` 下的每个路由返回 501 `business_required`，不录制任何内容，并隐藏命令组。已存储的会话保留在存储中。
+
 录制（`modules/recording`）是**特权会话录制**平面 —— 高保障买家对控制台和应急
 访问所期待的、与 PAM 对齐的控制。它将一次特权运营者会话在最敏感模块表面上实际所为捕获为
 结构化证据，并将该证据绑定到篡改可检测（tamper-evident）的审计账本，使其在事后无法被重写。

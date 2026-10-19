@@ -238,3 +238,12 @@ it('checks an update without applying and applies only with the reviewed digest 
     body: { apply: true, expected_digest: 'abc123' },
   })
 })
+
+it('previews a workspace and provider profile in the same server selection', async () => {
+  await skillsApi.selection('workspace', 'ws-1', undefined, 'ppf_profile-1')
+  expect(captured[0].url.searchParams.getAll('target')).toEqual([
+    'workspace:ws-1',
+    'profile:ppf_profile-1',
+  ])
+  expect(captured[0].url.searchParams.has('target_kind')).toBe(false)
+})

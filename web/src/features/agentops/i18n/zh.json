@@ -1,4 +1,35 @@
 {
+  "wiki": {
+    "title": "Wiki",
+    "create": "创建 Wiki",
+    "created": "Wiki 已创建",
+    "noWiki": "此文件夹中没有 Wiki。",
+    "loading": "正在加载 Wiki…",
+    "ingest": "导入",
+    "ask": "提问",
+    "lint": "检查",
+    "question": "问题",
+    "source": "来源",
+    "chooseSource": "选择 raw/ 下的来源文件",
+    "upload": "上传来源文件",
+    "raw": "返回 raw/",
+    "tool": "AI 工具",
+    "chooseTool": "选择 AI 工具",
+    "needTool": "登录 AI 工具以运行 Wiki 操作。",
+    "tools": "AI 工具",
+    "ingestSource": "导入来源",
+    "askWiki": "向 Wiki 提问",
+    "started": "Wiki 会话已启动",
+    "openSession": "打开会话",
+    "index": "索引",
+    "page": "Wiki 页面",
+    "recent": "最近活动",
+    "noEntries": "暂无记录。",
+    "truncated": "文件读取被截断。提高文件夹的读取上限以查看完整文件。",
+    "notText": "此文件不是 UTF-8 Markdown。",
+    "working": "正在处理…",
+    "tooLarge": "来源文件超过文件夹的上传上限。请选择较小的文件。"
+  },
   "listTruncation": {
     "label": "已加载 {{n}} 个模板；还有更多",
     "hint": "本次启动只能选择已加载的模板；未显示的模板可能位于后续页面。"
@@ -90,6 +121,13 @@
     "hint": "分支已合并且 worktree 干净时会自动删除。勾选以丢弃未合并或未提交的工作。"
   },
   "create": {
+    "fastMode": "快速模式",
+    "serviceTier": "服务等级",
+    "speedOn": "开启",
+    "speedOff": "关闭",
+    "speedUnavailable": "速度选项已更改。请使用工具默认设置或选择其他模型。",
+    "speedDefault": "使用工具默认设置",
+    "speedLoadFailed": "无法加载速度选项。",
     "title": "新建会话",
     "titleTool": "新建 {{tool}} 会话",
     "description": "先说要做什么。其他启动选项都在“高级选项”中。",
@@ -109,7 +147,7 @@
     "worktreeHint": "在独立的 worktree 中新建分支，使同一仓库的会话不共享文件。该文件夹必须是仓库的顶层文件夹。",
     "worktreeFrom": "起点",
     "isolation": "隔离",
-    "isolationNativeOnly": "本次发布仅接线了原生模式；容器/沙箱将被拒绝。",
+    "isolationContainerHint": "容器会在此服务器上通过 podman 或 Docker 运行会话。使用“提供商”中提供商的会话需要 native。",
     "envAllow": "转发宿主环境变量（名称）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "允许透传的宿主环境变量名称白名单（从不发送其值）。",
@@ -131,17 +169,17 @@
       "title": "启动身份",
       "humanHint": "会话以你自己的访问权限运行。",
       "human": "当前人类操作员",
-      "required": "编排配置需要独立验证的代理身份。"
+      "required": "编排配置需要独立验证的智能体身份。"
     },
     "blocked": {
-      "profilesForbidden": "你的角色无法读取提供商配置档案（sessions:profile:read），因此无法在此启动会话。",
+      "profilesForbidden": "你的角色无法读取提供商配置档案，因此无法在此启动会话。",
       "profilesFailed": "无法读取提供商配置档案。",
       "profilesLoading": "正在读取提供商配置档案…",
-      "noProfile": "还没有提供商配置档案。请先添加一个提供方。",
-      "openProviders": "打开提供方",
+      "noProfile": "还没有提供商配置档案。请先添加一个提供商。",
+      "openProviders": "打开提供商",
       "chooseProfile": "请选择一个提供商配置档案。",
       "worktreeFolder": "请为 worktree 选择一个仓库文件夹。",
-      "chooseAgent": "请选择此会话所用的已准入代理，或以你自己的身份运行。",
+      "chooseAgent": "请选择此会话所用的已准入智能体，或以你自己的身份运行。",
       "envConflict": "“转发宿主环境变量”中包含属于该配置档案的变量：请在“高级选项”中删除它。",
       "templateRefused": "该模板要求本次启动无法执行的条款：请在“高级选项”中选择其他模板。",
       "readinessFailed": "无法读取该配置档案的要求。"
@@ -233,6 +271,7 @@
       "notLive": "请启动或恢复会话以发送。",
       "approval": "启动正在等待审批；审批通过后即可发送。",
       "sending": "正在发送……请等待会话接受。",
+      "uploading": "正在保存图片… 附上后即可发送。",
       "empty": "请输入要发送的内容。"
     }
   },
@@ -432,14 +471,14 @@
     "empty": {
       "title": "没有提供商配置文件",
       "registerHint": "登记一个配置文件，以添加此服务器上已有的工具安装。之后，会话将使用其设置和登录信息运行。",
-      "noWrite": "添加配置文件需要 sessions:profile:write 权限，而你的角色不包含该权限。"
+      "noWrite": "你的角色无法添加配置文件。"
     },
     "filteredEmpty": {
       "title": "没有匹配此状态的配置文件",
       "description": "仅列出状态为“{{state}}”的配置文件。显示所有状态即可移除此筛选。",
       "clear": "显示所有状态"
     },
-    "noRead": "未显示提供商配置文件：您的角色不包含 sessions:profile:read。",
+    "noRead": "未显示提供商配置文件：您的角色无法读取它们。",
     "listTruncation": {
       "label": "已加载 {{n}} 个配置文件；还有更多",
       "hint": "此处只能选择已加载的配置文件。本页之外可能还有未显示的配置文件。"
@@ -538,7 +577,7 @@
         "title": "没有来源绑定",
         "description": "将已配置的来源绑定到配置文件，以归属其观测到的会话。"
       },
-      "noRead": "未显示来源绑定：您的角色不包含 sessions:profile-binding:read。",
+      "noRead": "未显示来源绑定：您的角色无法读取它们。",
       "notBindable": "只能绑定此服务器上的活动配置文件。",
       "revoke": {
         "title": "撤销绑定",
@@ -571,7 +610,7 @@
         "title": "绑定详情",
         "description": "所选租户的当前绑定详情。刷新以检查更改。",
         "loading": "正在从引擎读取绑定…",
-        "forbidden": "引擎刚刚拒绝向您的账户提供此绑定（活动租户上的 sessions:profile-binding:read）；这是引擎刚刚做出的决定，而非缓存的结果。不显示其任何内容。",
+        "forbidden": "您的角色无法在此组织中读取此绑定；引擎刚刚进行了检查。不显示其任何内容。",
         "missing": "引擎当前在活动租户中没有此引用的绑定。它可能在读取列表后已被移除；请刷新列表以查看当前行。",
         "error": "无法读取绑定：{{message}}",
         "ended": "由于您的权限、租户或会话发生变化，读取已结束。请重新打开“详情”，以当前权限重新读取。",
@@ -618,7 +657,7 @@
     },
     "workGrant": {
       "title": "编排权限",
-      "hint": "在一个工作区中授予操作权限。编排会话必须以已认证的代理身份启动。",
+      "hint": "在一个工作区中授予操作权限。编排会话必须以已认证的智能体身份启动。",
       "readPending": "正在等待已验证的配置档案读取以确认权限。",
       "none": "未授予编排权限",
       "workspace": "工作区 ID",
@@ -675,7 +714,7 @@
     "empty": {
       "title": "没有提供商账户",
       "adoptHint": "创建账户，或将已有的配置文件命名为账户。",
-      "noWrite": "将配置文件命名为账户需要 sessions:account:write 权限，而你的角色不包含该权限。"
+      "noWrite": "你的角色无法将配置文件命名为账户。"
     },
     "more": "目前已显示：{{shown}}。还有更多账户；加载更多即可查看。",
     "moreFailed": "无法读取下一页账户。所显示的账户不是完整列表。",
@@ -793,7 +832,7 @@
     "title": "本地启动要求",
     "loading": "正在检查所选配置档案的本地要求…",
     "unavailable": "无法读取要求。这不是启动判定。",
-    "forbidden": "当前角色不能读取此配置档案的要求 (sessions:profile:read)。",
+    "forbidden": "当前角色不能读取此配置档案的要求。",
     "notFound": "当前租户中没有此配置档案。已丢弃先前结果。",
     "unauthenticated": "会话已不再通过认证。已丢弃先前结果。",
     "conflict": "检查期间配置档案已变更。观测结果已丢弃。",
@@ -801,14 +840,14 @@
     "rereading": "正在读取…",
     "request": "请求启动",
     "requesting": "正在请求…",
-    "requestHintReady": "请求启动仍会走完授权、签发与进程启动。这不能证明提供方已登录。",
+    "requestHintReady": "请求启动仍会走完授权、签发与进程启动。这不能证明提供商已登录。",
     "requestHintUnknown": "检查未完成。仍可请求启动；服务器会重新校验全部项目。这不是 ready。",
     "requestBlocked": "此配置档案无法在此启动会话。原因见“高级选项”中的要求。",
-    "noWrite": "启动会话需要 sessions:run:write 权限。",
+    "noWrite": "你的角色无法启动会话。",
     "waitingPreview": "正在读取模板，然后检查配置档案…",
-    "providerAuth": "此处不观察提供方登录。有效的家目录或可执行文件不是已认证账户。",
-    "launchAuth": "启动授权在提交时决定，并且需要 sessions:run:write。",
-    "remoteControl": "仅生命周期：对话输入输出留在提供方，没有桥接的回合控制台。",
+    "providerAuth": "此处不观察提供商登录。有效的家目录或可执行文件不是已认证账户。",
+    "launchAuth": "提交时会检查你的角色能否启动此会话。",
+    "remoteControl": "仅生命周期：对话输入输出留在提供商，没有桥接的回合控制台。",
     "managedInjectionUnused": "此传输不应用所选的受管注入。它不会签发推理凭据，也不证明账户认证。",
     "codexProtocol": "Codex app-server 协议；输入是文本回合，不是 Claude NDJSON。",
     "grokProtocol": "Grok ACP 协议；输入是文本回合，不是 Claude NDJSON。",
@@ -817,8 +856,8 @@
     "transport": "传输",
     "isolation": "隔离",
     "failedInline": "启动请求被拒绝。你的选择保持不变。",
-    "stoppedAtStart": "The tool started and stopped at once. What it said:",
-    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
+    "stoppedAtStart": "该工具启动后立即停止。它输出的内容：",
+    "stoppedSilently": "它没有输出任何内容。请在“AI 工具”中检查它是否已安装并已登录，然后重新启动。",
     "state": {
       "ready": "已检查本地要求",
       "not_configured": "缺少配置",
@@ -840,12 +879,12 @@
       "program": "程序",
       "homes": "Homes",
       "auth_source": "认证来源",
-      "credential_source": "凭据接线",
+      "credential_source": "凭据来源",
       "runtime_credentials": "运行时凭据"
     },
     "code": {
       "profile_active": "该配置文件处于活动状态。",
-      "profile_disabled": "该配置文件已禁用。启用需要 sessions:profile:write；已退役的配置文件不能重新激活。",
+      "profile_disabled": "该配置文件已禁用。启用需要可更改配置文件的角色；已退役的配置文件不能重新激活。",
       "profile_retired": "该配置文件已退役，不能用于新的启动。",
       "environment_local": "该配置文件属于本节点。",
       "other_environment": "此配置文件属于另一台服务器。请选择此服务器上的配置文件，或使用管理它的服务器。会话绝不会自动在另一台服务器上启动。",
@@ -855,8 +894,8 @@
       "transport_unsupported": "此传输不是所选驱动的契约。",
       "runner_ready": "可以检查会话 Runner。",
       "runner_not_configured": "此运行时未配置会话 Runner。",
-      "isolation_unsupported": "原生 Runner 无法提供此隔离。请保持 native，或使用能够证明所请求隔离的 Runner。",
-      "runner_inspection_unavailable": "已接线的 Runner 无法在不启动的情况下检查。这不是安装缺失。",
+      "isolation_unsupported": "此服务器无法提供此隔离。请保持 native，或在服务器上安装 podman 或 Docker 以使用容器。",
+      "runner_inspection_unavailable": "已配置的 Runner 无法在不启动的情况下检查。这不是安装缺失。",
       "program_present": "解析到的程序存在，并且对此身份可执行。",
       "program_missing": "解析到的程序不存在。请按现有流程配置官方 CLI；对于 Claude，可以指定 OLIVARES_SESSION_RUNTIME_CLAUDE_BIN。本次读取不会安装任何内容。",
       "program_not_executable": "解析到的程序对此身份不可执行。",
@@ -868,15 +907,15 @@
       "auth_source_legacy_claude": "授权来源是 Claude 凭据的历史路径。",
       "auth_source_required": "此驱动需要明确的认证来源：account-home 或托管注入。该选择在配置文件上完成，而不是通过本次检查。",
       "managed_injection_not_applied_for_transport": "已选择托管注入，但此传输不会应用它。",
-      "claude_credential_source_configured": "Claude 推理凭据来源已接线。",
-      "claude_credential_source_not_configured": "Claude 推理凭据来源未接线。请配置 OLIVARES_SESSION_RUNTIME_WIF 或 OLIVARES_SESSION_RUNTIME_TOKEN_FILE。只使用名称，从不使用值。",
-      "provider_credential_adapter_configured": "此驱动的凭据适配器已接线。",
-      "provider_credential_adapter_not_configured": "此驱动的受治理凭据适配器未接线。不要复用其他提供商的 bearer，也不要回退到 account-home。",
+      "claude_credential_source_configured": "Claude 推理凭据来源已配置。",
+      "claude_credential_source_not_configured": "此处没有 Claude Code 的凭据：请在“AI 工具”中用其自身登录方式登录，或使用保存在“提供商”中的 API 密钥。自带推理网关的部署会设置 OLIVARES_SESSION_RUNTIME_WIF 或 OLIVARES_SESSION_RUNTIME_TOKEN_FILE。",
+      "provider_credential_adapter_configured": "此驱动的凭据适配器已配置。",
+      "provider_credential_adapter_not_configured": "此驱动的受治理凭据适配器未配置。不要复用其他提供商的 bearer，也不要回退到 account-home。",
       "credential_source_not_injected": "此组合不会注入推理凭据。",
-      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
-      "runtime_credentials_wired": "work/K3 运行时凭据已接线。",
+      "provider_record_bound": "此配置使用保存在“提供商”中的 API 密钥；该密钥即其凭据。",
+      "runtime_credentials_wired": "work/K3 运行时凭据已配置。",
       "runtime_credentials_not_requested": "此组合不请求 work/K3 运行时凭据。",
-      "runtime_credential_wiring_incomplete": "work/K3 运行时凭据接线不完整。由操作员审查该组合；本次读取不请求商业凭据。",
+      "runtime_credential_wiring_incomplete": "work/K3 运行时凭据配置不完整。由操作员审查该组合；本次读取不请求商业凭据。",
       "runtime_readiness_unavailable": "无法观测 work/K3 运行时 readiness。",
       "inspection_unavailable": "无法检查此要求。请重新读取，或请人审查环境。不确定不等于「未安装」。",
       "not_checked_in_this_environment": "因配置文件属于其他环境，本节点未检查此要求。这不是「Homes 缺失」。"
@@ -889,9 +928,9 @@
       "configure_session_runner": "配置会话 Runner。",
       "configure_provider_program": "在此运行时配置官方提供商 CLI。",
       "review_profile_homes": "通过管理配置读取查看已存储的 Homes。",
-      "authorize_auth_source": "在配置文件上授权 account-home 或托管注入（sessions:profile:write）。",
-      "configure_claude_credential_source": "接线 OLIVARES_SESSION_RUNTIME_WIF 或 OLIVARES_SESSION_RUNTIME_TOKEN_FILE。",
-      "configure_provider_credential_adapter": "接线此驱动的受治理凭据适配器。",
+      "authorize_auth_source": "在配置文件上授权 account-home 或托管注入。",
+      "configure_claude_credential_source": "在“AI 工具”中登录 Claude Code，或使用“提供商”中的 API 密钥。",
+      "configure_provider_credential_adapter": "设置此工具的凭据适配器。",
       "review_runtime_credential_composition": "审查 work/K3 运行时凭据组合。",
       "select_supported_selection": "选择此运行时能够证明的传输和隔离。",
       "retry_inspection": "再次读取要求。"
@@ -929,7 +968,7 @@
     "mismatch": "该应答属于其他配置文件版本、驱动或环境，已丢弃。",
     "conflict": "观察期间配置文件已更改。观察结果已丢弃。",
     "unavailable": "无法读取主机工具观察结果。这不是关于该工具的结论。",
-    "forbidden": "你的角色无法读取此配置文件的主机工具观察结果（sessions:profile:read）。",
+    "forbidden": "你的角色无法读取此配置文件的主机上有哪些工具。",
     "notFound": "此配置文件在当前租户中不可用。之前的观察结果已丢弃。",
     "unauthenticated": "会话已不再经过身份验证。之前的观察结果已丢弃。",
     "state": {
@@ -962,5 +1001,23 @@
       "different": "不是已配置的程序",
       "unknown": "与已配置程序的比较结果未知"
     }
+  },
+  "attach": {
+    "add": "附加图片",
+    "tray": "已附加的图片",
+    "remove": "移除 {{name}}",
+    "uploading": "保存中…",
+    "pasted": "粘贴的图片",
+    "failed": "{{name}} 未能附加：{{reason}}",
+    "notImage": "它不是 PNG、JPEG、WebP 或 GIF 图片",
+    "tooLarge": "它有 {{size}} MB，上限为 {{limit}} MB",
+    "tooMany": "一条消息最多附加 {{count}} 张图片",
+    "notStored": "图片无法保存",
+    "sent": "已附加的图片",
+    "imageN": "图片 {{n}}",
+    "open": "以原始大小打开 {{name}}",
+    "fullSize": "已附加图片的原始大小",
+    "unavailable": "图片不可用",
+    "movedOn": "保存前你已切换到另一个会话"
   }
 }

@@ -1,0 +1,132 @@
+{
+  "title": "Claude Code 도입",
+  "description": "Claude Code가 얼마나 사용되며, 제안한 것 중 개발자가 얼마나 유지하는지 보여줍니다.",
+  "range": {
+    "label": "기간",
+    "7d": "지난 7일",
+    "30d": "지난 30일",
+    "90d": "지난 90일",
+    "mtd": "이번 달"
+  },
+  "tabs": {
+    "overview": "개요",
+    "teams": "팀",
+    "developers": "개발자",
+    "trend": "추세"
+  },
+  "boundary": {
+    "note": "Claude API 트래픽만 포함합니다 — 관리자 Analytics 피드와 OTLP 텔레메트리 플레인입니다. {{providers}}에서 제공하는 사용량은 포함되지 않으므로 여기에 도입이 없다고 해서 실제로 없다는 증거가 되지는 않습니다.",
+    "providers": {
+      "claude-platform-aws": "AWS의 Claude Platform",
+      "microsoft-foundry": "Microsoft Foundry",
+      "amazon-bedrock": "Amazon Bedrock",
+      "vertex-ai": "Vertex AI"
+    }
+  },
+  "lenses": {
+    "analytics": {
+      "title": "개발자별(관리자 Analytics)",
+      "description": "관리자 Analytics 피드의 권위 있는 개발자별/일별 합계이며 {{developers}}명의 개발자를 포함합니다."
+    },
+    "telemetry": {
+      "title": "세션별(실시간 텔레메트리)",
+      "description": "OTLP 플레인의 실시간 세션별 활동이며 {{teams}}개 팀을 포함합니다. 활성 시간이 포함됩니다."
+    }
+  },
+  "comparison": {
+    "title": "공식 vs 관측",
+    "description": "관리자 Analytics API와 로컬 OTLP 텔레메트리 간에 공유되는 Claude Code 활동 지표를 비교합니다.",
+    "official": "공식(Analytics API)",
+    "observed": "관측(OTLP)",
+    "withinThreshold": "임계값 이내",
+    "empty": "이 기간에 공유 지표 활동이 없습니다.",
+    "boundaryNote": "공식 Analytics API는 {{providers}} 같은 3자 서피스를 포함하지 않으므로 텔레메트리에만 있는 사용량은 검토 신호이며 오용 결론이 아닙니다.",
+    "metrics": {
+      "sessions": "세션",
+      "tokens": "토큰",
+      "linesAdded": "추가된 줄",
+      "commits": "커밋",
+      "pullRequests": "풀 리퀘스트"
+    },
+    "directions": {
+      "aligned": "임계값 이내",
+      "telemetry_exceeds_official": "관측이 공식보다 {{ratio}} 초과",
+      "official_exceeds_telemetry": "공식이 관측보다 {{ratio}} 초과",
+      "official_plane_absent": "공식 플레인 없음",
+      "telemetry_plane_absent": "관측 플레인 없음"
+    }
+  },
+  "stats": {
+    "sessions": "세션",
+    "linesNet": "순 코드 줄",
+    "addedRemoved": "+{{added}} / -{{removed}}",
+    "commits": "커밋",
+    "pullRequests": "풀 리퀘스트",
+    "acceptance": "도구 수용률",
+    "acceptedOfTotal": "{{total}}개 중 {{accepted}}개 수용",
+    "tokens": "토큰",
+    "activeTime": "활성 시간"
+  },
+  "models": {
+    "total": "총 토큰",
+    "empty": "이 기간에 모델 사용량이 없습니다."
+  },
+  "acceptance": {
+    "empty": "이 기간에 도구 결정이 없습니다.",
+    "columns": {
+      "tool": "도구",
+      "accepted": "수용됨",
+      "rejected": "거부됨",
+      "rate": "수용률"
+    }
+  },
+  "trend": {
+    "title": "일별 추세",
+    "description": "선택한 렌즈의 시간별 생산성입니다.",
+    "lensLabel": "렌즈",
+    "empty": "이 기간에 활동이 없습니다.",
+    "emptyHint": "도입 추세는 선택한 기간의 세션에서 그려집니다. 활동이 있는 날짜를 포함하도록 기간을 넓히십시오."
+  },
+  "teams": {
+    "title": "팀별",
+    "description": "실시간 텔레메트리 플레인의 팀별 활동(운영자 팀 레이블)입니다.",
+    "empty": "이 기간에 팀 귀속 텔레메트리가 없습니다.",
+    "emptyHint": "Claude Code 플릿에 OTEL_RESOURCE_ATTRIBUTES(예: team=…)를 설정하여 팀별로 귀속하십시오.",
+    "unassigned": "(미지정)",
+    "columns": {
+      "team": "팀"
+    }
+  },
+  "developers": {
+    "title": "개발자별",
+    "description": "관리자 Analytics 피드의 개발자별 ROI입니다.",
+    "empty": "이 기간에 개발자별 활동이 없습니다.",
+    "emptyHint": "이 기간에 개발자가 세션을 실행하면 개발자별 활동이 여기에 표시됩니다. 더 많은 날짜를 포함하도록 기간을 넓히십시오.",
+    "locked": "개발자별 보기 제한됨",
+    "lockedHint": "현재 역할은 개별 개발자의 생산성을 볼 수 없습니다.",
+    "columns": {
+      "developer": "개발자"
+    }
+  },
+  "columns": {
+    "sessions": "세션",
+    "commits": "커밋",
+    "pullRequests": "PR",
+    "linesNet": "순 LoC",
+    "acceptance": "수용률"
+  },
+  "empty": {
+    "acceptance": {
+      "title": "아직 관측된 도구 결정이 없습니다",
+      "description": "관리자 Analytics 피드 또는 OTLP 텔레메트리가 보고하면 수용 및 거부된 도구 결정이 표시됩니다."
+    },
+    "developer": {
+      "title": "아직 보고된 개발자 활동이 없습니다",
+      "description": "Claude 관리자 Analytics 피드가 개발자 활동을 보고하면 개발자별 행이 표시됩니다."
+    },
+    "team": {
+      "title": "아직 팀 귀속 텔레메트리가 없습니다",
+      "description": "귀속에는 양쪽이 모두 필요합니다. 커넥터의 resource_labels 허용 목록이 팀 키를 지정해야 하며(기본값은 비어 있음), 플릿이 이를 보내야 합니다."
+    }
+  }
+}

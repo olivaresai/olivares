@@ -27,7 +27,10 @@ const recording = { enabled: false }
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({
     isSuccess: true,
-    data: { modules_not_enabled: recording.enabled ? [] : ['recording'] },
+    data: {
+      edition: 'enterprise',
+      modules_not_enabled: recording.enabled ? [] : ['recording'],
+    },
   }),
 }))
 vi.mock('@/features/recordings/api', async (orig) => ({
@@ -668,7 +671,12 @@ describe('AccessMapView — from a finding to where it is fixed', () => {
     expect(
       screen.queryByRole('button', { name: /open source bindings/i }),
     ).toBeNull()
-    expect(await screen.findByText(/tenant:admin/)).toBeVisible()
+    expect(
+      await screen.findByText(
+        /needs admin access for this; this role does not hold it/,
+      ),
+    ).toBeVisible()
+    expect(screen.queryByText(/tenant:admin/)).toBeNull()
   })
 })
 
@@ -729,7 +737,12 @@ describe('AccessMapView — the sheet does not claim a finding it never read', (
     expect(
       screen.queryByRole('button', { name: /read the drift for this edge/i }),
     ).toBeNull()
-    expect(await screen.findByText(/accessmap:drift:read/)).toBeVisible()
+    expect(
+      await screen.findByText(
+        /needs read access for this; this role does not hold it/,
+      ),
+    ).toBeVisible()
+    expect(screen.queryByText(/accessmap:drift:read/)).toBeNull()
     expect(
       screen.queryByRole('button', { name: /open source bindings/i }),
     ).toBeNull()

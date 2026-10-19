@@ -1,14 +1,14 @@
 # Changelog
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.2`<!-- /release -->.
+Releases use `MAJOR.MINOR`, with no patch number or `v` prefix. The next release is <!-- release -->`0.3`<!-- /release -->.
 See [versioning](INSTALL.md#versioning) for the release policy.
 
-> **Draft: Community <!-- release -->`0.2`<!-- /release --> is unreleased.** Dated sections remain unchanged;
+> **Draft: Community <!-- release -->`0.3`<!-- /release --> is unreleased.** Dated sections remain unchanged;
 > the release-preparation section awaits publication. Other dated sections record published releases. [GitHub releases](https://github.com/olivaresai/olivares/releases)
 > lists their notes and artifacts. Published CLI commands and flags, API routes and
 > fields, configuration keys, defaults, paths and stored data follow the compatibility policy.
-> The <!-- release -->0.2<!-- /release --> edition changes are described in [Editions](docs/editions.md).
+> The <!-- release -->0.3<!-- /release --> edition changes are described in [Editions](docs/editions.md).
 > Announce deprecations in an earlier release and provide an automatic migration
 > before removal. A release never permits a regression. Any breaking change must
 > be explicit under **Changed** or **Removed**.
@@ -27,6 +27,265 @@ See [versioning](INSTALL.md#versioning) for the release policy.
   fix and keep private reports undisclosed.
 
 ## [Unreleased]
+
+## [0.3] - 2026-10-19
+
+Community 0.3 release notes, covering changes since 0.2.
+
+### Added
+
+- A personal vault for logins, notes and authenticator codes. Every member keeps their own
+  items under **Vault** (Identity & access): add a login with a generated password, a note or
+  an authenticator key, find an item by typing, copy a password or the current code in one
+  click (the clipboard is cleared 30 seconds later), open an item to see the rest (recorded
+  in the audit ledger) and delete it. `olivares vault ls|put|get|rm|totp|generate` does the
+  same with `-o json`; secrets come from files or stdin, never the command line. Codes follow
+  RFC 6238 (SHA-1, SHA-256 and SHA-512; periods of 10 to 300 seconds; 6 to 8 digits) and the
+  key never leaves the server. Items are sealed with the server's key, not end-to-end
+  encrypted ([trust model](docs/VAULT-TRUST-MODEL.md)). The API adds
+  `POST /v1/console/secrets/totp` and `POST /v1/console/secrets/generate`, and any member can
+  use `/v1/console/secrets?scope=tenant` for their own items; the `mcp/` and `env/` names stay
+  with the organization's administrators.
+- Bring your passwords in and take them out. `olivares vault import <file> --from
+  bitwarden|keepass|1password|chrome|proton` reads that program's CSV export and stores each
+  login, note and authenticator key; `--dry-run` prints counts only, an item already in the
+  vault is kept unless you pass `--replace`, and no value is printed or logged. `olivares vault
+  export --file <path>` writes every item to one JSON file, created for you alone and never
+  over an existing file, that `olivares vault import --from olivares` reads back. Each item
+  exported is one audited reveal, so a large vault is read at about 20 items a minute. The
+  export file and the CSV another program writes hold every secret in the clear: delete them
+  when you are done.
+- Run a model on your own hardware and use it from OpenCode. `olivares tool start llama-cpp
+  --model <file.gguf>` (or `--model user/repo[:quantization]`, which the server downloads) and
+  `olivares tool start vllm --model <model>` start the llama.cpp or vLLM you installed as a
+  service of the engine, on loopback only and behind a key made for it at each start;
+  `olivares tool stop` ends it. The engine looks for `llama-server` and `vllm` on its `PATH`.
+  The server can reach the network, for example to download a model. OpenCode now runs on any
+  OpenAI-compatible server at a loopback or private-network address: add it as an
+  `openai_compatible` provider whose `base_url` ends in `/v1`, and bind a profile to it in
+  Providers. llama.cpp is measured end to end with OpenCode; vLLM follows the same path and has
+  not been run on real hardware yet. Gemini CLI still runs only on a Gemini key.
+- Run a session in a container. `olivares session start --isolation container`, the same flag
+  on `olivares agent session create`, and the Isolation choice in New session start the tool in
+  podman, or in Docker where podman is absent, on the engine's host. The container has a
+  read-only root, no capabilities and no way to gain privileges, and sees only the session's
+  folder, its account home, the tool's program and the hook and policy files governance reads.
+  `OLIVARES_SESSION_CONTAINER_RUNTIME` pins `podman` or `docker` or turns the feature `off`,
+  `OLIVARES_SESSION_CONTAINER_IMAGE` names the image, and `olivares doctor` shows the runtime it
+  found. Tool-call hooks stay in force in the container, which shares the host's network as a
+  native session does; a hook that cannot run there blocks the tool call. Limits: a session bound
+  to a provider endpoint from Providers (a local model included), assigned skills, worktrees and
+  a folder that holds the engine's own data are refused as container sessions; use native
+  isolation for them.
+- Hand work off from a session that is still running, and from Codex, Gemini CLI and OpenCode
+  sessions as well as Claude Code's. A running session is stopped first, and everything that can
+  be refused (the target profile, vault secrets, a repository credential) is refused before the
+  stop. Grok sessions answer that their tool keeps its conversation another way. The console,
+  `olivares session handoff` and `GET`/`POST /v1/m/sessions/runs/{ref}/handoff` take the same
+  sessions. Moving a session between accounts stays Claude Code only.
+- Add Slack and Microsoft Teams destinations in the console, under Alerting → Destinations,
+  instead of in the `OLIVARES_NOTIFY_CONFIG` file. **Send test message** posts a real message
+  before anything is saved; the webhook URL is checked against the vendor's own hosts, sealed in
+  the secret store and never shown again. New routes: `GET`, `PUT` and `DELETE
+  /v1/console/notify-destinations` and `POST /v1/console/notify-destinations/test`
+  (superadmin; writes and the test need step-up). Destinations in `OLIVARES_NOTIFY_CONFIG` keep
+  working and are listed read-only.
+- Take Olivares releases with `apt` and `dnf`. The package repository publishes
+  `olivares.sources` for apt (Debian 12 and 13, Ubuntu 22.04 and later) and `olivares.repo` for
+  DNF 4 (AlmaLinux 10, RHEL 10) and DNF 5 (Fedora); the host installs `olivares` and later
+  releases arrive with the operating system's updates. The repository is not published yet: the
+  install guide ("Install from a package") gives the commands and the key fingerprint for when
+  it is.
+- Reach any message of a session. The console thread has a rail with one mark per message you
+  sent (hover for the time and first line, click to scroll to it), and the Messages panel lists
+  them, searches the whole session and goes to a date and time. `olivares session messages
+  <session>` lists, searches (`--search`) and anchors by time (`--at`); `GET
+  /v1/m/sessions/runs/{ref}/messages` serves both for Claude Code and Codex. A session given
+  vault secrets or a repository credential answers 409.
+- Attach images to a message. Paste, drop or choose a PNG, JPEG, WebP or GIF in the console
+  composer (up to four, 3.75 MiB each), or run `olivares session send <session> --attach
+  shot.png "what is wrong here?"`. Claude Code and Codex receive the picture; a tool that takes
+  no images refuses it by name before anything is sent. A message needs its text; an image alone
+  is not sent. New routes: `POST /v1/m/sessions/runs/{ref}/attachments`, `GET
+  /v1/m/sessions/runs/{ref}/attachments/{id}`, and `attachments` on `.../input`. Images are
+  stored per tenant and session under the data directory and removed with the session.
+- A turn that Claude Code or Codex ends because the account ran out of quota, or the provider
+  throttled requests, is now a fact on the session: `limit` with `kind` (`usage` or `rate`),
+  `resets_at` when the tool says when it lifts, and the `account_ref`. `olivares session show`
+  says "Out of quota until 15:45", `session events` records `limit_reached`, and the console
+  session header offers Move to. A later successful turn clears it.
+- Pin a session so it stays first in your list: Pin in the session menu or `p` on a row in the
+  console, or `olivares session pin <session>` and `unpin`. Pins are yours, kept on the server
+  (up to 20; pinning a 21st drops your oldest) and follow you to another browser or machine; pins kept in a browser move to the
+  server the first time you open Sessions there. `GET /runs` and `GET /runs/{ref}` add `pinned`
+  and `pinned_at`; `POST` or `DELETE /runs/{ref}/pin` set and clear it.
+- Register a folder to write without deleting: `olivares agent workspace add <path> --mode
+  write_no_delete`, or `mount_mode` in the API. Sessions in it create and change files but
+  cannot delete, rename or move them. A session does not start on a host that cannot enforce
+  this. In a Git repository `.git` is left out of the rule so `git status`, `add` and `commit`
+  work; the cost is that the agent can empty `.git` and destroy the history. A tool that
+  replaces a file by removing or renaming it (`sed -i`, an atomic-save formatter) is refused
+  and can leave its temporary file behind.
+- A folder's Wiki opens from Workspace and beside Files in the folder sheet: read its index and
+  pages, see the latest log entries, ingest or upload a source, ask a question and lint the
+  wiki. A folder without a wiki offers Create wiki.
+- Korean and Italian join the console's languages, which now number nine.
+- Update from the console. Settings → Updates shows the running version and the newest signed
+  release in your channel with its notes; **Update to X** asks first, names how many running
+  sessions the restart stops, installs, and reports the result. It runs `olivares upgrade`, so
+  verification and refusals are the CLI's. `GET /v1/console/updates` and `POST
+  /v1/console/updates/apply` are system-admin routes; applying also needs step-up.
+- Now leads with your work: live sessions are cards (tool, state, folder, name, what it is
+  doing and what it cost, at most six) and a Today tile adds up what sessions that worked since
+  local midnight cost. A session that reported no cost is named as such, never counted as $0.
+- One **Stop all agents** action on the Kill switch page opens a single confirmation with an
+  optional reason, and a list of live sessions sits under the posture banner. Stopping one agent
+  is under More.
+- Optional idle auto-stop. `olivares config session-idle set --minutes <n>` (6 to 10080; also
+  Settings and `GET`/`PUT /v1/system/session-idle`) stops a finished session that has stayed
+  idle that many minutes after it first reads idle (five minutes after its last activity), with
+  no open view, approval, running child or peer; the console labels it
+  "Stopped to free memory" beside Resume. It is off by default.
+- Activity covers Codex sessions, read from Codex's own records, and shows a Claude Code
+  workflow's phases and agent progress. Codex skills and Gemini CLI and OpenCode commands now
+  appear when you type `/` in a message.
+- Gemini CLI and Grok Build sessions get the shared MCP server, as Claude Code, Codex and
+  OpenCode sessions do.
+- The console tells you when a session needs you or finishes while its tab is in the
+  background: one browser notification and a count in the tab title. It is off by default and
+  asks for permission only from **Notify me** in Settings.
+- Open a session beside the current one (Open beside in the rail and palette); Mod+Shift+Enter
+  jumps to the previous session, and 1 to 6 open the palette's recent sessions.
+- `olivares session ls --account <name>` lists one account's sessions, and `olivares session
+  start --permission full` starts a session with full permissions for run administrators (the
+  engine refuses it for anyone else).
+- docs.olivares.ai serves `/llms.txt` and `/llms-full.txt`, a summary and the full text of the
+  English documentation for AI assistants.
+
+### Changed
+
+- The [edition table](docs/editions.md) records where each capability sits and is the authority
+  for this release. Community no longer provides these, which the table places in Business:
+  steering a session another person started
+  (Community answers `501 business_required` on `POST /v1/m/sessions/runs/{ref}/input`, `POST
+  .../resume` and `PUT .../peers`, and `olivares session send`, `resume` and `peers` print it;
+  your own sessions work as before), group nesting (`PUT /v1/groups/{id}/parent` answers `501
+  departments_unavailable`), the inbound SCIM server, legal holds and erasure with key shredding,
+  privileged-session recording, fleet managed settings, deployment, and approval policies that
+  raise or lower a risk tier or approval count. A Community server answers their routes with 501
+  or, for a command, exits with code 9 and hides it; stored data is kept. A Community server
+  does not start with BYOK or HYOK key custody, an off-box ledger signer, an external policy
+  engine or active-passive HA leader routing configured. `olivares ddil`, `olivares collector`
+  and the Claude compliance, KMIP, Oracle audit, ServiceNow, SharePoint, SAP and Salesforce
+  connectors are Business.
+- A session belongs to the account that launched it, also when launched with that account's API
+  token. A session an agent or a work lease launched, and one launched with a token before this
+  release, names no account and stays open to a caller with the role.
+- Claude Code session Activity shows context tokens and the percentage of the window reported by
+  the tool in the console, API and CLI. An unknown window is labeled, and the Activity answer
+  carries `context_window: null` for it instead of omitting the field.
+- Access-map graph and drift return HTTP 400 for an invalid `mode` or `confidence`, and neighbors
+  returns 400 for an invalid `direction`; earlier releases returned an empty graph or used both
+  directions. Use `unknown`, `read`, `write` or `readwrite` for mode; `attributed` or
+  `approximate` for confidence; `outgoing`, `incoming` or `both` for direction.
+- A tenant keeps one MCP server per name. Creating or renaming a server onto a name another
+  server holds (compared without regard to case) answers `409 mcp_gateway_name_taken` and names
+  the holder.
+- An eval run is marked regressed only when the drop in pass rate is larger than noise: the 95%
+  interval of the difference must exclude zero. A smaller drop reports `inconclusive_noise`, raises
+  no finding, and `olivares evals gate` prints the interval. With 10 cases a one-case drop is
+  noise; with 100 cases the same 10-point drop is a finding.
+- Navigation lists only what works here: a module that is off folds out of the sidebar, the
+  palette and All areas (Settings → Modules turns it on, and its address keeps working), and the
+  provider profile, binding and account pages open from AI tools.
+- A session has one name in every list, its tool and folder, and the Last turns block folds
+  identical turns into one row with a count.
+- The packaged systemd units and the Docker Compose seccomp and AppArmor profiles allow a mount
+  namespace next to the user and network namespaces (`RestrictNamespaces=user net mnt`). The
+  session helper uses it only to keep a folder's Git hooks and configuration read-only; every other
+  namespace type stays denied. Re-running the archive installer replaces an unedited 0.1 or 0.2
+  service unit; a unit you edited is left untouched.
+- The Docker Compose stack gives `/tmp` an explicit size, `2g`, where Docker used half the host's
+  RAM. It is still `noexec,nosuid,nodev`; `OLIVARES_TMP_SIZE` in `deploy/compose/.env` changes it.
+  The Compose README shows how to size memory, processes and `/tmp` for many sessions.
+
+### Fixed
+
+- Sessions survive an engine restart. A session the engine stopped when it shut down is resumed
+  at the next start, in its folder and conversation, through the same checks as a person's resume
+  (one that needs full permissions, vault secrets or a retired profile stays stopped and is
+  logged); a session stopped by a person or the idle policy stays stopped. On Linux a session's
+  process now ends when the engine dies, and a session a crashed engine left running reads
+  stopped with the reason "the engine died; resume the session to continue".
+- A container keeps the release `olivares upgrade` applied across a recreate. The upgrade used to
+  replace `/usr/local/bin/olivares`, a file of the image, so `docker compose up -d
+  --force-recreate` brought the old binary back. In a Docker or Podman container it now installs
+  into the data volume (`ota/`), and each start verifies the stored signed release against its
+  embedded key and runs it when it is newer than the image.
+- `olivares upgrade --enterprise` on a Community build installs the Business build of the same
+  version; it used to answer "already on X.Y" and install nothing. `--check` prints `edition:
+  community -> enterprise`, `-o json` adds `edition_current` and `edition_available`, and
+  `olivares version -o json` adds `edition`.
+- Removing a member is guarded on the server as well as in the People tab. `DELETE
+  /v1/members/{id}` answers `409` when the caller removes itself (`cannot_remove_self`) or the
+  last active owner (`last_owner`), and `403` when the member outranks the caller (`role_ceiling`)
+  or the caller is confined to a workspace. A signed-in person also needs the administrative
+  step-up; API tokens are governed by their role. The ledger records `member.remove`.
+- An OpenCode session can edit the files of its folder again. The engine now writes the file
+  OpenCode asks it to after an approved edit, only where the session itself may write.
+- The Claude Code, Codex, Cowork and Grok telemetry receivers no longer believe a replayed,
+  back-filled or future time. Back-filled batches no longer mark every session in them as working,
+  a time too large for a signed instant no longer reads as 1677 to 1969, and a far-future time can
+  no longer keep a session live ahead of the clock or hide the OTEL-gap finding.
+- The console no longer asks the engine for the messages of a session whose tool keeps no record
+  the engine reads (OpenCode), which logged a console error each time.
+- Access-map graph responses return `has_more` and `cursor`, so a capped read shows the console
+  and CLI warning, and `olivares accessmap --mode` accepts the documented `r`, `w` and `rw`
+  aliases. The ignored `drift --limit` and `--cursor` flags remain accepted with a deprecation
+  warning. Invalid limits on access-map and governance list routes keep returning the default page
+  and send a `Warning` header. The NHI kind filter includes `credential`, `agent_nhi` and `nhi`;
+  group listings and member reads are audited; and agent binding rejects credential-bearing
+  `identity_ref` values.
+- Console wording uses plain words instead of internal terms (permission ids, abbreviations), and
+  the Russian, Chinese and Spanish text was reviewed.
+
+### Security
+
+- A Claude Code or Codex session on a key from Providers now sends its provider only that key. A
+  request carrying another key in `Authorization`, `X-Api-Key` or `Api-Key` is refused with 403,
+  and each refused host and header is recorded once as a high finding on the session, never with
+  the key. See "Session network isolation" in SECURITY.md for what is not checked.
+- A session working in a Git folder or linked worktree cannot change the repository's `hooks`
+  directory or `config` file (in a linked worktree also `config.worktree` and the pointers that
+  name the common directory) or move `.git` away: the next `git` command you ran there would run
+  what the session wrote. The first such session adds a `commondir` that names the Git directory
+  itself and an empty `config.worktree` to it; neither changes what git does. `git add`, `git
+  commit` and new files work as before; `git config` in the folder is refused (commit with `git -c
+  user.name=... -c user.email=... commit` or the `GIT_AUTHOR_*` and `GIT_COMMITTER_*` variables),
+  and a branch made from a remote-tracking branch is created without its upstream. It needs
+  unprivileged user and mount namespaces; where the host lacks them the session still starts and
+  says the hooks and configuration stay writable. Local MCP servers started in the folder get the
+  same protection. The protection lasts as long as the file: when you run `git config`, `git remote
+  add`, `git push -u` or `git branch -u` while a session runs, start a new session afterward.
+- A session does not start in a folder whose project files carry agent configuration that runs a
+  program or redirects traffic (project hooks, `apiKeyHelper`, `statusLine`, `*_BASE_URL` and
+  proxy settings, MCP servers) until a person approves exactly that content. `olivares agent
+  workspace project-config <ref>` shows it and `approve-project-config <ref>` approves it; one
+  changed character voids the approval. A Claude Code session that carries the engine's own hooks
+  reads none of these files and is not refused.
+- A Claude Code session is handed to a person after repeated policy refusals: 3 in a row or 20 in
+  total by default, set per organization with `denial_budget` (see the Claude Code integration
+  guide). With the console or CLI attached the turn is interrupted and the session shows it needs
+  a person; with nobody watching it is stopped. Only an operator's input from the console or CLI
+  continues it. Codex and Grok sessions are not covered.
+- A session that used a package registry token no longer shows its transcript in plain text after
+  it stops or is resumed: reads of its activity, a subagent's transcript, its messages and a
+  handoff preview answer 409, as for a session given vault secrets, and it cannot be moved or
+  handed off. A Grok, OpenCode or Gemini CLI session resumed after a launch that used a registry
+  token, vault secrets or a repository credential withholds the conversation its tool replays,
+  with one notice in the attach stream, so a token or secret rotated since is not shown there or
+  kept in the recorded I/O. A running session that was never resumed is unchanged. What a tool
+  writes to its error output is not covered.
 
 ## [0.2] - 2026-10-13
 
@@ -107,6 +366,14 @@ Community 0.2 release notes, covering changes since 0.1.
   never to its environment, and a session confined to its provider can also reach
   the declared registry hosts. Declaring either needs tenant administration. Limits:
   npm only, native sessions only.
+- A provider profile can declare the hosts its API-key sessions may reach beside their
+  provider: `olivares agent profile update <ref> --egress-host github.com`, or
+  `session_egress_hosts` on the provider profile API. A tenant administrator sets them,
+  each change is in `olivares audit`, no host is added by default, and a session whose
+  declared host resolves to a loopback or private address does not start.
+- A session confined to its provider trusts the session proxy's certificate authority in
+  git too (`GIT_SSL_CAINFO`; git ignored `SSL_CERT_FILE`), so `git` over HTTPS reaches the
+  hosts a provider profile declares.
 - MCP servers can be given to only some sessions: `olivares mcp assign <name>` and
   `mcp unassign` take the skills targets (workspace, folder, template, agent group,
   agent, session), and a server with no targets still serves every session.
@@ -191,9 +458,6 @@ Community 0.2 release notes, covering changes since 0.1.
   migration, and the existing signed channels. Automatic paired publication and
   full cross-edition qualification remain pending. See
   [Editions](docs/editions.md#release-cadence).
-- On SQLite, provider profiles created before account names receive their generated
-  name (such as `claude`) at the first start, as they already did on PostgreSQL;
-  names already set are never changed.
 
 ### Fixed
 

@@ -4,7 +4,8 @@
 """Reject common Spanish prose in source and exported English documentation.
 
 Explicit paths and the default tracked-file scan check full files. --base checks
-added lines so existing text can be translated without allowing new Spanish text.
+added lines since an ancestor; --compare accepts unrelated published histories.
+Both modes allow existing text to be translated without allowing new Spanish text.
 --public-docs scans shipped Markdown and docs-site/public text without Git metadata.
 --public-tooling checks existing contributor-facing tooling prose in the curated file set.
 """
@@ -76,7 +77,7 @@ def git(*args):
 def is_source(path):
     # Locale JSON and generated locale bundles are data; check authored source instead.
     path = os.path.relpath(path)
-    if re.search(r"(?:^|/)(?:i18n|locales)/(?:es|fr|de|ru|ja|zh)(?:\.json|/.*\.json)$", path):
+    if re.search(r"(?:^|/)(?:i18n|locales)/(?:es|fr|de|it|ru|ja|zh|ko)(?:\.json|/.*\.json)$", path):
         return False
     if path.startswith("core/internal/webui/dist/") or "testdata" in Path(path).parts:
         return False
@@ -106,6 +107,15 @@ def data_assignment_lines(path, text):
 
 
 def prose(path, line, number, assignments):
+    # A language hint lists every language by its own name (the Spanish endonym
+    # for Spanish): data, not prose. JSON cannot carry the language-data comment,
+    # so the key marks the value.
+    parts = Path(path).parts
+    if (Path(path).suffix == ".json"
+            and Path(path).name == "settings.json"
+            and {"i18n", "locales"}.issubset(parts)
+            and re.match(r'^\s*"languageHint"\s*:', line)):
+        return ""
     # Inline code keys identify accepted input syntax; surrounding prose stays checked.
     line = QUOTED.sub(
         lambda m: re.sub(r"`[A-Za-z_][A-Za-z0-9_.-]*:`",
@@ -466,19 +476,22 @@ def tooling_lines(path, text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", help="files to check; default: tracked source files")
-    parser.add_argument("--base", help="check added lines since this ancestor commit")
+    comparison = parser.add_mutually_exclusive_group()
+    comparison.add_argument("--base", help="check added lines since this ancestor commit")
+    comparison.add_argument("--compare", help="check added lines against this commit, including unrelated history")
     parser.add_argument("--public-docs", type=Path, metavar="ROOT",
                         help="check full English documentation in a curated export")
     parser.add_argument("--public-tooling", type=Path, metavar="ROOT",
                         help="check full contributor-facing text in the curated tooling")
     args = parser.parse_args()
-    if args.public_tooling is not None and (args.base is not None or args.paths
+    revision = args.base if args.base is not None else args.compare
+    if args.public_tooling is not None and (revision is not None or args.paths
                                            or args.public_docs is not None):
-        parser.error("choose --public-tooling, --public-docs, explicit paths, or --base")
-    if args.base is not None and args.paths:
-        parser.error("choose explicit paths or --base")
-    if args.public_docs is not None and (args.base is not None or args.paths):
-        parser.error("choose --public-docs, explicit paths, or --base")
+        parser.error("choose --public-tooling, --public-docs, explicit paths, --base, or --compare")
+    if revision is not None and args.paths:
+        parser.error("choose explicit paths, --base, or --compare")
+    if args.public_docs is not None and (revision is not None or args.paths):
+        parser.error("choose --public-docs, explicit paths, --base, or --compare")
     try:
         if args.public_tooling is not None:
             root = args.public_tooling.absolute()
@@ -488,10 +501,11 @@ def main():
             root = args.public_docs.absolute()
             paths = public_docs(root)
             os.chdir(root)
-        elif args.base is not None:
+        elif revision is not None:
             base = git("rev-parse", "--verify", "--end-of-options",
-                       args.base + "^{commit}").strip().decode()
-            git("merge-base", "--is-ancestor", base, "HEAD")
+                       revision + "^{commit}").strip().decode()
+            if args.base is not None:
+                git("merge-base", "--is-ancestor", base, "HEAD")
             inputs = git("diff", "--name-only", "-z", "--diff-filter=ACMRT",
                          "--no-renames", base, "--")
             paths = [os.fsdecode(p) for p in inputs.split(b"\0") if p]
@@ -518,7 +532,7 @@ def main():
                 text = payload.decode("utf-8")
             if "\0" in text:
                 raise ValueError("cannot check a binary source file")
-            selected = added_lines(base, name) if args.base is not None else None
+            selected = added_lines(base, name) if revision is not None else None
             assignments = data_assignment_lines(name, text)
             lines = (tooling_lines(name, text) if args.public_tooling is not None
                      else enumerate(text.split("\n"), 1))
@@ -540,7 +554,7 @@ def main():
                     label = json.dumps(name, ensure_ascii=False)[1:-1]
                     print(f"{label}:{number}: Spanish text detected; use US English.")
                     failures += 1
-        scope = "added lines" if args.base is not None else "full files"
+        scope = "added lines" if revision is not None else "full files"
         print(f"source-language: checked {checked} file(s), {scope}; {failures} finding(s)")
         return 1 if failures else 0
     except (OSError, UnicodeError, ValueError, SyntaxError, subprocess.TimeoutExpired) as error:

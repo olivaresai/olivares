@@ -1,0 +1,155 @@
+{
+  "title": "백업 및 복원",
+  "description": "Olivares AI의 재해 복구 스냅샷을 관리합니다.",
+  "tabs": {
+    "backups": "백업",
+    "schedule": "일정"
+  },
+  "actions": {
+    "restore": "복원",
+    "createBackup": "백업 생성",
+    "cancel": "취소",
+    "close": "닫기",
+    "upload": "업로드",
+    "delete": "삭제"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "백업",
+    "searchPlaceholder": "백업 검색...",
+    "deleted": "백업 삭제됨",
+    "deleteTitle": "백업 삭제",
+    "deleteDescription": "\"{{filename}}\"을(를) 영구적으로 삭제하시겠습니까? 되돌릴 수 없습니다.",
+    "columns": {
+      "date": "날짜",
+      "filename": "파일 이름",
+      "size": "크기",
+      "engine": "엔진",
+      "tenants": "테넌트",
+      "notes": "메모"
+    },
+    "actions": {
+      "download": "다운로드",
+      "inspect": "검사",
+      "downloadAria": "{{filename}} 다운로드",
+      "inspectAria": "{{filename}} 검사",
+      "deleteAria": "{{filename}} 삭제",
+      "downloadFailed": "다운로드 실패: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "백업 일정이 업데이트되었습니다",
+    "loading": "일정을 불러오는 중...",
+    "title": "자동 백업 일정",
+    "description": "반복 백업을 구성합니다. 엔진이 일정을 실행하며 암호는 인스턴스 비밀에서 파생됩니다.",
+    "enableAria": "자동 백업 활성화",
+    "enabled": "활성화됨",
+    "disabled": "비활성화됨",
+    "cronLabel": "Cron 표현식",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "매일 자정",
+      "daily0200": "매일 02:00",
+      "daily0300": "매일 03:00",
+      "weeklySundayMidnight": "매주 일요일 자정",
+      "weeklyMondayMidnight": "매주 월요일 자정",
+      "monthlyFirstMidnight": "매월 1일 자정",
+      "dailyAt": "매일 {{time}}"
+    },
+    "retentionLabel": "보존(일)",
+    "retentionDescription": "이 기간보다 오래된 백업은 자동으로 정리됩니다.",
+    "dualControlAria": "복원에 이중 통제 필요",
+    "dualControlLabel": "복원에 이중 통제 필요",
+    "dualControlDescription": "활성화하면 이 콘솔에서 시작된 복원은 실행 전에 별도의 두 번째 관리자가 승인해야 합니다. 끄면 기록되며 한 시간 후에 적용됩니다 — 게이트가 보호하는 복원과 같은 자리에서 제거할 수 없으며, 다시 활성화하면 대기 중인 제거가 취소됩니다. 호스트의 `olivares dr restore`는 이 게이트 밖에서 에스테이트를 교체하고 선언된 운영자를 기록하므로 포함되지 않습니다(Postgres 에스테이트는 이 방법으로만 복원). 단독 운영자는 꺼 두십시오.",
+    "dualControlDisarmPending": "제거 요청됨 — 기록되었으며 {{when}}에 적용됩니다. 그때까지 복원에는 두 번째 관리자가 필요합니다. 다시 활성화하면 취소됩니다.",
+    "dualControlDisarmRequestedBy": "{{who}}이(가) 요청했습니다.",
+    "save": "일정 저장"
+  },
+  "trigger": {
+    "started": "백업이 시작되었습니다",
+    "title": "백업 생성",
+    "description": "Olivares AI의 암호화된 스냅샷을 만듭니다.",
+    "notes": "메모",
+    "notesPlaceholder": "이 백업에 대한 선택적 설명",
+    "passphrase": "암호",
+    "passphraseDescription": "백업 번들을 암호화하는 데 사용됩니다.",
+    "start": "백업 시작"
+  },
+  "job": {
+    "initializing": "초기화 중",
+    "status": {
+      "running": "실행 중",
+      "completed": "완료됨",
+      "failed": "실패"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% 완료"
+  },
+  "pending": {
+    "title": "승인 대기 중인 복원(이중 통제)",
+    "requestedByPrefix": "요청자",
+    "approveRestore": "승인 및 복원",
+    "approved": "복원 승인됨",
+    "dialogTitle": "복원 승인",
+    "dialogDescription": "{{initiator}}이(가) 요청한 복원을 승인합니다. 요청자와 다른 관리자여야 합니다.",
+    "passphrase": "암호",
+    "passphraseDescription": "백업 생성 시 사용한 암호를 입력하십시오.",
+    "confirmTitle": "복원 확인",
+    "confirmDescription": "검증 후 백업 내용으로 모든 현재 데이터를 덮어씁니다. 이 작업은 되돌릴 수 없습니다.",
+    "confirmLabel": "승인하고 지금 복원"
+  },
+  "restore": {
+    "notAuthorized": "권한 없음",
+    "uploadFailed": "업로드 실패",
+    "started": "복원이 시작되었습니다",
+    "title": "백업에서 복원",
+    "description": ".drbundle 파일을 업로드하여 Olivares AI 상태를 복원합니다.",
+    "apply": "복원 적용",
+    "confirmTitle": "복원 확인",
+    "confirmDescription": "백업 내용으로 모든 현재 데이터를 덮어씁니다. 이 작업은 되돌릴 수 없습니다.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "지금 복원",
+    "confirmSummaryPrefix": "복원 원본",
+    "confirmSummarySuffix": "테넌트 {{count}}개 포함.",
+    "awaitingTitle": "두 번째 승인자 대기 중",
+    "awaitingDescription": "이중 통제가 활성화되어 있습니다. 다른 관리자가 승인하고 백업 탭에서 암호를 제공할 때까지 이 복원은 실행되지 않습니다.",
+    "requestId": "요청 ID",
+    "selectFile": ".drbundle 파일 선택",
+    "chooseFile": "파일 선택",
+    "passphrase": "암호",
+    "passphraseDescription": "이 백업 생성 시 사용한 암호를 입력하십시오.",
+    "manifestTitle": "번들 매니페스트",
+    "manifest": {
+      "file": "파일",
+      "engine": "엔진",
+      "created": "생성됨",
+      "tenants": "테넌트",
+      "keys": "키"
+    }
+  },
+  "inspect": {
+    "title": "백업 세부 정보",
+    "description": "봉인된 번들의 디코딩된 매니페스트 — 복원이 정확히 무엇을 되살리는지 보여줍니다.",
+    "filename": "파일 이름",
+    "size": "크기",
+    "engine": "엔진",
+    "createdAt": "생성 시각",
+    "tenants": "테넌트",
+    "keys": "봉인된 키",
+    "empty": "없음",
+    "loadFailed": "백업 세부 정보를 불러오지 못했습니다."
+  },
+  "empty": {
+    "backup": {
+      "title": "아직 생성된 백업 스냅샷 없음",
+      "description": "이 콘솔에서 암호화된 백업을 만드십시오."
+    }
+  }
+}

@@ -99,7 +99,7 @@ func TestBuiltinImportRefusesADamagedCatalog(t *testing.T) {
 }
 
 // The glob in builtin.go decides what ships in the binary; the pin decides what can be installed.
-// They must name the same files, and the agents and rules under data/ stay out of the binary.
+// They must name the same files, including the native component packs.
 func TestBuiltinEmbedHoldsExactlyThePinnedPacks(t *testing.T) {
 	var pin builtinPin
 	raw, err := fs.ReadFile(builtinEmbedded, "builtin/PIN.json")
@@ -129,6 +129,6 @@ func TestBuiltinEmbedHoldsExactlyThePinnedPacks(t *testing.T) {
 		}
 	}
 	if _, err := fs.Stat(builtinEmbedded, "builtin/data"); err == nil {
-		t.Error("the agents and rules archives are embedded; nothing reads them")
+		t.Error("an unpinned data directory is embedded")
 	}
 }

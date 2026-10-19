@@ -371,7 +371,9 @@ describe('ProfilesPanel — the list', () => {
     grant(WRITE, ADMIN)
     wrap()
     expect(
-      await screen.findByText(/does not include sessions:profile:read/),
+      await screen.findByText(
+        /Provider profiles are not shown: your role cannot read them/,
+      ),
     ).toBeInTheDocument()
     expect(api.listProfiles).not.toHaveBeenCalled()
     expect(
@@ -545,9 +547,7 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
     empty = emptyStateOf('No provider profiles')
     // Accurate for a reader: the specific missing write, not "you cannot use this".
     expect(
-      within(empty).getByText(
-        /needs the sessions:profile:write permission, which your role does not include/,
-      ),
+      within(empty).getByText(/Your role cannot add profiles/),
     ).toBeInTheDocument()
     expect(
       within(empty).queryByText(/Register a profile to add/),

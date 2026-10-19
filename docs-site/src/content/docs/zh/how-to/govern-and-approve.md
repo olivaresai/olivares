@@ -4,7 +4,7 @@ description: "运营者如何治理 estate：身份与权限、deny-by-default �
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
 :::
 
 本页面向已连接至少一个数据源、现在需要**治理** estate 的运营者：
@@ -68,6 +68,8 @@ admin 和 owner 到 admin）。因此一个新模块在不发布引擎版本的�
 # Choose one. Cedar is the embedded, pure-Go primary; OPA is an over-HTTP adapter.
 OLIVARES_PDP_ENGINE=cedar   # or: opa | none
 ```
+
+外部引擎是 Business 功能。选择 `cedar`、`opa` 或任何其他引擎值时，Community 构建拒绝启动；未设置、为空或 `none` 仅运行原生引擎。
 
 两个引擎都位于同一个接缝之后，而该接缝有一条决定你必须如何对其推理的不变式：
 
@@ -194,4 +196,4 @@ permitted-vs-observed 结果。[zero-to-graph 教程](/zh/tutorials/zero-to-grap
 
 ## 审批版本边界（0.1）
 
-Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求审核或提高风险等级、审批人数的策略。降低风险等级的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的数据仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。
+Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求对某项操作进行审核的策略。更改风险等级或审批人数的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的、提高风险等级或审批人数的策略继续生效；已保存的降低风险等级的策略和紧急授权仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。

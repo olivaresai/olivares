@@ -211,7 +211,7 @@
     "fromTo": "v{{from}} → v{{to}}",
     "planHash": "Plan hash",
     "changes": "Changes",
-    "noExecutor": "Reconciliation is not available — no runtime executor is wired for this deployment yet.",
+    "noExecutor": "Reconciliation is not available — no runtime executor is set up for this deployment yet.",
     "done": "Plan computed"
   },
   "verify": {
@@ -239,7 +239,7 @@
     "blockedHint": "Governance held this action. The estate was not changed.",
     "applied": "Deployment applied",
     "noop": "Nothing to apply — already up to date.",
-    "noExecutor": "Reconciliation is not available — no runtime executor is wired for this deployment yet.",
+    "noExecutor": "Reconciliation is not available — no runtime executor is set up for this deployment yet.",
     "retired": "This deployment is retired — roll back or edit the desired state before applying."
   },
   "retire": {

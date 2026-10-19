@@ -87,8 +87,9 @@ func identityEdges(id claudeIdentity, at time.Time) []model.EdgeObservation {
 			ObservedAt:   at,
 			// The operator's allowlisted OTEL_RESOURCE_ATTRIBUTES ride the
 			// once-per-session identity edges — session-stable attribution,
-			// already scrubbed at collection (labelsFromAttrs). nil when off.
-			Labels: id.labels,
+			// already scrubbed at collection (labelsFromAttrs), plus the engine this
+			// connector speaks for (engineLabels).
+			Labels: engineLabels(id.labels),
 		})
 	}
 	add(resIdentityOrg, id.orgID)
@@ -138,6 +139,9 @@ var builtinAttrKeys = map[string]bool{
 	attrEventName: true, attrSessionID: true, attrAccountUUID: true,
 	attrOrgID: true, attrAppVersion: true, attrAgentName: true,
 	attrAppEntrypoint: true,
+	// The governance attribution labels belong to the producer and the policy point
+	// (sdk/model/observation.go), never to an operator's allowlist.
+	model.LabelEngine: true, model.LabelPosture: true, model.LabelProjectFolder: true,
 }
 
 // identitySeen tracks which sessions have already had their identity edges emitted

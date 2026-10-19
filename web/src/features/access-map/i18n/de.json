@@ -28,7 +28,7 @@
     "clear": "Leeren",
     "drift": "Gestattet vs. beobachtet",
     "driftHint": "Den Abgleich der geringsten Rechte überlagern: unerwarteten Zugriff (beobachtet, nicht gestattet) und ungenutzte Gewährungen hervorheben.",
-    "driftForbidden": "Erfordert die Abweichungs-Berechtigung (accessmap:drift:read)."
+    "driftForbidden": "Ihre Rolle kann Abweichungen nicht sehen."
   },
   "legend": {
     "read": "Lesen",
@@ -51,7 +51,7 @@
     "unusedTitle": "Ungenutzte Gewährungen",
     "unusedHint": "Gestattet, aber nie beobachtet — zu straffende Überbereitstellung.",
     "forbiddenTitle": "Abweichung nicht autorisiert",
-    "forbiddenHint": "Ihre Rolle kann den Graphen sehen, aber nicht den Abgleich gestattet vs. beobachtet (accessmap:drift:read).",
+    "forbiddenHint": "Ihre Rolle kann den Graphen sehen, aber nicht den Unterschied zwischen dem Gestatteten und dem Beobachteten.",
     "partial": "Teilergebnis: Die Engine hat diesen Abgleich über ein abgeschnittenes Drift-Fenster durchgeführt. Diese Zahlen umfassen daher nicht die gesamte Umgebung, und eine hier fehlende Kante kann schlicht jenseits der Grenze liegen.",
     "emptyWindowTitle": "Keine Befunde im gescannten Fenster",
     "emptyWindowHint": "Der Scan endete an seiner Seitengrenze; dies ist daher keine Aussage über die gesamte Umgebung.",
@@ -104,9 +104,9 @@
     },
     "target": {
       "sourceBindings": "Quellbindungen öffnen",
-      "nhiRoster": "NHI-Bestand öffnen"
+      "nhiRoster": "Identitäten öffnen"
     },
-    "needsPermission": "{{action}} erfordert die Berechtigung {{permission}}, über die diese Rolle nicht verfügt.",
+    "needsPermission": "{{action}} erfordert dafür {{permission}}; diese Rolle verfügt nicht darüber.",
     "recheck": "Drift erneut prüfen",
     "verdict": {
       "clear": "Erneut geprüft: Diese Kante ist nicht mehr im Drift-Satz. Die Erklärung oben beschreibt den Zustand vor dieser Prüfung.",
@@ -137,12 +137,12 @@
     "mixed": "Gemischte Erfassungsqualität über Signale hinweg."
   },
   "attributionTier": {
-    "firm": "Fest",
+    "firm": "Exakt",
     "approximate": "Näherungsweise",
     "unknown": "Unbekannt"
   },
   "attributionTierHint": {
-    "firm": "Über ein SVID, WIF oder dedizierte Anmeldedaten an einen konkreten Agent/NHI gebunden.",
+    "firm": "Über eine eigene Identität oder dedizierte Anmeldedaten an genau einen Agenten gebunden.",
     "approximate": "Ein gemeinsam genutztes Konto — die Identität ist bekannt, aber nicht ein einzelner Agent.",
     "unknown": "Kein Audit je Identität (z. B. Redis/SQLite/D1) — Zuordnung nicht möglich."
   },
@@ -180,7 +180,7 @@
       "exfil": "Exfiltrationswege"
     },
     "attribution": {
-      "firm": "gesichert",
+      "firm": "exakt",
       "approximate": "ungefähr",
       "unknown": "nicht zugeordnet"
     },

@@ -1,0 +1,119 @@
+{
+  "title": "Registrazioni",
+  "subtitle": "Registrazione delle sessioni privilegiate: ogni azione amministrativa su una superficie registrata viene acquisita come frame concatenato tramite hash e ancorato al registro delle evidenze.",
+  "search": {
+    "field": "Campo di ricerca",
+    "subject": "Il soggetto contiene",
+    "grant": "ID grant",
+    "input": "Ricerca registrazioni",
+    "subjectPlaceholder": "Testo del soggetto",
+    "grantPlaceholder": "ID grant esatto",
+    "submit": "Cerca",
+    "clear": "Cancella"
+  },
+  "allStatuses": "Tutti gli stati",
+  "filterByStatus": "Filtra per stato",
+  "filterBySealReason": "Filtra per motivo di sigillatura",
+  "allSealReasons": "Tutti i motivi di sigillatura",
+  "filterOpenedAfter": "Aperta dopo",
+  "filterOpenedBefore": "Aperta prima",
+  "sealReasonOption": {
+    "idle": "Inattività",
+    "closed": "Chiusa",
+    "breakglass_review": "Revisione break-glass",
+    "sweep": "Sweep",
+    "consent_change": "Modifica del consenso"
+  },
+  "status": {
+    "active": "Attiva",
+    "sealed": "Sigillata"
+  },
+  "kind": {
+    "user": "Utente",
+    "token": "Token"
+  },
+  "cols": {
+    "subject": "Soggetto",
+    "kind": "Tipo",
+    "status": "Stato",
+    "opened": "Apertura",
+    "frames": "Frame scritti",
+    "flags": "Indicatori",
+    "sealReason": "Motivo di sigillatura"
+  },
+  "badge": {
+    "gap": "LACUNA",
+    "gapHint": "Dei frame sono stati riservati ma mai scritti: la registrazione ha una lacuna permanente e visibile.",
+    "breakglass": "Break-glass",
+    "breakglassHint": "Aperta con un grant break-glass: sempre registrata."
+  },
+  "empty": {
+    "title": "Ancora nessuna sessione di registrazione",
+    "description": "Quando gli operatori agiscono su una superficie privilegiata registrata, le loro sessioni compaiono qui."
+  },
+  "notice": {
+    "strip": "Questa è una superficie privilegiata registrata: le azioni vengono acquisite nel registro delle evidenze."
+  },
+  "consent": {
+    "title": "Avviso di registrazione (AC-8)",
+    "body": "Le azioni privilegiate su questo control plane vengono registrate: ogni richiesta amministrativa è acquisita come frame concatenato tramite hash e ancorato al registro delle evidenze, con solo forma della route, identificatori e un digest unidirezionale del corpo, mai payload o segreti. Le sessioni break-glass sono sempre registrate. Per continuare devi prendere atto di questo avviso.",
+    "ack": "Conferma e continua",
+    "ackDone": "Avviso di registrazione confermato",
+    "cancel": "Annulla"
+  },
+  "policy": {
+    "title": "Policy di registrazione",
+    "subtitle": "Cosa viene registrato su questo control plane e come vengono classificate le evidenze. Per modificarla serve un ruolo che amministra la policy di registrazione; ogni modifica qui è a sua volta un'azione privilegiata registrata.",
+    "loading": "Caricamento della policy di registrazione…",
+    "saved": "Policy di registrazione salvata",
+    "save": "Salva policy",
+    "saveFailed": "La policy non è stata salvata.",
+    "forbidden": {
+      "title": "Il tuo ruolo non può modificare la policy di registrazione",
+      "description": "Il tuo ruolo può amministrare le sessioni di registrazione, ma modificare la policy di registrazione richiede un permesso separato. Chiedi a un amministratore di concedertelo."
+    },
+    "error": {
+      "title": "Impossibile caricare la policy di registrazione",
+      "description": "Non è stato possibile leggere la policy di registrazione. Riprova, oppure verifica che il modulo sia montato."
+    },
+    "breakglass": {
+      "label": "Sessioni break-glass",
+      "hint": "L'accesso di emergenza break-glass è sempre registrato: nessuna policy può disattivarlo. Il livello minimo di registrazione dipende dai permessi, non dal namespace.",
+      "badge": "Sempre attivo"
+    },
+    "namespaces": {
+      "label": "Namespace registrati",
+      "hint": "Le superfici dei moduli di cui vengono acquisite le azioni privilegiate. Ognuna deve indicare un modulo montato; un nome sconosciuto viene rifiutato dal server.",
+      "empty": "Nessun namespace registrato: le azioni privilegiate non vengono acquisite su nessuna superficie dei moduli.",
+      "placeholder": "es. governance",
+      "addLabel": "Aggiungi un namespace registrato",
+      "add": "Aggiungi",
+      "remove": "Rimuovi {{name}}",
+      "shape": "Un namespace è composto da lettere minuscole, cifre, - o _, inizia con una lettera e non termina con - o _.",
+      "duplicate": "Questo namespace è già nell'elenco.",
+      "tooLong": "Un namespace può avere al massimo {{max}} caratteri.",
+      "tooMany": "Si possono registrare al massimo {{max}} namespace."
+    },
+    "consent": {
+      "label": "Richiedi conferma prima delle azioni privilegiate",
+      "hint": "Chiusura per impostazione predefinita (\"required\"): gli operatori devono confermare l'avviso di registrazione AC-8 prima di agire. Se disattivata, l'avviso resta solo un banner (\"notice\")."
+    },
+    "idle": {
+      "label": "Timeout di sigillatura per inattività (secondi)",
+      "hint": "Una sessione di registrazione aperta viene sigillata dopo questo periodo di inattività. Tra 60 e 86400 secondi.",
+      "error": "Inserisci un numero intero di secondi tra 60 e 86400."
+    },
+    "retention": {
+      "label": "Classe di conservazione (giorni)",
+      "hint": "Un'etichetta di classificazione applicata alle registrazioni sigillate: indica per quanto tempo dovrebbero essere conservate. Tra 1 e 3650 giorni.",
+      "tag": "Solo etichetta",
+      "enforced": "Applicata",
+      "notEnforced": "La conservazione è solo un'etichetta di classificazione: le registrazioni vengono etichettate, mai eliminate. Nessuna policy rimuove ancora una registrazione (non è disponibile alcuna eliminazione).",
+      "error": "Inserisci un numero intero di giorni tra 1 e 3650."
+    },
+    "ai": {
+      "label": "Riepiloghi generati dall'AI",
+      "hint": "Consenti la generazione di riepiloghi di sessione derivati da un modello. Un riepilogo è una narrazione derivata, mai un'evidenza: il registro resta costituito dai frame concatenati tramite hash."
+    }
+  }
+}

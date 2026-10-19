@@ -4,6 +4,7 @@
 package claude
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -116,5 +117,23 @@ func TestRecordTimeFallback(t *testing.T) {
 	}
 	if got := recordTime(&logspb.LogRecord{}); !got.IsZero() {
 		t.Errorf("zero record should yield zero time, got %v", got)
+	}
+}
+
+// A TimeUnixNano past MaxInt64 wraps negative in an int64 and reads as 1677-1969; it
+// is not an instant, so the record falls through to its observed time.
+func TestRecordTimeIgnoresWrappedSenderTime(t *testing.T) {
+	rec := &logspb.LogRecord{
+		TimeUnixNano:         math.MaxUint64,
+		ObservedTimeUnixNano: uint64(testTime.UnixNano()),
+	}
+	if got := recordTime(rec); !got.Equal(testTime) {
+		t.Errorf("recordTime with a wrapped TimeUnixNano = %v, want the observed time %v", got, testTime)
+	}
+	if got := recordTime(&logspb.LogRecord{TimeUnixNano: math.MaxUint64}); !got.IsZero() {
+		t.Errorf("recordTime with only a wrapped TimeUnixNano = %v, want the zero time", got)
+	}
+	if got := recordTime(&logspb.LogRecord{ObservedTimeUnixNano: math.MaxUint64}); !got.IsZero() {
+		t.Errorf("recordTime with only a wrapped ObservedTimeUnixNano = %v, want the zero time", got)
 	}
 }

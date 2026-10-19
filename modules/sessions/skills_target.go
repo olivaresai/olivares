@@ -24,16 +24,20 @@ type SkillsTarget struct {
 	Permission  auth.Permission
 }
 
-// ReadSkillsTarget reads the folder, template or session (run) row a skills assignment
-// names, inside the caller's transaction. kind is "folder", "template" or "session"; a
-// folder is named by workspace_ref and a session by run_ref. A write touches the row so its version
-// is fenced until commit. The scope is the request's own: a principal confined
-// to one workspace reaches only that workspace's rows, and a template declares no
-// workspace, so it is refused to such a principal as not found.
+// ReadSkillsTarget reads the profile, folder, template or session row named by
+// a skills assignment, inside the caller's transaction. Profiles use profile_ref,
+// folders workspace_ref, sessions run_ref, and templates their row ID. A write
+// touches the row to fence its version until commit. A confined scope reaches
+// only its workspace's rows; profiles and templates declare no workspace.
 func (m *Module) ReadSkillsTarget(ctx context.Context, sc store.Scope, kind, id string, write bool) (SkillsTarget, error) {
 	var target SkillsTarget
 	var entity model.Kind
 	switch kind {
+	case "profile":
+		entity, target.Permission = providerProfileKind, permProfileRead
+		if write {
+			target.Permission = permProfileWrite
+		}
 	case "folder":
 		entity, target.Permission = workspaceKind, permWsRead
 		if write {
@@ -64,6 +68,9 @@ func (m *Module) ReadSkillsTarget(ctx context.Context, sc store.Scope, kind, id 
 		locator := colRunRef
 		if kind == "folder" {
 			locator = colWsRef
+		}
+		if kind == "profile" {
+			locator = colPPRef
 		}
 		rows, _, err = repo.List(ctx, model.Query{Filters: []model.Filter{eq(locator, id)}, Limit: 2})
 		switch {

@@ -32,7 +32,7 @@ func TestRetirementActiveLegalHoldBlocksUntilReleased(t *testing.T) {
 					holdRecord["subject_kind"], holdRecord["subject_ref"] = nil, nil
 				}
 				id := sub.seedFenced(sub.tT, "compliance.legal_hold", holdRecord, user)
-				sub.scimDelete(sub.tT, user)
+				sub.deprovision(sub.tT, user)
 				sub.runPump()
 				sub.wantBlocked(t, user, sub.tT, id.String())
 				rec, _ := sub.record(user, sub.tT)
@@ -110,7 +110,7 @@ func TestDormantComplianceStillBlocksRetirementOnAnActiveHold(t *testing.T) {
 			if r := e.do("GET", "/v1/m/compliance/holds", e.admin, e.tT, nil); r.code != http.StatusNotFound || r.errorCode() != "module_not_enabled" {
 				t.Fatalf("dormant compliance route=%d %s", r.code, r.raw)
 			}
-			e.scimDelete(e.tT, user)
+			e.deprovision(e.tT, user)
 			e.runPump()
 			e.wantBlocked(t, user, e.tT, id.String())
 			rec, _ := e.record(user, e.tT)
@@ -130,7 +130,7 @@ func TestRetirementLegalHoldStoreNamesNonUserHolds(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		e.requireRetirementCompletion(t, "clearing non-user store holds requires published blocked and retired verdicts")
 		user := e.onboard(e.tT, "session-hold@consent.test", "viewer")
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		var out auth.RetirementOutcome
 		if err := json.Unmarshal([]byte(`{"Stores":[{"store":"session-cockpit:sqlite:owned-node","state":"legal_hold","holds":[{"id":"session-hold-id","matter_ref":"matter-session"},{"id":"agent-hold-id","matter_ref":"matter-agent"}]}]}`), &out); err != nil {
 			t.Fatal(err)
@@ -166,7 +166,7 @@ func TestRetirementHoldSubjectKindIsNotAUserAlias(t *testing.T) {
 				"subject_ref": user.String(), "reason": "PRIVATE OTHER SUBJECT CONTENT", "status": "active", "created_by": "test",
 			}, user)
 		}
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		e.runPump()
 		e.wantRetired(t, user, e.tT)
 	})

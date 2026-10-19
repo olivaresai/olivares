@@ -28,13 +28,15 @@ func newSessionPeersCmd() *cobra.Command {
 		none         bool
 	)
 	cmd := &cobra.Command{
-		Use:   "peers <session> [peer...]",
-		Short: "Choose which sessions a session may message",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "peers <session> [peer...]",
+		Short:       "Choose which sessions a session may message",
 		Long: "peers sets the sessions this session's agent may message or hand work to with its\n" +
 			"olivares_peer_send tool. Name each peer by its name, its id or its session ID (osn_...).\n" +
 			"--same-template allows every running session started from the same template; --none\n" +
 			"allows none. With no peer and no flag it prints the current choice. Tell the agent the\n" +
-			"peer's session ID it prints: that is the ID the tool sends to.",
+			"peer's session ID it prints: that is the ID the tool sends to.\n\n" +
+			"Inside a session, self or current names the session in OLIVARES_WORK_SESSION_ID.",
 		Example: "  olivares session peers lead reviewer tester\n" +
 			"  olivares session peers lead --same-template\n" +
 			"  olivares session peers lead --none\n" +
@@ -46,10 +48,7 @@ func newSessionPeersCmd() *cobra.Command {
 			if (sameTemplate && none) || ((sameTemplate || none) && len(peers) > 0) {
 				return sentence(exitcode.Usage, "Choose peers, --same-template or --none, not more than one")
 			}
-			if err := cfg.resolve(); err != nil {
-				return err
-			}
-			run, err := cfg.findSession(cmd.Context(), args[0])
+			run, err := cfg.findSessionTarget(cmd.Context(), args)
 			if err != nil {
 				return err
 			}
@@ -80,7 +79,7 @@ func newSessionPeersCmd() *cobra.Command {
 				}
 			}
 			// A peer named by its ID, or read back, is shown by its session's name too.
-			if runs, err := cfg.listRuns(cmd.Context()); err == nil {
+			if runs, err := cfg.listRuns(cmd.Context(), nil); err == nil {
 				for _, r := range runs {
 					if sid := str(r, "canonical_sid"); sid != "" && (names[sid] == "" || names[sid] == sid) {
 						names[sid] = sessionLabel(r)

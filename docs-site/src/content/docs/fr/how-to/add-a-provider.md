@@ -126,10 +126,10 @@ main.
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-Pour `anthropic`, `openai` et `xai`, OpenCode accepte uniquement le point de terminaison du fournisseur : laissez `base_url` vide. Utilisez `codex` pour un fournisseur `openai_compatible` ; utilisez `codex` ou `opencode` pour `ollama`.
+Pour `anthropic`, `openai` et `xai`, OpenCode accepte uniquement le point de terminaison du fournisseur : laissez `base_url` vide. Utilisez `codex` pour une passerelle `openai_compatible` ; utilisez `codex` ou `opencode` pour `ollama` et pour un serveur local `openai_compatible` dont la `base_url` est en `http` simple sur une adresse de bouclage ou privée, comme `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). La `base_url` inclut `/v1`.
 
 ## 4. Lancez la première session
 

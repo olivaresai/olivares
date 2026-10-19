@@ -264,6 +264,33 @@ describe('NowQueue — what needs a person', () => {
     expectNoRawI18nKeys(document.body)
   })
 
+  it('says what is not shown once, on a tool call stored without a review (#2269)', () => {
+    renderIntel(
+      <NowQueue
+        state="ready"
+        sessions={[]}
+        approvals={[
+          {
+            id: 'ap-4',
+            action: 'claude.hook.tool',
+            subject_kind: 'claude.tool',
+            subject_ref: 'Bash',
+            requested_by: 'user:ada',
+            status: 'pending',
+            required_approvals: 1,
+            approve_count: 0,
+            reject_count: 0,
+            escalated: false,
+          },
+        ]}
+      />,
+    )
+    expect(screen.getByTestId('now-approval-row')).toBeInTheDocument()
+    expect(
+      screen.getAllByText('This request does not include what will run.'),
+    ).toHaveLength(1)
+  })
+
   it('serves a role that reads approvals but not live sessions', () => {
     const spy = vi.spyOn(sessionsApi, 'live')
     renderIntel(
@@ -288,6 +315,10 @@ describe('NowQueue — what needs a person', () => {
     expect(screen.getByTestId('now-approval-row')).toHaveTextContent(
       'Deploy promote',
     )
+    // A request a person raised expects no command: no "does not include" note (#2269).
+    expect(
+      screen.queryByText('This request does not include what will run.'),
+    ).toBeNull()
     // Nothing about sessions it may not read: no failure line, no session read.
     expect(screen.queryByText('The sessions could not be read.')).toBeNull()
     expect(spy).not.toHaveBeenCalled()

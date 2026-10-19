@@ -52,8 +52,9 @@ type mcpToolPinActionInput struct {
 func newMCPCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:   "mcp",
-		Short: "MCP servers that sessions can use",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "mcp",
+		Short:       "MCP servers that sessions can use",
 		Long: "The MCP servers sessions can use: add a local one (a command the engine runs next to\n" +
 			"each session) or a remote one (an HTTPS URL), test it to list its tools, then turn it on.",
 		Example: `  olivares mcp add files -- npx -y @modelcontextprotocol/server-filesystem .
@@ -69,8 +70,9 @@ func newMCPCmd() *cobra.Command {
 
 func newMCPPinsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pins",
-		Short: "List and manage approved MCP tool fingerprints",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "pins",
+		Short:       "List and manage approved MCP tool fingerprints",
 		Long: "List, approve and remove tenant-scoped MCP tool fingerprints. Tool pins detect\n" +
 			"definition drift and are enforced by the Business tool-pin verifier.",
 		Example: `  olivares mcp pins ls
@@ -85,9 +87,10 @@ func newMCPPinsCmd(flags *authClientFlags) *cobra.Command {
 
 func newMCPPinsListCmd(client mcpPinsClient) *cobra.Command {
 	return &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List approved MCP tool fingerprints and current drift",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List approved MCP tool fingerprints and current drift",
 		Long: "List this tenant's approved MCP tool fingerprints, approval counts and any\n" +
 			"currently observed definition drift. JSON output preserves the raw API response.",
 		Example: `  olivares mcp pins ls
@@ -133,8 +136,9 @@ func newMCPPinsApproveCmd(client mcpPinsClient) *cobra.Command {
 		fromDrift   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "approve <tool>",
-		Short: "Approve an explicit or currently drifted tool fingerprint",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "approve <tool>",
+		Short:       "Approve an explicit or currently drifted tool fingerprint",
 		Long: "Approve a fingerprint for one MCP tool. Supply exactly one of --fingerprint for\n" +
 			"an explicit value or --from-drift to approve the server's current drift observation.",
 		Example: `  olivares mcp pins approve github.search --fingerprint sha256:abc123
@@ -178,9 +182,10 @@ func newMCPPinsApproveCmd(client mcpPinsClient) *cobra.Command {
 
 func newMCPPinsRemoveCmd(client mcpPinsClient) *cobra.Command {
 	return &cobra.Command{
-		Use:     "rm <tool>",
-		Aliases: []string{"remove", "unpin"},
-		Short:   "Remove an approved MCP tool fingerprint",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <tool>",
+		Aliases:     []string{"remove", "unpin"},
+		Short:       "Remove an approved MCP tool fingerprint",
 		Long: "Remove this tenant's approved fingerprint for one MCP tool. A tool without an\n" +
 			"existing pin is reported as not found.",
 		Example:           "  olivares mcp pins rm github.search",

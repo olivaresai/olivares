@@ -72,7 +72,7 @@ y es una costura deny-closed.
 :::caution[Límites honestos]
 - **`olivares_deployment` declara; no despliega.** El recurso escribe una *definición* de
   despliegue a través de las rutas del módulo VII. El `apply`/`retire` vivo contra
-  infraestructura real es una **costura deny-closed que devuelve `503`** hasta que un operador
+  infraestructura real es una función Business (Community responde `501`) y una **costura deny-closed que devuelve `503`** hasta que un operador
   aprovisiona un executor — declarar un despliegue en HCL nunca muta tu estate.
 - **El OpenAPI estable no es todo el cable.** La superficie estable del núcleo está en el
   contrato publicado (`/openapi.json`); las rutas de módulo (por ejemplo las lecturas del
@@ -122,7 +122,7 @@ inventario, findings — solo como refs/hashes/relaciones, con el propio export 
 - [Usar los SDKs cliente](/es/how-to/use-the-client-sdks/) — los clientes de primera parte Go/Python/TypeScript.
 - [Referencia de la CLI](/es/reference/cli/) — la misma funcionalidad desde el binario `olivares`.
 - [Gestionar el control plane como código](/es/how-to/manage-as-code/) — la guía del provider de Terraform.
-- [Módulo VII — despliegue](/es/reference/modules/vii-deploy/) — dónde actúa `olivares_deployment` (la costura `503`).
+- [Módulo VII — despliegue](/es/reference/modules/vii-deploy/) — dónde actúa `olivares_deployment` (Business; la costura `503`).
 - [Catálogo de módulos](/es/reference/modules/overview/) — la división Gobernar/Observar vs Actuar.
 - [Honestidad y límites](/es/start/honesty-and-limits/) — qué actúa hoy y qué no.
 - [Visión general de la arquitectura](/es/explanation/architecture/overview/) — la capa del motor sobre la que se asienta esta superficie.

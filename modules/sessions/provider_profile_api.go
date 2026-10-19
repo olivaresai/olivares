@@ -136,13 +136,15 @@ type providerProfileDTO struct {
 	// SessionPermissionMode is the declared permission mode ("" = none declared).
 	SessionPermissionMode string            `json:"session_permission_mode,omitempty"`
 	SessionWorkGrant      *SessionWorkGrant `json:"session_work_grant,omitempty"`
-	// SessionPrograms and SessionRegistries are the declared programs and package
-	// registries (provider_profile_packages.go): names and URLs, never a token.
-	SessionPrograms   []string          `json:"session_programs,omitempty"`
-	SessionRegistries []SessionRegistry `json:"session_registries,omitempty"`
-	CreatedAt         string            `json:"created_at,omitempty"`
-	UpdatedAt         string            `json:"updated_at,omitempty"`
-	RetiredAt         string            `json:"retired_at,omitempty"`
+	// SessionPrograms, SessionRegistries and SessionEgressHosts are the declared
+	// programs, package registries and egress hosts (provider_profile_packages.go):
+	// names and URLs, never a token.
+	SessionPrograms    []string          `json:"session_programs,omitempty"`
+	SessionRegistries  []SessionRegistry `json:"session_registries,omitempty"`
+	SessionEgressHosts []string          `json:"session_egress_hosts,omitempty"`
+	CreatedAt          string            `json:"created_at,omitempty"`
+	UpdatedAt          string            `json:"updated_at,omitempty"`
+	RetiredAt          string            `json:"retired_at,omitempty"`
 }
 
 // providerProfileConfigurationDTO is the authorized configuration read: the
@@ -177,10 +179,12 @@ type createProfileRequest struct {
 	// SessionPermissionMode declares the permission mode those sessions run under.
 	SessionPermissionMode string          `json:"session_permission_mode"`
 	SessionWorkGrant      json.RawMessage `json:"session_work_grant"`
-	// SessionPrograms and SessionRegistries declare the installed programs and
-	// the package registries sessions under this profile get.
-	SessionPrograms   []string          `json:"session_programs"`
-	SessionRegistries []SessionRegistry `json:"session_registries"`
+	// SessionPrograms, SessionRegistries and SessionEgressHosts declare the
+	// installed programs, the package registries and the hosts sessions under
+	// this profile get.
+	SessionPrograms    []string          `json:"session_programs"`
+	SessionRegistries  []SessionRegistry `json:"session_registries"`
+	SessionEgressHosts []string          `json:"session_egress_hosts"`
 }
 
 // patchProfileRequest is the only post-creation mutation: a label and/or an
@@ -203,10 +207,11 @@ type patchProfileRequest struct {
 	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
 	SessionPermissionMode *string         `json:"session_permission_mode"`
 	SessionWorkGrant      json.RawMessage `json:"session_work_grant"`
-	// SessionPrograms and SessionRegistries re-declare them; `[]` withdraws the
-	// declaration and a missing or null field leaves it unchanged.
-	SessionPrograms   *[]string          `json:"session_programs"`
-	SessionRegistries *[]SessionRegistry `json:"session_registries"`
+	// SessionPrograms, SessionRegistries and SessionEgressHosts re-declare them;
+	// `[]` withdraws the declaration and a missing or null field leaves it unchanged.
+	SessionPrograms    *[]string          `json:"session_programs"`
+	SessionRegistries  *[]SessionRegistry `json:"session_registries"`
+	SessionEgressHosts *[]string          `json:"session_egress_hosts"`
 }
 
 type providerBindingDTO struct {
@@ -242,6 +247,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 		SessionWorkGrant:      grant,
 		SessionPrograms:       p.SessionPrograms,
 		SessionRegistries:     p.SessionRegistries,
+		SessionEgressHosts:    p.SessionEgressHosts,
 		LocalEnvironment:      local,
 		ServerUserLogin:       usesServerUserLogin(p.Driver, p.AuthSource, p.ConfigHome),
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
@@ -262,7 +268,11 @@ func toBindingDTO(b ProviderSourceBinding) providerBindingDTO {
 // handleListProfiles lists the tenant's provider profiles as references and labels, never paths.
 func (m *Module) handleListProfiles(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
-	profiles, page, err := m.ListProfiles(r.Context(), mc.Tenant, state, listQuery(r))
+	profiles, page, err := listVisible(r.Context(), m, mc, listQuery(r),
+		func(q model.Query) ([]ProviderProfile, model.Page, error) {
+			return m.ListProfiles(r.Context(), mc.Tenant, state, q)
+		},
+		func(p ProviderProfile) (string, string) { return p.Ref, p.Driver })
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -281,6 +291,14 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
+	if err := m.requireNamedTool(r.Context(), mc, body.Driver); err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	if err := m.requireRecordShare(r.Context(), mc, body.ProviderRecordRef, ""); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	prof, err := m.CreateProfile(r.Context(), mc.Tenant, CreateProfileInput{
 		Driver: body.Driver, ConfigHome: body.ConfigHome, UserHome: body.UserHome,
 		DisplayName: body.DisplayName, EnvironmentRef: body.EnvironmentRef,
@@ -289,9 +307,10 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 		SessionToolsDeclared:  body.SessionTools != nil,
 		SessionPermissionMode: body.SessionPermissionMode,
 		SessionWorkGrant:      body.SessionWorkGrant, WorkGrantActor: mc.Principal,
-		SessionPrograms:   body.SessionPrograms,
-		SessionRegistries: body.SessionRegistries,
-		MayUseSecretEnv:   len(body.SessionPrograms)+len(body.SessionRegistries) > 0 && m.mayUseSecretEnv(r.Context(), mc),
+		SessionPrograms:    body.SessionPrograms,
+		SessionRegistries:  body.SessionRegistries,
+		SessionEgressHosts: body.SessionEgressHosts,
+		MayUseSecretEnv:    len(body.SessionPrograms)+len(body.SessionRegistries)+len(body.SessionEgressHosts) > 0 && m.mayUseSecretEnv(r.Context(), mc),
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -337,10 +356,26 @@ type resolvePreviewResponse struct {
 
 // handlePreviewProfile answers what a new session of a driver would run on, without creating anything: the tool's own login when it is signed in, otherwise the key or local model from Providers that the resolve rule picks, or the sentence that says what to add.
 func (m *Module) handlePreviewProfile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if err := m.requireNamedTool(r.Context(), mc, r.URL.Query().Get("driver")); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	got, err := m.PreviewProfile(r.Context(), mc.Tenant, r.URL.Query().Get("driver"))
 	if err != nil {
 		writeRunErr(w, err)
 		return
+	}
+	if got.Profile.Ref != "" {
+		if err := m.callerMayUse(r.Context(), mc.Tenant, mc.Principal, got.Profile.Ref, got.Profile.Driver); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
+	if got.Provider != nil {
+		if err := m.requireRecordAccess(r.Context(), mc, got.Provider.Ref); err != nil {
+			writeRunErr(w, err)
+			return
+		}
 	}
 	terms, _ := m.LaunchTermsFor(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("driver"))))
 	out := resolvePreviewResponse{Reason: got.Reason, Provider: resolveSourceOf(got.Provider),
@@ -373,6 +408,14 @@ func (m *Module) handleToolsReadiness(w http.ResponseWriter, r *http.Request, mc
 		writeRunErr(w, err)
 		return
 	}
+	tools, err = visibleTo(r.Context(), m, mc, tools, func(t ToolReadiness) (string, string) { return "", t.Driver })
+	if err == nil {
+		tools, err = m.withUsableKey(r.Context(), mc, tools)
+	}
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	out := make([]toolReadinessDTO, 0, len(tools))
 	for _, t := range tools {
 		out = append(out, toolReadinessDTO{Driver: t.Driver, Ready: t.Ready, Reason: t.Reason,
@@ -393,9 +436,13 @@ func (m *Module) handleResolveProfile(w http.ResponseWriter, r *http.Request, mc
 	var got ResolvedProfile
 	var err error
 	if body.Account != "" {
-		got, err = m.ResolveAccountProfile(r.Context(), mc.Tenant, body.Driver, body.Account)
+		if err = m.requireNamedTool(r.Context(), mc, body.Driver); err == nil {
+			got, err = m.resolveAccountProfile(r.Context(), mc.Tenant, body.Driver, body.Account, func(p ProviderProfile) error {
+				return m.callerMayUse(r.Context(), mc.Tenant, mc.Principal, p.Ref, p.Driver)
+			})
+		}
 	} else {
-		got, err = m.ResolveProfile(r.Context(), mc.Tenant, body.Driver)
+		got, err = m.resolveProfileForCaller(r.Context(), mc, body.Driver)
 	}
 	if err != nil {
 		writeRunErr(w, err)
@@ -408,6 +455,10 @@ func (m *Module) handleResolveProfile(w http.ResponseWriter, r *http.Request, mc
 
 // handleGetProfile returns one provider profile by its reference, without its paths.
 func (m *Module) handleGetProfile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	prof, err := m.GetProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
 	if err != nil {
 		writeRunErr(w, err)
@@ -424,9 +475,9 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 	}
 	if body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
 		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil && len(body.SessionWorkGrant) == 0 &&
-		body.SessionPrograms == nil && body.SessionRegistries == nil {
+		body.SessionPrograms == nil && body.SessionRegistries == nil && body.SessionEgressHosts == nil {
 		writeJSON(w, http.StatusBadRequest, errorBody(
-			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs and/or session_registries"))
+			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode, session_work_grant, session_programs, session_registries and/or session_egress_hosts"))
 		return
 	}
 	if body.State != nil {
@@ -440,15 +491,31 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 			return
 		}
 	}
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	if body.ProviderRecordRef != nil {
+		current, err := m.GetProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+		if err == nil {
+			err = m.requireRecordShare(r.Context(), mc, *body.ProviderRecordRef, current.ProviderRecordRef)
+		}
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	prof, err := m.PatchProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProfilePatch{
 		DisplayName: body.DisplayName, State: body.State, AuthSource: body.AuthSource,
 		ProviderRecordRef:     body.ProviderRecordRef,
 		SessionTools:          body.SessionTools,
 		SessionPermissionMode: body.SessionPermissionMode,
 		SessionWorkGrant:      body.SessionWorkGrant, WorkGrantActor: mc.Principal,
-		SessionPrograms:   body.SessionPrograms,
-		SessionRegistries: body.SessionRegistries,
-		MayUseSecretEnv:   (body.SessionPrograms != nil || body.SessionRegistries != nil) && m.mayUseSecretEnv(r.Context(), mc),
+		SessionPrograms:    body.SessionPrograms,
+		SessionRegistries:  body.SessionRegistries,
+		SessionEgressHosts: body.SessionEgressHosts,
+		MayUseSecretEnv: (body.SessionPrograms != nil || body.SessionRegistries != nil || body.SessionEgressHosts != nil) &&
+			m.mayUseSecretEnv(r.Context(), mc),
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -459,6 +526,10 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 
 // handleRetireProfile retires a provider profile for good: the id stays, its history stays, and the home becomes free for a new profile id.
 func (m *Module) handleRetireProfile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	retired := ProfileRetired
 	prof, err := m.PatchProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProfilePatch{State: &retired})
 	if err != nil {
@@ -470,6 +541,10 @@ func (m *Module) handleRetireProfile(w http.ResponseWriter, r *http.Request, mc 
 
 // handleProfileConfiguration returns the stored canonical homes of one provider profile; this is the only read that exposes paths, and it never exposes a credential value.
 func (m *Module) handleProfileConfiguration(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	prof, err := m.GetProfile(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
 	if err != nil {
 		writeRunErr(w, err)
@@ -485,7 +560,11 @@ func (m *Module) handleProfileConfiguration(w http.ResponseWriter, r *http.Reque
 // handleListBindings lists the source-to-profile bindings of the tenant, optionally narrowed to one profile.
 func (m *Module) handleListBindings(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	profile := strings.TrimSpace(r.URL.Query().Get("profile_ref"))
-	bindings, page, err := m.ListBindings(r.Context(), mc.Tenant, profile, listQuery(r))
+	bindings, page, err := listVisible(r.Context(), m, mc, listQuery(r),
+		func(q model.Query) ([]ProviderSourceBinding, model.Page, error) {
+			return m.ListBindings(r.Context(), mc.Tenant, profile, q)
+		},
+		func(b ProviderSourceBinding) (string, string) { return b.ProfileRef, b.Driver })
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -509,6 +588,12 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		writeJSON(w, http.StatusBadRequest, errorBody("source_id must be the source's persistent id"))
 		return
 	}
+	if validProfileRef(body.ProfileRef) {
+		if err := m.requireProfileAccess(r.Context(), mc, body.ProfileRef); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	b, err := m.CreateBinding(r.Context(), mc.Tenant, mc.Principal, CreateBindingInput{
 		SourceID: sourceID, SourceRevision: body.SourceRevision, ProfileRef: body.ProfileRef,
 	})
@@ -522,6 +607,9 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 // handleGetBinding returns one source-to-profile binding by its reference.
 func (m *Module) handleGetBinding(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	b, err := m.GetBinding(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if err == nil {
+		err = m.requireProfileAccess(r.Context(), mc, b.ProfileRef)
+	}
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -531,6 +619,14 @@ func (m *Module) handleGetBinding(w http.ResponseWriter, r *http.Request, mc api
 
 // handleRevokeBinding revokes a source-to-profile binding; events already attributed under it keep their provenance and later observations through that source are no longer attributed to the profile.
 func (m *Module) handleRevokeBinding(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	found, err := m.GetBinding(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
+	if err == nil {
+		err = m.requireProfileAccess(r.Context(), mc, found.ProfileRef)
+	}
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	b, err := m.RevokeBinding(r.Context(), mc.Tenant, chi.URLParam(r, "ref"))
 	if err != nil {
 		writeRunErr(w, err)

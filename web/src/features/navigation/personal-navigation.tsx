@@ -273,9 +273,9 @@ function usePersonalSession(
     session.getSnapshot,
     session.getSnapshot,
   )
-  // Favorites and recents stay on `navigable`, not `listed`, on purpose: they are a person's
-  // own shortcuts, not the product's directory, so a page whose module is off drops out of
-  // them (and returns when the module is turned on) instead of being drawn as an Off entry.
+  // Favorites and recents ask `navigable` directly, not the directory's listing, on purpose:
+  // they are a person's own shortcuts, so a pinned door (`doorTo`) stays pinned, and a page
+  // whose module is off drops out of them and returns when the module is turned on.
   const visible = (link: PersonalLink) => {
     const target = resolvePersonalLink(link)
     return (

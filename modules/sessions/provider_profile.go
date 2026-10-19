@@ -164,6 +164,9 @@ type ProviderProfile struct {
 	// (provider_profile_packages.go); nil declares none.
 	SessionPrograms   []string
 	SessionRegistries []SessionRegistry
+	// SessionEgressHosts are the hosts an administrator declared a confined
+	// session may reach beside its bound provider; nil declares none.
+	SessionEgressHosts []string
 	// packagesUnreadable: a stored declaration could not be read; a launch
 	// under this profile is refused (errUnreadablePackages).
 	packagesUnreadable bool
@@ -229,11 +232,15 @@ type CreateProfileInput struct {
 	// Empty declares none and leaves the launch's own validated mode in place.
 	SessionPermissionMode string
 	SessionWorkGrant      json.RawMessage
-	WorkGrantActor        auth.Principal
-	// SessionPrograms and SessionRegistries declare the programs and package
-	// registries sessions under this profile get (provider_profile_packages.go).
-	SessionPrograms   []string
-	SessionRegistries []SessionRegistry
+	// WorkGrantActor is the authenticated caller: it authorizes a work grant and
+	// is the actor of the ledger's egress-host entry.
+	WorkGrantActor auth.Principal
+	// SessionPrograms, SessionRegistries and SessionEgressHosts declare the
+	// programs, package registries and egress hosts sessions under this profile
+	// get (provider_profile_packages.go).
+	SessionPrograms    []string
+	SessionRegistries  []SessionRegistry
+	SessionEgressHosts []string
 	// MayUseSecretEnv is set by the server from the AUTHENTICATED caller's tenant
 	// administration: declaring programs or registries needs it.
 	MayUseSecretEnv bool
@@ -279,6 +286,7 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
 			{Name: colPPSessionPrograms, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionPrograms},
 			{Name: colPPSessionRegistries, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionRegistries},
+			{Name: colPPSessionEgressHosts, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionEgressHosts},
 			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace; re-read for mint and renewal: modules/sessions/orchestration_work.go:87, modules/sessions/orchestration_work.go:145")},
 			// Account metadata does not enter ProviderHomeSnapshot. A NULL name keeps
 			// every existing row an unnamed profile; account identity reuses its ref.
@@ -686,7 +694,7 @@ func (m *Module) localEnvironment() (string, error) {
 
 func profileFromRecord(rec model.Record) ProviderProfile {
 	policy := decodeSessionPolicy(rec)
-	programs, registries, packagesOK := decodeProfilePackages(rec)
+	programs, registries, egressHosts, packagesOK := decodeProfilePackages(rec)
 	return ProviderProfile{
 		ID:                    model.ID(rec.String(model.ColID)),
 		Ref:                   rec.String(colPPRef),
@@ -706,6 +714,7 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		SessionWorkGrant:      rec.String(colPPSessionWorkGrant),
 		SessionPrograms:       programs,
 		SessionRegistries:     registries,
+		SessionEgressHosts:    egressHosts,
 		packagesUnreadable:    !packagesOK,
 		Version:               rec.Int(model.ColVersion),
 		CreatedAt:             rec.String(model.ColCreatedAt),
@@ -834,8 +843,8 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
-	programs, registries, err := validateProfilePackagesInput(in.SessionPrograms, in.SessionRegistries,
-		len(in.SessionPrograms)+len(in.SessionRegistries) > 0, in.MayUseSecretEnv)
+	programs, registries, egressHosts, err := validateProfilePackagesInput(in.SessionPrograms, in.SessionRegistries, in.SessionEgressHosts,
+		len(in.SessionPrograms)+len(in.SessionRegistries)+len(in.SessionEgressHosts) > 0, in.MayUseSecretEnv)
 	if err != nil {
 		return ProviderProfile{}, err
 	}
@@ -886,11 +895,17 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 		setIf(rec, colPPSessionPermissionMode, policyMode)
 		setIf(rec, colPPSessionPrograms, programs)
 		setIf(rec, colPPSessionRegistries, registries)
+		setIf(rec, colPPSessionEgressHosts, egressHosts)
 		created, err := repo.Create(ctx, rec)
 		if err != nil {
 			return err
 		}
 		out = profileFromRecord(created)
+		if egressHosts != "" {
+			if err := appendProfileEgressHostsAudit(ctx, sc, in.WorkGrantActor, out); err != nil {
+				return err
+			}
+		}
 		if len(in.SessionWorkGrant) != 0 {
 			return appendProfileWorkGrantAudit(ctx, sc, in.WorkGrantActor, out.ID, grant)
 		}
@@ -980,11 +995,12 @@ type ProfilePatch struct {
 	SessionPermissionMode *string
 	SessionWorkGrant      json.RawMessage
 	WorkGrantActor        auth.Principal
-	// SessionPrograms and SessionRegistries re-declare the programs and package
-	// registries; an empty list withdraws the declaration. Like the tool policy,
-	// they do not reach a live child.
-	SessionPrograms   *[]string
-	SessionRegistries *[]SessionRegistry
+	// SessionPrograms, SessionRegistries and SessionEgressHosts re-declare the
+	// programs, package registries and egress hosts; an empty list withdraws the
+	// declaration. Like the tool policy, they do not reach a live child.
+	SessionPrograms    *[]string
+	SessionRegistries  *[]SessionRegistry
+	SessionEgressHosts *[]string
 	// MayUseSecretEnv: as CreateProfileInput's.
 	MayUseSecretEnv bool
 }
@@ -1039,7 +1055,7 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 	if grantErr != nil {
 		return ProviderProfile{}, grantErr
 	}
-	var inPrograms []string
+	var inPrograms, inEgressHosts []string
 	var inRegistries []SessionRegistry
 	if p.SessionPrograms != nil {
 		inPrograms = *p.SessionPrograms
@@ -1047,8 +1063,11 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 	if p.SessionRegistries != nil {
 		inRegistries = *p.SessionRegistries
 	}
-	programs, registries, err := validateProfilePackagesInput(inPrograms, inRegistries,
-		p.SessionPrograms != nil || p.SessionRegistries != nil, p.MayUseSecretEnv)
+	if p.SessionEgressHosts != nil {
+		inEgressHosts = *p.SessionEgressHosts
+	}
+	programs, registries, egressHosts, err := validateProfilePackagesInput(inPrograms, inRegistries, inEgressHosts,
+		p.SessionPrograms != nil || p.SessionRegistries != nil || p.SessionEgressHosts != nil, p.MayUseSecretEnv)
 	if err != nil {
 		return ProviderProfile{}, err
 	}
@@ -1119,6 +1138,9 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		if p.SessionRegistries != nil {
 			setOrNull(rec, colPPSessionRegistries, registries)
 		}
+		if p.SessionEgressHosts != nil {
+			setOrNull(rec, colPPSessionEgressHosts, egressHosts)
+		}
 		if p.State != nil {
 			switch *p.State {
 			case ProfileRetired:
@@ -1134,6 +1156,11 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			return err
 		}
 		out = profileFromRecord(updated)
+		if p.SessionEgressHosts != nil {
+			if err := appendProfileEgressHostsAudit(ctx, sc, p.WorkGrantActor, out); err != nil {
+				return err
+			}
+		}
 		if len(p.SessionWorkGrant) != 0 {
 			return appendProfileWorkGrantAudit(ctx, sc, p.WorkGrantActor, out.ID, grant)
 		}
@@ -1194,6 +1221,7 @@ func profileSessionPolicy(prof ProviderProfile) sessionPolicy {
 		workGrant:      prof.SessionWorkGrant,
 		programs:       prof.SessionPrograms,
 		registries:     prof.SessionRegistries,
+		egressHosts:    prof.SessionEgressHosts,
 		unreadable:     prof.packagesUnreadable,
 	}
 }
@@ -1345,6 +1373,9 @@ var (
 	// (provider_profile_packages.go:230).
 	pdeclProfileSessionPrograms = model.Nested([]string{}, model.ClassEvidence,
 		model.Leaf("[]", model.None("an installed program name resolved to a session's PATH: provider_profile_packages.go:279")),
+	)
+	pdeclProfileSessionEgressHosts = model.Nested([]string{}, model.ClassEvidence,
+		model.Leaf("[]", model.None("a DNS host name an administrator declared, granted to a confined session's network: provider_profile_packages.go:369")),
 	)
 	pdeclProfileSessionRegistries = model.Nested([]SessionRegistry{}, model.ClassEvidence,
 		model.Leaf("[].kind", model.None("a closed package manager kind: provider_profile_packages.go:176")),

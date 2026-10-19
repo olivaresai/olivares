@@ -70,7 +70,9 @@ describe('i18n runtime parity', () => {
       'en',
       'es',
       'fr',
+      'it',
       'ja',
+      'ko',
       'ru',
       'zh',
     ])

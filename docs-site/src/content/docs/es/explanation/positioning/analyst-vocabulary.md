@@ -87,7 +87,7 @@ Gartner.
   decisión: aprobaciones, el PEP de hooks de Claude Code, gating de herramientas MCP,
   kill switches.
 - **Gobernanza de la información** — descubrimiento de PII/sensibilidad sobre bases de
-  conocimiento gobernadas, atestación de residencia de datos, retención y legal-hold.
+  conocimiento gobernadas, atestación de residencia de datos, retención y legal-hold (el legal-hold es Business).
 
 Usamos AI TRiSM como un *mapa del espacio del problema que un comprador ya conoce*, para
 mostrar cobertura — no como una insignia.

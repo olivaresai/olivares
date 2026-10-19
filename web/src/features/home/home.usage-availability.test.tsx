@@ -1020,7 +1020,15 @@ describe('HomeView usage tiles — a real idle (QueryClient cancel)', () => {
 describe('HomeView availability region — failure, recovery, coverage, polling', () => {
   it('announces failure, recovery and a coverage change once each; stays silent on polls that only change numbers; moves no focus', async () => {
     const queryClient = createTestQueryClient()
-    renderIntel(<HomeView />, { queryClient })
+    // Now has no header control of its own (#2245), so the control focus rests on sits
+    // beside the view, outside every tile, card and list it re-renders.
+    renderIntel(
+      <>
+        <button type="button">Outside</button>
+        <HomeView />
+      </>,
+      { queryClient },
+    )
     await waitFor(() =>
       expect(within(tile('Live sessions')).getByText('3')).toBeInTheDocument(),
     )
@@ -1030,7 +1038,7 @@ describe('HomeView availability region — failure, recovery, coverage, polling'
     expect(screen.getAllByRole('status')).toHaveLength(1)
 
     // Focus rests on a control outside the tiles; nothing below may move it.
-    const report = screen.getByRole('link', { name: /Executive report/i })
+    const report = screen.getByRole('button', { name: 'Outside' })
     report.focus()
     expect(document.activeElement).toBe(report)
     const watched = observeRegion(region)

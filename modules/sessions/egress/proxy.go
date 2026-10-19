@@ -7,6 +7,7 @@ package egress
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	acl "github.com/stripe/smokescreen/pkg/smokescreen/acl/v1"
 	"github.com/stripe/smokescreen/pkg/smokescreen/conntrack"
 
+	coreegress "github.com/olivaresai/olivares/core/egress"
 	"github.com/olivaresai/olivares/sdk/netbind"
 )
 
@@ -36,12 +38,29 @@ import (
 // PublicOnly admits no loopback or private address for a provider, whatever
 // its name resolves to: for administrator-listed hosts, not a bound provider.
 type Policy struct {
-	Providers  []string
-	Controls   []string
-	PublicOnly bool
+	Providers []string
+	// PublicProviders are the hosts an administrator listed beside the bound
+	// provider, which may itself be a loopback or private endpoint. A listed host
+	// that resolves to a reserved address (core/egress ReservedAddress) refuses the
+	// launch by name: the proxy's allowed-address list is address-global, so a
+	// listed name pinned to an address another destination is allowed at would be
+	// admitted. A listed host takes no key check.
+	PublicProviders []string
+	Controls        []string
+	PublicOnly      bool
 	// Offline retains the same OS network boundary without granting any endpoint.
 	// Local session tools such as Git use it even after the agent has stopped.
 	Offline bool
+	// CredentialSHA256 is the digest of the one key the session is bound to; the
+	// key itself never enters the proxy. All zero means no key is checked. Only the
+	// first provider, the bound endpoint, is checked: later ones (package
+	// registries) take their own credentials. It and OnRefusal stay out of the
+	// helper's JSON, which travels in argv.
+	CredentialSHA256 [sha256.Size]byte `json:"-"`
+	// OnRefusal is told of a request refused for carrying another key. An error
+	// means the report was not kept; the next refusal of that host and header
+	// reports again.
+	OnRefusal func(Refusal) error `json:"-"`
 }
 
 type destination struct {
@@ -49,6 +68,8 @@ type destination struct {
 	scheme     string
 	control    bool
 	public     bool
+	listed     bool // an administrator-listed host (Policy.PublicProviders)
+	keyed      bool // only the session's own key is forwarded here
 	paths      map[string]bool
 }
 
@@ -56,20 +77,21 @@ func (d destination) address() string { return net.JoinHostPort(d.host, d.port) 
 
 func destinations(p Policy) ([]destination, error) {
 	if p.Offline {
-		if len(p.Providers)+len(p.Controls) != 0 {
+		if len(p.Providers)+len(p.PublicProviders)+len(p.Controls) != 0 {
 			return nil, errors.New("offline session egress cannot grant endpoints")
 		}
 		return nil, nil
 	}
-	if len(p.Providers) == 0 || len(p.Providers)+len(p.Controls) > 16 {
+	if len(p.Providers) == 0 || len(p.Providers)+len(p.PublicProviders)+len(p.Controls) > 16 {
 		return nil, errors.New("session egress requires a bounded provider endpoint list")
 	}
 	var out []destination
 	for _, group := range []struct {
-		urls    []string
-		control bool
-	}{{p.Providers, false}, {p.Controls, true}} {
-		for _, raw := range group.urls {
+		urls                   []string
+		control, public, bound bool // bound: its first URL is the session's bound provider
+		listed                 bool
+	}{{p.Providers, false, p.PublicOnly, true, false}, {p.PublicProviders, false, true, false, true}, {p.Controls, true, false, false, false}} {
+		for i, raw := range group.urls {
 			u, err := url.Parse(raw)
 			if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
 				return nil, errors.New("session egress endpoint is invalid")
@@ -89,7 +111,8 @@ func destinations(p Policy) ([]destination, error) {
 			if err != nil || n < 1 || n > 65535 {
 				return nil, errors.New("session egress endpoint port is invalid")
 			}
-			d := destination{host: host, port: strconv.Itoa(n), scheme: u.Scheme, control: group.control, public: p.PublicOnly && !group.control}
+			d := destination{host: host, port: strconv.Itoa(n), scheme: u.Scheme, control: group.control, public: group.public, listed: group.listed,
+				keyed: group.bound && i == 0 && p.CredentialSHA256 != ([sha256.Size]byte{})}
 			if group.control {
 				// The owned PEP listener is plaintext loopback; opening TLS CONNECT
 				// here would lose the HTTP path boundary.
@@ -117,6 +140,7 @@ func destinations(p Policy) ([]destination, error) {
 				for path := range d.paths {
 					out[i].paths[path] = true
 				}
+				out[i].keyed = out[i].keyed || d.keyed
 				merged = true
 			}
 			if !merged {
@@ -129,6 +153,7 @@ func destinations(p Policy) ([]destination, error) {
 
 type proxy struct {
 	dir, socket string
+	guard       *credentialGuard
 	server      *http.Server
 	transport   *http.Transport
 	caPEM       []byte
@@ -178,8 +203,8 @@ func (l trackedListener) Accept() (net.Conn, error) {
 	return l.owner.track(c)
 }
 
-func startProxy(ctx context.Context, ds []destination) (*proxy, error) {
-	return startProxyWithResolver(ctx, ds, net.DefaultResolver)
+func startProxy(ctx context.Context, ds []destination, opts ...proxyOption) (*proxy, error) {
+	return startProxyWithResolver(ctx, ds, net.DefaultResolver, opts...)
 }
 
 // Resolve in the engine namespace once. The proxy never follows later DNS
@@ -209,13 +234,13 @@ func (p pinnedResolver) LookupPort(ctx context.Context, network, service string)
 	return net.DefaultResolver.LookupPort(ctx, network, service)
 }
 
-func startProxyWithResolver(ctx context.Context, ds []destination, resolver smokescreen.Resolver) (*proxy, error) {
+func startProxyWithResolver(ctx context.Context, ds []destination, resolver smokescreen.Resolver, opts ...proxyOption) (*proxy, error) {
 	return startProxyWithDialer(ctx, ds, resolver, func(ctx context.Context, network, address string, timeout time.Duration) (net.Conn, error) {
 		return (&net.Dialer{Timeout: timeout}).DialContext(ctx, network, address)
-	})
+	}, opts...)
 }
 
-func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokescreen.Resolver, dial func(context.Context, string, string, time.Duration) (net.Conn, error)) (*proxy, error) {
+func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokescreen.Resolver, dial func(context.Context, string, string, time.Duration) (net.Conn, error), opts ...proxyOption) (*proxy, error) {
 	pins := pinnedResolver{}
 	var hosts, local []string
 	for _, d := range ds {
@@ -226,11 +251,18 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 			ips, err = resolver.LookupIP(lookup, "ip", d.host)
 			cancel()
 			if err != nil || len(ips) == 0 {
-				return nil, errors.New("session provider DNS resolution failed")
+				return nil, fmt.Errorf("session provider DNS resolution failed for %s", d.host)
 			}
 			// Prefer IPv4 when both are returned, matching local tool defaults.
 			sort.SliceStable(ips, func(i, j int) bool { return ips[i].To4() != nil && ips[j].To4() == nil })
 			pins[d.host] = ips
+		}
+		if d.listed {
+			for _, ip := range ips {
+				if coreegress.ReservedAddress(ip) {
+					return nil, fmt.Errorf("session egress host %s resolves to a non-public address (%s)", d.host, ip)
+				}
+			}
 		}
 		hosts = append(hosts, d.host)
 		for _, ip := range ips {
@@ -244,6 +276,9 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 		return nil, err
 	}
 	p := &proxy{dir: dir, socket: filepath.Join(dir, "proxy.sock"), connections: make(map[*trackedConn]bool), done: make(chan struct{})}
+	for _, opt := range opts {
+		opt(p)
+	}
 	// sun_path holds 107 bytes; past that, bind fails with a bare EINVAL.
 	if len(p.socket) > 107 {
 		_ = os.RemoveAll(dir)
@@ -332,13 +367,23 @@ func startProxyWithDialer(ctx context.Context, ds []destination, resolver smokes
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Never honor a client-selected upstream proxy or permit Host/URL
 			// disagreement to choose a second destination.
-			if r.Header.Get("X-Upstream-Https-Proxy") != "" || r.Header.Get("Upgrade") != "" || !requestAllowed(r, ds) {
+			d, allowed := allowedDestination(r, ds)
+			if r.Header.Get("X-Upstream-Https-Proxy") != "" || r.Header.Get("Upgrade") != "" || !allowed {
 				http.Error(w, "session destination denied", http.StatusForbidden)
 				return
 			}
 			if r.Method == http.MethodConnect {
 				p.serveConnect(w, r, p.server.Handler)
 				return
+			}
+			// A provider accepts any key; only the session's own is forwarded to it.
+			// The decrypted request of a CONNECT tunnel passes through here too.
+			if p.guard != nil && d.keyed {
+				if header := p.guard.foreign(r.Header); header != "" {
+					p.guard.refuse(d.host, header)
+					http.Error(w, "session credential denied", http.StatusForbidden)
+					return
+				}
 			}
 			upstream.ServeHTTP(streamingWriter{w}, r)
 		}),
@@ -371,6 +416,12 @@ func (w streamingWriter) Write(b []byte) (int, error) {
 }
 
 func requestAllowed(r *http.Request, ds []destination) bool {
+	_, ok := allowedDestination(r, ds)
+	return ok
+}
+
+// allowedDestination is the destination the request may reach, if any.
+func allowedDestination(r *http.Request, ds []destination) (destination, bool) {
 	u := r.URL
 	if r.Method == http.MethodConnect {
 		u = &url.URL{Scheme: "https", Host: r.Host}
@@ -395,19 +446,19 @@ func requestAllowed(r *http.Request, ds []destination) bool {
 			}
 		}
 		if !strings.EqualFold(authority.Hostname(), d.host) || authorityPort != d.port {
-			return false
+			return destination{}, false
 		}
 		if !d.control {
 			if r.Method == http.MethodConnect {
-				return d.scheme == "https"
+				return d, d.scheme == "https"
 			}
-			return u.Scheme == d.scheme
+			return d, u.Scheme == d.scheme
 		}
-		return r.Method != http.MethodConnect && u.Scheme == "http" && d.paths[u.EscapedPath()] &&
+		return d, r.Method != http.MethodConnect && u.Scheme == "http" && d.paths[u.EscapedPath()] &&
 			(r.Method == "GET" || r.Method == "POST" || r.Method == "DELETE") &&
 			strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ")
 	}
-	return false
+	return destination{}, false
 }
 
 func (p *proxy) close() {

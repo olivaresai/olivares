@@ -23,6 +23,16 @@ import (
 // DERIVED artifact the module stores marked as such; with no inference
 // credential the seam stays unwired and the endpoint answers an honest 501.
 
+// recordingEditionOptions enables recording in every edition but Community: it is a
+// Business capability (docs/editions.md), and the module refuses and records nothing
+// without the option (modules/recording/edition.go).
+func recordingEditionOptions(edition string) []recording.Option {
+	if edition == "community" {
+		return nil
+	}
+	return []recording.Option{recording.WithBusinessEdition()}
+}
+
 // Compile-time proof the adapter satisfies the module seam it is injected into.
 var _ recording.Summarizer = (*recordingSummarizerAdapter)(nil)
 

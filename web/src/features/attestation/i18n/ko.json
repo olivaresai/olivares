@@ -1,0 +1,202 @@
+{
+  "title": "공급망 증명",
+  "description": "실행 중인 바이너리에 대한 측정된 사실과 선언된 릴리스 검증 계약 — 모든 릴리스에 포함되는 내용과 정확한 검증 방법입니다. 브라우저에서는 아무것도 다시 검증하지 않습니다.",
+  "forbiddenTitle": "권한 없음",
+  "forbidden": "증명 계약을 보려면 compliance:read 권한이 필요합니다.",
+  "disclaimer": {
+    "tag": "베타",
+    "body": "이 프로젝트는 베타입니다: 아직 릴리스가 없으며 릴리스 파이프라인은 작성되었지만 활성화되지 않았습니다. 실행 바이너리 패널은 이 프로세스에서 측정된 값이고, 계약 탭은 선언된 계약이며 게시된 릴리스나 실시간 암호화 검증이 아닙니다 — 이 콘솔은 브라우저에서 서명을 다시 검증하지 않습니다.",
+    "declaredRef": "선언된 참조 — AsOf {{date}}. docs/RELEASE-VERIFICATION.md, SECURITY.md, .goreleaser.yaml 및 릴리스 / 스코어카드 / 패치 속도 워크플로에서 그대로 가져왔습니다. 엔진은 저장소나 CI 상태를 관찰할 수 없으므로 이 절반은 라이브로 제공되지 않습니다."
+  },
+  "live": {
+    "title": "실행 중인 바이너리(측정됨)",
+    "description": "이 엔진 프로세스가 자신에 대해 증명할 수 있는 것 — 바이너리에서 라이브로 읽습니다(ldflags, debug.ReadBuildInfo, crypto/fips140, 실행 파일의 자체 해시) — 그리고 정직한 릴리스 상태: v* 태그가 파이프라인을 실행하기 전까지는 아무것도 게시되거나 검증되지 않습니다.",
+    "status": {
+      "measured": "측정됨"
+    },
+    "fields": {
+      "commit": "커밋",
+      "buildDate": "빌드 날짜",
+      "goVersion": "Go 버전",
+      "platform": "OS / 아키텍처",
+      "mainModule": "메인 모듈",
+      "moduleSums": "모듈 합계",
+      "vcsStamp": "VCS 스탬프",
+      "selfHash": "자체 SHA256",
+      "capturedAt": "캡처 시각",
+      "releaseReason": "릴리스 상태",
+      "signature": "서명",
+      "verifier": "검증기",
+      "transparencyLog": "투명성 로그",
+      "workflows": "파이프라인 워크플로"
+    },
+    "fipsOn": "FIPS 140-3: 켜짐",
+    "fipsOff": "FIPS 140-3: 꺼짐",
+    "sums": "외부 의존성 {{n}}개에 go.sum 해시가 있습니다",
+    "sumsAbsent": "기록된 의존성 합계 없음",
+    "vcsAvailable": "Go 툴체인이 VCS 설정을 스탬프했습니다",
+    "vcsUnavailable": "VCS 스탬프 없음",
+    "selfHashHint": "자체 SHA256은 실행 파일의 스트림 해시이며 첫 읽기 시 한 번 계산됩니다. 향후 서명된 checksums.txt와 오프라인에서 비교하십시오 — 브라우저는 서명을 검증하지 않으며 해시만으로는 출처가 아니라 동일성만 증명합니다.",
+    "published": "게시됨",
+    "notPublished": "게시되지 않음",
+    "verifierAvailable": "네이티브 검증기가 컴파일되어 있음(core/secure/modelsign)",
+    "verifierUnavailable": "사용 가능한 검증기 없음",
+    "pipelineStatus": {
+      "declared": "선언됨."
+    }
+  },
+  "status": {
+    "declared": "선언됨",
+    "skip_when_absent": "없으면 건너뜀",
+    "not_run": "아직 실행 안 됨"
+  },
+  "trust": {
+    "keyless": "키리스(Fulcio/Rekor)",
+    "key_based": "키 기반(에어갭)",
+    "both": "키리스 + 키 기반",
+    "transitive": "전이적(서명된 체크섬)"
+  },
+  "tabs": {
+    "artifacts": "아티팩트",
+    "provenance": "출처 및 VEX",
+    "sbom": "SBOM",
+    "scorecard": "스코어카드",
+    "remediation": "교정 SLA",
+    "airgap": "에어갭 및 차트"
+  },
+  "artifacts": {
+    "title": "릴리스 아티팩트",
+    "description": "릴리스에 포함되는 항목과 각 아티팩트의 신뢰 설정 방식입니다. 키리스(Fulcio/Rekor)와 키 기반(에어갭) 서명은 모두 1급이며 어느 쪽도 정규가 아닙니다.",
+    "identityNote": "키리스 서명 신원(선언됨): OIDC 발급자 {{issuer}} · cosign 인증서 신원 {{regexp}}",
+    "columns": {
+      "artifact": "아티팩트",
+      "producedBy": "생성 주체",
+      "signatureTrust": "서명 / 신뢰",
+      "mechanism": "메커니즘",
+      "status": "상태",
+      "control": "통제"
+    }
+  },
+  "slsa": {
+    "title": "SLSA 빌드 출처",
+    "description": "slsa-github-generator가 생성하고 slsa-verifier로 검증하는 in-toto / ITE-6 출처입니다.",
+    "buildLevel": "SLSA Build {{level}}",
+    "predicate": "프레디킷 유형",
+    "generator": "생성기",
+    "pin": "재사용 워크플로 고정",
+    "pinKind": {
+      "semver_tag": "Semver 태그",
+      "sha": "SHA"
+    },
+    "verifyCommand": "검증 명령",
+    "honesty": "구성상 L3: 서명이 빌드 단계에서 접근할 수 없는 격리된 컨텍스트에서 실행됩니다. 재사용 워크플로는 SHA가 아니라 semver 태그로 고정됩니다 — slsa-verifier가 빌더 ID를 태그에 대해 검증하므로 SHA 고정은 검증을 깨뜨립니다. 모든 의존성이 SHA로 고정된 것은 아닙니다."
+  },
+  "sbom": {
+    "title": "소프트웨어 구성 명세서(SBOM)",
+    "description": "아카이브별 및 컨테이너 이미지에 대한 SPDX 2.3과 CycloneDX 1.6으로, 서명된 in-toto 증명으로 첨부됩니다.",
+    "attestation": "증명 프레디킷",
+    "linter": "CISA 린터",
+    "cisa": {
+      "title": "CISA 최소 요소 체크리스트",
+      "draftTag": "초안",
+      "draft": "CISA 2025 SBOM \"최소 요소\"는 초안(결정 전, 공개 의견 수렴)이며 법률이나 확정된 연방 요구 사항이 아닙니다. 필드 유형이 완전히 없으면 린터가 실패(경성)하고, 초안 자체가 허용하는 구성 요소별 누락은 경고(연성)합니다.",
+      "columns": {
+        "element": "요소",
+        "enforcement": "강제",
+        "carriedBy": "전달 주체"
+      },
+      "enforcement": {
+        "hard": "경성",
+        "soft": "연성"
+      }
+    }
+  },
+  "vex": {
+    "title": "OpenVEX 문",
+    "description": "도달 가능성 기반 익스플로잇 가능성 문(govulncheck)으로, 서명된 in-toto 증명으로 첨부됩니다.",
+    "columns": {
+      "vuln": "취약점",
+      "status": "상태",
+      "justification": "근거",
+      "author": "작성자"
+    },
+    "status": {
+      "not_affected": "영향 없음",
+      "affected": "영향 받음",
+      "fixed": "수정됨",
+      "under_investigation": "조사 중"
+    }
+  },
+  "scorecard": {
+    "title": "OpenSSF Scorecard",
+    "description": "자체 호스팅 보안 제품에 가장 중요한 네 가지 공급망 검사입니다.",
+    "checksTitle": "추적 검사",
+    "schedule": "일정",
+    "gauge": {
+      "title": "선언된 스코어카드 검사",
+      "summary": "추적되는 OpenSSF Scorecard 검사 {{total}}개 중 {{declared}}개가 계약에 선언되어 있습니다. 선언된 검사의 커버리지 개수이며 숫자형 Scorecard 점수가 아닙니다.",
+      "caption": "선언됨"
+    },
+    "columns": {
+      "check": "검사",
+      "what": "평가 대상",
+      "evidence": "증거"
+    }
+  },
+  "sla": {
+    "title": "CVE 교정 SLA",
+    "description": "출하되는 아티팩트에서 도달 가능한 취약점에 대해 업스트림 수정이 제공된 시점부터의 교정 목표입니다. 첫 태그 릴리스부터 적용됩니다.",
+    "cadenceTitle": "패치 속도 주기",
+    "schedule": "일정",
+    "columns": {
+      "severity": "심각도(CVSS v3.1)",
+      "cvss": "점수 범위",
+      "target": "패치된 서명 릴리스까지의 목표"
+    },
+    "severity": {
+      "critical": "치명적",
+      "high": "높음",
+      "medium": "중간",
+      "low": "낮음"
+    }
+  },
+  "airgap": {
+    "title": "오프라인 번들 및 Business Helm 패키지",
+    "description": "프라이빗 배포 계약: 오프라인 번들과 서명된 Business 차트 패키지입니다. 게시 여부는 검증되지 않은 상태입니다.",
+    "bundleTitle": "오프라인 번들",
+    "bundleIntro": "키 기반 경로는 Rekor나 Fulcio가 필요하지 않습니다. 유지 관리자가 온라인 상태에서 비공개 조립 배포본으로 자체 포함 번들을 한 번 빌드하고, 단절된 사이트가 이를 검증하고 미러링합니다.",
+    "buildCommand": "빌드(온라인 1회)",
+    "mirrorCommand": "미러(인터넷 없음)",
+    "chartTitle": "Business Helm 패키지",
+    "distribution": "배포",
+    "cosignPackage": "cosign(패키지)",
+    "gpgProv": "GPG .prov",
+    "verifyCommand": "검증 명령"
+  },
+  "empty": {
+    "artifact": {
+      "title": "선언된 릴리스 아티팩트 없음",
+      "description": "이 표는 선언된 릴리스 검증 계약에서 컴파일되며, 계약에 릴리스 아티팩트가 나열될 때만 행이 표시됩니다."
+    },
+    "checkChart": {
+      "title": "선언된 Scorecard 검사 없음",
+      "description": "선언된 검사 커버리지는 컴파일된 릴리스 계약에 추적되는 OpenSSF Scorecard 검사가 나열될 때만 표시됩니다."
+    },
+    "sbom": {
+      "title": "선언된 SBOM 체크리스트 요소 없음",
+      "description": "이 체크리스트는 선언된 SBOM 계약에서 컴파일되며, 계약에 CISA 초안 최소 요소가 나열될 때만 행이 표시됩니다."
+    },
+    "scorecard": {
+      "title": "선언된 추적 Scorecard 검사 없음",
+      "description": "이 표는 선언된 릴리스 계약에서 컴파일되며, 계약에 추적되는 OpenSSF Scorecard 검사가 나열될 때만 행이 표시됩니다."
+    },
+    "sla": {
+      "title": "선언된 교정 목표 없음",
+      "description": "이 표는 선언된 패치 속도 계약에서 컴파일되며, CVE 심각도 대역에 교정 목표가 할당될 때만 행이 표시됩니다."
+    },
+    "vex": {
+      "title": "선언된 OpenVEX 문 없음",
+      "description": "이 표는 선언된 릴리스 계약에서 컴파일되며, 계약에 예시 OpenVEX 문이 포함될 때만 행이 표시됩니다."
+    }
+  }
+}

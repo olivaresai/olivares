@@ -26,7 +26,7 @@
     "title": "Per-limiter inventory",
     "description": "Each limiter the provider reports, grouped by scope: organization-wide groups first, then workspace override groups.",
     "unavailable": "Inventory unavailable",
-    "unavailableHint": "The read-only Admin connector is not wired, so the per-limiter inventory cannot be read here. This is honest unavailability, not an empty inventory.",
+    "unavailableHint": "The read-only Admin connector is not set up, so the per-limiter inventory cannot be read here. This is honest unavailability, not an empty inventory.",
     "tableLabel": "Rate-limit inventory",
     "empty": "No rate limits reported",
     "emptyHint": "The provider returned no per-limiter entries for this organization.",

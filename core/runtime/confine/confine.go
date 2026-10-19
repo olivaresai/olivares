@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -28,8 +29,15 @@ const policyArg = "--policy-v1"
 // Policy grants only the paths and devices explicitly supplied by a caller.
 // Sealed paths cannot overlap any writable grant; Protect paths are carved out
 // of directory grants. Limits is optional and never supplied by the mechanism.
+// NoDelete folders are writable without the rights to remove, rename or move a
+// name: the child may create and change entries and never lose one. Like Sealed
+// paths they cannot overlap a writable grant, which would give the rights back.
+// KeepWritable names the one kind of exception: a path inside a NoDelete folder that
+// keeps the full write rights (a Git directory, which Git rewrites by renaming a lock
+// file over the index). It must lie strictly inside a NoDelete folder: the folder
+// itself would give every right back.
 type Policy struct {
-	ReadWrite, ReadOnly, Protect, Sealed []string
+	ReadWrite, ReadOnly, Protect, Sealed, NoDelete, KeepWritable []string
 	// SealedFiles are borrowed canonical directory handles; the caller closes them after launch.
 	SealedFiles []*os.File `json:"-"`
 	Devices     []Device
@@ -174,7 +182,7 @@ func Exec(p Policy, program string, argv []string) error {
 }
 
 func (p Policy) validate() error {
-	for _, group := range [][]string{p.ReadWrite, p.ReadOnly, p.Protect, p.Sealed} {
+	for _, group := range [][]string{p.ReadWrite, p.ReadOnly, p.Protect, p.Sealed, p.NoDelete, p.KeepWritable} {
 		for _, path := range group {
 			if !filepath.IsAbs(path) {
 				return fmt.Errorf("confine: %q is not an absolute path", path)
@@ -200,13 +208,32 @@ func (p Policy) validate() error {
 		}
 		sealedPaths = append(sealedPaths, file.Name())
 	}
+	// A no-delete folder is writable too: a read-only path under it would be changed
+	// through it, so it is checked like any writable grant. So is a path it keeps writable.
 	for _, sealed := range sealedPaths {
 		s := realPath(sealed)
-		for _, path := range writable {
+		for _, path := range append(append(append([]string{}, writable...), p.NoDelete...), p.KeepWritable...) {
 			w := realPath(path)
 			if contains(s, w) || contains(w, s) {
 				return fmt.Errorf("confine: the read-only path %q would be writable through %q; the session was not started", sealed, path)
 			}
+		}
+	}
+	for _, folder := range p.NoDelete {
+		n := realPath(folder)
+		for _, path := range writable {
+			w := realPath(path)
+			if contains(n, w) || contains(w, n) {
+				return fmt.Errorf("confine: the no-delete folder %q could delete through %q; the session was not started", folder, path)
+			}
+		}
+	}
+	for _, kept := range p.KeepWritable {
+		if !slices.ContainsFunc(p.NoDelete, func(folder string) bool {
+			f, k := realPath(folder), realPath(kept)
+			return f != k && contains(f, k)
+		}) {
+			return fmt.Errorf("confine: %q is kept writable outside every no-delete folder; the session was not started", kept)
 		}
 	}
 	return nil

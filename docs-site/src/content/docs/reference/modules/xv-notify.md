@@ -52,12 +52,18 @@ not the stable core contract; their field-level shapes live in the product's typ
   and never measures.
 - **Produces** outbound notifications through a dispatch seam, backed by the output
   connectors (Slack/Teams, PagerDuty/Opsgenie, signed webhook, and a SIEM destination
-  covering Splunk/Elastic via CEF/LEEF/syslog/OTLP). A notification carries only the
+  covering Splunk/Elastic via CEF/LEEF/syslog/OTLP). Community provides Slack, Teams,
+  email, SMS and signed webhook destinations; SIEM, ITSM and PagerDuty/Opsgenie destinations
+  require Business, and a Community server refuses to open one and names Business.
+  A notification carries only the
   finding's already-safe display fields — title, kind, severity, subject reference and
   a correlation hash — **never** a payload, prompt, secret or PII. **Minimal-data is a
   property of the wire**, not an after-the-fact filter. The destination secret lives
-  only in the connector configuration the operator provisions, referenced here by a
-  non-secret name.
+  only in the connector configuration, referenced here by a non-secret name. An
+  administrator adds Slack and Microsoft Teams destinations in the console
+  (**Alerting → Destinations**): the webhook URL is sealed in the secret store, shown
+  only as its host, and tested with a real message before it is saved. Every other
+  kind is provisioned by the operator in the file named by `OLIVARES_NOTIFY_CONFIG`.
 
 :::caution[Honest limits]
 - **The default binary ships a deny-closed dispatcher.** Until an operator provisions

@@ -308,7 +308,7 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		}
 		cancel()
 		response := commitOutcomeAwait(t, responses, "the canceled grant")
-		f.proxy.sever()
+		commitOutcomeSever(t, f.proxy, f.estate.eng)
 		commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 
 		commitOutcomeAssertUnknown(t, response, "a grant whose COMMIT was answered and never read")
@@ -345,7 +345,7 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 			t.Fatalf("COULD_NOT_LOOK: the server produced no COMMIT tag before the deadline (%q), so the deadline shape was not established", event.tag)
 		}
 		response := commitOutcomeAwait(t, responses, "the expired grant")
-		f.proxy.sever()
+		commitOutcomeSever(t, f.proxy, f.estate.eng)
 		commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 
 		commitOutcomeAssertUnknown(t, response, "a grant whose COMMIT outlived its deadline")
@@ -378,7 +378,7 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		response := commitOutcomeAwait(t, responses, "the canceled grant")
 		// The held answer is delivered to a socket the driver has given up on.
 		f.proxy.release()
-		f.proxy.sever()
+		commitOutcomeSever(t, f.proxy, f.estate.eng)
 		commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 
 		commitOutcomeAssertUnknown(t, response, "a grant whose COMMIT answer arrived too late to be read")
@@ -446,7 +446,7 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		event := f.proxy.waitForEvent("commit_held")
 		cancel()
 		response := commitOutcomeAwait(t, responses, "the undelivered grant")
-		f.proxy.sever()
+		commitOutcomeSever(t, f.proxy, f.estate.eng)
 		commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 
 		commitOutcomeAssertUnknown(t, response, "a grant whose COMMIT was never delivered")
@@ -553,7 +553,7 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		event := f.proxy.waitForEvent("ack_held")
 		cancel()
 		commitOutcomeAwait(t, responses, "the canceled grant")
-		f.proxy.sever()
+		commitOutcomeSever(t, f.proxy, f.estate.eng)
 		commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 
 		settled := censusChannelGrantHistory(t, f.estate.eng, f.estate.tenant)
@@ -590,7 +590,7 @@ func TestCommunicationCommitOutcomeHTTPPostgres(t *testing.T) {
 		event := f.proxy.waitForEvent("commit_held")
 		cancel()
 		commitOutcomeAwait(t, responses, "the undelivered grant")
-		f.proxy.sever()
+		commitOutcomeSever(t, f.proxy, f.estate.eng)
 		commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 		if after := censusChannelGrantHistory(t, f.estate.eng, f.estate.tenant); after != before {
 			t.Fatalf("the aborted original left durable state: %+v -> %+v", before, after)
@@ -1102,7 +1102,7 @@ func TestCommunicationCommitOutcomeRetryHTTPPostgres(t *testing.T) {
 				event := f.proxy.waitForEvent("ack_held")
 				cancel()
 				original := commitOutcomeAwait(t, responses, route.name+" original")
-				f.proxy.sever()
+				commitOutcomeSever(t, f.proxy, f.estate.eng)
 				commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 				// The original's own status is NOT asserted here: HC-1a and HC-2 own
 				// the wire assertion, and at C0 it is still 500. What this control
@@ -1160,7 +1160,19 @@ func TestCommunicationCommitOutcomeRetryHTTPPostgres(t *testing.T) {
 			// not a reason to weaken B.
 			t.Run("original_holds_route_fence_and_resend_recovers", func(t *testing.T) {
 				f := newCommitOutcomeKeyedFixture(t)
+				// The route's own commits nudge the engine's outbox drain, which
+				// publishes in the background and is itself a writer of this
+				// tenant. Under load it is still draining when the original takes
+				// the tenant's writer lock, queues behind it next to the resend,
+				// and leaves two proxy-owned backends blocked (dev#2502). Start it
+				// late, as a loaded host does, and join it before the original, so
+				// the original and the resend are the only writers.
+				commitOutcomeDelayOutboxDrain(t, f.estate.eng, commitOutcomeLateDrain)
 				request := route.prepare(t, f)
+				communicationHTTPTestSettleOutbox(t, f.estate.eng)
+				if commitOutcomeOutboxBusy(t, f.estate.eng) {
+					t.Fatal("COULD_NOT_LOOK: an outbox drain is still in flight, so it could queue on the tenant writer lock beside the resend")
+				}
 				before := request.effect(t)
 
 				// Derived from intent, BEFORE the request runs.
@@ -1245,7 +1257,7 @@ func TestCommunicationCommitOutcomeRetryHTTPPostgres(t *testing.T) {
 				event := f.proxy.waitForEvent("commit_held")
 				cancel()
 				commitOutcomeAwait(t, responses, route.name+" severed original")
-				f.proxy.sever()
+				commitOutcomeSever(t, f.proxy, f.estate.eng)
 				commitOutcomeWaitForBackendSettlement(t, f.owner, event.pid)
 				if mid := request.effect(t); mid != before {
 					t.Fatalf("the severed original left %d effects, want none", mid-before)
@@ -2425,6 +2437,37 @@ func commitOutcomeCursorFilterHash(t *testing.T) []byte {
 	return hash
 }
 
+// commitOutcomeLateDrain is how long the engine's outbox drain is held back
+// before it first runs, long enough that the route's prepare returns first.
+const commitOutcomeLateDrain = 250 * time.Millisecond
+
+// commitOutcomeDelayOutboxDrain makes the engine's outbox drain start delay
+// after it is nudged, through the fixture pump's own beforeRun seam.
+func commitOutcomeDelayOutboxDrain(t *testing.T, eng *engine, delay time.Duration) {
+	t.Helper()
+	value, ok := communicationHTTPTestPumps.Load(eng.communicationPump)
+	if !ok {
+		t.Fatal("COULD_NOT_LOOK: the fixture pump is not tracked, so its drain cannot be delayed")
+	}
+	tracked := value.(*communicationHTTPTestPump)
+	tracked.mu.Lock()
+	tracked.beforeRun = func(context.Context) { time.Sleep(delay) }
+	tracked.mu.Unlock()
+}
+
+// commitOutcomeOutboxBusy reports whether an outbox drain is queued or running.
+func commitOutcomeOutboxBusy(t *testing.T, eng *engine) bool {
+	t.Helper()
+	value, ok := communicationHTTPTestPumps.Load(eng.communicationPump)
+	if !ok {
+		t.Fatal("COULD_NOT_LOOK: the fixture pump is not tracked, so its drain cannot be read")
+	}
+	tracked := value.(*communicationHTTPTestPump)
+	tracked.mu.Lock()
+	defer tracked.mu.Unlock()
+	return tracked.queued > 0 || tracked.running
+}
+
 // commitOutcomeAwaitDistinctBackend identifies the RESEND's backend causally, or
 // refuses.
 //
@@ -2474,4 +2517,30 @@ func commitOutcomeContainsPID(blockers []int64, pid int) bool {
 		}
 	}
 	return false
+}
+
+// commitOutcomeSever severs the proxied connections, as a real reset does, and
+// then takes the engine pool's dead idle connections out of rotation before
+// anything is measured. The engine's PostgreSQL pool sets no idle cap, so
+// database/sql keeps up to two idle connections, and sever just killed them.
+// Whoever uses one first pays for it: a census's BeginTx got pgx's "conn closed"
+// (ack_late failed 19 of 30 runs on one shared CPU), a Ping gets "driver: bad
+// connection" (9 of 12 first pings). Either way the pool drops that connection
+// and the next call takes the next one or dials a fresh one, so pinging until it
+// answers makes the pool pay here and not inside a measurement. Two dead idle
+// connections and one fresh dial need three pings; the fourth is the spare.
+func commitOutcomeSever(t *testing.T, proxy *commitOutcomeProxy, eng *engine) {
+	t.Helper()
+	proxy.sever()
+	var err error
+	for attempt := 1; attempt <= 4; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), commitOutcomeProxyHoldLimit)
+		err = eng.store.Ping(ctx)
+		cancel()
+		if err == nil {
+			return
+		}
+		t.Logf("K3_POOL_RECOVERY|attempt=%d|err=%v", attempt, err)
+	}
+	t.Fatalf("COULD_NOT_LOOK: the engine's pool did not recover from the severed connections: %v", err)
 }

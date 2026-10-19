@@ -36,7 +36,7 @@ try {
     write(root, 'scripts/check-i18n-disclaimers.mjs', fs.readFileSync(scanner, 'utf8'))
     write(root, 'web/src/features/_intel/disclaimers.ts',
       `export const KNOWN_DISCLAIMERS = {\n  '${canonical}': 'report',\n}\n`)
-    for (const locale of ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh']) {
+    for (const locale of ['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko']) {
       write(root, `web/src/features/_intel/i18n/${locale}.json`, JSON.stringify({
         disclaimers: { report: locale === 'en' ? canonical : `[${locale}] ${canonical}` },
       }))

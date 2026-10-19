@@ -42,7 +42,8 @@ func finopsWindowAndDimension() []modelstackFilterSpec {
 func newFinOpsCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use: "finops",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "finops",
 		// Deliberately no "cost" alias: `finops cost ingest` is a real path under
 		// this group, and a top-level alias of the same word makes two different
 		// invocations read the same.
@@ -85,8 +86,9 @@ func newFinOpsCmd() *cobra.Command {
 
 func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "spend",
-		Short: "Report observed AI spend over a window",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "spend",
+		Short:       "Report observed AI spend over a window",
 		Long: "Report the spend the engine observed over a time window: the raw series, a\n" +
 			"summary, a trend, the reconciliation against provider invoices, the allocation to cost\n" +
 			"centers, the unified cross-source view, and the FOCUS export.",
@@ -166,8 +168,9 @@ func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsValueCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "value",
-		Short: "Report the value side of the unit economics",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "value",
+		Short:       "Report the value side of the unit economics",
 		Long: "Report the value recorded against spend: the series and its summary, so cost per\n" +
 			"outcome is a measurement rather than an estimate.",
 		Example: `  olivares finops value summary --since 2026-08-01T00:00:00Z
@@ -198,8 +201,9 @@ func newFinOpsValueCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsOutcomesCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "outcomes",
-		Short: "Record and read business outcomes attributed to AI work",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "outcomes",
+		Short:       "Record and read business outcomes attributed to AI work",
 		Long: "Record the outcomes that give spend a denominator, and read back what has been\n" +
 			"recorded, per subject.",
 		Example: `  olivares finops outcomes ls
@@ -230,8 +234,9 @@ func newFinOpsOutcomesCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "ingest",
-			Short: "Record one business outcome",
+			ChangesData: "write",
+			Use:         "ingest",
+			Short:       "Record one business outcome",
 			Long: "Record one outcome from a JSON document. The engine answers 202 Accepted:\n" +
 				"the record is taken, not yet aggregated into the value reports.",
 			Example: `  olivares finops outcomes ingest --data @outcome.json
@@ -246,8 +251,9 @@ func newFinOpsOutcomesCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsSeatsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "seats",
-		Short: "Record seat counts and read seat utilization",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "seats",
+		Short:       "Record seat counts and read seat utilization",
 		Long: "Record the seats a provider has assigned, and read the utilization that comes from\n" +
 			"comparing them with observed activity — the number that finds seats nobody uses.",
 		Example: `  olivares finops seats utilization
@@ -256,8 +262,9 @@ func newFinOpsSeatsCmd(c modelstackClient) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "ingest",
-			Short: "Record a provider's seat counts for a day",
+			ChangesData: "write",
+			Use:         "ingest",
+			Short:       "Record a provider's seat counts for a day",
 			Long: "Record assigned, premium and pending-invite seat counts for one provider and day,\n" +
 				"from a JSON document. The engine answers 202 Accepted.",
 			Example: `  olivares finops seats ingest --data @seats.json`,
@@ -304,8 +311,9 @@ func newFinOpsSeatsCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsCostIngestCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "cost",
-		Short: "Record an observed cost sample",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "cost",
+		Short:       "Record an observed cost sample",
 		Long: "Record one observed cost sample — tokens, cost, provider, model, and the workspace,\n" +
 			"key, actor and provenance it is attributed to — from a JSON document.\n\n" +
 			"This is the ingest path every spend report is built from. The engine answers\n" +
@@ -315,8 +323,9 @@ func newFinOpsCostIngestCmd(c modelstackClient) *cobra.Command {
 		Args: cobra.NoArgs,
 	}
 	cmd.AddCommand(newModelstackWriteCmd(c, modelstackWriteSpec{
-		Use:   "ingest",
-		Short: "Record one observed cost sample",
+		ChangesData: "write",
+		Use:         "ingest",
+		Short:       "Record one observed cost sample",
 		Long: "Record one cost sample from a JSON document. Fields the engine does not\n" +
 			"recognize are rejected with a 400 (exit 2) rather than silently dropped.",
 		Example: `  olivares finops cost ingest --data @sample.json`,
@@ -331,8 +340,9 @@ func newFinOpsCostIngestCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsBudgetsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "budgets",
-		Short: "Govern spend budgets and read their status",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "budgets",
+		Short:       "Govern spend budgets and read their status",
 		Long: "Govern the budgets that cap spend, and read each one's live status against its cap.\n\n" +
 			"An ENFORCING budget at its cap is what denies a routing resolve or execute: `models\n" +
 			"routing resolve` then exits 5 with the action (block or throttle) named.",
@@ -366,17 +376,19 @@ func newFinOpsBudgetsCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/budgets", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Create a budget",
-			Long:    "Create one budget from a JSON document. An enforcing budget can deny live traffic.",
-			Example: `  olivares finops budgets create --data @budget.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/budgets"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Create a budget",
+			Long:        "Create one budget from a JSON document. An enforcing budget can deny live traffic.",
+			Example:     `  olivares finops budgets create --data @budget.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/budgets"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "update <budget-id>",
-			Short: "Replace a budget",
+			ChangesData: "write",
+			Use:         "update <budget-id>",
+			Short:       "Replace a budget",
 			Long: "Replace one budget with the supplied document. Full replacement, not a merge: a cap\n" +
 				"omitted from the document is omitted from the budget.",
 			Example: `  olivares finops budgets update 018f2a10-0000-7000-8000-000000000009 --data @budget.json`,
@@ -437,7 +449,8 @@ func newFinOpsAlertsCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsCostCentersCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "cost-centers",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "cost-centers",
 		// The alias below is the BRITISH spelling on purpose: the command name is US
 		// (`.golangci.yml` sets `locale: US` and the API collection is `/cost-centers`),
 		// and the alias is what lets an operator or a runbook typing the British form
@@ -485,22 +498,24 @@ func newFinOpsCostCentersCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/cost-centers", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "create",
-			Short:   "Create a cost center",
-			Long:    "Create one cost center from a JSON document.",
-			Example: `  olivares finops cost-centers create --data @cost-center.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/cost-centers"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Create a cost center",
+			Long:        "Create one cost center from a JSON document.",
+			Example:     `  olivares finops cost-centers create --data @cost-center.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/cost-centers"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "update <cost-center-id>",
-			Short:   "Replace a cost center",
-			Long:    "Replace one cost center with the supplied document. Full replacement, not a merge.",
-			Example: `  olivares finops cost-centers update 018f2a10-0000-7000-8000-00000000000a --data @cost-center.json`,
-			Method:  http.MethodPut,
-			Target:  modelstackTarget{Collection: "/cost-centers", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "update <cost-center-id>",
+			Short:       "Replace a cost center",
+			Long:        "Replace one cost center with the supplied document. Full replacement, not a merge.",
+			Example:     `  olivares finops cost-centers update 018f2a10-0000-7000-8000-00000000000a --data @cost-center.json`,
+			Method:      http.MethodPut,
+			Target:      modelstackTarget{Collection: "/cost-centers", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <cost-center-id>",
@@ -519,8 +534,9 @@ func newFinOpsCostCentersCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsCostCenterMappingsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mappings",
-		Short: "Govern the rules that map spend onto one cost center",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "mappings",
+		Short:       "Govern the rules that map spend onto one cost center",
 		Long: "Govern the mapping rules of one cost center: which source dimension and key it\n" +
 			"claims, and in what priority order.",
 		Example: `  olivares finops cost-centers mappings ls 018f2a10-0000-7000-8000-00000000000a
@@ -549,13 +565,14 @@ func newFinOpsCostCenterMappingsCmd(c modelstackClient) *cobra.Command {
 			},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "add <cost-center-id>",
-			Short:   "Add a mapping rule to a cost center",
-			Long:    "Add one mapping rule to a cost center from a JSON document.",
-			Example: `  olivares finops cost-centers mappings add 018f2a10-0000-7000-8000-00000000000a --data @mapping.json`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/cost-centers", Nested: "mappings", IDs: 1},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "add <cost-center-id>",
+			Short:       "Add a mapping rule to a cost center",
+			Long:        "Add one mapping rule to a cost center from a JSON document.",
+			Example:     `  olivares finops cost-centers mappings add 018f2a10-0000-7000-8000-00000000000a --data @mapping.json`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/cost-centers", Nested: "mappings", IDs: 1},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackDeleteCmd(c, modelstackDeleteSpec{
 			Use:   "rm <cost-center-id> <mapping-id>",
@@ -576,9 +593,10 @@ func newFinOpsCostCenterMappingsCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsRatesCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "rates",
-		Aliases: []string{"model-rates"},
-		Short:   "Govern the model rate catalog used to price usage",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "rates",
+		Aliases:     []string{"model-rates"},
+		Short:       "Govern the model rate catalog used to price usage",
 		Long: "Govern the per-model rates the engine prices observed usage with: input,\n" +
 			"output, cache-read and cache-creation rates, and the window each rate is effective in.\n\n" +
 			"These identifiers are the SAME model references `models ls` reports.",
@@ -618,8 +636,9 @@ func newFinOpsRatesCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/model-rates", IDs: 1},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "create",
-			Short: "Add a model rate",
+			ChangesData: "write",
+			Use:         "create",
+			Short:       "Add a model rate",
 			Long: "Add one rate from a JSON document. An overlapping effective window for the same\n" +
 				"provider and model is refused with 409 (exit 5), so pricing never becomes ambiguous.",
 			Example: `  olivares finops rates create --data @rate.json`,
@@ -628,8 +647,9 @@ func newFinOpsRatesCmd(c modelstackClient) *cobra.Command {
 			Body:    modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "update <rate-id>",
-			Short: "Replace a model rate",
+			ChangesData: "write",
+			Use:         "update <rate-id>",
+			Short:       "Replace a model rate",
 			Long: "Replace one rate with the supplied document. Repricing changes what future reports\n" +
 				"compute; it does not rewrite samples already priced.",
 			Example: `  olivares finops rates update 018f2a10-0000-7000-8000-00000000000c --data @rate.json`,
@@ -655,8 +675,9 @@ func newFinOpsRatesCmd(c modelstackClient) *cobra.Command {
 
 func newFinOpsStatementsCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "statements",
-		Short: "Generate, read and export per-cost-center statements",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "statements",
+		Short:       "Generate, read and export per-cost-center statements",
 		Long: "Generate the periodic statements charged to each cost center, list and read them, and\n" +
 			"export one for an accounting system.",
 		Example: `  olivares finops statements ls --period monthly
@@ -665,8 +686,9 @@ func newFinOpsStatementsCmd(c modelstackClient) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "generate",
-			Short: "Generate statements for a period",
+			ChangesData: "write",
+			Use:         "generate",
+			Short:       "Generate statements for a period",
 			Long: "Generate the statements for one period from a JSON document naming the period\n" +
 				"(monthly or weekly) and its RFC3339 start. The engine refuses any other\n" +
 				"period or an unparseable start with a 400, which exits 2.",
@@ -789,8 +811,9 @@ func newFinOpsComparisonCmd(c modelstackClient) *cobra.Command {
 // settle the one handle the reserve answered with, and read or run the reconciliation.
 func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "admission",
-		Short: "Reserve spend before an effect, settle it, and reconcile the holds",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "admission",
+		Short:       "Reserve spend before an effect, settle it, and reconcile the holds",
 		Long: "Reserve estimated spend before a billable effect and receive one handle, then settle\n" +
 			"that handle: commit the measured cost, or release the hold when the effect did not run.\n" +
 			"A retry with the same idempotency key and payload is answered with the same handle, and\n" +
@@ -804,8 +827,9 @@ func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "reserve",
-			Short: "Reserve estimated spend before an effect",
+			ChangesData: "write",
+			Use:         "reserve",
+			Short:       "Reserve estimated spend before an effect",
 			Long: "Hold the estimate against every enforcing budget that scopes the request, and against\n" +
 				"the named actor's spend limits, under one handle. A refusal exits non-zero with the\n" +
 				"status: 402 for a cap that blocks or an activation frontier, 429 for a cap that\n" +
@@ -818,8 +842,9 @@ func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
 			Body:    modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "commit",
-			Short: "Commit a hold at its measured cost",
+			ChangesData: "write",
+			Use:         "commit",
+			Short:       "Commit a hold at its measured cost",
 			Long: "Settle a hold after the effect ran, at its measured cost. Ingest the spend first. The\n" +
 				"same amount again is answered as the first commit was. 409 refuses another amount, a\n" +
 				"hold whose admission is still a claim, and a hold whose money the attempt lifecycle\n" +
@@ -831,13 +856,14 @@ func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
 			Body:    modelstackBodyRequired,
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:     "release",
-			Short:   "Release a hold whose effect did not run",
-			Long:    "Return the headroom of a hold whose effect did not run. A committed hold stays committed.",
-			Example: `  olivares finops admission release --data '{"handle":"<handle>"}'`,
-			Method:  http.MethodPost,
-			Target:  modelstackTarget{Collection: "/admission/release"},
-			Body:    modelstackBodyRequired,
+			ChangesData: "write",
+			Use:         "release",
+			Short:       "Release a hold whose effect did not run",
+			Long:        "Return the headroom of a hold whose effect did not run. A committed hold stays committed.",
+			Example:     `  olivares finops admission release --data '{"handle":"<handle>"}'`,
+			Method:      http.MethodPost,
+			Target:      modelstackTarget{Collection: "/admission/release"},
+			Body:        modelstackBodyRequired,
 		}),
 		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:   "reconciliation",
@@ -848,8 +874,9 @@ func newFinOpsAdmissionCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/admission/reconciliation"},
 		}),
 		newModelstackWriteCmd(c, modelstackWriteSpec{
-			Use:   "reconcile",
-			Short: "Run admission recovery and file a finding on drift",
+			ChangesData: "write",
+			Use:         "reconcile",
+			Short:       "Run admission recovery and file a finding on drift",
 			Long: "Run admission recovery, sweep the holds that expired unsettled, and file a posture\n" +
 				"finding when the ledger drifted. The engine runs the same job every five minutes.",
 			Example: `  olivares finops admission reconcile -o json`,

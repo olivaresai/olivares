@@ -7,6 +7,7 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
 // Launch acceptance: a profile BOUND to a provider record resolves its
@@ -89,6 +91,35 @@ func TestBoundRecord_LaunchInjectsTheRegisteredCredential(t *testing.T) {
 	}
 	if got := stored.String(colRunProviderRecordRef); got != rec.Ref {
 		t.Fatalf("the run row records provider %q, want %q", got, rec.Ref)
+	}
+}
+
+// The session proxy forwards only the record's key: the launch pins its SHA-256 in the
+// network policy and reports a refused key as a finding on the run's core Session.
+func TestBoundRecord_LaunchPinsTheRegisteredKeyInTheProxyPolicy(t *testing.T) {
+	t.Parallel()
+	m, tenant, runner, _, _, _, prof := boundHarness(t)
+	dto, err := launchBound(m, tenant, prof)
+	if err != nil {
+		t.Fatalf("createRun: %v", err)
+	}
+	policy := runner.lastSpec().NetworkPolicy
+	if policy == nil || policy.CredentialSHA256 != sha256.Sum256([]byte(testProviderKey)) {
+		t.Fatalf("the launch's network policy does not pin the record's key: %+v", policy)
+	}
+	if policy.OnRefusal == nil {
+		t.Fatal("a refused key is not reported: the launch set no refusal callback")
+	}
+	if err := policy.OnRefusal(egress.Refusal{Host: "api.anthropic.com", Header: "X-Api-Key"}); err != nil {
+		t.Fatal(err)
+	}
+	var found []model.Finding
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
+		var err error
+		found, _, err = sc.Findings().List(context.Background(), model.Query{Filters: []model.Filter{eq("subject_kind", "session"), eq("subject_id", dto.CoreSessionID)}, Limit: 10})
+		return err
+	}); err != nil || len(found) != 1 {
+		t.Fatalf("findings on the session = %d (%v), want 1", len(found), err)
 	}
 }
 

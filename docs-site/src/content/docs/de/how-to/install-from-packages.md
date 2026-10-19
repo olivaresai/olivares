@@ -9,10 +9,10 @@ description: >-
 draft: false
 ---
 
-Das nächste Release ist <!-- release -->`0.2`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
+Das nächste Release ist <!-- release -->`0.3`<!-- /release -->; es ist noch nicht auf GitHub veröffentlicht. Die folgenden Befehle beschreiben die geplanten Artefakte. Bauen Sie bis zur Veröffentlichung aus dem Quellcode und prüfen Sie danach jedes Artefakt vor der Verwendung. Der beobachtete Veröffentlichungsstand steht in <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
 
 :::note[Veröffentlichte Paketnamen]
-Die GitHub-Release <!-- release -->0.2<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
+Die GitHub-Release <!-- release -->0.3<!-- /release --> veröffentlicht `.deb`-, `.rpm`- und `.apk`-Artefakte für
 `amd64` und `arm64`, zusammen mit `checksums.txt`, `checksums.txt.sig` und
 `checksums.txt.pem`. Die Befehle unten verwenden die wörtlichen `amd64`-Namen dieser
 Release; ersetzen Sie `amd64` auf einem 64-Bit-ARM-Host durch `arm64`. Installieren
@@ -88,13 +88,13 @@ tragen dieselben Dienst-Adapter: `scripts/install-service.sh` und `packaging/ser
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -144,9 +144,11 @@ weder ambient noch bounding — und `NoNewPrivileges=true`, sodass nichts, was s
 startet, welche gewinnen kann. Darüber hinaus trägt sie `ProtectSystem=full` (`/usr`,
 `/boot`, `/efi` und `/etc` sind schreibgeschützt), `PrivateDevices=true`,
 `ProtectClock=true`, `ProtectKernelTunables=true`, `ProtectKernelModules=true`,
-`ProtectKernelLogs=true`, `ProtectControlGroups=true`, `RestrictNamespaces=user net`
-(eine Session erhält ihren eigenen User- und Netzwerk-Namespace; jeder andere
-Namespace-Typ wird verweigert), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`ProtectKernelLogs=true`, `ProtectControlGroups=true`, `RestrictNamespaces=user net mnt`
+(eine Session erhält ihren eigenen User- und Netzwerk-Namespace, und der Helfer, der die
+Git-Hooks und die Konfiguration eines Ordners schreibgeschützt hält, einen eigenen
+Mount-Namespace, in dem der Syscall-Filter `mount` erlaubt; jeder andere Namespace-Typ
+wird verweigert), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
 `LockPersonality=true`, `SystemCallArchitectures=native`, einen
 `@system-service`-Syscall-Filter, der zusätzlich `@privileged` und `@resources`
 entfernt, und `UMask=0027`.

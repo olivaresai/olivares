@@ -80,22 +80,22 @@ type harness struct {
 	setupTok string
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T, opts ...sourcescope.Option) *harness {
 	t.Helper()
-	return newHarnessOn(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true})
+	return newHarnessOn(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, opts...)
 }
 
 // newHarnessOn is newHarness against an arbitrary store config, so the same end-to-end HTTP
 // path can be exercised on Postgres. The SQLite harness has a single writer, which is exactly
 // what hides a READ COMMITTED race (E-5) — a concurrency defect measured only on the
 // in-memory engine is a defect measured on the engine that cannot have it.
-func newHarnessOn(t *testing.T, cfg store.Config) *harness {
+func newHarnessOn(t *testing.T, cfg store.Config, opts ...sourcescope.Option) *harness {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	host := &fakeHost{}
 	gov := governance.New()
-	ss := sourcescope.New(sourcescope.WithScopedAuthorizer(gov.ScopedGrants()))
+	ss := sourcescope.New(append([]sourcescope.Option{sourcescope.WithScopedAuthorizer(gov.ScopedGrants())}, opts...)...)
 
 	register := func(reg store.ExtensionRegistry) error {
 		if err := gov.RegisterSchema(reg); err != nil {

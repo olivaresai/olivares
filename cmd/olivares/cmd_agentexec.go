@@ -168,7 +168,9 @@ func (c agentExecCall) do(cmd *cobra.Command) (agentExecResult, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	raw, rerr := readCLIHTTPResponse(resp, req, maxAgentExecBodySize+1, resp.StatusCode < 300, func(status int, body []byte) error {
-		if c.module == redteamModule && status == http.StatusNotImplemented {
+		if status == http.StatusNotImplemented &&
+			(c.module == redteamModule || c.module == deployModule ||
+				(c.module == recordingModule && agentExecErrorCode(body) == "business_required")) {
 			return notInEdition()
 		}
 		return agentExecHTTPError(status, body)
@@ -216,6 +218,15 @@ type agentExecErrorEnvelope struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// agentExecErrorCode is the machine code of the module error envelope, or "".
+func agentExecErrorCode(body []byte) string {
+	var env agentExecErrorEnvelope
+	if json.Unmarshal(body, &env) != nil {
+		return ""
+	}
+	return env.Error.Code
 }
 
 func agentExecErrorMessage(body []byte) string {

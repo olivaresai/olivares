@@ -104,6 +104,7 @@ type SelectionOrigin struct {
 	AssignmentVersion int64  `json:"assignment_version"`
 }
 type SelectedMember struct {
+	Kind           string            `json:"kind,omitempty"`
 	PackID         string            `json:"pack_id"`
 	RevisionID     string            `json:"pack_revision_id"`
 	ManifestDigest string            `json:"manifest_digest"`
@@ -138,6 +139,7 @@ type Selection struct {
 // have their own node, then the groups the agent belongs to, then the agent.
 const (
 	targetWorkspace  = "workspace"
+	targetProfile    = "profile"
 	targetFolder     = "folder"
 	targetTemplate   = "template"
 	targetAgentGroup = "agent_group"
@@ -145,7 +147,7 @@ const (
 	targetSession    = "session"
 )
 
-var targetRank = map[string]int{targetWorkspace: 0, targetFolder: 1, targetTemplate: 2, targetAgentGroup: 3, targetAgent: 4, targetSession: 5}
+var targetRank = map[string]int{targetWorkspace: 0, targetProfile: 1, targetFolder: 2, targetTemplate: 3, targetAgentGroup: 4, targetAgent: 5, targetSession: 6}
 
 // goneAfterDelete reports whether kind is one the core deletes outright, unlike
 // a workspace, a template or a session, which are retired and keep their row.
@@ -155,6 +157,10 @@ func goneAfterDelete(kind string) bool {
 
 func validTarget(t Target) bool {
 	_, known := targetRank[t.Kind]
+	if t.Kind == targetProfile {
+		// Provider profiles use their public reference, not the native row ID.
+		return strings.HasPrefix(t.ID, "ppf_") && canonicalID(strings.TrimPrefix(t.ID, "ppf_"))
+	}
 	return known && canonicalID(t.ID)
 }
 func canonicalID(value string) bool {
@@ -975,7 +981,7 @@ func (m *Module) resolveSelectionWithSnapshot(ctx context.Context, sc store.Scop
 				}
 				owners[name] = owner{digest: member.ContentDigest, rank: rank}
 				if selected[key] == nil {
-					selected[key] = &SelectedMember{PackID: rev.PackID, RevisionID: rev.ID, ManifestDigest: rev.ManifestDigest, Name: name, Directory: member.Directory, SkillDigest: member.SkillDigest, ContentDigest: member.ContentDigest, Origins: []SelectionOrigin{}}
+					selected[key] = &SelectedMember{Kind: member.Kind, PackID: rev.PackID, RevisionID: rev.ID, ManifestDigest: rev.ManifestDigest, Name: name, Directory: member.Directory, SkillDigest: member.SkillDigest, ContentDigest: member.ContentDigest, Origins: []SelectionOrigin{}}
 				}
 				selected[key].Overrides = append(selected[key].Overrides, replaced...)
 				origin := SelectionOrigin{Target: t, TargetVersion: stored.Version, AssignmentID: a.ID, AssignmentVersion: a.Version}

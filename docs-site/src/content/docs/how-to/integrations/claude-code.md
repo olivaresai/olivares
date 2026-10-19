@@ -117,6 +117,14 @@ This allowance is temporary: a missing, invalid, or expired timestamp resolves t
 Platform invariants—including identity, tenant, kill switch, firewall, and fail-closed errors—remain
 enforced while business rules are being observed.
 
+A session that keeps being refused is handed to a person. When one run reaches 3 refusals in a
+row, or 20 in total, by policy, firewall or platform rules, Olivares interrupts its turn if someone
+is watching it and stops it if nobody is. The run then shows `needs_person` with the last reasons,
+and one `sessions.run.denial_budget` entry is written to the ledger. A person declining a review
+does not count, and an allowed tool-call restarts the count of refusals in a row. Input from a
+person starts a new budget. Change the limits per tenant with `"denial_budget": {"consecutive": 3,
+"total": 20}`; a field left out keeps its default.
+
 <img class="light:sl-hidden" src="/console/guias-config-step-up-dark.png" alt="Step-up authentication required — AAL3 (hardware, phishing-resistant)">
 <img class="dark:sl-hidden" src="/console/guias-config-step-up-light.png" alt="Step-up authentication required — AAL3 (hardware, phishing-resistant)">
 
@@ -212,9 +220,9 @@ first event, operators can use the following views:
 | **Observability > Ingestion** (`/observability`) | Records by source, `edge`, `cost`, and `finding` types, signal, and first/last event. | These are process-wide counters since startup; they reset on restart and are not tenant-specific. |
 | **Sessions** (`/sessions`) | Session, state, action, model, tokens, cost, latest activity, and `enforced` or `observed` posture. | The posture summarizes event evidence; it is not inferred from registering the connector. |
 | **Access map** (`/access-map`) | R/RW edges attributed from observed tools, MCP, and resources. | An observed edge describes activity; it is not equivalent to prior authorization. |
-| **Cost & FinOps** (`/finops`) | Cost and token samples derived from received telemetry. | Coverage is limited to what the fleet exports; calls that never emitted OTLP cannot be reconstructed. |
+| **Budgets** (`/stored-budgets`) | Consumption against each stored budget limit, counted from cost and token samples derived from received telemetry. | Coverage is limited to what the fleet exports; calls that never emitted OTLP cannot be reconstructed. |
 | **Security** (`/security`) | Telemetry gaps, sandbox/MCP posture, and other emitted findings. | An absent finding does not make an unobserved surface compliant. |
-| **Claude Policy** (`/claude-policy`) | Authoring, distribution, versions, and check-in status for managed Claude Code surfaces. | Distribution and drift verification are separate facts and are shown separately. |
+| **Claude Policy** (`/claude-policy`) | Validation and preview for managed Claude Code surfaces; Business adds publishing, distribution, versions, and check-in status. | Distribution and drift verification are separate facts and are shown separately. |
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Live agent operation — what each session is doing right now, its tokens, cost and cadence, updated over a live stream.">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="Live agent operation — what each session is doing right now, its tokens, cost and cadence, updated over a live stream.">

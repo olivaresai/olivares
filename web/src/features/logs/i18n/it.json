@@ -1,0 +1,42 @@
+{
+  "title": "Visualizzatore log",
+  "controls": {
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "pauseAria": "Metti in pausa lo scorrimento automatico",
+    "resumeAria": "Riprendi lo scorrimento automatico",
+    "clear": "Svuota",
+    "clearAria": "Svuota le voci di log",
+    "entryCount": "{{value}} voci"
+  },
+  "filters": {
+    "levelAria": "Filtra i log {{level}}",
+    "modulePlaceholder": "Modulo...",
+    "moduleAria": "Filtra per modulo",
+    "searchPlaceholder": "Cerca...",
+    "searchAria": "Cerca nei messaggi di log",
+    "clearAria": "Azzera i filtri"
+  },
+  "capture": {
+    "debugUnavailable": "Le voci DEBUG non vengono acquisite con il livello di log attuale del motore: imposta OLIVARES_LOG_LEVEL=debug."
+  },
+  "stream": {
+    "empty": "Nessuna voce di log da mostrare.",
+    "emptyHint": "Le righe di log del motore compaiono qui man mano che vengono scritte. Allarga il filtro o abbassa il livello per vederne di più.",
+    "ariaLabel": "Flusso di log",
+    "attrsAriaLabel": "Attributi di log strutturati"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  },
+  "subtitle": "Coda in tempo reale del flusso di log del motore, unita al buffer che contiene."
+}

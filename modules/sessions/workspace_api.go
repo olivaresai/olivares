@@ -37,6 +37,8 @@ func workspacePermissions() []auth.Permission {
 // /v1/m/sessions/. The relative file path travels as ?path=<rel> (never a URL
 // segment) so the jail is unambiguous and a slash cannot break routing.
 func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
+	reg.HandleEntity("PUT", "/workspaces/{ref}/setup-command", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleSetWorkspaceSetup)
+	reg.HandleEntity("POST", "/workspaces/{ref}/setup-command/approve", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleApproveWorkspaceSetup)
 	reg.HandleEntity("POST", "/workspaces/{ref}/wiki", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleInitWiki)
 	reg.Handle("POST", "/workspaces", permWsAdmin, m.handleCreateWorkspace)
 	reg.Handle("GET", "/workspaces", permWsRead, m.handleListWorkspaces)
@@ -50,6 +52,8 @@ func (m *Module) workspaceRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/workspaces/{ref}/files/dir", permWsWrite, m.handleMkdir)
 	reg.Handle("POST", "/workspaces/{ref}/files/move", permWsWrite, m.handleMoveFile)
 	reg.Handle("DELETE", "/workspaces/{ref}/files", permWsWrite, m.handleDeleteFile)
+	reg.HandleEntity("GET", "/workspaces/{ref}/project-config", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleGetProjectConfig)
+	reg.HandleEntity("POST", "/workspaces/{ref}/project-config/approve", permWsAdmin, api.EntityRef{Kind: workspaceKind, IDParam: "ref", LookupColumn: colWsRef, ConcealDeniedAsNotFound: true}, m.handleApproveProjectConfig)
 }
 
 func (m *Module) handleCreateWorkspace(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {

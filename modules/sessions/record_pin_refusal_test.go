@@ -23,7 +23,7 @@ func TestARecordTheToolCannotBeHeldToIsRefusedOnBindAndLaunch(t *testing.T) {
 	for driver, want := range map[string]string{
 		providerDriverClaude:   `Claude Code runs only on an Anthropic key; "Gateway" (kind openai_compatible) is not one of these, so the session does not start`,
 		providerDriverGrok:     `Grok Build runs only on an xAI key; "Gateway" (kind openai_compatible) is not one of these, so the session does not start`,
-		providerDriverOpenCode: `OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama); "Gateway" (kind openai_compatible) is not one of these, so the session does not start`,
+		providerDriverOpenCode: `OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama, or an OpenAI-compatible server at a local address); "Gateway" (kind openai_compatible) is not one of these, so the session does not start`,
 		"some-future-driver":   "driver some-future-driver cannot be held to a provider from Providers; use its own sign-in",
 	} {
 		_, err := m.CreateProfile(context.Background(), tenant, CreateProfileInput{Driver: driver, ConfigHome: t.TempDir(), UserHome: t.TempDir(),

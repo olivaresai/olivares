@@ -96,7 +96,7 @@
     "searchResults": "Résultats dans vos données",
     "searchTruncated": "Il existe d’autres correspondances — affinez la recherche.",
     "searchDegraded": "Certaines sources n’ont pas pu être interrogées — cette liste est incomplète.",
-    "deniedReason": "Nécessite {{permission}}.",
+    "deniedReason": "Nécessite {{permission}} pour cela.",
     "deniedHelp": "Demandez à un administrateur qui peut l’accorder.",
     "noTargetReason": "Nécessite une organisation dans laquelle l’exécuter.",
     "noTargetHelp": "Sélectionnez une organisation, puis réessayez.",
@@ -107,6 +107,12 @@
     "footerMove": "déplacer",
     "footerOpen": "ouvrir",
     "footerCommands": "commandes seulement"
+  },
+  "permissionWords": {
+    "read": "un accès en lecture",
+    "write": "un accès en écriture",
+    "admin": "un accès administrateur",
+    "other": "un accès plus étendu"
   },
   "status": {
     "active": "Actif",
@@ -293,7 +299,13 @@
     },
     "command": {
       "palette": {
-        "open": "Ouvrir la palette de commandes"
+        "open": "Ouvrir la palette de commandes",
+        "recent1": "Ouvrir la session récente 1",
+        "recent2": "Ouvrir la session récente 2",
+        "recent3": "Ouvrir la session récente 3",
+        "recent4": "Ouvrir la session récente 4",
+        "recent5": "Ouvrir la session récente 5",
+        "recent6": "Ouvrir la session récente 6"
       },
       "help": {
         "toggle": "Afficher ces raccourcis"
@@ -304,6 +316,9 @@
         "startBackground": "La démarrer et rester ici"
       },
       "surface": {
+        "openBeside": "Ouvrir à côté",
+        "closeBeside": "Fermer la session à côté",
+        "focusBeside": "Déplacer le focus entre les sessions",
         "nextPane": "Volet suivant",
         "previousPane": "Volet précédent"
       },
@@ -328,7 +343,8 @@
         "pin": "Épingler ou détacher ce module"
       },
       "session": {
-        "new": "Nouvelle session"
+        "new": "Nouvelle session",
+        "previous": "Revenir à la session précédente"
       },
       "sourceDiff": {
         "nextFile": "Fichier suivant",
@@ -340,7 +356,9 @@
     "when": {
       "railFocused": "dans le rail des sessions",
       "launcherFocused": "dans le champ du lanceur",
-      "workSurface": "sur l’écran des sessions"
+      "workSurface": "sur l’écran des sessions",
+      "sessionHistory": "quand une session précédente est disponible",
+      "paletteRecent": "dans les résultats de la palette avec une recherche vide"
     },
     "precedence": "Quand deux lignes partagent les mêmes touches, la dernière applicable l’emporte.",
     "modNote": "⌘ correspond à Ctrl sous Windows et Linux.",

@@ -28,8 +28,9 @@ import (
 // the last ACTIVE superadmin cannot be disabled.
 func newSuperadminCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "superadmin",
-		Short: "Enable/disable internal superadmin accounts (never deletes)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "superadmin",
+		Short:       "Enable/disable internal superadmin accounts (never deletes)",
 		Example: "  olivares superadmin status --data-dir /var/lib/olivares\n" +
 			"  olivares superadmin disable --email admin@example.com --actor ops-oncall --reason offboarding\n" +
 			"  olivares superadmin enable --email admin@example.com --actor ops-oncall --reason leave-ended",
@@ -47,11 +48,12 @@ func newSuperadminCmd() *cobra.Command {
 func superadminStatusCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	cmd := &cobra.Command{
-		Use:     "status",
-		Short:   "List internal superadmin accounts and their active/inactive status",
-		Long:    "status lists internal superadmin IDs, email addresses and lifecycle states, including the number that remain active.",
-		Example: "  olivares superadmin status --data-dir /var/lib/olivares",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "List internal superadmin accounts and their active/inactive status",
+		Long:        "status lists internal superadmin IDs, email addresses and lifecycle states, including the number that remain active.",
+		Example:     "  olivares superadmin status --data-dir /var/lib/olivares",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := auditBootRO(cmd, dataDir, engine, dsn)
 			if err != nil {
@@ -136,11 +138,12 @@ func superadminSetActiveCmd(use string, active bool, short string) *cobra.Comman
 	var dataDir, engine, dsn, id, email string
 	var actorFlag, reasonFlag string
 	cmd := &cobra.Command{
-		Use:     use,
-		Short:   short,
-		Long:    short + ". The mutation is audited and targets exactly one account selected by --id or --email.",
-		Example: "  olivares superadmin " + use + " --email admin@example.com --actor ops-oncall --reason maintenance",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         use,
+		Short:       short,
+		Long:        short + ". The mutation is audited and targets exactly one account selected by --id or --email.",
+		Example:     "  olivares superadmin " + use + " --email admin@example.com --actor ops-oncall --reason maintenance",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := auditBoot(cmd, dataDir, engine, dsn)
 			if err != nil {

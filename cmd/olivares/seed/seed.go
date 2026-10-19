@@ -72,6 +72,12 @@ const (
 	SessionLive  = "sess-coder-7a3f" // a live session with an in-flight tool call
 	SessionEvade = "sess-coder-9c21" // a session flagged by anti-evasion correlation
 
+	// Sessions of earlier days, finished: their cost samples span the FinOps trend.
+	SessionBatch1 = "sess-batch-1"
+	SessionBatch2 = "sess-batch-2"
+	SessionBatch3 = "sess-batch-3"
+	SessionBatch4 = "sess-batch-4"
+
 	// Identities (NHI / DB roles). Self-materialize from identity-origin edges.
 	IdentityAppRole = "app_role" // the role the coder agent runs as (firmly attributed)
 	IdentityPool    = "svc_pool" // a SHARED service account → approximate attribution
@@ -233,6 +239,135 @@ func Evals() (EvalSuiteSpec, []EvalRunSpec) {
 		}
 }
 
+// TeamSession is one session of the demo team as a connector observed it: the
+// engine that ran it, what the console names it by, how many tool calls it made
+// and when. The ten of them cover four projects and three engines, started and
+// last seen at different times, with event counts from nine to forty-six, so the
+// Sessions view reads as a team's working day and not as one burst of identical
+// rows. Time is expressed back from the boot clock so each state (working, idle,
+// ended) is a fact of the timestamps, derived at read time by the sessions module.
+//
+// Summary is delivered the way the engine itself learns a session's name from an
+// observed channel: a context-compaction finding whose title the sessions module
+// keeps as the session's summary (modules/sessions/live.go applyLiveFinding). It
+// is a short, non-sensitive sentence, never transcript.
+type TeamSession struct {
+	Ref    string
+	Engine string // engine label the connector declares: claude, codex or opencode
+	// Project is the folder the team works in. It is the front of the session's name
+	// (the summary below) and, as for a real session whose hooks report their working
+	// directory, the project label on every tool call, so the live list carries it too.
+	Project string
+	Summary string
+	// Tools are the tool names the session cycles through; Events is how many
+	// tool calls it made in total. The calls carry no resource: an edge that
+	// names one is also an access, and a believable team does not have 48
+	// unexpected accesses to show for ten sessions.
+	Tools  []string
+	Events int
+	// Started and Last are how long before the boot clock the first and the
+	// last tool call ran. Last decides the state: within two minutes the
+	// session is working, within thirty idle, beyond that ended.
+	Started time.Duration
+	Last    time.Duration
+	// Usage is one model-usage sample stamped at the last call. Zero tokens
+	// mean the session's usage is declared elsewhere in Observations.
+	Provider, Model string
+	In, Out, Micro  int64
+}
+
+// Name is what the console names the session by: the project, then what was done in
+// it. It is the title of the compaction summary the seed emits for the session.
+func (t TeamSession) Name() string { return t.Project + ": " + t.Summary }
+
+// TeamSessions returns the demo team's ten observed sessions.
+func TeamSessions() []TeamSession {
+	const (
+		minute = time.Minute
+		hour   = time.Hour
+		day    = 24 * time.Hour
+	)
+	return []TeamSession{
+		// Working now, three engines.
+		{Ref: SessionLive, Engine: "claude", Project: "payments-api",
+			Summary: "Reconcile the invoice export with the billing ledger",
+			Tools:   []string{"Read", "Grep", "Edit", "Bash"}, Events: 9,
+			Started: 41 * minute, Last: 45 * time.Second},
+		{Ref: "sess-codex-4b8d", Engine: "codex", Project: "payments-api",
+			Summary: "Paginate the orders list endpoint",
+			Tools:   []string{"shell", "apply_patch", "shell", "read_file"}, Events: 21,
+			Started: 26 * minute, Last: 20 * time.Second,
+			Provider: "openai", Model: "gpt-5-codex", In: 61000, Out: 14500, Micro: 240000},
+		{Ref: "sess-oc-1f62", Engine: "opencode", Project: "infra-live",
+			Summary: "Review the autoscaling change for the staging pool",
+			Tools:   []string{"read", "grep", "bash", "read"}, Events: 15,
+			Started: 14 * minute, Last: 30 * time.Second,
+			Provider: "anthropic", Model: "claude-opus-4-8", In: 28000, Out: 6200, Micro: 150000},
+		// Quiet between turns.
+		{Ref: "sess-claude-a07e", Engine: "claude", Project: "data-pipelines",
+			Summary: "Triage the failed nightly orders export",
+			Tools:   []string{"Read", "Bash", "Grep"}, Events: 17,
+			Started: 58 * minute, Last: 11 * minute,
+			Provider: "anthropic", Model: "claude-opus-4-8", In: 73000, Out: 18800, Micro: 410000},
+		{Ref: "sess-codex-d391", Engine: "codex", Project: "payments-api",
+			Summary: "Upgrade the payments SDK and fix the deprecations",
+			Tools:   []string{"shell", "apply_patch", "read_file"}, Events: 33,
+			Started: 2 * hour, Last: 18 * minute,
+			Provider: "openai", Model: "gpt-5-codex", In: 118000, Out: 30500, Micro: 520000},
+		// Flagged by anti-evasion correlation (its finding is below).
+		{Ref: SessionEvade, Engine: "claude", Project: "storefront-web",
+			Summary: "Refactor the cart totals in the checkout page",
+			Tools:   []string{"Read", "Edit", "Bash"}, Events: 12,
+			Started: 52 * minute, Last: 10 * minute},
+		// Finished on earlier days.
+		{Ref: SessionBatch1, Engine: "codex", Project: "data-pipelines",
+			Summary: "Backfill the missing currency codes in the orders table",
+			Tools:   []string{"shell", "apply_patch", "read_file"}, Events: 27,
+			Started: 1*day + 110*minute, Last: 1 * day},
+		{Ref: SessionBatch2, Engine: "opencode", Project: "infra-live",
+			Summary: "Tighten the ingress rules of the staging cluster",
+			Tools:   []string{"read", "edit", "bash"}, Events: 14,
+			Started: 3*day + 40*minute, Last: 3 * day},
+		{Ref: SessionBatch3, Engine: "claude", Project: "payments-api",
+			Summary: "Move the webhook retries to the job queue",
+			Tools:   []string{"Read", "Edit", "Grep", "Bash", "Edit"}, Events: 46,
+			Started: 5*day + 3*hour, Last: 5 * day},
+		{Ref: SessionBatch4, Engine: "claude", Project: "data-pipelines",
+			Summary: "Write the on-call runbook for the export job",
+			Tools:   []string{"Read", "Write", "Read"}, Events: 11,
+			Started: 6*day + 25*minute, Last: 6 * day},
+	}
+}
+
+// toolCalls spreads the session's tool calls evenly from Started to Last. The
+// engine label, the observed posture and the project folder ride every call
+// (modules/sessions folds them onto the live row; the weakest posture seen wins).
+// The folder is what a real session's hooks report from their working directory.
+func (t TeamSession) toolCalls(now time.Time) []model.Observation {
+	out := make([]model.Observation, 0, t.Events)
+	for i := 0; i < t.Events; i++ {
+		ago := t.Last
+		if t.Events > 1 {
+			ago = t.Started - (t.Started-t.Last)*time.Duration(i)/time.Duration(t.Events-1)
+		}
+		out = append(out, model.EdgeObservation{
+			OriginKind: "session", OriginRef: t.Ref,
+			// claude.tool is the connector's own kind for a tool used with no resource
+			// detail: inventory catalogs the tool by its name and capabilities link the
+			// session to it, while an empty resource ref is the honest skip in access-map.
+			ResourceKind: "claude.tool",
+			Mode:         model.ModeUnknown, Source: model.SignalOTEL, Confidence: model.ConfidenceAttributed,
+			ToolRef:    t.Tools[i%len(t.Tools)],
+			ObservedAt: now.Add(-ago),
+			Labels: map[string]string{
+				model.LabelEngine: t.Engine, model.LabelPosture: model.PostureObserved,
+				model.LabelProjectFolder: t.Project,
+			},
+		})
+	}
+	return out
+}
+
 // edge is a terser builder for an EdgeObservation; ObservedAt is stamped by the
 // caller so the whole estate shares one deterministic clock.
 func edge(originKind, originRef, resKind, resRef string, mode model.AccessMode, src model.SignalSource, conf model.Confidence, tool string, at time.Time) model.EdgeObservation {
@@ -269,7 +404,13 @@ func Observations(now time.Time) []model.Observation {
 	)
 	day := 24 * time.Hour
 
-	obs := []model.Observation{
+	// The team's tool calls come first and in time order per session, so a live
+	// session's current action stays the last call emitted for it (below).
+	var obs []model.Observation
+	for _, t := range TeamSessions() {
+		obs = append(obs, t.toolCalls(now)...)
+	}
+	obs = append(obs, []model.Observation{
 		// ---- Observed access (real collectors → observed=true, permitted=false) ----
 		// Coder agent's firmly-attributed reads/writes. Each is ALSO granted below
 		// (same natural key), so the upsert merges them to observed&&permitted — the
@@ -310,7 +451,7 @@ func Observations(now time.Time) []model.Observation {
 		edge("identity", IdentityEtl, "postgres.table", ResBilling, R, model.SignalPolicy, att, "", now.Add(-1*day)),
 		// UNUSED GRANT: app_role may write archive but never has.
 		edge("identity", IdentityAppRole, "postgres.table", ResArchive, W, model.SignalPolicy, att, "", now.Add(-1*day)),
-	}
+	}...)
 
 	// ---- Cost samples (model/provider usage) — FinOps spend + session tokens + model catalog ----
 	// Spread across several days so /spend/trend has >=4 points and /forecast projects.
@@ -323,16 +464,30 @@ func Observations(now time.Time) []model.Observation {
 	}
 	obs = append(obs,
 		cost(SessionLive, 1200, 800, 42000, now.Add(-20*time.Second)), // ties tokens to the live session
-		cost("sess-batch-1", 50000, 12000, 310000, now.Add(-1*day)),
-		cost("sess-batch-2", 48000, 11000, 295000, now.Add(-3*day)),
-		cost("sess-batch-3", 90000, 22000, 540000, now.Add(-5*day)),
-		cost("sess-batch-4", 30000, 7000, 180000, now.Add(-6*day)),
+		cost(SessionBatch1, 50000, 12000, 310000, now.Add(-1*day)),
+		cost(SessionBatch2, 48000, 11000, 295000, now.Add(-3*day)),
+		cost(SessionBatch3, 90000, 22000, 540000, now.Add(-5*day)),
+		cost(SessionBatch4, 30000, 7000, 180000, now.Add(-6*day)),
 	)
 	// A second model so the catalog/routing estate is non-trivial.
 	obs = append(obs, model.CostSample{
-		ProviderRef: "openai", ModelRef: "gpt-4o", SessionRef: "sess-batch-2",
+		ProviderRef: "openai", ModelRef: "gpt-4o", SessionRef: SessionBatch2,
 		InputTokens: 8000, OutputTokens: 2000, CostMicroUSD: 60000, OccurredAt: now.Add(-3 * day),
 	})
+
+	// The team's own sessions declare their usage here, at their last call. The
+	// ones the estate already prices above (the live session and the four batch
+	// sessions) carry no usage in the table, and the flagged one has none.
+	for _, t := range TeamSessions() {
+		if t.In == 0 {
+			continue
+		}
+		obs = append(obs, model.CostSample{
+			ProviderRef: t.Provider, ModelRef: t.Model, SessionRef: t.Ref,
+			InputTokens: t.In, OutputTokens: t.Out, CostMicroUSD: t.Micro,
+			OccurredAt: now.Add(-t.Last),
+		})
+	}
 
 	// ---- Findings (guardrail / anti-evasion) — security anomalies + sessions timeline + notify ----
 	finding := func(kind string, sev model.Severity, subjKind, subjRef, title string, at time.Time) model.FindingReport {
@@ -340,6 +495,11 @@ func Observations(now time.Time) []model.Observation {
 			Kind: kind, Severity: sev, SubjectKind: subjKind, SubjectRef: subjRef,
 			Title: title, DetailHash: "", OccurredAt: at,
 		}
+	}
+	// Each session's name: the compaction summary the sessions module keeps as the
+	// row's summary. Info severity, a session subject: no other module reacts to it.
+	for _, t := range TeamSessions() {
+		obs = append(obs, finding("forensic", model.SeverityInfo, "session", t.Ref, t.Name(), now.Add(-t.Last)))
 	}
 	obs = append(obs,
 		// A high-severity guardrail finding on the live session (security anomaly + timeline).

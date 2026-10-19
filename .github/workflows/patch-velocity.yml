@@ -41,6 +41,7 @@ jobs:
     permissions:
       contents: read
       security-events: write # upload grype/trivy SARIF to code-scanning
+      actions: read # upload-sarif reads this run; without it a private repository refuses the upload
       issues: write # open/update the remediation tracking issue
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -111,7 +112,48 @@ jobs:
           output-format: sarif
           severity-cutoff: high
 
+      # Code scanning is a paid feature (Code Security) on a private repository, and this one keeps it off.
+      # Where it is off, upload-sarif refuses every upload with "Code Security must be enabled", which
+      # stopped run 38479702180 before the verdict below. So the two SARIF uploads are skipped, with a log
+      # line, when code scanning is unavailable. The scans always run and the verdict is unchanged.
+      - name: code scanning available?
+        id: code-scanning
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        # python3 and the REST API, not the gh CLI: the self-hosted runner class has no gh
+        # (run 38790970818: "gh: command not found").
+        run: |
+          set -uo pipefail
+          python3 - <<'PY'
+          import os, sys, urllib.error, urllib.request
+          url = f"https://api.github.com/repos/{os.environ['GH_REPO']}/code-scanning/analyses?per_page=1"
+          req = urllib.request.Request(url, headers={
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github+json",
+          })
+          refusals = ("code scanning is not enabled",
+                      "must be enabled for this repository to use code scanning")
+          try:
+              urllib.request.urlopen(req, timeout=30).close()
+              available, detail = True, ""
+          except urllib.error.HTTPError as err:
+              available, detail = False, err.read().decode("utf-8", "replace")
+              if not any(text in detail.lower() for text in refusals):
+                  print(f"::error::code scanning check failed: HTTP {err.code} {detail[:300]}")
+                  sys.exit(1)
+          except OSError as err:
+              print(f"::error::code scanning check failed: {err}")
+              sys.exit(1)
+          if not available:
+              print(f"::notice::code scanning is not enabled for {os.environ['GH_REPO']}: "
+                    "SARIF uploads are skipped; the scanner verdict still counts")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"available={'true' if available else 'false'}\n")
+          PY
+
       - name: upload grype SARIF
+        if: steps.code-scanning.outputs.available == 'true'
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}
@@ -141,7 +183,7 @@ jobs:
           set -uo pipefail
           count_sarif() { # count_sarif <file> -> results whose level is error/warning
             [ -f "$1" ] || { echo "MISSING"; return; }
-            jq '[.runs[]?.results[]? | select((.level // "warning") == "error" or (.level // "warning") == "warning")] | length' "$1" 2>/dev/null || echo "UNREADABLE"
+            jq '[.runs[]?.results[]? | select((.level // "warning") == "error" or (.level // "warning") == "warning")] | length' "$1" 2>/dev/null | grep -E '^[0-9]+$' || echo "UNREADABLE"
           }
           g="$(count_sarif "${{ steps.grype.outputs.sarif }}")"
           t="$(count_sarif trivy.sarif)"
@@ -164,6 +206,7 @@ jobs:
           esac
 
       - name: upload trivy SARIF
+        if: steps.code-scanning.outputs.available == 'true'
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
         with:
           sarif_file: trivy.sarif
@@ -206,9 +249,12 @@ jobs:
 
       # --- alert: open/update a tracking issue if anything needs a patch release -
       - name: open remediation issue on findings
-        if: vars.CI_NIGHTLIES == 'true' && (steps.govuln.outputs.found == 'true' || steps.base.outcome != 'success' || steps.base.outputs.drift == 'true' || steps.scanners.outputs.found != 'false')
+        # Report hard failures even after clean scan verdicts, or an unverified scan.
+        # Override implicit success() while respecting cancellation and the opt-in.
+        if: ${{ !cancelled() && vars.CI_NIGHTLIES == 'true' && (failure() || steps.govuln.outputs.found == 'true' || steps.base.outcome != 'success' || steps.base.outputs.drift == 'true' || steps.scanners.outputs.found != 'false') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           title="patch-velocity: remediation needed ($(date -u +%Y-%m-%d))"
@@ -223,10 +269,32 @@ jobs:
           See the run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           EOF
           )
-          existing="$(gh issue list --label patch-velocity --state open --search "$title" --json number --jq '.[0].number' || true)"
-          if [ -n "${existing:-}" ]; then
-            gh issue comment "$existing" --body "$body"
-          else
-            gh issue create --title "$title" --label patch-velocity --body "$body" || \
-            gh issue create --title "$title" --body "$body"
-          fi
+          # python3 and the REST API, not the gh CLI: the self-hosted runner class has no gh.
+          export title body
+          python3 - <<'PY'
+          import json, os, urllib.request
+          api = f"https://api.github.com/repos/{os.environ['GH_REPO']}"
+          def call(method, path, payload=None):
+              req = urllib.request.Request(
+                  api + path, method=method,
+                  data=None if payload is None else json.dumps(payload).encode(),
+                  headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                           "Accept": "application/vnd.github+json",
+                           "Content-Type": "application/json"})
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  return json.load(resp)
+          title, body = os.environ["title"], os.environ["body"]
+          # One tracking issue stays open across days: the title carries the date, so match its
+          # fixed prefix (the old `gh issue list --search` matched the words, not the date).
+          prefix = title.split(" (")[0]
+          open_issues = call("GET", "/issues?labels=patch-velocity&state=open&per_page=100")
+          existing = next((i["number"] for i in open_issues
+                           if i["title"].startswith(prefix) and "pull_request" not in i), None)
+          if existing:
+              done = call("POST", f"/issues/{existing}/comments", {"body": body})
+          else:
+              done = call("POST", "/issues", {"title": title, "labels": ["patch-velocity"], "body": body})
+          # A redirected POST is replayed as a GET by urllib and still answers 200; the issue or
+          # comment URL is only in the answer to a real create.
+          print(f"::notice::remediation issue: {done['html_url']}")
+          PY

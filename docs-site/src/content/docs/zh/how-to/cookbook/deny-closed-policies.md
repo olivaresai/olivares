@@ -8,7 +8,7 @@ sidebar:
   order: 1
 ---
 
-**版本：** 创建或编辑自定义 Cedar 策略（包括 permit 和 forbid）需要 Business。Community 继续执行已存储的策略、自定义角色和限定范围的授权，并允许查看和撤销。`DELETE /v1/m/governance/pdp/active?engine=cedar` 仅停用自行编写的 Cedar 策略，保留历史记录、托管授权和已采用的策略。内置角色、原生拒绝规则和紧急停止仍属于 Community。本示例的外部 PDP 只能限制访问；自行编写的 Cedar permit 可以在其范围内授予访问权限。
+**版本：** 创建或编辑自定义 Cedar 策略（包括 permit 和 forbid）需要 Business。Community 继续执行已存储的策略、自定义角色和限定范围的授权，并允许查看和撤销。`DELETE /v1/m/governance/pdp/active?engine=cedar` 仅停用自行编写的 Cedar 策略，保留历史记录、托管授权和已采用的策略。内置角色、原生拒绝规则和紧急停止仍属于 Community。本示例的外部 PDP 只能限制访问；自行编写的 Cedar permit 可以在其范围内授予访问权限。 选择该外部引擎（`OLIVARES_PDP_ENGINE`，Cedar 文件或 OPA）需要 Business：选择了引擎时，Community 拒绝启动。
 
 **目标：** 在默认拒绝（deny-by-default）的 RBAC 之上叠加基于属性的限制——
 例如，"无论角色如何规定，任何人都不能触碰标记为 `secret` 的资源。"

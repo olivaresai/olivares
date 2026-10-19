@@ -26,7 +26,7 @@
     "title": "Inventar pro Limitwert",
     "description": "Jeder vom Anbieter gemeldete Limitwert, gruppiert nach Geltungsbereich: zuerst organisationsweite Gruppen, dann Override-Gruppen pro Arbeitsbereich.",
     "unavailable": "Inventar nicht verfügbar",
-    "unavailableHint": "Der schreibgeschützte Admin-Konnektor ist nicht verkabelt, sodass das Inventar pro Limitwert hier nicht gelesen werden kann. Dies ist eine ehrliche Nichtverfügbarkeit, kein leeres Inventar.",
+    "unavailableHint": "Der schreibgeschützte Admin-Konnektor ist nicht eingerichtet, sodass das Inventar pro Limitwert hier nicht gelesen werden kann. Dies ist eine ehrliche Nichtverfügbarkeit, kein leeres Inventar.",
     "tableLabel": "Inventar der Ratenbegrenzungen",
     "empty": "Keine Ratenbegrenzungen gemeldet",
     "emptyHint": "Der Anbieter hat für diese Organisation keine Limitwert-Einträge zurückgegeben.",

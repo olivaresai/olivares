@@ -2,21 +2,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, userEvent, within } from '@/test/intel'
+import {
+  createTestQueryClient,
+  renderIntel,
+  screen,
+  userEvent,
+  within,
+} from '@/test/intel'
 import { agentOpsApi } from '@/features/agentops/api'
 import { consoleApi } from '@/features/console/api'
 import { http } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
 import { skillsApi } from './api'
 import { SkillsView } from './skills-view'
+import { PackSheet } from './pack-sheet'
 import type { SkillAssignment, SkillPack, SkillPackDetail } from './types'
 
 const auth = vi.hoisted(() => ({
   can: (_permission: string): boolean => true,
+  principal: { user_id: 'owner' },
 }))
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 'tenant-1', can: auth.can }),
+  useAuth: () => ({
+    activeTenant: 'tenant-1',
+    can: auth.can,
+    principal: auth.principal,
+  }),
 }))
 
 const pack: SkillPack = {
@@ -81,6 +93,7 @@ function list<T>(items: T[]) {
 beforeEach(() => {
   vi.restoreAllMocks()
   auth.can = () => true
+  auth.principal = { user_id: 'owner' }
   vi.spyOn(http, 'get').mockResolvedValue(
     list([
       {
@@ -104,6 +117,7 @@ beforeEach(() => {
   )
   vi.spyOn(consoleApi, 'listAgents').mockResolvedValue(list([]))
   vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue(list([]))
+  vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue(list([]))
 })
 
 async function chooseWorkspace() {
@@ -118,6 +132,140 @@ async function openPack() {
 }
 
 describe('SkillsView', () => {
+  it('refreshes cached pins when installation assigns an existing pack', async () => {
+    const queryClient = createTestQueryClient()
+    queryClient.setDefaultOptions({
+      queries: { retry: false, staleTime: 30_000 },
+    })
+    const pins = [groupPin]
+    vi.mocked(skillsApi.packAssignments).mockImplementation(async () =>
+      list([...pins]),
+    )
+    vi.spyOn(http, 'post').mockResolvedValue({
+      state: 'catalog_published',
+      pack,
+      revision: detail.revisions[0],
+    })
+    vi.spyOn(skillsApi, 'assign').mockImplementation(async () => {
+      const assignment = {
+        ...groupPin,
+        id: 'as-workspace',
+        target_kind: 'workspace' as const,
+        target_id: 'ws-1',
+      }
+      pins.push(assignment)
+      return { state: 'pinned', assignment }
+    })
+    renderIntel(<SkillsView />, { queryClient })
+    await userEvent.click(await screen.findByText('ecc'))
+    expect(
+      await within(await screen.findByRole('dialog')).findByText('Reviewers'),
+    ).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Install ecc-security' }),
+    )
+    await screen.findByText('Skill pack installed and assigned')
+    await userEvent.click(await screen.findByText('ecc'))
+    const sheet = await screen.findByRole('dialog')
+    expect(
+      await within(sheet).findByText('Research', { selector: 'span' }),
+    ).toBeInTheDocument()
+    expect(within(sheet).queryByRole('option', { name: 'Research' })).toBeNull()
+  })
+
+  it('retires cached profile pins when the acting principal changes', async () => {
+    const queryClient = createTestQueryClient()
+    queryClient.setDefaultOptions({
+      queries: { retry: false, staleTime: 30_000 },
+    })
+    const profilePin = {
+      ...groupPin,
+      target_kind: 'profile' as const,
+      target_id: 'ppf_private-profile',
+    }
+    vi.mocked(skillsApi.packAssignments).mockResolvedValue(list([profilePin]))
+    const view = renderIntel(
+      <PackSheet pack={pack} onOpenChange={() => {}} />,
+      { queryClient },
+    )
+    expect(await screen.findByText('ppf_private-profile')).toBeInTheDocument()
+    auth.principal = { user_id: 'reader' }
+    auth.can = (p) => p !== 'sessions:profile:write'
+    vi.mocked(skillsApi.packAssignments).mockResolvedValue(list([]))
+    view.rerender(<PackSheet pack={pack} onOpenChange={() => {}} />)
+    expect(screen.queryByText('ppf_private-profile')).toBeNull()
+    await screen.findByText(
+      'This pack is not assigned to any department, group or agent you can see.',
+    )
+    expect(skillsApi.packAssignments).toHaveBeenCalledTimes(2)
+    expect(
+      queryClient
+        .getQueryCache()
+        .findAll()
+        .some((q) =>
+          (JSON.stringify(q.state.data) ?? '').includes('ppf_private-profile'),
+        ),
+    ).toBe(false)
+  })
+
+  it('loads another page of profiles before assigning its public reference', async () => {
+    vi.mocked(agentOpsApi.listProfiles)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            profile_ref: 'ppf_first',
+            display_name: 'First profile',
+            driver: 'claude',
+          },
+        ],
+        has_more: true,
+        cursor: 'next-profile',
+      } as never)
+      .mockResolvedValueOnce({
+        items: [
+          {
+            profile_ref: 'ppf_later',
+            display_name: 'Later profile',
+            driver: 'claude',
+          },
+        ],
+        has_more: false,
+      } as never)
+    const assign = vi.spyOn(skillsApi, 'assign').mockResolvedValue({
+      state: 'pinned',
+      assignment: {
+        ...groupPin,
+        target_kind: 'profile',
+        target_id: 'ppf_later',
+      },
+    })
+    const sheet = await openPack()
+    await userEvent.selectOptions(
+      within(sheet).getByLabelText('Assign to'),
+      'profile',
+    )
+    await userEvent.click(
+      await within(sheet).findByRole('button', { name: 'Load more' }),
+    )
+    await userEvent.selectOptions(
+      within(sheet).getByLabelText('Target'),
+      await within(sheet).findByRole('option', { name: /Later profile/ }),
+    )
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Assign' }))
+    expect(agentOpsApi.listProfiles).toHaveBeenLastCalledWith(
+      { limit: 200, cursor: 'next-profile' },
+      { signal: expect.any(AbortSignal) },
+    )
+    expect(assign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_kind: 'profile',
+        target_id: 'ppf_later',
+      }),
+      { tenant: 'tenant-1' },
+    )
+  })
+
   it('browses builtins and installs and pins the returned revision in one action', async () => {
     const post = vi.spyOn(http, 'post').mockResolvedValue({
       state: 'catalog_published',
@@ -361,7 +509,9 @@ describe('SkillsView', () => {
     try {
       renderIntel(<SkillsView />)
       const sheet = await screen.findByRole('dialog')
-      expect(await within(sheet).findByText('code-review')).toBeInTheDocument()
+      expect(
+        await within(sheet).findByText('code-review', { selector: 'span' }),
+      ).toBeInTheDocument()
     } finally {
       window.history.pushState({}, '', '/')
     }
@@ -369,8 +519,12 @@ describe('SkillsView', () => {
 
   it('lists the catalog and shows where a pack is assigned', async () => {
     const sheet = await openPack()
-    expect(await within(sheet).findByText('code-review')).toBeInTheDocument()
-    expect(skillsApi.packAssignments).toHaveBeenCalledWith('pack-1')
+    expect(
+      await within(sheet).findByText('code-review', { selector: 'span' }),
+    ).toBeInTheDocument()
+    expect(skillsApi.packAssignments).toHaveBeenCalledWith('pack-1', {
+      signal: expect.any(AbortSignal),
+    })
     const group = (await within(sheet).findByText('Reviewers')).closest('li')
     expect(group?.textContent).toContain('Agent group')
     expect(group?.textContent).toContain('revision 1')
@@ -705,4 +859,145 @@ describe('SkillsView', () => {
     ).not.toHaveLength(0)
     expect(assign).not.toHaveBeenCalled()
   })
+})
+
+it('shows agents, commands and rules beside skills in a pack', async () => {
+  const mixed = structuredClone(detail)
+  mixed.revisions[0].members.push(
+    ...['agent:review', 'command:review', 'rule:common/testing'].map(
+      (name) => ({
+        name,
+        directory: name,
+        description: 'Reviewed instructions',
+      }),
+    ),
+  )
+  vi.spyOn(skillsApi, 'pack').mockResolvedValue(mixed)
+  const dialog = await openPack()
+  expect(
+    within(dialog).getByText('Skills, agents, commands and rules'),
+  ).toBeVisible()
+  for (const name of [
+    'code-review',
+    'agent:review',
+    'command:review',
+    'rule:common/testing',
+  ]) {
+    expect(within(dialog).getByText(name, { selector: 'span' })).toBeVisible()
+  }
+})
+
+it('assigns one command and approves only its selected active content', async () => {
+  const mixed = structuredClone(detail)
+  mixed.revisions[0].members = [
+    {
+      name: 'agent:review',
+      directory: 'agents/review.md',
+      description: 'Review changes',
+      active_content: ['tools'],
+    },
+    {
+      name: 'command:review',
+      directory: 'commands/review.md',
+      description: 'Review changes',
+      active_content: ['allowed-tools'],
+    },
+  ]
+  vi.spyOn(skillsApi, 'pack').mockResolvedValue(mixed)
+  const assign = vi
+    .spyOn(skillsApi, 'assign')
+    .mockResolvedValue({ state: 'pinned', assignment: groupPin })
+  const dialog = await openPack()
+  await userEvent.selectOptions(within(dialog).getByLabelText('Target'), 'ws-1')
+  await userEvent.deselectOptions(within(dialog).getByLabelText('Members'), [
+    'agent:review',
+  ])
+  const button = within(dialog).getByRole('button', { name: /^Assign$/ })
+  expect(button).toBeDisabled()
+  await userEvent.click(
+    within(dialog).getByRole('checkbox', {
+      name: /I reviewed.*command:review/,
+    }),
+  )
+  await userEvent.click(button)
+  expect(assign).toHaveBeenCalledWith(
+    {
+      target_kind: 'workspace',
+      target_id: 'ws-1',
+      pack_revision_id: 'rev-2',
+      members: ['command:review'],
+      approve_active_content: true,
+    },
+    expect.anything(),
+  )
+})
+
+it('requires a member choice for a pack above the assignment limit', async () => {
+  const large = structuredClone(detail)
+  large.revisions[0].members = Array.from({ length: 68 }, (_, i) => ({
+    name: `agent:worker-${i}`,
+    directory: `agents/worker-${i}.md`,
+    description: 'Review changes',
+  }))
+  vi.spyOn(skillsApi, 'pack').mockResolvedValue(large)
+  const assign = vi
+    .spyOn(skillsApi, 'assign')
+    .mockResolvedValue({ state: 'pinned', assignment: groupPin })
+  const dialog = await openPack()
+  await userEvent.selectOptions(within(dialog).getByLabelText('Target'), 'ws-1')
+  const button = within(dialog).getByRole('button', { name: /^Assign$/ })
+  expect(button).toBeDisabled()
+  await userEvent.selectOptions(within(dialog).getByLabelText('Members'), [
+    'agent:worker-0',
+  ])
+  await userEvent.click(button)
+  expect(assign).toHaveBeenCalledWith(
+    expect.objectContaining({ members: ['agent:worker-0'] }),
+    expect.anything(),
+  )
+})
+
+it('assigns a pack to a provider profile by its public reference', async () => {
+  vi.spyOn(agentOpsApi, 'listProfiles').mockResolvedValue(
+    list([
+      {
+        profile_ref: 'ppf_profile-1',
+        display_name: 'Review account',
+        driver: 'claude',
+        state: 'active',
+      },
+    ]),
+  )
+  const assign = vi
+    .spyOn(skillsApi, 'assign')
+    .mockResolvedValue({ state: 'pinned', assignment: groupPin })
+  const sheet = await openPack()
+  await userEvent.selectOptions(
+    await within(sheet).findByLabelText('Assign to'),
+    'profile',
+  )
+  await userEvent.selectOptions(
+    within(sheet).getByLabelText('Target'),
+    await within(sheet).findByRole('option', { name: 'Review account' }),
+  )
+  await userEvent.click(within(sheet).getByRole('button', { name: 'Assign' }))
+  expect(assign).toHaveBeenCalledWith(
+    {
+      target_kind: 'profile',
+      target_id: 'ppf_profile-1',
+      pack_revision_id: 'rev-2',
+    },
+    { tenant: 'tenant-1' },
+  )
+})
+
+it('does not load provider targets without the native read permission', async () => {
+  auth.can = (p) => p !== 'sessions:profile:read'
+  const sheet = await openPack()
+  await userEvent.selectOptions(
+    await within(sheet).findByLabelText('Assign to'),
+    'profile',
+  )
+  expect(agentOpsApi.listProfiles).not.toHaveBeenCalled()
+  expect(within(sheet).getByRole('button', { name: 'Assign' })).toBeDisabled()
 })

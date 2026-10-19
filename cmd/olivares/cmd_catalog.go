@@ -69,8 +69,9 @@ type catalogTransitionBody struct {
 func newCatalogCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:   "catalog",
-		Short: "Admit and govern catalog entries, connectors and MCP servers",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "catalog",
+		Short:       "Admit and govern catalog entries, connectors and MCP servers",
 		Long: "The admission gate of the data lane: catalog entries and their signed lifecycle\n" +
 			"(draft, submitted, approved, deprecated), the supply-chain admission policies for\n" +
 			"connectors and MCP servers, and the instances self-service provisions from an\n" +
@@ -132,8 +133,9 @@ func (f *catalogEntryFlags) body(cmd *cobra.Command) (catalogEntryBody, error) {
 
 func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "entries",
-		Short: "Author, review and admit catalog entries",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "entries",
+		Short:       "Author, review and admit catalog entries",
 		Long: "A catalog entry moves draft to submitted to approved, and approval is what signs\n" +
 			"it: the content hash and signature are computed then, and `verify` recomputes\n" +
 			"them afterwards. A deprecated entry keeps both, so it stays verifiable — it is\n" +
@@ -148,10 +150,11 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 		slug   string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List catalog entries",
-		Long:    datalaneListLong("List catalog entries, optionally narrowed by kind, status or slug."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List catalog entries",
+		Long:        datalaneListLong("List catalog entries, optionally narrowed by kind, status or slug."),
 		Example: `  olivares catalog entries ls
   olivares catalog entries ls --kind mcp --status approved`,
 		Args: cobra.NoArgs,
@@ -181,11 +184,12 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&slug, "slug", "", "only entries with this slug")
 
 	get := &cobra.Command{
-		Use:     "get <entry-id>",
-		Short:   "Show one catalog entry",
-		Long:    "Show one entry: its kind, version, status, specification and signature metadata.",
-		Example: "  olivares catalog entries get ce_123",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <entry-id>",
+		Short:       "Show one catalog entry",
+		Long:        "Show one entry: its kind, version, status, specification and signature metadata.",
+		Example:     "  olivares catalog entries get ce_123",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("entries", args[0])
 			if err != nil {
@@ -204,8 +208,9 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 
 	var createFields catalogEntryFlags
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Author a draft catalog entry",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Author a draft catalog entry",
 		Long: "Author a draft entry. It is not admissible yet: it must be submitted and then\n" +
 			"approved, and approval is what computes its content hash and signature. The\n" +
 			"engine refuses a specification carrying an inline credential — reference\n" +
@@ -239,8 +244,9 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 		replace   bool
 	)
 	set := &cobra.Command{
-		Use:   "set <entry-id>",
-		Short: "Replace a draft entry's authored fields",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <entry-id>",
+		Short:       "Replace a draft entry's authored fields",
 		Long: "Replace the authored fields of an entry. Only a DRAFT can be edited: an entry\n" +
 			"that has been approved carries a signature over its content, and rewriting it in\n" +
 			"place would break that.\n\n" +
@@ -283,9 +289,10 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 
 	var yes bool
 	remove := &cobra.Command{
-		Use:     "rm <entry-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete a catalog entry",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <entry-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete a catalog entry",
 		Long: "Delete a catalog entry. Deprecation is usually what you want: it retires the\n" +
 			"entry while keeping its hash and signature, so what was once admitted stays\n" +
 			"verifiable. Deleting removes that record.\n\n" +
@@ -317,8 +324,9 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 	addYesFlag(remove, &yes)
 
 	verify := &cobra.Command{
-		Use:   "verify <entry-id>",
-		Short: "Recompute an entry's hash and check its signature",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify <entry-id>",
+		Short:       "Recompute an entry's hash and check its signature",
 		Long: "Recompute the entry's content hash from its stored fields and verify the\n" +
 			"signature made at approval. It reports hash_ok, signature_ok and a combined\n" +
 			"verdict separately: a hash that no longer matches and a signature that does not\n" +
@@ -363,11 +371,12 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 func newCatalogEntryLifecycleCmd(client datalaneClient, verb, short, long string, destructive bool, confirmFmt string) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     verb + " <entry-id>",
-		Short:   short,
-		Long:    long,
-		Example: fmt.Sprintf("  olivares catalog entries %s ce_123", verb),
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         verb + " <entry-id>",
+		Short:       short,
+		Long:        long,
+		Example:     fmt.Sprintf("  olivares catalog entries %s ce_123", verb),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if destructive {
 				if err := confirmDestructive(cmd, yes,
@@ -407,8 +416,9 @@ func newCatalogEntryAdmitCmd(client datalaneClient) *cobra.Command {
 		note       string
 	)
 	cmd := &cobra.Command{
-		Use:   "admit <entry-id>",
-		Short: "Verify a supply-chain attestation for an entry",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "admit <entry-id>",
+		Short:       "Verify a supply-chain attestation for an entry",
 		Long: "Submit a Sigstore attestation bundle for a catalog entry and record the verdict\n" +
 			"under the active admission policy. The three outcomes are distinct: a malformed\n" +
 			"bundle is refused (400), a well-formed bundle that fails to verify is a RECORDED\n" +
@@ -457,8 +467,9 @@ func newCatalogEntryInstantiateCmd(client datalaneClient) *cobra.Command {
 		note      string
 	)
 	cmd := &cobra.Command{
-		Use:   "instantiate <entry-id>",
-		Short: "Request an instance from an approved entry",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "instantiate <entry-id>",
+		Short:       "Request an instance from an approved entry",
 		Long: "Request an instance of an approved catalog entry. This RECORDS a request with the\n" +
 			"exact entry version as its provenance; it does not provision anything. The\n" +
 			"approval decision and the provisioning are separate, governed steps — see\n" +
@@ -495,8 +506,9 @@ func newCatalogEntryInstantiateCmd(client datalaneClient) *cobra.Command {
 
 func newCatalogPubkeyCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "pubkey",
-		Short: "Show the public key catalog approvals are signed with",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "pubkey",
+		Short:       "Show the public key catalog approvals are signed with",
 		Long: "Show the public half of the key this engine signs catalog approvals with,\n" +
 			"so a third party can verify an entry's signature without trusting the API that\n" +
 			"produced it.",
@@ -523,8 +535,9 @@ func newCatalogPubkeyCmd(client datalaneClient) *cobra.Command {
 // one must never be a keystroke away from relaxing the other.
 func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject string) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   group,
-		Short: fmt.Sprintf("Read and set the %s supply-chain admission policy", subject),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         group,
+		Short:       fmt.Sprintf("Read and set the %s supply-chain admission policy", subject),
 		Long: fmt.Sprintf("The %s admission policy decides which attestations are accepted: whether a\n"+
 			"signature is required at all, whether the subject digest must be covered, and\n"+
 			"which identities, issuers, keys, roots and predicate types are trusted.\n\n"+
@@ -535,19 +548,21 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 	}
 
 	policy := &cobra.Command{
-		Use:     "policy",
-		Short:   fmt.Sprintf("Read or replace the %s admission policy", subject),
-		Long:    fmt.Sprintf("Read or replace the %s admission policy document.", subject),
-		Example: fmt.Sprintf("  olivares catalog %s policy get", group),
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "policy",
+		Short:       fmt.Sprintf("Read or replace the %s admission policy", subject),
+		Long:        fmt.Sprintf("Read or replace the %s admission policy document.", subject),
+		Example:     fmt.Sprintf("  olivares catalog %s policy get", group),
+		Args:        cobra.NoArgs,
 	}
 
 	get := &cobra.Command{
-		Use:     "get",
-		Short:   fmt.Sprintf("Show the %s admission policy", subject),
-		Long:    fmt.Sprintf("Show the %s admission policy currently in force, including who attested it and when.", subject),
-		Example: fmt.Sprintf("  olivares catalog %s policy get -o json", group),
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get",
+		Short:       fmt.Sprintf("Show the %s admission policy", subject),
+		Long:        fmt.Sprintf("Show the %s admission policy currently in force, including who attested it and when.", subject),
+		Example:     fmt.Sprintf("  olivares catalog %s policy get -o json", group),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := datalanePath(group, "policy")
 			if err != nil {
@@ -577,8 +592,9 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 		yes           bool
 	)
 	set := &cobra.Command{
-		Use:   "set",
-		Short: fmt.Sprintf("Replace the %s admission policy", subject),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       fmt.Sprintf("Replace the %s admission policy", subject),
 		Long: fmt.Sprintf("Replace the %s admission policy.\n\n"+
 			"THIS REPLACES THE WHOLE DOCUMENT, IT DOES NOT PATCH. A trust anchor left out is\n"+
 			"REMOVED, and dropping --require-signed opens admission to unsigned artifacts, so\n"+
@@ -639,9 +655,10 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 		onlyValid bool
 	)
 	admissions := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   fmt.Sprintf("List recorded %s admission verdicts", subject),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       fmt.Sprintf("List recorded %s admission verdicts", subject),
 		Long: datalaneListLong(fmt.Sprintf("List the %s admission verdicts recorded so far: what was claimed, what verified\n"+
 			"and which entry it was for. --verified narrows to the ones that verified.", subject)),
 		Example: fmt.Sprintf("  olivares catalog %s ls\n  olivares catalog %s ls --verified --limit 50", group, group),
@@ -684,8 +701,9 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 
 func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "instances",
-		Short: "Review and decide self-service instantiation requests",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "instances",
+		Short:       "Review and decide self-service instantiation requests",
 		Long: "An instance is a request to provision something from an approved entry. It moves\n" +
 			"requested to approved to active, or requested/approved to rejected; the module\n" +
 			"enforces that flow and records every decision.",
@@ -698,10 +716,11 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 		entryID string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List instantiation requests",
-		Long:    datalaneListLong("List instances, optionally narrowed by status or by the entry they came from."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List instantiation requests",
+		Long:        datalaneListLong("List instances, optionally narrowed by status or by the entry they came from."),
 		Example: `  olivares catalog instances ls
   olivares catalog instances ls --status requested --entry-id ce_123`,
 		Args: cobra.NoArgs,
@@ -729,8 +748,9 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&entryID, "entry-id", "", "only instances of this catalog entry")
 
 	get := &cobra.Command{
-		Use:   "get <instance-id>",
-		Short: "Show one instantiation request",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <instance-id>",
+		Short:       "Show one instantiation request",
 		Long: "Show one instance, including the exact entry version it was requested from —\n" +
 			"its provenance, which does not move when the entry is later updated.",
 		Example: "  olivares catalog instances get ci_123",
@@ -758,8 +778,9 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 		approvalRef string
 	)
 	transition := &cobra.Command{
-		Use:   "transition <instance-id>",
-		Short: "Decide an instance request or apply its deployment",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "transition <instance-id>",
+		Short:       "Decide an instance request or apply its deployment",
 		Long: "Record an admin-tier decision on an instantiation request: approved, rejected or\n" +
 			"active. Only the transitions the module allows are accepted — requested to\n" +
 			"approved or rejected, approved to active or rejected — and each is audited.\n\n" +
@@ -784,6 +805,11 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 			}
 			raw, code, err := client.do(cmd, http.MethodPost, path, nil,
 				catalogTransitionBody{Status: newStatus, Note: note, ApprovalRef: approvalRef})
+			if code == http.StatusNotImplemented && newStatus == "active" {
+				// Activation applies the deployment, which is a Business capability. The
+				// client returns the status beside its error for any non-2xx answer.
+				return notInEdition()
+			}
 			if err != nil {
 				return err
 			}
@@ -809,8 +835,9 @@ func newCatalogInstancesCmd(client datalaneClient) *cobra.Command {
 // catalog entry route; attestation admission remains under entries admit.
 func newCatalogToolAdmitCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "admit <entry-id>",
-		Short: "Admit a stored CLI or MCP tool declaration",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "admit <entry-id>",
+		Short:       "Admit a stored CLI or MCP tool declaration",
 		Long: "Admit and approve a catalog entry containing a pinned CLI or MCP tool declaration.\n" +
 			"The declaration must already be stored in the selected tenant. Use catalog entries\n" +
 			"admit with an attestation bundle for attestation admission.",

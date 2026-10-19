@@ -160,6 +160,7 @@ func (d *acctFailingData) Mutate(ctx context.Context, tenant model.TenantID, fn 
 type acctAuditedMeta struct {
 	targetKind model.Kind
 	targetID   model.ID
+	actor      string
 	meta       map[string]any
 }
 
@@ -180,7 +181,7 @@ func acctAuditsOf(t *testing.T, m *Module, tenant model.TenantID, action string)
 			if err := json.Unmarshal([]byte(canonical), &meta); err != nil {
 				return err
 			}
-			out = append(out, acctAuditedMeta{targetKind: ev.TargetKind, targetID: ev.TargetID, meta: meta})
+			out = append(out, acctAuditedMeta{targetKind: ev.TargetKind, targetID: ev.TargetID, actor: ev.Actor, meta: meta})
 			return nil
 		})
 	})

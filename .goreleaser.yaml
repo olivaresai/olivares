@@ -362,6 +362,7 @@ dockers:
       - LICENSES
       - packaging/container/data-dir
       - packaging/container/uv-LICENSE-MIT.txt
+      - packaging/container/bashrc.sh
     use: buildx
     goos: linux
     goarch: amd64
@@ -393,6 +394,7 @@ dockers:
       - LICENSES
       - packaging/container/data-dir
       - packaging/container/uv-LICENSE-MIT.txt
+      - packaging/container/bashrc.sh
     use: buildx
     goos: linux
     goarch: arm64

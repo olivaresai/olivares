@@ -88,10 +88,30 @@ func TestRealProfileRegistryReachesOnlyItsProfile(t *testing.T) {
 	t.Logf("profile %s: npm exited %d and the registry saw no request", other.Ref, code)
 }
 
-// runNPMSession launches prof through the real launch path, then runs script in
-// the resulting spec (its environment, Landlock policy and network policy) with
-// the bound provider moved to a local stand-in.
+// runNPMSession runs script (which uses npm) in prof's launch, see runBoundSession.
 func runNPMSession(t *testing.T, m *Module, tenant model.TenantID, runner *fakeRunner, prof ProviderProfile, provider, script string) (string, int) {
+	t.Helper()
+	// npm and node may sit outside the system paths a confined child reads (a
+	// test host's own install): grant that install, as a tool install is.
+	npm, err := exec.LookPath("npm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var grants []string
+	if real, err := filepath.EvalSymlinks(npm); err == nil {
+		grants = append(grants, filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(real))))))
+	}
+	if node, err := exec.LookPath("node"); err == nil {
+		grants = append(grants, filepath.Dir(node))
+	}
+	return runBoundSession(t, m, tenant, runner, prof, provider, script, grants...)
+}
+
+// runBoundSession launches prof through the real launch path, then runs script
+// in the resulting spec (its environment, Landlock policy and network policy)
+// with the bound provider moved to a local stand-in. grants are extra read
+// folders for the tools the script runs.
+func runBoundSession(t *testing.T, m *Module, tenant model.TenantID, runner *fakeRunner, prof ProviderProfile, provider, script string, grants ...string) (string, int) {
 	t.Helper()
 	if _, err := launchBound(m, tenant, prof); err != nil {
 		t.Fatal(err)
@@ -101,21 +121,12 @@ func runNPMSession(t *testing.T, m *Module, tenant model.TenantID, runner *fakeR
 		t.Fatal("a record-bound Claude launch is not confined")
 	}
 	spec.Program, spec.Args = "/bin/sh", []string{"-c", script}
-	// npm and node may sit outside the system paths a confined child reads (a
-	// test host's own install): grant that install, as a tool install is.
-	npm, err := exec.LookPath("npm")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if real, err := filepath.EvalSymlinks(npm); err == nil {
-		spec.AllowRead(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(real))))))
-	}
-	if node, err := exec.LookPath("node"); err == nil {
-		spec.AllowRead(filepath.Dir(node))
+	for _, grant := range grants {
+		spec.AllowRead(grant)
 	}
 	spec.NetworkPolicy.Providers[0] = provider
 	spec.ConfinementRequired = true
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	proc, err := NewProcRunner().Launch(ctx, spec)
 	if err != nil {

@@ -18,7 +18,7 @@ page câble les deux centrales et résume leurs compagnes côté roster.
 | Source (`kind`) | Ce qu'elle lit | Identifiant |
 |---|---|---|
 | `claude-api` | usage & coût facturé, inventaire modèle/workspace, analytics Claude Code, gouvernance MCP/server-tool côté API | Clé Admin API (`admin_key`) |
-| `claude-compliance` | le flux d'activité de conformité (événements de qualité probante) + l'annuaire de l'org | clé du flux d'activité + une Compliance Access Key **distincte** |
+| `claude-compliance` | le flux d'activité de conformité (événements de qualité probante) + l'annuaire de l'org | clé du flux d'activité + une Compliance Access Key **distincte** (Business) |
 | `claude-console` | roster IAM de l'org (membres, rôles) → findings de posture SSO/SCIM | identifiants console |
 | `claude-wif` | identités non humaines (comptes de service `svac_…`, identités fédérées) + leurs arêtes de périmètre **permis** | identifiants d'endpoint WIF |
 
@@ -115,12 +115,9 @@ validation — ce connecteur en lecture ne le détient jamais.
 
 Dépense facturée et estimée, découpée par les dimensions que la télémétrie
 transporte (les labels team et project deviennent de premier ordre), dans
-**Cost & FinOps** ; membres de l'org, identités non humaines et leurs périmètres dans
+**Budgets** ; membres de l'org, identités non humaines et leurs périmètres dans
 **Identity & NHI** ; findings de posture (shadow auth, dégradation de surface,
-footguns WIF) dans **Security** :
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="La vue Cost & FinOps : dépense par modèle et dimension, avec budgets et alertes." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="La vue Cost & FinOps : dépense par modèle et dimension, avec budgets et alertes." />
+footguns WIF) dans **Security**.
 
 ## Limites honnêtes
 

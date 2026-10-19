@@ -128,6 +128,10 @@ func pickRecord(driver string, tool resolveTool, records []ProviderRecord) *Prov
 			return 0
 		case kind == ProviderKindOllama:
 			return 1
+		case driver == providerDriverOpenCode && kind == ProviderKindOpenAICompatible:
+			// Only a server at a local address binds to OpenCode, and it could not before. A
+			// tenant that already had one and later added a key keeps getting the key.
+			return 3
 		default:
 			return 2
 		}
@@ -524,6 +528,13 @@ func (m *Module) findChosenProfile(ctx context.Context, tenant model.TenantID, c
 // nothing is created. A named account's own login must be ready; the default
 // login never qualifies it. The launch checks it again before spawning.
 func (m *Module) ResolveAccountProfile(ctx context.Context, tenant model.TenantID, driverIn, account string) (ResolvedProfile, error) {
+	return m.resolveAccountProfile(ctx, tenant, driverIn, account, nil)
+}
+
+// resolveAccountProfile is ResolveAccountProfile for a caller the assignments apply to:
+// mayUse is asked as soon as the account is found, before its driver, environment, state
+// or sign-in is judged, so a caller who may not use it learns nothing of them.
+func (m *Module) resolveAccountProfile(ctx context.Context, tenant model.TenantID, driverIn, account string, mayUse func(ProviderProfile) error) (ResolvedProfile, error) {
 	if m.Data == nil {
 		return ResolvedProfile{}, errNoData
 	}
@@ -563,6 +574,11 @@ func (m *Module) ResolveAccountProfile(ctx context.Context, tenant model.TenantI
 		return ResolvedProfile{}, err
 	}
 	profile := profileFromRecord(rec)
+	if mayUse != nil {
+		if err := mayUse(profile); err != nil {
+			return ResolvedProfile{}, err
+		}
+	}
 	switch {
 	case profile.Driver != driver:
 		return ResolvedProfile{}, conflictErr("this account is a " + profile.Driver + " account, not a " + tool.name + " one")

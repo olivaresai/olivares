@@ -97,14 +97,62 @@ func claudePolicyCheckinSchema() map[string]any {
 			"artifact_sha256", claudePolicyNullable(oas.Obj("type", "string", "description", "Optional artifact hash echo; a missing or mismatched value records the check-in unverified.")),
 			"key_fingerprint", claudePolicyNullable(oas.Obj("type", "string", "description", "Optional signer fingerprint echo.")),
 			"observed_content", claudePolicyNullable(oas.Obj("type", "string", "description", "Optional observed document, capped at 262144 UTF-8 bytes and credential-redacted before persistence.")),
+			"tools", claudePolicyNullable(oas.Obj(
+				"type", "array", "maxItems", workstationToolsMax, "items", claudePolicyToolSchema(),
+				"description", "The AI tools on this workstation, as the full list: a check-in that carries tools replaces the scope's earlier report (an empty list reports none), and one without tools leaves it unchanged. A driver appears once. The report is self-declared and unattested. Business only.",
+			)),
 		),
 		"required", oas.Enum("scope"),
+	)
+}
+
+// claudePolicyToolSchema is one tool a workstation reports on the check-in. Nothing
+// that names the account or could be a secret is part of it, and an unknown field is
+// refused.
+func claudePolicyToolSchema() map[string]any {
+	return oas.Obj(
+		"type", "object",
+		"additionalProperties", false,
+		"properties", oas.Obj(
+			"driver", oas.Obj("type", "string", "pattern", workstationDriverPattern, "description", "The provider driver key, for example claude or codex."),
+			"version", claudePolicyNullable(oas.Obj("type", "string", "pattern", workstationVersionPattern, "description", "The installed version when the tool reports one.")),
+			"state", oas.Obj("type", "string", "enum", oas.Enum(workstationToolStates...), "description", "The tool's sign-in state, as `olivares tool ls` reports it."),
+		),
+		"required", oas.Enum("driver", "state"),
+	)
+}
+
+// claudePolicyInventoryResponse is the inventory read: one entry per workstation scope
+// with the time of its latest report and the tools it reported then.
+func claudePolicyInventoryResponse() map[string]any {
+	host := oas.Obj(
+		"type", "object",
+		"properties", oas.Obj(
+			"scope", oas.Obj("type", "string", "description", "The workstation's check-in scope."),
+			"checked_in_at", oas.Obj("type", "string", "format", "date-time", "description", "The check-in that reported these tools."),
+			"tools", oas.Obj("type", "array", "items", claudePolicyToolSchema()),
+		),
+		"required", oas.Enum("scope", "checked_in_at", "tools"),
+	)
+	return oas.Obj(
+		"type", "object",
+		"properties", oas.Obj("hosts", oas.Obj("type", "array", "items", host)),
+		"required", oas.Enum("hosts"),
 	)
 }
 
 // OperationDocumentation publishes the request body each mutation's handler decodes.
 // A route this module has not classified stays unclassified.
 func (*PolicyConsole) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+	if method == http.MethodGet && pattern == "/inventory" {
+		return api.ModuleOperationDocumentation{
+			BodyKind: api.ModuleOperationBodyless,
+			SuccessResponses: map[string]any{
+				"200": oas.JSONRespSchema("The workstations that reported tools and what each reported (Business).", claudePolicyInventoryResponse()),
+				"501": oas.JSONResp("Community: the workstation tool inventory requires Business."),
+			},
+		}, true
+	}
 	decl, ok := claudePolicyRequestBodyDeclarationFor(method, pattern)
 	if !ok {
 		return api.ModuleOperationDocumentation{}, false

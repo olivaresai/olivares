@@ -27,6 +27,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { IntelNotice } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
+import { isCommunityEdition } from '@/lib/edition'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useModuleOn } from '@/stores/modules'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -56,9 +57,15 @@ export function RecordingNotice({
   // item 4). The notice is read only once server-info has answered AND lists Recording as
   // running. The module store alone is not enough: it starts empty ("everything on") until
   // its effect syncs server-info, which let the first read through.
+  //
+  // And a Community build is not asked at all: recording is a Business capability, a Community
+  // engine answers /v1/m/recording/notice with 501 and records nothing, so the strip and its
+  // consent dialog have nothing to say there (dev#2485: six Community pages made that read).
   const info = useServerInfo()
+  const communityBuild = isCommunityEdition(info.data?.edition)
   const storeOn = useModuleOn(RECORDING)
   const recordingOn =
+    !communityBuild &&
     info.isSuccess &&
     !(info.data?.modules_not_enabled ?? []).some(
       (m) => m.trim().toLowerCase() === RECORDING,

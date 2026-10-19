@@ -78,7 +78,7 @@ DANGEROUS）。处于异机的 agent 是内核 backstop 的职责，而非一个
 ## 你将在控制台看到什么
 
 已插桩的会话会作为实时活动出现在 **Sessions** 中，归属到发出遥测的 agent；它们的模型
-调用会馈送 **Cost & FinOps**；MCP 与工具 span 会像任何协作式来源一样为 **Access map**
+调用会馈送 **Budgets**；MCP 与工具 span 会像任何协作式来源一样为 **Access map**
 贡献边（edge）：
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Sessions 视图，展示来自协作式遥测的实时 agent 会话活动。" />

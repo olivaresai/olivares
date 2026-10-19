@@ -1,0 +1,173 @@
+{
+  "title": "Red-team",
+  "description": "Test di robustezza avversariali, solo sui tuoi agenti registrati e autorizzati. L'API espone tassonomia difensiva e scorecard, mai un payload di attacco.",
+  "tabs": {
+    "targets": "Obiettivi",
+    "runs": "Esecuzioni",
+    "catalog": "Catalogo"
+  },
+  "suites": {
+    "all": "Tutte le suite",
+    "injection": "Prompt injection",
+    "jailbreak": "Jailbreak",
+    "exfil": "Esfiltrazione di dati",
+    "tool_poisoning": "Tool poisoning"
+  },
+  "targets": {
+    "title": "Obiettivi",
+    "description": "La superficie del consenso. Un'esecuzione tocca sempre e solo un agente che hai registrato e autorizzato.",
+    "consentNote": "Registrare un agente non è un consenso. Un obiettivo nasce non autorizzato: autorizzalo per dare il consenso e revocalo in qualsiasi momento.",
+    "register": "Registra agente",
+    "authorize": "Autorizza",
+    "revoke": "Revoca",
+    "authorizedBy": "da {{who}}",
+    "empty": "Nessun obiettivo registrato",
+    "emptyHint": "Registra uno dei tuoi agenti come candidato, poi autorizzalo a eseguire i probe.",
+    "columns": {
+      "name": "Obiettivo",
+      "endpoint": "Endpoint",
+      "scope": "Ambito",
+      "consent": "Consenso",
+      "actions": "Azioni"
+    },
+    "dialog": {
+      "registerTitle": "Registra un agente candidato",
+      "registerHint": "Registra uno dei tuoi agenti come candidato red-team.",
+      "registerCta": "Registra",
+      "notConsentNote": "Registrare non è un consenso: il candidato viene creato non autorizzato e nessuna esecuzione può toccarlo finché non lo autorizzi.",
+      "registered": "Agente registrato come candidato",
+      "agentRef": "Riferimento dell'agente",
+      "name": "Nome visualizzato",
+      "endpoint": "Endpoint",
+      "scope": "Ambito",
+      "scopeHint": "Superfici separate da virgole (es. input, output, tool_args).",
+      "authorizeTitle": "Autorizza questo obiettivo",
+      "authorizeHint": "Concedere il consenso permette alle esecuzioni red-team di sottoporre {{name}} a probe. L'azione viene registrata nel registro di audit.",
+      "revokeTitle": "Revoca il consenso",
+      "revokeHint": "Revocare il consenso ferma ogni ulteriore esecuzione contro {{name}}. L'azione viene registrata nel registro di audit.",
+      "granted": "Consenso concesso",
+      "revoked": "Consenso revocato"
+    },
+    "truncated": "Caricati {{n}} obiettivi; ce ne sono altri",
+    "truncatedHint": "Ci sono più obiettivi registrati di quelli mostrati; questa pagina prende le righe per id. Un obiettivo assente da questo elenco non dimostra che non sia registrato o autorizzato: potrebbe essere oltre questa pagina."
+  },
+  "runs": {
+    "title": "Esecuzioni",
+    "description": "Ogni esecuzione sottopone a probe un obiettivo autorizzato e produce una scorecard di robustezza. I probe falliti diventano rilevamenti.",
+    "detailTitle": "Dettaglio dell'esecuzione",
+    "closeDetail": "Chiudi",
+    "launch": "Avvia esecuzione",
+    "launchGatedHint": "L'avvio è disabilitato finché questo obiettivo non è autorizzato: registrare un agente non è un consenso.",
+    "robustness": "robustezza",
+    "noScore": "nessun punteggio",
+    "degradedHint": "Tutti i probe sono stati saltati perché non era disponibile alcuna sandbox. È in attesa della sandbox, non un esito positivo.",
+    "errorHint": "Tutti i probe sono falliti per un errore di esecuzione. Non è un verdetto sulla robustezza: riesegui dopo aver risolto il problema.",
+    "empty": "Nessuna esecuzione",
+    "emptyHint": "Avvia un'esecuzione su un obiettivo autorizzato per produrre una scorecard.",
+    "status": {
+      "completed": "Completata",
+      "degraded": "In attesa della sandbox",
+      "error": "Errore di esecuzione"
+    },
+    "columns": {
+      "started": "Avviata",
+      "target": "Obiettivo",
+      "suite": "Suite",
+      "status": "Stato",
+      "score": "Punteggio",
+      "passFail": "Superati / falliti"
+    },
+    "stats": {
+      "passed": "Superati",
+      "passedCaption": "bloccati + rifiutati: la difesa ha tenuto",
+      "failed": "Falliti",
+      "failedCaption": "assecondati + trapelati: vulnerabilità reale",
+      "errors": "Errori",
+      "skipped": "Saltati",
+      "excludedCaption": "esclusi dal punteggio"
+    },
+    "scorecard": {
+      "title": "Scorecard",
+      "description": "Robustezza = superati / (superati + falliti) × 100. Errori e probe saltati sono esclusi; più alto è meglio."
+    },
+    "byFamily": {
+      "title": "Fallimenti per famiglia",
+      "description": "Famiglie di probe con almeno un probe fallito.",
+      "empty": "Nessun fallimento nelle famiglie.",
+      "summary": "Fallimenti per famiglia: {{count}} famiglie con fallimenti, la peggiore è {{family}} con {{failed}} probe falliti.",
+      "summaryEmpty": "Nessuna famiglia di probe ha avuto fallimenti.",
+      "colFamily": "Famiglia",
+      "colFailed": "Falliti"
+    },
+    "owasp": {
+      "title": "Fallimenti OWASP",
+      "description": "Righe OWASP con un probe fallito (conteggio per riferimento).",
+      "empty": "Nessuna riga OWASP fallita."
+    },
+    "dialog": {
+      "title": "Avvia esecuzione",
+      "hint": "Sottoponi a probe {{name}} con la suite selezionata. Questa azione avversariale viene registrata nel registro di audit.",
+      "suite": "Suite",
+      "launched": "Esecuzione avviata"
+    },
+    "truncated": "Caricate {{n}} esecuzioni; ce ne sono altre",
+    "truncatedHint": "Ci sono più esecuzioni di quelle mostrate; questa pagina prende le righe per id, non per data, quindi le più recenti non sono necessariamente qui. L'assenza di un'esecuzione non dimostra che un obiettivo non sia mai stato sottoposto a probe."
+  },
+  "results": {
+    "title": "Risultati per probe",
+    "description": "L'esito di ogni probe. L'impronta è un hash a senso unico, mai un payload di attacco.",
+    "empty": "Nessun risultato per questa esecuzione.",
+    "emptyHint": "Ogni probe dell'esecuzione è elencato qui con il suo verdetto e le prove che lo sostengono. Questa esecuzione non ha registrato risultati.",
+    "columns": {
+      "probe": "Probe",
+      "family": "Famiglia",
+      "frameworks": "Framework",
+      "outcome": "Esito",
+      "severity": "Gravità",
+      "fingerprint": "Impronta",
+      "occurredAt": "Avvenuto"
+    }
+  },
+  "catalog": {
+    "title": "Catalogo dei probe",
+    "description": "La tassonomia della batteria e la sua copertura dei framework: solo metadati difensivi.",
+    "suiteLabel": "Filtra per suite",
+    "metadataNote": "Sono metadati difensivi, non un arsenale di exploit. L'API non contiene alcun payload di attacco.",
+    "stats": {
+      "probes": "Probe",
+      "families": "Famiglie",
+      "owasp": "Rif. OWASP",
+      "atlas": "Rif. ATLAS"
+    },
+    "columns": {
+      "id": "ID del probe",
+      "family": "Famiglia",
+      "title": "Titolo",
+      "frameworks": "Framework",
+      "surface": "Superficie",
+      "severity": "Gravità"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "Nessun probe difensivo in catalogo",
+      "description": "Questa tassonomia di sola lettura è popolata solo dalle definizioni di probe compilate nel control plane."
+    },
+    "familyFailureChart": {
+      "title": "Nessun fallimento di famiglia di probe registrato",
+      "description": "Una famiglia compare quando un probe con punteggio dell'esecuzione selezionata fallisce perché asseconda una richiesta avversariale o fa trapelare un marcatore vietato."
+    },
+    "results": {
+      "title": "Nessun esito di probe registrato",
+      "description": "Avvia una suite su un obiettivo autorizzato: l'esito di ogni probe viene registrato qui con un'impronta a senso unico, mai il payload di attacco."
+    },
+    "runs": {
+      "title": "Nessuna esecuzione red-team avviata",
+      "description": "Registra e autorizza un agente di tua proprietà, poi avvia una suite di probe per registrarne la scorecard di robustezza."
+    },
+    "targets": {
+      "title": "Nessun obiettivo red-team registrato",
+      "description": "Registra come candidato un agente dall'inventario di questo tenant; l'autorizzazione resta un passaggio di consenso separato."
+    }
+  }
+}

@@ -28,6 +28,32 @@ func TestExplicitPolicyValidatesPathsAndSealedGrants(t *testing.T) {
 	}
 }
 
+// A path a no-delete folder keeps writable is an exception inside that folder only; a
+// kept path outside every no-delete folder, or over a read-only path, is refused.
+func TestKeepWritableMustLieInsideANoDeleteFolder(t *testing.T) {
+	ok := Policy{NoDelete: []string{"/work"}, KeepWritable: []string{"/work/.git"}}
+	if err := ok.validate(); err != nil {
+		t.Fatalf("a kept path inside the folder was refused: %v", err)
+	}
+	for name, p := range map[string]Policy{
+		"outside":           {NoDelete: []string{"/work"}, KeepWritable: []string{"/elsewhere/.git"}},
+		"no folder":         {KeepWritable: []string{"/work/.git"}},
+		"the folder's name": {NoDelete: []string{"/work"}, KeepWritable: []string{"/workshop"}},
+		"relative":          {NoDelete: []string{"/work"}, KeepWritable: []string{".git"}},
+		"read-only inside":  {NoDelete: []string{"/work"}, KeepWritable: []string{"/work/.git"}, Sealed: []string{"/work/.git/hooks"}},
+		"the folder itself": {NoDelete: []string{"/work"}, KeepWritable: []string{"/work"}},
+	} {
+		if err := p.validate(); err == nil {
+			t.Errorf("%s: accepted %+v", name, p)
+		}
+	}
+	// An ordinary writable grant inside the folder is still refused: the exception is
+	// KeepWritable, not ReadWrite.
+	if err := (Policy{NoDelete: []string{"/work"}, ReadWrite: []string{"/work/.git"}}).validate(); err == nil {
+		t.Error("a writable grant inside a no-delete folder was admitted")
+	}
+}
+
 func TestWrapPreservesCallerCommand(t *testing.T) {
 	if Probe().Mode != ModeLandlock {
 		t.Skip(Probe().Reason)

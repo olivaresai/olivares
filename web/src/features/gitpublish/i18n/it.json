@@ -1,0 +1,258 @@
+{
+  "title": "Pubblicazione Git",
+  "subtitle": "Esegui push dei commit, apri pull request e fai merge attraverso destinazioni di pubblicazione approvate.",
+  "notice": "Ogni richiesta viene controllata rispetto ai binding approvati della destinazione e alla tua autorità nel momento in cui la invii. Un esito incerto sull’host non viene mai reinviato: riconcilialo per leggere l’host.",
+  "actions": {
+    "refresh": "Aggiorna",
+    "newTarget": "Nuova destinazione",
+    "open": "Apri",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "push": "Push",
+    "pull_request": "Apri pull request",
+    "draftPullRequest": "Apri una pull request in bozza",
+    "merge": "Merge",
+    "reconcile": "Riconcilia",
+    "abandon": "Abbandona"
+  },
+  "columns": {
+    "target": "Destinazione",
+    "workspace": "Workspace",
+    "pushPrefix": "Prefisso di push",
+    "mergeBases": "Base di merge",
+    "version": "Versione",
+    "actions": "Azioni"
+  },
+  "targets": {
+    "title": "Destinazioni di pubblicazione",
+    "description": "Ogni destinazione lega una credenziale approvata e un repository a un prefisso di push e ai branch in cui può fare merge.",
+    "empty": "Nessuna destinazione di pubblicazione",
+    "emptyAdmin": "Seleziona un workspace e crea una destinazione a partire da un binding di credenziale e da un binding di repository approvati.",
+    "emptyReader": "Le destinazioni le crea un amministratore delle destinazioni. Qui sono elencate quelle che puoi leggere.",
+    "open": "Apri la destinazione {{id}}"
+  },
+  "target": {
+    "title": "Destinazione {{id}}",
+    "description": "Il binding attraverso cui questa destinazione pubblica, l'autorità richiesta da ogni azione e gli intent che trattiene.",
+    "binding": "Binding",
+    "credentialBinding": "Binding di credenziale",
+    "repositoryBinding": "Binding di repository",
+    "withheld": "Mostrato solo agli amministratori della destinazione",
+    "noMergeBases": "Nessuna",
+    "bindingHint": "I push restano sotto il prefisso di push, mentre pull request e merge vanno solo nelle basi di merge. Il motore verifica che entrambi i binding siano approvati nel workspace a ogni invio di una richiesta.",
+    "actions": "Azioni",
+    "administration": "Amministrazione della destinazione",
+    "notHeld": "Non posseduta",
+    "created": "Destinazione di pubblicazione creata",
+    "updated": "Destinazione di pubblicazione aggiornata",
+    "deleted": "Destinazione di pubblicazione eliminata",
+    "deleteTitle": "Eliminare la destinazione {{id}}?",
+    "deleteDescription": "Il motore rifiuta di eliminare una destinazione che un intent in invio, incerto o abbandonato trattiene ancora."
+  },
+  "targetForm": {
+    "createTitle": "Nuova destinazione di pubblicazione",
+    "editTitle": "Modifica la destinazione {{id}}",
+    "description": "Lega una credenziale e un repository approvati ai branch su cui questa destinazione può pubblicare.",
+    "credentialHint": "L'ID di un binding di credenziale approvato in questo workspace. La console non ne vede mai il segreto.",
+    "repositoryHint": "L'ID di un binding di repository approvato in questo workspace. Il suo proprietario deve essere uno di quelli consentiti dal binding di credenziale.",
+    "keepBinding": "Lascia vuoto per mantenere il binding attuale.",
+    "prefixHint": "I push devono restare sotto questo prefisso di branch. Termina con una barra e non può coprire una base di merge.",
+    "prefixSlash": "Il prefisso di push deve terminare con una barra.",
+    "basesHint": "I branch che pull request e merge possono avere come destinazione, uno per riga. Al massimo 16.",
+    "create": "Crea destinazione",
+    "save": "Salva modifiche"
+  },
+  "effects": {
+    "push": "Push",
+    "pull_request": "Pull request",
+    "merge": "Merge"
+  },
+  "authority": {
+    "requires": "Richiede {{permission}}",
+    "requiresStepUp": "Richiede {{permission}} e la verifica aggiuntiva per le azioni amministrative"
+  },
+  "publish": {
+    "push": {
+      "title": "Esegui il push di un commit",
+      "description": "Esegue il push di un commit preciso su un branch sotto {{prefix}}, con lease sul commit corrente atteso del branch.",
+      "submit": "Richiedi push"
+    },
+    "pull_request": {
+      "title": "Apri una pull request",
+      "description": "Apre una pull request da un branch sotto {{prefix}} verso una base di merge, oppure adotta quella aperta corrispondente.",
+      "submit": "Richiedi pull request"
+    },
+    "merge": {
+      "title": "Fai il merge di una pull request",
+      "description": "Fa il merge di una pull request solo finché la sua head è ancora il commit rivisto.",
+      "submit": "Richiedi merge"
+    }
+  },
+  "session": {
+    "title": "Pubblica",
+    "hint": "Esegui il push del commit di questa sessione attraverso la destinazione di pubblicazione del suo workspace. Il motore recupera il commit dalla cartella della sessione.",
+    "publish": "Pubblica",
+    "publishTo": "Pubblica su {{prefix}}"
+  },
+  "fields": {
+    "ref": "Ref del branch",
+    "refHint": "Un ref completo sotto il prefisso di push, ad esempio refs/heads/{{prefix}}change.",
+    "expectedOld": "Commit corrente atteso",
+    "expectedOldHint": "Facoltativo. Il push ha un lease su questo valore; lascialo vuoto per un nuovo branch.",
+    "commit": "Commit",
+    "tree": "Tree",
+    "treeHint": "L’ID del tree del commit. Il motore rifiuta il push se il repository gestito contiene un tree diverso.",
+    "sessionRun": "Esecuzione della sessione",
+    "sessionRunHint": "Facoltativo. L'esecuzione della sessione la cui cartella contiene il commit. Il motore recupera prima il commit da lì nel repository gestito.",
+    "sessionRunFixedHint": "La sessione da cui proviene questo push. Il motore recupera prima il commit dalla sua cartella nel repository gestito.",
+    "headRef": "Branch head",
+    "headRefHint": "Un branch sotto {{prefix}}.",
+    "base": "Branch di base",
+    "title": "Titolo",
+    "body": "Descrizione",
+    "draft": "Apri come bozza",
+    "number": "Numero della pull request",
+    "expectedHead": "Commit head rivisto",
+    "expectedHeadHint": "Il merge avviene solo finché la head della pull request è questo commit.",
+    "method": "Metodo di merge",
+    "acknowledgeIntent": "Riconosci l'intent abbandonato",
+    "acknowledgeIntentHint": "Facoltativo. L'ID di un intent abbandonato che trattiene questo ambito. Indicarlo richiede l'amministrazione della destinazione.",
+    "operationId": "ID dell'operazione",
+    "operationIdHint": "Inviando di nuovo questa stessa richiesta con questo ID si ottiene l'intent registrato. Non viene inviata una seconda volta."
+  },
+  "methods": {
+    "merge": "Merge commit",
+    "squash": "Squash",
+    "rebase": "Rebase"
+  },
+  "states": {
+    "dispatching": "In invio",
+    "applied": "Applicato",
+    "adopted": "Adottato",
+    "rejected": "Rifiutato dall'host",
+    "not_dispatched": "Non inviato",
+    "uncertain": "Incerto",
+    "abandoned": "Abbandonato"
+  },
+  "receipts": {
+    "caused": "Questa richiesta ha causato l'effetto sull'host.",
+    "existing_effect": "Sull'host esisteva già un effetto corrispondente ed è stato adottato.",
+    "none": "Nessun effetto sull'host è attribuito a questa richiesta."
+  },
+  "outcome": {
+    "toast": "Il motore ha risposto: {{state}}",
+    "settled": {
+      "title": "La richiesta è conclusa"
+    },
+    "uncertain": {
+      "title": "L'esito sull'host è incerto",
+      "body": "La richiesta è stata inviata, ma il suo risultato sull'host non è confermato. Potrebbe essere andata a buon fine. Non inviarla di nuovo: riconcilia legge l'host e registra ciò che osserva."
+    },
+    "rejected": {
+      "title": "L'host ha rifiutato la richiesta",
+      "body": "L'host ha rifiutato l'effetto. L'intent registra il rifiuto."
+    },
+    "refused": {
+      "title": "Il motore ha rifiutato la richiesta",
+      "code": "Codice di rifiuto:"
+    },
+    "unknown": {
+      "title": "La risposta del motore non è arrivata",
+      "body": "La richiesta potrebbe essere stata registrata. Apri gli intent di questa destinazione per verificarlo e, se è incerta, riconciliala da lì."
+    }
+  },
+  "refusals": {
+    "authority_expired": "Il controllo dell'autorità non è terminato in tempo, quindi la richiesta non è stata eseguita.",
+    "authority_unavailable": "Il motore non ha potuto decidere su questa richiesta, quindi non è stata eseguita.",
+    "base_not_allowed": "Il branch di base non è una delle basi di merge di questa destinazione.",
+    "binding_not_approved": "Un binding di credenziale o di repository non è approvato in questo workspace.",
+    "content_mismatch": "Il commit o il tree non corrisponde a quanto contiene il repository gestito.",
+    "default_branch_refused": "Il branch è quello predefinito del repository e la pubblicazione su di esso è rifiutata.",
+    "dispatch_deadline_passed": "La scadenza di invio è passata prima che la richiesta fosse inviata. Non è stato inviato nulla.",
+    "field_not_accepted": "La richiesta conteneva un campo che questa route non accetta.",
+    "forbidden": "La tua autorità attuale non consente questa azione su questa destinazione.",
+    "head_mismatch": "La head della pull request non è più il commit rivisto.",
+    "host_credential_refused": "L’host Git ha rifiutato la credenziale del binding o il suo ambito. Non è stato inviato nulla.",
+    "host_unavailable": "L'host Git non è raggiungibile. Non è stato inviato nulla.",
+    "intent_settled": "L'intent è già concluso, quindi non può essere abbandonato.",
+    "invalid_request": "La richiesta è incompleta o malformata. Controlla i nomi dei branch e gli ID dei commit.",
+    "lookup_incomplete": "Lo stato attuale dell’host non è stato letto per intero, quindi non è stato inviato nulla.",
+    "not_found": "La destinazione o l'intent non esiste, oppure non puoi vederlo.",
+    "not_mergeable": "L'host segnala che non è possibile fare il merge della pull request.",
+    "operation_conflict": "Questo ID di operazione è già stato usato per una richiesta diversa.",
+    "protected_branch_refused": "Il branch è protetto sull'host e la pubblicazione su di esso è rifiutata.",
+    "push_prefix_overlaps_base": "Il prefisso di push permetterebbe a un push di arrivare su una base di merge.",
+    "ref_not_allowed": "Il branch non è sotto il prefisso di push di questa destinazione.",
+    "repository_config_refused": "La configurazione del repository gestito non è quella che il motore gestisce. Non è stato eseguito alcun push.",
+    "repository_outside_binding": "Il repository è fuori dai proprietari consentiti dal binding di credenziale.",
+    "runtime_credential_refused": "La credenziale di runtime di una sessione non può pubblicare. Agisci con la tua credenziale.",
+    "scoped_grant_required": "Questa azione richiede una concessione con ambito su questa destinazione.",
+    "separation_of_duty": "Hai avviato la sessione che ha scritto questa modifica. Chiedi a un'altra persona di rivederla e farne il merge.",
+    "session_source_refused": "L’esecuzione della sessione non è nel workspace di questa destinazione, oppure la sua cartella non è un repository da cui il motore può recuperare.",
+    "session_source_unavailable": "La cartella della sessione non è stata letta in tempo. Non è stato eseguito alcun push.",
+    "stale_lease": "Il branch non contiene più il commit corrente atteso.",
+    "step_up_required": "Questa azione richiede la verifica aggiuntiva per le azioni amministrative che questo deployment richiede. Completala quando ti viene chiesto.",
+    "subject_mismatch": "Questo ID di operazione appartiene a una richiesta fatta da un altro soggetto.",
+    "target_changed": "La destinazione è cambiata dopo l'ammissione della richiesta. Non è stato inviato nulla.",
+    "target_in_use": "Un intent in invio, incerto o abbandonato trattiene ancora questa destinazione.",
+    "unresolved_intent": "Un intent non risolto trattiene già questo branch, questa pull request o questo merge.",
+    "unsupported_requirement": "L'host non può soddisfare questo requisito, ad esempio un merge con rebase su GitLab.",
+    "version_conflict": "La destinazione è cambiata da quando l'hai aperta. Riaprila per vedere la versione attuale.",
+    "workflow_change_refused": "Il commit modifica i file di workflow CI, che questa destinazione rifiuta di pubblicare.",
+    "unknown": "Il motore ha rifiutato la richiesta con un codice che questa console non descrive."
+  },
+  "intents": {
+    "title": "Intent",
+    "empty": "Nessun intent di pubblicazione è registrato per questa destinazione.",
+    "open": "Apri l'intent {{id}}"
+  },
+  "intent": {
+    "title": "Intent {{id}}",
+    "description": "Cosa è stato richiesto, cosa conteneva l'host all'ultima osservazione e se l'host ha confermato la richiesta sono registrati separatamente.",
+    "state": "Stato",
+    "effect": "Effetto",
+    "receipt": "Ricevuta",
+    "operationId": "ID dell'operazione",
+    "attempt": "Tentativo",
+    "targetVersion": "Versione della destinazione",
+    "reason": "Motivo",
+    "authorizedBy": "Preso in carico da",
+    "dispatchDeadline": "Scadenza di invio",
+    "releaseFailure": "Errore nel rilascio della credenziale",
+    "requested": "Richiesto",
+    "observed": "Osservato sull'host",
+    "notObserved": "L'host non è stato osservato per questo intent.",
+    "present": "Presente",
+    "sha": "Commit sull'host",
+    "headSha": "Commit head",
+    "merged": "Merge eseguito",
+    "mergeCommit": "Merge commit",
+    "mergeTree": "Merge tree",
+    "contentMatch": "La head corrisponde al commit richiesto",
+    "source": "Origine",
+    "at": "Il",
+    "acknowledged": "Confermato dall'host",
+    "acknowledgedValue": "Confermato",
+    "status": "Stato dell'host",
+    "requestId": "ID della richiesta sull'host",
+    "acknowledgedHint": "Una conferma è la risposta di successo dell’host a questa richiesta. Non è un’osservazione dell’effetto.",
+    "yes": "Sì",
+    "no": "No",
+    "observations": "Osservazioni",
+    "observationsEmpty": "Nessuna osservazione è registrata per questo intent.",
+    "obs": {
+      "at": "Il",
+      "attempt": "Tentativo",
+      "source": "Origine",
+      "result": "Risultato",
+      "host": "Oggetto, stato e richiesta sull'host"
+    },
+    "abandonedNote": "Un amministratore si è assunto la responsabilità di questo intent. Questo non prova nulla sull'host. Il suo ambito resta trattenuto finché una nuova richiesta non indica questo intent in Riconosci l'intent abbandonato.",
+    "abandoned": "Intent abbandonato",
+    "abandonTitle": "Abbandonare l'intent {{id}}?",
+    "abandonDescription": "Abbandonare registra che ti assumi la responsabilità di questo intent non risolto. Non modifica né legge l'host, e l'ambito resta trattenuto finché una nuova richiesta non riconosce questo intent.",
+    "abandonReason": "Motivo (al massimo 256 caratteri)"
+  }
+}

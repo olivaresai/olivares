@@ -355,7 +355,7 @@ func (b *Bridge) Request(ctx context.Context, tenant model.TenantID, action, sub
 		b.warnUnconfigured(tenant)
 		return NoGateRefPrefix + planHash, NoGate, planHash, nil
 	}
-	return b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, false)
+	return b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, reuseNone)
 }
 
 // GateOnce is the ONE-SHOT, plan-bound gate the hooks PEP uses: it opens (or
@@ -374,12 +374,24 @@ func (b *Bridge) GateOnce(ctx context.Context, tenant model.TenantID, action, su
 
 // GateOnceForSession is GateOnce that also records sessionRef on an approval it opens.
 func (b *Bridge) GateOnceForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error) {
+	return b.gateOnce(ctx, tenant, reuseApproved, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef)
+}
+
+// GateUnspentForSession is GateOnceForSession for a caller whose spend can never match an
+// earlier one, because it spends under a fresh consumer each time. An approved grant some
+// consumer already spent is no grant to that caller, so it is skipped and a fresh request
+// opens instead of the caller being told the spent one is used up.
+func (b *Bridge) GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error) {
+	return b.gateOnce(ctx, tenant, reuseUnspent, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef)
+}
+
+func (b *Bridge) gateOnce(ctx context.Context, tenant model.TenantID, mode reuse, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error) {
 	cred, ok := b.Cred(tenant)
 	if !ok {
 		b.warnUnconfigured(tenant)
 		return NoGateRefPrefix + planHash, NoGate, planHash, nil
 	}
-	ref, status, boundHash, err = b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, true, sessionRef)
+	ref, status, boundHash, err = b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, mode, sessionRef)
 	if err != nil || status != Pending {
 		return ref, status, boundHash, err
 	}
@@ -480,7 +492,7 @@ func (b *Bridge) findNotification(ctx context.Context, cred ServiceCred, action,
 		if st != Pending {
 			window = cred.ExpiresIn
 		}
-		ref, found, _, err := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, st, window)
+		ref, found, _, err := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, st, window, false)
 		if err != nil {
 			return "", err
 		}
@@ -658,11 +670,20 @@ func (b *Bridge) ConsumeApproval(ctx context.Context, tenant model.TenantID, ref
 	return dto.Granted, dto.Replay, nil
 }
 
+// reuse is which existing approvals may satisfy a repeated request for the same identity.
+type reuse uint8
+
+const (
+	reuseNone     reuse = iota // an open (pending) approval only
+	reuseApproved              // also an approved grant inside its time box
+	reuseUnspent               // also an approved grant inside its time box that no one has spent
+)
+
 // ensureApproval is the idempotent open: reuse an open (and, for the one-shot security
 // gate, an already-approved) approval for this identity, else open a fresh one bound to
 // the exact plan hash. The returned boundHash is the plan hash this approval is bound
 // to (equal to planHash by construction on every reuse/create path).
-func (b *Bridge) ensureApproval(ctx context.Context, cred ServiceCred, action, subjectKind, subjectRef, planHash, reason, requestedBy string, reuseApproved bool, sessionRef ...string) (ref, status, boundHash string, err error) {
+func (b *Bridge) ensureApproval(ctx context.Context, cred ServiceCred, action, subjectKind, subjectRef, planHash, reason, requestedBy string, mode reuse, sessionRef ...string) (ref, status, boundHash string, err error) {
 	encoded := EncodeSubjectRef(subjectRef, planHash)
 	key := idemKey(cred.Tenant, action, subjectKind, encoded)
 	unlock := b.locks.lock(key)
@@ -670,7 +691,7 @@ func (b *Bridge) ensureApproval(ctx context.Context, cred ServiceCred, action, s
 
 	// 1. In-process memo (fast idempotency within this process lifetime).
 	if memoRef := b.memoGet(key); memoRef != "" {
-		if v, rerr := b.ReadApproval(ctx, cred, memoRef); rerr == nil && b.reusable(cred, v, reuseApproved) {
+		if v, rerr := b.ReadApproval(ctx, cred, memoRef); rerr == nil && b.reusable(cred, v, mode) {
 			return memoRef, v.Status, v.BoundHash, nil
 		}
 		// Terminal/expired/stale/gone: drop the stale memo and open a fresh request.
@@ -680,7 +701,7 @@ func (b *Bridge) ensureApproval(ctx context.Context, cred ServiceCred, action, s
 	// 2. Durable lookup (idempotency across restarts; recover a still-valid approved
 	//    posture for the one-shot security gate). Best-effort: a list error opens a
 	//    fresh approval rather than blocking a legitimate actuation.
-	if foundRef, v, ferr := b.findReusable(ctx, cred, action, subjectKind, encoded, reuseApproved); ferr != nil {
+	if foundRef, v, ferr := b.findReusable(ctx, cred, action, subjectKind, encoded, mode); ferr != nil {
 		b.Log.Warn("approval-bridge: idempotency lookup failed; opening a fresh approval", "tenant", cred.TenantStr, "action", action, "err", ferr)
 	} else if foundRef != "" {
 		b.memoSet(key, foundRef)
@@ -713,6 +734,7 @@ type ApprovalView struct {
 	SubjectRef  string // the STORED, encoded subject (carries the "#plan=" binding)
 	BoundHash   string
 	DecidedAt   string
+	Consumed    bool // a consumer already spent the approval's single use
 }
 
 // ReadApproval GETs one approval as the service principal and returns its view. A
@@ -726,7 +748,7 @@ func (b *Bridge) ReadApproval(ctx context.Context, cred ServiceCred, ref string)
 		if err != nil {
 			return ApprovalView{}, err
 		}
-		return ApprovalView{Status: out.Status, Action: out.Action, SubjectKind: out.SubjectKind, SubjectRef: out.SubjectRef, BoundHash: decodePlanHash(out.SubjectRef), DecidedAt: out.DecidedAt}, nil
+		return ApprovalView{Status: out.Status, Action: out.Action, SubjectKind: out.SubjectKind, SubjectRef: out.SubjectRef, BoundHash: decodePlanHash(out.SubjectRef), DecidedAt: out.DecidedAt, Consumed: out.Consumed}, nil
 	}
 	code, raw := b.do(ctx, cred, http.MethodGet, "/v1/m/governance/approvals/"+url.PathEscape(ref), nil)
 	switch {
@@ -745,13 +767,14 @@ func (b *Bridge) ReadApproval(ctx context.Context, cred ServiceCred, ref string)
 		SubjectKind string `json:"subject_kind"`
 		SubjectRef  string `json:"subject_ref"`
 		DecidedAt   string `json:"decided_at"`
+		Consumed    bool   `json:"consumed"`
 	}
 	if jerr := json.Unmarshal(raw, &dto); jerr != nil {
 		return ApprovalView{}, fmt.Errorf("approval-bridge: malformed status response: %w", jerr)
 	}
 	return ApprovalView{
 		Status: dto.Status, Action: dto.Action, SubjectKind: dto.SubjectKind,
-		SubjectRef: dto.SubjectRef, BoundHash: decodePlanHash(dto.SubjectRef), DecidedAt: dto.DecidedAt,
+		SubjectRef: dto.SubjectRef, BoundHash: decodePlanHash(dto.SubjectRef), DecidedAt: dto.DecidedAt, Consumed: dto.Consumed,
 	}, nil
 }
 
@@ -761,14 +784,15 @@ func (b *Bridge) ReadApproval(ctx context.Context, cred ServiceCred, ref string)
 // reusable ONLY for the one-shot security gate (reuseApproved) AND only within the
 // time-box of its decision — so a human-approved enforcement grant is NOT permanent:
 // after the window a re-enable opens a fresh request and needs fresh approval, honoring
-// the time-box doctrine. Everything else (rejected/canceled/expired/unknown) is not
-// reusable → a fresh request is opened.
-func (b *Bridge) reusable(cred ServiceCred, v ApprovalView, reuseApproved bool) bool {
+// the time-box doctrine. A caller that asks for an unspent grant (reuseUnspent) is also
+// refused one a consumer already spent. Everything else (rejected/canceled/expired/
+// unknown) is not reusable → a fresh request is opened.
+func (b *Bridge) reusable(cred ServiceCred, v ApprovalView, mode reuse) bool {
 	switch v.Status {
 	case Pending:
 		return true
 	case Approved:
-		return reuseApproved && b.withinGrant(v.DecidedAt, cred.ExpiresIn)
+		return mode != reuseNone && !(mode == reuseUnspent && v.Consumed) && b.withinGrant(v.DecidedAt, cred.ExpiresIn)
 	default:
 		return false
 	}
@@ -832,15 +856,16 @@ func (b *Bridge) createApproval(ctx context.Context, cred ServiceCred, action, s
 // findReusable scans for an existing approval that may satisfy this actuation. PENDING
 // is always scanned (a small, bounded set of open requests). APPROVED is scanned only
 // for the one-shot security gate (reuseApproved) and only within the grant time-box, so
-// a stale approved grant is skipped and a fresh approval is required.
-func (b *Bridge) findReusable(ctx context.Context, cred ServiceCred, action, subjectKind, encodedSubjectRef string, reuseApproved bool) (ref string, v ApprovalView, err error) {
-	if foundRef, found, view, serr := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, Pending, 0); serr != nil {
+// a stale approved grant is skipped and a fresh approval is required. With reuseUnspent a
+// spent grant is skipped the same way, so it cannot hide an unspent one behind it.
+func (b *Bridge) findReusable(ctx context.Context, cred ServiceCred, action, subjectKind, encodedSubjectRef string, mode reuse) (ref string, v ApprovalView, err error) {
+	if foundRef, found, view, serr := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, Pending, 0, false); serr != nil {
 		return "", ApprovalView{}, serr
 	} else if found {
 		return foundRef, view, nil
 	}
-	if reuseApproved {
-		if foundRef, found, view, serr := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, Approved, cred.ExpiresIn); serr != nil {
+	if mode != reuseNone {
+		if foundRef, found, view, serr := b.scanForApproval(ctx, cred, action, subjectKind, encodedSubjectRef, Approved, cred.ExpiresIn, mode == reuseUnspent); serr != nil {
 			return "", ApprovalView{}, serr
 		} else if found {
 			return foundRef, view, nil
@@ -853,8 +878,9 @@ func (b *Bridge) findReusable(ctx context.Context, cred ServiceCred, action, sub
 // FIRST one whose subject_kind and stored subject_ref match this identity (and, when
 // freshWindowSecs > 0, was decided within that window). It re-checks the EFFECTIVE
 // status equals what was asked, so a stored-pending request already past its expiry is
-// never reused as if it were live.
-func (b *Bridge) scanForApproval(ctx context.Context, cred ServiceCred, action, subjectKind, encodedSubjectRef, wantStatus string, freshWindowSecs int64) (ref string, found bool, v ApprovalView, err error) {
+// never reused as if it were live. skipSpent also passes over an approval a consumer
+// already spent.
+func (b *Bridge) scanForApproval(ctx context.Context, cred ServiceCred, action, subjectKind, encodedSubjectRef, wantStatus string, freshWindowSecs int64, skipSpent bool) (ref string, found bool, v ApprovalView, err error) {
 	if b.localDefault && b.LocalProposer != nil {
 		cursor := ""
 		for {
@@ -863,10 +889,10 @@ func (b *Bridge) scanForApproval(ctx context.Context, cred ServiceCred, action, 
 				return "", false, ApprovalView{}, err
 			}
 			for _, it := range items {
-				if it.Status != wantStatus || it.SubjectKind != subjectKind || it.SubjectRef != encodedSubjectRef || (freshWindowSecs > 0 && !b.withinGrant(it.DecidedAt, freshWindowSecs)) {
+				if it.Status != wantStatus || it.SubjectKind != subjectKind || it.SubjectRef != encodedSubjectRef || (freshWindowSecs > 0 && !b.withinGrant(it.DecidedAt, freshWindowSecs)) || (skipSpent && it.Consumed) {
 					continue
 				}
-				return it.ID, true, ApprovalView{Status: it.Status, BoundHash: decodePlanHash(it.SubjectRef), DecidedAt: it.DecidedAt}, nil
+				return it.ID, true, ApprovalView{Status: it.Status, BoundHash: decodePlanHash(it.SubjectRef), DecidedAt: it.DecidedAt, Consumed: it.Consumed}, nil
 			}
 			if !page.HasMore || page.Cursor == "" {
 				return "", false, ApprovalView{}, nil
@@ -898,6 +924,7 @@ func (b *Bridge) scanForApproval(ctx context.Context, cred ServiceCred, action, 
 				SubjectRef  string `json:"subject_ref"`
 				Status      string `json:"status"`
 				DecidedAt   string `json:"decided_at"`
+				Consumed    bool   `json:"consumed"`
 			} `json:"items"`
 			Cursor  string `json:"cursor"`
 			HasMore bool   `json:"has_more"`
@@ -912,7 +939,10 @@ func (b *Bridge) scanForApproval(ctx context.Context, cred ServiceCred, action, 
 			if freshWindowSecs > 0 && !b.withinGrant(it.DecidedAt, freshWindowSecs) {
 				continue // an approved grant outside its time-box is not reusable
 			}
-			return it.ID, true, ApprovalView{Status: it.Status, BoundHash: decodePlanHash(it.SubjectRef), DecidedAt: it.DecidedAt}, nil
+			if skipSpent && it.Consumed {
+				continue
+			}
+			return it.ID, true, ApprovalView{Status: it.Status, BoundHash: decodePlanHash(it.SubjectRef), DecidedAt: it.DecidedAt, Consumed: it.Consumed}, nil
 		}
 		if !resp.HasMore || resp.Cursor == "" {
 			return "", false, ApprovalView{}, nil

@@ -7,6 +7,8 @@ package api
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -94,4 +96,31 @@ func filterRosterToWorkspace(roster []auth.RosterMember, ws model.ID) []auth.Ros
 		}
 	}
 	return out
+}
+
+// handleRemoveMember takes a member out of the resolved tenant: a scoped offboard
+// of the membership, never a change to the account itself, its other
+// organizations or its account-scope sessions (the console's People tab and the
+// roster above are the callers). The audit entries, the leaver ledger and the
+// retirement steps are the ones every offboard has; the cause is the removal's own
+// (member.remove), not a directory event's. An id that is not a member of this
+// tenant (another tenant's member included) is a 404, and removing it twice is
+// too.
+//
+// The engine refuses a caller removing itself or the tenant's last active owner
+// (409), a member above the caller's role (403 role_ceiling) and a workspace-confined
+// caller (403). A human session also meets the deployment's administrative step-up,
+// as the TOTP reset does; an API token never carries one, and its authority was
+// fixed, role-ceiling checked, when it was issued, so a token is governed by its
+// role alone.
+func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	if mc.Principal.Kind == auth.KindUser && !s.requireStepUp(w, r, mc.Principal) {
+		return
+	}
+	id := model.ID(chi.URLParam(r, "id"))
+	if err := s.authr.RemoveMember(r.Context(), mc.Principal, mc.Tenant, id); err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

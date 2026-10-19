@@ -33,8 +33,7 @@ import type {
  *  - EVERY work-item filter narrows the STORE. handleWorkList (:396-402) passes them
  *    into WorkQuery.Filters and the repository turns them into SQL predicates; none is
  *    applied to an already-read page. So "status=blocked" answers "…among ALL items",
- *    not "…among the N most recent". This is the opposite of the agentops `state`
- *    filter, and the difference is worth stating rather than assuming.
+ *    not "…among the N most recent", the same as the agentops run filters.
  *  - The decision SUBJECT and ACTOR filters are the exception, and only in the
  *    DecisionHead view: listCurrentWorkDecisions (:659) evaluates them on the
  *    referenced current Decision after reading each head. It keeps scanning until the

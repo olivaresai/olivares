@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useStepUpSatisfied } from '@/features/identity/assurance'
+import { usePermissionWords } from '@/lib/auth/permission-words'
 import { cn } from '@/lib/utils'
 import {
   actionAuthority,
@@ -36,12 +37,14 @@ export function AuthorityNote({
 }) {
   const { t } = useTranslation('gitpublish')
   const stepUpSatisfied = useStepUpSatisfied()
+  const permissionWords = usePermissionWords()
   const { permission, aal3 } = actionAuthority(action)
+  const access = permissionWords(permission)
   return (
     <p className={cn('text-caption text-muted-foreground', className)}>
       {aal3 && !stepUpSatisfied
-        ? t('authority.requiresStepUp', { permission })
-        : t('authority.requires', { permission })}
+        ? t('authority.requiresStepUp', { permission: access })
+        : t('authority.requires', { permission: access })}
     </p>
   )
 }

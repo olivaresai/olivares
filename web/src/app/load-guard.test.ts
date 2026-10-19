@@ -108,11 +108,15 @@ describe('the console load guard (index.html)', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
-  it('says it in the console language', () => {
-    localStorage.setItem('olivares.lang', 'es')
+  it.each([
+    ['es', 'Recargando la consola…'],
+    ['it', 'Ricaricamento della console…'],
+    ['ko', '콘솔을 다시 불러오는 중…'],
+  ])('says it in the console language (%s)', (lang, text) => {
+    localStorage.setItem('olivares.lang', lang)
     failedScript()
     expect(document.querySelector('[data-load-guard-line]')).toHaveTextContent(
-      'Recargando la consola…',
+      text,
     )
   })
 })

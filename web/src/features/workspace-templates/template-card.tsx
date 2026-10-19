@@ -10,7 +10,7 @@
 // ⛔ "Apply to session" LAUNCHES a session under the template. It used to POST
 // /apply and raise a toast, and nothing else happened anywhere: the endpoint answered
 // `applied:true, conflicts:[]` unconditionally and no run had ever carried a template.
-// The dialog promised, in seven languages, that applying overwrites the session's
+// The dialog promised, in nine languages, that applying overwrites the session's
 // settings — so the fix is to make that true, not to soften the sentence. The launch
 // dialog is where a session is configured, and the engine merges the template into it
 // before the governance gates.

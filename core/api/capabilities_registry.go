@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -203,6 +204,10 @@ func (s *Server) corroborateActiveWorkspace(
 // too: the three pilot collections require the selector, and treating an absent one as
 // "the default workspace" would authorize a scope the caller never named.
 func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string, bool) {
+	valuesByName, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return "", false
+	}
 	if scope.WorkspaceBodyField != "" {
 		if scope.WorkspaceScopeField != "" {
 			kind, err := bodyEntityID(r, scope.WorkspaceScopeField)
@@ -210,7 +215,7 @@ func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string,
 				return "", false
 			}
 			if strings.TrimSpace(kind) != "workspace" {
-				_, query := r.URL.Query()[scope.WorkspaceQueryParam]
+				_, query := valuesByName[scope.WorkspaceQueryParam]
 				return "", !query
 			}
 		}
@@ -224,7 +229,7 @@ func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string,
 				return "", false
 			}
 		}
-		if values, query := r.URL.Query()[scope.WorkspaceQueryParam]; query {
+		if values, query := valuesByName[scope.WorkspaceQueryParam]; query {
 			if raw == "" || len(values) != 1 {
 				return "", false
 			}
@@ -238,7 +243,15 @@ func collectionScopeSelector(r *http.Request, scope CollectionScopeRef) (string,
 	if scope.WorkspaceQueryParam == "" {
 		return "", false
 	}
-	values, ok := r.URL.Query()[scope.WorkspaceQueryParam]
+	for key := range valuesByName {
+		if key != scope.WorkspaceQueryParam && strings.EqualFold(key, scope.WorkspaceQueryParam) {
+			return "", false
+		}
+	}
+	values, ok := valuesByName[scope.WorkspaceQueryParam]
+	if !ok && scope.AllowTenantFallback {
+		return "", true
+	}
 	if !ok || len(values) != 1 {
 		return "", false
 	}

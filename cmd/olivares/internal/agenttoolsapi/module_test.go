@@ -69,8 +69,9 @@ func TestEveryRouteRequiresSystemAdministrator(t *testing.T) {
 	defer m.Close()
 	r := &registrar{}
 	m.APIRoutes(r)
-	// The existing host routes plus release removal and stored version selection.
-	if len(r.routes) != 19 {
+	// The existing host routes plus release removal, stored version selection and the three
+	// model-server routes (list, start, stop). Each is run below as a non-administrator.
+	if len(r.routes) != 22 {
 		t.Fatalf("routes = %d", len(r.routes))
 	}
 	for _, rt := range r.routes {
@@ -441,4 +442,49 @@ func seedOrg(t *testing.T, st store.Store, name, slug string) model.TenantID {
 		t.Fatalf("seed organization %s: %v", slug, err)
 	}
 	return org.TenantID
+}
+
+// Starting a model server follows the administrative step-up policy like an install: a server
+// that runs a model of the operator's choosing on this host is an administrative act. Stopping
+// one, which only ends what the engine started, asks for nothing more than an administrator.
+func TestModelServerStartFollowsTheStepUpPolicy(t *testing.T) {
+	m, err := New(context.Background(), toolinstall.NewEngine(toolinstall.NewCatalog(), toolinstall.EngineOptions{}), filepath.Join(t.TempDir(), "tools"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	r := &registrar{}
+	m.APIRoutes(r)
+	handler := func(method, suffix string) api.ModuleHandler {
+		for _, rt := range r.routes {
+			if rt.method == method && strings.HasSuffix(rt.pattern, suffix) {
+				return rt.handler
+			}
+		}
+		t.Fatalf("no %s route ending in %s", method, suffix)
+		return nil
+	}
+	start, stop := handler("POST", "/model-servers/{kind}/start"), handler("POST", "/model-servers/{kind}/stop")
+	admin := func(aal int, amr ...string) auth.Principal {
+		return auth.Principal{Kind: auth.KindUser, Superadmin: true, AAL: aal, AMR: amr}
+	}
+	for _, tc := range []struct {
+		name   string
+		run    api.ModuleHandler
+		who    auth.Principal
+		policy string
+		denied bool
+	}{
+		{"start at AAL1 under totp", start, admin(auth.AAL1, "pwd"), auth.StepUpTOTP, true},
+		{"start at AAL2 under totp", start, admin(auth.AAL2, "pwd", "totp"), auth.StepUpTOTP, false},
+		{"start at AAL1 under none", start, admin(auth.AAL1, "pwd"), auth.StepUpNone, false},
+		{"stop at AAL1 under totp", stop, admin(auth.AAL1, "pwd"), auth.StepUpTOTP, false},
+	} {
+		ctx := auth.WithStepUpSource(context.Background(), func(context.Context) (string, error) { return tc.policy, nil })
+		w := httptest.NewRecorder()
+		tc.run(w, httptest.NewRequest("POST", "/", strings.NewReader(`{}`)).WithContext(ctx), api.ModuleContext{Principal: tc.who})
+		if denied := w.Code == http.StatusForbidden && strings.Contains(w.Body.String(), "step_up_required"); denied != tc.denied {
+			t.Errorf("%s: %d %s, step-up refusal = %v, want %v", tc.name, w.Code, w.Body.String(), denied, tc.denied)
+		}
+	}
 }

@@ -13,7 +13,8 @@ GATE="$RAIZ/scripts/check-ci-timeout-arithmetic.sh"
 AYUDA="$RAIZ/scripts/ci-timeouts.py"
 fallos=0
 skips=0
-ok() { printf '  ok    %s\n' "$1"; }
+oks=0
+ok() { printf '  ok    %s\n' "$1"; oks=$((oks + 1)); }
 mal() { printf '  FAIL  %s — %s\n' "$1" "$2"; fallos=$((fallos + 1)); }
 
 [ -r "$GATE" ] || { echo "test-ci-timeout-arithmetic: 2 CANNOT INSPECT — missing $GATE" >&2; exit 2; }
@@ -263,6 +264,188 @@ rm -rf -- "$caja"
 [ "$rc" = "2" ] && ok "the fallback REFUSES a form it cannot read (2)" \
 	|| mal "unknown form" "rc=$rc, expected 2: the plain reader guessed"
 
+# --- the fallback READS the compact list style (dash at the key's column) ----------------------
+# merge-gate-check.yml writes `steps:` with its `- ` at column 4 and the step keys at column 6; the
+# fallback used to read only the indented style (dash 6, keys 8) and refused the real tree (#2635).
+# These cases force the plain reader and demand its exact verdict: `corre_fixture` accepts a refusal
+# where PyYAML reads, so it cannot catch a fallback that stays blind to this style.
+plana() {
+	local caja out txt
+	caja="$(mktemp -d)"
+	mkdir -p "$caja/scripts" "$caja/.github/workflows"
+	cp "$GATE" "$AYUDA" "$caja/scripts/"
+	printf '%s\n' "$1" > "$caja/.github/workflows/prueba.yml"
+	txt="$(OLIVARES_CI_TIMEOUTS_NO_YAML=1 bash "$caja/scripts/check-ci-timeout-arithmetic.sh" 2>&1)"
+	out=$?
+	rm -rf -- "$caja"
+	if [ "${2:-}" = texto ]; then printf '%s' "$txt"; else printf '%s' "$out"; fi
+}
+
+rc="$(plana 'jobs:
+  compact:
+    runs-on:
+    - self-hosted
+    timeout-minutes: 50
+    steps:
+    - uses: actions/checkout@v4
+      timeout-minutes: 20
+    - name: b
+      timeout-minutes: 20
+      run: echo hi')"
+[ "$rc" = "0" ] && ok "the fallback READS the compact list style: cap 50 above sum 40 is clean (0)" \
+	|| mal "compact style clean" "rc=$rc, expected 0"
+
+rc="$(plana 'jobs:
+  compact:
+    runs-on:
+    - self-hosted
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+      timeout-minutes: 20
+    - name: b
+      timeout-minutes: 20
+      run: echo hi')"
+[ "$rc" = "1" ] && ok "the fallback READS the compact list style: cap 30 below sum 40 is a FINDING (1)" \
+	|| mal "compact style finding" "rc=$rc, expected 1"
+
+rc="$(plana 'jobs:
+  compact:
+    timeout-minutes: 10
+    steps:
+    - timeout-minutes: 20
+      run: echo hi')"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a compact step key written on the dash line (2)" \
+	|| mal "compact inline key" "rc=$rc, expected 2: the dash-line key was not attributed and the reader did not refuse"
+
+rc="$(plana 'jobs:
+  compact:
+    timeout-minutes: 30
+    steps:
+    - name: a
+      timeout-minutes: 20
+    strategy:
+      timeout-minutes: 40')"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a column-6 cap outside the steps of a compact job (2)" \
+	|| mal "compact cap outside steps" "rc=$rc, expected 2: the 40 was read as a step guard or as nothing"
+
+rc="$(plana 'jobs:
+  deep:
+    timeout-minutes: 50
+    steps:
+        - name: a
+          timeout-minutes: 20')"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a steps list whose dash is at neither known column (2)" \
+	|| mal "unknown list column" "rc=$rc, expected 2: the reader accepted a list style it was never measured on"
+
+# A quoted key after the steps is a job key the reader does not name, so it must still END the
+# steps: the 5 below is not a step guard (PyYAML sums 40, a reader that kept going sums 45).
+rc="$(plana 'jobs:
+  quoted:
+    timeout-minutes: 30
+    steps:
+    - name: x
+      timeout-minutes: 20
+    - name: y
+      timeout-minutes: 20
+    "strategy":
+      timeout-minutes: 5')"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a column-6 cap under a quoted job key after compact steps (2)" \
+	|| mal "compact quoted key" "rc=$rc, expected 2: the 5 was added to the steps (30 against 45 is a finding PyYAML does not see)"
+
+rc="$(plana 'jobs:
+  quoted:
+    timeout-minutes: 30
+    steps:
+      - name: x
+        timeout-minutes: 20
+      - name: y
+        timeout-minutes: 20
+    "strategy":
+      matrix:
+        timeout-minutes: 5')"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a column-8 cap under a quoted job key after indented steps (2)" \
+	|| mal "indented quoted key" "rc=$rc, expected 2: the 5 was added to the steps"
+
+# The guard sits at the dash column + 2 and nowhere else: a cap nested under a step key (column 8)
+# in a compact job is not a step guard, and a reader that took 6 or 8 would sum 104 against 5.
+rc="$(plana 'jobs:
+  nested:
+    timeout-minutes: 50
+    steps:
+    - name: a
+      timeout-minutes: 5
+      with:
+        timeout-minutes: 99')"
+[ "$rc" = "2" ] && ok "the fallback REFUSES a column-8 cap nested under a compact step (2)" \
+	|| mal "compact nested cap" "rc=$rc, expected 2: the 99 was read as a step guard"
+
+# Mixed styles in one file, both orders: the dash column is read again for every steps list.
+txt="$(plana 'jobs:
+  compacto:
+    timeout-minutes: 30
+    steps:
+    - name: a
+      timeout-minutes: 20
+    - name: b
+      timeout-minutes: 20
+  indentado:
+    timeout-minutes: 25
+    steps:
+      - name: c
+        timeout-minutes: 15
+      - name: d
+        timeout-minutes: 20' texto)"
+case "$txt" in
+*compacto*"job limit 30"*"sum of steps 40"*indentado*"job limit 25"*"sum of steps 35"*)
+	ok "the fallback reads a compact job then an indented job in one file, with their own sums" ;;
+*) mal "mixed styles, compact first" "expected 30/40 then 25/35, got: ${txt//$'\n'/ }" ;;
+esac
+
+txt="$(plana 'jobs:
+  indentado:
+    timeout-minutes: 25
+    steps:
+      - name: c
+        timeout-minutes: 15
+      - name: d
+        timeout-minutes: 20
+  compacto:
+    timeout-minutes: 30
+    steps:
+    - name: a
+      timeout-minutes: 20
+    - name: b
+      timeout-minutes: 20' texto)"
+case "$txt" in
+*indentado*"job limit 25"*"sum of steps 35"*compacto*"job limit 30"*"sum of steps 40"*)
+	ok "the fallback reads an indented job then a compact job in one file, with their own sums" ;;
+*) mal "mixed styles, indented first" "expected 25/35 then 30/40, got: ${txt//$'\n'/ }" ;;
+esac
+
+# The diagnostic counts steps too: four steps, two guarded, and lists nested inside a step (one at
+# the step-key column, one deeper) are not steps. A reader counting every "- " says 4 unguarded.
+txt="$(plana 'jobs:
+  contados:
+    timeout-minutes: 30
+    steps:
+    - name: a
+      timeout-minutes: 20
+      with:
+        files:
+        - one
+    - name: b
+      timeout-minutes: 20
+      args:
+      - one
+      - two
+    - name: sin-guarda-uno
+    - name: sin-guarda-dos' texto)"
+case "$txt" in
+*"(+2 step(s) without timeouts)"*) ok "the fallback counts the steps of a compact job, not the lists nested in them (2 of 4 unguarded)" ;;
+*) mal "compact step count" "the diagnostic does not report '+2 step(s) without timeouts': ${txt//$'\n'/ }" ;;
+esac
+
 
 # --- que el interruptor de camino CONMUTE de verdad -------------------------------------------
 # ⛔ Sin este caso, `OLIVARES_CI_TIMEOUTS_NO_YAML` podia no hacer NADA y toda la bateria seguia
@@ -437,6 +620,344 @@ else
 	mal "M9 step count" "rc=$rc and the diagnostic does not report '+2 unguarded step(s)': $(printf '%s' "$output" | command grep 'job limit' | tail -1)"
 fi
 
+# --- the plain reader REFUSES the shapes it would otherwise guess (dev#2637) ---------------------
+# Forced plain path, one fixture per shape, exact verdict AND reason: rc 2 through the guard that
+# names the shape, never a row (a row is a guess: shapes 1-4 used to print one, 5 a traceback).
+# plana_v <workflow> -> "<rc>/<first line of the gate output>", built on the plana helper above
+plana_v() {
+	printf '%s/%s' "$(plana "$1")" "$(plana "$1" texto | head -1)"
+}
+# rehusa <label> <reason substring> <workflow>
+rehusa() {
+	local got
+	got="$(plana_v "$3")"
+	case "$got" in
+		2/*"$2"*) ok "plain reader refuses $1 (2): $2" ;;
+		2/*) mal "$1" "rc=2 through another guard: $got" ;;
+		*) mal "$1" "got ${got%%/*}, expected 2 — the plain reader guessed: $got" ;;
+	esac
+}
+GUARDAS='    steps:
+      - name: x
+        timeout-minutes: 20
+      - name: y
+        timeout-minutes: 20'
+rehusa "a quoted job id" "unsupported job line" 'jobs:
+  a:
+    timeout-minutes: 30
+'"$GUARDAS"'
+  "b":
+    timeout-minutes: 100
+    steps:
+      - name: z'
+# Any other column-2 spelling of a job id is refused the same way, not only the double-quoted one.
+rehusa "a single-quoted job id" "unsupported job line" "jobs:
+  a:
+    timeout-minutes: 30
+$GUARDAS
+  'b':
+    timeout-minutes: 100"
+rehusa "a job id with a space before the colon" "unsupported job line" "jobs:
+  a:
+    timeout-minutes: 30
+$GUARDAS
+  b :
+    timeout-minutes: 100"
+# Any column-0 key ends `jobs:`, not only a plain or quoted name: an explicit `? env` key kept the
+# reader inside job `a`, and the cap of `env` replaced a's own (100 against 40 instead of 30).
+rehusa "a column-0 explicit key after jobs" "4 mention(s) of timeout-minutes and only 3 attributed" "jobs:
+  a:
+    timeout-minutes: 30
+$GUARDAS
+? env
+:
+    timeout-minutes: 100"
+rehusa "an anchored job line" "anchor or alias" 'jobs:
+  j:
+    timeout-minutes: 30
+'"$GUARDAS"'
+  k: &k
+    timeout-minutes: 99
+    steps:
+      - name: z'
+rehusa "an alias reusing a step" "anchor or alias" 'jobs:
+  j:
+    timeout-minutes: 30
+    steps:
+      - &s
+        name: x
+        timeout-minutes: 20
+      - *s'
+# The anchored node's own timeout is attributed once; every alias to it adds timeouts nobody
+# counts, so the anchor is refused wherever it hides (own line, behind a tag) and so is each alias
+# position. The alias fixtures anchor OUTSIDE `jobs:` so only the alias can trip them.
+rehusa "an anchor on its own line" "anchor or alias" 'jobs:
+  a:
+    timeout-minutes: 100
+    steps:
+      -
+        &s
+        name: x
+        timeout-minutes: 20
+  b:
+    timeout-minutes: 30
+    steps: [x, y]'
+rehusa "a tagged anchor" "anchor or alias" 'jobs:
+  a:
+    timeout-minutes: 100
+    steps:
+      - !!map &s
+        name: x
+        timeout-minutes: 20'
+FUERA='x-step: &s
+  name: x
+  timeout-minutes: 20
+jobs:
+  b:
+    timeout-minutes: 30
+    steps'
+rehusa "an alias after a list dash" "anchor or alias" "$FUERA:
+      - *s
+      - *s"
+rehusa "an alias after a key" "anchor or alias" "$FUERA: *s"
+rehusa "an alias first in a flow list" "anchor or alias" "$FUERA: [*s]"
+rehusa "an alias after a flow comma" "anchor or alias" "$FUERA: [x, *s]"
+rehusa "a Unicode line break hiding a job line" "Unicode line breaks" 'jobs:
+  a:
+    timeout-minutes: 30
+'"$GUARDAS"'
+  # c'"$(printf '\xe2\x80\xa8')"'  b:
+    timeout-minutes: 100'
+rehusa "a leading-zero value (YAML 1.1 octal)" "is not a literal" 'jobs:
+  j:
+    timeout-minutes: 010
+    steps:
+      - name: x'
+rehusa "a non-ASCII digit" "is not a literal" 'jobs:
+  j:
+    timeout-minutes: ²
+    steps:
+      - name: x'
+# `²` is no Unicode decimal, so even `\d` rejects it; an Arabic-Indic digit parses with int() and
+# is what separates `[0-9]` from `\d`, in the first position and in the rest.
+rehusa "a leading non-ASCII decimal digit" "is not a literal" 'jobs:
+  j:
+    timeout-minutes: ٣
+    steps:
+      - name: x'
+rehusa "a trailing non-ASCII decimal digit" "is not a literal" 'jobs:
+  j:
+    timeout-minutes: 1٣
+    steps:
+      - name: x'
+# A block-scalar indicator counts only at the value position. The same characters inside a trailing
+# comment (`: |`, `- >`) are comment text, and treating them as a block switched the anchor check off
+# for every deeper line: a false CLEAN where a real YAML reader sums 30 against 40.
+rehusa "a block indicator in a job-line comment" "anchor or alias" 'jobs:
+  j: # see: |
+    timeout-minutes: 30
+    steps:
+      - &s
+        timeout-minutes: 20
+        run: echo
+      - *s'
+rehusa "a block indicator in a steps-line comment" "anchor or alias" 'jobs:
+  j:
+    timeout-minutes: 30
+    steps: # - >
+      - &s
+        timeout-minutes: 20
+        run: echo
+      - *s'
+# For `- run: |` the block belongs to the key (column 8), not to the dash (column 6): a sibling key
+# of the same step mapping is YAML, not script text.
+rehusa "a sibling key after a dash-line block scalar" "anchor or alias" 'jobs:
+  j:
+    timeout-minutes: 30
+    steps:
+      - run: |
+        name: &n x
+        timeout-minutes: 20'
+# A header-looking line inside a multi-line quoted scalar is string text, not a block header: it
+# used to open a fake block, and the alias on the closing line escaped the refusal. A quoted scalar
+# that does not close on its line is refused outright, in both quote styles and after a flow `[`.
+rehusa "a header-looking line in a multi-line double-quoted scalar" "multi-line quoted scalar" 'env: &d {runs-on: ubuntu-latest}
+jobs:
+  j:
+    timeout-minutes: 5
+    x: ["a
+      b: |
+        ", *d ]
+    steps:
+      - run: echo hi'
+rehusa "a header-looking line in a multi-line single-quoted scalar" "multi-line quoted scalar" "env: &d {runs-on: ubuntu-latest}
+jobs:
+  j:
+    timeout-minutes: 5
+    x: ['a
+      b: >
+        ', *d ]
+    steps:
+      - run: echo hi"
+# A quoted scalar has many spellings of its opener (behind a `!tag`, as a JSON-like key's value with
+# or without a space before the colon, after `? `, after `{`, `[` or a comma, with a key that is
+# itself a flow collection) and an escaped line break ends a double-quoted line still open. The
+# continuation line `b: |` sits left of the key (a PyYAML or js-yaml reader still takes it), opens a
+# fake block that hides the alias below, and a real YAML reader sums 30 against 40 where the plain
+# one printed a row (a false CLEAN). Each opener is a fixture: <opener line> <text that closes the
+# string on the line after `b: |`, its quote included>; every one is valid YAML.
+abierta() {
+	rehusa "a header-looking line after the quoted opener '${3:-$1}'" "multi-line quoted scalar" "jobs:
+  j:
+    timeout-minutes: 30
+    $1
+   b: |
+     $2
+    steps:
+      - &s
+        name: x
+        timeout-minutes: 20
+      - *s"
+}
+abierta 'x: !!str "a' '"'
+abierta "x: !!str 'a" "'"
+abierta 'x: {"k":"a' '"}'
+abierta "x: {'k':'a" "'}"
+abierta '? "a' '"'
+abierta 'x: [!!str "a' '"]'
+abierta 'x: [1, "a' '"]'
+abierta 'x: "a\' '"'
+abierta 'x: "a \' '"'
+abierta 'x: "a\"' '"'
+abierta $'x:\n      "a' '"' 'x:, then "a on its own line'
+abierta $'x:\n      - "a' '"' 'x:, then - "a as a list item'
+abierta 'x: {? "a' '" : 1}'
+abierta 'x: [? "a' '" : 1]'
+abierta 'x: {"k" :"a' '"}'
+abierta 'x: {[a]:"b' '"}'
+abierta 'x: {{a: 1}:"b' '"}'
+# A quote inside a plain key is a literal and must not pair with the real opener: `'s: '` is not a
+# closed string, whether the stray one follows a space or a letter, and whatever follows the pair.
+abierta "it 's: 'a" "'"
+abierta "don't: 'a" "'"
+abierta "k ': ' abc" "z'"
+abierta 'k ": " abc' 'z"'
+# Quotes glued to `-`, `?`, `:`, `,` or `[` are an opener in a flow collection and text in a plain
+# scalar; the line cannot say which, so the reading that leaves the string open is enough to refuse.
+abierta 'a-"b: "c' 'x"'
+abierta 'a? "b: "c' 'x"'
+abierta 'a:"b: "c' 'x"'
+abierta "a,'b: 'c" "x'"
+abierta "a['b: 'c" "x'"
+abierta 'k: [a-"b, "c' 'x"]'
+# `??` is a plain scalar, not two indicators: its quote is text, and the `'` after `: ` opens.
+abierta '?? "a: '"'"'b"c' "x'"
+# A line that starts with a quote can continue a flow collection, where that quote is text and a
+# later `, '` really opens a string; and a quote after an anchor is the quote after a node property.
+abierta $'k: {ab\n      \'x,\'' "x'}" 'k: {ab, then a continuation line that starts with a quote'
+abierta $'k: [ab\n      "c, \'d" e' "x']" 'k: [ab, then a continuation line that starts with a quote'
+abierta '? &a "b' 'x"'
+abierta 'k: {&a "b' 'x"}'
+abierta 'k: [? &a "b' 'x"]'
+abierta 'k: [{&a "b' 'x"}]'
+abierta '? ? &a "b' 'x"'
+# A `''` inside a single-quoted string is an escaped quote, so it can also reopen one.
+abierta "k: 'a''" "x'"
+# A flow mapping may hold a multi-line quoted key, and a tag may be glued to the token before it.
+abierta 'k: {"a' 'x"}'
+abierta 'k: [a,!!str "a' 'x"]'
+abierta 'k: {"b":!!str "a' 'x"}'
+# Control: text that only LOOKS like the shapes above is still read, so the refusals do not eat
+# real workflows (`&&`, `*` globs and a quoted `&` are everyday shell and expression syntax, and
+# a `run: |` block is script text: a `*pattern)` case arm or a `, *args` splat there is not an
+# alias; measured on release.yml and public-generation.yml).
+got="$(plana_v 'jobs:
+  ok:
+    timeout-minutes: 50
+    if: ${{ github.ref == '"'"'x'"'"' && github.actor != '"'"'y'"'"' }}
+    steps:
+      - name: "build & test"
+        timeout-minutes: 20
+        run: |
+          cp *foo bar \
+          && ls -l *
+          case "$v" in
+            *GitVersion:*) echo skip ;;
+          esac
+          python3 -c "check_output([x, *args])"
+      - name: tail')"
+case "$got" in
+	0/*"1 of 1 job(s)"*) ok "plain reader still READS jobs with &&, * globs and a quoted & (0)" ;;
+	*) mal "over-refusal control" "got $got, expected 0/..." ;;
+esac
+# Quoted scalars that close on their own line, an escaped quote, a doubled single quote and quotes
+# inside an expression are everyday workflow text and are still read.
+got="$(plana_v 'jobs:
+  ok:
+    timeout-minutes: 50
+    if: ${{ contains(github.event.head_commit.message, '"'"'[skip ci]'"'"') }}
+    steps:
+      - name: "say \"hi\", then go"
+        timeout-minutes: 20
+      - name: '"'"'it'"''"'s fine'"'"'
+      - run: echo ok # it'"'"'s a note')"
+case "$got" in
+	0/*"1 of 1 job(s)"*) ok "plain reader still READS quoted scalars that close on their line (0)" ;;
+	*) mal "over-refusal control (quoted scalars)" "got $got, expected 0/..." ;;
+esac
+# A quote inside a plain scalar is literal text: an apostrophe after a letter (`run's`), quotes in
+# the middle of a shell word (`x="a"b`, `echo "x"y`), the shell's `'\''` idiom, and a quote that only
+# appears in a trailing comment. A first version of the scan that refused them refused 13 of the 37
+# real workflows.
+Q="'"
+got="$(plana_v "jobs:
+  ok:
+    timeout-minutes: 50
+    steps:
+      - name: remove this run${Q}s image tag
+        timeout-minutes: 20
+      - run: x=\"a\"b
+      - run: echo \"x\"y
+      - run: echo ${Q}it${Q}\\${Q}${Q}s${Q}
+      - name: tail # todo: \"the docs")"
+case "$got" in
+	0/*"1 of 1 job(s)"*) ok "plain reader still READS a plain scalar with literal quotes and a quote in a comment (0)" ;;
+	*) mal "over-refusal control (literal quotes)" "got $got, expected 0/..." ;;
+esac
+# A string that closes on its line is read whatever its last characters are: a quote that follows
+# `, `, `: ` or `- ` inside it is its end, not a second opener.
+got="$(plana_v "jobs:
+  ok:
+    timeout-minutes: 50
+    steps:
+      - name: \"Build, test, \"
+        timeout-minutes: 20
+      - name: ${Q}Usage: ${Q}
+      - name: \"a - \"
+      - name: {\"k\": \"v\"}
+      - run: echo \"a\" \"b\"
+      - if: env.A != ${Q}${Q}
+        run: echo ${Q}${Q} \"\"")"
+case "$got" in
+	0/*"1 of 1 job(s)"*) ok "plain reader still READS closed strings that end in punctuation and flow mappings (0)" ;;
+	*) mal "over-refusal control (closed strings)" "got $got, expected 0/..." ;;
+esac
+# The block-scalar form with a dash and a comment after the indicator is still a block: its script
+# text (a `*pattern)` case arm) is not an alias.
+got="$(plana_v 'jobs:
+  ok:
+    timeout-minutes: 50
+    steps:
+      - run: | # note
+          case "$v" in
+            *x*) echo skip ;;
+          esac
+        timeout-minutes: 20')"
+case "$got" in
+	0/*"1 of 1 job(s)"*) ok "plain reader still READS a dash-line block scalar with a trailing comment (0)" ;;
+	*) mal "over-refusal control (dash-line block)" "got $got, expected 0/..." ;;
+esac
+
 # --- LA LOGICA DEL VEREDICTO, probada por PARES y no por comportamiento --------------------------
 # ⛔ ESTE CASO EXISTE PORQUE ESTA BATERIA NO PUEDE PROBARSE A SI MISMA EN UNA CAJA SIN PyYAML.
 # Ahi `con` y `sin` son EL MISMO lector, asi que `con != sin` es inalcanzable y toda la comparacion
@@ -466,7 +987,7 @@ if [ "$fallos" -eq "$_antes" ]; then
 fi
 
 if [ "$fallos" -eq 0 ]; then
-	echo "test-ci-timeout-arithmetic: 0 CLEAN — $((19 - skips)) cases, $skips unmeasurable on this machine"
+	echo "test-ci-timeout-arithmetic: 0 CLEAN — $oks cases, $skips unmeasurable on this machine"
 	exit 0
 fi
 echo "test-ci-timeout-arithmetic: 1 — $fallos failed case(s)"

@@ -68,9 +68,10 @@ var reportingTypes = []string{
 func newReportingCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:     "reporting",
-		Aliases: []string{"reports"},
-		Short:   "Generate reports and manage schedules, branding and templates",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "reporting",
+		Aliases:     []string{"reports"},
+		Short:       "Generate reports and manage schedules, branding and templates",
 		Long: "reporting generates the governance reports — compliance evidence, audit summary,\n" +
 			"FinOps, access review and the executive summary — and manages the schedules,\n" +
 			"branding and custom templates around them.\n\n" +
@@ -186,10 +187,11 @@ type reportingCatalog struct {
 
 func newReportingReportsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "reports",
-		Short:   "List the report catalog and generate a report",
-		Long:    "reports lists what can be generated and generates one. These two routes are the\nopen-core surface: they work in the Community edition.",
-		Example: "  olivares reporting reports ls\n  olivares reporting reports get audit-summary --out audit.html",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "reports",
+		Short:       "List the report catalog and generate a report",
+		Long:        "reports lists what can be generated and generates one. These two routes are the\nopen-core surface: they work in the Community edition.",
+		Example:     "  olivares reporting reports ls\n  olivares reporting reports get audit-summary --out audit.html",
 	}
 	cmd.AddCommand(newReportingReportsListCmd(flags), newReportingReportsGetCmd(flags))
 	return cmd
@@ -197,9 +199,10 @@ func newReportingReportsCmd(flags *authClientFlags) *cobra.Command {
 
 func newReportingReportsListCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the reports this build can generate",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the reports this build can generate",
 		Long: "ls reads the LIVE catalog from the engine, with each report's supported output\n" +
 			"formats. It is the authority on what `reports get` will accept — this command\n" +
 			"does not carry its own copy of the list.",
@@ -240,9 +243,10 @@ func newReportingReportsGetCmd(flags *authClientFlags) *cobra.Command {
 	var f reportingWindowFlags
 	var out string
 	cmd := &cobra.Command{
-		Use:     "get <report-type>",
-		Aliases: []string{"generate"},
-		Short:   "Generate one report and write it to a file",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "get <report-type>",
+		Aliases:     []string{"generate"},
+		Short:       "Generate one report and write it to a file",
 		Long: "get generates a report and writes the DOCUMENT — HTML, or PDF with --format pdf.\n\n" +
 			"--out IS REQUIRED because the answer is not JSON: pass a path, or `-` for\n" +
 			"stdout. With `-` the receipt goes to stderr, so `... --out - > report.html`\n" +
@@ -294,8 +298,9 @@ func newReportingReportsGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newReportingEnterpriseCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "enterprise",
-		Short: "Read the Business posture, risk and evidence-bundle reports",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "enterprise",
+		Short:       "Read the Business posture, risk and evidence-bundle reports",
 		Long: "enterprise exposes the three commercial report-engine views. They answer JSON\n" +
 			"rather than a rendered document, and they are add-on capabilities: in a build\n" +
 			"without the Business report engine each reports that it is not wired.",
@@ -320,8 +325,9 @@ func newReportingEnterpriseCmd(flags *authClientFlags) *cobra.Command {
 // the add-on adds a field.
 func newReportingEnterpriseViewCmd(flags *authClientFlags, name, short, long string) *cobra.Command {
 	return &cobra.Command{
-		Use:   name,
-		Short: short,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         name,
+		Short:       short,
 		Long: long + "\n\nIt is a Business capability. A build without the commercial report\n" +
 			"engine answers that it is not wired — a product boundary, not a fault, and the\n" +
 			"rest of this namespace is unaffected.\n\n" +
@@ -378,9 +384,10 @@ type reportingRunList struct {
 
 func newReportingSchedulesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "schedules",
-		Aliases: []string{"schedule"},
-		Short:   "Manage scheduled reports and read their runs",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "schedules",
+		Aliases:     []string{"schedule"},
+		Short:       "Manage scheduled reports and read their runs",
 		Long: "schedules run a report on a cron cadence and record one run per execution — a\n" +
 			"failed render is a RECORDED FACT, never a silent skip, so the run list is the\n" +
 			"honest history of what the schedule actually produced.",
@@ -428,12 +435,13 @@ func renderReportingSchedules(cmd *cobra.Command, raw []byte, list reportingSche
 
 func newReportingSchedulesListCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List report schedules",
-		Long:    "ls lists the tenant's report schedules with their cadence and whether each is\nenabled. A disabled schedule keeps its definition and produces no runs.",
-		Example: "  olivares reporting schedules ls\n  olivares reporting schedules ls -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List report schedules",
+		Long:        "ls lists the tenant's report schedules with their cadence and whether each is\nenabled. A disabled schedule keeps its definition and produces no runs.",
+		Example:     "  olivares reporting schedules ls\n  olivares reporting schedules ls -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := observeCall{flags: flags, ns: reportingNS, method: http.MethodGet, path: "/schedules"}.do(cmd)
 			if err != nil {
@@ -452,8 +460,9 @@ func newReportingSchedulesCreateCmd(flags *authClientFlags) *cobra.Command {
 	var reportType, format, cron, framework, team, locale string
 	var enabled bool
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Schedule a report on a cron cadence",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Schedule a report on a cron cadence",
 		Long: "create declares a scheduled report. --cron is a standard five-field spec and the\n" +
 			"engine parses it before storing, so an invalid one is refused rather than\n" +
 			"silently never firing.\n\n" +
@@ -507,9 +516,10 @@ func newReportingSchedulesCreateCmd(flags *authClientFlags) *cobra.Command {
 func newReportingSchedulesRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <schedule-id>",
-		Aliases: []string{"delete", "remove"},
-		Short:   "Delete a report schedule",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <schedule-id>",
+		Aliases:     []string{"delete", "remove"},
+		Short:       "Delete a report schedule",
 		Long: "rm deletes a schedule. The report stops being generated — silently, in the sense\n" +
 			"that nothing fails and reports simply stop arriving, which is how a compliance\n" +
 			"cadence is discovered to have lapsed at audit time.\n\n" +
@@ -543,8 +553,9 @@ func newReportingSchedulesRemoveCmd(flags *authClientFlags) *cobra.Command {
 
 func newReportingSchedulesRunsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "runs <schedule-id>",
-		Short: "List a schedule's executions",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "runs <schedule-id>",
+		Short:       "List a schedule's executions",
 		Long: "runs lists what a schedule actually produced, one row per execution.\n\n" +
 			"A FAILED RENDER IS A RECORDED RUN, not a gap: status `failed` with the reason\n" +
 			"beside it. That is what makes this list usable as evidence that a cadence ran —\n" +
@@ -601,8 +612,9 @@ func newReportingSchedulesRunsCmd(flags *authClientFlags) *cobra.Command {
 func newReportingSchedulesRunGetCmd(flags *authClientFlags) *cobra.Command {
 	var out string
 	cmd := &cobra.Command{
-		Use:   "run <schedule-id> <run-id>",
-		Short: "Fetch one run's stored report artifact",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "run <schedule-id> <run-id>",
+		Short:       "Fetch one run's stored report artifact",
 		Long: "run fetches what one execution produced.\n\n" +
 			"THIS ROUTE ANSWERS TWO DIFFERENT THINGS and the command handles both: the\n" +
 			"stored artifact (HTML or PDF) when the run produced one, and JSON metadata when\n" +
@@ -653,10 +665,11 @@ type reportingBranding struct {
 
 func newReportingBrandingCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "branding",
-		Short:   "Read and set the tenant's report branding",
-		Long:    "branding is the logo, colors, company name and footer applied to every rendered\nreport for this tenant.",
-		Example: "  olivares reporting branding get\n  olivares reporting branding set --company-name \"Acme\" --primary-color \"#0b5\"",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "branding",
+		Short:       "Read and set the tenant's report branding",
+		Long:        "branding is the logo, colors, company name and footer applied to every rendered\nreport for this tenant.",
+		Example:     "  olivares reporting branding get\n  olivares reporting branding set --company-name \"Acme\" --primary-color \"#0b5\"",
 	}
 	cmd.AddCommand(newReportingBrandingGetCmd(flags), newReportingBrandingSetCmd(flags))
 	return cmd
@@ -681,11 +694,12 @@ func renderReportingBranding(cmd *cobra.Command, raw []byte, b reportingBranding
 
 func newReportingBrandingGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get",
-		Short:   "Show the tenant's report branding",
-		Long:    "get shows the branding applied to rendered reports. Every field is optional, so\nblanks mean the built-in default is used, not that branding is broken.",
-		Example: "  olivares reporting branding get\n  olivares reporting branding get -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get",
+		Short:       "Show the tenant's report branding",
+		Long:        "get shows the branding applied to rendered reports. Every field is optional, so\nblanks mean the built-in default is used, not that branding is broken.",
+		Example:     "  olivares reporting branding get\n  olivares reporting branding get -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := observeCall{flags: flags, ns: reportingNS, method: http.MethodGet, path: "/branding"}.do(cmd)
 			if err != nil {
@@ -703,8 +717,9 @@ func newReportingBrandingGetCmd(flags *authClientFlags) *cobra.Command {
 func newReportingBrandingSetCmd(flags *authClientFlags) *cobra.Command {
 	var b reportingBranding
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Replace the tenant's report branding",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Replace the tenant's report branding",
 		Long: "set REPLACES the whole branding object. It is not a patch: a field you do not\n" +
 			"pass is cleared, because the engine stores exactly the document it is sent.\n\n" +
 			"Read `branding get -o json` first and pass back everything you want to keep.\n" +
@@ -740,9 +755,10 @@ func newReportingBrandingSetCmd(flags *authClientFlags) *cobra.Command {
 
 func newReportingTemplatesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "templates",
-		Aliases: []string{"template"},
-		Short:   "Read, store and remove custom report templates",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "templates",
+		Aliases:     []string{"template"},
+		Short:       "Read, store and remove custom report templates",
 		Long: "templates are operator-supplied HTML that replaces a report's built-in rendering\n" +
 			"for this tenant. One template per report type.\n\n" +
 			"THEY ARE RAW HTML, NOT JSON, in both directions: `get` writes the document to a\n" +
@@ -762,8 +778,9 @@ func newReportingTemplatesCmd(flags *authClientFlags) *cobra.Command {
 func newReportingTemplatesGetCmd(flags *authClientFlags) *cobra.Command {
 	var out string
 	cmd := &cobra.Command{
-		Use:   "get <report-type>",
-		Short: "Fetch the custom template stored for one report type",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "get <report-type>",
+		Short:       "Fetch the custom template stored for one report type",
 		Long: "get writes the stored HTML template to --out (`-` for stdout).\n\n" +
 			"NOT FOUND MEANS NO CUSTOM TEMPLATE IS STORED, and the report renders with its\n" +
 			"built-in template. It is not an error state — it is the default state.\n\n" +
@@ -796,8 +813,9 @@ func newReportingTemplatesGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newReportingTemplatesSetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "set <report-type> <template-file>",
-		Short: "Store a custom HTML template for one report type",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <report-type> <template-file>",
+		Short:       "Store a custom HTML template for one report type",
 		Long: "set stores an HTML template that replaces the built-in rendering of one report\n" +
 			"for this tenant. The file is sent VERBATIM as the request body — this route\n" +
 			"takes raw HTML, not a JSON envelope, so what is stored is byte-for-byte what is\n" +
@@ -853,9 +871,10 @@ func newReportingTemplatesSetCmd(flags *authClientFlags) *cobra.Command {
 func newReportingTemplatesRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <report-type>",
-		Aliases: []string{"delete", "remove"},
-		Short:   "Remove the custom template for one report type",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <report-type>",
+		Aliases:     []string{"delete", "remove"},
+		Short:       "Remove the custom template for one report type",
 		Long: "rm deletes the stored custom template. The report goes back to rendering with its\n" +
 			"built-in template — reports keep working, they just look different.\n\n" +
 			"The template itself is not recoverable from the engine afterwards, so\n" +

@@ -184,7 +184,7 @@ func renderPackDiff(out io.Writer, d skills.PackDiff, full bool) {
 func newSkillsDiffCmd(client datalaneClient) *cobra.Command {
 	var from, to string
 	var full bool
-	cmd := &cobra.Command{Use: "diff <pack-id>", Short: "Show what changed between two revisions of a pack", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "diff <pack-id>", Short: "Show what changed between two revisions of a pack", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := datalanePath("packs", args[0], "diff")
 		if err != nil {
 			return err
@@ -325,7 +325,7 @@ func describeSource(src skills.Source) string {
 func newSkillsPinCmd(client datalaneClient) *cobra.Command {
 	var revision string
 	var dryRun, approve bool
-	cmd := &cobra.Command{Use: "pin <pack-id>", Short: "Move every pin of a pack to one revision (update or roll back)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "write"}, Use: "pin <pack-id>", Short: "Move every pin of a pack to one revision (update or roll back)", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		pack, revisions, err := skillsPackHistory(cmd, client, args[0])
 		if err != nil {
 			return err
@@ -438,10 +438,10 @@ func pinMoveRefusal(target skills.Revision, pin skills.Assignment, approve bool)
 
 func newSkillsSelectionCmd(client datalaneClient) *cobra.Command {
 	var target skillsTargetFlags
-	cmd := &cobra.Command{Use: "selection", Short: "Show the skills a new session will get, before it starts", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "selection", Short: "Show the skills a new session will get, before it starts", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		targets := target.targets()
 		if len(targets) == 0 {
-			return exitcode.New(exitcode.Usage, fmt.Errorf("name the targets of the session: --workspace, --folder, --template, --agent, --group or --session"))
+			return exitcode.New(exitcode.Usage, fmt.Errorf("name the targets of the session: --workspace, --profile, --folder, --template, --agent, --group or --session"))
 		}
 		q := url.Values{}
 		for _, t := range targets {
@@ -492,7 +492,7 @@ func newSkillsSelectionCmd(client datalaneClient) *cobra.Command {
 	}}
 	cmd.Long = "Resolve what a new session would receive for the named targets, with the launch's own rules: every target's pins together, a narrower target replacing a broader one's skill of the same name. Name the whole tree of the session, for example its workspace and its folder."
 	cmd.Example = "  olivares skills selection --workspace <workspace-id> --folder <folder-ref>"
-	target.add(cmd)
+	target.addSkills(cmd)
 	return cmd
 }
 
@@ -503,15 +503,15 @@ type skillsCandidate struct {
 	rev  skills.Revision
 }
 
-func newSkillsEnableCmd(client datalaneClient, enable bool) *cobra.Command {
+func newSkillsEnableCmd(client datalaneClient, enable bool, changesData string) *cobra.Command {
 	var target skillsTargetFlags
 	var packID string
 	var approve bool
-	use, short := "enable <skill>...", "Enable skills on a workspace, folder, template, group, agent or session"
+	use, short := "enable <skill>...", "Enable skills on a workspace, profile, folder, template, group, agent or session"
 	if !enable {
-		use, short = "disable <skill>...", "Disable skills pinned to a workspace, folder, template, group, agent or session"
+		use, short = "disable <skill>...", "Disable skills pinned to a workspace, profile, folder, template, group, agent or session"
 	}
-	cmd := &cobra.Command{Use: use, Short: short, Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": changesData}, Use: use, Short: short, Args: cobra.MinimumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		t, err := target.target()
 		if err != nil {
 			return err
@@ -526,7 +526,7 @@ func newSkillsEnableCmd(client datalaneClient, enable bool) *cobra.Command {
 		return skillsEnable(cmd, client, t, args, packID, approve, pins)
 	}}
 	if enable {
-		cmd.Long = "Enable installed skills on one target by name. The pack that holds each skill is found for you (use --pack when two packs hold the same name); its latest revision is pinned, or the revision already pinned there is extended. Skills that carry hooks, shell interpolation or tool pre-approvals need --approve-active-content."
+		cmd.Long = "Enable installed members on one target by name. Agents, commands and rules use qualified names such as agent:review, command:review and rule:common/testing. The pack that holds each skill is found for you (use --pack when two packs hold the same name); its latest revision is pinned, or the revision already pinned there is extended. Members that carry hooks, shell interpolation, file imports or tool pre-approvals need --approve-active-content."
 		cmd.Example = "  olivares skills enable tdd-workflow code-review --folder <folder-ref>"
 		cmd.Flags().StringVar(&packID, "pack", "", "catalog pack identifier to take the skills from")
 		cmd.Flags().BoolVar(&approve, "approve-active-content", false, "approve skills that carry hooks, shell interpolation or tool pre-approvals")
@@ -535,7 +535,7 @@ func newSkillsEnableCmd(client datalaneClient, enable bool) *cobra.Command {
 		cmd.Example = "  olivares skills disable deploy --folder <folder-ref>"
 		cmd.Flags().StringVar(&packID, "pack", "", "catalog pack identifier: change only this pack's pin")
 	}
-	target.add(cmd)
+	target.addSkills(cmd)
 	return cmd
 }
 

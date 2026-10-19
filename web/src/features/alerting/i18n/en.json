@@ -1,10 +1,62 @@
 {
   "title": "Alerting",
-  "description": "Route findings to destinations and inspect the delivery log. A route references a destination by name; the credential lives in the wired transport.",
+  "description": "Route findings to destinations and inspect the delivery log. A route references a destination by name; the credential lives in the configured transport.",
   "tabs": {
     "routes": "Routes",
+    "destinations": "Destinations",
     "deliveries": "Deliveries",
     "outbox": "Dead letters"
+  },
+  "destinations": {
+    "adminOnly": "Destinations are managed by an administrator",
+    "adminOnlyHint": "Adding or changing a destination needs an instance administrator. Ask one to add it, or provision it in the operator file.",
+    "intro": "A destination is where a route sends alerts. Add Slack or Microsoft Teams here; the webhook URL is sealed and never shown again.",
+    "add": "Add destination",
+    "empty": "No destinations yet",
+    "emptyHint": "Add a Slack or Teams destination, then point a route at it.",
+    "noSealer": "Saving is disabled: this deployment has no secret sealer, so a webhook URL cannot be stored safely.",
+    "fileNote": "Destinations from the operator file (OLIVARES_NOTIFY_CONFIG) are listed read-only. Other kinds are provisioned there.",
+    "colName": "Name",
+    "colKind": "Kind",
+    "colHost": "Webhook host",
+    "colSource": "Source",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "sourceConsole": "Console",
+    "sourceFile": "Operator file",
+    "open": "Open",
+    "notOpen": "Not open",
+    "testAction": "Send a test message to {{name}}",
+    "editAction": "Edit destination {{name}}",
+    "deleteAction": "Delete destination {{name}}",
+    "tested": "Test message sent to {{name}}",
+    "testSent": "Test message sent",
+    "testFailed": "The destination did not accept the test message. Check the webhook URL.",
+    "saved": "Destination saved",
+    "savedNotOpen": "Destination saved, but it is not open. Check the webhook URL and send a test message.",
+    "deleted": "Destination deleted",
+    "deleteDialog": {
+      "title": "Delete destination?",
+      "description": "This removes “{{name}}” and its stored webhook URL. Routes that point at it will record an unknown destination until you choose another.",
+      "confirm": "Delete destination"
+    },
+    "dialog": {
+      "title": "Add destination",
+      "editTitle": "Edit destination",
+      "subtitle": "Send alerts to Slack or Microsoft Teams. Send a test message before you save.",
+      "kind": "Kind",
+      "name": "Name",
+      "nameHint": "Lowercase letters, digits, dot, dash or underscore. Routes refer to this name.",
+      "url": "Webhook URL",
+      "urlHint": {
+        "slack": "The incoming webhook URL of your Slack app (hooks.slack.com).",
+        "teams": "The Workflows webhook URL for “When a Teams webhook request is received”.",
+        "default": "The incoming webhook URL."
+      },
+      "urlKeep": "Leave blank to keep the stored URL ({{host}}).",
+      "urlStored": "Stored — type to replace",
+      "test": "Send test message"
+    }
   },
   "severities": {
     "any": "Any severity",

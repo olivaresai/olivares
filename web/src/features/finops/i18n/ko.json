@@ -1,0 +1,515 @@
+{
+  "alerts": {
+    "title": "임계값 알림",
+    "description": "예산 임계값 초과 이력입니다. Slack/SIEM 전달은 출력 커넥터가 처리합니다 — 이것은 기록입니다.",
+    "empty": "초과된 알림 없음",
+    "emptyHint": "설정한 임계값을 지출이 초과하면 예산 알림이 발생합니다. 이 범위에서는 초과된 것이 없습니다.",
+    "columns": {
+      "triggeredAt": "발생 시각",
+      "budget": "예산",
+      "threshold": "임계값",
+      "spend": "지출 / 한도",
+      "severity": "심각도"
+    },
+    "truncated": "알림 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 예산 알림이 있습니다. 이 페이지는 ID로 행을 가져옵니다. 여기에 알림이 없다고 임계값이 초과된 적 없다는 증거는 아닙니다."
+  },
+  "allocation": {
+    "title": "다중 에이전트 할당",
+    "description": "접근 그래프에 걸쳐 에이전트가 접촉한 리소스별로 분할된 비용입니다.",
+    "method": "방법",
+    "resolved": "해석됨",
+    "unresolved": "해석되지 않음",
+    "resourceCount_other": "리소스 {{count}}개",
+    "sharedCount_other": "공유 {{count}}개",
+    "empty": "이 범위에서 에이전트에 귀속된 비용이 없습니다.",
+    "confidence": {
+      "attributed": "귀속됨",
+      "approximate": "근사치"
+    },
+    "columns": {
+      "agent": "에이전트",
+      "cost": "비용",
+      "resolved": "그래프",
+      "confidence": "신뢰도",
+      "resources": "리소스"
+    }
+  },
+  "breakdown": {
+    "title": "지출 분석",
+    "description": "비용이 어디로 가는지 순위별로 보여줍니다.",
+    "byModel": "모델별",
+    "byProvider": "프로바이더별",
+    "byAgent": "에이전트별",
+    "share": "지출 비중",
+    "noAgentAttribution": "커넥터가 세션에 비용을 귀속하면 에이전트별 귀속이 나타납니다 — 모델과 프로바이더는 항상 존재합니다.",
+    "columns": {
+      "key": "이름",
+      "cost": "비용",
+      "inputTokens": "입력",
+      "outputTokens": "출력",
+      "samples": "레코드"
+    }
+  },
+  "budgets": {
+    "title": "예산",
+    "description": "각 한도에 대한 소비와 실행률 예측입니다. 예약 용량은 한도에 포함됩니다.",
+    "new": "새 예산",
+    "empty": "아직 예산 없음",
+    "emptyHint": "차원별 지출 한도를 설정하여 소비를 추적하고 임계값 알림을 받으십시오.",
+    "limit": "한도",
+    "spent": "지출됨",
+    "remaining": "남음",
+    "period": "기간",
+    "over": "한도 초과",
+    "onTrackToExceed": "초과 예상",
+    "disabled": "비활성화됨",
+    "global": "전역",
+    "reservedHint": "한도에 포함된 예약 용량 {{amount}}이(가) 포함됩니다.",
+    "actions": {
+      "alert": "알림",
+      "throttle": "제한",
+      "block": "차단"
+    },
+    "admission": {
+      "holds": "활성 원장 행: {{n}}",
+      "drift": "원장이 호출자가 정산한 것에서 드리프트되었습니다",
+      "outstanding": {
+        "corrupt": "무결성 검사에 실패한 승인 행: {{n}}",
+        "unresolved": "아직 결정되지 않은 복구 쓰기: {{n}}",
+        "undecodable": "미지급 목록이 디코드되지 않는 행: {{n}}",
+        "owed_remaining": "아직 지급해야 할 보류: {{n}}",
+        "frontier_blocked": "시도 수명 주기를 차단하는 보류: {{n}}",
+        "legacy_pending": "이전 빌드가 남긴 청구: {{n}}",
+        "legacy_owes_release": "이전 빌드가 지급해야 할 릴리스: {{n}}"
+      }
+    },
+    "dialog": {
+      "title": "새 예산",
+      "name": "이름",
+      "dimension": "차원",
+      "key": "차원 키",
+      "keyHint": "차원이 전역이 아닌 경우 필요합니다(예: 모델 또는 팀 이름).",
+      "limitUsd": "한도(USD)",
+      "reservedUsd": "예약(USD)",
+      "reservedHint": "한도에 포함되는 선택적 확정 용량입니다(청구가 아닌 회계 항목).",
+      "action": "작업",
+      "actionHint": "Alert는 쇼백 전용입니다. throttle/block은 실행 심이 강제할 수 있는 하드 캡 신호를 발생시킵니다.",
+      "period": "기간",
+      "create": "예산 만들기",
+      "created": "예산이 생성되었습니다",
+      "editTitle": "예산 편집",
+      "save": "예산 저장",
+      "saved": "예산이 업데이트되었습니다"
+    },
+    "editAction": "{{name}} 편집",
+    "deleteAction": "{{name}} 삭제",
+    "deleteDialog": {
+      "title": "예산을 삭제하시겠습니까?",
+      "description": "예산 “{{name}}”과(와) 그 임계값 알림을 영구 삭제합니다. 되돌릴 수 없습니다.",
+      "confirm": "예산 삭제",
+      "deleted": "예산이 삭제되었습니다"
+    },
+    "truncated": "예산 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 예산이 있습니다. 이 페이지는 ID로 행을 가져옵니다. 여기에 나열되지 않은 상한이 지출이 무제한이라는 증거는 아닙니다 — 단순히 이 페이지 밖에 있을 수 있습니다.",
+    "storedEmptyHint": "Business에서 만든 예산은 여기서 계속 읽고 제거할 수 있습니다."
+  },
+  "cache": {
+    "title": "프롬프트 캐시 효율",
+    "description": "캐시 읽기 대 생성 토큰과 실현된 절감 — Claude 비용의 지배적 레버입니다.",
+    "hitRate": "캐시 적중률",
+    "hitRateCaption": "전체 입력 토큰 중 캐시 읽기 비중",
+    "savings": "실현된 절감",
+    "savingsCaption": "캐시 읽기에서, 모델별 가격 적용",
+    "uncached": "캐시되지 않은 입력",
+    "read": "캐시 읽기",
+    "create1h": "캐시 생성(1h)",
+    "create5m": "캐시 생성(5m)",
+    "chartTitle": "입력 토큰 계층",
+    "chartSummary": "캐시 읽기 토큰 {{read}}개 대 캐시되지 않은 입력 {{uncached}}개 — 적중률 {{rate}}.",
+    "empty": "관측된 캐시 입력 없음",
+    "columns": {
+      "tier": "계층",
+      "tokens": "토큰"
+    },
+    "note": "절감 값은 캐시 읽기 토큰을 각 모델의 기본 입력 요율의 절감 비중으로 평가합니다. 가격이 없는 모델은 아무것도 기여하지 않습니다. 0 절감은 장애가 아니라 정직한 값입니다."
+  },
+  "chargeback": {
+    "title": "차원별 차지백",
+    "description": "읽기 모델이 보유한 모든 귀속 차원으로 지출을 분할합니다.",
+    "dimensionLabel": "차원",
+    "chartTitle": "{{dimension}}별 지출",
+    "chartSummary": "{{dimension}}별 지출, {{top}}이(가) 선두, 범위 전체 {{total}}.",
+    "empty": "이 범위에서 {{dimension}}에 기록된 지출이 없습니다.",
+    "costTypeBilledOnly": "비용 유형은 청구 전용 분석입니다(cost_report 서버 도구 분할). 기본 지출 스트림은 추정치이므로 이 차원은 여기서 보통 비어 있습니다 — 실제 세부 정보는 조정과 FOCUS 내보내기에서 나옵니다.",
+    "costTypeEmpty": "추정 스트림에는 비용 유형 세부 정보가 없습니다. 비용 유형은 청구된 행에만 채워집니다. 조정과 FOCUS 내보내기를 참조하십시오.",
+    "serviceTierFreeform": "서비스 계층 키는 API가 반환하는 그대로 렌더링됩니다. 문서화된 계층(standard, batch, priority, priority_on_demand, flex, flex_discount)은 표시 힌트이며 폐쇄 목록이 아닙니다."
+  },
+  "costCentres": {
+    "ambiguous": "모호함 — 엔진이 임의로 하나를 선택",
+    "archive": "비용 센터 {{code}} 보관",
+    "archived": "비용 센터가 업데이트되었습니다",
+    "code": "코드",
+    "create": "생성",
+    "created": "비용 센터가 생성되었습니다",
+    "delete": "비용 센터 {{code}} 삭제",
+    "deleteRule": "{{key}}의 규칙 삭제",
+    "description": "회계 코드와 지출을 여기에 바인딩하는 규칙입니다.",
+    "descriptionField": "설명",
+    "dimension": "차원: {{dim}}",
+    "dimensionLabel": "차원",
+    "edit": "비용 센터 {{code}} 편집",
+    "editDescription": "코드는 변경할 수 없습니다: 매핑 규칙이 코드로 해석되고 발행된 명세서가 이를 기록합니다.",
+    "editTitle": "비용 센터 편집",
+    "empty": "아직 비용 센터 없음",
+    "emptyHint": "비용 센터는 지출을 팀 또는 예산 소유자에게 귀속합니다. 하나를 만들어 귀속을 시작하십시오.",
+    "ingestOnlyNotice": "⛔ 매핑 규칙은 수집 시 적용되고 각 비용 행에 스탬프됩니다. 규칙을 만들거나 변경해도 이미 기록된 지출은 다시 귀속되지 않습니다 — 지금부터 수집되는 비용에만 영향을 줍니다.",
+    "key": "키",
+    "name": "이름",
+    "new": "새 비용 센터",
+    "newDescription": "코드가 필요합니다. 차지백 명세서가 필터링하는 회계 ID입니다.",
+    "newRule": "새 규칙",
+    "newRuleDescription": "하나의 차원 값을 이 비용 센터에 바인딩합니다.",
+    "noRules": "규칙 없음 — 트래픽이 귀속되지 않음",
+    "noRulesHint": "규칙은 트래픽을 비용 센터에 매핑합니다. 규칙이 없으면 모든 요청이 보고서에서 귀속되지 않은 상태로 유지됩니다.",
+    "owner": "소유자",
+    "priority": "우선순위 {{n}}",
+    "priorityLabel": "우선순위",
+    "priorityNote": "우선순위가 높은 것이 서로 다른 차원 사이에서 이깁니다. 하나의 차원 및 키 안에서 엔진은 단일 규칙을 읽고 우선순위로 정렬하지 않으므로 중복은 임의로 해결됩니다.",
+    "restore": "비용 센터 {{code}} 복원",
+    "ruleCreated": "규칙이 생성되었습니다",
+    "rulesDescription": "이 비용 센터에 바인딩되는 트래픽입니다.",
+    "rulesTitle": "매핑 규칙",
+    "save": "저장",
+    "saved": "비용 센터가 저장되었습니다",
+    "status": {
+      "archived": "보관됨",
+      "unknown": "상태 없음 — 아무것도 귀속하지 않음"
+    },
+    "title": "비용 센터",
+    "truncated": "비용 센터 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 비용 센터가 있습니다. 이 페이지는 ID로 행을 가져옵니다. 이 목록에 없는 비용 센터가 존재하지 않는다는 증거는 아닙니다.",
+    "rulesTruncated": "규칙 {{n}}개를 불러왔으며 더 있습니다",
+    "rulesTruncatedHint": "이 비용 센터에는 표시된 것보다 많은 매핑 규칙이 있습니다. 이 페이지는 ID로 행을 가져옵니다. 새로 수집되는 비용에 대해 엔진은 이 페이지와 무관하게 일치 규칙을 해석하므로 여기서 매핑되지 않은 것처럼 보이는 리소스가 이 페이지 밖의 규칙에 의해 매핑될 수 있습니다 — 또한 규칙이 추가되어도 이미 기록된 비용은 다시 귀속되지 않습니다."
+  },
+  "description": "에스테이트 전반의 토큰 비용 — 추세, 차지백, 조정, 예산 및 예측입니다. 수치는 FinOps 원장이 보고하는 그대로입니다.",
+  "dimensions": {
+    "global": "전역",
+    "model": "모델",
+    "provider": "프로바이더",
+    "agent": "에이전트",
+    "session": "세션",
+    "team": "팀",
+    "project": "프로젝트",
+    "workspace": "워크스페이스",
+    "api_key": "API 키",
+    "actor": "수행자",
+    "service_tier": "서비스 계층",
+    "context_window": "컨텍스트 창",
+    "inference_geo": "추론 지역",
+    "gateway": "게이트웨이",
+    "cost_type": "비용 유형"
+  },
+  "empty": {
+    "alerts": {
+      "title": "아직 초과된 예산 임계값 없음",
+      "description": "알림 임계값이 있는 예산을 만드십시오. 들어오는 비용 샘플이 소비를 임계값 중 하나 이상으로 끌어올리면 알림이 기록됩니다."
+    },
+    "allocation": {
+      "title": "아직 할당할 에이전트 귀속 비용 없음",
+      "description": "비용 스트림이 에이전트 참조를 전달하면 그 지출이 여기에 나타납니다. 접근 에지가 해석되는 곳에 리소스 분할이 추가됩니다."
+    },
+    "anomalies": {
+      "title": "아직 감지된 지출 이상 없음",
+      "description": "기록된 지출이 후행 윈도 기준선보다 표준 편차 2개 이상 높아지면 해당 날짜가 나타납니다."
+    },
+    "cacheEfficiencyChart": {
+      "title": "아직 기록된 입력 토큰 사용량 없음",
+      "description": "비용 샘플이 입력 토큰 사용량을 전달하면 캐시되지 않은, 캐시 읽기 및 캐시 생성 볼륨이 여기에 나타납니다."
+    },
+    "dimensionChart": {
+      "title": "이 차원에 기록된 지출 없음",
+      "description": "선택한 차원이 추정 비용 스트림에 존재하면 버킷이 나타납니다. 어떤 샘플도 전달하지 않는 차원은 여기서 비어 있습니다."
+    },
+    "futureBreakdowns": {
+      "title": "카탈로그된 향후 비용 분석 없음",
+      "description": "런타임 비용 분석이 컴파일된 참조에 추가될 때만 항목이 나타납니다. 이 표는 라이브 프로바이더 데이터로 채워지지 않습니다."
+    },
+    "futureDimensions": {
+      "title": "카탈로그된 향후 차원 없음",
+      "description": "향후 그룹화 차원이 컴파일된 참조에 추가될 때만 항목이 나타납니다. 이 표는 라이브 프로바이더 데이터로 채워지지 않습니다."
+    },
+    "reconciliationChart": {
+      "title": "아직 조정할 청구 지출 없음",
+      "description": "Claude API cost_report 폴링이 권위 있는 청구 행을 공급하면 일별 청구 대 추정 지출이 나타납니다."
+    },
+    "spend": {
+      "title": "이 분석에 아직 지출 없음",
+      "description": "비용 샘플이 선택한 모델, 프로바이더 또는 에이전트 참조를 전달하면 순위별 지출과 토큰 합계가 여기에 나타납니다."
+    }
+  },
+  "export": {
+    "title": "FOCUS 내보내기",
+    "description": "비용 읽기 모델을 FOCUS v1.3 CSV(FinOps Foundation의 공개 비용 및 사용 스키마)로 내보냅니다.",
+    "provenanceLabel": "출처",
+    "provenance": {
+      "estimated": "추정(세분화)",
+      "billed": "청구(cost_report)",
+      "all": "둘 다(태그됨)"
+    },
+    "download": "CSV 내보내기",
+    "done": "FOCUS 내보내기가 다운로드되었습니다",
+    "note": "EffectiveCost는 합산 안전 열입니다. 결합 내보내기에서 추정 행은 이를 생략하므로 단순 SUM이 청구 스트림을 이중 계산하지 않습니다. CSV에서 합계를 다시 계산하지 마십시오."
+  },
+  "forecast": {
+    "title": "기간 예측",
+    "subtitle": "모델이 아니라 현재 실행률의 투영입니다.",
+    "spentSoFar": "지금까지 지출",
+    "trendProjected": "종료 시 예상",
+    "dailyRunRate": "일일 실행률",
+    "projected": "종료 시 예상",
+    "period": "기간",
+    "confidenceBand": "{{window}}일 윈도 신뢰 구간: {{low}} … {{high}}(±1.96σ).",
+    "runRateNote": "투영은 후행 윈도 일일 실행률을 남은 기간에 걸쳐 조정한 것입니다 — 예측 모델이 아니라 현재 속도입니다.",
+    "anomaliesTitle": "지출 이상",
+    "sigma": "{{value}}σ",
+    "anomalyColumns": {
+      "day": "일",
+      "spend": "지출",
+      "baseline": "기준선",
+      "deviation": "편차"
+    }
+  },
+  "future": {
+    "title": "향후 차원",
+    "description": "플랫폼이 노출하지만 엔진이 아직 쿼리 가능한 슬라이스로 모델링하지 않는 Anthropic 차원 및 비용 분석입니다.",
+    "seam": "백엔드 대기 중",
+    "caveat": "선언된 참조 — AsOf {{date}}. 아직 쿼리 가능한 슬라이스가 아닙니다. Anthropic 문서와 대조 검증된 카탈로그이며 격차를 보이기 위해 표시되는 것이지 라이브 데이터가 아닙니다.",
+    "dimensionsTitle": "그룹화 차원",
+    "breakdownsTitle": "런타임 비용 분석",
+    "columns": {
+      "dimension": "차원",
+      "breakdown": "분석",
+      "field": "필드",
+      "maturity": "성숙도",
+      "ref": "참조"
+    },
+    "maturity": {
+      "beta": "베타",
+      "ga": "GA",
+      "development": "개발"
+    },
+    "dims": {
+      "speed": {
+        "label": "속도",
+        "detail": "베타 고속 모드(fast-mode-2026-02-01)로, 비용 보고서가 노출하는 별도 group_by입니다."
+      },
+      "service_account_id": {
+        "label": "서비스 계정",
+        "detail": "서비스 계정(svac_) 주체 — 오늘 지출 보기가 제공하는 혼합된 API 키와 구별됩니다."
+      },
+      "account_id": {
+        "label": "계정",
+        "detail": "소유 계정으로, 읽기 모델이 아직 모델링하지 않는 별도 group_by입니다."
+      }
+    },
+    "breakdowns": {
+      "advisor": {
+        "label": "어드바이저 추론",
+        "detail": "usage.iterations[].advisor_message에 별도로 청구되는 두 번째 숨겨진 서버 측 추론입니다."
+      },
+      "thinking_tokens": {
+        "label": "사고 토큰",
+        "detail": "확장 사고 토큰(usage.output_tokens_details.thinking_tokens)으로, 사고가 화면에서 생략되어도 청구됩니다."
+      },
+      "programmatic_tool_calling": {
+        "label": "프로그래매틱 도구 호출",
+        "detail": "중간 결과가 컨텍스트 밖과 usage 밖에 남으므로 비용/포렌식이 이를 과소 계산합니다."
+      }
+    }
+  },
+  "optimization": {
+    "title": "최적화 권장 사항",
+    "description": "거버넌스된 에스테이트에서 나온 절감 후보입니다. 추정치는 약속이 아닙니다 — 기능과 품질 적합성을 검증하십시오.",
+    "empty": "권장 사항 없음",
+    "emptyHint": "지출, 라우팅 또는 속도 제한이 개선될 수 있으면 권장 사항이 여기에 나타납니다. 지금 변경할 것이 없습니다.",
+    "estimatedSavings": "예상 절감",
+    "subject": "주체",
+    "kind": {
+      "cheaper_model": "저렴한 모델",
+      "budget_burn": "예산 소진",
+      "cache_savings": "캐시 절감",
+      "cache_opportunity": "캐시 기회",
+      "info": "참고"
+    }
+  },
+  "outcomes": {
+    "title": "등급화된 성과",
+    "description": "성과당 비용의 분자: 지출이 실제로 달성한 것입니다.",
+    "grade": "성과 등급화",
+    "gradeHint": "시점은 지금 캡처되며 재시도 시 변경 없이 다시 전송되므로 반복 제출이 값을 두 번 계산할 수 없습니다.",
+    "subject": "에이전트 참조",
+    "verdict": "판정",
+    "send": "전송",
+    "empty": "등급화된 성과 없음",
+    "emptyHint": "이것이 없으면 지출에는 측정 가능한 가치가 없고 모든 에이전트가 순수 비용처럼 보입니다.",
+    "noValue": "기록된 가치 없음",
+    "accepted": "수락됨 — 엔진이 중복 제거했을 수 있으며 아래 목록이 기록입니다",
+    "truncated": "성과 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 기록된 성과가 있습니다. 이 페이지는 ID로 행을 가져옵니다. 불러온 행에서 집계 성과 또는 가치 합계를 도출하지 마십시오."
+  },
+  "periods": {
+    "daily": "일별",
+    "weekly": "주별",
+    "monthly": "월별",
+    "total": "합계"
+  },
+  "range": {
+    "label": "범위",
+    "7d": "최근 7일",
+    "30d": "최근 30일",
+    "90d": "최근 90일",
+    "mtd": "이번 달"
+  },
+  "rates": {
+    "title": "모델 요율 카탈로그",
+    "description": "프로바이더가 달러 금액을 보고하지 않을 때 비용을 추정하는 데 사용되는 정가입니다. 청구된 금액이 아닙니다.",
+    "unit": "1M 토큰당 마이크로 USD(정수)",
+    "unitNote": "입력 및 출력 요율은 {{unit}} 단위입니다.",
+    "validityNote": "날짜는 각 항목이 선언한 유효성을 보여줍니다. 이 목록은 어떤 항목이 특정 청구의 가격을 정했는지 보여주지 않습니다.",
+    "empty": "카탈로그에 요율 없음",
+    "emptyHint": "이 조직에 기록된 정가가 없습니다.",
+    "model": "모델",
+    "provider": "프로바이더",
+    "inputRate": "입력 요율",
+    "outputRate": "출력 요율",
+    "effectiveFrom": "유효 시작",
+    "effectiveUntil": "유효 종료",
+    "noEndDate": "종료일 없음",
+    "invalid": {
+      "title": "요율 카탈로그 사용 불가",
+      "description": "응답을 요율 카탈로그로 읽을 수 없어 요율을 표시하지 않습니다. 다시 시도해도 같은 읽기를 반복할 뿐 아무것도 바뀌지 않습니다.",
+      "reason": {
+        "envelope": "응답에 읽을 수 있는 요율 항목 목록이 없습니다.",
+        "entry": "항목 {{n}}이(가) 요율 레코드가 아닙니다.",
+        "missing": "항목 {{n}}에 {{field}}이(가) 없습니다.",
+        "empty": "항목 {{n}}의 {{field}}이(가) 비어 있습니다.",
+        "type": "항목 {{n}}의 {{field}}이(가) 잘못된 유형입니다.",
+        "negative": "항목 {{n}}의 {{field}}이(가) 음수입니다.",
+        "notInteger": "항목 {{n}}의 {{field}}이(가) 정수가 아닙니다.",
+        "unsafe": "항목 {{n}}의 {{field}}이(가) 너무 커서 정확히 표시할 수 없습니다.",
+        "timestamp": "항목 {{n}}의 {{field}}이(가) RFC 3339 타임스탬프가 아닙니다."
+      }
+    },
+    "truncated": "요율 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 모델 요율이 있습니다. 이 페이지는 유효 날짜(최신순)로 정렬됩니다. 여기에 없다고 카탈로그에 없다는 뜻은 아닙니다: 비용 계산과 비교는 이 페이지와 무관하게 카탈로그에서 유효 요율을 해석합니다."
+  },
+  "reconciliation": {
+    "title": "청구 대 추정",
+    "description": "파생 추정치가 권위 있는 청구서를 얼마나 밀접하게 추적하는지입니다. 두 스트림은 절대 합산되지 않습니다.",
+    "billedTotal": "청구 합계",
+    "billedCaption": "프로바이더 cost_report에서",
+    "noBilled": "청구 데이터 없음",
+    "estimatedTotal": "추정 합계",
+    "estimatedCaption": "정가에서 파생됨",
+    "drift": "드리프트",
+    "driftUnder": "청구가 추정보다 높음(과소 추정)",
+    "driftOver": "청구가 추정보다 낮음(과대 추정)",
+    "driftNoBaseline": "아직 청구 기준선 없음",
+    "estimatedOnlyTiers": "추정 전용 계층",
+    "chartTitle": "일별 청구 대 추정",
+    "chartSummary": "범위 전체에서 청구 {{billed}} 대 추정 {{estimated}}.",
+    "columns": {
+      "day": "일",
+      "billed": "청구",
+      "estimated": "추정",
+      "drift": "드리프트"
+    }
+  },
+  "seats": {
+    "title": "시트 사용률",
+    "description": "실제로 활성인 수행자 대비 할당된 시트, 일별입니다. 시트 스냅샷이 없는 날은 아무것도 보고하지 않으며 사용량이 0인 날이 아닙니다.",
+    "provider": "프로바이더",
+    "empty": "보고된 날 없음",
+    "emptyHint": "시트 사용량은 세션 활동에서 일별로 보고됩니다. 이 범위의 어떤 날도 보고하지 않았습니다.",
+    "assigned": "{{assigned}} 할당 · {{active}} 활성",
+    "noSnapshot": "이 날짜에 게시된 시트 스냅샷 없음"
+  },
+  "statements": {
+    "agent": "에이전트",
+    "cost": "비용",
+    "description": "비용 센터별, 기간별 스냅샷으로 모델, 프로바이더 및 에이전트별로 그룹화된 항목입니다 — 재무가 내부 청구에 사용하는 산출물입니다.",
+    "empty": "생성된 차지백 명세서 없음",
+    "exportCsv": "명세서 CSV 내보내기",
+    "generate": "생성",
+    "generated": "명세서가 생성되었습니다",
+    "inputTokens": "입력 토큰",
+    "model": "모델",
+    "monthly": "월별",
+    "outputTokens": "출력 토큰",
+    "period": "기간",
+    "provider": "프로바이더",
+    "samples": "샘플",
+    "snapshotNotice": "명세서는 고정된 스냅샷입니다: 생성 시 계산되며 당시의 비용 센터 이름과 코드를 기록합니다. 같은 기간을 다시 생성해도 다시 계산하지 않으므로 이후 수집된 지출은 나타나지 않습니다.",
+    "title": "차지백 명세서",
+    "total": "합계",
+    "weekly": "주별",
+    "truncated": "명세서 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 차지백 명세서가 있습니다. 이 페이지는 기간 시작(최신순)으로 정렬됩니다. 이 목록에서 빠진 기간이 해당 기간에 청구가 없었다는 증거는 아닙니다."
+  },
+  "stats": {
+    "totalSpend": "총 지출",
+    "inThisRange": "이 범위에서",
+    "tokens": "토큰",
+    "inOut": "입력 {{in}} · 출력 {{out}}",
+    "samples": "비용 레코드",
+    "forecast": "예측",
+    "atRunRate": "투영됨(후행 윈도 추세)"
+  },
+  "tabs": {
+    "spend": "지출",
+    "chargeback": "차지백",
+    "reconciliation": "조정",
+    "budgets": "예산",
+    "optimization": "최적화",
+    "value": "성과당 비용",
+    "seats": "시트 사용률",
+    "costCentres": "비용 센터"
+  },
+  "title": "비용 및 FinOps",
+  "trend": {
+    "title": "비용 추세",
+    "description": "선택한 범위의 일별 토큰 비용입니다.",
+    "cost": "비용",
+    "tokens": "토큰"
+  },
+  "value": {
+    "title": "성과당 비용",
+    "description": "등급화된 성과에 대비한 지출입니다. 귀속되지 않은 지출은 합계에 포함되지 않고 별도로 표시됩니다.",
+    "totalCost": "총 지출",
+    "unattributed": "귀속되지 않음",
+    "outcomes": "충족된 성과",
+    "costPerOutcome": "성과당 비용",
+    "riskTitle": "이탈 위험",
+    "riskDescription": "충족된 성과 없이 지출을 소진하는 주체입니다.",
+    "riskEmpty": "성과 없이 지출을 소진하는 주체 없음",
+    "riskEmptyHint": "이 패널은 지출이 성과로 뒷받침되지 않는 주체를 나열합니다. 이 범위에서는 임계값을 넘은 주체가 없습니다.",
+    "satisfiedOf": "{{outcomes}} 중 {{satisfied}} 충족"
+  },
+  "evidence": {
+    "atLeast": "최소 {{amount}}",
+    "original": "원래 보고됨: {{amount}}",
+    "unknown": "금액 알 수 없음",
+    "exact": "정확한 금액",
+    "lower_bound": "하한, 합계 불완전",
+    "historical": "과거 수치, 검증되지 않음",
+    "unavailable": "사용 불가",
+    "barUnavailable": "소비 막대 사용 불가: 정확한 금액 기준이 없습니다.",
+    "forecast": "예측(인증되지 않음): {{amount}}",
+    "cause": "원인",
+    "reference": "알림 참조",
+    "digest": "기록된 증거 다이제스트",
+    "lookup": "조회",
+    "clear": "지우기"
+  }
+}

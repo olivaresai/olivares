@@ -15,12 +15,15 @@ import (
 // makes context cancellation hard-kill the whole group, so a hung process and
 // any grandchildren it spawned are terminated (a grandchild holding the stdout
 // pipe open would otherwise block the read and wedge teardown forever). On
+// Linux the child also dies with the engine (endWithEngine); a session's launch
+// then replaces that with its guard (watchEngine), which ends the whole tree. On
 // non-Unix this is a no-op and the default per-process kill applies.
 func configureProcGroup(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
+	endWithEngine(cmd)
 	cmd.Cancel = func() error { return procGroupKill(cmd) }
 }
 

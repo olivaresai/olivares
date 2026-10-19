@@ -55,7 +55,7 @@ token 是**可即时吊销的**，**不携带任何声明（claims）或机密**
 
 :::caution[诚实的边界]
 - **`olivares_deployment` 进行声明；它不进行部署。** 该资源通过模块 VII 的路由写入一个部署*定义*。
-  针对真实基础设施的实时 `apply`/`retire` 是一个**返回 `503` 的 deny-closed 接缝**，
+  针对真实基础设施的实时 `apply`/`retire` 是 Business 功能（Community 返回 `501`），也是一个**返回 `503` 的 deny-closed 接缝**，
   直到一位操作员供给一个执行器为止——在 HCL 中声明一个部署绝不会改变你的资产清单（estate）。
 - **稳定 OpenAPI 并非全部协议表面。** 稳定核心表面位于已发布契约
   （`/openapi.json`）中；模块路由（例如访问映射与漂移读取，以及 provider 所用的
@@ -95,7 +95,7 @@ token 是**可即时吊销的**，**不携带任何声明（claims）或机密**
 - [使用客户端 SDK](/zh/how-to/use-the-client-sdks/) — 第一方 Go/Python/TypeScript 客户端。
 - [CLI 参考](/zh/reference/cli/) — 来自 `olivares` 二进制的相同功能。
 - [将控制平面作为代码管理](/zh/how-to/manage-as-code/) — Terraform provider 指南。
-- [模块 VII — 部署](/zh/reference/modules/vii-deploy/) — `olivares_deployment` 驱动之处（那个 `503` 接缝）。
+- [模块 VII — 部署](/zh/reference/modules/vii-deploy/) — `olivares_deployment` 驱动之处（Business；那个 `503` 接缝）。
 - [模块目录](/zh/reference/modules/overview/) — Govern/Observe 与 Actuate 的划分。
 - [诚实与边界](/zh/start/honesty-and-limits/) — 今天驱动什么、不驱动什么。
 - [架构概览](/zh/explanation/architecture/overview/) — 这个面所处的引擎层。

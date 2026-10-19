@@ -36,6 +36,7 @@ type pinEntry struct {
 	File     string   `json:"file"`
 	SHA256   string   `json:"sha256"`
 	Skills   int      `json:"skills"`
+	Members  int      `json:"members"`
 	Files    int      `json:"files"`
 	Licenses []string `json:"licenses"`
 }
@@ -91,15 +92,25 @@ func TestBuiltinPinNamesTheReleasedSourcesAndTheirFullSelection(t *testing.T) {
 	for _, p := range pin.Packs {
 		skillsBySource[p.Source] += p.Skills
 	}
+	for _, id := range []string{"ecc-agents", "ecc-commands", "ecc-rules-common", "ecc-rules-golang"} {
+		if !ids[id] {
+			t.Errorf("missing native component pack %s", id)
+		}
+	}
 	// ECC v2.2.3 ships 293 skills and 8 are excluded (README.md, "Not shipped"); the two
 	// mattpocock categories carry 20 and 7 and 1 is excluded. The rest are in exactly one pack.
-	if skillsBySource["olivares"] != 1 || skillsBySource["ecc"] != 285 || skillsBySource["mattpocock-skills"] != 26 || len(pin.Packs) != 24 || len(pin.Data) != 2 {
+	if skillsBySource["olivares"] != 1 || skillsBySource["ecc"] != 285 || skillsBySource["mattpocock-skills"] != 26 || len(pin.Data) != 0 {
 		t.Fatalf("catalog selection changed: skills=%v packs=%d data=%d", skillsBySource, len(pin.Packs), len(pin.Data))
 	}
 }
 
-func TestBuiltinDataArchivesMatchThePinAndCarryTheirLicense(t *testing.T) {
-	for _, entry := range readPin(t).Data {
+func TestBuiltinComponentArchivesMatchThePinAndCarryTheirLicense(t *testing.T) {
+	seen := false
+	for _, entry := range readPin(t).Packs {
+		if entry.Members == entry.Skills {
+			continue
+		}
+		seen = true
 		t.Run(entry.ID, func(t *testing.T) {
 			raw, err := os.ReadFile(filepath.Join("builtin", entry.File))
 			if err != nil {
@@ -138,6 +149,9 @@ func TestBuiltinDataArchivesMatchThePinAndCarryTheirLicense(t *testing.T) {
 				t.Fatalf("%s: LICENSE=%v files=%d, pinned %d", entry.ID, names["LICENSE"], len(names), entry.Files)
 			}
 		})
+	}
+	if !seen {
+		t.Fatal("no native component archives were checked")
 	}
 }
 

@@ -50,6 +50,7 @@ export function commandLabel(command: RunCommandDTO): string {
 
 /** What choosing an entry puts in the field: a command or skill is typed as /name, an agent is mentioned the way the tool mentions it. */
 export function insertText(command: RunCommandDTO): string {
+  if (command.insert_text) return `${command.insert_text} `
   return command.kind === 'agent'
     ? `@agent-${command.name} `
     : `/${command.name} `

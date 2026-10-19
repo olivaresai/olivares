@@ -107,7 +107,7 @@
   },
   "enforcement": {
     "title": "强制执行态势",
-    "description": "唯一触及生产环境的操作。每个护栏类别默认仅作探测；启用内联强制执行属于管理员操作，并在已接线网关处受治理。",
+    "description": "唯一触及生产环境的操作。每个护栏类别默认仅作探测；启用内联强制执行属于管理员操作，并在已配置网关处受治理。",
     "defaultDetectiveNote": "默认平面为探测：类别仅在此处显式启用并受治理时才会阻断。",
     "fullyDetective": "未启用任何强制执行——该平面完全处于探测状态，即安全默认值。任何项都不会自行阻断。",
     "detective": "探测",
@@ -126,14 +126,14 @@
     },
     "dialog": {
       "title": "更改强制执行",
-      "description": "禁用（恢复为探测）始终被允许。启用内联强制执行在已接线网关处受治理——治理拒绝会作为原因显示。",
+      "description": "禁用（恢复为探测）始终被允许。启用内联强制执行在已配置网关处受治理——治理拒绝会作为原因显示。",
       "enabledLabel": "启用内联强制执行",
       "minSeverity": "最低严重程度",
       "reason": "原因",
       "reasonHint": "随此更改一并记录至审计账本。",
       "submit": "应用",
       "applied": "强制执行态势已更新",
-      "ungovernedWarning": "在未接线治理网关的情况下启用该类别会使其不受治理——此更改被允许但会被标记。",
+      "ungovernedWarning": "在未配置治理网关的情况下启用该类别会使其不受治理——此更改被允许但会被标记。",
       "deniedTitle": "治理已拒绝此更改"
     }
   },
@@ -191,13 +191,13 @@
     "checkpoints": "已签名的检查点",
     "checkpointsCount": "已验证 {{count}} 个检查点",
     "checkpointsCount_other": "已验证 {{count}} 个检查点",
-    "signingUnavailable": "未接线签名密钥——已签名的证明不会被伪造。",
+    "signingUnavailable": "未配置签名密钥——已签名的证明不会被伪造。",
     "checkpointsPendingNote": "尚未写入检查点——证明此账本的是哈希链的裁定。",
-    "signingSeam": "检查点签名未接线",
+    "signingSeam": "检查点签名未配置",
     "attestedSeq": "已证明的 seq",
     "headSeq": "账本头部 seq {{seq}}",
     "reverifyNote": "每个事件都携带 seq · hash · prev_hash，使读者可离线对照外部 WORM 存储重新验证链接。",
-    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+    "chainEmptyNote": "暂无可验证的内容——账本中还没有事件。"
   },
   "empty": {
     "enforcement": {

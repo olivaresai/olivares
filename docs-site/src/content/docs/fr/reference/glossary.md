@@ -94,7 +94,7 @@ rend la vérification résistante à un attaquant après une compromission de l'
 
 Le processus de bord push-only (`olivares collector`) qui exécute les
 [sources](#source) près des systèmes observés et pousse les observations vers le cœur
-via gRPC (optionnellement mTLS). Les collectors n'ont **aucun listener entrant**.
+via gRPC (optionnellement mTLS). Les collectors n'ont **aucun listener entrant**. Le collector est une fonctionnalité Business.
 
 ### Chemin coopératif
 
@@ -187,7 +187,7 @@ processus à un agent. Voir [eBPF/Tetragon](/fr/how-to/connectors/ebpf-tetragon/
 
 ### live_ref
 
-Identité attribuée par le serveur d’**une** ligne de session live. Olivares <!-- release -->0.2<!-- /release -->
+Identité attribuée par le serveur d’**une** ligne de session live. Olivares <!-- release -->0.3<!-- /release -->
 classe l’observation par `(périmètre d’observation, id externe)` afin que deux
 homes fournisseur qui annoncent le même id de session restent deux lignes. Les
 lectures console et API qui signifient « cette ligne » utilisent `live_ref`,

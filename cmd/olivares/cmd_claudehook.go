@@ -42,8 +42,9 @@ func newClaudeHookCmd() *cobra.Command {
 	// assigned once the flags exist, and the RunE below closes over it.
 	var resolveServer func() string
 	cmd := &cobra.Command{
-		Use:   "claude-hook",
-		Short: "Governed PEP hook client: forward a Claude Code hook to the engine and relay the decision (deny-closed)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "claude-hook",
+		Short:       "Governed PEP hook client: forward a Claude Code hook to the engine and relay the decision (deny-closed)",
 		Long: "claude-hook is the managed Claude Code PreToolUse/PostToolUse hook command.\n" +
 			"It reads the hook payload from stdin, forwards it to the governed PEP endpoint, and\n" +
 			"writes the allow/deny/ask decision to stdout. It is DENY-CLOSED: if the endpoint is\n" +

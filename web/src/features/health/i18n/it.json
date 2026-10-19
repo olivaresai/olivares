@@ -1,0 +1,483 @@
+{
+  "title": "Stato e SLA",
+  "subtitle": "Disponibilità, affidabilità e dipendenze del tuo parco, ricavate dall'attività osservata e dalla scansione di obsolescenza, mai interrogando l'infrastruttura.",
+  "auditedNote": "Il flusso live e ogni azione di risoluzione o modifica sono operazioni privilegiate e sottoposte ad audit. Lo stato è derivato; il motore non porta mai qui testo di errore né payload.",
+  "refresh": "Aggiorna",
+  "statusPageLink": "Pagina di stato pubblica",
+  "tabs": {
+    "status": "Stato",
+    "checks": "Controlli",
+    "sla": "SLA",
+    "incidents": "Incidenti",
+    "timeline": "Cronologia",
+    "connectors": "Connettori",
+    "dependencies": "Dipendenze",
+    "system": "Sistema"
+  },
+  "state": {
+    "healthy": "Integro",
+    "degraded": "Degradato",
+    "down": "Non attivo",
+    "observed": "Osservato",
+    "unknown": "Sconosciuto"
+  },
+  "stateHint": {
+    "unknown": "Nessun controllo segue questo soggetto: non equivale a integro.",
+    "observed": "Visto attivo da un edge, ma nessun controllo è dichiarato: lo stato di salute non è misurato (né integro né sconosciuto)."
+  },
+  "desired": {
+    "active": "Attivo",
+    "paused": "In pausa",
+    "retired": "Ritirato"
+  },
+  "desiredHint": {
+    "paused": "Nessun alert: messo in pausa da un operatore.",
+    "retired": "Nessun alert: ritirato."
+  },
+  "subjectKind": {
+    "agent": "Agente",
+    "mcp": "MCP",
+    "session": "Sessione",
+    "mcp_tool": "Strumento"
+  },
+  "tiles": {
+    "healthy": "Integri",
+    "degraded": "Degradati",
+    "down": "Non attivi",
+    "unknown": "Sconosciuti"
+  },
+  "facets": {
+    "allStates": "Tutti gli stati",
+    "allKinds": "Tutti i tipi"
+  },
+  "status": {
+    "unnamed": "Senza nome",
+    "title": "Soggetti monitorati",
+    "slaBreach": "Violazione SLA",
+    "slaBreachHint": "Per questo soggetto è aperta una violazione SLA.",
+    "notAlerting": "Nessun alert",
+    "cols": {
+      "subject": "Soggetto",
+      "kind": "Tipo",
+      "state": "Stato",
+      "desired": "Intento",
+      "sla": "SLA",
+      "latency": "Latenza",
+      "lastSeen": "Ultima attività"
+    },
+    "searchPlaceholder": "Cerca soggetto…",
+    "empty": {
+      "title": "Ancora nessun soggetto monitorato",
+      "description": "Quando viene dichiarato un controllo di salute per un agente o un server MCP, la sua disponibilità compare qui.",
+      "declare": "Dichiara un controllo"
+    }
+  },
+  "checks": {
+    "title": "Controlli di salute",
+    "description": "Dichiara e governa cadenza, finestra di tolleranza, obiettivo SLA e intento del ciclo di vita per gli agenti e i server MCP monitorati.",
+    "create": "Crea controllo",
+    "created": "Controllo di salute creato",
+    "updated": "Controllo di salute aggiornato",
+    "deleted": "Controllo di salute eliminato",
+    "failed": "L'operazione sul controllo di salute non è riuscita.",
+    "duplicate": "Esiste già un controllo di salute per questo soggetto.",
+    "searchPlaceholder": "Cerca controlli di salute…",
+    "reportTooltipLabel": "Sui report delle sonde",
+    "reportTooltip": "L'ingestione dei report delle sonde è rivolta alle macchine ed è omessa di proposito dalla console.",
+    "seconds": "{{count}} s",
+    "cols": {
+      "subject": "Soggetto",
+      "kind": "Tipo",
+      "state": "Stato",
+      "intent": "Intento",
+      "cadence": "Cadenza",
+      "sla": "SLA",
+      "lastChecked": "Ultimo controllo",
+      "actions": "Azioni"
+    },
+    "actions": {
+      "edit": "Modifica",
+      "editAria": "Modifica il controllo di salute per {{subject}}",
+      "pause": "Metti in pausa",
+      "pauseAria": "Metti in pausa il controllo di salute per {{subject}}",
+      "resume": "Riprendi",
+      "resumeAria": "Riprendi il controllo di salute per {{subject}}",
+      "retire": "Ritira",
+      "retireAria": "Ritira il controllo di salute per {{subject}}",
+      "delete": "Elimina",
+      "deleteAria": "Elimina il controllo di salute per {{subject}}"
+    },
+    "form": {
+      "name": "Nome",
+      "subjectKind": "Tipo di soggetto",
+      "subjectRef": "Riferimento del soggetto",
+      "expectedInterval": "Intervallo previsto (secondi)",
+      "graceFactor": "Fattore di tolleranza",
+      "slaTarget": "Obiettivo SLA (PPM)",
+      "slaTargetHint": "0 azzera l'obiettivo SLA; 999000 significa 99,9%.",
+      "desiredStatus": "Stato desiderato",
+      "validation": "Inserisci un riferimento del soggetto, valori interi positivi per cadenza e tolleranza e un obiettivo SLA da 0 a 1000000."
+    },
+    "createDialog": {
+      "title": "Crea controllo di salute",
+      "description": "Dichiara un agente o un server MCP da monitorare. Un soggetto può avere un solo controllo di salute."
+    },
+    "edit": {
+      "title": "Modifica controllo di salute",
+      "description": "Il soggetto non è modificabile. Aggiorna la configurazione mostrata e l'intento del ciclo di vita."
+    },
+    "delete": {
+      "title": "Elimina controllo di salute",
+      "description": "Elimina in modo permanente il controllo di salute per {{subject}}. Questa azione amministrativa viene registrata nel registro di audit."
+    },
+    "empty": {
+      "title": "Nessun controllo di salute dichiarato",
+      "description": "Crea un controllo per governare la cadenza di disponibilità attesa di un agente o di un server MCP."
+    }
+  },
+  "sla": {
+    "title": "Affidabilità (SLA)",
+    "pick": "Soggetto",
+    "pickPlaceholder": "Scegli un soggetto…",
+    "pickEmpty": "Ancora nessun soggetto monitorato su cui fare un report.",
+    "pickEmptyHint": "Un report SLA si ricava dai soggetti monitorati. Aggiungi un controllo di salute a un soggetto per poterne fare il report.",
+    "pickPrompt": {
+      "title": "Scegli un soggetto",
+      "description": "Scegli un soggetto monitorato per vedere il suo uptime rispetto all'obiettivo, ricostruito dal registro di affidabilità."
+    },
+    "window": "Finestra",
+    "uptime": "Uptime",
+    "target": "Obiettivo",
+    "noTarget": "Nessun obiettivo",
+    "breaching": "In violazione",
+    "withinTarget": "Entro l'obiettivo",
+    "downtime": "Downtime",
+    "degraded": "Degradato",
+    "degradedNote": "Lo stato degradato conta come attivo per lo SLA: è mostrato a parte, non come downtime.",
+    "currentState": "Stato attuale",
+    "noCheck": {
+      "title": "Nessun controllo dichiarato",
+      "description": "Per questo soggetto non esiste alcun controllo di salute, quindi non si può riportare alcuna affidabilità. È uno stato reale, non un guasto."
+    },
+    "noData": {
+      "title": "Ancora nessuna cronologia",
+      "description": "Questo soggetto ha un controllo ma nessuna cronologia di affidabilità nella finestra: l'uptime è indefinito, non 0%. Compare quando vengono registrate le transizioni."
+    }
+  },
+  "incidents": {
+    "title": "Incidenti",
+    "filterState": "Stato",
+    "allStates": "Tutti",
+    "open": "Aperto",
+    "resolved": "Risolto",
+    "resolve": "Risolvi",
+    "resolving": "Risoluzione in corso…",
+    "resolveTitle": "Chiudi questo record di incidente",
+    "resolveHint": "Risolvere riconosce la chiusura del periodo: NON afferma che il soggetto si sia ripreso. Il ripristino deriva dalla disponibilità reale. Questa azione è privilegiata e sottoposta ad audit.",
+    "cols": {
+      "subject": "Soggetto",
+      "subjectKind": "Tipo",
+      "incidentKind": "Incidente",
+      "severity": "Gravità",
+      "opened": "Aperto",
+      "state": "Stato",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "Degradato",
+      "down": "Non attivo",
+      "sla_breach": "Violazione SLA"
+    },
+    "possibleEvasion": "Possibile elusione",
+    "possibleEvasionHint": "Un soggetto è rimasto in silenzio entro la cadenza prevista (un down rilevato dalla scansione). Un soggetto che smette di emettere è già un segnale, non un guasto dell'interfaccia.",
+    "searchPlaceholder": "Cerca incidente…",
+    "empty": {
+      "title": "Nessun incidente",
+      "description": "Nessun incidente di affidabilità corrisponde a questo filtro. Gli incidenti aperti compaiono qui quando i soggetti si degradano o smettono di rispondere."
+    },
+    "truncated": "Mostrati i primi {{n}}",
+    "truncatedHint": "Gli incidenti sono più di quelli mostrati; questa pagina ha un limite, quindi un resto vuoto NON prova che non ce ne siano."
+  },
+  "timeline": {
+    "title": "Cronologia dell'affidabilità",
+    "pick": "Soggetto",
+    "pickPlaceholder": "Scegli un soggetto…",
+    "pickPrompt": {
+      "title": "Scegli un soggetto",
+      "description": "Scegli un soggetto monitorato per ripercorrere le sue transizioni di affidabilità dal registro append-only."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "Latenza",
+    "latencyUnknown": "Sconosciuta",
+    "cause": {
+      "edge": "Disponibilità osservata",
+      "report": "Sonda attiva",
+      "sweep": "Scansione di obsolescenza"
+    },
+    "causeHint": {
+      "edge": "Dedotto dall'attività osservata (un edge di disponibilità).",
+      "report": "Una sonda di salute attiva ha segnalato questo stato.",
+      "sweep": "Rilevato dalla scansione di obsolescenza: silenzio entro la cadenza prevista."
+    },
+    "possibleEvasion": "Possibile elusione",
+    "possibleEvasionHint": "Un down rilevato dalla scansione di obsolescenza indica silenzio entro la cadenza prevista: viene segnalato come possibile elusione, non come errore di caricamento.",
+    "empty": {
+      "title": "Nessuna transizione registrata",
+      "description": "Questo soggetto non ha ancora transizioni di affidabilità nel registro."
+    },
+    "truncated": "Mostrati i primi {{n}}",
+    "truncatedHint": "Gli eventi sono più di quelli mostrati. La pagina è ordinata per id (prima i più vecchi), quindi ciò che è tagliato è il tratto PIÙ RECENTE: un evento che qui non vedi non è un evento che non è avvenuto."
+  },
+  "deps": {
+    "title": "Mappa delle dipendenze",
+    "subtitle": "Individuata automaticamente dall'attività osservata. Ogni nodo è colorato in base al suo stato di salute attuale: un nodo visto attivo ma senza controllo è \"osservato\" (blu, salute non misurata), un nodo senza alcun segnale resta grigio (sconosciuto); nessuno dei due è mai verde.",
+    "legendTitle": "Stato di salute",
+    "relation": {
+      "uses_mcp": "Usa MCP",
+      "uses_tool": "Usa lo strumento",
+      "delegates_to": "Delega a"
+    },
+    "observed": "Osservato",
+    "truncated": "Mostrati i primi {{n}}",
+    "truncatedHint": "Il grafo delle dipendenze ha più nodi di quelli mostrati; questa è la prima pagina keyset.",
+    "empty": {
+      "title": "Ancora nessuna dipendenza individuata",
+      "description": "Quando gli agenti chiamano server e strumenti MCP, il grafo delle dipendenze osservato compare qui."
+    },
+    "mobile": {
+      "title": "La mappa richiede uno schermo più largo",
+      "summary": "{{nodes}} nodi · {{edges}} dipendenze",
+      "hint": "Apri questa vista su uno schermo più grande per il grafo interattivo delle dipendenze."
+    }
+  },
+  "detail": {
+    "statusTitle": "Stato di salute del soggetto",
+    "incidentTitle": "Incidente",
+    "ref": "Riferimento",
+    "id": "ID",
+    "name": "Nome",
+    "kind": "Tipo",
+    "state": "Stato",
+    "desired": "Intento",
+    "cadence": "Cadenza prevista",
+    "grace": "Fattore di tolleranza",
+    "slaTarget": "Obiettivo SLA",
+    "slaBreach": "Violazione SLA aperta",
+    "latency": "Ultima latenza",
+    "lastSeen": "Ultima attività",
+    "lastChecked": "Ultimo controllo",
+    "owner": "Responsabile",
+    "lastDetail": "Ultimo dettaglio",
+    "severity": "Gravità",
+    "opened": "Aperto",
+    "resolved": "Risolto",
+    "summary": "Riepilogo",
+    "viewSla": "Vedi SLA",
+    "viewTimeline": "Vedi cronologia",
+    "yes": "Sì",
+    "no": "No",
+    "minimalData": "Vengono mostrati solo i metadati. Per progetto il motore non porta mai qui testo di errore, payload o secret (dati minimi)."
+  },
+  "live": {
+    "note": "Le righe si aggiornano in tempo reale al variare dello stato di salute; riconciliate per id, senza presumere continuità."
+  },
+  "empty": {
+    "title": "Niente da mostrare",
+    "description": "Per questo tenant non ci sono ancora dati di salute."
+  },
+  "forbidden": {
+    "title": "Stato di salute non autorizzato",
+    "description": "Il tuo ruolo non include il permesso di vedere stato di salute e SLA."
+  },
+  "forbiddenResolve": {
+    "title": "Risoluzione non autorizzata",
+    "description": "Il tuo ruolo non può risolvere gli incidenti."
+  },
+  "connectors": {
+    "autoRefresh": "Si aggiorna in automatico ogni 15 secondi.",
+    "searchPlaceholder": "Cerca connettore…",
+    "modeFilter": "Filtro per modalità",
+    "modeAll": "Tutte le modalità",
+    "summary": {
+      "running": "In esecuzione",
+      "failed": "Falliti",
+      "stopped": "Fermati",
+      "disabled": "Disabilitati"
+    },
+    "cols": {
+      "name": "Connettore",
+      "kind": "Tipo",
+      "mode": "Modalità",
+      "health": "Salute",
+      "status": "Stato",
+      "trend": "Andamento",
+      "lastPoll": "Ultimo polling"
+    },
+    "status": {
+      "running": "In esecuzione",
+      "failed": "Fallito",
+      "stopped": "Fermato",
+      "disabled": "Disabilitato",
+      "not_wired": "Non configurato"
+    },
+    "trend": {
+      "up": "In miglioramento",
+      "down": "In peggioramento",
+      "stable": "Stabile"
+    },
+    "empty": {
+      "title": "Nessun connettore configurato",
+      "description": "Quando i connettori vengono attivati, la loro salute operativa compare qui."
+    },
+    "emptyMode": {
+      "title": "Nessun connettore corrisponde a questa modalità",
+      "description": "Cambia il filtro per modalità per vedere gli altri connettori."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares AI — Stato",
+    "subtitle": "Stato operativo attuale di tutti i componenti.",
+    "unavailable": "Le informazioni di stato non sono al momento disponibili.",
+    "lastUpdated": "Ultimo aggiornamento: {{time}}",
+    "overall": {
+      "operational": "Tutti i sistemi operativi",
+      "not_configured": "Operativo: funzionalità opzionali non configurate",
+      "degraded": "Disservizio parziale del sistema",
+      "outage": "Disservizio grave del sistema"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "Recupero della conoscenza",
+      "store": "Database",
+      "connectors": "Connettori",
+      "ingest": "Ingestione dei dati",
+      "audit_spool": "Spool di audit"
+    },
+    "status": {
+      "operational": "Operativo",
+      "not_configured": "Non configurato",
+      "degraded": "Degradato",
+      "outage": "Disservizio"
+    }
+  },
+  "update": {
+    "title": "Aggiornamenti",
+    "available": "Aggiornamento disponibile",
+    "security": "Aggiornamento di sicurezza",
+    "channel": "Canale",
+    "upToDate": "Aggiornato",
+    "notChecked": "Nessun controllo recente",
+    "failed": "Controllo degli aggiornamenti non riuscito",
+    "checked": "Controllo degli aggiornamenti completato",
+    "advisories": "Avvisi di sicurezza risolti",
+    "checkNow": "Controlla ora",
+    "unconfigured": "Il controllo degli aggiornamenti non è configurato. Nessun aggiornamento è stato verificato; i controlli di rete restano disattivati.",
+    "unavailable": "Controllo non disponibile",
+    "instructions": "Istruzioni di aggiornamento",
+    "configure": "Per abilitare i controlli, usa una release ufficiale con la sua chiave di verifica integrata. Imposta OLIVARES_UPDATE_ENDPOINT sul tuo canale firmato approvato nella configurazione del servizio, poi riavvia Olivares. Lascialo non impostato per mantenere disattivati i controlli di rete.",
+    "manual": "Per aggiornare manualmente, esegui il backup dei dati, verifica il nuovo pacchetto o la nuova immagine ed esegui l'upgrade con il tuo metodo di installazione. Mantieni la stessa directory dei dati. Una build di sviluppo senza chiave di verifica non può controllare un canale firmato."
+  },
+  "system": {
+    "title": "Salute del sistema",
+    "systemStatus": "Stato del sistema",
+    "healthy": "Integro",
+    "unhealthy": "Non integro",
+    "ready": "Pronto",
+    "notReady": "Non pronto",
+    "storeEngine": "Motore dello store",
+    "version": "Versione",
+    "connectors": "Connettori",
+    "connectorsRunning": "{{count}} in esecuzione",
+    "connectorsConfigured": "{{count}} configurati",
+    "connectorsAvailable": "{{count}} disponibili da configurare",
+    "connectorsError": "{{count}} in errore",
+    "noConnectors": "Nessun connettore configurato",
+    "users": "Utenti",
+    "usersCount": "{{count}} registrati",
+    "identity": "Identità",
+    "ssoConfigured": "SSO configurato",
+    "ssoNotConfigured": "SSO non configurato",
+    "unavailable": "I dati operativi non sono disponibili o non sei autorizzato."
+  },
+  "tls": {
+    "title": "Certificato TLS",
+    "notAfter": "Scade il",
+    "daysLeft": "{{count}} giorni rimanenti",
+    "expired": "Scaduto {{count}} giorni fa"
+  },
+  "keys": {
+    "title": "Custodia delle chiavi",
+    "empty": "Non sono disponibili metadati sulla custodia delle chiavi.",
+    "sealers": "Sealer simmetrici",
+    "sourceUnknown": "origine non disponibile",
+    "copyFingerprint": "Copia l'impronta completa per {{purpose}}",
+    "copied": "Impronta copiata",
+    "cols": {
+      "purpose": "Scopo",
+      "algorithm": "Algoritmo",
+      "mode": "Modalità di custodia",
+      "kek": "KEK",
+      "created": "Creata",
+      "fingerprint": "Impronta",
+      "prior": "Chiavi precedenti"
+    }
+  },
+  "config": {
+    "title": "Configurazione effettiva",
+    "empty": "Non sono disponibili voci di configurazione effettiva.",
+    "strictViolations": "Violazioni della configurazione strict",
+    "redacted": "Oscurato",
+    "cols": {
+      "key": "Chiave",
+      "value": "Valore effettivo",
+      "source": "Origine"
+    }
+  },
+  "bus": {
+    "title": "Event bus",
+    "noSubscribers": "Nessun sottoscrittore dell'event bus è registrato.",
+    "depthAria": "Profondità della coda per {{subscriber}}",
+    "counters": {
+      "publishBlocked": "Pubblicazioni bloccate",
+      "dropped": "Scartati",
+      "droppedTelemetry": "Telemetria scartata",
+      "droppedNotify": "Notifiche scartate",
+      "handlerErrors": "Errori degli handler",
+      "enqueued": "In coda",
+      "handled": "Gestiti"
+    },
+    "bridge": {
+      "title": "Bridge",
+      "pendingMessages": "Messaggi in sospeso",
+      "pendingBytes": "Byte in sospeso",
+      "dropped": "Scartati",
+      "publishErrors": "Errori di pubblicazione",
+      "decodeErrors": "Errori di decodifica",
+      "gateSkipped": "Gate saltato",
+      "invalidSubject": "Subject non valido"
+    }
+  },
+  "support": {
+    "title": "Support bundle",
+    "description": "Genera un archivio diagnostico per il supporto senza esporre i valori dei secret memorizzati.",
+    "download": "Scarica il support bundle",
+    "generate": "Genera e scarica",
+    "confirmTitle": "Generare un support bundle?",
+    "confirmDescription": "Questa azione privilegiata viene registrata nel registro di audit.",
+    "contents": "Il bundle contiene configurazione effettiva oscurata, stato operativo e log. Controllalo prima di condividerlo.",
+    "downloaded": "Support bundle scaricato",
+    "failed": "Generazione del support bundle non riuscita."
+  },
+  "auditSpool": {
+    "title": "Spool di audit",
+    "withinBudget": "Entro il budget",
+    "nearFull": "Vicino al budget",
+    "engaged": "Budget raggiunto",
+    "modes": {
+      "block": "Blocca quando pieno",
+      "degrade": "Degrada quando pieno"
+    },
+    "usage": "{{used}} di {{max}} usati ({{pct}})",
+    "pendingDrops": "{{drops}} scarti di evidenze non sigillate su {{tenants}} tenant"
+  }
+}

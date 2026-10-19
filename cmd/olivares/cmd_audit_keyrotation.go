@@ -47,8 +47,10 @@ func auditKeyTransitionCmd() *cobra.Command {
 	var dataDir, engineKind, dsn, adminDSN, tenant, priorPubB64 string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "key-transition",
-		Short: "Record the off-box-signed signing-key epoch boundary after `keys rotate`",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "key-transition",
+		Short:       "Record the off-box-signed signing-key epoch boundary after `keys rotate`",
+		Hidden:      thisEdition.name == "community",
 		Long: "key-transition appends one off-box-signed audit.key.rotation marker per tenant that fences the\n" +
 			"RETIRED per-event key to the sequence it last signed (this tenant's tail). Run it with the engine\n" +
 			"STOPPED, after `keys rotate` has swapped in the new sealed envelope and before serving resumes.\n" +
@@ -59,6 +61,10 @@ func auditKeyTransitionCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Business: the boundary needs the off-box signer. Refused before any store opens.
+			if thisEdition.name == "community" {
+				return notInEdition()
+			}
 			eng, err := auditBootCrossTenant(cmd, dataDir, engineKind, dsn, adminDSN)
 			if err != nil {
 				return err

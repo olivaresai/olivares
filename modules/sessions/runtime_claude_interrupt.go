@@ -40,11 +40,20 @@ func (m *Module) interruptClaudeTurn(ctx context.Context, lr *liveRun) (bool, er
 		return false, err
 	}
 	cursor := lr.ring.cursorNow()
+	// Read the turn count after the authority and call-cancellation waits: a queued
+	// successor can start during them, and the frame then interrupts that turn.
+	lr.mu.Lock()
+	turnAtInterrupt := lr.claudeTurnsEnded
+	lr.mu.Unlock()
 	if err := lr.proc.Send(ctx, line); err != nil {
 		m.warnf("session interrupt not delivered", "run_ref", lr.runRef)
 		return true, &runErr{http.StatusBadGateway, "the interrupt could not be written to the session; it may still be running its turn"}
 	}
-	return true, errors.Join(callErr, m.awaitClaudeControlResponse(ctx, lr.ring, cursor, id))
+	err = errors.Join(callErr, m.awaitClaudeControlResponse(ctx, lr.ring, cursor, id))
+	if err == nil {
+		lr.confirmTurnInterrupted(turnAtInterrupt)
+	}
+	return true, err
 }
 
 // awaitClaudeControlResponse reads the session's output from cursor until Claude

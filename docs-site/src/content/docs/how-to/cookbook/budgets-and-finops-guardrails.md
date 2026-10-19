@@ -82,11 +82,8 @@ its reason. Alerts also ride the notification stream, so a Slack or
 PagerDuty [destination](/how-to/forward-audit-to-splunk/) hears the 80%
 crossing before the 100% denial.
 
-In the console, **Cost & FinOps** shows spend by dimension with budget
-status inline:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="The Cost & FinOps view with spend trends and budget posture." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="The Cost & FinOps view with spend trends and budget posture." />
+In the console, **Budgets** shows consumption against each limit, with the
+run-rate projection.
 
 ## Give spend a denominator: outcomes
 

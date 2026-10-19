@@ -328,3 +328,31 @@ describe('RecentWork — the list starts the work', () => {
     )
   })
 })
+
+describe('a row named by its tool and folder says the folder once (#2266)', () => {
+  it('does not append the folder the name already carries', () => {
+    const session = mergeSessions(
+      [],
+      [
+        {
+          run_ref: 'run-1',
+          transport: 'stream-json',
+          permission_mode: 'default',
+          isolation: 'native',
+          state: 'running',
+          last_event_seq: 0,
+          pep_provisioned: true,
+          record_io: false,
+          critical: false,
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/billing-api',
+        },
+      ],
+    )
+    renderIntel(<RecentWork sessions={session} state="ready" />)
+    const rowEl = screen.getByTestId('home-recent-row')
+    const text = rowEl.textContent ?? ''
+    expect(text).toContain('Claude Code \u00b7 billing-api')
+    expect(text.split('billing-api')).toHaveLength(2)
+  })
+})

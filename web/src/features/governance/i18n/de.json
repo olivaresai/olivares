@@ -223,8 +223,8 @@
     "trailEmptyHint": "Jede Entscheidung zu dieser Freigabe — wer, wann und warum — wird hier festgehalten. Es hat noch niemand entschieden.",
     "decisionApprove": "Genehmigt",
     "decisionReject": "Abgelehnt",
-    "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & NHI an oder mit `olivares users create`.",
-    "openIdentity": "Identität & NHI öffnen",
+    "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & Zugriff an oder mit `olivares users create`.",
+    "openIdentity": "Identität & Zugriff öffnen",
     "cannotDecideOwn": "Sie können Ihre eigene Anfrage nicht genehmigen. Ein anderer Administrator muss entscheiden."
   },
   "policies": {
@@ -282,7 +282,7 @@
     "matchActionHint": "Leer = passt auf jede Aktion.",
     "matchSubjectKind": "Gegenstandsart abgleichen",
     "matchSubjectKindHint": "Leer = passt auf jede Gegenstandsart.",
-    "needsBusiness": "Eine Risikostufe unter den Standard der Aktion zu senken erfordert Business. Schalten Sie diese Richtlinie aus, um sie gespeichert zu lassen.",
+    "needsBusiness": "Eine Risikostufe oder eine Anzahl Freigaben, die vom Standard der Aktion abweicht, erfordert Business. Schalten Sie diese Richtlinie aus, um sie gespeichert zu lassen.",
     "create": "Richtlinie erstellen",
     "save": "Änderungen speichern",
     "confirmCreateBody": "Eine aktivierte ABAC-Richtlinie schränkt den Zugriff sofort weiter ein; eine aktivierte Genehmigungsrichtlinie beginnt, für passende Aktionen menschliche Genehmigungen zu verlangen. Wird sofort wirksam.",
@@ -313,7 +313,7 @@
     "empty": "Keine Identitäten",
     "emptyHint": "Identitäten erscheinen hier, sobald eine Verzeichnisquelle für diesen Mandanten abgeglichen wurde.",
     "principalTypeHuman": "Mensch",
-    "principalTypeNhi": "NHI",
+    "principalTypeNhi": "Nicht-menschlich",
     "principalTypeUnknown": "Unbekannt"
   },
   "groups": {
@@ -329,6 +329,7 @@
     "emptyHint": "Gruppen, Rollen und Richtlinien erscheinen hier, während Verzeichnisquellen abgeglichen werden."
   },
   "members": {
+    "notFound": "Diese Gruppe existiert nicht.",
     "title": "Gruppenmitglieder",
     "subtitle": "Mitglieder von „{{group}}“.",
     "direct": "Direkt",
@@ -345,7 +346,7 @@
   },
   "bindings": {
     "title": "Agent-Bindungen",
-    "caption": "Wie jeder Agent seiner nicht-menschlichen Identität (NHI) zugeordnet wird — die Brücke, die die Aktionen des Agenten in der Zugriffskarte zuordnet.",
+    "caption": "Wie jeder Agent seiner nicht-menschlichen Identität zugeordnet wird, über die seine Aktionen in der Zugriffskarte zugeordnet werden.",
     "search": "Bindungen suchen…",
     "agent": "Agent",
     "identity": "Identität",
@@ -584,7 +585,7 @@
     },
     "binding": {
       "title": "Noch keine Agent-Bindungen",
-      "description": "Binden Sie einen Agenten an eine vorhandene oder neu ausgestellte NHI, damit seine Aktionen dieser Identität in der Zugriffskarte zugeordnet werden."
+      "description": "Binden Sie einen Agenten an eine vorhandene oder neue nicht-menschliche Identität, damit seine Aktionen dieser Identität in der Zugriffskarte zugeordnet werden."
     },
     "group": {
       "title": "Noch keine Gruppen",

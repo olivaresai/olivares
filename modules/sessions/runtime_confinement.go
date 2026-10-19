@@ -5,6 +5,8 @@
 package sessions
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,6 +120,130 @@ gitDirs:
 		p.Sealed = []string{dir}
 	}
 	return p
+}
+
+// withoutDelete takes the session folder out of the policy's writable grants and
+// returns it as a no-delete folder (workspace mount_mode write_no_delete): the agent
+// may create and change what is in it and never remove, rename or move a name.
+// Landlock grants add up, so the folder cannot stay writable beside its no-delete
+// grant. The folder is always returned: a writable grant this does not take out (an
+// alias of the folder, a home above it) overlaps it, and the policy's own overlap
+// check refuses the launch instead of starting it with the rule dropped. The caller
+// skips a read-only session, which seals the folder and keeps the stricter rule.
+// A plain repository's .git directory is the one part of the folder that keeps the
+// delete rights (confine.CommandWithNoDelete): Git cannot finish an index write
+// without renaming its lock file.
+func withoutDelete(p *confine.Policy, dir string) []string {
+	if p == nil || dir == "" {
+		return nil
+	}
+	kept := make([]string, 0, len(p.ReadWrite))
+	for _, path := range p.ReadWrite {
+		if path != dir && resolvedPath(path) != resolvedPath(dir) {
+			kept = append(kept, path)
+		}
+	}
+	p.ReadWrite = kept
+	return []string{dir}
+}
+
+// GitMounts are the mounts that keep a session from changing the Git hooks and
+// configuration of its folder: the next `git` the person runs there would run
+// what the session wrote. Landlock cannot deny a path inside a writable grant, a
+// mount can. Each guarded node is the repository's own; the directories that
+// hold them are pinned so the session cannot move one away and put a copy in
+// its place. The note says which part the mounts could not cover (a symbolic
+// link, a layout this launch cannot read) and is "" when all of it is.
+// The guard on a file lasts as long as the file: when something outside the
+// session deletes it or renames another over it (git does that to config on
+// `git config`, `git remote add` or `git push -u`), the mount is gone in the
+// session's namespace and the session writes the new file.
+// Not covered: that, a sibling worktree's entry, a submodule's Git directory, a
+// repository nested in the folder and a folder that has no .git yet.
+func (m *Module) GitMounts(dir string) (confine.Mounts, string) {
+	var mounts confine.Mounts
+	var skipped []string
+	if dir == "" {
+		return mounts, "" // no folder: a relative ".git" would name the engine's own
+	}
+	layout, ok := gitlayout.Read(dir)
+	if !ok {
+		dotgit := filepath.Join(resolvedPath(dir), ".git")
+		info, err := os.Lstat(dotgit)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			return mounts, "" // not a Git folder
+		case err != nil:
+			skipped = append(skipped, ".git cannot be read")
+		case info.Mode().IsRegular():
+			// A pointer this launch cannot validate: at least keep it from being rewritten.
+			mounts.ReadOnly = append(mounts.ReadOnly, dotgit)
+			skipped = append(skipped, "its Git directory is not one this launch can read: a submodule, a separate Git directory or a changed pointer")
+		default:
+			skipped = append(skipped, "its Git directory is not one this launch can read")
+		}
+		return m.gitMountsNote(dir, mounts, skipped)
+	}
+	// guard binds path read-only. A missing path that git would read and the
+	// session could create is made first (mounts.Create, by WrapMounts, on a host
+	// that can then guard it); one that has no node to make is named instead.
+	guard := func(path string, node *confine.Node) {
+		info, err := os.Lstat(path)
+		switch {
+		case errors.Is(err, fs.ErrNotExist) && node != nil:
+			mounts.Create = append(mounts.Create, *node)
+			mounts.ReadOnly = append(mounts.ReadOnly, path)
+		case err != nil:
+			skipped = append(skipped, filepath.Base(path)+" cannot be read")
+		case info.Mode()&os.ModeSymlink != 0:
+			// The session could replace the link, so nothing about it is guarded.
+			skipped = append(skipped, filepath.Base(path)+" is a symbolic link")
+		default:
+			mounts.ReadOnly = append(mounts.ReadOnly, path)
+		}
+	}
+	file := func(path, content string) *confine.Node { return &confine.Node{Path: path, Content: content} }
+	hooks := filepath.Join(layout.CommonDir, "hooks")
+	guard(hooks, &confine.Node{Path: hooks, Dir: true}) // git init always makes hooks/
+	guard(filepath.Join(layout.CommonDir, "config"), nil)
+	// Git follows a commondir file in any Git directory, so one the session
+	// created in the repository's own would redirect git to a repository the
+	// session wrote. A commondir that names the directory itself changes nothing.
+	commondir := filepath.Join(layout.CommonDir, "commondir")
+	if _, err := os.Lstat(commondir); err == nil && !gitlayout.NamesItself(layout.CommonDir) {
+		// Read checked a plain repository's; a linked worktree's main one is not.
+		skipped = append(skipped, "commondir does not name its own directory")
+	} else {
+		guard(commondir, file(commondir, ".\n"))
+	}
+	// Per-worktree settings are read from any Git directory once
+	// extensions.worktreeConfig is on, which a later `git sparse-checkout` does.
+	// An empty file is a valid one.
+	perWorktree := func(gitDir string) {
+		path := filepath.Join(gitDir, "config.worktree")
+		guard(path, file(path, ""))
+	}
+	perWorktree(layout.CommonDir)
+	mounts.Pin = []string{layout.GitDir}
+	if layout.Linked() {
+		perWorktree(layout.GitDir)
+		// worktrees/ is pinned too: renamed, it could be recreated with a forged entry.
+		mounts.Pin = []string{filepath.Dir(layout.GitDir), layout.GitDir}
+		// The links that say where the common directory is, from both sides.
+		guard(filepath.Join(layout.GitDir, "commondir"), nil)
+		guard(filepath.Join(layout.GitDir, "gitdir"), nil)
+		guard(filepath.Join(resolvedPath(dir), ".git"), nil)
+	}
+	return m.gitMountsNote(dir, mounts, skipped)
+}
+
+func (m *Module) gitMountsNote(dir string, mounts confine.Mounts, skipped []string) (confine.Mounts, string) {
+	if len(skipped) == 0 {
+		return mounts, ""
+	}
+	note := strings.Join(skipped, ", ")
+	m.warnf("sessions: part of a folder's Git hooks and configuration is not guarded against the session", "folder", dir, "reason", note)
+	return mounts, note
 }
 
 // pathsOverlap reports whether a and b are the same directory or one contains the

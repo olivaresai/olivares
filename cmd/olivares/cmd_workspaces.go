@@ -41,9 +41,10 @@ const workspacesPath = "/v1/workspaces"
 func newWorkspacesCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:     "workspaces",
-		Aliases: []string{"workspace"},
-		Short:   "Workspaces: list, show",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "workspaces",
+		Aliases:     []string{"workspace"},
+		Short:       "Workspaces: list, show",
 		Long: "Read the workspaces of your organization. A workspace is the container agents,\n" +
 			"sessions, resources and agent groups live in. `ls` lists the tenant's workspaces;\n" +
 			"`get` shows one workspace with the counts of what it holds, from the engine's one\n" +
@@ -101,9 +102,10 @@ func workspacesListCmd(client bootstrapClient) *cobra.Command {
 	var limit int
 	var cursor string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the workspaces of the tenant",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the workspaces of the tenant",
 		Long: "List the workspaces of your organization with their id, handle, lifecycle status and\n" +
 			"which one is the default — the resolution target for every entity created without a\n" +
 			"workspace. A workspace-confined caller sees only its own; that concealment is the\n" +
@@ -149,9 +151,10 @@ func workspacesListCmd(client bootstrapClient) *cobra.Command {
 
 func workspacesGetCmd(client bootstrapClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "get <workspace-id>",
-		Aliases: []string{"show"},
-		Short:   "Show one workspace and what it holds",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <workspace-id>",
+		Aliases:     []string{"show"},
+		Short:       "Show one workspace and what it holds",
 		Long: "Show one workspace: its metadata, then the counts of what it holds — agents,\n" +
 			"sessions, resources and agent groups. The counts are the workspace's one contents\n" +
 			"read through the engine's confined scope (the same read the console's workspace page\n" +

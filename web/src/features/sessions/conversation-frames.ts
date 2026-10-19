@@ -46,6 +46,8 @@ export interface ConversationItem {
   durationMs?: number
   /** Init frame's working directory, when the driver reported one. */
   cwd?: string
+  /** Init frame's tool count: `systemText` words the session-start line from it. */
+  toolCount?: number
   systemKind?: string
   /** The ACP message a streamed reply belongs to (`agent_message_chunk.messageId`). */
   messageId?: string
@@ -59,6 +61,9 @@ export interface ConversationItem {
   /** A result the tool marked as an error (Claude Code `is_error`, an `error_*`
    * subtype): its text is the failure, and it is shown (F1C). */
   resultFailed?: boolean
+  /** The images the person attached to this message, by the id the engine keeps them
+   * under (operator rows only). */
+  attachments?: { id: string; mediaType: string }[]
   /** Every source line that built this item, in order. Never empty. */
   raw: string[]
 }
@@ -169,12 +174,15 @@ function systemSummary(frame: Record<string, unknown>): {
   systemKind: string
   cwd?: string
   model?: string
+  toolCount?: number
 } {
   const subtype = asString(frame.subtype) ?? ''
   if (subtype === 'init') {
     const tools = Array.isArray(frame.tools) ? frame.tools.length : 0
     const model = asString(frame.model)
     const cwd = asString(frame.cwd)
+    // The English line is the fallback text; the rendered one comes from the catalog
+    // (`systemText`, from `model` and `toolCount`).
     const parts = ['Session started']
     if (model) parts.push(model)
     if (tools > 0) parts.push(`${tools} tools`)
@@ -183,6 +191,7 @@ function systemSummary(frame: Record<string, unknown>): {
       systemKind: 'init',
       cwd,
       model,
+      toolCount: tools,
     }
   }
   if (subtype === 'hook_started' || subtype === 'hook_response') {
@@ -382,6 +391,20 @@ function codexErrorText(error: unknown): string | undefined {
   } catch {
     return message
   }
+}
+
+/** The images the engine says a user message carried (it replaces the tool's own echo,
+ * which holds the picture itself, with these references). */
+function attachmentsOf(
+  frame: Record<string, unknown>,
+): { id: string; mediaType: string }[] {
+  if (!Array.isArray(frame.attachments)) return []
+  return frame.attachments.flatMap((a) => {
+    const id = asString(asRecord(a)?.id)
+    return id
+      ? [{ id, mediaType: asString(asRecord(a)?.media_type) ?? '' }]
+      : []
+  })
 }
 
 /** One Codex app-server notification read as a conversation item, or null. */
@@ -913,6 +936,7 @@ export function foldConversationLine(
         systemKind: sys.systemKind,
         cwd: sys.cwd,
         model: sys.model,
+        toolCount: sys.toolCount,
         raw: [trimmed],
       },
     ]
@@ -1086,6 +1110,7 @@ export function foldConversationLine(
     const text =
       textFromContent(message) ||
       (typeof frame.message === 'string' ? frame.message : '')
+    const attachments = attachmentsOf(frame)
     return [
       ...items,
       {
@@ -1093,6 +1118,7 @@ export function foldConversationLine(
         id: nextId('operator', items.length, asString(frame.uuid)),
         text: text || undefined,
         summary: text ? truncateSummary(text) : 'Operator',
+        ...(attachments.length > 0 ? { attachments } : {}),
         raw: [trimmed],
       },
     ]

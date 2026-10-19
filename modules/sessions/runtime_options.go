@@ -142,6 +142,16 @@ func WithSessionCostSink(sink SessionCostSink) Option {
 	}
 }
 
+// WithLimitResets wires the reset time of a login's used-up usage windows, which a
+// usage limit falls back to when its tool's own result names none.
+func WithLimitResets(src LimitResetSource) Option {
+	return func(m *Module) {
+		if src != nil {
+			m.rt.LimitResets = src
+		}
+	}
+}
+
 // WithListPricer wires the declared list prices a turn is priced at when its tool
 // reported tokens and no money (runtime_usage.go). Unwired, such a turn's cost
 // stays unknown.

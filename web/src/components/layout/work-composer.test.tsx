@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {
   createMemoryHistory,
@@ -11,11 +11,21 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel } from '@/test/intel'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderIntel, createTestQueryClient } from '@/test/intel'
+import {
+  clearSessionDrafts,
+  sessionDraftKey,
+  writeSessionDraft,
+} from '@/lib/session-drafts'
 
 const auth = vi.hoisted(() => ({
   activeTenant: 'tnt-demo' as string | null,
+  principal: { kind: 'user', actor: 'user:alice', user_id: 'alice' } as {
+    kind: PrincipalKind
+    actor: string
+    user_id: string
+  } | null,
   grants: [] as { tenant: string; tenant_name?: string }[],
   can: (_: string): boolean => true,
 }))
@@ -38,7 +48,9 @@ const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
 vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 
 import { ScopeLine, WorkComposer } from './work-composer'
+import { COMPOSER_INPUT_ID } from './work-composer-id'
 import type { RunDTO } from '@/features/agentops/types'
+import type { PrincipalKind } from '@/lib/api/types'
 
 const PROFILE = {
   profile_ref: 'ppf_team',
@@ -60,6 +72,9 @@ const WORKSPACE = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  clearSessionDrafts()
+  sessionStorage.clear()
+  auth.principal = { kind: 'user', actor: 'user:alice', user_id: 'alice' }
   auth.activeTenant = 'tnt-demo'
   auth.grants = []
   auth.can = () => true
@@ -91,6 +106,8 @@ beforeEach(() => {
   })
 })
 
+afterEach(() => vi.restoreAllMocks())
+
 const RUNNING: RunDTO = {
   run_ref: 'run_live',
   name: 'nightly',
@@ -105,6 +122,285 @@ const RUNNING: RunDTO = {
   provider_driver: 'claude',
   provider_profile_ref: 'ppf_team',
 }
+
+describe('WorkComposer tab drafts', () => {
+  const composer = (run = RUNNING) => (
+    <WorkComposer attached={{ run, group: 'active' }} />
+  )
+  const field = () => screen.getByRole('textbox', { name: 'Session turn' })
+  const draftKeys = () =>
+    Object.keys(sessionStorage).filter((key) =>
+      key.startsWith('olivares.draft.'),
+    )
+
+  it('clears the current field when a send completes after an unedited session round trip', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'This message is being sent')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    view.rerender(composer({ ...RUNNING, run_ref: 'run_other' }))
+    view.rerender(composer())
+    expect(field()).toHaveValue('This message is being sent')
+    await act(async () => finish({ accepted: true }))
+    expect(field()).toHaveValue('')
+    expect(draftKeys()).toHaveLength(0)
+  })
+
+  it('keeps editing and sending available and explains when tab storage refuses a write', async () => {
+    const user = userEvent.setup()
+    renderIntel(composer())
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage full', 'QuotaExceededError')
+    })
+    await user.type(field(), 'Unsaved message')
+    expect(field()).toHaveValue('Unsaved message')
+    expect(screen.getByRole('status', { name: 'Draft' })).toHaveTextContent(
+      'Draft could not be saved in this tab.',
+    )
+    expect(screen.getByTestId('composer-send')).toBeEnabled()
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(field()).toHaveValue(''))
+    expect(api.input).toHaveBeenCalledOnce()
+  })
+
+  it('clears a draft whose send completes while another session is open', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'Sent from the closed session')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    view.rerender(composer({ ...RUNNING, run_ref: 'run_other' }))
+    await act(async () => finish({ accepted: true }))
+    await user.type(field(), 'The open session is unaffected')
+    view.rerender(composer())
+    expect(field()).toHaveValue('')
+    expect(draftKeys()).toHaveLength(1)
+  })
+
+  it('keeps a storage-refused draft for this tab across a session switch', async () => {
+    const user = userEvent.setup()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    const other = { ...RUNNING, run_ref: 'run_other' }
+    const view = renderIntel(composer())
+    setItem.mockImplementation(() => {
+      throw new DOMException('Storage full', 'QuotaExceededError')
+    })
+    await user.type(field(), 'Only this tab keeps it')
+    view.rerender(composer(other))
+    await user.type(field(), 'Other session text')
+    view.rerender(composer())
+    expect(field()).toHaveValue('Only this tab keeps it')
+    view.unmount()
+    const restored = renderIntel(composer())
+    expect(field()).toHaveValue('Only this tab keeps it')
+    // A tab whose storage recovers persists again and stops warning.
+    setItem.mockRestore()
+    await user.clear(field())
+    await user.type(field(), 'Saved once more')
+    expect(screen.queryByRole('status', { name: 'Draft' })).toBeNull()
+    restored.unmount()
+    renderIntel(composer())
+    expect(field()).toHaveValue('Saved once more')
+  })
+
+  it('keeps an in-flight send blocking its draft across a session round trip', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'Already going out')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    view.rerender(composer({ ...RUNNING, run_ref: 'run_other' }))
+    view.rerender(composer())
+    // The remounted field must not offer the pending message as a new draft.
+    expect(field()).toBeDisabled()
+    expect(screen.getByTestId('composer-send')).toBeDisabled()
+    await act(async () => finish({ accepted: true }))
+    await waitFor(() => expect(field()).toBeEnabled())
+    expect(api.input).toHaveBeenCalledOnce()
+    expect(field()).toHaveValue('')
+  })
+
+  it('keeps two session drafts separate on switching and remounting', async () => {
+    const user = userEvent.setup()
+    const other = { ...RUNNING, run_ref: 'run_other' }
+    const view = renderIntel(composer())
+    await user.type(field(), 'First unsent message')
+    expect(api.inputText).not.toHaveBeenCalled()
+    expect(api.input).not.toHaveBeenCalled()
+    view.rerender(composer(other))
+    expect(field()).toHaveValue('')
+    await user.type(field(), 'Second unsent message')
+    view.rerender(composer())
+    expect(field()).toHaveValue('First unsent message')
+    view.unmount()
+    const remounted = renderIntel(composer())
+    expect(field()).toHaveValue('First unsent message')
+    remounted.rerender(composer(other))
+    expect(field()).toHaveValue('Second unsent message')
+    expect(draftKeys()).toHaveLength(2)
+    expect(localStorage.getItem(draftKeys()[0])).toBeNull()
+  })
+
+  it('removes the stored draft after sending, preserving the other session', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(composer({ ...RUNNING, run_ref: 'run_other' }))
+    await user.type(field(), 'Other draft')
+    view.rerender(composer())
+    await user.type(field(), 'Send this message')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(field()).toHaveValue(''))
+    expect(api.input).toHaveBeenCalledWith(
+      'run_live',
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: 'Send this message' },
+      }),
+      undefined,
+    )
+    expect(draftKeys()).toHaveLength(1)
+    view.unmount()
+    renderIntel(composer())
+    expect(field()).toHaveValue('')
+  })
+
+  it('keeps a rejected message available after remount', async () => {
+    api.input.mockRejectedValueOnce(new Error('Send rejected'))
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'Keep this message')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(toasts.error).toHaveBeenCalled())
+    expect(field()).toHaveValue('Keep this message')
+    view.unmount()
+    renderIntel(composer())
+    expect(field()).toHaveValue('Keep this message')
+  })
+
+  it('drops a draft stored 25 hours ago on read', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'Expired draft')
+    const [key] = draftKeys()
+    expect(key).toBeDefined()
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({
+        text: 'Expired draft',
+        updatedAt: Date.now() - 25 * 60 * 60 * 1000,
+      }),
+    )
+    view.unmount()
+    renderIntel(composer())
+    expect(field()).toHaveValue('')
+    expect(sessionStorage.getItem(key)).toBeNull()
+  })
+
+  it('isolates tenants and principals even when the session address is identical', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'Alice in the first tenant')
+    auth.activeTenant = 'tnt-other'
+    view.rerender(composer())
+    expect(field()).toHaveValue('')
+    await user.type(field(), 'Alice in the other tenant')
+    auth.principal = { kind: 'user', actor: 'user:bob', user_id: 'bob' }
+    view.rerender(composer())
+    expect(field()).toHaveValue('')
+    await user.type(field(), 'Bob in the other tenant')
+    auth.principal = { kind: 'user', actor: 'user:alice', user_id: 'alice' }
+    view.rerender(composer())
+    expect(field()).toHaveValue('Alice in the other tenant')
+    auth.activeTenant = 'tnt-demo'
+    view.rerender(composer())
+    expect(field()).toHaveValue('Alice in the first tenant')
+    expect(draftKeys()).toHaveLength(3)
+    expect(
+      draftKeys().every((key) => key.includes('alice') || key.includes('bob')),
+    ).toBe(true)
+    expect(
+      draftKeys().every(
+        (key) => key.includes('tnt-demo') || key.includes('tnt-other'),
+      ),
+    ).toBe(true)
+  })
+
+  it.each<[string, Partial<NonNullable<typeof auth.principal>>]>([
+    ['kind', { kind: 'token' }],
+    ['actor', { actor: 'user:alice-2' }],
+    ['user_id', { user_id: 'alice-2' }],
+  ])(
+    'does not share a draft with a principal that differs only in %s',
+    async (_field, change) => {
+      const user = userEvent.setup()
+      const view = renderIntel(composer())
+      await user.type(field(), 'Alice only')
+      auth.principal = { ...auth.principal!, ...change }
+      view.rerender(composer())
+      expect(field()).toHaveValue('')
+    },
+  )
+
+  it('keeps a newer edit made while an earlier send is in flight', async () => {
+    let finish!: (value: { accepted: boolean }) => void
+    api.input.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    renderIntel(composer())
+    await user.type(field(), 'Going out now')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledOnce())
+    // The field is locked while sending; a dictation result still lands in the draft.
+    act(() => {
+      writeSessionDraft(
+        sessionDraftKey('tnt-demo', auth.principal, 'run_live'),
+        'Dictated afterwards',
+      )
+    })
+    await act(async () => finish({ accepted: true }))
+    await waitFor(() => expect(field()).toBeEnabled())
+    expect(field()).toHaveValue('Dictated afterwards')
+  })
+
+  it('does not restore or persist without a resolved principal', async () => {
+    const user = userEvent.setup()
+    const view = renderIntel(composer())
+    await user.type(field(), 'Private draft')
+    auth.principal = null
+    view.rerender(composer())
+    expect(field()).toHaveValue('')
+    await user.type(field(), 'Unresolved identity')
+    expect(draftKeys()).toHaveLength(1)
+    auth.principal = { kind: 'user', actor: 'user:alice', user_id: 'alice' }
+    view.rerender(composer())
+    expect(field()).toHaveValue('Private draft')
+  })
+})
 
 describe('WorkComposer permissions', () => {
   it('opens the pending approval from Needs you', async () => {
@@ -443,6 +739,67 @@ describe('WorkComposer layout and disclosure', () => {
 })
 
 describe('WorkComposer — attached session input', () => {
+  it('keeps two composers and their submitted turns separate', async () => {
+    const user = userEvent.setup()
+    renderIntel(
+      <>
+        <WorkComposer
+          inputId="first-composer"
+          attached={{ run: RUNNING, group: 'active' }}
+        />
+        <WorkComposer
+          inputId="second-composer"
+          attached={{
+            run: {
+              ...RUNNING,
+              run_ref: 'run_second',
+              provider_driver: 'codex',
+            },
+            group: 'active',
+          }}
+        />
+      </>,
+    )
+    const first = document.getElementById('first-composer')!
+    const second = document.getElementById('second-composer')!
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    await user.type(first, 'First draft')
+    await user.type(second, 'Second turn')
+    expect(second).toHaveFocus()
+    expect(first).not.toHaveFocus()
+    await user.keyboard('{Enter}')
+    await waitFor(() =>
+      expect(api.inputText).toHaveBeenCalledWith(
+        'run_second',
+        'Second turn',
+        undefined,
+      ),
+    )
+    expect(api.inputText).toHaveBeenCalledTimes(1)
+    expect(first).toHaveValue('First draft')
+    await user.click(first)
+    await user.keyboard('{Enter}')
+    await waitFor(() =>
+      expect(api.input).toHaveBeenCalledWith(
+        'run_live',
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'First draft' },
+        }),
+        undefined,
+      ),
+    )
+    expect(api.inputText).toHaveBeenCalledTimes(1)
+    expect(api.input).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives the field the shared composer id when the caller passes none', async () => {
+    renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
+    const field = await screen.findByTestId('launcher-input')
+    expect(field).toHaveAttribute('id', COMPOSER_INPUT_ID)
+  })
+
   it('sends a sentence as a user frame on a Claude run', async () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={{ run: RUNNING, group: 'active' }} />)
@@ -690,6 +1047,188 @@ describe('WorkComposer — model and effort', () => {
     group: 'active' as const,
   }
 
+  it.each([undefined, 'priority'])(
+    'clears a retired service tier (persisted: %s) after catalog failure',
+    async (persisted) => {
+      const user = userEvent.setup()
+      const qc = createTestQueryClient()
+      api.profileModels.mockResolvedValue({
+        state: 'fresh',
+        default_model: 'opus-5-5',
+        models: [
+          {
+            id: 'opus-5-5',
+            service_tiers: ['priority'],
+            effort_levels: ['medium', 'high'],
+          },
+        ],
+      })
+      renderIntel(
+        <WorkComposer
+          attached={{
+            ...ATTACHED,
+            run: {
+              ...ATTACHED.run,
+              provider_driver: 'codex',
+              service_tier: persisted,
+              ...(persisted
+                ? { model_ref: undefined, usage_model_ref: undefined }
+                : {}),
+            },
+          }}
+        />,
+        { queryClient: qc },
+      )
+      await user.click(await screen.findByTestId('composer-tool-model'))
+      await user.click(await screen.findByLabelText('Service tier'))
+      await user.click(screen.getByRole('option', { name: 'priority' }))
+      await user.click(screen.getByLabelText('Effort'))
+      await user.click(screen.getByRole('option', { name: 'high' }))
+      api.profileModels.mockRejectedValue(new Error('Catalog offline'))
+      await qc.invalidateQueries({
+        predicate: (q) => q.queryKey.includes('models'),
+      })
+      await waitFor(() =>
+        expect(screen.getByTestId('composer-new-with-choice')).toBeDisabled(),
+      )
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Speed options changed',
+      )
+      await user.click(screen.getByRole('button', { name: 'Use tool default' }))
+      expect(screen.getByTestId('composer-new-with-choice')).toBeEnabled()
+      await user.click(screen.getByTestId('composer-new-with-choice'))
+      const { useNewSessionDialog } =
+        await import('@/features/first-hour/new-session-store')
+      expect(useNewSessionDialog.getState().advanced).not.toHaveProperty(
+        'serviceTier',
+      )
+    },
+  )
+
+  it('shows persisted Fast On, preserves it for effort, and allows the native default', async () => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [
+        {
+          id: 'opus-5-5',
+          supports_fast_mode: true,
+          effort_levels: ['medium', 'high'],
+        },
+      ],
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{ ...ATTACHED, run: { ...ATTACHED.run, fast_mode: true } }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    expect(await screen.findByLabelText('Fast mode')).toHaveTextContent('On')
+    expect(screen.queryByTestId('composer-new-with-choice')).toBeNull()
+    await user.click(screen.getByLabelText('Effort'))
+    await user.click(screen.getByRole('option', { name: 'high' }))
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      fastMode: true,
+      effort: 'high',
+    })
+    await user.click(screen.getByTestId('composer-tool-model'))
+    await user.click(await screen.findByLabelText('Fast mode'))
+    await user.click(screen.getByRole('option', { name: 'Model default' }))
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).not.toHaveProperty(
+      'fastMode',
+    )
+  })
+
+  it('drops Fast On when another model is picked and hides unsupported speed controls', async () => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [
+        { id: 'opus-5-5', supports_fast_mode: true },
+        { id: 'haiku-5-5', display_name: 'Claude Haiku 5.5' },
+      ],
+    })
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await user.click(await screen.findByLabelText('Fast mode'))
+    await user.click(screen.getByRole('option', { name: 'On' }))
+    await user.click(screen.getByText('Claude Haiku 5.5'))
+    expect(screen.queryByLabelText('Fast mode')).toBeNull()
+    await user.click(screen.getByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).not.toHaveProperty(
+      'fastMode',
+    )
+  })
+
+  it('does not offer provider-bound Fast On', async () => {
+    api.listProfiles.mockResolvedValue({
+      items: [{ ...PROFILE, provider_record_ref: 'prv_bound' }],
+    })
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [{ id: 'opus-5-5', supports_fast_mode: true }],
+    })
+    renderIntel(<WorkComposer attached={ATTACHED} />)
+    await userEvent.click(await screen.findByTestId('composer-tool-model'))
+    await waitFor(() => expect(api.profileModels).toHaveBeenCalled())
+    expect(screen.queryByLabelText('Fast mode')).toBeNull()
+  })
+
+  it.each([
+    { driver: 'claude', label: 'Fast mode', option: 'On', fastMode: true },
+    { driver: 'claude', label: 'Fast mode', option: 'Off', fastMode: false },
+    {
+      driver: 'codex',
+      label: 'Service tier',
+      option: 'priority',
+      serviceTier: 'priority',
+    },
+  ])('hands the message-bar $label choice to a new session', async (choice) => {
+    const user = userEvent.setup()
+    const { useNewSessionDialog } =
+      await import('@/features/first-hour/new-session-store')
+    useNewSessionDialog.setState({ advanced: null })
+    api.profileModels.mockResolvedValue({
+      state: 'fresh',
+      models: [
+        {
+          id: 'opus-5-5',
+          supports_fast_mode: true,
+          service_tiers: ['priority'],
+        },
+      ],
+    })
+    renderIntel(
+      <WorkComposer
+        attached={{
+          ...ATTACHED,
+          run: { ...ATTACHED.run, provider_driver: choice.driver },
+        }}
+      />,
+    )
+    await user.click(await screen.findByTestId('composer-tool-model'))
+    await user.click(await screen.findByLabelText(choice.label))
+    await user.click(await screen.findByRole('option', { name: choice.option }))
+    await user.click(await screen.findByTestId('composer-new-with-choice'))
+    expect(useNewSessionDialog.getState().advanced).toMatchObject({
+      open: true,
+      profileRef: 'ppf_team',
+      model: 'opus-5-5',
+      effort: 'medium',
+      ...(choice.driver === 'claude'
+        ? { fastMode: choice.fastMode }
+        : { serviceTier: choice.serviceTier }),
+    })
+    expect(api.input).not.toHaveBeenCalled()
+    expect(api.inputText).not.toHaveBeenCalled()
+  })
+
   it("lists the tool's models and the session's effort levels from the message bar", async () => {
     const user = userEvent.setup()
     renderIntel(<WorkComposer attached={ATTACHED} />)
@@ -716,7 +1255,7 @@ describe('WorkComposer — model and effort', () => {
     await user.click(await screen.findByText('Claude Haiku 5.5'))
     expect(
       await screen.findByText(
-        'This session keeps Claude Code · opus-5-5 · medium. A different model or effort starts a new session.',
+        'This session keeps Claude Code · opus-5-5 · medium. A different choice starts a new session.',
       ),
     ).toBeInTheDocument()
     await user.click(screen.getByTestId('composer-new-with-choice'))

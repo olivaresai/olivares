@@ -1,0 +1,42 @@
+{
+  "title": "로그 뷰어",
+  "controls": {
+    "pause": "일시 중지",
+    "resume": "재개",
+    "pauseAria": "자동 스크롤 일시 중지",
+    "resumeAria": "자동 스크롤 재개",
+    "clear": "지우기",
+    "clearAria": "로그 항목 지우기",
+    "entryCount": "{{value}}개 항목"
+  },
+  "filters": {
+    "levelAria": "{{level}} 로그 필터",
+    "modulePlaceholder": "모듈...",
+    "moduleAria": "모듈별 필터",
+    "searchPlaceholder": "검색...",
+    "searchAria": "로그 메시지에서 검색",
+    "clearAria": "필터 지우기"
+  },
+  "capture": {
+    "debugUnavailable": "DEBUG 항목은 엔진의 현재 로그 수준에서 수집되지 않습니다. OLIVARES_LOG_LEVEL=debug를 설정하십시오."
+  },
+  "stream": {
+    "empty": "표시할 로그 항목이 없습니다.",
+    "emptyHint": "엔진 로그 줄이 기록되는 대로 여기에 표시됩니다. 더 보려면 필터를 넓히거나 수준을 낮추십시오.",
+    "ariaLabel": "로그 스트림",
+    "attrsAriaLabel": "구조화된 로그 속성"
+  },
+  "levels": {
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "WARN": "WARN",
+    "ERROR": "ERROR"
+  },
+  "levelAbbrev": {
+    "DEBUG": "DBG",
+    "INFO": "INF",
+    "WARN": "WRN",
+    "ERROR": "ERR"
+  },
+  "subtitle": "엔진 로그 스트림의 실시간 테일과 엔진이 보유한 버퍼를 병합한 것입니다."
+}

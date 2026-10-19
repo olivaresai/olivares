@@ -116,6 +116,11 @@ these. A handoff with a branch and commit offers **Open in a new session worktre
 choose a registered folder whose repository contains that commit. The engine
 refuses unsupported or unsafe repository settings before creating the worktree.
 
+A folder can store one setup command for new worktrees. A person must approve
+its exact text, by SHA-256, before a worktree start is accepted; changing one
+character requires approval again. Nothing runs the command yet. See
+[Approving a folder's setup command](/reference/session-runtime-api/#approving-a-folders-setup-command).
+
 Cleanup refuses to discard uncommitted or unmerged work. **Also discard the
 worktree and branch** explicitly authorizes that loss; ignored files are removed
 with the worktree. Worktrees share the repository's git metadata. See the

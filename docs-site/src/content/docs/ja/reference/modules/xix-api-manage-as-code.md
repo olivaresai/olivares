@@ -66,7 +66,7 @@ REST サーフェスは、製品が作成したスキーマから直接 [API リ
 :::caution[誠実な限界]
 - **`olivares_deployment` は宣言する; デプロイしない。** このリソースはモジュール VII のルートを
   通じてデプロイメント*定義*を書き込みます。実際のインフラに対するライブな `apply`/`retire` は、
-  オペレーターがエグゼキューターをプロビジョニングするまで **`503` を返すデナイクローズドなシーム**
+  Business の機能（Community は `501` を返す）であり、オペレーターがエグゼキューターをプロビジョニングするまで **`503` を返すデナイクローズドなシーム**
   です — HCL でデプロイメントを宣言しても、あなたの estate を変更することは決してありません。
 - **安定 OpenAPI はワイヤーの全体ではない。** 安定コアサーフェスは公開された
   契約（`/openapi.json`）にあります。モジュールルート（例えばアクセスマップとドリフトの読み取り、
@@ -119,7 +119,7 @@ REST サーフェスは、製品が作成したスキーマから直接 [API リ
 - [CLI リファレンス](/ja/reference/cli/) — `olivares` バイナリからの同じ機能。
 - [control plane をコードとして管理する](/ja/how-to/manage-as-code/) — Terraform プロバイダーガイド。
 - [モジュール VII — デプロイメント](/ja/reference/modules/vii-deploy/) — `olivares_deployment` が
-  作用する場所（`503` シーム）。
+  作用する場所（Business。`503` シーム）。
 - [モジュールカタログ](/ja/reference/modules/overview/) — Govern/Observe 対 Actuate の区分。
 - [誠実さと限界](/ja/start/honesty-and-limits/) — 現在何が作用し何が作用しないか。
 - [アーキテクチャ概要](/ja/explanation/architecture/overview/) — このサーフェスが乗るエンジン

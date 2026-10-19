@@ -55,6 +55,17 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		{"roster.go", 522, 522}: {"modules/governance/identity_inventory.go", 97, 97},
 		{"roster.go", 590, 590}: {"modules/governance/identity_inventory.go", 165, 165},
 		{"roster.go", 623, 623}: {"modules/governance/identity_inventory.go", 198, 198},
+		// validSurface and surfaceOf stand where the fleet handlers left them.
+		{"claudepolicy.go", 246, 255}: {"modules/governance/claudepolicy.go", 201, 210},
+		// Deploy's spec readers keep their order in the private overlay but not their
+		// line numbers: the typed spec stayed public and the validators moved.
+		{"spec.go", 138, 138}:    {"modules/deploy/spec_enterprise.go", 86, 86},
+		{"spec.go", 161, 161}:    {"modules/deploy/spec_enterprise.go", 104, 104},
+		{"helpers.go", 284, 284}: {"modules/deploy/helpers_enterprise.go", 257, 257},
+		// The renderer of the SCIM enterprise attributes left with the inbound SCIM
+		// server (Business); the engine's directory write stands at these lines.
+		{"core/api/scim/user.go", 192, 192}: {"core/auth/scim.go", 396, 396},
+		{"core/api/scim/user.go", 195, 195}: {"core/auth/scim.go", 397, 397},
 	}
 	namespace, _, _ := strings.Cut(string(kind), ".")
 	// Bare citations can relocate only within their owning module. Explicit
@@ -64,7 +75,7 @@ func localNoneCitationResolves(lineCounts map[string][]int, kind model.Kind, cit
 		cited, last = current.file, current.last
 	}
 	switch namespace {
-	case "finops", "redteam", "sandbox", "governance", "orchestration":
+	case "finops", "redteam", "sandbox", "governance", "orchestration", "deploy":
 		if !strings.Contains(cited, "/") {
 			cited = "modules/" + namespace + "/" + cited
 		}
@@ -164,6 +175,17 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	{"governance.breakglass_use", "the consumed action name, rendered only: breakglass.go:412"}:                                                                                       {"breakglass.go:412"},
 	{"governance.breakglass_use", "the id of the break-glass grant that was used: breakglass.go:406"}:                                                                                 {"breakglass.go:406"},
 
+	// Fleet managed settings moved to Business (dev#2349): the truth loop's readers now live in
+	// claudepolicy_truth_enterprise.go of the Business overlay. Each citation was checked in that
+	// change's parent, where the file was public.
+	{"governance.policy_distribution", "a hex digest of the distributed bytes, compared at claudepolicy_truth.go:678"}:                                              {"claudepolicy_truth.go:678"},
+	{"governance.policy_distribution", "a detached signature produced at claudepolicy_truth.go:183 and rendered only: claudepolicy_truth.go:568"}:                   {"claudepolicy_truth.go:183", "claudepolicy_truth.go:568"},
+	{"governance.policy_distribution", "a verifier public key, rendered only: claudepolicy_truth.go:569"}:                                                           {"claudepolicy_truth.go:569"},
+	{"governance.policy_distribution", "a signer key fingerprint, compared at claudepolicy_truth.go:682"}:                                                           {"claudepolicy_truth.go:682"},
+	{"governance.policy_observed", "a host or distribution name, validated at claudepolicy_truth.go:628-636 and used as the upsert key: claudepolicy_truth.go:709"}: {"claudepolicy_truth.go:628-636", "claudepolicy_truth.go:709"},
+	{"governance.policy_observed", "a hex digest of the stored content: claudepolicy_truth.go:725, claudepolicy_truth.go:954"}:                                      {"claudepolicy_truth.go:725", "claudepolicy_truth.go:954"},
+	{"governance.policy_observed", "an artifact hash echoed by the host, compared before it is stored: claudepolicy_truth.go:678, claudepolicy_truth.go:718"}:       {"claudepolicy_truth.go:678", "claudepolicy_truth.go:718"},
+
 	// Identity & Scale readers moved to Business in 46cfbf0c. Each citation was checked in that commit's parent.
 	// Some were already approximate there: handlers:143 is the brace after the event read at :139; handlers:372 and :375 are the
 	// block that declares and reads source, target and kind; agentidentity:269 returns on the empty reference (the agent-kind
@@ -183,6 +205,43 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	{"governance.collection_member", "a directory source name, part of the edge's lookup key: roster.go:369"}:                                                                                {"roster.go:369"},
 	{"core.identity", "closed governance keys and allow-listed, non-identifying directory attributes: modules/governance/roster.go:45, modules/governance/roster.go:277"}:                    {"modules/governance/roster.go:277"},
 	{"core.set_seen_jti", "a SET publisher id, compared to refuse a replay and resolved to a publisher: core/auth/set_publisher.go:237, core/auth/caep_events.go:182"}:                       {"core/auth/caep_events.go:182"},
+	// Module VII deploy moved to Business; its readers sit in the private overlay.
+	{"deploy.definition", "a source provenance label, never a principal; credential-like values are refused and catalog applies compare it to the approved entry label: definitions.go:114, lifecycle.go"}: {"definitions.go:114"},
+	{"deploy.definition", "an environment label handed to the executor and used as a list filter: lifecycle.go:115, definitions.go:265"}:                                                                   {"lifecycle.go:115", "definitions.go:265"},
+	{"deploy.definition", "an infrastructure target reference handed to the executor, refused when it looks like a credential: lifecycle.go:114, definitions.go:114"}:                                      {"lifecycle.go:114", "definitions.go:114"},
+	{"deploy.definition", "closed set active|retired: definitions.go:28, definitions.go:29"}:                                                                                                               {"definitions.go:28", "definitions.go:29"},
+	{"deploy.definition", "closed set agent|mcp_server: definitions.go:101"}:                                                                                                                               {"definitions.go:101"},
+	{"deploy.definition", "hex SHA-256 of the canonical desired spec: spec.go:161, helpers.go:203"}:                                                                                                        {"spec.go:161", "helpers.go:203"},
+	{"deploy.definition", "the deployed agent or MCP server reference (subject_kind is refused unless agent or mcp_server: definitions.go:101), resolved against the agent roster by external id or name (cmd/olivares/deployidentity.go:189) and used as the kill-switch agent dimension (lifecycle.go:603); wiring.go:128 copies it into agent_ref"}: {"definitions.go:101", "lifecycle.go:603", "wiring.go:128"},
+	{"deploy.definition", "the executor runtime kind handed to the executor: lifecycle.go:114"}:                                                        {"lifecycle.go:114"},
+	{"deploy.definition", "the linked core Deployment row id, read back only through the deployment repository: lifecycle.go:651, definitions.go:325"}: {"lifecycle.go:651", "definitions.go:325"},
+	{"deploy.definition", "the logical deployment name, rendered and used as the approval subject label: definitions.go:63, lifecycle.go:122"}:         {"definitions.go:63", "lifecycle.go:122"},
+	{"deploy.operation", "a bounded outcome summary, only rendered: lifecycle.go:676, operations.go:40"}:                                               {"lifecycle.go:676", "operations.go:40"},
+	{"deploy.operation", "a governance approval reference (approval id, no-gate or break-glass handle) resolved only as an approval: cmd/olivares/internal/approvalbridge/approvalbridge.go:509, cmd/olivares/internal/approvalbridge/approvalbridge.go:512, cmd/olivares/internal/approvalbridge/approvalbridge.go:518; the stored copy is only rendered: operations.go:39"}: {"operations.go:39"},
+	{"deploy.operation", "a hex SHA-256 binding an approval to one transition, compared only as a hash: helpers.go:210, lifecycle.go:314"}:                                                                                                                                                                  {"helpers.go:210", "lifecycle.go:314"},
+	{"deploy.operation", "closed set of operation outcomes: lifecycle.go:29, lifecycle.go:36"}:                                                                                                                                                                                                              {"lifecycle.go:29", "lifecycle.go:36"},
+	{"deploy.operation", "closed set plan|apply|verify|retire: lifecycle.go:21, lifecycle.go:24"}:                                                                                                                                                                                                           {"lifecycle.go:21", "lifecycle.go:24"},
+	{"deploy.operation", "the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680"}:                                                                                                                                                        {"definitions.go:576", "wiring.go:103", "lifecycle.go:680"},
+	{"deploy.revision", "a bounded operator note, only rendered: definitions.go:181, definitions.go:468"}:                                                                                                                                                                                                   {"definitions.go:181", "definitions.go:468"},
+	{"deploy.revision", "a compute request key or value such as cpu or mem, refused when it looks like a credential: spec.go:87"}:                                                                                                                                                                           {"spec.go:87"},
+	{"deploy.revision", "a container image or artifact reference, refused when it looks like a credential and handed to the executor: spec.go:77, lifecycle.go:116"}:                                                                                                                                        {"spec.go:77", "lifecycle.go:116"},
+	{"deploy.revision", "a secret-store reference <scheme>:<locator> from a closed scheme allow-list: helpers.go:260, helpers.go:284"}:                                                                                                                                                                      {"helpers.go:260", "helpers.go:284"},
+	{"deploy.revision", "a source provenance label, never a principal; credential-like values are refused and catalog applies compare it to the approved entry label: definitions.go:114, lifecycle.go"}:                                                                                                    {"definitions.go:114"},
+	{"deploy.revision", "an access mode from the closed set read|write|readwrite: spec.go:138"}:                                                                                                                                                                                                             {"spec.go:138"},
+	{"deploy.revision", "an entrypoint override, refused when it looks like a credential and handed to the executor: spec.go:77, lifecycle.go:116"}:                                                                                                                                                         {"spec.go:77", "lifecycle.go:116"},
+	{"deploy.revision", "an environment variable name, refused when it looks like a credential: spec.go:98"}:                                                                                                                                                                                                {"spec.go:98"},
+	{"deploy.revision", "hex SHA-256 of the canonical desired spec: spec.go:161, helpers.go:203"}:                                                                                                                                                                                                           {"spec.go:161", "helpers.go:203"},
+	{"deploy.revision", "the directory reference of the non-human identity the agent runs as, handed to the binder (wiring.go:76), whose governance endpoint refuses to bind a human identity: modules/governance/identity.go:188"}:                                                                         {"wiring.go:76"},
+	{"deploy.revision", "the kind or natural reference of the enterprise resource a wiring reaches, published only as the edge resource: spec.go:50, wiring.go:144"}:                                                                                                                                        {"wiring.go:144"},
+	{"deploy.revision", "the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680"}:                                                                                                                                                         {"definitions.go:576", "wiring.go:103", "lifecycle.go:680"},
+	{"deploy.wiring", "a secret-store reference <scheme>:<locator> from a closed scheme allow-list: helpers.go:260, helpers.go:284"}:                                                                                                                                                                        {"helpers.go:260", "helpers.go:284"},
+	{"deploy.wiring", "an access mode from the closed set read|write|readwrite: spec.go:138"}:                                                                                                                                                                                                               {"spec.go:138"},
+	{"deploy.wiring", "closed set declared|applied|revoked: wiring.go:21, wiring.go:23"}:                                                                                                                                                                                                                    {"wiring.go:21", "wiring.go:23"},
+	{"deploy.wiring", "closed set firm|degraded: wiring.go:30, wiring.go:31"}:                                                                                                                                                                                                                               {"wiring.go:30", "wiring.go:31"},
+	{"deploy.wiring", "the bound identity's external id (modules/governance/identity.go:132), which the governance endpoint refuses for a human identity (modules/governance/identity.go:188), else the declared identity or agent subject ref (wiring.go:74, wiring.go:79); only rendered: wiring.go:223"}: {"wiring.go:74", "wiring.go:79", "wiring.go:223"},
+	{"deploy.wiring", "the deployed agent or MCP server reference (subject_kind is refused unless agent or mcp_server: definitions.go:101), resolved against the agent roster by external id or name (cmd/olivares/deployidentity.go:189) and used as the kill-switch agent dimension (lifecycle.go:603); wiring.go:128 copies it into agent_ref"}: {"definitions.go:101", "lifecycle.go:603", "wiring.go:128"},
+	{"deploy.wiring", "the kind or natural reference of the enterprise resource a wiring reaches, published only as the edge resource: spec.go:50, wiring.go:144"}:                                                                                                                                                                                 {"wiring.go:144"},
+	{"deploy.wiring", "the owning deploy.definition row id, written from that row's own id: definitions.go:576, wiring.go:103, lifecycle.go:680"}:                                                                                                                                                                                                  {"definitions.go:576", "wiring.go:103", "lifecycle.go:680"},
 }
 
 func TestHistoricalBusinessNoneCitationsAreExact(t *testing.T) {

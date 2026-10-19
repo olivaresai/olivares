@@ -5,6 +5,7 @@
 package governance
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -69,13 +70,16 @@ type abacSpec struct {
 type approvalMatch struct {
 	Action      string `json:"action,omitempty"`
 	SubjectKind string `json:"subject_kind,omitempty"`
+	// ChangeClass narrows the policy to a publication whose change is of that
+	// class (docs_only, code, sensitive): Business.
+	ChangeClass string `json:"change_class,omitempty"`
 }
 
 // approvalSpec is the spec of an "approval" policy: how many approvals an
 // in-scope request needs, its timeout/escalation windows, and the
 // action's explicit risk tier. An empty RiskTier defers to the built-in default
-// classification (risktier.go); Community accepts review and raising policies,
-// while Business also permits lowering the default tier. A "critical" tier
+// classification (risktier.go); Community accepts review policies only, while
+// Business also sets a tier or a quorum different from the default. A "critical" tier
 // floors the threshold at two distinct human
 // approvers regardless of RequiredApprovals.
 type approvalSpec struct {
@@ -84,6 +88,19 @@ type approvalSpec struct {
 	EscalateInSeconds int64         `json:"escalate_in_seconds,omitempty"`
 	RiskTier          string        `json:"risk_tier,omitempty"`
 	Match             approvalMatch `json:"match,omitempty"`
+	// SensitivePaths are the globs that make a change sensitive for the actions
+	// this policy governs (changeclass.go); no policy lists any, the defaults
+	// apply. Business.
+	SensitivePaths []string `json:"sensitive_paths,omitempty"`
+	// RequireOtherThanLauncher refuses the decision of the person who launched
+	// the session that proposed the change. Business.
+	RequireOtherThanLauncher bool `json:"require_other_than_launcher,omitempty"`
+}
+
+// usesChangeClass reports whether the spec uses what only Business offers:
+// matching or deciding by what a change touches.
+func (s approvalSpec) usesChangeClass() bool {
+	return s.Match.ChangeClass != "" || len(s.SensitivePaths) > 0 || s.RequireOtherThanLauncher
 }
 
 // policyRequest is the create/update body. Spec is a raw message parsed against
@@ -204,6 +221,19 @@ func canonicalizeApproval(raw json.RawMessage) (map[string]any, string) {
 	if spec.RiskTier != "" && !validRiskTier(spec.RiskTier) {
 		return nil, "risk_tier must be one of low, medium, high, critical"
 	}
+	spec.Match.ChangeClass = strings.TrimSpace(strings.ToLower(spec.Match.ChangeClass))
+	if spec.Match.ChangeClass != "" && !validChangeClass(spec.Match.ChangeClass) {
+		return nil, "match.change_class must be one of docs_only, code, sensitive"
+	}
+	if len(spec.SensitivePaths) > maxChangePaths {
+		return nil, "sensitive_paths lists too many globs"
+	}
+	for i, g := range spec.SensitivePaths {
+		spec.SensitivePaths[i] = strings.TrimSuffix(strings.TrimSpace(g), "/")
+		if !validGlob(spec.SensitivePaths[i]) {
+			return nil, "sensitive_paths holds an invalid glob: a repository-relative path with * ? [..], no . or .. segment and at most two ** segments"
+		}
+	}
 	// Authoring-time coherence: a policy cannot declare an action CRITICAL and
 	// simultaneously set a sub-floor threshold. The create/decide floor would
 	// override it anyway (deny-closed), but rejecting the contradiction here makes
@@ -297,7 +327,7 @@ func toMap(v any) (map[string]any, string) {
 
 // handleListPolicies lists governance policies, optionally filtered by kind/enabled.
 func (m *Module) handleListPolicies(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	if v := r.URL.Query().Get("kind"); v != "" {
 		q.Filters = append(q.Filters, eq("kind", strings.ToLower(v)))
 	}
@@ -375,13 +405,17 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 	if !in.availableInEdition(w, canon) {
 		return
 	}
-	var out policyDTO
+	var (
+		out      policyDTO
+		advanced bool
+	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		candidate := model.Policy{Name: in.Name, Kind: in.Kind, Spec: canon, Enabled: in.Enabled}
 		advance, err := policyChangeAdvancesAuthorizationEpoch(nil, &candidate)
 		if err != nil {
 			return err
 		}
+		advanced = advance
 		if advance {
 			// The epoch CAS is the first effective write and shares this transaction
 			// with the policy row and its audit event.
@@ -401,6 +435,7 @@ func (m *Module) handleCreatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	m.eval.invalidate(mc.Tenant) // post-commit: the new rule takes effect on the next evaluate
+	m.reloadGrantsAfterEpochAdvance(r.Context(), mc.Tenant, advanced)
 	m.emitPolicyChanged(r.Context(), mc.Tenant, model.ID(out.ID), in.Kind, event.PolicyOpCreated, in.Enabled)
 	writeJSON(w, http.StatusCreated, out)
 }
@@ -426,8 +461,9 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	var (
-		out     policyDTO
-		changed bool
+		out      policyDTO
+		changed  bool
+		advanced bool
 	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
@@ -454,6 +490,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
+		advanced = advance
 		if advance {
 			// Reads above establish impact; the epoch CAS remains the first write.
 			if err := advancePolicyAuthorizationEpoch(r.Context(), sc); err != nil {
@@ -478,6 +515,7 @@ func (m *Module) handleUpdatePolicy(w http.ResponseWriter, r *http.Request, mc a
 	}
 	if changed {
 		m.eval.invalidate(mc.Tenant)
+		m.reloadGrantsAfterEpochAdvance(r.Context(), mc.Tenant, advanced)
 		m.emitPolicyChanged(r.Context(), mc.Tenant, id, in.Kind, event.PolicyOpUpdated, in.Enabled)
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -493,7 +531,10 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 	}
 	// The kind is read inside the transaction; captured so the post-commit
 	// policy.changed event can carry it.
-	var deletedKind string
+	var (
+		deletedKind string
+		advanced    bool
+	)
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
 		if err != nil {
@@ -507,6 +548,7 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 		if err != nil {
 			return err
 		}
+		advanced = advance
 		if advance {
 			// The policy read determines impact; the epoch CAS is the first write.
 			if err := advancePolicyAuthorizationEpoch(r.Context(), sc); err != nil {
@@ -523,8 +565,20 @@ func (m *Module) handleDeletePolicy(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	m.eval.invalidate(mc.Tenant)
+	m.reloadGrantsAfterEpochAdvance(r.Context(), mc.Tenant, advanced)
 	m.emitPolicyChanged(r.Context(), mc.Tenant, id, deletedKind, event.PolicyOpDeleted, false)
 	writeJSON(w, http.StatusNoContent, nil)
+}
+
+// reloadGrantsAfterEpochAdvance re-captures the live grant engine after a policy
+// write advanced the tenant authorization epoch. The typed evidence path rejects a
+// generation older than the stored epoch, so without this every read that asks for a
+// receipt answers "undecided" until the process restarts. Every other writer of the
+// epoch (inheritance filters, scoped grants, retirement, PDP disable) does the same.
+func (m *Module) reloadGrantsAfterEpochAdvance(ctx context.Context, tenant model.TenantID, advanced bool) {
+	if advanced {
+		m.reloadTenantGrantsLogged(ctx, tenant, FreshnessRecord{})
+	}
 }
 
 // Validate before selecting an edition, so malformed specs keep their 400 contract.
@@ -539,7 +593,11 @@ func (in *policyRequest) availableInEdition(w http.ResponseWriter, canon map[str
 		return false
 	}
 	if !approvalPolicyAvailable(spec) {
-		writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", "Tier-lowering approval policies require Olivares Business."))
+		msg := "Approval policies that change the risk tier or the approval count require Olivares Business."
+		if spec.usesChangeClass() {
+			msg = "Approval policies that depend on what a change touches require Olivares Business."
+		}
+		writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", msg))
 		return false
 	}
 	return true

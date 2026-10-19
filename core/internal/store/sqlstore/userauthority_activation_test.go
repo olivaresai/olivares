@@ -167,7 +167,7 @@ func TestUserAuthorityAlreadyOpenV9WriterFenced(t *testing.T) {
 	}
 	for _, engine := range store.SupportedEngines() {
 		t.Run(string(engine), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 			defer cancel()
 			cfg := store.Config{Engine: engine, DSN: filepath.Join(t.TempDir(), "old-live.db")}
 			if engine == store.EnginePostgres {

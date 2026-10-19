@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
 :::
 
 このページはファーストパーティコネクタの**カタログ**であり、それぞれについて、サポート可能な
@@ -74,7 +74,7 @@ description: >-
 |---|---|---|
 | `claude` | Claude Code OTLP ツールテレメトリ + MCP イントロスペクション → エッジ / コスト / findings | プロセス外プラグイン。エージェント単位のアイデンティティが存在すれば `attributed`、なければ `approximate` |
 | `claude-api` | Claude Admin-API のコストサンプル + ガバナンス姿勢の findings | プロセス内。オフライン時（admin key なし）は no-op |
-| `claude-compliance` | Claude Compliance アクティビティフィードの証跡 → findings | 構造上 GET のみ。オフライン時は no-op |
+| `claude-compliance` | Claude Compliance アクティビティフィードの証跡 → findings | 構造上 GET のみ。オフライン時は no-op (Business) |
 | `claude-config` | 静的な Claude 設定ツリー（subagents / Skills / plugins）→ **宣言された能力**のエッジ | メタデータのみ —— 能力面であって、観測されたアクセスではない |
 | `claude-console` | Claude org IAM → SSO/SCIM 姿勢の findings（アイデンティティ名簿 + ソース） | Business: Identity & Scale;  |
 | `claude-wif` | Anthropic の非人間アイデンティティ／ワークロードアイデンティティ名簿 + 許可スコープのエッジ | Business: Identity & Scale; オペレーターが宣言したフェデレーションをモデル化し、静的キーの落とし穴を警告する |
@@ -229,7 +229,7 @@ posture findings を出力する。実行のライブトレースではない。
 | `bigquery-audit` | BigQuery データアクセス監査 |
 | `redshift-audit` | Amazon Redshift 監査 |
 | `mssql-audit` | SQL Server 監査 |
-| `oracle-audit` | Oracle 統合監査 |
+| `oracle-audit` | Oracle 統合監査 (Business) |
 | `gcs-audit` | Google Cloud Storage データアクセス監査 |
 | `azure-blob-audit` | Azure Blob Storage 監査 |
 
@@ -320,7 +320,7 @@ moat の**非協調的**な半分。協調パスがエージェントが*報告�
 | `iceberg-catalog` | Iceberg REST カタログ → 許可された grant + vend されたクレデンシャルのアイデンティティ | permitted |
 | `inference-gateway` | K8s Gateway API Inference-Extension のルーティング → 許可された推論ルート | permitted |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | クラウド KMS 監査 → キーアクセスエッジ（キー材料は決して含まない） | approximate |
-| `external-secrets` / `sops` / `kmip` | シークレット管理マニフェスト / KMIP locate → プロビジョニング/カストディエッジ | approximate（存在であって、使用ではない） |
+| `external-secrets` / `sops` / `kmip` | シークレット管理マニフェスト / KMIP locate → プロビジョニング/カストディエッジ | approximate（存在であって、使用ではない）; `kmip`: Business |
 | `istio-telemetry` | Istio Telemetry CRD → L7 メッシュエッジ | approximate（パースされた CRD であって、ライブフローではない） |
 | `egress-proxy` | Egress プロキシの判定ログ → L7 egress エッジ | approximate |
 | `kong-audit` | Kong 監査ログ → 設定変更の findings | approximate |
@@ -450,10 +450,10 @@ grant の OBSERVED 対応物を出力する。
 | `gdrive` | Google Drive ドキュメント（Docs/Sheets/Slides/ファイル） |
 | `confluence` | Atlassian Confluence のスペース & ページ |
 | `notion` | Notion ワークスペース、データベース & ページ |
-| `sharepoint` | Microsoft SharePoint / OneDrive のサイト & ドキュメント |
+| `sharepoint` | Microsoft SharePoint / OneDrive のサイト & ドキュメント (Business) |
 | `s3content` | オブジェクトストレージの内容（S3 / R2 / GCS オブジェクト） |
-| `sap_odata` | SAP OData service entities を governed documents として |
-| `salesforce` | Salesforce objects/records を governed documents として |
+| `sap_odata` | SAP OData service entities を governed documents として (Business) |
+| `salesforce` | Salesforce objects/records を governed documents として (Business) |
 | `snowflake` | Snowflake tables/rows を governed documents として（`snowflake-audit` R/RW observer とは別） |
 | `azure_ai_search` | Azure AI Search index documents |
 | `postgres` | PostgreSQL rows を governed documents として —— 構造上 read-only、行ごとの宣言 ACL、列ごとの classification（`pgaudit` R/RW observer とは別。NL-to-SQL ではない）。[Postgres を governed context source とする](/ja/how-to/govern-postgres-content/) を参照。 |

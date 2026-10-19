@@ -49,6 +49,13 @@ const (
 	sourceProvider  = "provider"  // a model provider (by name)     → "provider"
 	sourceKnowledge = "knowledge" // a knowledge base (by id)       → "resource"
 	sourceData      = "data"      // a generic data source (by ref) → "resource"
+
+	// A provider profile (by its ppf_ reference) and an AI tool (by its driver key) are
+	// sources a department, group or person is assigned (modules/sessions asks before every
+	// launch). Both ride the "provider" scopeable kind, so a grant or an inheritance filter
+	// is authored against one catalog entry. Writing them is Business (profile_assignment.go).
+	sourceProfile = "profile"
+	sourceTool    = "tool"
 )
 
 // Exported source-type identifiers, for composition-root adapters building Resolve
@@ -60,6 +67,8 @@ const (
 	SourceProvider  = sourceProvider
 	SourceKnowledge = sourceKnowledge
 	SourceData      = sourceData
+	SourceProfile   = sourceProfile
+	SourceTool      = sourceTool
 )
 
 // Scope-tree kinds a binding is bounded to. Two families:

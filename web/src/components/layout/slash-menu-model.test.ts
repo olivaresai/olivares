@@ -145,3 +145,9 @@ describe('insertText', () => {
     )
   })
 })
+
+it('inserts the native Codex skill spelling reported by the route', () => {
+  const skill = { ...cmd('review'), insert_text: '$review' }
+  expect(insertText(skill)).toBe('$review ')
+  expect(commandLabel(skill)).toBe('$review')
+})

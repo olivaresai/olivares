@@ -125,6 +125,30 @@ the plan's masking rule (`planValue`, `cmd_sources_plan.go:253-274`) rather than
 config verbatim — a row written before the inline-secret guard existed can still hold a
 literal.
 
+### `session start --permission` has no `full` — console parity — ✅ FILLED 2026-10-15
+
+> **Closed in `cmd/olivares/cmd_session.go` (`permissionModes`).** Witnesses in
+> `cmd_session_preset_test.go`.
+
+The console's New session offers every permission mode, full permissions included. The CLI
+accepted four values and the only route to full access was
+`olivares agent session create --permission-mode bypassPermissions`, which is Claude Code
+only and takes no first prompt. `--permission` now takes five values:
+
+| value | mode sent | what the agent may do without asking |
+|---|---|---|
+| `edits-and-commands` (default) | the built-in template | edit files and run commands |
+| `edits-only` | `acceptEdits` | edit files |
+| `read-only` | `plan` | read |
+| `ask` | `default` | nothing; each action asks |
+| `full` | `bypassPermissions` | every tool, no prompts |
+
+`full` adds no check of its own. The engine refuses it to anyone who is not a run
+administrator (`modules/sessions/runtime.go` `refuseUnrestrictedFor`), the CLI prints that
+sentence as it is, and no session is created. `full` does not go with `--template`: the
+engine lets a template's mode win over a narrower named one, so the CLI refuses the pair
+instead of starting narrower than asked. The four existing values are unchanged.
+
 ### `eventing subscriptions` — `get` and `update`: BOTH FILLED
 
 `create` accepts `--description`, `--auth-header-name`, `--max-attempts`,

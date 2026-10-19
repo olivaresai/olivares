@@ -24,8 +24,8 @@ description: >-
 потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
 <!-- release -->
-:::note[Olivares 0.2]
-Следующий выпуск — `0.2`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.2-install-surfaces.json`.
+:::note[Olivares 0.3]
+Следующий выпуск — `0.3`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.3-install-surfaces.json`.
 :::
 <!-- /release -->
 
@@ -40,7 +40,7 @@ description: >-
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.2
+docker pull docker.io/olivaresai/olivares:0.3
 ```
 <!-- /release -->
 
@@ -49,8 +49,8 @@ docker pull docker.io/olivaresai/olivares:0.2
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: <!-- release -->`:0.2`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
-`:0.2-fips`<!-- /release --> / <!-- release -->`:0.2-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: <!-- release -->`:0.3`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
+`:0.3-fips`<!-- /release --> / <!-- release -->`:0.3-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -62,7 +62,7 @@ Docker Hub через `cosign copy`, поэтому digest тот же:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.2")"
+DIGEST="$(crane digest "$IMAGE:0.3")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -102,7 +102,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -341,7 +341,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (<!-- release -->`:0.2`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (<!-- release -->`:0.3`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 

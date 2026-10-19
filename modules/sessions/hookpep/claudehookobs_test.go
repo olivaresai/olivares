@@ -5,6 +5,8 @@
 package hookpep
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,4 +125,34 @@ func containsStr(haystack, needle string) bool {
 			}
 			return false
 		}()
+}
+
+// The governed hook path reads the same `cwd` the telemetry connector does, so a session
+// seen through the PEP is named by its project too; absent, no label is written.
+func TestClaudeEdgeCarriesTheProject(t *testing.T) {
+	in := testHookInput("PreToolUse", "Bash", "shell", "ls -la", "read", "sess-1")
+	in.Project = "billing-api"
+	edge, ok := claudeEdgeFor(in, true, in.At)
+	if !ok {
+		t.Fatal("expected an edge")
+	}
+	if got := edge.Labels[sdkmodel.LabelProjectFolder]; got != "billing-api" {
+		t.Errorf("project label = %q, want billing-api", got)
+	}
+	in.Project = ""
+	edge, _ = claudeEdgeFor(in, true, in.At)
+	if v, ok := edge.Labels[sdkmodel.LabelProjectFolder]; ok {
+		t.Errorf("no folder, no project label; got %q", v)
+	}
+}
+
+// The retained copy of a hook input is scrubbed like its other text fields.
+func TestRetainedHookInputScrubsTheProject(t *testing.T) {
+	token := "ghp_" + strings.Repeat("a", 36)
+	in := testHookInput("PreToolUse", "Bash", "shell", "ls", "read", "sess-1")
+	in.Project = token
+	got := (&Decider{}).retainedHookInput(context.Background(), in)
+	if got.Project == "" || strings.Contains(got.Project, token) {
+		t.Errorf("retained project = %q: want a placeholder, never the token", got.Project)
+	}
 }

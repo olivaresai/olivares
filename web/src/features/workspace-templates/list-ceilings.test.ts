@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import {
-  desajustesPorFichero,
+  mismatchesByFile,
   etiquetasConLiteral,
   leer,
   nombresDeLista,
@@ -27,7 +27,7 @@ describe('workspace templates · both live consumers declare truncation', () => 
   it('the catalog and launch picker each have their own badge', () => {
     const listas = nombresDeLista(leer('features/workspace-templates/api.ts'))
     const vistas = VISTAS.map((nombre) => ({ nombre, src: leer(nombre) }))
-    const { total, desajustes } = desajustesPorFichero(
+    const { total, desajustes } = mismatchesByFile(
       vistas,
       listas,
       'templatesApi',

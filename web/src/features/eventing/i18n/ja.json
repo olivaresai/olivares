@@ -86,7 +86,7 @@
       "newrelic": "New Relic"
     },
     "sinkFormat": "シンク形式",
-    "sinkFormatHint": "シンクの転送方言。デフォルト = OCSF。",
+    "sinkFormatHint": "シンクが受け取る形式。デフォルト：OCSF。",
     "sinkFormatDefault": "デフォルト（OCSF）",
     "sinkCred": "シンククレデンシャル",
     "sinkCredHint": "このシンク用のコレクタートークン/キー — 保存時に封印され、二度と表示されません。",

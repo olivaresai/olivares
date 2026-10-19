@@ -4,7 +4,7 @@ description: "Wie ein Operator das Estate steuert: Identität und Berechtigungen
 ---
 
 :::note[Business]
-Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
 :::
 
 Diese Seite ist für den Operator, der mindestens eine Quelle verbunden hat und nun das
@@ -70,6 +70,8 @@ attributbasierte Regeln verdrahten. Sie wählen die Engine mit einer einzigen Um
 # Choose one. Cedar is the embedded, pure-Go primary; OPA is an over-HTTP adapter.
 OLIVARES_PDP_ENGINE=cedar   # or: opa | none
 ```
+
+Die externe Engine ist eine Business-Funktion. Ein Community-Build verweigert den Start, wenn `cedar`, `opa` oder ein anderer Engine-Wert ausgewählt ist; nicht gesetzt, leer oder `none` führt nur die native Engine aus.
 
 Beide Engines sitzen hinter einer Naht, und die Naht hat eine Invariante, die bestimmt, wie Sie
 über sie nachdenken müssen:
@@ -212,4 +214,4 @@ alles andere, weshalb das Lesen davon eine Editor-und-aufwärts-Aktion ist.
 
 ## Editionen und Genehmigungen (0.1)
 
-Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die eine Prüfung verlangen oder Risikostufe beziehungsweise Quorum erhöhen. Richtlinien zur Senkung der Risikostufe und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Daten bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.
+Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die für eine Aktion eine Prüfung verlangen. Genehmigungsrichtlinien, die die Risikostufe oder die Zahl der erforderlichen Genehmigungen ändern, und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Richtlinien, die die Risikostufe oder die Zahl der Genehmigungen erhöhen, gelten weiter; gespeicherte Richtlinien zur Senkung und Notfallzugriffe bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.

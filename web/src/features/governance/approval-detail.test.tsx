@@ -33,6 +33,8 @@ function wrap(ui: ReactNode) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
 }
 
+const NOTE = 'This request does not include what will run.'
+
 // 16 KiB with no space in it: the shape that pushed the sheet past the viewport.
 const COMMAND = `curl -fsS https://example.test/${'a'.repeat(16 * 1024)}`
 
@@ -79,6 +81,8 @@ describe('ApprovalDetailSheet — the reason a reviewer approves', () => {
     expect(screen.getByRole('button', { name: /^cancel$/i })).toBeEnabled()
     expect(screen.getByText('session:osn_new')).toBeInTheDocument()
     expect(api.decide).not.toHaveBeenCalled()
+    // A launch runs nothing by itself: no command is expected, so no note (#2269).
+    expect(screen.queryByText(NOTE)).toBeNull()
   })
 
   it('explains why a requester cannot decide their own pending request', async () => {
@@ -114,6 +118,8 @@ describe('ApprovalDetailSheet — the reason a reviewer approves', () => {
     expect(block.className).toMatch(/whitespace-pre-wrap/)
     expect(block.className).toMatch(/break-all/)
     expect(block.className).toMatch(/overflow-y-auto/)
+    // A tool call stored without a review says so once.
+    expect(screen.getAllByText(NOTE)).toHaveLength(1)
   })
 
   it('keeps a prose reason as text, and any long value still breaks anywhere', async () => {
@@ -130,6 +136,7 @@ describe('ApprovalDetailSheet — the reason a reviewer approves', () => {
     const value = await screen.findByText(prose, { selector: 'dd' })
     expect(value.tagName).toBe('DD')
     expect(value.className).toMatch(/\[overflow-wrap:anywhere\]/)
+    expect(screen.queryByText(NOTE)).toBeNull()
   })
 })
 

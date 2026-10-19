@@ -112,7 +112,7 @@ func (b *Bridge) GateOnceNoBreakGlass(ctx context.Context, tenant model.TenantID
 		b.warnUnconfigured(tenant)
 		return NoGateRefPrefix + planHash, NoGate, planHash, nil
 	}
-	return b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, true)
+	return b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, reuseApproved)
 }
 
 // ApproverEvidence is one approval's dual-control evidence, in the two forms a

@@ -38,6 +38,9 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request, mc Mod
 	if lic.SupportTier != "" {
 		license["support_tier"] = lic.SupportTier
 	}
+	if lic.SupportProfile != "" {
+		license["support_profile"] = lic.SupportProfile
+	}
 	info := map[string]any{
 		"version":        s.version,
 		"engine":         string(s.st.Engine()),

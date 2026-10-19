@@ -4,7 +4,7 @@ name: mainline-ci-report
 
 on:
   workflow_run:
-    workflows: [mainline-ci]
+    workflows: [mainline-ci, merge-gate-check]
     types: [completed]
     branches: [main]
 
@@ -13,17 +13,19 @@ permissions:
   actions: read
   issues: write
 
+# One group per triggering event: a push report never displaces a scheduled battery report.
 concurrency:
-  group: mainline-ci-report
+  group: mainline-ci-report-${{ github.event.workflow_run.event }}
   cancel-in-progress: false
 
 jobs:
   reconcile:
-    # Tracking issues only where the repository opts in with CI_NIGHTLIES=true.
+    # Tracking issues for mainline-ci only where the repository opts in with CI_NIGHTLIES=true.
+    # The scheduled merge-gate-check run is reported wherever that workflow exists.
     if: >-
-      vars.CI_NIGHTLIES == 'true' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      ((vars.CI_NIGHTLIES == 'true' && github.event.workflow_run.event == 'push') ||
+       (startsWith(github.event.workflow_run.name, 'merge-gate-check') && github.event.workflow_run.event == 'schedule'))
     runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:

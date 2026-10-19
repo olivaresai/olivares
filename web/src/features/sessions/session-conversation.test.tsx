@@ -12,8 +12,10 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentOpsKeys } from '@/features/agentops/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/lib/api/errors'
+import i18n from '@/lib/i18n'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
 import { SessionConversation } from './session-conversation'
 import { sentTurnsPartition, useSentTurns } from './sent-turns'
@@ -67,10 +69,13 @@ const run: RunDTO = {
   critical: false,
 }
 
+let lastClient: QueryClient | null = null
+const qcIdle = () => lastClient?.isFetching() === 0
+
 function wrap(overrides: Partial<RunDTO> = {}) {
-  const qc = new QueryClient({
+  const qc = (lastClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
+  }))
   return render(
     <QueryClientProvider client={qc}>
       <SessionConversation run={{ ...run, ...overrides }} />
@@ -294,6 +299,35 @@ describe('SessionConversation', () => {
     expect(screen.queryByText(/Working folder/)).toBeNull()
   })
 
+  // The first line of the thread is worded by the catalog of the console's language, not
+  // by the frame mapper: in German it reads "Sitzung gestartet · <model> · 4 Tools".
+  it('words the session-start line in the console language', async () => {
+    await i18n.changeLanguage('de')
+    try {
+      wrap()
+      await screen.findByTestId('session-conversation')
+      act(() => {
+        push(
+          JSON.stringify({
+            type: 'system',
+            subtype: 'init',
+            cwd: '/engine/dir',
+            tools: ['Read', 'Bash', 'Write', 'Task'],
+            model: 'claude-opus-5',
+          }),
+        )
+      })
+      expect(
+        await screen.findByText('Sitzung gestartet · claude-opus-5 · 4 Tools'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/Session started/)).toBeNull()
+    } finally {
+      // Unmount first: restoring the language under a mounted tree re-renders it outside act.
+      cleanup()
+      await i18n.changeLanguage('en')
+    }
+  })
+
   it('inspects a row by handing the raw frame to the caller', async () => {
     const onInspect = vi.fn()
     const qc = new QueryClient({
@@ -387,7 +421,7 @@ describe('SessionConversation', () => {
         )
     })
     const line = await screen.findByText(
-      'The provider refused the API key. Replace it under API keys.',
+      'The provider refused the API key. Replace it under Providers.',
     )
     expect(line.closest('button')).toHaveClass('text-danger')
     expect(screen.queryByText(/api retry/i)).toBeNull()
@@ -1231,5 +1265,160 @@ describe('SessionConversation and the Activity tab', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+// #2129: the person's messages as a rail beside the thread. The index is the engine's
+// (the transcript the tool keeps); a mark reaches the row of the thread that message is.
+describe('SessionConversation — the message navigator', () => {
+  beforeEach(() => useTenantStore.setState({ activeTenant: 'demo' }))
+  afterEach(() => vi.restoreAllMocks())
+  const message = (id: number, line: string, text = line) => ({
+    id,
+    role: 'user' as const,
+    at: '2026-10-14T10:00:00.000Z',
+    first_line: line,
+    text,
+  })
+
+  it('reaches, highlights and announces the row of a message sent', async () => {
+    const asked = vi
+      .spyOn(agentOpsApi, 'messages')
+      .mockImplementation(async (_ref, params) => ({
+        driver: 'claude',
+        transcript: 'read',
+        total: 2,
+        items:
+          params?.id === 1
+            ? [message(1, 'fix the failing test')]
+            : [
+                message(1, 'fix the failing test'),
+                message(3, 'now the linter'),
+              ],
+      }))
+    const userEvents = userEvent.setup()
+    wrap()
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'fix the failing test' },
+        }),
+        1,
+      )
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Done.' }],
+          },
+        }),
+        2,
+      )
+      push(
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'now the linter' },
+        }),
+        3,
+      )
+    })
+    const marks = await screen.findAllByTestId('message-mark')
+    expect(marks).toHaveLength(2)
+    expect(marks[0]).toHaveAccessibleName(/Message 1, .*fix the failing test/)
+
+    await userEvents.click(marks[0]!)
+    const rows = screen.getAllByTestId('conversation-item')
+    await waitFor(() => expect(rows[0]!.closest('li')).toHaveClass('ring-2'))
+    // Every kind of row names its item, so a jump to an answer finds it too.
+    for (const row of rows) expect(row).toHaveAttribute('data-item-id')
+    expect(rows[1]).toHaveAttribute('data-kind', 'assistant')
+    expect(rows[2]!.closest('li')).not.toHaveClass('ring-2')
+    expect(screen.getByRole('status')).toHaveTextContent('Jumped to message 1.')
+    expect(asked).toHaveBeenCalledWith(
+      'run_1',
+      { order: 'desc', limit: 200 },
+      expect.anything(),
+    )
+  })
+
+  it('draws nothing when the session has no messages the engine can read', async () => {
+    const asked = vi
+      .spyOn(agentOpsApi, 'messages')
+      .mockRejectedValue(new ApiError(422, 'unprocessable', 'another tool'))
+    wrap()
+    await waitFor(() => expect(asked).toHaveBeenCalled())
+    await waitFor(() => expect(qcIdle()).toBe(true))
+    expect(screen.queryByTestId('message-rail')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('message-bar')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
+  })
+
+  // #2258: the engine answers 422 for a tool that keeps its record another way, and the
+  // browser logs every failed request as a console error, so the first-hour journey on an
+  // OpenCode session failed on a request the console never needed to make.
+  it('does not ask a tool that keeps no transcript for its messages', async () => {
+    const asked = vi.spyOn(agentOpsApi, 'messages').mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      total: 0,
+      items: [],
+    })
+    wrap({ provider_driver: 'opencode' })
+    await waitFor(() => expect(qcIdle()).toBe(true))
+    expect(asked).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('message-bar')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('message-problem')).not.toBeInTheDocument()
+  })
+
+  // A legacy run names no driver; the engine answers for it (409), so it is still asked.
+  it('asks a run that names no driver for its messages', async () => {
+    const asked = vi.spyOn(agentOpsApi, 'messages').mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      total: 0,
+      items: [],
+    })
+    wrap({ provider_driver: undefined })
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(1))
+  })
+
+  it.each(['claude', 'codex'])(
+    'asks a %s session for its messages',
+    async (provider_driver) => {
+      const asked = vi.spyOn(agentOpsApi, 'messages').mockResolvedValue({
+        driver: provider_driver,
+        transcript: 'read',
+        total: 1,
+        items: [message(1, 'fix the failing test')],
+      })
+      wrap({ provider_driver })
+      await waitFor(() => expect(asked).toHaveBeenCalledTimes(1))
+      expect(await screen.findAllByTestId('message-mark')).toHaveLength(1)
+    },
+  )
+
+  it('reads the index again when the person sends another message, not on every burst of output', async () => {
+    const asked = vi.spyOn(agentOpsApi, 'messages').mockResolvedValue({
+      driver: 'claude',
+      transcript: 'read',
+      total: 1,
+      items: [message(1, 'fix the failing test')],
+    })
+    wrap()
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(1))
+    const send = (role: 'user' | 'assistant', content: unknown, seq: number) =>
+      act(() =>
+        push(JSON.stringify({ type: role, message: { role, content } }), seq),
+      )
+    send('user', 'fix the failing test', 1)
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(2))
+    // Output that is not a message sent changes nothing in the index.
+    send('assistant', [{ type: 'text', text: 'ok' }], 2)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(asked).toHaveBeenCalledTimes(2)
+    send('user', 'now the linter', 3)
+    await waitFor(() => expect(asked).toHaveBeenCalledTimes(3))
   })
 })

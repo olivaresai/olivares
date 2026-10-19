@@ -11,7 +11,7 @@ ends, one real scenario at a time.
 | Example | What it shows | Surface |
 |---|---|---|
 | [**govern-claude-code/**](./govern-claude-code/) | Govern an agent's tool-calls: **allow / deny / rewrite** a Claude Code `PreToolUse` call before it runs, deny-closed and audited. | hooks PEP |
-| [**otel-genai-ingest/**](./otel-genai-ingest/) | Send vendor-neutral OpenTelemetry **GenAI** (`gen_ai.*`) telemetry from any framework and watch it become attributed **cost** in FinOps. | OTLP GenAI |
+| [**otel-genai-ingest/**](./otel-genai-ingest/) | Send vendor-neutral OpenTelemetry **GenAI** (`gen_ai.*`) telemetry from any framework and watch it become attributed **cost** in FinOps (cost read-back is a Business feature). | OTLP GenAI |
 | [**build-a-connector/**](./build-a-connector/) | Scaffold, build, test and boundary-check **your first connector** — offline, never importing `/core`. | connector SDK |
 | [**bring-your-own-protocol/**](./bring-your-own-protocol/) | Turn a **proprietary in-house protocol** (a fictional FabWorks ERP) into a governed content source: scaffold, fill, sign, and prove deny-closed admission — fully offline. | content-source SDK |
 

@@ -8,6 +8,10 @@ This document explains both, how to move between them, and what the operator rep
 when something goes wrong. (`cp` in the commands below is the ControlPlane resource's
 short name, as declared by the CRD.)
 
+Leader routing (the leader gate and the pod label below) is a Business capability. A Community
+binary started with `OLIVARES_HA_LEADER_GATE` or `OLIVARES_HA_LEADER_LABEL` set refuses to serve,
+exits 9 and names Business; unset the variable to start it. See [editions](editions.md).
+
 ## 1. Why there are two layouts
 
 The control plane is a **single writer**: exactly one node holds the Postgres
@@ -139,7 +143,7 @@ apiVersion: ops.olivares.ai/v1alpha1
 kind: ControlPlane
 metadata: { name: cp }
 spec:
-  image: docker.io/olivaresai/olivares:0.2   # MUST serve /pod-readyz
+  image: docker.io/olivaresai/olivares:0.3   # MUST serve /pod-readyz
   engine: postgres
   replicas: 3
   haRouting: LeaderRouting

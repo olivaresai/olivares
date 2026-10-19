@@ -12,6 +12,14 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
+// The alias form is documented (docs/contracts/mcp-gateway-management.md), so a
+// change to it is a change to a published tool name.
+func TestManagedToolAliasFormIsPublished(t *testing.T) {
+	if got := managedToolAlias("01a14608-f7fc-7ecb-9138-6cf6c48c4261", "hu_echo"); got != "mcp_01a14608f7fc7ecb91386cf6c48c4261_hu_echo" {
+		t.Fatalf("alias = %q", got)
+	}
+}
+
 func TestManagedMCPAliasesAreBoundedAndSeparateServers(t *testing.T) {
 	a, b := model.NewID().String(), model.NewID().String()
 	for _, name := range []string{"read_file", strings.Repeat("x", 128)} {

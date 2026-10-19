@@ -63,8 +63,9 @@ var claudePolicySurfaces = []string{"managed-settings", "hooks", "managed-mcp", 
 func newClaudePolicyCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "claude-policy",
-		Short: "Author, publish and track the Claude Code managed-* policy surfaces",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "claude-policy",
+		Short:       "Author, publish and track the Claude Code managed-* policy surfaces",
 		Long: "claude-policy is the authoring console for the four managed surfaces —\n" +
 			"managed-settings, hooks, managed-mcp and sandbox — over the same API the web\n" +
 			"console calls: validate a document, dry-run it against what hosts actually\n" +
@@ -162,8 +163,9 @@ func claudePolicyReportIssues(cmd *cobra.Command, flags *authClientFlags, res ag
 func newClaudePolicyValidateCmd(flags *authClientFlags) *cobra.Command {
 	var contentFile string
 	cmd := &cobra.Command{
-		Use:   "validate <surface>",
-		Short: "Validate a policy document server-side (exit 7 when it has errors)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "validate <surface>",
+		Short:       "Validate a policy document server-side (exit 7 when it has errors)",
 		Long: "validate runs the authoritative server-side validation for one surface. It has\n" +
 			"no effect and persists nothing.\n\n" +
 			"THE EXIT CODE IS THE POINT. The route answers 200 even for a document full of\n" +
@@ -200,8 +202,9 @@ func newClaudePolicyValidateCmd(flags *authClientFlags) *cobra.Command {
 func newClaudePolicyDryRunCmd(flags *authClientFlags) *cobra.Command {
 	var contentFile string
 	cmd := &cobra.Command{
-		Use:   "dry-run <surface>",
-		Short: "Resolve a document against observed hosts without writing anything",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dry-run <surface>",
+		Short:       "Resolve a document against observed hosts without writing anything",
 		Long: "dry-run validates the document and resolves it against what distribution agents\n" +
 			"have actually reported, showing the changes a publish would make.\n\n" +
 			"NO HOST IS WRITTEN by a dry-run, and nothing is persisted.\n\n" +
@@ -242,8 +245,9 @@ func newClaudePolicyPublishCmd(flags *authClientFlags) *cobra.Command {
 		note        string
 	)
 	cmd := &cobra.Command{
-		Use:   "publish <surface>",
-		Short: "Publish a new revision and, when a distributor is wired, sign it",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "publish <surface>",
+		Short:       "Publish a new revision and, when a distributor is wired, sign it",
 		Long: "publish appends a revision and — when a distributor is wired — mints a SIGNED\n" +
 			"artifact for the pull agents. It prints the artifact's sha256 and key\n" +
 			"fingerprint: pin the fingerprint and hand it to the agents out of band.\n\n" +
@@ -326,10 +330,11 @@ func newClaudePolicyPublishCmd(flags *authClientFlags) *cobra.Command {
 
 func newClaudePolicyVersionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "versions",
-		Short:   "List and read published revisions of a surface",
-		Long:    "Every publish appends a revision. `ls` lists them and `get` returns one with its full content.",
-		Example: "  olivares claude-policy versions ls managed-settings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "versions",
+		Short:       "List and read published revisions of a surface",
+		Long:        "Every publish appends a revision. `ls` lists them and `get` returns one with its full content.",
+		Example:     "  olivares claude-policy versions ls managed-settings",
 	}
 	cmd.AddCommand(newClaudePolicyVersionsListCmd(flags), newClaudePolicyVersionsGetCmd(flags))
 	return cmd
@@ -337,8 +342,9 @@ func newClaudePolicyVersionsCmd(flags *authClientFlags) *cobra.Command {
 
 func newClaudePolicyVersionsListCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "ls <surface>",
-		Short: "List a surface's published revisions",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls <surface>",
+		Short:       "List a surface's published revisions",
 		Long: "ls lists every revision, newest first, without the document bodies.\n\n" +
 			"It is NOT paginated by the engine: the whole history comes back in one answer,\n" +
 			"so there is no --cursor to continue from.",
@@ -365,11 +371,12 @@ func newClaudePolicyVersionsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newClaudePolicyVersionsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <surface> <revision>",
-		Short:   "Show one revision with its document content",
-		Long:    "get returns one revision including the document that was published. Use -o json to pipe the content back into validate or publish.",
-		Example: "  olivares claude-policy versions get managed-settings 3 -o json",
-		Args:    cobra.ExactArgs(2),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <surface> <revision>",
+		Short:       "Show one revision with its document content",
+		Long:        "get returns one revision including the document that was published. Use -o json to pipe the content back into validate or publish.",
+		Example:     "  olivares claude-policy versions get managed-settings 3 -o json",
+		Args:        cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			surface, err := claudePolicySurface(args[0])
 			if err != nil {
@@ -396,8 +403,9 @@ func newClaudePolicyVersionsGetCmd(flags *authClientFlags) *cobra.Command {
 func newClaudePolicyArtifactCmd(flags *authClientFlags) *cobra.Command {
 	var revision int64
 	cmd := &cobra.Command{
-		Use:   "artifact <surface>",
-		Short: "Fetch the signed artifact a distribution agent would pull",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "artifact <surface>",
+		Short:       "Fetch the signed artifact a distribution agent would pull",
 		Long: "artifact returns the rendered document a pull agent applies, with the sha256\n" +
 			"and key fingerprint it must verify against. Without --revision it returns the\n" +
 			"newest.\n\n" +
@@ -441,8 +449,9 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 		observedFile   string
 	)
 	cmd := &cobra.Command{
-		Use:   "checkin <surface>",
-		Short: "Report an agent's applied artifact and observed config (exit 7 when unverified)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "checkin <surface>",
+		Short:       "Report an agent's applied artifact and observed config (exit 7 when unverified)",
 		Long: "checkin is what a distribution agent reports after applying an artifact: which\n" +
 			"revision it verified, the hash and key fingerprint it echoes back, and the\n" +
 			"configuration it now OBSERVES on the host.\n\n" +
@@ -523,8 +532,9 @@ func newClaudePolicyCheckinCmd(flags *authClientFlags) *cobra.Command {
 
 func newClaudePolicyDistributionCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "distribution <surface>",
-		Short: "Show published vs signed vs observed, scope by scope",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "distribution <surface>",
+		Short:       "Show published vs signed vs observed, scope by scope",
 		Long: "distribution is the truth view: the newest published revision, the signed\n" +
 			"artifact, and every scope that has checked in — with whether it verified and\n" +
 			"whether it is on the current artifact.\n\n" +

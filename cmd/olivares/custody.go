@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/secure"
@@ -66,6 +67,7 @@ const (
 	envKeyWrapOld     = "OLIVARES_KEY_WRAP_OLD"
 	envKeyCustody     = "OLIVARES_KEY_CUSTODY"
 	envLedgerCustody  = "OLIVARES_LEDGER_CUSTODY"
+	envLedgerSigner   = "OLIVARES_LEDGER_SIGNER"
 	envAuditWrapped   = "OLIVARES_AUDIT_SIGNING_KEY_WRAPPED_FILE"
 	envCatalogWrapped = "OLIVARES_CATALOG_SIGNING_KEY_WRAPPED_FILE"
 	envPolicyWrapped  = "OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE"
@@ -372,6 +374,45 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// offBoxLedgerSigner reports whether an OLIVARES_LEDGER_SIGNER value asks for a
+// signer other than the on-box default. An unsupported value counts: it is not the
+// on-box signer, so Community must not guess what the operator meant.
+func offBoxLedgerSigner(kind string) bool {
+	switch strings.TrimSpace(kind) {
+	case "", "ed25519", "on-box":
+		return false
+	}
+	return true
+}
+
+// businessCustodyError is the Community refusal of a Business custody setting. It is
+// FIXED: it names the variable and never carries the value supplied for it. The class
+// is the Edition exit code, as for every other Business refusal.
+func businessCustodyError(setting string) error {
+	return exitcode.New(exitcode.Edition, fmt.Errorf("%s is a Business capability (key custody assertions and the off-box ledger signer): "+
+		"run the Business edition, or unset %s: %s", setting, setting, pricingURL))
+}
+
+// refuseBusinessCustodyInCommunity makes the custody assertions byok and hyok and the
+// off-box ledger signer Business capabilities. boot calls it first, before anything is
+// opened or any key is created, instead of letting Community run with a posture the
+// operator believes is enforced. The data stays: unset the variable, or run the
+// Business build. cmek is refused by checkCMEKInstall, as before.
+func refuseBusinessCustodyInCommunity() error {
+	if thisEdition.name != "community" {
+		return nil
+	}
+	switch {
+	case strings.TrimSpace(envconfig.Get(envKeyCustody)) == "byok":
+		return businessCustodyError(envKeyCustody)
+	case strings.TrimSpace(envconfig.Get(envLedgerCustody)) == "hyok":
+		return businessCustodyError(envLedgerCustody)
+	case offBoxLedgerSigner(envconfig.Get(envLedgerSigner)):
+		return businessCustodyError(envLedgerSigner)
+	}
+	return nil
 }
 
 // custodyAssertions is the declared posture parsed from the environment.

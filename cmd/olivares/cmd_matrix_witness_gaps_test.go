@@ -80,6 +80,9 @@ func TestHooksConformArgvReachesEditionBoundaryOnlyForValidArgs(t *testing.T) {
 }
 
 func TestAuditKeyTransitionArgvReachesSignerGuardOnlyForValidArgs(t *testing.T) {
+	// key-transition is a Business verb: Community answers the edition sentence first
+	// (custody_edition_test.go), so the signer guard is the Business behavior.
+	asEdition(t, "enterprise")
 	t.Setenv("OLIVARES_LEDGER_SIGNER", "")
 	dir := initialisedDataDir(t)
 	_, _, err := execRootOwnProcess(t, "audit", "key-transition", "--data-dir", dir, "--yes")

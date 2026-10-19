@@ -8,7 +8,7 @@
 // which is accent-insensitivity ONLY in Latin script. Outside it, the same line is
 // corruption — NFD decomposes Russian "й" into "и" + combining breve and Japanese "が"
 // into "か" + combining voiced mark, and stripping those returns a DIFFERENT letter. The
-// console ships seven languages; the bug made two of them fail to find their own words,
+// console ships nine languages; the bug made two of them fail to find their own words,
 // and it was invisible through the component tests because those type Latin.
 //
 // The property that matters is stated directly below: every published label must match
@@ -52,7 +52,7 @@ describe('filter folding', () => {
       expect(fold(fold(s))).toBe(fold(s))
   })
 
-  it('lets every published label find ITSELF in all seven languages', () => {
+  it('lets labels from every shipped script find ITSELF', () => {
     // The end-to-end property. Whatever the folding does, a word must never stop
     // matching itself — that is the only way a filter can be silently useless.
     const labels = [
@@ -79,6 +79,14 @@ describe('filter folding', () => {
       '智能体',
       '基础设施',
       '工作流', // zh
+      'Sessioni',
+      'Agenti',
+      'Identità',
+      'Attività', // it
+      '세션',
+      '에이전트',
+      '워크플로',
+      '작업', // ko
     ]
     for (const l of labels) expect(fold(l).includes(fold(l))).toBe(true)
     // And distinct labels must not collapse into one another.

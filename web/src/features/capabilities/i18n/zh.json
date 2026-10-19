@@ -1,6 +1,6 @@
 {
   "title": "MCP 与技能",
-  "subtitle": "实时能力目录 —— MCP 服务器、工具、技能及其接线方式。",
+  "subtitle": "实时能力目录 —— MCP 服务器、工具、技能及其连接方式。",
   "tabs": {
     "servers": "服务器",
     "tools": "工具",
@@ -40,7 +40,7 @@
     "tools": "工具",
     "skills": "技能",
     "resources": "资源",
-    "consumers": "接线对象",
+    "consumers": "使用方",
     "consumersHint": "已连接到此服务器的会话与智能体。",
     "noConfig": "无托管配置",
     "noConfigHint": "添加已保存的定义，以记录此服务器的传输方式和密钥引用。",

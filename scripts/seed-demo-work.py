@@ -69,6 +69,7 @@ if _lib is None:
     sys.exit(2)
 sys.path.insert(0, _lib)
 from redaccion import abre  # noqa: E402
+from demo_edition import keeps_action  # noqa: E402
 
 
 # El estate de demo cuenta una historia para que la captura enseñe estados DISTINTOS (badges,
@@ -168,17 +169,18 @@ def pedir(base, token, tenant, metodo, ruta, cuerpo=None, cabeceras=None):
 def sembrar_decisiones(base, token, tenant, work_item_id, version, cantidad):
     """Create enough effective heads to make DecisionsPanel expose its next page."""
     for index in range(1, cantidad + 1):
-        key = "demo-capture-decision-%03d" % index
+        # The key, the statement and the authority are on screen in the Decisions panel: plain names, not
+        # the harness's own.
+        key = "scope-%03d" % index
         body = {
             "command": "decision.set",
             "work_item_id": work_item_id,
             "decision_key": key,
             "subject_kind": "work.scope",
             "subject_ref": work_item_id,
-            "statement_md": "Decision %d: keep this demo item inside the governed scope." % index,
-            "rationale_md": "Synthetic demo evidence for the paginated Decisions console "
-                            "capture; every key is an independent effective head.",
-            "authority_ref": "demo-seed/docs-captures",
+            "statement_md": "Decision %d: keep this item inside the governed scope." % index,
+            "rationale_md": "Agreed when the item was scoped; every key is its own effective decision.",
+            "authority_ref": "governance/scope-review",
         }
         code, result = pedir(
             base, token, tenant, "POST", "/v1/m/sessions/decisions?mode=apply", body,
@@ -303,6 +305,16 @@ def sembrar_catalogo(base, token, tenant):
     return 0
 
 
+def edicion_de_la_build(base, token, tenant):
+    """The edition the server declares, or None (the error already printed) when it cannot be known."""
+    code, info = pedir(base, token, tenant, "GET", "/v1/server-info")
+    edition = info.get("edition") if isinstance(info, dict) else None
+    if code != 200 or edition not in ("community", "business", "enterprise"):
+        print("ERROR: could not determine the build edition (%s)" % code, file=sys.stderr)
+        return None
+    return edition
+
+
 # ── DEPLOY ──────────────────────────────────────────────────────────────────────────────────────
 # `/deploy` salia con «No deployments declared yet» ocupando la region principal. Deploy es el
 # estado DESEADO de lo que corre, asi que vacio dice que no hay nada desplegado — justo lo contrario
@@ -312,6 +324,12 @@ def sembrar_catalogo(base, token, tenant):
 #    un id a mano daria filas que apuntan a nada y una pantalla de detalle rota. Se leen los agentes
 #    que el sembrado YA creo y se despliegan esos.
 def sembrar_deploy(base, token, tenant):
+    edition = edicion_de_la_build(base, token, tenant)
+    if edition is None:
+        return 1
+    if edition == "community":
+        print("deploy seed SKIPPED: deployment is a Business capability")
+        return 0
     # Los agentes son del NUCLEO, no de un modulo: `/v1/agents`, no `/v1/m/agents` (el contrato
     # embebido publica las dos formas para familias distintas y la equivocada da 404, no vacio).
     code, ags = pedir(base, token, tenant, "GET", "/v1/agents?limit=100")
@@ -493,10 +511,8 @@ MODELOS_COSTE = [
 
 def sembrar_coste(base, token, tenant, dias=30):
     """Serie diaria de coste por la ruta canonica de ingesta."""
-    code, info = pedir(base, token, tenant, "GET", "/v1/server-info")
-    edition = info.get("edition") if isinstance(info, dict) else None
-    if code != 200 or edition not in ("community", "business", "enterprise"):
-        print("ERROR: could not determine the build edition (%s)" % code, file=sys.stderr)
+    edition = edicion_de_la_build(base, token, tenant)
+    if edition is None:
         return 1
     if edition == "community":
         print("cost seed SKIPPED: FinOps spend analysis is a Business capability")
@@ -652,7 +668,13 @@ APROBACIONES = [
 
 def sembrar_permisos(base, token, tenant):
     creadas = 0
+    edicion = edicion_de_la_build(base, token, tenant)
+    if edicion is None:
+        return 1
     for a in APROBACIONES:
+        # A Community estate holds no approval for a Business action (scripts/lib/demo_edition.py).
+        if not keeps_action(edicion, a["accion"]):
+            continue
         cuerpo = {"action": a["accion"], "subject_kind": a["sujeto_kind"],
                   "subject_ref": a["sujeto_ref"], "reason": a["razon"],
                   "required_approvals": a["aprobaciones"],
@@ -704,6 +726,13 @@ def sembrar_politica(base, token, tenant):
     code, pub = pedir(base, token, tenant, "POST",
                       "/v1/m/claude-policy/managed-settings/publish",
                       {"content": POLITICA, "note": "Baseline for the demo estate"})
+    # Fleet managed settings are Business: a Community engine answers 501 naming it. That is the
+    # edition, not a seeding failure; any other refusal, or a 501 from a paid edition, stays an error.
+    if code == 501 and "Business" in str(pub.get("error", "")):
+        code_info, info = pedir(base, token, tenant, "GET", "/v1/server-info")
+        if code_info == 200 and isinstance(info, dict) and info.get("edition") == "community":
+            print("policy seed SKIPPED: fleet managed settings are a Business capability")
+            return 0
     if code not in (200, 201):
         print("ERROR: publish policy -> %s %s" % (code, pub), file=sys.stderr)
         return 1
@@ -927,7 +956,7 @@ def sembrar_workspace_y_run(base, token, tenant, root):
         return 1
 
     # remote-control avoids inventing an inference credential. The capture engine points its real
-    # procRunner at scripts/demo-agent.sh, so this still exercises admission, process lifecycle,
+    # procRunner at scripts/demo-tools/demo-tool.py, so this still exercises admission, process lifecycle,
     # provider-session binding and the ledger without touching a real Claude account.
     code, created_run = pedir(base, token, tenant, "POST", "/v1/m/sessions/runs", {
         "name": "acme-platform governed session",

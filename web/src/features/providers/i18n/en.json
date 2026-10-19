@@ -16,7 +16,7 @@
   },
   "forbidden": {
     "title": "You cannot read the providers of this tenant",
-    "description": "Reading registered providers needs sessions:provider:read. Ask an administrator of this tenant for it."
+    "description": "Your role cannot read registered providers. Ask an administrator of this organization for access."
   },
   "columns": {
     "name": "Name",
@@ -127,7 +127,7 @@
   },
   "vaultUnavailable": {
     "title": "This deployment cannot store a provider credential",
-    "description": "No sealed credential vault is wired, so the engine refuses to store a key rather than storing one it cannot protect. An administrator must configure the secret sealer."
+    "description": "No sealed credential vault is set up, so the engine refuses to store a key rather than storing one it cannot protect. An administrator must configure the secret sealer."
   },
   "truncation": {
     "label": "Showing {{n}} providers; there are more",

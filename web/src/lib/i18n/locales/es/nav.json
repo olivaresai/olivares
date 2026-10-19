@@ -41,7 +41,8 @@
     "console": "Administración",
     "sourceDiff": "Diferencia de origen",
     "permissions": "Permisos",
-    "identity": "Identidad y NHI",
+    "identity": "Identidad y acceso",
+    "vault": "Caja fuerte",
     "claudePolicy": "Gobierno de Claude Code",
     "routinePolicies": "Políticas de rutinas",
     "deploy": "Despliegue",
@@ -50,7 +51,7 @@
     "catalog": "Catálogo",
     "killswitch": "Kill switch",
     "work": "Trabajo",
-    "agentops": "Sesiones",
+    "agentops": "Operar sesiones",
     "agentArtifacts": "Artefactos de agente",
     "models": "Modelos",
     "modelOps": "Operaciones de modelos",
@@ -68,6 +69,7 @@
     "attestation": "Cadena de suministro",
     "apiPlayground": "API Playground",
     "audit": "Registro de auditoría",
+    "retention": "Retención",
     "workspaceDashboard": "Espacio de trabajo",
     "settings": "Ajustes",
     "workspace-templates": "Plantillas de workspace",
@@ -108,13 +110,14 @@
     "skills": "Explorar paquetes de skills y asignarlos a departamentos, grupos de agentes y agentes",
     "protocolBindings": "Compón y reconcilia enlaces gobernados A2A y MCP",
     "communications": "Canales, avisos directos y bandeja personal del workspace seleccionado",
-    "communicationsInbox": "Tu bandeja exacta: entregas dirigidas a ti, leídas en fresco y acusadas de forma explícita",
+    "communicationsInbox": "Mensajes dirigidos a ti: ábrelos y acusa recibo de cada uno",
     "communicationsNew": "Crea un canal con concesiones iniciales explícitas",
-    "communicationsAdministration": "Administra canales: configuración e historial de concesiones, cada acto bajo el ETag actual del canal",
+    "communicationsAdministration": "Administra canales: configuración e historial de concesiones",
     "communicationsHandoffs": "Ofertas de responsabilidad de trabajo dirigidas a ti: lee el contexto y acepta o rechaza",
     "console": "Usuarios, SSO/IdP, workspaces, grupos de agentes, roles, secretos, conectores, claves API y la licencia de esta instalación",
     "permissions": "Identidad, roles y aprobaciones",
-    "identity": "SSO, SCIM, el inventario NHI y el grafo WIF",
+    "identity": "SSO, SCIM y las identidades que usan tus agentes",
+    "vault": "Tus contraseñas, notas y códigos de autenticación",
     "claudePolicy": "Política gestionada, hooks, MCP, sandbox y policy-as-code",
     "deploy": "Aprovisiona y conecta agentes a la infraestructura",
     "gitPublication": "Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados",
@@ -142,6 +145,7 @@
     "attestation": "Atestación de releases — SLSA, SBOM, VEX y Scorecard",
     "apiPlayground": "Explora y prueba la API del control plane",
     "audit": "Registro de evidencias cuya manipulación puede detectarse",
+    "retention": "Cuánto tiempo se conserva cada clase de registro, el barrido que lo aplica y sus certificados sellados",
     "workspaceDashboard": "Agentes, sesiones, recursos y actividad de un espacio de trabajo",
     "settings": "Ajustes del espacio de trabajo y de la cuenta",
     "inferenceProxy": "Compuertas del proxy, reglas DLP de egreso y aprobaciones de dispositivos",
@@ -150,7 +154,7 @@
     "postureExport": "Exporta la postura real para una torre de control",
     "providers": "Registra las claves de API y los endpoints con los que arrancan las sesiones; pruébalos, rótalos y revócalos",
     "providerProfiles": "Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda",
-    "providerBindings": "Dedica fuentes configuradas, en la revisión que aplicó este nodo, a perfiles de proveedor",
+    "providerBindings": "Vincula fuentes configuradas a perfiles de proveedor",
     "providerAccounts": "Lista las cuentas de proveedor con nombre y adopta un perfil de proveedor existente como cuenta",
     "routinePolicies": "Intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación, listas permitidas de cron y entornos bloqueados para las rutinas de Claude Code",
     "agentcoreExport": "Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada",
@@ -175,7 +179,7 @@
       "createSchedule": "Nueva programación"
     },
     "killswitch": {
-      "engage": "Activar kill switch"
+      "engage": "Parar todos los agentes"
     },
     "identity": {
       "invite": "Invitar a personas"
@@ -274,8 +278,7 @@
     "empty": "No hay entradas de esta área disponibles para ti",
     "emptyHint": "Las entradas aparecen aquí cuando tu rol en la organización actual da acceso a un módulo de esta área.",
     "backHome": "Ir a Inicio",
-    "area": "Área",
-    "off": "Apagado"
+    "area": "Área"
   },
   "personal": {
     "favorites": "Favoritos",
@@ -332,6 +335,7 @@
     "wirePlaceholder": "Envía una línea NDJSON a stdin…",
     "wireAria": "Línea de entrada de la sesión",
     "turnFailed": "La sesión no ha podido aceptar este turno.",
+    "draftSaveFailed": "No se ha podido guardar el borrador en esta pestaña. Mantén esta página abierta o copia tu mensaje antes de salir.",
     "sendBackgroundHint": "Ctrl+Entrar envía y deja el borrador listo para la siguiente frase.",
     "messagePlaceholder": "Mensaje para {{title}}…",
     "slashLabel": "Comandos y skills",
@@ -351,7 +355,7 @@
       }
     },
     "modelAria": "Modelo y effort de esta sesión: {{value}}",
-    "sessionKeeps": "Esta sesión sigue con {{value}}. Otro modelo u otro effort inicia una sesión nueva.",
+    "sessionKeeps": "Esta sesión sigue con {{value}}. Otra selección inicia una sesión nueva.",
     "startWithChoice": "Iniciar una sesión nueva con esta elección"
   },
   "shell": {

@@ -93,6 +93,7 @@ import {
 } from './api'
 import { PagePrimaryAction } from '@/components/ui/page-actions'
 import { StaticTable } from '@/components/data/static-table'
+import { DestinationsTab } from './destinations-tab'
 
 const SEVERITIES: NotifySeverity[] = [
   '',
@@ -161,11 +162,17 @@ export function AlertingView() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="routes">{t('tabs.routes')}</TabsTrigger>
+          <TabsTrigger value="destinations">
+            {t('tabs.destinations')}
+          </TabsTrigger>
           <TabsTrigger value="deliveries">{t('tabs.deliveries')}</TabsTrigger>
           <TabsTrigger value="outbox">{t('tabs.outbox')}</TabsTrigger>
         </TabsList>
         <TabsContent value="routes" className="pt-4">
           <RoutesTab creating={creating} setCreating={setCreating} />
+        </TabsContent>
+        <TabsContent value="destinations" className="pt-4">
+          <DestinationsTab />
         </TabsContent>
         <TabsContent value="deliveries" className="pt-4">
           <DeliveriesTab />

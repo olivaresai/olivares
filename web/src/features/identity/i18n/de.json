@@ -1,6 +1,6 @@
 {
-  "title": "Identität & NHI",
-  "subtitle": "SSO, SCIM, Identitätsinventar, NHI-Lebenszyklus, WIF-Graph und privilegierte Anmeldung — beobachtet, gesteuert und auditiert.",
+  "title": "Identität & Zugriff",
+  "subtitle": "Wer sich anmelden darf, was er tun darf und wie er es nachweist.",
   "sections": "Identitätsbereiche",
   "groups": {
     "people": "Personen",
@@ -84,7 +84,7 @@
       "webauthn": "NIST SP 800-63B-4 (Authenticator Assurance)",
       "certManager": "cert-manager (CNCF)",
       "pqc": "NIST SP 800-57 Part 1 r6 (Schlüsselverwaltung)",
-      "wifReference": "Anthropic WIF-Referenz",
+      "wifReference": "Anthropic-Workload-Identitätsreferenz",
       "workloadIdentity": "Anthropic Workload Identity Federation",
       "externalKeys": "Anthropic External Keys (CMEK)",
       "workspaceUpdate": "Anthropic Arbeitsbereich-Residenz"
@@ -128,6 +128,7 @@
     "title": "SCIM 2.0-Provisionierung",
     "description": "Eingehende Provisionierung von Benutzern und Gruppen. Schreibgeschützter Status des Dienstanbieters, der synchronisierten Benutzer und der Austritts-Nachweise.",
     "seamWhat": "Die SCIM-Dienstanbieter-Konfiguration",
+    "businessOnly": "Der eingehende SCIM-Server erfordert Business. Entfernen Sie eine Person unter Personen aus der Organisation.",
     "patch": "PATCH",
     "filter": "Filter",
     "filterMax": "Unterstützt (max. {{n}})",
@@ -318,7 +319,7 @@
     "loadFailed": "Diese Einstellung konnte nicht gelesen werden. Laden Sie die Seite neu, um es erneut zu versuchen.",
     "note": "Um einen Passkey zu verlangen, melden Sie sich hier zuerst mit Ihrem Passkey an. Um einen Authenticator-Code zu verlangen, melden Sie sich zuerst mit Ihrem Code an. Um die Prüfung auszuschalten oder abzuschwächen, bestehen Sie zuerst die aktuelle Prüfung. Eine Änderung gilt innerhalb weniger Sekunden auf jedem Server.",
     "refused": {
-      "passkey_not_enrolled": "Fügen Sie Ihrem Konto zuerst einen Passkey hinzu (Identität & NHI > Passkeys) und schalten Sie die Prüfung dann ein.",
+      "passkey_not_enrolled": "Fügen Sie Ihrem Konto zuerst einen Passkey hinzu (Identität & Zugriff > Passkeys) und schalten Sie die Prüfung dann ein.",
       "totp_sign_in_required": "Richten Sie zuerst eine Authenticator-App ein und melden Sie sich mit ihrem Code an; schalten Sie die Prüfung dann ein."
     }
   },

@@ -86,11 +86,10 @@ export function InstalledHere({
           : t('installed.noWorkspace')
   const skillsReadable = !skillsOff && can('skills:catalog:read')
   const skills = useQuery({
-    queryKey: skillsKeys.selection(
-      activeTenant,
-      'workspace',
-      workspaceID ?? '',
-    ),
+    queryKey: [
+      ...scope,
+      ...skillsKeys.selection(activeTenant, 'workspace', workspaceID ?? ''),
+    ],
     queryFn: ({ signal }) =>
       skillsApi.selection('workspace', workspaceID!, signal),
     enabled: !!activeTenant && !!workspaceID && skillsReadable,
@@ -111,6 +110,33 @@ export function InstalledHere({
         }),
       enabled: !!activeTenant && profilesReadable,
     })),
+  })
+  // Resolve the workspace and profile together on the server, so a profile's
+  // skill of the same name replaces the workspace's skill exactly as at launch.
+  const profileSkills = useQueries({
+    queries: drivers.map((driver, i) => {
+      const ref = previews[i]?.data?.profile?.profile_ref
+      return {
+        queryKey: [
+          ...scope,
+          ...skillsKeys.selection(
+            activeTenant,
+            'workspace',
+            workspaceID ?? '',
+            ref,
+          ),
+          driver,
+        ],
+        queryFn: ({ signal }: { signal: AbortSignal }) =>
+          skillsApi.selection('workspace', workspaceID!, signal, ref),
+        enabled:
+          !!activeTenant &&
+          !!workspaceID &&
+          !!ref &&
+          skillsReadable &&
+          profilesReadable,
+      }
+    }),
   })
   const mcp = useQuery({
     queryKey: [...scope, 'installed-mcp', activeTenant],
@@ -169,6 +195,56 @@ export function InstalledHere({
       })),
     ]
   })
+  // Hosts an administrator declared a confined session may reach beside its provider.
+  const egressHosts = profiles.flatMap(({ driver, profile }) =>
+    (profile.session_egress_hosts ?? []).map((host) => ({
+      key: `${driver}/host/${host}`,
+      label: host,
+      detail: drivers.length > 1 ? toolLabel(driver) : undefined,
+      href: boxOf(driver),
+    })),
+  )
+  const skillItems = new Map<
+    string,
+    { key: string; label: string; href: string; detail?: string }
+  >()
+  const selections =
+    drivers.length > 0
+      ? drivers.flatMap((driver, i) =>
+          refused(previews[i]?.error)
+            ? []
+            : [
+                {
+                  driver,
+                  selection: previews[i]?.data?.profile
+                    ? profileSkills[i]?.data
+                    : skills.data,
+                },
+              ],
+        )
+      : [{ driver: '', selection: skills.data }]
+  for (const { driver, selection } of selections) {
+    for (const member of selection?.members ?? []) {
+      const key = `${member.pack_revision_id}/${member.name}`
+      const item = skillItems.get(key)
+      const tool = drivers.length > 1 ? toolLabel(driver) : undefined
+      if (item) {
+        if (tool && !item.detail?.includes(tool))
+          item.detail = [item.detail, tool].filter(Boolean).join(', ')
+      } else {
+        skillItems.set(key, {
+          key,
+          label: member.name,
+          href: `/skills?pack=${encodeURIComponent(member.pack_id)}`,
+          detail: tool,
+        })
+      }
+    }
+  }
+  const profileSkillsFailed = profileSkills.find((q) => q.isError)
+  const profileSkillsPending = drivers.some(
+    (_, i) => previews[i]?.data?.profile && profileSkills[i]?.isPending,
+  )
   const servers = mcp.data
     ? [
         ...(mcp.data.source === 'store' && mcp.data.session_tools
@@ -237,26 +313,33 @@ export function InstalledHere({
               : []),
           ].join(' ')}
         />
+        {egressHosts.length > 0 && (
+          <Row label={t('installed.egressHosts')} items={egressHosts} />
+        )}
         <Row
           label={t('installed.skills')}
-          items={(skills.data?.members ?? []).map((member) => ({
-            key: `${member.pack_revision_id}/${member.name}`,
-            label: member.name,
-            href: `/skills?pack=${encodeURIComponent(member.pack_id)}`,
-          }))}
+          items={[...skillItems.values()]}
           state={
             skillsOff
               ? t('installed.skillsOff')
               : !skillsReadable
                 ? t('installed.notReadable')
-                : (workspaceState ??
-                  (skills.isError
-                    ? t('installed.readFailed', {
-                        message: message(skills.error),
-                      })
-                    : skills.isPending
-                      ? t('installed.reading')
-                      : undefined))
+                : !profilesReadable && drivers.length > 0
+                  ? t('installed.profilesNotReadable')
+                  : (workspaceState ??
+                    (skills.isError || profileSkillsFailed || previewFailed
+                      ? t('installed.readFailed', {
+                          message: message(
+                            skills.error ??
+                              profileSkillsFailed?.error ??
+                              previewFailed?.error,
+                          ),
+                        })
+                      : skills.isPending ||
+                          profileSkillsPending ||
+                          previews.some((q) => q.isPending)
+                        ? t('installed.reading')
+                        : undefined))
           }
           hint={t('installed.skillsHint')}
         />

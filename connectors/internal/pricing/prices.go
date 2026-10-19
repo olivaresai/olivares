@@ -4,6 +4,7 @@
 package pricing
 
 import (
+	"errors"
 	"math"
 	"time"
 
@@ -70,9 +71,24 @@ func newDataset() *genai_prices.Calculator {
 	return c
 }
 
+// calculate is the one call For makes into the dataset. It is a variable only so a
+// test can make a lookup fail transiently (see TestForRetriesTransientCalculateError).
+var calculate = func(request genai_prices.PriceRequest) (genai_prices.PriceCalculation, error) {
+	return dataset.Calculate(request)
+}
+
+// lookupAttempts bounds how often each probe's Calculate call runs before For answers
+// not-found. The dataset guards each regex match with a 100 ms wall-clock timeout that a
+// CPU stall can trip on a model the dataset does carry, so a single errored run says
+// nothing about the model. A missing model or provider errors the same way on every run,
+// so For does not retry it. ponytail: a stall that outlasts all three runs still answers
+// not-found; upgrade when genai-prices offers matching without a wall-clock timeout.
+const lookupAttempts = 3
+
 // For returns the declared list pricing the embedded dataset carries for one
 // provider's model, as USD per million tokens per tier. ok is false when the
-// dataset has no such provider/model — it never guesses a price.
+// dataset has no such provider/model, or a lookup keeps failing (see lookupAttempts):
+// it never guesses a price.
 //
 // Rates are derived by pricing probeTokens of each tier through the dataset
 // calculator (see probeTokens: always the standard tier, never a long-context
@@ -88,13 +104,19 @@ func For(providerID, modelID string) (modelprovider.ModelPricing, bool) {
 		return modelprovider.ModelPricing{}, false
 	}
 	total := func(u genai_prices.Usage) (float64, bool) {
-		res, err := dataset.Calculate(genai_prices.PriceRequest{
+		request := genai_prices.PriceRequest{
 			Usage: u, Model: modelID, ProviderID: providerID, Timestamp: datasetTime,
-		})
-		if err != nil {
-			return 0, false
 		}
-		return res.TotalPrice, true
+		for attempt := 0; attempt < lookupAttempts; attempt++ {
+			res, err := calculate(request)
+			if err == nil {
+				return res.TotalPrice, true
+			}
+			if errors.Is(err, genai_prices.ErrModelNotFound) || errors.Is(err, genai_prices.ErrProviderNotFound) {
+				break
+			}
+		}
+		return 0, false
 	}
 	input, ok := total(genai_prices.Usage{genai_prices.UsageInputTokens: probeTokens})
 	if !ok {

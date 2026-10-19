@@ -41,8 +41,9 @@ func newAgentWorkspaceCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var readOnlyFolders []string
 	cmd := &cobra.Command{
-		Use:   "workspace [ref]",
-		Short: "Manage governed workspaces and their files (browse/read/write/move/delete)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "workspace [ref]",
+		Short:       "Manage governed workspaces and their files (browse/read/write/move/delete)",
 		Long: "workspace registers the host directories a governed session is allowed to see,\n" +
 			"and gives the operator the same governed file access the session gets: list,\n" +
 			"stat, read, write, move and delete — each subject to the workspace's mode and\n" +
@@ -95,6 +96,8 @@ func newAgentWorkspaceCmd() *cobra.Command {
 	})
 	cmd.AddCommand(
 		newWorkspaceAddCmd(),
+		newWorkspaceSetupCmd(false),
+		newWorkspaceSetupCmd(true),
 		newWorkspaceListCmd(),
 		newWorkspaceRemoveCmd(),
 		newWorkspaceFilesCmd(),
@@ -104,6 +107,8 @@ func newAgentWorkspaceCmd() *cobra.Command {
 		newWorkspaceMkdirCmd(),
 		newWorkspaceMoveCmd(),
 		newWorkspaceRmCmd(),
+		newWorkspaceProjectConfigCmd(),
+		newWorkspaceApproveProjectConfigCmd(),
 	)
 	return cmd
 }
@@ -116,8 +121,9 @@ func newWorkspaceAddCmd() *cobra.Command {
 		subpaths                []string
 	)
 	cmd := &cobra.Command{
-		Use:   "add <root-path>",
-		Short: "Register a host directory as a governed workspace",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "add <root-path>",
+		Short:       "Register a host directory as a governed workspace",
 		Long: "add registers a host directory with its mount mode, container target, DLP posture and optional allowed subpaths.\n\n" +
 			"The default DLP posture label requires a launch approval for every read-write session.\n" +
 			"Use --dlp off to register without classification, as session start does by default.",
@@ -143,11 +149,11 @@ func newWorkspaceAddCmd() *cobra.Command {
 	}
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&name, "name", "", "display name")
-	cmd.Flags().StringVar(&mode, "mode", "rw", "mount mode: rw|ro")
+	cmd.Flags().StringVar(&mode, "mode", "rw", "mount mode: rw|ro|write_no_delete (write_no_delete: sessions create and change files but cannot delete, rename or move them)")
 	cmd.Flags().StringVar(&target, "target", "/workspace", "container mount target path")
 	cmd.Flags().StringVar(&dlp, "dlp", "label", "DLP posture on reads: label|deny|off")
 	_ = cmd.RegisterFlagCompletionFunc("mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		return []string{"rw", "ro"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"rw", "ro", "write_no_delete"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = cmd.RegisterFlagCompletionFunc("dlp", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"label", "deny", "off"}, cobra.ShellCompDirectiveNoFileComp
@@ -161,12 +167,13 @@ func newWorkspaceAddCmd() *cobra.Command {
 func newWorkspaceListCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List registered workspaces",
-		Long:    "ls lists the governed workspaces registered for the configured tenant, including their mount and DLP posture.",
-		Example: "  olivares agent workspace ls -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List registered workspaces",
+		Long:        "ls lists the governed workspaces registered for the configured tenant, including their mount and DLP posture.",
+		Example:     "  olivares agent workspace ls -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -196,6 +203,7 @@ func newWorkspaceListCmd() *cobra.Command {
 func newWorkspaceRemoveCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "delete"},
 		Use:               "rm-workspace <ref>",
 		Short:             "Deregister a workspace (does NOT delete host files)",
 		Long:              "rm-workspace removes a workspace registration from Olivares without deleting any files from the host directory.",
@@ -222,6 +230,7 @@ func newWorkspaceFilesCmd() *cobra.Command {
 		path string
 	)
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
 		Use:               "files <ref>",
 		Short:             "List one directory level in a workspace",
 		Long:              "files lists one directory level within a governed workspace; use --path to select a directory below its root.",
@@ -257,6 +266,7 @@ func newWorkspaceFilesCmd() *cobra.Command {
 func newWorkspaceStatCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
 		Use:               "stat <ref> <path>",
 		Short:             "Show metadata for one path",
 		Long:              "stat retrieves governed metadata for one file or directory path inside a registered workspace.",
@@ -281,6 +291,7 @@ func newWorkspaceStatCmd() *cobra.Command {
 func newWorkspaceGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
 		Use:               "get <ref> <path>",
 		Short:             "Read a file's content to stdout (DLP-governed)",
 		Long:              "get reads one file through the governed workspace API, applies the workspace DLP posture, and writes its content to stdout.",
@@ -325,6 +336,7 @@ func newWorkspacePutCmd() *cobra.Command {
 		from string
 	)
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "write"},
 		Use:               "put <ref> <path>",
 		Short:             "Write a file from --from (a local file or '-' for stdin)",
 		Long:              "put writes content from a local file or stdin to a path inside a writable governed workspace.",
@@ -357,6 +369,7 @@ func newWorkspacePutCmd() *cobra.Command {
 func newWorkspaceMkdirCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "write"},
 		Use:               "mkdir <ref> <path>",
 		Short:             "Create a directory (and parents)",
 		Long:              "mkdir creates a directory and any missing parents inside a writable governed workspace.",
@@ -381,6 +394,7 @@ func newWorkspaceMkdirCmd() *cobra.Command {
 func newWorkspaceMoveCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "write"},
 		Use:               "mv <ref> <from> <to>",
 		Short:             "Move/rename a path within the workspace",
 		Long:              "mv moves or renames a file or directory between two paths in the same governed workspace.",
@@ -414,8 +428,9 @@ func newWorkspaceRmCmd() *cobra.Command {
 		yes       bool
 	)
 	cmd := &cobra.Command{
-		Use:   "rm <ref> <path>",
-		Short: "Delete a file or (with --recursive) a directory subtree",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <ref> <path>",
+		Short:       "Delete a file or (with --recursive) a directory subtree",
 		Long: "rm deletes a file from a governed workspace, or deletes a directory subtree when --recursive is supplied.\n\n" +
 			"A --recursive delete asks for confirmation, because the caller names a directory and the\n" +
 			"server deletes everything under it. In a non-interactive session there is nobody to ask, so\n" +

@@ -2,23 +2,23 @@
   "doors": {
     "catalog": {
       "title": "Communications",
-      "description": "Channels of the selected workspace that this principal may read now, the direct notices sent through them and the personal inbox. Each read and each act is decided by the engine under its own permission."
+      "description": "Channels of the selected workspace you may read now, the direct notices sent through them and your inbox. The engine decides each read and each action."
     },
     "inbox": {
       "title": "Communications inbox",
-      "description": "The exact personal mailbox of this principal in the selected workspace: deliveries addressed to it, opened fresh, acknowledged only by an explicit act."
+      "description": "Messages addressed to you in the selected workspace: open and acknowledge each one."
     },
     "new": {
       "title": "New channel",
-      "description": "Create a channel with explicit initial grants. Nothing is granted by implication, and the receipt of the act is not a durable list of who may read it later."
+      "description": "Create a channel and choose who may use it from the start. Nobody gets access by implication, and the receipt is not a lasting list of who may read it later."
     },
     "administration": {
       "title": "Channel administration",
-      "description": "The channels this principal may administer in the selected workspace: configuration and grant history, with each act confirmed under the channel's current ETag. Administration needs the channel:admin permission and a current local admin bit; it does not require, and does not give, the right to read the channel's content."
+      "description": "The channels you may administer in the selected workspace: configuration and grant history. Each change applies only to the version you read. Administering a channel neither needs nor gives the right to read its content."
     },
     "handoffs": {
       "title": "Handoffs",
-      "description": "Offers of work responsibility addressed to this principal in the selected workspace. The list carries no offer content; opening one reads its protected context fresh, and accepting or rejecting is an explicit act the engine decides."
+      "description": "Offers of work addressed to you in the selected workspace. The list shows no offer content; opening one reads its context, and the engine decides each accept or reject."
     }
   },
   "tabs": {
@@ -104,7 +104,7 @@
       "updated": "Updated"
     },
     "openById": "Open a channel by ID",
-    "openByIdHint": "A channel opened by ID is read fresh with its ETag; that read does not report your local bits."
+    "openByIdHint": "A channel opened by ID is read fresh; that read does not show your own access."
   },
   "access": {
     "label": "Your local access",
@@ -143,7 +143,7 @@
   },
   "channel": {
     "title": "Channel",
-    "description": "Read fresh from the engine with its ETag. This read carries no grants and no local bits.",
+    "description": "Read fresh from the engine. This read carries no grants and not your own access.",
     "fields": {
       "id": "Channel ID",
       "slug": "Slug",
@@ -164,7 +164,7 @@
       "routeRevision": "Route revision",
       "subscriptionRevision": "Subscription revision",
       "version": "Version",
-      "etag": "ETag",
+      "etag": "Version",
       "created": "Created",
       "updated": "Updated",
       "workspace": "Workspace",
@@ -222,7 +222,7 @@
       "grants": "Grants recorded",
       "noGrants": "No grant row was returned.",
       "auditSeq": "Audit sequence",
-      "etag": "ETag"
+      "etag": "Version"
     },
     "unknown": {
       "title": "Outcome unknown",
@@ -360,9 +360,9 @@
     },
     "ack": {
       "title": "Acknowledge this delivery",
-      "body": "The act sends If-Match {{etag}} — the version you read — and a key of its own. If the delivery changed meanwhile the engine answers 412 and you re-read before confirming again; the console never substitutes the version.",
+      "body": "This sends the version you read ({{etag}}) and a key of its own. If the delivery changed meanwhile, the engine refuses and you read it again before confirming; the console never swaps the version.",
       "key": "Idempotency key",
-      "ifMatch": "If-Match",
+      "ifMatch": "Version read",
       "appliedTitle": "Acknowledged",
       "appliedBody": "The engine recorded the acknowledgement.",
       "replayedTitle": "Already acknowledged",
@@ -371,7 +371,7 @@
       "conflictTitle": "The delivery changed since you read it",
       "conflictBody": "The engine refused the acknowledgement: the version you read is no longer current, or the delivery is already acknowledged. Re-read the delivery and confirm again only if it still applies. Nothing was re-sent.",
       "ambiguousTitle": "Outcome unknown",
-      "ambiguousBody": "The transport failed before an answer arrived. Retrying re-sends the same key and the same If-Match; the engine either applies it once, replays it, or refuses it with the current version.",
+      "ambiguousBody": "The connection failed before an answer arrived. Retrying sends the same key and the same version; the engine applies it once, replays it, or refuses it with the current version.",
       "refusedTitle": "Acknowledgement refused",
       "noPermission": "You do not hold the delivery-write permission, so acknowledging is not offered."
     },
@@ -427,7 +427,7 @@
     "eventId": "Event ID",
     "auditSeq": "Audit sequence",
     "version": "Version",
-    "etag": "ETag",
+    "etag": "Version",
     "state": "State",
     "verdict": "Verdict",
     "code": "Code",
@@ -484,7 +484,7 @@
       "state": "State",
       "sensitivity": "Sensitivity",
       "protection": "Protection",
-      "etag": "ETag",
+      "etag": "Version",
       "updated": "Updated"
     },
     "openById": "Administer a channel by ID",
@@ -505,7 +505,7 @@
   },
   "admin": {
     "title": "Channel administration",
-    "description": "Read fresh through the grant history with the channel's precondition ETag; no content is opened.",
+    "description": "Read fresh through the grant history, with the channel’s current version; no content is opened.",
     "observedAt": "Observed at",
     "tabs": {
       "config": "Configuration",
@@ -552,12 +552,12 @@
     },
     "confirm": {
       "title": "Confirm the configuration change",
-      "body": "Only the fields below are sent, with If-Match {{etag}} — the ETag of the read on screen. If the channel changed meanwhile the engine refuses and you re-read before confirming again; the console never substitutes the ETag.",
+      "body": "Only the fields below are sent, with the version on screen ({{etag}}). If the channel changed meanwhile, the engine refuses and you read it again before confirming; the console never swaps the version.",
       "archiving": "This archives the channel. Archiving is one-way: it will not return to active.",
-      "ifMatch": "If-Match"
+      "ifMatch": "Version read"
     },
     "appliedTitle": "Configuration applied",
-    "appliedBody": "The engine committed the change. The sheet re-reads the channel; the next act uses the ETag of that read.",
+    "appliedBody": "The engine saved the change. The sheet reads the channel again; the next change uses that version.",
     "conflictTitle": "The channel changed since you read it",
     "conflictBody": "The engine refused the change: its precondition no longer matches the current channel. Nothing was re-sent. Re-read, review your edits against the current values, and confirm again only if they still apply.",
     "unknownTitle": "Result pending verification",
@@ -614,7 +614,7 @@
     },
     "confirm": {
       "title": "Confirm the grant",
-      "body": "This sends exactly the generation below with If-Match of the read on screen. The engine refuses it if the subject already holds an active generation, or if the channel changed meanwhile; then you re-read and confirm again. Nothing is retried on its own.",
+      "body": "This sends exactly the generation below with the version on screen. The engine refuses it if the subject already holds an active generation, or if the channel changed meanwhile; then you re-read and confirm again. Nothing is retried on its own.",
       "successorOf": "Successor of revoked generation {{id}}. It is a separate act: the revocation above already committed."
     },
     "appliedTitle": "Grant recorded",
@@ -629,7 +629,7 @@
     "refusedTitle": "Grant refused",
     "revoke": {
       "title": "Revoke this exact generation",
-      "body": "This revokes the generation shown, by its ID, with If-Match of the read on screen. Its history is kept. A successor for the subject is a separate act after re-reading.",
+      "body": "This revokes the generation shown, by its ID, with the version on screen. Its history is kept. A successor for the subject is a separate act after re-reading.",
       "bodyThenGrant": "First act of two: revoke the generation shown. After the engine's answer is read, you will be offered a separate confirmation for a successor generation; nothing is chained automatically.",
       "ownAdminWarning": "This generation is an admin grant for your own account. It may be what sustains your administrative access to this channel; the console does not compute your full authority, and the engine decides your next request.",
       "appliedTitle": "Generation revoked",
@@ -680,12 +680,12 @@
     "prepareFailedBody": "Nothing was advanced. Refresh the inbox and prepare again from a current page.",
     "confirm": {
       "title": "Confirm the advance",
-      "body": "This sends the prepared target and the delivery above with If-Match of the cursor version read, and a key of its own. Only confirming advances anything. A retry after an ambiguous result re-sends exactly this."
+      "body": "This sends the prepared target and the delivery above with the cursor version you read, and a key of its own. Only confirming advances anything. A retry after an ambiguous result re-sends exactly this."
     },
     "conflictTitle": "The cursor changed since it was prepared",
     "conflictBody": "The engine refused the advance: the cursor version or the target is no longer current. Nothing was re-sent. Refresh the inbox and prepare again from a current page.",
     "ambiguousTitle": "Outcome unknown",
-    "ambiguousBody": "The transport failed before an answer arrived. Retrying re-sends the same target, the same If-Match and the same key; the engine either applies it once, replays it, or refuses it with its current version. Leaving it undetermined keeps the previous result unknown.",
+    "ambiguousBody": "The connection failed before an answer arrived. Retrying sends the same target, the same version and the same key; the engine either applies it once, replays it, or refuses it with its current version. Leaving it undetermined keeps the previous result unknown.",
     "refusedTitle": "Advance refused",
     "refusedBody": "The engine did not advance the cursor. Refresh the inbox before preparing again.",
     "result": {
@@ -734,7 +734,7 @@
       "reject": "Reject handoff"
     },
     "retained": {
-      "submitting": "A handoff operation is on the wire.",
+      "submitting": "A handoff operation is being sent.",
       "uncertain": "A handoff operation has no confirmed result.",
       "confirmed": "The offer receipt is still available.",
       "responseConfirmed": "The response receipt is still available.",
@@ -771,13 +771,13 @@
       "currentOwner": "Current owner",
       "ownerEpoch": "Owner epoch",
       "itemWorkspace": "Item workspace",
-      "precondition": "Precondition (If-Match)",
+      "precondition": "Version read",
       "itemMismatch": "The read returned a different work item than the one requested. Nothing can be offered under this read.",
       "workspaceMismatchTitle": "Select the item's workspace",
       "workspaceMismatchBody": "This item belongs to workspace {{itemWorkspace}} and the selected workspace is {{selected}}. Select the item's workspace in the switcher to offer it; the console never selects one for you.",
       "workspaceNone": "No explicit workspace is selected. An offer is workspace-scoped, so select the item's workspace in the switcher; the console never selects one for you.",
-      "noPrecondition": "The work item read carried no ETag, so there is no precondition to send. Re-read the item; a version is not turned into a validator here.",
-      "noPermission": "Offering a handoff requires sessions:message-send:write. The engine also checks item ownership and channel authority.",
+      "noPrecondition": "The work item was read without a version, so there is nothing to check the offer against. Read the item again.",
+      "noPermission": "Your role cannot offer a handoff. The engine also checks who owns the item and who may use the channel.",
       "channel": "Channel",
       "channelHint": "The canonical channel ID the carrier is published on. It can always be typed.",
       "channelPick": "Pick a channel",
@@ -876,8 +876,8 @@
       "deadline": "Response deadline",
       "created": "Created",
       "observed": "Observed",
-      "precondition": "Handoff ETag (If-Match)",
-      "preconditionHint": "A response is bound to the handoff ETag above, never to the carrier delivery version beside it.",
+      "precondition": "Handoff version",
+      "preconditionHint": "A response applies to the handoff version above, never to the delivery version beside it.",
       "carrierDelivery": "Carrier delivery",
       "carrierVersion": "Carrier delivery version",
       "channel": "Channel",
@@ -888,7 +888,7 @@
         "terminal": "This offer is already resolved"
       },
       "notCurrentBody": "The engine reports it cannot be answered now, so no response control is offered. Re-read to see its current state.",
-      "noRespondPermission": "Responding requires sessions:handoff-response:write."
+      "noRespondPermission": "Your role cannot respond to handoffs."
     },
     "respond": {
       "acceptTitle": "Accept responsibility",

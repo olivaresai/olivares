@@ -20,8 +20,8 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 			"type": "object", "additionalProperties": false,
 			"required": []string{"target_kind", "target_id", "pack_revision_id"},
 			"properties": map[string]any{
-				"target_kind":      map[string]any{"type": "string", "enum": []string{"workspace", "folder", "template", "agent_group", "agent", "session"}},
-				"target_id":        map[string]any{"type": "string", "format": "uuid"},
+				"target_kind":      map[string]any{"type": "string", "enum": []string{"workspace", "profile", "folder", "template", "agent_group", "agent", "session"}},
+				"target_id":        map[string]any{"type": "string", "description": "Public ppf_ profile reference for a profile target; canonical UUID for every other target kind."},
 				"pack_revision_id": map[string]any{"type": "string", "format": "uuid"},
 				"members": map[string]any{"type": []string{"array", "null"}, "maxItems": MaxSelectedMembers, "uniqueItems": true,
 					"items": map[string]any{"type": "string"}, "description": "Omitted, null, or empty selects all members of the pinned revision."},

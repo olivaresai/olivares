@@ -396,7 +396,7 @@ func TestNextCommandPlaceholdersAreLoadBearing(t *testing.T) {
 	// The `stripped` column is, literally, the four lines that were run offline.
 	for _, tc := range []struct{ printed, stripped string }{
 		{"olivares claude-agents sessions events <session-id>", "olivares claude-agents sessions events"},
-		{"olivares claude-policy distribution <surface>", "olivares claude-policy distribution"},
+		{"olivares claude-policy validate <surface> --content-file <file>", "olivares claude-policy validate"},
 		{"olivares ddil verify --bundle <bundle> --pubkey <pubkey>", "olivares ddil verify"},
 		{"olivares work list items", "olivares work list"},
 		// Added by the container repair of 2026-09-19: `knowledge documents` is the
@@ -419,7 +419,7 @@ func TestNextCommandPlaceholdersAreLoadBearing(t *testing.T) {
 	// something about lines nobody prints.
 	for path, want := range map[string]string{
 		"claude-agents": "olivares claude-agents sessions events <session-id>",
-		"claude-policy": "olivares claude-policy distribution <surface>",
+		"claude-policy": "olivares claude-policy validate <surface> --content-file <file>",
 		"ddil":          "olivares ddil verify --bundle <bundle> --pubkey <pubkey>",
 		"work":          "olivares work list items",
 		"knowledge":     "olivares knowledge documents get <document-id>",

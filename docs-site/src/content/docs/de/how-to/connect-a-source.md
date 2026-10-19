@@ -4,7 +4,7 @@ description: "Eine echte Beobachtungsquelle ins Control Plane verkabeln, das Con
 ---
 
 :::note[Edition]
-Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs) sowie der Lebenszyklus verwalteter Identitäten benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, eingehendes SCIM für Benutzer/Gruppen, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
+Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs), der Lebenszyklus verwalteter Identitäten sowie der eingehende SCIM-Server benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
 :::
 
 Diese Seite erklärt das allgemeine Connector-Modell und wie man eine echte Quelle in die Engine verkabelt. Wenn du nur einen Coding-Agenten verbinden willst, beginne mit [Claude Code verbinden](/de/how-to/connect-claude-code/) — das ist eine spezifische Quelle auf dem kooperativen Pfad, und diese Seite ist das Modell darunter.

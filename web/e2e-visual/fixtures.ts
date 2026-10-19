@@ -10,6 +10,19 @@ import type {
   EgressCompatReport,
   EgressPolicyStatus,
 } from '../src/features/eventing/types'
+import type { ToolReadinessDTO } from '../src/features/agentops/types'
+import { SESSION_TOOLS } from '../src/features/agentops/tool-names.ts'
+
+// The first-hour card asks readiness as an object with tools[], not a list envelope.
+// No synthetic account is configured here; each tool reports why it cannot start.
+export const toolsReadiness: { tools: ToolReadinessDTO[] } = {
+  tools: SESSION_TOOLS.map((driver) => ({
+    driver,
+    ready: false,
+    code: 'nothing_to_run_on',
+    message: 'No account configured in this fixture.',
+  })),
+}
 
 export const serverInfo = {
   version: '0.1.0-dev',
@@ -2469,6 +2482,21 @@ export function fixtureFor(pathname: string): unknown | null {
   // The console signs in by recovering its cookie session (lib/auth/browser-session.ts);
   // anything else here leaves every shot on the sign-in page.
   if (pathname === '/v1/auth/browser-session') return browserSession
+  // The engine always sends `pins` (toolPins starts from an empty slice) and `kinds` (an empty
+  // array at least); /agent-tools maps the first and /workspace filters the second, so the
+  // catch-all `{ items: [] }` renders the error boundary. Held kinds: axe measures a painted table.
+  if (pathname === '/v1/m/agenttools/pins') return { pins: [] }
+  const contents = /^\/v1\/workspaces\/([^/]+)\/contents$/.exec(pathname)
+  if (contents)
+    return {
+      workspace_id: decodeURIComponent(contents[1]),
+      kinds: [
+        { kind: 'core.agent_group', count: 2, capped: false },
+        { kind: 'core.user_group', count: 1, capped: false },
+      ],
+    }
+  if (pathname === '/v1/m/sessions/provider-profiles/readiness')
+    return toolsReadiness
   if (pathname === '/v1/m/agenttools/inventory')
     return {
       drivers: ['claude', 'codex', 'grok', 'opencode', 'ollama'],

@@ -30,8 +30,9 @@ const sandboxModule = "sandbox"
 func newSandboxCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "sandbox",
-		Short: "Run agents against synthetic scenarios and compare two variants",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sandbox",
+		Short:       "Run agents against synthetic scenarios and compare two variants",
 		Long: "sandbox exercises the isolated evaluation plane: synthetic scenarios an\n" +
 			"operator authors, deterministic replays of a recorded session against supplied\n" +
 			"mocks, and the A/B comparison whose verdict is the evidence a deploy decision\n" +
@@ -58,10 +59,11 @@ func newSandboxCmd() *cobra.Command {
 
 func newSandboxScenariosCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "scenarios",
-		Short:   "Author, inspect, run and archive sandbox scenarios",
-		Long:    "A scenario is a synthetic fixture: the steps to drive an agent through and the mocks its tools answer with. Its spec_hash makes an identical fixture recognizable.",
-		Example: "  olivares sandbox scenarios ls --status active",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "scenarios",
+		Short:       "Author, inspect, run and archive sandbox scenarios",
+		Long:        "A scenario is a synthetic fixture: the steps to drive an agent through and the mocks its tools answer with. Its spec_hash makes an identical fixture recognizable.",
+		Example:     "  olivares sandbox scenarios ls --status active",
 	}
 	cmd.AddCommand(
 		newSandboxScenariosListCmd(flags),
@@ -81,11 +83,12 @@ func newSandboxScenariosListCmd(flags *authClientFlags) *cobra.Command {
 		status string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List the tenant's scenarios",
-		Long:    "ls lists authored scenarios. --status narrows to one lifecycle state server-side.",
-		Example: "  olivares sandbox scenarios ls\n  olivares sandbox scenarios ls --status archived --limit 50",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List the tenant's scenarios",
+		Long:        "ls lists authored scenarios. --status narrows to one lifecycle state server-side.",
+		Example:     "  olivares sandbox scenarios ls\n  olivares sandbox scenarios ls --status archived --limit 50",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -109,11 +112,12 @@ func newSandboxScenariosListCmd(flags *authClientFlags) *cobra.Command {
 
 func newSandboxScenariosGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one scenario with its steps and mocks",
-		Long:    "get returns the whole fixture. Use -o json to capture the steps and mocks for editing.",
-		Example: "  olivares sandbox scenarios get sc-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one scenario with its steps and mocks",
+		Long:        "get returns the whole fixture. Use -o json to capture the steps and mocks for editing.",
+		Example:     "  olivares sandbox scenarios get sc-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: sandboxModule,
@@ -136,8 +140,9 @@ func newSandboxScenariosCreateCmd(flags *authClientFlags) *cobra.Command {
 		mocksFile   string
 	)
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Author a scenario from JSON step and mock files",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Author a scenario from JSON step and mock files",
 		Long: "create records a synthetic fixture. --steps-file and --mocks-file each take a\n" +
 			"JSON ARRAY ('-' reads stdin, and only one of them may read it). A name already\n" +
 			"in use is a conflict (exit 5), not a silent second copy.",
@@ -192,8 +197,9 @@ func newSandboxScenariosCreateCmd(flags *authClientFlags) *cobra.Command {
 func newSandboxScenariosArchiveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "archive <id>",
-		Short: "Archive a scenario (destructive; needs --yes when unattended)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "archive <id>",
+		Short:       "Archive a scenario (destructive; needs --yes when unattended)",
 		Long: "archive retires a fixture. It is a POST, not a DELETE, and it is still\n" +
 			"irreversible: comparisons and runs recorded against this scenario keep pointing\n" +
 			"at a fixture nobody can run again.\n\n" +
@@ -226,8 +232,9 @@ func newSandboxScenariosRunCmd(flags *authClientFlags) *cobra.Command {
 		suiteRef string
 	)
 	cmd := &cobra.Command{
-		Use:   "run <id>",
-		Short: "Run a scenario against the isolated runner (synchronous)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "run <id>",
+		Short:       "Run a scenario against the isolated runner (synchronous)",
 		Long: "run drives the scenario's steps through the isolated runner and persists the\n" +
 			"run with its per-step outputs. It is synchronous: the command returns the\n" +
 			"completed run.\n\n" +
@@ -269,10 +276,11 @@ var sandboxRunColumns = []string{
 
 func newSandboxRunsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "runs",
-		Short:   "Inspect sandbox runs, their outputs and their live stream",
-		Long:    "A run is one execution of a scenario or one replay of a recorded session, with its per-step outputs and deterministic outputs_hash.",
-		Example: "  olivares sandbox runs ls --kind replay",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "runs",
+		Short:       "Inspect sandbox runs, their outputs and their live stream",
+		Long:        "A run is one execution of a scenario or one replay of a recorded session, with its per-step outputs and deterministic outputs_hash.",
+		Example:     "  olivares sandbox runs ls --kind replay",
 	}
 	cmd.AddCommand(
 		newSandboxRunsListCmd(flags),
@@ -290,11 +298,12 @@ func newSandboxRunsListCmd(flags *authClientFlags) *cobra.Command {
 		scenarioRef string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List sandbox runs",
-		Long:    "ls lists runs newest-first. --kind separates scenario runs from replays; --scenario-ref narrows to one fixture.",
-		Example: "  olivares sandbox runs ls --limit 20\n  olivares sandbox runs ls --scenario-ref sc-1 --kind scenario",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List sandbox runs",
+		Long:        "ls lists runs newest-first. --kind separates scenario runs from replays; --scenario-ref narrows to one fixture.",
+		Example:     "  olivares sandbox runs ls --limit 20\n  olivares sandbox runs ls --scenario-ref sc-1 --kind scenario",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -320,11 +329,12 @@ func newSandboxRunsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newSandboxRunsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one run",
-		Long:    "get returns one run's status, step counters, score (when scored) and outputs_hash.",
-		Example: "  olivares sandbox runs get run-1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one run",
+		Long:        "get returns one run's status, step counters, score (when scored) and outputs_hash.",
+		Example:     "  olivares sandbox runs get run-1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: sandboxModule,
@@ -340,8 +350,9 @@ func newSandboxRunsGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newSandboxRunsOutputsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "outputs <id>",
-		Short: "List one run's per-step outputs",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "outputs <id>",
+		Short:       "List one run's per-step outputs",
 		Long: "outputs returns every step's recorded output. It is NOT paginated by the\n" +
 			"engine: the whole set comes back in one answer.",
 		Example: "  olivares sandbox runs outputs run-1 -o json",
@@ -362,8 +373,9 @@ func newSandboxRunsOutputsCmd(flags *authClientFlags) *cobra.Command {
 
 func newSandboxRunsStreamCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "stream <id>",
-		Short: "Follow a live run as NDJSON (one object per event)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "stream <id>",
+		Short:       "Follow a live run as NDJSON (one object per event)",
 		Long: "stream follows the engine's server-sent run events and prints ONE JSON OBJECT\n" +
 			"PER LINE on stdout. Keep-alives and notices go to stderr.",
 		Example: "  olivares sandbox runs stream run-1",
@@ -384,8 +396,9 @@ func newSandboxReplayCmd(flags *authClientFlags) *cobra.Command {
 		suiteRef   string
 	)
 	cmd := &cobra.Command{
-		Use:   "replay",
-		Short: "Deterministically re-execute a recorded session against supplied mocks",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "replay",
+		Short:       "Deterministically re-execute a recorded session against supplied mocks",
 		Long: "replay reconstructs a historical session's input timeline and re-executes it\n" +
 			"against the mocks you supply. The same session_ref and the same mocks always\n" +
 			"produce identical outputs — the runner is pure.\n\n" +
@@ -432,8 +445,9 @@ func newSandboxCompareCmd(flags *authClientFlags) *cobra.Command {
 		suiteRef    string
 	)
 	cmd := &cobra.Command{
-		Use:   "compare",
-		Short: "Run the same scenario as two variants and record the verdict",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "compare",
+		Short:       "Run the same scenario as two variants and record the verdict",
 		Long: "compare executes the SAME steps as a baseline and a candidate variant, scores\n" +
 			"both (or compares their deterministic outputs_hash when no scorer is wired) and\n" +
 			"persists an append-only comparison — the evidence a deploy decision is made on.\n\n" +
@@ -486,10 +500,11 @@ var sandboxComparisonColumns = []string{
 
 func newSandboxComparisonsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "comparisons",
-		Short:   "Inspect the append-only A/B comparison ledger",
-		Long:    "A comparison is the recorded verdict of one baseline-vs-candidate run pair. It is append-only: it is the evidence a deploy decision cited.",
-		Example: "  olivares sandbox comparisons ls --verdict regression",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "comparisons",
+		Short:       "Inspect the append-only A/B comparison ledger",
+		Long:        "A comparison is the recorded verdict of one baseline-vs-candidate run pair. It is append-only: it is the evidence a deploy decision cited.",
+		Example:     "  olivares sandbox comparisons ls --verdict regression",
 	}
 	cmd.AddCommand(
 		newSandboxComparisonsListCmd(flags),
@@ -505,11 +520,12 @@ func newSandboxComparisonsListCmd(flags *authClientFlags) *cobra.Command {
 		verdict     string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List recorded comparisons",
-		Long:    "ls lists the comparison ledger, optionally narrowed to one scenario or one verdict.",
-		Example: "  olivares sandbox comparisons ls\n  olivares sandbox comparisons ls --scenario-ref sc-1 --verdict regression",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List recorded comparisons",
+		Long:        "ls lists the comparison ledger, optionally narrowed to one scenario or one verdict.",
+		Example:     "  olivares sandbox comparisons ls\n  olivares sandbox comparisons ls --scenario-ref sc-1 --verdict regression",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if err := page.apply(q); err != nil {
@@ -535,11 +551,12 @@ func newSandboxComparisonsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newSandboxComparisonsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one comparison",
-		Long:    "get returns one comparison with both run references, both scores and the delta.",
-		Example: "  olivares sandbox comparisons get cmp-1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one comparison",
+		Long:        "get returns one comparison with both run references, both scores and the delta.",
+		Example:     "  olivares sandbox comparisons get cmp-1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: sandboxModule,

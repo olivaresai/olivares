@@ -211,7 +211,7 @@
     "fromTo": "v{{from}} → v{{to}}",
     "planHash": "Hachage du plan",
     "changes": "Modifications",
-    "noExecutor": "La réconciliation n’est pas disponible — aucun exécuteur d’exécution n’est encore câblé pour ce déploiement.",
+    "noExecutor": "La réconciliation n’est pas disponible — aucun exécuteur d’exécution n’est encore configuré pour ce déploiement.",
     "done": "Plan calculé"
   },
   "verify": {
@@ -239,7 +239,7 @@
     "blockedHint": "La gouvernance a retenu cette action. Le parc n’a pas été modifié.",
     "applied": "Déploiement appliqué",
     "noop": "Rien à appliquer — déjà à jour.",
-    "noExecutor": "La réconciliation n’est pas disponible — aucun exécuteur d’exécution n’est encore câblé pour ce déploiement.",
+    "noExecutor": "La réconciliation n’est pas disponible — aucun exécuteur d’exécution n’est encore configuré pour ce déploiement.",
     "retired": "Ce déploiement est retiré — restaurez ou modifiez l’état désiré avant d’appliquer."
   },
   "retire": {

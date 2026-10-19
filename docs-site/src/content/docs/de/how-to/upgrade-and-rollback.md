@@ -23,11 +23,12 @@ und seine private Passphrase oder sein KEK für die Rückkehr zum vorigen Releas
 
 ## Welcher Upgrade-Pfad ist Ihrer?
 
-Es gibt zwei Wege, das Binary vorwärtszubringen; beide führen zum selben Ziel.
+Es gibt drei Wege, das Binary vorwärtszubringen; alle führen zum selben Ziel.
 
 | Ihre Installation | Pfad |
 |---|---|
-| Binary auf einem Host, systemd, Docker Compose | `olivares upgrade` — diese Seite |
+| Binary auf einem Host, systemd | `olivares upgrade` — diese Seite |
+| Ein Docker- oder Podman-Container | `docker compose exec olivares olivares upgrade`, danach den Container neu erstellen. Das Image kann sich nicht ändern; daher wird das Release im Datenvolume abgelegt (`ota/` im Datenverzeichnis), und jeder Start des Image-Binary startet es, solange es neuer ist als das Image oder dieselbe Version anders gebaut ist. Wenn Sie `ota/` entfernen, kehrt der Container zum Binary seines Images zurück. [Docker und Compose](/de/how-to/install-a-license/#docker-und-compose) enthält die Befehle. |
 | Kubernetes / Helm | Setzen Sie das Image und lassen Sie den Operator den Rollout durchführen. Führen Sie `olivares upgrade` nicht in einem Pod aus: Die Bereitstellung ist deklarativ, und der nächste Reconcile würde die Änderung rückgängig machen. |
 
 ## Vor allem anderen: den Plan lesen
@@ -54,7 +55,7 @@ Schutzmechanismen aktiv:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.2
+olivares upgrade --check --current-version 0.3
 ```
 <!-- /release -->
 

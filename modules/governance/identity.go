@@ -56,6 +56,10 @@ type bindResponse struct {
 	Minted      bool   `json:"minted,omitempty"`
 	Shared      bool   `json:"shared"`
 	AgentCount  int    `json:"agent_count"`
+	// FindingFailed is set only when the bind made the identity shared and the
+	// shared-identity finding could not be published: the bind stands, the finding
+	// is missing, and the caller can tell.
+	FindingFailed bool `json:"finding_failed,omitempty"`
 }
 
 // handleBindAgent binds an agent to its NHI identity (Agent.IdentityID). Admin-tier
@@ -104,7 +108,17 @@ func (m *Module) handleBindAgent(w http.ResponseWriter, r *http.Request, mc api.
 				return nil
 			}
 		case strings.TrimSpace(in.IdentityRef) != "":
-			target, err = foBindIdentity(r.Context(), sc, strings.TrimSpace(in.IdentityRef))
+			ref := strings.TrimSpace(in.IdentityRef)
+			// The ref becomes Identity.ExternalID, which a viewer reads back from
+			// GET /identities: refuse what the other governance references refuse.
+			if containsInlineCredential(ref) {
+				clientErr, clientCode = "identity_ref carries an inline credential", http.StatusBadRequest
+				return nil
+			}
+			if len(ref) > maxNoteLen {
+				w.Header().Add("Warning", `299 olivares "Identity references over 4096 bytes are deprecated; use a shorter stable reference."`)
+			}
+			target, err = foBindIdentity(r.Context(), sc, ref)
 			if err != nil {
 				return err
 			}
@@ -145,7 +159,7 @@ func (m *Module) handleBindAgent(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	if sharedN > 1 { // emit AFTER commit, so a rolled-back bind never signals
-		m.emitSharedIdentityFinding(r.Context(), mc.Tenant, identID, sharedN)
+		resp.FindingFailed = !m.emitSharedIdentityFinding(r.Context(), mc.Tenant, identID, sharedN)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -257,10 +271,11 @@ func countAgentsForIdentity(ctx context.Context, sc store.Scope, identityID mode
 // more than one agent, so per-agent attribution collapses to the identity level
 // (ARCHITECTURE.md — honest, never faked as a recoverable agent). The title carries the
 // count only; the identity id rides SubjectRef; no DisplayName/email is ever
-// interpolated (docs/SECURITY-HARDENING.md).
-func (m *Module) emitSharedIdentityFinding(ctx context.Context, tenant model.TenantID, identityID model.ID, count int) {
+// interpolated (docs/SECURITY-HARDENING.md). It reports whether the finding went out; a failure is
+// logged at warn level (the bind has committed and is not undone).
+func (m *Module) emitSharedIdentityFinding(ctx context.Context, tenant model.TenantID, identityID model.ID, count int) bool {
 	if m.host == nil {
-		return
+		return false // no host can publish the finding
 	}
 	sum := sha256.Sum256([]byte("shared_identity|" + identityID.String() + "|" + strconv.Itoa(count)))
 	finding := sdkmodel.FindingReport{
@@ -273,8 +288,10 @@ func (m *Module) emitSharedIdentityFinding(ctx context.Context, tenant model.Ten
 		OccurredAt:  m.clock.Now().Time(),
 	}
 	if err := m.host.Publish(ctx, event.FromObservation(tenant.String(), Name, finding)); err != nil {
-		m.debugf("governance: emit shared-identity finding failed", "err", err)
+		m.warnf("governance: emit shared-identity finding failed", "err", err)
+		return false
 	}
+	return true
 }
 
 // bindingDTO is one agent↔identity binding in the governance view.

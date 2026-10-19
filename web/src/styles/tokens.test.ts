@@ -2,19 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The console design tokens are GENERATED from the DTCG sources (web/tokens/*.tokens.json)
-// into ./tokens.css. This test pins the generated file to the v26.10 visual system in BOTH
-// themes, so a token edit can never shift it silently:
-//   - the palette: four layered neutrals (frame, canvas, surface, raised), three text tones,
-//     the single brand orange #f08000 and its roles, the status colors and their soft fills;
+// The console design tokens are GENERATED from the DTCG sources (web/tokens/console/*.tokens.json)
+// into ./tokens.css. This test pins the generated file to the B2 system the website wears, in
+// BOTH themes, so a token edit can never shift it silently:
+//   - the palette: four neutrals (frame, canvas, surface, raised), three text tones, the
+//     single brand orange #f08000 and its roles, the status colors and their soft fills,
+//     the four tool data colors and two neutral shadows;
 //   - the role names the components use today, each equal to the palette token it aliases;
 //   - the contrast contract of the palette, measured the way the design measures it: every
-//     text token on 22 backgrounds per theme (the four bases, each base under the selection
-//     fill, and canvas and surface under each of the seven soft fills), control boundaries,
-//     focus and the selection border at 3:1, the ink on the orange at 4.5:1 — 372 pairs;
+//     text token on 30 backgrounds per theme (the four bases, each base under the selection
+//     fill, under the hover fill and under both, and canvas and surface under each of the
+//     seven soft fills), control boundaries,
+//     focus and the selection border at 3:1, the ink on the orange at 4.5:1 — 500 pairs;
 //   - the type ladder, the font stacks, radii, density and motion.
 /// <reference types="node" />
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -50,80 +52,96 @@ function parseBlock(rawCss: string, selector: string): Record<string, string> {
 }
 
 // ---------------------------------------------------------------- the palette
+// The website's B2 values, so the console and olivares.ai wear one brand
+// (scripts/check-brand-parity.mjs pins the shared subset against this generated file).
+// Some dark values are the console's own, measured against its stricter contract below
+// (the website stacks no hover on a selected row): the orange as TEXT, the muted texts and
+// danger are lighter (#f08000, #a8a29e, #a6a097 and #e08e8e measure under 4.5:1 on a
+// hovered, selected row, #424245), and the soft fills are opaque tints of the canvas
+// because a translucent tint on the B2 surface takes the secondary text under 4.5:1. The
+// two hovers are lighter than the design's 7% so the inks hold under them.
 const PALETTE_DARK: Record<string, string> = {
-  frame: '#0a0a0c',
-  canvas: '#111113',
-  surface: '#17171a',
-  raised: '#1d1d21',
-  hover: 'rgba(255, 255, 255, 0.045)',
-  active: 'rgba(255, 255, 255, 0.08)',
+  frame: '#1b1b1e',
+  canvas: '#28282b',
+  surface: '#343434',
+  raised: '#343434',
+  hover: 'rgba(255, 255, 255, 0.05)',
+  active: '#38383b',
   line: 'rgba(255, 255, 255, 0.08)',
   'line-strong': 'rgba(255, 255, 255, 0.14)',
-  'ctl-border': '#6e6e72',
-  scrim: 'rgba(5, 5, 6, 0.62)',
-  text: '#f3f2ef',
-  'text-2': '#b0aea8',
-  'text-3': '#9a9892',
+  'ctl-border': '#8a8783',
+  scrim: 'rgba(0, 0, 0, 0.5)',
+  text: '#fafaf9',
+  'text-2': '#b4aeaa',
+  'text-3': '#b4aea5',
   accent: '#f08000',
   'on-accent': '#1a1206',
   'accent-text': '#ff9b3d',
-  'accent-soft': 'rgba(240, 128, 0, 0.13)',
+  'accent-soft': '#3c3127',
   'accent-line': 'rgba(240, 128, 0, 0.42)',
-  'accent-border': '#f08000',
-  focus: '#ffb366',
-  ok: '#52c98f',
-  'ok-soft': 'rgba(82, 201, 143, 0.12)',
-  warn: '#e8c14a',
-  'warn-soft': 'rgba(232, 193, 74, 0.12)',
-  bad: '#f47a70',
-  'bad-soft': 'rgba(244, 122, 112, 0.12)',
-  info: '#72aef5',
-  'info-soft': 'rgba(114, 174, 245, 0.12)',
-  'diff-add': 'rgba(82, 201, 143, 0.13)',
-  'diff-del': 'rgba(244, 122, 112, 0.13)',
+  'accent-border': '#ff9b3d',
+  focus: '#f08000',
+  ok: '#9cc79c',
+  'ok-soft': '#343836',
+  warn: '#d9b45c',
+  'warn-soft': '#3a3630',
+  bad: '#eb9999',
+  'bad-soft': '#3c3336',
+  info: '#9db9cf',
+  'info-soft': '#34363b',
+  'diff-add': '#343836',
+  'diff-del': '#3c3336',
+  'tool-claude': '#3987e5',
+  'tool-codex': '#199e70',
+  'tool-opencode': '#9085e9',
+  'tool-gemini': '#d55181',
+  'shadow-raised':
+    '0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7)',
   'shadow-pop':
-    '0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4)',
+    '0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85)',
   'shadow-card': 'none',
-  ember:
-    'radial-gradient(720px 260px at 50% -110px, rgba(240, 128, 0, 0.12), transparent 70%)',
 }
 
 const PALETTE_LIGHT: Record<string, string> = {
-  frame: '#efeee9',
-  canvas: '#ffffff',
-  surface: '#f8f7f4',
+  frame: '#f2f2f1',
+  canvas: '#fafaf9',
+  surface: '#ffffff',
   raised: '#ffffff',
-  hover: 'rgba(20, 18, 14, 0.04)',
-  active: 'rgba(20, 18, 14, 0.075)',
-  line: 'rgba(20, 18, 14, 0.09)',
-  'line-strong': 'rgba(20, 18, 14, 0.16)',
-  'ctl-border': '#8a8883',
-  scrim: 'rgba(26, 25, 23, 0.32)',
-  text: '#1a1917',
-  'text-2': '#4a4742',
-  'text-3': '#5f5c55',
+  hover: 'rgba(40, 40, 43, 0.04)',
+  active: '#f1f1ef',
+  line: '#e6e6e4',
+  'line-strong': '#d6d6d3',
+  'ctl-border': '#8f8a83',
+  scrim: 'rgba(28, 28, 31, 0.28)',
+  text: '#28282b',
+  'text-2': '#5c564e',
+  'text-3': '#635d54',
   accent: '#f08000',
   'on-accent': '#1a1206',
-  'accent-text': '#9c4a00',
+  'accent-text': '#a84f00',
   'accent-soft': 'rgba(240, 128, 0, 0.12)',
   'accent-line': 'rgba(194, 96, 0, 0.45)',
   'accent-border': '#c26000',
-  focus: '#b45500',
-  ok: '#18693f',
-  'ok-soft': 'rgba(24, 105, 63, 0.09)',
-  warn: '#7d5400',
-  'warn-soft': 'rgba(125, 84, 0, 0.09)',
-  bad: '#a8231c',
-  'bad-soft': 'rgba(168, 35, 28, 0.08)',
-  info: '#1c58a3',
-  'info-soft': 'rgba(28, 88, 163, 0.08)',
-  'diff-add': 'rgba(29, 122, 75, 0.1)',
-  'diff-del': 'rgba(179, 38, 30, 0.09)',
+  focus: '#a84f00',
+  ok: '#2f6b2c',
+  'ok-soft': 'rgba(47, 107, 44, 0.09)',
+  warn: '#665c00',
+  'warn-soft': 'rgba(102, 92, 0, 0.09)',
+  bad: '#b0201b',
+  'bad-soft': 'rgba(176, 32, 27, 0.08)',
+  info: '#1e5a86',
+  'info-soft': 'rgba(30, 90, 134, 0.08)',
+  'diff-add': 'rgba(47, 107, 44, 0.1)',
+  'diff-del': 'rgba(176, 32, 27, 0.09)',
+  'tool-claude': '#2a78d6',
+  'tool-codex': '#1baf7a',
+  'tool-opencode': '#6250d6',
+  'tool-gemini': '#d55181',
+  'shadow-raised':
+    '0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22)',
   'shadow-pop':
-    '0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08)',
-  'shadow-card': '0 1px 2px rgba(30, 24, 16, 0.05)',
-  ember:
-    'radial-gradient(720px 260px at 50% -110px, rgba(240, 128, 0, 0.09), transparent 70%)',
+    '0 2px 6px -2px rgba(28, 28, 31, 0.1), 0 24px 48px -24px rgba(28, 28, 31, 0.3)',
+  'shadow-card': 'none',
 }
 
 // ------------------------------------------------ the role names, as aliases
@@ -150,17 +168,17 @@ const ROLE_ALIASES: Record<string, string> = {
   'elev-xs': 'shadow-card',
   'elev-sm': 'shadow-card',
   'elev-md': 'shadow-card',
-  'elev-lg': 'shadow-pop',
+  'elev-lg': 'shadow-raised',
   'elev-xl': 'shadow-pop',
 }
 
 // Roles the palette does not define. Each keeps a measured value, and the checks below hold
 // it to the same contrast rule as the palette.
 const OWN_DARK: Record<string, string> = {
-  // The solid well: the selection fill (`active`) painted on the canvas, as one opaque color.
-  muted: '#242426',
-  // The primary button's hover: the orange at brightness 1.06, as the design renders it.
-  'accent-hover': '#fe8800',
+  // The solid well: the B2 second surface step, the same tone as the selection fill.
+  muted: '#38383b',
+  // The primary button's hover: the B2 fill hover, the same in both themes.
+  'accent-hover': '#df6d00',
   'accent-active': '#d87000',
   'danger-solid': '#c5362f',
   'danger-solid-foreground': '#fff1ef',
@@ -168,8 +186,8 @@ const OWN_DARK: Record<string, string> = {
   'confidence-approximate': '#9aa3b0',
 }
 const OWN_LIGHT: Record<string, string> = {
-  muted: '#ededed',
-  'accent-hover': '#fe8800',
+  muted: '#f1f1ef',
+  'accent-hover': '#df6d00',
   'accent-active': '#cc6a00',
   'danger-solid': '#b0201b',
   'danger-solid-foreground': '#fff8f0',
@@ -234,14 +252,18 @@ interface Pair {
   required: number
 }
 
-/** The design's contrast method: 186 required pairs per theme. */
+/** The design's contrast method: 250 required pairs per theme. */
 function requiredPairs(theme: string, t: Record<string, string>): Pair[] {
   const c = (n: string) => parseColor(t[n])
   const bases: Record<string, RGBA> = {}
   for (const b of ['canvas', 'surface', 'raised', 'frame']) bases[b] = c(b)
   const bgs: Record<string, RGBA> = { ...bases }
-  for (const b of ['canvas', 'surface', 'raised', 'frame'])
+  for (const b of ['canvas', 'surface', 'raised', 'frame']) {
     bgs[`${b}+selected`] = over(c('active'), bases[b])
+    // A pointer over a row, and over the selected row: the hover fill stacks on both.
+    bgs[`${b}+hover`] = over(c('hover'), bases[b])
+    bgs[`${b}+selected+hover`] = over(c('hover'), bgs[`${b}+selected`])
+  }
   for (const s of [
     'accent-soft',
     'ok-soft',
@@ -340,12 +362,12 @@ describe('v26.10 design tokens — the generated file is the approved system', (
       expect(light[name], `:root --${name}`).toBe(v)
   })
 
-  it('passes all 372 required contrast pairs (186 per theme)', () => {
+  it('passes all 500 required contrast pairs (250 per theme)', () => {
     const pairs = [
       ...requiredPairs('dark', dark),
       ...requiredPairs('light', light),
     ]
-    expect(pairs).toHaveLength(372)
+    expect(pairs).toHaveLength(500)
     const failing = pairs
       .filter((p) => p.ratio < p.required)
       .map(
@@ -365,24 +387,24 @@ describe('v26.10 design tokens — the generated file is the approved system', (
           .map((p) => p.ratio),
       )
     const MEASURED: [string, string, number][] = [
-      ['dark', 'text', 11.9],
-      ['light', 'text', 12.98],
-      ['dark', 'text-2', 6.0],
-      ['light', 'text-2', 6.83],
-      ['dark', 'text-3', 4.62],
-      ['light', 'text-3', 4.93],
-      ['dark', 'accent-text', 6.35],
-      ['light', 'accent-text', 4.57],
-      ['dark', 'ok', 6.41],
-      ['light', 'ok', 4.96],
-      ['dark', 'warn', 7.71],
-      ['light', 'warn', 4.94],
-      ['dark', 'bad', 4.99],
-      ['light', 'bad', 5.31],
-      ['dark', 'info', 5.76],
-      ['light', 'info', 5.22],
-      ['dark', 'ctl-border', 3.31],
-      ['light', 'ctl-border', 3.31],
+      ['dark', 'text', 9.6],
+      ['light', 'text', 12.09],
+      ['dark', 'text-2', 4.57],
+      ['light', 'text-2', 5.96],
+      ['dark', 'text-3', 4.55],
+      ['light', 'text-3', 5.36],
+      ['dark', 'accent-text', 4.78],
+      ['light', 'accent-text', 4.56],
+      ['dark', 'ok', 5.28],
+      ['light', 'ok', 5.3],
+      ['dark', 'warn', 5.08],
+      ['light', 'warn', 5.58],
+      ['dark', 'bad', 4.56],
+      ['light', 'bad', 5.63],
+      ['dark', 'info', 4.9],
+      ['light', 'info', 6.03],
+      ['dark', 'ctl-border', 3.48],
+      ['light', 'ctl-border', 3.28],
     ]
     for (const [t, fg, want] of MEASURED)
       expect(min(t, fg), `${t} ${fg}`).toBeCloseTo(want, 2)
@@ -482,7 +504,7 @@ describe('v26.10 design tokens — the generated file is the approved system', (
   it('records the orange FILL on the light canvas as informative, below 3:1', () => {
     // The fill carries ink, never a boundary: the 3:1 boundary is --accent-border.
     const r = contrast(parseColor(light.accent), parseColor(light.canvas))
-    expect(r).toBeCloseTo(2.69, 2)
+    expect(r).toBeCloseTo(2.58, 2)
     expect(
       contrast(parseColor(light['accent-border']), parseColor(light.canvas)),
     ).toBeGreaterThanOrEqual(3)
@@ -526,9 +548,7 @@ describe('v26.10 design tokens — the generated file is the approved system', (
 
   it('maps every color token to a Tailwind utility', () => {
     const colors = [
-      ...Object.keys(PALETTE_DARK).filter(
-        (n) => !['shadow-pop', 'shadow-card', 'ember'].includes(n),
-      ),
+      ...Object.keys(PALETTE_DARK).filter((n) => !n.startsWith('shadow-')),
       ...Object.keys(ROLE_ALIASES).filter((n) => !n.startsWith('elev-')),
       ...Object.keys(OWN_DARK),
       ...Object.keys(RUNTIME_LINES),
@@ -539,30 +559,58 @@ describe('v26.10 design tokens — the generated file is the approved system', (
       expect(theme[`shadow-${s}`]).toBe(`var(--elev-${s})`)
   })
 
-  it('sets the interface in Geist and machine text in JetBrains Mono', () => {
-    expect(theme['font-sans']).toMatch(/^'Geist', /)
+  it('sets text in Inter, titles and figures in Space Grotesk, code in JetBrains Mono', () => {
+    expect(theme['font-sans']).toMatch(/^'Inter', /)
+    expect(theme['font-display']).toMatch(/^'Space Grotesk', 'Inter', /)
     expect(theme['font-mono']).toMatch(/^'JetBrains Mono', /)
-    // One interface family: weight carries the hierarchy, not a second face.
-    expect(theme['font-display']).toBe(theme['font-sans'])
-    for (const old of ['Inter', 'Space Grotesk'])
-      expect(tokensCss).not.toContain(old)
+    expect(tokensCss).not.toContain('Geist')
+  })
+
+  it('has no glow: no ember, radial gradient, blur or halo token', () => {
+    const css = tokensCss.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const banned of [
+      '--ember',
+      'radial-gradient',
+      'blur(',
+      'glow',
+      'halo',
+    ])
+      expect(css).not.toContain(banned)
+  })
+
+  it('has no glow or blur in any console source either', () => {
+    // A blur, a glow shadow or a gradient halo written as a utility in a component
+    // bypasses the tokens, so the sources are read too (tests excluded: they name the
+    // classes they forbid).
+    const GLOW =
+      /backdrop-blur|backdrop-filter|\bblur-(?:none|xs|sm|md|lg|xl|2xl|3xl|\[)|drop-shadow|radial-gradient|var\(--ember\)|shadow-\[0_0_[1-9]/
+    const hits = readdirSync('src', { recursive: true, encoding: 'utf8' })
+      .filter((f) => /\.(tsx?|css)$/.test(f) && !/\.test\.tsx?$/.test(f))
+      .flatMap((f) =>
+        readFileSync(`src/${f}`, 'utf8')
+          .split('\n')
+          .flatMap((line, i) =>
+            GLOW.test(line) ? [`src/${f}:${i + 1}: ${line.trim()}`] : [],
+          ),
+      )
+    expect(hits).toEqual([])
   })
 
   it('gives each step of the type ladder the design value of its role', () => {
     // [step, size, line height, tracking, weight] — the design name of the role in the
     // comment. Steps without tracking or weight inherit the page's.
     const LADDER: [string, string, string, string?, string?][] = [
-      ['hero', '2.5rem', '2.75rem', '-0.035em', '600'], // hero 40/44
-      ['display-lg', '1.875rem', '2.25rem', '-0.03em', '600'], // display 30/36
-      ['display', '1.375rem', '1.75rem', '-0.02em', '600'], // title-l 22/28 (figures)
-      ['title', '1.375rem', '1.75rem', '-0.02em', '600'], // title-l 22/28 (page title)
-      ['heading', '1rem', '1.375rem', '-0.01em', '600'], // title 16/22
-      ['body-l', '0.9375rem', '1.5rem'], // body-l 15/24
-      ['body', '0.875rem', '1.25rem'], // body 14/20
-      ['caption', '0.8125rem', '1.125rem'], // small 13/18
-      ['overline', '0.75rem', '1rem', undefined, '500'], // micro 12/16
-      ['mono', '0.8125rem', '1.25rem'], // mono 13/20
-      ['mono-s', '0.75rem', '1.125rem'], // mono-s 12/18
+      ['hero', '2.25rem', '2.5rem', '-0.03em', '600'], // figure 36
+      ['display-lg', '2.25rem', '2.5rem', '-0.03em', '600'], // figure 36
+      ['display', '1.625rem', '1.875rem', '-0.02em', '600'], // title 26 (figures)
+      ['title', '1.625rem', '1.875rem', '-0.02em', '600'], // title 26 (page title)
+      ['heading', '1.0625rem', '1.375rem', '-0.01em', '600'], // head 17
+      ['body-l', '0.875rem', '1.375rem'], // body 14, a looser line
+      ['body', '0.875rem', '1.25rem'], // body 14
+      ['caption', '0.8125rem', '1.125rem'], // meta 13
+      ['overline', '0.75rem', '1rem', undefined, '500'], // micro 12
+      ['mono', '0.8125rem', '1.25rem'], // meta 13
+      ['mono-s', '0.75rem', '1.125rem'], // micro 12
     ]
     for (const [step, size, lh, track, weight] of LADDER) {
       expect(theme[`text-${step}`], `--text-${step}`).toBe(size)
@@ -574,6 +622,8 @@ describe('v26.10 design tokens — the generated file is the approved system', (
       (k) => /^text-[\w-]+$/.test(k) && !k.includes('--'),
     )
     expect(new Set(steps)).toEqual(new Set(LADDER.map(([s]) => `text-${s}`)))
+    // Six sizes in all (the design's figure, title, head, body, meta and micro).
+    expect(new Set(LADDER.map(([, size]) => size)).size).toBe(6)
   })
 
   it('uses the design radii for controls, cards and panels', () => {

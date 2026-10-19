@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-The next release is <!-- release -->`0.2`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release --> for the observed publication state.
+The next release is <!-- release -->`0.3`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release --> for the observed publication state.
 
 :::note[Published package names]
-The Olivares <!-- release -->0.2<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
+The Olivares <!-- release -->0.3<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
 and `arm64`, with `checksums.txt`, `checksums.txt.sig` and `checksums.txt.pem`. The
 commands below use the literal `amd64` names from that release; replace `amd64` with
 `arm64` on a 64-bit ARM host. Install from those verified release assets. Repository
@@ -34,8 +34,9 @@ preproduction qualification, which remains pending.
 contains deterministic apt, rpm-md and APK repository producers, a signed-index verifier,
 a clean-client qualification and a staged publication workflow whose dispatch stays inert
 until a reviewer approves it. **No package-repository URL is live**, no DNS name is
-delegated and no production repository-signing key is provisioned. Nothing in this
-proposal is a package-manager source; keep using the verified release assets below.
+delegated and no production repository-signing key is provisioned. Until the first
+publication, keep using the verified release assets below; the
+[apt and dnf commands](#from-the-package-repository-apt-and-dnf) apply from that publication on.
 :::
 
 This is the path for a normal Linux host where you want the engine as a service, not in a
@@ -81,13 +82,13 @@ survive an upgrade), the data directory `/var/lib/olivares`, and the licence tex
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -134,8 +135,9 @@ capability bounding set — it holds no capabilities at all, ambient or bounding
 `ProtectSystem=full` (`/usr`, `/boot`, `/efi` and `/etc` are read-only),
 `PrivateDevices=true`, `ProtectClock=true`, `ProtectKernelTunables=true`,
 `ProtectKernelModules=true`, `ProtectKernelLogs=true`, `ProtectControlGroups=true`,
-`RestrictNamespaces=user net` (a session gets its own user and network namespace; every
-other namespace type is denied), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`RestrictNamespaces=user net mnt` (a session gets its own user and network namespace, and
+the helper that keeps a folder's Git hooks and configuration read-only gets its own mount
+namespace, where the syscall filter allows `mount`; every other namespace type is denied), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
 `LockPersonality=true`, `SystemCallArchitectures=native`, a `@system-service` syscall
 filter that additionally drops `@privileged` and `@resources`, and `UMask=0027`.
 
@@ -300,6 +302,59 @@ package does for you.
 
 ## 6. Upgrading
 
+### From the package repository (apt and dnf)
+
+A host that adds the repository takes each Olivares release with the operating system's own
+updates. `apt` verifies the signed repository metadata, which carries the hash of every package;
+`dnf` verifies that metadata and the signature of each package. The repository carries `amd64`
+and `arm64` for apt and `x86_64` and `aarch64` for dnf. For apt the file you download names the
+repository and carries the signing key. For dnf you first store the key, then download the file
+that names it.
+
+```bash
+# Debian / Ubuntu (apt 2.4 or later)
+sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg
+sudo curl --proto '=https' --tlsv1.2 -fsSL https://packages.olivares.ai/olivares.sources -o /etc/apt/sources.list.d/olivares.sources
+sudo apt-get update && sudo apt-get install olivares
+
+# AlmaLinux / RHEL / Fedora
+sudo curl --proto '=https' --tlsv1.2 -fsSL https://packages.olivares.ai/olivares-packages.asc -o /etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository
+sudo gpg --show-keys --fingerprint /etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository
+sudo curl --proto '=https' --tlsv1.2 -fsSL https://packages.olivares.ai/olivares.repo -o /etc/yum.repos.d/olivares.repo
+sudo dnf install olivares
+```
+
+**What you trust.** The key comes from the same address as the file, so the host trusts
+`packages.olivares.ai` on first use. The fingerprint below is the one check that does not depend on
+that address. Compare it before you install; `gpg` prints it in groups of four.
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://packages.olivares.ai/olivares-packages.asc | gpg --show-keys --fingerprint
+# fingerprint: AE27B5B818C9BCFE485B4D8B155E5EC6550A6EF8
+```
+
+On dnf, the second command prints the fingerprint of the key you stored, and `dnf` shows it again
+when it imports that key on the first install: compare both with the one above, and do not add `-y`
+to that first install. dnf keeps the keys it imports, in the rpm database, where a key applies to
+every repository on the host that checks signatures, and under `/var/cache/dnf`; `dnf clean all`
+does not remove them. The repository file you installed names the stored key file and no address,
+so a later `dnf upgrade`, with or without `-y`, and `dnf-automatic` never ask the repository for a
+key: metadata signed by another key is refused. To move to a new key, compare its fingerprint and
+replace that file yourself. After that, `sudo apt-get update && sudo apt-get upgrade` and
+`sudo dnf upgrade` move the host to the newest release, and `dnf-automatic` does it on a schedule.
+`unattended-upgrades` takes only the origins you allow; add Olivares, bound to its address, with a
+drop-in:
+
+```text
+// /etc/apt/apt.conf.d/52olivares
+Unattended-Upgrade::Origins-Pattern { "origin=Olivares.AI,suite=stable,site=packages.olivares.ai"; };
+```
+
+Use one updater per host. A host installed from the repository updates with `apt` or `dnf`;
+`olivares upgrade`, below, replaces the binary behind the package manager.
+
+### With `olivares upgrade`
+
 `olivares upgrade` replaces the binary in place, and the safety properties are the reason to
 prefer it over re-installing the package by hand: it **never replaces the binary until the
 downloaded candidate has been exec-probed successfully**, it keeps a timestamped backup, and
@@ -359,7 +414,8 @@ Stated plainly, because a security product that is vague here does not deserve t
 
 - **It does not add a repository.** Nothing is written to `/etc/apt/sources.list.d`,
   `/etc/yum.repos.d` or `/etc/apk/repositories`. You installed one file; only that file was
-  installed. Upgrades are yours to trigger — by a new package, or by `olivares upgrade`.
+  installed. Upgrades are yours to trigger — by a new package, by `olivares upgrade`, or by
+  adding the [package repository](#from-the-package-repository-apt-and-dnf) yourself.
 - **It does not start or enable the service.** systemd packages reload systemd when
   `systemctl` is present and print `systemctl enable --now`. OpenRC packages print
   `rc-service olivares start` and do not `rc-update add`. Starting remains your decision.

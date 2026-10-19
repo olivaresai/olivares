@@ -4,6 +4,7 @@
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 """Build and retain the complete console output in the existing hosted pr-web job."""
 
+import errno
 import hashlib
 import io
 import json
@@ -33,13 +34,41 @@ REQUIRED = {"web/package.json", "web/pnpm-lock.yaml", "web/vite.config.ts",
             "pnpm-lock.yaml", "Taskfile.yml", ".github/workflows/pr-ci.yml", HELPER}
 
 
+class Refusal(ValueError):
+    """A precondition failed. The message is a constant written in this file."""
+
+
 def require(condition, message):
     if not condition:
-        raise ValueError(message)
+        raise Refusal(message)
+
+
+def environment(name):
+    value = os.environ.get(name)
+    require(value, "missing environment variable " + name)
+    return value
 
 
 def command(args):
-    return subprocess.check_output(args, cwd=ROOT, text=True).strip()
+    try:
+        return subprocess.check_output(args, cwd=ROOT, text=True).strip()
+    except FileNotFoundError as error:
+        if error.filename != args[0]:
+            raise
+        raise Refusal(args[0] + " not found") from None
+
+
+def reason(error):
+    """Why the capture stopped, from constants and tool names only. Exception text, paths
+    and environment values never reach the log or the generation artifacts."""
+    if isinstance(error, Refusal):
+        return str(error)
+    if isinstance(error, subprocess.CalledProcessError):
+        tool = error.cmd[0] if isinstance(error.cmd, (list, tuple)) and error.cmd else "command"
+        return "%s exited %s" % (os.path.basename(str(tool)), error.returncode)
+    if isinstance(error, OSError):
+        return "I/O error " + errno.errorcode.get(error.errno, "unknown")
+    return type(error).__name__
 
 
 def digest(data):
@@ -79,8 +108,10 @@ def inputs():
     require(all(not (p.exists() or p.is_symlink()) or p.relative_to(ROOT).as_posix() in names
                 for p in optional),
             "untracked build configuration")
-    subprocess.run(["git", "diff", "--quiet", "--exit-code", "HEAD", "--", *INPUT_PATHS],
-                   cwd=ROOT, check=True)
+    diff = subprocess.run(["git", "diff", "--quiet", "--exit-code", "HEAD", "--", *INPUT_PATHS],
+                          cwd=ROOT)
+    require(diff.returncode != 1, "a tracked build input differs from HEAD")
+    diff.check_returncode()
     extra = subprocess.check_output(
         ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", *INPUT_PATHS], cwd=ROOT)
     require(not extra, "untracked build input")
@@ -115,16 +146,22 @@ def outputs():
 
 def capture():
     checkout = command(["git", "rev-parse", "HEAD"])
-    pr_head = os.environ["PR_HEAD"]
+    pr_head = environment("PR_HEAD")
     require(checkout == pr_head and re.fullmatch(r"[0-9a-f]{40}", pr_head),
             "unexpected PR checkout identity")
-    repository = os.environ["GITHUB_REPOSITORY"]
+    repository = environment("GITHUB_REPOSITORY")
     require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository), "invalid repository")
-    run_id, attempt = os.environ["GITHUB_RUN_ID"], os.environ["GITHUB_RUN_ATTEMPT"]
+    run_id, attempt = environment("GITHUB_RUN_ID"), environment("GITHUB_RUN_ATTEMPT")
     require(run_id.isdecimal() and attempt.isdecimal(), "invalid run identity")
-    runner = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
+    runner = Path(environment("RUNNER_TEMP")).resolve(strict=True)
     final = runner / "web-generation-artifact"
-    require(not final.exists() and not final.is_symlink(), "artifact destination already exists")
+    # A self-hosted runner can keep RUNNER_TEMP between jobs, so the artifact of an earlier job may
+    # sit here. A plain directory is removed now, so that no capture that fails from here on leaves
+    # an old artifact for a later step to take for this one; anything else is refused untouched.
+    if final.exists() or final.is_symlink():
+        require(final.is_dir() and not final.is_symlink(),
+                "artifact destination is not a plain directory")
+        shutil.rmtree(final)
     before = inputs()
     versions = {tool: command([tool, "--version"]) for tool in ["node", "pnpm", "task"]}
     require(all(versions.values()), "missing tool version")
@@ -184,8 +221,9 @@ def capture():
 if __name__ == "__main__":
     try:
         capture()
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
-        # Build output is already in the job log. Do not serialize environment,
-        # arbitrary exception text, or file contents into generation artifacts.
-        print("capture-web-generation: capture failed; no new artifact published", file=sys.stderr)
+    except Exception as error:
+        # Build output is already in the job log. Name the reason from constants and tool names
+        # only: no environment, arbitrary exception text, path or file contents.
+        print("capture-web-generation: capture failed (%s); no new artifact published"
+              % reason(error), file=sys.stderr)
         sys.exit(1)

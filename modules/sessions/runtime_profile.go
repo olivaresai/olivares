@@ -130,6 +130,17 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 	if err := validateProfiledEnvAllow(p.EnvAllow); err != nil {
 		return err
 	}
+	// Assigned before anything else is told about the profile: an unassigned caller learns
+	// nothing of its state, home or readiness.
+	if p.asks.profileAccess != nil {
+		prof, err := m.GetProfile(ctx, tenant, p.ProviderProfileRef)
+		if err != nil {
+			return err
+		}
+		if err := p.asks.profileAccess(prof.Ref, prof.Driver); err != nil {
+			return err
+		}
+	}
 	snap, policy, err := m.resolveLaunchProfile(ctx, tenant, p.ProviderProfileRef)
 	if err != nil {
 		return err
@@ -354,7 +365,7 @@ func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy)
 	if err := validateRegistryEnvAllow(policy.registries, p.EnvAllow); err != nil {
 		return err
 	}
-	p.profilePrograms, p.profileRegistries = policy.programs, policy.registries
+	p.profilePrograms, p.profileRegistries, p.profileEgressHosts = policy.programs, policy.registries, policy.egressHosts
 	if err := refuseNonNativePackages(*p); err != nil {
 		return err
 	}

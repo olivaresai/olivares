@@ -178,8 +178,9 @@ func (c *agentClientConfig) do(ctx context.Context, method, path string, body an
 
 func newAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "agent",
-		Short: "Expert settings behind sessions: profiles, registered folders, managed settings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "agent",
+		Short:       "Expert settings behind sessions: profiles, registered folders, managed settings",
 		Long: "agent is the operator surface for official provider sessions under governance: the\n" +
 			"sessions themselves, the workspaces a session may read and write, and the\n" +
 			"managed-settings.json that binds a launched Claude Code session to the PEP hook.\n\n" +
@@ -203,7 +204,8 @@ func newAgentCmd() *cobra.Command {
 
 func newAgentSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "session",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "session",
 		// `olivares session` is the path a person takes (cmd_session.go). This spelling
 		// keeps working for scripts and is out of the help.
 		Hidden: true,
@@ -247,8 +249,9 @@ func newAgentSessionCreateCmd() *cobra.Command {
 		envAllow                                            []string
 	)
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Launch a governed Claude Code session",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Launch a governed Claude Code session",
 		Long: "create launches a Claude Code session through the Olivares sessions API, applying the\n" +
 			"selected transport, permission mode, workspace, isolation, model, effort, environment\n" +
 			"allowlist and, when given, provider profile. Without --provider-profile the engine\n" +
@@ -301,14 +304,14 @@ func newAgentSessionCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace reference (the session's working directory)")
 	cmd.Flags().StringVar(&providerProfile, "provider-profile", "",
 		"provider profile reference to launch under (default: the profile the engine resolves for Claude Code, for a caller who may write profiles)")
-	// The accepted values and the WIRED values are not the same set. The only runner
-	// is the native one, and it refuses container/sandbox deny-closed rather than run
-	// unisolated while the row claims otherwise (modules/sessions/procrunner.go). The
-	// flag still accepts them, because the API and the row model do; the help says
-	// which one actually launches.
+	// The accepted values and the WIRED values are not the same set. A node runs
+	// container only when it has podman or Docker, and sandbox never; the engine
+	// refuses what it cannot run deny-closed rather than run unisolated while the row
+	// claims otherwise (modules/sessions). The flag still accepts them, because the API
+	// and the row model do; the help says which one launches.
 	cmd.Flags().StringVar(&isolation, "isolation", "native",
-		"native (the only runner wired this release) | container | sandbox — "+
-			"container and sandbox are refused before launch with HTTP 422 until their runner ships")
+		"native (a governed host process) | container (podman or Docker on this server) | sandbox — "+
+			"a value the node cannot run is refused before launch with HTTP 422")
 	cmd.Flags().StringSliceVar(&envAllow, "env-allow", nil, "host env var NAMES to forward to the session (allowlist; nothing else is inherited)")
 	addDeprecatedJSONFlag(cmd)
 	_ = cmd.RegisterFlagCompletionFunc("transport", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -322,12 +325,11 @@ func newAgentSessionCreateCmd() *cobra.Command {
 	})
 	_ = cmd.RegisterFlagCompletionFunc("isolation", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		// Descriptions, not a bare list: the shell shows them, so the completion
-		// stops presenting three equally-valid-looking choices when one launches
-		// and two are refused.
+		// does not present three equally-valid-looking choices when one is never available.
 		return []string{
-			"native\twired: runs as a governed host child",
-			"container\tnot wired this release: the launcher refuses it",
-			"sandbox\tnot wired this release: the launcher refuses it",
+			"native\truns as a governed host child",
+			"container\truns in podman or Docker on this server; refused where there is none",
+			"sandbox\tnot available: the launcher refuses it",
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
@@ -339,10 +341,11 @@ func newAgentSessionListCmd() *cobra.Command {
 		state string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List operated sessions",
-		Long:    "ls lists the governed Claude Code sessions visible to the configured tenant, optionally filtered by lifecycle state.",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List operated sessions",
+		Long:        "ls lists the governed Claude Code sessions visible to the configured tenant, optionally filtered by lifecycle state.",
 		Example: `  # List all sessions
   olivares agent session ls
 
@@ -391,6 +394,7 @@ func newAgentSessionListCmd() *cobra.Command {
 func newAgentSessionGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
 		Use:               "get <run-ref>",
 		Short:             "Show one session",
 		Long:              "get retrieves the complete governed-session record for one run reference and prints it as JSON.",
@@ -415,6 +419,7 @@ func newAgentSessionGetCmd() *cobra.Command {
 func newAgentSessionEventsCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
 		Use:               "events <run-ref>",
 		Short:             "Show a session's lifecycle ledger",
 		Long:              "events retrieves the ordered lifecycle ledger for one governed session and prints the JSON response.",
@@ -442,6 +447,7 @@ func newAgentSessionAttachCmd() *cobra.Command {
 		from int64
 	)
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": "read"},
 		Use:               "attach <run-ref>",
 		Short:             "Stream a live session's I/O (server-sent events) to stdout",
 		Long:              "attach opens the server-sent-events stream for a live governed session and writes session output to stdout until the stream ends or is canceled.",
@@ -489,8 +495,9 @@ func newAgentSessionInputCmd() *cobra.Command {
 		workLeaseFence int64
 	)
 	cmd := &cobra.Command{
-		Use:   "input <run-ref>",
-		Short: "Send one line or driver text to a live session",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "input <run-ref>",
+		Short:       "Send one line or driver text to a live session",
 		Long: "input sends exactly one payload to a live governed session.\n\n" +
 			"With neither --text nor --line, one NDJSON line is read from stdin (legacy).\n" +
 			"--line sends a raw NDJSON line for stream-json stdin; an explicit empty value or\n" +
@@ -565,8 +572,9 @@ func newAgentSessionInterruptCmd() *cobra.Command {
 		workLeaseFence int64
 	)
 	cmd := &cobra.Command{
-		Use:   "interrupt <run-ref>",
-		Short: "Cancel the active provider turn without stopping the session",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "interrupt <run-ref>",
+		Short:       "Cancel the active provider turn without stopping the session",
 		Long: "interrupt cancels the active provider turn of a live governed session and keeps\n" +
 			"the owned process running. It is not stop: stop ends the session. interrupt does\n" +
 			"not stop, resume, or clean up a session, and it does not retry another lifecycle\n" +
@@ -678,19 +686,20 @@ func sessionTextPayload(cmd *cobra.Command, text string) (string, error) {
 }
 
 func newAgentSessionStopCmd() *cobra.Command {
-	return newAgentSessionActionCmd("stop", "Stop a running session", "POST", "/stop")
+	return newAgentSessionActionCmd("stop", "Stop a running session", "POST", "/stop", "write")
 }
 func newAgentSessionResumeCmd() *cobra.Command {
-	return newAgentSessionActionCmd("resume", "Resume a stopped session", "POST", "/resume")
+	return newAgentSessionActionCmd("resume", "Resume a stopped session", "POST", "/resume", "write")
 }
 func newAgentSessionCleanupCmd() *cobra.Command {
-	return newAgentSessionActionCmd("cleanup", "Release a stopped session (mark cleaned)", "POST", "/cleanup")
+	return newAgentSessionActionCmd("cleanup", "Release a stopped session (mark cleaned)", "POST", "/cleanup", "delete")
 }
 
 // newAgentSessionActionCmd builds a simple ref-only lifecycle action command.
-func newAgentSessionActionCmd(use, short, method, suffix string) *cobra.Command {
+func newAgentSessionActionCmd(use, short, method, suffix, changesData string) *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations:       map[string]string{"changes_data": changesData},
 		Use:               use + " <run-ref>",
 		Short:             short,
 		Long:              short + " through the governed sessions API and print the updated session record.",
@@ -715,6 +724,7 @@ func newAgentSessionActionCmd(use, short, method, suffix string) *cobra.Command 
 func newAgentSessionDeleteCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "delete"},
 		// Canonical short verb first (`ls`/`rm` across the CLI); the old
 		// names stay as aliases so nothing breaks.
 		Use:               "rm <run-ref>",

@@ -124,12 +124,12 @@
     "table": "Tableau"
   },
   "partial": {
-    "noLiveRead": "Les sessions observées ne sont pas affichées : votre rôle n’inclut pas sessions:live:read. Les sessions lancées ci-dessous sont la part qui a pu être lue, pas le tableau complet.",
-    "noRunRead": "Les sessions lancées ne sont pas affichées : votre rôle n’inclut pas sessions:run:read. Une session indiquée ci-dessous comme découverte peut avoir été lancée par Olivares — cette liste n’a pas pu le vérifier.",
+    "noLiveRead": "Les sessions observées ne sont pas affichées : votre rôle ne peut pas les lire. Les sessions lancées ci-dessous sont la part qui a pu être lue, pas le tableau complet.",
+    "noRunRead": "Les sessions lancées ne sont pas affichées : votre rôle ne peut pas les lire. Une session indiquée ci-dessous comme découverte peut avoir été lancée par Olivares — cette liste n’a pas pu le vérifier.",
     "truncated": "Ceci est la page la plus récente, pas l’ensemble du parc. L’origine y est recoupée sur ce qui est chargé : une session dont l’exécution est sortie de la page peut apparaître comme découverte ; ouvrez la session pour que le moteur réponde.",
     "runLookupFailed": "La moitié « lancées » n’a pas pu être lue : la requête sur les exécutions a échoué. Les lignes ci-dessous sont ce qu’a renvoyé la moitié observée ; l’origine est indiquée comme non lue plutôt que devinée.",
     "liveLookupFailed": "La moitié observée n’a pas pu être lue : la requête en direct a échoué. Les lignes ci-dessous sont les sessions lancées ; les colonnes de télémétrie sont vides parce que rien n’a pu être lu, pas parce qu’il n’y a rien.",
-    "noProfileRead": "Les noms des profils de fournisseur ne sont pas affichés : votre rôle n’inclut pas sessions:profile:read. La colonne Instance porte à la place la référence du profil de chaque ligne.",
+    "noProfileRead": "Les noms des profils de fournisseur ne sont pas affichés : votre rôle ne peut pas lire les profils. La colonne Instance porte à la place la référence du profil de chaque ligne.",
     "profileLookupFailed": "Les noms des profils de fournisseur n’ont pas pu être lus : la requête sur les profils a échoué. La colonne Instance porte à la place la référence du profil de chaque ligne."
   },
   "move": {
@@ -157,7 +157,10 @@
     "firstTurn": "Premier message",
     "close": "Fermer",
     "profilesFailed": "Impossible de lister les comptes.",
-    "profilesDenied": "Vous n'avez pas le droit de lister les comptes, donc aucun ne peut être choisi."
+    "profilesDenied": "Vous n'avez pas le droit de lister les comptes, donc aucun ne peut être choisi.",
+    "stopsFirst": "Cette session tourne encore : elle est d’abord arrêtée, puis déplacée.",
+    "handoffStopsFirst": "Cette session tourne encore : elle est d’abord arrêtée, puis transmise.",
+    "stoppedNotMoved": "La session a été arrêtée, mais le déplacement a échoué. Réessayez le déplacement."
   },
   "card": {
     "tabs": {
@@ -172,7 +175,7 @@
       "discovered": "Découverte",
       "launchedExplain": "Un enregistrement de lancement rattache cette session à Olivares : c’est lui qui l’a démarrée. Ce que l’on peut en faire maintenant figure ci-dessous — l’avoir lancée n’équivaut pas à détenir un processus vivant.",
       "discoveredExplain": "Aucun enregistrement de lancement ne s’y rattache : autant que ce plan puisse l’établir, Olivares ne l’a pas démarrée. Elle peut être lue et auditée, pas pilotée.",
-      "unknownExplain": "Impossible de vérifier si Olivares a lancé cette session : permission sessions:run:read absente, ou la requête a échoué. C’est « non lu », pas « non lancée ».",
+      "unknownExplain": "Impossible de vérifier si Olivares a lancé cette session : votre rôle ne peut pas lire les sessions lancées, ou la requête a échoué. C’est « non lu », pas « non lancée ».",
       "multipleRuns": "{{n}} exécutions pilotent cette session",
       "unknown": "Origine non lue"
     },
@@ -184,7 +187,7 @@
       "fullExplain": "Olivares détient le processus et relaie ses E/S : il peut être observé, piloté et arrêté.",
       "lifecycleExplain": "Démarrer et arrêter, rien entre les deux : soit Olivares détient le processus mais pas ses E/S, soit le processus est arrêté et peut être repris.",
       "observeExplain": "Olivares ne détient aucun processus pour cette session. Elle peut être lue et auditée ; l’arrêter n’est pas à la portée de ce plan.",
-      "unknownExplain": "La moitié « opération » n’a pas été lue (sessions:run:read) : voici ce qui se voit depuis la seule moitié observée."
+      "unknownExplain": "La moitié « opération » n’a pas été lue (votre rôle ne peut pas lire les sessions lancées) : voici ce qui se voit depuis la seule moitié observée."
     },
     "cap": {
       "watch": "Voir sa télémétrie en direct et sa chronologie",
@@ -228,7 +231,7 @@
     "notDeclared": "Non déclarée",
     "unclaimed": "Une activité a été vue depuis une session ne détenant aucune revendication active. Le moteur le signale ; ce n’est pas le même signal qu’une possible évasion.",
     "relayedIO": "Ses E/S sont relayées vers le cloud d’Anthropic : Olivares ne peut pas les afficher ici. Le contrôle du cycle de vie reste applicable.",
-    "observedNotRead": "La moitié observée n’a pas été lue : votre rôle n’inclut pas sessions:live:read.",
+    "observedNotRead": "La moitié observée n’a pas été lue : votre rôle ne peut pas lire les sessions observées.",
     "noObservationYet": "Cette session n’a pas encore d’activité.",
     "failureReasonMissing": "Cette session a échoué. Le serveur n’a pas indiqué la raison.",
     "hostIsolationRemedy": "Demandez à l’administrateur du serveur d’autoriser les espaces de noms utilisateur et réseau non privilégiés ainsi que Landlock, puis relancez la session.",
@@ -258,7 +261,8 @@
       "title": "Également observée via des sources liées",
       "explain": "Ces lignes partagent le profil et l’identifiant de session du fournisseur de cette exécution, mais sont arrivées par une source, pas par le processus qu’Olivares tient. Elles sont affichées à côté de l’exécution, jamais fusionnées avec elle.",
       "open": "Ouvrir"
-    }
+    },
+    "idlePolicyStopped": "Arrêtée pour libérer de la mémoire."
   },
   "facet": {
     "observed": "Observée : {{state}}",
@@ -290,9 +294,15 @@
     "unpin": "Détacher",
     "pinnedMark": "Épinglée",
     "rowMenu": "Actions pour {{name}}",
-    "noObservation": "Aucune télémétrie n’est encore arrivée pour cette session."
+    "noObservation": "Aucune télémétrie n’est encore arrivée pour cette session.",
+    "pinFailed": "L’épinglage n’a pas pu être modifié."
   },
   "surface": {
+    "openBeside": "Ouvrir à côté",
+    "closeBeside": "Fermer la session à côté",
+    "currentSession": "Session actuelle",
+    "besideSession": "Session à côté",
+    "switchSession": "Changer de session",
     "closeContext": "Fermer le contexte",
     "backTo": "Retour à {{pane}}",
     "pane": {
@@ -313,10 +323,20 @@
     "mode": "Mode : {{mode}}",
     "modeTitle": "{{tool}} indique : {{mode}}",
     "theTool": "l'outil",
+    "toolWord": {
+      "bypassPermissions": "Ne demande jamais l’autorisation",
+      "untrusted": "Demande avant les commandes auxquelles il ne fait pas confiance",
+      "onFailure": "Demande quand une commande échoue",
+      "onRequest": "Demande quand c’est nécessaire",
+      "never": "Ne demande jamais l’autorisation",
+      "granular": "Demande selon ses propres règles"
+    },
     "usageLabel": "Consommation de cette session",
     "tokens": "{{input}} en entrée / {{output}} en sortie (jetons)",
     "costTitle": "Une estimation, pas une facture : le chiffre de l'outil lui-même, ou le prix catalogue d'un tour qu'il n'a pas chiffré",
     "costUnknown": "coût non communiqué",
+    "costPartial": "{{cost}} (partiel)",
+    "viewCosts": "Voir les coûts",
     "planLabel": "Fenêtres d'utilisation du forfait de la connexion de cette session",
     "planNotRead": "fenêtre du forfait non lue",
     "resets": "Réinitialisation {{when}} ({{at}})",
@@ -337,6 +357,7 @@
     "forbiddenDescription": "Votre rôle n’inclut pas la permission de lire la télémétrie des sessions.",
     "errorTitle": "Les preuves n’ont pas pu être lues",
     "errorDescription": "La lecture de la chronologie n’a pas répondu. Une liste vide ici signifierait que la session n’a rien fait, ce qui est un autre fait.",
+    "repeat": "×{{count}}",
     "atLeast_one": "au moins {{count}}",
     "atLeast_other": "au moins {{count}}",
     "touches_one": "{{count}} entrée",
@@ -376,9 +397,9 @@
     "copyRef": "Copier {{value}}",
     "identifiersTitle": "Identifiants",
     "identifiersHint": "Références à copier. Ce ne sont pas les noms de la ligne d’étendue.",
-    "wireTitle": "Fil",
-    "wireHint": "Le cadre brut de la ligne sélectionnée. La conversation est la vue par défaut.",
-    "wireEmpty": "Sélectionnez une ligne de la conversation pour voir son cadre brut.",
+    "wireTitle": "Ligne sélectionnée",
+    "wireHint": "La ligne sélectionnée telle que l’outil l’a envoyée. La conversation est la vue par défaut.",
+    "wireEmpty": "Sélectionnez une ligne de la conversation pour la voir telle que l’outil l’a envoyée.",
     "thisNode": "Ce nœud",
     "workTitle": "Autorité de travail de la session",
     "workHint": "Enregistrée pour le dernier lancement. Chaque action vérifie l’autorisation actuelle.",
@@ -440,6 +461,10 @@
     "retrying": "Nouvelle tentative ({{count}}) : {{message}}",
     "keyRefused": "Le fournisseur a refusé la clé d’API. Remplacez-la dans Fournisseurs.",
     "output": "Sortie de l’outil ({{count}}) : {{first}}",
+    "started": "Session démarrée",
+    "startedTools_one": "{{count}} outil",
+    "startedTools_many": "{{count}} outils",
+    "startedTools_other": "{{count}} outils",
     "notSent": "Non envoyé : {{reason}}",
     "waitingApproval": "Sera envoyé une fois le lancement approuvé et la session démarrée.",
     "workingFolder": "Dossier de travail : {{cwd}}",
@@ -512,6 +537,7 @@
   },
   "list": {
     "group": {
+      "pinned": "Épinglées",
       "attention": "Vous attend",
       "active": "En cours",
       "settled": "Plus tôt"
@@ -527,6 +553,8 @@
     "terminalHint": "La même session depuis un terminal."
   },
   "activity": {
+    "workflowPhases": "Phases",
+    "workflowProgress": "Agents terminés : {{done}} sur {{total}}",
     "empty": "Rien pour l’instant. La liste de tâches de l’outil, les agents qu’il lance, le travail qu’il laisse en arrière-plan et les fichiers qu’il modifie apparaissent ici pendant qu’il travaille.",
     "missing": "La transcription de cette session n’est pas dans le dossier de son compte : ce que son outil a fait ne peut pas être affiché.",
     "failed": "Impossible de lire l’activité.",
@@ -546,13 +574,17 @@
     "context": "Contexte",
     "model": "Modèle",
     "tokens": "En contexte",
+    "contextUsage": "{{tokens}} tokens · {{percent}} de {{window}}",
+    "contextUnknown": "{{tokens}} tokens · fenêtre inconnue",
     "compactions": "Compactages",
-    "compactedTimes_one": "Compacté une fois",
+    "compactedTimes_one": "Compacté {{n}} fois",
+    "compactedTimes_many": "Compacté {{n}} fois",
     "compactedTimes_other": "Compacté {{n}} fois",
     "neverCompacted": "Non compacté",
     "skills": "Skills",
     "mcp": "Serveurs MCP",
     "unreadable_one": "{{n}} enregistrement illisible n’est pas affiché.",
+    "unreadable_many": "{{n}} enregistrements illisibles ne sont pas affichés.",
     "unreadable_other": "{{n}} enregistrements illisibles ne sont pas affichés.",
     "countRunning": "{{total}} · {{running}} en cours",
     "state": {
@@ -570,6 +602,7 @@
     },
     "due": "à {{time}}",
     "toolUses_one": "{{n}} appel d’outil",
+    "toolUses_many": "{{n}} appels d’outils",
     "toolUses_other": "{{n}} appels d’outils",
     "agentTokens": "{{value}} jetons",
     "agentFailed": "Impossible de lire la transcription de cet agent.",
@@ -579,5 +612,36 @@
       "tool": "Outil",
       "result": "Résultat"
     }
+  },
+  "messages": {
+    "title": "Messages",
+    "rail": "Messages envoyés",
+    "mark": "Message {{n}}, {{time}} : {{line}}",
+    "search": "Rechercher dans les messages de la session",
+    "searchHint": "Un mot ou une expression",
+    "goToTime": "Aller à une date et une heure",
+    "go": "Aller",
+    "includeAnswers": "Inclure les réponses",
+    "count": "{{shown}} sur {{total}} messages",
+    "none": "Aucun message ne correspond.",
+    "loading": "Lecture des messages…",
+    "older": "Afficher les messages précédents",
+    "answer": "Réponse",
+    "timeNone": "Aucun message à partir de cette heure.",
+    "error": "Les messages n’ont pas pu être lus.",
+    "pending": "L’outil n’a pas encore écrit la transcription de cette session.",
+    "missing": "La transcription de cette session n’est pas dans le dossier de son compte ; ses messages ne peuvent donc pas être affichés.",
+    "jumped": "Saut au message {{n}}.",
+    "farNotice": "Le message {{n}} est affiché ci-dessous : il est plus ancien que la conversation à l’écran.",
+    "farTitle": "Message plus ancien",
+    "farBody": "Message {{n}}, {{time}}. Il est plus ancien que la conversation à l’écran.",
+    "close": "Fermer",
+    "refused": "Cette session a reçu des secrets ; ses messages ne peuvent donc pas être listés. Sa sortie en direct reste affichée.",
+    "unreadable": "{{n}} enregistrements de la transcription n’ont pas pu être lus."
+  },
+  "limit": {
+    "usageUntil": "Quota épuisé jusqu’à {{time}}",
+    "usage": "Quota épuisé",
+    "rate": "Le fournisseur limite les requêtes. Réessayez dans un instant."
   }
 }

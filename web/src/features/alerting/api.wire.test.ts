@@ -111,3 +111,72 @@ describe('the notify outbox client, on the wire', () => {
     ).rejects.toBeInstanceOf(ApiError)
   })
 })
+
+describe('the console destinations client, on the wire', () => {
+  const URL = 'https://hooks.slack.com/services/T0/B0/SYNTHETICSECRET'
+
+  it('lists with a plain GET', async () => {
+    mockFetch(200, { destinations: [], kinds: [], sealer_available: true })
+    await notifyApi.listConsoleDestinations()
+    expect(lastUrl).toBe('/v1/console/notify-destinations')
+    expect(lastInit?.method).toBe('GET')
+  })
+
+  it('saves with PUT and sends the webhook URL only when one was typed', async () => {
+    mockFetch(200, {
+      name: 'oncall',
+      kind: 'slack',
+      source: 'console',
+      live: true,
+    })
+    await notifyApi.putConsoleDestination({
+      name: 'oncall',
+      kind: 'slack',
+      webhook_url: URL,
+    })
+    expect(lastUrl).toBe('/v1/console/notify-destinations')
+    expect(lastInit?.method).toBe('PUT')
+    expect(JSON.parse(String(lastInit?.body))).toEqual({
+      name: 'oncall',
+      kind: 'slack',
+      webhook_url: URL,
+    })
+
+    // A blank URL means "keep the stored one": the key must be absent, not "".
+    await notifyApi.putConsoleDestination({ name: 'oncall', kind: 'slack' })
+    expect(JSON.parse(String(lastInit?.body))).toEqual({
+      name: 'oncall',
+      kind: 'slack',
+    })
+  })
+
+  it('tests on the /test subpath the router registers', async () => {
+    mockFetch(200, { ok: true })
+    await notifyApi.testConsoleDestination({ name: 'oncall', kind: 'slack' })
+    expect(lastUrl).toBe('/v1/console/notify-destinations/test')
+    expect(lastInit?.method).toBe('POST')
+  })
+
+  it('deletes with the name in the body, which the handler reads', async () => {
+    mockFetch(200, { ok: true })
+    await notifyApi.deleteConsoleDestination('oncall')
+    expect(lastUrl).toBe('/v1/console/notify-destinations')
+    expect(lastInit?.method).toBe('DELETE')
+    expect(JSON.parse(String(lastInit?.body))).toEqual({ name: 'oncall' })
+  })
+
+  it('surfaces a refused test message as an ApiError carrying the engine code', async () => {
+    mockFetch(422, {
+      error: {
+        code: 'notify_destination_test_failed',
+        message: 'the destination did not accept the test message',
+      },
+    })
+    await expect(
+      notifyApi.testConsoleDestination({ name: 'oncall', kind: 'slack' }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: 'notify_destination_test_failed',
+    })
+  })
+})

@@ -37,6 +37,29 @@ ingestion-health 表是从连接器（connector）和导出器编译所依据的
 - 它**不是**指标端点：运营时序数据存在于
   [`/metrics`](/zh/how-to/monitor-with-prometheus/)；本模块提供的是结构化答案，而非时序。
 
+## 复现读取模型的旅程
+
+在一个**全新的、可丢弃的 Enterprise SQLite Compose 安装**上，使用 Python 3.11 或更高版本运行
+`scripts/qualify-observability.py`。提供已安装的二进制文件、HTTPS 地址、容器名称、完整的源提交
+和一个新的证据目录：
+
+```sh
+python3 scripts/qualify-observability.py /path/to/olivares \
+  https://127.0.0.1:8443 olivares <source-sha> /path/to/new-evidence
+```
+
+该探针使用 Enterprise 组织管理为其隔离检查预配第二个租户。ingestion-health、追踪读取模型和证明（attestation）表面在 Community 中仍然可用。
+
+探针通过 API 创建夹具账户和 agent，启用现有的可观测性和安全模块，并实际重启容器。它把所启动可执行文件的
+SHA-256 与所提供的二进制文件比较，用一个第一方发现项验证摄取，检查租户拒绝，并检查账本追踪详情/导出的
+保留在重启以及模块关闭/开启之后依然成立。它还验证摄取计数器会重置，并且证明（attestation）把已度量的
+二进制身份与声明的流水线及未发布的发布状态区分开。CLI 检查使用 JSON 输出。凭据只留在内存或子进程环境中；
+保留的引擎日志会对安装令牌做脱敏。
+
+按 README 中的安装步骤，并显式选择候选镜像。绝不要对现有安装运行该探针。Python 优化被拒绝，
+因为它会禁用断言。运行后请删除可丢弃的 Compose 栈及其卷。探针把该清理留给调用方，并把其结果和
+引擎日志写入证据目录。它不演练控制台操作、PostgreSQL、供应商收集器或发布签名验证。
+
 ## 相关
 
 - [使用 Prometheus 监控](/zh/how-to/monitor-with-prometheus/) —— 运营指标与 SLO。

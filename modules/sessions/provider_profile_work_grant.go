@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"sort"
 	"strings"
@@ -127,6 +128,24 @@ func (m *Module) authorizeProfileWorkGrant(ctx context.Context, actor auth.Princ
 		}
 	}
 	return nil
+}
+
+// appendProfileEgressHostsAudit records the profile's egress hosts after a
+// declaration or a withdrawal, in the transaction that stored them.
+func appendProfileEgressHostsAudit(ctx context.Context, sc store.Scope, actor auth.Principal, profile ProviderProfile) error {
+	hosts := profile.SessionEgressHosts
+	if hosts == nil {
+		hosts = []string{}
+	}
+	event, err := sc.Audit().Append(ctx, model.AuditDraft{
+		Actor: orSystem(actor.Actor()), ActorKind: orSystemKind(actor.ActorKind()),
+		Action: "sessions.provider_profile.egress_hosts", TargetKind: providerProfileKind, TargetID: profile.ID,
+		Meta: map[string]any{"profile_ref": profile.Ref, "hosts": hosts},
+	})
+	if err == nil && event.Seq == 0 {
+		return errors.New("provider profile egress hosts audit was not persisted")
+	}
+	return err
 }
 
 func appendProfileWorkGrantAudit(ctx context.Context, sc store.Scope, actor auth.Principal, id model.ID, grant *SessionWorkGrant) error {

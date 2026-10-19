@@ -3,8 +3,9 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test, type Page } from '@playwright/test'
 
-// Deploy on a fresh Community install, where no runtime executor is connected, and on an
-// install that has one. scripts/web-e2e.sh runs this spec twice, each time on a virgin engine:
+// Deploy on a fresh Business install, where no runtime executor is connected, and on an
+// install that has one. A Community engine answers every deploy route with 501 and skips
+// this spec. scripts/web-e2e.sh runs this spec twice, each time on a virgin engine:
 // once without an executor, once started with a test executor (OLIVARES_DEPLOY_EXECUTOR_CONFIG)
 // and PLAYWRIGHT_DEPLOY_EXECUTOR=configured. Each run walks first boot.
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''
@@ -18,6 +19,13 @@ const PASSWORD = 'correct-horse-battery-staple-42'
 test.use({ screenshot: 'off', trace: 'off' })
 // Turning Deploy on restarts the engine once.
 test.describe.configure({ timeout: 180_000 })
+test.beforeEach(async ({ request }) => {
+  const info = await request.get('/v1/server-info')
+  test.skip(
+    (await info.json()).edition === 'community',
+    'Deployment is Business; Community answers 501, pinned by TestCommunityDeployRoutesAnswerBusiness.',
+  )
+})
 
 async function firstBoot(page: Page) {
   await page.goto('/setup')

@@ -170,7 +170,7 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
 function DepLegend() {
   const { t } = useTranslation('health')
   return (
-    <div className="pointer-events-none flex flex-col gap-1.5 rounded-md border border-border bg-surface/90 px-2.5 py-2 shadow-sm backdrop-blur">
+    <div className="pointer-events-none flex flex-col gap-1.5 rounded-md border border-border bg-surface px-2.5 py-2 shadow-sm">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {t('deps.legendTitle')}
       </span>

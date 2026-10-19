@@ -226,14 +226,14 @@ cd "$ROOT/web"
 # line is what makes it actually RUN.
 # first-screens.spec.ts joins them for the same reason and with the same
 # guard: it signs in as the demo operator, and on the shared engine of scripts/web-e2e.sh
-# it would grade the login page in seven languages and call it green.
+# it would grade the login page in nine languages and call it green.
 # session-work-surface.spec.ts likewise: it opens a COLD deep link in a second
 # browser context carrying the signed-in state, which only means anything against an
 # engine that actually has sessions in it.
 # console-wide-standard.spec.ts for the same reason again, and with one of its own:
-# it MEASURES the rail in seven languages (`scrollWidth > clientWidth`) and the computed
+# it MEASURES the rail in nine languages (`scrollWidth > clientWidth`) and the computed
 # font size of a painted element, and both of those need a real console with a real
-# estate behind it — on the shared engine it would measure the login page seven times.
+# estate behind it — on the shared engine it would measure the login page nine times.
 SPECS=(e2e/demo-graph.spec.ts e2e/console-func-l4.spec.ts e2e/console-keyboard-routes.spec.ts
   e2e/first-screens.spec.ts e2e/session-work-surface.spec.ts e2e/console-wide-standard.spec.ts)
 # The access graph and the identity inventory are Community: the public specs above cover them.

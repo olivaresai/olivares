@@ -21,7 +21,7 @@ import (
 // stderr stays a pipe so the two streams remain distinct on the bridge.
 // Closing stdin on Stop does not close the master: that would also tear down
 // the stdout pump before SIGTERM has a chance to flush.
-func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, release func()) (*procProcess, error) {
+func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, stripImages bool, release func()) (*procProcess, error) {
 	master, slave, err := openLocalPTY()
 	if err != nil {
 		return nil, fmt.Errorf("sessions: local PTY: %w", err)
@@ -43,16 +43,26 @@ func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, release 
 	cmd.SysProcAttr.Setctty = true
 	cmd.SysProcAttr.Ctty = 0 // stdin is the slave, so the child's fd 0 is the tty
 	cmd.Cancel = func() error { return procGroupKill(cmd) }
-	if err := cmd.Start(); err != nil {
+	program := specProgram(cmd) // the guard replaces cmd.Path
+	engine, err := watchEngine(cmd)
+	if err != nil {
 		_ = stderr.Close()
 		_ = master.Close()
 		_ = slave.Close()
-		return nil, fmt.Errorf("sessions: start %q: %w", specProgram(cmd), err)
+		return nil, fmt.Errorf("sessions: start %q: %w", program, err)
 	}
+	if err := cmd.Start(); err != nil {
+		engine.close()
+		_ = stderr.Close()
+		_ = master.Close()
+		_ = slave.Close()
+		return nil, fmt.Errorf("sessions: start %q: %w", program, err)
+	}
+	engine.started()
 	cmd.Env = nil
 	_ = slave.Close()
 	stdin := ptyWriter{f: master}
-	return pr.watch(cmd, stdin, master, stderr, waitDelay, release), nil
+	return pr.watch(cmd, stdin, stripImagesFrom(master, stripImages), stderr, waitDelay, engine.with(release)), nil
 }
 
 func openLocalPTY() (master, slave *os.File, err error) {

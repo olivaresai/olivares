@@ -54,6 +54,7 @@ type Dependencies struct {
 	CursorKeyring                    *CursorTokenKeys
 	Runner                           Runner
 	SessionMCP                       SessionMCPLaunchSource
+	SessionDecoys                    SessionDecoySource
 	GitRead                          SessionGitReadSource
 	GitReadDataDir                   string
 	Creds                            CredentialSource
@@ -64,6 +65,7 @@ type Dependencies struct {
 	Classifier                       Classifier
 	CostSink                         SessionCostSink
 	ListPricer                       ListPricer
+	LimitResets                      LimitResetSource
 	WorkSessionCreds                 WorkSessionCredentialSource
 	CommunicationSessionCreds        CommunicationSessionCredentialSource
 	// The enabled bit distinguishes an intentional K3 OFF posture from a lost
@@ -85,6 +87,17 @@ type Dependencies struct {
 	ProviderApprovalPolicy    ProviderApprovalPolicy
 	ProviderApprovalPrincipal func(context.Context, model.TenantID, string) (auth.Principal, string, error)
 	QueuedLaunchAuthorization func(context.Context, model.TenantID, auth.QueuedCredential, string, model.ID) (auth.Principal, error)
+
+	// SteerOthers is the Business edition's: it lets a caller with sessions:run:write steer
+	// (input, resume, peers) a session another person started. Community leaves it false and
+	// answers 501 business_required (steering_edition.go).
+	SteerOthers bool
+
+	// ProfileAccess decides who may use which provider profile and AI tool
+	// (provider_profile_access.go). The engine requires it (dependencyChecks); a module built
+	// without one, as the sessions tests build it, leaves every profile and tool open to
+	// whoever holds the route's permission.
+	ProfileAccess ProfileAccess
 }
 
 // normalize canonicalizes absent interface ports, including typed nils. It does
@@ -201,6 +214,7 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"Classifier", d.Classifier, "governed read classification", false},
 		{"CostSink", d.CostSink, "session spend attribution", true},
 		{"ListPricer", d.ListPricer, "token-only usage pricing", true},
+		{"LimitResets", d.LimitResets, "reset times of a usage limit the tool did not name", false},
 		{"WorkSessionCreds", d.WorkSessionCreds, "session work credentials", true},
 		{"CommunicationSessionCreds", d.CommunicationSessionCreds, "communication session credentials", true},
 		{"RecoveryWorkSessionCreds", d.RecoveryWorkSessionCreds, "work credential withdrawal during recovery", true},
@@ -213,11 +227,12 @@ func (m *Module) dependencyChecks() []dependencyCheck {
 		{"HostTools", d.HostTools, "host tool observation", false},
 		{"SessionAccessCheck", d.SessionAccessCheck, "owner access termination", true},
 		{"Tracer", d.Tracer, "session traces", false},
-		{"ApprovalRecoveryTenants", d.ApprovalRecoveryTenants, "cross-tenant waiting-launch recovery", false},
+		{"ApprovalRecoveryTenants", d.ApprovalRecoveryTenants, "cross-tenant recovery of waiting launches and engine-stopped runs", false},
 		{"QueuedCredentialCapture", d.QueuedCredentialCapture, "queued-launch credential capture", true},
 		{"ProviderApprovalPolicy", d.ProviderApprovalPolicy, "provider approval policy", true},
 		{"ProviderApprovalPrincipal", d.ProviderApprovalPrincipal, "provider approval identity", true},
 		{"QueuedLaunchAuthorization", d.QueuedLaunchAuthorization, "queued-launch authorization", true},
+		{"ProfileAccess", d.ProfileAccess, "provider profile and tool assignments", true},
 	}
 	if d.ManagedStopAuthority != nil {
 		checks = append(checks,

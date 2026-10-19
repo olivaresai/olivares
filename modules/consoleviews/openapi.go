@@ -113,10 +113,17 @@ func consoleViewsUIStateSchema() map[string]any {
 			"sidebar", oas.Obj(
 				"type", "string",
 				"enum", oas.Enum("full", "rail"),
-				"description", "The console sidebar width: full (240 px, with labels) or rail (56 px, icons).",
+				"description", "The console sidebar width: full (with labels) or rail (icons).",
+			),
+			"show_edition_badge", oas.Obj(
+				"type", "boolean",
+				"description", "Show the active commercial edition badge. Defaults to true; omitted fields retain their saved value.",
 			),
 		),
-		"required", oas.Enum("sidebar"),
+		"anyOf", []any{
+			oas.Obj("required", oas.Enum("sidebar")),
+			oas.Obj("required", oas.Enum("show_edition_badge")),
+		},
 	)
 }
 

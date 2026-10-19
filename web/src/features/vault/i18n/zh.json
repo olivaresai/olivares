@@ -1,0 +1,88 @@
+{
+  "title": "保险库",
+  "subtitle": "您的密码、笔记和验证码。它们在此服务器上加密封存，只有您能打开。",
+  "add": "添加条目",
+  "search": "查找条目",
+  "noMatch": "没有与“{{query}}”匹配的条目",
+  "sealerUnavailable": "此服务器暂时无法封存机密，因此无法保存条目。",
+  "created": "条目已添加",
+  "saved": "条目已保存",
+  "deleted": "条目已删除",
+  "copyBlocked": "浏览器不允许复制",
+  "nothingToCopy": "此条目没有可复制的内容",
+  "needPerson": "保险库属于个人。请使用您自己的账户登录以使用您的保险库。",
+  "needOrganization": "请选择一个组织，以在其中打开您的保险库。",
+  "copied": "已复制{{field}}。{{seconds}} 秒后将从剪贴板清除。",
+  "rowCopied": "已复制{{what}}。{{seconds}} 秒后将从剪贴板清除。",
+  "what": {
+    "password": "密码",
+    "code": "验证码",
+    "note": "笔记"
+  },
+  "kind": {
+    "login": "登录",
+    "note": "笔记",
+    "totp": "验证器",
+    "code": "验证码"
+  },
+  "empty": {
+    "title": "您的保险库是空的",
+    "description": "添加登录信息、笔记或验证器密钥。打开或复制条目都会记录在审计账本中。"
+  },
+  "row": {
+    "open": "打开 {{label}}",
+    "openItem": "打开",
+    "delete": "删除",
+    "menu": "{{label}} 的操作",
+    "copyPassword": "复制 {{label}} 的密码",
+    "copyNote": "复制 {{label}} 的笔记",
+    "copyCode": "复制 {{label}} 的验证码"
+  },
+  "delete": {
+    "title": "删除 {{label}}？",
+    "body": "条目将被永久删除，无法撤销。",
+    "confirm": "删除"
+  },
+  "detail": {
+    "locked": "已锁定。显示条目会记录在审计账本中，一分钟后会再次隐藏。",
+    "hidden": "已隐藏",
+    "reveal": "显示",
+    "edit": "编辑",
+    "totpKey": "验证器密钥",
+    "code": "验证码",
+    "codeHidden": "未显示",
+    "codeLeft": "剩余 {{n}} 秒",
+    "showCode": "显示验证码",
+    "copyField": "复制{{field}}",
+    "showField": "显示{{field}}",
+    "hideField": "隐藏{{field}}"
+  },
+  "form": {
+    "addTitle": "添加条目",
+    "editTitle": "编辑 {{label}}",
+    "name": "名称",
+    "nameHint": "字母、数字、点、连字符和下划线。可通过此名称找到条目，命令行中也一样。",
+    "nameTaken": "已存在同名条目",
+    "nameInvalid": "请使用字母、数字、点、连字符和下划线",
+    "type": "类型",
+    "username": "用户名",
+    "password": "密码",
+    "show": "显示密码",
+    "hide": "隐藏密码",
+    "generate": "生成",
+    "generateOptions": "生成器选项",
+    "generateFailed": "无法生成密码",
+    "length": "长度",
+    "lower": "小写字母",
+    "upper": "大写字母",
+    "digits": "数字",
+    "symbols": "符号",
+    "url": "网站",
+    "totp": "验证器密钥",
+    "totpHint": "base32 密钥，或服务二维码背后的 otpauth:// 链接",
+    "note": "笔记",
+    "description": "说明",
+    "descriptionHint": "显示在列表中，不属于机密。",
+    "save": "保存"
+  }
+}

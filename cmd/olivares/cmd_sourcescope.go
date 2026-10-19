@@ -70,9 +70,10 @@ type sourcescopeWsConnectorBody struct {
 func newSourceScopeCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use:     "sourcescope",
-		Aliases: []string{"source-scope"},
-		Short:   "Decide which sources a workspace or agent may reach",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sourcescope",
+		Aliases:     []string{"source-scope"},
+		Short:       "Decide which sources a workspace or agent may reach",
 		Long: "Govern source scoping: the bindings that confine a source to a workspace or agent\n" +
 			"group, the connector assignments, the workspace-scoped connectors, the retrieval\n" +
 			"guard postures and the dual-controlled queue that relaxations pass through.\n\n" +
@@ -120,7 +121,7 @@ type sourcescopeBindingFlags struct {
 }
 
 func (f *sourcescopeBindingFlags) add(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.sourceType, "source-type", "", "mcp, model, provider, knowledge or data")
+	cmd.Flags().StringVar(&f.sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile or tool")
 	cmd.Flags().StringVar(&f.sourceRef, "source-ref", "", "reference of the source being confined")
 	cmd.Flags().StringVar(&f.scopeTree, "scope-tree", "", "scope tree the binding attaches to (e.g. workspace, agent_group)")
 	cmd.Flags().StringVar(&f.scopeRef, "scope-ref", "", "reference within the scope tree")
@@ -145,8 +146,9 @@ func (f *sourcescopeBindingFlags) body() sourcescopeBindingBody {
 
 func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "bindings",
-		Short: "Confine a source to a workspace or agent group",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "bindings",
+		Short:       "Confine a source to a workspace or agent group",
 		Long: "A binding is the rule that takes a source out of tenant-wide visibility and\n" +
 			"confines it to a scope. The FIRST allow for a source is what brings it under\n" +
 			"governance and applies immediately; a later allow WIDENS reach and is proposed.",
@@ -161,9 +163,10 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 		scopeTree  string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List source-to-scope bindings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List source-to-scope bindings",
 		Long: datalaneListLong("List the tenant's bindings, optionally narrowed to a source type, a source\n" +
 			"reference or a scope tree."),
 		Example: `  olivares sourcescope bindings ls
@@ -197,11 +200,12 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&scopeTree, "scope-tree", "", "only bindings in this scope tree")
 
 	get := &cobra.Command{
-		Use:     "get <binding-id>",
-		Short:   "Show one binding",
-		Long:    "Show one binding: its source, its scope, its effect and the credential it carries.",
-		Example: "  olivares sourcescope bindings get bnd_123",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <binding-id>",
+		Short:       "Show one binding",
+		Long:        "Show one binding: its source, its scope, its effect and the credential it carries.",
+		Example:     "  olivares sourcescope bindings get bnd_123",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("bindings", args[0])
 			if err != nil {
@@ -220,8 +224,9 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 
 	var createFields sourcescopeBindingFlags
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Bind a source to a scope",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Bind a source to a scope",
 		Long: "Create a binding. An allow added to an ALREADY confined source widens who can\n" +
 			"reach it, so the engine answers 202 and records a dual-controlled proposal\n" +
 			"instead of applying it. The first allow for a source, and every forbid, apply\n" +
@@ -251,8 +256,9 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 		replace   bool
 	)
 	set := &cobra.Command{
-		Use:   "set <binding-id>",
-		Short: "Replace a binding",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <binding-id>",
+		Short:       "Replace a binding",
 		Long: "Replace a binding.\n\n" +
 			"THIS REPLACES, IT DOES NOT PATCH. The engine re-resolves the scope from\n" +
 			"the payload and rewrites the stored row, so a field left out is reset. The\n" +
@@ -296,9 +302,10 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 
 	var yes bool
 	remove := &cobra.Command{
-		Use:     "rm <binding-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete a binding",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <binding-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete a binding",
 		Long: "Delete a binding. Removing the LAST binding of a source unconfines it, which\n" +
 			"WIDENS who can reach it, so the engine treats a relaxing delete as a\n" +
 			"dual-controlled proposal (202) rather than applying it.\n\n" +
@@ -337,11 +344,12 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 
 func newSourceScopeResourcesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "resources",
-		Short:   "Navigate the tenant's resource tree",
-		Long:    "The navigable resource tree a folder or subtree binding is anchored to.",
-		Example: "  olivares sourcescope resources ls",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "resources",
+		Short:       "Navigate the tenant's resource tree",
+		Long:        "The navigable resource tree a folder or subtree binding is anchored to.",
+		Example:     "  olivares sourcescope resources ls",
+		Args:        cobra.NoArgs,
 	}
 	var (
 		page        datalanePageFlags
@@ -351,9 +359,10 @@ func newSourceScopeResourcesCmd(client datalaneClient) *cobra.Command {
 		subtree     string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List resources, by children or by subtree",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List resources, by children or by subtree",
 		Long: datalaneListLong("List the tenant's resources. --parent lists the direct children of one node,\n" +
 			"--subtree lists everything beneath it; both take a real resource id, which is\n" +
 			"what a folder binding must be anchored to."),
@@ -394,11 +403,12 @@ func newSourceScopeResourcesCmd(client datalaneClient) *cobra.Command {
 
 func newSourceScopeSourcesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "sources",
-		Short:   "Source-wide posture operations",
-		Long:    "Operations that act on a whole source rather than on one binding.",
-		Example: "  olivares sourcescope sources disable-scoping --source-type knowledge --source-ref kb_123 --yes",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sources",
+		Short:       "Source-wide posture operations",
+		Long:        "Operations that act on a whole source rather than on one binding.",
+		Example:     "  olivares sourcescope sources disable-scoping --source-type knowledge --source-ref kb_123 --yes",
+		Args:        cobra.NoArgs,
 	}
 	var (
 		sourceType string
@@ -406,8 +416,9 @@ func newSourceScopeSourcesCmd(client datalaneClient) *cobra.Command {
 		yes        bool
 	)
 	disable := &cobra.Command{
-		Use:   "disable-scoping",
-		Short: "Propose removing ALL scoping from a source",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "disable-scoping",
+		Short:       "Propose removing ALL scoping from a source",
 		Long: "Propose disabling every binding of one source — the flagship one-way relaxation.\n\n" +
 			"THIS IS THE MOST WIDENING OPERATION IN THIS FAMILY, and it is destructive in the\n" +
 			"sense that matters here even though it deletes nothing: it removes the\n" +
@@ -440,7 +451,7 @@ func newSourceScopeSourcesCmd(client datalaneClient) *cobra.Command {
 			return datalaneResult(cmd, raw, code, "")
 		},
 	}
-	disable.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge or data")
+	disable.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile or tool")
 	disable.Flags().StringVar(&sourceRef, "source-ref", "", "reference of the source to unconfine")
 	addYesFlag(disable, &yes)
 	cmd.AddCommand(disable)
@@ -451,8 +462,9 @@ func newSourceScopeSourcesCmd(client datalaneClient) *cobra.Command {
 
 func newSourceScopeGuardPosturesCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "guard-postures",
-		Short: "Read and set the retrieval guard posture",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "guard-postures",
+		Short:       "Read and set the retrieval guard posture",
 		Long: "The guard posture is a separate axis from source scoping: it decides whether\n" +
 			"governed retrieval stays ACL/clearance/region aware, or drops to public content\n" +
 			"only. With no row, a knowledge base is ACL-aware by default.",
@@ -466,9 +478,10 @@ func newSourceScopeGuardPosturesCmd(client datalaneClient) *cobra.Command {
 		profile    string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List explicit guard-posture overrides",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List explicit guard-posture overrides",
 		Long: datalaneListLong("List the explicit guard-posture overrides. Only overrides are listed: a source\n" +
 			"with no row is ACL-aware, which is the deny-closed default."),
 		Example: `  olivares sourcescope guard-postures ls
@@ -507,8 +520,9 @@ func newSourceScopeGuardPosturesCmd(client datalaneClient) *cobra.Command {
 		reason        string
 	)
 	set := &cobra.Command{
-		Use:   "set",
-		Short: "Set the guard posture of one source",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Set the guard posture of one source",
 		Long: "Set the retrieval guard posture of one source. The two directions are NOT\n" +
 			"symmetric and the engine says which happened: acl_aware TIGHTENS and\n" +
 			"applies at once, while public_only RELAXES and is answered 202 — recorded for a\n" +
@@ -547,8 +561,9 @@ func newSourceScopeGuardPosturesCmd(client datalaneClient) *cobra.Command {
 
 func newSourceScopePostureRequestsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "posture-requests",
-		Short: "Review the dual-control queue of proposed relaxations",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "posture-requests",
+		Short:       "Review the dual-control queue of proposed relaxations",
 		Long: "Every relaxation of an existing confinement lands here as a pending request. It\n" +
 			"is the second half of the dual control: the proposer rides the editor-tier write\n" +
 			"path, the decision is admin-tier, and one actor can never do both.",
@@ -562,9 +577,10 @@ func newSourceScopePostureRequestsCmd(client datalaneClient) *cobra.Command {
 		sourceRef  string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List posture-change requests",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List posture-change requests",
 		Long: datalaneListLong("List posture-change requests, optionally narrowed by status, source type or\n" +
 			"source reference. This is the reviewer's queue."),
 		Example: `  olivares sourcescope posture-requests ls --status pending
@@ -597,8 +613,9 @@ func newSourceScopePostureRequestsCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&sourceRef, "source-ref", "", "only requests for this source reference")
 
 	get := &cobra.Command{
-		Use:   "get <request-id>",
-		Short: "Show one posture-change request",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <request-id>",
+		Short:       "Show one posture-change request",
 		Long: "Show one posture-change request in full, including the reason recorded for the\n" +
 			"approver and the binding it targets.",
 		Example: "  olivares sourcescope posture-requests get pr_123",
@@ -620,11 +637,11 @@ func newSourceScopePostureRequestsCmd(client datalaneClient) *cobra.Command {
 	}
 
 	cmd.AddCommand(list, get,
-		newSourceScopePostureDecisionCmd(client, "approve",
+		newSourceScopePostureDecisionCmd(client, "approve", "delete",
 			"Approve a pending relaxation and apply it",
 			"Approve a pending posture change. THIS APPLIES THE RELAXATION: from here the\nsource is reachable by whoever the proposal admitted. It is admin-tier and\nseparated from the proposer by design, so it asks for confirmation.",
 			true),
-		newSourceScopePostureDecisionCmd(client, "reject",
+		newSourceScopePostureDecisionCmd(client, "reject", "write",
 			"Reject a pending relaxation, changing nothing",
 			"Reject a pending posture change. Nothing is applied and the confinement stays as\nit is; the request keeps its record of who decided.",
 			false),
@@ -632,14 +649,15 @@ func newSourceScopePostureRequestsCmd(client datalaneClient) *cobra.Command {
 	return cmd
 }
 
-func newSourceScopePostureDecisionCmd(client datalaneClient, verb, short, long string, destructive bool) *cobra.Command {
+func newSourceScopePostureDecisionCmd(client datalaneClient, verb, changesData, short, long string, destructive bool) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     verb + " <request-id>",
-		Short:   short,
-		Long:    long,
-		Example: fmt.Sprintf("  olivares sourcescope posture-requests %s pr_123", verb),
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": changesData},
+		Use:         verb + " <request-id>",
+		Short:       short,
+		Long:        long,
+		Example:     fmt.Sprintf("  olivares sourcescope posture-requests %s pr_123", verb),
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if destructive {
 				if err := confirmDestructive(cmd, yes, fmt.Sprintf(
@@ -679,8 +697,9 @@ func newSourceScopeResolveCmd(client datalaneClient) *cobra.Command {
 		actorRef   string
 	)
 	cmd := &cobra.Command{
-		Use:   "resolve",
-		Short: "Preview what one actor would resolve for one source",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "resolve",
+		Short:       "Preview what one actor would resolve for one source",
 		Long: "Ask the resolver what a session or agent WOULD get for a source, without\n" +
 			"performing the access. It is the read-only preview an operator uses to check a\n" +
 			"binding change before making it, and it reports the decision and the rule that\n" +
@@ -707,7 +726,7 @@ func newSourceScopeResolveCmd(client datalaneClient) *cobra.Command {
 			return datalaneResult(cmd, raw, code, "")
 		},
 	}
-	cmd.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge or data")
+	cmd.Flags().StringVar(&sourceType, "source-type", "", "mcp, model, provider, knowledge, data, profile or tool")
 	cmd.Flags().StringVar(&sourceRef, "source-ref", "", "reference of the source to resolve")
 	cmd.Flags().StringVar(&actorKind, "actor-kind", "", "session or agent")
 	cmd.Flags().StringVar(&actorRef, "actor-ref", "", "reference of the actor to resolve for")
@@ -741,8 +760,9 @@ func (f *sourcescopeAssignmentFlags) body() sourcescopeAssignmentBody {
 
 func newSourceScopeAssignmentsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "assignments",
-		Short: "Assign global connectors to workspaces",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "assignments",
+		Short:       "Assign global connectors to workspaces",
 		Long: "An assignment confines a global connector to the workspaces it names. With NO\n" +
 			"assignment rows a connector is visible tenant-wide, so the first assignment\n" +
 			"tightens and the last deletion widens.",
@@ -755,9 +775,10 @@ func newSourceScopeAssignmentsCmd(client datalaneClient) *cobra.Command {
 		workspaceRef  string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List connector-to-workspace assignments",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List connector-to-workspace assignments",
 		Long: datalaneListLong("List assignments, optionally narrowed to one connector or one workspace.\n" +
 			"An empty list does NOT mean no connector is reachable: with no rows at all,\n" +
 			"connectors are globally visible."),
@@ -789,11 +810,12 @@ func newSourceScopeAssignmentsCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&workspaceRef, "workspace-ref", "", "only assignments to this workspace")
 
 	get := &cobra.Command{
-		Use:     "get <assignment-id>",
-		Short:   "Show one assignment",
-		Long:    "Show one connector-to-workspace assignment with its mode and enabled state.",
-		Example: "  olivares sourcescope assignments get asg_123",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <assignment-id>",
+		Short:       "Show one assignment",
+		Long:        "Show one connector-to-workspace assignment with its mode and enabled state.",
+		Example:     "  olivares sourcescope assignments get asg_123",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := datalanePath("assignments", args[0])
 			if err != nil {
@@ -812,8 +834,9 @@ func newSourceScopeAssignmentsCmd(client datalaneClient) *cobra.Command {
 
 	var createFields sourcescopeAssignmentFlags
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Assign a connector to a workspace",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Assign a connector to a workspace",
 		Long: "Assign a global connector to a workspace. An ENABLED assignment added to an\n" +
 			"already-assigned connector admits a workspace that could not reach it a moment\n" +
 			"earlier, so it is answered 202 and proposed. The FIRST assignment — the one that\n" +
@@ -843,8 +866,9 @@ func newSourceScopeAssignmentsCmd(client datalaneClient) *cobra.Command {
 		replace   bool
 	)
 	set := &cobra.Command{
-		Use:   "set <assignment-id>",
-		Short: "Replace an assignment",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <assignment-id>",
+		Short:       "Replace an assignment",
 		Long: "Replace an assignment.\n\n" +
 			"THIS REPLACES, IT DOES NOT PATCH: --enabled and --note are written from the\n" +
 			"request, so leaving one out resets it. The command refuses a partial invocation\n" +
@@ -885,9 +909,10 @@ func newSourceScopeAssignmentsCmd(client datalaneClient) *cobra.Command {
 
 	var yes bool
 	remove := &cobra.Command{
-		Use:     "rm <assignment-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete an assignment",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <assignment-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete an assignment",
 		Long: "Delete an assignment. Deleting the LAST row for a connector makes it visible in\n" +
 			"EVERY workspace again — unassigned connectors are globally visible — so this is\n" +
 			"the widening direction and it asks for confirmation.\n\n" +
@@ -981,9 +1006,10 @@ func (f *sourcescopeWsConnectorFlags) body(cmd *cobra.Command) (sourcescopeWsCon
 
 func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "workspace-connectors",
-		Aliases: []string{"ws-connectors"},
-		Short:   "Manage connectors that belong to one workspace",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "workspace-connectors",
+		Aliases:     []string{"ws-connectors"},
+		Short:       "Manage connectors that belong to one workspace",
 		Long: "A workspace connector is owned by a single workspace rather than by the tenant.\n" +
 			"Its secrets are written, never read back: the API returns configuration and\n" +
 			"status, never the credential.",
@@ -996,10 +1022,11 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 		kind         string
 	)
 	list := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List workspace connectors",
-		Long:    datalaneListLong("List workspace-scoped connectors, optionally narrowed to one workspace or kind."),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List workspace connectors",
+		Long:        datalaneListLong("List workspace-scoped connectors, optionally narrowed to one workspace or kind."),
 		Example: `  olivares sourcescope workspace-connectors ls
   olivares sourcescope workspace-connectors ls --workspace-ref ws-1 --kind github`,
 		Args: cobra.NoArgs,
@@ -1028,8 +1055,9 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 	list.Flags().StringVar(&kind, "kind", "", "only connectors of this kind")
 
 	get := &cobra.Command{
-		Use:   "get <connector-id>",
-		Short: "Show one workspace connector",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <connector-id>",
+		Short:       "Show one workspace connector",
 		Long: "Show one workspace connector: its kind, workspace, configuration and status. The\n" +
 			"secrets are never returned.",
 		Example: "  olivares sourcescope workspace-connectors get wc_123",
@@ -1052,8 +1080,9 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 
 	var createFields sourcescopeWsConnectorFlags
 	create := &cobra.Command{
-		Use:   "create",
-		Short: "Declare a workspace connector",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Declare a workspace connector",
 		Long: "Declare a connector owned by one workspace.\n\n" +
 			"Secrets are supplied ONLY through --secrets-file (a JSON object of string\n" +
 			"values, - for stdin). There is no --secret flag on purpose: a credential passed\n" +
@@ -1087,8 +1116,9 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 		replace   bool
 	)
 	set := &cobra.Command{
-		Use:   "set <connector-id>",
-		Short: "Replace a workspace connector",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <connector-id>",
+		Short:       "Replace a workspace connector",
 		Long: "Replace a workspace connector.\n\n" +
 			"THIS REPLACES, IT DOES NOT PATCH: --config, --poll-seconds, --enabled and\n" +
 			"--note are written from the request, so leaving one out resets it — an omitted\n" +
@@ -1134,9 +1164,10 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 
 	var yes bool
 	remove := &cobra.Command{
-		Use:     "rm <connector-id>",
-		Aliases: []string{"delete"},
-		Short:   "Delete a workspace connector",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <connector-id>",
+		Aliases:     []string{"delete"},
+		Short:       "Delete a workspace connector",
 		Long: "Delete a workspace connector and the stored secrets that belong to it. Anything\n" +
 			"ingesting through it stops.\n\n" +
 			"An endpoint answering 204 has no body: JSON output is then the CLI's own\n" +

@@ -47,7 +47,7 @@
     "provenance": "来源",
     "control": "可控程度",
     "instance": "实例",
-    "instanceUnknown": "提供方配置名称未知"
+    "instanceUnknown": "提供商配置名称未知"
   },
   "state": {
     "active": "运行中",
@@ -122,13 +122,13 @@
     "table": "表格"
   },
   "partial": {
-    "noLiveRead": "未显示被观察的会话：你的角色不包含 sessions:live:read。下面这些已启动的会话只是能读到的部分，不是全貌。",
-    "noRunRead": "未显示已启动的会话：你的角色不包含 sessions:run:read。下面标为“已发现”的会话仍可能由 Olivares 启动——此列表无法核对。",
-    "truncated": "这是最近的一页，不是全部资产。此处的来源只在已加载的数据上比对，因此运行记录已滚出该页的会话可能显示为“已发现”；打开会话，让引擎来回答。",
+    "noLiveRead": "未显示被观察的会话：你的角色无法读取它们。下面这些已启动的会话只是能读到的部分，不是全貌。",
+    "noRunRead": "未显示已启动的会话：你的角色无法读取它们。下面标为“已发现”的会话仍可能由 Olivares 启动——此列表无法核对。",
+    "truncated": "这是最近的一页，不是整个资产域。此处的来源只在已加载的数据上比对，因此运行记录已滚出该页的会话可能显示为“已发现”；打开会话，让引擎来回答。",
     "runLookupFailed": "已启动的那一半读取失败：运行查询出错。下面的行是被观察的那一半返回的内容；来源标记为“未读取”，而不是猜测。",
     "liveLookupFailed": "被观察的那一半读取失败：实时查询出错。下面的行是已启动的会话；遥测列为空是因为没能读到，而不是因为没有。",
-    "noProfileRead": "未显示提供方配置名称：你的角色不包含 sessions:profile:read。“实例”列改为显示每行的配置引用。",
-    "profileLookupFailed": "未能读取提供方配置名称：配置查询出错。“实例”列改为显示每行的配置引用。"
+    "noProfileRead": "未显示提供商配置名称：你的角色无法读取配置。“实例”列改为显示每行的配置引用。",
+    "profileLookupFailed": "未能读取提供商配置名称：配置查询出错。“实例”列改为显示每行的配置引用。"
   },
   "move": {
     "open": "移动到…",
@@ -155,7 +155,10 @@
     "firstTurn": "第一条消息",
     "close": "关闭",
     "profilesFailed": "无法列出账户。",
-    "profilesDenied": "你无权列出账户，因此无法选择。"
+    "profilesDenied": "你无权列出账户，因此无法选择。",
+    "stopsFirst": "此会话仍在运行：将先停止，再移动。",
+    "handoffStopsFirst": "此会话仍在运行：将先停止，再交接。",
+    "stoppedNotMoved": "会话已停止，但移动失败。请再次尝试移动。"
   },
   "card": {
     "tabs": {
@@ -170,7 +173,7 @@
       "discovered": "已发现",
       "launchedExplain": "有一条启动记录把该会话与 Olivares 关联起来：是它启动的。现在能对它做什么见下方——启动过并不等于持有一个存活的进程。",
       "discoveredExplain": "没有任何启动记录与之关联，因此就本平面能够证实的范围而言，Olivares 并未启动它。可以读取和审计，但无法操控。",
-      "unknownExplain": "无法核对该会话是否由 Olivares 启动：缺少 sessions:run:read 权限，或查询失败。这是“未读取”，不是“未启动”。",
+      "unknownExplain": "无法核对该会话是否由 Olivares 启动：你的角色无法读取已启动的会话，或查询失败。这是“未读取”，不是“未启动”。",
       "multipleRuns": "有 {{n}} 个运行在驱动该会话",
       "unknown": "来源未读取"
     },
@@ -182,7 +185,7 @@
       "fullExplain": "Olivares 持有该进程并桥接其输入输出：可观察、可操控、可停止。",
       "lifecycleExplain": "只有启动与停止，中间没有别的：要么 Olivares 持有进程但不持有其输入输出，要么进程已停止且可以恢复。",
       "observeExplain": "Olivares 没有该会话的任何进程。可以读取和审计；停止它不是本平面能做到的事。",
-      "unknownExplain": "运维那一半未被读取（sessions:run:read），以下仅是从被观察的那一半所能看到的内容。"
+      "unknownExplain": "运维那一半未被读取（你的角色无法读取已启动的会话），以下仅是从被观察的那一半所能看到的内容。"
     },
     "cap": {
       "watch": "查看实时遥测与时间线",
@@ -226,7 +229,7 @@
     "notDeclared": "未声明",
     "unclaimed": "观察到一个未持有有效认领的会话在活动。引擎如实上报；这与“可能的规避”不是同一个信号。",
     "relayedIO": "其输入输出被转发到 Anthropic 云端，因此 Olivares 无法在此展示。生命周期控制依然有效。",
-    "observedNotRead": "被观察的那一半未被读取：你的角色不包含 sessions:live:read。",
+    "observedNotRead": "被观察的那一半未被读取：你的角色无法读取被观察的会话。",
     "noObservationYet": "此会话尚无活动。",
     "failureReasonMissing": "此会话失败了。服务器未报告原因。",
     "hostIsolationRemedy": "请让服务器管理员允许非特权用户和网络命名空间以及 Landlock，然后重新启动会话。",
@@ -256,7 +259,8 @@
       "title": "也通过已绑定来源观测到",
       "explain": "这些行与此运行共享配置档案和提供商会话 ID，但它们经由来源到达，而非 Olivares 持有的进程。它们显示在运行旁边，绝不与其合并。",
       "open": "打开"
-    }
+    },
+    "idlePolicyStopped": "已停止以释放内存。"
   },
   "facet": {
     "observed": "观察态：{{state}}",
@@ -284,9 +288,15 @@
     "unpin": "取消固定",
     "pinnedMark": "已固定",
     "rowMenu": "{{name}} 的操作",
-    "noObservation": "尚未收到该会话的遥测数据。"
+    "noObservation": "尚未收到该会话的遥测数据。",
+    "pinFailed": "未能更改固定状态。"
   },
   "surface": {
+    "openBeside": "在旁边打开",
+    "closeBeside": "关闭旁边的会话",
+    "currentSession": "当前会话",
+    "besideSession": "旁边的会话",
+    "switchSession": "切换会话",
     "closeContext": "关闭上下文",
     "backTo": "返回{{pane}}",
     "pane": {
@@ -307,10 +317,20 @@
     "mode": "模式：{{mode}}",
     "modeTitle": "{{tool}} 报告：{{mode}}",
     "theTool": "该工具",
+    "toolWord": {
+      "bypassPermissions": "从不请求许可",
+      "untrusted": "在执行不信任的命令前询问",
+      "onFailure": "命令失败时询问",
+      "onRequest": "需要时询问",
+      "never": "从不请求许可",
+      "granular": "按自身规则询问"
+    },
     "usageLabel": "本会话的用量",
     "tokens": "输入 {{input}} / 输出 {{output}} 个令牌",
     "costTitle": "这是估算，不是发票：工具自身的数字，或工具未定价的轮次的标价",
     "costUnknown": "未报告费用",
+    "costPartial": "{{cost}}（部分）",
+    "viewCosts": "查看费用",
     "planLabel": "本会话登录的套餐用量窗口",
     "planNotRead": "未读取套餐窗口",
     "resets": "{{when}}重置（{{at}}）",
@@ -331,6 +351,7 @@
     "forbiddenDescription": "您的角色不包含读取会话遥测数据的权限。",
     "errorTitle": "无法读取证据",
     "errorDescription": "时间线读取没有响应。此处若显示空列表，等于说该会话什么都没做，而这是另一回事。",
+    "repeat": "×{{count}}",
     "atLeast_other": "至少 {{count}} 条",
     "touches_other": "{{count}} 条"
   },
@@ -342,8 +363,8 @@
     "tenant": "组织",
     "workspace": "工作区",
     "environment": "环境",
-    "provider": "提供方",
-    "profile": "提供方配置",
+    "provider": "提供商",
+    "profile": "提供商配置",
     "traceTitle": "追踪",
     "traceHint": "该会话的各种引用标识，以及控制平面对它的记录。",
     "sessionRef": "会话引用",
@@ -366,9 +387,9 @@
     "copyRef": "复制 {{value}}",
     "identifiersTitle": "标识符",
     "identifiersHint": "供复制的引用。它们不是范围行上的名称。",
-    "wireTitle": "线路",
-    "wireHint": "所选行的原始帧。默认视图是对话。",
-    "wireEmpty": "在对话中选择一行以查看其原始帧。",
+    "wireTitle": "所选行",
+    "wireHint": "所选行，与工具发送时完全一致。对话是默认视图。",
+    "wireEmpty": "在对话中选择一行，即可查看工具发送时的原样内容。",
     "thisNode": "本节点",
     "workTitle": "会话工作权限",
     "workHint": "记录于上次启动。每项操作都会检查当前授权。",
@@ -388,8 +409,8 @@
     "workActions": "授予的操作",
     "notRecorded": "未记录",
     "workRoles": {
-      "worker": "工作代理",
-      "orchestrator": "编排代理"
+      "worker": "工作智能体",
+      "orchestrator": "编排智能体"
     },
     "details": "详情",
     "echoes": "也记录为",
@@ -428,8 +449,10 @@
     },
     "turnFailed": "本轮失败：{{message}}",
     "retrying": "正在重试（{{count}}）：{{message}}",
-    "keyRefused": "提供方拒绝了该 API 密钥。请在“提供方”中替换它。",
+    "keyRefused": "提供商拒绝了该 API 密钥。请在“提供商”中替换它。",
     "output": "工具输出（{{count}}）：{{first}}",
+    "started": "会话已开始",
+    "startedTools_other": "{{count}} 个工具",
     "notSent": "未发送：{{reason}}",
     "waitingApproval": "启动获批且会话开始后发送。",
     "workingFolder": "工作文件夹：{{cwd}}",
@@ -440,7 +463,7 @@
   "changes": {
     "title": "{{folder}} 中的更改",
     "titleNoFolder": "更改",
-    "hint": "自本次会话开始以来，代理在其文件夹中更改的文件。",
+    "hint": "自本次会话开始以来，智能体在其文件夹中更改的文件。",
     "empty": "还没有文件被更改。",
     "none": "此会话在此服务器上没有文件夹。",
     "loading": "正在读取文件夹…",
@@ -498,6 +521,7 @@
   },
   "list": {
     "group": {
+      "pinned": "已固定",
       "attention": "需要你处理",
       "active": "运行中",
       "settled": "更早"
@@ -513,6 +537,8 @@
     "terminalHint": "在终端中操作同一个会话。"
   },
   "activity": {
+    "workflowPhases": "阶段",
+    "workflowProgress": "{{total}} 个智能体中 {{done}} 个已完成",
     "empty": "暂无内容。工具的任务列表、它启动的智能体、在后台运行的工作以及它修改的文件，会在它工作时显示在这里。",
     "missing": "此会话的记录不在其账户主目录中，因此无法显示其工具所做的事。",
     "failed": "无法读取活动。",
@@ -532,6 +558,8 @@
     "context": "上下文",
     "model": "模型",
     "tokens": "上下文中",
+    "contextUsage": "{{tokens}} 个 token · {{window}} 的 {{percent}}",
+    "contextUnknown": "{{tokens}} 个 token · 窗口未知",
     "compactions": "压缩",
     "compactedTimes_other": "已压缩 {{n}} 次",
     "neverCompacted": "未压缩",
@@ -562,5 +590,36 @@
       "tool": "工具",
       "result": "结果"
     }
+  },
+  "messages": {
+    "title": "消息",
+    "rail": "已发送的消息",
+    "mark": "第 {{n}} 条消息，{{time}}：{{line}}",
+    "search": "搜索会话消息",
+    "searchHint": "单词或短语",
+    "goToTime": "转到日期和时间",
+    "go": "转到",
+    "includeAnswers": "包含回答",
+    "count": "共 {{total}} 条消息，显示 {{shown}} 条",
+    "none": "没有匹配的消息。",
+    "loading": "正在读取消息…",
+    "older": "显示更早的消息",
+    "answer": "回答",
+    "timeNone": "该时间之后没有消息。",
+    "error": "无法读取消息。",
+    "pending": "工具尚未写入此会话的记录。",
+    "missing": "此会话的记录不在其账户文件夹中，因此无法显示其消息。",
+    "jumped": "已跳转到第 {{n}} 条消息。",
+    "farNotice": "第 {{n}} 条消息显示在下方：它早于屏幕上的对话。",
+    "farTitle": "较早的消息",
+    "farBody": "第 {{n}} 条消息，{{time}}。它早于屏幕上的对话。",
+    "close": "关闭",
+    "refused": "此会话已获得机密，因此无法列出其消息。其实时输出仍会显示。",
+    "unreadable": "有 {{n}} 条记录无法读取。"
+  },
+  "limit": {
+    "usageUntil": "额度已用完，{{time}} 恢复",
+    "usage": "额度已用完",
+    "rate": "提供商正在限制请求。请稍后再试。"
   }
 }

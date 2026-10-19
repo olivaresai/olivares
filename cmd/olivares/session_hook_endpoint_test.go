@@ -115,10 +115,7 @@ func endpointSessionHook(t *testing.T, eng *engine, run string) (string, string,
 	if err != nil {
 		t.Fatal(err)
 	}
-	// No process heartbeats this fixture's claim, so its lease must outlive the test: the
-	// first session is checked again after a second engine boots in its own process,
-	// which takes more than a minute under the race detector.
-	lease, err := eng.sessionsMod.Claim(ctx, tenant, sid, principal.Actor(), 10*time.Minute)
+	lease, err := eng.sessionsMod.Claim(ctx, tenant, sid, principal.Actor(), time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,13 +164,22 @@ func endpointSessionHook(t *testing.T, eng *engine, run string) (string, string,
 	return endpoint, token, intent
 }
 
+// endpointHookDeadline bounds the whole hook helper (stdin, path canonicalization, HTTP): a
+// timeout answers deny, so a deadline a loaded runner overruns reads as "the engine did
+// not allow". The checks here are about which engine answers, not how fast, so the margin
+// is twice the product default of 5s.
+const endpointHookDeadline = 10 * time.Second
+
 func callEndpointHook(t *testing.T, endpoint, token string, tenant model.TenantID) string {
 	t.Helper()
 	body := []byte(`{"hook_event_name":"PreToolUse","session_id":"vendor-session","tool_name":"Read","tool_use_id":"endpoint-proof","tool_input":{"file_path":"/tmp/endpoint-proof"}}`)
 	var out bytes.Buffer
-	if err := claude.RunHookClient(context.Background(), bytes.NewReader(body), &out, claude.HookClientConfig{Endpoint: endpoint, Token: token, Tenant: tenant.String(), Timeout: time.Second}); err != nil {
+	if err := claude.RunHookClient(context.Background(), bytes.NewReader(body), &out, claude.HookClientConfig{Endpoint: endpoint, Token: token, Tenant: tenant.String(), Timeout: endpointHookDeadline}); err != nil {
 		t.Fatal(err)
 	}
+	// The answer carries the reason for a deny (a timed-out hook is denied with one), so a
+	// failure of the caller's check says why the engine did not allow.
+	t.Logf("hook answer: %s", out.String())
 	var answer struct {
 		Output struct {
 			Decision string `json:"permissionDecision"`

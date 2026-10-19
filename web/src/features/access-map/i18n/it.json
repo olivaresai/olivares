@@ -1,0 +1,194 @@
+{
+  "title": "Mappa degli accessi",
+  "subtitle": "Cosa legge e scrive ogni agente nel tuo parco: le origini a sinistra, le risorse che toccano a destra, R/RW per colore.",
+  "auditedNote": "Aprire questa mappa è un'azione privilegiata e tracciata nell'audit. Solo per revisione difensiva: mostra relazioni, mai SQL, contenuti o segreti.",
+  "refresh": "Aggiorna",
+  "stats": {
+    "origins": "Origini",
+    "resources": "Risorse",
+    "read": "Lettura",
+    "write": "Scrittura / RW",
+    "approximate": "Approssimati",
+    "unexpected": "Inattesi",
+    "truncated": "Mostrati i primi {{n}}",
+    "truncatedHint": "Il parco ha più collegamenti di quelli mostrati; restringi con i filtri o espandi un nodo per vedere i suoi vicini."
+  },
+  "webgl": {
+    "badge": "Vista ad alta densità",
+    "hint": "Mostrati {{n}} nodi: passaggio al renderer WebGL accelerato per gestire volumi elevati.",
+    "clustered": "A questa scala le risorse sono raggruppate per host; un gruppo si legge come “host (N)”. Nessuna segnalazione viene nascosta: ogni gruppo con accessi inattesi è contrassegnato."
+  },
+  "filters": {
+    "search": "Cerca origine, risorsa, strumento…",
+    "mode": "Modalità di accesso",
+    "attributedOnly": "Solo attribuiti",
+    "attributedHint": "Nascondi i collegamenti approssimati (dedotti) e mostra solo gli accessi attribuiti con certezza.",
+    "signal": "Segnale",
+    "allSignals": "Tutti i segnali",
+    "clear": "Azzera",
+    "drift": "Consentito e osservato",
+    "driftHint": "Sovrapponi la differenza di privilegio minimo: evidenzia gli accessi inattesi (osservati, non consentiti) e le concessioni inutilizzate.",
+    "driftForbidden": "Il tuo ruolo non può vedere il drift."
+  },
+  "legend": {
+    "read": "Lettura",
+    "write": "Scrittura",
+    "writeRw": "Scrittura / RW",
+    "unknown": "Sconosciuto",
+    "approximate": "Approssimato",
+    "unexpected": "Accesso inatteso",
+    "pending": "In sospeso (non deciso)",
+    "unused": "Concessione inutilizzata"
+  },
+  "drift": {
+    "title": "Drift del privilegio minimo",
+    "cleanTitle": "Nessun drift trovato",
+    "cleanHint": "Ogni accesso osservato è consentito e ogni concessione è in uso.",
+    "unexpectedTitle": "Accesso inatteso",
+    "unexpectedHint": "Osservato ma NON consentito: la segnalazione a priorità più alta.",
+    "pendingTitle": "In attesa di riconciliazione",
+    "pendingHint": "Osservato senza una concessione corrispondente, e il motore non può ancora decidere se sia consentito: un collegamento agente-identità non risolto, una modalità di concessione sconosciuta o una modalità osservata non decidibile. Non dice quale, quindi non è ancora una violazione certa.",
+    "unusedTitle": "Concessioni inutilizzate",
+    "unusedHint": "Consentite ma mai osservate: provisioning eccessivo da ridurre.",
+    "forbiddenTitle": "Drift non autorizzato",
+    "forbiddenHint": "Il tuo ruolo può vedere il grafo ma non la differenza tra ciò che è consentito e ciò che è stato osservato.",
+    "partial": "Risultato parziale: il motore ha riconciliato questa differenza su una finestra di drift troncata, quindi questi conteggi non coprono l'intero parco e un collegamento che qui manca potrebbe semplicemente essere oltre il limite.",
+    "emptyWindowTitle": "Nessuna segnalazione nella finestra analizzata",
+    "emptyWindowHint": "La scansione si è fermata al limite di pagina, quindi questa non è un'affermazione sull'intero parco.",
+    "scopeHint": "L'elenco del drift copre l'intera organizzazione; i filtri della mappa non si applicano"
+  },
+  "detail": {
+    "edgeTitle": "Collegamento di accesso",
+    "nodeSubtitle": "Un nodo del grafo: espandilo per vedere a cosa è collegato.",
+    "ref": "Riferimento",
+    "id": "ID",
+    "expand": "Espandi i vicini",
+    "unexpectedFlag": "Osservato senza una concessione corrispondente",
+    "origin": "Origine",
+    "kind": "Tipo",
+    "bridge": "Ponte",
+    "unbridged": "Agente non risolto",
+    "resource": "Risorsa",
+    "coverage": "Copertura",
+    "tool": "Strumento",
+    "attribution": "Attribuzione per agente",
+    "signal": "Segnale e affidabilità",
+    "confidence": "Affidabilità",
+    "sources": "Sorgenti",
+    "reason": "Attribuzione",
+    "diff": "Consentito e osservato",
+    "observed": "Osservato",
+    "permitted": "Consentito",
+    "activity": "Attività",
+    "occurrences": "Occorrenze",
+    "firstSeen": "Prima occorrenza",
+    "lastSeen": "Ultima occorrenza",
+    "yes": "Sì",
+    "no": "No",
+    "minimalData": "Sono mostrati solo i metadati. Per progetto il motore non porta mai qui SQL, contenuti o segreti (dati minimi)."
+  },
+  "authority": {
+    "title": "Autorità e passo successivo",
+    "declaredBy": "Segnali su questo collegamento:",
+    "multiple": "Qui è registrata più di una autorizzazione indipendente. Intervenire su una lascia in piedi l'altra.",
+    "noRetraction": "La mappa registra i segnali e non li ritira mai, quindi questo collegamento può persistere dopo che hai cambiato la sorgente. Ricontrolla invece di presumere.",
+    "explain": {
+      "sourceScope": "Un'associazione sorgente-ambito ha registrato l'autorizzazione per questo collegamento. È in quel piano di associazioni che viene configurata.",
+      "declared": "Per questo collegamento è stato registrato un segnale di autorizzazione dichiarata. La mappa non indica quale sistema lo ha emesso (un identity provider, un deployment, oppure l'ACL di un repository o di un secret store), quindi non può indicartene uno.",
+      "unattributed": "Questo accesso è consentito, ma sul collegamento non c'è nessun segnale che indichi un'autorizzazione. Qui non c'è nulla che identifichi il sistema proprietario, e indovinarne uno sarebbe peggio che dirlo.",
+      "unpermitted": "In questa mappa non c'è nessun segnale di autorizzazione per questo accesso. È ciò che lo rende una segnalazione, ma non è la prova che nulla lo consenta: un resolver attivo può consentire accessi che questa mappa non vede mai.",
+      "undetermined": "Né osservato né consentito. È una capacità dichiarata, non un'evidenza di accesso, quindi non c'è nulla da correggere.",
+      "undecided": "Per ora non si può decidere se questo collegamento sia consentito, quindi non è una violazione confermata. Il motore non dice quale condizione resti irrisolta (un collegamento agente-identità, una modalità di concessione sconosciuta o una modalità osservata non decidibile), quindi non viene proposta nessuna correzione specifica.",
+      "unchecked": "Questa mappa mostra l'accesso senza segnale di autorizzazione, ma lo stato di drift di questo collegamento non è stato stabilito qui. Solo la differenza di privilegio minimo dice se il motore ha confermato una segnalazione o sta ancora riconciliando, e questa scheda non ha una sua risposta. Fino ad allora non è una segnalazione, e nemmeno un collegamento pulito.",
+      "reconciled": "Il motore ha letto la differenza di privilegio minimo e non vi ha elencato questo accesso, quindi non è una segnalazione confermata e qui non c'è nulla da correggere. Ciò che la mappa non dice è PERCHÉ: una concessione che lo copre può essere registrata su un altro collegamento, oppure un'autorizzazione può aver raggiunto questo; il grafo e la differenza sono letture separate, quindi questa scheda non può dirti quale."
+    },
+    "target": {
+      "sourceBindings": "Apri le associazioni delle sorgenti",
+      "nhiRoster": "Apri le identità"
+    },
+    "needsPermission": "{{action}} richiede {{permission}} per questo; questo ruolo non ce l'ha.",
+    "recheck": "Ricontrolla il drift",
+    "verdict": {
+      "clear": "Ricontrollato: questo collegamento non è più nell'insieme del drift. La spiegazione sopra descrive lo stato precedente a quel controllo.",
+      "present": "Ricontrollato: questo collegamento è ancora nell'insieme del drift.",
+      "unknown": "Impossibile confermare: la lettura del drift non è tornata, oppure ha coperto solo una parte del parco. Nessuno dei due casi equivale a pulito."
+    },
+    "checkDrift": "Leggi il drift per questo collegamento",
+    "closes": "Registrare un'autorizzazione è ciò che chiude questa segnalazione, anche se non necessariamente su questo collegamento: una concessione sull'identità a cui l'accesso si risolve la chiude da un altro. La proiezione sorgente-ambito è best-effort, e le associazioni di gruppo, ruolo e cartella applicano il controllo senza proiettare nulla sulla mappa, quindi può esistere un'autorizzazione reale che questa differenza non vede mai. Nemmeno interrompere l'accesso la chiude: un'osservazione non viene mai ritirata. Ricontrolla invece di presumere.",
+    "cannotClose": "Eliminare la concessione non cancellerà il flag di consentito su questo collegamento: la mappa non ritira mai un'autorizzazione, quindi questa segnalazione non sparisce per via di quell'eliminazione. (Può comunque uscire dalla differenza per un motivo non correlato, per esempio perché l'accesso viene finalmente osservato.) Verifica la rimozione sulla superficie proprietaria, non qui.",
+    "signalsNotFused": "Questo collegamento porta solo il suo segnale più recente: l'insieme di conferma non era incluso in questa risposta, quindi possono esistere altri segnali, comprese altre autorizzazioni, che qui non sono mostrati."
+  },
+  "kinds": {
+    "agent": "Agente",
+    "session": "Sessione",
+    "identity": "Identità",
+    "resource": "Risorsa"
+  },
+  "coverage": {
+    "clean": "Pulita",
+    "lossy": "Con perdite",
+    "opaque": "Opaca",
+    "mixed": "Mista"
+  },
+  "coverageHint": {
+    "clean": "Acquisizione ad alta fedeltà (per es. audit SQL/oggetti/warehouse).",
+    "lossy": "Acquisizione parziale: alcuni accessi non sono classificabili.",
+    "opaque": "Non acquisibile in modo passivo (per es. Redis/SQLite).",
+    "mixed": "Fedeltà mista tra i segnali."
+  },
+  "attributionTier": {
+    "firm": "Esatta",
+    "approximate": "Approssimata",
+    "unknown": "Sconosciuta"
+  },
+  "attributionTierHint": {
+    "firm": "Legata a un solo agente tramite la sua identità o una credenziale dedicata.",
+    "approximate": "Un account condiviso: l'identità è nota, ma non è un singolo agente.",
+    "unknown": "Nessun audit per identità (per es. Redis/SQLite/D1): attribuzione non possibile."
+  },
+  "empty": {
+    "title": "Ancora nessun accesso osservato",
+    "description": "Quando i connettori segnaleranno l'attività degli agenti, qui compariranno le relazioni R/RW."
+  },
+  "list": {
+    "summary": "Mappa come elenco",
+    "hint": "Elenco navigabile da tastiera di ogni nodo di questa mappa. Selezionare una riga apre lo stesso dettaglio del grafo.",
+    "node": "Nodo",
+    "kind": "Tipo"
+  },
+  "forbidden": {
+    "title": "Mappa degli accessi non autorizzata",
+    "description": "Il tuo ruolo non include il permesso di vedere il grafo degli accessi."
+  },
+  "mobile": {
+    "title": "La mappa richiede uno schermo più largo",
+    "hint": "Apri questa vista su uno schermo più grande per il grafo R/RW interattivo."
+  },
+  "attackPaths": {
+    "chooseAgent": "Scegli un agente nel grafo per vedere i suoi percorsi di attacco.",
+    "auditedNote": "Ognuna di queste letture è sigillata nel registro di audit, come il grafo stesso.",
+    "loading": "Calcolo in corso…",
+    "error": "Non è stato possibile leggere questa analisi.",
+    "none": "Nessun percorso trovato.",
+    "weakestLink": "anello più debole:",
+    "sensitivity": "sensibilità massima",
+    "sensitivityAbsent": "non indicata",
+    "sensitivityAbsentHint": "Il motore omette questo campo quando è vuoto, quindi un valore assente NON afferma che non sia coinvolto nulla di sensibile.",
+    "kind": {
+      "reachability": "Cosa può raggiungere",
+      "escalation": "Dove potrebbe scalare i privilegi",
+      "exfil": "Percorsi di esfiltrazione"
+    },
+    "attribution": {
+      "firm": "esatta",
+      "approximate": "approssimata",
+      "unknown": "non attribuita"
+    },
+    "confidence": {
+      "attributed": "attribuita",
+      "approximate": "approssimata"
+    },
+    "analyse": "Analizza i percorsi di attacco (con audit)",
+    "truncated": "Il motore ha limitato questa analisi, quindi i percorsi mostrati non sono la risposta completa."
+  }
+}

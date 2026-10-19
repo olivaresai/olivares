@@ -130,7 +130,7 @@ store/<snapshot>   the consistent store snapshot (absent in PITR mode).
 - **KMS/HSM seam.** Today the on-box keys are encrypted with the operator KEK.
   Later, the KEK can be a key wrapped by KMS/HSM (mode
   `--kek-key-file`), and checkpoints can already be signed off-box today
-  (`OLIVARES_LEDGER_SIGNER`, `docs/SECURITY-HARDENING.md`). The **per-event** signature will stay on-box by
+  (`OLIVARES_LEDGER_SIGNER`, `docs/SECURITY-HARDENING.md`; Business). The **per-event** signature will stay on-box by
   design, so the `audit-signing.key` encrypted in the bundle remains necessary.
 - **3-2-1.** A backup on the same host/cluster **is not** disaster recovery: copy the
   bundles **off-site**. `dr backup --offsite-bucket …` replicates each bundle to an
@@ -830,6 +830,6 @@ race; it is not isolation from whoever owns the filesystem.
   cross-region replication of a single tenant (the active/active tier) is future work
   that would build on this base.
 - **BYOK/HSM:** the bundle KEK wrapped by KMS/HSM; off-box checkpoints (already
-  available via `OLIVARES_LEDGER_SIGNER`).
+  available via `OLIVARES_LEDGER_SIGNER`, Business).
 - **SLO/procurement:** these RPO/RTO + the DR drill feed the SLOs and the
   procurement package (DORA/financial requires a DR plan that is defined **and tested**).

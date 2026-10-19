@@ -93,6 +93,16 @@ function commandName(command: string, args: string[]): string {
   )
 }
 
+/** A 409 that is not a stale version (code "conflict"), such as a held server name or an
+ * operator-file roster. A retry cannot fix it, so the engine's own sentence is shown. */
+function isRefusedConflict(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    err.code !== 'conflict' &&
+    err.message !== ''
+  )
+}
 /** The host of an endpoint, for messages and the default name; '' when it does not parse. */
 function hostOf(endpoint: string): string {
   try {
@@ -185,6 +195,10 @@ function GatewayInner({ titled }: { titled: boolean }) {
       setActionError('')
     },
     onError: (err) => {
+      if (isRefusedConflict(err)) {
+        setActionError(err.message)
+        return true
+      }
       if (err instanceof ApiError && err.status === 409) {
         setActionError(t('console:mcpGateway.conflict'))
         void query.refetch()
@@ -779,6 +793,11 @@ function GatewayForm({
     queryKey: [...queryKey, 'credentials', tenant],
     queryFn: ({ signal }) =>
       consoleApi.listSecrets('tenant', { signal, tenant }),
+    // The engine accepts only mcp/ names as a gateway credential.
+    select: (list) => ({
+      ...list,
+      secrets: list.secrets.filter((s) => s.name.startsWith('mcp/')),
+    }),
     gcTime: 0,
   })
   const publicKeys = jwks.trim() ? mcpPublicJWKS(jwks) : undefined
@@ -844,6 +863,10 @@ function GatewayForm({
             tools: err.tools.join(', '),
           }),
         )
+        return true
+      }
+      if (isRefusedConflict(err)) {
+        setError(err.message)
         return true
       }
       if (err instanceof ApiError && err.status === 409) {

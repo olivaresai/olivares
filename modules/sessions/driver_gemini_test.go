@@ -628,7 +628,7 @@ func TestGeminiRejectedModelAndEmptyModeListFailTheHandshake(t *testing.T) {
 	}
 }
 
-// The CLI rejects a null mcpServers; the driver connects no Olivares MCP edge.
+// The CLI rejects a null mcpServers; a launch with no session MCP server sends [].
 func TestGeminiSendsAnEmptyMCPServerListNotNull(t *testing.T) {
 	t.Parallel()
 	peer := newGeminiPeer(t)

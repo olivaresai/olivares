@@ -1,0 +1,961 @@
+{
+  "doors": {
+    "catalog": {
+      "title": "커뮤니케이션",
+      "description": "지금 읽을 수 있는 선택한 Workspace의 채널, 그 채널을 통해 보낸 직접 공지 및 귀하의 받은편지함입니다. 엔진이 모든 읽기와 모든 작업을 결정합니다."
+    },
+    "inbox": {
+      "title": "커뮤니케이션 받은편지함",
+      "description": "선택한 Workspace에서 귀하에게 보낸 메시지입니다: 각 메시지를 열고 확인하십시오."
+    },
+    "new": {
+      "title": "새 채널",
+      "description": "채널을 만들고 처음부터 누가 사용할 수 있는지 선택하십시오. 어떤 권한도 암묵적으로 부여되지 않으며, 영수증은 나중에 누가 읽을 수 있는지에 대한 지속적인 목록이 아닙니다."
+    },
+    "administration": {
+      "title": "채널 관리",
+      "description": "선택한 Workspace에서 관리할 수 있는 채널과 구성 및 부여 이력입니다. 각 변경은 귀하가 읽은 버전에만 적용됩니다. 채널을 관리한다고 해서 그 콘텐츠를 읽을 권리가 생기거나 필요한 것은 아닙니다."
+    },
+    "handoffs": {
+      "title": "핸드오프",
+      "description": "선택한 Workspace에서 귀하에게 온 작업 제안입니다. 목록에는 제안 내용이 표시되지 않습니다; 열면 컨텍스트를 읽으며 엔진이 각 수락 또는 거부를 결정합니다."
+    }
+  },
+  "tabs": {
+    "channels": "채널",
+    "inbox": "받은편지함",
+    "create": "새 채널",
+    "administration": "관리",
+    "handoffs": "핸드오프"
+  },
+  "workspace": {
+    "requiredTitle": "Workspace 선택",
+    "requiredBody": "커뮤니케이션에는 명시적인 Workspace가 필요합니다. Workspace 전환기에서 선택하십시오: 콘솔이 대신 선택하지 않으며, 선택하기 전에는 아무 요청도 하지 않습니다.",
+    "scope": "Workspace 범위"
+  },
+  "actions": {
+    "refresh": "새로 고침",
+    "loadMore": "더 보기",
+    "newChannel": "새 채널",
+    "open": "열기",
+    "openMessage": "메시지 열기",
+    "sendNotice": "공지 보내기",
+    "compose": "작성",
+    "confirm": "확인하고 보내기",
+    "ack": "확인",
+    "confirmAck": "확인 확정",
+    "reread": "다시 읽기",
+    "retrySameKey": "같은 키로 재시도",
+    "discardAndEdit": "이 의도를 버리고 편집",
+    "checkCatalog": "카탈로그 확인",
+    "addGrant": "부여 추가",
+    "addMe": "내 계정을 주체로 추가",
+    "removeGrant": "부여 제거",
+    "addBlock": "블록 추가",
+    "removeBlock": "블록 제거",
+    "useMe": "내 계정 사용",
+    "create": "채널 만들기",
+    "creating": "만드는 중…",
+    "sending": "보내는 중…",
+    "acking": "확인하는 중…",
+    "cancel": "취소",
+    "close": "닫기",
+    "back": "편집으로 돌아가기",
+    "pageSize": "페이지 크기",
+    "administer": "관리",
+    "advancing": "진행하는 중…",
+    "applyFilter": "필터 적용",
+    "applying": "적용하는 중…",
+    "confirmArchive": "확인하고 보관",
+    "confirmChanges": "변경 사항 확인",
+    "confirmGrant": "부여 확인",
+    "confirmRevoke": "취소 확인",
+    "confirmSeen": "확인: 여기까지 읽음으로 표시",
+    "discardIntent": "이 의도 버리기",
+    "grantSuccessor": "후속 부여(별도 작업)",
+    "leaveUndetermined": "미결로 두기",
+    "markSeen": "여기까지 읽음으로 표시",
+    "openBarrierDelivery": "배리어 전달 열기",
+    "refreshInbox": "받은편지함 새로 고침",
+    "rereadAndEdit": "다시 읽고 다시 편집",
+    "rereadHistory": "이력 다시 읽기",
+    "rereadToVerify": "확인을 위해 다시 읽기",
+    "revert": "편집 되돌리기",
+    "reviewChanges": "변경 사항 검토",
+    "reviewGrant": "부여 검토",
+    "revokeGeneration": "이 세대 취소",
+    "revokeThenGrant": "취소한 뒤 후속 부여",
+    "dismiss": "닫기"
+  },
+  "catalog": {
+    "title": "표시되는 채널",
+    "description": "이 주체가 지금 읽을 수 있는 활성 채널과 그 자체의 현재 로컬 비트입니다. 한 페이지는 전체 카탈로그의 검색이 아닙니다: 서버의 연속 지점에서 계속하려면 더 불러오십시오.",
+    "emptyTitle": "표시되는 채널 없음",
+    "emptyBody": "이 주체가 이 Workspace에서 읽을 수 있는 채널이 없거나 아직 존재하지 않습니다. 읽기 부여와 channel:read 권한이 있으면 여기에 표시됩니다.",
+    "truncated": "이 페이지 너머에 더 많은 채널이 있습니다",
+    "truncatedHint": "서버가 더 많은 표시 가능 채널을 보고했습니다. 연속 지점에서 계속하려면 더 불러오십시오.",
+    "columns": {
+      "name": "이름",
+      "slug": "슬러그",
+      "kind": "종류",
+      "state": "상태",
+      "protection": "보호",
+      "access": "귀하의 로컬 접근",
+      "updated": "업데이트됨"
+    },
+    "openById": "ID로 채널 열기",
+    "openByIdHint": "ID로 연 채널은 새로 읽습니다; 그 읽기는 귀하의 접근을 표시하지 않습니다."
+  },
+  "access": {
+    "label": "귀하의 로컬 접근",
+    "read": "읽기",
+    "write": "쓰기",
+    "admin": "관리",
+    "none": "로컬 비트 없음",
+    "unknown": "이 읽기에서 보고되지 않음",
+    "hint": "로컬 비트는 이 주체에 대한 채널 자체의 부여입니다. 코어 권한도 필요하며 엔진은 요청되는 순간 모든 작업을 결정합니다."
+  },
+  "kind": {
+    "coordination": "조정",
+    "work": "작업",
+    "incident": "사건",
+    "announcement": "공지",
+    "private": "비공개"
+  },
+  "sensitivity": {
+    "internal": "내부",
+    "restricted": "제한"
+  },
+  "protection": {
+    "storage": "스토리지",
+    "application_sealed": "애플리케이션 봉인"
+  },
+  "ackPolicy": {
+    "none": "없음",
+    "each_required": "각각 필요",
+    "quorum": "정족수"
+  },
+  "wake": {
+    "none": "없음",
+    "primary": "기본",
+    "all": "전체",
+    "inherit": "상속"
+  },
+  "channel": {
+    "title": "채널",
+    "description": "엔진에서 새로 읽습니다. 이 읽기에는 부여가 없으며 귀하의 접근도 없습니다.",
+    "fields": {
+      "id": "채널 ID",
+      "slug": "슬러그",
+      "name": "이름",
+      "descriptionField": "설명",
+      "kind": "종류",
+      "state": "상태",
+      "sensitivity": "민감도",
+      "protection": "콘텐츠 보호",
+      "protectionGeneration": "보호 세대",
+      "ackPolicy": "기본 확인 정책",
+      "ackTimeout": "기본 확인 제한 시간(ms)",
+      "wake": "기본 기상",
+      "retention": "보존 정책 참조",
+      "maxFanout": "최대 팬아웃",
+      "maxAutomationDepth": "최대 자동화 깊이",
+      "aclRevision": "ACL 개정",
+      "routeRevision": "라우트 개정",
+      "subscriptionRevision": "구독 개정",
+      "version": "버전",
+      "etag": "버전",
+      "created": "생성됨",
+      "updated": "업데이트됨",
+      "workspace": "Workspace",
+      "tenant": "테넌트"
+    },
+    "sendHint": {
+      "canWrite": "귀하의 로컬 쓰기 비트가 이 카탈로그 페이지에서 현재 유효하며 보내기 권한을 보유하고 있습니다. 엔진이 보낼 때 다시 결정합니다.",
+      "noWrite": "이 카탈로그 페이지는 귀하의 로컬 쓰기 비트를 보고하지 않습니다. 엔진이 보내기를 거부하므로 작성이 제공되지 않습니다.",
+      "unknown": "이 읽기는 귀하의 로컬 비트를 보고하지 않습니다. 보내기 권한은 보유하고 있으며 엔진이 보낼 때 로컬 권한을 결정합니다.",
+      "noPermission": "메시지 보내기 권한을 보유하지 않아 작성이 제공되지 않습니다."
+    }
+  },
+  "create": {
+    "title": "채널 만들기",
+    "description": "계약의 모든 필드를 사용할 수 있습니다. 초기 부여는 명시적입니다: 각 주체를 추가하고 의도한 각 비트를 표시하십시오. 귀하를 대신하여 아무것도 추가되지 않습니다.",
+    "fields": {
+      "slug": "슬러그",
+      "slugHint": "소문자, 숫자 및 하이픈; Workspace에서 고유해야 합니다.",
+      "name": "이름",
+      "descriptionField": "설명",
+      "kind": "종류",
+      "sensitivity": "민감도",
+      "protection": "콘텐츠 보호",
+      "protectionHint": "애플리케이션 봉인 콘텐츠는 한 번 기록되면 되돌릴 수 없습니다.",
+      "ackPolicy": "기본 확인 정책",
+      "ackTimeout": "기본 확인 제한 시간(ms)",
+      "wake": "기본 기상",
+      "retention": "보존 정책 참조",
+      "maxFanout": "최대 팬아웃",
+      "maxAutomationDepth": "최대 자동화 깊이",
+      "grants": "초기 부여",
+      "grantsHint": "비트가 하나 이상인 부여가 하나 이상 필요합니다. 부여는 주체와 세 개의 독립적인 비트입니다. 귀하의 계정도 다른 주체와 같습니다."
+    },
+    "grant": {
+      "subject": "주체",
+      "read": "읽기",
+      "write": "쓰기",
+      "admin": "관리",
+      "expiresAt": "만료 시각",
+      "expiresHint": "선택 사항. 만료 없는 부여는 비워 두십시오."
+    },
+    "validation": {
+      "slug": "슬러그는 소문자, 숫자 및 하이픈이어야 하며 문자나 숫자로 시작해야 합니다.",
+      "name": "이름이 필요합니다.",
+      "grants": "초기 부여가 하나 이상 필요합니다.",
+      "grantRef": "모든 부여에는 주체 참조가 필요합니다.",
+      "grantBits": "모든 부여에는 비트가 하나 이상 필요합니다.",
+      "number": "0 이상의 정수여야 합니다.",
+      "fanout": "1 이상의 정수여야 합니다."
+    },
+    "noReadHint": "channel:read 없이 channel:write를 보유하고 있습니다. 명시적 부여로 만들 수 있습니다; 카탈로그는 결과를 귀하에게 표시하지 않으며 이 영수증도 그것을 바꾸지 않습니다.",
+    "result": {
+      "title": "채널이 만들어졌습니다",
+      "body": "이것은 작업의 영수증입니다. 아래 부여는 지금 기록된 것이며, 나중에 누가 채널을 읽을 수 있는지에 대한 지속적인 목록이 아닙니다. 표시 여부는 모든 읽기에서 카탈로그가 결정합니다.",
+      "grants": "기록된 부여",
+      "noGrants": "부여 행이 반환되지 않았습니다.",
+      "auditSeq": "감사 순번",
+      "etag": "버전"
+    },
+    "unknown": {
+      "title": "결과 알 수 없음",
+      "body": "요청이 적용되었을 수도 있고 아닐 수도 있습니다: 답이 도착하기 전에 전송이 실패했습니다. 이 경로에는 멱등 키가 없으므로 콘솔이 자체적으로 재시도하지 않습니다. 다시 만들기 전에 슬러그 “{{slug}}”의 카탈로그를 확인하십시오. 읽기 접근이 없을 때 거기에 보이지 않는다고 해서 만들어지지 않았다는 증거는 아닙니다."
+    }
+  },
+  "subject": {
+    "kind": "종류",
+    "ref": "참조",
+    "kinds": {
+      "user": "사용자",
+      "user_group": "사용자 그룹",
+      "agent": "에이전트",
+      "agent_group": "에이전트 그룹",
+      "session": "세션"
+    },
+    "pickUser": "사용자 선택",
+    "pickAgent": "에이전트 선택",
+    "manualRef": "참조(ID)",
+    "userRefHint": "정규 사용자 ID입니다. 디렉터리의 사용자가 그 자체로 이 채널의 적격 수신자는 아닙니다: 엔진이 보낼 때 결정합니다.",
+    "agentRefHint": "에이전트의 신원 ID이며 행 ID나 외부 ID가 아닙니다.",
+    "sessionRefHint": "정규 세션 ID입니다. 이 콘솔에는 아직 세션 디렉터리가 없습니다; 권한 원본에서 ID를 입력하십시오.",
+    "groupRefHint": "그룹 ID입니다.",
+    "noDirectory": "디렉터리가 귀하에게 제공되지 않습니다(읽기 권한 없음). 참조를 직접 입력하십시오.",
+    "noIdentity": "주소 지정 불가 — ID 없음",
+    "truncated": "디렉터리 페이지가 불완전합니다: 불러온 것보다 많은 행이 있습니다.",
+    "loading": "디렉터리 불러오는 중…",
+    "me": "나"
+  },
+  "compose": {
+    "title": "직접 공지 보내기",
+    "description": "채널 “{{channel}}”의 사용자, 에이전트 또는 세션 하나에 보내는 공지 하나입니다. 콘텐츠는 입력된 블록이며, 엔진이 보낼 때 수신자의 현재 적격성과 부여를 확인합니다.",
+    "recipient": "수신자",
+    "subjectField": "제목",
+    "blocks": "콘텐츠 블록",
+    "block": {
+      "type": "종류",
+      "format": "형식",
+      "text": "텍스트",
+      "code": "코드",
+      "referenceKind": "참조 종류",
+      "referenceRef": "참조",
+      "referenceHash": "참조 해시",
+      "referenceHint": "참조는 독자를 위한 정보입니다. 그것으로 아무것도 가져오거나 실행하지 않습니다.",
+      "codeHint": "토큰 하나, 최대 128자입니다. 상태 블록은 다른 것을 담지 않습니다.",
+      "markdownHint": "Markdown은 작성된 그대로 저장되고 텍스트로 표시됩니다; 원시 HTML 태그는 엔진이 거부합니다."
+    },
+    "urgency": "긴급도",
+    "availableAt": "사용 가능 시각",
+    "availableAtHint": "선택적 지연 공개이며 현지 시간 기준입니다. 지금 공개하려면 비워 두십시오.",
+    "validation": {
+      "recipient": "수신자 참조가 필요합니다.",
+      "subject": "제목이 필요합니다.",
+      "blocks": "블록이 하나 이상 필요합니다.",
+      "text": "텍스트 블록에는 텍스트가 필요합니다.",
+      "reference": "참조 블록에는 종류와 참조가 필요합니다.",
+      "code": "상태 블록에는 코드가 필요합니다: 공백이 없고 최대 128자인 토큰 하나입니다.",
+      "availableAt": "사용 가능 시각을 날짜로 읽을 수 없습니다.",
+      "markdownHtml": "Markdown 블록에는 원시 HTML 태그가 없어야 합니다.",
+      "subjectLength": "제목은 최대 256바이트여야 합니다."
+    },
+    "confirm": {
+      "title": "의도 확인",
+      "body": "이 의도는 이제 불변입니다. 키가 본문과 대상을 묶습니다; 모호한 결과 후 재시도는 정확히 이것을 다시 보내며, 편집하면 새 의도가 시작됩니다.",
+      "key": "멱등 키",
+      "channel": "채널",
+      "recipient": "수신자",
+      "subject": "제목",
+      "blocksCount": "블록",
+      "urgency": "긴급도",
+      "availableAt": "사용 가능 시각"
+    },
+    "result": {
+      "appliedTitle": "공지가 공개되었습니다",
+      "appliedBody": "엔진이 메시지와 그 전달을 지금 만들었습니다.",
+      "replayedTitle": "이미 공개됨",
+      "replayedBody": "엔진이 멱등 원장에서 응답했습니다: 이 정확한 의도가 이미 적용되었습니다. 두 번 전송된 것은 없습니다.",
+      "ambiguousTitle": "결과 알 수 없음",
+      "ambiguousBody": "답이 도착하기 전에 전송이 실패하여 공지가 공개되었을 수도 아닐 수도 있습니다. 재시도는 같은 키와 본문을 다시 보냅니다: 엔진은 한 번 적용하거나 이전 결과를 재생합니다.",
+      "refusedTitle": "보내기 거부됨",
+      "refusedBody": "엔진이 이 공지를 공개하지 않았습니다. 사유는 서버의 것이며 디렉터리가 적격성을 약속하지 않았습니다."
+    }
+  },
+  "urgency": {
+    "normal": "보통",
+    "high": "높음",
+    "critical": "심각",
+    "": "기본값"
+  },
+  "blockType": {
+    "text": "텍스트",
+    "reference": "참조",
+    "status": "상태",
+    "action_ref": "작업 참조"
+  },
+  "format": {
+    "plain": "일반 텍스트",
+    "markdown": "Markdown",
+    "": "기본값"
+  },
+  "inbox": {
+    "title": "개인 받은편지함",
+    "description": "엔진이 지금 승인하는 대로 이 Workspace에서 이 주체에게 보낸 전달입니다. 페이지를 읽는다고 확인되거나 커서가 진행되지 않습니다.",
+    "emptyTitle": "전달 없음",
+    "emptyBody": "지금 이 Workspace에서 이 주체에게 보낸 것이 없습니다.",
+    "truncated": "이 페이지 너머에 더 많은 전달이 있습니다",
+    "truncatedHint": "서버가 더 많은 표시 가능 전달을 보고했습니다. 연속 지점에서 계속하려면 더 불러오십시오.",
+    "columns": {
+      "subject": "제목",
+      "sender": "보낸 사람",
+      "urgency": "긴급도",
+      "state": "전달 상태",
+      "available": "사용 가능",
+      "ackDue": "확인 기한",
+      "acknowledged": "확인됨",
+      "delivery": "전달"
+    }
+  },
+  "delivery": {
+    "title": "전달",
+    "description": "이 주체를 위해 새로 읽습니다. 확인은 방금 읽은 버전으로 하는 명시적 작업입니다.",
+    "fields": {
+      "id": "전달 ID",
+      "messageId": "메시지 ID",
+      "recipient": "수신자",
+      "state": "상태",
+      "required": "필요",
+      "seq": "전달 순번",
+      "version": "버전",
+      "available": "사용 가능 시각",
+      "firstSeen": "처음 본 시각",
+      "ackDue": "확인 기한",
+      "expires": "만료 시각",
+      "acknowledged": "확인 시각"
+    },
+    "ack": {
+      "title": "이 전달 확인",
+      "body": "읽은 버전({{etag}})과 자체 키를 보냅니다. 그동안 전달이 변경되면 엔진이 거부하며 확인 전에 다시 읽습니다; 콘솔이 버전을 바꾸지 않습니다.",
+      "key": "멱등 키",
+      "ifMatch": "읽은 버전",
+      "appliedTitle": "확인됨",
+      "appliedBody": "엔진이 확인을 기록했습니다.",
+      "replayedTitle": "이미 확인됨",
+      "replayedBody": "엔진이 이전의 동일한 확인 영수증을 재생했습니다.",
+      "late": "지연 확인: 확인 기한 후에 기록되었습니다. 효과적인 이행으로 계산되지 않습니다.",
+      "conflictTitle": "읽은 후 전달이 변경되었습니다",
+      "conflictBody": "엔진이 확인을 거부했습니다: 읽은 버전이 더 이상 현재가 아니거나 전달이 이미 확인되었습니다. 전달을 다시 읽고 여전히 해당할 때만 다시 확인하십시오. 다시 전송된 것은 없습니다.",
+      "ambiguousTitle": "결과 알 수 없음",
+      "ambiguousBody": "답이 도착하기 전에 연결이 실패했습니다. 재시도는 같은 키와 같은 버전을 보냅니다; 엔진은 한 번 적용하거나 재생하거나 현재 버전과 함께 거부합니다.",
+      "refusedTitle": "확인 거부됨",
+      "noPermission": "전달 쓰기 권한을 보유하지 않아 확인이 제공되지 않습니다."
+    },
+    "openMessageHint": "자체 읽기로 메시지를 열며 메시지 읽기 권한이 적용됩니다.",
+    "noMessageRead": "메시지 읽기 권한을 보유하지 않습니다; 이 전달이 담고 있는 범위에서만 메시지가 표시됩니다."
+  },
+  "message": {
+    "title": "메시지",
+    "description": "엔진의 정확한 매개 검사 후 메시지 읽기 권한으로 새로 읽습니다.",
+    "fields": {
+      "id": "메시지 ID",
+      "channel": "채널",
+      "thread": "스레드",
+      "state": "상태",
+      "sender": "보낸 사람",
+      "urgency": "긴급도",
+      "ackPolicy": "확인 정책",
+      "ackQuorum": "확인 정족수",
+      "available": "사용 가능 시각",
+      "published": "공개 시각",
+      "ackDue": "확인 기한",
+      "expires": "만료 시각",
+      "terminal": "종료 시각",
+      "terminalCode": "종료 코드",
+      "version": "버전"
+    }
+  },
+  "content": {
+    "title": "콘텐츠",
+    "inert": "텍스트로 표시됩니다. 참조와 작업 참조는 정보일 뿐입니다: 콘솔은 절대 가져오거나 따라가거나 실행하지 않습니다.",
+    "markdownAsText": "markdown, 텍스트로 표시됨",
+    "reference": "참조",
+    "action": "작업 참조",
+    "status": "상태",
+    "hash": "해시",
+    "empty": "(비어 있음)"
+  },
+  "fulfillment": {
+    "title": "이행",
+    "state": "상태",
+    "required": "필요",
+    "acknowledged": "확인됨",
+    "viable": "유효",
+    "unmet": "미충족",
+    "quorum": "정족수"
+  },
+  "receipt": {
+    "title": "영수증",
+    "commandId": "명령 ID",
+    "messageId": "메시지 ID",
+    "deliveryId": "전달 ID",
+    "ackId": "확인 ID",
+    "eventId": "이벤트 ID",
+    "auditSeq": "감사 순번",
+    "version": "버전",
+    "etag": "버전",
+    "state": "상태",
+    "verdict": "판정",
+    "code": "코드",
+    "deliveryCount": "전달",
+    "requiredCount": "필요",
+    "payloadDigest": "페이로드 다이제스트",
+    "planHash": "계획 해시",
+    "audienceHash": "대상 해시",
+    "late": "지연"
+  },
+  "failure": {
+    "forbidden": "엔진이 현재 주체를 위해 이를 거부했습니다.",
+    "step_up": "귀하의 역할이 이를 허용하지만 세션을 먼저 승격해야 합니다.",
+    "not_found": "찾을 수 없거나 이 주체에게 보이지 않습니다.",
+    "unavailable": "엔진이 조회할 수 없었습니다: 현재 권한, 보관 또는 저장 증거를 사용할 수 없습니다. 빈 결과도 거부도 아닙니다.",
+    "version_mismatch": "읽은 버전이 더 이상 현재가 아닙니다.",
+    "version_required": "엔진이 요구한 버전 전제 조건을 콘솔이 보내지 않았습니다.",
+    "plan_changed": "공개가 바인딩된 계획을 재현하지 못합니다.",
+    "terminal": "대상이 종료 상태에 있어 작업을 적용할 수 없습니다.",
+    "invalid": "엔진이 요청을 잘못된 형식으로 거부했습니다.",
+    "rate_limited": "속도가 제한되었습니다. 기다린 뒤 다시 요청하십시오.",
+    "ambiguous": "답이 도착하기 전에 전송이 실패했습니다.",
+    "aborted": "권한이 변경되어 콘솔이 취소했습니다.",
+    "other": "요청이 실패했습니다.",
+    "code": "코드",
+    "status": "상태",
+    "requestId": "요청 ID",
+    "message": "서버 메시지",
+    "conflict": "읽은 후 행이 변경되었거나 작업이 더 이상 적용되지 않습니다. 다시 결정하기 전에 다시 읽으십시오.",
+    "snapshot_changed": "이 목록의 두 페이지 사이에 채널이 변경되었습니다."
+  },
+  "authority": {
+    "lost": "이 작업에 대한 권한을 더 이상 보유하지 않습니다; 아무것도 전송되지 않았습니다.",
+    "confirmationClosed": "뒤에 있던 권한을 잃어 대기 중인 확인이 닫혔습니다.",
+    "notAddressable": "이 주체는 이 종류에 대한 디렉터리 참조가 없어 주소 지정할 수 없습니다."
+  },
+  "states": {
+    "loading": "불러오는 중…",
+    "reading": "읽는 중…"
+  },
+  "administration": {
+    "title": "관리 가능한 채널",
+    "description": "이 주체가 지금 관리할 수 있는 채널입니다: 코어 channel:admin과 현재 로컬 관리 비트를 엔진이 모든 읽기에서 결정합니다. 보관된 채널도 목록에 남아 검사할 수 있습니다. 이것은 읽기 카탈로그가 아닙니다: 로컬 읽기 비트는 필요하지도 암시되지도 않습니다.",
+    "stateFilter": "저장된 상태",
+    "states": {
+      "all": "모든 상태",
+      "active": "활성만",
+      "archived": "보관됨만"
+    },
+    "columns": {
+      "name": "이름",
+      "slug": "슬러그",
+      "kind": "종류",
+      "state": "상태",
+      "sensitivity": "민감도",
+      "protection": "보호",
+      "etag": "버전",
+      "updated": "업데이트됨"
+    },
+    "openById": "ID로 채널 관리",
+    "openByIdHint": "시트는 channel:admin 아래 부여 이력으로 읽으며, 읽기 계층의 채널 읽기를 절대 사용하지 않습니다.",
+    "emptyTitle": "관리 가능한 채널 없음",
+    "emptyBody": "이 Workspace의 어떤 채널도 이 주체에게 현재 관리 비트를 부여하지 않거나 선택한 저장 상태와 일치하는 채널이 없습니다. 로컬 관리 부여와 channel:admin 권한이 있으면 여기에 표시됩니다.",
+    "truncated": "이 페이지 너머에 더 많은 관리 가능 채널이 있습니다",
+    "truncatedHint": "서버가 더 많은 관리 가능 채널을 보고했습니다. 연속 지점에서 계속하려면 더 불러오십시오."
+  },
+  "channelState": {
+    "active": "활성",
+    "archived": "보관됨"
+  },
+  "grantState": {
+    "active": "활성",
+    "revoked": "취소됨",
+    "expired": "만료됨"
+  },
+  "admin": {
+    "title": "채널 관리",
+    "description": "채널의 현재 버전과 함께 부여 이력으로 새로 읽습니다; 콘텐츠는 열지 않습니다.",
+    "observedAt": "관측 시각",
+    "tabs": {
+      "config": "구성",
+      "grants": "부여"
+    },
+    "readFailedTitle": "관리 읽기가 성공하지 못했습니다",
+    "readFailedBody": "이 채널에 대해 이전에 표시된 것은 유지되지 않습니다: 화면에는 엔진이 지금 승인하는 것만 있어야 합니다. 원인이 해결되면 다시 읽으십시오."
+  },
+  "config": {
+    "immutable": "슬러그, 종류, 테넌트, Workspace 및 세대 카운터는 정보 제공용이며 여기서 불변입니다; 엔진은 이를 넘는 변경을 거부합니다.",
+    "advanced": "고급 옵션",
+    "archivedNote": "이 채널은 보관되었습니다. 상태는 활성으로 돌아갈 수 없습니다; 구성은 여전히 편집할 수 있습니다.",
+    "stateHint": "보관은 단방향입니다: 보관된 채널은 활성으로 돌아가지 않습니다.",
+    "stateLocked": "보관됨. 엔진은 보관된 채널의 모든 상태 변경을 거부합니다.",
+    "sensitivityHint": "제한은 애플리케이션 봉인 콘텐츠를 요구하며 내부로 다시 낮출 수 없습니다.",
+    "protectionHint": "애플리케이션 봉인 보호는 스토리지로 다시 낮출 수 없습니다.",
+    "ackHint": "확인 정책 “없음”은 제한 시간 0이 필요하며, 다른 정책은 양의 제한 시간이 필요합니다.",
+    "wakeHint": "채널 기본값은 “상속”일 수 없습니다; 그 값은 메시지에 속합니다.",
+    "validation": {
+      "name": "이름은 1에서 256바이트여야 합니다.",
+      "description": "설명은 최대 4096바이트여야 합니다.",
+      "fanout": "최대 팬아웃은 1 이상의 정수여야 합니다.",
+      "depth": "최대 자동화 깊이는 0 이상의 정수여야 합니다.",
+      "timeout": "확인 제한 시간은 밀리초 단위의 정수여야 합니다.",
+      "ackTimeout": "확인 정책 “없음”은 제한 시간 0이 필요하며, 다른 모든 정책은 양의 제한 시간이 필요합니다.",
+      "restrictedSealed": "제한 채널은 애플리케이션 봉인이어야 합니다.",
+      "sensitivityLowered": "민감도를 제한에서 내부로 낮출 수 없습니다.",
+      "protectionLowered": "콘텐츠 보호를 애플리케이션 봉인에서 스토리지로 낮출 수 없습니다.",
+      "archivedState": "보관된 채널은 활성으로 돌아갈 수 없습니다.",
+      "nothingChanged": "변경된 것이 없습니다: 보낼 필드가 없습니다."
+    },
+    "fieldNames": {
+      "name": "이름",
+      "description": "설명",
+      "state": "상태",
+      "sensitivity": "민감도",
+      "content_protection": "콘텐츠 보호",
+      "default_ack_policy": "기본 확인 정책",
+      "default_ack_timeout_ms": "기본 확인 제한 시간(ms)",
+      "default_wake": "기본 기상",
+      "retention_policy_ref": "보존 정책 참조",
+      "max_fanout": "최대 팬아웃",
+      "max_automation_depth": "최대 자동화 깊이"
+    },
+    "confirm": {
+      "title": "구성 변경 확인",
+      "body": "아래 필드만 화면의 버전({{etag}})과 함께 전송됩니다. 그동안 채널이 변경되면 엔진이 거부하며 확인 전에 다시 읽습니다; 콘솔이 버전을 바꾸지 않습니다.",
+      "archiving": "채널을 보관합니다. 보관은 단방향입니다: 활성으로 돌아가지 않습니다.",
+      "ifMatch": "읽은 버전"
+    },
+    "appliedTitle": "구성이 적용되었습니다",
+    "appliedBody": "엔진이 변경을 저장했습니다. 시트가 채널을 다시 읽으며, 다음 변경은 그 버전을 사용합니다.",
+    "conflictTitle": "읽은 후 채널이 변경되었습니다",
+    "conflictBody": "엔진이 변경을 거부했습니다: 전제 조건이 현재 채널과 일치하지 않습니다. 다시 전송된 것은 없습니다. 다시 읽고 현재 값과 편집 내용을 검토한 뒤 여전히 해당할 때만 다시 확인하십시오.",
+    "unknownTitle": "결과 확인 대기 중",
+    "unknownBody": "답이 도착하기 전에 전송이 실패하여 변경이 적용되었을 수도 아닐 수도 있습니다. 이 경로에는 멱등 키가 없으며 콘솔이 다시 보내지 않습니다. 채널을 다시 읽으십시오: 현재 값이 적용 여부를 말해줍니다; 일치한다고 해서 어느 시도가 적용했는지 증명되지는 않습니다.",
+    "refusedTitle": "구성 거부됨",
+    "noPermission": "channel:admin 권한을 보유하지 않아 구성 변경이 제공되지 않습니다.",
+    "rebased": "편집하는 동안 채널이 변경되었습니다. 건드리지 않은 필드는 그 읽기에서 새로 고쳐졌습니다({{fields}}); 귀하의 편집은 유지되며 그것만 전송됩니다. 새 버전에 대해 확인하려면 변경 사항을 다시 검토하십시오.",
+    "versionMoved": "채널이 변경되었습니다. 편집 내용은 유지됩니다; 확인 전에 다시 검토하십시오."
+  },
+  "grants": {
+    "filters": {
+      "title": "부여 이력 필터",
+      "state": "저장된 상태",
+      "stateHint": "저장된 상태를 선택합니다. 만료가 지난 활성 행은 여기서 여전히 “활성”이며 관측 시점에서는 “만료”로 읽힙니다.",
+      "subjectKind": "주체 종류",
+      "subjectRef": "주체 참조",
+      "subjectHint": "종류와 참조는 함께 갑니다: 둘 다 또는 둘 다 아님. 그룹은 확장되지 않습니다.",
+      "anySubject": "모든 주체",
+      "applied": "주체 {{kind}} {{ref}}(으)로 필터링되었습니다."
+    },
+    "columns": {
+      "subject": "주체",
+      "bits": "비트",
+      "generation": "세대",
+      "stored": "저장된 상태",
+      "temporal": "관측 시점",
+      "expires": "만료",
+      "grantedBy": "부여자",
+      "created": "생성됨"
+    },
+    "truncated": "이 페이지 너머에 더 많은 세대가 있습니다",
+    "truncatedHint": "서버가 더 많은 세대를 보고했습니다. 연속 지점에서 계속하려면 더 불러오십시오; 페이지 사이에 채널이 변경되면 목록이 다시 시작됩니다.",
+    "emptyTitle": "세대 없음",
+    "emptyBody": "선택한 상태와 주체에 일치하는 저장된 부여 세대가 없습니다. 새 부여가 하나를 추가합니다.",
+    "temporalHint": "“저장된 상태”는 엔진이 저장한 것이고, “관측 시점”은 관측 시점에 그 행이 유효했는지입니다. 지난 만료는 보고되지만 구체화되지 않습니다: 행을 취소하지 않으며, 그 주체의 후속 부여에는 여전히 명시적 취소가 먼저 필요합니다.",
+    "snapshotChanged": "이 이력의 두 페이지 사이에 채널이 변경되어 지금까지 읽은 모든 페이지가 버려지고 목록이 처음부터 다시 시작되었습니다({{count}}회 재시작).",
+    "detail": {
+      "title": "세대 세부 정보",
+      "id": "부여 ID",
+      "supersedes": "대체 대상",
+      "revokedBy": "취소자",
+      "version": "행 버전",
+      "updated": "업데이트됨",
+      "expiredActive": "이 행은 활성으로 저장되었지만 관측 시점에 만료가 지났습니다. 엔진이 취소하지 않았습니다: 이 주체의 후속 부여에는 이 세대를 명시적으로 취소해야 합니다.",
+      "notActive": "이 세대는 활성으로 저장되지 않았습니다; 여기서 취소할 수 없습니다. 그 주체의 새 부여에는 활성 세대가 필요하지 않습니다."
+    },
+    "form": {
+      "title": "새 부여 세대",
+      "hint": "주체 하나, 독립적인 비트 세 개, 선택적 만료입니다. 디렉터리 행은 후보이며 적격 주체가 아닙니다: 엔진이 작업 시 결정하며, 기록된 세대는 효과적 접근의 약속이 아닙니다."
+    },
+    "validation": {
+      "expiry": "만료를 날짜로 읽을 수 없습니다.",
+      "expiryPast": "만료는 미래여야 합니다."
+    },
+    "confirm": {
+      "title": "부여 확인",
+      "body": "아래 세대를 화면의 버전과 함께 정확히 전송합니다. 주체가 이미 활성 세대를 보유하거나 그동안 채널이 변경되면 엔진이 거부합니다; 그러면 다시 읽고 확인하십시오. 자체적으로 재시도하는 것은 없습니다.",
+      "successorOf": "취소된 세대 {{id}}의 후속입니다. 별도의 작업입니다: 위의 취소는 이미 커밋되었습니다."
+    },
+    "appliedTitle": "부여가 기록되었습니다",
+    "appliedBody": "엔진이 이 세대를 지금 기록했습니다. 주체가 행동할 수 있다는 약속이 아닙니다: 엔진은 요청되는 순간 모든 작업을 결정합니다.",
+    "conflictTitle": "읽은 후 채널이 변경되었습니다",
+    "conflictBody": "엔진이 작업을 거부했습니다: 전제 조건이 현재 채널과 더 이상 일치하지 않거나 대상 세대가 더 이상 본 것이 아닙니다. 다시 전송된 것은 없습니다. 이력을 다시 읽고 작업이 여전히 해당할 때만 다시 확인하십시오.",
+    "unknownTitle": "결과 확인 대기 중",
+    "unknownBody": "답이 도착하기 전에 전송이 실패했습니다. 작업이 적용되었을 수도 아닐 수도 있으며 이 경로에는 멱등 키가 없습니다: 콘솔이 다시 보내지 않습니다. 이력을 다시 읽고 결정하십시오; 일치하는 행은 현재 상태를 보여줄 뿐 어느 시도가 만들었는지는 알려주지 않습니다.",
+    "unknownAct": "작업",
+    "unknownGrant": "부여(POST …/grants)",
+    "unknownRevoke": "취소(POST …/revoke)",
+    "refusedTitle": "부여 거부됨",
+    "revoke": {
+      "title": "이 정확한 세대 취소",
+      "body": "표시된 세대를 그 ID로 화면의 버전과 함께 취소합니다. 이력은 유지됩니다. 주체의 후속 부여는 다시 읽은 후의 별도 작업입니다.",
+      "bodyThenGrant": "두 작업 중 첫 번째: 표시된 세대를 취소합니다. 엔진의 답을 읽은 후 후속 세대에 대한 별도 확인이 제공됩니다; 자동으로 연결되는 것은 없습니다.",
+      "ownAdminWarning": "이 세대는 귀하 자신의 계정에 대한 관리 부여입니다. 이 채널에 대한 귀하의 관리 접근을 유지하는 것이 이것일 수 있습니다; 콘솔은 귀하의 전체 권한을 계산하지 않으며 엔진이 다음 요청을 결정합니다.",
+      "appliedTitle": "세대가 취소되었습니다",
+      "appliedBody": "엔진이 취소를 지금 기록했습니다. 이력은 취소된 상태로 계속 읽을 수 있습니다.",
+      "refusedTitle": "취소 거부됨"
+    },
+    "stateFilters": {
+      "active": "활성(저장됨)",
+      "revoked": "취소됨(저장됨)",
+      "expired": "만료됨(저장됨)",
+      "all": "전체(저장됨)"
+    }
+  },
+  "cursor": {
+    "title": "여기까지 읽음으로 표시",
+    "description": "개인 읽음 커서를 받은편지함 한 페이지의 마지막 전달로 진행합니다. 아무것도 확인하지 않으며 어떤 전달도 변경하지 않습니다.",
+    "section": {
+      "title": "읽음 커서",
+      "hint": "불러온 각 페이지는 마지막 전달까지 읽음으로 표시할 수 있습니다. 대상은 그 정확한 전달을 위해 엔진이 발행한 페이지 자체의 것입니다; 범위가 모호하지 않도록 표의 로컬 필터가 비어 있어야 합니다.",
+      "page": "페이지 {{page}} · 전달 {{count}}개",
+      "upTo": "여기까지"
+    },
+    "reasons": {
+      "noPermission": "delivery:write 권한이 필요합니다.",
+      "noRecipient": "이 세션은 사용자 ID가 아닙니다; 개인 커서는 사용자 사서함에 속합니다.",
+      "filtered": "먼저 표 필터를 지우십시오: 커서 대상은 필터링된 행이 아니라 서버 페이지입니다.",
+      "emptyPage": "이 페이지에는 표시할 전달이 없습니다.",
+      "otherRecipient": "이 페이지의 마지막 전달이 귀하의 사용자 ID로 보내지지 않았습니다."
+    },
+    "fields": {
+      "scope": "범위",
+      "scopeValue": "불러온 체인의 페이지 {{page}}(전달 {{count}}개)",
+      "workspace": "Workspace",
+      "recipient": "수신자",
+      "lastSubject": "마지막 제목",
+      "lastDelivery": "마지막 전달",
+      "lastSeq": "전달 순번",
+      "cursorVersion": "커서 버전",
+      "cursorId": "커서 ID",
+      "replayed": "재생됨",
+      "lastSeenSeq": "마지막으로 본 순번",
+      "barrierDelivery": "배리어 전달",
+      "barrierReason": "배리어 사유",
+      "barrierSince": "배리어 시작"
+    },
+    "preparing": "준비 중: 이 페이지의 커서 대상을 엔진에 요청하는 중…",
+    "prepareFailedTitle": "커서 대상을 준비할 수 없습니다",
+    "prepareFailedBody": "아무것도 진행되지 않았습니다. 받은편지함을 새로 고치고 현재 페이지에서 다시 준비하십시오.",
+    "confirm": {
+      "title": "진행 확인",
+      "body": "준비된 대상과 위의 전달을 읽은 커서 버전 및 자체 키와 함께 전송합니다. 확인만이 무언가를 진행합니다. 모호한 결과 후 재시도는 정확히 이것을 다시 보냅니다."
+    },
+    "conflictTitle": "준비된 후 커서가 변경되었습니다",
+    "conflictBody": "엔진이 진행을 거부했습니다: 커서 버전이나 대상이 더 이상 현재가 아닙니다. 다시 전송된 것은 없습니다. 받은편지함을 새로 고치고 현재 페이지에서 다시 준비하십시오.",
+    "ambiguousTitle": "결과 알 수 없음",
+    "ambiguousBody": "답이 도착하기 전에 연결이 실패했습니다. 재시도는 같은 대상, 같은 버전, 같은 키를 보냅니다; 엔진은 한 번 적용하거나 재생하거나 현재 버전과 함께 거부합니다. 미결로 두면 이전 결과를 알 수 없는 상태로 유지합니다.",
+    "refusedTitle": "진행 거부됨",
+    "refusedBody": "엔진이 커서를 진행하지 않았습니다. 다시 준비하기 전에 받은편지함을 새로 고치십시오.",
+    "result": {
+      "appliedTitle": "커서가 진행되었습니다",
+      "appliedBody": "엔진이 진행을 커밋하고 아래 위치를 반환했습니다. 받은편지함을 지속 커서에서 다시 읽습니다.",
+      "replayedTitle": "이미 진행됨",
+      "replayedBody": "엔진이 이전의 동일한 명령 결과를 재생했습니다. 두 번 적용된 것은 없습니다.",
+      "barrierTitle": "배리어로 진행이 제한됨",
+      "barrierBody": "엔진이 명시한 사유로 아래 전달에서 멈췄습니다; 커서가 대상에 도달하지 않았습니다. 완전한 진행이 아닙니다.",
+      "barrierHint": "배리어 전달을 새로 읽어 여십시오. 해결한다고 해서 그 자체로 진행되지는 않습니다: 받은편지함을 새로 고치고 새 대상을 준비한 뒤 다시 확인하십시오.",
+      "notAck": "읽음 커서는 확인이 아니며 어떤 전달의 상태나 처음 본 표시도 변경하지 않습니다."
+    }
+  },
+  "capability": {
+    "actInterrupted": "작업이 이미 전송되는 동안 확인이 닫혔습니다: 이 콘솔에는 그 작업에 대한 현재 답이 없습니다. 결정된 것도 거부된 것도 없습니다; 작업이 엔진에 도달했는지는 여기서 확립되지 않습니다.",
+    "checking": "접근 확인 중…",
+    "confirmationClosed": "대기 중인 확인이 닫혔습니다: 이 콘솔에는 그 작업에 대한 현재 답이 없습니다. 결정된 것도, 거부된 것도, 전송된 것도 없습니다.",
+    "globalAccountBody": "이 보기를 열려면 이 조직의 구성원 계정을 사용하십시오. 전역 계정은 이 보기의 접근을 확인할 수 없습니다.",
+    "globalAccountTitle": "구성원 계정으로 로그인",
+    "notConfirmed": "아무것도 전송되지 않았습니다: 방금 이 작업의 권한을 확인할 수 없었습니다.",
+    "retrying": "몇 초마다 다시 확인하는 중입니다.",
+    "unavailableBody": "이 콘솔에는 이 작업에 대한 현재 답이 없습니다. 결정된 것도 거부된 것도 없습니다.",
+    "unavailableTitle": "접근을 확립할 수 없습니다",
+    "undisclosedBody": "엔진이 이 작업에 대한 답을 여기에 공개하지 않았습니다. 그것은 귀하의 역할, 대상의 존재 여부 또는 서비스 가용성에 대한 진술이 아닙니다.",
+    "undisclosedTitle": "이 결정은 공개되지 않습니다"
+  },
+  "continuity": {
+    "interrupted": "잠시 접근을 확인할 수 없어 대기 중인 확인이 닫혔습니다. 귀하의 편집은 유지되며 아무것도 전송되지 않았습니다; 확인 전에 다시 검토하십시오.",
+    "interruptedSend": "변경을 전송하는 동안 접근을 확인할 수 없어 확인이 닫혔습니다. 귀하의 편집은 유지되며 아무것도 다시 전송되지 않았습니다; 변경이 엔진에 도달했는지는 여기서 확립되지 않습니다 — 다시 읽어 확인하십시오."
+  },
+  "handoff": {
+    "state": {
+      "offered": "제안됨",
+      "accepted": "수락됨",
+      "rejected": "거부됨",
+      "withdrawn": "철회됨",
+      "expired": "만료됨"
+    },
+    "context": {
+      "current": "지금 응답 가능",
+      "stale": "더 이상 현재가 아님",
+      "terminal": "이미 해결됨"
+    },
+    "actions": {
+      "accept": "책임 수락",
+      "reject": "핸드오프 거부"
+    },
+    "retained": {
+      "submitting": "핸드오프 작업을 전송하는 중입니다.",
+      "uncertain": "핸드오프 작업에 확인된 결과가 없습니다.",
+      "confirmed": "제안 영수증을 여전히 사용할 수 있습니다.",
+      "responseConfirmed": "응답 영수증을 여전히 사용할 수 있습니다.",
+      "reopen": "작업 표시"
+    },
+    "lost": {
+      "title": "자격 증명이 변경되었습니다",
+      "body": "제출이 중단되었습니다; 결과가 확인되지 않았습니다. 다시 행동하기 전에 현재 상태를 읽으십시오.",
+      "notSent": "제출이 시작되지 않아 이 명령이 전송되지 않았습니다. 다시 행동하기 전에 현재 상태를 읽으십시오.",
+      "latestNotSent": "최근 시도가 시작되지 않아 전송되지 않았습니다. 이전 시도는 별개의 사실입니다. 다시 행동하기 전에 현재 상태를 읽으십시오."
+    },
+    "uncertain": {
+      "title": "결과를 알 수 없습니다",
+      "body": "요청이 적용되었을 수도 아닐 수도 있습니다. 시간 초과는 롤백이 아닙니다. 재시도는 같은 키로 동일한 작업을 전송하므로 엔진은 두 번 적용하는 대신 이미 적용되었다고 답할 수 있습니다.",
+      "discard": "로컬 추적 중지",
+      "priorTransmission": "이전 시도가 전송되었고 그 결과는 결코 확인되지 않았습니다. 이후 답은 그것이 아니라 답을 반환한 요청을 설명합니다."
+    },
+    "references": {
+      "hint": "종류와 참조가 필요하며 해시는 선택 사항입니다. 참조는 수신자가 읽는 레이블입니다 — 여기서 아무것도 가져오거나 따라가거나 열지 않습니다.",
+      "kind": "종류",
+      "ref": "참조",
+      "hash": "해시",
+      "add": "참조 추가",
+      "remove": "참조 제거"
+    },
+    "offer": {
+      "title": "핸드오프 제안",
+      "description": "이 작업 항목에 대한 책임을 채널을 통해 수신자에게 제안합니다. 제안을 만든다고 소유권이 이전되지 않습니다: 수락된 응답만 이전합니다.",
+      "readRefusedTitle": "작업 항목을 읽을 수 없습니다",
+      "itemTitle": "작업 항목",
+      "item": "작업 항목",
+      "itemId": "작업 항목 ID",
+      "itemStatus": "상태",
+      "currentOwner": "현재 소유자",
+      "ownerEpoch": "소유자 에포크",
+      "itemWorkspace": "항목 Workspace",
+      "precondition": "읽은 버전",
+      "itemMismatch": "읽기가 요청한 것과 다른 작업 항목을 반환했습니다. 이 읽기로는 아무것도 제안할 수 없습니다.",
+      "workspaceMismatchTitle": "항목의 Workspace를 선택하십시오",
+      "workspaceMismatchBody": "이 항목은 Workspace {{itemWorkspace}}에 속하며 선택한 Workspace는 {{selected}}입니다. 제안하려면 전환기에서 항목의 Workspace를 선택하십시오; 콘솔이 대신 선택하지 않습니다.",
+      "workspaceNone": "명시적인 Workspace가 선택되지 않았습니다. 제안은 Workspace 범위이므로 전환기에서 항목의 Workspace를 선택하십시오; 콘솔이 대신 선택하지 않습니다.",
+      "noPrecondition": "작업 항목이 버전 없이 읽혀 제안을 검사할 대상이 없습니다. 항목을 다시 읽으십시오.",
+      "noPermission": "귀하의 역할은 핸드오프를 제안할 수 없습니다. 엔진은 또한 항목 소유자와 채널을 사용할 수 있는 사람을 확인합니다.",
+      "channel": "채널",
+      "channelHint": "매개 메시지가 공개되는 정규 채널 ID입니다. 항상 입력할 수 있습니다.",
+      "channelPick": "채널 선택",
+      "channelNoDirectory": "이 권한으로는 채널 카탈로그를 읽을 수 없어 채널 ID를 직접 입력합니다. 어차피 나열된 채널은 후보일 뿐 적격성 결정이 아닙니다.",
+      "recipient": "수신자",
+      "summary": "요약",
+      "nextAction": "다음 작업",
+      "risk": "위험",
+      "riskHint": "선택 사항.",
+      "artifacts": "아티팩트 참조",
+      "deadline": "응답 기한",
+      "deadlineHint": "귀하의 시간대에 입력하는 절대 시점입니다. 의도적으로 비어 있게 시작합니다: 콘솔이 귀하를 위해 약속을 선택하지 않으며 절대 연장하지 않습니다.",
+      "deadlineReview": "{{zone}} 현지, {{utc}}로 전송됩니다. 서버 시계가 최종이며 여전히 거부할 수 있습니다.",
+      "review": "제안 검토",
+      "confirm": "확인하고 제안",
+      "confirmTitle": "제안 전 검토",
+      "confirmBody": "여기서부터 키, 본문, 대상 및 전제 조건이 고정됩니다. 알 수 없는 결과 후 재시도는 정확히 이 객체를 전송합니다.",
+      "key": "멱등 키",
+      "submitting": "제안하는 중…",
+      "conflictTitle": "제안이 적용되지 않았습니다",
+      "conflictBody": "읽은 후 항목이 이동했거나 명령이 더 이상 적용되지 않습니다. 이 응답은 어느 쪽인지 말하지 않습니다. 항목을 다시 읽고 새 제안을 검토하십시오; 전제 조건은 절대 교체되어 다시 전송되지 않습니다.",
+      "refusedTitle": "제안이 거부되었습니다",
+      "createdTitle": "제안이 만들어졌습니다",
+      "replayedTitle": "제안이 이미 적용됨(재생)",
+      "pendingBody": "소유권이 이전되지 않았습니다. 수신자의 응답이 대기 중입니다.",
+      "startOver": "새 제안 시작",
+      "serverFinal": "엔진이 최종 검증자입니다: 적격성, 권한 또는 한도 때문에 이 제안을 여전히 거부할 수 있으며 그 답은 오는 그대로 표시됩니다.",
+      "validation": {
+        "channel": "채널이 필요합니다.",
+        "channelFormat": "채널 ID는 정규 UUID여야 합니다.",
+        "recipient": "수신자 참조가 필요합니다.",
+        "recipientLength": "수신자 참조가 1024바이트를 초과합니다.",
+        "summary": "요약이 필요합니다.",
+        "summaryLength": "요약이 32 KiB를 초과합니다.",
+        "nextAction": "다음 작업이 필요합니다.",
+        "nextActionLength": "다음 작업이 32 KiB를 초과합니다.",
+        "riskLength": "위험 메모가 32 KiB를 초과합니다.",
+        "references": "각 참조에는 1에서 512바이트의 종류와 참조가 필요하며, 이미 다듬어졌고 줄바꿈이 없어야 합니다.",
+        "referencesMax": "아티팩트 참조는 최대 64개입니다.",
+        "deadline": {
+          "empty": "응답 기한이 필요합니다.",
+          "unreadable": "응답 기한을 시점으로 읽을 수 없습니다.",
+          "past": "응답 기한은 현재 시각보다 늦어야 합니다."
+        }
+      },
+      "targetRefusedTitle": "먼저 현재 제안을 완료하십시오",
+      "targetRefusedBody": "이전 제안이 전송되었고 해결되지 않았습니다. 해결하거나 로컬 추적을 중지한 뒤 새 제안을 시작하십시오.",
+      "conflictTitleLatest": "이 시도가 적용되지 않았습니다",
+      "conflictBodyLatest": "읽은 후 항목이 이동했거나 명령이 더 이상 적용되지 않습니다. 이 답은 방금 반환된 요청에 대한 것입니다. 항목을 다시 읽고 현재 상태에서 새 제안을 검토하십시오.",
+      "refusedTitleLatest": "이 시도가 거부되었습니다"
+    },
+    "inbox": {
+      "title": "귀하에게 온 핸드오프",
+      "description": "서버의 연속 지점에서 한 페이지씩입니다. 이 컬렉션은 콘텐츠가 없습니다: 제안의 요약, 다음 작업 및 위험은 열어야만 읽을 수 있습니다.",
+      "filter": "상태",
+      "truncated": "이 페이지 너머에 더 많은 제안이 있습니다",
+      "truncatedHint": "엔진이 같은 트랜잭션에서 추가 제안이 승인되었음을 보고합니다. 총계도 아니고 숨겨진 행의 개수도 아닙니다.",
+      "emptyTitle": "이 Workspace에 {{state}} 핸드오프가 없습니다",
+      "emptyBody": "이것은 승인된 빈 결과이며 거부도 조회 실패도 아닙니다.",
+      "unavailableTitle": "핸드오프 정보를 확인할 수 없습니다",
+      "unavailableBody": "현재 핸드오프 정보를 불러올 수 없습니다. 다시 시도하거나 계속되면 관리자에게 문의하십시오.",
+      "accountGuidanceTitle": "개인 핸드오프에는 구성원 계정을 사용하십시오",
+      "accountGuidanceBody": "전역 관리자로 로그인되어 있습니다. 귀하에게 온 제안을 보려면 이 조직의 구성원 계정으로 로그인하십시오.",
+      "accountGuidanceHint": "제안을 받은 계정을 사용하십시오.",
+      "contentFree": "행은 ID, 상태 및 시각만 표시합니다. 보호된 컨텍스트를 읽으려면 자체 승인된 읽기로 행을 여십시오.",
+      "elapsed": "윈도 경과",
+      "elapsedHint": "엔진의 관측에서 응답 윈도가 지났습니다. 행은 여전히 제안됨으로 저장되어 있을 수 있습니다: 이 읽기는 만료 정리기를 실행하지 않으므로 만료가 기록되었다는 증거가 아닙니다.",
+      "columns": {
+        "workItem": "작업 항목",
+        "from": "보낸 사람",
+        "to": "수신자",
+        "state": "상태",
+        "deadline": "기한",
+        "observed": "관측됨",
+        "delivery": "매개 전달"
+      }
+    },
+    "detail": {
+      "title": "핸드오프 제안",
+      "description": "매개 전달을 통해 새로 읽은 한 제안의 보호된 컨텍스트입니다. 이 패널이 닫힌 후에는 유지되지 않습니다.",
+      "contextTitle": "제안 컨텍스트",
+      "summary": "요약",
+      "nextAction": "다음 작업",
+      "risk": "위험",
+      "artifacts": "아티팩트 참조",
+      "artifactsInert": "참조는 텍스트로 표시됩니다. 여기서 아무것도 가져오거나 따라가거나 열지 않습니다.",
+      "branch": "브랜치",
+      "commit": "커밋",
+      "openWorktree": "새 세션 워크트리에서 열기",
+      "openWorktreeHint": "이 커밋 또는 브랜치에서 자체 워크트리에 세션을 시작합니다. 리포지토리가 있는 Workspace는 귀하가 선택합니다.",
+      "adminTitle": "영수증 필드",
+      "workItem": "작업 항목",
+      "handoffId": "핸드오프 ID",
+      "from": "보낸 사람",
+      "to": "수신자",
+      "deadline": "응답 기한",
+      "created": "생성됨",
+      "observed": "관측됨",
+      "precondition": "핸드오프 버전",
+      "preconditionHint": "응답은 옆에 있는 전달 버전이 아니라 위의 핸드오프 버전에 적용됩니다.",
+      "carrierDelivery": "매개 전달",
+      "carrierVersion": "매개 전달 버전",
+      "channel": "채널",
+      "terminalTitle": "엔진이 기록한 사유",
+      "deadlineElapsed": "윈도 경과",
+      "notCurrent": {
+        "stale": "이 제안은 더 이상 현재가 아닙니다",
+        "terminal": "이 제안은 이미 해결되었습니다"
+      },
+      "notCurrentBody": "엔진이 지금 응답할 수 없다고 보고하므로 응답 제어가 제공되지 않습니다. 현재 상태를 보려면 다시 읽으십시오.",
+      "noRespondPermission": "귀하의 역할은 핸드오프에 응답할 수 없습니다."
+    },
+    "respond": {
+      "acceptTitle": "책임 수락",
+      "rejectTitle": "핸드오프 거부",
+      "acceptDescription": "수락하면 작업 항목의 소유권이 아래 수신자에게 이전되고 확인이 만들어집니다. 세션을 시작하지 않으며 실행 리스를 획득하지 않습니다.",
+      "rejectDescription": "거부에는 사유 코드가 필요합니다. 소유권은 이동하지 않습니다.",
+      "reasonCode": "사유 코드",
+      "reasonCodeHint": "이 네 가지는 콘솔 사전 설정이며 엔진의 목록이 아닙니다. 엔진은 열린 어휘를 유지하므로 사용자 지정 코드를 사용할 수 있습니다.",
+      "reasonCodeEmpty": "사유 선택",
+      "customCode": "사용자 지정 사유 코드",
+      "customCodeHint": "최대 128바이트의 소문자 토큰: 문자, 숫자, 점, 하이픈 및 밑줄이며 문자나 숫자로 시작합니다.",
+      "reasonText": "설명",
+      "reasonTextHint": "선택 사항, 최대 32 KiB.",
+      "reasonReferences": "사유 참조",
+      "reasons": {
+        "not_available": "사용할 수 없음",
+        "outside_scope": "내 범위 밖",
+        "needs_information": "정보가 더 필요함",
+        "other": "기타",
+        "custom": "사용자 지정 코드…"
+      },
+      "review": "응답 검토",
+      "confirmTitle": "응답 전 검토",
+      "confirmAcceptBody": "확인하면 이 작업 항목의 소유권이 위 수신자에게 이전됩니다. 키, 본문 및 전제 조건은 여기서부터 고정됩니다.",
+      "confirmRejectBody": "확인하면 이 거부가 기록됩니다. 소유권은 이동하지 않습니다. 키, 본문 및 전제 조건은 여기서부터 고정됩니다.",
+      "confirmAccept": "수락 확인",
+      "confirmReject": "거부 확인",
+      "transition": "응답",
+      "submitting": "응답하는 중…",
+      "conflictTitle": "응답이 적용되지 않았습니다",
+      "conflictBody": "읽은 후 제안이 이동했거나 명령이 더 이상 적용되지 않습니다. 이 응답은 어느 쪽인지 말하지 않습니다. 제안을 다시 읽고 새 응답을 검토하십시오; 전제 조건은 절대 교체되어 다시 전송되지 않습니다.",
+      "refusedTitle": "응답이 거부되었습니다",
+      "acceptedTitle": "책임이 수락되었습니다",
+      "rejectedTitle": "핸드오프가 거부되었습니다",
+      "replayedTitle": "응답이 이미 적용됨(재생)",
+      "acceptedBody": "작업 항목의 소유권이 이동했고 소유자 에포크가 진행되었습니다.",
+      "rejectedBody": "거부가 기록되었습니다. 소유권은 이동하지 않았습니다.",
+      "validation": {
+        "code": "사유 코드가 필요합니다.",
+        "codeLength": "사유 코드가 128바이트를 초과합니다.",
+        "codeShape": "사유 코드는 소문자 토큰이어야 합니다: 문자, 숫자, 점, 하이픈 및 밑줄이며 문자나 숫자로 시작합니다.",
+        "textLength": "설명이 32 KiB를 초과합니다.",
+        "references": "각 참조에는 1에서 512바이트의 종류와 참조가 필요하며, 이미 다듬어졌고 줄바꿈이 없어야 합니다.",
+        "referencesMax": "사유 참조는 최대 64개입니다."
+      },
+      "targetRefusedTitle": "먼저 현재 응답을 완료하십시오",
+      "targetRefusedBody": "이전 응답이 전송되었고 해결되지 않았습니다. 해결하거나 로컬 추적을 중지한 뒤 새 응답을 시작하십시오.",
+      "startNew": "새 응답 시작",
+      "conflictTitleLatest": "이 시도가 적용되지 않았습니다",
+      "conflictBodyLatest": "읽은 후 제안이 이동했거나 명령이 더 이상 적용되지 않습니다. 이 답은 방금 반환된 요청에 대한 것입니다. 제안을 다시 읽고 현재 상태에서 새 응답을 검토하십시오.",
+      "refusedTitleLatest": "이 시도가 거부되었습니다"
+    },
+    "receipt": {
+      "handoffId": "핸드오프 ID",
+      "deliveryId": "매개 전달",
+      "ownerEpoch": "소유자 에포크",
+      "leaseFence": "결과 리스 펜스",
+      "status": "HTTP {{status}}",
+      "noLease": "응답에 리스 펜스가 없었습니다. 책임은 이동했고 실행 리스는 획득되지 않았으며 실행 중인 세션이 없습니다.",
+      "notCurrentOwnership": "이것은 이 영수증이 보고한 값입니다. 현재 소유권은 작업 항목을 읽으십시오."
+    },
+    "tracking": {
+      "limits": "이 패널을 숨겨도 로컬 추적은 유지됩니다. 추적을 중지하거나 이 컨텍스트를 떠나도 이미 전송된 명령을 취소하거나 롤백할 수 없으며, 전체 새로 고침은 이 로컬 관측자를 종료합니다. 여기에는 명령 상태 조회가 없습니다.",
+      "pendingHide": "명령이 대기 중인 동안 이 패널을 숨길 수 있습니다; 추적은 여기서 계속되며 결과는 바뀌지 않습니다. 추적을 중지하거나 이 컨텍스트를 떠나도 이미 전송된 명령을 취소하거나 롤백할 수 없습니다.",
+      "ended": "이 컨텍스트에 대한 접근이 변경되어 로컬 추적이 종료되었습니다. 엔진 결과는 여기서 확립되지 않습니다.",
+      "endedAfterSend": "명령이 이미 전송되었습니다. 로컬 추적을 종료해도 취소되거나 롤백되지 않았습니다.",
+      "stoppedAfterSend": "이미 전송되었을 수 있는 명령의 추적을 중지했습니다. 그것을 취소하거나 롤백하지 않으며, 그 결과는 여기서 확립되지 않습니다. 다시 행동하기 전에 현재 상태를 읽으십시오."
+    }
+  }
+}

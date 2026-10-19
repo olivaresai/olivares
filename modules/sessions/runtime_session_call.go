@@ -162,13 +162,17 @@ func (m *Module) finishSessionCalls(lr *liveRun, turn string) {
 		if lr.claudePendingTurns > 0 && !lr.stopRequested && !lr.finalized && !lr.launchFailed {
 			lr.claudeTurnDone = make(chan struct{})
 			lr.sessionCallsEnded = false
+			// A previously accepted queued input owns the successor; this is not
+			// late output reviving the interrupted turn.
+			lr.turnInterrupted = false
 		}
 		lr.mu.Unlock()
 	}
 }
 
-// waitingForInput reports a session that has answered at least one turn and has none
-// running: the person's move. The turn accounting is the one admission already keeps
+// waitingForInput reports a session whose turn ended or was confirmed interrupted:
+// the person's move. Late output after an interrupt cannot reopen work; the next
+// input that crosses the provider boundary does. The turn accounting is the one admission already keeps
 // (a raw Claude run counts its result frames and the inputs it accepted; a driver run
 // asks its conversation for the active turn), so the state is read from the run's turns
 // and not from whether its process is alive. A session that never finished a turn is
@@ -181,10 +185,35 @@ func (m *Module) finishSessionCalls(lr *liveRun, turn string) {
 func (lr *liveRun) waitingForInput() bool {
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
+	return lr.waitingForInputLocked()
+}
+
+func (lr *liveRun) waitingForInputLocked() bool {
+	if lr.turnInterrupted {
+		return true
+	}
 	if lr.session != nil {
 		return lr.driverTurnEnded && lr.session.ActiveTurn() == ""
 	}
 	return lr.claudeTurnsEnded > 0 && lr.claudePendingTurns == 0 && !lr.claudeOutputOpen
+}
+
+func (lr *liveRun) setTurnInterrupted(interrupted bool) (previous bool) {
+	lr.mu.Lock()
+	previous = lr.turnInterrupted
+	lr.turnInterrupted = interrupted
+	lr.mu.Unlock()
+	return previous
+}
+
+func (lr *liveRun) confirmTurnInterrupted(turn uint64) {
+	lr.mu.Lock()
+	defer lr.mu.Unlock()
+	// The old result can precede the acknowledgement and reopen a previously
+	// accepted queued input. That successor must not inherit the interrupt.
+	if lr.session != nil || lr.claudePendingTurns == 0 || lr.claudeTurnsEnded == turn {
+		lr.turnInterrupted = true
+	}
 }
 
 // setDriverTurnEnded records that a driver's turn ended (true) or that an input is

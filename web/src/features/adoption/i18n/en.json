@@ -103,7 +103,7 @@
     "empty": "No per-developer activity in this range.",
     "emptyHint": "Per-developer activity appears here once developers run sessions in this range. Widen the range to cover more days.",
     "locked": "Per-developer view restricted",
-    "lockedHint": "Viewing individual developer productivity requires the adoption:developer:read permission (deny-closed).",
+    "lockedHint": "Your role cannot see the productivity of individual developers.",
     "columns": {
       "developer": "Developer"
     }

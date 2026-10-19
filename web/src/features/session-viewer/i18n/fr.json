@@ -28,7 +28,7 @@
     "loadMore": "Charger plus",
     "empty": "Aucun événement enregistré",
     "emptyHint": "Chaque événement capté par l’enregistrement apparaît ici dans l’ordre. Cet enregistrement n’en a capté aucun.",
-    "activityUnavailable": "L’activité de l’agent est indisponible car le résolveur de timeline n’est pas câblé ou n’a pas répondu. Les preuves de gouvernance restent disponibles.",
+    "activityUnavailable": "L’activité de l’agent est indisponible car le résolveur de timeline n’est pas configuré ou n’a pas répondu. Les preuves de gouvernance restent disponibles.",
     "tool": "Appel d'outil",
     "mcp": "Invocation MCP",
     "cost": "Échantillon de coût",

@@ -144,6 +144,16 @@ assert 'Values from the env file and hook PEP URLs are never read into output' i
 assert 'cmd.Stdout = io.Discard' in doctor and 'cmd.Stderr = io.Discard' in doctor
 PY
 
+# The units earlier releases rendered are kept byte for byte so the installer can tell
+# an unedited install from an edited one; any change strands the installs it recognizes.
+for pin in \
+  'packaging/service/systemd-0.2.service f668c047c263b6c62d3bac8f69f639e06c6b3d826431a134955b107e2b135723' \
+  'packaging/service/systemd-26.10.service 2effb264f48f52cb51c8858d93fab15033895f4ef08e084c62a1747f54a48ad3'; do
+  path="${pin% *}"
+  digest="$(python3 -I -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$root/$path" 2>/dev/null)"
+  [[ "$digest" = "${pin#* }" ]] || fail "$path is a frozen upgrade-recognition template and changed"
+done
+
 for pair in \
   'packaging/service/systemd.service:@USER_LINE@' \
   'packaging/service/systemd.service:@DATA_DIR@' \
@@ -158,6 +168,20 @@ grep -Fq 'ProtectSystem=full' "$root/packaging/service/systemd.service" ||
 for unit in packaging/service/systemd.service packaging/systemd/olivares.service; do
   grep -Fqx 'SystemCallFilter=@system-service landlock_create_ruleset landlock_add_rule landlock_restrict_self' "$root/$unit" ||
     fail "$unit blocks the product's Landlock launcher"
+  # The session helper bind-mounts a workspace's git hooks and configuration
+  # read-only in its own mount namespace; without the namespace type and the
+  # syscall that guard degrades to "hooks and configuration stay writable".
+  grep -Fqx 'RestrictNamespaces=user net mnt' "$root/$unit" ||
+    fail "$unit denies the session mount namespace"
+  # systemd applies the lines in order: the deny line removes @privileged from the
+  # allow list, so mount must follow it and nothing may take it out again.
+  awk '
+    /^SystemCallFilter=~@privileged @resources$/ { deny = NR }
+    /^SystemCallFilter=mount$/ { allow = NR }
+    allow && (/^SystemCallFilter=~.*mount/ || /^SystemCallFilter=$/) { removed = 1 }
+    END { exit !(deny && allow > deny && !removed) }
+  ' "$root/$unit" ||
+    fail "$unit denies the mount syscall of the session helper's read-only bind mounts"
 done
 grep -Fq 'command_user="olivares:olivares"' "$root/packaging/service/openrc.sh" ||
   fail "OpenRC adapter lost its no-login service account"

@@ -93,7 +93,7 @@ das, was die Verifikation nach einer Host-Kompromittierung angreifer-resistent m
 
 Der push-only Edge-Prozess (`olivares collector`), der
 [Sources](#source) nahe den beobachteten Systemen ausführt und Beobachtungen an den
-Core über gRPC pusht (optional mTLS). Collectors haben **keinen Inbound-Listener**.
+Core über gRPC pusht (optional mTLS). Collectors haben **keinen Inbound-Listener**. Der Collector ist ein Business-Feature.
 
 ### Cooperative Path
 
@@ -188,7 +188,7 @@ an einen Agenten bindet. Siehe [eBPF/Tetragon](/de/how-to/connectors/ebpf-tetrag
 
 ### live_ref
 
-Die vom Server vergebene Identität **einer** Live-Session-Zeile. Olivares <!-- release -->0.2<!-- /release -->
+Die vom Server vergebene Identität **einer** Live-Session-Zeile. Olivares <!-- release -->0.3<!-- /release -->
 schlüsselt Beobachtung nach `(Beobachtungsumfang, externe ID)`, damit zwei
 Anbieter-Homes, die dieselbe Session-ID bekanntgeben, zwei Zeilen bleiben.
 Konsolen- und API-Reads, die „diese Zeile“ meinen, nutzen `live_ref`, nicht

@@ -72,7 +72,6 @@ func TestConfigRegistryCoversEngineCatalogKeys(t *testing.T) {
 		"OLIVARES_PORTAL_TLS_DIRECTORY": "appliance portal TLS directory",
 		"OLIVARES_WORK_":                "session child-process output family",
 		"OLIVARES_WORK_RUN_REF":         "session child-process output",
-		"OLIVARES_WORK_SESSION_ID":      "session child-process output",
 	}
 	body, err := os.ReadFile("../../scripts/config-env-catalog.tsv")
 	if err != nil {
@@ -396,7 +395,7 @@ func TestConfigValidateRejectsUnknownKey(t *testing.T) {
 	}
 }
 
-// addonAIRSConstructorInputs are the five file-reference names the enterprise addon_airs
+// addonAIRSConstructorInputs are the file-reference names the enterprise addon_airs
 // constructors read (cmd-overlay/olivares/wire_enterprise_addon_airs.go, private). T9
 // measured it on 2026-09-11: both built SKUs enforced OLIVARES_CONTENT_FIREWALL_CONFIG while
 // `config validate` and `config effective --strict` refused a deployment that set it, and
@@ -407,7 +406,9 @@ func TestConfigValidateRejectsUnknownKey(t *testing.T) {
 var addonAIRSConstructorInputs = []string{
 	"OLIVARES_COMPUTER_USE_CONFIG",
 	"OLIVARES_CONTENT_FIREWALL_CONFIG",
+	"OLIVARES_DECOY_CREDENTIALS_CONFIG",
 	"OLIVARES_ELICITATION_MEDIATOR_CONFIG",
+	"OLIVARES_PII_TOKENS_CONFIG",
 	"OLIVARES_RENDER_INSPECTOR_CONFIG",
 	"OLIVARES_SERVERTOOL_EGRESS_CONFIG",
 }
@@ -426,7 +427,7 @@ func TestConfigVerbsAcceptAddonAIRSConstructorInputs(t *testing.T) {
 			assertConfigVerbsAccept(t, map[string]string{key: setAddonAIRSPolicyFile(t, key)})
 		})
 	}
-	t.Run("all six together", func(t *testing.T) {
+	t.Run("all together", func(t *testing.T) {
 		clearOlivaresEnv(t)
 		want := make(map[string]string, len(keys))
 		for _, key := range keys {

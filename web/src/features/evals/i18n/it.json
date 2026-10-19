@@ -1,0 +1,204 @@
+{
+  "truncation": {
+    "label": "Caricate {{n}} righe; ce ne sono altre",
+    "hint": "Questo elenco ha un limite. Sono mostrate solo le righe caricate; l'assenza qui non prova che un record di valutazione non esista."
+  },
+  "title": "Valutazioni",
+  "description": "Scorecard di qualità, risultati delle esecuzioni, confronti A/B e drift, misurati su suite golden versionate. Gli output non vengono mai conservati: solo punteggi e impronte hash.",
+  "forbidden": {
+    "title": "Non autorizzato",
+    "description": "Serve il permesso di lettura delle valutazioni per vedere le misurazioni di qualità."
+  },
+  "tabs": {
+    "scorecards": "Scorecard",
+    "runs": "Esecuzioni",
+    "ab": "A/B",
+    "drift": "Drift",
+    "gate": "Gate CI",
+    "calibration": "Calibrazione del giudice"
+  },
+  "subjectKind": {
+    "suite": "Suite",
+    "agent": "Agente",
+    "model": "Modello",
+    "prompt_variant": "Variante del prompt",
+    "prompt": "Prompt",
+    "session": "Sessione",
+    "sandbox_run": "Esecuzione in sandbox"
+  },
+  "scorecards": {
+    "title": "Scorecard di qualità",
+    "description": "Punteggio medio, tasso di superamento e andamento per soggetto, aggregati in lettura.",
+    "groupBy": "Raggruppa per",
+    "by": {
+      "agent": "Per agente",
+      "model": "Per modello",
+      "suite": "Per suite",
+      "prompt_variant": "Per variante del prompt"
+    },
+    "meanScore": "Punteggio medio",
+    "passRate": "Tasso di superamento",
+    "runs": "Esecuzioni",
+    "lastScore": "Ultimo punteggio",
+    "regressed": "In regressione",
+    "empty": "Ancora nessuna scorecard: esegui una valutazione su una suite golden.",
+    "emptyHint": "Una scorecard riassume i punteggi ottenuti da un modello sui casi di una suite. Esegui una valutazione su una suite golden per produrne una."
+  },
+  "runs": {
+    "title": "Esecuzioni di valutazione",
+    "description": "Ogni esecuzione assegna un punteggio a un soggetto rispetto a una versione di suite. Una regressione è segnata qui; il rilevamento è gestito dalla vista Sicurezza.",
+    "columns": {
+      "subject": "Soggetto",
+      "status": "Stato",
+      "score": "Punteggio",
+      "passRate": "Tasso di superamento",
+      "regression": "Regressione",
+      "startedAt": "Avviata"
+    },
+    "regressed": "In regressione · drift {{drift}}",
+    "withinNoise": "Calo entro il rumore · drift {{drift}}",
+    "passRateDiff": "Calo del tasso di superamento {{drop}} (IC 95% {{lo}}–{{hi}}): {{passed}}/{{n}} valutati contro {{baselinePassed}}/{{baselineN}} della baseline",
+    "noRegression": "Nessuna",
+    "empty": "Nessuna esecuzione nell'intervallo.",
+    "emptyHint": "Ogni esecuzione di valutazione nell'intervallo selezionato è elencata qui con il suo punteggio. Allarga l'intervallo o avvia un'esecuzione.",
+    "overN": "su {{n}}",
+    "notScored": "non valutata: nessun verdetto",
+    "noBaseline": "nessuna baseline: niente da confrontare"
+  },
+  "cases": {
+    "title": "{{subject}}: risultati per caso",
+    "titleEmpty": "Risultati per caso",
+    "description": "Esito e punteggio di ogni caso per questa esecuzione.",
+    "noPayload": "L'output candidato non viene mai conservato: ogni caso porta solo un'impronta unidirezionale e una breve etichetta troncata, mai un contenuto espandibile.",
+    "fingerprint": "fp",
+    "columns": {
+      "case": "Caso",
+      "outcome": "Esito",
+      "score": "Punteggio",
+      "label": "Etichetta",
+      "fingerprint": "Impronta"
+    },
+    "empty": "Nessun risultato per caso in questa esecuzione.",
+    "emptyHint": "Ogni caso della suite è elencato qui con il verdetto del giudice. Questa esecuzione non ha registrato risultati per caso."
+  },
+  "ab": {
+    "title": "Confronto A/B",
+    "description": "Due varianti del prompt valutate sulla stessa suite; vince il punteggio più alto, i pareggi sono espliciti.",
+    "winner": "Vincitore: {{label}} · Δ {{delta}}",
+    "winnerTag": "Vincitore",
+    "tie": "Pareggio",
+    "passRate": "Tasso di superamento {{value}}",
+    "seamNote": "Un confronto A/B è una scrittura privilegiata tramite POST /ab; il motore non espone nessun confronto salvato da rileggere.",
+    "seamLabel": "Scrittura privilegiata",
+    "pickerTitle": "Esegui un confronto A/B",
+    "pickerDescription": "Scegli la suite, poi fornisci gli output candidati prodotti da ogni variante.",
+    "runComparison": "Esegui confronto",
+    "runError": "Non è stato possibile eseguire il confronto A/B. Riprova.",
+    "empty": "In questa sessione non è stato eseguito nessun confronto A/B.",
+    "emptyDescription": "Un risultato compare solo dopo il completamento della scrittura privilegiata POST /ab. Non esiste un endpoint GET per un confronto salvato.",
+    "suiteLabel": "Suite",
+    "selectSuite": "Seleziona una suite",
+    "noSuites": "Ancora nessuna suite. Un confronto viene valutato sui casi di una suite, quindi creane prima una.",
+    "noSuitesHint": "Un confronto viene valutato sui casi di una suite, quindi deve prima esistere una suite. Creane una nella scheda Suite.",
+    "labelA": "Etichetta della variante A",
+    "labelB": "Etichetta della variante B",
+    "outputsA": "Output della variante A",
+    "outputsB": "Output della variante B",
+    "outputsHint": "Oggetto JSON che associa case_key all'output prodotto da quella variante. Il motore li valuta e ne conserva solo l'hash: il testo non viene mai conservato.",
+    "outputsInvalid": "Non è un oggetto JSON che associa case_key al testo dell'output.",
+    "outputsEmpty": "Fornisci almeno un output di caso. Un insieme vuoto non valuta nulla e verrebbe salvato come esecuzione senza risultato.",
+    "pairwiseLabel": "Giudica anche le varianti a confronto diretto",
+    "pairwiseHint": "Giudica ogni caso condiviso due volte, scambiando l'ordine dei due candidati, e conta una vittoria solo quando i due ordini concordano. Due chiamate al giudice per caso (a pagamento) e la suite deve avere un criterio.",
+    "pairwiseTitle": "Giudicato a confronto diretto",
+    "pairwiseSkippedTag": "Saltato",
+    "pairwiseWinner": "Vincitore giudicato: {{label}}",
+    "pairwiseCounts": "{{compared}} confrontati · {{aWins}} A · {{bWins}} B · {{ties}} pareggi · {{inconsistent}} incoerenti sull'ordine · {{errors}} errori",
+    "pairwiseConsistency": "Coerenza di posizione {{rate}} (n={{n}}, IC 95% {{lo}}–{{hi}})",
+    "outputsTooLong": "Una chiave di caso deve avere al massimo {{maxKey}} caratteri e un output al massimo {{maxOutput}}. Il motore tronca i valori più lunghi e valuta il testo troncato.",
+    "outputsPlaceholder": "{\"case-1\": \"l'output prodotto da quella variante\"}",
+    "pairwiseSkippedBody": "Il motore non ha eseguito il confronto giudicato. Il suo motivo:"
+  },
+  "drift": {
+    "title": "Drift: {{subject}}",
+    "description": "Punteggio nel tempo rispetto alla soglia di superamento della suite. La regressione è un confronto con una sola esecuzione baseline: il calo di punteggio deve superare la soglia della suite e l'intervallo al 95% della differenza dei tassi di superamento deve escludere lo zero. Quell'esecuzione può usare un'altra versione di suite, un altro modello o un altro valutatore, e il confronto non indica quale sia cambiato. Dopo un cambio di versione della suite, fissa una baseline.",
+    "score": "Punteggio",
+    "threshold": "Soglia di superamento",
+    "pickerTitle": "Soggetto",
+    "note": "La linea della soglia è la soglia di superamento della suite; i punti sotto di essa non hanno raggiunto l'obiettivo in quel momento.",
+    "empty": "Ancora nessun dato di andamento.",
+    "emptyHint": "Il drift confronta i punteggi recenti di un modello con il suo stesso storico. Due o più esecuzioni della stessa suite producono il primo andamento."
+  },
+  "outcomeBar": {
+    "passed": "Superati",
+    "failed": "Non superati",
+    "errors": "Errori",
+    "skipped": "Saltati"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "Nessun esito per caso registrato per questa esecuzione",
+      "description": "L'esecuzione deve valutare o saltare i casi della suite selezionata prima che compaiano qui esiti, punteggi e impronte per caso."
+    },
+    "runs": {
+      "title": "Ancora nessuna esecuzione di valutazione registrata",
+      "description": "Un chiamante deve inviare output candidati a una suite golden versionata tramite l'API di esecuzione delle valutazioni prima che compaia qui un'esecuzione valutata."
+    }
+  },
+  "gate": {
+    "title": "Gate CI",
+    "description": "Valutazioni del gate di regressione: cosa ha misurato il gate e su cosa deve agire la CI.",
+    "empty": "Nessuna valutazione del gate",
+    "emptyHint": "Una valutazione del gate decide se un candidato può essere rilasciato. Esegui una valutazione su una suite con gate per registrarne una.",
+    "measured": "misurato {{verdict}}",
+    "effective": "La CI agisce su {{verdict}}",
+    "sampled": "{{sampled}} casi su {{total}} campionati",
+    "overriddenBy": "forzato da {{actor}}",
+    "override": "Forza",
+    "overrideTitle": "Forza un gate {{verdict}}",
+    "overrideDescription": "È richiesto un motivo scritto. Viene registrato accanto al verdetto originale, nella riga e nel registro delle evidenze.",
+    "reason": "Motivo",
+    "reasonHint": "Perché questo gate viene forzato. Il verdetto originale non viene cancellato.",
+    "confirmOverride": "Forza il gate",
+    "overrideDone": "Gate forzato",
+    "cancel": "Annulla",
+    "correctedRate": "Tasso di superamento corretto per il bias {{rate}} (sensibilità del giudice {{sens}}, specificità {{spec}}): mostrato accanto al tasso grezzo, mai al suo posto.",
+    "noCorrection": "Nessuna stima corretta per il bias: non c'è una calibrazione affidabile con cui correggere, quindi il tasso grezzo non è corretto. Non significa che i due concordino."
+  },
+  "calibration": {
+    "title": "Calibrazione del giudice",
+    "description": "Quanto il giudice LLM concorda con le etichette umane. Un insieme che non può misurare l'accordo corretto per il caso non può certificare nulla.",
+    "empty": "Nessun report di calibrazione",
+    "emptyHint": "Un report di calibrazione confronta i punteggi del giudice con le etichette umane. Esegui una calibrazione per produrne uno.",
+    "meets": "raggiunge l'obiettivo",
+    "below": "sotto l'obiettivo",
+    "cannotCertify": "non può certificare: kappa non definito",
+    "agreement": "Accordo",
+    "kappa": "Kappa",
+    "sensitivity": "Sensibilità",
+    "specificity": "Specificità",
+    "ciOverN": "IC 95% {{lo}}–{{hi}} su n={{n}}",
+    "degradedWithErrors": "degradato · {{n}} con errori",
+    "verbosityCorr": "Corr. verbosità"
+  },
+  "calibItems": {
+    "title": "Insieme di riferimento",
+    "description": "Le etichette umane rispetto a cui viene misurato il giudice, e il motivo per cui un report può o non può certificare.",
+    "run": "Esegui calibrazione",
+    "empty": "Ancora nessun elemento etichettato",
+    "emptyHint": "Gli elementi etichettati sono i giudizi umani rispetto a cui viene valutato un report di calibrazione. Etichetta un caso per aggiungere il primo.",
+    "distribution": "{{pass}} etichettati superato · {{fail}} etichettati non superato",
+    "degenerate": "⛔ Tutte le etichette sono uguali, quindi kappa NON PUÒ essere calcolato e nessun report di questo insieme può certificare. Etichetta casi dell'altro tipo.",
+    "humanPass": "umano: superato",
+    "humanFail": "umano: non superato",
+    "unscored": "non valutato",
+    "noJudge": "Nessun giudice è configurato, quindi non c'è nulla da misurare. Non è un'interruzione né un limite dell'edizione: una calibrazione non si può simulare."
+  },
+  "baseline": {
+    "pin": "Fissa come baseline",
+    "confirm": "Sostituisci la baseline",
+    "pinned": "Baseline fissata",
+    "replaceWarning": "⛔ Esiste UNA SOLA baseline per suite e soggetto, ed è modificabile. Fissare non aggiunge: SOSTITUISCE quella che è attualmente la baseline per {{suite}} / {{subject}}. Ogni regressione futura verrà misurata rispetto a essa.",
+    "thisRunScores": "Questa esecuzione ha superato {{score}} su n={{n}}.",
+    "cannotShowCurrent": "La console non può mostrare cosa viene sostituito: POST /baselines è l'unica route che il motore espone e il riferimento precedente è registrato nell'auto-audit, non in un endpoint leggibile. Fissare un'esecuzione PEGGIORE abbassa l'asticella, ed è così che un gate di qualità smette di scattare senza che nessuno lo disattivi."
+  }
+}

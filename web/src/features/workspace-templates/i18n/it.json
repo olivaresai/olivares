@@ -1,0 +1,95 @@
+{
+  "truncation": {
+    "label": "Caricati {{n}} template; ce ne sono altri",
+    "hint": "In questo catalogo sono disponibili solo i template caricati. Un template non mostrato qui potrebbe esistere oltre questa pagina."
+  },
+  "title": "Template di workspace",
+  "subtitle": "Snapshot riutilizzabili di hook, impostazioni, connettori e policy per le sessioni del workspace.",
+  "catalog": {
+    "builtin": "Integrato",
+    "version": "v{{version}}",
+    "author": "Di {{author}}",
+    "archived": "Archiviato",
+    "noTemplates": "Nessun template trovato.",
+    "noTemplatesHint": "Crea il tuo primo template per riutilizzare le configurazioni del workspace.",
+    "filterAll": "Tutti",
+    "filterBuiltin": "Integrati",
+    "filterCustom": "Personalizzati",
+    "showArchived": "Mostra archiviati"
+  },
+  "editor": {
+    "nameLabel": "Nome",
+    "namePlaceholder": "es. Sessione di sviluppo sicuro",
+    "descriptionLabel": "Descrizione",
+    "descriptionPlaceholder": "Cosa configura questo template?",
+    "sections": {
+      "hooks": "Hook",
+      "hooksHint": "Comandi eseguiti prima/dopo i tool e le sessioni.",
+      "settings": "Impostazioni dell'agente",
+      "settingsHint": "Modalità dei permessi, livello di impegno, modello e istruzioni personalizzate.",
+      "connectors": "Connettori",
+      "connectorsHint": "ID dei connettori da collegare quando questo template viene applicato.",
+      "policies": "Policy di governance",
+      "policiesHint": "Modalità DLP, limiti di durata della sessione, tool consentiti e registrazione dell'I/O."
+    },
+    "hooks": {
+      "preTool": "Prima del tool",
+      "postTool": "Dopo il tool",
+      "preSession": "Prima della sessione",
+      "postSession": "Dopo la sessione",
+      "command": "Comando",
+      "timeoutMs": "Timeout (ms)",
+      "addHook": "Aggiungi hook",
+      "removeHook": "Rimuovi"
+    },
+    "settings": {
+      "permissionMode": "Modalità dei permessi",
+      "effort": "Livello di impegno",
+      "model": "Modello",
+      "customInstructions": "Istruzioni personalizzate",
+      "secretEnv": "Segreti come variabili d'ambiente",
+      "secretEnvHint": "VARIABILE=env/segreto, separati da virgole. Le sessioni di questo template leggono ogni segreto del vault dalla sua variabile; solo chi gestisce i segreti del tenant può avviarle."
+    },
+    "policies": {
+      "dlpMode": "Modalità DLP",
+      "maxDuration": "Durata massima della sessione (minuti)",
+      "allowedTools": "Tool consentiti",
+      "allowedToolsPlaceholder": "es. Bash,Read,Edit",
+      "requireTruncateProtection": "Richiedi la protezione dal troncamento per le sessioni di sola lettura",
+      "truncateProtectionHint": "Le sessioni di sola lettura di questo template non si avvieranno su kernel più vecchi che non possono applicarla.",
+      "recordIo": "Registra l'I/O",
+      "peersSameTemplate": "Le sessioni di questo template possono scambiarsi messaggi"
+    }
+  },
+  "actions": {
+    "create": "Nuovo template",
+    "edit": "Modifica",
+    "duplicate": "Duplica",
+    "archive": "Archivia",
+    "restore": "Ripristina",
+    "apply": "Applica alla sessione",
+    "save": "Salva",
+    "cancel": "Annulla",
+    "confirmArchive": "Archiviare questo template?",
+    "confirmArchiveHint": "I template archiviati sono nascosti dal catalogo ma si possono ripristinare.",
+    "confirmApply": "Applicare il template?",
+    "confirmApplyHint": "Sovrascriverà le impostazioni attuali della sessione con i valori del template.",
+    "duplicateName": "Copia di {{name}}"
+  },
+  "apply": {
+    "success": "Template applicato.",
+    "conflicts": "Applicato con {{count}} conflitto/i.",
+    "conflictField": "Campo",
+    "conflictOld": "Valore precedente",
+    "conflictNew": "Nuovo valore",
+    "unenforceable": "Questo template non può essere applicato: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "Impossibile caricare i template.",
+    "saveFailed": "Impossibile salvare il template.",
+    "applyFailed": "Impossibile applicare il template.",
+    "archiveFailed": "Impossibile archiviare il template.",
+    "duplicateFailed": "Impossibile duplicare il template."
+  },
+  "notFound": "Template non trovato."
+}

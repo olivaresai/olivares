@@ -148,9 +148,11 @@ describe('groupSessions — the rail in reading order', () => {
     cc_state: 'ended',
   })
 
-  it('keeps the three sections and their order', () => {
-    // Needs you, Working, Earlier: what asks for the person comes first.
+  it('keeps the pinned section first and the three state sections in their order', () => {
+    // Pinned, then Needs you, Working, Earlier: what asks for the person comes first
+    // among the rest.
     expect(groupSessions([done, working, asking]).map((g) => g.id)).toEqual([
+      'pinned',
       'attention',
       'active',
       'settled',
@@ -161,17 +163,38 @@ describe('groupSessions — the rail in reading order', () => {
     // A rail that changed shape every time a session settled would move the row under
     // the operator's cursor.
     const groups = groupSessions([working])
-    expect(groups).toHaveLength(3)
+    expect(groups).toHaveLength(4)
     expect(groups.find((g) => g.id === 'settled')?.sessions).toEqual([])
+    expect(groups.find((g) => g.id === 'pinned')?.sessions).toEqual([])
   })
 
-  it('lifts a pin WITHIN its section, never above one', () => {
-    // The whole rule: a pin is a bookmark, not a priority. Pinning a settled session
-    // must not put it above a session that is asking for a person.
-    const order = railOrder(
-      groupSessions([working, asking, done, alsoDone], new Set([alsoDone.key])),
-    )
-    expect(order.map((s) => s.sessionRef)).toEqual(['b', 'a', 'd', 'c'])
+  it('puts pinned sessions in their own section ABOVE every other, in pin order', () => {
+    // A pin is "always first in my list" (#2130): a settled session pinned goes above
+    // the one asking for a person, and two pins keep the order they were pinned in,
+    // not the order the list gave them.
+    const all = [working, asking, done, alsoDone]
+    expect(
+      railOrder(groupSessions(all, new Set([alsoDone.key, working.key]))).map(
+        (s) => s.sessionRef,
+      ),
+    ).toEqual(['d', 'a', 'b', 'c'])
+    expect(
+      railOrder(groupSessions(all, new Set([working.key, alsoDone.key]))).map(
+        (s) => s.sessionRef,
+      ),
+    ).toEqual(['a', 'd', 'b', 'c'])
+  })
+
+  it('lists a pinned session once: it leaves its state section', () => {
+    const groups = groupSessions([working, done], new Set([done.key]))
+    expect(
+      groups.map((g) => [g.id, g.sessions.map((s) => s.sessionRef)]),
+    ).toEqual([
+      ['pinned', ['c']],
+      ['attention', []],
+      ['active', ['a']],
+      ['settled', []],
+    ])
   })
 
   it('preserves the incoming order inside a section (the join sorted it)', () => {

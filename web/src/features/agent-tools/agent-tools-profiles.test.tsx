@@ -24,7 +24,7 @@ const { api, auth, signIn, providers } = vi.hoisted(() => ({
   },
   auth: {
     isSuperadmin: true,
-    can: (_permission: string) => true,
+    can: (_permission: string): boolean => true,
     activeTenant: 't1' as string | null,
     principal: { user_id: 'root', aal: 1 },
   },
@@ -691,6 +691,45 @@ describe('AI tools: one boxed list per installed tool', () => {
     await waitFor(() =>
       expect(api.plan.mock.calls[0]).toEqual(['claude', 'latest']),
     )
+  })
+
+  // #2240: the provider pages fold into AI tools, so the tool menu is their way in. It
+  // opens the room on a door this person may read; the room's tabs reach the others.
+  it.each([
+    ['sessions:account:read', '/provider-profiles'],
+    ['sessions:profile:read', '/provider-bindings'],
+  ])(
+    'opens the detailed profiles page on a door it may read, without %s',
+    async (missing, href) => {
+      const lacking = new Set([missing, 'sessions:account:read'])
+      auth.can = (p: string) => !lacking.has(p)
+      mount()
+      await screen.findByTestId('tool-claude')
+      await userEvent
+        .setup()
+        .click(screen.getByRole('button', { name: 'Options for Claude Code' }))
+      expect(
+        await screen.findByRole('menuitem', { name: 'Detailed profiles page' }),
+      ).toHaveAttribute('href', href)
+    },
+  )
+
+  it('offers no detailed profiles page to a person who may read none of its doors', async () => {
+    const doors = [
+      'sessions:account:read',
+      'sessions:profile:read',
+      'sessions:profile-binding:read',
+    ]
+    auth.can = (p: string) => !doors.includes(p)
+    mount()
+    await screen.findByTestId('tool-claude')
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Options for Claude Code' }))
+    await screen.findByRole('menuitem', { name: 'Install details' })
+    expect(
+      screen.queryByRole('menuitem', { name: 'Detailed profiles page' }),
+    ).toBeNull()
   })
 
   it('names no tool of its own: a tool the engine lists is a box, with its profiles', async () => {

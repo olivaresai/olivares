@@ -7,7 +7,7 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 [`docs-site/`](docs-site/).
 
 > **Beta.** Releases are cut from this repository. The binaries,
-> images and packages below describe the **next release (Olivares <!-- release -->`0.2`<!-- /release -->), not yet published**;
+> images and packages below describe the **next release (Olivares <!-- release -->`0.3`<!-- /release -->), not yet published**;
 > [building from source](#from-source) remains supported. Everything is self-hosted: the engine
 > makes no mandatory outbound calls at boot and verifying a licence never calls us. The one
 > command that reaches us is `olivares upgrade`, which fetches from the update channel unless
@@ -15,9 +15,9 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 > downloaded with your subscription as the credential ([`LICENSING.md`](LICENSING.md#what-the-subscription-does-and-does-not-call-home-for)).
 
 **Verify before you run.** For a security product the supply chain is part of the trust
-model. A cosign-signed checksum manifest covers the archives and native packages; archives
-also carry SBOM attestations, and container images are signed and SBOM-attested by digest.
-OpenVEX and SLSA provenance cover the release set. The installer verifies cosign plus
+model. A cosign-signed checksum manifest covers the archives and native packages;
+container images are signed and SBOM-attested by digest, with the OpenVEX attested the same
+way. SLSA provenance covers the release set. The installer verifies cosign plus
 SHA-256; Homebrew checks each cask download against its recorded SHA-256. For manual downloads
 use [`scripts/verify-release.sh`](scripts/verify-release.sh) (see
 [Verifying a release](#verifying-a-release)).
@@ -138,7 +138,7 @@ removes it afterwards; pass `--install-cosign` to keep that verified copy next t
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
 
-To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.2`<!-- /release -->.
+To pin a release: <!-- release -->`curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 0.3`<!-- /release -->.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The
@@ -150,7 +150,7 @@ present:
 <!-- release -->
 ```sh
 # systemd user service on Linux, LaunchAgent on macOS; review before starting
-ver=0.2   # the release tag
+ver=0.3   # the release tag
 sh "olivares-install-$ver.sh" --version "$ver" --user
 olivares doctor --mode user
 
@@ -195,7 +195,7 @@ acts happen, use the signed GitHub Release assets and the direct commands below;
 a package-manager source based on this proposal.
 
 On ARM servers, download the `arm64` asset instead of `amd64`. All assets are on the <!-- release -->
-[release page](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->.
+[release page](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
 
 Each package installs the binary to `/usr/bin/olivares`, an example env file, and a
 no-login `olivares` service user plus the data dir `/var/lib/olivares`. `.deb` and
@@ -207,17 +207,17 @@ auto-start or enable the service — starting it is your explicit decision.
 <!-- release -->
 ```sh
 # Debian / Ubuntu
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.2/olivares_0.2_linux_amd64.deb
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
 # Verify the downloaded package before installing (see Verifying a release).
 sudo dpkg -i olivares_*_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.2/olivares_0.2_linux_amd64.rpm
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
 # Verify the downloaded package before installing (see Verifying a release).
 sudo rpm -i olivares_*_linux_amd64.rpm
 
 # Alpine
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.2/olivares_0.2_linux_amd64.apk
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
 # Verify the downloaded package before installing (see Verifying a release).
 sudo apk add --allow-untrusted olivares_*_linux_amd64.apk
 
@@ -274,7 +274,7 @@ it by hand if you really mean to.
 
 <!-- release -->
 ```sh
-ver=0.2; os=linux; arch=amd64
+ver=0.3; os=linux; arch=amd64
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver}_${os}_${arch}.tar.gz
 curl -fsSLO $base/checksums.txt
@@ -302,7 +302,7 @@ persistent data volume:
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -335,7 +335,7 @@ host's network namespace (Linux):
 <!-- release -->
 ```sh
 docker run --rm --network host --tmpfs /data:uid=65532,gid=65532 \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444 --data-dir /data
 ```
 <!-- /release -->
@@ -354,16 +354,16 @@ is the **fallback**: the release pipeline builds and signs on ghcr.io and then c
 content to Docker Hub **by digest** (`cosign copy`), so both coordinates resolve to identical
 layers, signatures and attestations. Docker Hub applies a rate limit to **anonymous** pulls;
 ghcr.io does not rate-limit anonymous pulls of public images — `docker login` on Docker Hub, or
-switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.2`<!-- /release -->
+switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: <!-- release -->`:0.3`<!-- /release -->
 (pin a release), `:latest`, the Business FIPS and STIG variants
 (STIG-profiled UBI base) — see [SCP-09](docs/SCP-09-FIPS-STIG.md). The base and `:latest` tags
 are multi-arch (amd64/arm64); Business FIPS/STIG images are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
-the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.2 --certificate-identity-regexp
+the image: <!-- release -->`cosign verify docker.io/olivaresai/olivares:0.3 --certificate-identity-regexp
 '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 --certificate-oidc-issuer
 https://token.actions.githubusercontent.com`<!-- /release --> (the same verification works identically against the <!-- release -->
-`ghcr.io/olivaresai/olivares:0.2`<!-- /release --> fallback — same digest, signatures and attestations).
+`ghcr.io/olivaresai/olivares:0.3`<!-- /release --> fallback — same digest, signatures and attestations).
 
 ### Docker Compose
 
@@ -446,7 +446,7 @@ and its packaging files come from the checkout, never from a branch:
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.2
+ver=0.3
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig
@@ -561,7 +561,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.
 
 <!-- release -->
 ```sh
-ver=0.2; arch=arm64   # or amd64 on Intel
+ver=0.3; arch=arm64   # or amd64 on Intel
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver}_darwin_${arch}.tar.gz
 # ...verify (see Verifying a release), then:
@@ -639,14 +639,15 @@ trusts the checkout, so read it first.
 
 ```sh
 /path/to/olivares/scripts/verify-release.sh                  # keyless / Sigstore (default)
-/path/to/olivares/scripts/verify-release.sh --key cosign.pub # key-based (air-gap)
-/path/to/olivares/scripts/verify-release.sh --offline --key cosign.pub
+/path/to/olivares/scripts/verify-release.sh --key /path/to/operator-cosign.pub # key-based (your own key pair)
+/path/to/olivares/scripts/verify-release.sh --offline --key /path/to/operator-cosign.pub
 ```
 
 It checks, in order: the cosign signature over `checksums.txt`, the SHA-256 of each
-artifact, the SBOM and OpenVEX attestations, and the SLSA build provenance (each step
-skipped with a clear note if its files or tools are absent). Details:
-[`docs/RELEASE-VERIFICATION.md`](docs/RELEASE-VERIFICATION.md).
+artifact, the per-archive SBOM and OpenVEX attestations (releases up to 26.10.1<!-- release-fixed -->; from
+0.1 the one SBOM and OpenVEX attest to the container image by digest), and the SLSA
+build provenance (each step skipped with a clear note if its files or tools are
+absent). Details: [`docs/RELEASE-VERIFICATION.md`](docs/RELEASE-VERIFICATION.md).
 
 ## Upgrading & uninstalling
 
@@ -689,7 +690,7 @@ olivares uninstall --plan --data-dir /var/lib/olivares
 olivares uninstall --preserve --data-dir /var/lib/olivares
 olivares uninstall --purge --data-dir /var/lib/olivares --yes
 # Same contract through the verified installer:
-sh olivares-install-0.2.sh --uninstall --plan --data-dir /var/lib/olivares
+sh olivares-install-0.3.sh --uninstall --plan --data-dir /var/lib/olivares
 ```
 <!-- /release -->
 

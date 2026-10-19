@@ -49,7 +49,7 @@ func (e *consentEstate) retirementCompletionRefused(t *testing.T) bool {
 	const email = "completion@consent.test"
 	user := e.onboard(e.tT, email, "viewer")
 	e.seedMembership(user, e.tB, "viewer")
-	e.scimDelete(e.tT, user)
+	e.deprovision(e.tT, user)
 	e.runPump()
 	refused := e.wantEditionRetirementRefusal(t, user, e.tT, retirementSeeder{}, "")
 	if refused != businessErasureRefusedOn(e.engine) {

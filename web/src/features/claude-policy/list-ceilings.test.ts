@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import {
-  desajustesPorFichero,
+  mismatchesByFile,
   etiquetasConLiteral,
   leer,
   nombresDeLista,
@@ -52,7 +52,7 @@ describe('claude-policy · las listas que PAGINAN piden su techo y declaran su r
     const listas = nombresDeLista(leer('features/claude-policy/api.ts')).filter(
       (n) => !(n in NO_PAGINAN),
     )
-    const { total, desajustes } = desajustesPorFichero(
+    const { total, desajustes } = mismatchesByFile(
       VISTAS.map((v) => ({ nombre: v, src: leer(v) })),
       listas,
       'claudePolicyApi',

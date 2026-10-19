@@ -58,7 +58,7 @@ func TestSubjectExcludedFromOffboardUntilLift(t *testing.T) {
 			}
 		}
 		want(e.tT, false)
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		want(e.tT, true)
 		want(e.tB, false)
 		step := &erasureFixtureStep{st: e.eng.store, outcome: auth.RetirementOutcome{Stores: []auth.RetirementStoreState{{Store: "agent-spool:owned-node", State: "offline"}}}}
@@ -91,7 +91,7 @@ func TestRetirementStoreStateBlocksUntilClean(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		e.requireRetirementCompletion(t, "external store-state transitions require published blocked and retired verdicts")
 		user := e.onboard(e.tT, "store-state@consent.test", "viewer")
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		step := &erasureFixtureStep{st: e.eng.store}
 		for _, state := range []string{"outside_custody", "offline", "unreadable", "unknown", "changing", "not-a-verdict", ""} {
 			step.outcome = auth.RetirementOutcome{Stores: []auth.RetirementStoreState{{Store: "audit-archive:owned-sink", State: state, Retention: "30 days"}}, Limits: []string{"text by others not scanned: fixture.reason"}}
@@ -150,7 +150,7 @@ func TestReadmitRefusedUntilPrivateErasureCompletes(t *testing.T) {
 		e.requireRetirementCompletion(t, "the private-store case requires completion to permit readmission")
 		const email = "private-erasure@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		step := &erasureFixtureStep{st: e.eng.store, outcome: auth.RetirementOutcome{Stores: []auth.RetirementStoreState{{Store: "session-cockpit:sqlite:owned-node", State: "changing"}}}}
 		erasureFixturePass(t, e, user, step)
 		if res := e.readmit(e.tT, email, "viewer"); res.code != http.StatusConflict || res.errorCode() != "retirement_pending" {

@@ -4,7 +4,7 @@ description: "La posture sécurisée par conception derrière Olivares AI — po
 ---
 
 :::note[Business]
-L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et le transfert DDIL entre sites isolés nécessitent aussi Business.
 :::
 
 Olivares AI est un produit de sécurité qui s'exécute **au sein de la propre

@@ -18,11 +18,12 @@ description: >-
 
 ## 选择升级路径
 
-二进制文件有两种升级方式，最终结果相同。
+二进制文件有三种升级方式，最终结果相同。
 
 | 你的安装方式 | 路径 |
 |---|---|
-| 主机上的二进制文件、systemd、Docker Compose | `olivares upgrade`——本页 |
+| 主机上的二进制文件、systemd | `olivares upgrade`——本页 |
+| Docker 或 Podman 容器 | 运行 `docker compose exec olivares olivares upgrade`，然后重新创建容器。镜像无法更改，因此该版本会保存在数据卷中（数据目录下的 `ota/`），镜像中的二进制文件每次启动时，只要该版本比镜像新或是同一版本的另一种构建，就会启动它。删除 `ota/` 即可让容器回到其镜像中的二进制文件。命令见 [Docker 与 Compose](/zh/how-to/install-a-license/#docker-与-compose)。 |
 | Kubernetes / Helm | 设置镜像，让 operator 执行滚动更新。不要在 pod 内运行 `olivares upgrade`：部署是声明式的，下一次协调会撤销它。 |
 
 ## 首先阅读计划
@@ -45,7 +46,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.2
+olivares upgrade --check --current-version 0.3
 ```
 <!-- /release -->
 

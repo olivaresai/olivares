@@ -2,32 +2,40 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// PINS are a preference in the browser, and everything read back from storage is
-// input nobody wrote on purpose.
+// PINS are the engine's: this module only turns the `pinned` / `pinned_at` the runs
+// carry into the set the rail sorts by (#2130).
 import { describe, expect, it } from 'vitest'
 import type { Whoami } from '@/lib/api/types'
 import {
   MAX_PINS,
   decodePins,
   encodePins,
+  isPinnable,
+  isPinned,
   pinStorageKey,
-  pinnedAddress,
-  togglePin,
+  pinnedKeys,
+  preferenceStorageKey,
 } from './session-pins'
 
 const user = { kind: 'user', user_id: 'u-1' } as unknown as Whoami
 
-describe('pinStorageKey — no partition, no pinning', () => {
+// The model favorites still keep a browser preference per principal and tenant.
+describe('preferenceStorageKey — no partition, nothing written', () => {
   it('partitions by origin, user and tenant', () => {
-    const key = pinStorageKey('https://console.example', user, 't-1')
+    const key = preferenceStorageKey(
+      'x',
+      'https://console.example',
+      user,
+      't-1',
+    )
     expect(key).toContain('u-1')
     expect(key).toContain('t-1')
     expect(key).toContain('https://console.example')
   })
 
   it('answers a DIFFERENT key for another tenant of the same user', () => {
-    expect(pinStorageKey('o', user, 't-1')).not.toBe(
-      pinStorageKey('o', user, 't-2'),
+    expect(preferenceStorageKey('x', 'o', user, 't-1')).not.toBe(
+      preferenceStorageKey('x', 'o', user, 't-2'),
     )
   })
 
@@ -45,15 +53,118 @@ describe('pinStorageKey — no partition, no pinning', () => {
     ],
     ['no tenant is established', user, null],
   ])('refuses a key when %s', (_why, principal, tenant) => {
-    expect(pinStorageKey('o', principal, tenant)).toBeNull()
+    expect(preferenceStorageKey('x', 'o', principal, tenant)).toBeNull()
+  })
+})
+
+type Row = Parameters<typeof pinnedKeys>[0][number]
+const row = (
+  key: string,
+  runs: { run_ref: string; pinned?: boolean; pinned_at?: string }[],
+): Row => ({ key, runs: runs as unknown as Row['runs'] })
+
+describe('pinnedKeys — the sessions this person pinned, oldest pin first', () => {
+  it('lists the pinned rows in the order they were pinned, not the list order', () => {
+    const keys = pinnedKeys([
+      row('run:new', [
+        { run_ref: 'new', pinned: true, pinned_at: '2026-10-14T10:00:09Z' },
+      ]),
+      row('run:mid', [{ run_ref: 'mid' }]),
+      row('run:old', [
+        { run_ref: 'old', pinned: true, pinned_at: '2026-10-14T10:00:05Z' },
+      ]),
+    ])
+    expect([...keys]).toEqual(['run:old', 'run:new'])
+  })
+
+  it('ignores a run the engine says is not pinned, or says nothing about', () => {
+    const keys = pinnedKeys([
+      row('run:a', [{ run_ref: 'a', pinned: false }]),
+      row('run:b', [{ run_ref: 'b' }]),
+    ])
+    expect(keys.size).toBe(0)
+  })
+
+  it('counts a session pinned when ANY of its runs is, from the earliest pin', () => {
+    const keys = pinnedKeys([
+      row('live:x', [
+        { run_ref: 'r2', pinned: true, pinned_at: '2026-10-14T10:00:20Z' },
+        { run_ref: 'r1', pinned: true, pinned_at: '2026-10-14T10:00:01Z' },
+      ]),
+      row('run:y', [
+        { run_ref: 'y', pinned: true, pinned_at: '2026-10-14T10:00:10Z' },
+      ]),
+    ])
+    expect([...keys]).toEqual(['live:x', 'run:y'])
+  })
+
+  it('keeps the list order for two pins with one stamp', () => {
+    const at = '2026-10-14T10:00:00Z'
+    const keys = pinnedKeys([
+      row('run:a', [{ run_ref: 'a', pinned: true, pinned_at: at }]),
+      row('run:b', [{ run_ref: 'b', pinned: true, pinned_at: at }]),
+    ])
+    expect([...keys]).toEqual(['run:a', 'run:b'])
+  })
+})
+
+describe('isPinnable — a pin hangs on a run that is still listed', () => {
+  it('is false for a session the plane only observes', () => {
+    expect(isPinnable({ runs: [] })).toBe(false)
+  })
+  it('is true once a run drives it', () => {
+    expect(
+      isPinnable({ runs: [{ run_ref: 'r', state: 'running' }] as never }),
+    ).toBe(true)
+  })
+  it('is false when every run is released', () => {
+    expect(
+      isPinnable({ runs: [{ run_ref: 'r', state: 'cleaned' }] as never }),
+    ).toBe(false)
+  })
+})
+
+// The open card can be a session the list does not hold (a deep link past the page).
+describe("isPinned — the list, or the session's own runs", () => {
+  const none = new Set<string>()
+  it("reads the list's set", () => {
+    expect(isPinned(new Set(['run:a']), row('run:a', [{ run_ref: 'a' }]))).toBe(
+      true,
+    )
+  })
+  it("reads the engine's answer on the session's own runs when the list lacks it", () => {
+    expect(isPinned(none, row('run:a', [{ run_ref: 'a', pinned: true }]))).toBe(
+      true,
+    )
+  })
+  it('is false when neither says so', () => {
+    expect(
+      isPinned(none, row('run:a', [{ run_ref: 'a', pinned: false }])),
+    ).toBe(false)
+  })
+})
+
+// The pins this browser kept before the engine did (#2130) are stored data: read back
+// only to be moved to the engine, and everything in them is input nobody wrote on purpose.
+describe('pinStorageKey — the key the old pins live under', () => {
+  it('is the key the console always wrote, per origin, user and tenant', () => {
+    expect(pinStorageKey('o', user, 't-1')).toBe(
+      'olivares.sessions.pins:["o","user","u-1","t-1"]',
+    )
+  })
+
+  it('has no key for a token principal or without a tenant', () => {
+    const token = { kind: 'token', user_id: 'u-1' } as unknown as Whoami
+    expect(pinStorageKey('o', token, 't-1')).toBeNull()
+    expect(pinStorageKey('o', user, null)).toBeNull()
   })
 })
 
 describe('decodePins — a stored value is untrusted input', () => {
-  it('round-trips what it wrote', () => {
-    expect(decodePins(encodePins(['live:a', 'sess:b']))).toEqual([
+  it('round-trips what the old console wrote, oldest first', () => {
+    expect(decodePins(encodePins(['live:a', 'run:b']))).toEqual([
       'live:a',
-      'sess:b',
+      'run:b',
     ])
   })
 
@@ -68,8 +179,6 @@ describe('decodePins — a stored value is untrusted input', () => {
   })
 
   it('drops entries this plane could not have minted', () => {
-    // Nothing is RECONSTRUCTED from storage: a stored label, URL or object never
-    // becomes an address, it is simply not one.
     const raw = JSON.stringify({
       version: 1,
       pins: ['live:a', 'nonsense', 42, { id: 'x' }, 'https://evil.example'],
@@ -77,49 +186,21 @@ describe('decodePins — a stored value is untrusted input', () => {
     expect(decodePins(raw)).toEqual(['live:a'])
   })
 
-  it('drops duplicates and stops at the ceiling', () => {
+  it('reads the exact value the old console wrote', () => {
+    expect(
+      decodePins('{"version":1,"pins":["live:lr-a","sess:sid-b","run:run-c"]}'),
+    ).toEqual(['live:lr-a', 'sess:sid-b', 'run:run-c'])
+  })
+
+  it('drops a duplicate', () => {
+    expect(decodePins(encodePins(['live:a', 'live:a', 'live:b']))).toEqual([
+      'live:a',
+      'live:b',
+    ])
+  })
+
+  it('stops at the ceiling', () => {
     const many = Array.from({ length: MAX_PINS + 5 }, (_, i) => `live:${i}`)
-    expect(decodePins(encodePins([...many, 'live:0']))).toHaveLength(MAX_PINS)
-  })
-})
-
-describe('togglePin', () => {
-  it('adds, then removes', () => {
-    const one = togglePin([], 'live:a')
-    expect(one).toEqual(['live:a'])
-    expect(togglePin(one, 'live:a')).toEqual([])
-  })
-
-  it('refuses an address that names nothing', () => {
-    expect(togglePin(['live:a'], 'nonsense')).toEqual(['live:a'])
-  })
-
-  it('drops the OLDEST pin past the ceiling, never the one just added', () => {
-    const full = Array.from({ length: MAX_PINS }, (_, i) => `live:${i}`)
-    const next = togglePin(full, 'live:new')
-    expect(next).toHaveLength(MAX_PINS)
-    expect(next).toContain('live:new')
-    expect(next).not.toContain('live:0')
-    expect(next[0]).toBe('live:1')
-  })
-})
-
-// F1 09b sweep: a launched session is run:<ref> until its managed row is proven and
-// live:<ref> after, so a pin saved under one name was lost under the other.
-describe('pinnedAddress — one session, either name', () => {
-  const session = {
-    key: 'live:lr-a',
-    liveRef: 'lr-a',
-    runs: [{ run_ref: 'run-a' }],
-  } as unknown as Parameters<typeof pinnedAddress>[1]
-  it('finds a pin stored under the run name once the session is live', () => {
-    expect(pinnedAddress(new Set(['run:run-a']), session)).toBe('run:run-a')
-  })
-  it('while the session is still a run, finds a pin stored under the run name', () => {
-    const early = { ...session, key: 'run:run-a', liveRef: undefined }
-    expect(pinnedAddress(new Set(['run:run-a']), early)).toBe('run:run-a')
-  })
-  it('is undefined for a session pinned under no name of its own', () => {
-    expect(pinnedAddress(new Set(['run:other']), session)).toBeUndefined()
+    expect(decodePins(encodePins(many))).toHaveLength(MAX_PINS)
   })
 })

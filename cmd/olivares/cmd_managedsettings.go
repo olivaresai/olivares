@@ -53,8 +53,9 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 		gatewayURL    string
 	)
 	cmd := &cobra.Command{
-		Use:   "managed-settings",
-		Short: "Render the Claude Code managed-settings.json that governs operated sessions (PEP hook)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "managed-settings",
+		Short:       "Render the Claude Code managed-settings.json that governs operated sessions (PEP hook)",
 		Long: "managed-settings renders the non-overridable Claude Code managed-settings.json that makes an\n" +
 			"operated session's tool-calls pass the governed PEP: a managed PreToolUse hook running\n" +
 			"`olivares claude-hook`. User and project hooks are restricted to preserve the PEP's\n" +

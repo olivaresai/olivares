@@ -6,7 +6,7 @@
 # Visual e2e for the management views. Unlike scripts/web-e2e.sh (which boots a
 # real engine for the setup→login smoke), this is HERMETIC: it builds the SPA to a
 # private dir, serves it with `vite preview`, and runs the Playwright spec, which
-# seeds a session + intercepts every /v1 call with fixtures. So it renders the four
+# recovers a synthetic browser session and intercepts every /v1 call with fixtures. So it renders the four
 # management views (capabilities, catalog, permissions, deploy, knowledge) in light
 # AND dark with no backend, and writes a screenshot per view per theme into
 # web/playwright-report/. Building to a private dir keeps it immune to other build
@@ -51,9 +51,15 @@ DIST="$(mktemp -d)"
 
 cleanup() {
   [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null || true
+  [ -n "${PID:-}" ] && wait "$PID" 2>/dev/null || true
   rm -rf "$DIST"
 }
 trap cleanup EXIT
+
+if curl -sf --max-time 1 "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then
+  echo "ERROR: 127.0.0.1:$PORT already has a listener; refusing to use another server" >&2
+  exit 1
+fi
 
 # The spec and its harness are TypeScript that Playwright transpiles WITHOUT type-checking, so
 # a type error in e2e/management-views.spec.ts surfaced only after the build and the preview
@@ -66,15 +72,30 @@ pnpm --dir "$WEB" run typecheck:e2e
 
 echo "==> Building the SPA to a private dir ($DIST)"
 pnpm --dir "$WEB" exec vite build --outDir "$DIST" --emptyOutDir
+# A foreign listener, including one that appears during the build, cannot prove
+# that this private output is being served. Probe content unique to our directory.
+READY_MARKER="$DIST"
+printf '%s\n' "$READY_MARKER" > "$DIST/visual-e2e-ready.txt"
 
 echo "==> Serving the frozen build on 127.0.0.1:$PORT"
-pnpm --dir "$WEB" exec vite preview --outDir "$DIST" --port "$PORT" --strictPort >"$DIST/preview.log" 2>&1 &
+pnpm --dir "$WEB" exec vite preview --outDir "$DIST" --host 127.0.0.1 --port "$PORT" --strictPort >"$DIST/preview.log" 2>&1 &
 PID=$!
 
+READY=false
 for _ in $(seq 1 40); do
-  if curl -sf "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then break; fi
+  if ! kill -0 "$PID" 2>/dev/null; then break; fi
+  if RESPONSE="$(curl -sf --max-time 1 "http://127.0.0.1:$PORT/visual-e2e-ready.txt" 2>/dev/null)" &&
+     [ "$RESPONSE" = "$READY_MARKER" ]; then
+    READY=true
+    break
+  fi
   sleep 0.5
 done
+if [ "$READY" != true ] || ! kill -0 "$PID" 2>/dev/null; then
+  echo "ERROR: preview did not become ready on 127.0.0.1:$PORT; refusing to run Playwright" >&2
+  cat "$DIST/preview.log" >&2
+  exit 1
+fi
 
 echo "==> Running the visual spec"
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" \

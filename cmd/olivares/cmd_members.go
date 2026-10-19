@@ -47,8 +47,9 @@ const (
 func newMembersCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:   "members",
-		Short: "People in an organization and their roles",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "members",
+		Short:       "People in an organization and their roles",
 		Long: "Manage who belongs to a tenant and with which role. A grant is what turns a global\n" +
 			"account into somebody who can do work in one tenant; the roster is the resolved view of\n" +
 			"that tenant's members, their effective role, workspace confinement and directory groups.\n" +
@@ -102,9 +103,10 @@ type cliInviteList struct {
 
 func membersListCmd(client bootstrapClient) *cobra.Command {
 	return &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the resolved tenant's member roster",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the resolved tenant's member roster",
 		Long: "List every account with a membership in the resolved tenant, with its effective role,\n" +
 			"workspace confinement and directory groups. The set is tenant-scoped by the engine — a\n" +
 			"workspace-confined caller sees only its own workspace's members — and is returned\n" +
@@ -148,8 +150,9 @@ func membersListCmd(client bootstrapClient) *cobra.Command {
 func membersGrantCmd(client bootstrapClient) *cobra.Command {
 	var userID, role, workspaceID string
 	cmd := &cobra.Command{
-		Use:   "grant",
-		Short: "Grant an existing account a role in a tenant",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "grant",
+		Short:       "Grant an existing account a role in a tenant",
 		Long: "Grant a global account a role in one tenant, optionally confined to a single workspace\n" +
 			"of that tenant. The engine authorizes the grant in the TARGET tenant (membership:write)\n" +
 			"and enforces the role ceiling — a caller can never grant a role above its own. Create the\n" +
@@ -227,8 +230,9 @@ func membersGrantCmd(client bootstrapClient) *cobra.Command {
 
 func membersInvitesCmd(client bootstrapClient) *cobra.Command {
 	root := &cobra.Command{
-		Use:   "invites",
-		Short: "List and revoke the tenant's pending invitations",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "invites",
+		Short:       "List and revoke the tenant's pending invitations",
 		Long: "Inspect the invitations issued from the console that nobody has redeemed yet, and\n" +
 			"revoke one. Invitations are issued from the console; the browser-free equivalent is\n" +
 			"`users create` followed by `members grant`.",
@@ -241,9 +245,10 @@ func membersInvitesCmd(client bootstrapClient) *cobra.Command {
 
 func invitesListCmd(client bootstrapClient) *cobra.Command {
 	return &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the tenant's pending, unexpired invitations",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the tenant's pending, unexpired invitations",
 		Long: "List invitations that have been issued for this tenant and not yet redeemed. No token\n" +
 			"material is returned — the engine's invitation DTO carries none, by construction.",
 		Example: "  olivares members invites ls --tenant tenant-a",
@@ -282,9 +287,10 @@ func invitesListCmd(client bootstrapClient) *cobra.Command {
 func invitesRevokeCmd(client bootstrapClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "revoke <invite-id>",
-		Aliases: []string{"rm", "delete"},
-		Short:   "Revoke a pending invitation",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "revoke <invite-id>",
+		Aliases:     []string{"rm", "delete"},
+		Short:       "Revoke a pending invitation",
 		Long: "Revoke a pending invitation so its single-use token can no longer be redeemed. Use it\n" +
 			"when an invitation was sent to the wrong address: the link stops working at once.",
 		Example: "  olivares members invites revoke 018f2c2e-0000-7000-8000-000000000003 --yes",

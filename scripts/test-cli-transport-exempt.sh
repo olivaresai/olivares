@@ -77,7 +77,7 @@ printf 'package main\nfunc f(){ c := &http.Client{} ; _ = c }\n' > "$T/cmd/oliva
 #    delante. Es la trampa del `push | tail` de esta misma noche, en su cuarta forma.
 MSG=$(bash "$GUION" "$T" 2>&1 || true)
 case "$MSG" in
-	*BLOQUE*) paso "failure message NAMES adjacency" ;;
+	*Adjacency*) paso "failure message NAMES adjacency" ;;
 	*) failed "failure does not name the rule: documentation does not ensure diagnostics" ;;
 esac
 

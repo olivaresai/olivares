@@ -17,8 +17,9 @@ import (
 
 func newConnectorCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "connector",
-		Short: "Scaffold out-of-tree connector projects",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "connector",
+		Short:       "Scaffold out-of-tree connector projects",
 		Example: "  olivares connector init acme.widget-audit \\\n" +
 			"    --module github.com/acme/olivares-connector-widget-audit \\\n" +
 			"    --template access-edge-source",
@@ -59,8 +60,9 @@ func connectorInitCmd() *cobra.Command {
 		sdkPath    string
 	)
 	cmd := &cobra.Command{
-		Use:   "init <name>",
-		Short: "Generate a connector repository from an archetype template",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "init <name>",
+		Short:       "Generate a connector repository from an archetype template",
 		Long: `Generate a complete, boundary-clean connector repository.
 
 Templates:

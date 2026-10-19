@@ -164,7 +164,7 @@ detached signature **from disk**, so it is fully offline — in an air-gap, poin
 olivares security check --feed advisories.json          # --sig defaults to advisories.json.sig
 olivares security check --feed /media/olivares-update/advisories.json   # air-gap: file from a bundle
 olivares security check --feed advisories.json --quiet  # print nothing when unaffected (probes)
-olivares security check --feed advisories.json --product-version 0.2  # what-if / fleet check
+olivares security check --feed advisories.json --product-version 0.3  # what-if / fleet check
 ```
 <!-- /release -->
 

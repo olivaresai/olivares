@@ -8,7 +8,7 @@ description: >-
 ---
 
 :::note[Édition]
-Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges) et le cycle de vie des identités gérées nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, SCIM entrant utilisateurs/groupes, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
+Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges), le cycle de vie des identités gérées et le serveur SCIM entrant nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
 :::
 
 Le module VI est le **plan de gouvernance sur le modèle d'autorisation existant du
@@ -123,4 +123,4 @@ typée, jamais un e-mail.
 
 ## Éditions et approbations (0.1)
 
-Community conserve le moteur d’approbation, le minimum de deux personnes distinctes pour les actions CRITICAL, le double contrôle du kill-switch et les politiques qui imposent une revue ou augmentent le niveau de risque ou le quorum. Les politiques qui abaissent le risque et l’accès d’urgence break-glass font partie de la base Business. Les données stockées restent lisibles et exportables, mais ne peuvent ni abaisser les valeurs par défaut de Community ni autoriser un accès d’urgence.
+Community conserve le moteur d’approbation, le minimum de deux personnes distinctes pour les actions CRITICAL, le double contrôle du kill-switch et les politiques qui imposent la revue d’une action. Les politiques d’approbation qui modifient le niveau de risque ou le nombre d’approbations, ainsi que l’accès d’urgence break-glass, font partie de la base Business. Les politiques stockées qui augmentent le niveau de risque ou le nombre d’approbations continuent de s’appliquer ; les politiques d’abaissement stockées et les accès d’urgence restent lisibles et exportables, mais ne peuvent ni abaisser les valeurs par défaut de Community ni autoriser un accès d’urgence.

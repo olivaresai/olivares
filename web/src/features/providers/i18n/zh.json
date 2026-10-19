@@ -1,22 +1,22 @@
 {
-  "title": "提供方",
+  "title": "提供商",
   "subtitle": "智能体工具使用的云服务凭据或本地模型端点。",
-  "nav": "提供方",
-  "add": "添加提供方",
+  "nav": "提供商",
+  "add": "添加提供商",
   "rowMenu": "{{name}} 的行操作",
   "empty": {
-    "title": "尚未注册任何提供方",
+    "title": "尚未注册任何提供商",
     "description": "使用 API 密钥连接 Anthropic、OpenAI 或 xAI，或添加无需密钥的本地 Ollama 端点，然后测试连接。",
-    "action": "添加你的第一个提供方"
+    "action": "添加你的第一个提供商"
   },
   "emptyFiltered": {
-    "title": "没有提供方符合此筛选条件",
-    "description": "清除筛选条件即可查看所有已注册的提供方。",
+    "title": "没有提供商符合此筛选条件",
+    "description": "清除筛选条件即可查看所有已注册的提供商。",
     "action": "显示全部"
   },
   "forbidden": {
-    "title": "你无权读取此租户的提供方",
-    "description": "读取已注册的提供方需要 sessions:provider:read。请向该租户的管理员申请。"
+    "title": "你无权读取此租户的提供商",
+    "description": "你的角色无法读取已注册的提供商。请向该组织的管理员申请访问权限。"
   },
   "columns": {
     "name": "名称",
@@ -51,8 +51,8 @@
     "refused": "被拒绝",
     "unreachable": "无法连通",
     "neverHint": "还没有人测试过这份凭据。注册本身并不能证明它可用。",
-    "okHint": "提供方作出了响应并接受了这份凭据。",
-    "refusedHint": "提供方作出了响应并拒绝了这份凭据。请更换密钥。",
+    "okHint": "提供商作出了响应并接受了这份凭据。",
+    "refusedHint": "提供商作出了响应并拒绝了这份凭据。请更换密钥。",
     "unreachableHint": "端点没有响应。这并不能说明凭据本身有任何问题。",
     "models": "{{n}} 个模型",
     "latency": "{{ms}} 毫秒",
@@ -72,24 +72,24 @@
     "details": "详情"
   },
   "create": {
-    "title": "添加提供方",
+    "title": "添加提供商",
     "description": "引擎会封存该密钥且永不返回。你只会看到四个字符的提示，再无其他。",
-    "kind": "提供方",
-    "kindPlaceholder": "选择提供方",
+    "kind": "提供商",
+    "kindPlaceholder": "选择提供商",
     "name": "名称",
     "nameHint": "你为这份凭据起的名字。选择器中显示的就是它。",
     "namePlaceholder": "Anthropic（生产）",
     "baseURL": "端点",
-    "baseURLHint": "留空表示使用提供方的官方端点。必须是 https。",
-    "baseURLLocalHint": "留空表示使用提供方的官方端点。否则使用 https，或环回或私有网络地址上的普通 http。",
+    "baseURLHint": "留空表示使用提供商的官方端点。必须是 https。",
+    "baseURLLocalHint": "留空表示使用提供商的官方端点。否则使用 https，或环回或私有网络地址上的普通 http。",
     "baseURLPlaceholder": "https://llm.example.com",
     "apiKey": "API 密钥",
     "apiKeyHint": "只发送一次，由引擎封存，永不返回到此浏览器。",
     "apiKeyPlaceholder": "粘贴密钥",
-    "submit": "添加提供方",
+    "submit": "添加提供商",
     "submitting": "封存中…",
     "cancel": "取消",
-    "success": "已添加提供方。",
+    "success": "已添加提供商。",
     "testNext": "立即测试连接",
     "registering": "正在注册…",
     "localNameHint": "此端点的显示名称，将显示在选择器中。",
@@ -98,7 +98,7 @@
     "requiredEndpointHint": "请输入服务端点：https，或环回或私有网络地址上的普通 http。"
   },
   "rotate": {
-    "title": "更换此提供方的密钥",
+    "title": "更换此提供商的密钥",
     "description": "新密钥在同一引用下替换旧密钥，因此所有已绑定的配置档案继续可用。已在运行的会话仍保留它启动时的凭据。",
     "verdictCleared": "先前的连接测试结果会被清除：针对一份已不存在的凭据所得出的结论，并不能证明替换它的那一份可用。",
     "submit": "更换密钥",
@@ -106,19 +106,19 @@
     "success": "密钥已更换。请测试连接以确认新密钥可用。"
   },
   "revoke": {
-    "title": "吊销此提供方",
+    "title": "吊销此提供商",
     "description": "此操作会销毁已封存的凭据。对该引用而言无法撤销。",
-    "consequence": "所有绑定到它的提供方配置档案都将拒绝启动，并指名这个提供方。提供方那一侧的凭据不会被吊销：请在他们自己的控制台中操作。",
+    "consequence": "所有绑定到它的提供商配置档案都将拒绝启动，并指名这个提供商。提供商那一侧的凭据不会被吊销：请在他们自己的控制台中操作。",
     "confirm": "吊销",
-    "success": "提供方已吊销，其封存的凭据已被销毁。",
+    "success": "提供商已吊销，其封存的凭据已被销毁。",
     "localDescription": "此操作将撤销端点注册。绑定的配置将拒绝新的启动。Ollama 服务及其模型会保留在主机上。",
     "localSuccess": "端点注册已撤销。"
   },
   "detail": {
-    "title": "提供方",
+    "title": "提供商",
     "reference": "引用",
     "endpoint": "端点",
-    "officialEndpoint": "提供方的官方端点",
+    "officialEndpoint": "提供商的官方端点",
     "created": "注册于",
     "revoked": "吊销于",
     "models": "最近一次测试列出的模型",
@@ -126,23 +126,23 @@
     "close": "关闭"
   },
   "vaultUnavailable": {
-    "title": "此部署无法保存提供方凭据",
+    "title": "此部署无法保存提供商凭据",
     "description": "没有接入封存式凭据保管库，因此引擎拒绝保存密钥，而不是保存一份它无法保护的密钥。需要管理员配置机密封存器。"
   },
   "truncation": {
-    "label": "正在显示 {{n}} 个提供方；还有更多",
+    "label": "正在显示 {{n}} 个提供商；还有更多",
     "hint": "此列表只是一页。请缩小范围，或使用 `olivares provider ls` 获取完整集合。"
   },
   "bind": {
     "title": "绑定配置档",
-    "description": "所选配置档的下次启动将使用 {{name}}。现有会话保留当前提供方。",
+    "description": "所选配置档的下次启动将使用 {{name}}。现有会话保留当前提供商。",
     "profile": "配置档",
     "choose": "选择兼容的配置档",
-    "empty": "没有兼容的活动配置档。请在提供方配置档页面创建。",
+    "empty": "没有兼容的活动配置档。请在提供商配置档页面创建。",
     "more": "加载更多配置档",
     "unavailable": "缺少配置档权限或兼容的活动配置档。",
     "loadError": "无法加载配置档。",
-    "success": "提供方已绑定到配置档。"
+    "success": "提供商已绑定到配置档。"
   },
   "defaultModel": {
     "title": "默认模型",

@@ -444,9 +444,17 @@ class SourceLanguageTests(unittest.TestCase):
     def test_locale_and_unicode_data_are_retained(self):
         locale = '{"title": "Configuración"}\n'  # language-data: locale fixture
         source = 'const input = "mañana"; // language-data: Unicode fixture\n'  # language-data: fixture
+        italian = '{"title": "Perché non è disponibile"}\n'  # language-data: locale fixture
+        # The Spanish token proves the ko exclusion discriminates; without it the case
+        # would pass with ko treated as source.
+        korean = '{"title": "콘솔을 다시 불러오는 중…", "note": "El archivo no existe"}\n'  # language-data: locale fixture
         self.write("web/src/features/example/i18n/es.json", locale)
+        self.write("web/src/features/example/i18n/it.json", italian)
+        self.write("web/src/features/example/i18n/ko.json", korean)
         self.write("web/src/example.test.ts", source + "// Temporal workflow test.\n")
-        result = self.check("web/src/features/example/i18n/es.json", "web/src/example.test.ts")
+        result = self.check("web/src/features/example/i18n/es.json",
+                            "web/src/features/example/i18n/it.json",
+                            "web/src/features/example/i18n/ko.json", "web/src/example.test.ts")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((self.root / "web/src/example.test.ts").read_text(),
                          source + "// Temporal workflow test.\n")
@@ -516,6 +524,26 @@ class SourceLanguageTests(unittest.TestCase):
         self.write("web/src/features/example/i18n/en.json", locale)
         result = self.check("web/src/features/example/i18n/en.json")
         self.assertEqual(result.returncode, 1, result.stderr)
+
+    def test_english_language_hint_is_data_but_the_catalog_is_checked(self):
+        path = "web/src/lib/i18n/locales/en/settings.json"
+        names = 'English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.'  # language-data: language names
+        hint = ('{\n  "general": {\n'
+                f'    "languageHint": "{names}"\n'
+                '  }\n}\n')
+        self.write(path, hint)
+        result = self.check(path)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rejection = '"title": "El archivo no existe",'  # language-data: rejection fixture
+        checked = hint.replace(
+            '    "languageHint":',
+            f'    {rejection}\n    "languageHint":',
+        )
+        self.write(path, checked)
+        result = self.check(path)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(f"{path}:3", result.stdout)
+        self.assertNotIn(f"{path}:4", result.stdout)
 
     def test_generated_locale_assets_are_exempt_in_both_modes(self):
         # The console build generates the embedded bundle under core/internal/webui/dist;
@@ -629,6 +657,40 @@ class SourceLanguageTests(unittest.TestCase):
         result = self.check("--base", "HEAD")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn(":(literal)example.py:1", result.stdout)
+
+    def test_unrelated_comparison_preserves_base_ancestry_and_added_line_checks(self) -> None:
+        historical = "// El archivo no existe.\n"  # language-data: existing published text
+        self.write("core/example.go", historical + "var count = 1\n")
+        self.git("init", "-q", "-b", "main")
+        self.git("add", ".")
+        self.git("commit", "-qm", "published source")
+        self.git("tag", "published-base")
+        self.git("checkout", "-q", "--orphan", "community-export")
+        self.git("rm", "-q", "-rf", ".")
+        self.write("core/example.go", historical + "var count = 2\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "exported candidate")
+        result = self.check("--base", "published-base")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        result = self.check("--compare", "published-base")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("checked 1 file(s), added lines; 0 finding(s)", result.stdout)
+        changed = "// El archivo no existe.\nvar count = 2\n// La tarea falla.\n"  # language-data: rejection fixture
+        self.write("core/example.go", changed)
+        added = '# El archivo no existe.\n'  # language-data: rejection fixture
+        self.write("scripts/new.py", added)
+        self.git("add", ".")
+        result = self.check("--compare", "published-base")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("core/example.go:3: Spanish text detected", result.stdout)
+        self.assertIn("scripts/new.py:1: Spanish text detected", result.stdout)
+        result = self.check("--compare", "missing-base")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        for other in [("--base", "published-base"), ("core/example.go",),
+                      ("--public-docs", "."), ("--public-tooling", ".")]:
+            with self.subTest(other=other):
+                result = self.check("--compare", "published-base", *other)
+                self.assertEqual(result.returncode, 2, result.stderr)
 
     def test_missing_base_and_unreadable_source_are_unavailable(self):
         self.write("core/example.go", "var count = 1\n")

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// A RAIL ROW IS 52 px AND CUTS ITS TITLE, NEVER ITS STATE OR ITS TIME. The row is the
+// A RAIL ROW IS ONE LINE AND CUTS ITS TITLE, NEVER ITS STATE OR ITS TIME. The row is the
 // list's "find the session" instrument: tool icon, a one-line title (cut with an ellipsis;
-// the whole name, the tail and the reference are on its hover), a second line, and on the
-// right the state dot and the relative time, each whole. In German the old row spent 146 px
+// the whole name, the tail and the reference are on its hover), and on the right the
+// state dot and the relative time, each whole. In German the old row spent 146 px
 // on a state badge; a dot has no width to lose. jsdom has no layout, so this pins the
 // arrangement; the browser capture at 1280 px in German and Japanese measures overflow.
 import { render, screen, within } from '@testing-library/react'
@@ -60,7 +60,7 @@ function renderRow() {
   }
 }
 
-describe('a rail row is one 52 px line pair', () => {
+describe('a rail row is one line at the standard row height', () => {
   it('the title is cut to one line and its whole text stays on the hover', () => {
     const { name, nameEl, rowEl } = renderRow()
     expect(nameEl).toHaveTextContent(name)
@@ -69,7 +69,7 @@ describe('a rail row is one 52 px line pair', () => {
       expect.arrayContaining(['truncate', 'min-w-0']),
     )
     expect(classes(rowEl)).toEqual(
-      expect.arrayContaining(['h-14', 'min-[761px]:h-[52px]']),
+      expect.arrayContaining(['h-11', 'min-[761px]:h-9']),
     )
     expect(classes(rowEl)).not.toContain('flex-wrap')
   })

@@ -15,7 +15,7 @@ Claude Code 遥测告诉你在开发者机器上运行了什么。**Anthropic ad
 | 源（`kind`） | 它读取什么 | 凭据 |
 |---|---|---|
 | `claude-api` | 用量与已计费成本、模型/工作区清单、Claude Code 分析、API 侧 MCP/server-tool 治理 | Admin API 密钥（`admin_key`） |
-| `claude-compliance` | 合规活动馈送（证据级事件）+ 组织目录 | 活动馈送密钥 + 一个**独立的** Compliance Access Key |
+| `claude-compliance` | 合规活动馈送（证据级事件）+ 组织目录 | 活动馈送密钥 + 一个**独立的** Compliance Access Key (Business) |
 | `claude-console` | 组织 IAM 名册（成员、角色）→ SSO/SCIM 姿态发现 | console 凭据 |
 | `claude-wif` | 非人类身份（服务账户 `svac_…`、联邦身份）+ 它们的**已许可**范围 edge | WIF 端点凭据 |
 
@@ -93,12 +93,9 @@ Gemini Enterprise Agent Platform (formerly Vertex AI) 或 Microsoft Foundry 上�
 
 ## 你将在 console 中看到什么
 
-已计费与估算支出，按遥测所携带的维度切分（team 和 project 标签成为一等的），在 **Cost & FinOps** 中；
+已计费与估算支出，按遥测所携带的维度切分（team 和 project 标签成为一等的），在 **Budgets** 中；
 组织成员、非人类身份及其范围在 **Identity & NHI** 中；姿态发现（影子认证、表面降级、WIF 隐患）在
-**Security** 中：
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Cost & FinOps 视图：按模型与维度的支出，带预算与告警。" />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Cost & FinOps 视图：按模型与维度的支出，带预算与告警。" />
+**Security** 中。
 
 ## 诚实局限
 

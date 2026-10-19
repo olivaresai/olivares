@@ -341,14 +341,14 @@ func TestSetupProvisionsNothingWhenTheRequestIsRejected(t *testing.T) {
 	}
 	lr := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "root@x.io", "password": "supersecret1"}, nil)
 	token, _ := lr.body["token"].(string)
-	ar := h.do("GET", "/v1/audit/system", token, nil, nil)
+	// The filtered scan, not the plain listing: the plain listing is oldest-first
+	// and one page long, so a tenant.drop past the first page would go unseen.
+	ar := h.do("GET", "/v1/audit/system?action=tenant.drop", token, nil, nil)
 	if ar.code != http.StatusOK {
 		t.Fatalf("system audit = %d %s", ar.code, ar.raw)
 	}
 	events, _ := ar.body["items"].([]any)
-	for _, it := range events {
-		if m, _ := it.(map[string]any); m["action"] == "tenant.drop" {
-			t.Fatalf("a rejected setup provisioned a tenant and rolled it back (tenant.drop on the system chain): %v", m)
-		}
+	if len(events) != 0 {
+		t.Fatalf("a rejected setup provisioned a tenant and rolled it back (tenant.drop on the system chain): %v", events)
 	}
 }

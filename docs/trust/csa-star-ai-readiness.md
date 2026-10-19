@@ -44,11 +44,11 @@ self-assessment is a transcription exercise, not a discovery exercise:
 |---|---|
 | Governance/GRC, audit & assurance | [README.md](./README.md) (status, no-claims), compliance module catalog + status endpoints, `GOVERNANCE.md` |
 | Identity & access, logging & monitoring | [iso-27001-readiness.md](./iso-27001-readiness.md) rows A.5.15–A.5.18, A.8.15–A.8.16; access map drift |
-| Cryptography & key management | Community BYOK/HYOK and Business CMEK envelope, FIPS build, PQC posture (`docs/SCP-09-FIPS-STIG.md`, `docs/SEC-G3-CRYPTO-AGILITY-PQC.md`) |
-| Data security & privacy lifecycle | PII discovery/DLP, RTBF (`docs/RIGHT-TO-ERASURE.md`), retention/legal hold (`docs/RECORDS-MANAGEMENT.md`), residency |
+| Cryptography & key management | Community operator-provided keys; Business BYOK/HYOK custody assertions, off-box ledger signer and CMEK envelope, FIPS build, PQC posture (`docs/SCP-09-FIPS-STIG.md`, `docs/SEC-G3-CRYPTO-AGILITY-PQC.md`) |
+| Data security & privacy lifecycle | PII discovery/DLP, RTBF and legal hold (Business; `docs/RIGHT-TO-ERASURE.md`, `docs/RECORDS-MANAGEMENT.md`), retention, residency |
 | Change control, interoperability, infrastructure | Reference architecture, change ledger, expand-contract migrations, SIEM/ITSM interop |
 | Incident management & forensics | Ledger forensics, `docs/STATUS-AND-INCIDENT-COMMS.md`, `SECURITY.md` |
-| Supply chain, transparency & accountability | `scripts/verify-release.sh` artifacts (cosign/SBOM/SLSA/OpenVEX), [vendor-viability.md](./vendor-viability.md) |
+| Supply chain, transparency & accountability | `scripts/verify-release.sh` (cosign signature, checksums, SLSA provenance; SBOM/OpenVEX attested to the container image), [vendor-viability.md](./vendor-viability.md) |
 | Threat & vulnerability management | CVE SLA + reachability/VEX process (`SECURITY.md`), red-team module, [penetration-testing.md](./penetration-testing.md) |
 | Business continuity & resilience | HA/DR with measured RPO/RTO (`docs/DR-RUNBOOK.md`), SLOs (`docs/17-PRODUCTION-READINESS-SLO.md`) |
 | **Model Security** (the new domain) | Signed model admission, sealed AIBOM + SPDX 3.0.1 AI Profile, model cards, GPAI supplier posture, guardrails (OWASP Agentic/ASI catalog), kill switch |

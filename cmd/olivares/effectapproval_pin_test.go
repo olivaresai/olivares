@@ -33,6 +33,13 @@ type pinBridge struct {
 	granted, replay    bool
 
 	opened, sessions, scoped, spent []string
+	unspent                         int // lookups that asked for an unspent grant
+}
+
+// GateUnspentForSession answers as GateOnceForSession does and counts the ask.
+func (b *pinBridge) GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (string, string, string, error) {
+	b.unspent++
+	return b.GateOnceForSession(ctx, tenant, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef)
 }
 
 func (b *pinBridge) GateOnceForSession(_ context.Context, _ model.TenantID, action, subjectKind, subjectRef, planHash, _, _, sessionRef string) (string, string, string, error) {
@@ -110,6 +117,15 @@ func TestPinCriticalLaunchApprovalOutcomes(t *testing.T) {
 				t.Fatalf("opened for session %q, want %q", got, wantSession)
 			}
 			assertPinSpend(t, tc.bridge.spent, tc.spend)
+			// The launch spends under a fresh nonce, so it must never be handed an approval
+			// some earlier launch spent; a named approval is read, not looked up.
+			wantUnspent := 1
+			if tc.scoped != "" {
+				wantUnspent = 0
+			}
+			if tc.bridge.unspent != wantUnspent {
+				t.Fatalf("unspent lookups = %d, want %d", tc.bridge.unspent, wantUnspent)
+			}
 		})
 	}
 }

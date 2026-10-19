@@ -26,8 +26,9 @@ const tokensPath = "/v1/tokens"
 func newTokensCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:   "tokens",
-		Short: "API tokens for scripts: issue, list, rotate, revoke",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tokens",
+		Short:       "API tokens for scripts: issue, list, rotate, revoke",
 		Long: "Manage the API tokens that authenticate non-interactive callers: CI jobs, collectors,\n" +
 			"and this CLI itself. A token is either BOUND to one tenant with one role, or (superadmin\n" +
 			"only) cross-tenant. The secret is shown ONCE, at issue and at rotate; the engine stores\n" +
@@ -90,9 +91,10 @@ func tokensListCmd(client bootstrapClient) *cobra.Command {
 	var limit int
 	var cursor string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the API tokens the caller may see",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the API tokens the caller may see",
 		Long: "List API tokens. A superadmin sees every token; a tenant admin sees the tokens bound\n" +
 			"to the tenant they hold token:read in — the engine applies that filter, not this client.\n" +
 			"Revoked tokens are hidden unless --include-revoked. No secret is ever returned.",
@@ -145,8 +147,9 @@ func tokensIssueCmd(client bootstrapClient) *cobra.Command {
 	var name, role string
 	var superadmin bool
 	cmd := &cobra.Command{
-		Use:   "issue",
-		Short: "Issue an API token and print its secret ONCE",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "issue",
+		Short:       "Issue an API token and print its secret ONCE",
 		Long: "Issue an API token. By default it is BOUND to the resolved tenant with --role, which is\n" +
 			"what a CI job or a collector should hold; --superadmin mints a cross-tenant token and is\n" +
 			"accepted only from a caller who is already a superadmin (the engine decides, not this\n" +
@@ -206,8 +209,9 @@ func tokensIssueCmd(client bootstrapClient) *cobra.Command {
 // tokens live. Probe the old token after failure rather than assume rollback.
 func tokensRotateCmd(client bootstrapClient) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "rotate <token-id>",
-		Short: "Rotate an API token: issue a replacement with the same spec and revoke the old one",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rotate <token-id>",
+		Short:       "Rotate an API token: issue a replacement with the same spec and revoke the old one",
 		Long: "Rotate an API token. The engine issues a replacement carrying the SAME name, tenant,\n" +
 			"role and expiry, then revokes the old one; the new secret is printed once. On success\n" +
 			"both halves happened and every holder of the old secret stops working.\n\n" +
@@ -297,9 +301,10 @@ func findTokenByID(cmd *cobra.Command, client bootstrapClient, id string) (*cliT
 func tokensRevokeCmd(client bootstrapClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "revoke <token-id>",
-		Aliases: []string{"rm", "delete"},
-		Short:   "Revoke an API token",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "revoke <token-id>",
+		Aliases:     []string{"rm", "delete"},
+		Short:       "Revoke an API token",
 		Long: "Revoke an API token. Everything holding that secret stops authenticating at once and\n" +
 			"there is no undo — the replacement is a new token, so prefer `tokens rotate` when the\n" +
 			"holder must keep working. A token outside the caller's authority is reported as not\n" +

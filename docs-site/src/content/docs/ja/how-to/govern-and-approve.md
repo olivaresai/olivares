@@ -4,7 +4,7 @@ description: "運用者が estate をどうガバナンスするか: アイデ�
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
 :::
 
 このページは、少なくとも1つのソースを接続し、これから estate を **ガバナンス** する必要のある
@@ -68,6 +68,8 @@ RBAC の上に、運用者は属性ベースのルールのために外部の **
 # Choose one. Cedar is the embedded, pure-Go primary; OPA is an over-HTTP adapter.
 OLIVARES_PDP_ENGINE=cedar   # or: opa | none
 ```
+
+外部エンジンは Business の機能です。Community ビルドは、`cedar`、`opa`、またはその他のエンジン値が選択されていると起動を拒否します。未設定、空、または `none` ではネイティブエンジンのみが動作します。
 
 両エンジンは1つのシームの背後に位置し、そのシームには、それについてどう推論すべきかを支配する
 1つの不変条件があります:
@@ -201,4 +203,4 @@ RLS をバイパスするロール）とチェックポイント削除に対し�
 
 ## 承認のエディション境界（0.1）
 
-Community は承認エンジン、CRITICAL 操作に対する異なる2人の承認、kill-switch の二重管理、およびレビューを要求するかリスク階層・承認人数を引き上げるポリシーを維持します。リスク階層を引き下げる承認ポリシーと break-glass 緊急アクセスは Business 基本版に含まれます。保存済みデータは読み取り・エクスポートできますが、Community の既定の要件を下げたり緊急アクセスを許可したりすることはできません。
+Community は承認エンジン、CRITICAL 操作に対する異なる2人の承認、kill-switch の二重管理、および操作のレビューを要求するポリシーを維持します。リスク階層または承認人数を変更する承認ポリシーと break-glass 緊急アクセスは Business 基本版に含まれます。リスク階層または承認人数を引き上げる保存済みポリシーは引き続き適用されます。リスク階層を引き下げる保存済みポリシーと緊急アクセスの許可は読み取り・エクスポートできますが、Community の既定の要件を下げたり緊急アクセスを許可したりすることはできません。

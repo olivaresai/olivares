@@ -20,7 +20,10 @@ import (
 	"github.com/olivaresai/olivares/core/ddil"
 )
 
+// The audit planes stay a Business capability on their own: with the group gate open, the
+// !enterprise stubs still refuse an export and an import that carries audit segments.
 func TestCommunityDDILAuditRefusesBeforeWrites(t *testing.T) {
+	asEdition(t, "enterprise")
 	dir := filepath.Join(t.TempDir(), "not-created")
 	_, _, err := runDDILCommand(context.Background(), "export", "--tenant", "22222222-2222-7222-8222-222222222222", "--out", dir, "--sign-key", "invalid", "--data-dir", dir)
 	if exitcode.From(err) != exitcode.Edition {
@@ -48,7 +51,9 @@ func TestCommunityDDILAuditRefusesBeforeWrites(t *testing.T) {
 	}
 }
 
-func TestCommunityDDILTrustOnlyImportRetained(t *testing.T) {
+// DDIL air-gap transfer is a Business capability, so Community no longer runs even the
+// import that carries no audit segments.
+func TestCommunityDDILTrustOnlyImportRefused(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -65,10 +70,12 @@ func TestCommunityDDILTrustOnlyImportRetained(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "evidence")
 	archive := filepath.Join(t.TempDir(), "unused-archive")
 	_, _, err = runDDILCommand(context.Background(), "import", "--tenant", tenant, "--bundle", bundle, "--pubkey", base64.StdEncoding.EncodeToString(pub), "--evidence-out", out, "--audit-out", archive)
-	if err != nil {
-		t.Fatal(err)
+	if exitcode.From(err) != exitcode.Edition || !strings.Contains(err.Error(), "Business") {
+		t.Fatalf("trust-only import must be refused as a Business feature: %v", err)
 	}
-	if _, err := os.Stat(archive); !os.IsNotExist(err) {
-		t.Fatalf("trust-only import touched unused archive: %v", err)
+	for _, path := range []string{out, archive} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("the refused import touched %s: %v", path, err)
+		}
 	}
 }

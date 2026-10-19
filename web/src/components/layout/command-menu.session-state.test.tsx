@@ -6,14 +6,25 @@
 // the four states through `ui.status.*` ("Done" for an ended session) while the rail said
 // "Ended". The words below are read off the rendered rows, so the old mapping cannot
 // come back unnoticed.
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import type { RailRow, RailState } from './session-rail-model'
 
+const routing = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  location: {
+    pathname: '/sessions',
+    search: { session: 'run:current', filter: 'kept' } as Record<
+      string,
+      string
+    >,
+    hash: 'anchor',
+  },
+}))
 vi.mock('@tanstack/react-router', () => ({
-  useRouterState: () => '',
-  useNavigate: () => vi.fn(),
+  useRouterState: () => routing.location,
+  useNavigate: () => routing.navigate,
 }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
@@ -32,7 +43,7 @@ const row = (state: RailState): RailRow => ({
   meta: null,
   minutes: 1,
   to: '/sessions',
-  search: {},
+  search: { session: `run:${state}` },
   href: `/sessions?s=${state}`,
 })
 vi.mock('./use-session-rail', () => ({
@@ -57,9 +68,71 @@ import { useCommandStore } from '@/stores/command'
 
 afterEach(() => {
   useCommandStore.getState().setOpen(false)
+  routing.location.search = { session: 'run:current', filter: 'kept' }
+  routing.navigate.mockClear()
 })
 
 describe('command palette session rows', () => {
+  it('opens beside the current default before it has a URL address', () => {
+    routing.location.search = { filter: 'kept' }
+    useCommandStore.getState().setOpen(true)
+    renderIntel(
+      <>
+        <div data-testid="work-rail">
+          <div role="option" aria-selected="true" data-address="run:default" />
+        </div>
+        <CommandMenu />
+      </>,
+    )
+    fireEvent.click(
+      screen.getByRole('option', { name: 'Open beside · idle session' }),
+    )
+    expect(routing.navigate).toHaveBeenCalledWith({
+      to: '/sessions',
+      search: {
+        session: 'run:default',
+        filter: 'kept',
+        beside: 'run:idle',
+        pane: 'narrative',
+      },
+      hash: 'anchor',
+    })
+  })
+
+  it('opens a recent session beside the current one and preserves other address facets', () => {
+    useCommandStore.getState().setOpen(true)
+    renderIntel(<CommandMenu />)
+    fireEvent.click(
+      screen.getByRole('option', { name: 'Open beside · idle session' }),
+    )
+    expect(routing.navigate).toHaveBeenCalledWith({
+      to: '/sessions',
+      search: {
+        session: 'run:current',
+        filter: 'kept',
+        beside: 'run:idle',
+        pane: 'narrative',
+      },
+      hash: 'anchor',
+    })
+  })
+
+  it('opens on a link whose session or beside value the router parsed as a non-string', () => {
+    // The router JSON-parses `?session=123` and `?beside=true`: the palette must read a
+    // value that is not an address as no address, not throw while it mounts.
+    routing.location.search = {
+      session: 123,
+      beside: true,
+      filter: 'kept',
+    } as unknown as Record<string, string>
+    useCommandStore.getState().setOpen(true)
+    renderIntel(<CommandMenu />)
+    expect(screen.getByText('idle session')).toBeTruthy()
+    expect(
+      screen.queryByRole('option', { name: 'Open beside · idle session' }),
+    ).toBeNull()
+  })
+
   it.each([
     ['need', 'Needs you'],
     ['live', 'Working'],

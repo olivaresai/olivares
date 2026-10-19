@@ -52,6 +52,9 @@ func NewPTYRunner() Runner { return &procRunner{lineCap: maxOutputLine, usePTY: 
 // RunConfinementHelper dispatches the private session reexec stages. Keeping the
 // network supervisor here leaves the standalone filesystem helper independent.
 func RunConfinementHelper(args []string) int {
+	if handlesSessionGuard(args) {
+		return runSessionGuard(args)
+	}
 	if egress.Handles(args) {
 		return egress.RunHelper(args, confine.RunHelperWithReady)
 	}
@@ -75,6 +78,12 @@ func networkBoundaryErr(err error) error {
 // far smaller; this guards against a runaway line, never a normal one.
 const maxOutputLine = 1 << 20
 
+// maxOverflowDrain is the most a line may total when the pump discards it in favour of
+// a recognized replacement (an image echo, a command catalog): four 3.75 MiB images as
+// base64 with the message around them. A longer line is a runaway and ends the process
+// as any other over-long line does.
+const maxOverflowDrain = 24 << 20
+
 // Launch spawns the process with explicit env, a dedicated process group, and
 // stdin/stdout/stderr pipes, then starts the output pumps. The ctx is the
 // runtime manager's PER-RUN background context (NOT a request context), so the
@@ -90,9 +99,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	// The native runner runs `claude` as a plain host child — it CANNOT honor a
 	// container/sandbox isolation request (it would silently run UNISOLATED while the
 	// row reports isolation=container). Refuse, deny-closed: a container/sandbox launch
-	// is the job of the container Runner (a documented follow-up), not this one.
+	// is the job of the container Runner (container_runner.go), not this one.
 	if spec.Isolation == IsolationContainer || spec.Isolation == IsolationSandbox {
-		return nil, fmt.Errorf("sessions: native runner cannot honor isolation %q — only native is wired this release (the container/sandbox runner is a documented follow-up); relaunch with isolation=native", spec.Isolation)
+		return nil, fmt.Errorf("sessions: native runner cannot honor isolation %q — container needs podman or Docker on the server, and sandbox has no runner; relaunch with isolation=native", spec.Isolation)
 	}
 	cmd, env, state, release, err := pr.command(ctx, spec)
 	if err != nil {
@@ -117,9 +126,9 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	}
 	var p *procProcess
 	if pr.usePTY {
-		p, err = pr.launchPTY(cmd, spec.WaitDelay, release)
+		p, err = pr.launchPTY(cmd, spec.WaitDelay, spec.StripImageData, release)
 	} else {
-		p, err = pr.launchPipes(cmd, spec.WaitDelay, release)
+		p, err = pr.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, release)
 	}
 	if err != nil {
 		release()
@@ -140,7 +149,7 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	return p, nil
 }
 
-func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, release func()) (*procProcess, error) {
+func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, stripImages bool, release func()) (*procProcess, error) {
 	// Own process group so a graceful/hard stop reaches grandchildren that would
 	// otherwise hold the stdout pipe open and wedge teardown.
 	configureProcGroup(cmd)
@@ -178,12 +187,19 @@ func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, releas
 		}
 	}()
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinRead, stdoutWrite, stderrWrite
+	program := specProgram(cmd) // the guard replaces cmd.Path
+	engine, err := watchEngine(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("sessions: start %q: %w", program, err)
+	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("sessions: start %q: %w", specProgram(cmd), err)
+		engine.close()
+		return nil, fmt.Errorf("sessions: start %q: %w", program, err)
 	}
 	started = true
+	engine.started()
 	cmd.Env = nil
-	return pr.watch(cmd, stdin, stdout, stderr, waitDelay, release), nil
+	return pr.watch(cmd, stdin, stripImagesFrom(stdout, stripImages), stderr, waitDelay, engine.with(release)), nil
 }
 
 func specProgram(cmd *exec.Cmd) string {
@@ -276,9 +292,17 @@ func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stre
 	for {
 		line, err := readBoundedLineWithOverflow(br, pr.lineCap, func(prefix []byte) []byte {
 			if c := p.commandResponses.Load(); c != nil {
-				return c.oversizedResponse(prefix)
+				if replacement := c.oversizedResponse(prefix); replacement != nil {
+					return replacement
+				}
 			}
-			return nil
+			if c := p.catalogResponses.Load(); c != nil {
+				if replacement := c.oversizedCatalogResponse(prefix); replacement != nil {
+					return replacement
+				}
+			}
+			// The echo of a message with an image (image_echo.go).
+			return oversizedImageEcho(prefix)
 		})
 		if errors.Is(err, ErrOutputLineTooLong) {
 			p.outputFailure.Do(func() {
@@ -389,6 +413,9 @@ type procProcess struct {
 	// The catalog's existing waiter map is also the authority for recovering an
 	// oversized initialize answer. Set before its request reaches stdin.
 	commandResponses atomic.Pointer[toolCommandCache]
+	// The Codex session whose own skills/list requests may be answered over the
+	// line limit, recovered the same way. Set before the first request is written.
+	catalogResponses atomic.Pointer[codexSession]
 	drainAbandoned   atomic.Bool
 
 	exit    int
@@ -854,8 +881,15 @@ func readBoundedLineWithOverflow(br *bufio.Reader, limit int, overflow func([]by
 				copy(prefix, line)
 				copy(prefix[len(line):], fragment[:keep])
 				if replacement := overflow(prefix); replacement != nil {
+					// The rest of the line is discarded, to a ceiling: a recognized
+					// replacement shortens a line, it does not make one endless.
+					drained := size
 					for errors.Is(err, bufio.ErrBufferFull) {
-						_, err = br.ReadSlice('\n')
+						var more []byte
+						more, err = br.ReadSlice('\n')
+						if drained += len(more); drained > maxOverflowDrain {
+							return nil, ErrOutputLineTooLong
+						}
 					}
 					if err == nil || errors.Is(err, io.EOF) {
 						return replacement, err

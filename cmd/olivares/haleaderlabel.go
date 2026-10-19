@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -131,6 +132,22 @@ func loadHALeaderConfig(getenv func(string) string) (haLeaderConfig, error) {
 	}
 	cfg.APIServer = "https://" + net.JoinHostPort(host, port)
 	return cfg, nil
+}
+
+// haLeaderRoutingEdition keeps the leader gate and the pod-label publisher out of a
+// Community binary. Active-passive HA leader routing is a Business capability, so a
+// Community start with either switch set fails with the Business exit code and names
+// the switch, instead of running a standby that answers 503 or an empty leader Service.
+// The Business build passes through unchanged.
+func haLeaderRoutingEdition(cfg haLeaderConfig) error {
+	if thisEdition.name != "community" || !cfg.Gate {
+		return nil
+	}
+	key := haLabelGateEnv
+	if cfg.PublishLabel {
+		key = haLabelPublishEnv
+	}
+	return sentence(exitcode.Edition, "Active-passive HA leader routing is a Business feature (%s is set): %s", key, pricingURL)
 }
 
 func haBoolEnv(getenv func(string) string, key string) (bool, error) {

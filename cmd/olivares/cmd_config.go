@@ -23,8 +23,9 @@ import (
 // reference (--dsn=file:<path>), never typed.
 func newConfigCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "config",
-		Short: "Generate validated engine configuration (the non-interactive setup)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "config",
+		Short:       "Generate validated engine configuration (the non-interactive setup)",
 		Long: "config is the non-interactive half of first-run setup: compose a validated\n" +
 			"olivares.env (or a Kubernetes snippet) from flags, check that the OLIVARES_*\n" +
 			"keys already in the environment are ones the engine accepts, and print what\n" +
@@ -34,15 +35,16 @@ func newConfigCmd() *cobra.Command {
 			"  olivares config validate\n" +
 			"  olivares config effective",
 	}
-	root.AddCommand(configGenerateCmd(), configEffectiveCmd(), configValidateCmd(), newTracingCmd())
+	root.AddCommand(configGenerateCmd(), configEffectiveCmd(), configValidateCmd(), newTracingCmd(), newSessionIdleCmd())
 	return root
 }
 
 func configEffectiveCmd() *cobra.Command {
 	var strict bool
 	cmd := &cobra.Command{
-		Use:   "effective",
-		Short: "Print configured OLIVARES_* values with secrets redacted",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "effective",
+		Short:       "Print configured OLIVARES_* values with secrets redacted",
 		Long: "Print the configured production OLIVARES_* environment values after applying the\n" +
 			"runtime environment/activation-overlay precedence. Secret-bearing values are always\n" +
 			"shown as <redacted>. Use --strict as the CI/pre-production unknown-key gate.",
@@ -94,8 +96,9 @@ type configValidateResult struct {
 
 func configValidateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "validate",
-		Short: "Validate configured OLIVARES_* environment keys",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "validate",
+		Short:       "Validate configured OLIVARES_* environment keys",
 		Long: "Validate every configured OLIVARES_* environment key against the production config\n" +
 			"contract. Unknown keys are listed together and make the command exit non-zero.",
 		Example: "  olivares config validate",
@@ -147,8 +150,9 @@ func configGenerateCmd() *cobra.Command {
 		force                           bool
 	)
 	cmd := &cobra.Command{
-		Use:   "generate",
-		Short: "Compose a validated /etc/olivares/olivares.env (or k8s snippet) from flags",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "generate",
+		Short:       "Compose a validated /etc/olivares/olivares.env (or k8s snippet) from flags",
 		Long: "Builds and validates the engine configuration for a profile (eval, single-node-prod,\n" +
 			"postgres-prod, k8s) and writes it to --out (default stdout). Every value is validated;\n" +
 			"pass secrets by reference (--dsn=file:/etc/olivares/secrets/db.dsn) so nothing sensitive\n" +

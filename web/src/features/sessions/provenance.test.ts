@@ -19,6 +19,7 @@ import {
   sessionSearchKey,
   sessionTarget,
   sharedNames,
+  runWantsAPerson,
   type Grants,
 } from './provenance'
 import type { LiveDTO } from './types'
@@ -729,7 +730,7 @@ describe('sessionNaming — what a ONE-LINE row is called', () => {
     })
   })
 
-  it('degrades down the front door\u2019s ladder, action rung included', () => {
+  it('degrades down the front door\u2019s ladder, and stops above the action', () => {
     const summary = mergeSessions(
       [live('sess-s', { summary: 'Filed PR #7723' })],
       [],
@@ -753,8 +754,10 @@ describe('sessionNaming — what a ONE-LINE row is called', () => {
       ],
       [],
     )[0]!
+    // The action is what the row's hover and the detail say; with no tool and no
+    // project known the row is untitled, not named by a tool call (#2266).
     expect(sessionNaming(acting, 'Untitled session').name).toBe(
-      'create_issue \u00b7 github',
+      'Untitled session',
     )
   })
 
@@ -793,6 +796,229 @@ describe('sessionNaming — what a ONE-LINE row is called', () => {
     // a reader could have searched for.
     const bare = mergeSessions([live('sess-coder-7a3f')], [])[0]!
     expect(sessionShortId(bare)).toBe('coder-7a3f')
+  })
+})
+
+/**
+ * #2266 — THE LIST NAMES A SESSION BY ITS TOOL AND ITS PLACE, never by its last file.
+ *
+ * Measured in a 50-session capture: every observed row was titled by its only tool event
+ * ("Read · src/ma…", "Write · READM…"), cut by the row's own ellipsis, and the launched
+ * session on top was "Untitled session". The file of the last event is the secondary
+ * line (the row's hover and the detail), never the title.
+ */
+describe('sessionNaming — tool and place, not the last file (#2266)', () => {
+  const untitled = 'Untitled session'
+  const observed = (ref: string, over: Partial<LiveDTO> = {}) =>
+    live(ref, {
+      provider: 'claude',
+      current_action: 'Read',
+      current_resource: 'src/main.go',
+      ...over,
+    })
+
+  it('titles an observed session by its tool, and the file is not the title', () => {
+    const s = mergeSessions([observed('sess-a')], [])[0]!
+    const naming = sessionNaming(s, untitled)
+    expect(naming.name).toBe('Claude Code')
+    expect(naming.name).not.toContain('src/main.go')
+    expect(sessionTitle(s, untitled)).toBe('Claude Code')
+  })
+
+  it('takes the tool from the engine label when no profile declared a driver', () => {
+    const s = mergeSessions(
+      [observed('sess-a', { provider: undefined, engine: 'codex' })],
+      [],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('Codex')
+  })
+
+  it('adds the project folder when the run that drives the session has one', () => {
+    const s = mergeSessions(
+      [observed('sess-a')],
+      [
+        run('run-1', {
+          claude_session_id: 'sess-a',
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/billing-api',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe(
+      'Claude Code \u00b7 billing-api',
+    )
+  })
+
+  it('names an observed session by the project its hooks reported', () => {
+    const s = mergeSessions(
+      [observed('sess-a', { project: 'billing-api' })],
+      [],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe(
+      'Claude Code \u00b7 billing-api',
+    )
+    expect(sessionTitle(s, untitled)).toBe('Claude Code \u00b7 billing-api')
+  })
+
+  it('prefers the folder of the run that drives the session over a reported project', () => {
+    const s = mergeSessions(
+      [observed('sess-a', { project: 'old-name' })],
+      [
+        run('run-1', {
+          claude_session_id: 'sess-a',
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/billing-api',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe(
+      'Claude Code \u00b7 billing-api',
+    )
+  })
+
+  it('does not name a launched session by the folder Olivares made for its run, even when its hooks report it', () => {
+    const s = mergeSessions(
+      [observed('sess-a', { project: 'run-1' })],
+      [
+        run('run-1', {
+          claude_session_id: 'sess-a',
+          provider_driver: 'claude',
+          workspace_path: '/var/lib/olivares/runs/run-1',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('Claude Code')
+  })
+
+  it('names a launched session by its first prompt', () => {
+    const s = mergeSessions(
+      [],
+      [
+        run('run-1', {
+          name: 'Fix the flaky billing test',
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/billing-api',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('Fix the flaky billing test')
+  })
+
+  it('names a launched session with no prompt by its tool and project, never Untitled', () => {
+    const s = mergeSessions(
+      [],
+      [
+        run('run-1', {
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/billing-api',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe(
+      'Claude Code \u00b7 billing-api',
+    )
+    expect(sessionTitle(s, untitled)).toBe('Claude Code \u00b7 billing-api')
+  })
+
+  it('does not call a folder Olivares made for the run a project', () => {
+    const s = mergeSessions(
+      [],
+      [
+        run('run-1', {
+          provider_driver: 'codex',
+          workspace_path: '/var/lib/olivares/runs/run-1',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('Codex')
+  })
+
+  it('takes the run\u2019s driver over the profile\u2019s, the profile\u2019s over the engine label', () => {
+    const both = mergeSessions(
+      [observed('sess-a', { provider: 'claude' })],
+      [
+        run('run-1', {
+          claude_session_id: 'sess-a',
+          provider_driver: 'codex',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(both, untitled).name).toBe('Codex')
+    const profile = mergeSessions(
+      [observed('sess-b', { provider: 'claude', engine: 'codex' })],
+      [],
+    )[0]!
+    expect(sessionNaming(profile, untitled).name).toBe('Claude Code')
+    const empty = mergeSessions(
+      [observed('sess-c', { provider: '', engine: 'codex' })],
+      [],
+    )[0]!
+    expect(sessionNaming(empty, untitled).name).toBe('Codex')
+  })
+
+  it('names an unknown driver by itself, as the rest of the console does', () => {
+    const s = mergeSessions(
+      [observed('sess-a', { provider: 'acme-agent' })],
+      [],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('acme-agent')
+  })
+
+  it('names a session by its folder when only the folder is known, never Untitled', () => {
+    const s = mergeSessions(
+      [],
+      [
+        run('run-1', {
+          provider_driver: '',
+          workspace_path: '/srv/work/billing-api',
+        }),
+      ],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('billing-api')
+  })
+
+  it('searches a session by the name its row paints', () => {
+    const s = mergeSessions([observed('sess-a')], [])[0]!
+    expect(sessionSearchKey(s)).toContain('Claude Code')
+  })
+
+  it('keeps an engine-sent summary above the tool', () => {
+    const s = mergeSessions(
+      [observed('sess-a', { summary: 'Filed PR #7723' })],
+      [],
+    )[0]!
+    expect(sessionNaming(s, untitled).name).toBe('Filed PR #7723')
+  })
+
+  it('says untitled only when no tool and no project is known', () => {
+    const s = mergeSessions(
+      [live('sess-coder-7a3f', { current_action: 'Read' })],
+      [],
+    )[0]!
+    const naming = sessionNaming(s, untitled)
+    expect(naming.name).toBe(untitled)
+    expect(naming.shortId).toBe('coder-7a3f')
+  })
+
+  it('tells apart observed sessions that share a tool by their tail', () => {
+    const rows = mergeSessions(
+      [
+        observed('sess-aaa1'),
+        observed('sess-bbb2'),
+        observed('sess-ccc3', { provider: 'codex' }),
+      ],
+      [],
+    )
+    const shared = sharedNames(rows, untitled)
+    const named = rows.map((s) => sessionNaming(s, untitled, shared))
+    expect(named.map((n) => n.name)).toEqual([
+      'Claude Code',
+      'Claude Code',
+      'Codex',
+    ])
+    expect(named[0]!.shortId).toBe('aaa1')
+    expect(named[1]!.shortId).toBe('bbb2')
+    expect(named[2]!.shortId).toBeNull()
   })
 })
 
@@ -965,5 +1191,27 @@ describe('runAwaitedApproval — the approval a run waits on now (#502)', () => 
     ],
   ])('%s', (_name, patch, want) => {
     expect(runAwaitedApproval(run(patch))).toBe(want)
+  })
+})
+
+describe('runWantsAPerson — a run interrupted after repeated policy denials', () => {
+  const needs = {
+    code: 'repeated_policy_denials' as const,
+    consecutive_denials: 3,
+    total_denials: 3,
+    reasons: ['writes are not allowed here'],
+  }
+  const run = (patch: Partial<RunDTO>) =>
+    ({ run_ref: 'r', state: 'running', ...patch }) as RunDTO
+  it.each<[string, Partial<RunDTO>, boolean]>([
+    ['a live run with needs_person', { needs_person: needs }, true],
+    ['a live run without it', {}, false],
+    [
+      'a stopped run keeps no claim on a person',
+      { state: 'stopped', needs_person: needs },
+      false,
+    ],
+  ])('%s', (_name, patch, want) => {
+    expect(runWantsAPerson(run(patch))).toBe(want)
   })
 })

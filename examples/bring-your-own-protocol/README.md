@@ -72,6 +72,10 @@ It builds the plugin, writes a bundle, proves the deny-closed no-anchor case is
 refused, then proves the same artifact is admitted when the operator trusts the
 generated public key and pins the matching sha256.
 
+The skeleton step runs `./bin/olivares` (`task build:bin`; `OLIVARES_BIN` points
+elsewhere) and builds it once when it is absent. Every step that can wait stops
+after `OLIVARES_SMOKE_STEP_TIMEOUT` seconds (default 600) and names itself.
+
 ## 5. Configure
 
 Operators pin trust globally and the plugin artifact per source:

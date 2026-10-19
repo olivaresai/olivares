@@ -8,6 +8,7 @@ import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { consoleApi, consoleKeys } from '@/features/console/api'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -38,6 +39,7 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
   const { t } = useTranslation('skills')
   const { activeTenant, can } = useAuth()
   const queryClient = useQueryClient()
+  const boundary = useAuthBoundary()
   const canInstall = can('skills:catalog:write')
   const canAssign = can('skills:assignment:write') && can('tenant:read')
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace)
@@ -121,7 +123,7 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
     },
     invalidateKeys: (result) => [
       skillsKeys.packs(activeTenant),
-      skillsKeys.packAssignments(activeTenant, result.pack.id),
+      skillsKeys.packAssignments(activeTenant, result.pack.id, boundary.epoch),
     ],
     successMessage: (_, action) => installedMessage(action),
     onDone: (_, action) => {
@@ -181,7 +183,7 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
       className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4"
       aria-label={t('install.title')}
     >
-      <h2 className="text-label font-medium">{t('install.title')}</h2>
+      <h2 className="font-medium">{t('install.title')}</h2>
       {canInstall && canAssign && (
         <Field
           label={t('install.workspace')}
@@ -232,7 +234,7 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
         </div>
       )}
       <details open>
-        <summary className="cursor-pointer text-label font-medium">
+        <summary className="cursor-pointer font-medium">
           {t('install.builtins')}
         </summary>
         {builtins.isLoading && <p role="status">{t('install.loading')}</p>}
@@ -276,7 +278,7 @@ export function InstallPack({ packs }: { packs: SkillPack[] }) {
       </details>
       {canInstall && (
         <details>
-          <summary className="cursor-pointer text-label font-medium">
+          <summary className="cursor-pointer font-medium">
             {t('install.git')}
           </summary>
           <form className="mt-3 flex flex-col gap-3" onSubmit={submitGit}>

@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[版本]
-目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）和托管身份生命周期需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、用户/组入站 SCIM、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
 :::
 
 模块 VI 是 **位于引擎现有授权模型之上的治理平面**——它 **不** 重新实现执行器或身份连接器，
@@ -82,4 +82,4 @@ Cedar/OPA 策略即代码、WIF 对象图）增加了一条 **发布→不可变
 
 ## 审批版本边界（0.1）
 
-Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求审核或提高风险等级、审批人数的策略。降低风险等级的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的数据仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。
+Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求对某项操作进行审核的策略。更改风险等级或审批人数的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的、提高风险等级或审批人数的策略继续生效；已保存的降低风险等级的策略和紧急授权仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。

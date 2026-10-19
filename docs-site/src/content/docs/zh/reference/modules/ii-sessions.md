@@ -11,7 +11,7 @@ description: >-
 estate，而模块 II 则在同一条观测流之上为每个会话维护一个**实时运行叠加层**——并且只展示
 该流如实承载的内容。
 
-Olivares <!-- release -->0.2<!-- /release --> 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
+Olivares <!-- release -->0.3<!-- /release --> 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
 CLI **作为自有子进程启动**。该受管路径是同一模块。它不替代叠加层，也不合并两个
 宣布同一提供商会话 id 的主目录（`CHANGELOG.md` `[26.9.0]` B1/B2）。
 
@@ -68,6 +68,34 @@ home 是两行、两条时间线。用 `GET /v1/m/sessions/live/by-id/{live_ref}
 `_GROK_BIN` 和 `_OPENCODE_BIN` 显式覆盖此查找过程（见 [配置](/reference/configuration/)）。
 找不到可执行文件时，引擎会拒绝启动。配置文件认证、启动策略等其他就绪检查仍然适用。
 操作步骤：[运行提供商会话](/how-to/operate-provider-sessions/)。
+
+## 受管运行的生命周期与重启边界
+
+Sessions 是内核模块：即使它不在已保存的模块选择中，也会继续运行。关闭可选模块不会重置会话数据。
+
+`/v1/m/sessions/runs` 下的受管运行 API 与 `olivares session` 使用同一个运行时。读取运行需要
+`sessions:run:read`；启动、输入、停止和 resume 需要 `sessions:run:write`。viewer 可以读取运行，
+而不被允许停止它。租户和工作区权限仍适用于每个运行。
+
+```sh
+olivares session ls -o json
+olivares session show <session> -o json
+olivares session send <session> "continue the task"
+olivares session stop <session>
+olivares session resume <session>
+```
+
+一条消息可以携带图片。`olivares session send <session> --attach shot.png "what is wrong here?"`
+以及控制台编辑器（粘贴、拖放或回形针）会把每个 PNG、JPEG、WebP 或 GIF 与会话一起存储，
+每条消息最多四张，每张最大 3.75 MB，然后与文本一起发送；消息必须有文本，所以只有图片不会被发送
+（CLI 和编辑器会要求补充文本）。Claude Code 接收图片内容块，Codex 接收它自己的图片输入；
+没有图片输入的工具会在任何内容发出之前按名称拒绝该消息。API 是
+`POST /v1/m/sessions/runs/{ref}/attachments`（图片，base64）、`GET .../attachments/{id}`，
+以及 `.../input` 上的 `attachments`。图片位于数据目录下，按租户和会话存放，并随会话一起移除。
+
+已停止的运行、其提供商配置文件和工作区引用以及生命周期事件在引擎重启后仍然存在。
+Resume 会为现有运行启动一个新的自有子进程。实时 attach 输出是内存中的有界环；保留的运行元数据和
+生命周期事件不承诺持久化的对话记录。录制策略与工具自身的 resume 支持仍是独立的要求。
 
 ## 它消费什么（以及它派生什么）
 

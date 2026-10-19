@@ -46,6 +46,39 @@ superficie se mueve con él.
   [`/metrics`](/es/how-to/monitor-with-prometheus/); este módulo sirve respuestas
   estructuradas, no series.
 
+## Reproducir el recorrido del modelo de lectura
+
+En una **instalación Compose de Enterprise con SQLite, nueva y desechable**, ejecuta
+`scripts/qualify-observability.py` con Python 3.11 o posterior. Aporta el binario
+instalado, la dirección HTTPS, el nombre del contenedor, el commit completo del código
+fuente y un directorio de evidencia nuevo:
+
+```sh
+python3 scripts/qualify-observability.py /path/to/olivares \
+  https://127.0.0.1:8443 olivares <source-sha> /path/to/new-evidence
+```
+
+La sonda usa la gestión de organizaciones de Enterprise para aprovisionar un segundo tenant para sus comprobaciones de aislamiento. Las superficies de ingestion-health, los modelos de lectura de trazas y la atestación siguen disponibles en Community.
+
+La sonda crea cuentas y agentes de fixture a través de la API, habilita los módulos
+observability y security existentes, y reinicia físicamente el contenedor. Compara el
+SHA-256 del ejecutable arrancado con el binario aportado, verifica la ingesta a partir
+de un hallazgo de primera parte, comprueba los rechazos entre tenants y comprueba la
+retención del detalle y de la exportación de trazas del ledger tras el reinicio y tras
+desactivar y volver a activar el módulo. También verifica que los contadores de ingesta
+se reinician y que la atestación separa la identidad medida del binario del estado
+declarado de la canalización y de la release no publicada. Las comprobaciones de CLI
+usan salida JSON. Las credenciales permanecen en memoria o en los entornos de los
+procesos hijo; los registros conservados del motor expurgan los tokens de configuración.
+
+Usa los pasos de instalación del README con una imagen candidata seleccionada de forma
+explícita. No ejecutes nunca la sonda contra una instalación existente. Se rechaza la
+optimización de Python porque desactiva las aserciones. Elimina la pila Compose
+desechable y sus volúmenes tras la ejecución. La sonda deja esa limpieza a quien la
+invoca y escribe su resultado y el registro del motor en el directorio de evidencia. No
+ejercita acciones de consola, PostgreSQL, colectores de proveedores ni la verificación
+de firmas de release.
+
 ## Relacionado
 
 - [Monitorizar con Prometheus](/es/how-to/monitor-with-prometheus/) — las métricas

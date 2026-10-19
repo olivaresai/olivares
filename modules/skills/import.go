@@ -36,7 +36,7 @@ const (
 	// activeRules versions the rules that decide what is active content. A revision
 	// records the version it was derived under; pinning re-derives the ones that
 	// predate it from their own bytes. Raise it when the rules change.
-	activeRules = 1
+	activeRules = 2
 
 	MaxSourceBytes     = 32 << 20
 	MaxExpandedBytes   = 64 << 20
@@ -96,6 +96,9 @@ type FileEntry struct {
 	Digest string `json:"sha256"`
 }
 type Member struct {
+	// An absent kind is a skill, preserving existing revision and selection bytes.
+	// Other names are qualified (agent:review, command:review, rule:common/testing).
+	Kind          string            `json:"kind,omitempty"`
 	Name          string            `json:"name"`
 	Directory     string            `json:"directory"`
 	Description   string            `json:"description"`
@@ -120,7 +123,7 @@ func (m Member) ActiveContent() []string {
 	var out []string
 	for _, e := range m.Extensions {
 		switch {
-		case e == "hooks", e == "allowed-tools", e == "dynamic-command-interpolation", strings.Contains(e, "/"), strings.HasSuffix(e, ".json"):
+		case e == "hooks", e == "allowed-tools", e == "tools" && m.Kind == "agent", e == "permissionMode" && m.Kind == "agent", e == "mcpServers" && m.Kind == "agent", e == "mcp-servers" && m.Kind == "agent", e == "file-import" && m.Kind == "rule", e == "dynamic-command-interpolation", strings.Contains(e, "/"), strings.HasSuffix(e, ".json"):
 			if len(out) == maxActiveItems {
 				return out // a long list is still a non-empty one: the member needs approval
 			}
@@ -388,6 +391,7 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 	// All members are siblings; selecting a repository parent is not an implicit
 	// import of its configuration, authentication or arbitrary other directories.
 	root := ""
+	hasSkills := false
 	for name := range t.files {
 		if path.Base(name) != "SKILL.md" {
 			continue
@@ -397,13 +401,54 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 			return nil, refuse("invalid_skill", "skill directory")
 		}
 		parent := path.Dir(dir)
+		if path.Base(parent) == "skills" {
+			// A skills-only wrapper retains its historical normalization. Only
+			// native siblings make skills/ the explicit member directory.
+			candidate := path.Dir(parent)
+			for sibling := range t.files {
+				rel := sibling
+				if candidate != "." {
+					if !strings.HasPrefix(sibling, candidate+"/") {
+						continue
+					}
+					rel = strings.TrimPrefix(sibling, candidate+"/")
+				}
+				if componentKind(rel) != "" {
+					parent = candidate
+					break
+				}
+			}
+		}
 		if root != "" && root != parent {
 			return nil, refuse("invalid_skill", "members must share a pack root")
 		}
 		root = parent
+		hasSkills = true
+	}
+	for name := range t.files {
+		// Legacy skill packs already identify their wrapper. A wrapper named
+		// agents/commands/rules is not itself a native component directory.
+		if hasSkills {
+			break
+		}
+		parts := strings.Split(name, "/")
+		for i := 0; i < min(2, len(parts)-1); i++ {
+			if componentKind(strings.Join(parts[i:], "/")) == "" {
+				continue
+			}
+			parent := "."
+			if i == 1 {
+				parent = parts[0]
+			}
+			if root != "" && root != parent {
+				return nil, refuse("invalid_skill", "members must share a pack root")
+			}
+			root = parent
+			break
+		}
 	}
 	if root == "" {
-		return nil, refuse("invalid_skill", "SKILL.md missing")
+		return nil, refuse("invalid_skill", "instruction member missing")
 	}
 	if root != "." {
 		normalized := map[string][]byte{}
@@ -432,11 +477,23 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 			mode = 0755
 		}
 		p.Manifest = append(p.Manifest, FileEntry{Path: name, Size: int64(len(t.files[name])), Mode: mode, Digest: digest(t.files[name])})
-		if path.Base(name) != "SKILL.md" {
+		kind := componentKind(name)
+		// A portable skill owns all its support files, even when its name
+		// matches a native component directory. Preserve existing pack bytes.
+		if _, skillOwned := t.files[strings.SplitN(name, "/", 2)[0]+"/SKILL.md"]; skillOwned {
+			kind = ""
+		}
+		if path.Base(name) != "SKILL.md" && kind == "" {
 			continue
 		}
 		dir := path.Dir(name)
-		m, err := parseSkill(dir, t.files[name])
+		var m Member
+		var err error
+		if path.Base(name) == "SKILL.md" {
+			m, err = parseSkill(dir, t.files[name])
+		} else {
+			m, err = parseComponent(name, t.files[name], kind)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -453,7 +510,7 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 		}
 		seen[m.Name] = true
 		for _, name := range names {
-			if !strings.HasPrefix(name, m.Directory+"/") {
+			if !m.owns(name) {
 				continue
 			}
 			rel := strings.TrimPrefix(name, m.Directory+"/")
@@ -473,8 +530,12 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 		// A shared SKILL.md alone does not make two native skills identical.
 		var manifest []FileEntry
 		for _, entry := range p.Manifest {
-			if strings.HasPrefix(entry.Path, m.Directory+"/") {
-				entry.Path = strings.TrimPrefix(entry.Path, m.Directory+"/")
+			if m.owns(entry.Path) {
+				if m.Kind == "" {
+					entry.Path = strings.TrimPrefix(entry.Path, m.Directory+"/")
+				} else {
+					entry.Path = path.Base(entry.Path)
+				}
 				manifest = append(manifest, entry)
 			}
 		}
@@ -485,7 +546,7 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 	for _, name := range names {
 		owner := false
 		for _, m := range p.Members {
-			if strings.HasPrefix(name, m.Directory+"/") {
+			if m.owns(name) {
 				owner = true
 				break
 			}
@@ -507,6 +568,11 @@ func (t *tree) validate(sourceDigest string) (*ValidatedPack, error) {
 // the tool runs unasked.
 var interpolation = regexp.MustCompile("(?:^|[^A-Za-z0-9_`])!`[^`]+`|(?:```|~~~)[ \\t]*!")
 
+// Claude expands @file imports while loading rules, before any model tool call.
+// Include Unicode whitespace, as its native parser does. This conservative check
+// also holds examples in code/comments for approval instead of parsing Markdown.
+var fileImport = regexp.MustCompile(`(?:^|[\s\p{Z}\x{FEFF}\x{000B}])@\S`)
+
 // printable bounds pack-supplied text that is listed, audited or printed: no
 // control characters, at most 120 runes.
 func printable(s string) string {
@@ -525,27 +591,34 @@ func printable(s string) string {
 var portableName = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func parseSkill(dir string, b []byte) (Member, error) {
-	m := Member{Directory: dir, SkillDigest: digest(b), Extensions: []string{}, Scripts: []string{}}
+	return parseInstruction(dir, b, "")
+}
+
+func parseInstruction(dir string, b []byte, kind string) (Member, error) {
+	m := Member{Kind: kind, Directory: dir, SkillDigest: digest(b), Extensions: []string{}, Scripts: []string{}}
 	if len(b) > MaxSkillBytes || !utf8.Valid(b) || bytes.ContainsRune(b, 0) {
 		return m, refuse("invalid_skill", "encoding/size")
 	}
 	lines := strings.Split(string(b), "\n")
-	if len(lines) < 3 || strings.TrimSuffix(lines[0], "\r") != "---" {
-		return m, refuse("invalid_skill", "frontmatter")
-	}
-	end := 0
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSuffix(lines[i], "\r") == "---" {
-			end = i
-			break
+	end := -1
+	root := &yaml.Node{Kind: yaml.MappingNode}
+	if strings.TrimSuffix(lines[0], "\r") == "---" {
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimSuffix(lines[i], "\r") == "---" {
+				end = i
+				break
+			}
 		}
-	}
-	if end == 0 {
+		if end < 1 {
+			return m, refuse("invalid_skill", "frontmatter")
+		}
+		var err error
+		root, err = parseYAML([]byte(strings.Join(lines[1:end], "\n")))
+		if err != nil {
+			return m, err
+		}
+	} else if kind == "" || kind == "agent" {
 		return m, refuse("invalid_skill", "frontmatter")
-	}
-	root, err := parseYAML([]byte(strings.Join(lines[1:end], "\n")))
-	if err != nil {
-		return m, err
 	}
 	for i := 0; i < len(root.Content); i += 2 {
 		k, v := root.Content[i].Value, root.Content[i+1]
@@ -579,11 +652,22 @@ func parseSkill(dir string, b []byte) (Member, error) {
 			m.Extensions = append(m.Extensions, printable(k))
 		}
 	}
+	if kind == "command" || kind == "rule" {
+		if m.Name == "" {
+			m.Name = path.Base(dir)
+		}
+		if m.Description == "" {
+			m.Description = path.Base(dir)
+		}
+	}
 	if !portableName.MatchString(m.Name) || len(m.Name) > 64 || m.Name != path.Base(dir) || strings.TrimSpace(m.Description) == "" || utf8.RuneCountInString(m.Description) > 1024 || utf8.RuneCountInString(m.Compatibility) > 500 {
 		return m, refuse("invalid_skill", "name/description/compatibility")
 	}
 	if interpolation.MatchString(strings.Join(lines[end+1:], "\n")) {
 		m.Extensions = append(m.Extensions, "dynamic-command-interpolation")
+	}
+	if kind == "rule" && fileImport.Match(b) {
+		m.Extensions = append(m.Extensions, "file-import")
 	}
 	return m, nil
 }

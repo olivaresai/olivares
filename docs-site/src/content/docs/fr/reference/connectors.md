@@ -7,6 +7,10 @@ description: >-
   ainsi que les destinations de sortie.
 ---
 
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; les routes et commandes d’export renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et le transfert DDIL entre sites isolés nécessitent aussi Business.
+:::
+
 Cette page est le **catalogue** des connecteurs first-party et, pour chacun, le
 **niveau de couverture honnête** qu'il peut prendre en charge. Elle complète
 [connecter une source](/fr/how-to/connect-a-source/), qui explique le *modèle* de
@@ -108,7 +112,7 @@ dev l'omet et le boot le signale honnêtement plutôt que d'avoir l'air sain).
 |---|---|---|
 | `claude` | Télémétrie d'outils OTLP de Claude Code + introspection MCP → arêtes / coût / findings | Plugin hors processus ; `attributed` quand une identité per-agent est présente, sinon `approximate` |
 | `claude-api` | Échantillons de coût de l'Admin API Claude + findings de posture de gouvernance | In-process ; no-op hors ligne (pas de clé admin) |
-| `claude-compliance` | Preuves du flux d'activité Compliance de Claude → findings | GET-only par construction ; no-op hors ligne |
+| `claude-compliance` | Preuves du flux d'activité Compliance de Claude → findings | GET-only par construction ; no-op hors ligne (Business) |
 | `claude-config` | Arbre de configuration Claude statique (subagents / Skills / plugins) → arêtes de **capacité déclarée** | Métadonnées uniquement — une surface de capacité, pas un accès observé |
 | `claude-console` | IAM de l'organisation Claude → findings de posture SSO/SCIM (roster d'identités + source) | Business: Identity & Scale;  |
 | `claude-wif` | Roster d'identités non-humaines / workload-identity Anthropic + arêtes de scope permis | Business: Identity & Scale; Modélise la fédération déclarée par l'opérateur ; signale les pièges des clés statiques |
@@ -275,7 +279,7 @@ map](/fr/reference/modules/iii-access-map/) est construite (leurs alias avec tir
 | `bigquery-audit` | Audit d'accès aux données BigQuery |
 | `redshift-audit` | Audit Amazon Redshift |
 | `mssql-audit` | Audit SQL Server |
-| `oracle-audit` | Audit unifié Oracle |
+| `oracle-audit` | Audit unifié Oracle (Business) |
 | `gcs-audit` | Audit d'accès aux données Google Cloud Storage |
 | `azure-blob-audit` | Audit Azure Blob Storage |
 
@@ -373,7 +377,7 @@ rôle / processus / credential partagée plutôt qu'à un agent résolu.
 | `iceberg-catalog` | Catalogue REST Iceberg → grants permis + identités de credentials délivrées | permitted |
 | `inference-gateway` | Routage K8s Gateway API Inference-Extension → routes d'inférence permises | permitted |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | Audit cloud KMS → arêtes d'accès aux clés (jamais le matériel de clé) | approximate |
-| `external-secrets` / `sops` / `kmip` | Manifests de gestion de secrets / locate KMIP → arêtes de provisioning/custody | approximate (existence, pas usage) |
+| `external-secrets` / `sops` / `kmip` | Manifests de gestion de secrets / locate KMIP → arêtes de provisioning/custody | approximate (existence, pas usage); `kmip`: Business |
 | `istio-telemetry` | CRDs Istio Telemetry → arêtes de mesh L7 | approximate (CRDs parsés, pas flux en direct) |
 | `egress-proxy` | Journal de verdicts du proxy d'egress → arêtes d'egress L7 | approximate |
 | `kong-audit` | Journaux d'audit Kong → findings de changement de configuration | approximate |
@@ -512,10 +516,10 @@ expurge le corps avant de persister).
 | `gdrive` | Documents Google Drive (Docs/Sheets/Slides/fichiers) |
 | `confluence` | Espaces et pages Atlassian Confluence |
 | `notion` | Workspaces, bases de données et pages Notion |
-| `sharepoint` | Sites et documents Microsoft SharePoint / OneDrive |
+| `sharepoint` | Sites et documents Microsoft SharePoint / OneDrive (Business) |
 | `s3content` | Contenu d'object-storage (objets S3 / R2 / GCS) |
-| `sap_odata` | Entités de service SAP OData sous forme de documents gouvernés |
-| `salesforce` | Objets/enregistrements Salesforce sous forme de documents gouvernés |
+| `sap_odata` | Entités de service SAP OData sous forme de documents gouvernés (Business) |
+| `salesforce` | Objets/enregistrements Salesforce sous forme de documents gouvernés (Business) |
 | `snowflake` | Tables/lignes Snowflake sous forme de documents gouvernés (distinct de l'observateur R/RW `snowflake-audit`) |
 | `azure_ai_search` | Documents d'index Azure AI Search |
 | `postgres` | Lignes PostgreSQL sous forme de documents gouvernés — lecture seule par construction, ACL déclarée par ligne, classification par colonne (distinct de l'observateur R/RW `pgaudit` ; pas de NL-to-SQL). Voir [Postgres comme source de contexte gouvernée](/fr/how-to/govern-postgres-content/). |

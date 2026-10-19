@@ -14,6 +14,18 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ListTruncationBadge } from './notices'
+
+it('renders a rich hint visibly instead of coercing it into a native title', () => {
+  const { container } = render(
+    <ListTruncationBadge
+      query={{ data: { has_more: true } }}
+      label="Showing one page"
+      hint={<code>executed_at</code>}
+    />,
+  )
+  expect(screen.getByText('executed_at').tagName).toBe('CODE')
+  expect(container.querySelector('[title]')).toBeNull()
+})
 import './i18n'
 
 const AVISO = 'Loaded 3 rows; there are more'

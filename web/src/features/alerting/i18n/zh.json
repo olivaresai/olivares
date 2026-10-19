@@ -1,10 +1,62 @@
 {
   "title": "告警",
-  "description": "将发现路由到目标并查看投递日志。路由按名称引用目标；凭据存在于已接线的传输中。",
+  "description": "将发现路由到目标并查看投递日志。路由按名称引用目标；凭据存在于已配置的传输中。",
   "tabs": {
     "routes": "路由",
+    "destinations": "目标",
     "deliveries": "投递",
     "outbox": "死信"
+  },
+  "destinations": {
+    "adminOnly": "目标由管理员管理",
+    "adminOnlyHint": "添加或更改目标需要实例管理员。请让管理员添加，或在运维配置文件中配置。",
+    "intro": "目标是路由发送告警的地方。可在此添加 Slack 或 Microsoft Teams；Webhook URL 会被加密保存，之后不再显示。",
+    "add": "添加目标",
+    "empty": "尚无目标",
+    "emptyHint": "添加 Slack 或 Teams 目标，然后让路由指向它。",
+    "noSealer": "已禁用保存：此部署没有密钥封装器，无法安全存储 Webhook URL。",
+    "fileNote": "来自运维配置文件（OLIVARES_NOTIFY_CONFIG）的目标以只读方式列出。其他类型在该文件中配置。",
+    "colName": "名称",
+    "colKind": "类型",
+    "colHost": "Webhook 主机",
+    "colSource": "来源",
+    "colStatus": "状态",
+    "colActions": "操作",
+    "sourceConsole": "控制台",
+    "sourceFile": "运维配置文件",
+    "open": "已打开",
+    "notOpen": "未打开",
+    "testAction": "向 {{name}} 发送测试消息",
+    "editAction": "编辑目标 {{name}}",
+    "deleteAction": "删除目标 {{name}}",
+    "tested": "已向 {{name}} 发送测试消息",
+    "testSent": "测试消息已发送",
+    "testFailed": "目标未接受测试消息。请检查 Webhook URL。",
+    "saved": "目标已保存",
+    "savedNotOpen": "目标已保存，但未打开。请检查 Webhook URL 并发送测试消息。",
+    "deleted": "目标已删除",
+    "deleteDialog": {
+      "title": "删除目标？",
+      "description": "这将删除“{{name}}”及其已存储的 Webhook URL。指向它的路由在你选择其他目标之前会记录未知目标。",
+      "confirm": "删除目标"
+    },
+    "dialog": {
+      "title": "添加目标",
+      "editTitle": "编辑目标",
+      "subtitle": "将告警发送到 Slack 或 Microsoft Teams。保存前请先发送测试消息。",
+      "kind": "类型",
+      "name": "名称",
+      "nameHint": "小写字母、数字、点、短横线或下划线。路由通过此名称引用。",
+      "url": "Webhook URL",
+      "urlHint": {
+        "slack": "你的 Slack 应用的传入 Webhook URL（hooks.slack.com）。",
+        "teams": "“收到 Teams Webhook 请求时”工作流的 Webhook URL。",
+        "default": "传入 Webhook URL。"
+      },
+      "urlKeep": "留空则保留已存储的 URL（{{host}}）。",
+      "urlStored": "已存储 — 输入以替换",
+      "test": "发送测试消息"
+    }
   },
   "severities": {
     "any": "任意严重级别",

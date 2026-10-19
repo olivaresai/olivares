@@ -8,13 +8,19 @@
 // breadcrumb rendered a blank BreadcrumbPage — a visible bug AND an axe
 // aria-command-name violation. These assertions pin the resolver's behaviour.
 import { describe, expect, it } from 'vitest'
+import { FEATURE_VIEWS } from '@/features/registry'
 import { currentViewId } from './topbar'
 
 describe('currentViewId', () => {
   it('resolves a dynamic route to its registry view id (the matchBase fix)', () => {
-    expect(currentViewId('/session-viewer/sess-a11y')).toBe('session-viewer')
+    // The session viewer is a Business page (docs/editions.md): only a Business build
+    // registers it, and a Community build resolves its address to no view at all.
+    const served = FEATURE_VIEWS.some((v) => v.id === 'session-viewer')
+    expect(currentViewId('/session-viewer/sess-a11y')).toBe(
+      served ? 'session-viewer' : null,
+    )
     expect(currentViewId('/session-viewer/anything-here')).toBe(
-      'session-viewer',
+      served ? 'session-viewer' : null,
     )
   })
 

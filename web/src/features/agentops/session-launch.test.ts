@@ -69,6 +69,30 @@ beforeEach(() => {
 })
 
 describe('the first-hour launch', () => {
+  it.each([
+    { speed: { fastMode: true }, field: 'fast_mode', value: true },
+    { speed: { fastMode: false }, field: 'fast_mode', value: false },
+    {
+      speed: { serviceTier: 'priority' },
+      field: 'service_tier',
+      value: 'priority',
+    },
+  ])(
+    'sends explicit quick-launch $field=$value',
+    async ({ speed, field, value }) => {
+      await startSession({
+        driver: field === 'service_tier' ? 'codex' : 'claude',
+        folder: '',
+        permission: 'ask',
+        prompt: '',
+        ...speed,
+      })
+      expect(ops.createRun).toHaveBeenCalledWith(
+        expect.objectContaining({ [field]: value }),
+        launchAuthority,
+      )
+    },
+  )
   it('uses the supplied registration even when another folder has the same path', async () => {
     ops.listWorkspaces.mockResolvedValue({
       items: [

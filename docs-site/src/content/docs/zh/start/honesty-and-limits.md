@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
 :::
 
 面向 AI 的控制平面（control plane）是一款安全产品。如果它夸大其所覆盖的范围，
@@ -39,7 +39,7 @@ description: >-
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
-  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.2<!-- /release -->**，尚未发布。发布前请从源码构建。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.3<!-- /release -->**，尚未发布。发布前请从源码构建。
 
 ## 开放内核 —— 哪些开放、哪些属于商业版
 
@@ -50,8 +50,8 @@ description: >-
 
 - **单 IdP 的 SSO 是开放的。** 单 IdP 登录 —— **OIDC**（授权码 + PKCE）
   和 **SAML 2.0**（已签名的响应、防重放）—— 在默认二进制中运行，**无需**
-  `-tags enterprise`，入站 **SCIM** 同样如此。运行**多于一个活动 IdP**（按租户 / 按域名）
-  以及 **SSO 强制**（要求 SSO / 阻止密码登录）属于 Business（Identity & Scale）；
+  `-tags enterprise`。运行**多于一个活动 IdP**（按租户 / 按域名）、
+  **SSO 强制**（要求 SSO / 阻止密码登录）以及入站 **SCIM** 服务器属于 Business（Identity & Scale）；
   激活第二个活动 IdP 会返回 `multi_idp_requires_enterprise` —— 这是一条明确的
   产品边界，绝非伪造的 501。
 - **不存在用户数量上限 —— 所有版本的账户都不受限制。** 社区版、Business
@@ -60,8 +60,8 @@ description: >-
   兼容性 no-op 保留在代码中，不会拒绝任何操作），授权过期也绝不会限制、停用或删除
   账户。商业模式是对模块的按期授权，而非按席位收费。
 - **平台的其余部分都是开放的。** 完整的治理闭环 —— 清单、R/RW 访问图谱、
-  RBAC/ABAC/Cedar 策略、已封存的审计账本、FinOps、合规、SIEM 出口、MCP、
-  HA/分布式 —— 都在开放二进制中运行，没有任何授权检查。那条增量式的
+  RBAC/ABAC/Cedar 策略、已封存的审计账本、FinOps、合规、SIEM 出口、MCP
+  —— 都在开放二进制中运行，没有任何授权检查。主备（active-passive）HA 的 leader 路由和边缘 collector 属于 Business 版。那条增量式的
   `enterprise/` 模块是从未存在于开放产品中的新代码，而非从中移除的功能；
   哪项能力属于哪个版本，只在仓库的 `docs/editions.md` 中写一次。开放二进制中的授权验证
   **仅作为存证** —— 它从不启用、禁用或阻止任何东西，唯一的例外是安装未声明社区版的更新
@@ -85,19 +85,19 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
 - **规范的 R/RW 源在标准 `serve` 中已接好线。** 组合根
   注册了主机级别的观察者 —— `pgaudit`、`s3cloudtrail`、`ebpf`、
   `runtime` 和 `mcp` 内省源 —— 同时还有数据仓库/数据湖
-  观察者（snowflake/databricks/bigquery/mssql/oracle/mongo/redshift/gcs/
+  观察者（snowflake/databricks/bigquery/mssql/mongo/redshift/gcs/
   azure-blob/iceberg/openlineage/delta-sharing），全部可通过
   `OLIVARES_SOURCES_CONFIG` 配置（[快速上手](/zh/start/quickstart/)
   针对标准二进制接好了一个真实的 `pgaudit` 源，冒烟测试会断言这一点）。
   知识**文档源**
-  （gdrive/confluence/notion/sharepoint/s3content）有意**不**作为运行时
+  （gdrive/confluence/notion/s3content）有意**不**作为运行时
   源 —— 它们由知识摄取请求按需加载。
   [连接器参考](/zh/reference/connectors/)标注了每种类型。
 - **默认是单一二进制文件；分布式事件总线确实存在，并对其语义保持诚实。**
   默认作为单个二进制文件运行，带有**进程内**事件
   总线。**远程采集器→核心的数据路径已构建并发布**：边缘采集器
   在本地运行源连接器，并通过经验证的客户端证书双向 TLS 将观察结果推送到
-  中央核心，且没有入站监听器（`collector` 模式）。
+  中央核心，且没有入站监听器（`collector` 模式，属于 Business 功能）。
   **分布式事件总线**随横向扩展工作一同发布：这是一种混合方案，
   既为本地投递保留进程内的扇出（阻塞式背压、无本地丢失），
   又通过 **NATS** 在节点间桥接事件，由
@@ -112,7 +112,7 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
   以及进程内的合成沙箱运行器（由构造方式天然隔离）。还有若干能力是
   **按需接好线的** —— 后端已构建并接好线，但在运维方通过 env 配置预置它之前，
   保持 **deny-closed 或降级状态**：模块 VII（deploy）
-  `apply`/`retire`（在预置执行器之前返回 `503`）、模块 IV 编排
+  `apply`/`retire`（仅 Business：Community 返回 `501`，在预置执行器之前返回 `503`）、模块 IV 编排
   *fire* 和模块 XVI 语音派发（两者在配置好派发器之前均为 deny-closed）、
   OS 隔离的沙箱/红队运行时（在预置前为合成 / DEGRADED）、
   基于模型的**语义**检索（默认仅为词法和公开内容），
@@ -132,7 +132,7 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
   你确实自托管的模型（例如在模块 XXIII 下通过 vLLM/Ollama）可以
   气隙化运行；经中介的前沿模型则不能。
 - **模块路由采用独立的 beta 契约。** 模块端点（例如访问图谱和漂移）
-  不属于包含 128 条路径的稳定核心契约；它们以独立的 **beta** 文档发布——
+  不属于包含 {{core-paths}} 条路径的稳定核心契约；它们以独立的 **beta** 文档发布——
   见[模块路由参考](/reference/api-beta/)（由 `/openapi.beta.json` 提供）。
   beta 表示结构可能在事先通知后发生变化，字段级细节仍在产品的类型化接口中。
   [核心 API 参考](/reference/api/)记录稳定表面；它并非整个产品表面。

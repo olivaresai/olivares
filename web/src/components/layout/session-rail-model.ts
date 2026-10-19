@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { sessionNameLadder } from '@/features/home/work-line'
 //
 // THE SESSION RAIL, AS DATA: three groups in a fixed order, grouped by what each row needs
 // from the operator. Pure, so the grouping is tested without a network or a router.
@@ -12,10 +11,9 @@ import { sessionNameLadder } from '@/features/home/work-line'
 import type { HandoffInboxItem } from '@/features/communications/types'
 import {
   mergeSessions,
-  operatorName,
   primaryRun,
   runAwaitedApproval,
-  runWantsAPerson,
+  sessionListName,
   sessionReference,
   sessionShortId,
   sharedNames,
@@ -25,6 +23,8 @@ import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
 import type { LiveDTO } from '@/features/sessions/types'
 import type { RunDTO } from '@/features/agentops/types'
 import { runFolder } from '@/features/sessions/folder'
+import { sessionDisplayState } from '@/features/sessions/session-display-state'
+import type { RailState } from '@/features/sessions/session-display-state'
 
 export const RAIL_GROUP_IDS = ['needsYou', 'working', 'earlier'] as const
 export type RailGroupId = (typeof RAIL_GROUP_IDS)[number]
@@ -33,7 +33,7 @@ export type RailGroupId = (typeof RAIL_GROUP_IDS)[number]
 export const RAIL_ROWS_PER_GROUP = 8
 
 /** The state a row's glyph and word say. */
-export type RailState = 'need' | 'live' | 'ended' | 'idle'
+export type { RailState } from '@/features/sessions/session-display-state'
 
 export interface RailRow {
   key: string
@@ -89,25 +89,6 @@ function minutesSince(iso: string | undefined, now: number): number {
   return Math.max(0, Math.floor((now - at) / 60_000))
 }
 
-function sessionState(live: LiveDTO): RailState {
-  if (live.cc_state === 'silent_evasion' || live.unclaimed === true)
-    return 'need'
-  if (live.cc_state === 'active') return 'live'
-  if (live.cc_state === 'ended') return 'ended'
-  return 'idle'
-}
-
-/** A launched run: one asking for a person needs the operator (the rule Sessions files
- * by too), running is working, idle (it answered and waits for input) is idle, pending
- * needs the operator, and stopped, failed or cleaned is earlier. */
-function runState(run: RunDTO): RailState {
-  if (runWantsAPerson(run)) return 'need'
-  if (run.state === 'running') return 'live'
-  if (run.state === 'idle') return 'idle'
-  if (run.state === 'pending') return 'need'
-  return 'ended'
-}
-
 /** Distinguish repeated titles with the short session identifier. */
 function distinctTitle(
   title: string | null,
@@ -127,11 +108,7 @@ function sessionRow(
 ): RailRow {
   const run = primaryRun(s.runs)
   const live = s.live
-  const state: RailState = run
-    ? runState(run)
-    : live
-      ? sessionState(live)
-      : 'idle'
+  const state = sessionDisplayState(s).rail
   const waitingOn =
     state === 'need' && destinations.canOpenApprovals !== false && run
       ? runAwaitedApproval(run)
@@ -143,6 +120,7 @@ function sessionRow(
         search: { [SESSION_PARAM]: addressOf(s) },
       }
   // Tool and folder (Warp concept) for a launched session; engine and agent otherwise.
+  const named = sessionListName(s, '')
   const meta = (
     run
       ? [run.provider_driver || 'claude', runFolder(run)]
@@ -156,15 +134,10 @@ function sessionRow(
     key: s.key,
     kind: 'session',
     state,
-    title: distinctTitle(
-      operatorName(s) ||
-        (live ? sessionNameLadder(null, live, '').text : '') ||
-        null,
-      s,
-      shared,
-    ),
+    title: distinctTitle(named.text || null, s, shared),
     reference: sessionReference(s),
-    meta: meta || null,
+    // A title that IS the tool and folder already says what the caption would.
+    meta: named.from === 'place' ? null : meta || null,
     minutes: minutesSince(state === 'live' ? started : last, now),
     to,
     search,

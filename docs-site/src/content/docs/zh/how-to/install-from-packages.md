@@ -7,10 +7,10 @@ description: >-
 draft: false
 ---
 
-下一个版本是 <!-- release -->`0.2`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->。
+下一个版本是 <!-- release -->`0.3`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->。
 
 :::note[已发布的软件包名称]
-GitHub 的 Olivares <!-- release -->0.2<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
+GitHub 的 Olivares <!-- release -->0.3<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
 `checksums.txt`、`checksums.txt.sig` 和 `checksums.txt.pem`。下面的命令使用该发行的字面
 `amd64` 名称；在 64 位 ARM 主机上将 `amd64` 换成 `arm64`。请从这些已验证的发行产物安装。
 源码树中的仓库元数据生成器不是本指南的安装说明。
@@ -65,13 +65,13 @@ Sigstore 信任根材料，尚未缓存时由 cosign 获取。`--offline` 只去
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -116,7 +116,7 @@ ambient 也没有 bounding capability — 并设置 `NoNewPrivileges=true`，因
 无法获得权限。此外还带有 `ProtectSystem=full`（`/usr`、`/boot`、`/efi` 和 `/etc` 只读）、
 `PrivateDevices=true`、`ProtectClock=true`、`ProtectKernelTunables=true`、
 `ProtectKernelModules=true`、`ProtectKernelLogs=true`、`ProtectControlGroups=true`、
-`RestrictNamespaces=user net`（会话获得自己的用户和网络命名空间，其他命名空间类型一律拒绝）、
+`RestrictNamespaces=user net mnt`（会话获得自己的用户和网络命名空间；将文件夹的 Git 钩子和配置保持只读的辅助进程获得自己的挂载命名空间，系统调用过滤器在其中允许 `mount`；其他命名空间类型一律拒绝）、
 `RestrictSUIDSGID=true`、`RestrictRealtime=true`、`LockPersonality=true`、
 `SystemCallArchitectures=native`、额外去掉 `@privileged` 和 `@resources` 的
 `@system-service` 系统调用过滤器，以及 `UMask=0027`。

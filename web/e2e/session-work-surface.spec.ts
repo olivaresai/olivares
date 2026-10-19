@@ -31,8 +31,18 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
 
-/** The seven the console ships; `lint:i18n` proves the resources exist for each. */
-const LANGUAGES = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'] as const
+/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+const LANGUAGES = [
+  'en',
+  'es',
+  'de',
+  'fr',
+  'it',
+  'ja',
+  'ko',
+  'ru',
+  'zh',
+] as const
 
 async function signIn(page: Page) {
   await page.goto('/login')
@@ -185,7 +195,11 @@ test.describe('the work surface', () => {
     await prefer(page, 'dark', 'en')
     await signIn(page)
     await page.goto('/')
-    const row = page.getByTestId('home-recent-row').first()
+    // A live session is a card on Now and an ended one a row (#2245): either opens it.
+    const row = page
+      .getByTestId('now-live-card')
+      .or(page.getByTestId('home-recent-row'))
+      .first()
     await expect(row).toBeVisible()
     const href = await row.getAttribute('href')
     expect(href, 'the row addresses ONE session').toMatch(
@@ -319,6 +333,54 @@ test.describe('the work surface', () => {
     await expect(start).not.toContainText(demoTenant)
     await expect(start.getByRole('button').first()).toBeVisible()
     await expect(start).toContainText(/New session|Sign in|Install|Providers/i)
+  })
+
+  test('previous-session chord and numbered palette rows', async ({ page }) => {
+    await prefer(page, 'dark', 'en')
+    await signIn(page)
+    await page.goto('/sessions')
+    await expect(page.getByTestId('work-rail')).toBeVisible()
+    await page.keyboard.press('ControlOrMeta+k')
+    const dialog = page.getByRole('dialog')
+    const recent = dialog.locator('[data-value^="recent-session:"]')
+    await expect(recent.nth(1)).toBeVisible()
+    const first = (await recent.nth(0).getAttribute('data-value'))!
+      .split(' ')[0]
+      .slice('recent-session:'.length)
+    const second = (await recent.nth(1).getAttribute('data-value'))!
+      .split(' ')[0]
+      .slice('recent-session:'.length)
+    await dialog.getByRole('combobox').fill('1')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('combobox')).toHaveValue('1')
+    await dialog.getByRole('combobox').fill('')
+    await dialog.getByRole('combobox').press('Tab')
+    await expect(dialog.getByRole('listbox')).toBeFocused()
+    await page.keyboard.press('1')
+    await expect(dialog).toBeHidden()
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get('session') === first,
+    )
+    await page.keyboard.press('ControlOrMeta+k')
+    await dialog.getByRole('combobox').press('Tab')
+    await page.keyboard.press('2')
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get('session') === second,
+    )
+    await page.keyboard.press('ControlOrMeta+Shift+Enter')
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get('session') === first,
+    )
+    await page.keyboard.press('ControlOrMeta+Shift+Enter')
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get('session') === second,
+    )
+    await page.keyboard.press('ControlOrMeta+k')
+    const axe = await new AxeBuilder({ page })
+      .include('[role="dialog"]')
+      .analyze()
+    expect(axe.violations).toEqual([])
+    await page.screenshot({ path: 'playwright-report/session-shortcuts.png' })
   })
 
   test('the palette keeps focus while open and RETURNS it to the list filter', async ({

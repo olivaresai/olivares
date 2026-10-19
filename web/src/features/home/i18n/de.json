@@ -1,7 +1,6 @@
 {
   "title": "Übersicht",
   "description": "Was Ihre KI-Agenten in den letzten 30 Tagen getan haben, in den Bereichen, die Sie öffnen können.",
-  "openReport": "Management-Bericht",
   "aside": "Übersicht des Bestands",
   "range": "letzte 30 Tage",
   "next": {
@@ -30,7 +29,17 @@
     "open": "Sitzung öffnen: {{what}}",
     "untitled": "Unbenannte Sitzung"
   },
+  "live": {
+    "title": "Gerade aktiv"
+  },
   "tiles": {
+    "today": {
+      "label": "Heute",
+      "caption_one": "Kosten der heute aktiven Sitzung",
+      "caption_other": "Kosten der {{count}} heute aktiven Sitzungen",
+      "unpriced_one": "{{count}} ohne gemeldete Kosten",
+      "unpriced_other": "{{count}} ohne gemeldete Kosten"
+    },
     "inventory": {
       "label": "Inventar",
       "caption": "{{agents}} Agenten · {{active}} aktiv"

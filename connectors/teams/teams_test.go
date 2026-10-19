@@ -396,3 +396,19 @@ func TestCloseIsSafe(t *testing.T) {
 		t.Errorf("Close after Open: %v", err)
 	}
 }
+
+// WithHTTPClient is the transport a delivery uses: the console passes a client that does
+// not follow redirects, and a connector that ignored it would follow them.
+func TestWithHTTPClientIsTheDeliveryTransport(t *testing.T) {
+	doer := &recordingDoer{responses: []stubResp{{status: 202}}}
+	o := New().WithHTTPClient(doer)
+	if err := o.Open(context.Background(), sdk.Config{Settings: map[string]string{cfgWebhookURL: testWebhook}}); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := o.Notify(context.Background(), sdk.Notification{Title: "t", Severity: model.SeverityLow}); err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	if doer.calls != 1 || doer.reqs[0].url != testWebhook {
+		t.Fatalf("doer saw %d calls %+v, want one POST to the webhook URL", doer.calls, doer.reqs)
+	}
+}

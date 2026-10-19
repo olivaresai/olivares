@@ -118,6 +118,17 @@ vi.mock('./license-tab', () => ({
 
 import ConsoleView from './console-view'
 
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ can: () => true, confinedWorkspace: null }),
+}))
+vi.mock('@/features/extensions', async (original) => {
+  const actual = await original<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: { ...actual.PANEL_EXTENSIONS, consoleAccess: undefined },
+  }
+})
+
 function renderAt(search: string) {
   window.history.replaceState({}, '', `/console${search}`)
   return render(<ConsoleView />)

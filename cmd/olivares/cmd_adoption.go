@@ -47,8 +47,9 @@ const adoptionNS = "adoption"
 func newAdoptionCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "adoption",
-		Short: "Report Claude adoption by org, team, trend and developer",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "adoption",
+		Short:       "Report Claude adoption by org, team, trend and developer",
 		Long: "adoption reports how the estate is using Claude, over a time window.\n\n" +
 			"It has two non-additive lenses and they are never summed: `analytics` counts\n" +
 			"per developer from the admin feed, `telemetry` counts per session from OTLP.\n" +
@@ -226,8 +227,9 @@ type adoptionSummary struct {
 func newAdoptionSummaryCmd(flags *authClientFlags) *cobra.Command {
 	var f adoptionWindowFlags
 	cmd := &cobra.Command{
-		Use:   "summary",
-		Short: "Show both adoption lenses over one window",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "summary",
+		Short:       "Show both adoption lenses over one window",
 		Long: "summary reports the window through both lenses side by side, plus the distinct\n" +
 			"developer and team counts.\n\n" +
 			"THE TWO ROWS ARE NOT ADDED and this command will not add them. `analytics` is\n" +
@@ -298,8 +300,9 @@ func newAdoptionTrendCmd(flags *authClientFlags) *cobra.Command {
 	var f adoptionWindowFlags
 	var lens string
 	cmd := &cobra.Command{
-		Use:   "trend",
-		Short: "Show a per-day series for ONE lens",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "trend",
+		Short:       "Show a per-day series for ONE lens",
 		Long: "trend is a per-day series for a SINGLE lens, because the two lenses are not\n" +
 			"additive and a combined series would be meaningless. --lens selects which one;\n" +
 			"the engine defaults to analytics.",
@@ -395,8 +398,9 @@ type adoptionDevelopers struct {
 func newAdoptionTeamsCmd(flags *authClientFlags) *cobra.Command {
 	var f adoptionWindowFlags
 	cmd := &cobra.Command{
-		Use:   "teams",
-		Short: "Break adoption down by team",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "teams",
+		Short:       "Break adoption down by team",
 		Long: "teams is the per-team rollup over the window, from the telemetry lens. It\n" +
 			"carries no per-person identity, which is why it takes the ordinary read\n" +
 			"permission rather than the stricter one `developers` requires.\n\n" +
@@ -452,8 +456,9 @@ func newAdoptionTeamsCmd(flags *authClientFlags) *cobra.Command {
 func newAdoptionDevelopersCmd(flags *authClientFlags) *cobra.Command {
 	var f adoptionWindowFlags
 	cmd := &cobra.Command{
-		Use:   "developers",
-		Short: "Break adoption down by developer (privileged: exposes identity)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "developers",
+		Short:       "Break adoption down by developer (privileged: exposes identity)",
 		Long: "developers is the per-person drill-down, and it is the one view in this\n" +
 			"namespace that exposes a developer's identity.\n\n" +
 			"IT TAKES ITS OWN, STRICTER PERMISSION. A caller entitled to `summary`, `trend`,\n" +
@@ -539,9 +544,10 @@ type adoptionDiscrepancy struct {
 func newAdoptionDiscrepancyCmd(flags *authClientFlags) *cobra.Command {
 	var f adoptionWindowFlags
 	cmd := &cobra.Command{
-		Use:     "discrepancy",
-		Aliases: []string{"discrepancies"},
-		Short:   "Measure how far the two lenses disagree",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "discrepancy",
+		Aliases:     []string{"discrepancies"},
+		Short:       "Measure how far the two lenses disagree",
 		Long: "discrepancy is the view that exists BECAUSE the two lenses disagree. For each\n" +
 			"day and metric it reports both figures, their ratio, which way the gap runs,\n" +
 			"and whether the engine considers it material.\n\n" +

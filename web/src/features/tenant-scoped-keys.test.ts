@@ -244,6 +244,11 @@ const NO_SON_DE_INQUILINO: Record<string, string> = {
   'console.*':
     '`/v1/console/…`, rotuladas «global, superadmin-gated» en el propio cliente. Las dos con ' +
     '`scope` SÍ son de inquilino: `scope` es el id del inquilino, sólo que no se llama así.',
+  'alerting.consoleDestinations':
+    '`/v1/console/notify-destinations` uses `systemRoute("system:admin")` and its list ignores the ' +
+    'module context (`handleListNotifyDestinations(w, r, _ ModuleContext)`, ' +
+    'core/api/handlers_notify_destinations.go:21): deployment destinations, not tenant ones. ' +
+    'The other `notifyKeys` entries DO carry `t`.',
   'health.publicStatus': '`/status`, la página pública y sin autenticar',
   'reporting.reports':
     '`handleListReports(w, _ *http.Request, _ api.ModuleContext)` — catálogo estático en código, ' +

@@ -25,7 +25,7 @@
     "columns": {
       "name": "名称",
       "kind": "类型",
-      "provider": "提供方",
+      "provider": "提供商",
       "visibility": "可见性",
       "status": "状态"
     },
@@ -37,7 +37,7 @@
       "kind": "类型",
       "status": "状态",
       "baseRef": "基础引用",
-      "providerRef": "提供方引用",
+      "providerRef": "提供商引用",
       "visibility": "可见性",
       "ownerRef": "所有者引用",
       "note": "备注"
@@ -107,13 +107,13 @@
       "governedHint": "一个声明性的姿态标志——并非准入绕过。",
       "note": "备注",
       "deploymentType": "部署类型",
-      "deploymentTypeHint": "Local 提供自托管的模型版本并受准入控制；brokered 调用托管的提供方，不受准入控制。",
-      "providerRef": "提供方端点",
-      "providerHint": "此部署所代理的托管提供方（例如 API 端点）。"
+      "deploymentTypeHint": "Local 提供自托管的模型版本并受准入控制；brokered 调用托管的提供商，不受准入控制。",
+      "providerRef": "提供商端点",
+      "providerHint": "此部署所代理的托管提供商（例如 API 端点）。"
     },
     "types": {
       "local": "Local（自托管）",
-      "brokered": "Brokered（托管提供方）"
+      "brokered": "Brokered（托管提供商）"
     },
     "truncated": "已加载 {{n}} 个部署；还有更多",
     "truncatedHint": "部署多于此处所示；本页按行 id 取数。运行时与状态筛选由引擎执行并重新查询——截断作用于已筛选的集合。部署未列在此处，并不能证明没有任何东西在运行。 表格的搜索与排序仅作用于已加载的内容。"

@@ -1,7 +1,6 @@
 {
   "title": "Now",
   "description": "What your AI agents did in the last 30 days, in the areas you can open.",
-  "openReport": "Executive report",
   "aside": "Estate summary",
   "range": "last 30 days",
   "next": {
@@ -30,7 +29,17 @@
     "open": "Open the session: {{what}}",
     "untitled": "Untitled session"
   },
+  "live": {
+    "title": "Live now"
+  },
   "tiles": {
+    "today": {
+      "label": "Today",
+      "caption_one": "Cost of the session that worked today",
+      "caption_other": "Cost of the {{count}} sessions that worked today",
+      "unpriced_one": "{{count}} reported no cost",
+      "unpriced_other": "{{count}} reported no cost"
+    },
     "inventory": {
       "label": "Inventory",
       "caption": "{{agents}} agents · {{active}} active"

@@ -189,7 +189,13 @@ func TestComparisonSameProtocolPositive(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "comparison-drift")
 	suite := comparisonFixture(t, h, admin, tenant, "drift")
-	base := comparisonRun(t, h, admin, tenant, suite, "model-a")
+	// Two cases, not one: on a single case no drop can exclude zero (#2151), and this
+	// test is about which score the comparison reads, not about the interval.
+	h.addCase(admin, tenant, suite, map[string]any{"case_key": "two", "input": "question", "expected": "answer"})
+	base := h.do("POST", "/v1/m/evals/runs", admin, map[string]any{"suite_ref": suite, "subject_ref": "model-a", "outputs": map[string]string{"one": "answer", "two": "answer"}}, tenantHdr(tenant))
+	if base.code != http.StatusCreated {
+		t.Fatalf("baseline run: %d %s", base.code, base.raw)
+	}
 	// A mutable aggregate is not the immutable metric source used for comparison.
 	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 		repo, e := sc.Ext(runKind)
@@ -206,7 +212,7 @@ func TestComparisonSameProtocolPositive(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	r := h.do("POST", "/v1/m/evals/gate", admin, map[string]any{"suite_ref": suite, "subject_ref": "model-a", "outputs": map[string]string{"one": "wrong"}}, tenantHdr(tenant))
+	r := h.do("POST", "/v1/m/evals/gate", admin, map[string]any{"suite_ref": suite, "subject_ref": "model-a", "outputs": map[string]string{"one": "wrong", "two": "wrong"}}, tenantHdr(tenant))
 	assertComparison(t, r.body, "comparable")
 	if !hasReason(r.body, "regression_vs_baseline") {
 		t.Fatalf("immutable baseline score was lost: %s", r.raw)

@@ -4,7 +4,7 @@ description: "Die secure-by-design Posture hinter Olivares AI — warum read-fir
 ---
 
 :::note[Business]
-Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
 :::
 
 Olivares AI ist ein Sicherheitsprodukt, das **innerhalb der eigenen Infrastruktur des

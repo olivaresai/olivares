@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](editions.md).
 
 S3 Object Lock archives and notification delivery require Business Regulated Operations.
+So do legal holds and right to erasure. Community keeps retention schedules and the hold-checked sweep, and a legal hold a Business engine stored keeps vetoing every purge there.
 Community keeps directory archives, offline verification and data export. An installation
 configured for S3 refuses to serve in Community; offline reads and exports remain available.
 Archive objects, configuration files and resume metadata are preserved for Business.
@@ -160,7 +161,7 @@ exact and the RTBF erasure path adopts it verbatim (`ports.go:209-218`):
 | Pillar | How the product meets it |
 |---|---|
 | **Documented** | Policy per class with `basis` + `retention_days` + the §1.1 registry (the class declares what it covers and by which column it ages) |
-| **Approved** | Enabling `disposition=purge` passes the governance gate: action `compliance.retention.enable`, HIGH by default (≥1 human + SoD; raisable to CRITICAL by approval policy), `PlanHash` bound to the exact schedule, no break-glass (`retention.go:40-47,204-206,232-260`) |
+| **Approved** | Enabling `disposition=purge` passes the governance gate: action `compliance.retention.enable`, HIGH by default (≥1 human + SoD; raisable to CRITICAL by an approval policy in Business), `PlanHash` bound to the exact schedule, no break-glass (`retention.go:40-47,204-206,232-260`) |
 | **Repeatable** | The sweep runs ONLY `enabled` policies, with a hold-check per batch, and seals an append-only `retention_run` certificate + self-audit `compliance.retention.purge` per class with activity (`retention.go:599-603,619-675`) |
 
 ### 3.1 Enabling a purge (the governed act)

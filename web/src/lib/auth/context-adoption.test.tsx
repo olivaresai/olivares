@@ -77,6 +77,7 @@ function Probe() {
   )
 }
 beforeEach(() => {
+  sessionStorage.clear()
   useSessionStore.getState().clear()
   useTenantStore.getState().clear()
   order = []
@@ -146,6 +147,48 @@ async function startA() {
   order.push('A-session-installed-before-response')
 }
 describe('session adoption credential ownership', () => {
+  it('clears every tab draft only after explicit sign-out is confirmed', async () => {
+    await startA()
+    const draftA = 'olivares.draft.v1.["tenant-a","alice","run-a"]'
+    const draftB = 'olivares.draft.v1.["tenant-b","bob","run-b"]'
+    sessionStorage.setItem(draftA, 'Draft A')
+    sessionStorage.setItem(draftB, 'Draft B')
+    sessionStorage.setItem('other-setting', 'keep')
+    await act(async () => {
+      await auth.logout()
+    })
+    expect(sessionStorage.getItem(draftA)).toBeNull()
+    expect(sessionStorage.getItem(draftB)).toBeNull()
+    expect(sessionStorage.getItem('other-setting')).toBe('keep')
+    await act(async () => {
+      releaseA(new Response(JSON.stringify(identity('A'))))
+      await adoption
+    })
+  })
+
+  it('keeps every tab draft when sign-out revocation fails', async () => {
+    await startA()
+    await act(async () => {
+      releaseA(new Response(JSON.stringify(identity('A'))))
+      await adoption
+    })
+    sessionStorage.setItem(
+      'olivares.draft.v1.["tenant-a","user","user:alice","alice","run-a"]',
+      'Draft A',
+    )
+    vi.mocked(globalThis.fetch).mockImplementationOnce(() =>
+      Promise.resolve(new Response('service unavailable', { status: 503 })),
+    )
+    await act(async () => {
+      await auth.logout()
+    })
+    expect(
+      sessionStorage.getItem(
+        'olivares.draft.v1.["tenant-a","user","user:alice","alice","run-a"]',
+      ),
+    ).toBe('Draft A')
+  })
+
   it('publishes its current principal with exactly one whoami request', async () => {
     await startA()
     await act(async () => {

@@ -98,8 +98,8 @@ describe('group role mapping', () => {
     },
   )
 
-  // Group nesting is published Community API: removing a parent sends the
-  // empty parent the route takes as "un-nest".
+  // Removing a parent sends the empty parent the nesting route takes as
+  // "un-nest".
   it('removes a stored parent through the nesting route', async () => {
     const user = userEvent.setup()
     api.setGroupParent.mockResolvedValue({

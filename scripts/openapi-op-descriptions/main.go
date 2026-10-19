@@ -57,6 +57,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // Exit codes. Three answers, never two: "I could not look" is not "in sync".
@@ -79,6 +80,15 @@ const (
 // its count too, so a truncated list never reads as the whole list.
 const maxNamed = 40
 
+// buildTags is the tag set the walk selects files with, the way `go build -tags` does.
+var buildTags []string
+
+// splitTags reads a -tags value: names separated by commas or white space, as the go
+// command takes them.
+func splitTags(s string) []string {
+	return strings.FieldsFunc(s, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+}
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--self-test" {
 		os.Exit(selfTest())
@@ -88,8 +98,10 @@ func main() {
 		write = flag.Bool("write", false, "regenerate "+generatedRel)
 		list  = flag.Bool("list", false, "print the composed roster (key, source, description)")
 		miss  = flag.Bool("missing", false, "print every operation that still needs a catalog row, and why")
+		tags  = flag.String("tags", "", "build tags the walk selects files with, as `go build -tags` takes them (default: none, the Community binary)")
 	)
 	flag.Parse()
+	buildTags = splitTags(*tags)
 	if *miss {
 		os.Exit(runMissing(*root, os.Stdout, os.Stderr))
 	}
@@ -239,6 +251,10 @@ func run(root string, write, list bool, out, errw io.Writer) int {
 		"(%d from a handler doc comment, %d from %s; %d stable + %d beta)\n",
 		len(model.keys), model.countBySource(sourceDoc), model.countBySource(sourceCatalog), catalogRel,
 		model.countByTier(tierStable), model.countByTier(tierBeta))
+	if len(buildTags) > 0 {
+		// A misspelled tag selects the Community files without a word; say which set read.
+		fmt.Fprintf(out, "  read with build tags: %s\n", strings.Join(buildTags, " "))
+	}
 	return exitClean
 }
 

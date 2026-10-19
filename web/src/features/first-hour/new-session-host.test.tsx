@@ -23,6 +23,8 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
       initialProfileRef,
       initialModel,
       initialEffort,
+      initialFastMode,
+      initialServiceTier,
     }: ComponentProps<
       typeof import('@/features/agentops/run-create-dialog').RunCreateDialog
     >) => {
@@ -42,6 +44,7 @@ vi.mock('@/features/agentops/run-create-dialog', async () => {
             <p>
               {`profile:${initialProfileRef ?? ''}|model:${initialModel ?? ''}|effort:${initialEffort ?? ''}`}
             </p>
+            <p>{`fast:${String(initialFastMode)}|tier:${initialServiceTier ?? ''}`}</p>
           </DialogContent>
         </Dialog>
       )
@@ -108,6 +111,31 @@ function shell(door: string, open: (opener: HTMLElement) => void) {
 }
 
 describe('the one New session host', () => {
+  it('passes explicit Fast Off and service tier to separate launch drafts', async () => {
+    shell('Door', () => undefined)
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({
+        profileRef: 'ppf_a',
+        fastMode: false,
+        serviceTier: 'priority',
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('fast:false|tier:priority')
+    act(() => useNewSessionDialog.getState().closeAdvanced())
+    act(() =>
+      useNewSessionDialog.getState().openAdvanced({
+        profileRef: 'ppf_a',
+        fastMode: true,
+        serviceTier: 'priority',
+      }),
+    )
+    expect(
+      await screen.findByRole('dialog', { name: 'Advanced launch' }),
+    ).toHaveTextContent('fast:true|tier:priority')
+    expect(mounts.advanced).toBe(2)
+  })
   it('hands the form over to the advanced launch, and focus returns to the door that opened the form', async () => {
     const user = userEvent.setup()
     const door = shell('New session', (opener) =>

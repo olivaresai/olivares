@@ -1272,6 +1272,30 @@ func prepareRecoveryReservation(
 	return created.RunRef, lease
 }
 
+// A leader that takes over finds a row whose process it never held: the engine
+// that held it died. The row says so, as a crashed engine's row does where
+// Start reads it.
+func TestRecoverRuntimeCredentialsSaysTheEngineDiedForARunThisEngineNeverHeld(t *testing.T) {
+	t.Parallel()
+
+	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()))
+	probe := &dualCredentialProbe{now: clk.get}
+	wireDualCredentialProbe(m, probe)
+	runRef, _ := prepareRecoveryReservation(t, m, tenant, probe, 2, false)
+	m.rt.dropLive(tenant, runRef)
+
+	if err := m.RecoverRuntimeCredentials(context.Background(), tenant); err != nil {
+		t.Fatalf("recover: %v", err)
+	}
+	got, err := m.getRun(context.Background(), tenant, runRef)
+	if err != nil || got.State != stateStopped {
+		t.Fatalf("recovered run: state %q (%v), want %q", got.State, err, stateStopped)
+	}
+	if !strings.HasPrefix(got.Reason, engineDiedReason) || !strings.Contains(got.Reason, "not confirmed terminated") {
+		t.Fatalf("recovered run reason = %q, want it to say the engine died and the process is not confirmed terminated", got.Reason)
+	}
+}
+
 func TestRecoverRuntimeCredentialsHandlesZeroOneAndTwoAndReleasesClaim(t *testing.T) {
 	t.Parallel()
 
@@ -2560,6 +2584,11 @@ func TestRecoverRuntimeCredentialsRetriesUnconfirmedLocalStop(t *testing.T) {
 	record, _ = m.loadRun(context.Background(), tenant, created.RunRef)
 	if record.String(colState) != stateStopped || record.String(colRuntimeLaunchID) != "" {
 		t.Fatalf("second recovery row = %v", record)
+	}
+	// This module held the process, so the engine did not die: only the handle's
+	// loss is known.
+	if got := record.String(colReason); !strings.HasPrefix(got, "orphaned: ") {
+		t.Fatalf("second recovery reason = %q, want the neutral orphaned reason for a process this module held", got)
 	}
 }
 

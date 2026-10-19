@@ -7,9 +7,9 @@ import { describe, expect, it } from 'vitest'
 import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { LANGUAGE_CODES } from '@/lib/i18n'
-import { en, es, zh, ja, de, ru, fr } from './index'
+import { en, es, zh, ja, de, ru, fr, it as itBundle, ko } from './index'
 
-const bundles = { en, es, zh, ja, de, ru, fr }
+const bundles = { en, es, zh, ja, de, ru, fr, it: itBundle, ko }
 const labels = {
   en: 'Reports',
   es: 'Informes',
@@ -18,6 +18,8 @@ const labels = {
   de: 'Berichte',
   ru: 'Отчёты',
   fr: 'Rapports',
+  it: 'Report',
+  ko: '보고서',
 }
 
 describe('reporting navigation edition boundary', () => {

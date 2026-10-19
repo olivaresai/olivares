@@ -4,7 +4,7 @@
 //
 // check-i18n-parity.mjs — fail if any console UI language drifts from English.
 //
-// The console ships seven languages (en/es/zh/ja/de/ru/fr). Every
+// The console ships nine languages (en/es/zh/ja/de/ru/fr/it/ko). Every
 // language MUST carry the same key set as English, or i18next falls back to
 // English *silently* — an untranslated string ships looking translated. This
 // check makes that drift a hard error in the push gate + mainline-ci.
@@ -13,13 +13,16 @@
 // i18n bundle) and every language:
 //   1. Key parity — the same non-plural keys as English (no missing, no extra).
 //   2. Plural correctness — for each English plural base, the language carries
-//      EXACTLY its CLDR cardinal categories (Intl.PluralRules): zh/ja → {other},
-//      de → {one, other}, es/fr → {one, many, other},
+//      EXACTLY its CLDR cardinal categories (Intl.PluralRules): zh/ja/ko → {other},
+//      de → {one, other}, es/fr/it → {one, many, other},
 //      ru → {one, few, many, other}.
 //      (So this is NOT naive key-equality: a plural key set differs by language
 //      *by design*, and getting it wrong is itself a bug we catch.)
-//   3. Placeholder parity — the same {{interpolation}} variables and the same
-//      <component> tags as English, so a translator can't drop or invent one.
+//   3. Placeholder parity — require the matching English form's variables and
+//      <component> tags. Plurals may also use variables from other English forms
+//      in that group (e.g. a count where English says "once"), but a category
+//      that selects integers other than 1 (ru "one" covers 21) keeps English's
+//      other-form variables, so the count cannot be dropped.
 //
 // Usage:
 //   node scripts/check-i18n-parity.mjs            # full scan, exits 1 on drift
@@ -70,6 +73,20 @@ function pluralCats(lang) {
       new Set(new Intl.PluralRules(lang, { type: 'cardinal' }).resolvedOptions().pluralCategories),
     )
   return catsCache.get(lang)
+}
+
+/**
+ * True when `cat` selects an integer other than 1 (ru "one" also selects 21, 31, ...).
+ * Such a form cannot drop the count the way English "Compacted once" does.
+ */
+const wideCache = new Map()
+function selectsMoreThanOne(lang, cat) {
+  const key = `${lang}/${cat}`
+  if (!wideCache.has(key)) {
+    const rules = new Intl.PluralRules(lang, { type: 'cardinal' })
+    wideCache.set(key, Array.from({ length: 999 }, (_, i) => i + 2).some((n) => rules.select(n) === cat))
+  }
+  return wideCache.get(key)
 }
 
 function readJSON(p) {
@@ -171,24 +188,32 @@ function compareNs(nsId, lang, enObj, langObj) {
   }
 
   // 3. Placeholder/tag parity (only for keys present in both; structural gaps are
-  //    already reported above). Plural forms compare against EN's `_other`.
+  //    already reported above). Match English's category when available;
+  //    additional CLDR categories use `_other`.
   for (const [k, enVal] of en.regular) {
     if (!lg.regular.has(k)) continue
     placeholderProblems(k, enVal, lg.regular.get(k), problems)
   }
   for (const b of [...enBases].filter((x) => lgBases.has(x))) {
-    const enOther = en.plurals.get(b).get('other')
-    for (const [cat, val] of lg.plurals.get(b)) placeholderProblems(`${b}_${cat}`, enOther, val, problems)
+    const enForms = en.plurals.get(b)
+    const allowedVars = new Set([...enForms.values()].flatMap((value) => [...tokensOf(value).vars]))
+    const countVars = tokensOf(enForms.get('other')).vars
+    for (const [cat, val] of lg.plurals.get(b)) {
+      // A form with no required variables must still be text: "" and null render blank.
+      if (typeof val !== 'string' || val.trim() === '') problems.push(`${b}_${cat}: empty translation`)
+      placeholderProblems(`${b}_${cat}`, enForms.get(cat) ?? enForms.get('other'), val, problems, allowedVars,
+        selectsMoreThanOne(lang, cat) ? countVars : undefined)
+    }
   }
 
   return problems.map((p) => `[${nsId}/${lang}] ${p}`)
 }
 
-function placeholderProblems(key, enVal, langVal, problems) {
+function placeholderProblems(key, enVal, langVal, problems, allowedVars, extraRequiredVars = []) {
   const a = tokensOf(enVal)
   const b = tokensOf(langVal)
-  for (const v of diff(a.vars, b.vars)) problems.push(`${key}: missing placeholder {{${v}}}`)
-  for (const v of diff(b.vars, a.vars)) problems.push(`${key}: extra placeholder {{${v}}}`)
+  for (const v of diff(new Set([...a.vars, ...extraRequiredVars]), b.vars)) problems.push(`${key}: missing placeholder {{${v}}}`)
+  for (const v of diff(b.vars, allowedVars ?? a.vars)) problems.push(`${key}: extra placeholder {{${v}}}`)
   for (const t of diff(a.tags, b.tags)) problems.push(`${key}: missing tag <${t}>`)
   for (const t of diff(b.tags, a.tags)) problems.push(`${key}: extra tag <${t}>`)
 }
@@ -217,7 +242,7 @@ const NO_I18N_ALLOWLIST = new Map([
   // every string it paints is a key of the foundation `nav` namespace
   // (web/src/lib/i18n/locales/*/nav.json: nav.areas, nav.directory, nav.items,
   // nav.descriptions, nav.aliases), which this scan already compares across the
-  // seven languages. A second bundle would split the sidebar's vocabulary in two
+  // nine languages. A second bundle would split the sidebar's vocabulary in two
   // files; the foundation catalog is where the shell's words live.
   [
     'navigation',
@@ -226,7 +251,7 @@ const NO_I18N_ALLOWLIST = new Map([
   // settings/ (ARCH C1 and the S seam, 2026-10-02) renders the Edition & modules and
   // Report signing panels of the Settings page. Both call useTranslation('settings'),
   // the foundation namespace (web/src/lib/i18n/locales/*/settings.json) that the Settings
-  // page already uses and this scan already compares across the seven languages.
+  // page already uses and this scan already compares across the nine languages.
   [
     'settings',
     'settings panels: every string is a key of the foundation settings namespace (locales/*/settings.json), already under parity',

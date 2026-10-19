@@ -11,7 +11,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -356,7 +358,7 @@ func TestActivity_EndpointRefusals(t *testing.T) {
 	}
 	setRunColumn(t, f, colRunProfileConfigHome, real)
 
-	setRunColumn(t, f, colRunProfileDriver, "codex")
+	setRunColumn(t, f, colRunProfileDriver, "opencode")
 	if _, r := f.activity(t); r.code != http.StatusUnprocessableEntity {
 		t.Fatalf("another tool's session = %d %s", r.code, r.raw)
 	}
@@ -466,6 +468,129 @@ func TestActivity_ContextIsTheLatestRequest(t *testing.T) {
 	got := foldActivity(t, fixture+synthetic, nil).dto
 	if got.ContextTokens != want || got.Model != "claude-haiku-5-5" {
 		t.Fatalf("context %d model %q, want %d", got.ContextTokens, got.Model, want)
+	}
+}
+
+// The tool's reported window, not a model-family guess, supplies the denominator.
+func TestActivity_ContextWindowFromTheTool(t *testing.T) {
+	for _, tc := range []struct {
+		name, models string
+		window       int64
+		percent      float64
+	}{
+		{"200k", `"claude-opus-5-5":{"inputTokens":1,"outputTokens":1,"contextWindow":200000}`, 200000, 41.793},
+		{"1m", `"claude-opus-5-5[1m]":{"inputTokens":1,"outputTokens":1,"contextWindow":1000000}`, 1000000, 8.3586},
+		{"other model", `"claude-other-model":{"inputTokens":1,"outputTokens":1,"contextWindow":1000000}`, 0, 0},
+		{"missing window", `"claude-opus-5-5":{"inputTokens":1,"outputTokens":1}`, 0, 0},
+		{"invalid window", `"claude-opus-5-5":{"inputTokens":1,"outputTokens":1,"contextWindow":-1}`, 0, 0},
+		{"ambiguous variants", `"claude-opus-5-5":{"inputTokens":1,"outputTokens":1,"contextWindow":200000},"claude-opus-5-5[1m]":{"contextWindow":1000000}`, 0, 0},
+		{"unknown variant", `"claude-opus-5-5":{"inputTokens":1,"outputTokens":1},"claude-opus-5-5[1m]":{"contextWindow":1000000}`, 0, 0},
+		{"invalid variant", `"claude-opus-5-5":{"inputTokens":1,"outputTokens":1,"contextWindow":200000},"claude-opus-5-5[1m]":{"contextWindow":-1}`, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newMoveFixture(t)
+			transcript := activityFixtureHome(t, f)
+			data, err := os.ReadFile(transcript)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, transcript, strings.ReplaceAll(string(data), "claude-haiku-5-5", "claude-opus-5-5"))
+			frame := fmt.Sprintf(`{"type":"result","modelUsage":{%s}}`, tc.models)
+			f.fr.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(frame)}
+			waitFor(t, "result metering", func() bool {
+				d, _ := f.m.getRun(context.Background(), f.tenant, f.runRef)
+				return d.OutputTokens != nil && *d.OutputTokens == 1
+			})
+			_, response := f.activity(t)
+			if response.code != http.StatusOK {
+				t.Fatal(response.raw)
+			}
+			var got struct {
+				Tokens  int64    `json:"context_tokens"`
+				Window  *int64   `json:"context_window"`
+				Percent *float64 `json:"context_percent"`
+			}
+			if err := json.Unmarshal([]byte(response.raw), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Tokens != 83586 {
+				t.Fatalf("tokens = %d", got.Tokens)
+			}
+			if tc.window == 0 {
+				if got.Window != nil || got.Percent != nil || !strings.Contains(response.raw, `"context_window":null`) {
+					t.Fatalf("unknown window: %s", response.raw)
+				}
+			} else if got.Window == nil || *got.Window != tc.window || got.Percent == nil || math.Abs(*got.Percent-tc.percent) > 1e-9 {
+				t.Fatalf("window/percent: %s; want %d / %g", response.raw, tc.window, tc.percent)
+			}
+			// A later result can report no window without adding another billed
+			// token. The previous denominator must still become unknown.
+			if tc.name == "200k" {
+				f.fr.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(strings.ReplaceAll(frame, `"contextWindow":200000`, `"unknownWindow":200000`))}
+				waitFor(t, "window becomes unknown on unchanged metering", func() bool {
+					r, _ := f.m.loadRun(context.Background(), f.tenant, f.runRef)
+					return r.String("context_windows") == `{"claude-opus-5-5":0}`
+				})
+				_, unknown := f.activity(t)
+				if !strings.Contains(unknown.raw, `"context_window":null`) {
+					t.Fatal(unknown.raw)
+				}
+			}
+			// Read after stopping: the denominator is retained on the session row.
+			if _, err := f.m.stopRun(context.Background(), f.tenant, f.runRef, "user:u1", model.ActorUser); err != nil {
+				t.Fatal(err)
+			}
+			_, stopped := f.activity(t)
+			if tc.name == "1m" && !strings.Contains(stopped.raw, fmt.Sprintf(`"context_window":%d`, tc.window)) {
+				t.Fatal(stopped.raw)
+			}
+			if tc.name == "1m" {
+				if r := f.post(t, "resume", nil); r.code != http.StatusOK {
+					t.Fatal(r.raw)
+				}
+				_, resumed := f.activity(t)
+				if !strings.Contains(resumed.raw, `"context_window":null`) {
+					t.Fatal(resumed.raw)
+				}
+			}
+		})
+	}
+}
+
+// What the stored report means for a model, including the shapes the endpoint test
+// cannot reach: equal sizes on both variants, no tokens yet, and a damaged column.
+func TestActivityContextWindowReadsTheStoredReport(t *testing.T) {
+	for _, tc := range []struct {
+		name, stored string
+		tokens       int64
+		window       int64
+		percent      float64
+		unreadable   int
+	}{
+		{"both variants report the same size", `{"m":200000,"m[1m]":200000}`, 50000, 200000, 25, 0},
+		{"no tokens is zero percent, not unknown", `{"m":200000}`, 0, 200000, 0, 0},
+		{"tokens beyond the window are not clipped", `{"m":1000}`, 1500, 1000, 150, 0},
+		{"an empty report is unknown", `{}`, 50000, 0, 0, 0},
+		{"only another model is reported", `{"n":200000}`, 50000, 0, 0, 0},
+		{"no report is unknown", ``, 50000, 0, 0, 0},
+		{"a damaged column is counted as unreadable", `not-json`, 50000, 0, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dto := activityDTO{Model: "m", ContextTokens: tc.tokens}
+			activityContextWindow(&dto, model.Record{colRunContextWindows: tc.stored})
+			if dto.Unreadable != tc.unreadable {
+				t.Fatalf("unreadable = %d, want %d", dto.Unreadable, tc.unreadable)
+			}
+			if tc.window == 0 {
+				if dto.ContextWindow != nil || dto.ContextPercent != nil {
+					t.Fatalf("want unknown, got window set=%t percent set=%t", dto.ContextWindow != nil, dto.ContextPercent != nil)
+				}
+				return
+			}
+			if dto.ContextWindow == nil || *dto.ContextWindow != tc.window || dto.ContextPercent == nil || math.Abs(*dto.ContextPercent-tc.percent) > 1e-9 {
+				t.Fatalf("want %d / %g, got %+v", tc.window, tc.percent, dto)
+			}
+		})
 	}
 }
 
@@ -611,7 +736,7 @@ func TestActivity_SubagentsDirectoryIsOpenedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got string
-	if err := readActivityState(context.Background(), dir, "agent-a1.jsonl", func(_ context.Context, r io.Reader) error {
+	if _, err := readActivityState(context.Background(), dir, "agent-a1.jsonl", func(_ context.Context, r io.Reader) error {
 		b, err := io.ReadAll(r)
 		got = string(b)
 		return err

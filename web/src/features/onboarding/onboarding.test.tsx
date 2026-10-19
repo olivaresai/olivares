@@ -311,7 +311,7 @@ describe('the setup wizard', () => {
     wrap(<OnboardingView />)
     expect(
       await screen.findByText(
-        'The API key Team key was refused. Replace it under API keys.',
+        'The API key Team key was refused. Replace it under Providers.',
       ),
     ).toBeInTheDocument()
     expect(screen.queryByText('Uses your API key: Team key')).toBeNull()

@@ -1000,7 +1000,7 @@ func bridgeGuardEditionPredecessor(
 		if !guardEditionModuleDelta(delta) {
 			continue
 		}
-		predecessorHistory, perr := verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
+		predecessorHistory, perr := verifyGuardBootEditionHistory(ctx, mdb, dia, edge.From)
 		if perr != nil {
 			// More than two pending module edges leave even the immediate parent
 			// unreadable. Walk its module parents before asking it to converge;
@@ -1011,7 +1011,7 @@ func bridgeGuardEditionPredecessor(
 				return false, bridgeErr
 			}
 			if bridged {
-				predecessorHistory, perr = verifyGuardEditionHistory(ctx, mdb, dia, edge.From)
+				predecessorHistory, perr = verifyGuardBootEditionHistory(ctx, mdb, dia, edge.From)
 			}
 		}
 		if perr != nil || !guardEditionPostModuleSourceReady(edge, predecessorHistory) {
@@ -1070,7 +1070,7 @@ func runAppendOnlyGuardUnits(
 	// Receipt, inventory and gate histories select one edition state together. Validating
 	// them independently would accept cross-products no writer can commit (for example an
 	// epoch-1 bootstrap beside an epoch-2 inventory).
-	history, err := verifyGuardEditionHistory(ctx, mdb, dia, m)
+	history, err := verifyGuardBootEditionHistory(ctx, mdb, dia, m)
 	if err != nil {
 		// A boot that has to cross more than one module edge arrives here with the
 		// target history unreadable, because the database is still standing at an
@@ -1087,7 +1087,7 @@ func runAppendOnlyGuardUnits(
 			return summary, bridgeErr
 		}
 		if bridged {
-			history, err = verifyGuardEditionHistory(ctx, mdb, dia, m)
+			history, err = verifyGuardBootEditionHistory(ctx, mdb, dia, m)
 		}
 	}
 	if err != nil {
@@ -1471,7 +1471,7 @@ func transitionGuardEditionAfterModules(
 	if err := tx.Commit(); err != nil {
 		return history, fmt.Errorf("sqlstore: commit guard edition %d transition: %w", current.CodeEpoch, err)
 	}
-	post, err := verifyGuardEditionHistory(ctx, mdb, dia, current)
+	post, err := verifyGuardBootEditionHistory(ctx, mdb, dia, current)
 	if err != nil {
 		return history, fmt.Errorf("sqlstore: verify committed guard edition %d transition: %w", current.CodeEpoch, err)
 	}

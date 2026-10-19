@@ -6,7 +6,7 @@
 // captured in (English, and German and Japanese for the text-fit check). It is fixture text
 // with the design's neutral demo identities, not product copy: it never reaches a product
 // route, so it stays out of the locale files. The components' own words come from the
-// `ui.*` keys of `common.json` in all seven locales.
+// `ui.*` keys of `common.json` in all nine locales.
 
 export type DemoLang = 'en' | 'de' | 'ja'
 

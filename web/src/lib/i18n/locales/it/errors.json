@@ -1,0 +1,68 @@
+{
+  "notFound": {
+    "title": "Pagina non trovata",
+    "description": "Questa pagina non esiste o è stata spostata.",
+    "back": "Torna alla panoramica"
+  },
+  "businessOnly": {
+    "title": "Parte di Business",
+    "description": "Questa pagina fa parte di Olivares AI Business. Questa edizione non la include.",
+    "link": "Scopri Business"
+  },
+  "forbidden": {
+    "title": "Non autorizzato",
+    "description": "Non hai il permesso di vedere questo contenuto. Chiedi l'accesso a un amministratore.",
+    "accessTo": "Non hai accesso a {{subject}}.",
+    "accessToThis": "Non hai accesso a questo contenuto.",
+    "nextStep": "I tuoi ruoli o una policy di gruppo non lo consentono. Un proprietario o un amministratore di questa organizzazione può concederti l'accesso.",
+    "deniedByPolicy": "La policy “{{policy}}” lo nega. Un proprietario o un amministratore di questa organizzazione può modificarla."
+  },
+  "serverError": {
+    "title": "Qualcosa è andato storto",
+    "description": "Olivares ha riscontrato un errore imprevisto. Riprova.",
+    "back": "Torna alla panoramica"
+  },
+  "evidenceUnavailable": {
+    "title": "Queste informazioni non possono essere verificate",
+    "description": "Al momento non è possibile caricare queste informazioni. Riprova, oppure contatta un amministratore se il problema persiste."
+  },
+  "network": {
+    "title": "Control plane non raggiungibile",
+    "description": "Non siamo riusciti a raggiungere il control plane. Controlla la connessione e che il motore sia in esecuzione."
+  },
+  "boundary": {
+    "title": "Questa vista è andata in crash",
+    "description": "Si è verificato un errore imprevisto durante la visualizzazione. Di solito si risolve ricaricando.",
+    "reload": "Ricarica"
+  },
+  "generic": "Qualcosa è andato storto.",
+  "sessionTemplateUnavailable": "Il template “Modifiche e comandi” non è disponibile, quindi la sessione non è stata avviata. Scegli un altro permesso o chiedi a un amministratore di ripristinare il template.",
+  "requestId": "ID richiesta",
+  "codes": {
+    "unauthenticated": "La tua sessione non è più valida.",
+    "forbidden": "Non hai l'autorizzazione per farlo.",
+    "not_found": "Non trovato.",
+    "conflict": "È in conflitto con lo stato attuale.",
+    "bad_request": "La richiesta non era valida.",
+    "weak_password": "Scegli una password più robusta.",
+    "locked_out": "Troppi tentativi. Riprova tra poco.",
+    "setup_required": "Il control plane richiede la configurazione al primo avvio.",
+    "setup_complete": "La configurazione è già completata.",
+    "setup_token_unreadable": "Il motore non riesce a leggere il file del suo token di configurazione. Esegui `olivares first-boot --data-dir <data directory> --new-token` come root o come account del motore per sostituirlo, poi usa il nuovo token; il log del motore indica il file e il motivo.",
+    "cross_tenant_admin_pool_not_configured": "Questo database non può elencare tutte le organizzazioni. Esegui `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` e riavvia il motore. Oppure predisponi un ruolo NOSUPERUSER BYPASSRLS con `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (vedi deploy/postgres/README.md) e riavvia il server con --admin-dsn che punta a quel ruolo.",
+    "internal": "Si è verificato un errore interno."
+  },
+  "tenantAdmission": {
+    "title": "Ammissione al tenant richiesta",
+    "description": "Accedi con un'identità di directory ammessa al tenant. L'autorità globale di bootstrap non può gestire le comunicazioni dei workspace."
+  },
+  "moduleNotEnabled": {
+    "description": "Questa parte di Olivares è disattivata qui, quindi non c'è nulla da mostrare.",
+    "named": "{{module}} non è abilitato in questa installazione.",
+    "unnamed": "Questo modulo non è abilitato in questa installazione."
+  },
+  "notInEdition": {
+    "subject": "Questa edizione non include {{subject}}.",
+    "generic": "Questa edizione non include questo contenuto."
+  }
+}

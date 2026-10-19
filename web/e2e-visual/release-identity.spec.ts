@@ -69,7 +69,7 @@ for (const theme of ['light', 'dark']) {
 
       for (const release of ['0.1', '1.0', '10.12']) {
         version = release
-        for (const path of ['/sessions', '/session-viewer/sess-a11y']) {
+        for (const path of ['/sessions', '/health']) {
           await page.goto(path)
           await expect(page.locator('[data-slot="app-frame"]')).toBeVisible()
           await expectIdentityRead(page, version)

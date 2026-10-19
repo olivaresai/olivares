@@ -4,6 +4,11 @@
     "description": "此页面不存在或已移动。",
     "back": "返回概览"
   },
+  "businessOnly": {
+    "title": "属于 Business 版",
+    "description": "此页面属于 Olivares AI Business，当前版本不包含。",
+    "link": "了解 Business"
+  },
   "forbidden": {
     "title": "未获授权",
     "description": "您无权查看此内容。请向管理员申请访问权限。",

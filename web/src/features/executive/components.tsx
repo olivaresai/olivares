@@ -233,7 +233,7 @@ export interface PartialCoverage {
  * carrying the SAME full sentence the caption used to hold (`notices.truncatedHint`
  * for an aggregate at its scan ceiling, `notices.listTruncatedHint` for a one-page
  * list) — a definition list, so the source→sentence pairing is explicit rather than
- * positional. The sentences are the existing seven-language strings, unchanged.
+ * positional. The sentences are the existing nine-language strings, unchanged.
  *
  * `PartialCoverageDisclosure` puts these rows behind a native <details> for the
  * screen; `PartialCoveragePrint` lays the same rows out for the printed report. Both
@@ -431,14 +431,17 @@ export function KpiTiles({
           <MetricStat
             icon={<Boxes />}
             label={t('pillars.usage')}
-            value={formatInt(usage.activeAgents)}
+            value={formatInt(usage.working)}
             caption={
               <>
                 {/* `formatInt` prints the em-dash for a half the rollup did not
                     establish (`null`) — the same mark every intel surface uses for
                     "not known" — and a real 0 for a successful empty answer. */}
+                {/* "Live" is every session that has not ended, so it is never smaller
+                    than the Working figure above it: the card says how many of the
+                    live sessions are working, and the two cannot contradict. */}
                 {t('pillars.usageCaption', {
-                  live: formatInt(usage.liveActive),
+                  live: formatInt(usage.liveNow),
                   entities: formatInt(usage.totalEntities),
                 })}
                 {usageHints}

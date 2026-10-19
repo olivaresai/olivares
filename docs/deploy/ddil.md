@@ -8,7 +8,8 @@ Denied, Disrupted, Intermittent or Limited (DDIL). A satellite or pLEO bearer is
 just intermittent IP — the control plane runs over it unchanged. What matters is
 how governance behaves while the link is down for hours or days and returns in
 short windows. This page is the honest operator guide: what survives an outage,
-what does not, and the limits you must declare.
+what does not, and the limits you must declare. The `olivares ddil` air-gap transfer
+below is a Business capability.
 
 ## The three planes, offline
 

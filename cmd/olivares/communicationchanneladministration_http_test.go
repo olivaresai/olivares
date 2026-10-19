@@ -755,36 +755,6 @@ func exerciseCommunicationChannelAdministrationHTTP(t *testing.T, storeEstate co
 	})
 }
 
-// scimGroupWithMember creates a real directory user-group through the product's
-// SCIM surface and returns its canonical id, so a second CLOSURE SUBJECT for the
-// same principal is a directory fact and not a fixture row.
-func scimGroupWithMember(
-	t *testing.T,
-	eng *engine,
-	token string,
-	tenant model.TenantID,
-	display string,
-	member model.ID,
-) model.ID {
-	t.Helper()
-	created := communicationHTTPTestRequest(t, eng, http.MethodPost, "/v1/scim/v2/Groups", token, tenant,
-		map[string]any{
-			"schemas":     []string{"urn:ietf:params:scim:schemas:core:2.0:Group"},
-			"displayName": display,
-			"members":     []map[string]any{{"value": member.String()}},
-		}, map[string]string{"Content-Type": "application/scim+json"})
-	if created.status != http.StatusCreated {
-		t.Fatalf("create SCIM group %s = %d: %s", display, created.status, created.raw)
-	}
-	id, err := model.ParseID(communicationHTTPTestDecode[struct {
-		ID string `json:"id"`
-	}](t, created).ID)
-	if err != nil {
-		t.Fatalf("SCIM group id: %v", err)
-	}
-	return id
-}
-
 // exerciseChannelAdministrationHorizonsHTTP covers what only TIME and a second
 // authority path can show: a revocation taken after the first observation, an
 // expiry crossed between two requests, and the OR-horizon of two admin grants
@@ -799,7 +769,7 @@ func exerciseChannelAdministrationHorizonsHTTP(
 	wsQuery := "workspace_id=" + workspace.String()
 	ownerAll := channelAdministrationGrant(channelAdministrationSubject("user", owner.id), true, true, true)
 
-	group := scimGroupWithMember(t, eng, owner.token, tenant, "K3 admin stewards", steward.id)
+	group := directoryGroupWithMember(t, eng, owner.token, tenant, "K3 admin stewards", steward.id)
 	horizons := estate.createChannel(t, workspace, "admin-horizons", []map[string]any{ownerAll})
 
 	// Two administrative paths for the SAME principal: a direct grant that

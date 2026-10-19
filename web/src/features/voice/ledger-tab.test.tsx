@@ -161,6 +161,16 @@ describe('DecisionsTable — una denegación no se pinta tranquila', () => {
 })
 
 describe('VoiceView — la pestaña del ledger', () => {
+  it('words the ledger permission for a person, without a raw permission id or backticks', async () => {
+    renderIntel(<VoiceView />)
+    await abrirLedger()
+    const caveat = await screen.findByText(
+      /with only permission to read voice sessions/,
+    )
+    expect(caveat.textContent).not.toContain('voice:session:read')
+    expect(caveat.textContent).not.toContain('`')
+    expect(caveat.querySelector('code')).toBeNull()
+  })
   // La pestaña no es la de por defecto, así que hay que abrirla: `TabsContent` no monta
   // lo que no está activo. Si esto se olvida, los asertos de abajo pasarían a medir «no
   // aparece» por una razón que no es la suya.

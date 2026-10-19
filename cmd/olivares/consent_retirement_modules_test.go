@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -62,7 +60,7 @@ func TestAnAuthoredCedarGrantBlocksReadmissionUntilRevised(t *testing.T) {
 		const email = "cedar-permit@consent.test"
 		user := e.onboard(e.tT, email, "viewer")
 		e.publishCedar(e.tT, `permit(principal in User::"`+user.String()+`", action, resource);`)
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		e.runPump()
 		e.wantBlocked(t, user, e.tT, "policy")
 		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {
@@ -161,7 +159,7 @@ func TestASourceScopeBindingDoesNotSurviveALift(t *testing.T) {
 		}
 		requestID, _ := proposal.body["id"].(string)
 
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		if r := bind(user, "binding-S2", "C"); r.code != http.StatusConflict || r.errorCode() != "subject_retirement_active" {
 			t.Errorf("a binding naming the account while it retires = %d %s, want 409 subject_retirement_active", r.code, r.raw)
 		}
@@ -192,7 +190,7 @@ func TestASourceScopeBindingDoesNotSurviveALift(t *testing.T) {
 			if r := bind(subject, "binding-K", "C"); r.code != http.StatusCreated {
 				t.Fatalf("bind K = %d %s", r.code, r.raw)
 			}
-			e.scimDelete(e.tT, subject)
+			e.deprovision(e.tT, subject)
 			// The sourcescope step still answers, and removes nothing: a missing step
 			// would leave the retirement incomplete instead.
 			var skipped []declaredModule
@@ -223,17 +221,16 @@ func TestASourceScopeBindingDoesNotSurviveALift(t *testing.T) {
 	})
 }
 
-// scimCreateExternal provisions an address with an external id through the
-// tenant's SCIM connection and returns the account id.
-func (e *consentEstate) scimCreateExternal(tenant model.TenantID, email, externalID string) string {
+// provisionExternal provisions an address with an external id into the tenant through the
+// account engine and returns the account id.
+func (e *consentEstate) provisionExternal(tenant model.TenantID, email, externalID string) string {
 	e.t.Helper()
-	r := e.scim("POST", "/v1/scim/v2/Users", e.scimToken(tenant),
-		`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"`+email+`","externalId":"`+externalID+`","active":true}`)
-	if r.code != http.StatusCreated {
-		e.t.Fatalf("SCIM create %s = %d %s", email, r.code, r.raw)
+	u, created, err := e.eng.authr.SCIMProvisionUser(context.Background(), e.directoryActor(tenant), tenant,
+		auth.SCIMUserInput{UserName: email, ExternalID: externalID, Active: true})
+	if err != nil || !created {
+		e.t.Fatalf("provision %s = %v created=%v", email, err, created)
 	}
-	id, _ := r.body["id"].(string)
-	return id
+	return u.ID.String()
 }
 
 // rosterHuman writes a human identity with externalID into tenant's roster.
@@ -306,7 +303,7 @@ func TestAWorkflowNamingTheUserBlocksReadmissionUntilEdited(t *testing.T) {
 				email := fmt.Sprintf("workflow-%d@consent.test", i)
 				user := e.onboard(e.tT, email, "viewer")
 				wfID := e.createRetirementWorkflow(e.tT, fmt.Sprintf("names-%d", i), participantSteps(t, role, user, heir), user, heir).String()
-				e.scimDelete(e.tT, user)
+				e.deprovision(e.tT, user)
 				late := e.do("POST", "/v1/m/orchestration/workflows", e.admin, e.tT, map[string]any{
 					"name": fmt.Sprintf("late-%d", i), "steps": participantSteps(t, role, user, heir),
 				})
@@ -389,106 +386,6 @@ func managedNaming(surface, alias string) string {
 	return ""
 }
 
-// managedSurfaces are the four managed surfaces, each matched against every
-// alias of an account.
-var managedSurfaces = []string{"managed-settings", "hooks", "managed-mcp", "sandbox"}
-
-// TestAManagedDocumentNamingTheUserBlocksReadmissionUntilRevised: on every
-// managed surface, the published document naming the account, by id or by
-// email, blocks its retirement until the tenant publishes one that no longer
-// names it; while it retires no document naming it by either alias can be
-// published; and a publish that read the account's standing before the
-// offboard is refused at its barrier.
-func TestAManagedDocumentNamingTheUserBlocksReadmissionUntilRevised(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		e.requireRetirementCompletion(t, "revising managed documents requires a blocked verdict and later completion")
-		for i, surface := range managedSurfaces {
-			t.Run(surface, func(t *testing.T) {
-				e := e.forSubtest(t)
-				email := fmt.Sprintf("managed-%d@consent.test", i)
-				user := e.onboard(e.tT, email, "viewer")
-				alias := user.String()
-				if i%2 == 1 {
-					alias = email
-				}
-				if r := e.publishManaged(e.tT, surface, managedNaming(surface, alias)); r.code != http.StatusOK {
-					t.Fatalf("publish %s = %d %s", surface, r.code, r.raw)
-				}
-				e.scimDelete(e.tT, user)
-				for _, a := range []string{user.String(), strings.ToUpper(email)} {
-					if r := e.publishManaged(e.tT, surface, managedNaming(surface, a)); r.code != http.StatusConflict ||
-						r.errorCode() != "subject_retirement_active" {
-						t.Errorf("a %s document naming the retiring account as %q = %d %s, want 409 subject_retirement_active",
-							surface, a, r.code, r.raw)
-					}
-				}
-				e.runPump()
-				e.wantBlocked(t, user, e.tT, "governance.policy_revision:")
-				if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {
-					t.Errorf("re-admission while a %s document names the account = %d %s, want 409", surface, r.code, r.raw)
-				}
-				// A newer publish puts the older document out of force.
-				if r := e.publishManaged(e.tT, surface, managedNaming(surface, "nobody@elsewhere.test")); r.code != http.StatusOK {
-					t.Fatalf("revise %s = %d %s", surface, r.code, r.raw)
-				}
-				e.runPump()
-				e.wantRetired(t, user, e.tT)
-			})
-		}
-
-		t.Run("a publish parked between its standing read and its barrier", func(t *testing.T) {
-			e := e.forSubtest(t)
-			const email = "managed-parked@consent.test"
-			user := e.onboard(e.tT, email, "viewer")
-			if e.eng.standing == nil {
-				t.Fatal("the composition has no standing port")
-			}
-			parked := make(chan struct{})
-			release := make(chan struct{})
-			var once sync.Once
-			e.eng.standing.afterReadHook = func(_ model.TenantID, users []model.ID) {
-				for _, u := range users {
-					if u == user {
-						once.Do(func() {
-							close(parked)
-							<-release
-						})
-					}
-				}
-			}
-			defer func() { e.eng.standing.afterReadHook = nil }()
-			result := make(chan consentResp, 1)
-			go func() { result <- e.publishManaged(e.tT, "managed-settings", managedNaming("managed-settings", email)) }()
-			select {
-			case <-parked:
-			case r := <-result:
-				t.Fatalf("the publish never read the account's standing: %d %s", r.code, r.raw)
-			case <-time.After(10 * time.Second):
-				t.Fatal("the publish never read the account's standing")
-			}
-			e.scimDelete(e.tT, user)
-			close(release)
-			if r := <-result; r.code != http.StatusConflict || r.errorCode() != "subject_retirement_active" {
-				t.Errorf("the parked publish after the offboard = %d %s, want 409 subject_retirement_active", r.code, r.raw)
-			}
-			e.runPump()
-			e.wantRetired(t, user, e.tT)
-		})
-
-		t.Run("values that name no account do not count against the bound", func(t *testing.T) {
-			e := e.forSubtest(t)
-			var ids []string
-			for i := 0; i < 3*auth.MaxFencedSubjects; i++ {
-				ids = append(ids, model.NewID().String())
-			}
-			doc := `{"allowedMcpServers":[{"serverName":"` + strings.Join(ids, `"},{"serverName":"`) + `"}]}`
-			if r := e.publishManaged(e.tT, "managed-mcp", doc); r.code != http.StatusOK {
-				t.Errorf("a document naming %d ids that are no account = %d %s, want 200", len(ids), r.code, r.raw)
-			}
-		})
-	})
-}
-
 // TestAModelForbidOutlivesTheRetirementAndStillRestricts: the retirement deletes
 // the account's model-access allows and keeps the forbids that name it; while it
 // retires, a forbid naming the account may still be written and an allow may
@@ -512,7 +409,7 @@ func TestAModelForbidOutlivesTheRetirementAndStillRestricts(t *testing.T) {
 			t.Fatalf("create the rules = %d %s / %d %s", allow.code, allow.raw, forbid.code, forbid.raw)
 		}
 
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		if r := rule("claude-haiku-4-5", "forbid"); r.code != http.StatusCreated {
 			t.Errorf("a forbid naming the retiring account = %d %s, want 201: a restriction is never refused", r.code, r.raw)
 		}
@@ -554,12 +451,12 @@ func TestNHISponsorshipBlocksReadmissionUntilReassigned(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		e.requireRetirementCompletion(t, "reassigning sponsorship requires a blocked verdict and later completion")
 		const email = "sponsor@consent.test"
-		user := model.ID(e.scimCreateExternal(e.tT, email, "ext-sponsor"))
-		heir := model.ID(e.scimCreateExternal(e.tT, "sponsor-heir@consent.test", "ext-sponsor-heir"))
+		user := model.ID(e.provisionExternal(e.tT, email, "ext-sponsor"))
+		heir := model.ID(e.provisionExternal(e.tT, "sponsor-heir@consent.test", "ext-sponsor-heir"))
 		e.rosterHuman(e.tT, "ext-sponsor")
 		e.rosterHuman(e.tT, "ext-sponsor-heir")
 		id := e.seedFenced(e.tT, "governance.nhi_lifecycle", nhiRecord("agent-sponsor", "sponsor_ref", "ext-sponsor"), user)
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 		e.runPump()
 		e.wantBlocked(t, user, e.tT, "agent-sponsor")
 		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {

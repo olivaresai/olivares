@@ -18,8 +18,9 @@ import (
 // is no API route, token or network. On SQLite run it against a STOPPED engine.
 func newAdminCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "admin",
-		Short: "Host-local repairs: give a person who lost their only passkey a way back",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "admin",
+		Short:       "Host-local repairs: give a person who lost their only passkey a way back",
 		Long: "Repairs that run on the engine's host with its access to the database, for the cases\n" +
 			"the console cannot reach. On SQLite run them against a stopped engine; on Postgres\n" +
 			"they are safe alongside a running one. Every repair is audited.",
@@ -43,8 +44,9 @@ func adminRecoverCmd() *cobra.Command {
 	var dataDir, engine, dsn, email, actorFlag, reasonFlag string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "recover",
-		Short: "Remove a person's passkeys and end their sessions so they can add a new passkey",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "recover",
+		Short:       "Remove a person's passkeys and end their sessions so they can add a new passkey",
 		Long: "recover is for someone who lost their only passkey on a deployment whose step-up\n" +
 			"policy asks for passkeys. In one audited transaction it removes that person's\n" +
 			"passkeys and ends their sessions. Nothing else changes: not the deployment's policy,\n" +

@@ -303,6 +303,27 @@ class CouldNotCheck(Exception):
     """Ceguera, no veredicto: el motor no contesto, o contesto que la ruta no existe."""
 
 
+class SoloBusiness(Exception):
+    """The engine ruled: this surface is Business and this engine is Community. Terminal, not a failure."""
+
+
+def exige_edicion(motor, s, cuerpo):
+    """A 501 that NAMES Business, on an engine that says it is Community = the edition, not the seeding.
+
+    The text alone is not enough: a Business engine with an unlinked module can also say "Business"
+    in a 501, and that IS a failure. So the engine is asked for its edition, and only on this path.
+    """
+    if s != 501 or "Business" not in mensaje(cuerpo):
+        return
+    st, info = motor.pedir("GET", "/v1/server-info")
+    try:
+        edicion = json.loads(info).get("edition") if 200 <= st < 300 else None
+    except Exception:
+        edicion = None
+    if edicion == "community":
+        raise SoloBusiness(mensaje(cuerpo))
+
+
 class Motor:
     def __init__(self, base, token, tenant):
         self.base, self.token, self.tenant = base.rstrip("/"), token, tenant
@@ -517,6 +538,8 @@ CASOS = [
     dict(
         id="claude-policy-publish", ruta="/v1/m/claude-policy/managed-settings/publish",
         listar=None, bajo=None, marcador=None,
+        # Fleet managed settings are Business: a 501 that names it on a Community engine is terminal.
+        business_en_community=True,
         cuerpo=lambda r: {"content": json.dumps(
             {"permissions": {"allow": ["Bash(git status:*)"], "deny": ["Bash(curl:*)"]},
              "env": {"CLAUDE_CODE_ENABLE_TELEMETRY": "1"}}, indent=2),
@@ -552,6 +575,7 @@ def cadena_claude_policy(motor, refs):
                       "env": {"CLAUDE_CODE_ENABLE_TELEMETRY": "1"}}, indent=2)
     s, b = motor.pedir("POST", "/v1/m/claude-policy/managed-settings/publish",
                        {"content": doc, "note": "Baseline for the billing workspace."})
+    exige_edicion(motor, s, b)
     if not (200 <= s < 300):
         return RC_RECHAZADO, f"publish rejected: {mensaje(b)}"
     s, b = motor.pedir("GET", "/v1/m/claude-policy/managed-settings/artifact")
@@ -979,11 +1003,13 @@ def main():
     #    que manda es un LEDGER: **cada id declarado tiene que alcanzar un estado TERMINAL**, y el
     #    id que no lo alcanza es rc 2, no rc 0.
     #
-    # Estados terminales, y solo estos dos cuentan como verificado:
+    # Estados terminales; solo los dos primeros cuentan como verificado:
     #   · `ejercido`   se mando el payload y el motor lo juzgo.
     #   · `revalidado` estaba sembrado Y la fila persistida CASA con el payload que habria mandado.
     #                  Sin esa comparacion, «hay una fila con este marcador» oculta un cuerpo
     #                  distinto — que es la otra mitad de A-02.
+    #   · `solo_business` (terminal, counted APART) the engine ruled with a 501 that NAMES Business:
+    #                  the surface belongs to another edition, not a seeding failure.
     ESPERADOS = [c["id"] for c in CASOS] + [i for i, _ in CADENAS]
     estado, motivo = {}, {}
 
@@ -1023,6 +1049,12 @@ def main():
                 ciegos += 1
                 continue
             s, b = motor.pedir("POST", caso["ruta"], cuerpo)
+            if caso.get("business_en_community"):
+                exige_edicion(motor, s, b)
+        except SoloBusiness as e:
+            print(f"  {ident:22s} {RC_LIMPIO:>2d} {501:>5d}  BUSINESS ONLY · Community engine, 501: {e}")
+            anota(ident, "solo_business", f"HTTP 501: {e}")
+            continue
         except SecretoEnPayload as e:
             di(f"  {ident:22s} {RC_RECHAZADO:>2d} {'—':>5s}  SECRET GUARD: {e}")
             anota(ident, "cortado", f"blocked by the secret guard: {e}")
@@ -1064,6 +1096,10 @@ def main():
             continue
         try:
             rc, veredicto = fn(motor, refs)
+        except SoloBusiness as e:
+            print(f"  {ident:22s} {RC_LIMPIO:>2d}         BUSINESS ONLY · Community engine, 501: {e}")
+            anota(ident, "solo_business", f"HTTP 501: {e}")
+            continue
         except CouldNotCheck as e:
             rc, veredicto = RC_UNAVAILABLE, f"COULD NOT LOOK: {e}"
         except SecretoEnPayload as e:
@@ -1100,12 +1136,14 @@ def main():
     ejercidos = sum(1 for e in estado.values() if e == "ejercido")
     cortados = sum(1 for e in estado.values() if e == "cortado")
     revalidados = sum(1 for e in estado.values() if e == "revalidado")
+    solo_business = sum(1 for e in estado.values() if e == "solo_business")
     sin_estado = [i for i in ESPERADOS if i not in estado]
     no_terminales = [i for i in ESPERADOS if estado.get(i) in ("ciego", "discrepante")]
 
     print()
     print(f"  LEDGER: {len(ESPERADOS)} declared · {ejercidos} exercised · {cortados} blocked "
-          f"by local guards · {revalidados} revalidated · {len(no_terminales)} without a terminal state "
+          f"by local guards · {revalidados} revalidated · {solo_business} Business-only on this engine "
+          f"· {len(no_terminales)} without a terminal state "
           f"· {len(sin_estado)} unvisited")
     for i in no_terminales + sin_estado:
         print(f"    ⛔ {i}: {motivo.get(i, 'was not visited')}")
@@ -1117,7 +1155,7 @@ def main():
     if sin_estado or no_terminales:
         print("verify-seed-payloads: ⛔ COULD NOT LOOK: "
               f"{len(sin_estado) + len(no_terminales)} of {len(ESPERADOS)} declared IDs did not "
-              "reach a terminal state (exercised, blocked or revalidated).",
+              "reach a terminal state (exercised, blocked, revalidated or Business-only).",
               file=sys.stderr)
         return RC_UNAVAILABLE
     if ciegos:

@@ -468,6 +468,28 @@ func (f childMCPFixture) ConfigureSessionMCP(_ context.Context, _ model.TenantID
 // The contributions after the spec (git read, Claude hooks, session MCP) reach the
 // child in one order, on create and on resume alike: what the runner is handed.
 func TestChildLaunchContributionsOnCreateAndResume(t *testing.T) {
+	for _, installed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("installed=%t", installed), func(t *testing.T) {
+			binDir := t.TempDir()
+			wantProgram := "claude"
+			if installed {
+				if err := os.WriteFile(filepath.Join(binDir, "claude"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				wantProgram, err = filepath.EvalSymlinks(filepath.Join(binDir, "claude"))
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("PATH", binDir)
+			testChildLaunchContributionsOnCreateAndResume(t, wantProgram)
+		})
+	}
+}
+
+func testChildLaunchContributionsOnCreateAndResume(t *testing.T, wantProgram string) {
+	t.Helper()
 	ctx := context.Background()
 	dataDir := t.TempDir()
 	useClaudeManagedSettingsDir(t, t.TempDir())
@@ -588,6 +610,7 @@ fs required=false handles=0 truncate=false
 isolation native waitdelay 5s
 bound [] []
 `}[name]
+		want = strings.Replace(want, "program claude\n", "program "+wantProgram+"\n", 1)
 		if got != strings.TrimPrefix(want, "\n") {
 			t.Errorf("%s child:\n%s", name, got)
 		}

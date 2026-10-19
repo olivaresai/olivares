@@ -6,7 +6,7 @@
 // tool (a move), or a new, linked session continues in another tool from a summary the
 // person reviews (a handoff). Both are the engine's own routes; this renders them.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { currentControlFence } from '@/features/agentops/work-fence'
 import {
   profileLabel,
   type HandoffRunResult,
@@ -30,6 +31,7 @@ import {
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
+import { canMoveSession, isLiveRun } from './provenance'
 import './i18n'
 
 const NONE = '__none__'
@@ -52,7 +54,12 @@ export function MoveSessionDialog({
   const boundary = useAuthBoundary()
   const qc = useQueryClient()
   const summaryId = useId()
-  const [mode, setMode] = useState<Mode>('move')
+  // The run was stopped by this dialog's own move, whatever the move then did.
+  const stopped = useRef(false)
+  // Only a Claude Code session moves between accounts; every tool a handoff reads is
+  // handed off.
+  const movable = canMoveSession(run)
+  const [mode, setMode] = useState<Mode>(movable ? 'move' : 'handoff')
   const [chosen, setChosen] = useState(NONE)
   // The person's edit of the generated text; null means they left it as generated.
   const [edited, setEdited] = useState<string | null>(null)
@@ -109,14 +116,28 @@ export function MoveSessionDialog({
     toast.error(err instanceof ApiError ? err.message : t('move.failed'))
 
   const move = useMutation({
-    mutationFn: () => agentOpsApi.move(run.run_ref, chosen),
+    // A session that is still running (one a limit stopped answering) is stopped first:
+    // the engine moves only a stopped session.
+    mutationFn: async () => {
+      if (isLiveRun(run)) {
+        await agentOpsApi.stop(run.run_ref, await currentControlFence(run))
+        stopped.current = true
+      }
+      return agentOpsApi.move(run.run_ref, chosen)
+    },
     onSuccess: () => {
       toast.success(
         t('move.moved', { name: profile ? profileLabel(profile) : '' }),
       )
       done()
     },
-    onError: onErr,
+    onError: (err) => {
+      if (!stopped.current) return onErr(err)
+      // The session is stopped now: refresh, so a retry moves it without stopping again.
+      toast.error(t('move.stoppedNotMoved'))
+      void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
+      void qc.invalidateQueries({ queryKey: sessionsKeys.all(activeTenant) })
+    },
   })
   const handoff = useMutation({
     // The text on screen is what is sent: the engine would regenerate it otherwise,
@@ -185,7 +206,13 @@ export function MoveSessionDialog({
       open
       onOpenChange={(o) => !o && !pending && done()}
       title={t('move.title')}
-      description={mode === 'move' ? t('move.moveHint') : t('move.handoffHint')}
+      description={
+        mode === 'move'
+          ? t('move.moveHint') +
+            (isLiveRun(run) ? ' ' + t('move.stopsFirst') : '')
+          : t('move.handoffHint') +
+            (isLiveRun(run) ? ' ' + t('move.handoffStopsFirst') : '')
+      }
       confirmLabel={
         mode === 'move' ? t('move.confirmMove') : t('move.confirmHandoff')
       }
@@ -199,19 +226,21 @@ export function MoveSessionDialog({
       onConfirm={() => (mode === 'move' ? move.mutate() : handoff.mutate())}
     >
       <div className="flex flex-col gap-3">
-        <Segmented<Mode>
-          aria-label={t('move.mode')}
-          value={mode}
-          onValueChange={(next) => {
-            if (pending) return
-            setMode(next)
-            setChosen(NONE)
-          }}
-          options={[
-            { value: 'move', label: t('move.modeMove') },
-            { value: 'handoff', label: t('move.modeHandoff') },
-          ]}
-        />
+        {movable && (
+          <Segmented<Mode>
+            aria-label={t('move.mode')}
+            value={mode}
+            onValueChange={(next) => {
+              if (pending) return
+              setMode(next)
+              setChosen(NONE)
+            }}
+            options={[
+              { value: 'move', label: t('move.modeMove') },
+              { value: 'handoff', label: t('move.modeHandoff') },
+            ]}
+          />
+        )}
         <Field label={t('move.target')}>
           <Select
             value={chosen}

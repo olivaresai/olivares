@@ -109,9 +109,11 @@ type graphResponse struct {
 }
 
 // toGraphResponse builds the node+edge contract from a slice of edges, deriving
-// each endpoint node once (by id) from the edge and its redacted metadata.
-func toGraphResponse(edges []model.AccessEdge) graphResponse {
-	out := graphResponse{Nodes: []nodeDTO{}, Edges: []edgeDTO{}}
+// each endpoint node once (by id) from the edge and its redacted metadata. page is
+// the store's: has_more without a cursor means the read hit a ceiling that has no
+// continuation (neighbors), which a consumer must still not present as complete.
+func toGraphResponse(edges []model.AccessEdge, page model.Page) graphResponse {
+	out := graphResponse{Nodes: []nodeDTO{}, Edges: []edgeDTO{}, Cursor: page.Cursor, HasMore: page.HasMore}
 	seen := map[string]bool{}
 	addNode := func(id, kind, ref string) {
 		if id == "" || seen[id] {

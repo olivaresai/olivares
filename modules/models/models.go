@@ -11,6 +11,7 @@ import (
 
 	mp "github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
@@ -58,9 +59,10 @@ type Module struct {
 	// platforms surfaces the declared deployment-surface / lifecycle reference
 	// (ANT2-01/03); nil (the default) degrades GET /platforms to
 	// available=false with a reason.
-	platforms         PlatformsProvider
-	availability      *availabilityCatalog
-	connectorCatalogs func(context.Context, model.TenantID) ([]ConnectorCatalog, error)
+	platforms          PlatformsProvider
+	availability       *availabilityCatalog
+	availabilityAccess func(ctx context.Context, tenant model.TenantID, principal auth.Principal, source AvailabilitySource) (bool, error)
+	connectorCatalogs  func(context.Context, model.TenantID) ([]ConnectorCatalog, error)
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe

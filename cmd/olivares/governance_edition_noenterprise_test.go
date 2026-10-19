@@ -75,3 +75,30 @@ func TestCommunityGovernanceBreakGlassReferenceDescriptions(t *testing.T) {
 		})
 	}
 }
+
+// Approval review quality is a Business command. Community has no such command: the hook in
+// governanceApprovalsReviewQualityCmd adds nothing, the help does not offer it, and trying it
+// is an unknown command that never reaches the engine.
+func TestCommunityGovernanceApprovalsHasNoReviewQuality(t *testing.T) {
+	root := newRootCmd()
+	found, _, err := root.Find([]string{"governance", "approvals", "review-quality"})
+	if err == nil && found != nil && found.Name() == "review-quality" {
+		t.Fatalf("Community offers %s", found.CommandPath())
+	}
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"governance", "approvals", "--help"})
+	if _, err := root.ExecuteC(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "review-quality") {
+		t.Fatalf("Community help offers review-quality:\n%s", out.String())
+	}
+	spy := newObserveSpy(t, http.StatusOK, "{}")
+	if _, _, err := execRoot(t, observeArgs(spy.srv.URL, "governance", "approvals", "review-quality")...); err == nil {
+		t.Error("review-quality ran in Community")
+	}
+	if spy.count() != 0 {
+		t.Errorf("review-quality spent %d HTTP requests in Community", spy.count())
+	}
+}

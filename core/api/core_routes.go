@@ -76,6 +76,21 @@ func (s *Server) collectionRoute(perm auth.Permission, scope CollectionScopeRef)
 	}
 }
 
+// The creation route and its self-capability projection share one declaration.
+func (s *Server) coreCreationRoutes(v1 chi.Router, pattern string, perm auth.Permission, scope CollectionScopeRef, create ModuleHandler, siblings func(chi.Router)) {
+	full := canonicalRoutePattern("/v1" + pattern)
+	if s.routeDescriptors == nil {
+		s.routeDescriptors = map[string]routeDescriptor{}
+	}
+	s.routeDescriptors[routeDescriptorKey("POST", full)] = routeDescriptor{
+		method: "POST", pattern: full, perm: perm, collectionScope: &scope,
+	}
+	v1.Route(pattern, func(r chi.Router) {
+		coreRoute(r, "POST", "/", s.collectionRoute(perm, scope), create)
+		siblings(r)
+	})
+}
+
 // Bind a creation to its admitted workspace in the same transaction as the write.
 // Tenant-authorized defaults keep their existing behavior.
 func collectionMutationScope(r *http.Request, sc store.Scope, mc ModuleContext, workspace string) (store.Scope, error) {

@@ -418,7 +418,7 @@ func checkSourceKind(def model.SourceDef) []string {
 		return problems
 	}
 	if _, ok := buildInProcSource(def.Kind); !ok {
-		return append(problems, fmt.Sprintf("unknown or unsupported source kind %q", def.Kind))
+		return append(problems, unsupportedSourceKindReason(def.Kind))
 	}
 	return problems
 }
@@ -508,8 +508,9 @@ func sourcesPlanCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	var e sourceEdit
 	cmd := &cobra.Command{
-		Use:   "plan",
-		Short: "Show what a `sources set` with these flags WOULD change — no source is written or opened",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "plan",
+		Short:       "Show what a `sources set` with these flags WOULD change — no source is written or opened",
 		Long: "plan is `sources set` with the writing taken out. It reads the roster, applies exactly the\n" +
 			"flags you passed the way set would, and prints the field-by-field difference, whether the\n" +
 			"result would be accepted, and what a running engine would do with it at its next reload.\n" +
@@ -641,8 +642,9 @@ func sourcesValidateCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	var e sourceEdit
 	cmd := &cobra.Command{
-		Use:   "validate",
-		Short: "Check a source definition is coherent by itself — offline, no network, no writes",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "validate",
+		Short:       "Check a source definition is coherent by itself — offline, no network, no writes",
 		Long: "validate answers one question: is this configuration internally consistent and admissible?\n" +
 			"It runs the store's own rules (name, tenant, a kind XOR a plugin, credential fields that\n" +
 			"must hold references), the descriptor-aware inline-secret guard, and the checks that used to\n" +
@@ -757,8 +759,9 @@ func sourcesTestCmd() *cobra.Command {
 	var timeout time.Duration
 	var showConnectorError bool
 	cmd := &cobra.Command{
-		Use:   "test",
-		Short: "Open the source for real to prove it answers, then close it — nothing is wired or written",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "test",
+		Short:       "Open the source for real to prove it answers, then close it — nothing is wired or written",
 		Long: "test is the verb that goes to the network. It resolves the source's secret references,\n" +
 			"builds the connector exactly as the engine would, and calls Open — which the SDK defines as\n" +
 			"the configuration-validation point, so a missing setting, a bad credential and an\n" +

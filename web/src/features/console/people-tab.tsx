@@ -127,7 +127,7 @@ export function PeopleTab({
   // A tenant can only remove a member. Nothing here re-activates an account:
   // its global status belongs to the deployment.
   const memberToggleMutation = usePrivilegedMutation<RosterMemberDTO, unknown>({
-    mutationFn: (member) => consoleApi.setMemberActive(member.user_id, false),
+    mutationFn: (member) => consoleApi.removeMember(member.user_id),
     invalidateKeys: () => [consoleKeys.members(activeTenant)],
     successMessage: t('console:members.disabled'),
     onDone: () => setMemberToggle(null),

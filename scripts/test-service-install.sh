@@ -241,6 +241,8 @@ if grep -q '^BindPaths=' "$unit"; then
   printf 'default unit gained a folder-specific bind mount\n' >&2; exit 1
 fi
 grep -Fqx 'SystemCallFilter=@system-service landlock_create_ruleset landlock_add_rule landlock_restrict_self' "$unit"
+grep -Fqx 'RestrictNamespaces=user net mnt' "$unit"
+grep -Fqx 'SystemCallFilter=mount' "$unit"
 case_ok "default unit supports Node and chosen folders without a second installer"
 
 # Engine upgrade: the adapter rewrites the manifest and must carry the AgentOps
@@ -448,6 +450,8 @@ expect_rc 0 "a user service keeps chosen temporary folders visible" \
 user_unit="$user_tmp_root$user_home/.config/systemd/user/olivares.service"
 grep -Fqx 'PrivateTmp=false' "$user_unit"
 grep -Fqx 'ProtectHome=false' "$user_unit"
+grep -Fqx 'RestrictNamespaces=user net mnt' "$user_unit"
+grep -Fqx 'SystemCallFilter=mount' "$user_unit"
 if grep -q '^BindPaths=' "$user_unit"; then exit 1; fi
 
 expect_rc 1 "mutant: data directory under /proc is refused as an API file system" \
@@ -862,6 +866,33 @@ mutant="$(make_mutant unit-privatetmp)"
 sed -i 's/^PrivateTmp=false$/PrivateTmp=true/' "$mutant/packaging/systemd/olivares.service"
 expect_docs_red 1 "mutant: a unit change the install docs do not follow is red" \
   'how-to/install-from-packages.md: `PrivateTmp=false`, unit sets'
+
+mutant="$(make_mutant unit-no-mount-namespace)"
+sed -i 's/^RestrictNamespaces=user net mnt$/RestrictNamespaces=user net/' "$mutant/packaging/service/systemd.service"
+expect_docs_red 1 "mutant: a unit that denies the session mount namespace is red" \
+  'packaging/service/systemd.service denies the session mount namespace'
+
+mutant="$(make_mutant unit-no-mount-call)"
+sed -i '/^SystemCallFilter=mount$/d' "$mutant/packaging/systemd/olivares.service"
+expect_docs_red 1 "mutant: a unit that denies the mount syscall is red" \
+  "packaging/systemd/olivares.service denies the mount syscall"
+
+mutant="$(make_mutant unit-mount-before-deny)"
+sed -i -e '/^SystemCallFilter=mount$/d' \
+  -e 's/^SystemCallFilter=~@privileged @resources$/SystemCallFilter=mount\n&/' \
+  "$mutant/packaging/systemd/olivares.service"
+expect_docs_red 1 "mutant: mount allowed before the deny line that removes it is red" \
+  "packaging/systemd/olivares.service denies the mount syscall"
+
+mutant="$(make_mutant unit-mount-removed-later)"
+sed -i 's/^SystemCallFilter=mount$/&\nSystemCallFilter=~@mount/' "$mutant/packaging/service/systemd.service"
+expect_docs_red 1 "mutant: a later line that removes mount again is red" \
+  "packaging/service/systemd.service denies the mount syscall"
+
+mutant="$(make_mutant frozen-template-edited)"
+printf '# edited\n' >> "$mutant/packaging/service/systemd-0.2.service"
+expect_docs_red 1 "mutant: an edit to a frozen upgrade-recognition template is red" \
+  'packaging/service/systemd-0.2.service is a frozen upgrade-recognition template and changed'
 
 mutant="$(make_mutant dropin-protecthome)"
 sed -i 's/^ProtectHome=false$/ProtectHome=true/' \

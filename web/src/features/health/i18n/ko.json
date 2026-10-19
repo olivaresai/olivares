@@ -1,0 +1,483 @@
+{
+  "title": "상태 및 SLA",
+  "subtitle": "에스테이트 전반의 활성, 신뢰성 및 의존성 — 관측된 활동과 오래됨 스윕에서 도출되며 인프라를 프로빙하지 않습니다.",
+  "auditedNote": "라이브 스트림과 해결/편집 작업은 권한이 필요하고 감사되는 운영입니다. 상태는 도출되며 엔진은 여기에 오류 텍스트나 페이로드를 절대 전달하지 않습니다.",
+  "refresh": "새로 고침",
+  "statusPageLink": "공개 상태 페이지",
+  "tabs": {
+    "status": "상태",
+    "checks": "검사",
+    "sla": "SLA",
+    "incidents": "인시던트",
+    "timeline": "타임라인",
+    "connectors": "커넥터",
+    "dependencies": "의존성",
+    "system": "시스템"
+  },
+  "state": {
+    "healthy": "정상",
+    "degraded": "저하됨",
+    "down": "다운",
+    "observed": "관측됨",
+    "unknown": "알 수 없음"
+  },
+  "stateHint": {
+    "unknown": "이 주체를 추적하는 검사가 없습니다 — 정상과는 다릅니다.",
+    "observed": "에지가 활성으로 확인했지만 선언된 검사가 없습니다 — 상태가 측정되지 않았습니다(정상도 알 수 없음도 아님)."
+  },
+  "desired": {
+    "active": "활성",
+    "paused": "일시 중지됨",
+    "retired": "폐기됨"
+  },
+  "desiredHint": {
+    "paused": "알림 없음 — 운영자가 일시 중지했습니다.",
+    "retired": "알림 없음 — 폐기되었습니다."
+  },
+  "subjectKind": {
+    "agent": "에이전트",
+    "mcp": "MCP",
+    "session": "세션",
+    "mcp_tool": "도구"
+  },
+  "tiles": {
+    "healthy": "정상",
+    "degraded": "저하됨",
+    "down": "다운",
+    "unknown": "알 수 없음"
+  },
+  "facets": {
+    "allStates": "모든 상태",
+    "allKinds": "모든 종류"
+  },
+  "status": {
+    "unnamed": "이름 없음",
+    "title": "모니터링되는 주체",
+    "slaBreach": "SLA 위반",
+    "slaBreachHint": "이 주체에 대해 열린 SLA 위반이 있습니다.",
+    "notAlerting": "알림 없음",
+    "cols": {
+      "subject": "주체",
+      "kind": "종류",
+      "state": "상태",
+      "desired": "의도",
+      "sla": "SLA",
+      "latency": "지연",
+      "lastSeen": "마지막 확인"
+    },
+    "searchPlaceholder": "주체 검색…",
+    "empty": {
+      "title": "아직 모니터링되는 주체 없음",
+      "description": "에이전트 또는 MCP 서버에 대한 상태 검사가 선언되면 그 활성이 여기에 나타납니다.",
+      "declare": "검사 선언"
+    }
+  },
+  "checks": {
+    "title": "상태 검사",
+    "description": "모니터링되는 에이전트와 MCP 서버의 주기, 유예 기간, SLA 목표 및 수명 주기 의도를 선언하고 거버넌스합니다.",
+    "create": "검사 만들기",
+    "created": "상태 검사가 생성되었습니다",
+    "updated": "상태 검사가 업데이트되었습니다",
+    "deleted": "상태 검사가 삭제되었습니다",
+    "failed": "상태 검사 작업이 실패했습니다.",
+    "duplicate": "이 주체에 대한 상태 검사가 이미 있습니다.",
+    "searchPlaceholder": "상태 검사 검색…",
+    "reportTooltipLabel": "프로브 보고서 정보",
+    "reportTooltip": "프로브 보고서 수집은 머신 지향이며 콘솔에서 의도적으로 생략됩니다.",
+    "seconds": "{{count}}초",
+    "cols": {
+      "subject": "주체",
+      "kind": "종류",
+      "state": "상태",
+      "intent": "의도",
+      "cadence": "주기",
+      "sla": "SLA",
+      "lastChecked": "마지막 검사",
+      "actions": "작업"
+    },
+    "actions": {
+      "edit": "편집",
+      "editAria": "{{subject}}의 상태 검사 편집",
+      "pause": "일시 중지",
+      "pauseAria": "{{subject}}의 상태 검사 일시 중지",
+      "resume": "재개",
+      "resumeAria": "{{subject}}의 상태 검사 재개",
+      "retire": "폐기",
+      "retireAria": "{{subject}}의 상태 검사 폐기",
+      "delete": "삭제",
+      "deleteAria": "{{subject}}의 상태 검사 삭제"
+    },
+    "form": {
+      "name": "이름",
+      "subjectKind": "주체 종류",
+      "subjectRef": "주체 참조",
+      "expectedInterval": "예상 간격(초)",
+      "graceFactor": "유예 계수",
+      "slaTarget": "SLA 목표(PPM)",
+      "slaTargetHint": "0은 SLA 목표를 지웁니다. 999000은 99.9%를 의미합니다.",
+      "desiredStatus": "원하는 상태",
+      "validation": "주체 참조, 양의 정수 주기 및 유예 값, 0에서 1000000 사이의 SLA 목표를 입력하십시오."
+    },
+    "createDialog": {
+      "title": "상태 검사 만들기",
+      "description": "모니터링할 에이전트 또는 MCP 서버를 하나 선언합니다. 주체당 상태 검사는 하나만 가능합니다."
+    },
+    "edit": {
+      "title": "상태 검사 편집",
+      "description": "주체는 불변입니다. 표시된 구성과 수명 주기 의도를 업데이트하십시오."
+    },
+    "delete": {
+      "title": "상태 검사 삭제",
+      "description": "{{subject}}의 상태 검사를 영구 삭제합니다. 이 관리자 작업은 감사 원장에 기록됩니다."
+    },
+    "empty": {
+      "title": "선언된 상태 검사 없음",
+      "description": "검사를 만들어 에이전트 또는 MCP 서버의 예상 활성 주기를 거버넌스하십시오."
+    }
+  },
+  "sla": {
+    "title": "신뢰성(SLA)",
+    "pick": "주체",
+    "pickPlaceholder": "주체 선택…",
+    "pickEmpty": "아직 보고할 모니터링 주체가 없습니다.",
+    "pickEmptyHint": "SLA 보고서는 모니터링되는 주체에서 가져옵니다. 주체에 상태 검사를 추가하여 보고할 수 있게 하십시오.",
+    "pickPrompt": {
+      "title": "주체 선택",
+      "description": "모니터링되는 주체를 선택하여 신뢰성 원장에서 재구성한 목표 대비 가동 시간을 보십시오."
+    },
+    "window": "기간",
+    "uptime": "가동 시간",
+    "target": "목표",
+    "noTarget": "목표 없음",
+    "breaching": "위반 중",
+    "withinTarget": "목표 이내",
+    "downtime": "다운타임",
+    "degraded": "저하됨",
+    "degradedNote": "저하됨은 SLA에서 가동으로 계산됩니다 — 다운타임이 아니라 별도로 표시됩니다.",
+    "currentState": "현재 상태",
+    "noCheck": {
+      "title": "선언된 검사 없음",
+      "description": "이 주체에 대한 상태 검사가 없어 신뢰성을 보고할 수 없습니다. 이것은 장애가 아니라 정직한 상태입니다."
+    },
+    "noData": {
+      "title": "아직 이력 없음",
+      "description": "이 주체에는 검사가 있지만 기간 내 신뢰성 이력이 없습니다 — 가동 시간은 0%가 아니라 정의되지 않습니다. 전환이 기록되면 나타납니다."
+    }
+  },
+  "incidents": {
+    "title": "인시던트",
+    "filterState": "상태",
+    "allStates": "전체",
+    "open": "열림",
+    "resolved": "해결됨",
+    "resolve": "해결",
+    "resolving": "해결 중…",
+    "resolveTitle": "이 인시던트 기록 닫기",
+    "resolveHint": "해결은 기간이 종료되었음을 확인하는 것이며 주체가 복구되었다고 주장하지 않습니다. 복구는 실제 활성에서 나옵니다. 이 작업은 권한이 필요하고 감사됩니다.",
+    "cols": {
+      "subject": "주체",
+      "subjectKind": "유형",
+      "incidentKind": "인시던트",
+      "severity": "심각도",
+      "opened": "열림",
+      "state": "상태",
+      "action": ""
+    },
+    "kind": {
+      "degraded": "저하됨",
+      "down": "다운",
+      "sla_breach": "SLA 위반"
+    },
+    "possibleEvasion": "가능한 회피",
+    "possibleEvasionHint": "주체가 예상 주기 내에 조용해졌습니다(스윕이 감지한 다운). 내보내기를 멈추는 주체 자체가 신호이며 UI 장애가 아닙니다.",
+    "searchPlaceholder": "인시던트 검색…",
+    "empty": {
+      "title": "인시던트 없음",
+      "description": "이 필터와 일치하는 신뢰성 인시던트가 없습니다. 주체가 저하되거나 다운되면 열린 인시던트가 여기에 나타납니다."
+    },
+    "truncated": "처음 {{n}}개 표시 중",
+    "truncatedHint": "표시된 것보다 많은 인시던트가 있습니다. 이 페이지는 제한되어 있으므로 나머지가 비어 있다고 해서 없는 것은 아닙니다."
+  },
+  "timeline": {
+    "title": "신뢰성 타임라인",
+    "pick": "주체",
+    "pickPlaceholder": "주체 선택…",
+    "pickPrompt": {
+      "title": "주체 선택",
+      "description": "모니터링되는 주체를 선택하여 추가 전용 원장에서 신뢰성 전환을 추적하십시오."
+    },
+    "transition": "{{prev}} → {{next}}",
+    "latency": "지연",
+    "latencyUnknown": "알 수 없음",
+    "cause": {
+      "edge": "관측된 활성",
+      "report": "능동 프로브",
+      "sweep": "오래됨 스윕"
+    },
+    "causeHint": {
+      "edge": "관측된 활동에서 추론되었습니다(활성 에지).",
+      "report": "능동 상태 프로브가 이 상태를 보고했습니다.",
+      "sweep": "오래됨 스윕이 감지했습니다 — 예상 주기 내의 침묵입니다."
+    },
+    "possibleEvasion": "가능한 회피",
+    "possibleEvasionHint": "오래됨 스윕이 감지한 다운은 예상 주기 내의 침묵을 의미하며 로드 오류가 아니라 가능한 회피로 표시됩니다.",
+    "empty": {
+      "title": "기록된 전환 없음",
+      "description": "이 주체에는 아직 원장에 신뢰성 전환이 없습니다."
+    },
+    "truncated": "처음 {{n}}개 표시 중",
+    "truncatedHint": "표시된 것보다 많은 이벤트가 있습니다. 페이지는 ID(오래된 것부터)로 정렬되므로 잘린 부분이 가장 최근 구간입니다 — 여기서 보지 못한 이벤트가 일어나지 않은 것은 아닙니다."
+  },
+  "deps": {
+    "title": "의존성 맵",
+    "subtitle": "관측된 활동에서 자동 발견됩니다. 각 노드는 현재 상태에 따라 색칠됩니다 — 활성으로 보였지만 검사가 없는 노드는 \"관측됨\"(파란색, 상태 측정 안 됨)이고 신호가 전혀 없는 노드는 회색(알 수 없음)으로 유지됩니다. 어느 쪽도 녹색이 되지 않습니다.",
+    "legendTitle": "상태",
+    "relation": {
+      "uses_mcp": "MCP 사용",
+      "uses_tool": "도구 사용",
+      "delegates_to": "위임"
+    },
+    "observed": "관측됨",
+    "truncated": "처음 {{n}}개 표시 중",
+    "truncatedHint": "의존성 그래프에 표시된 것보다 많은 노드가 있습니다. 이것은 첫 키셋 페이지입니다.",
+    "empty": {
+      "title": "아직 발견된 의존성 없음",
+      "description": "에이전트가 MCP 서버와 도구를 호출하면 관측된 의존성 그래프가 여기에 나타납니다."
+    },
+    "mobile": {
+      "title": "맵에는 더 넓은 화면이 필요합니다",
+      "summary": "노드 {{nodes}}개 · 의존성 {{edges}}개",
+      "hint": "대화형 의존성 그래프를 보려면 더 큰 디스플레이에서 이 보기를 여십시오."
+    }
+  },
+  "detail": {
+    "statusTitle": "주체 상태",
+    "incidentTitle": "인시던트",
+    "ref": "참조",
+    "id": "ID",
+    "name": "이름",
+    "kind": "종류",
+    "state": "상태",
+    "desired": "의도",
+    "cadence": "예상 주기",
+    "grace": "유예 계수",
+    "slaTarget": "SLA 목표",
+    "slaBreach": "SLA 위반 열림",
+    "latency": "마지막 지연",
+    "lastSeen": "마지막 확인",
+    "lastChecked": "마지막 검사",
+    "owner": "소유자",
+    "lastDetail": "마지막 세부 정보",
+    "severity": "심각도",
+    "opened": "열림",
+    "resolved": "해결됨",
+    "summary": "요약",
+    "viewSla": "SLA 보기",
+    "viewTimeline": "타임라인 보기",
+    "yes": "예",
+    "no": "아니요",
+    "minimalData": "메타데이터만 표시됩니다. 설계상 엔진은 여기에 오류 텍스트, 페이로드 또는 비밀을 절대 전달하지 않습니다(최소 데이터)."
+  },
+  "live": {
+    "note": "상태가 바뀌면 행이 라이브로 업데이트됩니다. 연속성을 가정하지 않고 ID로 조정됩니다."
+  },
+  "empty": {
+    "title": "표시할 항목 없음",
+    "description": "이 테넌트에는 아직 상태 데이터가 없습니다."
+  },
+  "forbidden": {
+    "title": "상태 접근 권한 없음",
+    "description": "귀하의 역할에는 상태 및 SLA를 볼 권한이 없습니다."
+  },
+  "forbiddenResolve": {
+    "title": "해결 권한 없음",
+    "description": "귀하의 역할은 인시던트를 해결할 수 없습니다."
+  },
+  "connectors": {
+    "autoRefresh": "15초마다 자동 새로 고침됩니다.",
+    "searchPlaceholder": "커넥터 검색…",
+    "modeFilter": "모드 필터",
+    "modeAll": "모든 모드",
+    "summary": {
+      "running": "실행 중",
+      "failed": "실패",
+      "stopped": "중지됨",
+      "disabled": "비활성화됨"
+    },
+    "cols": {
+      "name": "커넥터",
+      "kind": "종류",
+      "mode": "모드",
+      "health": "상태",
+      "status": "상태",
+      "trend": "추세",
+      "lastPoll": "마지막 폴링"
+    },
+    "status": {
+      "running": "실행 중",
+      "failed": "실패",
+      "stopped": "중지됨",
+      "disabled": "비활성화됨",
+      "not_wired": "설정되지 않음"
+    },
+    "trend": {
+      "up": "개선 중",
+      "down": "악화 중",
+      "stable": "안정"
+    },
+    "empty": {
+      "title": "구성된 커넥터 없음",
+      "description": "커넥터가 온보딩되면 운영 상태가 여기에 나타납니다."
+    },
+    "emptyMode": {
+      "title": "이 모드와 일치하는 커넥터 없음",
+      "description": "모드 필터를 변경하여 다른 커넥터를 보십시오."
+    }
+  },
+  "statusPage": {
+    "title": "Olivares AI — 상태",
+    "subtitle": "모든 구성 요소의 현재 운영 상태입니다.",
+    "unavailable": "현재 상태 정보를 사용할 수 없습니다.",
+    "lastUpdated": "마지막 업데이트: {{time}}",
+    "overall": {
+      "operational": "모든 시스템 정상",
+      "not_configured": "정상 — 선택적 기능이 구성되지 않음",
+      "degraded": "부분 시스템 장애",
+      "outage": "주요 시스템 장애"
+    },
+    "component": {
+      "api": "API",
+      "knowledge": "지식 검색",
+      "store": "데이터베이스",
+      "connectors": "커넥터",
+      "ingest": "데이터 수집",
+      "audit_spool": "감사 스풀"
+    },
+    "status": {
+      "operational": "정상",
+      "not_configured": "구성되지 않음",
+      "degraded": "저하됨",
+      "outage": "장애"
+    }
+  },
+  "update": {
+    "title": "업데이트",
+    "available": "업데이트 사용 가능",
+    "security": "보안 업데이트",
+    "channel": "채널",
+    "upToDate": "최신 상태",
+    "notChecked": "최근 확인 없음",
+    "failed": "업데이트 확인 실패",
+    "checked": "업데이트 확인 완료",
+    "advisories": "수정된 보안 권고",
+    "checkNow": "지금 확인",
+    "unconfigured": "업데이트 확인이 구성되지 않았습니다. 업데이트가 확인되지 않았으며 네트워크 확인은 꺼져 있습니다.",
+    "unavailable": "확인 사용 불가",
+    "instructions": "업데이트 지침",
+    "configure": "확인을 켜려면 내장 검증 키가 있는 공식 릴리스를 사용하십시오. 서비스 구성에서 OLIVARES_UPDATE_ENDPOINT를 승인된 서명 채널로 설정한 뒤 Olivares를 재시작하십시오. 설정하지 않으면 네트워크 확인이 꺼진 상태로 유지됩니다.",
+    "manual": "수동으로 업데이트하려면 데이터를 백업하고 새 패키지 또는 이미지를 검증한 뒤 설치 방법으로 업그레이드하십시오. 같은 데이터 디렉터리를 유지하십시오. 검증 키가 없는 개발 빌드는 서명 채널을 확인할 수 없습니다."
+  },
+  "system": {
+    "title": "시스템 상태",
+    "systemStatus": "시스템 상태",
+    "healthy": "정상",
+    "unhealthy": "비정상",
+    "ready": "준비됨",
+    "notReady": "준비되지 않음",
+    "storeEngine": "저장소 엔진",
+    "version": "버전",
+    "connectors": "커넥터",
+    "connectorsRunning": "{{count}}개 실행 중",
+    "connectorsConfigured": "{{count}}개 구성됨",
+    "connectorsAvailable": "{{count}}개 구성 가능",
+    "connectorsError": "{{count}}개 오류",
+    "noConnectors": "구성된 커넥터 없음",
+    "users": "사용자",
+    "usersCount": "{{count}}개 등록됨",
+    "identity": "ID",
+    "ssoConfigured": "SSO 구성됨",
+    "ssoNotConfigured": "SSO 구성되지 않음",
+    "unavailable": "운영 데이터를 사용할 수 없거나 권한이 없습니다."
+  },
+  "tls": {
+    "title": "TLS 인증서",
+    "notAfter": "만료일",
+    "daysLeft": "{{count}}일 남음",
+    "expired": "{{count}}일 전에 만료됨"
+  },
+  "keys": {
+    "title": "키 보관",
+    "empty": "사용 가능한 키 보관 메타데이터가 없습니다.",
+    "sealers": "대칭 봉인기",
+    "sourceUnknown": "소스 사용 불가",
+    "copyFingerprint": "{{purpose}}의 전체 지문 복사",
+    "copied": "지문이 복사되었습니다",
+    "cols": {
+      "purpose": "용도",
+      "algorithm": "알고리즘",
+      "mode": "보관 모드",
+      "kek": "KEK",
+      "created": "생성됨",
+      "fingerprint": "지문",
+      "prior": "이전 키"
+    }
+  },
+  "config": {
+    "title": "유효 구성",
+    "empty": "사용 가능한 유효 구성 항목이 없습니다.",
+    "strictViolations": "엄격 구성 위반",
+    "redacted": "가림 처리됨",
+    "cols": {
+      "key": "키",
+      "value": "유효 값",
+      "source": "소스"
+    }
+  },
+  "bus": {
+    "title": "이벤트 버스",
+    "noSubscribers": "등록된 이벤트 버스 구독자가 없습니다.",
+    "depthAria": "{{subscriber}}의 큐 깊이",
+    "counters": {
+      "publishBlocked": "게시 차단됨",
+      "dropped": "드롭됨",
+      "droppedTelemetry": "텔레메트리 드롭됨",
+      "droppedNotify": "알림 드롭됨",
+      "handlerErrors": "핸들러 오류",
+      "enqueued": "대기열에 추가됨",
+      "handled": "처리됨"
+    },
+    "bridge": {
+      "title": "브리지",
+      "pendingMessages": "대기 중인 메시지",
+      "pendingBytes": "대기 중인 바이트",
+      "dropped": "드롭됨",
+      "publishErrors": "게시 오류",
+      "decodeErrors": "디코드 오류",
+      "gateSkipped": "게이트 건너뜀",
+      "invalidSubject": "잘못된 주체"
+    }
+  },
+  "support": {
+    "title": "지원 번들",
+    "description": "저장된 비밀 값을 노출하지 않고 지원용 진단 아카이브를 생성합니다.",
+    "download": "지원 번들 다운로드",
+    "generate": "생성 및 다운로드",
+    "confirmTitle": "지원 번들을 생성하시겠습니까?",
+    "confirmDescription": "이 권한이 필요한 작업은 감사 원장에 기록됩니다.",
+    "contents": "번들에는 가림 처리된 유효 구성, 운영 상태 및 로그가 포함됩니다. 공유하기 전에 검토하십시오.",
+    "downloaded": "지원 번들이 다운로드되었습니다",
+    "failed": "지원 번들 생성이 실패했습니다."
+  },
+  "auditSpool": {
+    "title": "감사 스풀",
+    "withinBudget": "예산 이내",
+    "nearFull": "예산 근접",
+    "engaged": "예산 발동",
+    "modes": {
+      "block": "가득 차면 차단",
+      "degrade": "가득 차면 저하"
+    },
+    "usage": "{{max}} 중 {{used}} 사용됨({{pct}})",
+    "pendingDrops": "{{tenants}}개 테넌트에 걸쳐 봉인되지 않은 증거 드롭 {{drops}}개"
+  }
+}

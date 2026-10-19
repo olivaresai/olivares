@@ -49,6 +49,24 @@ func wilsonInterval(successes, n int) (lo, hi float64) {
 	return lo, hi
 }
 
+// newcombeDifference returns the difference p1−p2 of two independent proportions
+// x1/n1 and x2/n2 with its 95% Newcombe interval (method 10: the difference of the
+// two Wilson intervals, Newcombe 1998). It stays inside [−1,1] and is well-behaved
+// at small n and at p near 0/1, where the Wald difference is not. ok is false when
+// either denominator is empty: there is no difference to put an interval on.
+func newcombeDifference(x1, n1, x2, n2 int) (d, lo, hi float64, ok bool) {
+	if n1 <= 0 || n2 <= 0 {
+		return 0, 0, 0, false
+	}
+	p1, p2 := float64(x1)/float64(n1), float64(x2)/float64(n2)
+	l1, u1 := wilsonInterval(x1, n1)
+	l2, u2 := wilsonInterval(x2, n2)
+	d = p1 - p2
+	lo = d - math.Sqrt((p1-l1)*(p1-l1)+(u2-p2)*(u2-p2))
+	hi = d + math.Sqrt((u1-p1)*(u1-p1)+(p2-l2)*(p2-l2))
+	return d, math.Max(lo, -1), math.Min(hi, 1), true
+}
+
 // tCritical95 returns the two-sided 95% Student t critical value for df degrees of
 // freedom (a fixed table — no dependency, fully deterministic). df beyond the table
 // converges to the normal value.
@@ -79,22 +97,10 @@ func tCritical95(df int) float64 {
 // observation carries no spread information, and claiming an interval would be
 // fabricated precision.
 func meanInterval(values []float64) (lo, hi float64, ok bool) {
-	n := len(values)
-	if n < 2 {
+	mean, half, ok := tInterval(values)
+	if !ok {
 		return 0, 0, false
 	}
-	var sum float64
-	for _, v := range values {
-		sum += v
-	}
-	mean := sum / float64(n)
-	var ss float64
-	for _, v := range values {
-		d := v - mean
-		ss += d * d
-	}
-	sd := math.Sqrt(ss / float64(n-1))
-	half := tCritical95(n-1) * sd / math.Sqrt(float64(n))
 	lo, hi = mean-half, mean+half
 	if lo < 0 {
 		lo = 0
@@ -103,6 +109,42 @@ func meanInterval(values []float64) (lo, hi float64, ok bool) {
 		hi = 1
 	}
 	return lo, hi, true
+}
+
+// tInterval returns the sample mean of values and the half-width of its 95% Student t
+// interval. ok is false when n < 2, for the reason meanInterval states.
+func tInterval(values []float64) (mean, half float64, ok bool) {
+	n := len(values)
+	if n < 2 {
+		return 0, 0, false
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	mean = sum / float64(n)
+	var ss float64
+	for _, v := range values {
+		d := v - mean
+		ss += d * d
+	}
+	sd := math.Sqrt(ss / float64(n-1))
+	return mean, tCritical95(n-1) * sd / math.Sqrt(float64(n)), true
+}
+
+// WilsonInterval95 is the 95% Wilson score interval for successes/n, for callers
+// outside this package that report a rate with its denominator (n <= 0 gives [0,1]).
+func WilsonInterval95(successes, n int) (lo, hi float64) { return wilsonInterval(successes, n) }
+
+// MeanInterval95 is the sample mean of values with its 95% Student t interval, NOT
+// clamped to [0,1]: it serves counts, tokens and money, where meanInterval's score
+// bound would be wrong. ok is false when len(values) < 2.
+func MeanInterval95(values []float64) (mean, lo, hi float64, ok bool) {
+	mean, half, ok := tInterval(values)
+	if !ok {
+		return 0, 0, 0, false
+	}
+	return mean, mean - half, mean + half, true
 }
 
 // cohenKappa returns Cohen's kappa for two binary raters over the same items

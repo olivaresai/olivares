@@ -21,7 +21,8 @@ Audit SIEM export, directory archives and external archive verification require 
 | Task | [taskfile.dev](https://taskfile.dev) (the build runner) |
 | pnpm | for the embedded web console build |
 
-Optional: `cosign` (release signature verification), Docker (container path),
+Optional: `cosign` (release signature verification), `slsa-verifier` (SLSA provenance;
+without it verify-release.sh step 5 reports a skip), Docker (container path),
 Postgres (HA topology evaluation).
 
 ---
@@ -37,8 +38,8 @@ not check, stop here.
 | 1.1 | Build from source | `task build` | Binary appears at `./bin/olivares`; exit 0 | [Install — From source](../../INSTALL.md#from-source) |
 | 1.2 | Boot the demo estate | `./bin/olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"` | `=== DEMO MODE (SYNTHETIC DATA) ===` banner with the public demo credentials; console at `http://127.0.0.1:8901` (loopback-only; `--insecure` turns TLS off — demo only, refused on non-loopback addresses) | [Install — From source](../../INSTALL.md#from-source) |
 | 1.2b | Secure first run (no demo) | `./bin/olivares quickstart` | TLS on at the printed URL (default `https://127.0.0.1:8443`), **one-time setup token** printed, no default credentials — this is the credential-free-first-run property; it belongs to a fresh estate, not the seeded demo | [Install — From source](../../INSTALL.md#from-source) |
-| 1.3 | Verify cosign signature | `scripts/verify-release.sh --key cosign.pub` | "PASS" for all 5 checks (signature, SBOM attestation, SLSA provenance, OpenVEX, checksum) | [RELEASE-VERIFICATION.md](../RELEASE-VERIFICATION.md) |
-| 1.4 | Check SBOM attestation | Inspect the release attestation bundle | CycloneDX and SPDX SBOMs present and parseable | [RELEASE-VERIFICATION.md](../RELEASE-VERIFICATION.md) |
+| 1.3 | Verify cosign signature | `scripts/verify-release.sh --source-tag <tag>` | On 0.1+ releases steps 1/2/5 pass (signature, checksums, SLSA provenance — the final banner omits SBOM/VEX; step 5 skips with a named-tool note when `slsa-verifier` is not installed) and steps 3/4 print "(skipped: no *.sbom.sigstore.json present)" / "(skipped: no *.vex.sigstore.json present)": the one SBOM and OpenVEX attest to the container image by digest, not per archive — the next row verifies them. Releases up to 26.10.1<!-- release-fixed --> pass all 5. | [RELEASE-VERIFICATION.md](../RELEASE-VERIFICATION.md) |
+| 1.4 | Check SBOM attestation | Parse `olivares.spdx.sbom.json`; verify its attestation on the image with `cosign verify-attestation --type spdxjson`, the OpenVEX `olivares.vex.openvex.json` the same way with `--type openvex` | One SPDX SBOM (`olivares.spdx.sbom.json`), present and parseable; its attestation and the OpenVEX attestation verify against the image | [RELEASE-VERIFICATION.md](../RELEASE-VERIFICATION.md) |
 | 1.5 | Inspect security.txt | `curl -fsSL https://olivares.ai/.well-known/security.txt` (this repo's copy: `docs-site/public/.well-known/security.txt`, a docs-site asset that the engine does not serve; the apex is served by the web site) | RFC 9116-valid `security.txt` with contact, policy and encryption fields; consistency with `SECURITY.md` is CI-checked by `scripts/check-security-txt.sh` | [SECURITY.md](../../SECURITY.md) |
 | 1.6 | FIPS build (optional) | `GOFIPS140=v1.0.0 task build` | Binary boots with FIPS module loaded (CMVP cert #5247, Level 1); `olivares version` reports FIPS | [SCP-09-FIPS-STIG.md](../SCP-09-FIPS-STIG.md) |
 

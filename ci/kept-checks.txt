@@ -24,6 +24,8 @@ lint:c03-02-sign-features:selftest
 lint:c05-14-effect-key-prep:selftest
 lint:c13-07-ar-holds-prep:selftest
 lint:c13-07-holds
+lint:capture-held
+lint:capture-release
 lint:capture-view-keys
 lint:capture-view-keys:selftest
 lint:catalog-dodo-discount
@@ -70,6 +72,7 @@ lint:cra-pack
 lint:cra-pack:selftest
 lint:decision-index
 lint:decision-index:selftest
+lint:demo-dataset:selftest
 lint:disk-headroom
 lint:docker-context-sufficiency
 lint:docker-context-sufficiency:selftest

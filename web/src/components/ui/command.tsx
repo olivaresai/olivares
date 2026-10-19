@@ -33,17 +33,19 @@ export function Command({
 
 export function CommandInput({
   className,
+  leading,
   ...props
-}: ComponentProps<typeof CommandPrimitive.Input>) {
+}: ComponentProps<typeof CommandPrimitive.Input> & { leading?: ReactNode }) {
   return (
     <div
-      className="flex items-center gap-2 border-b border-border px-3"
+      className="flex items-center gap-2 border-b border-border px-3 has-focus-visible:outline-3 has-focus-visible:-outline-offset-3 has-focus-visible:outline-focus"
       cmdk-input-wrapper=""
     >
       <Search
         className="size-4 shrink-0 text-muted-foreground"
         aria-hidden="true"
       />
+      {leading}
       <CommandPrimitive.Input
         className={cn(
           'h-11 w-full bg-transparent text-body text-foreground outline-none',
@@ -194,7 +196,7 @@ export function CommandDialog({
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
-            'fixed inset-0 z-50 bg-overlay backdrop-blur-[2px]',
+            'fixed inset-0 z-50 bg-overlay',
             'transition-opacity duration-150 ease-out',
             'data-[state=closed]:opacity-0 data-[state=open]:opacity-100',
           )}

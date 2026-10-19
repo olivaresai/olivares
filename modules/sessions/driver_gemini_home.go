@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // geminiConfigDirName is the directory Gemini CLI keeps its configuration in,
@@ -184,3 +185,96 @@ func geminiJSTruthy(raw json.RawMessage) bool {
 // stand for a pre-approval: tools.allowed and mcp.allowed ("allowed"), tools.core
 // ("core"), a trusted MCP server ("trust"), and the policy file paths.
 var geminiPreApprovingKeys = []string{"allowed", "core", "trust", "policyPaths", "adminPolicyPaths"}
+
+// launchOwnMCPOnly says whether nothing but the session MCP server can start an MCP
+// server in this Gemini CLI launch: the call id of a tool names its server only then.
+// The CLI starts every server of the user's settings, the workspace's settings
+// (when it trusts the folder), an extension and a subagent definition, and turns
+// a character of a server name it does not allow into "_", so a server named
+// olivares/x registers as olivares_x like ours, with a tool and arguments of its own
+// choosing. A folder the person trusts can hold any of them. Anything not proved
+// absent is false, and the session tools are then refused as they were before. The
+// check runs on every create and resume, like geminiHomeRefusal, after the child is
+// spawned and before the handshake that makes the CLI read the workspace: a writer
+// that changes these files between the spawn and the check is not caught, as for
+// geminiHomeRefusal. It does not read the administrator's system settings, which no
+// folder controls.
+func launchOwnMCPOnly(driver string, home *ProviderHomeSnapshot, workDir string) bool {
+	if driver != providerDriverGemini || home == nil || home.ConfigHome == "" {
+		return false
+	}
+	// The ACP cwd the CLI reads the workspace from is trimmed the same way (acpSession.workDir).
+	if workDir = strings.TrimSpace(workDir); workDir == "" {
+		var err error
+		if workDir, err = os.Getwd(); err != nil {
+			return false
+		}
+	}
+	for _, dir := range []string{home.ConfigHome, filepath.Join(workDir, geminiConfigDirName)} {
+		if !geminiDirDefinesNoMCP(dir) {
+			return false
+		}
+	}
+	return true
+}
+
+// geminiDirDefinesNoMCP reports whether a .gemini directory provably defines no MCP
+// server: no entry in extensions or agents, and a settings.json that is a JSON object
+// with neither mcpServers nor mcp.serverCommand. An absent file or directory defines
+// none; an empty file or a top-level null is not proved.
+func geminiDirDefinesNoMCP(dir string) bool {
+	for _, sub := range []string{"extensions", "agents"} {
+		entries, err := os.ReadDir(filepath.Join(dir, sub))
+		if (err != nil && !errors.Is(err, fs.ErrNotExist)) || len(entries) > 0 {
+			return false
+		}
+	}
+	path := filepath.Join(dir, "settings.json")
+	info, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return true
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() > geminiSettingsMaxBytes {
+		return false
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	top, err := geminiJSONObject(raw)
+	if err != nil || top == nil {
+		return false
+	}
+	servers, err := geminiJSONLookup(top, "mcpServers")
+	if err != nil || geminiDefinesServers(servers) {
+		return false
+	}
+	command, err := geminiJSONLookup(top, "mcp", "serverCommand")
+	if err != nil || geminiJSTruthy(command) {
+		return false
+	}
+	// The CLI also starts the servers of a built-in subagent's override, which its
+	// own schema forbids but still applies when validation only warns.
+	overrides, err := geminiJSONLookup(top, "agents", "overrides")
+	if err != nil {
+		return false
+	}
+	byAgent, err := geminiJSONObject(overrides)
+	if err != nil {
+		return false
+	}
+	for _, agent := range byAgent {
+		fields, err := geminiJSONObject(agent)
+		if err != nil || geminiDefinesServers(fields["mcpServers"]) {
+			return false
+		}
+	}
+	return true
+}
+
+// geminiDefinesServers reports whether an mcpServers value names a server. A value
+// that is not an object is not proved empty.
+func geminiDefinesServers(raw json.RawMessage) bool {
+	byName, err := geminiJSONObject(raw)
+	return err != nil || len(byName) > 0
+}

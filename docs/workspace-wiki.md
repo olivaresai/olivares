@@ -15,18 +15,40 @@ olivares wiki init /srv/my-wiki
 You can also use a registered session workspace reference instead of a path.
 Initialization creates these entries:
 
-| Path | Purpose |
-| --- | --- |
-| `raw/` | Your source files. The tool must leave them unchanged. |
-| `wiki/` | Markdown pages that the tool creates and updates. |
-| `index.md` | One line per page, with a link and a short summary. |
-| `log.md` | An append-only record of wiki operations. |
-| `AGENTS.md` | The workspace wiki schema. |
+| Path        | Purpose                                                |
+| ----------- | ------------------------------------------------------ |
+| `raw/`      | Your source files. The tool must leave them unchanged. |
+| `wiki/`     | Markdown pages that the tool creates and updates.      |
+| `index.md`  | One line per page, with a link and a short summary.    |
+| `log.md`    | An append-only record of wiki operations.              |
+| `AGENTS.md` | The workspace wiki schema.                             |
 
 Initialization preserves existing files. You can run it again to create missing
 entries. If AGENTS.md already exists, the assigned skill supplies the wiki schema
 without replacing your instructions. Initialization pins the built-in pack to
 this session folder. Other folders keep their existing skill assignments.
+
+## Use the console
+
+Open **Workspace**, find the session folder, and select **Wiki**. You can also
+open the folder under **Sessions > Workspaces** and select the **Wiki** tab.
+Select **Create wiki** if the folder has no wiki. You need workspace
+administration, file write, and skills catalog write and assignment access.
+
+The view renders index.md and linked pages. Select a page link to read it, or
+select **Index** to return to the catalog. **Recent activity** shows the last
+ten log entries, newest first. **Refresh** reads the files again after a session
+updates them. An incomplete read is marked; an incomplete log is not presented
+as the most recent activity.
+
+Select **Ingest** to choose a file under raw/ or upload a source. Select a folder
+in the source list to browse it. Uploads use a unique name under raw/ and preserve
+the original bytes, so a file with the same name does not replace a source.
+Select **Ask** to enter a question, or **Lint** to check the wiki. Each action
+starts a session in the registered folder with the selected AI tool and the
+assigned wiki skill. **Open session** opens the conversation and its evidence.
+Sign in an AI tool before starting an operation. Read-only or disabled folders
+show their wiki without offering actions that change it.
 
 ## Add sources and ask questions
 

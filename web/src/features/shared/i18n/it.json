@@ -1,0 +1,61 @@
+{
+  "live": {
+    "open": "Live",
+    "connecting": "Connessione…",
+    "error": "Riconnessione…",
+    "closed": "Offline"
+  },
+  "sourceModes": {
+    "export": "Esportazione",
+    "live": "Live",
+    "direct": "Diretto",
+    "hints": {
+      "export": "Il contenuto proviene da un'esportazione o da una fonte offline, oppure la modalità non è stata dichiarata.",
+      "live": "Il contenuto proviene da una fonte upstream live.",
+      "direct": "Il contenuto è stato inviato direttamente nella knowledge base."
+    }
+  },
+  "graph": {
+    "empty": "Nessuna relazione da mostrare",
+    "emptyHint": "Per ora nulla corrisponde ai filtri attuali.",
+    "mobileTitle": "Il grafo richiede uno schermo più largo",
+    "mobileHint": "Apri questa vista su uno schermo più grande per la mappa interattiva.",
+    "fit": "Adatta alla vista",
+    "minimap": "Minimappa",
+    "controls": {
+      "zoomIn": "Ingrandisci",
+      "zoomOut": "Riduci",
+      "reset": "Reimposta la vista"
+    }
+  },
+  "urlState": {
+    "urlRejected": "{{count}} valore in questo link non è utilizzabile ({{keys}}); la vista è tornata al valore predefinito.",
+    "urlRejected_one": "{{count}} valore in questo link non è utilizzabile ({{keys}}); la vista è tornata ai valori predefiniti.",
+    "urlRejected_many": "{{count}} valori in questo link non sono utilizzabili ({{keys}}); la vista è tornata ai valori predefiniti.",
+    "urlRejected_other": "{{count}} valori in questo link non sono utilizzabili ({{keys}}); la vista è tornata ai valori predefiniti.",
+    "savedViewRejected": "{{count}} valore salvato in “{{name}}” non è utilizzabile ({{keys}}); la vista è tornata al valore predefinito.",
+    "savedViewRejected_one": "{{count}} valore salvato in “{{name}}” non è utilizzabile ({{keys}}); la vista è tornata ai valori predefiniti.",
+    "savedViewRejected_many": "{{count}} valori salvati in “{{name}}” non sono utilizzabili ({{keys}}); la vista è tornata ai valori predefiniti.",
+    "savedViewRejected_other": "{{count}} valori salvati in “{{name}}” non sono utilizzabili ({{keys}}); la vista è tornata ai valori predefiniti.",
+    "thisSavedView": "questa vista salvata",
+    "dismiss": "Chiudi"
+  },
+  "workspaceRequired": {
+    "use": "Usa {{name}}",
+    "choose": "Scegli un workspace"
+  },
+  "names": {
+    "untitledSession": "Sessione senza titolo",
+    "unknownUser": "Utente sconosciuto",
+    "unknownWorkspace": "Workspace sconosciuto"
+  },
+  "headDiff": {
+    "file": "File",
+    "changes": "Modifiche rispetto a HEAD",
+    "committed": "HEAD (committato)",
+    "current": "Attuale",
+    "same": "Nessuna differenza rispetto a HEAD.",
+    "view": "Visualizza",
+    "unavailable": "Impossibile confrontare con HEAD."
+  }
+}

@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -67,6 +68,7 @@ const (
 
 	codexNotifyTurnCompleted = "turn/completed"
 	codexNotifyTokenUsage    = "thread/tokenUsage/updated"
+	codexNotifyRateLimits    = "account/rateLimits/updated"
 	// The provider's OWN statement that it lost, and then regained, the ability to
 	// authenticate with the model provider. It is what makes readiness revocable
 	// instead of a one-shot answer taken at launch.
@@ -269,11 +271,12 @@ type codexSession struct {
 	policy CodexPolicy
 	conn   *rpcConn
 
-	mu           sync.Mutex
-	configReadID string
-	threadID     string
-	turnID       string
-	authState    string
+	mu              sync.Mutex
+	catalogRequests map[string]struct{}
+	configReadID    string
+	threadID        string
+	turnID          string
+	authState       string
 	// model and modelProvider are what the thread answer named: the model its
 	// usage is metered on, and who serves it (what a list price is looked up under).
 	model, modelProvider string
@@ -288,9 +291,19 @@ type codexSession struct {
 	priorTurns []string
 	// usageUnreadSaid: an unreadable usage report has been reported once already.
 	usageUnreadSaid bool
-	pending         map[string]*codexServerRequest
-	approvalFacts   map[string]codexApprovalFacts
-	closed          bool
+	// limitWindows are the account's primary and secondary windows as Codex last
+	// reported them (driver_codex_limit.go).
+	limitWindows [2]codexRateLimitWindow
+	// Native plan notifications also cover Code Mode's nested update_plan calls,
+	// whose arguments need not be persisted in the rollout. Only the latest plan
+	// is held with this already-owned live conversation; no second store.
+	activityPlan           []activityTodo
+	activityPlanAt         time.Time
+	activityPlanSeen       bool
+	activityPlanUnreadable int
+	pending                map[string]*codexServerRequest
+	approvalFacts          map[string]codexApprovalFacts
+	closed                 bool
 	// finished holds turn ids whose completion arrived BEFORE we had recorded them
 	// as active. A fast provider can answer turn/start and complete the turn in the
 	// same breath, and the two are processed by different goroutines: the response
@@ -347,6 +360,7 @@ type codexConfigReadResponse struct {
 }
 
 type codexThreadStartParams struct {
+	ServiceTier    *string             `json:"serviceTier,omitempty"`
 	Cwd            *string             `json:"cwd,omitempty"`
 	ApprovalPolicy CodexApprovalPolicy `json:"approvalPolicy"`
 	Sandbox        string              `json:"sandbox"`
@@ -355,7 +369,13 @@ type codexThreadStartParams struct {
 }
 
 type codexThreadResumeParams struct {
-	ThreadID       string              `json:"threadId"`
+	ServiceTier *string `json:"serviceTier,omitempty"`
+	ThreadID    string  `json:"threadId"`
+	// ExcludeTurns keeps the stored history out of the answer. The driver never reads
+	// it (earlier turns arrive as notifications), and it lists every image a person
+	// attached as a data URL: one 900 KiB screenshot makes a 1.2 MB line, which the
+	// pump ends the session for (measured on codex-cli 0.162.1).
+	ExcludeTurns   bool                `json:"excludeTurns"`
 	Cwd            *string             `json:"cwd,omitempty"`
 	ApprovalPolicy CodexApprovalPolicy `json:"approvalPolicy"`
 	Sandbox        string              `json:"sandbox"`
@@ -379,6 +399,7 @@ type codexThreadResponse struct {
 	// under: the model its usage is metered on, and its mode (runtime_tool_mode.go).
 	// The approval policy is a word or a {"granular":{…}} object.
 	Model          string          `json:"model"`
+	ServiceTier    *string         `json:"serviceTier"`
 	ApprovalPolicy json.RawMessage `json:"approvalPolicy"`
 	Sandbox        struct {
 		Type string `json:"type"`
@@ -406,10 +427,15 @@ func (r codexThreadResponse) toolMode() string {
 	return strings.Join(words, " · ")
 }
 
-type codexUserInputText struct {
+// codexUserInput is one block of a turn's input: text, or an image by data URL
+// (the app-server's UserInput "image" variant, codex-cli 0.162.1 schema).
+type codexUserInput struct {
 	Type string `json:"type"`
-	Text string `json:"text"`
+	Text string `json:"text,omitempty"`
+	URL  string `json:"url,omitempty"`
 }
+
+type codexUserInputText = codexUserInput
 
 type codexTurnStartParams struct {
 	ThreadID string               `json:"threadId"`
@@ -457,7 +483,25 @@ type codexTurnCompletedNotification struct {
 // response before any attach, recording or protocol consumer sees it.
 func (s *codexSession) send(ctx context.Context, data []byte) error {
 	var request requestOut
-	if json.Unmarshal(data, &request) == nil && request.Method == codexMethodConfigRead {
+	if json.Unmarshal(data, &request) == nil && request.Method == "skills/list" {
+		s.mu.Lock()
+		if len(s.catalogRequests) >= maxAbandonedCommandRequests {
+			s.mu.Unlock()
+			return &runErr{http.StatusGatewayTimeout, "Codex has not answered its earlier catalog requests"}
+		}
+		if s.catalogRequests == nil {
+			s.catalogRequests = map[string]struct{}{}
+		}
+		s.catalogRequests[strconv.FormatInt(request.ID, 10)] = struct{}{}
+		s.mu.Unlock()
+		// A menu caller may leave during a partial write. Finish this protocol
+		// line under its own bounded deadline, as askClaudeCommands does.
+		deadline := time.Now().Add(toolCommandsWait)
+		sendCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
+		defer cancel()
+		return s.cfg.Send(sendCtx, data)
+	}
+	if request.Method == codexMethodConfigRead {
 		s.mu.Lock()
 		s.configReadID = strconv.FormatInt(request.ID, 10)
 		s.mu.Unlock()
@@ -550,7 +594,8 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	}
 	if resume := strings.TrimSpace(s.cfg.ResumeConversationID); resume != "" {
 		raw, err = s.conn.call(ctx, codexMethodThreadResume, codexThreadResumeParams{
-			ThreadID: resume, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
+			ServiceTier: codexOptionalString(s.cfg.ServiceTier),
+			ThreadID:    resume, ExcludeTurns: true, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
 		}, s.cfg.CallTimeout)
 		if err != nil {
 			// REFUSE. A resume that failed is not an invitation to start a different
@@ -563,7 +608,8 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 		}
 	} else {
 		raw, err = s.conn.call(ctx, codexMethodThreadStart, codexThreadStartParams{
-			Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
+			ServiceTier: codexOptionalString(s.cfg.ServiceTier),
+			Cwd:         cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
 		}, s.cfg.CallTimeout)
 		if err != nil {
 			return DriverHandshake{}, codexHandshakeErr("thread/start", err)
@@ -577,6 +623,9 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 		return DriverHandshake{}, &runErr{http.StatusConflict, "Codex did not confirm this session's bound provider; refusing to send input"}
 	}
 	id := strings.TrimSpace(resp.Thread.ID)
+	if s.cfg.ServiceTier != "" && (resp.ServiceTier == nil || *resp.ServiceTier != s.cfg.ServiceTier) {
+		return DriverHandshake{}, &runErr{http.StatusConflict, "Codex did not apply the requested service tier; refusing to send input"}
+	}
 	if id == "" {
 		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's conversation response carried no thread id"}
 	}
@@ -621,7 +670,13 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 // order; this goroutine then only reports the outcome. Recording it here instead
 // was the measured false-refusal: ten of ten valid same-turn approvals cancelled.
 func (s *codexSession) Input(ctx context.Context, text string) (bool, error) {
-	if strings.TrimSpace(text) == "" {
+	return s.InputImages(ctx, text, nil)
+}
+
+// InputImages is Input for a turn that carries images, which the app-server takes as
+// image blocks beside the text (imageInputSession).
+func (s *codexSession) InputImages(ctx context.Context, text string, images []turnImage) (bool, error) {
+	if strings.TrimSpace(text) == "" && len(images) == 0 {
 		return false, badRequest("input text is required for a provider-driven session")
 	}
 	s.mu.Lock()
@@ -630,7 +685,13 @@ func (s *codexSession) Input(ctx context.Context, text string) (bool, error) {
 	if thread == "" {
 		return false, conflictErr("the provider conversation is not bound yet")
 	}
-	input := []codexUserInputText{{Type: "text", Text: text}}
+	input := make([]codexUserInput, 0, len(images)+1)
+	for _, img := range images {
+		input = append(input, codexUserInput{Type: "image", URL: "data:" + img.MediaType + ";base64," + base64.StdEncoding.EncodeToString(img.Data)})
+	}
+	if strings.TrimSpace(text) != "" {
+		input = append(input, codexUserInput{Type: "text", Text: text})
+	}
 	// Before the request: the turn's usage can be read before its answer is.
 	s.mu.Lock()
 	s.turnSent = true
@@ -759,6 +820,12 @@ func (s *codexSession) Close(err error) {
 // nobody in particular, and a subagent or another client produces the same shape.
 func (s *codexSession) onNotification(method string, params json.RawMessage) {
 	switch method {
+	case "turn/plan/updated":
+		s.observeActivityPlan(params)
+	case "skills/changed":
+		if s.cfg.OnCommandsChanged != nil {
+			s.cfg.OnCommandsChanged()
+		}
 	case "item/started":
 		s.observeApprovalItem(params)
 	case "item/completed":
@@ -787,6 +854,9 @@ func (s *codexSession) onNotification(method string, params json.RawMessage) {
 		// A completed turn ends the TURN, not the run and not the process: the same
 		// owned child accepts another input immediately.
 		s.clearTurn(n.Turn.ID)
+		s.reportTurnLimit(params)
+	case codexNotifyRateLimits:
+		s.observeRateLimits(params)
 	case codexNotifyTokenUsage:
 		s.observeTokenUsage(params)
 	case codexNotifyAuthRecoveryStarted:

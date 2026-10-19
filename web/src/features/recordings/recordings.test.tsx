@@ -90,8 +90,8 @@ const api = vi.hoisted(() => ({
 const serverInfo = vi.hoisted(() => ({
   state: {
     isSuccess: true,
-    data: { modules_not_enabled: [] as string[] } as
-      { modules_not_enabled?: string[] } | undefined,
+    data: { edition: 'enterprise', modules_not_enabled: [] as string[] } as
+      { edition?: string; modules_not_enabled?: string[] } | undefined,
   },
 }))
 vi.mock('@/lib/hooks/use-server-info', () => ({
@@ -531,7 +531,10 @@ describe('RecordingsView — deep-linkable filter state', () => {
 // read /v1/m/recording/notice and got 404 module_not_enabled, 18 per walk.
 describe('RecordingNotice — reads nothing while Recording is off', () => {
   afterEach(() => {
-    serverInfo.state = { isSuccess: true, data: { modules_not_enabled: [] } }
+    serverInfo.state = {
+      isSuccess: true,
+      data: { edition: 'enterprise', modules_not_enabled: [] },
+    }
   })
 
   it('makes no request before server-info has answered', async () => {
@@ -544,7 +547,18 @@ describe('RecordingNotice — reads nothing while Recording is off', () => {
   it('makes no request when server-info says Recording is not enabled', async () => {
     serverInfo.state = {
       isSuccess: true,
-      data: { modules_not_enabled: ['recording'] },
+      data: { edition: 'enterprise', modules_not_enabled: ['recording'] },
+    }
+    wrap(<RecordingNotice namespace="governance" />)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(api.notice).not.toHaveBeenCalled()
+    expect(screen.queryByText(/recorded privileged surface/i)).toBeNull()
+  })
+
+  it('makes no request on a Community build, whose recording routes answer 501', async () => {
+    serverInfo.state = {
+      isSuccess: true,
+      data: { edition: 'community', modules_not_enabled: [] },
     }
     wrap(<RecordingNotice namespace="governance" />)
     await new Promise((r) => setTimeout(r, 50))

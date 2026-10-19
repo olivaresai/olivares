@@ -38,7 +38,7 @@
       "apiSupport": "API 支持",
       "messages": "Messages",
       "admin": "Admin",
-      "compliance": "Compliance",
+      "compliance": "合规",
       "models": "Models",
       "batches": "Batches",
       "mcp": "MCP 连接器"
@@ -54,7 +54,7 @@
     "notesTitle": "面备注",
     "compliance": {
       "title": "合规态势",
-      "description": "HIPAA / FedRAMP / IL / ZDR 是按面划分的维度（即推理在何处运行），与某个模型或提供方的 GPAI 态势不同。请勿混为一谈。",
+      "description": "HIPAA / FedRAMP / IL / ZDR 是按面划分的维度（即推理在何处运行），与某个模型或提供商的 GPAI 态势不同。请勿混为一谈。",
       "hipaaNote": "HIPAA 会连同其确认状态一并显示。「待确认」态势绝不会被呈现为明确的「是」或「否」。"
     }
   },
@@ -98,7 +98,7 @@
     }
   },
   "effectiveState": {
-    "label": "在本环境中：",
+    "label": "在本资产域中：",
     "models": "模型目录",
     "modelOps": "模型运维"
   }

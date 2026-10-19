@@ -6,10 +6,30 @@
 
 package main
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"os"
+)
 
 const canReexec = false
 
+// openRegular opens a regular file of the data volume for reading; a link, pipe or device is refused.
+func openRegular(path string) (*os.File, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	return os.Open(path)
+}
+
 func reexecSelf([]string) error {
 	return errors.New("this platform cannot re-execute a running process; restart the engine with its service manager")
+}
+
+func execApplied(string) error {
+	return errors.New("this platform cannot hand over to an applied release")
 }

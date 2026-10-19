@@ -330,6 +330,59 @@ describe('the ledger of a move', () => {
   })
 })
 
+describe('MoveSessionDialog — a handoff of a session that is not Claude Code', () => {
+  it('goes straight to the handoff: no other account of Codex is a move', async () => {
+    const user = userEvent.setup()
+    show(
+      <MoveSessionDialog
+        run={run({ provider_driver: 'codex', provider_profile_ref: 'ppf_x' })}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('radio')).toBeNull()
+    const summary = await screen.findByRole('textbox', {
+      name: 'Summary the new session starts from',
+    })
+    await waitFor(() =>
+      expect(summary).toHaveValue('The task: migrate the schema.'),
+    )
+    await user.click(screen.getByRole('combobox', { name: 'Account' }))
+    // Any tool the engine can start is a choice, the session's own included.
+    expect(
+      screen.getByRole('option', { name: /Account B/ }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('option', { name: /Codex main/ }))
+    await user.click(screen.getByRole('button', { name: 'Start new session' }))
+    await waitFor(() =>
+      expect(api.handoff).toHaveBeenCalledWith('run_1', {
+        provider_profile_ref: 'ppf_codex',
+        summary: 'The task: migrate the schema.',
+      }),
+    )
+    expect(api.move).not.toHaveBeenCalled()
+  })
+
+  it('says a running session is stopped first, and leaves the stopping to the handoff', async () => {
+    const user = userEvent.setup()
+    show(
+      <MoveSessionDialog
+        run={run({ state: 'running', provider_driver: 'gemini-cli' })}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(
+      await screen.findByText(/it is stopped first, then handed off/),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(api.handoffPreview).toHaveBeenCalled())
+    await user.click(screen.getByRole('combobox', { name: 'Account' }))
+    await user.click(await screen.findByRole('option', { name: /Codex main/ }))
+    await user.click(screen.getByRole('button', { name: 'Start new session' }))
+    await waitFor(() => expect(api.handoff).toHaveBeenCalled())
+    // The engine stops the source in the same request, under its own refusals.
+    expect(api.stop).not.toHaveBeenCalled()
+  })
+})
+
 describe('RunActions — Move to…', () => {
   const caps: Capability[] = [{ id: 'resume', available: true }]
 
@@ -348,12 +401,51 @@ describe('RunActions — Move to…', () => {
     expect(api.handoffPreview).not.toHaveBeenCalled()
   })
 
-  it('is not offered where Resume is not, nor for a session of another tool', () => {
+  it.each(['claude', 'codex', 'gemini-cli', 'opencode'])(
+    'is offered for a stopped %s session with a conversation',
+    async (driver) => {
+      show(
+        <RunActions
+          run={run({ provider_driver: driver })}
+          caps={caps}
+          onClose={vi.fn()}
+        />,
+      )
+      expect(
+        screen.getByRole('button', { name: 'Move to…' }),
+      ).toBeInTheDocument()
+    },
+  )
+
+  it('is offered for a running session, which the handoff stops itself', async () => {
+    const user = userEvent.setup()
+    show(
+      <RunActions
+        run={run({ state: 'running', provider_driver: 'opencode' })}
+        caps={[{ id: 'stop', available: true }]}
+        onClose={vi.fn()}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Move to…' }))
+    expect(
+      await screen.findByRole('dialog', { name: 'Move this session' }),
+    ).toBeInTheDocument()
+  })
+
+  it('is not offered where neither Resume nor Stop is, nor for a tool whose conversation is not read, nor before the session has one', () => {
     show(<RunActions run={run()} caps={[]} onClose={vi.fn()} />)
     expect(screen.queryByRole('button', { name: 'Move to…' })).toBeNull()
     show(
       <RunActions
-        run={run({ provider_driver: 'codex' })}
+        run={run({ provider_driver: 'grok' })}
+        caps={caps}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Move to…' })).toBeNull()
+    show(
+      <RunActions
+        run={run({ provider_driver: 'codex', claude_session_id: '' })}
         caps={caps}
         onClose={vi.fn()}
       />,

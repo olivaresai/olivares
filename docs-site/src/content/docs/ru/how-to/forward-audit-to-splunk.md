@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Business]
-Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, `olivares audit verify` и `olivares dr backup`; экспорт возвращает HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL с сегментами аудита также требуют Business.
+Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, `olivares audit verify` и `olivares dr backup`; экспорт возвращает HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL между изолированными сетями также требуют Business.
 :::
 
 Вы можете доставить данные Olivares AI в Splunk **уже сегодня**, не дожидаясь

@@ -76,7 +76,8 @@ describe('a denied palette action', () => {
 
     const option = screen.getByRole('option', { name: /New alert route/ })
     expect(option).toHaveAttribute('aria-disabled', 'true')
-    expect(option).toHaveTextContent('notify:route:write')
+    expect(option).toHaveTextContent('Needs write access for this.')
+    expect(option).not.toHaveTextContent('notify:route:write')
     expect(option).toHaveTextContent(/administrator/i)
     await user.click(option)
     expect(useCommandStore.getState().pendingAction).toBeNull()

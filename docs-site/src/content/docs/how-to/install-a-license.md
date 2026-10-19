@@ -104,6 +104,13 @@ Run it after every install, and after removing an override.
 
 ## 3 · Community → Business, in place
 
+Installing a valid Business or Enterprise license on a Community build keeps that
+build running. The session cockpit and the other commercial pages appear only after
+you switch this installation to Business. The console's **Edition & license** view
+names the installed license separately from the build. **Expires** is the paid term;
+**Lease until**, when shown, is the separate provisional instance lease. Running in
+Docker? Go to [Docker and Compose](#docker-and-compose) below.
+
 With a license installed, the commercial binary is a download away. Nothing is
 reinstalled and no data moves:
 
@@ -120,8 +127,9 @@ Each family can be enabled or disabled; none is sold separately.
 
 It fetches the signed commercial build for your platform, **verifies the signature
 offline** — a tampered artifact aborts the upgrade with the running binary untouched — and
-swaps it in atomically, keeping a backup of the previous one. `--check` first if you want to
-see the plan without taking it:
+swaps it in atomically, keeping a backup of the previous one. Business has the same version
+number as Community, so this also works when you already run that version. `--check` first if
+you want to see the plan without taking it; it names the move as `edition: community -> enterprise`:
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN> --check
@@ -146,6 +154,77 @@ The swap replaces a binary, not your data — but take the backup anyway, the sa
 [Upgrade and roll back](/how-to/upgrade-and-rollback/) asks for. That page also covers
 going back to the previous binary.
 :::
+
+### Docker and Compose
+
+The public `docker.io/olivaresai/olivares` image is Community. In a container,
+`olivares upgrade` installs the release into the data volume, not into the image, so
+recreating the container starts it again. This applies the Business release when it is newer
+than the image or has the same version (`--check` names the move as `edition: community -> enterprise`);
+building the image yourself, as described below, is the alternative. With the license installed (section 2),
+run the upgrade in the running container and restart it. The token comes from your fulfilment
+email; pass it by name so it stays out of the process list:
+
+```sh
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
+docker compose up -d --force-recreate olivares
+```
+
+The release is kept in `ota/` under the data directory (`/var/lib/olivares/ota` in the
+shipped image) together with the signed manifest and artifact it was verified from. The
+image binary starts that release when it is newer than the image, or the same version
+built differently (a Community image of the version you applied as Business). Nothing in
+the volume is trusted on its own. A start checks the manifest's signature against the OTA
+key embedded in the image, checks the artifact against the digest the manifest signs,
+unpacks the binary from it and rewrites the applied binary if it differs. Unpacking takes
+about a second, so the proof is kept in the container's temporary directory (the shipped
+Compose file mounts a `tmpfs` there), not in the volume: later commands, the Compose
+health probe included, check the signature and the version and reuse the proof while the
+manifest and the applied binary are exactly as proved. A recreate empties it and the next
+start proves again. Without a writable temporary directory every command proves in full.
+If the image is newer than the applied release, for example after you pull a new image,
+the image runs and the start log says so; run the upgrade again to apply a newer release.
+Evidence that does not verify is ignored with a message and the image runs.
+`docker compose exec olivares olivares ...` runs the applied release too. The volume keeps
+no backup of the previous binary: a start rebuilds the applied binary from its evidence, so
+a backup would not roll anything back. To return to the image's binary, remove `ota/`.
+This needs a build with an embedded OTA key, which every published image has, and a data
+volume that allows executing files (a named volume does; on a `noexec` mount
+`olivares serve` stops and says why instead of silently running the image's binary).
+
+You can also build the image yourself instead. Download the **same version and Linux
+architecture** of the Business binary through the
+[licensed download portal](https://licenses.olivares.ai/portal), and verify its signature
+and checksum using the download's instructions. Then layer that verified binary onto the
+matching Community runtime image on your own host. In a directory containing the verified
+binary named `olivares`, use this `Dockerfile`:
+
+```dockerfile
+ARG COMMUNITY_IMAGE
+FROM ${COMMUNITY_IMAGE}
+COPY --chmod=0755 olivares /usr/local/bin/olivares
+```
+
+Build with the digest of the Community image for that version, verified as in
+[Verify a release](/how-to/verify-a-release/). The result keeps that image's non-root
+user, entrypoint and ports, so the `Dockerfile` needs no `USER` line:
+
+```sh
+docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+  --tag olivares-business-local:X.Y .
+```
+
+Keep this image private and retain the commercial license and notices supplied with
+the download. Do not put your license file or download token into the build context.
+Set your Compose service's `image` to `olivares-business-local:X.Y`, then recreate
+that service with `docker compose up -d --no-deps --force-recreate olivares`. For
+standalone Docker, recreate the container with this image and the same volume and
+arguments. Keep the data volume: do not use `down --volumes`.
+
+Check **Edition & license** after the restart: the edition should read **Business**, and
+the installed license remains in the data volume. Enterprise contracts use this
+commercial build too; any contract-specific artifact follows its download instructions.
 
 ## Removing a license
 

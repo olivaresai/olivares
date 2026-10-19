@@ -4,6 +4,14 @@
 /.well-known/security.txt
   Content-Type: text/plain; charset=utf-8
 
+# The assistants' files carry non-ASCII text. Measured 2026-10-18: robots.txt is served as plain
+# text/plain, while a path with a rule here is served with the charset.
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
+
+/llms-full.txt
+  Content-Type: text/plain; charset=utf-8
+
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff

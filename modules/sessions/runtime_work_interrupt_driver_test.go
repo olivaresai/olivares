@@ -134,7 +134,7 @@ func TestRuntimeWorkAPIFencedInterruptKeepsTheRunSpeakable(t *testing.T) {
 	if interrupted.code != http.StatusOK {
 		t.Fatalf("fenced interrupt = %d %s", interrupted.code, interrupted.raw)
 	}
-	if interrupted.body["state"] != stateRunning {
+	if interrupted.body["state"] != stateIdle || interrupted.body["process_state"] != stateRunning {
 		t.Fatalf("the fenced interrupt reported state %v; it is not terminal", interrupted.body["state"])
 	}
 	waitFor(t, "the child cancelled its turn", func() bool {
@@ -191,7 +191,7 @@ func TestRuntimeAPIUnfencedInterruptStillServesANonWorkRun(t *testing.T) {
 
 	// No body at all: exactly the request a pre-existing client sends.
 	interrupted := h.do(http.MethodPost, "/v1/m/sessions/runs/"+runRef+"/interrupt", admin, tenantHdr(tenant))
-	if interrupted.code != http.StatusOK || interrupted.body["state"] != stateRunning {
+	if interrupted.code != http.StatusOK || interrupted.body["state"] != stateIdle || interrupted.body["process_state"] != stateRunning {
 		t.Fatalf("legacy empty-body interrupt = %d %s", interrupted.code, interrupted.raw)
 	}
 	waitFor(t, "the child cancelled its turn", func() bool {

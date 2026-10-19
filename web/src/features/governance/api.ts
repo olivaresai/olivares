@@ -74,10 +74,11 @@ export const governanceApi = {
       query: { limit: LIST_PAGE, ...params },
     }),
   listGroupMembers: (ref: string, params?: { transitive?: boolean }) =>
-    http.get<ListResponse<MemberDTO> & { truncated?: boolean }>(
-      `${BASE}/groups/${encodeURIComponent(ref)}/members`,
-      { query: { ...params } },
-    ),
+    http.get<
+      ListResponse<MemberDTO> & { truncated?: boolean; not_found?: boolean }
+    >(`${BASE}/groups/${encodeURIComponent(ref)}/members`, {
+      query: { ...params },
+    }),
   syncRoster: () => http.post<RosterReport>(`${BASE}/roster/sync`),
 
   /** El registro «design-toward» de estándares emergentes. Lectura pura. */

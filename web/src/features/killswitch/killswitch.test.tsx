@@ -7,6 +7,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
+import { PageActionsProvider } from '@/components/ui/page-actions'
 import { useStepUpStore } from '@/stores/step-up'
 import {
   agentStopFixture,
@@ -95,7 +96,18 @@ const admin = (id: string, role = 'admin') => ({
   role,
 })
 
+// The live session list reads the operated runs (agentops), mocked at the same seam.
+const runsApi = vi.hoisted(() => ({ listRuns: vi.fn() }))
+vi.mock('@/features/agentops/api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/features/agentops/api')>()
+  return { ...actual, agentOpsApi: { ...actual.agentOpsApi, ...runsApi } }
+})
+
+import type { RunDTO } from '@/features/agentops/types'
+import { NO_REASON } from './engage-card'
 import en from './i18n/en.json'
+import { estateSince, pollMs, watchedRuns } from './live-runs'
 import KillswitchView from './killswitch-view'
 import { ReenableDialog } from './reenable-dialog'
 
@@ -122,8 +134,31 @@ beforeEach(() => {
     items: [admin('a', 'owner'), admin('b'), admin('c')],
     has_more: false,
   })
+  runsApi.listRuns.mockReset()
+  runsByState([])
 })
 afterEach(() => vi.clearAllMocks())
+
+/** The runs read, answered as the engine's store filter does: by `state`. */
+function runsByState(items: RunDTO[], hasMore = false) {
+  runsApi.listRuns.mockImplementation(async (p?: { state?: string }) => ({
+    items: items.filter((r) => r.state === p?.state),
+    has_more: hasMore,
+  }))
+}
+
+/** The one verb: open its confirmation, type a reason when given, confirm. */
+async function stopAll(reason?: string) {
+  await userEvent.click(
+    await screen.findByRole('button', { name: /^stop all agents$/i }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  if (reason !== undefined)
+    await userEvent.type(within(dialog).getByLabelText(/^reason/i), reason)
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: /^stop all agents$/i }),
+  )
+}
 
 describe('KillswitchView — engage (the one-click emergency stop)', () => {
   it('la ceremonia del RE-ENABLE es alcanzable, y no sólo está escrita', async () => {
@@ -166,17 +201,7 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
     )
     wrap(<KillswitchView />)
 
-    await userEvent.type(
-      screen.getByLabelText(/^reason/i),
-      'Prompt-injection cascade',
-    )
-    await userEvent.click(
-      await screen.findByRole('button', { name: /emergency stop/i }),
-    )
-    const dialog = await screen.findByRole('dialog')
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: /engage kill switch/i }),
-    )
+    await stopAll('Prompt-injection cascade')
 
     // Ancla POSITIVA: la ceremonia se pidió.
     await waitFor(() =>
@@ -206,81 +231,158 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
     api.engage.mockRejectedValue(new ApiError(403, 'forbidden', 'no'))
     wrap(<KillswitchView />)
 
-    await userEvent.type(
-      screen.getByLabelText(/^reason/i),
-      'Prompt-injection cascade',
-    )
-    await userEvent.click(
-      await screen.findByRole('button', { name: /emergency stop/i }),
-    )
-    const dialog = await screen.findByRole('dialog')
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: /engage kill switch/i }),
-    )
+    await stopAll('Prompt-injection cascade')
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalledTimes(1))
     expect(useStepUpStore.getState().request).toBeNull()
   })
 
-  it('gates engage on a MANDATORY reason and a danger confirm step (estate scope)', async () => {
+  it('ONE "Stop all agents" verb: no form before it, a danger confirm, and an optional reason', async () => {
     api.engage.mockResolvedValue(estateStopFixture)
     wrap(<KillswitchView />)
 
-    const engageBtn = await screen.findByRole('button', {
-      name: /emergency stop/i,
+    // The verb is offered at once: no scope, agent or reason field stands before it.
+    const verb = await screen.findByRole('button', {
+      name: /^stop all agents$/i,
     })
-    // No reason yet → the engine would 400; the button never offers the call.
-    expect(engageBtn).toBeDisabled()
+    expect(verb).toBeEnabled()
+    expect(screen.queryByLabelText(/^reason/i)).toBeNull()
+    expect(screen.queryByLabelText(/^agent/i)).toBeNull()
+    expect(screen.queryByRole('combobox', { name: /^scope$/i })).toBeNull()
 
-    await userEvent.type(
-      screen.getByLabelText(/^reason/i),
-      'Prompt-injection cascade',
-    )
-    expect(engageBtn).toBeEnabled()
-    await userEvent.click(engageBtn)
-
+    await userEvent.click(verb)
     // The deliberate confirm step (no single-click estate stop).
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText(/stop all agents\?/i)).toBeInTheDocument()
     await userEvent.click(
-      within(dialog).getByRole('button', { name: /engage kill switch/i }),
+      within(dialog).getByRole('button', { name: /^stop all agents$/i }),
     )
 
     await waitFor(() => expect(api.engage).toHaveBeenCalledTimes(1))
-    // Estate-wide: scope_ref MUST be absent (the engine 400s a non-empty one).
+    // Estate-wide: scope_ref MUST be absent (the engine 400s a non-empty one), and the
+    // engine's mandatory reason gets the sentence that says none was given.
     expect(api.engage.mock.calls[0][0]).toEqual({
       scope_kind: 'estate',
-      reason: 'Prompt-injection cascade',
+      reason: NO_REASON,
     })
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
   })
 
-  it('agent scope additionally requires the agent ref and sends it as scope_ref', async () => {
+  it('the page header carries one verb: Stop all agents (New rule sits in its section)', async () => {
+    // With the provider the console mounts (AppLayout), so a section's PagePrimaryAction
+    // would land in the header as it does on screen.
+    wrap(
+      <PageActionsProvider>
+        <KillswitchView />
+      </PageActionsProvider>,
+    )
+    await screen.findByRole('button', { name: /^stop all agents$/i })
+    const header = document.querySelector<HTMLElement>(
+      '[data-slot="page-header"]',
+    )!
+    expect(
+      within(header).getByRole('button', { name: /^stop all agents$/i }),
+    ).toBeInTheDocument()
+    expect(
+      within(header).queryByRole('button', { name: /new rule/i }),
+    ).toBeNull()
+    expect(
+      await screen.findByRole('button', { name: /new rule/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('a reason typed in the confirmation is the one sent', async () => {
+    api.engage.mockResolvedValue(estateStopFixture)
+    wrap(<KillswitchView />)
+
+    await stopAll('  Prompt-injection cascade  ')
+
+    await waitFor(() => expect(api.engage).toHaveBeenCalledTimes(1))
+    expect(api.engage.mock.calls[0][0]).toEqual({
+      scope_kind: 'estate',
+      reason: 'Prompt-injection cascade',
+    })
+  })
+
+  it('is not offered again while every agent is already stopped', async () => {
+    api.state.mockResolvedValue(estateStoppedStateFixture)
+    wrap(<KillswitchView />)
+
+    expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^stop all agents$/i }),
+      ).toBeDisabled(),
+    )
+  })
+
+  it('a single-agent stop lives under More and sends its ref as scope_ref', async () => {
     api.engage.mockResolvedValue(agentStopFixture)
     wrap(<KillswitchView />)
 
-    await userEvent.type(screen.getByLabelText(/^reason/i), 'rogue agent')
-    await userEvent.click(screen.getByRole('combobox', { name: /scope/i }))
     await userEvent.click(
-      await screen.findByRole('option', { name: /single agent/i }),
+      await screen.findByRole('button', { name: /^more$/i }),
     )
-
-    const engageBtn = screen.getByRole('button', { name: /emergency stop/i })
-    expect(engageBtn).toBeDisabled() // ref still missing
-    await userEvent.type(screen.getByLabelText(/^agent/i), 'support-triage')
-    expect(engageBtn).toBeEnabled()
-    await userEvent.click(engageBtn)
-
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: /stop one agent/i }),
+    )
     const dialog = await screen.findByRole('dialog')
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: /engage kill switch/i }),
+    const confirm = within(dialog).getByRole('button', {
+      name: /^stop this agent$/i,
+    })
+    expect(confirm).toBeDisabled() // the ref is still missing
+    await userEvent.type(
+      within(dialog).getByLabelText(/^agent/i),
+      'support-triage',
     )
+    expect(confirm).toBeEnabled()
+    await userEvent.type(
+      within(dialog).getByLabelText(/^reason/i),
+      'rogue agent',
+    )
+    await userEvent.click(confirm)
+
     await waitFor(() => expect(api.engage).toHaveBeenCalledTimes(1))
     expect(api.engage.mock.calls[0][0]).toEqual({
       scope_kind: 'agent',
       scope_ref: 'support-triage',
       reason: 'rogue agent',
     })
+  })
+
+  it('a failed stop keeps what the operator typed', async () => {
+    api.engage.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    wrap(<KillswitchView />)
+
+    const openAgentStop = async () => {
+      await userEvent.click(
+        await screen.findByRole('button', { name: /^more$/i }),
+      )
+      await userEvent.click(
+        await screen.findByRole('menuitem', { name: /stop one agent/i }),
+      )
+      return screen.findByRole('dialog')
+    }
+    let dialog = await openAgentStop()
+    await userEvent.type(
+      within(dialog).getByLabelText(/^agent/i),
+      'support-triage',
+    )
+    await userEvent.type(
+      within(dialog).getByLabelText(/^reason/i),
+      'rogue agent',
+    )
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: /^stop this agent$/i }),
+    )
+    await waitFor(() => expect(api.engage).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+
+    dialog = await openAgentStop()
+    expect(within(dialog).getByLabelText(/^agent/i)).toHaveValue(
+      'support-triage',
+    )
+    expect(within(dialog).getByLabelText(/^reason/i)).toHaveValue('rogue agent')
   })
 
   it('a 409 surfaces the EXISTING stop instead of swallowing it', async () => {
@@ -293,19 +395,191 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
     )
     wrap(<KillswitchView />)
 
-    await userEvent.type(screen.getByLabelText(/^reason/i), 'second stop')
-    await userEvent.click(
-      screen.getByRole('button', { name: /emergency stop/i }),
-    )
-    const dialog = await screen.findByRole('dialog')
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: /engage kill switch/i }),
-    )
+    await stopAll('second stop')
 
     await waitFor(() => expect(toast.warning).toHaveBeenCalled())
     // The engine's message NAMES the existing stop — relayed, not replaced.
     expect(toast.warning.mock.calls[0][1]?.description).toMatch(/ks-estate-1/)
     expect(toast.error).not.toHaveBeenCalled()
+  })
+})
+
+describe('KillswitchView — the live session list', () => {
+  const run = (over: Partial<RunDTO>): RunDTO =>
+    ({
+      run_ref: 'run-1',
+      name: 'billing-reconciler',
+      transport: 'stream-json',
+      permission_mode: 'default',
+      isolation: 'none',
+      state: 'running',
+      last_event_seq: 0,
+      pep_provisioned: true,
+      record_io: false,
+      created_at: '2026-06-11T08:49:00Z',
+      started_at: '2026-06-11T08:50:00Z',
+      ...over,
+    }) as RunDTO
+  const yesterday = run({
+    run_ref: 'old',
+    name: 'yesterday',
+    state: 'stopped',
+    created_at: '2026-06-10T07:00:00Z',
+    stopped_at: '2026-06-10T08:00:00Z',
+  })
+
+  it('flips a running session to Stopped once every agent is stopped', async () => {
+    runsByState([run({}), yesterday])
+    api.engage.mockResolvedValue(estateStopFixture)
+    wrap(<KillswitchView />)
+
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(
+      await within(list).findByText('billing-reconciler'),
+    ).toBeInTheDocument()
+    expect(within(list).getByText(/working/i)).toBeInTheDocument()
+    // An ended session with no stop in force is not what this list watches, and the
+    // ended runs are not even asked for.
+    expect(within(list).queryByText('yesterday')).toBeNull()
+    expect(runsApi.listRuns.mock.calls.map((c) => c[0].state).sort()).toEqual([
+      'idle',
+      'pending',
+      'running',
+    ])
+
+    // The stop lands: the engine reports the estate stopped and the run ended after it.
+    api.state.mockResolvedValue(estateStoppedStateFixture)
+    runsByState([
+      run({ state: 'stopped', stopped_at: '2026-06-11T09:00:07Z' }),
+      yesterday,
+    ])
+    await stopAll()
+
+    await waitFor(() =>
+      expect(within(list).getByText(/^stopped$/i)).toBeInTheDocument(),
+    )
+    expect(within(list).getByText('billing-reconciler')).toBeInTheDocument()
+    expect(within(list).queryByText(/working/i)).toBeNull()
+    // Ended before the stop began: not one of the runs it stopped.
+    expect(within(list).queryByText('yesterday')).toBeNull()
+    expect(within(list).getByRole('status')).toHaveTextContent(
+      '0 running, 1 ended.',
+    )
+  })
+
+  it("keeps the rows on screen while the stop's first read is still out", async () => {
+    runsByState([run({})])
+    api.engage.mockResolvedValue(estateStopFixture)
+    wrap(<KillswitchView />)
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(
+      await within(list).findByText('billing-reconciler'),
+    ).toBeInTheDocument()
+
+    api.state.mockResolvedValue(estateStoppedStateFixture)
+    let release = () => {}
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    runsApi.listRuns.mockImplementation(async (p?: { state?: string }) => {
+      await gate
+      return {
+        items:
+          p?.state === 'stopped'
+            ? [run({ state: 'stopped', stopped_at: '2026-06-11T09:00:07Z' })]
+            : [],
+        has_more: false,
+      }
+    })
+    await stopAll()
+
+    // The estate stop is known (the caption changed), its reads are still out, and
+    // the row the operator was watching has not vanished.
+    expect(
+      await within(list).findByText(en.runs.captionStopped),
+    ).toBeInTheDocument()
+    expect(within(list).getByText('billing-reconciler')).toBeInTheDocument()
+    release()
+    await waitFor(() =>
+      expect(within(list).getByText(/^stopped$/i)).toBeInTheDocument(),
+    )
+  })
+
+  it('lists an idle session too: it is alive and the stop ends it', async () => {
+    runsByState([run({ state: 'idle', name: 'waiting-for-input' })])
+    wrap(<KillswitchView />)
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(
+      await within(list).findByText('waiting-for-input'),
+    ).toBeInTheDocument()
+    expect(within(list).getByText(/^idle$/i)).toBeInTheDocument()
+  })
+
+  it('says when no session is running', async () => {
+    wrap(<KillswitchView />)
+    expect(await screen.findByText(en.runs.empty)).toBeInTheDocument()
+  })
+
+  it('a failed read says so and never claims nothing is running', async () => {
+    runsApi.listRuns.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    wrap(<KillswitchView />)
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(await within(list).findByRole('alert')).toHaveTextContent(
+      en.runs.error,
+    )
+    expect(within(list).queryByText(en.runs.empty)).toBeNull()
+  })
+
+  it('a failed poll keeps the rows it already had', async () => {
+    runsByState([run({})])
+    api.engage.mockResolvedValue(estateStopFixture)
+    wrap(<KillswitchView />)
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(
+      await within(list).findByText('billing-reconciler'),
+    ).toBeInTheDocument()
+
+    runsApi.listRuns.mockRejectedValue(new ApiError(500, 'internal', 'boom'))
+    await stopAll() // the engage refreshes the list, and that read fails
+
+    expect(await within(list).findByRole('alert')).toBeInTheDocument()
+    expect(within(list).getByText('billing-reconciler')).toBeInTheDocument()
+  })
+
+  it('a truncated read says so and never claims nothing is running', async () => {
+    runsByState([], true)
+    wrap(<KillswitchView />)
+    const list = await screen.findByTestId('killswitch-runs')
+    expect(
+      await within(list).findByText(en.runs.truncated.replace('{{n}}', '1000')),
+    ).toBeInTheDocument()
+    expect(within(list).queryByText(en.runs.empty)).toBeNull()
+  })
+
+  it('is not rendered for a reader without sessions:run:read', async () => {
+    authState.can = (p) => p !== 'sessions:run:read'
+    wrap(<KillswitchView />)
+    await screen.findByRole('heading', { name: en.stops.title })
+    expect(screen.queryByTestId('killswitch-runs')).toBeNull()
+    expect(runsApi.listRuns).not.toHaveBeenCalled()
+  })
+
+  it('watches the estate stop only, merges the reads, and polls fast only while it ends runs', () => {
+    expect(estateSince([agentStopFixture])).toBeNull()
+    const since = estateSince([agentStopFixture, estateStopFixture])
+    expect(since).toBe(Date.parse('2026-06-11T09:00:00Z'))
+
+    const live = run({})
+    const ended = run({ state: 'stopped', stopped_at: '2026-06-11T09:00:07Z' })
+    // The reads race the stop: the same run seen live and ended is shown ended, once.
+    expect(watchedRuns([live, ended], since)).toEqual([ended])
+    expect(watchedRuns([ended, live], since)).toEqual([ended])
+    expect(watchedRuns([ended, yesterday], since)).toEqual([ended])
+    expect(watchedRuns([ended], null)).toEqual([])
+
+    expect(pollMs(since, [live])).toBe(2_000)
+    expect(pollMs(since, [ended])).toBe(12_000)
+    expect(pollMs(null, [live])).toBe(12_000)
   })
 })
 
@@ -517,12 +791,8 @@ describe('KillswitchView — forced post-review', () => {
 describe('KillswitchView — the two-admin rule, said before and after', () => {
   async function openEstateConfirm() {
     wrap(<KillswitchView />)
-    await userEvent.type(
-      await screen.findByLabelText(/^reason/i),
-      'Prompt-injection cascade',
-    )
     await userEvent.click(
-      screen.getByRole('button', { name: /emergency stop/i }),
+      await screen.findByRole('button', { name: /^stop all agents$/i }),
     )
     return screen.findByRole('dialog')
   }
@@ -889,7 +1159,10 @@ describe('KillswitchView — RBAC gating', () => {
     // The read view still shows the truth…
     expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
     // …but offers no privileged action the backend would 403.
-    expect(screen.queryByRole('button', { name: /emergency stop/i })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /stop all agents/i }),
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: /^more$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /re-enable/i })).toBeNull()
     expect(
       screen.queryByRole('button', { name: /download evidence pack/i }),

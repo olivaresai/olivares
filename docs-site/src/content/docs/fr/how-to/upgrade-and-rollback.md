@@ -22,11 +22,12 @@ niveau et sa phrase secrète privée ou sa KEK sont nécessaires pour revenir à
 
 ## Quelle voie de mise à niveau vous correspond
 
-Il existe deux manières de faire avancer le binaire, et elles aboutissent au même résultat.
+Il existe trois manières de faire avancer le binaire, et elles aboutissent au même résultat.
 
 | Votre installation | Voie |
 |---|---|
-| Un binaire sur un hôte, systemd ou Docker Compose | `olivares upgrade` — cette page |
+| Un binaire sur un hôte, systemd | `olivares upgrade` — cette page |
+| Un conteneur Docker ou Podman | `docker compose exec olivares olivares upgrade`, puis recréez le conteneur. L'image ne peut pas changer : la version est donc conservée dans le volume de données (`ota/` sous le répertoire de données), et chaque démarrage du binaire de l'image la lance tant qu'elle est plus récente que l'image ou de même version construite autrement. Supprimer `ota/` ramène le conteneur au binaire de son image. [Docker et Compose](/fr/how-to/install-a-license/#docker-et-compose) donne les commandes. |
 | Kubernetes / Helm | Définissez l'image et laissez l'opérateur effectuer le rolling update. N'exécutez pas `olivares upgrade` dans un pod : le déploiement est déclaratif et la prochaine réconciliation annulerait le changement. |
 
 ## Avant toute chose : lisez le plan
@@ -51,7 +52,7 @@ actives :
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.2
+olivares upgrade --check --current-version 0.3
 ```
 <!-- /release -->
 

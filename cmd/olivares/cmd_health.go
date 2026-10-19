@@ -45,8 +45,9 @@ const healthNS = "health"
 func newHealthCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "health",
-		Short: "Watch subject health, incidents, SLA and dependencies",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "health",
+		Short:       "Watch subject health, incidents, SLA and dependencies",
 		Long: "health is the reliability plane: the current state of every monitored subject,\n" +
 			"the append-only ledger of transitions, the incidents those transitions opened,\n" +
 			"the observed dependency graph, and the checks that define what is watched.\n\n" +
@@ -165,8 +166,9 @@ func newHealthStatusCmd(flags *authClientFlags) *cobra.Command {
 	var f healthSubjectFilters
 	var state string
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show the current health of every monitored subject",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show the current health of every monitored subject",
 		Long: "status is the current state of each monitored subject: healthy, degraded, down,\n" +
 			"or unknown when nothing has reported within the expected interval times the\n" +
 			"grace factor.\n\n" +
@@ -208,9 +210,10 @@ func newHealthStatusCmd(flags *authClientFlags) *cobra.Command {
 func newHealthWatchCmd(flags *authClientFlags) *cobra.Command {
 	var subjectRef string
 	cmd := &cobra.Command{
-		Use:     "watch",
-		Aliases: []string{"stream"},
-		Short:   "Follow health changes as they happen (one JSON object per line)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "watch",
+		Aliases:     []string{"stream"},
+		Short:       "Follow health changes as they happen (one JSON object per line)",
 		Long: "watch opens the live health stream and prints ONE JSON OBJECT PER LINE, so it\n" +
 			"pipes into jq or a log shipper without any parsing of the server-sent-event\n" +
 			"framing. Keepalive comments are consumed and never emitted, so a quiet stream\n" +
@@ -354,8 +357,9 @@ func newHealthSLACmd(flags *authClientFlags) *cobra.Command {
 	var windowSeconds int64
 	var strict bool
 	cmd := &cobra.Command{
-		Use:   "sla",
-		Short: "Report observed uptime for one subject against its target",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sla",
+		Short:       "Report observed uptime for one subject against its target",
 		Long: "sla reports the uptime actually observed for ONE subject over a window, and\n" +
 			"whether that breaches the target its check declares.\n\n" +
 			"HAS-DATA IS THE FIELD TO READ FIRST. A subject with no observed history has no\n" +
@@ -470,9 +474,10 @@ type healthDepGraph struct {
 func newHealthDependenciesCmd(flags *authClientFlags) *cobra.Command {
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "dependencies",
-		Aliases: []string{"deps"},
-		Short:   "Show the observed dependency graph",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dependencies",
+		Aliases:     []string{"deps"},
+		Short:       "Show the observed dependency graph",
 		Long: "dependencies is the graph of what has been observed calling what, with the\n" +
 			"current health of each end. It is what turns \"this agent is down\" into \"and\n" +
 			"these three things depend on it\".\n\n" +
@@ -552,9 +557,10 @@ type healthEventList struct {
 func newHealthEventsCmd(flags *authClientFlags) *cobra.Command {
 	var f healthSubjectFilters
 	cmd := &cobra.Command{
-		Use:     "events",
-		Aliases: []string{"transitions"},
-		Short:   "List the append-only reliability transition ledger",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "events",
+		Aliases:     []string{"transitions"},
+		Short:       "List the append-only reliability transition ledger",
 		Long: "events is the append-only ledger of state transitions: every time a subject\n" +
 			"changed health, what it changed from and to, and what caused the change.\n\n" +
 			"It is the evidence behind an incident. Nothing here is ever edited or deleted,\n" +
@@ -626,9 +632,10 @@ type healthIncidentList struct {
 
 func newHealthIncidentsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "incidents",
-		Aliases: []string{"incident"},
-		Short:   "List, open and resolve health incidents",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "incidents",
+		Aliases:     []string{"incident"},
+		Short:       "List, open and resolve health incidents",
 		Long: "incidents are opened by the engine when a subject's transitions warrant one, and\n" +
 			"closed either by recovery or by an operator declaring them resolved.",
 		Example: "  olivares health incidents ls --state open\n" +
@@ -661,9 +668,10 @@ func newHealthIncidentsListCmd(flags *authClientFlags) *cobra.Command {
 	var f healthSubjectFilters
 	var state string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List health incidents",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List health incidents",
 		Long: "ls lists incidents, optionally narrowed by state and subject. --state open is\n" +
 			"the working set: what is broken right now and has not been closed.",
 		Example: "  olivares health incidents ls\n" +
@@ -717,11 +725,12 @@ func newHealthIncidentsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newHealthIncidentsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <incident-id>",
-		Short:   "Show one incident",
-		Long:    "get shows one incident in full, including the check that raised it and the\nsummary of what changed.",
-		Example: "  olivares health incidents get inc-1\n  olivares health incidents get inc-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <incident-id>",
+		Short:       "Show one incident",
+		Long:        "get shows one incident in full, including the check that raised it and the\nsummary of what changed.",
+		Example:     "  olivares health incidents get inc-1\n  olivares health incidents get inc-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := observeCall{
 				flags: flags, ns: healthNS, method: http.MethodGet,
@@ -743,8 +752,9 @@ func newHealthIncidentsGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newHealthIncidentsResolveCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "resolve <incident-id>",
-		Short: "Declare an incident resolved",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "resolve <incident-id>",
+		Short:       "Declare an incident resolved",
 		Long: "resolve closes an open incident. It is admin-tier and audited.\n\n" +
 			"IT IS IDEMPOTENT AND IT DOES NOT FIX ANYTHING. Resolving an already-resolved\n" +
 			"incident changes nothing and still succeeds; and closing the record does not\n" +
@@ -832,9 +842,10 @@ func inList(v string, list []string) bool {
 
 func newHealthChecksCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "checks",
-		Aliases: []string{"check"},
-		Short:   "Declare, inspect, probe and retire health checks",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "checks",
+		Aliases:     []string{"check"},
+		Short:       "Declare, inspect, probe and retire health checks",
 		Long: "checks are the declarations of what is monitored: a subject, how often it is\n" +
 			"expected to report, how much grace before silence counts as unknown, and the\n" +
 			"SLA target its uptime is judged against.\n\n" +
@@ -859,9 +870,10 @@ func newHealthChecksListCmd(flags *authClientFlags) *cobra.Command {
 	var f healthSubjectFilters
 	var desiredStatus string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List declared checks",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List declared checks",
 		Long: "ls lists what has been DECLARED as monitored, with each check's current runtime\n" +
 			"state folded in — a check and its status are the same row seen two ways.\n\n" +
 			"--desired-status separates the checks that are meant to be running from those\n" +
@@ -923,11 +935,12 @@ func renderHealthCheck(cmd *cobra.Command, raw []byte, c healthStatus, headline 
 
 func newHealthChecksGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <check-id>",
-		Short:   "Show one check",
-		Long:    "get shows one check's declaration and its current runtime state together.",
-		Example: "  olivares health checks get chk-1\n  olivares health checks get chk-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <check-id>",
+		Short:       "Show one check",
+		Long:        "get shows one check's declaration and its current runtime state together.",
+		Example:     "  olivares health checks get chk-1\n  olivares health checks get chk-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := observeCall{
 				flags: flags, ns: healthNS, method: http.MethodGet,
@@ -949,8 +962,9 @@ func newHealthChecksCreateCmd(flags *authClientFlags) *cobra.Command {
 	var name, subjectKind, subjectRef, desiredStatus string
 	var interval, grace, slaTarget int64
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Declare a new monitored subject",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Declare a new monitored subject",
 		Long: "create declares a subject to monitor. --interval is how often a probe is\n" +
 			"expected; --grace multiplies it before silence is read as unknown.\n\n" +
 			"THE SUBJECT IS THE NATURAL KEY, and it cannot be changed afterwards: `update`\n" +
@@ -1020,8 +1034,9 @@ func newHealthChecksUpdateCmd(flags *authClientFlags) *cobra.Command {
 	var name, desiredStatus string
 	var interval, grace, slaTarget int64
 	cmd := &cobra.Command{
-		Use:   "update <check-id>",
-		Short: "Change a check's configuration",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "update <check-id>",
+		Short:       "Change a check's configuration",
 		Long: "update changes a check's name, interval, grace factor, SLA target or lifecycle\n" +
 			"status. It never changes the SUBJECT — that is the natural key — and never the\n" +
 			"runtime state, which only probes move.\n\n" +
@@ -1078,8 +1093,9 @@ func newHealthChecksReportCmd(flags *authClientFlags) *cobra.Command {
 	var state, detail string
 	var latency int64
 	cmd := &cobra.Command{
-		Use:   "report <check-id>",
-		Short: "Post a probe result against a check",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "report <check-id>",
+		Short:       "Post a probe result against a check",
 		Long: "report posts an active probe result. It is how an external checker, a CI step or\n" +
 			"an agent itself tells the engine what it observed.\n\n" +
 			"A REPORT CANNOT POST \"unknown\". Only healthy, degraded and down are\n" +
@@ -1125,9 +1141,10 @@ func newHealthChecksReportCmd(flags *authClientFlags) *cobra.Command {
 func newHealthChecksRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <check-id>",
-		Aliases: []string{"delete", "remove"},
-		Short:   "Delete a check (admin-tier)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <check-id>",
+		Aliases:     []string{"delete", "remove"},
+		Short:       "Delete a check (admin-tier)",
 		Long: "rm deletes a check. The subject stops being monitored: no further transitions\n" +
 			"are recorded and no incident will be opened for it again.\n\n" +
 			"CONSIDER `update --desired-status retired` INSTEAD. Retiring stops the\n" +

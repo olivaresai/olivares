@@ -94,7 +94,7 @@ Kernel-Backstops, nicht eines öffentlichen OTLP-Ports.
 
 Instrumentierte Sessions erscheinen unter **Sessions** als Live-Aktivität,
 dem emittierenden Agenten zugeordnet; ihre Modellaufrufe speisen
-**Cost & FinOps**; MCP- und Tool-Spans tragen Kanten zur **Access Map** bei
+**Budgets**; MCP- und Tool-Spans tragen Kanten zur **Access Map** bei
 wie jede kooperative Quelle:
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Die Sessions-Ansicht zeigt Live-Aktivität von Agenten-Sessions aus kooperativer Telemetrie." />

@@ -16,6 +16,7 @@ import (
 
 func newOrchestrationCmd() *cobra.Command {
 	return &cobra.Command{
+		Annotations:        map[string]string{"changes_data": "read"},
 		Use:                "orchestration",
 		Short:              "Orchestration requires Business Identity & Scale",
 		Long:               "Orchestration is a Business Identity & Scale feature.",

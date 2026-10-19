@@ -263,7 +263,7 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 		// gate connector VISIBILITY for UNCONFINED sources — those
 		// with no enabled ALLOW binding (len==0 OR forbid-only). A confined source is
 		// governed by its allow bindings, the finer-grained control.
-		if !hasAllowBinding(bindings) {
+		if !hasAllowBinding(bindings) && !isProfileSource(sourceType) {
 			allowed, cerr := ConnectorAssigned(ctx, sc, sourceRef, actor.workspaceSlug)
 			if cerr != nil {
 				return cerr
@@ -548,7 +548,7 @@ func scopeableKindFor(sourceType string) string {
 		return "mcp_server"
 	case sourceModel:
 		return "model"
-	case sourceProvider:
+	case sourceProvider, sourceProfile, sourceTool:
 		return "provider"
 	default: // knowledge, data
 		return "resource"
@@ -569,6 +569,9 @@ func rbacAllows(principal auth.Principal, tenant model.TenantID, sourceType stri
 	role, ok := principal.RoleIn(tenant)
 	if !ok || role == "" {
 		return false
+	}
+	if isProfileSource(sourceType) {
+		return auth.RoleGrants(role, profileAdminPermission)
 	}
 	return auth.RoleGrants(role, auth.Permission(scopeableKindFor(sourceType)+":"+auth.VerbRead))
 }

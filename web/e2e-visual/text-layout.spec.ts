@@ -207,7 +207,8 @@ for (const theme of ['light', 'dark']) {
       await page.goto('/console')
       const consoleTitle = page.getByRole('heading', {
         level: 1,
-        name: 'Control console',
+        name: 'Administration',
+        exact: true,
       })
       await expect(consoleTitle).toBeVisible()
       const titleBox = await consoleTitle.boundingBox()

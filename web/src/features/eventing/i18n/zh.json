@@ -86,7 +86,7 @@
       "newrelic": "New Relic"
     },
     "sinkFormat": "接收器格式",
-    "sinkFormatHint": "接收器的传输方言。默认 = OCSF。",
+    "sinkFormatHint": "接收器接收的格式。默认：OCSF。",
     "sinkFormatDefault": "默认（OCSF）",
     "sinkCred": "接收器凭据",
     "sinkCredHint": "此接收器的采集端令牌/密钥 — 加密封存，不会再次显示。",

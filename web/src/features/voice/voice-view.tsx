@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AudioLines, Plus, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import {
   Dialog,
   DialogContent,
@@ -245,7 +246,9 @@ export function VoiceView() {
             noPadding
           >
             <div className="p-4">
-              <CaveatNotice className="mb-3">{t('ledger.caveat')}</CaveatNotice>
+              <CaveatNotice className="mb-3">
+                {withInlineCommands(t('ledger.caveat'), 'code')}
+              </CaveatNotice>
               <AsyncSection query={ledgerQ} skeletonHeight={220}>
                 {(list) => (
                   <>

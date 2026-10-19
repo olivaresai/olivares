@@ -301,7 +301,7 @@ func (a *Authenticator) SCIMSetMemberActive(ctx context.Context, actor Principal
 		return err
 	})
 	if err == nil && !active {
-		a.recordSCIMLeaver(ctx, actor, tenant, id, scimSetDeactivateCause)
+		a.recordLeaver(ctx, actor, tenant, id, scimSetDeactivateCause)
 	}
 	return err
 }

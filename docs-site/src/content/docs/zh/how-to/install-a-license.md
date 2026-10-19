@@ -96,6 +96,12 @@ olivares license status --data-dir /var/lib/olivares
 
 ## 3 · Community → Business，原地切换
 
+在 Community 构建上安装有效的 Business 或 Enterprise 许可证，该构建会继续运行。
+会话驾驶舱（session cockpit）和其他商业页面只有在你把这个安装切换到 Business 之后才会出现。
+控制台的 **Edition & license** 视图会把已安装的许可证与构建分开显示。**Expires** 是付费期限；
+**Lease until**（显示时）是另一个独立的临时实例租约。在 Docker 中运行？请看下面的
+[Docker 与 Compose](#docker-与-compose)。
+
 :::note[Business 与商业制品渠道]
 `--enterprise` 参数表示商业制品渠道，并非版本名称。
 版本为 Community、Business 和 Enterprise。Business 在一份订阅中包含 Regulated Operations、
@@ -111,7 +117,8 @@ olivares upgrade --enterprise --token <TOKEN>
 
 该命令会获取适用于你所在平台的已签名商业版构建，并**离线验证签名**——遭篡改的制品会
 中止升级，正在运行的二进制文件保持原样——然后以原子方式完成替换，并保留上一个文件的
-备份。如果希望先查看计划而不执行，请先使用 `--check`：
+备份。Business 与 Community 的版本号相同，因此即使你已在运行该版本，此命令同样有效。如果希望先查看
+计划而不执行，请先使用 `--check`，它会将此变更显示为 `edition: community -> enterprise`：
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN> --check
@@ -133,6 +140,57 @@ olivares enterprise enable <preset>     # starter | regulated | full
 切换替换的是二进制文件，而不是数据——但仍应执行[升级与回滚](/zh/how-to/upgrade-and-rollback/)
 所要求的同一份备份。该页面还介绍了如何返回上一个二进制文件。
 :::
+
+### Docker 与 Compose
+
+公开的 `docker.io/olivaresai/olivares` 镜像是 Community 版。在容器中，`olivares upgrade`
+会把该版本安装到数据卷而不是镜像中，因此重新创建容器会再次启动它。当 Business 版本比镜像新或与镜像版本相同时（`--check` 会将此变更显示为 `edition: community -> enterprise`），
+这会应用该版本；也可以按下文自行构建镜像。
+安装好许可证后（第 2 节），在运行中的容器内执行升级并重启它。令牌在你的交付邮件中；
+请按名称传递它，使其不会出现在进程列表中：
+
+```sh
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
+docker compose up -d --force-recreate olivares
+```
+
+该版本保存在数据目录下的 `ota/`（随附镜像中为 `/var/lib/olivares/ota`），与用于验证它的
+已签名清单和制品放在一起。当该版本比镜像新，或版本相同但构建不同（例如你作为 Business 应用的
+版本所对应的 Community 镜像）时，镜像中的二进制文件会启动它。数据卷中的内容本身不被信任：
+每次启动都会用镜像中内嵌的 OTA 密钥验证清单签名，并用清单所签名的摘要校验制品。验证证明保存在
+容器的临时目录中（随附的 Compose 文件会在那里挂载 `tmpfs`），而不是数据卷中；重新创建容器会将其
+清空。如果镜像比已应用的版本新，则运行镜像，启动日志会说明；请再次运行升级。无法通过验证的内容
+会被忽略并给出提示，随后运行镜像。数据卷不保留旧二进制文件的备份：要回到镜像中的二进制文件，
+请删除 `ota/`。这需要允许执行文件的数据卷（命名卷允许；在 `noexec` 挂载上，`olivares serve`
+会停止并说明原因，而不是悄悄运行镜像中的二进制文件）。
+
+你也可以自行构建镜像。请通过
+[授权下载门户](https://licenses.olivares.ai/portal)下载 Business 二进制文件的**相同版本和相同 Linux 架构**，
+并按下载页面的说明验证其签名和校验和。然后你可以在自己的主机上，把这个已验证的二进制文件叠加到匹配的
+Community 运行时镜像上。在包含名为 `olivares` 的已验证二进制文件的目录中，使用这个 `Dockerfile`：
+
+```dockerfile
+ARG COMMUNITY_IMAGE
+FROM ${COMMUNITY_IMAGE}
+COPY --chmod=0755 olivares /usr/local/bin/olivares
+```
+
+使用该版本 Community 镜像的摘要（digest）来构建，并按[验证你下载的内容](/zh/how-to/verify-a-release/)中的方法验证它。
+结果会保留该镜像的非 root 用户、入口点（entrypoint）和端口，因此 `Dockerfile` 不需要 `USER` 行：
+
+```sh
+docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+  --tag olivares-business-local:X.Y .
+```
+
+请将此镜像保持私有，并保留下载内容随附的商业许可证和声明。不要把你的许可证文件或下载令牌放进构建上下文。
+把你的 Compose 服务的 `image` 设为 `olivares-business-local:X.Y`，然后用
+`docker compose up -d --no-deps --force-recreate olivares` 重新创建该服务。对于独立的 Docker，
+请用这个镜像以及相同的数据卷和参数重新创建容器。保留数据卷：不要使用 `down --volumes`。
+
+重启后请检查 **Edition & license**：版本应显示为 **Business**，已安装的许可证仍保存在数据卷中。
+Enterprise 合同也使用这个商业构建；合同特定的制品按其下载说明处理。
 
 ## 移除许可证
 

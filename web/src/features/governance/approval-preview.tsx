@@ -154,6 +154,32 @@ export function approvalCommandUnknown(approval: ApprovalDTO): boolean {
   return noCommand && noPaths
 }
 
+const PUBLISH_SUBJECT = 'gitpublish.target'
+/** Requests, besides `*.tool` calls, whose approval makes the engine run something: an
+ * MCP tool call (cmd/olivares/mcpgateway.go; its arguments are not in the reason), a
+ * deploy plan the executor applies or retires (modules/deploy/lifecycle.go) and an
+ * AgentCore export apply (cmd/olivares/agentcoreexportgate.go). */
+const RUNS_ON_APPROVAL = new Set([
+  PROVIDER_APPROVAL,
+  'mcp.tool.call',
+  'deploy.apply',
+  'deploy.retire',
+  'agentcore.export.apply',
+  'agentcore.export.apply_weakening',
+])
+
+/** Where a command, a tool call or a plan is expected: the requests the engine raises to
+ * run something. Only on these is a missing review worth saying. A request a person
+ * raised (a deploy, an export, a launch) runs nothing by itself, so the note would only
+ * repeat under it (#2269). */
+export function approvalExpectsCommand(approval: ApprovalDTO): boolean {
+  return (
+    !!approval.subject_kind?.endsWith('.tool') ||
+    approval.subject_kind === PUBLISH_SUBJECT ||
+    (!!approval.action && RUNS_ON_APPROVAL.has(approval.action))
+  )
+}
+
 /** The reviewed text, verbatim and monospace; long text opens in full on demand. */
 export function ReviewText({
   text,
@@ -265,22 +291,20 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
           </span>
           <ReviewText text={review.text} />
         </div>
-      ) : !toolCall ? (
+      ) : (
         <div className="flex flex-col gap-1 text-body">
-          {approval.action ? (
+          {!toolCall && approval.action ? (
             <p className="font-medium">{readableAction(approval.action)}</p>
           ) : null}
-          {approval.reason ? (
+          {!toolCall && approval.reason ? (
             <p className="break-words text-text-2">{approval.reason}</p>
           ) : null}
-          <p className="text-text-2" data-slot="approval-no-review">
-            {t('preview.noReview')}
-          </p>
+          {approvalExpectsCommand(approval) ? (
+            <p className="text-text-2" data-slot="approval-no-review">
+              {t('preview.noReview')}
+            </p>
+          ) : null}
         </div>
-      ) : (
-        <p className="text-body text-text-2" data-slot="approval-no-review">
-          {t('preview.noReview')}
-        </p>
       )}
     </section>
   )
@@ -382,9 +406,11 @@ export function ApprovalRequestCell({
               {approval.reason}
             </span>
           ) : null}
-          <span className="text-caption text-text-2">
-            {t('preview.noReview')}
-          </span>
+          {approvalExpectsCommand(approval) ? (
+            <span className="text-caption text-text-2">
+              {t('preview.noReview')}
+            </span>
+          ) : null}
         </>
       )}
       {session.folder ? (

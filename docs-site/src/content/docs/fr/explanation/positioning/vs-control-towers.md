@@ -9,6 +9,10 @@ sidebar:
   order: 4
 ---
 
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; les routes et commandes d’export renvoient HTTP 501 ou le code de sortie 9. Le transfert d’audit et le transfert DDIL entre sites isolés nécessitent aussi Business.
+:::
+
 Une **tour de contrôle de l'IA** est la couche de tableau de bord et de workflow à
 l'échelle de l'organisation pour la gouvernance de l'IA : un endroit unique pour voir
 les agents enregistrés, router les approbations, ouvrir des tickets et rendre compte de

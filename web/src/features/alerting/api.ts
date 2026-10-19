@@ -78,6 +78,46 @@ export interface NotifyTestResult {
   detail?: string
 }
 
+/**
+ * One notification destination as /v1/console/notify-destinations lists it
+ * (core/api/notify_destinations.go). `source` says who owns it: the console edits
+ * `console` rows; `file` rows are provisioned in the operator file and are read-only.
+ * The webhook URL is never returned — only the host it points at.
+ */
+export interface NotifyDestinationRow {
+  name: string
+  kind: string
+  source: 'console' | 'file'
+  live: boolean
+  webhook_host?: string
+}
+
+/** A kind the console can create (Slack, Teams). */
+export interface NotifyDestinationKind {
+  kind: string
+  title: string
+}
+
+export interface NotifyDestinationList {
+  destinations: NotifyDestinationRow[]
+  kinds: NotifyDestinationKind[]
+  /** False when no secret sealer is wired: saving would be refused. */
+  sealer_available: boolean
+}
+
+/** Create/update/test payload. A blank `webhook_url` keeps (or, for a test, uses) the stored one. */
+export interface NotifyDestinationInput {
+  name: string
+  kind: string
+  webhook_url?: string
+}
+
+/** The step-up authority a privileged mutation hands its request (use-privileged-mutation). */
+type PrivilegedRequest = {
+  signal?: AbortSignal
+  dispatchGuard?: () => void
+}
+
 export interface NotifyMatchType {
   type: string
   description: string
@@ -219,6 +259,34 @@ export const notifyApi = {
     }),
   listDestinations: () =>
     http.get<{ destinations: string[] }>(`${BASE}/destinations`),
+  // Console destinations (deployment-wide, superadmin-gated; writes and the test send
+  // need the AAL3 step-up). The webhook URL travels only in a request, never back.
+  listConsoleDestinations: () =>
+    http.get<NotifyDestinationList>('/v1/console/notify-destinations'),
+  putConsoleDestination: (
+    input: NotifyDestinationInput,
+    opts?: PrivilegedRequest,
+  ) =>
+    http.put<NotifyDestinationRow>(
+      '/v1/console/notify-destinations',
+      input,
+      opts && { signal: opts.signal, dispatchGuard: opts.dispatchGuard },
+    ),
+  testConsoleDestination: (
+    input: NotifyDestinationInput,
+    opts?: PrivilegedRequest,
+  ) =>
+    http.post<{ ok: boolean }>(
+      '/v1/console/notify-destinations/test',
+      input,
+      opts && { signal: opts.signal, dispatchGuard: opts.dispatchGuard },
+    ),
+  deleteConsoleDestination: (name: string, opts?: PrivilegedRequest) =>
+    http.delete<{ ok: boolean }>(
+      '/v1/console/notify-destinations',
+      { name },
+      opts && { signal: opts.signal, dispatchGuard: opts.dispatchGuard },
+    ),
   listMatchTypes: () =>
     http.get<{ match_types: NotifyMatchType[] }>(`${BASE}/match-types`),
   evaluateRoutes: (body: NotifyEvaluateInput) =>
@@ -259,6 +327,8 @@ export const notifyKeys = {
   routeRevisions: (t: string | null, id: string) =>
     ['notify', t, 'routes', id, 'revisions'] as const,
   destinations: (t: string | null) => ['notify', t, 'destinations'] as const,
+  /** The console's destination list is deployment-wide, so its key carries no tenant. */
+  consoleDestinations: () => ['notify', 'console-destinations'] as const,
   matchTypes: (t: string | null) => ['notify', t, 'match-types'] as const,
   deliveries: (t: string | null, params?: unknown) =>
     params === undefined

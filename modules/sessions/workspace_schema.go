@@ -25,10 +25,14 @@ const workspaceTable = "sessions_workspace"
 // (minimal-data, docs/SECURITY-HARDENING.md): root_path is the operator-chosen non-secret host path;
 // file content never lands here (reads stream hot, writes are anchored by hash).
 const (
+	colWsSetupCommand    = "setup_command"
+	colWsSetupHash       = "setup_approved_sha256"
+	colWsSetupActor      = "setup_approved_by"
+	colWsSetupAt         = "setup_approved_at"
 	colWsRef             = "workspace_ref"
 	colWsName            = "name"
 	colWsRootPath        = "root_path"
-	colWsMountMode       = "mount_mode"        // rw | ro
+	colWsMountMode       = "mount_mode"        // rw | ro | write_no_delete
 	colWsContainerTgt    = "container_target"  // e.g. /workspace
 	colWsAllowSubpaths   = "allow_subpaths"    // JSON array of relative subpaths (empty = whole root)
 	colWsReadOnlyFolders = "read_only_folders" // JSON array of additional host folders (empty = none)
@@ -38,9 +42,14 @@ const (
 )
 
 // Mount modes (how the workspace root is bound / what the file API permits).
+// write_no_delete is read-write without the right to remove a name: a native session
+// may create and change files in the folder and never unlink, rmdir, rename or move
+// one out (the operating system enforces it, so a host that cannot confine refuses
+// the launch).
 const (
-	mountRW = "rw"
-	mountRO = "ro"
+	mountRW       = "rw"
+	mountRO       = "ro"
+	mountNoDelete = "write_no_delete"
 )
 
 // DLP read postures. Folder registration defaults to off (Root, 2026-10-01).
@@ -72,6 +81,10 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 		Kind:  workspaceKind,
 		Table: workspaceTable,
 		Fields: []model.FieldSpec{
+			{Name: colWsSetupCommand, Kind: model.KindText, Nullable: true, Principal: model.None("operator-written setup command text, never interpreted as an identity: workspace_dto.go:39-40")},
+			{Name: colWsSetupHash, Kind: model.KindText, Nullable: true, Principal: model.None("SHA-256 of the approved setup command text: workspace_setup.go:32-36")},
+			{Name: colWsSetupActor, Kind: model.KindText, Nullable: true, Principal: pdeclActorRef},
+			{Name: colWsSetupAt, Kind: model.KindText, Nullable: true, Principal: model.None("time the operator approved the setup command: workspace_setup.go:32-36")},
 			{Name: colWsRef, Kind: model.KindText, Principal: model.None("an opaque workspace registry id (a UUID) minted by this module: workspace.go:82, workspace_dto.go:27")},
 			{Name: colWsName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen workspace label, shown only: workspace_dto.go:28")},
 			{Name: colWsRootPath, Kind: model.KindText, Principal: model.None("the canonical host root path of the workspace: workspace.go:73, workspace_dto.go:29")},
@@ -83,6 +96,9 @@ func (m *Module) registerWorkspaceSchema(reg store.ExtensionRegistry) error {
 			{Name: colWsState, Kind: model.KindText, Indexed: true, Principal: model.None("a workspace state, a closed set: workspace_schema.go:54-55, workspace.go:199")},
 			{Name: colWsReadOnlyFolders, Kind: model.KindJSON, Nullable: true, Principal: model.Nested([]string{}, model.ClassEvidence,
 				model.Leaf("[]", model.None("an administrator-selected canonical host folder: workspace_read_only_folders.go:24-43")))},
+			{Name: colWsProjectConfigHash, Kind: model.KindText, Nullable: true, Principal: model.None("SHA-256 of the approved project agent configuration: workspace_project_config.go:482-487")},
+			{Name: colWsProjectConfigActor, Kind: model.KindText, Nullable: true, Principal: pdeclActorRef},
+			{Name: colWsProjectConfigAt, Kind: model.KindText, Nullable: true, Principal: model.None("time the operator approved the project agent configuration: workspace_project_config.go:482-487")},
 		},
 		Indexes: []model.IndexSpec{{
 			Name:    "sessions_workspace_ref_uniq",

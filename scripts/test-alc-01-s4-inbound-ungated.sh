@@ -24,9 +24,7 @@ stage() {
 	chmod +x "$TMP/tree/scripts/check-alc-01-s4-inbound-ungated.sh"
 	cp "$ROOT/design/alc-01-s4-inbound-ungated.json" "$TMP/tree/design/"
 	cp "$ROOT/design/ALC-01-S4-INBOUND-UNGATED-2026-08-20.md" "$TMP/tree/design/"
-	cp "$ROOT/core/api/handlers_scim.go" "$TMP/tree/core/api/"
-	cp "$ROOT/core/api/handlers_scim_groups.go" "$TMP/tree/core/api/"
-	cp "$ROOT/core/api/handlers_scim_events.go" "$TMP/tree/core/api/"
+	cp "$ROOT/core/api/handlers_scim_noenterprise.go" "$TMP/tree/core/api/"
 	cp "$ROOT/core/auth/scim.go" "$TMP/tree/core/auth/"
 	cp "$ROOT/core/auth/scim_groups.go" "$TMP/tree/core/auth/"
 	cp "$ROOT/core/auth/scim_events.go" "$TMP/tree/core/auth/"
@@ -50,7 +48,7 @@ else
 fi
 
 stage
-echo 'addonGate.Authorize(ctx, "wire")' >>"$TMP/tree/core/api/handlers_scim.go"
+echo 'addonGate.Authorize(ctx, "wire")' >>"$TMP/tree/core/api/handlers_scim_noenterprise.go"
 run
 if [ "$(cat "$TMP/rc")" = 1 ]; then
 	ok "firing: planted grant consult is FAIL"
@@ -93,7 +91,7 @@ else
 fi
 
 stage
-rm -f "$TMP/tree/core/api/handlers_scim.go"
+rm -f "$TMP/tree/core/api/handlers_scim_noenterprise.go"
 run
 if [ "$(cat "$TMP/rc")" = 2 ]; then
 	ok "missing inbound handler is COULD NOT LOOK"

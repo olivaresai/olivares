@@ -89,6 +89,8 @@ func statusFor(err error) (int, string) {
 	switch {
 	case errors.Is(err, audit.ErrBusinessAudit):
 		return http.StatusNotImplemented, "audit_export_unavailable"
+	case errors.Is(err, ErrSessionIdleSettingsUnavailable):
+		return http.StatusServiceUnavailable, "session_idle_settings_unavailable"
 	case errors.Is(err, ErrTracingUnavailable):
 		return http.StatusServiceUnavailable, "tracing_unavailable"
 	case errors.Is(err, auth.ErrSSOProviderUnavailable):
@@ -131,10 +133,16 @@ func statusFor(err error) (int, string) {
 		return http.StatusServiceUnavailable, "secret_store_unavailable"
 	case errors.Is(err, auth.ErrSecretNotFound):
 		return http.StatusNotFound, "not_found"
-	case errors.Is(err, auth.ErrBadSecretName), errors.Is(err, auth.ErrEmptySecretValue):
+	case errors.Is(err, auth.ErrBadSecretName), errors.Is(err, auth.ErrEmptySecretValue),
+		errors.Is(err, auth.ErrVaultItem), errors.Is(err, auth.ErrPasswordOptions):
 		return http.StatusBadRequest, "bad_request"
+	case errors.Is(err, auth.ErrVaultNoTOTP):
+		// the item exists but holds no authenticator secret: like ErrTOTPNotEnrolled.
+		return http.StatusConflict, "vault_no_totp"
 	case errors.Is(err, auth.ErrMCPGatewayInvalid):
 		return http.StatusBadRequest, "mcp_gateway_invalid"
+	case errors.Is(err, auth.ErrMCPGatewayNameTaken):
+		return http.StatusConflict, "mcp_gateway_name_taken"
 	case errors.Is(err, auth.ErrMCPGatewayFileOwned):
 		return http.StatusConflict, "mcp_gateway_file_owned"
 	case errors.Is(err, auth.ErrMCPGatewayUnavailable):
@@ -147,6 +155,8 @@ func statusFor(err error) (int, string) {
 		// the console connector-onboarding surface is not wired on this
 		// deployment (an embedder/test that did not opt in). 501 honest-seam.
 		return http.StatusNotImplemented, "connector_onboarding_unavailable"
+	case errors.Is(err, errNotifyDestinationsUnavailable):
+		return http.StatusNotImplemented, "notify_destinations_unavailable"
 	case errors.Is(err, errWorkspaceContentsUnavailable):
 		// No store registry was handed to the server (an embedder or test store
 		// that exposes none). 501 honest seam, never a list without module kinds.
@@ -173,8 +183,8 @@ func statusFor(err error) (int, string) {
 	case errors.Is(err, ErrOrganizationsUnavailable):
 		return http.StatusNotImplemented, "organizations_unavailable"
 	case errors.Is(err, ErrDepartmentsUnavailable):
-		// Departments and filing a group in a workspace are the Business
-		// edition (docs/editions.md). 501 honest seam.
+		// Departments, filing a group in a workspace and nesting groups are the
+		// Business edition (docs/editions.md). 501 honest seam.
 		return http.StatusNotImplemented, "departments_unavailable"
 	case errors.Is(err, ErrUnknownModule):
 		return http.StatusBadRequest, "unknown_module"
@@ -182,6 +192,12 @@ func statusFor(err error) (int, string) {
 		return http.StatusServiceUnavailable, "modules_not_recorded"
 	case errors.Is(err, ErrModulesRestartUnavailable):
 		return http.StatusServiceUnavailable, "modules_restart_unavailable"
+	case errors.Is(err, ErrUpdatesUnavailable):
+		return http.StatusNotImplemented, "updates_unavailable"
+	case errors.Is(err, ErrUpdateRefused):
+		return http.StatusConflict, "update_refused"
+	case errors.Is(err, ErrUpdateRestartUnavailable):
+		return http.StatusServiceUnavailable, "update_restart_unavailable"
 	case errors.Is(err, ErrActivationNotRecorded):
 		return http.StatusServiceUnavailable, "activation_not_recorded"
 	case errors.Is(err, ErrActivationRestartUnavailable):
@@ -200,11 +216,22 @@ func statusFor(err error) (int, string) {
 		// the blob does not verify against this build's embedded key — a paste/
 		// format error, refused before persisting. 400.
 		return http.StatusBadRequest, "license_invalid"
+	case errors.Is(err, ErrConnectorUnavailable):
+		// A Business connector asked of a Community build. 501 honest seam.
+		return http.StatusNotImplemented, "connector_unavailable"
 	case errors.Is(err, ErrConnectorTestFailed):
 		// a connectivity test failed — the candidate connector could not be
 		// opened with the supplied configuration. 422 (understood, did not succeed);
 		// the message is generic by construction (never echoes a resolved secret).
 		return http.StatusUnprocessableEntity, "connector_test_failed"
+	case errors.Is(err, ErrNotifyDestinationTestFailed):
+		// The destination did not accept the test message; the text is generic by
+		// construction (a connector error can embed the webhook URL).
+		return http.StatusUnprocessableEntity, "notify_destination_test_failed"
+	case errors.Is(err, ErrNotifyDestinationInvalid):
+		return http.StatusBadRequest, "bad_request"
+	case errors.Is(err, ErrNotifyDestinationNotFound):
+		return http.StatusNotFound, "not_found"
 	case errors.Is(err, auth.ErrSourceDefNotFound):
 		return http.StatusNotFound, "not_found"
 	case errors.Is(err, auth.ErrBadSourceName), errors.Is(err, auth.ErrBadSourceDef):
@@ -368,6 +395,10 @@ func statusFor(err error) (int, string) {
 		return http.StatusForbidden, "not_tenant_governed"
 	case errors.Is(err, auth.ErrRetirementPending):
 		return http.StatusConflict, "retirement_pending"
+	case errors.Is(err, auth.ErrSelfRemoval):
+		return http.StatusConflict, "cannot_remove_self"
+	case errors.Is(err, auth.ErrLastOwner):
+		return http.StatusConflict, "last_owner"
 	case errors.Is(err, auth.ErrInviteDeliveryUnavailable):
 		return http.StatusConflict, "invite_delivery_unavailable"
 	case errors.Is(err, auth.ErrRecoveryRequired):
@@ -538,6 +569,8 @@ var honestSeamMessage = map[string]string{
 	"audit_export_unavailable":         "Audit export and external archive verification require Business. The signed ledger and dr backup remain available.",
 	"activation_not_recorded":          "The change reached this server but could not be saved for the deployment, so the engine did not restart. Apply it again; if it fails again, check the engine log.",
 	"activation_restart_unavailable":   "The change is saved, but this engine cannot restart itself. Restart the engine with its service manager to apply it.",
+	"updates_unavailable":              "Updates from the console are not available on this engine. Run `olivares upgrade` on the server.",
+	"update_restart_unavailable":       "The new version is installed, but this engine cannot restart itself. Restart the engine with its service manager to run it.",
 	"sso_not_configured":               "SSO is not configured on this deployment.",
 	"sso_builder_unavailable":          "This build can store SSO configuration but has no provider builder to activate it.",
 	"sso_unavailable":                  "SSO is unavailable: no secret sealer is wired, so an SSO secret cannot be sealed or opened.",
@@ -545,13 +578,15 @@ var honestSeamMessage = map[string]string{
 	"secret_store_unavailable":         "The runtime secret store is not wired on this deployment.",
 	"source_roster_unavailable":        "The durable source roster is not wired on this deployment.",
 	"connector_onboarding_unavailable": "Connector onboarding is not wired on this deployment.",
+	"connector_unavailable":            "This connector is in the Business edition.",
+	"notify_destinations_unavailable":  "Notification destinations are not wired on this deployment.",
 	"dr_unavailable":                   "Disaster-recovery operations are not wired on this deployment.",
 	"workspace_contents_unavailable":   "Workspace contents are unavailable: no store registry is wired on this deployment, so the kinds a workspace holds cannot be listed.",
 	"log_broker_unavailable":           "The log broker is not wired on this deployment.",
 	"license_unavailable":              "License operations are not wired on this deployment.",
 	"activation_unavailable":           "Activation is not wired on this deployment.",
 	"organizations_unavailable":        "Managing several organizations is in the Enterprise edition. Stored data stays available for export.",
-	"departments_unavailable":          "Departments and filing a group in a workspace are in the Business edition. What is already stored stays readable and keeps applying.",
+	"departments_unavailable":          "Departments, filing a group in a workspace and nesting groups are in the Business edition. What is already stored stays readable and keeps applying.",
 	"recording_unavailable":            "Session recording is not wired on this deployment.",
 	"entity_authorization_unavailable": "Entity authorization evidence is temporarily unavailable.",
 	"piv_not_configured":               "Privileged login (PIV) is not configured on this deployment.",

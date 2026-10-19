@@ -83,7 +83,6 @@
     "activeUsers": "Aktive Benutzerkonten",
     "noUserLimit": "self-hosted: kein Limit",
     "expires": "Läuft ab",
-    "paidThrough": "Bezahlt bis",
     "leaseUntil": "Vorläufige Laufzeit bis",
     "leaseNote": "Vorläufige Laufzeit (Widerrufsfrist). Vor diesem Datum erneuern, damit die Lizenz bis zum bezahlten Datum gültig bleibt.",
     "issued": "Ausgestellt",
@@ -96,6 +95,9 @@
       "data-dir": "Datenverzeichnis"
     },
     "communityNote": "Community-Edition: das Anwenden einer verifizierten Lizenz zeigt deren Angaben hier; es ändert diesen Build nicht.",
+    "buildMismatch": "Ihre Lizenz gilt für {{edition}}; diese Installation verwendet den Community-Build.",
+    "switchBuild": "Zu {{edition}} wechseln",
+    "editionAdds": "{{edition}} ergänzt (laut Editionsdokumentation):",
     "expiredBanner": "Diese kommerzielle Lizenz ist abgelaufen: die Business-Module sind inaktiv und die Bereitstellung verhält sich wie die Community-Edition. Ihre Daten und Ihre Benutzerkonten sind unversehrt — kein Konto wurde begrenzt, deaktiviert oder gelöscht. Installieren Sie eine erneuerte Lizenz, um die Module wiederherzustellen.",
     "managedExternally": "Die Lizenz wird out-of-band verwaltet (Quelle: {{source}}). Bearbeiten Sie diese Quelle, um sie zu ändern — die Installation über die Konsole ist deaktiviert, um eine verdeckte Datei zu vermeiden.",
     "installTitle": "Lizenz installieren oder aktualisieren",
@@ -913,7 +915,7 @@
     "addon": "Modul",
     "state": "Status",
     "tier": "Preset",
-    "restartNote": "Die Aktivierung wird beim nächsten Neustart der Engine wirksam (Module werden beim Start verdrahtet).",
+    "restartNote": "Die Aktivierung wird beim nächsten Neustart der Engine wirksam (Module werden beim Start geladen).",
     "promote": "Aktivieren",
     "promoted": "{{addon}} aktiviert.",
     "promoteFailed": "Modul konnte nicht aktiviert werden.",
@@ -938,7 +940,9 @@
       "model": "Modell",
       "provider": "Anbieter",
       "knowledge": "Wissen",
-      "data": "Daten"
+      "data": "Daten",
+      "profile": "Anbieterprofil",
+      "tool": "KI-Werkzeug"
     },
     "sourceRef": "Quellenreferenz",
     "sourceRefHint": "Verwenden Sie die exakte Quellenreferenz. Es gibt keinen einzelnen Katalog für jede Quellenart.",
@@ -1075,7 +1079,7 @@
         "rw": "Lesen/Schreiben",
         "ro": "Nur lesen",
         "disabled": "Deaktiviert",
-        "forbidden": "nicht aufgelöst — Ihnen fehlt sourcescope:assignment:read",
+        "forbidden": "nicht aufgelöst — Ihre Rolle kann Quellzuweisungen nicht lesen",
         "unknown": "nicht aufgelöst — die Zuweisungsliste wurde nicht vollständig geladen",
         "notFound": "keine passende Zuweisung",
         "notApplicable": "kein Zuweisungsziel — dieser Auflöser gilt hier nicht"

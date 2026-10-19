@@ -55,14 +55,31 @@ export const CRITICAL_PERMISSION_MODES: PermissionMode[] = [
   'bypassPermissions',
 ]
 
+/** The answer of POST and DELETE /runs/{ref}/pin: the signed-in person's pin state. */
+export interface RunPinDTO {
+  run_ref: string
+  pinned: boolean
+  pinned_at?: string
+}
+
 /** One operated Claude Code session (GET /runs, /runs/{ref}). */
 export interface RunDTO {
   run_ref: string
   name?: string
+  /**
+   * THE CALLER'S OWN pin on this session, as the engine reads it for the signed-in
+   * person: true when they pinned it, with `pinned_at` the moment. Another person's
+   * pin never shows here. Absent on answers that do not look the pin up (a stop or a
+   * resume), which is not "unpinned".
+   */
+  pinned?: boolean
+  pinned_at?: string
   transport: Transport
   permission_mode: PermissionMode | string
   effort?: Effort | string
   model_ref?: string
+  fast_mode?: boolean
+  service_tier?: string
   workspace_ref?: string
   /** The workspace the run is authorized in (MC 850beb3d), separate from its folder;
    * omitted when the engine recorded none. */
@@ -133,6 +150,14 @@ export interface RunDTO {
    * nothing waits. Requested from PEP for HU-R12: the run stays `running` while a hook
    * call waits, so without it the console cannot say the session needs a person. */
   pending_approval_ref?: string
+  /** Set while the run's turn was interrupted because it spent its budget of policy
+   * denials and no operator has answered yet; absent otherwise. */
+  needs_person?: {
+    code: 'repeated_policy_denials'
+    consecutive_denials: number
+    total_denials: number
+    reasons: string[]
+  }
   /** The canonical session ids this run may message or hand work to (COMMS-PATH, MC). */
   peers?: string[]
   /** "same-template": every live session of the run's template, resolved at each call. */
@@ -165,6 +190,11 @@ export interface RunDTO {
    * Codex's approval policy and sandbox), beside the `permission_mode` the launch
    * asked for. Absent until the tool says. */
   tool_mode?: string
+  /** The usage or rate limit the tool ended its last turn with, from the tool's own
+   * result. `resets_at` (RFC 3339) is when the tool says it lifts; absent when it
+   * names none. Absent altogether until a turn ends on a limit, and again after a
+   * later turn succeeds. */
+  limit?: RunLimit
   /** What this session's turns metered, summed over its launches. ABSENT means the
    * tool reported nothing, which is unknown, never zero; a cost is the tool's own
    * figure or the list price of a turn it did not price: an estimate. */
@@ -176,6 +206,14 @@ export interface RunDTO {
    * bridge proved the run owns its provider id. A profiled run is joined to its
    * session by THIS, never by the bare `claude_session_id` two homes may share. */
   live_ref?: string
+}
+
+/** A limit a tool ended a turn on: the account's plan ran out (`usage`), or the
+ * provider is throttling requests for a moment (`rate`). */
+export interface RunLimit {
+  kind: 'usage' | 'rate'
+  resets_at?: string
+  account_ref?: string
 }
 
 /** One provider profile (GET /provider-profiles): the durable identity of ONE
@@ -234,6 +272,8 @@ export interface ProviderProfileDTO {
     scope?: string
     secret?: string
   }[]
+  /** The hosts a confined session may reach beside its provider. */
+  session_egress_hosts?: string[]
   created_at?: string
   updated_at?: string
   retired_at?: string
@@ -523,6 +563,27 @@ export interface ActivityAgentDTO {
   summary?: string
 }
 
+export interface ActivityWorkflowDTO {
+  run_id: string
+  name?: string
+  duration_ms?: number
+  /** Agents the tool has observed so far, not an estimate of future work. */
+  agents_total: number
+  agents_done: number
+  agents_failed?: number
+  phases: {
+    index: number
+    title: string
+    detail?: string
+    /** Live state describes observed active/failed agents, not script-phase
+     * completion. Only a completed workflow summary ends its phases. */
+    state?: ActivityState
+    agents_total: number
+    agents_done: number
+    agents_failed?: number
+  }[]
+}
+
 export interface ActivityTaskDTO {
   tool_use_id: string
   task_id?: string
@@ -535,6 +596,7 @@ export interface ActivityTaskDTO {
   ended_at?: string
   due_at?: string
   summary?: string
+  workflow?: ActivityWorkflowDTO
 }
 
 export interface ActivityFileDTO {
@@ -552,6 +614,44 @@ export interface ActivityTodoDTO {
   active_form?: string
 }
 
+/** One message of a session's transcript, as GET /runs/{ref}/messages indexes it (#2129).
+ * `id` is its position among the session's messages; `text` is only present when one
+ * message is read whole by id. */
+export interface RunMessageDTO {
+  id: number
+  role: 'user' | 'assistant'
+  at?: string
+  first_line: string
+  text?: string
+  /** With `text`: how many later messages of the same sender repeat its first line. */
+  later_same?: number
+}
+
+export interface RunMessagesDTO {
+  driver: string
+  /** read; pending (not written yet); missing (it should be there). */
+  transcript: 'read' | 'pending' | 'missing'
+  /** Every message that matches, not only this page. */
+  total: number
+  /** Oldest first, whichever end of the session the page was read from. */
+  items: RunMessageDTO[]
+  /** The cursor of the page that continues in the order asked; absent at the end. */
+  next?: string
+  unreadable?: number
+}
+
+/** What the messages read accepts: a phrase, a start time, every sender or the person's
+ * own, the end to read from and a page cursor. */
+export interface RunMessagesParams {
+  q?: string
+  at?: string
+  role?: 'user' | 'all'
+  order?: 'asc' | 'desc'
+  cursor?: string
+  limit?: number
+  id?: number
+}
+
 export interface RunActivityDTO {
   driver: string
   /** read; pending (not reported or not written yet); missing (it should be there). */
@@ -559,6 +659,10 @@ export interface RunActivityDTO {
   model?: string
   effort?: string
   context_tokens: number
+  /** The tool's reported window; null/absent means unknown. */
+  context_window?: number | null
+  /** Already a percentage, calculated by the engine. */
+  context_percent?: number | null
   compactions: {
     at?: string
     trigger?: string
@@ -635,6 +739,8 @@ export interface CreateRunRequest {
   permission_mode: PermissionMode | string
   effort: string
   model?: string
+  fast_mode?: boolean
+  service_tier?: string
   workspace_ref: string
   isolation: Isolation
   env_allow: string[]
@@ -792,6 +898,8 @@ export interface RunCommandDTO {
   name: string
   description: string
   argument_hint?: string
+  /** Native invocation when the tool does not use /name. */
+  insert_text?: string
   source: '' | 'built-in' | 'user' | 'project' | 'plugin'
   kind: 'command' | 'agent'
 }

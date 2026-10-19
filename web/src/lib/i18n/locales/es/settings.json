@@ -23,7 +23,9 @@
     "about": "Acerca de",
     "sections": "Secciones de ajustes",
     "signing": "Firma de informes",
-    "tracing": "Trazas"
+    "tracing": "Trazas",
+    "sessionIdle": "Memoria de sesiones",
+    "updates": "Actualizaciones"
   },
   "general": {
     "title": "General",
@@ -33,7 +35,7 @@
     "density": "Densidad",
     "densityHint": "Compacto muestra más filas; cómodo se lee mejor.",
     "language": "Idioma",
-    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
     "time": "Hora",
     "timeHint": "Las horas se muestran en tu zona ({{zone}}). Los registros y las exportaciones siguen en UTC.",
     "clock24": "24 horas",
@@ -49,6 +51,15 @@
     "notifications": "Las preferencias de notificación aún no se guardan en esta instalación.",
     "sessionDefaults": "Los valores de sesión aún no se guardan en esta instalación."
   },
+  "sessionNotifications": {
+    "title": "Notificaciones de sesiones",
+    "hint": "Avisarme cuando una sesión me necesite o termine mientras esta pestaña esté en segundo plano. Se aplica a este navegador.",
+    "notifyMe": "Avisarme",
+    "denied": "Las notificaciones están bloqueadas en este navegador.",
+    "unavailable": "Las notificaciones del navegador no están disponibles aquí.",
+    "needsYou": "Esta sesión te necesita.",
+    "finished": "El turno ha terminado."
+  },
   "keyboard": {
     "title": "Teclado",
     "scope": "Las teclas que responde esta instalación. Son las mismas para todos."
@@ -57,6 +68,7 @@
     "title": "Edición y módulos",
     "scope": "La edición de esta compilación, los módulos que ejecuta y lo que añade Business.",
     "label": "Edición",
+    "licenseAlias": "Licencia",
     "unknown": "Este motor no la indica",
     "editions": {
       "community": "Community",
@@ -70,6 +82,16 @@
       "regulatory": "Operaciones regulatorias: registros DORA, clasificación de incidentes NIS 2, perfiles OSCAL, paquetes de EE. UU. y sectoriales, y supervisión continua de controles",
       "reports": "Informes Business e informes programados",
       "toolPins": "Fijación de herramientas"
+    },
+    "badge": {
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "businessShort": "Biz",
+      "enterpriseShort": "Ent",
+      "accessibleName": "Edición {{edition}}",
+      "show": "Mostrar la insignia de edición",
+      "loadError": "No se ha podido cargar la preferencia de la insignia.",
+      "saveError": "No se ha podido guardar la preferencia de la insignia. Inténtalo de nuevo."
     }
   },
   "about": {
@@ -286,5 +308,45 @@
     "hours_many": "{{count}} horas",
     "hours_other": "{{count}} horas",
     "ssoInactive": "Se ha solicitado inicio de sesión único, pero su proveedor de identidad está inactivo. Este requisito no bloquea el acceso con contraseña."
+  },
+  "sessionIdle": {
+    "minutes": "Detener tras minutos en inactividad",
+    "description": "Desactivado por defecto. Libera memoria deteniendo sesiones terminadas que ya no están abiertas. Reanudar conserva la carpeta y la conversación.",
+    "hint": "Usa 0 para desactivar o entre 6 y 10080 minutos. La inactividad comienza tras cinco minutos sin salida. Las sesiones con aprobaciones, procesos secundarios o sesiones vinculadas en ejecución, o un mensaje nuevo, siguen funcionando.",
+    "saved": "Ajuste de memoria de sesiones guardado."
+  },
+  "updates": {
+    "title": "Actualizaciones",
+    "description": "La versión que ejecuta este motor, la versión firmada más reciente de su canal y una acción para instalarla. El motor verifica la versión, reemplaza su binario y se reinicia una vez; el reinicio detiene las sesiones en curso.",
+    "check": "Comprobar de nuevo",
+    "install": "Actualizar a {{version}}",
+    "applied": "Actualización instalada.",
+    "failed": "La actualización ha fallado. Inténtalo de nuevo.",
+    "restarting": "Reiniciando el motor…",
+    "stillRestarting": "El motor aún no ha vuelto con la nueva versión. Recarga esta página dentro de un minuto para comprobarlo.",
+    "unavailable": "Este motor no puede instalar actualizaciones desde la consola. Ejecuta olivares upgrade en el servidor.",
+    "loadFailed": "No se pudo leer el estado de las actualizaciones. Inténtalo de nuevo.",
+    "status": {
+      "available": "Actualización disponible",
+      "current": "Al día",
+      "unchecked": "No se pudo comprobar si hay actualizaciones"
+    },
+    "security": "Versión de seguridad",
+    "release": "Versión",
+    "running": "En ejecución",
+    "channel": "Canal",
+    "newest": "Versión más reciente",
+    "advisories": "Corrige",
+    "notes": "Notas de la versión",
+    "confirm": {
+      "title": "¿Actualizar a {{version}}?",
+      "stop_one": "Se detiene {{count}} sesión en curso. Puede reanudarse después del reinicio.",
+      "stop_many": "Se detienen {{count}} sesiones en curso. Cada una puede reanudarse después del reinicio.",
+      "stop_other": "Se detienen {{count}} sesiones en curso. Cada una puede reanudarse después del reinicio.",
+      "none": "El motor se reinicia una vez con la nueva versión.",
+      "confirm": "Instalar y reiniciar"
+    },
+    "alreadyCurrent": "Ya estás en la versión más reciente. No se instaló nada.",
+    "restartRequired": "Hay una versión más nueva instalada. Reinicia el motor con su gestor de servicios para ejecutarla."
   }
 }

@@ -1,6 +1,6 @@
 {
   "title": "MCP et compétences",
-  "subtitle": "Le catalogue de capacités en temps réel — serveurs MCP, outils, compétences et leur câblage.",
+  "subtitle": "Le catalogue de capacités en temps réel — serveurs MCP, outils, compétences et leurs connexions.",
   "tabs": {
     "servers": "Serveurs",
     "tools": "Outils",
@@ -40,7 +40,7 @@
     "tools": "Outils",
     "skills": "Compétences",
     "resources": "Ressources",
-    "consumers": "Câblé à",
+    "consumers": "Utilisé par",
     "consumersHint": "Sessions et agents connectés à ce serveur.",
     "noConfig": "Aucune configuration gérée",
     "noConfigHint": "Ajoutez une définition enregistrée pour documenter le transport et les références aux secrets de ce serveur.",

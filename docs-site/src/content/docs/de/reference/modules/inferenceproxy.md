@@ -67,6 +67,15 @@ Zählen. Der Proxy ist einer der **vier deny-closed PEPs**, die die Plattform au
   nicht weiterleiten) und wird nur gemountet, wenn ein Betreiber ihn
   bereitstellt.
 
+Der Standard bleibt der veröffentlichte Endpunkt von 26.10.1<!-- release-fixed -->;
+bestehende Konfigurationen und Client-URLs brauchen keine Migration. Auch Codex-Hooks
+verwenden allein standardmäßig `127.0.0.1:8448`. Um beide Listener zu aktivieren, geben Sie
+einem von beiden ausdrücklich eine andere Adresse: Setzen Sie zum Beispiel `listen` auf
+`127.0.0.1:8450` in der Datei, die `OLIVARES_CODEX_HOOK_PEP_CONFIG` auswählt, und setzen Sie
+`OLIVARES_CODEX_HOOK_URL` des Hook-Clients auf `http://127.0.0.1:8450/`. Die Engine weist
+überlappende Adressen vor dem Binden ab, statt einen der beiden Endpunkte stillschweigend zu
+verlegen.
+
 Dieses Modul **entscheidet nichts** über eine Live-Anfrage. Es ist die
 dauerhafte, über die Konsole autorierbare Policy, die der Composition Root via
 `Policy()` liest; die Entscheidung wird am Rand aus bestehenden Seams

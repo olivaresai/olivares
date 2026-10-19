@@ -127,7 +127,7 @@ export function DictateButton({
     if (!take) return
     setPhase('transcribing')
     try {
-      // The person speaks the console's language (the seven it ships are Whisper's too).
+      // The person speaks the console's language (the nine it ships are Whisper's too).
       const language = i18n.resolvedLanguage ?? 'en'
       const text = (await transcribe(await take.stop(), language)).trim()
       if (!mounted.current) return

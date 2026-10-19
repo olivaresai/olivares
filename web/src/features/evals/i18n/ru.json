@@ -56,12 +56,14 @@
       "startedAt": "Начат"
     },
     "regressed": "Регрессия · отклонение {{drift}}",
+    "withinNoise": "Падение в пределах шума · отклонение {{drift}}",
+    "passRateDiff": "Падение доли пройденных {{drop}} (95 % ДИ {{lo}}–{{hi}}) — {{passed}}/{{n}} против {{baselinePassed}}/{{baselineN}} на базовой линии",
     "noRegression": "Нет",
     "empty": "Нет запусков в диапазоне.",
     "emptyHint": "Каждый прогон оценки в выбранном диапазоне перечислен здесь с оценкой. Расширьте диапазон или запустите прогон.",
     "overN": "из {{n}}",
-    "notScored": "not scored — no verdict",
-    "noBaseline": "no baseline — nothing compared"
+    "notScored": "не оценено — вердикта нет",
+    "noBaseline": "нет базовой линии — сравнивать не с чем"
   },
   "cases": {
     "title": "{{subject}} — результаты по случаям",
@@ -92,7 +94,7 @@
     "pickerDescription": "Выберите набор, затем укажите выводы, которые выдал каждый вариант.",
     "runComparison": "Запустить сравнение",
     "runError": "Не удалось выполнить A/B-сравнение. Повторите попытку.",
-    "empty": "В этом сеансе A/B-сравнение ещё не запускалось.",
+    "empty": "В этой сессии A/B-сравнение ещё не запускалось.",
     "emptyDescription": "Результат появляется только после завершения привилегированной записи POST /ab. GET-эндпоинта для сохранённого сравнения нет.",
     "suiteLabel": "Набор",
     "selectSuite": "Выберите набор",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "Отклонение — {{subject}}",
-    "description": "Оценка во времени относительно порога прохождения набора. Регрессия — точечное сравнение балла с одним базовым прогоном. Этот прогон может использовать другую версию набора, другую модель или другой scorer, и сравнение не сообщает, что именно изменилось. После смены версии набора закрепите базовую линию.",
+    "description": "Оценка во времени относительно порога прохождения набора. Регрессия — сравнение с одним базовым прогоном: падение балла должно превышать порог набора, а 95%-й интервал разности долей прохождения — не содержать ноль. Этот прогон может использовать другую версию набора, другую модель или другой scorer, и сравнение не сообщает, что именно изменилось. После смены версии набора закрепите базовую линию.",
     "score": "Оценка",
     "threshold": "Порог прохождения",
     "pickerTitle": "Субъект",
@@ -159,8 +161,8 @@
     "confirmOverride": "Переопределить шлюз",
     "overrideDone": "Шлюз переопределён",
     "cancel": "Отмена",
-    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
-    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+    "correctedRate": "Скорректированная на смещение доля прохождения {{rate}} (чувствительность судьи {{sens}}, специфичность {{spec}}) — показана рядом с исходной долей, а не вместо неё.",
+    "noCorrection": "Оценки, скорректированной на смещение, нет: нет надёжной калибровки, по которой можно корректировать, поэтому исходная доля не скорректирована — это не то же самое, что совпадение двух оценок."
   },
   "calibration": {
     "title": "Калибровка судьи",
@@ -179,24 +181,24 @@
     "verbosityCorr": "Корр. многословия"
   },
   "calibItems": {
-    "title": "Reference set",
-    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
-    "run": "Run calibration",
-    "empty": "No labelled items yet",
+    "title": "Эталонный набор",
+    "description": "Разметка людей, относительно которой измеряется судья, — и причина, по которой отчёт может или не может сертифицировать.",
+    "run": "Запустить калибровку",
+    "empty": "Размеченных элементов пока нет",
     "emptyHint": "Размеченные элементы — это человеческие суждения, с которыми сверяется отчёт о калибровке. Разметьте случай, чтобы добавить первый.",
-    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
-    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
-    "humanPass": "human: pass",
-    "humanFail": "human: fail",
-    "unscored": "unscored",
-    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+    "distribution": "{{pass}} с меткой «прошёл» · {{fail}} с меткой «не прошёл»",
+    "degenerate": "⛔ Все метки одинаковы, поэтому каппу ВЫЧИСЛИТЬ НЕЛЬЗЯ, и ни один отчёт по этому набору не может сертифицировать. Разметьте случаи другого рода.",
+    "humanPass": "человек: прошёл",
+    "humanFail": "человек: не прошёл",
+    "unscored": "не оценено",
+    "noJudge": "Судья не настроен, поэтому измерять нечего. Это не сбой и не ограничение редакции: калибровку нельзя имитировать."
   },
   "baseline": {
-    "pin": "Pin as baseline",
-    "confirm": "Replace the baseline",
-    "pinned": "Baseline pinned",
-    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
-    "thisRunScores": "This run passed {{score}} over n={{n}}.",
-    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+    "pin": "Закрепить как базовую линию",
+    "confirm": "Заменить базовую линию",
+    "pinned": "Базовая линия закреплена",
+    "replaceWarning": "⛔ Для набора и субъекта существует ОДНА базовая линия, и она изменяема. Закрепление не добавляет — оно ЗАМЕНЯЕТ текущую базовую линию для {{suite}} / {{subject}}. Все будущие регрессии измеряются относительно неё.",
+    "thisRunScores": "Этот запуск прошёл {{score}} при n={{n}}.",
+    "cannotShowCurrent": "Консоль не может показать, что именно заменяется: POST /baselines — единственный маршрут, который предоставляет движок, а прежний эталон записывается в самоаудит, а не в читаемую конечную точку. Закрепление ХУДШЕГО запуска понижает планку — так контроль качества перестаёт срабатывать, хотя никто его не отключал."
   }
 }

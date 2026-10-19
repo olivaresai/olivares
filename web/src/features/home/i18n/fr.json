@@ -1,7 +1,6 @@
 {
   "title": "Vue d’ensemble",
   "description": "Ce que vos agents d'IA ont fait au cours des 30 derniers jours, dans les domaines que vous pouvez ouvrir.",
-  "openReport": "Rapport exécutif",
   "aside": "Résumé de l’environnement",
   "range": "30 derniers jours",
   "next": {
@@ -30,7 +29,19 @@
     "open": "Ouvrir la session : {{what}}",
     "untitled": "Session sans titre"
   },
+  "live": {
+    "title": "En cours"
+  },
   "tiles": {
+    "today": {
+      "label": "Aujourd’hui",
+      "caption_one": "Coût de la session active aujourd’hui",
+      "caption_many": "Coût des {{count}} sessions actives aujourd’hui",
+      "caption_other": "Coût des {{count}} sessions actives aujourd’hui",
+      "unpriced_one": "{{count}} sans coût indiqué",
+      "unpriced_many": "{{count}} sans coût indiqué",
+      "unpriced_other": "{{count}} sans coût indiqué"
+    },
     "inventory": {
       "label": "Inventaire",
       "caption": "{{agents}} agents · {{active}} actifs"

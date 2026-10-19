@@ -83,7 +83,6 @@
     "activeUsers": "Comptes utilisateurs actifs",
     "noUserLimit": "auto-hébergé : sans limite",
     "expires": "Expire le",
-    "paidThrough": "Payée jusqu'au",
     "leaseUntil": "Période provisoire jusqu'au",
     "leaseNote": "Période provisoire (délai de remboursement). À renouveler avant cette date pour rester valide jusqu'à la date payée.",
     "issued": "Émise le",
@@ -96,6 +95,9 @@
       "data-dir": "répertoire de données"
     },
     "communityNote": "Édition Community : appliquer une licence vérifiée en affiche les détails ici ; cela ne modifie pas cette compilation.",
+    "buildMismatch": "Votre licence est pour {{edition}} ; cette installation utilise la compilation Community.",
+    "switchBuild": "Passer à {{edition}}",
+    "editionAdds": "{{edition}} ajoute (selon la documentation des éditions) :",
     "expiredBanner": "Cette licence commerciale a expiré : les modules Business sont inactifs et le déploiement se comporte comme l'édition community. Vos données et vos comptes utilisateurs sont intacts — aucun compte n'a été plafonné, désactivé ni supprimé. Installez une licence renouvelée pour restaurer les modules.",
     "managedExternally": "La licence est gérée hors bande (source : {{source}}). Modifiez cette source pour la changer — l'installation depuis la console est désactivée afin d'éviter un fichier masqué.",
     "installTitle": "Installer ou mettre à jour la licence",
@@ -914,7 +916,7 @@
     "addon": "Module",
     "state": "État",
     "tier": "Preset",
-    "restartNote": "L'activation s'applique au prochain redémarrage du moteur (les modules sont câblés au démarrage).",
+    "restartNote": "L'activation s'applique au prochain redémarrage du moteur (les modules sont chargés au démarrage).",
     "promote": "Activer",
     "promoted": "{{addon}} activé.",
     "promoteFailed": "Impossible d'activer le module.",
@@ -939,7 +941,9 @@
       "model": "Modèle",
       "provider": "Fournisseur",
       "knowledge": "Connaissances",
-      "data": "Données"
+      "data": "Données",
+      "profile": "Profil de fournisseur",
+      "tool": "Outil d’IA"
     },
     "sourceRef": "Référence de source",
     "sourceRefHint": "Utilisez la référence de source exacte. Il n’existe pas de catalogue unique pour chaque type de source.",
@@ -1076,7 +1080,7 @@
         "rw": "Lecture/écriture",
         "ro": "Lecture seule",
         "disabled": "Désactivée",
-        "forbidden": "non résolu — il vous manque sourcescope:assignment:read",
+        "forbidden": "non résolu — votre rôle ne peut pas lire les affectations de sources",
         "unknown": "non résolu — la liste des affectations n'a pas été chargée en entier",
         "notFound": "aucune affectation correspondante",
         "notApplicable": "la cible n'est pas une affectation — ce résolveur ne s'applique pas"

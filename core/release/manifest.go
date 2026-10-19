@@ -63,6 +63,11 @@ func ValidChannel(name string) bool {
 // install without a license (REL.4b).
 const EditionCommunity = "community"
 
+// EditionUnknown is the installed edition of a target that did not say which it is (a build
+// from before `version -o json` carried one). The upgrade plan treats it like Community: of
+// two builds at one version, the one that cannot say is not known to be the one asked for.
+const EditionUnknown = "unknown"
+
 // ManifestSchemaVersion is the current on-the-wire schema. The verifier rejects a
 // manifest it does not understand (a newer major schema) rather than guess.
 const ManifestSchemaVersion = 1
@@ -943,6 +948,12 @@ type UpgradePlan struct {
 	Advisories   []string
 	Artifact     Artifact
 	HasArtifact  bool
+	// FromEdition and ToEdition are the installed edition (EditionCommunity, "enterprise" or
+	// EditionUnknown) and the edition the release delivers, when the route makes a claim
+	// ("" = no claim). PlanUpgrade orders by version only and leaves them empty; the command
+	// layer fills them because only it knows the route and the target.
+	FromEdition string
+	ToEdition   string
 }
 
 // PlanUpgrade builds the decision for currentVersionStr moving to m, for goos/goarch
@@ -994,6 +1005,19 @@ func (m Manifest) PlanUpgrade(currentVersionStr, goos, goarch, installID string,
 // cannot be handed a fabricated ordering.
 func (p UpgradePlan) IsRollback() bool { return p.CurrentKnown && p.Direction < 0 }
 
-// IsUpToDate reports whether the target equals the running version. Unknown current
-// version yields FALSE, for the same reason as IsRollback.
-func (p UpgradePlan) IsUpToDate() bool { return p.CurrentKnown && p.Direction == 0 }
+// EditionMove reports whether the release replaces a Community build, or one that did not
+// say which edition it is, with a build of another edition. Business X.Y is cut from the same
+// version as Community X.Y, so this is the case where the version alone cannot say "nothing
+// to do". The reverse (Business over a Community release) is no move: nothing here installs it.
+func (p UpgradePlan) EditionMove() bool {
+	return (p.FromEdition == EditionCommunity || p.FromEdition == EditionUnknown) &&
+		p.ToEdition != "" && p.ToEdition != EditionCommunity
+}
+
+// IsUpToDate reports whether the target equals the running version in the running
+// edition. Unknown current version yields FALSE, for the same reason as IsRollback.
+// An older release stays a rollback whatever its edition (Direction < 0), so anti-rollback
+// and min_version apply to a cross-edition install unchanged.
+func (p UpgradePlan) IsUpToDate() bool {
+	return p.CurrentKnown && p.Direction == 0 && !p.EditionMove()
+}

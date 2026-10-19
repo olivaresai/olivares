@@ -346,27 +346,47 @@ func queuedRunNaming(e *consentEstate, column string, subject retirementSubject)
 	case "queued_actor":
 		rec[column], rec["queued_actor_kind"] = "user:"+subject.id.String(), "user"
 	case "queued_credential_id":
-		credential, err := auth.NewCredential(auth.PrefixToken)
-		if err != nil {
-			e.t.Fatal(err)
-		}
-		ctx := context.Background()
-		if err := e.eng.store.AuthMutate(ctx, func(as store.AuthScope) error {
-			token, err := as.Tokens().Create(ctx, model.APIToken{
-				Name: "queued-launch", UserID: subject.id, BoundTenantID: e.tT,
-				Role: auth.RoleViewer, Selector: credential.Selector, SecretHash: credential.SecretHash,
-			})
-			if err == nil {
-				rec[column], rec["queued_credential_kind"] = token.ID.String(), "token"
-			}
-			return err
-		}); err != nil {
-			e.t.Fatalf("seed the queued launch credential: %v", err)
-		}
+		rec[column], rec["queued_credential_kind"] = e.seedLaunchToken(subject), "token"
 	default:
 		e.t.Fatalf("a queued launch names no account through %s", column)
 	}
 	return rec
+}
+
+// resumableRunNaming retains the account through the launch credential the engine's next
+// start would resume the run with: a run the engine's own stop ended, which blocks
+// retirement until it is stopped or removed.
+func resumableRunNaming(e *consentEstate, subject retirementSubject) model.Record {
+	e.t.Helper()
+	return model.Record{
+		"run_ref": model.NewID().String(), "transport": "stream-json", "permission_mode": "default",
+		"isolation": "native", "state": "stopped", "reason": "the engine stopped; resume the session to continue",
+		"last_event_seq": int64(0), "resume_credential_id": e.seedLaunchToken(subject), "resume_credential_kind": "token",
+		"resume_credential_seal": "seal",
+	}
+}
+
+// seedLaunchToken stores a token of subject bound to T, the credential a launch carries, and
+// returns its id.
+func (e *consentEstate) seedLaunchToken(subject retirementSubject) string {
+	e.t.Helper()
+	credential, err := auth.NewCredential(auth.PrefixToken)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	ctx := context.Background()
+	var id string
+	if err := e.eng.store.AuthMutate(ctx, func(as store.AuthScope) error {
+		token, err := as.Tokens().Create(ctx, model.APIToken{
+			Name: "launch", UserID: subject.id, BoundTenantID: e.tT,
+			Role: auth.RoleViewer, Selector: credential.Selector, SecretHash: credential.SecretHash,
+		})
+		id = token.ID.String()
+		return err
+	}); err != nil {
+		e.t.Fatalf("seed the launch credential: %v", err)
+	}
+	return id
 }
 
 // sessionsSeeders are the communication rows a cmd test can seed without a full
@@ -381,6 +401,9 @@ var sessionsSeeders = map[string]retirementSeeder{
 	}},
 	"sessions.run.queued_credential_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFenced(e.tT, "sessions.run", queuedRunNaming(e, "queued_credential_id", s), s.id)
+	}},
+	"sessions.run.resume_credential_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.run", resumableRunNaming(e, s), s.id)
 	}},
 	"sessions.channel_grant.subject_ref": {"sessions.channel_grant", retireRevokes, func(e *consentEstate, s retirementSubject) model.ID {
 		workspace, channel := e.seedChannel(e.tT, "grant-"+s.id.String())
@@ -500,7 +523,7 @@ func (e *consentEstate) retirementSubjectIn(tenant model.TenantID, label string)
 	e.t.Helper()
 	email := label + "@kinds.test"
 	ext := "ext-" + label
-	id := model.ID(e.scimCreateExternal(tenant, email, ext))
+	id := model.ID(e.provisionExternal(tenant, email, ext))
 	return retirementSubject{id: id, email: email, externalID: ext}
 }
 
@@ -594,6 +617,44 @@ func TestTheTStepRetiresEveryDeclaredKind(t *testing.T) {
 	})
 }
 
+// TestARunNoEngineResumeAwaitsDoesNotBlockRetirement: the launch credential a run keeps holds
+// its account to the retirement only while the engine's next start can resume that run. A run a
+// person stopped, an agent's run and a run with no kept seal keep the row, and the retirement
+// completes.
+func TestARunNoEngineResumeAwaitsDoesNotBlockRetirement(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(model.Record)
+	}{
+		{"stopped-by-a-person", func(rec model.Record) { rec["reason"] = "stopped by the user" }},
+		{"driven-by-an-agent", func(rec model.Record) { rec["agent_ref"] = "agent-driving-the-run" }},
+		{"no-kept-seal", func(rec model.Record) { delete(rec, "resume_credential_seal") }},
+	}
+	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
+		for i, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				sub := e.forSubtest(t)
+				subject := sub.retirementSubjectIn(sub.tT, fmt.Sprintf("no-resume-%d", i))
+				seeder := retirementSeeder{"sessions.run", retireKeeps, func(e *consentEstate, s retirementSubject) model.ID {
+					rec := resumableRunNaming(e, s)
+					c.edit(rec)
+					return e.seedFenced(e.tT, "sessions.run", rec, s.id)
+				}}
+				row := seeder.seed(sub, subject)
+				sub.wantNamesOnlyThrough(t, seeder.kind, "resume_credential_id", row, subject.id)
+				sub.deprovision(sub.tT, subject.id)
+				sub.runPump()
+				if !sub.seededRowExists(seeder.kind, row) {
+					t.Error("the retirement deleted the run")
+				}
+				if !sub.wantEditionRetirementRefusal(t, subject.id, sub.tT, seeder, row) {
+					sub.wantRetired(t, subject.id, sub.tT)
+				}
+			})
+		}
+	})
+}
+
 // retireSeeded seeds the case key for subject, checks that the row names the
 // subject through the case's column and no other counted column, removes the
 // subject from T and checks what the declared module's step did with the row. On
@@ -610,7 +671,7 @@ func (e *consentEstate) retireSeeded(t *testing.T, key string, subject retiremen
 	if sibling, ok := messagingSiblings[key]; ok && e.comm != nil {
 		e.wantNames(t, s.kind, sibling, row, e.comm.sender.id)
 	}
-	e.scimDelete(e.tT, subject.id)
+	e.deprovision(e.tT, subject.id)
 	e.runPump()
 	if !e.eng.census.CompositionReadiness().Ready() {
 		if !e.wantEditionRetirementRefusal(t, subject.id, e.tT, s, row) {
@@ -668,7 +729,7 @@ func TestOwnedObligationsBlockReadmissionUntilResolved(t *testing.T) {
 		schedule := e.seedFenced(e.tT, "orchestration.schedule", scheduleRecord("obligations", subject.id), subject.id)
 		run := e.seedFenced(e.tT, "orchestration.workflow_run", runRecord(subject.id), subject.id)
 		sub := e.seedSubscription(e.tT, "obligations", subject.id)
-		e.scimDelete(e.tT, subject.id)
+		e.deprovision(e.tT, subject.id)
 		e.runPump()
 		e.wantBlocked(t, subject.id, e.tT, schedule.String(), run.String(), sub.String())
 		if r := e.readmit(e.tT, subject.email, "viewer"); r.code != http.StatusConflict {
@@ -803,7 +864,7 @@ func TestAnUnknownStoredKindBlocksRetirement(t *testing.T) {
 			"surface": "future-surface", "revision": int64(1), "content": subject.email, "author": "restore",
 			"validated": true, "active": true,
 		})
-		e.scimDelete(e.tT, subject.id)
+		e.deprovision(e.tT, subject.id)
 		e.runPump()
 		e.wantBlocked(t, subject.id, e.tT, "unknown_kind")
 		rec, _ := e.record(subject.id, e.tT)
@@ -862,7 +923,7 @@ func TestATokenOwnedSubscriptionBlocksReadmissionUntilResolved(t *testing.T) {
 				t.Fatalf("the subscription's owner = %q, want the token that created it", owner)
 			}
 
-			e.scimDelete(e.tT, user)
+			e.deprovision(e.tT, user)
 			e.runPump()
 			e.wantBlocked(t, user, e.tT, "eventing.subscription:"+subID)
 			if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {

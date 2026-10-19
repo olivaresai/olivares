@@ -376,7 +376,7 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 	}
 	var attempted bool
 	if request.Mode == RuntimeInputText {
-		attempted, err = m.sendTextInputLoaded(ctx, request.Target.Tenant, request.Target.RunRef, request.Text, rec)
+		attempted, err = m.sendTextInputLoaded(ctx, request.Target.Tenant, request.Target.RunRef, request.Text, nil, rec)
 	} else {
 		attempted, err = m.sendInputLoaded(ctx, request.Target.Tenant, request.Target.RunRef, request.Raw, rec)
 	}

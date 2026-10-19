@@ -111,6 +111,10 @@ describe('the structural cache identity', () => {
       ['workspace', differs({ workspace: 'other' })],
       ['question kind', capabilityKey(CONTEXT, SURFACE)],
       ['operation', capabilityKey(CONTEXT, PATCH)],
+      [
+        'question workspace',
+        capabilityKey(CONTEXT, { ...SHEET, workspaceId: 'other' }),
+      ],
       ['path selector', capabilityKey(CONTEXT, REVOKE)],
       [
         'body selector',

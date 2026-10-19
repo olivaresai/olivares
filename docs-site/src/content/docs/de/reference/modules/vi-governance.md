@@ -8,7 +8,7 @@ description: >-
 ---
 
 :::note[Edition]
-Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs) sowie der Lebenszyklus verwalteter Identitäten benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, eingehendes SCIM für Benutzer/Gruppen, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
+Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs), der Lebenszyklus verwalteter Identitäten sowie der eingehende SCIM-Server benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
 :::
 
 Modul VI ist die **Governance-Plane über dem bestehenden Autorisierungsmodell der
@@ -123,4 +123,4 @@ eine typisierte Principal-Referenz, niemals eine E-Mail.
 
 ## Editionen und Genehmigungen (0.1)
 
-Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die eine Prüfung verlangen oder Risikostufe beziehungsweise Quorum erhöhen. Richtlinien zur Senkung der Risikostufe und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Daten bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.
+Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die für eine Aktion eine Prüfung verlangen. Genehmigungsrichtlinien, die die Risikostufe oder die Zahl der erforderlichen Genehmigungen ändern, und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Richtlinien, die die Risikostufe oder die Zahl der Genehmigungen erhöhen, gelten weiter; gespeicherte Richtlinien zur Senkung und Notfallzugriffe bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.

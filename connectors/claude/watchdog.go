@@ -71,11 +71,20 @@ func (w *watchdog) observe(sessionID string, at time.Time, otel bool) {
 		s = &sessionLiveness{}
 		w.sessions[sessionID] = s
 	}
+	// A signal never moves a time backwards: a batch a collector replayed late is
+	// older than what the session already showed, and reading it as "OTEL went
+	// quiet ten minutes ago" beside fresh hooks would flag evasion that is not.
 	if otel {
-		s.lastOTEL, s.otelSeen = at, true
-		s.gapReported = false // OTEL is back
+		s.otelSeen = true
+		if at.After(s.lastOTEL) {
+			s.lastOTEL = at
+			s.gapReported = false // OTEL is back
+		}
 	} else {
-		s.lastHook, s.hookSeen = at, true
+		s.hookSeen = true
+		if at.After(s.lastHook) {
+			s.lastHook = at
+		}
 	}
 }
 

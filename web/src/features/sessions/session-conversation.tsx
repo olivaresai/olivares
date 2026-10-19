@@ -18,7 +18,9 @@ import type { TFunction } from 'i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { agentOpsKeys } from '@/features/agentops/api'
+import { MessageImages } from '@/features/agentops/attachment-ui'
 import { useRunAttach } from '@/features/agentops/attach'
+import { readsNativeRecord } from '@/features/agentops/provider-contract'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
 import { formatDuration, formatInt } from '@/lib/format'
 import '@/features/shared/i18n'
@@ -33,6 +35,8 @@ import {
 } from './conversation-frames'
 import { systemFailed, systemText } from './conversation-text'
 import { MarkdownText } from './markdown-text'
+import { MessageBar, MessageRail } from './message-navigator'
+import { useMessageNavigator } from './use-message-navigator'
 import { hostIsolationUnavailable } from './provenance'
 import { unechoedTurns, useRunSentTurns, type SentTurn } from './sent-turns'
 import './i18n'
@@ -171,6 +175,34 @@ export function SessionConversation({
     setAutoscroll(atBottom)
   }, [])
 
+  // The message index is read again when the person has sent another message, not on
+  // every burst of output: each read is a scan of the tool's transcript.
+  const sentCount = useMemo(
+    () => items.filter((item) => item.kind === 'operator').length,
+    [items],
+  )
+  const sentSeen = useRef({ runRef, sentCount })
+  useEffect(() => {
+    const seen = sentSeen.current
+    sentSeen.current = { runRef, sentCount }
+    if (seen.runRef !== runRef || seen.sentCount === sentCount) return
+    void queryClient.invalidateQueries({
+      queryKey: agentOpsKeys.runMessages(tenant, runRef),
+    })
+  }, [runRef, sentCount, tenant, queryClient])
+
+  // The person's messages as a rail and a panel (#2129). A jump leaves the newest output
+  // behind: following it again is the person scrolling back down.
+  const stopFollowing = useCallback(() => setAutoscroll(false), [])
+  const messages = useMessageNavigator({
+    runRef,
+    // A legacy run names no driver: the engine answers for it, as it always did.
+    enabled: !run.provider_driver || readsNativeRecord(run),
+    items,
+    scrollRef,
+    onJump: stopFollowing,
+  })
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col gap-2"
@@ -181,77 +213,83 @@ export function SessionConversation({
           {t('conversation.lag', { count: dropped })}
         </p>
       ) : null}
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        tabIndex={0}
-        role="log"
-        aria-label={t('conversation.log')}
-        className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
-      >
-        {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
+      <MessageBar nav={messages} />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          tabIndex={0}
+          role="log"
+          aria-label={t('conversation.log')}
+          className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
+        >
+          {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
             longer than that is a line nobody follows. */}
-        <div className="mx-auto w-full max-w-[760px] px-4 py-4">
-          {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
+          <div className="mx-auto w-full max-w-[760px] px-4 py-4">
+            {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
               already read stay on the page. Without it a stale transcript reads as a
               finished one. */}
-          {status === 'error' || status === 'connecting' ? (
-            <p
-              role="status"
-              data-testid="conversation-link"
-              className="mb-2 text-center text-overline font-normal text-text-3"
-            >
-              {tShared(`live.${status}`)}
-            </p>
-          ) : null}
-          {items.length === 0 &&
-          pending.length === 0 &&
-          !hostIsolationUnavailable(run) &&
-          status !== 'error' &&
-          status !== 'connecting' ? (
-            <p className="py-2 text-caption text-muted-foreground">
-              {status === 'open'
-                ? t('conversation.waiting')
-                : t('conversation.empty')}
-            </p>
-          ) : (
-            <ol className="flex flex-col gap-1">
-              {foldTools(items).map((part) =>
-                part.kind === 'fold' ? (
-                  <li key={`fold-${part.items[0]!.id}`}>
-                    <details data-testid="conversation-tools-fold">
-                      <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-ctl px-2 text-caption text-text-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
-                        {t('conversation.toolsFolded', {
-                          count: part.items.length,
-                        })}
-                      </summary>
-                      <ol className="flex flex-col">
-                        {part.items.map((item) => (
-                          <ConversationRow
-                            key={item.id}
-                            item={item}
-                            selected={selectedId === item.id}
-                            onInspect={onInspect}
-                          />
-                        ))}
-                      </ol>
-                    </details>
-                  </li>
-                ) : (
-                  <ConversationRow
-                    key={part.item.id}
-                    item={part.item}
-                    selected={selectedId === part.item.id}
-                    onInspect={onInspect}
-                  />
-                ),
-              )}
-              {pending.map((turn, i) => (
-                <SentTurnRow key={`sent-${i}`} turn={turn} />
-              ))}
-            </ol>
-          )}
+            {status === 'error' || status === 'connecting' ? (
+              <p
+                role="status"
+                data-testid="conversation-link"
+                className="mb-2 text-center text-overline font-normal text-text-3"
+              >
+                {tShared(`live.${status}`)}
+              </p>
+            ) : null}
+            {items.length === 0 &&
+            pending.length === 0 &&
+            !hostIsolationUnavailable(run) &&
+            status !== 'error' &&
+            status !== 'connecting' ? (
+              <p className="py-2 text-caption text-muted-foreground">
+                {status === 'open'
+                  ? t('conversation.waiting')
+                  : t('conversation.empty')}
+              </p>
+            ) : (
+              <ol className="flex flex-col gap-1">
+                {foldTools(items).map((part) =>
+                  part.kind === 'fold' ? (
+                    <li key={`fold-${part.items[0]!.id}`}>
+                      <details data-testid="conversation-tools-fold">
+                        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-ctl px-2 text-caption text-text-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
+                          {t('conversation.toolsFolded', {
+                            count: part.items.length,
+                          })}
+                        </summary>
+                        <ol className="flex flex-col">
+                          {part.items.map((item) => (
+                            <ConversationRow
+                              key={item.id}
+                              item={item}
+                              runRef={run.run_ref}
+                              selected={selectedId === item.id}
+                              onInspect={onInspect}
+                            />
+                          ))}
+                        </ol>
+                      </details>
+                    </li>
+                  ) : (
+                    <ConversationRow
+                      key={part.item.id}
+                      item={part.item}
+                      runRef={run.run_ref}
+                      selected={selectedId === part.item.id}
+                      onInspect={onInspect}
+                    />
+                  ),
+                )}
+                {pending.map((turn, i) => (
+                  <SentTurnRow key={`sent-${i}`} turn={turn} />
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
+        <MessageRail nav={messages} />
       </div>
       {ended ? (
         <p className="text-center text-overline font-normal text-text-3">
@@ -316,10 +354,12 @@ function ToolGlyph({ name, command }: { name?: string; command?: string }) {
 
 function ConversationRow({
   item,
+  runRef,
   selected,
   onInspect,
 }: {
   item: ConversationItem
+  runRef: string
   selected: boolean
   onInspect?: (item: ConversationItem) => void
 }) {
@@ -332,6 +372,7 @@ function ConversationRow({
       <li>
         <details
           data-testid="conversation-item"
+          data-item-id={item.id}
           data-kind="tool"
           className={cn('group rounded-ctl', selected && 'bg-active')}
         >
@@ -411,6 +452,7 @@ function ConversationRow({
         <button
           type="button"
           data-testid="conversation-item"
+          data-item-id={item.id}
           data-kind="system"
           onClick={inspect}
           className={cn(
@@ -474,6 +516,7 @@ function ConversationRow({
       <li>
         <details
           data-testid="conversation-item"
+          data-item-id={item.id}
           data-kind="result"
           className={cn('group my-2 rounded-ctl', selected && 'bg-active')}
         >
@@ -525,6 +568,7 @@ function ConversationRow({
         <button
           type="button"
           data-testid="conversation-item"
+          data-item-id={item.id}
           data-kind="operator"
           onClick={inspect}
           className={cn(
@@ -537,6 +581,11 @@ function ConversationRow({
             {item.text || item.summary}
           </span>
         </button>
+        {/* The images the person attached, from the engine's copy: they come back with
+            the message after a reload. */}
+        {item.attachments?.length ? (
+          <MessageImages runRef={runRef} attachments={item.attachments} />
+        ) : null}
       </li>
     )
 
@@ -549,6 +598,7 @@ function ConversationRow({
         <button
           type="button"
           data-testid="conversation-item"
+          data-item-id={item.id}
           data-kind="unknown"
           onClick={inspect}
           className={cn(
@@ -585,6 +635,7 @@ function ConversationRow({
     <li className="py-1">
       <div
         data-testid="conversation-item"
+        data-item-id={item.id}
         data-kind={item.kind}
         onClick={openFromWords}
         className={cn(

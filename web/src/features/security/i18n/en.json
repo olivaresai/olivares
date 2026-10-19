@@ -108,7 +108,7 @@
   },
   "enforcement": {
     "title": "Enforcement posture",
-    "description": "The one action that touches production. Each guardrail class is detective by default; enabling inline enforcement is an admin action, governed where the gate is wired.",
+    "description": "The one action that touches production. Each guardrail class is detective by default; enabling inline enforcement is an admin action, governed where a gate is set up.",
     "defaultDetectiveNote": "The default plane is detective: classes only block when explicitly enabled here and governed.",
     "fullyDetective": "No enforcement is enabled — the plane is fully detective, the safe default. Nothing blocks on its own.",
     "detective": "Detective",
@@ -127,14 +127,14 @@
     },
     "dialog": {
       "title": "Change enforcement",
-      "description": "Disabling (back to detective) is always allowed. Enabling inline enforcement is governed where the gate is wired — a governance denial is shown as the reason.",
+      "description": "Disabling (back to detective) is always allowed. Enabling inline enforcement is governed where a gate is set up — a governance denial is shown as the reason.",
       "enabledLabel": "Enable inline enforcement",
       "minSeverity": "Minimum severity",
       "reason": "Reason",
       "reasonHint": "Recorded with the change for the audit ledger.",
       "submit": "Apply",
       "applied": "Enforcement posture updated",
-      "ungovernedWarning": "Enabling this class without a wired governance gate leaves it ungoverned — the change is allowed but flagged.",
+      "ungovernedWarning": "Enabling this class without a governance gate set up leaves it ungoverned — the change is allowed but flagged.",
       "deniedTitle": "Governance denied this change"
     }
   },
@@ -194,9 +194,9 @@
     "checkpointsCount": "{{count}} checkpoint verified",
     "checkpointsCount_one": "{{count}} checkpoint verified",
     "checkpointsCount_other": "{{count}} checkpoints verified",
-    "signingUnavailable": "No signing key is wired — signed attestation is not faked.",
+    "signingUnavailable": "No signing key is set up — signed attestation is not faked.",
     "checkpointsPendingNote": "No checkpoint written yet — the chain verdict is what proves this ledger.",
-    "signingSeam": "Checkpoint signing not wired",
+    "signingSeam": "Checkpoint signing not set up",
     "attestedSeq": "Attested seq",
     "headSeq": "ledger head seq {{seq}}",
     "reverifyNote": "Each event carries seq · hash · prev_hash so a reader can re-verify the link offline against an external WORM store.",

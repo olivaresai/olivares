@@ -56,6 +56,8 @@
       "startedAt": "Démarrée"
     },
     "regressed": "En régression · dérive {{drift}}",
+    "withinNoise": "Chute dans le bruit · dérive {{drift}}",
+    "passRateDiff": "Chute du taux de réussite {{drop}} (IC 95 % {{lo}}–{{hi}}) — {{passed}}/{{n}} notés contre {{baselinePassed}}/{{baselineN}} de référence",
     "noRegression": "Aucune",
     "empty": "Aucune exécution sur la période.",
     "emptyHint": "Chaque exécution d’évaluation de la plage sélectionnée est listée ici avec son score. Élargissez la plage ou lancez une exécution.",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "Dérive — {{subject}}",
-    "description": "Score au fil du temps par rapport au seuil de réussite de la suite. Une régression est une comparaison de score ponctuelle avec une exécution de référence, qui peut utiliser une autre version de suite, un autre modèle ou un autre scorer, et la comparaison ne dit pas lequel a changé. Après un changement de version de suite, épinglez une référence.",
+    "description": "Score au fil du temps par rapport au seuil de réussite de la suite. Une régression est une comparaison avec une exécution de référence : la baisse de score doit dépasser le seuil de la suite et l'intervalle à 95 % de la différence de taux de réussite doit exclure zéro. Cette exécution peut utiliser une autre version de suite, un autre modèle ou un autre scorer, et la comparaison ne dit pas lequel a changé. Après un changement de version de suite, épinglez une référence.",
     "score": "Score",
     "threshold": "Seuil de réussite",
     "pickerTitle": "Sujet",
@@ -189,7 +191,7 @@
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
-    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+    "noJudge": "Aucun juge n’est configuré : il n’y a donc rien à mesurer. Ce n’est ni une panne ni une limite d’édition : une calibration ne peut pas être simulée."
   },
   "baseline": {
     "pin": "Pin as baseline",

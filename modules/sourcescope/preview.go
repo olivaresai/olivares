@@ -41,7 +41,7 @@ func (m *Module) handleResolvePreview(w http.ResponseWriter, r *http.Request, mc
 	sourceType, sourceRef := qp.Get("source_type"), qp.Get("source_ref")
 	actorKind, actorRef := qp.Get("actor_kind"), qp.Get("actor_ref")
 	if !validSourceTypes[sourceType] {
-		writeJSON(w, http.StatusBadRequest, errorBody("source_type must be one of mcp|model|provider|knowledge|data"))
+		writeJSON(w, http.StatusBadRequest, errorBody("source_type must be one of mcp|model|provider|knowledge|data|profile|tool"))
 		return
 	}
 	if sourceRef == "" || actorRef == "" {

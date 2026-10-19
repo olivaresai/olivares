@@ -92,7 +92,7 @@ lo que hace la verificación resistente al atacante tras un compromiso del host.
 
 El proceso de borde solo-push (`olivares collector`) que corre
 [fuentes](#fuente) cerca de los sistemas observados y empuja observaciones al
-core sobre gRPC (opcionalmente mTLS). Los collectors **no tienen listener entrante**.
+core sobre gRPC (opcionalmente mTLS). Los collectors **no tienen listener entrante**. El collector es una función Business.
 
 ### Ruta cooperativa
 
@@ -187,7 +187,7 @@ proceso a un agente. Ver [eBPF/Tetragon](/es/how-to/connectors/ebpf-tetragon/).
 
 ### live_ref
 
-Identidad asignada por el servidor de **una** fila de sesión viva. Olivares <!-- release -->0.2<!-- /release -->
+Identidad asignada por el servidor de **una** fila de sesión viva. Olivares <!-- release -->0.3<!-- /release -->
 clavea la observación por `(ámbito de observación, id externo)` para que dos
 homes de proveedor que anuncian el mismo id de sesión sigan siendo dos filas.
 Las lecturas de consola y API que significan «esta fila» usan `live_ref`, no

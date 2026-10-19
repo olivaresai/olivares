@@ -94,7 +94,7 @@ port OTLP public.
 
 Les sessions instrumentées apparaissent dans **Sessions** comme activité en
 direct, attribuées à l'agent émetteur ; leurs appels de modèle alimentent
-**Cost & FinOps** ; les spans MCP et d'outils contribuent des arêtes à
+**Budgets** ; les spans MCP et d'outils contribuent des arêtes à
 l'**Access map** comme toute source coopérative :
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="La vue Sessions montrant l'activité de session d'agent en direct issue de la télémétrie coopérative." />

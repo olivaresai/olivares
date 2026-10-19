@@ -15,26 +15,33 @@
     "revoked_other": "{{count}} ausstehende Genehmigungsanfragen storniert"
   },
   "engage": {
-    "title": "Notabschaltung",
-    "caption": "Stoppt alle Agenten oder einen einzelnen: Laufende Sitzungen enden, und Werkzeugaufrufe, MCP, Zeitpläne und Workflows, Sprache, Modellaufrufe, Bereitstellungen und Ereigniszustellung werden abgelehnt. Ausstehende Genehmigungsanfragen für diese Aktionen werden storniert. Das Stoppen braucht keine Genehmigung, der Neustart schon. Konsole, Audit-Protokoll und Anmeldung funktionieren weiter.",
-    "scope": "Geltungsbereich",
-    "scopeEstate": "Alle Agenten",
-    "scopeAgent": "Einzelner Agent",
     "agentRef": "Agent",
     "agentRefHint": "Agent-UUID oder externe Referenz. Eine unbekannte Referenz löst dennoch aus — der Stopp greift dann auf genau diese Zeichenfolge.",
     "reason": "Begründung",
-    "reasonHint": "Pflichtangabe: Sagen Sie, warum. Die Prüfung dieses Stopps und spätere Audits lesen sie.",
-    "button": "Notabschaltung",
+    "reasonHint": "Optional: Sagen Sie, warum. Die Prüfung dieses Stopps und spätere Audits lesen sie.",
     "confirmTitleEstate": "Alle Agenten stoppen?",
     "confirmBodyEstate": "Alle Agenten stoppen sofort: Laufende Sitzungen enden, ihre Aktionen werden abgelehnt, und ausstehende Genehmigungsanfragen für diese Aktionen werden storniert. Für den Neustart müssen zwei verschiedene Benutzerkonten zustimmen, und der Stopp muss danach geprüft werden. Es gibt keinen Notfallweg daran vorbei.",
     "confirmBodyEstateNoRestart": "Alle Agenten stoppen sofort: Laufende Sitzungen enden, ihre Aktionen werden abgelehnt, und ausstehende Genehmigungsanfragen für diese Aktionen werden storniert. Es gibt keinen Notfallweg daran vorbei.",
     "confirmTitleAgent": "Diesen Agenten stoppen?",
     "confirmBodyAgent": "Dieser Agent stoppt sofort: Seine Aktionen werden abgelehnt und seine ausstehenden Genehmigungsanfragen storniert. Für den Neustart müssen zwei verschiedene Benutzerkonten zustimmen, und der Stopp muss danach geprüft werden.",
-    "confirm": "Not-Aus auslösen",
     "done": "Not-Aus ausgelöst",
     "doneBody": "Stopp {{id}} ist aktiv. Die Wiederfreigabe erfordert das Vier-Augen-Prinzip.",
     "alreadyStopped": "Für diesen Geltungsbereich besteht bereits ein aktiver Stopp",
-    "restartNeedsAdmins": "Der Neustart braucht die Genehmigung von zwei anderen Administratorkonten, und eines davon muss ihn danach prüfen."
+    "restartNeedsAdmins": "Der Neustart braucht die Genehmigung von zwei anderen Administratorkonten, und eines davon muss ihn danach prüfen.",
+    "stopAll": "Alle Agenten stoppen",
+    "more": "Mehr",
+    "stopOne": "Einen Agenten stoppen…",
+    "stopAgent": "Diesen Agenten stoppen"
+  },
+  "runs": {
+    "title": "Sitzungen",
+    "caption": "Sitzungen, die gerade laufen. Die Liste aktualisiert sich selbst.",
+    "captionStopped": "Sitzungen, die gerade laufen, und die seit Beginn des Stopps beendeten. Die Liste aktualisiert sich selbst.",
+    "empty": "Keine Sitzung läuft.",
+    "error": "Die Sitzungsliste konnte nicht gelesen werden. Der Stopp selbst ist davon nicht betroffen.",
+    "truncated": "Die ersten {{n}} Sitzungen geladen",
+    "truncatedHint": "Es gibt mehr Sitzungen als angezeigt, daher kann eine laufende Sitzung in dieser Liste fehlen. Der Stopp gilt trotzdem für jede Sitzung.",
+    "status": "{{live}} laufend, {{ended}} beendet."
   },
   "stops": {
     "title": "Stopps",
@@ -146,7 +153,7 @@
     },
     "actionLabel": {
       "stop_agent": "Agent stoppen",
-      "quarantine_nhi": "NHI in Quarantäne",
+      "quarantine_nhi": "Identität in Quarantäne",
       "stop_estate": "Alle Agenten stoppen"
     },
     "modeLabel": {

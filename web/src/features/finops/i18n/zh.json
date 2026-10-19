@@ -39,10 +39,10 @@
     "title": "支出明细",
     "description": "成本流向，按排名展示。",
     "byModel": "按模型",
-    "byProvider": "按提供方",
+    "byProvider": "按提供商",
     "byAgent": "按智能体",
     "share": "支出占比",
-    "noAgentAttribution": "一旦连接器将成本归因到某个会话，便会显示按智能体的归因——模型和提供方始终存在。",
+    "noAgentAttribution": "一旦连接器将成本归因到某个会话，便会显示按智能体的归因——模型和提供商始终存在。",
     "columns": {
       "key": "名称",
       "cost": "成本",
@@ -146,7 +146,7 @@
     "serviceTierFreeform": "服务层级键完全按 API 返回的内容呈现；文档所列层级（standard、batch、priority、priority_on_demand、flex、flex_discount）只是显示提示，并非封闭列表。"
   },
   "costCentres": {
-    "ambiguous": "ambiguous — engine picks one arbitrarily",
+    "ambiguous": "存在歧义——引擎会任选其一",
     "archive": "Archive cost centre {{code}}",
     "archived": "Cost centre updated",
     "code": "Code",
@@ -154,37 +154,37 @@
     "created": "Cost centre created",
     "delete": "Delete cost centre {{code}}",
     "deleteRule": "Delete rule for {{key}}",
-    "description": "Accounting codes and the rules that bind spend to them.",
+    "description": "会计代码，以及把支出绑定到它们的规则。",
     "descriptionField": "Description",
     "dimension": "Dimension: {{dim}}",
     "dimensionLabel": "Dimension",
     "edit": "Edit cost centre {{code}}",
-    "editDescription": "The code cannot be changed: mapping rules resolve by it and issued statements record it.",
+    "editDescription": "代码无法更改：映射规则按它解析，已出具的账单也记录了它。",
     "editTitle": "Edit cost centre",
-    "empty": "No cost centres yet",
+    "empty": "还没有成本中心",
     "emptyHint": "成本中心把支出归属到某个团队或预算负责人。先创建一个，才能开始归属。",
-    "ingestOnlyNotice": "⛔ Mapping rules are applied AT INGESTION and stamped on each cost row. Creating or changing a rule does NOT re-attribute spend already recorded — it only affects costs ingested from now on.",
+    "ingestOnlyNotice": "⛔ 映射规则在接入时应用，并写入每一条成本行。创建或修改规则不会对已记录的支出重新归属——只影响此后接入的成本。",
     "key": "Key",
     "name": "Name",
     "new": "New cost centre",
-    "newDescription": "A code is required. It is the accounting identity chargeback statements filter on.",
+    "newDescription": "必须填写代码。它是分摊账单据以筛选的会计标识。",
     "newRule": "New rule",
-    "newRuleDescription": "Bind one dimension value to this cost centre.",
-    "noRules": "No rules — traffic stays unattributed",
+    "newRuleDescription": "把一个维度值绑定到该成本中心。",
+    "noRules": "没有规则——流量保持未归属",
     "noRulesHint": "规则把流量映射到成本中心。没有规则时，所有请求在报表中都保持未归属状态。",
     "owner": "Owner",
     "priority": "priority {{n}}",
     "priorityLabel": "Priority",
-    "priorityNote": "The highest priority wins BETWEEN different dimensions. Within one dimension and key the engine reads a single rule and does not order by priority, so duplicates are resolved arbitrarily.",
+    "priorityNote": "最高优先级仅在不同维度之间生效。同一维度和键下，引擎只读取一条规则，不按优先级排序，因此重复规则会被任意解析。",
     "restore": "Restore cost centre {{code}}",
     "ruleCreated": "Rule created",
-    "rulesDescription": "Which traffic binds to this cost centre.",
+    "rulesDescription": "哪些流量绑定到该成本中心。",
     "rulesTitle": "Mapping rules",
     "save": "Save",
     "saved": "Cost centre saved",
     "status": {
       "archived": "Archived",
-      "unknown": "No status — attributes nothing"
+      "unknown": "无状态——不做任何归属"
     },
     "title": "Cost centres",
     "truncated": "已加载 {{n}} 个成本中心；还有更多",
@@ -196,7 +196,7 @@
   "dimensions": {
     "global": "全局",
     "model": "模型",
-    "provider": "提供方",
+    "provider": "提供商",
     "agent": "智能体",
     "session": "会话",
     "team": "团队",
@@ -233,11 +233,11 @@
     },
     "futureBreakdowns": {
       "title": "尚未收录未来成本明细",
-      "description": "只有在编译时内置的参考数据中加入运行时成本明细后，条目才会显示；此表不会由实时提供方数据填充。"
+      "description": "只有在编译时内置的参考数据中加入运行时成本明细后，条目才会显示；此表不会由实时提供商数据填充。"
     },
     "futureDimensions": {
       "title": "尚未收录未来维度",
-      "description": "只有将未来分组维度加入编译时内置的参考数据后，条目才会显示；此表不会由实时提供方数据填充。"
+      "description": "只有将未来分组维度加入编译时内置的参考数据后，条目才会显示；此表不会由实时提供商数据填充。"
     },
     "reconciliationChart": {
       "title": "尚无可对账的已计费支出",
@@ -245,7 +245,7 @@
     },
     "spend": {
       "title": "此明细尚无支出",
-      "description": "成本记录包含所选模型、提供方或智能体引用后，此处将显示排序后的支出和 token 总量。"
+      "description": "成本记录包含所选模型、提供商或智能体引用后，此处将显示排序后的支出和 token 总量。"
     }
   },
   "export": {
@@ -345,16 +345,16 @@
   },
   "outcomes": {
     "title": "Graded outcomes",
-    "description": "The numerator of cost-per-outcome: what the spend actually achieved.",
+    "description": "单位成果成本的分子：这笔支出实际达成了什么。",
     "grade": "Grade an outcome",
-    "gradeHint": "The instant is captured now and re-sent unchanged on a retry, so a repeated submit cannot count the value twice.",
-    "subject": "Agent ref",
+    "gradeHint": "时刻在此刻捕获，重试时原样重发，因此重复提交不会把该值计算两次。",
+    "subject": "智能体引用",
     "verdict": "Verdict",
     "send": "Send",
     "empty": "No graded outcomes",
-    "emptyHint": "Without these, spend has no measurable value and every agent looks like pure cost.",
+    "emptyHint": "没有这些，支出就没有可衡量的价值，每个智能体看起来都只是成本。",
     "noValue": "no value recorded",
-    "accepted": "Accepted — the engine may have deduplicated it; the list below is the record",
+    "accepted": "已接受——引擎可能已对其去重；以下列表才是记录",
     "truncated": "已加载 {{n}} 条成果；还有更多",
     "truncatedHint": "已记录的成果多于所显示的；本页按 id 取行。请勿据已加载的行推导成果或价值的汇总值。"
   },
@@ -408,7 +408,7 @@
     "title": "已计费与估算对比",
     "description": "派生估算值与权威账单的贴合程度。两个数据流绝不会相加。",
     "billedTotal": "已计费合计",
-    "billedCaption": "来自提供方的 cost_report",
+    "billedCaption": "来自提供商的 cost_report",
     "noBilled": "无已计费数据",
     "estimatedTotal": "估算合计",
     "estimatedCaption": "依据标价推导",
@@ -429,17 +429,17 @@
   "seats": {
     "title": "席位使用率",
     "description": "按日比较已分配席位与实际活跃的主体。没有席位快照的日期不代表使用量为零，而是没有任何上报。",
-    "provider": "提供方",
+    "provider": "提供商",
     "empty": "没有上报的日期",
     "emptyHint": "席位用量按日从会话活动中统计。此时间范围内没有任何一天有数据。",
     "assigned": "已分配 {{assigned}} · 活跃 {{active}}",
     "noSnapshot": "该日未上报席位快照"
   },
   "statements": {
-    "agent": "Agent",
+    "agent": "智能体",
     "cost": "Cost",
-    "description": "Per-cost-centre, per-period snapshots with line items grouped by model, provider and agent — the artefact finance consumes for internal billing.",
-    "empty": "No chargeback statements generated",
+    "description": "按成本中心、按周期的快照，明细行按模型、提供商和智能体分组——财务据以进行内部计费的凭据。",
+    "empty": "尚未生成分摊账单",
     "exportCsv": "Export statement CSV",
     "generate": "Generate",
     "generated": "Statements generated",
@@ -448,9 +448,9 @@
     "monthly": "Monthly",
     "outputTokens": "Output tokens",
     "period": "Period",
-    "provider": "Provider",
+    "provider": "提供商",
     "samples": "Samples",
-    "snapshotNotice": "A statement is a frozen snapshot: it is computed when generated and records the cost centre name and code as they were. Regenerating the same period does NOT recalculate it, so spend ingested afterwards will not appear.",
+    "snapshotNotice": "账单是冻结的快照：它在生成时计算，并按当时的样子记录成本中心的名称和代码。对同一周期重新生成不会重新计算，因此之后接入的支出不会出现。",
     "title": "Chargeback statements",
     "total": "Total",
     "weekly": "Weekly",

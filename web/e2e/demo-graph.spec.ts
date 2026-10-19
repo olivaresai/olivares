@@ -217,8 +217,9 @@ test.describe('embedded web over real seeded data', () => {
         url.searchParams.get('limit') === '500'
       )
     })
-    await page.getByRole('link', { name: /access map/i }).click()
-    await page.waitForURL('**/access-map')
+    // A fresh sign-in lists the navigation areas, not the pages inside a closed one,
+    // so the Access map link is not on screen: open the route as the other cases do.
+    await page.goto('/access-map')
     const initialResponse = await initialGraphResponse
     expect(initialResponse.status()).toBe(200)
     let graph = (await initialResponse.json()) as LiveAccessGraph
@@ -355,9 +356,10 @@ test.describe('embedded web over real seeded data', () => {
       'the demo seed must expose at least one drift row for this functional check',
     ).toBeGreaterThan(0)
     await expect(page.getByRole('heading', { name: /drift/i })).toBeVisible()
-    await expect(page.locator('aside').getByRole('listitem')).toHaveCount(
-      findingCount,
-    )
+    // Scoped to the page: the navigation sidebar is an aside with list items too.
+    await expect(
+      page.locator('#main-content aside').getByRole('listitem'),
+    ).toHaveCount(findingCount)
     await page.screenshot({
       path: 'playwright-report/demo-access-map-drift.png',
     })
@@ -491,7 +493,7 @@ test.describe('embedded web over real seeded data', () => {
     })
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Open the NHI roster' })
+      .getByRole('button', { name: 'Open identities' })
       .click()
     await page.waitForURL('**/identity?tab=inventory')
     const identitiesResponse = await identitiesRead
@@ -526,21 +528,19 @@ test.describe('embedded web over real seeded data', () => {
     } finally {
       await anonymous.dispose()
     }
-    const before = await page.request.get('/v1/m/recording/config', { headers })
-    expect(before.status()).toBe(200)
-    const config = await before.json()
+    // Recording is a Business feature, so a Community write reaches the module's 501
+    // business_required refusal; without the CSRF token the engine stops it first (403).
     const policy = {
-      namespaces: config.namespaces,
-      consent: config.consent,
-      idle_seconds: config.idle_seconds,
-      retention_days: config.retention_days,
-      ai_summaries: config.ai_summaries,
+      namespaces: [],
+      consent: 'notice',
+      idle_seconds: 1800,
+      retention_days: 180,
     }
     const accepted = await page.request.put('/v1/m/recording/config', {
       headers,
       data: policy,
     })
-    expect(accepted.status()).toBe(200)
+    expect(accepted.status()).toBe(501)
     const withoutCSRF = { ...headers }
     delete withoutCSRF['X-CSRF-Token']
     const refused = await page.request.put('/v1/m/recording/config', {
@@ -548,9 +548,6 @@ test.describe('embedded web over real seeded data', () => {
       data: policy,
     })
     expect(refused.status()).toBe(403)
-    const after = await page.request.get('/v1/m/recording/config', { headers })
-    expect(after.status()).toBe(200)
-    expect(await after.json()).toEqual(config)
   })
 
   test('shared data and the Community access graph are served together', async ({

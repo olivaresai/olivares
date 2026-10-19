@@ -84,7 +84,7 @@
       "webauthn": "NIST SP 800-63B-4 (authenticator assurance)",
       "certManager": "cert-manager (CNCF)",
       "pqc": "NIST SP 800-57 Part 1 r6 (key management)",
-      "wifReference": "Anthropic WIF reference",
+      "wifReference": "Anthropic workload identity reference",
       "workloadIdentity": "Anthropic Workload Identity Federation",
       "externalKeys": "Anthropic External Keys (CMEK)",
       "workspaceUpdate": "Anthropic workspace residency"
@@ -128,6 +128,7 @@
     "title": "SCIM 2.0 provisioning",
     "description": "Inbound provisioning of users and groups. Read-only status of the service provider, the synchronized users, and the leaver evidence.",
     "seamWhat": "The SCIM service-provider configuration",
+    "businessOnly": "The inbound SCIM server requires Business. Remove a person from the organization in People.",
     "patch": "PATCH",
     "filter": "Filter",
     "filterMax": "Supported (max {{n}})",

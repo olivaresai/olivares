@@ -1,0 +1,396 @@
+{
+  "_": "Recorded demo conversations. demo-tool.py answers from this file by exact prompt text and seed-demo-dataset.py launches the same sessions with the same prompts, so a transcript has one source. Plain prose only: no markdown, no tool bookkeeping.",
+  "sessions": [
+    {
+      "name": "Plan per-client rate limiting",
+      "tool": "claude",
+      "model": "claude-sonnet-5-5",
+      "folder": "payments-api",
+      "turns": [
+        {
+          "prompt": "We need per-client rate limiting on the public API before the partner launch. Look at how requests are routed today and propose a plan.",
+          "steps": [
+            {
+              "say": "I will start with the router and the middleware chain."
+            },
+            {
+              "tool": {
+                "name": "Read",
+                "command": "cat internal/api/router.go",
+                "input": {
+                  "file_path": "internal/api/router.go"
+                },
+                "output": "router.go: 214 lines, 38 routes. Middleware order: request ID, authentication, audit, handler."
+              }
+            },
+            {
+              "tool": {
+                "name": "Grep",
+                "command": "rg -n RateLimit internal docs",
+                "input": {
+                  "pattern": "RateLimit",
+                  "path": "internal"
+                },
+                "output": "docs/runbooks/throttling.md:12: manual throttling is done at the load balancer\nNo matches under internal/api."
+              }
+            },
+            {
+              "say": "Requests pass through request ID, authentication, audit and then the handler, and nothing limits a single client today. I would add a token bucket keyed by the authenticated client ID, placed right after authentication so anonymous traffic is rejected earlier. Limits should come from configuration per plan tier, with a burst of twice the sustained rate. Rejected requests should return 429 with a Retry-After header and be counted in the audit trail so support can see who is being throttled."
+            }
+          ],
+          "usage": {
+            "input": 18400,
+            "output": 1350,
+            "cache_read": 9200,
+            "cost_usd": 0.0812
+          }
+        },
+        {
+          "prompt": "Should the counters live in memory or in Redis?",
+          "steps": [
+            {
+              "say": "Use Redis if the API runs more than one replica, because in-memory buckets would let a client send the full limit to every replica. Production runs three replicas, so I recommend Redis with a small Lua script that checks and decrements atomically. If Redis is unreachable the limiter should fail open for ten seconds, raise an alert, and then fall back to a conservative per-replica limit."
+            }
+          ],
+          "usage": {
+            "input": 6100,
+            "output": 520,
+            "cache_read": 17800,
+            "cost_usd": 0.0194
+          },
+          "final": true
+        }
+      ],
+      "profile": "claude-platform",
+      "template": "Code review (read-only)"
+    },
+    {
+      "name": "Fix the flaky checkout test",
+      "tool": "claude",
+      "model": "claude-sonnet-4-6",
+      "folder": "storefront-web",
+      "turns": [
+        {
+          "prompt": "The checkout end-to-end test fails about one run in five on CI. Find out why.",
+          "steps": [
+            {
+              "say": "I will reproduce it locally with repeated runs first."
+            },
+            {
+              "tool": {
+                "name": "Bash",
+                "command": "pnpm test:e2e --grep checkout --repeat-each 10",
+                "input": {
+                  "command": "pnpm test:e2e --grep checkout --repeat-each 10"
+                },
+                "output": "10 runs: 8 passed, 2 failed.\nFailure: timeout waiting for [data-testid=order-confirmation] (5000 ms)"
+              }
+            },
+            {
+              "tool": {
+                "name": "Read",
+                "command": "cat e2e/checkout.spec.ts",
+                "input": {
+                  "file_path": "e2e/checkout.spec.ts"
+                },
+                "output": "e2e/checkout.spec.ts: clicks Place order, then asserts the confirmation after a fixed wait."
+              }
+            },
+            {
+              "say": "The test clicks Place order and asserts the confirmation after a fixed five second wait. The confirmation only renders after the simulated payment webhook, which takes between one and eight seconds on the CI runners. I would wait for the confirmation with the retrying assertion instead of a fixed timeout, and remove the second click in the retry path because the button disables itself while the request is in flight."
+            }
+          ],
+          "usage": {
+            "input": 22300,
+            "output": 1180,
+            "cache_read": 11000,
+            "cost_usd": 0.241
+          }
+        },
+        {
+          "prompt": "Go ahead and make the change.",
+          "steps": [
+            {
+              "tool": {
+                "name": "Edit",
+                "command": "edit e2e/checkout.spec.ts",
+                "input": {
+                  "file_path": "e2e/checkout.spec.ts"
+                },
+                "output": "Replaced the fixed wait with an expectation that retries for up to 15 seconds and removed the duplicate click."
+              }
+            },
+            {
+              "tool": {
+                "name": "Bash",
+                "command": "pnpm test:e2e --grep checkout --repeat-each 10",
+                "input": {
+                  "command": "pnpm test:e2e --grep checkout --repeat-each 10"
+                },
+                "output": "10 runs: 10 passed."
+              }
+            },
+            {
+              "say": "Done. The test now waits for the confirmation with an expectation that retries for up to fifteen seconds, and the duplicate click is gone. Ten consecutive runs passed. I left the application code alone because the disabled button is the intended behavior."
+            }
+          ],
+          "usage": {
+            "input": 9100,
+            "output": 640,
+            "cache_read": 24800,
+            "cost_usd": 0.0968
+          },
+          "final": true
+        }
+      ],
+      "profile": "claude-web"
+    },
+    {
+      "name": "Speed up the nightly orders export",
+      "tool": "codex",
+      "model": "gpt-5-codex",
+      "folder": "data-pipelines",
+      "turns": [
+        {
+          "prompt": "The nightly orders export takes almost two hours. Profile it and tell me where the time goes.",
+          "steps": [
+            {
+              "tool": {
+                "name": "shell",
+                "command": "python -m cProfile -s cumtime export_orders.py --day yesterday --dry-run",
+                "input": {
+                  "command": "python -m cProfile -s cumtime export_orders.py --day yesterday --dry-run"
+                },
+                "output": "412,330 calls to fetch_line_items (6,120 s)\n  39,870 calls to encode_row (410 s)\n       1 call to upload_file (95 s)"
+              }
+            },
+            {
+              "say": "About ninety percent of the run is spent fetching line items one order at a time, roughly 412,000 queries. CSV encoding and the upload are small by comparison. Loading line items in batches of 5,000 order IDs should remove almost all of that time."
+            }
+          ],
+          "usage": {
+            "input": 14200,
+            "cache_read": 3000,
+            "output": 900
+          }
+        },
+        {
+          "prompt": "Implement the batching and keep the output identical.",
+          "steps": [
+            {
+              "tool": {
+                "name": "shell",
+                "command": "git diff --stat",
+                "input": {
+                  "command": "git diff --stat"
+                },
+                "output": " export_orders.py        | 41 ++++++++++++++++++++++++++++-----------\n tests/test_export.py    | 36 ++++++++++++++++++++++++++++++++++\n 2 files changed, 63 insertions(+), 14 deletions(-)"
+              }
+            },
+            {
+              "tool": {
+                "name": "shell",
+                "command": "pytest tests/test_export.py -q",
+                "input": {
+                  "command": "pytest tests/test_export.py -q"
+                },
+                "output": "6 passed in 3.41s"
+              }
+            },
+            {
+              "say": "The export now loads line items in batches of 5,000 orders. A run against yesterday's data produced a byte-identical file in 11 minutes instead of 1 hour 52 minutes. I added a regression test that compares the batched output with the original code on a fixture of 200 orders."
+            }
+          ],
+          "usage": {
+            "input": 11800,
+            "cache_read": 15200,
+            "output": 1250
+          },
+          "final": true
+        }
+      ],
+      "profile": "codex-data"
+    },
+    {
+      "name": "Add idempotency keys to refunds",
+      "tool": "codex",
+      "model": "gpt-5-codex",
+      "folder": "payments-api",
+      "turns": [
+        {
+          "prompt": "Refund requests can be submitted twice when a client retries. Add idempotency key support to the refund endpoint.",
+          "steps": [
+            {
+              "tool": {
+                "name": "shell",
+                "command": "rg -n refund internal/api internal/billing | head -20",
+                "input": {
+                  "command": "rg -n refund internal/api internal/billing | head -20"
+                },
+                "output": "internal/api/refunds.go:44: func (h *Handler) CreateRefund(w http.ResponseWriter, r *http.Request)\ninternal/billing/refund.go:18: func (s *Service) Refund(ctx context.Context, req RefundRequest) (Refund, error)"
+              }
+            },
+            {
+              "say": "The endpoint calls the billing service directly with no deduplication. I will read an Idempotency-Key header, store the key with a hash of the request body for 24 hours, return the original response for a repeated key, and answer 422 when the same key arrives with a different body."
+            }
+          ],
+          "usage": {
+            "input": 9800,
+            "cache_read": 2100,
+            "output": 760
+          }
+        },
+        {
+          "prompt": "Write the tests for the repeated key and the changed body cases.",
+          "steps": [
+            {
+              "tool": {
+                "name": "shell",
+                "command": "go test ./internal/api -run Refund -count=1",
+                "input": {
+                  "command": "go test ./internal/api -run Refund -count=1"
+                },
+                "output": "ok   internal/api  0.412s"
+              }
+            },
+            {
+              "say": "Two tests are in place. A repeated key returns the first refund with the same status and does not call the billing service a second time. A changed body under the same key returns 422 and leaves the first refund untouched. The package tests pass."
+            }
+          ],
+          "usage": {
+            "input": 7400,
+            "cache_read": 11800,
+            "output": 640
+          },
+          "final": true
+        }
+      ],
+      "profile": "codex-platform"
+    },
+    {
+      "name": "Draft the changelog entry",
+      "tool": "gemini-cli",
+      "model": "gemini-2.5-pro",
+      "folder": "docs-site",
+      "turns": [
+        {
+          "prompt": "Summarize the merged pull requests since the last release tag into a changelog entry for customers.",
+          "steps": [
+            {
+              "tool": {
+                "name": "Shell",
+                "command": "git log --oneline $(git describe --tags --abbrev=0)..HEAD",
+                "input": {
+                  "command": "git log --oneline $(git describe --tags --abbrev=0)..HEAD"
+                },
+                "output": "9f2c1ab Add audit export filters\n4d81e07 Show provider status on the sessions list\nc03a5de Fix duplicate approval notifications\n71be9a4 Reduce cold start time of the console\n2ee0b19 Document the retention settings"
+              }
+            },
+            {
+              "say": "This release adds filters to the audit export, shows the provider status next to each session, and makes the console start noticeably faster. It also fixes duplicate approval notifications and documents the retention settings."
+            }
+          ],
+          "usage": {}
+        },
+        {
+          "prompt": "Shorten it to two sentences and put the fix last.",
+          "steps": [
+            {
+              "say": "This release adds filters to the audit export and shows each session's provider status, and the console now starts noticeably faster. Duplicate approval notifications are fixed."
+            }
+          ],
+          "usage": {},
+          "final": true
+        }
+      ],
+      "profile": "gemini-docs"
+    },
+    {
+      "name": "Review the staging load balancer change",
+      "tool": "opencode",
+      "model": "opencode/big-pickle",
+      "folder": "infra-live",
+      "turns": [
+        {
+          "prompt": "Review the pending change to the staging load balancer and call out anything risky.",
+          "steps": [
+            {
+              "tool": {
+                "name": "terraform plan",
+                "command": "terraform plan -target=module.staging_lb -no-color",
+                "input": {
+                  "command": "terraform plan -target=module.staging_lb -no-color"
+                },
+                "output": "Plan: 1 to add, 2 to change, 0 to destroy.\n  ~ aws_lb_target_group.api  health_check.interval 30 -> 10\n  ~ aws_lb_listener.https    ssl_policy ELBSecurityPolicy-2016-08 -> ELBSecurityPolicy-FS-1-2-Res\n  + aws_lb_listener_rule.canary"
+              }
+            },
+            {
+              "say": "Nothing is destroyed. The tighter health check interval is low risk, but at ten seconds with the current unhealthy threshold of two a brief slowdown could remove a healthy target, so I would raise the threshold to three. The TLS policy change drops TLS 1.1 clients, which the access logs show are a small fraction of one percent of staging traffic. The new canary rule has no weight set and would send all matching traffic to the canary target group."
+            }
+          ],
+          "usage": {}
+        },
+        {
+          "prompt": "Set the canary weight to five percent and raise the unhealthy threshold to three.",
+          "steps": [
+            {
+              "tool": {
+                "name": "terraform plan",
+                "command": "terraform plan -target=module.staging_lb -no-color",
+                "input": {
+                  "command": "terraform plan -target=module.staging_lb -no-color"
+                },
+                "output": "Plan: 1 to add, 3 to change, 0 to destroy.\n  ~ aws_lb_target_group.api  unhealthy_threshold 2 -> 3\n  + aws_lb_listener_rule.canary  weight 5"
+              }
+            },
+            {
+              "say": "Both changes are in the plan. The canary rule now carries five percent of matching traffic and the unhealthy threshold is three. The plan shows one addition and three changes and no destructions, so it is ready for review."
+            }
+          ],
+          "usage": {},
+          "final": true
+        }
+      ],
+      "profile": "opencode-infra"
+    },
+    {
+      "name": "Explain a slow query plan",
+      "tool": "opencode",
+      "model": "qwen3-coder:30b",
+      "folder": "data-pipelines",
+      "local": true,
+      "turns": [
+        {
+          "prompt": "This query takes eleven seconds on the reporting replica. Explain the plan and suggest an index.",
+          "steps": [
+            {
+              "tool": {
+                "name": "psql",
+                "command": "psql reporting -c 'EXPLAIN ANALYZE SELECT * FROM shipments WHERE carrier_id = 42 AND shipped_at > now() - interval 30 days ORDER BY shipped_at DESC LIMIT 50'",
+                "input": {
+                  "command": "psql reporting -c 'EXPLAIN ANALYZE SELECT * FROM shipments WHERE carrier_id = 42 AND shipped_at > now() - interval 30 days ORDER BY shipped_at DESC LIMIT 50'"
+                },
+                "output": "Limit  (cost=0.00..1873.4 rows=50)\n  ->  Index Scan Backward using shipments_shipped_at_idx\n        Filter: (carrier_id = 42)\n        Rows Removed by Filter: 2,481,117\nExecution Time: 10912.4 ms"
+              }
+            },
+            {
+              "say": "The planner walks the shipped_at index backward and throws away about 2.5 million rows because the carrier filter is applied afterwards. A composite index on carrier_id and shipped_at descending lets it jump straight to the fifty rows it needs. Expect the query to drop from eleven seconds to a few milliseconds."
+            }
+          ],
+          "usage": {}
+        },
+        {
+          "prompt": "Will that index slow down the nightly load?",
+          "steps": [
+            {
+              "say": "Slightly. Each insert now maintains one more index, which typically adds a few percent to bulk load time. Because the nightly load appends rows in shipped_at order, the new index grows at its right edge and stays compact, so I would expect the load to take about three percent longer. Create it concurrently during the day so the build does not block writes."
+            }
+          ],
+          "usage": {},
+          "final": true
+        }
+      ],
+      "profile": "opencode-local"
+    }
+  ]
+}

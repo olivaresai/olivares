@@ -25,3 +25,14 @@ func reexecSelf(env []string) error {
 	exe = strings.TrimSuffix(exe, " (deleted)")
 	return syscall.Exec(exe, os.Args, append(os.Environ(), env...)) // #nosec G204 -- the engine's own binary and its own argv
 }
+
+// execApplied replaces this process with the applied binary, keeping the arguments and environment.
+func execApplied(path string) error {
+	return syscall.Exec(path, os.Args, os.Environ()) // #nosec G204 -- a binary the hand-over checked against OTA-signed evidence, started with this process's own argv
+}
+
+// openRegular opens a file of the data volume for reading without following a symlink and without
+// blocking on a FIFO. The caller asks the descriptor whether it is a regular file.
+func openRegular(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+}

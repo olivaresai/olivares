@@ -101,8 +101,9 @@ func auditRecoverCmdWithDeps(deps auditRecoverDeps) *cobra.Command {
 	var pubSpecs []string
 	var dryRun bool
 	cmd := &cobra.Command{
-		Use:   "recover",
-		Short: "Seal a corrupt audit tail and start a governed recovery epoch",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "recover",
+		Short:       "Seal a corrupt audit tail and start a governed recovery epoch",
 		Long: "recover performs a deny-closed, dual-control ceremony around a corrupt audit tail.\n" +
 			"It never repairs, moves or deletes audit rows: it appends an off-box-signed audit.recover\n" +
 			"marker that preserves the genesis scar and starts a new verifiable epoch.",
@@ -146,6 +147,10 @@ func auditRecoverCmdWithDeps(deps auditRecoverDeps) *cobra.Command {
 			}
 			eng, err := deps.boot(cmd, dataDir, engineKind, dsn)
 			if err != nil {
+				// An edition refusal keeps its class (exit 9) and its sentence.
+				if exitcode.From(err) == exitcode.Edition {
+					return err
+				}
 				return refuse("engine boot failed: " + err.Error())
 			}
 			defer func() { _ = eng.Close() }()

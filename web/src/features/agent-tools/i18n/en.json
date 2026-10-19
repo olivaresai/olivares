@@ -204,6 +204,7 @@
     "readFailed": "Could not read it: {{message}}",
     "tools": "AI tools",
     "packages": "Programs and registries",
+    "egressHosts": "Network hosts",
     "skills": "Skills",
     "mcp": "MCP servers",
     "none": "None",

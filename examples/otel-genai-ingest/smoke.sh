@@ -12,8 +12,12 @@
 # What it proves, end to end, against `olivares serve` with the Claude/OTEL
 # source wired (semconv_opt_in=gen_ai_latest_experimental):
 #   1. an OTLP/HTTP JSON trace export with one gen_ai.* span is accepted;
-#   2. its token usage surfaces in /v1/m/finops/spend/summary (samples + tokens);
-#   3. the provider is attributed (openai), proving it is parsed, not faked.
+#   2. on a Business binary, its token usage surfaces in /v1/m/finops/spend/summary
+#      (samples + tokens);
+#   3. on a Business binary, the provider is attributed (openai), proving it is
+#      parsed, not faked;
+#   4. on a Community binary (the default build), that route answers the documented
+#      501 edition refusal; any other status fails and names itself.
 #
 # Surface: connectors/claude (OTLP receiver + gen_ai profile), modules/finops.
 #
@@ -192,40 +196,75 @@ done
 [ -n "$OK" ] || { cat "$WORK/boot2.log" >&2; fail "OTLP receiver never accepted the span (is $OTLP up?)"; }
 
 # ---------------------------------------------------------------------------
-# Step 4 — assert the span surfaced as attributed cost in FinOps.
+# Step 4 — read the span back from FinOps spend. FinOps analysis is a Business
+# feature: a Business binary answers 200 and must show the attributed cost; a
+# Community binary answers 501 "FinOps is a Business feature" and that edition
+# refusal is the documented answer there. Any other status is a failure that
+# names itself (never read as "no samples").
 # ---------------------------------------------------------------------------
+SUMMARY_BODY="$WORK/summary.json"
+# summary_status prints the HTTP status of /v1/m/finops/spend/summary (000 if
+# unreachable) and leaves the body in $SUMMARY_BODY.
+summary_status() {
+  : >"$SUMMARY_BODY"   # a failed request must not leave an earlier iteration's body behind
+  printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -s --max-time 2 -o "$SUMMARY_BODY" -w '%{http_code}' \
+    "$BASE/v1/m/finops/spend/summary" -H @- -H "X-Olivares-Tenant: $TENANT" || true
+}
+
 # summary_fields prints "<samples> <input_tokens> <output_tokens> <provider>"
-# from /v1/m/finops/spend/summary (provider is "openai" when present, else NONE).
+# from the 200 body (provider is "openai" when present, else NONE).
 summary_fields() {
-  api_get '/v1/m/finops/spend/summary' 2>/dev/null | python3 -c '
+  python3 -c '
 import sys,json
 try:
-    d=json.load(sys.stdin)
+    d=json.load(open(sys.argv[1]))
 except Exception:
     print("0 0 0 NONE"); sys.exit()
 prov="NONE"
 for b in d.get("by_provider",[]):
     if b.get("key")=="openai": prov="openai"
-print(d.get("samples",0), d.get("input_tokens",0), d.get("output_tokens",0), prov)' 2>/dev/null || echo "0 0 0 NONE"
+print(d.get("samples",0), d.get("input_tokens",0), d.get("output_tokens",0), prov)' "$SUMMARY_BODY" 2>/dev/null || echo "0 0 0 NONE"
 }
 
-note "assert the GenAI usage surfaces in /v1/m/finops/spend/summary"
-SAMPLES=0; IN=0; OUT=0; PROV=NONE
+note "read the GenAI usage back from /v1/m/finops/spend/summary"
+STATUS=000; SAMPLES=0; IN=0; OUT=0; PROV=NONE
 # 60s for the same reason as the receiver wait: ingest crosses the source plugin and
 # the cost pipeline, and a busy host stretches that far past the old 10s budget.
+# A 501 is final (the edition's answer); other non-200 statuses may be the module
+# still starting after the restart, so they are retried and named if they persist.
 for _ in $(seq 1 120); do
-  read -r SAMPLES IN OUT PROV <<<"$(summary_fields)"
-  [ "${SAMPLES:-0}" != "0" ] && break
+  STATUS="$(summary_status)"
+  [ "$STATUS" = "501" ] && break
+  if [ "$STATUS" = "200" ]; then
+    read -r SAMPLES IN OUT PROV <<<"$(summary_fields)"
+    [ "${SAMPLES:-0}" != "0" ] && break
+  fi
   sleep 0.25
 done
 
-assert_eq "finops samples"        "$SAMPLES" "1"
-assert_eq "finops input_tokens"   "$IN"      "1200"
-assert_eq "finops output_tokens"  "$OUT"     "350"
-assert_eq "finops provider"       "$PROV"    "openai"
+case "$STATUS" in
+  200)
+    assert_eq "finops samples"        "$SAMPLES" "1"
+    assert_eq "finops input_tokens"   "$IN"      "1200"
+    assert_eq "finops output_tokens"  "$OUT"     "350"
+    assert_eq "finops provider"       "$PROV"    "openai"
+    RESULT="PASS — a vendor-neutral OpenTelemetry GenAI span became attributed cost on the real binary:
+  1 sample · 1200 in / 350 out tokens · provider=openai (genuinely parsed, not seeded)."
+    ;;
+  501)
+    grep -q "FinOps is a Business feature" "$SUMMARY_BODY" \
+      || fail "GET /v1/m/finops/spend/summary answered 501 without the edition refusal: $(cat "$SUMMARY_BODY")"
+    echo "    ok: finops spend summary = 501 (Community: FinOps analysis is a Business feature)"
+    RESULT="PASS — the OTLP receiver accepted the gen_ai span; spend analysis answered the Community
+  edition refusal (501, FinOps is a Business feature). Run this smoke with OLIVARES_BIN set to a
+  Business binary to assert the attributed cost."
+    ;;
+  *)
+    fail "GET /v1/m/finops/spend/summary answered HTTP $STATUS (want 200 on a Business binary or the 501 edition refusal on Community): $(cat "$SUMMARY_BODY" 2>/dev/null)"
+    ;;
+esac
 
 kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 
 echo
-echo "PASS — a vendor-neutral OpenTelemetry GenAI span became attributed cost on the real binary:"
-echo "  1 sample · 1200 in / 350 out tokens · provider=openai (genuinely parsed, not seeded)."
+echo "$RESULT"

@@ -1275,7 +1275,17 @@ const UUID_ANY =
 /** Canonical UUID v7: version nibble 7, RFC 4122 variant. What the console mints. */
 const UUID_V7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-const I3_LOCALES = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'] as const
+const I3_LOCALES = [
+  'en',
+  'es',
+  'de',
+  'fr',
+  'ja',
+  'ru',
+  'zh',
+  'it',
+  'ko',
+] as const
 type I3Locale = (typeof I3_LOCALES)[number]
 const I3_STATE_LABEL = {
   offered: 'Offered',
@@ -1412,7 +1422,7 @@ const i3: I3Evidence = {
       'K3 I3: offered work survives restart and accepted ownership survives a second restart',
       'K3 I3: keyboard rejection preserves ownership and exact response replay has no new effect',
       'K3 I3: context changes and reload preserve honest handling of a lost offer response',
-      'K3 I3: handoff views support keyboard focus, narrow layout, themes and seven locales',
+      'K3 I3: handoff views support keyboard focus, narrow layout, themes and nine locales',
     ],
     limits: [
       'selected-route locale coverage, not complete translated product acceptance',
@@ -1775,9 +1785,7 @@ async function fillAndReviewOffer(
     )?.trim() ?? ''
   const precondition =
     (
-      await intent
-        .locator('dt:text-is("Precondition (If-Match)") + dd')
-        .textContent()
+      await intent.locator('dt:text-is("Version read") + dd').textContent()
     )?.trim() ?? ''
   expect(key, 'the reviewed key is a canonical UUID v7').toMatch(UUID_V7)
   return { key, precondition, deadlineUtc }
@@ -3296,8 +3304,8 @@ test('K3 I3: context changes and reload preserve honest handling of a lost offer
   }
 })
 
-// ─── I3 · 4: keyboard, narrow layout, themes, seven locales, capture code ────────
-test('K3 I3: handoff views support keyboard focus, narrow layout, themes and seven locales', async ({
+// ─── I3 · 4: keyboard, narrow layout, themes, nine locales, capture code ────────
+test('K3 I3: handoff views support keyboard focus, narrow layout, themes and nine locales', async ({
   browser,
 }) => {
   const offered = i3Fixture('lost')
@@ -3476,7 +3484,7 @@ test('K3 I3: handoff views support keyboard focus, narrow layout, themes and sev
     }
     await setTheme(b, 'light')
 
-    // Seven locales through the persisted language preference; the actual
+    // Nine locales through the persisted language preference; the actual
     // translated H1 and tab, no raw key presentation.
     for (const lng of I3_LOCALES) {
       await b.evaluate(

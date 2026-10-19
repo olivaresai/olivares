@@ -22,8 +22,8 @@ description: >-
 これはサーバーだからです。下記のように意図して制限してください。
 
 <!-- release -->
-:::note[Olivares 0.2]
-次のリリースは `0.2` で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は `docs/releases/0.2-install-surfaces.json` に記録されています。
+:::note[Olivares 0.3]
+次のリリースは `0.3` で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は `docs/releases/0.3-install-surfaces.json` に記録されています。
 :::
 <!-- /release -->
 
@@ -39,7 +39,7 @@ description: >-
 
 <!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:0.2
+docker pull docker.io/olivaresai/olivares:0.3
 ```
 <!-- /release -->
 
@@ -47,7 +47,7 @@ docker pull docker.io/olivaresai/olivares:0.2
 バックアップ兼ビルドレジストリとして使われます。Docker Hub は**匿名**プルにレート制限を課しますが、
 ghcr.io は公開イメージの匿名プルにレート制限を課しません。CI ノードや大規模なフリートが上限に達した
 場合は `docker login` するか、ghcr.io の座標に切り替えてください。タグには **先頭に `v` が付きません**: <!-- release -->
-`:0.2`<!-- /release --> はリリースを固定し、`:latest` は浮動、<!-- release -->`:0.2-fips`<!-- /release --> / <!-- release -->`:0.2-stig`<!-- /release --> は
+`:0.3`<!-- /release --> はリリースを固定し、`:latest` は浮動、<!-- release -->`:0.3-fips`<!-- /release --> / <!-- release -->`:0.3-stig`<!-- /release --> は
 堅牢化されたバリアントです。ベースと `:latest` タグはマルチアーキ
 （`linux/amd64`、`linux/arm64`）で、`fips`/`stig` は `amd64` 専用です。
 
@@ -59,7 +59,7 @@ Docker Hub にコピーされるため、ダイジェストは同じです:
 <!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:0.2")"
+DIGEST="$(crane digest "$IMAGE:0.3")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -98,7 +98,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -328,7 +328,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 本番ではダイジェストで固定する
 
-可変タグ（<!-- release -->`:0.2`<!-- /release -->、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
+可変タグ（<!-- release -->`:0.3`<!-- /release -->、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
 ダイジェストは不変であり、まさにあなたが承認したものです:
 
 ```bash

@@ -140,7 +140,7 @@ func TestTenantErasureAnonymizesNoAccountWithoutCustodyEvidence(t *testing.T) {
 func TestTheCustodianReadmitsItsOwnOffboardedAccount(t *testing.T) {
 	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
 		user := e.onboard(e.tT, "custodied@consent.test", "viewer")
-		e.scimDelete(e.tT, user)
+		e.deprovision(e.tT, user)
 
 		again := map[string]any{"email": "custodied@consent.test", "role": "viewer", "mode": "password", "password": "another-pass-1"}
 		if r := e.do("POST", "/v1/onboard", e.admin, e.tT, again); r.code != http.StatusConflict || r.errorCode() != "retirement_pending" {

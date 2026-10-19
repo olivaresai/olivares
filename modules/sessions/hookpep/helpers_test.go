@@ -76,6 +76,9 @@ func (f *fakeOpener) ConsumeApproval(_ context.Context, _ model.TenantID, _, _, 
 func (f *fakeOpener) GateOnceForSession(ctx context.Context, tenant model.TenantID, action, kind, ref, hash, reason, actor, session string) (string, string, string, error) {
 	return f.GateOnce(ctx, tenant, action, kind, ref, hash, reason, actor)
 }
+func (f *fakeOpener) GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, kind, ref, hash, reason, actor, session string) (string, string, string, error) {
+	return f.GateOnceForSession(ctx, tenant, action, kind, ref, hash, reason, actor, session)
+}
 func (f *fakeOpener) StatusScoped(ctx context.Context, tenant model.TenantID, ref, hash, action, kind, subject string) (string, string, error) {
 	return f.status, "ph", f.err
 }

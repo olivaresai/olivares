@@ -28,7 +28,7 @@
     "clear": "Effacer",
     "drift": "Permis vs observé",
     "driftHint": "Superposer la différence de moindre privilège : mettre en évidence les accès inattendus (observés, non permis) et les octrois inutilisés.",
-    "driftForbidden": "Nécessite la permission de dérive (accessmap:drift:read)."
+    "driftForbidden": "Votre rôle ne peut pas voir la dérive."
   },
   "legend": {
     "read": "Lecture",
@@ -51,7 +51,7 @@
     "unusedTitle": "Octrois inutilisés",
     "unusedHint": "Permis mais jamais observé — surprovisionnement à resserrer.",
     "forbiddenTitle": "Dérive non autorisée",
-    "forbiddenHint": "Votre rôle peut voir le graphe mais pas la différence permis-vs-observé (accessmap:drift:read).",
+    "forbiddenHint": "Votre rôle peut voir le graphe, mais pas la différence entre ce qui est permis et ce qui a été observé.",
     "partial": "Résultat partiel : le moteur a réconcilié cet écart sur une fenêtre de dérive tronquée ; ces totaux ne couvrent donc pas tout le parc et une arête absente ici peut simplement se situer au-delà de la limite.",
     "emptyWindowTitle": "Aucun constat dans la fenêtre analysée",
     "emptyWindowHint": "L'analyse s'est arrêtée à sa limite de page : ceci ne dit rien de l'ensemble du parc.",
@@ -104,9 +104,9 @@
     },
     "target": {
       "sourceBindings": "Ouvrir les liaisons de source",
-      "nhiRoster": "Ouvrir l'inventaire NHI"
+      "nhiRoster": "Ouvrir les identités"
     },
-    "needsPermission": "{{action}} requiert la permission {{permission}}, dont ce rôle ne dispose pas.",
+    "needsPermission": "{{action}} requiert pour cela {{permission}} ; ce rôle n’en dispose pas.",
     "recheck": "Revérifier la dérive",
     "verdict": {
       "clear": "Revérifié : cette arête n'est plus dans l'ensemble de dérive. L'explication ci-dessus décrit l'état antérieur à cette vérification.",
@@ -137,12 +137,12 @@
     "mixed": "Fidélité mixte selon les signaux."
   },
   "attributionTier": {
-    "firm": "Ferme",
+    "firm": "Exacte",
     "approximate": "Approximatif",
     "unknown": "Inconnu"
   },
   "attributionTierHint": {
-    "firm": "Lié à un agent/NHI concret via un SVID, WIF ou un identifiant dédié.",
+    "firm": "Lié à un seul agent par sa propre identité ou un identifiant dédié.",
     "approximate": "Un compte partagé — l’identité est connue, mais pas un agent unique.",
     "unknown": "Aucun audit par identité (p. ex. Redis/SQLite/D1) — attribution impossible."
   },
@@ -180,7 +180,7 @@
       "exfil": "Voies d'exfiltration"
     },
     "attribution": {
-      "firm": "ferme",
+      "firm": "exacte",
       "approximate": "approximative",
       "unknown": "non attribuée"
     },

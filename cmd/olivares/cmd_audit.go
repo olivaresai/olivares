@@ -25,8 +25,9 @@ import (
 // export/verify the immutable archive.
 func newAuditCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "audit",
-		Short: "See recent events; verify, checkpoint and export the audit ledger",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "audit",
+		Short:       "See recent events; verify, checkpoint and export the audit ledger",
 		Long: "audit is how the evidence ledger is proved, anchored and handed over: verify a\n" +
 			"tenant's hash chain against its signed checkpoints, write a new checkpoint,\n" +
 			"publish a C2SP Merkle checkpoint and verify it offline, export the ledger to a SIEM\n" +
@@ -98,8 +99,9 @@ func auditVerifyCmd() *cobra.Command {
 	var fromSeq int64
 	var strict bool
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify a tenant's chain and its signed checkpoints",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Verify a tenant's chain and its signed checkpoints",
 		Long: "verify checks a tenant's audit hash chain, signed checkpoints and per-event signatures.\n" +
 			"Without pinned keys the check is advisory; pass off-box public keys and --strict for an\n" +
 			"attacker-resistant automation gate that exits non-zero on any integrity failure.",
@@ -441,11 +443,12 @@ func parsePubKeySpec(spec, compatAlg string, n int) (audit.SigAlg, []byte, error
 func auditCheckpointCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant string
 	cmd := &cobra.Command{
-		Use:     "checkpoint",
-		Short:   "Write a signed checkpoint (all tenants, or one with --tenant)",
-		Long:    "checkpoint appends a signed audit checkpoint for one tenant, or for every tenant when --tenant is omitted.",
-		Example: "  olivares audit checkpoint --tenant t_abc123",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "checkpoint",
+		Short:       "Write a signed checkpoint (all tenants, or one with --tenant)",
+		Long:        "checkpoint appends a signed audit checkpoint for one tenant, or for every tenant when --tenant is omitted.",
+		Example:     "  olivares audit checkpoint --tenant t_abc123",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := auditBoot(cmd, dataDir, engine, dsn)
 			if err != nil {
@@ -495,8 +498,9 @@ func auditCheckpointCmd() *cobra.Command {
 func auditExportCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, format string
 	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Export a tenant's ledger to a SIEM format (" + audit.FormatList() + ")",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "export",
+		Short:       "Export a tenant's ledger to a SIEM format (" + audit.FormatList() + ")",
 		Long: "export walks one tenant's audit ledger in sequence order and writes each event to stdout in " +
 			"ArcSight CEF, IBM QRadar LEEF 2.0, RFC 5424 syslog, a complete OTLP/HTTP export request " +
 			"(otlp; otlp_envelope is an exact alias), the bare OTLP LogRecord projection " +
@@ -547,8 +551,9 @@ func auditExportCmd() *cobra.Command {
 // the JSONL+manifest segment format an external WORM copy re-verifies offline.
 func auditArchiveCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "archive",
-		Short: "Export and verify the immutable ledger archive",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "archive",
+		Short:       "Export and verify the immutable ledger archive",
 		Long: "archive writes the ledger out as self-describing JSONL segments plus a signed\n" +
 			"manifest, and verifies such a directory again later.\n\n" +
 			"The point of the split is that verify needs neither the store nor the network:\n" +
@@ -568,8 +573,9 @@ func auditArchiveExportCmd() *cobra.Command {
 	var fromSeq int64
 	var segmentEvents int
 	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Export a tenant's ledger as verifiable archive segments to a directory",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "export",
+		Short:       "Export a tenant's ledger as verifiable archive segments to a directory",
 		Long: "export writes immutable JSONL audit segments, manifests and advisory verification keys\n" +
 			"to a directory suitable for external WORM storage. Use --from-seq to resume an export. Requires Business.",
 		Example: "  olivares audit archive export --tenant t_abc123 --out /mnt/worm/audit/t_abc123",
@@ -592,8 +598,9 @@ func auditArchiveVerifyCmd() *cobra.Command {
 	var pubSpecs, eventPubB64s []string
 	var strict bool
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify an exported archive directory offline (no store, no network)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Verify an exported archive directory offline (no store, no network)",
 		Long: "verify checks an exported archive's segment hashes, chain continuity and signatures without\n" +
 			"opening a store or using the network. Pin trusted keys and use --strict for an automation gate. Requires Business.",
 		Example: "  olivares audit archive verify --dir /mnt/worm/audit/t_abc123 --strict",

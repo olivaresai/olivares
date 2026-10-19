@@ -4,6 +4,21 @@
 import { describe, expect, it } from 'vitest'
 import { parseInline, parseMarkdown, safeHref, type Block } from './markdown'
 
+it('lets a governed wiki resolve relative links throughout Markdown without widening reply links', () => {
+  const resolve = (href: string) =>
+    href === 'wiki/earth.md' ? '#earth' : safeHref(href)
+  const linked = { kind: 'link', href: '#earth', children: ['Earth'] }
+  const source =
+    '# [Earth](wiki/earth.md)\n\n- **[Earth](wiki/earth.md)**\n\n> [Earth](wiki/earth.md)\n\n| Page |\n| --- |\n| [Earth](wiki/earth.md) |'
+  expect(JSON.stringify(parseMarkdown(source, resolve))).toContain(
+    JSON.stringify(linked),
+  )
+  expect(
+    JSON.stringify(parseMarkdown(source, resolve)).match(/"href":"#earth"/g),
+  ).toHaveLength(4)
+  expect(JSON.stringify(parseMarkdown(source))).not.toContain('"kind":"link"')
+})
+
 describe('parseMarkdown — blocks (#1784)', () => {
   it('reads the reply that was shown raw: bold lead-ins, nested items, ordered steps and code', () => {
     const blocks = parseMarkdown(

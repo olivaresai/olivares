@@ -109,7 +109,8 @@
     "published_26100": true,
     "config_defaults": {},
     "console_entries": [
-      "compliance"
+      "compliance",
+      "retention"
     ],
     "retirement_order": 8
   },

@@ -1,0 +1,202 @@
+{
+  "title": "MCP 및 스킬",
+  "subtitle": "라이브 기능 카탈로그 — MCP 서버, 도구, 스킬 및 연결 방식입니다.",
+  "tabs": {
+    "servers": "서버",
+    "tools": "도구",
+    "skills": "스킬",
+    "wiring": "연결",
+    "configs": "관리 구성"
+  },
+  "servers": {
+    "search": "서버 검색…",
+    "name": "서버",
+    "transport": "전송",
+    "version": "버전",
+    "status": "상태",
+    "connection": "연결",
+    "tools": "도구",
+    "managed": "관리됨",
+    "managedRev": "관리됨 · rev {{rev}}",
+    "discovered": "발견됨",
+    "empty": "발견된 MCP 서버 없음",
+    "emptyHint": "인벤토리와 인트로스펙션 플레인이 발견하는 대로 서버가 여기에 표시됩니다.",
+    "truncated": "서버 {{n}}개를 불러왔으며 더 있습니다"
+  },
+  "connection": {
+    "connected": "연결됨",
+    "degraded": "성능 저하",
+    "down": "중단",
+    "unknown": "아직 신호 없음",
+    "caption": "마지막으로 관측된 연결 신호 — 공식 가동 시간/SLA가 아닙니다."
+  },
+  "detail": {
+    "title": "서버 세부 정보",
+    "identity": "신원",
+    "endpoint": "엔드포인트",
+    "config": "관리 구성",
+    "health": "연결 상태",
+    "healthCaption": "마지막 신호의 기본 연결 상태 — 공식 SLA가 아닙니다.",
+    "tools": "도구",
+    "skills": "스킬",
+    "resources": "리소스",
+    "consumers": "사용 주체",
+    "consumersHint": "이 서버에 연결된 세션과 에이전트입니다.",
+    "noConfig": "관리 구성 없음",
+    "noConfigHint": "저장된 정의를 추가하여 이 서버의 전송 및 비밀 참조를 문서화하십시오.",
+    "manageConfig": "구성 관리",
+    "editConfig": "구성 편집",
+    "deleteConfig": "구성 삭제",
+    "revisionHistory": "리비전 이력",
+    "severity": "심각도",
+    "lastTitle": "마지막 문제",
+    "statusAt": "마지막 신호",
+    "occurrences": "발생 횟수",
+    "detailHash": "세부 해시"
+  },
+  "tools": {
+    "search": "도구 검색…",
+    "name": "도구",
+    "kind": "종류",
+    "server": "서버",
+    "annotations": "주석",
+    "schemaHash": "스키마 해시",
+    "readOnly": "읽기 전용",
+    "destructive": "파괴적",
+    "untrustedNote": "MCP 주석은 서버가 제공한 검증되지 않은 진술입니다. Olivares AI는 이를 신호로 표시하며 이에 근거해 강제하지 않습니다.",
+    "empty": "발견된 도구 없음",
+    "truncated": "도구 {{n}}개를 불러왔으며 더 있습니다"
+  },
+  "skills": {
+    "search": "스킬 검색…",
+    "name": "스킬",
+    "source": "소스",
+    "version": "버전",
+    "status": "상태",
+    "description": "설명",
+    "caption": "커넥터가 발견하는 대로 Claude Code 플러그인과 하위 에이전트가 여기에 표시됩니다. 메타데이터는 의도적으로 최소화되어 있습니다.",
+    "empty": "발견된 스킬 없음",
+    "truncated": "스킬 {{n}}개를 불러왔으며 더 있습니다"
+  },
+  "wiring": {
+    "title": "기능 연결",
+    "mobileHint": "연결 그래프(연결 {{count}}개)는 큰 화면에서 보는 것이 좋습니다.",
+    "description": "무엇이 무엇에 연결되어 있는지 — 에이전트와 세션이 사용하는 MCP 서버, 도구, 스킬 및 리소스입니다.",
+    "notAccessMap": "이는 기능 연결 그래프이며 R/RW 리소스 접근 맵이 아닙니다(접근 맵 참조).",
+    "observed": "관측됨",
+    "declared": "선언됨",
+    "legend": "출처",
+    "partial": "부분 그래프 표시 중 — 필터를 조정하여 특정 연결을 확인하십시오.",
+    "occurrences": "발생 횟수",
+    "firstSeen": "처음 확인",
+    "lastSeen": "마지막 확인",
+    "via": "경유",
+    "nodeKinds": {
+      "session": "세션",
+      "agent": "에이전트",
+      "mcp_server": "MCP 서버",
+      "tool": "도구",
+      "skill": "스킬",
+      "resource": "리소스"
+    }
+  },
+  "configs": {
+    "search": "구성 검색…",
+    "serverRef": "서버",
+    "transport": "전송",
+    "scope": "범위",
+    "enabled": "활성화됨",
+    "revision": "리비전",
+    "secrets": "비밀 참조",
+    "secretsCount": "{{count}}개 참조",
+    "secretsCount_other": "{{count}}개 참조",
+    "newConfig": "새 구성",
+    "empty": "관리 구성 없음",
+    "emptyHint": "관측 및 리비전 이력을 위해 MCP 서버의 전송, 범위 및 비밀 참조 정의를 저장하십시오.",
+    "truncated": "구성 {{n}}개를 불러왔으며 더 있습니다",
+    "observationNotice": "저장된 정의는 관측 메타데이터입니다. 저장, 활성화 또는 삭제해도 MCP 게이트웨이나 실행 중인 서버는 바뀌지 않습니다."
+  },
+  "editor": {
+    "createTitle": "새 관리 구성",
+    "editTitle": "관리 구성 편집",
+    "serverRef": "서버 참조",
+    "serverRefHint": "이 정의가 설명하는 MCP 서버 이름입니다. 생성 후 변경할 수 없습니다.",
+    "transport": "전송",
+    "endpoint": "엔드포인트",
+    "endpointHint": "참조만 입력하십시오 — 엔드포인트에 자격 증명을 절대 포함하지 마십시오.",
+    "scope": "범위",
+    "scopeHint": "선택적 배포/테넌트 범위 레이블(예: team-a).",
+    "enabled": "활성화됨",
+    "note": "메모",
+    "secretRefs": "비밀 참조",
+    "secretRefsHint": "콘솔 외부에 저장된 자격 증명에 대한 참조 — 값 자체는 절대 아닙니다.",
+    "secretName": "이름",
+    "secretRefKind": "저장 위치",
+    "secretRef": "로케이터",
+    "secretRefPlaceholder": "$GITHUB_TOKEN",
+    "secretHint": "마스킹된 힌트(선택 사항)",
+    "addSecret": "참조 추가",
+    "removeSecret": "제거",
+    "noSecrets": "비밀 참조 없음",
+    "credentialWarning": "자격 증명 값처럼 보입니다. 참조(예: $GITHUB_TOKEN 또는 볼트 경로)를 입력하고 비밀 자체는 절대 입력하지 마십시오.",
+    "refKind": {
+      "env": "환경 변수",
+      "vault": "볼트",
+      "secret_manager": "비밀 관리자",
+      "file": "파일",
+      "other": "기타"
+    },
+    "create": "구성 생성",
+    "save": "변경 사항 저장",
+    "confirmCreateTitle": "관리 구성을 생성하시겠습니까?",
+    "confirmCreateBody": "“{{server}}”의 관리 구성을 생성하고 변경 불가능한 리비전 이력을 시작합니다. 귀하의 신원으로 감사 원장에 기록됩니다.",
+    "confirmUpdateTitle": "구성 변경 사항을 저장하시겠습니까?",
+    "confirmUpdateBody": "리비전을 올리고 “{{server}}”의 변경 불가능한 이력 스냅샷을 기록합니다. 귀하의 신원으로 감사됩니다. 서버 참조는 변경할 수 없습니다.",
+    "created": "관리 구성이 생성되었습니다",
+    "updated": "관리 구성이 업데이트되었습니다"
+  },
+  "remove": {
+    "title": "관리 구성을 삭제하시겠습니까?",
+    "body": "“{{server}}”의 변경 불가능한 이력에 마지막 “삭제” 스냅샷을 추가하며 귀하의 신원으로 감사됩니다. MCP 서버는 발견된 설정으로 계속 실행됩니다.",
+    "confirm": "영구 삭제",
+    "done": "관리 구성이 삭제되었습니다"
+  },
+  "revisions": {
+    "title": "리비전 이력",
+    "subtitle": "“{{server}}”의 변경 불가능한 최신순 스냅샷입니다.",
+    "revision": "리비전",
+    "action": "변경",
+    "actor": "작업자",
+    "at": "시각",
+    "caption": "이력은 삭제 후에도 유지됩니다 — 마지막 항목은 “삭제” 스냅샷입니다.",
+    "actions": {
+      "create": "생성됨",
+      "update": "업데이트됨",
+      "delete": "삭제됨"
+    },
+    "empty": "리비전 없음",
+    "emptyHint": "이 서버의 모든 변경은 비교하고 복원할 수 있는 리비전으로 보관됩니다. 첫 편집이 하나를 생성합니다.",
+    "truncated": "리비전 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "이력이 이 페이지보다 깁니다. 이 목록에 없는 리비전이 기록된 적 없다는 증거는 아닙니다."
+  },
+  "empty": {
+    "config": {
+      "title": "아직 생성된 관리 구성 없음",
+      "description": "관측 및 리비전 이력을 위해 MCP 서버의 전송, 범위 및 비밀 참조 정의를 저장하십시오."
+    },
+    "server": {
+      "title": "아직 발견된 MCP 서버 없음",
+      "description": "커넥터 관측이 테넌트 인벤토리에서 MCP 서버를 식별하면 서버가 표시됩니다.",
+      "action": "MCP 서버에서 서버 추가 또는 테스트"
+    },
+    "skill": {
+      "title": "아직 발견된 스킬 없음",
+      "description": "스킬은 MCP 프롬프트 인트로스펙션에서 나옵니다. Claude Code 소스는 하위 에이전트, 스킬 및 플러그인을 선언된 리소스로 보고하며 이 표에는 넣지 않습니다."
+    },
+    "tool": {
+      "title": "아직 발견된 MCP 도구 없음",
+      "description": "MCP 인트로스펙션이나 관측된 도구 활동이 테넌트 인벤토리에 보고하면 도구가 표시됩니다."
+    }
+  },
+  "truncatedHint": "표시된 것보다 많은 행이 있으며 이 페이지는 생성 시 할당된 행 id로 가져오므로 이후 행이 누락됩니다. 여기에 없는 서버, 도구, 스킬 또는 구성이 존재하지 않는다는 증거는 아닙니다."
+}

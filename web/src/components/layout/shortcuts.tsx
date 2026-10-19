@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -28,6 +28,12 @@ import {
   NAV_SEQUENCES,
   NAV_SEQUENCE_TIMEOUT_MS,
 } from '@/lib/keybindings/table'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import {
+  isSessionAddress,
+  SESSION_PARAM,
+} from '@/features/sessions/session-address'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useCommandStore } from '@/stores/command'
 import { foldOrOverlay } from './sidebar-mode'
 import { useNewSession } from './new-session'
@@ -63,6 +69,12 @@ function chordTokens(keys: string): string[] {
     .map((p) => (p.toLowerCase() === 'mod' ? '⌘' : p))
 }
 
+/** A session the person has open, as the router addresses it. */
+interface OpenedSession {
+  to: '/sessions' | '/agentops'
+  search: { session: string }
+}
+
 /**
  * Global keyboard shortcuts. `g`+letter navigation sequences, and every
  * chord the DECLARED TABLE holds, resolved through it rather than matched by hand.
@@ -80,7 +92,53 @@ export function GlobalShortcuts() {
   const { t } = useTranslation(['common', 'nav'])
   const navigate = useNavigate()
   // The same permission projection the sidebar, palette and directories use.
-  const { listed } = useViewAccess()
+  const { listed, navigable } = useViewAccess()
+  const boundary = useAuthBoundary()
+  const workspace = useWorkspaceStore((s) => s.activeWorkspace)
+  // Who is acting and where, not which credential: a renewal keeps the same person in
+  // the same tenant and workspace, so it must not forget the previous session.
+  const scope = `${boundary.principal ?? ''}|${boundary.tenant ?? ''}|${workspace ?? ''}`
+  // Primitives, so the effect below runs when the address changes and not on every render.
+  const path = useRouterState({ select: (s) => s.location.pathname })
+  const sessionParam = useRouterState({
+    select: (s) =>
+      (s.location.search as Record<string, unknown>)[SESSION_PARAM],
+  })
+  const history = useRef<{
+    scope: string
+    current: OpenedSession | null
+    previous: OpenedSession | null
+    /** The session the URL still named when the scope changed: it belongs to the old scope. */
+    stale: string | null
+  }>({ scope, current: null, previous: null, stale: null })
+  useEffect(() => {
+    const h = history.current
+    const opened: OpenedSession | null =
+      (path === '/sessions' || path === '/agentops') &&
+      typeof sessionParam === 'string' &&
+      isSessionAddress(sessionParam)
+        ? { to: path, search: { session: sessionParam } }
+        : null
+    if (h.scope !== scope) {
+      // Nothing recorded since the last change means the URL still names the same old
+      // session, so keep ignoring it through a second switch.
+      const url = opened?.search.session ?? null
+      history.current = {
+        scope,
+        current: null,
+        previous: null,
+        stale: h.current || h.stale === url ? url : null,
+      }
+    }
+    const next = history.current
+    if (!opened) return
+    if (opened.search.session === next.stale) return
+    next.stale = null
+    if (opened.search.session !== next.current?.search.session) {
+      next.previous = next.current
+      next.current = opened
+    } else if (opened.to !== next.current.to) next.current = opened
+  }, [scope, path, sessionParam])
   const [helpOpen, setHelpOpen] = useState(false)
   const armedUntil = useRef(0)
   const { valid, problems } = auditKeybindings(KEYBINDINGS)
@@ -112,6 +170,8 @@ export function GlobalShortcuts() {
       // `command-menu.tsx` so the console has ONE keyboard authority and one table.
       const chordCommand = resolveBinding(KEYBINDINGS, e, {
         outsideField: !typing,
+        sessionHistory:
+          !!history.current.previous && !helpOpen && !modalIsOpen(),
       })
       if (chordCommand === 'palette.open') {
         e.preventDefault()
@@ -125,6 +185,22 @@ export function GlobalShortcuts() {
       if (chordCommand === 'nav.toggleRail') {
         e.preventDefault()
         foldOrOverlay(window.location.pathname)
+        return
+      }
+      // The previous-session jump is the third chord that works WHILE TYPING, for the
+      // same reason as the two above: it is three modified keys, so it cannot be typed
+      // into a session name by accident, and one chord is the whole point of the feature.
+      if (chordCommand === 'session.previous') {
+        if (e.repeat || e.isComposing || e.defaultPrevented) return
+        const previous = history.current.previous
+        const view = FEATURE_VIEWS.find((v) => v.path === previous?.to)
+        if (!previous || !view || !navigable(view)) return
+        e.preventDefault()
+        armedUntil.current = 0
+        void navigate({
+          to: previous.to as never,
+          search: previous.search as never,
+        })
         return
       }
       if (typing) return
@@ -148,7 +224,13 @@ export function GlobalShortcuts() {
         //    answer to `/` there is to go where the work is, not to swallow the key.
         //    `/sessions` is the destination because it mounts the composer beside the
         //    list the run will join; nothing is auto-typed and nothing is auto-started.
-        const field = document.getElementById(COMPOSER_INPUT_ID)
+        // With two narratives the focused column's own composer is the target. A focused
+        // column with no composer (nothing to type to) is not a reason to type into the
+        // other column's, so the id fallback is for the one-narrative case.
+        const focusedColumn = document.querySelector('[data-focused="true"]')
+        const field = focusedColumn
+          ? focusedColumn.querySelector('textarea')
+          : document.getElementById(COMPOSER_INPUT_ID)
         e.preventDefault()
         armedUntil.current = 0
         if (field instanceof HTMLElement) {
@@ -191,7 +273,7 @@ export function GlobalShortcuts() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [helpOpen, navigate, visible, newSession])
+  }, [helpOpen, navigate, visible, newSession, navigable])
 
   return (
     <Dialog open={helpOpen} onOpenChange={setHelpOpen}>

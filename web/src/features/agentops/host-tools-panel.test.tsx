@@ -408,7 +408,7 @@ describe('HC1 host-tool observation — closed contract', () => {
 describe('HC1 host-tool observation — errors, refresh and stale answers', () => {
   it.each([
     [401, 'unauthenticated', /no longer authenticated/],
-    [403, 'forbidden', /cannot read this profile’s host tool observation/],
+    [403, 'forbidden', /cannot read which tools this profile’s host has/],
     [404, 'not_found', /not available in the current tenant/],
     [409, 'profile_changed', /profile changed during observation/],
     [503, 'unavailable', /could not be read/],

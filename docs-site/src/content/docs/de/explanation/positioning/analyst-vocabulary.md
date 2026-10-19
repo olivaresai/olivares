@@ -89,7 +89,7 @@ Konformität damit und implizieren keine Gartner-Befürwortung.
   Entscheidungspfad sitzen: Freigaben, der Claude Code Hooks PEP, MCP-Tool-Gating, Kill
   Switches.
 - **Informationsgovernance** — PII-/Sensitivitäts-Erkennung über governete
-  Wissensbasen, Datenresidenz-Attestierung, Aufbewahrung und Legal Hold.
+  Wissensbasen, Datenresidenz-Attestierung, Aufbewahrung und Legal Hold (Legal Hold ist Business).
 
 Wir nutzen AI TRiSM als *Karte des Problemraums, den ein Käufer bereits kennt*, um
 Abdeckung zu zeigen — nicht als Abzeichen.

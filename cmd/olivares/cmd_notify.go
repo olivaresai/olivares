@@ -46,8 +46,9 @@ const notifyNS = "notify"
 func newNotifyCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "notify",
-		Short: "Author notification routes and inspect deliveries and the outbox",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "notify",
+		Short:       "Author notification routes and inspect deliveries and the outbox",
 		Long: "notify is the routing plane for findings: rules that select signals by type,\n" +
 			"kind, severity, source and subject, and send them to a provisioned destination.\n\n" +
 			"Authoring a route is a privileged, audited action, and every change appends a\n" +
@@ -121,9 +122,10 @@ var notifySeverities = []string{"info", "low", "medium", "high", "critical"}
 
 func newNotifyRoutesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "routes",
-		Aliases: []string{"route"},
-		Short:   "Author, inspect, test and roll back notification routes",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "routes",
+		Aliases:     []string{"route"},
+		Short:       "Author, inspect, test and roll back notification routes",
 		Long: "routes are the rules: which signals go where. A route names a provisioned\n" +
 			"destination and a predicate over event type, finding kind, severity floor,\n" +
 			"source and subject kind.\n\n" +
@@ -177,9 +179,10 @@ func newNotifyRoutesListCmd(flags *authClientFlags) *cobra.Command {
 	var destination, enabled string
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List notification routes",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List notification routes",
 		Long: "ls lists the tenant's routes. The ENABLED column is the one to read first: a\n" +
 			"disabled route still matches in `evaluate` but can never fire, which is the\n" +
 			"usual explanation for \"the rule looks right and nothing arrives\".",
@@ -243,11 +246,12 @@ func newNotifyRoutesListCmd(flags *authClientFlags) *cobra.Command {
 
 func newNotifyRoutesGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <route-id>",
-		Short:   "Show one route's full predicate",
-		Long:    "get shows every dimension of one route's predicate, plus its dedup and throttle\nwindows and who authored it.",
-		Example: "  olivares notify routes get rt-1\n  olivares notify routes get rt-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <route-id>",
+		Short:       "Show one route's full predicate",
+		Long:        "get shows every dimension of one route's predicate, plus its dedup and throttle\nwindows and who authored it.",
+		Example:     "  olivares notify routes get rt-1\n  olivares notify routes get rt-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := observeCall{
 				flags: flags, ns: notifyNS, method: http.MethodGet,
@@ -331,8 +335,9 @@ func (f notifyRouteFlags) input(cmd *cobra.Command) (notifyRouteInput, error) {
 func newNotifyRoutesCreateCmd(flags *authClientFlags) *cobra.Command {
 	var f notifyRouteFlags
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Declare a notification route",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Declare a notification route",
 		Long: "create declares a route. The name is the natural key in the tenant, so creating\n" +
 			"the same name twice conflicts rather than replacing.\n\n" +
 			"A ROUTE WITH NO MATCH FILTERS MATCHES EVERYTHING that clears the severity floor.\n" +
@@ -376,8 +381,9 @@ func newNotifyRoutesCreateCmd(flags *authClientFlags) *cobra.Command {
 func newNotifyRoutesUpdateCmd(flags *authClientFlags) *cobra.Command {
 	var f notifyRouteFlags
 	cmd := &cobra.Command{
-		Use:   "update <route-id>",
-		Short: "Replace a route's predicate",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "update <route-id>",
+		Short:       "Replace a route's predicate",
 		Long: "update REPLACES the predicate. Every match dimension you do not pass is CLEARED,\n" +
 			"not kept — so an update that means to add one severity floor and forgets\n" +
 			"--match-type widens the route.\n\n" +
@@ -415,9 +421,10 @@ func newNotifyRoutesUpdateCmd(flags *authClientFlags) *cobra.Command {
 func newNotifyRoutesRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <route-id>",
-		Aliases: []string{"delete", "remove"},
-		Short:   "Delete a route (admin-tier)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <route-id>",
+		Aliases:     []string{"delete", "remove"},
+		Short:       "Delete a route (admin-tier)",
 		Long: "rm deletes a route. Signals it used to select stop being delivered, silently —\n" +
 			"nothing fails, notifications simply stop arriving, which is the hardest kind of\n" +
 			"outage to notice.\n\n" +
@@ -458,8 +465,9 @@ type notifyTestResult struct {
 
 func newNotifyRoutesTestCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "test <route-id>",
-		Short: "Send a REAL test notification through a route (admin-tier)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "test <route-id>",
+		Short:       "Send a REAL test notification through a route (admin-tier)",
 		Long: "test sends a synthetic notification through the route's actual destination and\n" +
 			"records the attempt in the delivery ledger.\n\n" +
 			"THIS LEAVES THE BUILDING. A real message arrives at a real Slack channel, inbox\n" +
@@ -510,9 +518,10 @@ type notifyRevisionList struct {
 func newNotifyRoutesRevisionsCmd(flags *authClientFlags) *cobra.Command {
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "revisions <route-id>",
-		Aliases: []string{"history"},
-		Short:   "List a route's revision ledger",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "revisions <route-id>",
+		Aliases:     []string{"history"},
+		Short:       "List a route's revision ledger",
 		Long: "revisions lists every change made to a route, oldest first, with who made it and\n" +
 			"a full snapshot of the route as it was AFTER that change.\n\n" +
 			"The revision ids here are what `routes restore` takes. Use `-o json` to read the\n" +
@@ -574,8 +583,9 @@ type notifyRestoreInput struct {
 func newNotifyRoutesRestoreCmd(flags *authClientFlags) *cobra.Command {
 	var revisionID string
 	cmd := &cobra.Command{
-		Use:   "restore <route-id>",
-		Short: "Put a route back to an earlier revision",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "restore <route-id>",
+		Short:       "Put a route back to an earlier revision",
 		Long: "restore rewrites a route to the snapshot stored in one of its revisions. It is\n" +
 			"the undo for an `update` that widened or broke a predicate.\n\n" +
 			"IT IS ITSELF A CHANGE, and appends a revision of its own — so restoring is\n" +
@@ -623,9 +633,10 @@ type notifyMatchTypes struct {
 
 func newNotifyMatchTypesCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "match-types",
-		Aliases: []string{"types"},
-		Short:   "List the event types a route may match",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "match-types",
+		Aliases:     []string{"types"},
+		Short:       "List the event types a route may match",
 		Long: "match-types is the vocabulary --match-type accepts. It is the authoritative\n" +
 			"list this build routes: a type absent here is not one the engine will ever\n" +
 			"deliver, whatever a route names.",
@@ -667,9 +678,10 @@ type notifyDestinations struct {
 
 func newNotifyDestinationsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "destinations",
-		Aliases: []string{"dests"},
-		Short:   "List the destinations THIS tenant may address",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "destinations",
+		Aliases:     []string{"dests"},
+		Short:       "List the destinations THIS tenant may address",
 		Long: "destinations lists the provisioned destination NAMES this tenant can route to.\n" +
 			"It never returns a credential — a route stores only a name.\n\n" +
 			"The list is scoped to your tenant, deliberately: destination names are what a\n" +
@@ -731,9 +743,10 @@ type notifyEvaluateResponse struct {
 func newNotifyEvaluateCmd(flags *authClientFlags) *cobra.Command {
 	var in notifyEvaluateInput
 	cmd := &cobra.Command{
-		Use:     "evaluate",
-		Aliases: []string{"eval", "dry-run"},
-		Short:   "Ask which routes a signal WOULD select, delivering nothing",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "evaluate",
+		Aliases:     []string{"eval", "dry-run"},
+		Short:       "Ask which routes a signal WOULD select, delivering nothing",
 		Long: "evaluate is the dry run. Describe a signal by its predicate dimensions and the\n" +
 			"engine answers which routes select it and, for those that do not, which\n" +
 			"dimension rejected it. NOTHING IS DELIVERED, RECORDED OR CLAIMED.\n\n" +
@@ -831,9 +844,10 @@ func newNotifyDeliveriesCmd(flags *authClientFlags) *cobra.Command {
 	var status, findingKind, destination, route string
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "deliveries",
-		Aliases: []string{"ledger"},
-		Short:   "List the append-only delivery ledger",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "deliveries",
+		Aliases:     []string{"ledger"},
+		Short:       "List the append-only delivery ledger",
 		Long: "deliveries is the append-only record of every delivery ATTEMPT: what was sent,\n" +
 			"through which route, to which destination, and how it went.\n\n" +
 			"It is the answer to \"did this notification go out\", and because it is\n" +
@@ -923,9 +937,10 @@ type notifyOutboxList struct {
 
 func newNotifyOutboxCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "outbox",
-		Aliases: []string{"dlq"},
-		Short:   "Inspect the durable outbox and requeue terminal rows",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "outbox",
+		Aliases:     []string{"dlq"},
+		Short:       "Inspect the durable outbox and requeue terminal rows",
 		Long: "outbox is the durable queue behind delivery: what is waiting, what is in flight,\n" +
 			"what was delivered and what dead-lettered after exhausting its retries.\n\n" +
 			"`--status dead` is the dead-letter view — the notifications that never arrived\n" +
@@ -941,9 +956,10 @@ func newNotifyOutboxListCmd(flags *authClientFlags) *cobra.Command {
 	var status, destination string
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List durable outbox rows",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List durable outbox rows",
 		Long: "ls lists the outbox. Statuses are queued, delivering, delivered and dead.\n\n" +
 			"ATTEMPTS AND NEXT ATTEMPT ARE THE TWO COLUMNS THAT EXPLAIN A STUCK QUEUE: a row\n" +
 			"with rising attempts and a receding next-attempt time is backing off, not\n" +
@@ -1004,9 +1020,10 @@ func newNotifyOutboxListCmd(flags *authClientFlags) *cobra.Command {
 
 func newNotifyOutboxRedeliverCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "redeliver <outbox-id>",
-		Aliases: []string{"requeue"},
-		Short:   "Requeue a terminal outbox row for another delivery attempt (admin-tier)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "redeliver <outbox-id>",
+		Aliases:     []string{"requeue"},
+		Short:       "Requeue a terminal outbox row for another delivery attempt (admin-tier)",
 		Long: "redeliver requeues a TERMINAL outbox row: attempts reset to zero and the next\n" +
 			"pump sends it again. It is how a dead-letter queue is drained after the\n" +
 			"destination is fixed.\n\n" +

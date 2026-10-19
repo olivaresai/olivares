@@ -68,6 +68,9 @@ type liveDTO struct {
 	SourceBindingRef   string `json:"source_binding_ref,omitempty"`
 	CanonicalSID       string `json:"canonical_sid,omitempty"`
 	RunRef             string `json:"run_ref,omitempty"`
+	// Project is the folder name the session works in, as its hooks reported it. A name
+	// only: the path is not kept. Omitted until a producer reports one.
+	Project string `json:"project,omitempty"`
 }
 
 // toLiveDTO projects a live record to its DTO, deriving the Claude Code state and
@@ -103,6 +106,7 @@ func (m *Module) toLiveDTO(rec model.Record) liveDTO {
 		SourceBindingRef:   rec.String(colLiveBindingRef),
 		CanonicalSID:       rec.String(colLiveCanonicalSID),
 		RunRef:             rec.String(colLiveRunRef),
+		Project:            rec.String(colProject),
 	}
 }
 

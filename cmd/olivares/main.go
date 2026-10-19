@@ -46,6 +46,7 @@ func main() {
 		}
 		os.Exit(sessions.RunConfinementHelper(os.Args[2:]))
 	}
+	handOverIfApplied()
 	os.Exit(runMain())
 }
 
@@ -120,8 +121,9 @@ func classifyOutcome(cmd *cobra.Command, err error) (int, error) {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "olivares",
-		Short: "Olivares AI — self-hosted engine for enterprise AI",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "olivares",
+		Short:       "Olivares AI — self-hosted engine for enterprise AI",
 		Long: "olivares runs and governs AI coding agents (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI)\n" +
 			"on your own server: one binary for the engine, its console and this CLI.\n" +
 			"Run `olivares` alone to see this installation's state and the next step.\n" +
@@ -156,7 +158,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
+	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newVaultCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newAdminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newWorkspacesCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
 	root.AddCommand(newAccountCmd(), newModulesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
@@ -229,7 +231,7 @@ var commandGroups = map[string]string{
 	"redteam": "beta", "reporting": "beta", "health": "beta", "observability": "beta", "adoption": "beta", "inventory": "beta",
 	"consoleviews": "beta", "accessmap": "beta", "identity": "beta", "notify": "beta", "knowledge": "beta",
 	"sourcescope": "beta", "catalog": "beta", "governance": "beta", "policy": "beta", "capabilities": "beta",
-	"gitpublish": "beta",
+	"gitpublish": "beta", "vault": "beta",
 }
 
 // addOnOnlyCommands are the top-level groups whose every verb answers
@@ -318,9 +320,10 @@ func groupRootCommands(root *cobra.Command) {
 // first screen of the root help and still one command away.
 func newExitCodesTopic() *cobra.Command {
 	return &cobra.Command{
-		Use:    "exit-codes",
-		Short:  "What the exit codes of olivares mean",
-		Hidden: true,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "exit-codes",
+		Short:       "What the exit codes of olivares mean",
+		Hidden:      true,
 		Long: "Exit codes:\n" +
 			"  0  success\n" +
 			"  1  generic error\n" +
@@ -342,8 +345,9 @@ func newExitCodesTopic() *cobra.Command {
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
-		Short: "Print the olivares version, build metadata and FIPS 140-3 mode",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "version",
+		Short:       "Print the olivares version, build metadata and FIPS 140-3 mode",
 		Long: "version prints the binary's semantic version, git commit, build date, OS/arch and Go\n" +
 			"runtime, its FIPS 140-3 mode (self-reported, not a validation claim), and the origins +\n" +
 			"fingerprints of the independent license and OTA verification keys compiled into it.",
@@ -374,6 +378,7 @@ func newVersionCmd() *cobra.Command {
 			info := versionOutput{
 				Version: version, Commit: commit, Date: date, OS: runtime.GOOS, Arch: runtime.GOARCH,
 				Go: runtime.Version(), FIPS: fips, Module: fips140.Version(), LicenseKey: licKey, OTAKey: otaKey,
+				Edition: thisEdition.name,
 			}
 			if err := renderOut(cmd, func(out io.Writer) error {
 				_, err := fmt.Fprintf(out,
@@ -403,6 +408,9 @@ type versionOutput struct {
 	Module     string `json:"module"`
 	LicenseKey string `json:"license_key"`
 	OTAKey     string `json:"ota_key"`
+	// Edition is what `upgrade` asks of a binary it replaces: Business X.Y is cut from the
+	// same version as Community X.Y, so the version alone cannot say which one is installed.
+	Edition string `json:"edition"`
 }
 
 // keyDomainCollisionWarning reports, AT RUNTIME, that this binary was built with
@@ -438,8 +446,9 @@ func keyDomainCollisionWarning() string {
 // to be linked into the binary, so the placeholder UI ships from commit one.
 func newWebUIFilesCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "webui-files",
-		Short: "List the web UI assets embedded in this binary (diagnostic)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "webui-files",
+		Short:       "List the web UI assets embedded in this binary (diagnostic)",
 		Long: "webui-files is a hidden diagnostic that lists every web UI asset embedded in this\n" +
 			"binary's go:embed bundle and prints their total count; it also forces the webui\n" +
 			"package to link so the bundle ships from commit one.",

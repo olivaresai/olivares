@@ -7,6 +7,8 @@ description: >-
   anclados al audit ledger firmado por PayloadHash. Alineado con PAM, LIVE.
 ---
 
+La grabación de sesiones privilegiadas es una función de **[Business](https://olivares.ai/pricing)**. Community responde con 501 `business_required` en cada ruta de `/v1/m/recording/`, no graba nada y oculta el grupo de comandos. Las sesiones ya almacenadas permanecen en el almacén.
+
 La grabación (`modules/recording`) es el plano de **grabación de sesiones
 privilegiadas** — el control alineado con PAM que los compradores de alta garantía
 esperan para consolas y acceso de emergencia. Captura, como evidencia

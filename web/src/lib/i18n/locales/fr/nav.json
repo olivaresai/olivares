@@ -41,7 +41,8 @@
     "console": "Administration",
     "sourceDiff": "Comparaison de source",
     "permissions": "Permissions",
-    "identity": "Identité et NHI",
+    "identity": "Identité et accès",
+    "vault": "Coffre-fort",
     "claudePolicy": "Gouvernance de Claude Code",
     "routinePolicies": "Politiques de routines",
     "deploy": "Déploiement",
@@ -50,7 +51,7 @@
     "catalog": "Catalogue",
     "killswitch": "Coupe-circuit",
     "work": "Travail",
-    "agentops": "Sessions",
+    "agentops": "Opérer les sessions",
     "agentArtifacts": "Agent Artifacts",
     "models": "Modèles",
     "modelOps": "Opérations sur les modèles",
@@ -68,6 +69,7 @@
     "attestation": "Chaîne d’approvisionnement",
     "apiPlayground": "API Playground",
     "audit": "Registre d’audit",
+    "retention": "Conservation",
     "workspaceDashboard": "Espace de travail",
     "settings": "Paramètres",
     "workspace-templates": "Modèles de workspace",
@@ -108,15 +110,16 @@
     "skills": "Parcourir les paquets de skills et les attribuer aux départements, groupes d’agents et agents",
     "protocolBindings": "Composer et réconcilier les liaisons A2A et MCP gouvernées",
     "communications": "Canaux, avis directs et boîte de réception personnelle de l’espace de travail sélectionné",
-    "communicationsInbox": "Votre boîte exacte : les remises qui vous sont adressées, lues à neuf et accusées explicitement",
+    "communicationsInbox": "Les messages qui vous sont adressés : ouvrez et accusez réception de chacun",
     "communicationsNew": "Créer un canal avec des droits initiaux explicites",
-    "communicationsAdministration": "Administrer les canaux : configuration et historique des droits, chaque acte sous l'ETag actuel du canal",
+    "communicationsAdministration": "Administrer les canaux : configuration et historique des droits",
     "communicationsHandoffs": "Offres de responsabilité de travail qui vous sont adressées : lisez le contexte, puis acceptez ou refusez",
     "console": "Utilisateurs, SSO/IdP, espaces de travail, groupes d’agents, rôles, secrets, connecteurs, clés API et licence de cette installation",
     "permissions": "Identité, rôles et approbations",
-    "identity": "SSO, SCIM, le répertoire des NHI et le graphe WIF",
+    "identity": "SSO, SCIM et les identités qu’utilisent vos agents",
+    "vault": "Vos mots de passe, notes et codes d’authentification",
     "claudePolicy": "Politique gérée, hooks, MCP, bac à sable et politique en tant que code",
-    "deploy": "Provisionnez et câblez les agents à l’infrastructure",
+    "deploy": "Provisionnez les agents et connectez-les à l’infrastructure",
     "gitPublication": "Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées",
     "knowledge": "Bases de connaissances, RAG et lignage des données",
     "catalog": "Agents et capacités curés et approuvés",
@@ -142,6 +145,7 @@
     "attestation": "Attestation de version — SLSA, SBOM, VEX et Scorecard",
     "apiPlayground": "API Playground",
     "audit": "Registre de preuves inviolable",
+    "retention": "Durée de conservation de chaque classe d’enregistrements, balayage qui l’applique et ses certificats scellés",
     "workspaceDashboard": "Agents, sessions, ressources et activité d’un espace de travail",
     "settings": "Paramètres d’espace de travail et de compte",
     "inferenceProxy": "Gates du proxy, règles DLP de sortie et approbations d'appareils",
@@ -150,7 +154,7 @@
     "postureExport": "Exportez la posture réelle pour une tour de contrôle",
     "providers": "Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les",
     "providerProfiles": "Enregistrer et administrer les répertoires de fournisseur sous lesquels les sessions se lancent, et lire leur configuration à la demande",
-    "providerBindings": "Dédier des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur",
+    "providerBindings": "Lier des sources configurées à des profils de fournisseur",
     "providerAccounts": "Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte",
     "routinePolicies": "Planchers de cadence, plafonds de concurrence, exigences d’approbation, listes d’autorisation cron et environnements bloqués pour les routines Claude Code",
     "agentcoreExport": "Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien",
@@ -175,7 +179,7 @@
       "createSchedule": "Nouvelle planification"
     },
     "killswitch": {
-      "engage": "Activer le coupe-circuit"
+      "engage": "Arrêter tous les agents"
     },
     "identity": {
       "invite": "Inviter des personnes"
@@ -274,8 +278,7 @@
     "empty": "Aucune entrée de ce domaine ne vous est accessible",
     "emptyHint": "Les entrées apparaissent ici lorsque votre rôle dans l’organisation actuelle donne accès à un module de ce domaine.",
     "backHome": "Aller à l’accueil",
-    "area": "Domaine",
-    "off": "Désactivé"
+    "area": "Domaine"
   },
   "personal": {
     "favorites": "Favoris",
@@ -332,6 +335,7 @@
     "wirePlaceholder": "Envoyer une ligne NDJSON sur stdin…",
     "wireAria": "Ligne d’entrée de session",
     "turnFailed": "La session n’a pas pu accepter ce tour.",
+    "draftSaveFailed": "Le brouillon n’a pas pu être enregistré dans cet onglet. Gardez cette page ouverte ou copiez votre message avant de la quitter.",
     "sendBackgroundHint": "Ctrl+Entrée envoie et laisse le brouillon prêt pour la phrase suivante.",
     "messagePlaceholder": "Message à {{title}}…",
     "slashLabel": "Commandes et skills",
@@ -351,7 +355,7 @@
       }
     },
     "modelAria": "Modèle et effort de cette session : {{value}}",
-    "sessionKeeps": "Cette session reste sur {{value}}. Un autre modèle ou un autre effort démarre une nouvelle session.",
+    "sessionKeeps": "Cette session reste sur {{value}}. Un autre choix démarre une nouvelle session.",
     "startWithChoice": "Démarrer une nouvelle session avec ce choix"
   },
   "shell": {

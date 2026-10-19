@@ -246,6 +246,8 @@ classify() {
   esac
   case "$base" in
     # ---- SOURCE -------------------------------------------------------------
+    # C test fixtures are compiled programs and use their directory's inline license header.
+    *.c) echo source; return ;;
     # Go, the TypeScript/JavaScript family INCLUDING the ESM/CJS spellings, markup and
     # styles, Python, Java, shell. .mjs/.cjs/.mts/.cts were the 2026-08-14 blind spot;
     # they are written out rather than globbed so the family is visible to a reader.
@@ -299,8 +301,8 @@ classify() {
     # Structured data, config and manifests — including the Go module metadata.
     *.json|*.json5|*.jsonc|*.jsonl|*.jsonlog|*.ndjson|*.yaml|*.yml|*.toml|*.xml) echo data; return ;;
     *.mod|*.sum|*.work|*.example|*.conf|*.service|*.webmanifest|*.node-version) echo data; return ;;
-    # systemd socket units are shipped source with their own header: REUSE.toml lists no unit glob.
-    *.socket) echo source; return ;;
+    # systemd socket, path and timer units are shipped source with their own header: REUSE.toml lists no unit glob.
+    *.socket|*.path|*.timer) echo source; return ;;
     *.rules) echo source; return ;;  # polkit rules are JavaScript polkitd runs; they carry a // header.
     *.te|*.if|*.fc|*.spec) echo source; return ;;  # SELinux policy module sources and the rpm spec that builds them; # headers.
     *.repo|*.preset) echo source; return ;;  # the image's DNF repository file and systemd preset; # headers.

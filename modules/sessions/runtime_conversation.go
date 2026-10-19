@@ -24,18 +24,54 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	if rec.String(colRunProfileDriver) != providerDriverCodex || threadID == "" {
 		return "", nil
 	}
-	secrets, decodeErr := decodeSecretEnv(rec.String(colRunSecretEnv))
-	if decodeErr != nil || len(secrets) != 0 || rec.String(colRunGitRead) != "" {
+	if m.earlierLaunchValuesMayBeUnheld(ctx, tenant, rec) {
 		// Current vault values cannot redact secrets from earlier generations
-		// after rotation, nor expired Git read tokens from earlier launches.
-		// The already-redacted live ring remains available.
+		// after rotation, nor expired Git read tokens from earlier launches, nor
+		// a package registry token (the stored thread is the tool's own, so none
+		// is withheld from it). The already-redacted live ring remains available.
 		return "", errors.New("stored conversation is unavailable because historical secret redaction cannot be proven")
 	}
 	home, _, err := m.revalidateStoredProfile(ctx, tenant, rec)
 	if err != nil {
 		return "", errors.New("stored conversation is unavailable because its provider home is no longer authorized")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	args := append([]string{"-c", "features.api_key_model_discovery=false"}, NewCodexDriver().LaunchArgs(DriverLaunch{})...)
+	err = m.withStoredReader(ctx, tenant, rec, home, args, 15*time.Second,
+		func(ctx context.Context, proc Process) (err error) {
+			line, err = readCodexConversation(ctx, proc, threadID)
+			return err
+		})
+	switch {
+	case errors.Is(err, errStoredReaderVersion):
+		return "", errors.New("stored conversation tool version is unavailable; install it or clear its version selection")
+	case errors.Is(err, errStoredReaderStart):
+		return "", errors.New("stored conversation reader could not be started")
+	case errors.Is(err, errStoredReaderStop):
+		return "", errors.New("stored conversation reader could not be stopped without error")
+	case err != nil:
+		return "", errors.New("stored conversation could not be read; live output remains available where bridged")
+	}
+	if _, _, err = m.revalidateStoredProfile(ctx, tenant, rec); err != nil {
+		return "", errors.New("stored conversation provider home authorization changed during the read")
+	}
+	return line, nil
+}
+
+var (
+	errStoredReaderVersion = errors.New("the tool's program is unavailable")
+	errStoredReaderStart   = errors.New("the tool could not be started")
+	errStoredReaderStop    = errors.New("the tool could not be stopped without error")
+)
+
+// withStoredReader runs the tool of home's profile once, offline, to read the
+// conversation it stored: its own program under the profile's homes, in the
+// confinement a session of that profile gets, with the network closed. read gets
+// the process; the process is stopped afterwards, and the tool stays admitted until
+// the engine has confirmed that the child was reaped. A read that succeeds on a
+// child that could not be stopped still fails, with errStoredReaderStop.
+func (m *Module) withStoredReader(ctx context.Context, tenant model.TenantID, rec model.Record, home ProviderHomeSnapshot,
+	args []string, timeout time.Duration, read func(context.Context, Process) error) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	m.rt.toolMu.RLock()
 	releaseAdmission := true
@@ -46,15 +82,28 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 	}()
 	program, err := m.resolveRunProgram(ctx, tenant, CreateRunParams{ProviderHome: &home, WorkspaceRef: rec.String(colWorkspaceRef), AgentRef: rec.String(colRunAgentRef)})
 	if err != nil {
-		return "", errors.New("stored conversation tool version is unavailable; install it or clear its version selection")
+		return errStoredReaderVersion
 	}
 	program, _ = toolProgramIdentity(program)
-	args := NewCodexDriver().LaunchArgs(DriverLaunch{})
-	args = append([]string{"-c", "features.api_key_model_discovery=false"}, args...)
+	env := toSessionEnv(cliruntime.HomeEnv(home.Driver, home.UserHome, home.ConfigHome))
+	if home.Driver == providerDriverOpenCode {
+		// OpenCode keeps its data under XDG directories beside HOME, the mapping its
+		// own sessions run under, and its own sessions run with its background
+		// network work switched off: so does this read.
+		env = append(env, openCodeXDGMapping(home.UserHome)...)
+		env = append(env,
+			EnvVar{Name: envOpenCodeDisableAutoUpdate, Value: "1"},
+			EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"},
+			EnvVar{Name: envOpenCodeDisableLSPDownload, Value: "1"},
+			EnvVar{Name: envNPMConfigOffline, Value: "true"},
+			EnvVar{Name: envOpenCodeDisableShare, Value: "1"})
+	}
 	spec := LaunchSpec{Program: program, Args: args,
-		Dir: home.UserHome, Env: toSessionEnv(cliruntime.HomeEnv(home.Driver, home.UserHome, home.ConfigHome)),
+		Dir: home.UserHome, Env: env,
 		Isolation: IsolationNative, WaitDelay: time.Second,
-		Confinement: m.sessionConfinement("", &home, PresetNone), NetworkPolicy: &egress.Policy{Offline: true}}
+		// Its answer lists the images a person attached: see LaunchSpec.StripImageData.
+		StripImageData: true,
+		Confinement:    m.sessionConfinement("", &home, PresetNone), NetworkPolicy: &egress.Policy{Offline: true}}
 	proc, err := m.rt.Runner.Launch(ctx, spec)
 	if proc != nil {
 		defer func() {
@@ -74,22 +123,18 @@ func (m *Module) conversationHistory(ctx context.Context, tenant model.TenantID,
 					}
 				}()
 			}
-			if stopErr != nil {
-				line, err = "", errors.New("stored conversation reader could not be stopped without error")
+			// A read that failed on a child that was reaped keeps its own error: the
+			// teardown report then only says output was given up, which the read
+			// already knows.
+			if stopErr != nil && !(err != nil && childWasReaped(stopErr)) {
+				err = errStoredReaderStop
 			}
 		}()
 	}
 	if err != nil || proc == nil {
-		return "", errors.New("stored conversation reader could not be started")
+		return errStoredReaderStart
 	}
-	line, err = readCodexConversation(ctx, proc, threadID)
-	if err != nil {
-		return "", errors.New("stored conversation could not be read; live output remains available where bridged")
-	}
-	if _, _, err = m.revalidateStoredProfile(ctx, tenant, rec); err != nil {
-		return "", errors.New("stored conversation provider home authorization changed during the read")
-	}
-	return line, nil
+	return read(ctx, proc)
 }
 
 func readCodexConversation(ctx context.Context, proc Process, threadID string) (string, error) {

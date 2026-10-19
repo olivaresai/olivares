@@ -46,14 +46,14 @@ and their honest constraints, are below.
 | 1 | Docker | Docker | **Same container** (the standard image), procRunner child | **Recommended** (same governed path as 2) |
 | 2 | Native | Native | Same host (systemd), procRunner child | **Recommended**, smoke-tested end-to-end |
 | 3 | Docker | Native (host) | Cross-namespace — not governable as-is | Co-locate instead (see below) |
-| 4 | Native | Docker (per-session) | Per-session container via the Docker API | Follow-up (documented) |
+| 4 | Native | Per-session container (podman or Docker) | Per-session container through the container CLI | Available where the host has podman or Docker |
 
 The two **co-located** topologies (1, 2) are the secure default. Topology 2 (native) is
 tested end-to-end by [`scripts/smoke-agentops.sh`](https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh);
 topology 1 reuses the **same** governed procRunner path, and CI runs the image's agent
-runtime check (`scripts/qualify-container-agent-runtime.sh`). Topologies 3 and 4 want the governor and the governed in
-*different* containers; bridging stdio across that boundary needs Docker-API access (a
-privilege the engine deliberately does **not** take by default). Their honest paths are
+runtime check (`scripts/qualify-container-agent-runtime.sh`). Topology 3 wants the governor and the governed in
+*different* namespaces, which the engine cannot bridge. Topology 4 starts the session
+container with the host's own container CLI, so it takes no Docker-API access. Both are
 spelled out in [Mixed topologies](#mixed-topologies-3-and-4).
 
 ---
@@ -71,7 +71,7 @@ Pin the engine by digest and verify it first:
 <!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:0.2 \
+cosign verify docker.io/olivaresai/olivares:0.3 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
@@ -119,7 +119,7 @@ installer after a failed check.
 (
 set -eu
 cd "$(mktemp -d)"
-ver=0.2
+ver=0.3
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/checksums.txt
 curl -fsSLO $base/checksums.txt.sig
@@ -206,13 +206,13 @@ contract for all of this is [`scripts/smoke-agentops.sh`](https://github.com/oli
 which brings the native co-deployment up against a hermetic fake `claude` and asserts the
 session is governable end to end.
 
-:::note[Only `--isolation native` is functional this release]
-`--isolation container` and `--isolation sandbox` are **forward-compatibility seam
-values, not wired yet** (the per-session container Runner is the documented follow-up in
-[Topology 4](#topology-4--olivares-native-claude-in-a-per-session-container)). The native
-runner **refuses** a container/sandbox launch with HTTP 422 (`isolation_unsupported`)
-before creating a run, workspace directory or credential. Use `native` — under the standard image /
-systemd co-deployment that is the engine's own hardened container/host boundary.
+:::note[`--isolation container` needs podman or Docker on the engine's host]
+`native` is the default. `container` runs the session in a container of its own where the
+host has podman or Docker (see
+[Topology 4](#topology-4--olivares-native-claude-in-a-per-session-container)); where it has
+neither, and for `sandbox`, which no runner provides yet, the engine **refuses** the launch
+with HTTP 422 (`isolation_unsupported`) before creating a run, workspace directory or
+credential. Run `olivares doctor` to see which runtime the engine found.
 :::
 
 :::caution[`bypassPermissions` belongs behind governance]
@@ -240,20 +240,56 @@ run both native (topology 2). This is a real limit, stated rather than papered o
 
 ### Topology 4 — Olivares native, Claude in a per-session container
 
-This is the natural home for **per-session fresh-container isolation**: each session gets
-a brand-new hardened `claude` container (workspace bind-mounted, read-only root, non-root,
-cap-drop), created and torn down by the engine through the Docker API, with stdio bridged
-via Docker attach/hijack. The data-model seam already **models** it (`--isolation container`
-is a valid value, and the executor mount primitive it will consume already ships) — but the
-runner behind it is not wired yet, so the native runner refuses that value today (see the
-note above).
+Each session runs in a brand-new container of its own: the root filesystem is read-only,
+no capability is kept, no privilege can be gained, and the session sees only its workspace,
+the tool's account home and the tool's own program, mounted from the host. The engine
+starts it with the host's container CLI (`podman run`, or `docker run`) and bridges its
+stdio exactly as it does for a native child. The engine needs no Docker socket and no
+extra privilege: it runs the CLI as its own user, which is rootless with podman.
 
-**It is a documented follow-up, not shipped in this release.** Driving sibling containers
-means giving the engine Docker-API access (ideally through a least-privilege socket
-proxy) — a trust surface this release deliberately avoids in favour of the socket-free
-standard image. Choosing this topology is choosing stronger governor/governed isolation
-*at the cost of* that Docker-API grant; it will arrive behind the existing
-`isolation=container` seam. Until then, the secure default is co-location.
+```bash
+olivares session start . --isolation container
+```
+
+**The runtime.** The engine uses podman when it is installed and Docker otherwise; podman
+is what AlmaLinux and RHEL 10 ship. `OLIVARES_SESSION_CONTAINER_RUNTIME` pins `podman` or
+`docker`, or turns container isolation `off`. To use Docker CE on an Olivares Server,
+install it from Docker's official repository for your distribution, remove `podman-docker`
+(it owns the `docker` command), and set `OLIVARES_SESSION_CONTAINER_RUNTIME=docker`.
+Restart the engine; `olivares doctor` shows the runtime it found.
+
+**The image.** `OLIVARES_SESSION_CONTAINER_IMAGE` names it. The default,
+`localhost/olivares-session:latest`, is the name an Olivares Server image carries its session
+image under; nothing in this repository builds it, so on any other host name an image you have.
+It must be compatible with the host's tool program, which is mounted into it, and hold what
+the tool shells out to: a shell and `git`.
+
+**Rootless and labels.** podman runs rootless when the engine runs as a user other than root,
+which is how the service user of a server runs it. An engine that runs as root gets rootful
+containers, as it gets root sessions. On a host that enforces SELinux the session's mounts
+carry the `z` label, which changes the label of the folder and the account home for good, and
+a large folder takes time to relabel.
+
+**Governance and network.** A server that governs tool calls with hooks (the default) keeps
+them in the container. The hook program and the run's settings are mounted read-only, the
+host's Claude Code managed settings are mounted where the container reads them
+(`/etc/claude-code`), and a hook that cannot run in the image (another architecture, no
+`/bin/sh`) blocks the tool call instead of letting it through. The hooks call the engine on
+its loopback address, so a container whose environment names the engine there shares the
+host's network. Be clear about what that means: the container isolates files, processes and
+privileges, and its network is the host's, as a native session's is. It does not isolate
+the network, and it does not scope the host's abstract Unix sockets the way a native
+session's Landlock policy does. A container that names no engine endpoint keeps the
+runtime's own network.
+
+**What it does not do yet.** A session bound to a provider's endpoint from Providers stays
+native: its network boundary is a proxy and a network namespace that only the native runner
+holds, and the engine will not start a container session that is meant to reach one endpoint
+on a wider network. That includes a local model such as Ollama added in Providers. A tool that is a single program file works; one that needs its own directory beside it, or a
+runtime such as Node, needs an image that holds it.
+The image needs `/bin/sh`, `git` and what the tool shells out to. Assigned skills and git
+worktrees need native isolation.
+Co-location, the standard image, remains the default.
 
 ---
 

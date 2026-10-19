@@ -62,7 +62,7 @@ const READS = [
   'orchestration:graph:read',
 ]
 /** The permissions the ENGINE requires for the writes the palette's verbs open (the three
- * creation verbs, Engage kill switch and Invite people). */
+ * creation verbs, Stop all agents and Invite people). */
 const WRITES = [
   'eventing:subscription:write',
   'notify:route:write',
@@ -126,12 +126,35 @@ afterEach(() => {
 })
 
 describe('CommandMenu', () => {
+  it.each(['License', 'Edition'])(
+    'finds the Settings license entry for %s',
+    async (term) => {
+      const user = userEvent.setup()
+      searchConsoleMock.mockResolvedValue({ results: [], truncated: false })
+      openPalette()
+      await user.type(screen.getByRole('combobox'), term)
+      await waitFor(() => expect(searchConsoleMock).toHaveBeenCalled())
+      const entry = (await screen.findAllByRole('option')).find((option) =>
+        option.getAttribute('data-value')?.startsWith('settings:edition '),
+      )
+      expect(entry).toBeDefined()
+      expect(entry).toHaveTextContent('Edition & modules')
+      await user.click(entry!)
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/settings',
+        search: { section: 'edition' },
+        hash: '',
+      })
+    },
+  )
+
   it('lists no hideInNav view and therefore no parameterized route', () => {
-    // The registry MUST contain at least one hidden, parameterized view
-    // (session-viewer) or this test would pass vacuously.
+    // Every parameterized view the registry holds is hidden. (The only one, the session
+    // viewer, is a Business page: a Community registry holds none, and the assertion below
+    // still pins that no palette entry names a "$" path.)
+    for (const view of FEATURE_VIEWS.filter((v) => v.path.includes('$')))
+      expect(view.hideInNav, view.id).toBe(true)
     const hidden = FEATURE_VIEWS.filter((v) => v.hideInNav)
-    expect(hidden.length).toBeGreaterThan(0)
-    expect(hidden.some((v) => v.path.includes('$'))).toBe(true)
 
     useCommandStore.getState().setOpen(true)
     renderIntel(<CommandMenu />)
@@ -584,7 +607,7 @@ describe('the palette of a new installation', () => {
       .map((v) => /^view:(\S+) /.exec(v)?.[1])
       .filter(Boolean)
     expect(views).toEqual(
-      expect.arrayContaining(['audit', 'deploy', 'home', 'sessions']),
+      expect.arrayContaining(['audit', 'gitPublication', 'home', 'sessions']),
     )
     await user.type(screen.getByRole('combobox'), 'new')
     expect(optionValues().some((v) => v.startsWith('action:'))).toBe(true)
@@ -600,27 +623,22 @@ describe('the palette of a new installation', () => {
   })
 })
 
-describe('the palette lists a page whose module is off', () => {
+// #2240: Settings > Modules is where an off module reads as Off.
+describe('the palette folds a page whose module is off', () => {
   afterEach(() => useModulesStore.setState({ off: new Set() }))
 
-  it('as a calm entry tagged Off that still opens, and offers none of its verbs', async () => {
+  it('offers neither the page nor its verbs', async () => {
     const user = userEvent.setup()
-    useModulesStore.setState({ off: new Set(['deploy']) })
+    useModulesStore.setState({ off: new Set(['gitpublish']) })
     holding([...READS, ...WRITES])
     openPalette()
-    await user.type(screen.getByRole('combobox'), 'deploy')
-    const row = screen
-      .getAllByRole('option')
-      .find((o) =>
-        (o.getAttribute('data-value') ?? '').startsWith('view:deploy '),
-      )!
-    expect(row).toBeDefined()
-    expect(row).toHaveTextContent('Off')
-    expect(optionValues().some((v) => v.startsWith('action:deploy'))).toBe(
-      false,
-    )
-    await user.click(row)
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/deploy' })
+    await user.type(screen.getByRole('combobox'), 'git')
+    expect(
+      optionValues().some((v) => v.startsWith('view:gitPublication ')),
+    ).toBe(false)
+    expect(
+      optionValues().some((v) => v.startsWith('action:gitPublication')),
+    ).toBe(false)
   })
 })
 
