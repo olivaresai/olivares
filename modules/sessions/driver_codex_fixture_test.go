@@ -213,6 +213,9 @@ func TestMain(m *testing.M) {
 			os.Exit(runOpenCodeFixturePeer())
 		case confine.HelperArg:
 			// The confinement helper: procRunner re-executes this test binary.
+			if handlesSessionGuard(args[1:]) {
+				execGuardWithRaceGuardEnv()
+			}
 			os.Exit(RunConfinementHelper(args[1:]))
 		case "fixture-grandchild":
 			// A grandchild that holds the inherited stdout open. Only a PROCESS GROUP
@@ -223,6 +226,31 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(m.Run())
+}
+
+// execGuardWithRaceGuardEnv restarts the session guard with raceGuardEnv. Under
+// -race the guard is this test binary, which pauses before it exits 0 (GORACE
+// atexit_sleep_ms); the engine's guard does not. A launch that cannot carry
+// raceGuardEnv, such as the Codex sandbox probe, which passes only the homes,
+// would end a second late, and once more for the stand-in Codex the guard
+// starts, which inherits the guard's environment. It returns when the guard
+// already runs with raceGuardEnv, in a plain build, or when the restart failed.
+func execGuardWithRaceGuardEnv() {
+	if len(raceGuardEnv) == 0 {
+		return
+	}
+	name, want := raceGuardEnv[0].Name+"=", raceGuardEnv[0].Name+"="+raceGuardEnv[0].Value
+	var env []string
+	for _, kv := range os.Environ() {
+		if kv == want {
+			return
+		}
+		if !strings.HasPrefix(kv, name) {
+			env = append(env, kv)
+		}
+	}
+	err := syscall.Exec("/proc/self/exe", os.Args, append(env, want)) // #nosec G204 -- this test binary restarts itself with its own arguments
+	fmt.Fprintln(os.Stderr, "fixture: the session guard keeps the race exit pause:", err)
 }
 
 // runCodexFixtureSandboxCommand runs what `codex sandbox [COMMAND]...` runs once

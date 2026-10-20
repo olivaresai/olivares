@@ -58,6 +58,34 @@ func TestSessionGuardPassesTheToolsEndToTheEngine(t *testing.T) {
 	}
 }
 
+// Under -race the guard is this test binary, which pauses before it exits 0 for
+// as long as GORACE atexit_sleep_ms says (1 s by default); the engine's guard
+// does not. A launch cannot always carry raceGuardEnv to the guard: the Codex
+// sandbox probe passes only the homes, and its 3 s deadline held this pause and
+// the one of the stand-in Codex the guard starts. The pause is stretched here, so
+// a guard that keeps the launch's setting cannot end in time.
+func TestSessionGuardEndsWithItsProgramUnderTheRaceDetector(t *testing.T) {
+	if !raceDetectorEnabled {
+		t.Skip("the exit pause exists only in a race-detector build")
+	}
+	proc, err := NewProcRunner().Launch(context.Background(), LaunchSpec{Dir: t.TempDir(), Program: "/bin/true", WaitDelay: time.Second,
+		Env: []EnvVar{{Name: "GORACE", Value: "atexit_sleep_ms=600000"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = proc.Stop(context.Background()) })
+	go func() {
+		for range proc.Output() {
+		}
+	}()
+	if !proc.(*procProcess).finishedWithin(30 * time.Second) {
+		t.Fatal("the session guard did not end with its program")
+	}
+	if code, err := proc.Wait(); err != nil || code != 0 {
+		t.Fatalf("the session guard ended with %d, %v, want its program's 0", code, err)
+	}
+}
+
 // The guard ends the session when the engine's end of its pipe closes. That end
 // is a file the Go runtime closes once nothing refers to it, so a live session
 // must keep it referenced: otherwise the collector would end the session.
