@@ -793,7 +793,7 @@
       "shards": [
         {
           "name": "a",
-          "tests_now": 262,
+          "tests_now": 263,
           "minutes_est": 25.6,
           "families": [
             "ABACAuthorization",
@@ -892,7 +892,8 @@
             "Gate",
             "Shown",
             "Tree",
-            "Workstation"
+            "Workstation",
+            "Hold"
           ]
         },
         {
