@@ -113,7 +113,7 @@ func writeOwnedChild(t *testing.T, script string) string {
 func launchOwnedChild(t *testing.T, script string, waitDelay time.Duration) *procProcess {
 	t.Helper()
 	proc, err := NewProcRunner().Launch(context.Background(), LaunchSpec{
-		Program: writeOwnedChild(t, script), Dir: t.TempDir(), WaitDelay: waitDelay,
+		Program: writeOwnedChild(t, script), Dir: t.TempDir(), WaitDelay: waitDelay, Env: raceGuardEnv,
 	})
 	if err != nil {
 		t.Fatalf("launch: %v", err)
@@ -1050,7 +1050,7 @@ func TestProcRunnerOversizedOutputCannotBecomeAProtocolFrame(t *testing.T) {
 				script += " >&2"
 			}
 			proc, err := (&procRunner{lineCap: 32}).Launch(context.Background(), LaunchSpec{
-				Program: writeOwnedChild(t, script+"\nexec sleep 300\n"), WaitDelay: 50 * time.Millisecond,
+				Program: writeOwnedChild(t, script+"\nexec sleep 300\n"), WaitDelay: 50 * time.Millisecond, Env: raceGuardEnv,
 			})
 			if err != nil {
 				t.Fatal(err)

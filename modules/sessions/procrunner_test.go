@@ -58,7 +58,7 @@ func TestProcRunner_StreamSendStop(t *testing.T) {
 	defer cancel()
 	proc, err := r.Launch(ctx, LaunchSpec{
 		Program: script, Args: []string{"--permission-mode", "default"},
-		Dir: t.TempDir(), WaitDelay: 2 * time.Second,
+		Dir: t.TempDir(), WaitDelay: 2 * time.Second, Env: raceGuardEnv,
 	})
 	if err != nil {
 		t.Fatalf("launch: %v", err)

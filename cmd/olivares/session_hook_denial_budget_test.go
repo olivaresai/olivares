@@ -231,6 +231,30 @@ func TestSessionHookReportsOnlyPolicyDecisionsToTheDenialBudget(t *testing.T) {
 	}
 }
 
+// A tool-call canceled after its review is queued but before the run registers the
+// wait is the same canceled call as one canceled while it waits: not a policy refusal.
+func TestSessionHookDoesNotCountACallCanceledBeforeItsReviewWaitRegisters(t *testing.T) {
+	var registered error // written by the hook before askAnd returns
+	f := newDenialBudgetHookWith(t, sessions.DenialBudget{Consecutive: 50, Total: 50}, nil, func(d *hookpep.Decider) {
+		register := d.ApprovalWait
+		d.ApprovalWait = func(ctx context.Context, p auth.Principal, ref string, until time.Time) (func(), error) {
+			<-ctx.Done() // the cancel lands first, then the real registration runs
+			end, err := register(ctx, p, ref, until)
+			registered = err
+			return end, err
+		}
+	})
+	if d, r := f.askAnd("cancel"); d != "deny" || r != "tool-call interrupted while waiting for human approval" {
+		t.Fatalf("canceled before its wait registered = %s %q, want deny for the interruption", d, r)
+	}
+	if registered == nil {
+		t.Fatal("the run registered the wait of a canceled call: this test no longer reaches the Register step")
+	}
+	if got := f.counted(); len(got) != 0 {
+		t.Fatalf("a call canceled before its review wait registered was counted: %+v", got)
+	}
+}
+
 // With the operator's budget of 3 in a row, two policy denials each followed by a person's
 // rejected review never reach it; a third policy denial in a row does, and nobody is
 // watching, so the run stops.

@@ -17,7 +17,7 @@ import (
 func TestNativeDiagnosticOverflowPreservesHealthyProtocolOutput(t *testing.T) {
 	for _, tail := range []string{"\n", ""} {
 		script := "#!/bin/sh\nprintf '%s' '" + strings.Repeat("d", 4096) + tail + "' >&2\nprintf '%s\\n' '" + `{"type":"assistant"}` + "'\n"
-		proc, err := (&procRunner{lineCap: 64}).Launch(context.Background(), LaunchSpec{Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond})
+		proc, err := (&procRunner{lineCap: 64}).Launch(context.Background(), LaunchSpec{Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond, Env: raceGuardEnv})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,7 +60,7 @@ func TestNativeDiagnosticOverflowPreservesHealthyProtocolOutput(t *testing.T) {
 
 func TestNativeDiagnosticUnterminatedDiscardStopsWithinTheBound(t *testing.T) {
 	script := "#!/bin/sh\nprintf '%s' '" + strings.Repeat("d", 4096) + "' >&2\nexec sleep 30\n"
-	proc, err := (&procRunner{lineCap: 64}).Launch(context.Background(), LaunchSpec{Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond})
+	proc, err := (&procRunner{lineCap: 64}).Launch(context.Background(), LaunchSpec{Program: writeOwnedChild(t, script), WaitDelay: 50 * time.Millisecond, Env: raceGuardEnv})
 	if err != nil {
 		t.Fatal(err)
 	}

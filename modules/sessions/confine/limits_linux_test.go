@@ -9,6 +9,7 @@ package confine
 import (
 	"bufio"
 	"crypto/sha256"
+	"debug/elf"
 	"errors"
 	"os"
 	"os/exec"
@@ -36,6 +37,21 @@ func TestSessionAndSDKChildrenHaveDifferentDefaultReadPolicy(t *testing.T) {
 	image, err := os.ReadFile(self)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The owned rootfs holds only this test binary. A dynamically linked build
+	// (-race links libc) cannot exec there: its ELF interpreter is absent (ENOENT).
+	// The static build runs this proof.
+	if bin, err := elf.Open(self); err != nil {
+		t.Fatal(err)
+	} else {
+		dynamic := false
+		for _, prog := range bin.Progs {
+			dynamic = dynamic || prog.Type == elf.PT_INTERP
+		}
+		bin.Close()
+		if dynamic {
+			t.Skip("fixture rootfs carries no ELF interpreter for a dynamically linked test binary")
+		}
 	}
 	program := filepath.Join(scratch, "probe")
 	if err := os.WriteFile(program, image, 0o755); err != nil {

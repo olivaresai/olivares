@@ -236,17 +236,22 @@ func (d *Decider) gateViaSessionApproval(ctx context.Context, tenant model.Tenan
 			return nil
 		},
 	})
+	// The call canceled once its review was queued, before or after the run registered
+	// the wait, is the call ending, not the policy refusing.
+	if (a.Failed == effectgate.Register || a.Failed == effectgate.Wait) && errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		if d.Log != nil {
+			d.Log.Debug("hook-pep: tool-call canceled while its human review was pending; not counted against the denial budget", "tenant", tenant.String(), "err", err)
+		}
+		declinedByPerson(ctx)
+		return deny("tool-call interrupted while waiting for human approval", actor, tier, version)
+	}
 	switch a.Failed {
 	case effectgate.Open:
 		return deny("could not request human approval", actor, tier, version)
 	case effectgate.Register:
 		return deny("session could not register its approval wait", actor, tier, version)
 	case effectgate.Wait:
-		switch {
-		case errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded):
-			declinedByPerson(ctx)
-			return deny("tool-call interrupted while waiting for human approval", actor, tier, version)
-		case errors.Is(err, context.DeadlineExceeded):
+		if errors.Is(err, context.DeadlineExceeded) {
 			// Wait owns the audited expiry transition, including rollback recovery. Nobody
 			// answered, which is not a person declining: the denial counts.
 			return deny("human approval did not arrive before the tool-call deadline; retry after review", actor, tier, version)

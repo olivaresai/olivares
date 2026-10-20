@@ -1115,13 +1115,12 @@
         },
         {
           "name": "c",
-          "tests_now": 310,
-          "minutes_est": 26.9,
+          "tests_now": 233,
+          "minutes_est": 43.4,
           "families": [
             "SameSubject",
             "Superseded",
             "Supersession",
-            "Administrative",
             "Assert",
             "Claim",
             "F3",
@@ -1135,7 +1134,6 @@
             "OrchestrationWork",
             "Overlapping",
             "Replay",
-            "Run",
             "Summary",
             "WorkAcceptance",
             "WorkPersists",
@@ -1159,18 +1157,97 @@
             "AStop",
             "Login",
             "PublicProviders",
-            "Strip"
+            "Strip",
+            "RunAction",
+            "RunChanges",
+            "RunCommands",
+            "RunControl",
+            "RunCore",
+            "RunD",
+            "RunH",
+            "RunLaunch",
+            "RunLimit",
+            "RunLineage",
+            "RunOutlives",
+            "RunPending",
+            "RunPin",
+            "RunSkills",
+            "RunWork",
+            "Runner",
+            "Runs",
+            "RuntimeCallbacks",
+            "RuntimeCleanup",
+            "RuntimeCommunication",
+            "RuntimeCompanion",
+            "RuntimeCompletion",
+            "RuntimeComponents",
+            "RuntimeCore",
+            "RuntimeCredential",
+            "RuntimeDriver",
+            "RuntimeDual",
+            "RuntimeDuration",
+            "RuntimeFilesystem",
+            "RuntimeIncomplete",
+            "RuntimeInvalid",
+            "RuntimeK3",
+            "RuntimeLaunch",
+            "RuntimeLifecycle",
+            "RuntimeNever",
+            "RuntimePost",
+            "RuntimeRejects",
+            "RuntimeResume",
+            "RuntimeSilent",
+            "RuntimeSkills",
+            "RuntimeStandby",
+            "Runtime_ACreateThatCannotSpawnGivesTheClaimBack",
+            "Runtime_ADriverRunReadsRunningFromTheInputToTheAnswer",
+            "Runtime_ALaunchThatCannotSpawnStillLeavesOneRow",
+            "Runtime_AResumeThatCannotSpawnGivesTheClaimBack",
+            "Runtime_ATurnClaudeStartsByItselfIsWorking",
+            "Runtime_ContextPolicySummaryRecordedInLaunchLedger",
+            "Runtime_CredentialDenyClosed",
+            "Runtime_E2E",
+            "Runtime_FullLifecycle",
+            "Runtime_GovernanceFactsDefault",
+            "Runtime_GovernanceFactsPersisted",
+            "Runtime_GovernanceFactsRederivedOnResume",
+            "Runtime_IOEvidenceFailureSurvivesOperatorStop",
+            "Runtime_IdleDerivedAtReadTime",
+            "Runtime_IdleWindowStillIdlesASilentSession",
+            "Runtime_InterruptedClaudeAcceptedQueuedTurnIsWorking",
+            "Runtime_InterruptedClaudeLateEventStaysIdle",
+            "Runtime_InterruptedClaudeRefusedInputKeepsIdle",
+            "Runtime_InterruptedDriverLateEventStaysIdle",
+            "Runtime_KillSwitchSweepTerminatesRunning",
+            "Runtime_LaunchDecisionStatusMapped",
+            "Runtime_LaunchGateDenies",
+            "Runtime_OrphanReconciledOnStop",
+            "Runtime_PEPEnvInjectedAndIORecorded",
+            "Runtime_ProviderEnvFamiliesRefusedFromHostAndLaunchGate",
+            "Runtime_RejectsInjectedEnvironmentThatCanOverrideRuntimeAuthority",
+            "Runtime_RemoteControlRejectsInput",
+            "Runtime_SessionWaitingForInputIsIdle",
+            "Runtime_SilentActiveTurnDefaultFiveMinuteProjection",
+            "Runtime_StopCheckedBeforeLaunchGate",
+            "Runtime_TerminalCleanupKeepsUncollectedWorktree",
+            "Runtime_TerminalDeleteKeepsUncollectedProcess",
+            "Runtime_TerminalStopAfterCleanupOrResume",
+            "Runtime_TerminalStopAfterRetention",
+            "Runtime_TerminalStopReportsUnfinishedProcess",
+            "Runtime_TerminalStopReportsUnverifiedCollection",
+            "Runtime_TheBridgeReadsTheClockWhileTheTestBodyMovesIt",
+            "Runtime_UnconfirmedClaudeInterruptDoesNotProjectIdle",
+            "Runtime_UnconfirmedInterruptDoesNotProjectIdle"
           ]
         },
         {
           "name": "d",
-          "tests_now": 508,
-          "minutes_est": 26.9,
+          "tests_now": 357,
+          "minutes_est": 43.6,
           "families": [
             "Ack",
             "Attach",
             "Canonical",
-            "Communication",
             "Credential",
             "Cursor",
             "Deny",
@@ -1193,7 +1270,6 @@
             "Publication",
             "Recover",
             "Requested",
-            "Resolve",
             "Sealed",
             "Settling",
             "Traversal",
@@ -1225,8 +1301,8 @@
         },
         {
           "name": "e",
-          "tests_now": 314,
-          "minutes_est": 26.9,
+          "tests_now": 264,
+          "minutes_est": 43.4,
           "families": [
             "Agent",
             "An",
@@ -1246,7 +1322,6 @@
             "WorkTerminal",
             "WorkWaiver",
             "Workflow",
-            "Workspace",
             "ATurn",
             "Dialable",
             "Endpoint",
@@ -1267,8 +1342,8 @@
         },
         {
           "name": "f",
-          "tests_now": 318,
-          "minutes_est": 26.9,
+          "tests_now": 334,
+          "minutes_est": 40.9,
           "families": [
             "AccountHome",
             "Name",
@@ -1310,13 +1385,14 @@
             "AFull",
             "Egress",
             "Operator",
-            "Skills"
+            "Skills",
+            "RuntimeA"
           ]
         },
         {
           "name": "g",
-          "tests_now": 277,
-          "minutes_est": 27.0,
+          "tests_now": 362,
+          "minutes_est": 42.0,
           "families": [
             "ATransition",
             "Activity",
@@ -1339,13 +1415,14 @@
             "WorkExact",
             "WorkIdempotency",
             "WorkReceipt",
-            "SecretEnv"
+            "SecretEnv",
+            "Administrative"
           ]
         },
         {
           "name": "h",
-          "tests_now": 293,
-          "minutes_est": 26.9,
+          "tests_now": 297,
+          "minutes_est": 44.7,
           "families": [
             "AJoined",
             "ARefusal",
@@ -1360,7 +1437,6 @@
             "Get",
             "Handoff",
             "Idle",
-            "Incoming",
             "MCPProbe",
             "Output",
             "ProductCause",
@@ -1391,12 +1467,34 @@
             "Price",
             "Shadow",
             "Stored",
-            "Tool",
             "Version"
+          ]
+        },
+        {
+          "name": "i",
+          "tests_now": 101,
+          "minutes_est": 40.6,
+          "families": [
+            "Workspace",
+            "Tool",
+            "RuntimeRun"
+          ]
+        },
+        {
+          "name": "j",
+          "tests_now": 218,
+          "minutes_est": 43.8,
+          "families": [
+            "RuntimeInput",
+            "Communication",
+            "Incoming",
+            "RuntimeWork",
+            "Resolve",
+            "RunPreview"
           ]
         }
       ],
-      "shards_why": "CONTINGENCIA: si `-parallel 8` no basta en el runner, el paquete se parte por `-run` igual que la raiz. 799 tests de nivel superior, 106 familias, 100 racimos CERRADOS POR PREFIJO (`-run ^Test(Auth)` casa tambien TestAuthorizeX: sin la clausura un test correria en los DOS turnos), repartidos 400/399. Es amplitud: el paquete no cuelga, no cabe. Actualizacion de cobertura 2026-09-06: el censo del lector de este gate contiene 1022 tests, 129 nuevos sin turno. Se conservan todas las pertenencias anteriores y se asignan las diez familias nuevas sin solapamiento: 511/511. Es un reparto por cuenta, no una nueva medida de duracion; los presupuestos y el paralelismo permanecen iguales. Actualizacion de cobertura 2026-09-07: el clasificador vivo del gate (glob de *_test.go del paquete) nombra 1076 tests y 3 huerfanos. Familias nuevas, cerradas por prefijo: Administrative (2 tests de administracion K3) e Inspect (1 test de launch-readiness). Se conservan todas las pertenencias anteriores y se asignan esas dos familias al turno a, que ya posee Channel y Launch, los racimos de los mismos ficheros. Censo vivo 564/512. Tres tests no justifican un turno nuevo; go_timeout 42m, parallel 8 y techo 45m permanecen. No hay medida nueva de duracion. Actualizacion de cobertura 2026-09-07 (R13): la composicion 255a0c2a80 trae runtime_attach_continuity_test.go y runtime_attach_reconnect_test.go, seis tests TestAttachHTTP_* sin turno; el censo vivo del gate nombra 1082 tests. Familia nueva, cerrada por prefijo: Attach (ninguna familia existente es prefijo suya ni ella de otra). Va al turno a, que ya posee Runtime (runtime_api_test.go, el TestRuntimeAPI_HTTP que ya recorre /attach) y Output (runtime_stream_test.go, el anillo que alimenta el attach): mismo harness y misma fuente. Se conservan todas las pertenencias anteriores. Censo vivo 570/512. Seis tests no justifican un turno nuevo; go_timeout 42m, parallel 8 y techo 45m permanecen. No hay medida nueva de duracion del turno. Coverage update, September 12, 2026: 18 TerminalEvidence tests and two LifecycleHTTP tests had no shard. Both complete nonoverlapping prefixes now belong to shard b with Finalize, Resume and Stop. Existing assignments, time limits, parallelism and all tests are unchanged. The live source census is 1,130 tests, split 597/533; tests_now records that count, not a new duration measurement. Coverage update, September 12, 2026 (RW1): runtime_operation_admission_test.go adds ten tests. Eight TestOperationAdmission_* had no shard; one new prefix-closed family, OperationAdmission, joins shard b, which already owns Stop, Resume and Finalize and already receives this file's two migrated-entrypoint tests through Stop. No existing family is a prefix of it or it of them. Every earlier assignment, the 45-minute step ceiling, go_timeout 42m and parallel 8 are unchanged, and no test is removed. The live source census is 1,140 tests, split 597/543; tests_now records that count, not a new duration measurement. Coverage update, September 12, 2026 (R91): driver_opencode_test.go and runtime_opencode_test.go add 38 TestOpenCode* tests with no shard. One new prefix-closed family, OpenCode, joins shard b, which already owns Grok, Resume, Stop, Env and Dispatch — the JSON-RPC ACP sibling and the launch/resume/stop/env surfaces these tests exercise. OpenCode is not a prefix of any existing family and no existing family is a prefix of it, so TestOpenCodeRuntime* stays with TestOpenCode* in the same turn (the same prefix-closed pairing Codex and Grok already use for their driver and real-child runtime tests). Every earlier assignment, the 45-minute step ceiling, go_timeout 42m and parallel 8 are unchanged, and no test is removed. The live source census is 1,178 tests, split 597/581; tests_now records that count, not a new duration measurement. Coverage update, September 13, 2026 (CAT1 composition, TF1 token-file refusal): runtime_credential_refusal_test.go adds two tests, TestCredentialRefusalsStayDistinct and TestWiredTokenFileRefusalAnswers503AndNamesItsVariable, that had no shard. The accepted TF1 head carries the same file and the same unchanged race-groups.json, so it was already orphaned there; composing it beside the R5 delta, whose delta runs this gate, is what made anyone look. Two new prefix-closed families, Credential and Wired: neither is a prefix of any of the 130 declared families nor has one as its prefix, and each selects exactly one of the two orphans and no test that already had a shard. Both go to shard b, which already owns Deny — the family that selects TestDenyClosedNamesTheUnwiredCredentialSource, the unwired half of the same refusal taxonomy these two extend — and was the lighter of the two shards in the live census (582 against 609). tests_now for shard b is refreshed to the live census (584); shard a keeps its declared count. Two tests do not justify a third shard; go_timeout, parallel and the step ceiling are unchanged, and there is no new duration measurement.",
+      "shards_why": "CONTINGENCIA: si `-parallel 8` no basta en el runner, el paquete se parte por `-run` igual que la raiz. 799 tests de nivel superior, 106 familias, 100 racimos CERRADOS POR PREFIJO (`-run ^Test(Auth)` casa tambien TestAuthorizeX: sin la clausura un test correria en los DOS turnos), repartidos 400/399. Es amplitud: el paquete no cuelga, no cabe. Actualizacion de cobertura 2026-09-06: el censo del lector de este gate contiene 1022 tests, 129 nuevos sin turno. Se conservan todas las pertenencias anteriores y se asignan las diez familias nuevas sin solapamiento: 511/511. Es un reparto por cuenta, no una nueva medida de duracion; los presupuestos y el paralelismo permanecen iguales. Actualizacion de cobertura 2026-09-07: el clasificador vivo del gate (glob de *_test.go del paquete) nombra 1076 tests y 3 huerfanos. Familias nuevas, cerradas por prefijo: Administrative (2 tests de administracion K3) e Inspect (1 test de launch-readiness). Se conservan todas las pertenencias anteriores y se asignan esas dos familias al turno a, que ya posee Channel y Launch, los racimos de los mismos ficheros. Censo vivo 564/512. Tres tests no justifican un turno nuevo; go_timeout 42m, parallel 8 y techo 45m permanecen. No hay medida nueva de duracion. Actualizacion de cobertura 2026-09-07 (R13): la composicion 255a0c2a80 trae runtime_attach_continuity_test.go y runtime_attach_reconnect_test.go, seis tests TestAttachHTTP_* sin turno; el censo vivo del gate nombra 1082 tests. Familia nueva, cerrada por prefijo: Attach (ninguna familia existente es prefijo suya ni ella de otra). Va al turno a, que ya posee Runtime (runtime_api_test.go, el TestRuntimeAPI_HTTP que ya recorre /attach) y Output (runtime_stream_test.go, el anillo que alimenta el attach): mismo harness y misma fuente. Se conservan todas las pertenencias anteriores. Censo vivo 570/512. Seis tests no justifican un turno nuevo; go_timeout 42m, parallel 8 y techo 45m permanecen. No hay medida nueva de duracion del turno. Coverage update, September 12, 2026: 18 TerminalEvidence tests and two LifecycleHTTP tests had no shard. Both complete nonoverlapping prefixes now belong to shard b with Finalize, Resume and Stop. Existing assignments, time limits, parallelism and all tests are unchanged. The live source census is 1,130 tests, split 597/533; tests_now records that count, not a new duration measurement. Coverage update, September 12, 2026 (RW1): runtime_operation_admission_test.go adds ten tests. Eight TestOperationAdmission_* had no shard; one new prefix-closed family, OperationAdmission, joins shard b, which already owns Stop, Resume and Finalize and already receives this file's two migrated-entrypoint tests through Stop. No existing family is a prefix of it or it of them. Every earlier assignment, the 45-minute step ceiling, go_timeout 42m and parallel 8 are unchanged, and no test is removed. The live source census is 1,140 tests, split 597/543; tests_now records that count, not a new duration measurement. Coverage update, September 12, 2026 (R91): driver_opencode_test.go and runtime_opencode_test.go add 38 TestOpenCode* tests with no shard. One new prefix-closed family, OpenCode, joins shard b, which already owns Grok, Resume, Stop, Env and Dispatch — the JSON-RPC ACP sibling and the launch/resume/stop/env surfaces these tests exercise. OpenCode is not a prefix of any existing family and no existing family is a prefix of it, so TestOpenCodeRuntime* stays with TestOpenCode* in the same turn (the same prefix-closed pairing Codex and Grok already use for their driver and real-child runtime tests). Every earlier assignment, the 45-minute step ceiling, go_timeout 42m and parallel 8 are unchanged, and no test is removed. The live source census is 1,178 tests, split 597/581; tests_now records that count, not a new duration measurement. Coverage update, September 13, 2026 (CAT1 composition, TF1 token-file refusal): runtime_credential_refusal_test.go adds two tests, TestCredentialRefusalsStayDistinct and TestWiredTokenFileRefusalAnswers503AndNamesItsVariable, that had no shard. The accepted TF1 head carries the same file and the same unchanged race-groups.json, so it was already orphaned there; composing it beside the R5 delta, whose delta runs this gate, is what made anyone look. Two new prefix-closed families, Credential and Wired: neither is a prefix of any of the 130 declared families nor has one as its prefix, and each selects exactly one of the two orphans and no test that already had a shard. Both go to shard b, which already owns Deny — the family that selects TestDenyClosedNamesTheUnwiredCredentialSource, the unwired half of the same refusal taxonomy these two extend — and was the lighter of the two shards in the live census (582 against 609). tests_now for shard b is refreshed to the live census (584); shard a keeps its declared count. Two tests do not justify a third shard; go_timeout, parallel and the step ceiling are unchanged, and there is no new duration measurement. Rebalance, October 20, 2026: race-full 39345910965 on the 0.3 release PR stopped shard c at its 70-minute Go timeout with 112 of its 310 tests not started and none hung (the running tests were at most 63 s in); e and h used 69 and 67 of the job's minutes. The group has 2781 tests against 2191 on 0.2. Each shard is priced from that run as serial elapsed plus parallel elapsed divided by 7.5, the concurrency the run reached (it predicts the measured spans within 3 min); a test the run never reached takes the mean of its shard's measured tests of the same kind. Shards above 55 min (c 79.2, e 66.2, h 66.3, d 57.2) are cut to at most 45 min, moving whole families; Run is divided by its next CamelCase words. A moved family goes to the fullest shard that stays at or below 42 min, or 45, else to new shards i and j. minutes_est of every changed shard is that estimate without margin.",
       "go_timeout_minutes": 70
     },
     {
@@ -1411,12 +1509,12 @@
   "root_package": "github.com/olivaresai/olivares/cmd/olivares",
   "root_step_ceiling_minutes": 80,
   "root_go_timeout_minutes": 70,
-  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. Coverage refresh for 0.3: 135 root tests added since 0.2 had no shard (122 on the 0.3 candidate, which does not carry the terminal main menu). Every existing root turn was already at or above its 45-minute estimate at its live test count, so they form a new turn, root-u, estimated at 37.5 minutes from the mean calibrated rate of the root turns; this is an estimate, not a measurement. Recalibrate from the next race-full run.",
+  "root_shards_why": "Historical rebalance for the earlier native test universe using top-level test elapsed times from race-full run 37124606369 on hosted runners. The former root-a, root-f, root-g and modules-finops jobs exhausted the unchanged 70-minute Go timeout; the active tests were still making progress. At that measurement, each root turn was estimated at no more than 45 minutes including 20% scheduling margin and 3 minutes startup. Prefixes stay disjoint, and a large family is divided by its next CamelCase word. 2772 of 3201 root tests completed with timings; the 429 unfinished/unstarted tests use their file maximum, or the measured 90th percentile (37.88 seconds) where the file has no completed test. These are estimates, not completed shard durations. The hook endpoint fixtures reserve 90 and 45 seconds respectively because their former 30-second deadline cut raced startup short. Recalibrate from the next full run; the native checker remains the coverage authority. Coverage refresh: added previously uncovered, prefix-disjoint families from the current source inventory to the smallest existing shards by live test count. Existing test owners, timeouts and parallelism are preserved. Refreshed tests_now values describe coverage counts, not new elapsed-time measurements; recalibrate from the next race-full run. All unchanged minutes_est values, including workspace groups, are historical calibration snapshots. Durations after this coverage refresh are not yet measured. Coverage refresh for 0.3: 135 root tests added since 0.2 had no shard (122 on the 0.3 candidate, which does not carry the terminal main menu). Every existing root turn was already at or above its 45-minute estimate at its live test count, so they form a new turn, root-u, estimated at 37.5 minutes from the mean calibrated rate of the root turns; this is an estimate, not a measurement. Recalibrate from the next race-full run. 2026-10-20 rebalance: race-full 39345910965 on the 0.3 release PR stopped root-b, root-d, root-g and root-k at the 70-minute Go timeout with no test hung (the running tests were 8 s to 1 min 31 s in) and per-test times equal to 0.2's green run (median ratio 0.95 over 957 tests in both). The 0.2 rebalances never reached this line, and 135 tests were added since. Each shard is priced from that run's elapsed times; tests it never reached use 0.95 times their 0.2 time, or 60 s when 0.2 never ran them. Every shard at or above 55 min (b 107.3, k 83.0, d 76.9, g 74.5, q 65.8, l 60.0, e-communication 59.6, m 57.6, c 55.0) is cut to at most 45 min, moving whole families first. SessionClaude and Boot are divided by their next CamelCase word. Moved families go to the fullest shard that stays at or below 42 min, otherwise to a new shard: root-v, root-w, root-x, root-y. The minutes_est of every changed shard is that estimate without margin.",
   "root_shards": [
     {
       "name": "root-a",
-      "tests_now": 124,
-      "minutes_est": 43.4,
+      "tests_now": 145,
+      "minutes_est": 41.9,
       "families": [
         "AStale",
         "Admit",
@@ -1435,13 +1533,15 @@
         "SCIMDelete",
         "Scope",
         "SharedSessionCredential",
-        "Verbs"
+        "Verbs",
+        "Default",
+        "BootFresh"
       ]
     },
     {
       "name": "root-b",
-      "tests_now": 107,
-      "minutes_est": 43.4,
+      "tests_now": 82,
+      "minutes_est": 43.2,
       "families": [
         "Account",
         "Console",
@@ -1450,7 +1550,6 @@
         "Delete",
         "Enforce",
         "MCPTool",
-        "SessionClaude",
         "SessionStop",
         "Setup",
         "Two",
@@ -1464,13 +1563,19 @@
         "RetirementCompletion",
         "SkillsCatalog",
         "SkillsExisting",
-        "AccessMapModeHelp"
+        "AccessMapModeHelp",
+        "SessionClaudeCanceled",
+        "SessionClaudeCustom",
+        "SessionClaudePost",
+        "SessionClaudeStructured",
+        "SessionClaudeTenant",
+        "SessionClaudeUnknown"
       ]
     },
     {
       "name": "root-c",
-      "tests_now": 140,
-      "minutes_est": 43.4,
+      "tests_now": 146,
+      "minutes_est": 43.5,
       "families": [
         "AJoined",
         "Advice",
@@ -1487,7 +1592,6 @@
         "Pagination",
         "Pg",
         "Posture",
-        "Provider",
         "Release",
         "RetirementStore",
         "Run",
@@ -1495,19 +1599,40 @@
         "SessionAuthority",
         "Template",
         "Version",
-        "Whoami"
+        "Whoami",
+        "ProviderAccount",
+        "ProviderAdd",
+        "ProviderApproval",
+        "ProviderBind",
+        "ProviderCanceled",
+        "ProviderCommands",
+        "ProviderComposition",
+        "ProviderDefault",
+        "ProviderEraser",
+        "ProviderFamily",
+        "ProviderFull",
+        "ProviderGet",
+        "ProviderIs",
+        "ProviderList",
+        "ProviderProbe",
+        "ProviderRecord",
+        "ProviderRef",
+        "ProviderRemove",
+        "ProviderSource",
+        "ProviderStructured",
+        "ProviderTable",
+        "ProviderTest"
       ]
     },
     {
       "name": "root-d",
-      "tests_now": 131,
-      "minutes_est": 43.4,
+      "tests_now": 105,
+      "minutes_est": 43.1,
       "families": [
         "ABusiness",
         "AFailed",
         "AList",
         "APush",
-        "Boot",
         "Collector",
         "Copy",
         "DBActivate",
@@ -1515,7 +1640,6 @@
         "Export",
         "IPv6",
         "Legal",
-        "No",
         "Operator",
         "OwnedObligations",
         "Route",
@@ -1524,18 +1648,42 @@
         "SessionWIF",
         "Shadow",
         "Step",
-        "SubjectExcluded"
+        "SubjectExcluded",
+        "BootActivation",
+        "BootBinds",
+        "BootBusiness",
+        "BootCannot",
+        "BootCloses",
+        "BootCommunity",
+        "BootDerives",
+        "BootEnforces",
+        "BootFailure",
+        "BootModule",
+        "BootPrefers",
+        "BootProceeds",
+        "BootPromotion",
+        "BootPropagates",
+        "BootProvider",
+        "BootRefuses",
+        "BootRegistered",
+        "BootRejects",
+        "BootReopens",
+        "BootServe",
+        "BootTreats",
+        "BootWarns",
+        "BootWires",
+        "BootWork",
+        "Booted"
       ]
     },
     {
       "name": "root-e-communication",
-      "tests_now": 112,
-      "minutes_est": 43.4,
+      "tests_now": 115,
+      "minutes_est": 43.1,
       "families": [
         "ABlank",
         "Accidental",
         "Adoption",
-        "Apply",
         "Atomic",
         "Break",
         "Bridge",
@@ -1546,13 +1694,11 @@
         "Findings",
         "Install",
         "JSONOutput",
-        "Kill",
         "Postgres",
         "Put",
         "QueuedSession",
         "Recording",
         "RetirementActive",
-        "SessionCredential",
         "SessionUnknown",
         "Source",
         "Business",
@@ -1568,7 +1714,7 @@
     },
     {
       "name": "root-e-rest",
-      "tests_now": 403,
+      "tests_now": 405,
       "minutes_est": 43.4,
       "families": [
         "ADeclared",
@@ -1744,7 +1890,7 @@
     },
     {
       "name": "root-f",
-      "tests_now": 113,
+      "tests_now": 120,
       "minutes_est": 43.4,
       "families": [
         "Clean",
@@ -1771,8 +1917,8 @@
     },
     {
       "name": "root-g",
-      "tests_now": 110,
-      "minutes_est": 43.4,
+      "tests_now": 75,
+      "minutes_est": 43.6,
       "families": [
         "ADocument",
         "AModelForbid",
@@ -1782,7 +1928,6 @@
         "CommunicationGlobal",
         "DDILEvidence",
         "DRCommunication",
-        "E2",
         "Follow",
         "Inventory",
         "LoginAsks",
@@ -1793,7 +1938,6 @@
         "NHILifecycle",
         "Rejected",
         "Review",
-        "Seed",
         "SessionShow",
         "SessionTool",
         "Stamped",
@@ -1814,8 +1958,8 @@
     },
     {
       "name": "root-h",
-      "tests_now": 112,
-      "minutes_est": 43.41,
+      "tests_now": 165,
+      "minutes_est": 41.5,
       "families": [
         "APermitNaming",
         "Admission",
@@ -1838,13 +1982,15 @@
         "SessionPublish",
         "SkillsPack",
         "Spanish",
-        "SessionHandoff"
+        "SessionHandoff",
+        "No",
+        "Read"
       ]
     },
     {
       "name": "root-i",
-      "tests_now": 121,
-      "minutes_est": 43.4,
+      "tests_now": 134,
+      "minutes_est": 41.8,
       "families": [
         "AReport",
         "AStoredActivation",
@@ -1868,12 +2014,13 @@
         "SessionPeers",
         "ThirdPartyText",
         "Verify",
-        "Web"
+        "Web",
+        "Owner"
       ]
     },
     {
       "name": "root-j",
-      "tests_now": 110,
+      "tests_now": 113,
       "minutes_est": 43.4,
       "families": [
         "ADelayedCleanup",
@@ -1913,14 +2060,13 @@
     },
     {
       "name": "root-k",
-      "tests_now": 156,
-      "minutes_est": 43.41,
+      "tests_now": 105,
+      "minutes_est": 43.4,
       "families": [
         "ADormant",
         "ATokenOwnedSubscription",
         "Capability",
         "Cloudflare",
-        "Community",
         "DRDrill",
         "DRIn",
         "DRPush",
@@ -1934,17 +2080,15 @@
     },
     {
       "name": "root-l",
-      "tests_now": 123,
-      "minutes_est": 43.41,
+      "tests_now": 113,
+      "minutes_est": 43.9,
       "families": [
         "AWorkflowNaming",
         "Apps",
         "CRLWitness",
-        "CommunicationMessaging",
         "Composition",
         "Config",
         "DDILImport",
-        "DRBackup",
         "DROffsite",
         "DRSQ",
         "Edition",
@@ -1956,8 +2100,8 @@
     },
     {
       "name": "root-m",
-      "tests_now": 208,
-      "minutes_est": 43.4,
+      "tests_now": 199,
+      "minutes_est": 44.2,
       "families": [
         "ANon",
         "Auth",
@@ -1974,9 +2118,7 @@
         "Governed",
         "HALeader",
         "K1",
-        "Owner",
         "Pin",
-        "Read",
         "Secrets",
         "Semantic",
         "Success",
@@ -1986,8 +2128,8 @@
     },
     {
       "name": "root-n",
-      "tests_now": 161,
-      "minutes_est": 43.4,
+      "tests_now": 177,
+      "minutes_est": 39.9,
       "families": [
         "AManagedDocument",
         "ARetirementWithout",
@@ -2014,12 +2156,13 @@
         "TLSCertificate",
         "Task",
         "Test",
-        "UsedModules"
+        "UsedModules",
+        "SessionClaudeReview"
       ]
     },
     {
       "name": "root-o",
-      "tests_now": 222,
+      "tests_now": 249,
       "minutes_est": 43.4,
       "families": [
         "ATrace",
@@ -2052,8 +2195,8 @@
     },
     {
       "name": "root-p",
-      "tests_now": 242,
-      "minutes_est": 43.4,
+      "tests_now": 261,
+      "minutes_est": 41.1,
       "families": [
         "Argument",
         "Audit",
@@ -2080,20 +2223,18 @@
         "Tokens",
         "Tool",
         "Tracing",
-        "Voice"
+        "Voice",
+        "Apply"
       ]
     },
     {
       "name": "root-q",
-      "tests_now": 106,
-      "minutes_est": 43.41,
+      "tests_now": 82,
+      "minutes_est": 44.1,
       "families": [
-        "Admin",
         "Arming",
         "CommitOutcome",
-        "CommunicationIncoming",
         "CommunicationStore",
-        "Default",
         "Module",
         "Production",
         "RetirementHold",
@@ -2115,8 +2256,8 @@
     },
     {
       "name": "root-r",
-      "tests_now": 229,
-      "minutes_est": 43.4,
+      "tests_now": 239,
+      "minutes_est": 41.0,
       "families": [
         "AAL3",
         "ABlockedRetirement",
@@ -2140,13 +2281,14 @@
         "SessionName",
         "SessionRemove",
         "SessionView",
-        "SkillsCLI"
+        "SkillsCLI",
+        "CommunicationIncoming"
       ]
     },
     {
       "name": "root-s",
-      "tests_now": 180,
-      "minutes_est": 43.41,
+      "tests_now": 185,
+      "minutes_est": 41.3,
       "families": [
         "Agent",
         "CommunicationLineage",
@@ -2162,13 +2304,14 @@
         "Persisted",
         "Quickstart",
         "Reconcile",
-        "Superadmin"
+        "Superadmin",
+        "SessionCredential"
       ]
     },
     {
       "name": "root-t",
-      "tests_now": 106,
-      "minutes_est": 43.4,
+      "tests_now": 121,
+      "minutes_est": 41.9,
       "families": [
         "A2",
         "APartial",
@@ -2202,7 +2345,9 @@
         "Raw",
         "SessionWorktree",
         "SkillsDirectory",
-        "AccessMapAttackPaths"
+        "AccessMapAttackPaths",
+        "ProviderSession",
+        "Seed"
       ]
     },
     {
@@ -2252,6 +2397,46 @@
         "Vacant",
         "Vault",
         "WithContainer"
+      ]
+    },
+    {
+      "name": "root-v",
+      "tests_now": 95,
+      "minutes_est": 41.8,
+      "families": [
+        "Community",
+        "CommunicationMessaging"
+      ]
+    },
+    {
+      "name": "root-w",
+      "tests_now": 53,
+      "minutes_est": 41.0,
+      "families": [
+        "E2",
+        "DRBackup"
+      ]
+    },
+    {
+      "name": "root-x",
+      "tests_now": 23,
+      "minutes_est": 41.0,
+      "families": [
+        "SessionClaudeHook",
+        "SessionClaudeApproval"
+      ]
+    },
+    {
+      "name": "root-y",
+      "tests_now": 21,
+      "minutes_est": 33.7,
+      "families": [
+        "SessionClaudePreset",
+        "BootNon",
+        "Admin",
+        "BootWith",
+        "BootApproval",
+        "Kill"
       ]
     }
   ],
