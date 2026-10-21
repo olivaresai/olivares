@@ -6,7 +6,6 @@ package api_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -36,66 +35,6 @@ func createOwnedGroup(t *testing.T, h *harness, actor auth.Principal, tenant mod
 		t.Fatal(err)
 	}
 	return out.Group
-}
-
-func TestGroupOriginHTTPScimAncestryUsesFixedForbiddenEnvelope(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "origin-scim-ancestry")
-	ctx := context.Background()
-	actor, err := h.authr.Authenticate(ctx, admin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tok := h.scimToken(actor, tenant)
-	first := h.scimUser(tok, "first@ancestry.test")
-	second := h.scimUser(tok, "second@ancestry.test")
-	groups := map[string]model.UserGroup{}
-	for _, name := range []string{"child", "middle", "parent"} {
-		var members []model.ID
-		if name == "child" {
-			members = []model.ID{model.ID(first)}
-		}
-		g, err := h.authr.SCIMCreateGroup(ctx, actor, tenant, auth.SCIMGroupInput{DisplayName: name, ExternalID: name, Members: members})
-		if err != nil {
-			t.Fatal(err)
-		}
-		groups[name] = g.Group
-	}
-	for _, edge := range [][2]string{{"child", "middle"}, {"middle", "parent"}} {
-		if _, err := h.authr.ConfigureGroupParent(ctx, actor, tenant, groups[edge[0]].ID, groups[edge[1]].ID); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
-		g, err := as.Groups().Get(ctx, groups["parent"].ID)
-		if err != nil {
-			return err
-		}
-		g.ProvisionedBy = "directory-a"
-		_, err = as.Groups().Update(ctx, g)
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for _, op := range []struct{ name, method, group, body string }{
-		{"replace", http.MethodPut, "child", `{"displayName":"child","externalId":"child","members":[]}`},
-		{"add", http.MethodPatch, "child", fmt.Sprintf(`{"Operations":[{"op":"add","path":"members","value":[{"value":%q}]}]}`, second)},
-		{"remove", http.MethodPatch, "child", fmt.Sprintf(`{"Operations":[{"op":"remove","path":"members[value eq \"%s\"]"}]}`, first)},
-		{"delete-child", http.MethodDelete, "child", ""},
-		{"delete-intermediate", http.MethodDelete, "middle", ""},
-	} {
-		t.Run(op.name, func(t *testing.T) {
-			res := h.scim(op.method, scimBase+"/Groups/"+groups[op.group].ID.String(), tok, op.body)
-			if res.code != http.StatusForbidden || res.body["status"] != "403" || res.body["scimType"] != "mutability" || res.body["detail"] != "group is managed by another provisioner" {
-				t.Errorf("SCIM ancestry refusal: status=%d body=%v", res.code, res.body)
-			}
-		})
-	}
-	res := h.scim(http.MethodPatch, scimBase+"/Groups/"+groups["child"].ID.String(), tok, `{"Operations":[{"op":"replace","path":"displayName","value":"renamed"}]}`)
-	if res.code != http.StatusOK || !memberIDs(res)[first] || memberIDs(res)[second] || res.body["displayName"] != "renamed" {
-		t.Errorf("attribute-only NULL update: status=%d body=%v", res.code, res.body)
-	}
 }
 
 func TestGroupOriginOperatorProjection(t *testing.T) {
@@ -130,7 +69,8 @@ func TestGroupOriginOperatorProjection(t *testing.T) {
 }
 
 func TestGroupOriginHTTPWritesRefuseClaimedGroups(t *testing.T) {
-	h := newHarness(t)
+	// Group nesting is a Business route: the department service is wired to reach it.
+	h := newHarnessOpts(t, groupDepartments)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "origin-http")
 	ctx := context.Background()
@@ -156,19 +96,6 @@ func TestGroupOriginHTTPWritesRefuseClaimedGroups(t *testing.T) {
 			}
 		})
 	}
-	tok := h.scimToken(actor, tenant)
-	for _, op := range []struct{ method, body string }{
-		{http.MethodPut, `{"displayName":"Renamed","externalId":"replacement","members":[]}`},
-		{http.MethodPatch, `{"Operations":[{"op":"replace","path":"displayName","value":"Renamed"}]}`},
-		{http.MethodDelete, ""},
-	} {
-		t.Run("scim/"+op.method, func(t *testing.T) {
-			res := h.scim(op.method, scimBase+"/Groups/"+g.ID.String(), tok, op.body)
-			if res.code != http.StatusForbidden || res.body["status"] != "403" || res.body["detail"] != "group is managed by another provisioner" {
-				t.Errorf("SCIM refusal: status=%d body=%v", res.code, res.body)
-			}
-		})
-	}
 	if err := h.st.AuthView(ctx, func(as store.AuthScope) error {
 		current, err := as.Groups().Get(ctx, g.ID)
 		if err != nil {
@@ -184,7 +111,8 @@ func TestGroupOriginHTTPWritesRefuseClaimedGroups(t *testing.T) {
 }
 
 func TestGroupOriginHTTPHierarchyUsesFixedForbiddenEnvelope(t *testing.T) {
-	h := newHarness(t)
+	// Group nesting is a Business route: the department service is wired to reach it.
+	h := newHarnessOpts(t, groupDepartments)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "origin-hierarchy-http")
 	ctx := context.Background()

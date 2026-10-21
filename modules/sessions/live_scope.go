@@ -222,6 +222,89 @@ func endManagedLive(ctx context.Context, sc store.Scope, runRef string, at time.
 	return err
 }
 
+// dropBatch bounds one read of rows to delete. The loops below read again until
+// nothing is left, so the bound is a page, not a ceiling.
+const dropBatch = 200
+
+// dropRunLive removes what the live list shows for a run that is being deleted: the
+// plane's own row for it, the rows its hooks and cost sink folded on the legacy
+// channel under the run reference and the canonical id, and the timelines of all
+// of them. The run carries the session's name, so a row left behind is listed as
+// an untitled session that no route removes.
+//
+// It matches only references the plane minted for THIS run. The provider's own id is
+// never matched on the legacy channel: two homes may both announce it. It is reached
+// only through the managed row that names this run, and that row goes as itself.
+//
+// Live and timeline rows carry no workspace lineage, so the caller runs this with the
+// engine's authority, after the confined run lookup proved the caller may delete the run.
+func dropRunLive(ctx context.Context, sc store.Scope, runRef, claimSID string) error {
+	live, err := sc.Ext(liveKind)
+	if err != nil {
+		return err
+	}
+	legacyRefs := []string{runRef}
+	if claimSID != "" {
+		legacyRefs = append(legacyRefs, claimSID)
+	}
+	for {
+		managed, _, err := live.List(ctx, model.Query{Filters: []model.Filter{eq(colLiveRunRef, runRef)}, Limit: dropBatch})
+		if err != nil {
+			return err
+		}
+		if len(managed) == 0 {
+			break
+		}
+		for _, row := range managed {
+			if sid := row.String(colLiveCanonicalSID); sid != "" && sid != claimSID {
+				legacyRefs = append(legacyRefs, sid)
+			}
+			id, err := model.ParseID(row.String(model.ColID))
+			if err != nil {
+				return err
+			}
+			if err := dropAll(ctx, sc, timelineKind, []model.Filter{eq(colTLLiveRef, id.String())}); err != nil {
+				return err
+			}
+			if err := live.Delete(ctx, id); err != nil {
+				return err
+			}
+		}
+	}
+	for _, ref := range legacyRefs {
+		if err := dropAll(ctx, sc, timelineKind, legacyTimelineFilters(ref)); err != nil {
+			return err
+		}
+		if err := dropAll(ctx, sc, liveKind, liveKeyFilters(ref, "")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dropAll deletes every row of kind that matches filters, one page at a time.
+func dropAll(ctx context.Context, sc store.Scope, kind model.Kind, filters []model.Filter) error {
+	repo, err := sc.Ext(kind)
+	if err != nil {
+		return err
+	}
+	for {
+		rows, _, err := repo.List(ctx, model.Query{Filters: filters, Limit: dropBatch})
+		if err != nil || len(rows) == 0 {
+			return err
+		}
+		for _, row := range rows {
+			id, err := model.ParseID(row.String(model.ColID))
+			if err != nil {
+				return err
+			}
+			if err := repo.Delete(ctx, id); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // touchManagedLive advances the managed row's last_event_at for a live profiled
 // run, best-effort and outside any other transaction: liveness of the plane's own
 // process is a fact the plane can state without a connector.

@@ -7,9 +7,23 @@
 // the model says can never become markup. A link says where it goes (its title) and opens
 // without the opener.
 import { Fragment, memo, type ReactNode } from 'react'
-import { parseMarkdown, type Block, type Inline } from './markdown'
+import {
+  parseMarkdown,
+  type Block,
+  type Inline,
+  type HrefResolver,
+} from './markdown'
 
-function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
+interface MarkdownPresentation {
+  renderLink?: (href: string, children: ReactNode) => ReactNode
+  /** A wiki is a document; replies keep their headings as bold lines. */
+  headingOffset?: number
+}
+
+function Inlines({
+  nodes,
+  renderLink,
+}: { nodes: readonly Inline[] } & MarkdownPresentation): ReactNode {
   return nodes.map((node, i) => {
     if (typeof node === 'string') return <Fragment key={i}>{node}</Fragment>
     switch (node.kind) {
@@ -25,16 +39,25 @@ function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
       case 'strong':
         return (
           <strong key={i} className="font-semibold">
-            <Inlines nodes={node.children} />
+            <Inlines nodes={node.children} renderLink={renderLink} />
           </strong>
         )
       case 'em':
         return (
           <em key={i}>
-            <Inlines nodes={node.children} />
+            <Inlines nodes={node.children} renderLink={renderLink} />
           </em>
         )
       case 'link':
+        if (renderLink)
+          return (
+            <Fragment key={i}>
+              {renderLink(
+                node.href,
+                <Inlines nodes={node.children} renderLink={renderLink} />,
+              )}
+            </Fragment>
+          )
         return (
           <a
             key={i}
@@ -52,17 +75,20 @@ function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
 }
 
 /** An item that is one paragraph reads as its words, without a paragraph box around them. */
-function ListItem({ blocks }: { blocks: readonly Block[] }) {
+function ListItem({
+  blocks,
+  ...presentation
+}: { blocks: readonly Block[] } & MarkdownPresentation) {
   const only = blocks.length === 1 ? blocks[0] : undefined
   if (only?.kind === 'paragraph')
     return (
       <li>
-        <Inlines nodes={only.inline} />
+        <Inlines nodes={only.inline} {...presentation} />
       </li>
     )
   return (
     <li>
-      <Blocks blocks={blocks} gap="gap-1" />
+      <Blocks blocks={blocks} gap="gap-1" {...presentation} />
     </li>
   )
 }
@@ -70,10 +96,11 @@ function ListItem({ blocks }: { blocks: readonly Block[] }) {
 function Blocks({
   blocks,
   gap = 'gap-2',
+  ...presentation
 }: {
   blocks: readonly Block[]
   gap?: string
-}) {
+} & MarkdownPresentation) {
   return (
     <div className={`flex flex-col ${gap}`}>
       {blocks.map((block, i) => {
@@ -81,16 +108,26 @@ function Blocks({
           case 'paragraph':
             return (
               <p key={i} className="whitespace-pre-wrap">
-                <Inlines nodes={block.inline} />
+                <Inlines nodes={block.inline} {...presentation} />
               </p>
             )
-          case 'heading':
+          case 'heading': {
+            if (presentation.headingOffset !== undefined) {
+              const Heading =
+                `h${Math.min(6, block.level + presentation.headingOffset)}` as 'h1'
+              return (
+                <Heading key={i} className="mt-3 text-heading font-semibold">
+                  <Inlines nodes={block.inline} {...presentation} />
+                </Heading>
+              )
+            }
             // The transcript is not the page's outline: a reply's heading is a bold line.
             return (
               <p key={i} className="font-semibold">
-                <Inlines nodes={block.inline} />
+                <Inlines nodes={block.inline} {...presentation} />
               </p>
             )
+          }
           case 'code':
             return (
               <pre
@@ -108,7 +145,7 @@ function Blocks({
                 key={i}
                 className="m-0 border-l-2 border-line pl-3 text-text-2"
               >
-                <Blocks blocks={block.blocks} gap="gap-1" />
+                <Blocks blocks={block.blocks} gap="gap-1" {...presentation} />
               </blockquote>
             )
           case 'list': {
@@ -120,7 +157,7 @@ function Blocks({
                 className={`m-0 flex flex-col gap-1 pl-5 ${block.ordered ? 'list-decimal' : 'list-disc'}`}
               >
                 {block.items.map((item, n) => (
-                  <ListItem key={n} blocks={item} />
+                  <ListItem key={n} blocks={item} {...presentation} />
                 ))}
               </Tag>
             )
@@ -141,7 +178,7 @@ function Blocks({
                           scope="col"
                           className="border-b border-line px-2 py-1 text-left font-medium"
                         >
-                          <Inlines nodes={cell} />
+                          <Inlines nodes={cell} {...presentation} />
                         </th>
                       ))}
                     </tr>
@@ -154,7 +191,7 @@ function Blocks({
                             key={c}
                             className="border-b border-line px-2 py-1 align-top"
                           >
-                            <Inlines nodes={cell} />
+                            <Inlines nodes={cell} {...presentation} />
                           </td>
                         ))}
                       </tr>
@@ -174,8 +211,11 @@ function Blocks({
 /** Re-parsed only when the words change: a long thread repaints on every frame. */
 export const MarkdownText = memo(function MarkdownText({
   text,
+  resolveHref,
+  ...presentation
 }: {
   text: string
-}) {
-  return <Blocks blocks={parseMarkdown(text)} />
+  resolveHref?: HrefResolver
+} & MarkdownPresentation) {
+  return <Blocks blocks={parseMarkdown(text, resolveHref)} {...presentation} />
 })

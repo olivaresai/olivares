@@ -11,22 +11,12 @@
 import { useTranslation } from 'react-i18next'
 import { StatusDot, type StatusTone } from '@/components/ui/status-chip'
 import { cn } from '@/lib/utils'
-import { primaryRun, type UnifiedSession } from './provenance'
-import { groupOf } from './session-groups'
+import type { UnifiedSession } from './provenance'
+import { sessionDisplayState, type StateTone } from './session-display-state'
 import './i18n'
 import '@/features/agentops/i18n'
 
-export type StateTone = 'needs' | 'working' | 'idle' | 'failed'
-
-function stateTone(session: UnifiedSession): StateTone {
-  if (primaryRun(session.runs)?.state === 'failed') return 'failed'
-  const group = groupOf(session)
-  return group === 'attention'
-    ? 'needs'
-    : group === 'active'
-      ? 'working'
-      : 'idle'
-}
+export type { StateTone } from './session-display-state'
 
 const TONE: Record<StateTone, StatusTone> = {
   needs: 'warn',
@@ -43,12 +33,14 @@ export function StateDot({
   className?: string
 }) {
   const { t } = useTranslation(['sessions', 'agentops'])
-  const run = primaryRun(session.runs)
-  const word = run
-    ? t(`agentops:state.${run.state}`, { defaultValue: String(run.state) })
-    : session.live
-      ? t(`sessions:state.${session.live.cc_state}`, {
-          defaultValue: String(session.live.cc_state),
+  const display = sessionDisplayState(session)
+  const word = display.runState
+    ? t(`agentops:state.${display.runState}`, {
+        defaultValue: String(display.runState),
+      })
+    : display.observedState
+      ? t(`sessions:state.${display.observedState}`, {
+          defaultValue: String(display.observedState),
         })
       : ''
   return (
@@ -56,12 +48,12 @@ export function StateDot({
       role="img"
       aria-label={word}
       title={word}
-      data-tone={stateTone(session)}
+      data-tone={display.tone}
       className={cn('inline-flex size-1.5 shrink-0 items-center', className)}
     >
       <StatusDot
-        tone={TONE[stateTone(session)]}
-        working={stateTone(session) === 'working'}
+        tone={TONE[display.tone]}
+        working={display.tone === 'working'}
       />
     </span>
   )

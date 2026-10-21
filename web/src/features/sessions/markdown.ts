@@ -62,6 +62,9 @@ export function safeHref(url: string): string | null {
   return WEB_OR_MAIL.test(url) ? url : null
 }
 
+/** The caller may resolve governed file links; replies keep the web/mail policy. */
+export type HrefResolver = (url: string) => string | null
+
 interface Hit {
   nodes: Inline[]
   end: number
@@ -99,6 +102,7 @@ function emphasis(
   depth: number,
   inLink: boolean,
   dead: Set<string>,
+  resolveHref: HrefResolver,
 ): Hit | null {
   const ch = text[at]!
   const double = text[at + 1] === ch
@@ -140,7 +144,12 @@ function emphasis(
       nodes: [
         {
           kind: double ? 'strong' : 'em',
-          children: parseInline(text.slice(open, close), depth + 1, inLink),
+          children: parseInline(
+            text.slice(open, close),
+            depth + 1,
+            inLink,
+            resolveHref,
+          ),
         },
       ],
       end: close + mark.length,
@@ -234,14 +243,20 @@ function link(
   at: number,
   depth: number,
   inLink: boolean,
+  resolveHref: HrefResolver,
 ): Hit | null {
   const open = text[at] === '!' ? at + 1 : at
   const labelEnd = closingBracket(text, open)
   if (labelEnd < 0 || text[labelEnd + 1] !== '(') return null
   const dest = destination(text, labelEnd + 2)
   if (!dest) return null
-  const children = parseInline(text.slice(open + 1, labelEnd), depth + 1, true)
-  const href = safeHref(dest.url)
+  const children = parseInline(
+    text.slice(open + 1, labelEnd),
+    depth + 1,
+    true,
+    resolveHref,
+  )
+  const href = resolveHref(dest.url)
   // A link inside a link label is one anchor, with its address kept in the words; an
   // address that is not a web or mail one stays in the text as written, never dropped.
   if (inLink) return { nodes: [...children, ` (${dest.url})`], end: dest.end }
@@ -258,7 +273,12 @@ function link(
   }
 }
 
-export function parseInline(text: string, depth = 0, inLink = false): Inline[] {
+export function parseInline(
+  text: string,
+  depth = 0,
+  inLink = false,
+  resolveHref: HrefResolver = safeHref,
+): Inline[] {
   if (depth > MAX_DEPTH || text.length > MAX_INLINE_CHARS) return [text]
   const out: Inline[] = []
   const dead = new Set<string>()
@@ -278,9 +298,9 @@ export function parseInline(text: string, depth = 0, inLink = false): Inline[] {
     let hit: Hit | null = null
     if (ch === '`') hit = codeSpan(text, at)
     else if (ch === '*' || ch === '_')
-      hit = emphasis(text, at, depth, inLink, dead)
+      hit = emphasis(text, at, depth, inLink, dead, resolveHref)
     else if (ch === '[' || (ch === '!' && next === '['))
-      hit = link(text, at, depth, inLink)
+      hit = link(text, at, depth, inLink, resolveHref)
     else if (ch === '<' && !inLink) {
       AUTOLINK.lastIndex = at
       const m = AUTOLINK.exec(text)
@@ -372,6 +392,7 @@ function parseList(
   lines: string[],
   start: number,
   depth: number,
+  resolveHref: HrefResolver,
 ): { block: Block; end: number } {
   const first = ITEM.exec(lines[start]!)!
   const base = first[1]!.length
@@ -402,7 +423,7 @@ function parseList(
       content.push(line.slice(Math.min(contentIndent, indent)))
       i++
     }
-    items.push(parseBlocks(content, depth + 1))
+    items.push(parseBlocks(content, depth + 1, resolveHref))
   }
   return {
     block: {
@@ -415,7 +436,11 @@ function parseList(
   }
 }
 
-function parseBlocks(lines: string[], depth: number): Block[] {
+function parseBlocks(
+  lines: string[],
+  depth: number,
+  resolveHref: HrefResolver,
+): Block[] {
   if (depth > MAX_DEPTH)
     return [{ kind: 'paragraph', inline: [lines.join('\n')] }]
   const blocks: Block[] = []
@@ -441,7 +466,7 @@ function parseBlocks(lines: string[], depth: number): Block[] {
       blocks.push({
         kind: 'heading',
         level: heading[1]!.length,
-        inline: parseInline(headingText(heading[2]!)),
+        inline: parseInline(headingText(heading[2]!), 0, false, resolveHref),
       })
       i++
       continue
@@ -455,11 +480,14 @@ function parseBlocks(lines: string[], depth: number): Block[] {
       const inner: string[] = []
       while (i < lines.length && QUOTE.test(lines[i]!))
         inner.push(lines[i++]!.replace(QUOTE, ''))
-      blocks.push({ kind: 'quote', blocks: parseBlocks(inner, depth + 1) })
+      blocks.push({
+        kind: 'quote',
+        blocks: parseBlocks(inner, depth + 1, resolveHref),
+      })
       continue
     }
     if (ITEM.test(line)) {
-      const list = parseList(lines, i, depth)
+      const list = parseList(lines, i, depth, resolveHref)
       blocks.push(list.block)
       i = list.end
       continue
@@ -471,10 +499,14 @@ function parseBlocks(lines: string[], depth: number): Block[] {
       const rows: Inline[][][] = []
       i += 2
       while (i < lines.length && lines[i]!.trim() && lines[i]!.includes('|'))
-        rows.push(tableCells(lines[i++]!).map((c) => parseInline(c)))
+        rows.push(
+          tableCells(lines[i++]!).map((c) =>
+            parseInline(c, 0, false, resolveHref),
+          ),
+        )
       blocks.push({
         kind: 'table',
-        head: head.map((c) => parseInline(c)),
+        head: head.map((c) => parseInline(c, 0, false, resolveHref)),
         rows,
       })
       continue
@@ -493,16 +525,22 @@ function parseBlocks(lines: string[], depth: number): Block[] {
       )
     )
       text.push(lines[i++]!)
-    blocks.push({ kind: 'paragraph', inline: parseInline(text.join('\n')) })
+    blocks.push({
+      kind: 'paragraph',
+      inline: parseInline(text.join('\n'), 0, false, resolveHref),
+    })
   }
   return blocks
 }
 
 /** The reply as blocks, ready to paint. Never throws; never produces markup. */
-export function parseMarkdown(text: string): Block[] {
+export function parseMarkdown(
+  text: string,
+  resolveHref: HrefResolver = safeHref,
+): Block[] {
   const lines = text
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/^\t+/, (tabs) => '    '.repeat(tabs.length)))
-  return parseBlocks(lines, 0)
+  return parseBlocks(lines, 0, resolveHref)
 }

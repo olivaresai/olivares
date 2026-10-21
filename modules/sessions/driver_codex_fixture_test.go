@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -112,9 +113,27 @@ type codexFixture struct {
 	// ForeignUsage is a total the peer reports for ANOTHER thread (a subagent's)
 	// after each turn/start; it must never reach this run.
 	ForeignUsage *codexFixtureTokens `json:"foreign_usage"`
+	// StoredImageBytes gives the thread two earlier turns, the first with an image of
+	// this many base64 bytes in its user message (what codex-cli 0.162.1 reports for a
+	// message that was sent a screenshot). thread/resume lists them unless the client
+	// sends excludeTurns; thread/read lists them when it asks for turns.
+	StoredImageBytes int `json:"stored_image_bytes"`
+	// FirstTurnReplay is a file of notifications recorded from the real tool, one JSON
+	// object per line, that the peer sends after answering the FIRST turn/start, with
+	// the recorded thread and turn ids replaced by the peer's own. Later turns follow
+	// CompleteTurn.
+	FirstTurnReplay string `json:"first_turn_replay"`
 	// Model overrides the model the thread answer names ("" ⇒ "the model").
 	Model         string           `json:"model"`
 	CatalogModels []map[string]any `json:"catalog_models,omitempty"`
+	// SkillsPadBytes pads the description of the skill that one skills/list answer
+	// carries, so its reply line can pass the one-line limit the way a large skill
+	// set does. SkillsPadRequest is the 1-based request it pads (0 means the first);
+	// the other answers are small. SkillsPadForeignID answers the padded request
+	// under an id nobody issued.
+	SkillsPadBytes     int  `json:"skills_pad_bytes"`
+	SkillsPadRequest   int  `json:"skills_pad_request"`
+	SkillsPadForeignID bool `json:"skills_pad_foreign_id"`
 }
 
 // codexFixtureTokens is one TokenUsageBreakdown, in the wire's own field names.
@@ -139,11 +158,14 @@ type codexFixtureRecord struct {
 	// Efforts is the `effort` carried by each turn/start, so a test can prove a
 	// provider-advertised value reached the provider instead of being refused by
 	// somebody else's enum on the way.
-	Efforts []string `json:"efforts"`
+	Efforts      []string `json:"efforts"`
+	ServiceTiers []string `json:"service_tiers"`
 	// Inputs is the `text` of every input block that arrived on a turn/start or a
 	// turn/steer, byte for byte, so a row can compare the string the child received
 	// rather than the number of turns.
 	Inputs []string `json:"inputs"`
+	// Images is the `url` of every image block that arrived beside the text, as sent.
+	Images []string `json:"images"`
 }
 
 // codexFixtureEnvValues are the NON-SECRET names whose values the peer records:
@@ -191,6 +213,9 @@ func TestMain(m *testing.M) {
 			os.Exit(runOpenCodeFixturePeer())
 		case confine.HelperArg:
 			// The confinement helper: procRunner re-executes this test binary.
+			if handlesSessionGuard(args[1:]) {
+				execGuardWithRaceGuardEnv()
+			}
 			os.Exit(RunConfinementHelper(args[1:]))
 		case "fixture-grandchild":
 			// A grandchild that holds the inherited stdout open. Only a PROCESS GROUP
@@ -201,6 +226,31 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(m.Run())
+}
+
+// execGuardWithRaceGuardEnv restarts the session guard with raceGuardEnv. Under
+// -race the guard is this test binary, which pauses before it exits 0 (GORACE
+// atexit_sleep_ms); the engine's guard does not. A launch that cannot carry
+// raceGuardEnv, such as the Codex sandbox probe, which passes only the homes,
+// would end a second late, and once more for the stand-in Codex the guard
+// starts, which inherits the guard's environment. It returns when the guard
+// already runs with raceGuardEnv, in a plain build, or when the restart failed.
+func execGuardWithRaceGuardEnv() {
+	if len(raceGuardEnv) == 0 {
+		return
+	}
+	name, want := raceGuardEnv[0].Name+"=", raceGuardEnv[0].Name+"="+raceGuardEnv[0].Value
+	var env []string
+	for _, kv := range os.Environ() {
+		if kv == want {
+			return
+		}
+		if !strings.HasPrefix(kv, name) {
+			env = append(env, kv)
+		}
+	}
+	err := syscall.Exec("/proc/self/exe", os.Args, append(env, want)) // #nosec G204 -- this test binary restarts itself with its own arguments
+	fmt.Fprintln(os.Stderr, "fixture: the session guard keeps the race exit pause:", err)
 }
 
 // runCodexFixtureSandboxCommand runs what `codex sandbox [COMMAND]...` runs once
@@ -235,6 +285,7 @@ type codexFixturePeer struct {
 	rec    codexFixtureRecord
 	thread string
 	turn   int
+	skills int // skills/list requests answered
 }
 
 func runCodexFixturePeer() int {
@@ -367,10 +418,18 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 		}
 		p.reply(id, map[string]any{"data": models, "nextCursor": nil})
 	case codexMethodThreadStart:
+		var tier string
+		_ = json.Unmarshal(params["serviceTier"], &tier)
+		p.rec.ServiceTiers = append(p.rec.ServiceTiers, tier)
+		p.flush()
 		p.waitForRelease()
 		p.thread = p.cfg.ThreadID
 		p.reply(id, p.threadResult(p.thread))
 	case codexMethodThreadResume:
+		var tier string
+		_ = json.Unmarshal(params["serviceTier"], &tier)
+		p.rec.ServiceTiers = append(p.rec.ServiceTiers, tier)
+		p.flush()
 		if p.cfg.FailResume {
 			p.replyError(id, -32000, "conversation unavailable")
 			return
@@ -381,7 +440,13 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 		if p.cfg.ResumeThreadID != "" {
 			p.thread = p.cfg.ResumeThreadID
 		}
-		p.reply(id, p.threadResult(p.thread))
+		result := p.threadResult(p.thread)
+		var excludeTurns bool
+		_ = json.Unmarshal(params["excludeTurns"], &excludeTurns)
+		if p.cfg.StoredImageBytes > 0 && !excludeTurns {
+			result["thread"].(map[string]any)["turns"] = p.storedTurns()
+		}
+		p.reply(id, result)
 		if p.cfg.ResumeUsage != nil && p.cfg.ResumeUsageAfterPath != "" {
 			go func(thread string, total codexFixtureTokens) {
 				if waitForFile(p.cfg.ResumeUsageAfterPath) { // never released: no replay, and the test's wait fails
@@ -391,6 +456,16 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 		} else if p.cfg.ResumeUsage != nil {
 			p.tokenUsage("turn-of-an-earlier-process", *p.cfg.ResumeUsage)
 		}
+	case "thread/read":
+		var threadID string
+		_ = json.Unmarshal(params["threadId"], &threadID)
+		thread := map[string]any{"id": threadID, "parentThreadId": nil, "agentRole": nil}
+		var includeTurns bool
+		_ = json.Unmarshal(params["includeTurns"], &includeTurns)
+		if includeTurns {
+			thread["turns"] = p.storedTurns()
+		}
+		p.reply(id, map[string]any{"thread": thread})
 	case codexMethodTurnStart:
 		p.turn++
 		turnID := fmt.Sprintf("turn-%d", p.turn)
@@ -432,7 +507,9 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 				},
 			})
 		}
-		if p.cfg.CompleteTurn {
+		if p.cfg.FirstTurnReplay != "" && p.turn == 1 {
+			p.replayRecorded(p.cfg.FirstTurnReplay, turnID)
+		} else if p.cfg.CompleteTurn {
 			p.send(map[string]any{
 				"method": codexNotifyTurnCompleted,
 				"params": map[string]any{
@@ -447,10 +524,54 @@ func (p *codexFixturePeer) handle(frame map[string]json.RawMessage) {
 		p.reply(id, map[string]any{"turnId": fmt.Sprintf("turn-%d", p.turn)})
 	case codexMethodTurnInterrupt:
 		p.reply(id, map[string]any{})
+	case "skills/list":
+		p.skills++
+		description := "Fixture skill"
+		replyID := id
+		if p.cfg.SkillsPadBytes > 0 && p.skills == max(p.cfg.SkillsPadRequest, 1) {
+			description = strings.Repeat("x", p.cfg.SkillsPadBytes)
+			if p.cfg.SkillsPadForeignID {
+				n, _ := strconv.Atoi(string(id))
+				replyID = json.RawMessage(strconv.Itoa(n + 1000))
+			}
+		}
+		var cwds []string
+		_ = json.Unmarshal(params["cwds"], &cwds)
+		cwd := ""
+		if len(cwds) == 1 {
+			cwd = cwds[0]
+		}
+		p.reply(replyID, map[string]any{"data": []any{map[string]any{
+			"cwd": cwd, "errors": []any{},
+			"skills": []any{map[string]any{"name": "fixture-skill", "description": description, "enabled": true, "scope": "repo"}},
+		}}})
 	case codexMethodThreadUnsubscribe:
 		p.reply(id, map[string]any{"status": "unsubscribed"})
 	default:
 		p.replyError(id, -32601, "the fixture peer does not implement "+method)
+	}
+}
+
+// The ids inside the notifications recorded from the real tool (codex-cli 0.162.1).
+const (
+	recordedCodexThreadID = "01a13a73-2fe6-7593-a275-596356a9eacf"
+	recordedCodexTurnID   = "01a13a73-30ab-7e02-8f7a-3a0f8f930986"
+)
+
+// replayRecorded sends each line of a recording as it was recorded, under this
+// peer's thread and turn.
+func (p *codexFixturePeer) replayRecorded(path, turnID string) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		panic(fmt.Sprintf("the fixture peer cannot read its recording: %v", err))
+	}
+	replacer := strings.NewReplacer(recordedCodexThreadID, p.thread, recordedCodexTurnID, turnID)
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		var frame map[string]any
+		if err := json.Unmarshal([]byte(replacer.Replace(line)), &frame); err != nil {
+			panic(fmt.Sprintf("the fixture peer cannot read a recorded frame: %v", err))
+		}
+		p.send(frame)
 	}
 }
 
@@ -466,11 +587,36 @@ func (p *codexFixturePeer) recordInput(params map[string]json.RawMessage) {
 		return
 	}
 	for _, block := range blocks {
+		if block.Type == "image" {
+			p.rec.Images = append(p.rec.Images, block.URL)
+			continue
+		}
 		p.rec.Inputs = append(p.rec.Inputs, block.Text)
 	}
 }
 
+// storedTurns is the thread's earlier history: a user message that carried an image
+// and the answer to it, in the shape thread/read lists them (itemsView "full").
+func (p *codexFixturePeer) storedTurns() []map[string]any {
+	image := "data:image/png;base64," + strings.Repeat("A", p.cfg.StoredImageBytes)
+	return []map[string]any{
+		{"id": "turn-a", "status": "completed", "itemsView": "full", "items": []map[string]any{
+			{"type": "userMessage", "id": "item-1", "content": []map[string]any{
+				{"type": "text", "text": "what is in this picture", "text_elements": []any{}},
+				{"type": "image", "url": image},
+			}},
+		}},
+		{"id": "turn-b", "status": "completed", "itemsView": "full", "items": []map[string]any{
+			{"type": "agentMessage", "id": "item-2", "text": "a cat on a sofa"},
+		}},
+	}
+}
+
 func (p *codexFixturePeer) threadResult(id string) map[string]any {
+	var serviceTier any
+	if n := len(p.rec.ServiceTiers); n > 0 && p.rec.ServiceTiers[n-1] != "" {
+		serviceTier = p.rec.ServiceTiers[n-1]
+	}
 	var approval any = "untrusted"
 	if len(p.cfg.ApprovalPolicy) > 0 {
 		approval = p.cfg.ApprovalPolicy
@@ -488,7 +634,7 @@ func (p *codexFixturePeer) threadResult(id string) map[string]any {
 			"id": id, "parentThreadId": nil, "agentRole": nil, "model": "gpt-5.6-sol",
 			"cliVersion": "0.153.4", "modelProvider": "openai",
 		},
-		"model": model, "modelProvider": "openai",
+		"model": model, "modelProvider": "openai", "serviceTier": serviceTier,
 		"cwd": p.rec.Cwd, "approvalPolicy": approval,
 		// The shape codex-cli 0.160.1 answers (measured 2026-10-07): a tagged object.
 		"sandbox":           map[string]any{"type": sandbox, "networkAccess": false},

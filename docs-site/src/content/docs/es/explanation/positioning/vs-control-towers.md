@@ -9,6 +9,10 @@ sidebar:
   order: 4
 ---
 
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
+:::
+
 Una **torre de control de IA** es la capa de panel y flujo de trabajo a escala de
 organización para la gobernanza de IA: un único lugar donde ver los agentes
 registrados, encaminar aprobaciones, abrir tickets e informar de la postura a la

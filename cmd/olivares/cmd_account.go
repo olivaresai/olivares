@@ -18,7 +18,8 @@ import (
 func newAccountCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
-		Use: "account", Short: "Manage your own account",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "account", Short: "Manage your own account",
 		Long:    "Manage your signed-in account. Change your password and end your other sign-ins with account password.",
 		Example: "  olivares account password",
 	}
@@ -30,7 +31,8 @@ func newAccountCmd() *cobra.Command {
 func newAccountPasswordCmd(client bootstrapClient) *cobra.Command {
 	var currentFile, passwordFile string
 	cmd := &cobra.Command{
-		Use: "password", Short: "Change your own password and sign out your other sessions",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "password", Short: "Change your own password and sign out your other sessions",
 		Long: "Change the password of the signed-in account. Your current password is required.\n" +
 			"At a terminal, passwords are prompted with echo off; confirm the new password.\n" +
 			"Scripts supply --current-password-file and --password-file (one may be - for stdin).\n" +

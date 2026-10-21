@@ -23,10 +23,12 @@ import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
 import { RelTime } from '@/features/shared/rel-time'
 import { killswitchApi, killswitchKeys } from './api'
+import { WRAP_HEADER } from './columns'
 import { StopScopeCell, StopSourceCell, StopStateBadge } from './components'
-import { EmergencyStopCard } from './engage-card'
+import { StopAgentMenu, StopAllAction } from './engage-card'
 import { downloadEvidencePack, evidenceFilename } from './evidence'
 import { GuardianSection } from './guardian'
+import { LiveRunsSection } from './live-runs'
 import { ReenableDialog } from './reenable-dialog'
 import { ReviewDialog } from './review-dialog'
 import './i18n'
@@ -42,7 +44,8 @@ const KILLSWITCH_POLL_MS = 12_000
 
 /**
  * KillswitchView (registry id 'killswitch') is the estate emergency-stop console:
- * the live stop posture, the one-click engage (deliberately cheap server-side),
+ * the live stop posture, ONE "Stop all agents" verb (deliberately cheap server-side;
+ * a single-agent stop sits under More), the live session list that flips to Stopped,
  * the dual-control re-enable loop, the forced post-review, the downloadable
  * incident evidence pack and the guardian containment rules. The web is a thin
  * client — every gate decision, floor and sentinel lives in the engine
@@ -54,6 +57,7 @@ export default function KillswitchView() {
   const { activeTenant, can } = useAuth()
   const canAdmin = can('governance:killswitch:admin')
   const canGuardian = can('governance:guardian:read')
+  const canRuns = can('sessions:run:read')
 
   const stateQ = useQuery({
     queryKey: killswitchKeys.state(activeTenant),
@@ -67,11 +71,17 @@ export default function KillswitchView() {
         title={t('title')}
         description={t('subtitle')}
         icon={OctagonAlert}
+        actions={canAdmin ? <StopAgentMenu /> : undefined}
+        primaryAction={
+          canAdmin ? (
+            <StopAllAction estateStopped={!!stateQ.data?.estate_stopped} />
+          ) : undefined
+        }
       />
 
       {stateQ.data && <StateBanner state={stateQ.data} />}
 
-      {canAdmin && <EmergencyStopCard />}
+      {canRuns && <LiveRunsSection active={stateQ.data?.active ?? []} />}
 
       <StopsSection canAdmin={canAdmin} />
 
@@ -209,7 +219,7 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
         header: t('stops.reason'),
         cell: ({ row }) => (
           <span
-            className="truncate text-caption text-muted-foreground"
+            className="line-clamp-2 text-caption break-words whitespace-normal text-muted-foreground"
             title={row.original.reason || undefined}
           >
             {row.original.reason || '—'}
@@ -224,35 +234,37 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
       {
         id: 'engaged',
         header: t('stops.engaged'),
-        // MEDIDO: 349 px para TRES cosas —un ULID de 26 caracteres, la hora relativa
-        // y la insignia de AAL— salía en dos líneas. El actor trunca con su valor en
-        // el `title`, la hora no rompe nunca, y la columna pide el ancho que necesita.
-        size: 300,
+        // Measured on the 0.2 binary: actor handle (41 characters), relative time and AAL
+        // badge on one line took 501 px, and with the other columns the table was 1540 px
+        // wide in a 1140 px container (1440 viewport). The actor now sits over the time
+        // and the badge, and truncates at 9 rem with its full value in the `title`; the
+        // time never breaks, which is the rule for time columns.
         cell: ({ row }) => (
-          // ⛔ TRES valores en una celda, y cada uno rompia por su cuenta: el ULID de
-          // `engaged_by` salia en CUATRO lineas y la hora relativa en TRES. El actor
-          // corta solo por sus separadores (`user:01J8...` rompe tras los dos puntos y
-          // en ningun otro sitio) y la hora NUNCA rompe, que es la regla del informe
-          // para columnas de tiempo.
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate font-mono text-caption text-muted-foreground">
+          <span className="flex flex-col items-start gap-0.5">
+            <span
+              className="max-w-36 truncate font-mono text-caption text-muted-foreground"
+              title={row.original.engaged_by || undefined}
+            >
               {row.original.engaged_by || '—'}
             </span>
-            <RelTime
-              ts={row.original.engaged_at}
-              className="shrink-0 whitespace-nowrap text-caption text-muted-foreground"
-            />
-            {row.original.source === 'operator' && (
-              <Badge variant="outline" title={t('stops.aalHint')}>
-                {t('stops.aalShort', { aal: row.original.engaged_aal })}
-              </Badge>
-            )}
+            <span className="flex items-center gap-1.5">
+              <RelTime
+                ts={row.original.engaged_at}
+                className="shrink-0 whitespace-nowrap text-caption text-muted-foreground"
+              />
+              {row.original.source === 'operator' && (
+                <Badge variant="outline" title={t('stops.aalHint')}>
+                  {t('stops.aalShort', { aal: row.original.engaged_aal })}
+                </Badge>
+              )}
+            </span>
           </span>
         ),
       },
       {
         accessorKey: 'revoked_approvals',
         header: t('stops.revoked'),
+        meta: WRAP_HEADER,
         cell: ({ row }) => (
           <span
             className="font-mono tabular-nums text-caption"
@@ -266,7 +278,7 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
         accessorKey: 'status',
         header: t('stops.status'),
         cell: ({ row }) => (
-          <span className="flex items-center gap-1.5">
+          <span className="flex flex-col items-start gap-0.5">
             <StopStateBadge stop={row.original} />
             {row.original.status === 'active' &&
               row.original.reenable_approval && (
@@ -284,7 +296,7 @@ function StopsSection({ canAdmin }: { canAdmin: boolean }) {
           const isActive = stop.status === 'active'
           const reviewDue = stop.status === 'reenabled' && !stop.reviewed
           return (
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-1">
               {isActive && (
                 <Button
                   variant="ghost"

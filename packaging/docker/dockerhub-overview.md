@@ -22,7 +22,7 @@ version tag or a digest in production; never rely on `latest` for a reproducible
 
 | Tag | Contents | Architectures |
 |-----|----------|---------------|
-| <!-- release -->`0.2`<!-- /release -->, `latest` | Base engine + embedded web console | amd64, arm64 |
+| <!-- release -->`0.3`<!-- /release -->, `latest` | Base engine + embedded web console | amd64, arm64 |
 
 FIPS and STIG images are available through the Business deployment channel.
 
@@ -43,7 +43,7 @@ docker run -d --name olivares -p 127.0.0.1:8443:8443 -p 127.0.0.1:8444:8444 \
   -v olivares-data:/var/lib/olivares \
   --user 65532:65532 --read-only --tmpfs /tmp --cap-drop ALL \
   --security-opt no-new-privileges \
-  olivaresai/olivares:0.2 \
+  olivaresai/olivares:0.3 \
   serve --listen 0.0.0.0:8443 --grpc-listen 0.0.0.0:8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -79,7 +79,7 @@ provenance attestations — all preserved on this registry by digest:
 
 <!-- release -->
 ```sh
-cosign verify olivaresai/olivares:0.2 \
+cosign verify olivaresai/olivares:0.3 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

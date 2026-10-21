@@ -50,6 +50,10 @@ const { api, mockNavigate, authState } = vi.hoisted(() => ({
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
+// The SCIM server is Business: these cases are the Business console, which asks for it.
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useCommunityBuild: () => false,
+}))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, identityApi: api }
@@ -297,6 +301,27 @@ describe('ADM-IDN-02 — NHI roster', () => {
         to: '/access-map',
         search: { focus: 'apikey_abc123' },
       }),
+    )
+  })
+
+  it('offers every identity kind Community produces in the kind filter', async () => {
+    const user = userEvent.setup()
+    api.identities.mockReset()
+    api.identities.mockResolvedValue({ items: [], has_more: false })
+    wrap(<NhiRosterTab />)
+
+    await user.click(screen.getByRole('combobox', { name: 'Filter by kind' }))
+    // credential (the access-map bridge), agent_nhi (a minted per-agent NHI) and nhi
+    // (a bind by directory ref) are what Community writes; a filter that lacks them
+    // answers "No identities yet" over rows that exist.
+    for (const kind of ['credential', 'agent_nhi', 'nhi']) {
+      expect(screen.getByRole('option', { name: kind })).toBeInTheDocument()
+    }
+    await user.click(screen.getByRole('option', { name: 'agent_nhi' }))
+    await waitFor(() =>
+      expect(api.identities).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'agent_nhi' }),
+      ),
     )
   })
 

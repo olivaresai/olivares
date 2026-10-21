@@ -7,7 +7,6 @@ package deploy
 import (
 	"context"
 	"log/slog"
-	"net/http"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -123,29 +122,6 @@ func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	return nil
 }
 
-// Start has no background work. It warns once per un-wired seam so a deployment
-// that cannot actually act — or that would deny every mutation — is VISIBLE
-// rather than a silent surprise at apply time (the honest Fase C posture).
-func (m *Module) Start(context.Context) error {
-	if m.log == nil {
-		return nil
-	}
-	if m.data == nil {
-		m.log.Warn("deploy: started without a data handle; definitions, wirings and operations will not persist")
-	}
-	if _, ok := m.gate.(denyGate); ok {
-		m.log.Warn("deploy: no approval gate wired; every governed infrastructure mutation will be DENIED by default")
-	}
-	if !m.executorWired() {
-		m.log.Warn("deploy: no runtime executor wired (IaC); desired state can be declared but not reconciled to infrastructure")
-	}
-	if _, ok := m.binder.(unwiredBinder); ok {
-		// Attribution is REPORTED as degraded — the route answers. Rule: Info.
-		m.log.Info("deploy: no identity binder wired; wiring attribution will be reported as degraded")
-	}
-	return nil
-}
-
 // Stop is a no-op (no background work, no live subscription in v1); idempotent.
 func (m *Module) Stop(context.Context) error { return nil }
 
@@ -156,80 +132,4 @@ func (m *Module) APINamespace() string { return Namespace }
 // built-in roles grant them by verb tier.
 func (m *Module) Permissions() []auth.Permission {
 	return []auth.Permission{permDeploymentRead, permDeploymentWrite, permDeploymentAdmin, permWiringRead}
-}
-
-// APIRoutes mounts the module's routes. The engine wraps each with authentication,
-// tenant resolution and the declared permission check before the handler runs, and
-// pins the data handle to the resolved tenant.
-func (m *Module) APIRoutes(reg api.RouteRegistrar) {
-	// Desired-state declaration (control-plane only — NOT an infra mutation).
-	reg.Handle("GET", "/definitions", permDeploymentRead, m.handleListDefinitions)
-	reg.Handle("POST", "/definitions", permDeploymentWrite, m.handleCreateDefinition)
-	reg.Handle("GET", "/definitions/{id}", permDeploymentRead, m.handleGetDefinition)
-	reg.Handle("PUT", "/definitions/{id}", permDeploymentWrite, m.handleUpdateDefinition)
-	reg.Handle("DELETE", "/definitions/{id}", permDeploymentWrite, m.handleDeleteDefinition)
-	reg.Handle("GET", "/definitions/{id}/revisions", permDeploymentRead, m.handleListRevisions)
-	reg.Handle("POST", "/definitions/{id}/rollback", permDeploymentWrite, m.handleRollback)
-
-	// Reconciliation lifecycle. plan is a dry-run that REQUESTS approval; verify is
-	// read-only on infra; apply and retire MUTATE infra and are admin-tier AND
-	// gated by the HITL approval (deny-by-default).
-	reg.Handle("POST", "/definitions/{id}/plan", permDeploymentWrite, m.handlePlan)
-	reg.Handle("POST", "/definitions/{id}/verify", permDeploymentWrite, m.handleVerify)
-	reg.Handle("POST", "/definitions/{id}/apply", permDeploymentAdmin, m.handleApply)
-	reg.Handle("POST", "/definitions/{id}/retire", permDeploymentAdmin, m.handleRetire)
-
-	// The declared PERMITTED wiring contract and the change-management
-	// ledger.
-	reg.Handle("GET", "/wirings", permWiringRead, m.handleListWirings)
-	reg.Handle("GET", "/operations", permDeploymentRead, m.handleListOperations)
-
-	// Whether this installation can reconcile at all: the console says what Deploy
-	// needs before it offers a declaration form.
-	reg.Handle("GET", "/executor", permDeploymentRead, m.handleExecutor)
-	reg.Handle("GET", "/executor/config", permDeploymentAdmin, m.handleGetExecutorConfig)
-	reg.Handle("PUT", "/executor/config", permDeploymentAdmin, m.handlePutExecutorConfig)
-	reg.Handle("POST", "/executor/test", permDeploymentAdmin, m.handleTestExecutor)
-}
-
-// executorWired reports whether the composition root wired a runtime executor. It is
-// the one test of the seam: Start's warning and GET /executor both read it, and
-// plan/verify/apply/retire fail closed (503) exactly when it is false.
-func (m *Module) executorWired() bool {
-	_, unwired := m.exec.(unwiredExecutor)
-	return !unwired
-}
-
-// executorDTO is the GET /executor answer.
-type executorDTO struct {
-	Configured bool `json:"configured"`
-}
-
-// handleExecutor reports whether a runtime executor is configured, which plan, verify,
-// apply and retire need to reach infrastructure.
-func (m *Module) handleExecutor(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	exec, _, err := m.executorFor(r.Context(), mc)
-	if err != nil {
-		execUnavailable(w, err)
-		return
-	}
-	_, unwired := exec.(unwiredExecutor)
-	writeJSON(w, http.StatusOK, executorDTO{Configured: exec != nil && !unwired})
-}
-
-// debugf logs at debug level if a logger is set.
-func (m *Module) debugf(msg string, args ...any) {
-	if m.log != nil {
-		m.log.Debug(msg, args...)
-	}
-}
-
-// errorf logs at error level if a logger is set. It is used where a best-effort
-// ledger write fails: the primary outcome (deny/failure) still returns to the
-// client, but a lost audit/operation record is an integrity event worth surfacing
-// rather than swallowing (docs/SECURITY-HARDENING.md — never a silent gap).
-func (m *Module) errorf(msg string, args ...any) {
-	if m.log != nil {
-		m.log.Error(msg, args...)
-	}
 }

@@ -33,8 +33,9 @@ import (
 // counting. Neither is readable without the other, so each one's help points at its half.
 func governanceRBACCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "rbac",
-		Short: "Who can do what: the grant vocabulary, the custom roles and the scoped grants",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "rbac",
+		Short:       "Who can do what: the grant vocabulary, the custom roles and the scoped grants",
 		Long: "rbac reads the authorization model: the vocabulary a grant may be built from\n" +
 			"(`catalog`), what you yourself may delegate (`delegation-authority`), the custom roles\n" +
 			"and permission groups, the scoped grants in force, and the inheritance filters that\n" +
@@ -72,8 +73,9 @@ type cliRBACCatalog struct {
 // reproduce the exact bug the module documents.
 func rbacCatalogCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "catalog",
-		Short: "The vocabulary a grant can be built from",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "catalog",
+		Short:       "The vocabulary a grant can be built from",
 		Example: "  olivares governance rbac catalog\n" +
 			"  olivares governance rbac catalog -o json",
 		Long: "Every value a scoped grant may use: grantable kinds, the subset that lives in the\n" +
@@ -130,9 +132,10 @@ type cliDelegationAuthority struct {
 // rbacDelegationCmd — what YOU may hand to someone else, which is not what you may do.
 func rbacDelegationCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "delegation-authority",
-		Short:   "What the calling principal may delegate, and where",
-		Example: "  olivares governance rbac delegation-authority",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "delegation-authority",
+		Short:       "What the calling principal may delegate, and where",
+		Example:     "  olivares governance rbac delegation-authority",
 		Long: "The domains in which you may create grants for others. This is a different question\n" +
 			"from what you may DO: holding a permission does not imply being able to hand it on.\n\n" +
 			"A superadmin answer means the domain list is not the bound.",
@@ -190,8 +193,9 @@ type cliCustomRoleList struct {
 
 func rbacRolesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "roles",
-		Short: "Custom roles: what each one grants, and what it takes away",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "roles",
+		Short:       "Custom roles: what each one grants, and what it takes away",
 		Long: "The tenant's own roles, as opposed to the built-in ones. A custom role is a permission\n" +
 			"set plus an EXCLUDES list, and the exclusions are the half that surprises: a role can\n" +
 			"subtract a permission its group grants, so reading the grants alone tells you less than\n" +
@@ -200,8 +204,9 @@ func rbacRolesCmd(flags *authClientFlags) *cobra.Command {
 			"  olivares governance rbac roles get incident-responder",
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "ls",
-		Short: "List the custom roles",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List the custom roles",
 		Example: "  olivares governance rbac roles ls\n" +
 			"  olivares governance rbac roles ls -o json",
 		Long: "The tenant's custom roles. EXCLUDES is the column to read twice: a role can subtract\n" +
@@ -236,8 +241,9 @@ func rbacRolesCmd(flags *authClientFlags) *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get <name>",
-		Short: "One custom role, with its full permission set",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <name>",
+		Short:       "One custom role, with its full permission set",
 		Long: "One role in full. `excludes` is printed even when empty, so an absent exclusion list is\n" +
 			"visible rather than inferred from a missing line: a role that subtracts nothing and a\n" +
 			"role whose exclusions you failed to notice look identical otherwise.",
@@ -304,8 +310,9 @@ type cliPermGroupList struct {
 
 func rbacPermGroupsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "permission-groups",
-		Short: "Named bundles of permissions that roles reuse",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "permission-groups",
+		Short:       "Named bundles of permissions that roles reuse",
 		Long: "A permission group is a named set of permissions that roles include by reference, so a\n" +
 			"change to the group reaches every role that uses it. Read this before editing a role:\n" +
 			"the permission you are looking for may come from a group rather than from the role.",
@@ -313,8 +320,9 @@ func rbacPermGroupsCmd(flags *authClientFlags) *cobra.Command {
 			"  olivares governance rbac permission-groups get on-call",
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "ls",
-		Short: "List the permission groups",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List the permission groups",
 		Long: "Every permission group with the count of permissions it carries. Use `get` for the\n" +
 			"members: this listing answers which groups exist, not what is in them.",
 		Example: "  olivares governance rbac permission-groups ls",
@@ -347,8 +355,9 @@ func rbacPermGroupsCmd(flags *authClientFlags) *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get <name>",
-		Short: "One permission group, with its members",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <name>",
+		Short:       "One permission group, with its members",
 		Long: "One group with its full permission list and its description. The description is printed\n" +
 			"as `-` when absent rather than omitted, so a group WITH a description and one without\n" +
 			"are not identical on screen.",
@@ -403,16 +412,18 @@ type cliScopedGrantList struct {
 
 func rbacGrantsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "grants",
-		Short: "The scoped grants in force: who holds what, where",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "grants",
+		Short:       "The scoped grants in force: who holds what, where",
 		Example: "  olivares governance rbac grants ls\n" +
 			"  olivares governance rbac grants get g-4711",
 		Long: "Read with `governance pdp active`: that verb says whether positive grants have\n" +
 			"expired past the offline-staleness bound, and this one says which grants those are.",
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "ls",
-		Short: "List every scoped grant",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List every scoped grant",
 		Example: "  olivares governance rbac grants ls\n" +
 			"  olivares governance rbac grants ls -o json",
 		Long: "The whole set, sorted by the engine. The route takes no filter and no cursor, so the\n" +
@@ -455,8 +466,9 @@ func rbacGrantsCmd(flags *authClientFlags) *cobra.Command {
 		},
 	})
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get <id>",
-		Short: "One scoped grant",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "One scoped grant",
 		Long: "One grant: its holder, the scope it applies in, what it grants and who issued it. Read\n" +
 			"it beside `governance pdp active`, which says whether positive grants are in force at\n" +
 			"all — a grant that exists and a grant that is being honoured are different facts.",
@@ -526,8 +538,9 @@ type cliEffectiveRights struct {
 func rbacRightsCmd(flags *authClientFlags) *cobra.Command {
 	var subject, subjectType string
 	cmd := &cobra.Command{
-		Use:   "rights <agent|session|resource> <id>",
-		Short: "Which trustee rights a subject holds at a node, and the node's path",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "rights <agent|session|resource> <id>",
+		Short:       "Which trustee rights a subject holds at a node, and the node's path",
 		Example: "  olivares governance rbac rights agent <agent-id> --subject <user-id>\n" +
 			"  olivares governance rbac rights resource <resource-id> --subject <token-id> --subject-type token -o json",
 		Long: "The eight trustee rights (Supervisor, Browse, Read, Write, Create, Erase, Modify, Access\n" +

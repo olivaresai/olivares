@@ -96,7 +96,7 @@
     "searchResults": "データ内の結果",
     "searchTruncated": "さらに一致があります — 検索を絞り込んでください。",
     "searchDegraded": "一部のソースを検索できませんでした — この一覧は不完全です。",
-    "deniedReason": "{{permission}} が必要です。",
+    "deniedReason": "これには {{permission}} が必要です。",
     "deniedHelp": "付与できる管理者に依頼してください。",
     "noTargetReason": "実行する組織が必要です。",
     "noTargetHelp": "組織を選択してから、もう一度試してください。",
@@ -107,6 +107,12 @@
     "footerMove": "移動",
     "footerOpen": "開く",
     "footerCommands": "コマンドのみ"
+  },
+  "permissionWords": {
+    "read": "読み取り権限",
+    "write": "書き込み権限",
+    "admin": "管理者権限",
+    "other": "より広い権限"
   },
   "status": {
     "active": "アクティブ",
@@ -293,7 +299,13 @@
     },
     "command": {
       "palette": {
-        "open": "コマンドパレットを開く"
+        "open": "コマンドパレットを開く",
+        "recent1": "最近のセッション 1 を開く",
+        "recent2": "最近のセッション 2 を開く",
+        "recent3": "最近のセッション 3 を開く",
+        "recent4": "最近のセッション 4 を開く",
+        "recent5": "最近のセッション 5 を開く",
+        "recent6": "最近のセッション 6 を開く"
       },
       "help": {
         "toggle": "これらのショートカットを表示"
@@ -304,6 +316,9 @@
         "startBackground": "開始してこの画面に残る"
       },
       "surface": {
+        "openBeside": "隣に開く",
+        "closeBeside": "隣のセッションを閉じる",
+        "focusBeside": "セッション間でフォーカスを移動",
         "nextPane": "次のペイン",
         "previousPane": "前のペイン"
       },
@@ -328,7 +343,8 @@
         "pin": "このモジュールを固定／固定解除"
       },
       "session": {
-        "new": "新しいセッション"
+        "new": "新しいセッション",
+        "previous": "前のセッションに戻る"
       },
       "sourceDiff": {
         "nextFile": "次のファイル",
@@ -340,7 +356,9 @@
     "when": {
       "railFocused": "セッションレール内",
       "launcherFocused": "ランチャー入力欄内",
-      "workSurface": "セッション画面"
+      "workSurface": "セッション画面",
+      "sessionHistory": "前のセッションがある場合",
+      "paletteRecent": "検索欄が空のパレットの結果で"
     },
     "precedence": "同じキーを持つ行が 2 つある場合、該当する最後の行が優先されます。",
     "modNote": "Windows と Linux では ⌘ は Ctrl です。",

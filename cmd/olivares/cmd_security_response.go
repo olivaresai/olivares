@@ -67,8 +67,9 @@ type securityAdvisoriesResult struct {
 func newSecurityAdvisoriesCmd() *cobra.Command {
 	var in, out, signKey, author, expectPubkey string
 	cmd := &cobra.Command{
-		Use:   "advisories",
-		Short: "Build and sign an OSV advisory feed the product self-checks — PSIRT use",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "advisories",
+		Short:       "Build and sign an OSV advisory feed the product self-checks — PSIRT use",
 		Long: "advisories validates a PSIRT draft, stamps its feed metadata, signs it with the\n" +
 			"release Ed25519 key, self-verifies the result and writes the feed plus detached signature.",
 		Example: "  olivares security advisories --in draft-advisories.json --out advisories.json \\\n" +
@@ -138,8 +139,9 @@ func newSecurityAdvisoriesCmd() *cobra.Command {
 // these subcommands are the offline producer + a pre-flight verify.
 func newSecurityRulePackCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "rulepack",
-		Short: "Author/verify signed hot-reload security rule-packs (deny-lists, MCP blocks, patterns)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "rulepack",
+		Short:       "Author/verify signed hot-reload security rule-packs (deny-lists, MCP blocks, patterns)",
 		Long: "rulepack builds and verifies the signed rule bundles the engine hot-reloads:\n" +
 			"deny-lists, MCP server blocks and content patterns that must take effect\n" +
 			"during an incident without waiting for a release.\n\n" +
@@ -197,8 +199,9 @@ type rulePackVerifyResult struct {
 func newRulePackSignCmd() *cobra.Command {
 	var in, out, signKey, expectPubkey string
 	cmd := &cobra.Command{
-		Use:   "sign",
-		Short: "Build and sign a rule-pack from a draft (writes <out> + <out>.sig)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "sign",
+		Short:       "Build and sign a rule-pack from a draft (writes <out> + <out>.sig)",
 		Long: "sign normalizes a security rule-pack draft, signs it with an Ed25519 release key,\n" +
 			"self-verifies the result and writes the pack plus its detached signature.",
 		Example: "  olivares security rulepack sign --in rulepack-draft.json --out rulepack.json \\\n" +
@@ -263,6 +266,7 @@ func newRulePackSignCmd() *cobra.Command {
 func newRulePackVerifyCmd() *cobra.Command {
 	var in, sig, pubkey string
 	cmd := &cobra.Command{
+		Annotations:  map[string]string{"changes_data": "read"},
 		Use:          "verify",
 		Short:        "Verify a signed rule-pack against a trusted key and print its summary",
 		Long:         "verify authenticates a signed security rule-pack against a pinned Ed25519 public key and prints its version and contents summary.",

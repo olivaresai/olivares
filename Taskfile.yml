@@ -140,6 +140,16 @@ tasks:
     desc: Build the console once and verify its source stamp and generated assets.
     deps: [build:web]
 
+  web:community-sweep:
+    desc: >-
+      Real-use sweep of a Community build with the demo dataset (needs Chromium; build, engine and browser in
+      one run, so go through the heavy-job wrapper): every top-level console route is opened and none may
+      make a request the engine answers with 501, no navigation list may offer a Business page, the demo
+      approval queue holds no Business action, and each Business bookmark shows the Business notice.
+      Output: web/playwright-report/sweep/routes-501.json.
+    cmds:
+      - bash scripts/docs-captures.sh e2e/community-no-501.spec.ts --grep @sweep
+
   build:go:
     desc: Compile every Go module in the workspace.
     deps: [lint:pack-codes]
@@ -995,10 +1005,18 @@ tasks:
       current binary.
     deps: [build:bin]
     cmds:
+      - task: smoke:examples:selftest
       - bash examples/govern-claude-code/smoke.sh
       - bash examples/otel-genai-ingest/smoke.sh
       - bash examples/build-a-connector/smoke.sh
       - bash examples/bring-your-own-protocol/smoke.sh
+
+  smoke:examples:selftest:
+    desc: >-
+      Prove the bring-your-own-protocol smoke takes its skeleton from the built engine
+      (never `go run ./cmd/olivares`, dev#2363) and that a stalled step fails by name.
+    cmds:
+      - bash scripts/test-byop-smoke.sh
 
   vet:
     desc: >-
@@ -1151,7 +1169,8 @@ tasks:
       marked in the source (<!-- release --> in Markdown, {/* release */} in MDX, a
       `# release` comment line pair elsewhere), and a version of MAJOR 1 to 99, or of the
       retired 26.x line, outside a mark is a refusal unless it is a record or a
-      NOT_RELEASES row names what it versions. Every
+      NOT_RELEASES row names what it versions; a bare MAJOR.MINOR in Markdown documentation counts
+      only beside a release word (release, version, tag, the product, in every locale). Every
       marked version on a release-bearing surface — README ×7, CHANGELOG,
       docs-site install/verify pages, trust and launch material — must equal the canon in
       RELEASE-VERSION (the published install baseline) or its -fips/-stig image variants.
@@ -1346,8 +1365,17 @@ tasks:
         go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.10
         -ignore "unexpected key .queue. for .concurrency. section"
         "${wf[@]}"'
+      - python3 scripts/check-release-gate.py
+      - python3 scripts/test-release-gate.py
+      - python3 scripts/test-require-green-run.py
       - bash scripts/check-workflow-node-setup.sh
       - python3 scripts/test-ci-evidence.py -v
+      # The scheduled suite's own contract tests: the cut evidence in all five timer
+      # blocks, the cmd/olivares matrix derivation, and the report wiring (dev#2591).
+      # export-closure: hub-only scripts/test-main-suite-workflow.py — guarded by scripts/hub-leg.sh
+      - bash scripts/hub-leg.sh lint:actions scripts/test-main-suite-workflow.py -v
+      - python3 scripts/test-mainline-ci-schedule.py
+      - python3 scripts/test-patch-velocity-remediation.py
       - python3 scripts/check-ci-evidence.py
       - bash scripts/test-docs-site-deploy-target.sh
       # External observations must preserve the check's 0/1/2 contract: an observed finding may
@@ -1999,7 +2027,7 @@ tasks:
           python3 scripts/test-release-published-delivery.py || exit $?
           bash scripts/test-release-finalize-stable.sh || exit $?
           bash scripts/test-release-finalize-stable.sh --first-stable || exit $?
-          bash scripts/test-release-race-evidence.sh || exit $?
+          python3 scripts/test-require-green-run.py || exit $?
           bash scripts/test-release-preflight.sh || exit $?
           bash scripts/test-resolve-bare-manifest-digest.sh || exit $?
           bash scripts/test-cosign-verified-mode.sh || exit $?
@@ -2172,7 +2200,7 @@ tasks:
   test:release-first-hour:
     desc: Release qualification evidence, orchestration and Chromium surface guards (release-first-hour workflow).
     cmds:
-      - bash scripts/test-first-hour-evidence.sh
+      - python3 scripts/test-require-green-run.py
       - python3 scripts/test-release-first-hour.py
       - bash scripts/test-first-hour-artifacts.sh
 
@@ -2193,6 +2221,7 @@ tasks:
       # already runs it; the gate reads the same Dockerfiles and needs no Docker either.
       - task: lint:dockerfile-node-toolchain
       - task: lint:runtime-base
+      - python3 scripts/test-container-shell.py
 
   lint:runtime-base:
     desc: >-
@@ -2466,6 +2495,25 @@ tasks:
       being clean, and a NEGATIVE CONTROL so the battery cannot be measuring its own fixture.
     cmds:
       - bash scripts/test-ci-step-guard.sh
+
+  lint:ci-hosted-runners:
+    desc: >-
+      Refuse a workflow job that names a GitHub-hosted runner on its own. Hosted minutes on a
+      private repository are billed and the Actions budget is for storage only. A job must read
+      vars.CI_RUNNER* (the hosted label only as the fallback) or name self-hosted; the rest is
+      listed with its reason in ci/hosted-runners.txt, and a stale entry is refused too.
+    cmds:
+      # export-closure: hub-only scripts/check-ci-hosted-runners.sh — guarded by scripts/hub-leg.sh
+      - bash scripts/hub-leg.sh lint:ci-hosted-runners scripts/check-ci-hosted-runners.sh
+
+  lint:ci-hosted-runners:selftest:
+    desc: >-
+      Battery for the hosted-runner gate: each answer by exit code, block and inline runs-on,
+      the allowlist (reason required, stale entry refused), the real tree clean, and a negative
+      control that puts a hosted label into a real workflow.
+    cmds:
+      # export-closure: hub-only scripts/test-ci-hosted-runners.sh — guarded by scripts/hub-leg.sh
+      - bash scripts/hub-leg.sh lint:ci-hosted-runners:selftest scripts/test-ci-hosted-runners.sh
 
   lint:ci-a11y-gate-wrap:selftest:
     desc: >-
@@ -2857,6 +2905,24 @@ tasks:
     cmds:
       - python3 scripts/check-capture-view-keys.py
 
+  lint:capture-held:
+    desc: >-
+      Check scripts/docs-captures-held.txt: every view the capture run leaves out names the open issue that
+      owns its retake, exists in the capture spec, is listed once and is published in both themes or in neither.
+
+    cmds:
+      - bash scripts/test-docs-captures-held.sh
+      - bash scripts/test-docs-captures-held.sh --selftest
+
+  lint:capture-release:
+    desc: >-
+      Run scripts/docs-captures-release.sh against a fake registry (a curl shim): a layer cut once is resumed, a corrupt
+      layer fails its digest, an HTTP error stops with its cause, a manifest without a size and a tag that resolves to
+      another image are refused. No network and no engine.
+
+    cmds:
+      - bash scripts/test-docs-captures-release.sh
+
   lint:capture-view-keys:selftest:
     desc: >-
       Test capture-view key checks, including valid hooks, unsupported syntax, and false-positive controls.
@@ -2866,10 +2932,24 @@ tasks:
 
   lint:seed-payloads:selftest:
     desc: >-
-      Test that demo seed payloads match the engine API contract.
+      Test that demo seed payloads match the engine API contract, and that cost seeding skips a
+      Community build before any cost request and checks both held and edition skips in capture manifests.
 
     cmds:
       - bash scripts/test-verify-seed-payloads.sh
+      - python3 scripts/test-seed-demo-work-cost.py
+      - python3 scripts/test-seed-demo-work-edition.py
+
+  lint:demo-dataset:selftest:
+    desc: >-
+      Test the demo dataset documentation captures are taken from: the recorded conversations are plain
+      prose with nothing private in them, every reference of the dataset resolves, and each AI tool
+      stand-in answers them over its own wire protocol as the real process the engine launches. No
+      engine, network or vendor account.
+
+    cmds:
+      - python3 scripts/test-demo-dataset.py
+      - bash scripts/test-demo-agent.sh
 
   lint:exec-tmpdir:selftest:
     desc: >-
@@ -4207,6 +4287,7 @@ tasks:
     cmds:
       # Pure Node (no pnpm/deps) so it runs inside the Go-toolchain gate.
       - node scripts/test-i18n-edition-namespaces.mjs
+      - node scripts/test-i18n-plural-placeholders.mjs
       - node scripts/check-i18n-parity.mjs
       - task: lint:i18n-usage
       # THE GAP THIS CLOSES. The two checks above ask "does the key exist?" and
@@ -4590,10 +4671,19 @@ tasks:
     desc: >-
       Offline controls of the release publication script (disposable repositories, no GitHub
       writes, about 10 s). The pre-push hook runs it when a push changes scripts/release,
-      scripts/export-scrub or scripts/export-public.sh. Development repository only: the
-      public tree does not carry scripts/release and answers NOT APPLICABLE.
+      scripts/export-scrub, scripts/export-public.sh or scripts/check-export-closure.sh, and
+      the development repository's pull request checks run it on every pull request. Development
+      repository only: the public tree does not carry scripts/release and answers NOT APPLICABLE.
     cmds:
       - bash scripts/hub-leg.sh lint:export-release scripts/release/test-export-release.sh
+
+  lint:export-server:
+    desc: >-
+      The Community appliance recipe's export to olivares-server: a dry run over the committed tree and one defect per
+      gate (internal reference, secret, licence header, link). The exporter and this battery are curated out of the
+      public tree, so it answers NOT APPLICABLE there. Needs gitleaks on PATH.
+    cmds:
+      - bash scripts/hub-leg.sh lint:export-server scripts/test-export-server.sh
 
   lint:export-license:
     desc: >-
@@ -5729,10 +5819,11 @@ tasks:
 
   lint:brand-parity:
     desc: >-
-      The console's DTCG tokens (web/tokens) and the public website's
-      hand-maintained palette (the website checkout's src/styles/global.css)
-      must declare the SAME brand. Pins brand.manifest.json (repo root — inside web/ it perturbs the embedded-console build hashes) to the DTCG
-      sources always; when the website tree is present (dev workspace), also checks
+      The console's emitted tokens (web/src/styles/tokens.css, generated from
+      web/tokens/console) and the public website's hand-maintained palette (the
+      website checkout's src/styles/global.css) must declare the SAME brand. Pins
+      brand.manifest.json (repo root — inside web/ it perturbs the embedded-console build hashes) to the emitted
+      console stylesheet always; when the website tree is present (dev workspace), also checks
       its live @theme/light-dark() values and its vendored manifest copy. The second
       command is the fixture battery — flipped hexes MUST go red (lint:boundary
       pattern: a detector nobody has seen fail is not a detector).
@@ -6058,6 +6149,7 @@ tasks:
       to be re-measured when the thing it measured changes.
     cmds:
       - bash scripts/test-web-e2e-boot.sh
+      - python3 scripts/test-web-visual-e2e.py
 
   lint:secrets:
     desc: Secret scanning over the history (gitleaks, docs/SECURITY-HARDENING.md). Blocking in CI. Names what it finds.

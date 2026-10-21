@@ -15,13 +15,14 @@
     "truncatedHint": "Use olivares skills ls --cursor to list the rest."
   },
   "detail": {
-    "skills": "Skills in this pack",
+    "skills": "Skills, agents, commands and rules",
     "revisions": "Revisions",
     "revision": "revision {{n}}",
     "revisionLine": "Revision {{n}} from {{source}}",
     "activeContent": "acts when loaded: {{items}}"
   },
   "kind": {
+    "profile": "Profile",
     "workspace": "Department",
     "agent_group": "Agent group",
     "agent": "Agent",
@@ -56,7 +57,9 @@
     "submit": "Assign",
     "done": "Skill pack assigned",
     "directoryFailed": "The targets could not be loaded. Close and reopen the pack to retry.",
-    "approve": "I reviewed these skills and approve that their tool acts on them when loaded: {{skills}}"
+    "approve": "I reviewed these skills and approve that their tool acts on them when loaded: {{skills}}",
+    "members": "Members",
+    "membersHint": "Choose up to 64 members. Skills, agents, commands and rules can be selected separately."
   },
   "install": {
     "title": "Install a skill pack",

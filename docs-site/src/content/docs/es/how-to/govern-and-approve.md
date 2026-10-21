@@ -4,7 +4,7 @@ description: "Cómo un operador gobierna el estate: identidad y permisos, el mod
 ---
 
 :::note[Business]
-La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
 :::
 
 Esta página es para el operador que ha conectado al menos una fuente y ahora necesita
@@ -70,6 +70,8 @@ reglas basadas en atributos. Eliges el motor con una única variable de entorno:
 # Choose one. Cedar is the embedded, pure-Go primary; OPA is an over-HTTP adapter.
 OLIVARES_PDP_ENGINE=cedar   # or: opa | none
 ```
+
+El motor externo es una capacidad de Business. Una compilación Community se niega a arrancar con `cedar`, `opa` o cualquier otro motor seleccionado; sin definir, vacío o `none` ejecuta solo el motor nativo.
 
 Ambos motores se sientan tras un único seam, y el seam tiene un invariante que gobierna cómo
 debes razonar sobre él:
@@ -212,4 +214,4 @@ todo lo demás, razón por la que leerlo es una acción de editor-en-adelante.
 
 ## Ediciones de aprobación (0.1)
 
-Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen revisión o aumentan el nivel de riesgo o el cuórum. Las políticas que reducen el nivel de riesgo y el acceso de emergencia break-glass pertenecen a la base de Business. Los registros almacenados se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.
+Community conserva el motor de aprobaciones, el mínimo de dos personas distintas para acciones CRITICAL, el doble control del kill-switch y las políticas que exigen la revisión de una acción. Las políticas de aprobación que cambian el nivel de riesgo o el número de aprobaciones, y el acceso de emergencia break-glass, pertenecen a la base de Business. Las políticas almacenadas que aumentan el nivel de riesgo o el número de aprobaciones siguen aplicándose; las políticas de reducción almacenadas y las concesiones de emergencia se conservan para lectura y exportación, pero no pueden reducir los valores predeterminados de Community ni autorizar acceso de emergencia.

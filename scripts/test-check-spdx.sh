@@ -103,10 +103,11 @@ hdr_file() {
 	} >"$1"
 }
 
-# run_gate <dir> — echo the gate's combined output; return its exit code.
+# run_gate <dir> <gate> [args...] — echo combined output; return the gate's exit code.
 run_gate() {
-	local out rc
-	out="$(cd "$1" && sh "$2" 2>&1)"
+	local dir="$1" gate="$2" out rc
+	shift 2
+	out="$(cd "$dir" && sh "$gate" "$@" 2>&1)"
 	rc=$?
 	printf '%s' "$out"
 	return $rc
@@ -132,10 +133,11 @@ expect_silent() {
 	esac
 }
 
-# expect_rc <label> <dir> <gate> <want-rc> <substring>
+# expect_rc <label> <dir> <gate> <want-rc> <substring> [args...]
 expect_rc() {
 	local label="$1" dir="$2" gate="$3" wrc="$4" want="$5" out rc
-	out="$(run_gate "$dir" "$gate")"
+	shift 5
+	out="$(run_gate "$dir" "$gate" "$@")"
 	rc=$?
 	if [ "$rc" != "$wrc" ]; then
 		fail "$label" "exit $rc, wanted $wrc — $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
@@ -457,6 +459,37 @@ case "$f12_rc:$f12_out" in
 "1:"*"MISSING  web/bad.ts"*) pass "F12b --files names a missing header among the listed files" ;;
 *) fail "F12b --files names a missing header among the listed files" "rc $f12_rc: $(printf '%s' "$f12_out" | tr '\n' ' ' | cut -c1-200)" ;;
 esac
+
+# F13 C is executable source: check valid, missing and wrong headers through the same
+# --files path used by pre-push. Synthetic source keeps this battery usable in public exports.
+R="$(mkrepo c-source)" || exit 2
+c_path=commercial/probe.c
+mkdir -p "$R/commercial"
+printf '// SPDX-License-Identifier: LicenseRef-Olivares-Commercial\nint main(void) { return 0; }\n' >"$R/$c_path"
+expect_rc "F13a C with its directory's required header is checked" \
+	"$R" "$GATE" 0 "SPDX check OK: 1 source files" --files "$c_path"
+printf 'int main(void) { return 0; }\n' >"$R/$c_path"
+expect_rc "F13b C without a header is MISSING, not ignored" \
+	"$R" "$GATE" 1 "MISSING  $c_path  (no license identifier; expected LicenseRef-Olivares-Commercial)" --files "$c_path"
+printf '// SPDX-License-Identifier: AGPL-3.0-only\nint main(void) { return 0; }\n' >"$R/$c_path"
+expect_rc "F13c C with another directory's header is MISMATCH" \
+	"$R" "$GATE" 1 "MISMATCH $c_path  (found AGPL-3.0-only; expected LicenseRef-Olivares-Commercial)" --files "$c_path"
+printf '// SPDX-License-Identifier: AGPL-3.0-only\nint main(void) { return 0; }\n' >"$R/web/probe.c"
+expect_rc "F13d C in web uses the AGPL header" \
+	"$R" "$GATE" 0 "SPDX check OK: 1 source files" --files web/probe.c
+mkdir -p "$R/sdk"
+printf '// SPDX-License-Identifier: Apache-2.0\nint main(void) { return 0; }\n' >"$R/sdk/probe.c"
+expect_rc "F13e C in sdk uses the Apache header" \
+	"$R" "$GATE" 0 "SPDX check OK: 1 source files" --files sdk/probe.c
+
+# M9 removing C classification reproduces exit 2 for the SAME correctly licensed source.
+printf '// SPDX-License-Identifier: LicenseRef-Olivares-Commercial\nint main(void) { return 0; }\n' >"$R/$c_path"
+if m="$(mutate c-unclassified '    *.c) echo source; return ;;' '')"; then
+	expect_rc "M9 without C classification the same C fixture is UNCLASSIFIED" \
+		"$R" "$m" 2 "UNCLASSIFIED $c_path" --files "$c_path"
+else
+	fail "M9 without C classification" "the mutation did not apply; this is a failure, not a skip"
+fi
 
 if [ "$fails" -ne 0 ]; then
 	printf 'test-check-spdx: %d FAILED\n' "$fails" >&2

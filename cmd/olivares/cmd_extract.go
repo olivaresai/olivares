@@ -59,10 +59,11 @@ const (
 func newExtractCmd() *cobra.Command {
 	var kind string
 	cmd := &cobra.Command{
-		Use:    "__extract",
-		Hidden: true,
-		Args:   cobra.NoArgs,
-		Short:  "internal: extract text from a rich document on stdin (sandboxed re-exec target)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "__extract",
+		Hidden:      true,
+		Args:        cobra.NoArgs,
+		Short:       "internal: extract text from a rich document on stdin (sandboxed re-exec target)",
 		Long: "__extract is an internal, hidden re-exec target — NOT a user command. The engine\n" +
 			"launches it under plugin confinement to extract plain text from an Office Open XML\n" +
 			"document (DOCX/PPTX/XLSX) read from stdin, writing \"<subtype>\\n<text>\" to stdout. It\n" +

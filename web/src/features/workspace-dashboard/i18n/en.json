@@ -35,6 +35,7 @@
     "unavailable": "Workspace contents are unavailable."
   },
   "sessionFolders": {
+    "wiki": "Open wiki for {{folder}}",
     "title": "Session folders",
     "intro": "Folders on this server where sessions work. They are separate from workspaces.",
     "manage": "Manage folders",

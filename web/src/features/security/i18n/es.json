@@ -109,7 +109,7 @@
   },
   "enforcement": {
     "title": "Postura de enforcement",
-    "description": "La única acción que toca producción. Cada clase de guardrail es detective por defecto; habilitar enforcement inline es una acción de admin, gobernada donde el gate esté cableado.",
+    "description": "La única acción que toca producción. Cada clase de guardrail es detective por defecto; habilitar enforcement inline es una acción de admin, gobernada donde haya un gate configurado.",
     "defaultDetectiveNote": "El plano por defecto es detective: las clases solo bloquean cuando se habilitan aquí explícitamente y están gobernadas.",
     "fullyDetective": "No hay enforcement habilitado — el plano es totalmente detective, el default seguro. Nada bloquea por su cuenta.",
     "detective": "Detective",
@@ -128,14 +128,14 @@
     },
     "dialog": {
       "title": "Cambiar enforcement",
-      "description": "Deshabilitar (volver a detective) está siempre permitido. Habilitar enforcement inline está gobernado donde el gate esté cableado — una denegación de gobernanza se muestra como el motivo.",
+      "description": "Deshabilitar (volver a detective) está siempre permitido. Habilitar enforcement inline está gobernado donde haya un gate configurado — una denegación de gobernanza se muestra como el motivo.",
       "enabledLabel": "Habilitar enforcement inline",
       "minSeverity": "Severidad mínima",
       "reason": "Motivo",
       "reasonHint": "Se registra con el cambio en la cadena de auditoría.",
       "submit": "Aplicar",
       "applied": "Postura de enforcement actualizada",
-      "ungovernedWarning": "Habilitar esta clase sin un gate de gobernanza cableado la deja sin gobernar — el cambio se permite pero queda señalado.",
+      "ungovernedWarning": "Habilitar esta clase sin un gate de gobernanza configurado la deja sin gobernar — el cambio se permite pero queda señalado.",
       "deniedTitle": "La gobernanza denegó este cambio"
     }
   },
@@ -197,9 +197,9 @@
     "checkpointsCount_one": "{{count}} checkpoint verificado",
     "checkpointsCount_many": "{{count}} checkpoints verificados",
     "checkpointsCount_other": "{{count}} checkpoints verificados",
-    "signingUnavailable": "No hay clave de firma cableada — la atestación firmada no se finge.",
+    "signingUnavailable": "No hay clave de firma configurada — la atestación firmada no se finge.",
     "checkpointsPendingNote": "Aún no se ha escrito ningún checkpoint — el veredicto de la cadena es lo que prueba este ledger.",
-    "signingSeam": "Firma de checkpoints sin cablear",
+    "signingSeam": "Firma de checkpoints sin configurar",
     "attestedSeq": "Seq atestado",
     "headSeq": "seq cabeza del ledger {{seq}}",
     "reverifyNote": "Cada evento lleva seq · hash · prev_hash para que un lector re-verifique el enlace offline contra un WORM externo.",

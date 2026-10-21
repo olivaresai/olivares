@@ -44,12 +44,12 @@
   },
   "workspaceRequired": {
     "use": "Использовать {{name}}",
-    "choose": "Выберите рабочее пространство"
+    "choose": "Выберите рабочую область"
   },
   "names": {
-    "untitledSession": "Сеанс без названия",
+    "untitledSession": "Сессия без названия",
     "unknownUser": "Неизвестный пользователь",
-    "unknownWorkspace": "Неизвестное рабочее пространство"
+    "unknownWorkspace": "Неизвестная рабочая область"
   },
   "headDiff": {
     "file": "Файл",

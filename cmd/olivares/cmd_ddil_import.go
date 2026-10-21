@@ -49,8 +49,9 @@ type ddilVerifyReport struct {
 func newDDILVerifyCmd() *cobra.Command {
 	var bundle, pubkey string
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify and inspect a DDIL courier bundle without applying it",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Verify and inspect a DDIL courier bundle without applying it",
 		Long: "verify authenticates a DDIL courier bundle with the pinned transport public key and\n" +
 			"reports its tenant, expiry, policy snapshot, audit segments and evidence without applying it.",
 		Example:      "  olivares ddil verify --bundle transfer.ddil --pubkey @ddil-public.b64 -o json",
@@ -194,8 +195,9 @@ func newDDILImportCmd() *cobra.Command {
 	var bundle, pubkey, tenant, auditOut, evidenceOut string
 	var eventPubkeys, checkpointPubkeys []string
 	cmd := &cobra.Command{
-		Use:   "import",
-		Short: "Verify, reconcile and apply a DDIL courier bundle fail-closed",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "import",
+		Short:       "Verify, reconcile and apply a DDIL courier bundle fail-closed",
 		Long: "import verifies a DDIL courier bundle, rejects tenant or audit-sequence mismatches,\n" +
 			"stages carried audit segments, extracts evidence read-only and adopts a newer signed policy snapshot.",
 		Example: `  olivares ddil import --bundle transfer.ddil --pubkey @ddil-public.b64 \

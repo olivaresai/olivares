@@ -248,6 +248,65 @@ class ReporterTest(unittest.TestCase):
                 report.reconcile_run(run, "olivaresai/olivares", self.github.request)
         self.assertEqual(self.github.issues, [])
 
+    def test_the_scheduled_battery_pass_reports_from_the_repository_that_runs_it(self):
+        # The Community batteries run on a schedule against main, off the merge path. The run's
+        # name is its run-name, which extends the workflow name.
+        self.run.update(name="merge-gate-check main batteries", event="schedule",
+                        head_repository={"full_name": "owner/development"})
+        self.github.jobs = [{"name": "community-functional (shard-3)", "conclusion": "failure",
+                             "steps": [], "html_url": "https://example.com/job"},
+                            {"name": "community-functional (shard-4)", "conclusion": "success"},
+                            {"name": "check", "conclusion": "skipped"}]
+        report.reconcile_run(self.run, "owner/development", self.github.request)
+        self.assertEqual([issue["title"] for issue in self.github.issues],
+                         ["mainline-ci: job community-functional failed on main"])
+
+    def scheduled_run(self, run_id, jobs):
+        self.run.update(id=run_id, name="merge-gate-check main batteries", event="schedule",
+                        head_repository={"full_name": "owner/development"})
+        self.github.jobs = [{"name": name, "conclusion": conclusion, "steps": [], "html_url": "https://example.com/job"}
+                            for name, conclusion in jobs]
+        report.reconcile_run(self.run, "owner/development", self.github.request)
+
+    def test_a_scheduled_battery_run_reports_each_matrix_group_once_and_recovers(self):
+        shards = [f"community-functional (shard-{n})" for n in range(1, 17)]
+        installers = [f"community-installer ({family}, {family}:latest)" for family in ("debian", "fedora", "ubuntu")]
+        green = [("community-partition", "success"), ("community-contracts", "success"), ("check", "skipped"),
+                 *((name, "success") for name in shards + installers)]
+        red = [(name, "failure" if name == installers[1] else conclusion) for name, conclusion in green]
+        self.scheduled_run(100, red)
+        self.assertEqual([issue["title"] for issue in self.github.issues],
+                         ["mainline-ci: job community-installer failed on main"])
+        # A cancelled newer run neither closes nor re-reports it.
+        self.scheduled_run(101, [(name, "cancelled") for name, _ in green])
+        self.assertEqual((len(self.github.issues), self.github.issues[0]["state"]), (1, "open"))
+        # A green scheduled run recovers it.
+        self.scheduled_run(102, green)
+        self.assertEqual((len(self.github.issues), self.github.issues[0]["state"]), (1, "closed"))
+
+    def test_a_failed_partition_is_reported_and_its_skipped_dependents_are_not(self):
+        self.scheduled_run(100, [("community-partition", "failure"),
+                                 ("community-functional (shard-1)", "skipped"),
+                                 ("community-installer (debian, debian:latest)", "skipped"),
+                                 ("check", "skipped")])
+        self.assertEqual([issue["title"] for issue in self.github.issues],
+                         ["mainline-ci: job community-partition failed on main"])
+
+    def test_only_the_scheduled_battery_pass_of_a_gate_workflow_reports(self):
+        # A gate dispatch on a candidate, an unnamed workflow and mainline-ci outside the public
+        # repository never write, whatever their events.
+        for name, event, repo in [("merge-gate-check mg-1-abc", "workflow_dispatch", "owner/development"),
+                                  ("merge-gate-check", "push", "owner/development"),
+                                  ("mainline-ci", "push", "owner/development"),
+                                  ("mainline-ci", "schedule", "olivaresai/olivares"),
+                                  ("other", "schedule", "owner/development"),
+                                  ("other", None, "owner/development")]:
+            with self.subTest(name=name, event=event, repo=repo):
+                run = copy.deepcopy(self.run)
+                run.update(name=name, event=event, head_repository={"full_name": repo})
+                report.reconcile_run(run, repo, self.github.request)
+        self.assertEqual(self.github.issues, [])
+
 
 if __name__ == "__main__":
     unittest.main()

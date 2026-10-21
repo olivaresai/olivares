@@ -8,7 +8,7 @@ sidebar:
   order: 1
 ---
 
-**Edición:** crear o editar políticas Cedar personalizadas, tanto permit como forbid, requiere Business. Community mantiene la aplicación de políticas, roles personalizados y concesiones acotadas ya almacenadas; permite leerlas y revocarlas. `DELETE /v1/m/governance/pdp/active?engine=cedar` desactiva solo la política Cedar redactada y conserva el historial, las concesiones gestionadas y las políticas adoptadas. Los roles integrados, las reglas nativas de denegación y el interruptor de emergencia siguen en Community. El PDP externo de esta receta solo restringe; un permit Cedar redactado puede conceder acceso dentro de su ámbito.
+**Edición:** crear o editar políticas Cedar personalizadas, tanto permit como forbid, requiere Business. Community mantiene la aplicación de políticas, roles personalizados y concesiones acotadas ya almacenadas; permite leerlas y revocarlas. `DELETE /v1/m/governance/pdp/active?engine=cedar` desactiva solo la política Cedar redactada y conserva el historial, las concesiones gestionadas y las políticas adoptadas. Los roles integrados, las reglas nativas de denegación y el interruptor de emergencia siguen en Community. El PDP externo de esta receta solo restringe; un permit Cedar redactado puede conceder acceso dentro de su ámbito. Seleccionar ese motor externo (`OLIVARES_PDP_ENGINE`, un archivo Cedar u OPA) requiere Business: Community se niega a arrancar con un motor seleccionado.
 
 **Objetivo:** añadir restricciones basadas en atributos sobre un RBAC
 deny-by-default — por ejemplo, "nadie toca los recursos etiquetados como

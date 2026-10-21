@@ -15,7 +15,7 @@ const { api, authState } = vi.hoisted(() => ({
     listInvites: vi.fn(),
     revokeInvite: vi.fn(),
     listMembers: vi.fn(),
-    setMemberActive: vi.fn(),
+    removeMember: vi.fn(),
     listSuperadmins: vi.fn(),
     setSuperadminActive: vi.fn(),
     listWorkspaces: vi.fn(),

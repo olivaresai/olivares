@@ -22,11 +22,12 @@ executable; it does not take a database backup.
 
 ## Which upgrade path is yours
 
-There are two ways to move the binary forward, and they land in the same place.
+There are three ways to move the binary forward, and they land in the same place.
 
 | Your install | Path |
 |---|---|
-| A binary on a host, systemd, Docker Compose | `olivares upgrade` — this page |
+| A binary on a host, systemd | `olivares upgrade` — this page |
+| A Docker or Podman container | `docker compose exec olivares olivares upgrade`, then recreate the container. The image cannot change, so the release is stored in the data volume (`ota/` under the data directory) and every start of the image binary starts it while it is newer than the image or the same version built differently. Removing `ota/` returns the container to its image's binary. [Docker and Compose](/how-to/install-a-license/#docker-and-compose) has the commands. |
 | Kubernetes / Helm | Set the image and let the operator roll it. Do not run `olivares upgrade` inside a pod: the deployment is declarative and the next reconcile would undo it. |
 
 ## Before anything: read the plan
@@ -50,7 +51,7 @@ version you know is there and the guards stay armed:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.2
+olivares upgrade --check --current-version 0.3
 ```
 <!-- /release -->
 

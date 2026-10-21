@@ -282,7 +282,7 @@ be tested on a host where the hook is marked as trusted.
 | **Control console > Connectors** (`/console`) | Source, mode, frequency, non-secret configuration, and Test/Save/Reload actions. | The persisted source appears immediately; its data does not. |
 | **Health > Connectors** (`/health`) | Connector status, message, trend, and latest activity. | After the roster is reloaded. |
 | **Observability > Ingestion** (`/observability`) | Counters for `olivares.codex`, observation types, and first/last receipt. | After `Gather` emits data. These process-wide counters start at boot and reset on restart. |
-| **Cost & FinOps** (`/finops`) | Estimated Analytics usage and, when enabled, daily billed cost. | A valid credential, `workspace_id`, and authorized APIs; `costs` requires explicit opt-in. |
+| **Budgets** (`/stored-budgets`) | Consumption against each stored budget limit, counted from estimated Analytics usage and, when enabled, daily billed cost. | A valid credential, `workspace_id`, and authorized APIs; `costs` requires explicit opt-in. |
 | **Security** (`/security`) | Adoption findings, unavailable enterprise surfaces, and opt-in structured analysis of Compliance data. | After collection; 403/404 responses from enterprise surfaces become posture evidence, not success. |
 | **Sessions** (`/sessions`) | Sessions and timeline with action, model, identity, cost, and posture. | Comes from the governed hook. The batch source alone does not create a live session. |
 | **Audit** (`/audit`) | Imported activity evidence and PEP decisions anchored in the ledger. | After attributable logs or decisions have been received. |
@@ -293,8 +293,6 @@ that screen.
 
 <img class="light:sl-hidden" src="/console/health-dark.png" alt="Liveness, reliability and dependencies across your estate — derived from observed activity and the staleness sweep, never by probing infrastructure.">
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="Liveness, reliability and dependencies across your estate — derived from observed activity and the staleness sweep, never by probing infrastructure.">
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Token cost across the estate — trends, chargeback, reconciliation, budgets and forecast. Figures are exactly as the FinOps ledger reports them.">
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Token cost across the estate — trends, chargeback, reconciliation, budgets and forecast. Figures are exactly as the FinOps ledger reports them.">
 <img class="light:sl-hidden" src="/console/security-dark.png" alt="Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. The plane is detective by default — it records, it does not block on its own unless enforcement is enabled and governed.">
 <img class="dark:sl-hidden" src="/console/security-light.png" alt="Guardrail findings, the enforcement posture, the anomaly queue and tamper-evident incident forensics. The plane is detective by default — it records, it does not block on its own unless enforcement is enabled and governed.">
 

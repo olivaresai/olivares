@@ -222,8 +222,8 @@
     "trailEmptyHint": "关于该审批的每一次决定——谁在何时因何决定——都会记录在这里。目前还没有人做出决定。",
     "decisionApprove": "已批准",
     "decisionReject": "已拒绝",
-    "reenableNeedsAdmins": "需要另外两个管理员账户批准。请在“身份与 NHI”中创建，或使用 `olivares users create`。",
-    "openIdentity": "打开“身份与 NHI”",
+    "reenableNeedsAdmins": "需要另外两个管理员账户批准。请在“身份与访问”中创建，或使用 `olivares users create`。",
+    "openIdentity": "打开“身份与访问”",
     "cannotDecideOwn": "您不能审批自己的请求。必须由另一位管理员决定。"
   },
   "policies": {
@@ -280,7 +280,7 @@
     "matchActionHint": "留空 = 匹配任意操作。",
     "matchSubjectKind": "匹配对象类别",
     "matchSubjectKindHint": "留空 = 匹配任意对象类别。",
-    "needsBusiness": "将风险等级降到该操作的默认值以下需要 Business。关闭此策略即可保留已保存的内容。",
+    "needsBusiness": "将风险等级或批准数量设为与该操作默认值不同的值需要 Business。关闭此策略即可保留已保存的内容。",
     "create": "创建策略",
     "save": "保存更改",
     "confirmCreateBody": "已启用的 ABAC 策略会立即进一步限制访问；已启用的审批策略会开始对匹配的操作要求人工审批。立即生效。",
@@ -311,7 +311,7 @@
     "empty": "暂无身份",
     "emptyHint": "当为此租户协调某个目录来源后，身份将在此处显示。",
     "principalTypeHuman": "人类",
-    "principalTypeNhi": "NHI",
+    "principalTypeNhi": "非人类",
     "principalTypeUnknown": "未知"
   },
   "groups": {
@@ -327,6 +327,7 @@
     "emptyHint": "随着目录来源被协调，组、角色和策略将在此处显示。"
   },
   "members": {
+    "notFound": "此组不存在。",
     "title": "组成员",
     "subtitle": "「{{group}}」的成员。",
     "direct": "直接",
@@ -343,7 +344,7 @@
   },
   "bindings": {
     "title": "智能体绑定",
-    "caption": "每个智能体如何映射到其非人类身份（NHI）—— 在访问映射中归因智能体操作的桥梁。",
+    "caption": "每个智能体如何映射到其非人类身份，访问映射通过该身份归因智能体的操作。",
     "search": "搜索绑定…",
     "agent": "智能体",
     "identity": "身份",
@@ -434,7 +435,7 @@
       "resources": "资源：{{value}}",
       "autonomous": "自主",
       "scheduled": "已计划",
-      "truncated": "scan truncated — counts are a floor"
+      "truncated": "扫描已截断——计数只是下限"
     },
     "classifyButton": "分类智能体",
     "classify": {
@@ -581,7 +582,7 @@
     },
     "binding": {
       "title": "尚无智能体绑定",
-      "description": "将智能体绑定到现有或新建的 NHI，以便在访问映射中将其操作归因于该身份。"
+      "description": "将智能体绑定到现有或新的非人类身份，以便在访问映射中将其操作归因于该身份。"
     },
     "group": {
       "title": "尚无组",
@@ -589,7 +590,7 @@
     },
     "identity": {
       "title": "尚无身份",
-      "description": "当代理访问资源，或您将代理绑定到某个身份时，身份会显示在这里。"
+      "description": "当智能体访问资源，或您将智能体绑定到某个身份时，身份会显示在这里。"
     },
     "policies": {
       "title": "暂无规则",

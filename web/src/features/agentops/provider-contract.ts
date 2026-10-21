@@ -44,6 +44,23 @@ export function runInputMode(
 }
 
 /**
+ * readsNativeRecord reports whether the engine reads this run's activity and messages
+ * from its tool's own record: Claude Code and Codex. It answers 422 for any other tool,
+ * and the browser logs every failed request as a console error, so the console does not
+ * ask one (#2258). A legacy run names no driver, so it is not one of these.
+ *
+ * Mirrors `activitySource` (`modules/sessions/session_activity.go`); the server stays
+ * the authority. When the engine learns to read another tool's record, add its driver
+ * here: until then the console shows that tool no message rail and no Activity tab.
+ */
+export function readsNativeRecord(
+  run: Pick<RunDTO, 'provider_driver'>,
+): boolean {
+  const driver = run.provider_driver
+  return driver === CLAUDE_DRIVER || driver === 'codex'
+}
+
+/**
  * The environment variables a provider profile OWNS on its launched child. The server
  * resolves them from the profile and refuses a launch whose `env_allow` (or whose
  * launch gate) names any of them, for every driver rather than only the current one:

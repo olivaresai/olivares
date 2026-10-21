@@ -8,7 +8,7 @@ description: >-
 ---
 
 :::note[Edición]
-Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas) y el ciclo de vida de identidades gestionadas requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, SCIM entrante de usuarios/grupos, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
+Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas), el ciclo de vida de identidades gestionadas y el servidor SCIM entrante requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
 :::
 
 Esta página es el mapa de la consola. Enumera **todas las rutas que monta la aplicación**,
@@ -70,7 +70,7 @@ Seguridad e identidad, Despliegue, Observabilidad y evidencias, y Sistema y ajus
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **75 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **73 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
 ### Inicio
@@ -92,13 +92,13 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Herramientas de agentes | `/agent-tools` | Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue | `system:admin` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
-| Sesiones | `/agentops` | Inicia sesiones y sigue lo que hace cada una, también las que encuentra Olivares | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
+| Operar sesiones | `/agentops` | Inicia sesiones y sigue lo que hace cada una, también las que encuentra Olivares | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
 | Servidores MCP | `/mcp-servers` | Conecta servidores MCP remotos a esta organización, pruébalos y elige qué herramientas pueden usar las sesiones | `tenant:admin` | [how-to/connectors/mcp-governance](/es/how-to/connectors/mcp-governance/) |
 | Operaciones de modelos | `/model-operations` | Modelos propios, admisión y despliegues | `models:registry:read` | [reference/modules/xxiii-model-operations](/es/reference/modules/xxiii-model-operations/) |
 | Modelos | `/models` | Modelos, enrutado y claves de proveedor | `models:catalog:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
 | Plataformas | `/platforms` | Superficies de despliegue, matriz de compliance y ciclo de vida de modelos por plataforma | `models:platforms:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
 | Cuentas de proveedor | `/provider-accounts` | Lista las cuentas de proveedor con nombre y adopta un perfil de proveedor existente como cuenta | `sessions:account:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
-| Vínculos de fuentes | `/provider-bindings` | Dedica fuentes configuradas, en la revisión que aplicó este nodo, a perfiles de proveedor | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Vínculos de fuentes | `/provider-bindings` | Vincula fuentes configuradas a perfiles de proveedor | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Perfiles de proveedor | `/provider-profiles` | Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda | `sessions:profile:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Proveedores | `/providers` | Registra las claves de API y los endpoints con los que arrancan las sesiones; pruébalos, rótalos y revócalos | `sessions:provider:read` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
 | Límites de uso | `/rate-limits` | Inventario de límites de Anthropic (solo lectura) | `models:ratelimits:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
@@ -122,9 +122,9 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Comunicaciones | `/communications` | Canales, avisos directos y bandeja personal del workspace seleccionado | `sessions:channel:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
-| Administración de canales | `/communications/administration` | Administra canales: configuración e historial de concesiones, cada acto bajo el ETag actual del canal | `sessions:channel:admin` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Administración de canales | `/communications/administration` | Administra canales: configuración e historial de concesiones | `sessions:channel:admin` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Traspasos | `/communications/handoffs` | Ofertas de responsabilidad de trabajo dirigidas a ti: lee el contexto y acepta o rechaza | `sessions:delivery:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
-| Bandeja de comunicaciones | `/communications/inbox` | Tu bandeja exacta: entregas dirigidas a ti, leídas en fresco y acusadas de forma explícita | `sessions:delivery:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Bandeja de comunicaciones | `/communications/inbox` | Mensajes dirigidos a ti: ábrelos y acusa recibo de cada uno | `sessions:delivery:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Nuevo canal | `/communications/new` | Crea un canal con concesiones iniciales explícitas | `sessions:channel:write` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Enlaces de protocolo | `/communications/protocol-bindings` | Compón y reconcilia enlaces gobernados A2A y MCP | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Trabajo | `/work` | Trabajo compartido: unidades, dependencias, aceptación y decisiones | `sessions:work:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
@@ -143,18 +143,18 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Mapa de acceso | `/access-map` | Qué lee y escribe cada agente (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/es/reference/modules/iii-access-map/) |
 | Exportación a AgentCore | `/agentcore-export` | Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Gobierno de Claude Code | `/claude-policy` | Policy gestionada, hooks, MCP, sandbox y policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/es/how-to/connectors/claude-code-hooks-pep/) |
-| Identidad y NHI | `/identity` | SSO, SCIM, el inventario NHI y el grafo WIF | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
+| Identidad y acceso | `/identity` | SSO, SCIM y las identidades que usan tus agentes | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Proxy de inferencia | `/inference-proxy` | Compuertas del proxy, reglas DLP de egreso y aprobaciones de dispositivos | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/es/reference/modules/inferenceproxy/) |
 | Kill switch | `/killswitch` | Parada de emergencia, recuperación con doble control y contención guardiana | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/es/how-to/cookbook/kill-switch-drill/) |
 | Permisos | `/permissions` | Identidad, roles y aprobaciones | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Políticas de rutinas | `/routine-policies` | Intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación y allowlists cron para rutinas de Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Seguridad | `/security` | Guardrails, forense y anomalías | `security:finding:read` | [reference/modules/ix-security](/es/reference/modules/ix-security/) |
+| Caja fuerte | `/vault` | Tus contraseñas, notas y códigos de autenticación | `tenant:read` | [reference/console](/es/reference/console/) |
 
 ### Despliegue
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Despliegue | `/deploy` | Aprovisiona y conecta agentes a la infraestructura | `deploy:deployment:read` | [reference/modules/vii-deploy](/es/reference/modules/vii-deploy/) |
 | Publicación Git | `/git-publication` | Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados | `gitpublish:target:read` | [reference/modules/gitpublish](/es/reference/modules/gitpublish/) |
 
 ### Observabilidad y evidencias
@@ -164,13 +164,11 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Adopción de Claude Code | `/adoption` | Productividad, aceptación y mix de modelos | `adoption:metrics:read` | [reference/modules/claudeadoption](/es/reference/modules/claudeadoption/) |
 | Cadena de suministro | `/attestation` | Atestación de releases: SLSA, SBOM, VEX y Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/es/how-to/verify-a-release/) |
 | Registro de auditoría | `/audit` | Ledger de evidencia con alteraciones detectables | `audit:read` | [reference/modules/ix-security](/es/reference/modules/ix-security/) |
-| Cumplimiento | `/compliance` | Marcos, controles y evidencia | `compliance:framework:read` | [reference/modules/xiii-compliance](/es/reference/modules/xiii-compliance/) |
 | Paneles | `/dashboards` | KPIs ejecutivos e informes | cualquier usuario autenticado | [reference/modules/xxi-executive-dashboards](/es/reference/modules/xxi-executive-dashboards/) |
 | Evals | `/evals` | Calidad, evals y regresión | `evals:run:read` | [reference/modules/xii-evals](/es/reference/modules/xii-evals/) |
 | Salud y SLA | `/health` | Disponibilidad y SLA de agentes y MCP | `health:status:read` | [reference/modules/xxii-health](/es/reference/modules/xxii-health/) |
 | Observabilidad | `/observability` | Salud de la ingesta por estándar y exploración de trazas | `health:status:read` | [reference/modules/observability](/es/reference/modules/observability/) |
-| Grabaciones | `/recordings` | Grabación y replay de sesiones privilegiadas | `recording:session:admin` | [reference/modules/recording](/es/reference/modules/recording/) |
-| Visor de sesiones | `/session-viewer/$id` (solo enlace profundo) | Cronología completa de una sesión grabada, accesible desde una fila de Grabaciones y no desde la barra lateral. | `recording:session:admin` | [reference/modules/recording](/es/reference/modules/recording/) |
+| Retención | `/retention` | Cuánto tiempo se conserva cada clase de registro, el barrido que lo aplica y sus certificados sellados | `compliance:retention:read` | [reference/modules/xiii-compliance](/es/reference/modules/xiii-compliance/) |
 | Presupuestos | `/stored-budgets` | Consumo frente a cada límite guardado. La capacidad reservada cuenta para el límite. | `finops:budget:read` | [reference/modules/xi-finops](/es/reference/modules/xi-finops/) |
 
 ### Sistema y ajustes

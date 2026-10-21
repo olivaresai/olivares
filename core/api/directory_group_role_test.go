@@ -101,7 +101,8 @@ func TestLDAPGroupRoleMappingHTTP(t *testing.T) {
 }
 
 func TestDirectoryGroupRoleMappingPreservesAuthorizationHTTP(t *testing.T) {
-	onEachEngine(t, nil, func(t *testing.T, h *harness) {
+	// Group nesting is a Business route: the department service is wired to reach it.
+	onEachEngine(t, groupDepartments, func(t *testing.T, h *harness) {
 		ctx := context.Background()
 		superToken := h.adminLogin()
 		tenant := h.createOrg(superToken, "directory-role-guards")
@@ -153,15 +154,9 @@ func TestDirectoryGroupRoleMappingPreservesAuthorizationHTTP(t *testing.T) {
 				if res.code != http.StatusOK || res.body["mapped_role"] != auth.RoleEditor {
 					t.Fatalf("admin mapping = %d %s, want 200/editor", res.code, res.raw)
 				}
-				// The directory-owned roster and identity still reject SCIM and
-				// operator hierarchy writes after the local mapping is changed.
+				// The directory-owned roster and identity still reject operator
+				// hierarchy writes after the local mapping is changed.
 				if origin == "ldap" {
-					tok := h.scimToken(super, tenant)
-					scimRes := h.scim(http.MethodPut, scimBase+"/Groups/"+group.ID.String(), tok,
-						`{"displayName":"Renamed","externalId":"replacement","members":[]}`)
-					if scimRes.code != http.StatusForbidden {
-						t.Fatalf("directory identity/roster replace = %d %s, want 403", scimRes.code, scimRes.raw)
-					}
 					res = h.do(http.MethodPut, "/v1/groups/"+group.ID.String()+"/parent", superToken,
 						map[string]any{"parent_id": ""}, tenantHdr(tenant))
 					if res.code != http.StatusForbidden {

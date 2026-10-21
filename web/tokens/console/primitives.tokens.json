@@ -38,16 +38,16 @@
   },
   "font": {
     "$type": "fontFamily",
-    "$description": "Self-hosted faces (src/styles/fonts.css): Geist Variable for the interface, JetBrains Mono 400 and 500 for code, commands, paths and identifiers. Geist has no CJK glyphs, so the stack falls back to the system CJK face.",
+    "$description": "Self-hosted faces (src/styles/fonts.css), the website's: Inter for text, Space Grotesk for titles and figures, JetBrains Mono 400 and 500 for code, commands, paths and identifiers. The files are the Latin subset and have no CJK glyphs, so the stacks fall back to the system faces for those scripts.",
     "font-sans": {
-      "$value": "'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC', 'PingFang SC',\n    'Microsoft YaHei', 'Yu Gothic', sans-serif"
+      "$value": "'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC', 'PingFang SC',\n    'Microsoft YaHei', 'Yu Gothic', sans-serif"
     },
     "font-mono": {
       "$value": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,\n    'Liberation Mono', monospace"
     },
     "font-display": {
-      "$value": "{font.font-sans}",
-      "$description": "Display text uses the interface face: weight carries the hierarchy, not a second family."
+      "$value": "'Space Grotesk', 'Inter', system-ui, sans-serif",
+      "$description": "Titles and figures: page titles, dialog titles and the one big number of a block."
     }
   },
   "radius": {
@@ -101,24 +101,24 @@
   },
   "type": {
     "$type": "dimension",
-    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Each step the components use takes the design value of the role it serves: display-lg is the design's display (30/36), display (figures) and title (page title) are title-l (22/28), heading is title (16/22), body is body (14/20), caption is small (13/18), overline is micro (12/16, the minimum size of any text). hero (40/44), body-l (15/24), mono (13/20) and mono-s (12/18) are added as the design names them.",
+    "$description": "The type ladder. Tailwind reads `--text-<step>` with its `--line-height`, `--letter-spacing` and `--font-weight` sub-keys, so one utility carries all four decisions. Six sizes in all, the design's: figure 36 (hero, display-lg), title 26 (display, title), head 17 (heading), body 14 (body-l with a looser line, body), meta 13 (caption, mono) and micro 12 (overline, mono-s).",
     "text-hero": {
-      "$value": "2.5rem"
+      "$value": "2.25rem"
     },
     "text-hero--line-height": {
-      "$value": "2.75rem"
+      "$value": "2.5rem"
     },
     "text-hero--letter-spacing": {
-      "$value": "-0.035em"
+      "$value": "-0.03em"
     },
     "text-hero--font-weight": {
       "$value": "600"
     },
     "text-display-lg": {
-      "$value": "1.875rem"
+      "$value": "2.25rem"
     },
     "text-display-lg--line-height": {
-      "$value": "2.25rem"
+      "$value": "2.5rem"
     },
     "text-display-lg--letter-spacing": {
       "$value": "-0.03em"
@@ -127,10 +127,10 @@
       "$value": "600"
     },
     "text-display": {
-      "$value": "1.375rem"
+      "$value": "1.625rem"
     },
     "text-display--line-height": {
-      "$value": "1.75rem"
+      "$value": "1.875rem"
     },
     "text-display--letter-spacing": {
       "$value": "-0.02em"
@@ -139,10 +139,10 @@
       "$value": "600"
     },
     "text-title": {
-      "$value": "1.375rem"
+      "$value": "1.625rem"
     },
     "text-title--line-height": {
-      "$value": "1.75rem"
+      "$value": "1.875rem"
     },
     "text-title--letter-spacing": {
       "$value": "-0.02em"
@@ -151,7 +151,7 @@
       "$value": "600"
     },
     "text-heading": {
-      "$value": "1rem"
+      "$value": "1.0625rem"
     },
     "text-heading--line-height": {
       "$value": "1.375rem"
@@ -163,10 +163,10 @@
       "$value": "600"
     },
     "text-body-l": {
-      "$value": "0.9375rem"
+      "$value": "0.875rem"
     },
     "text-body-l--line-height": {
-      "$value": "1.5rem"
+      "$value": "1.375rem"
     },
     "text-body": {
       "$value": "0.875rem"

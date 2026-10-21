@@ -35,6 +35,7 @@
     "unavailable": "Le contenu de l’espace de travail est indisponible."
   },
   "sessionFolders": {
+    "wiki": "Ouvrir le wiki de {{folder}}",
     "title": "Dossiers de session",
     "intro": "Dossiers de ce serveur où travaillent les sessions. Ils sont distincts des espaces de travail.",
     "manage": "Gérer les dossiers",

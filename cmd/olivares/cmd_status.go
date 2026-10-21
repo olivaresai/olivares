@@ -60,8 +60,9 @@ func newStatusCmd() *cobra.Command {
 		verbose bool
 	)
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show whether the engine is up and which parts are configured",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show whether the engine is up and which parts are configured",
 		Long: "Reads the unauthenticated GET /status endpoint and prints whether the engine is up,\n" +
 			"what `olivares` alone says about this installation (who is signed in, the next step)\n" +
 			"and one row per component. --verbose adds the knowledge search posture (embedder,\n" +

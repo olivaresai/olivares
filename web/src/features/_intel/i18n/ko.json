@@ -1,0 +1,122 @@
+{
+  "severity": {
+    "label": "심각도",
+    "info": "정보",
+    "low": "낮음",
+    "medium": "보통",
+    "high": "높음",
+    "critical": "치명적"
+  },
+  "outcome": {
+    "pass": "통과",
+    "fail": "실패",
+    "error": "오류",
+    "skipped": "건너뜀",
+    "blocked": "차단됨",
+    "refused": "거부됨",
+    "complied": "준수함",
+    "leaked": "유출됨"
+  },
+  "verdict": {
+    "allow": "허용",
+    "flag": "플래그",
+    "block": "차단",
+    "detective": "탐지",
+    "enforced": "강제됨"
+  },
+  "integrity": {
+    "verified": "무결성 확인됨",
+    "failed": "무결성 실패",
+    "unavailable": "서명 사용 불가",
+    "pending": "아직 증명되지 않음",
+    "tamperEvident": "변조 증거 있음",
+    "chainOk": "해시 체인 일관됨",
+    "chainBroken": "seq {{seq}}에서 체인 끊김",
+    "reverifyHint": "각 이벤트에는 seq · hash · prev_hash가 있어 판독자가 오프라인에서 링크를 다시 확인할 수 있습니다.",
+    "attestedSeq": "seq {{seq}}까지 증명됨",
+    "headSeq": "원장 헤드 seq {{seq}}"
+  },
+  "consent": {
+    "registered": "등록됨",
+    "authorized": "승인됨",
+    "revoked": "취소됨",
+    "notAuthorizedHint": "등록은 동의가 아닙니다 — 대상이 승인될 때까지 실행이 차단됩니다."
+  },
+  "risk": {
+    "unacceptable": "수용 불가",
+    "high": "높음",
+    "limited": "제한적",
+    "minimal": "최소",
+    "suggested": "제안됨",
+    "approved": "승인됨",
+    "overridden": "재정의됨"
+  },
+  "control": {
+    "satisfied": "충족됨",
+    "by_design": "설계 준비됨",
+    "partial": "부분",
+    "gap": "공백",
+    "unmapped": "매핑 안 됨",
+    "operational": "운영",
+    "architectural": "아키텍처"
+  },
+  "hash": {
+    "fingerprint": "지문",
+    "hint": "단방향 지문이며 페이로드가 아닙니다(최소 데이터).",
+    "copy": "전체 값 복사",
+    "copied": "복사됨"
+  },
+  "notices": {
+    "truncated": "부분 데이터",
+    "truncatedHint": "이 집계가 스캔 상한에 도달했습니다 — 정확한 총계가 아니라 부분입니다.",
+    "truncatedBrief": "스캔 상한 도달",
+    "seam": "아직 연결되지 않음",
+    "seamBody": "선언된 계약 — {{what}}이(가) 아직 백엔드에 연결되지 않아 실제 데이터가 아닌 선언된 형태를 표시합니다.",
+    "minimalData": "집계 및 메타데이터만 포함 — 프롬프트, 출력 또는 비밀 없음.",
+    "declared": "선언된 참조",
+    "noConnector": "커넥터 없음 — 0이 아니라 부재.",
+    "listTruncated": "행 {{n}}개를 불러왔으며 더 있습니다",
+    "listTruncatedHint": "엔진이 전체 집합이 아닌 한 페이지를 반환했습니다. 불러온 행에서 총계를 추론할 수 없으며 표시되지 않은 행이 존재할 수 있습니다.",
+    "listTruncatedBrief": "한 페이지 로드됨, 더 있음"
+  },
+  "badges": {
+    "signed": "서명됨",
+    "linked": "관리 연쇄",
+    "governed": "거버넌스됨",
+    "ungoverned": "거버넌스 안 됨",
+    "approximate": "근사치",
+    "attributed": "귀속됨",
+    "isolated": "격리됨",
+    "destroyed": "파괴됨"
+  },
+  "timeline": {
+    "title": "재구성된 타임라인",
+    "empty": "기간 내 이벤트 없음.",
+    "emptyHint": "엔진이 기록하는 대로 증거 이벤트가 여기에 표시됩니다. 더 오래된 이벤트에 도달하려면 기간을 넓히십시오.",
+    "seq": "seq"
+  },
+  "consumption": {
+    "projected": "예상 {{pct}}",
+    "label": "예산 소비",
+    "valueText": "{{consumed}} 소비, {{projected}} 예상"
+  },
+  "disclaimers": {
+    "aimsPack": "Olivares AI의 현재 평가와 운영자 제공 컨텍스트를 기반으로 한 ISO/IEC 42001:2023 인증 준비 초안 팩입니다. 모든 산출물은 초안이며, 인증 기관, 감사자 또는 구매자에게 제출하기 전에 유능한 사람이 검토해야 합니다. 이 팩은 인증, 적합성 보증 또는 법률 자문을 제공하지 않습니다. 인증에는 공인 기관(ISO/IEC 42006:2025)이 필요합니다. 제어 상태는 현재 테넌트 증거를 반영하며 공백은 충족되지 않은 상태입니다.",
+    "report": "관측된 플랫폼 증거에서 도출된 기술 제어 상태 매핑입니다. 인증이 아니며 법률 자문도 아닙니다."
+  },
+  "gate": {
+    "approved": "승인됨",
+    "pending": "대기 중",
+    "rejected": "거부됨",
+    "expired": "만료됨",
+    "no_gate": "게이트 없음",
+    "not_required": "필요 없음",
+    "approvedHint": "거버넌스가 이 계획을 승인했습니다 — 계속하려면 실행하십시오.",
+    "pendingHint": "거버넌스 결정을 기다리는 중입니다(기본 거부).",
+    "rejectedHint": "거버넌스가 이 계획을 거부했습니다 — 새 계획으로 다시 요청하십시오.",
+    "expiredHint": "승인이 만료되었습니다 — 다시 계획하고 요청하십시오.",
+    "no_gateHint": "승인 게이트가 구성되지 않았습니다 — 작업을 진행할 수 없습니다.",
+    "not_requiredHint": "이 작업에는 승인이 필요하지 않습니다.",
+    "displayNotice": "게이트 상태는 여기에만 표시되는 보고된 결정입니다. 권한 부여는 서버 측에서 강제되며 콘솔은 이 값으로 액세스를 부여하지 않습니다."
+  }
+}

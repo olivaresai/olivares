@@ -12,18 +12,20 @@ import (
 
 func newReportingSigningCmd(flags *authClientFlags) *cobra.Command {
 	root := &cobra.Command{
-		Use: "signing", Short: "Manage evidence bundle signing in the engine",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "signing", Short: "Manage evidence bundle signing in the engine",
 		Long:    "signing manages the deployment's reporting key through your authenticated engine context. A system administrator can enable or disable signing without a restart. The engine creates and encrypts the private key; status shows only the public key. Existing startup file configuration is a legacy fallback until a product setting is recorded.",
 		Example: "  olivares reporting signing status\n  olivares reporting signing enable\n  olivares reporting signing disable",
 	}
-	for _, entry := range []struct{ verb, short, long string }{
-		{"enable", "Turn on evidence bundle signing", "Enable creates a dedicated reporting key in the engine when needed, stores it encrypted, and applies signing immediately without a restart. It reuses an existing managed key."},
-		{"status", "Show evidence bundle signing and its public key", "Status reads the engine's reporting signing setting and public verification key. It does not change the key or return private key material."},
-		{"disable", "Turn off evidence bundle signing", "Disable applies immediately without a restart. It preserves the managed key for re-enable and verification of earlier bundles."},
+	for _, entry := range []struct{ verb, short, long, changesData string }{
+		{"enable", "Turn on evidence bundle signing", "Enable creates a dedicated reporting key in the engine when needed, stores it encrypted, and applies signing immediately without a restart. It reuses an existing managed key.", "write"},
+		{"status", "Show evidence bundle signing and its public key", "Status reads the engine's reporting signing setting and public verification key. It does not change the key or return private key material.", "read"},
+		{"disable", "Turn off evidence bundle signing", "Disable applies immediately without a restart. It preserves the managed key for re-enable and verification of earlier bundles.", "write"},
 	} {
 		verb := entry.verb
 		cmd := &cobra.Command{
-			Use: verb, Short: entry.short, Args: cobra.NoArgs,
+			Annotations: map[string]string{"changes_data": entry.changesData},
+			Use:         verb, Short: entry.short, Args: cobra.NoArgs,
 			Long:    entry.long,
 			Example: "  olivares reporting signing " + verb,
 			RunE: func(cmd *cobra.Command, _ []string) error {

@@ -34,7 +34,8 @@ type drRestoreStatus struct {
 func drRestoreStatusCmd() *cobra.Command {
 	var sf drFlags
 	cmd := &cobra.Command{
-		Use: "restore-status", Short: "Read the destination's restore controls without opening the engine",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "restore-status", Short: "Read the destination's restore controls without opening the engine",
 		Long: "Read durable restore controls without loading signing keys or migrating the store.\n" +
 			"An unenrolled destination has no verified restore completion. This observation\n" +
 			"does not authorize a later boot or prove that the recorded signing keys are available.",

@@ -30,6 +30,9 @@ var (
 	ErrMCPGatewayInvalid     = errors.New("invalid MCP gateway configuration")
 	ErrMCPGatewayFileOwned   = errors.New("MCP gateway configuration is owned by the operator file")
 	ErrMCPGatewayUnavailable = errors.New("MCP gateway configuration unavailable")
+	// ErrMCPGatewayNameTaken is a conflict: a tenant has one server per name, so
+	// a second one is refused and never replaces or joins the first.
+	ErrMCPGatewayNameTaken = errors.New("MCP server name is already in use")
 )
 
 const mcpGatewayRosterName = "mcp-gateway"
@@ -304,6 +307,19 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 	// meaning every session of the tenant), the previous ones and the new pin.
 	assignment := map[string]any{}
 	return s.mutate(ctx, actor, tenant, version, action, id, func(cfg *MCPGatewayConfig) error {
+		// Only a new or renamed server can take a held name: a roster that already
+		// holds two servers of one name keeps both editable, so either can be turned off.
+		renamed := create
+		for _, old := range cfg.Servers {
+			if old.ID == id {
+				renamed = !strings.EqualFold(old.Name, in.Name)
+			}
+		}
+		for _, held := range cfg.Servers {
+			if renamed && held.ID != id && strings.EqualFold(held.Name, in.Name) {
+				return fmt.Errorf("%w: %q is held by server %s", ErrMCPGatewayNameTaken, in.Name, held.ID)
+			}
+		}
 		if create && len(in.Targets) > 0 {
 			assignment["targets"] = in.Targets
 		}

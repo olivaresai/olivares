@@ -104,11 +104,10 @@ func (f *hookPEPFixture) hookCallNoToolUseID(t *testing.T, tool string, input ma
 // TestHookPEP_F02_AbsentToolUseIDIsStrictSingleUse is the-FIX BLOCKER repro: the
 // adversarial path the FIRST fix left open. A destructive tool-call that carries NO
 // tool_use_id (the CLI payload) must be STRICTLY single-use — the approval is spent on the
-// first execution and ANY later call (no id, same session+args, well inside the ~24h
-// window) is denied would-replay. It is RED on the pre-fix decider (the consumer fell back
-// to the constant plan hash → the second call hit result-idempotency and was ALLOWED) and
-// GREEN after: with no non-forgeable transport id, the PEP mints a fresh server-side nonce
-// per call, so the second consume is a would-replay DENY.
+// first execution, and a later call (no id, same session+args, inside the ~24h window) must
+// not be allowed on that spent approval; it opens a new human request. It is RED on the
+// pre-fix decider (the consumer fell back to the constant plan hash → the second call hit
+// result-idempotency and was ALLOWED).
 func TestHookPEP_F02_AbsentToolUseIDIsStrictSingleUse(t *testing.T) {
 	h := newHarness(t)
 	agentTok := h.firmAgentToken(t, "agent-f02-noid@e2e.test")
@@ -141,23 +140,24 @@ func TestHookPEP_F02_AbsentToolUseIDIsStrictSingleUse(t *testing.T) {
 	}
 
 	// STEP 2 — THE BLOCKER: a SECOND call with NO tool_use_id (same session+args, well
-	// inside the ~24h window) MUST be denied would-replay. The pre-fix decider ALLOWED this
-	// (consumer = constant plan hash → result-idempotency), reopening F-02 trivially and
-	// automatically under the CLI.
+	// inside the ~24h window) must NOT be allowed on the spent approval. It opens a NEW
+	// request for a human and asks again (6f7476f19 pins this: a spent grant is not handed
+	// to a call without a transport id). The pre-fix decider ALLOWED this (consumer =
+	// constant plan hash → result-idempotency), reopening F-02 trivially under the CLI.
 	out = f.hookCallNoToolUseID(t, "Bash", destructive, agentTok, h.tenantA)
-	if got := decisionOf(out); got != claude.DecisionDeny {
-		t.Fatalf("single-use blocker: a SECOND tool-call with NO tool_use_id MUST be denied "+
-			"(strict single-use), got %q (%v) — the single-use human approval was replayed", got, out)
+	if got := decisionOf(out); got == claude.DecisionAllow {
+		t.Fatalf("single-use blocker: a SECOND tool-call with NO tool_use_id was ALLOWED on the "+
+			"spent approval — the single-use human approval was replayed (%v)", out)
 	}
-	if reason, _ := out["permissionDecisionReason"].(string); !strings.Contains(reason, "replay") {
-		t.Fatalf("the deny must name the replay, got %q", reason)
+	if got := decisionOf(out); got != claude.DecisionAsk {
+		t.Fatalf("the second call must open a fresh human request (ask), got %q (%v)", got, out)
+	}
+	if second := h.firstPendingApproval(t, hookpep.ActionCapability); second == "" || second == id {
+		t.Fatalf("the second call must open a NEW pending approval, got %q (spent approval %q)", second, id)
 	}
 
-	// STEP 3 — the signed ledger carries the would-replay-denied event (the evidence leg).
+	// STEP 3 — the signed ledger carries the single-use spend (the evidence leg).
 	actions := h.tenantLedgerActions(t, f.tenant)
-	if !actions["governance.approval.replay_denied"] {
-		t.Fatal("a would-replay must leave a governance.approval.replay_denied event in the signed ledger")
-	}
 	if !actions["governance.approval.consume"] {
 		t.Fatal("the single-use spend must leave a governance.approval.consume event in the signed ledger")
 	}

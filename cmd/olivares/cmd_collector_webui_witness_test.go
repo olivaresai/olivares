@@ -14,10 +14,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/webui"
 )
 
 func TestCollectorArgvWitnessEntersLoopAndHonorsCancellation(t *testing.T) {
+	withEditionName(t, "enterprise")
 	t.Setenv("OLIVARES_SOURCES_CONFIG", "")
 	t.Setenv("OLIVARES_INGEST_TOKEN", "")
 
@@ -45,7 +47,53 @@ func TestCollectorArgvWitnessEntersLoopAndHonorsCancellation(t *testing.T) {
 	}
 }
 
+// The edge collector is a Business capability: a Community binary answers with the
+// edition sentence and exit code 9, before it reads a token or dials a core.
+func TestCollectorCommunityRefusesWithBusinessSentence(t *testing.T) {
+	withEditionName(t, "community")
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(previousLogger)
+
+	root := newRootCmd()
+	root.SetContext(context.Background())
+	root.SetArgs([]string{"collector", "--core-addr", "127.0.0.1:1", "--insecure", "--token-file", filepath.Join(t.TempDir(), "missing-token")})
+	_, err := root.ExecuteC()
+	if err == nil {
+		t.Fatal("Community ran the edge collector")
+	}
+	if got := exitcode.From(err); got != exitcode.Edition {
+		t.Errorf("exit code = %d, want %d (Edition): %v", got, exitcode.Edition, err)
+	}
+	if want := "The edge collector is a Business feature: " + pricingURL; err.Error() != want {
+		t.Errorf("error = %q, want %q", err, want)
+	}
+	if strings.Contains(logs.String(), "collector:") {
+		t.Errorf("Community collector logged before refusing:\n%s", logs.String())
+	}
+}
+
+// A bare `olivares collector` has no --core-addr yet: Community still answers with the
+// Business sentence and exit code 9, not the usage error.
+func TestCollectorCommunityRefusesBeforeRequiredFlags(t *testing.T) {
+	withEditionName(t, "community")
+	root := newRootCmd()
+	root.SetArgs([]string{"collector"})
+	_, err := root.ExecuteC()
+	if err == nil {
+		t.Fatal("Community ran the edge collector")
+	}
+	if got := exitcode.From(err); got != exitcode.Edition {
+		t.Errorf("exit code = %d, want %d (Edition): %v", got, exitcode.Edition, err)
+	}
+	if want := "The edge collector is a Business feature: " + pricingURL; err.Error() != want {
+		t.Errorf("error = %q, want %q", err, want)
+	}
+}
+
 func TestCollectorArgvWitnessMissingCoreAddressDoesNotStart(t *testing.T) {
+	withEditionName(t, "enterprise")
 	missingToken := filepath.Join(t.TempDir(), "missing-token")
 	root := newRootCmd()
 	root.SetArgs([]string{"collector", "--token-file", missingToken, "--insecure"})

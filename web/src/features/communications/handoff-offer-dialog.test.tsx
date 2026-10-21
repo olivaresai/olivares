@@ -207,7 +207,9 @@ describe('the exact selected-workspace match', () => {
       <HandoffOfferHost target={target} readItem={readItem} />
     ))
     expect(
-      await screen.findByText(/carried no ETag, so there is no precondition/i),
+      await screen.findByText(
+        /read without a version, so there is nothing to check/i,
+      ),
     ).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review offer' })).toBeDisabled()
   })
@@ -474,7 +476,7 @@ describe('the offer is independent of the directory and of the work permissions'
       <HandoffOfferHost target={target} readItem={readItem} />
     ))
     expect(
-      await screen.findByText(/requires sessions:message-send:write/i),
+      await screen.findByText(/Your role cannot offer a handoff/i),
     ).toBeVisible()
     expect(screen.getByRole('button', { name: 'Review offer' })).toBeDisabled()
   })

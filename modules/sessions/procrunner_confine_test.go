@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -346,4 +347,63 @@ func TestReadOnlyFolderIsNotReopenedByRunnerOrDeviceGrants(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The runner offers the private directory it names HOME to the launch's ScratchHome hook
+// while the directory already exists, and only when the spec named no HOME.
+func TestProcRunnerScratchHomeIsTheDirectoryNamedHOME(t *testing.T) {
+	policy := func() *confine.Policy { return &confine.Policy{ReadWrite: []string{t.TempDir()}} }
+	homeOf := func(env []EnvVar) string {
+		for _, e := range env {
+			if e.Name == envUserHome {
+				return e.Value
+			}
+		}
+		return ""
+	}
+	t.Run("unnamed", func(t *testing.T) {
+		var offered string
+		var existed bool
+		spec := LaunchSpec{Program: "/bin/true", Dir: t.TempDir(), Confinement: policy(),
+			ScratchHome: func(home string) error {
+				offered = home
+				info, err := os.Stat(home)
+				existed = err == nil && info.IsDir()
+				return nil
+			}}
+		_, env, _, release, err := (&procRunner{}).command(t.Context(), spec)
+		if err != nil {
+			t.Fatalf("command: %v", err)
+		}
+		defer release()
+		if offered == "" || offered != homeOf(env) || !existed {
+			t.Fatalf("offered %q (existed=%v), HOME %q; want the existing directory that is HOME", offered, existed, homeOf(env))
+		}
+	})
+	t.Run("named", func(t *testing.T) {
+		called := false
+		spec := LaunchSpec{Program: "/bin/true", Dir: t.TempDir(), Confinement: policy(),
+			Env:         []EnvVar{{Name: envUserHome, Value: t.TempDir()}},
+			ScratchHome: func(string) error { called = true; return nil }}
+		_, _, _, release, err := (&procRunner{}).command(t.Context(), spec)
+		if err != nil {
+			t.Fatalf("command: %v", err)
+		}
+		defer release()
+		if called {
+			t.Fatal("the hook was offered a directory the spec had already named HOME")
+		}
+	})
+	t.Run("refused", func(t *testing.T) {
+		var offered string
+		spec := LaunchSpec{Program: "/bin/true", Dir: t.TempDir(), Confinement: policy(),
+			ScratchHome: func(home string) error { offered = home; return errors.New("no decoys, no session") }}
+		cmd, _, _, release, err := (&procRunner{}).command(t.Context(), spec)
+		if err == nil || cmd != nil || release != nil {
+			t.Fatalf("command = %v, %v, %v; want the hook's refusal and nothing to start", cmd, release != nil, err)
+		}
+		if _, statErr := os.Stat(offered); !os.IsNotExist(statErr) {
+			t.Fatalf("the private directory of a refused launch was left behind: %v", statErr)
+		}
+	})
 }

@@ -38,7 +38,7 @@ import type {
 } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
-import { formatDuration, formatInt } from '@/lib/format'
+import { formatDuration, formatInt, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import './i18n'
 
@@ -213,6 +213,20 @@ function ActivityBody({
   const running = (items: { state: ActivityState }[]) =>
     items.filter((i) => i.state === 'running').length
 
+  let contextUsage = t('activity.contextUnknown', {
+    tokens: formatInt(a.context_tokens),
+  })
+  if (a.context_window != null && a.context_window > 0) {
+    contextUsage =
+      a.context_percent != null
+        ? t('activity.contextUsage', {
+            tokens: formatInt(a.context_tokens),
+            percent: formatPercent(a.context_percent, { digits: 1 }),
+            window: formatInt(a.context_window),
+          })
+        : `${formatInt(a.context_tokens)} / ${formatInt(a.context_window)}`
+  }
+
   return (
     <div data-testid="session-activity" className="flex flex-col gap-3">
       {a.transcript === 'missing' ? (
@@ -359,9 +373,7 @@ function ActivityBody({
             {a.effort ? ` · ${a.effort}` : ''}
           </dd>
           <dt className="text-muted-foreground">{t('activity.tokens')}</dt>
-          <dd className="tabular-nums text-foreground">
-            {formatInt(a.context_tokens)}
-          </dd>
+          <dd className="tabular-nums text-foreground">{contextUsage}</dd>
           <dt className="text-muted-foreground">{t('activity.compactions')}</dt>
           <dd className="text-foreground">
             {a.compactions.length
@@ -401,6 +413,7 @@ function ActivityBody({
 
 function TaskRow({ task }: { task: ActivityTaskDTO }) {
   const { t } = useTranslation('sessions')
+  const workflow = task.workflow
   const Icon = TASK_ICON[task.kind] ?? Terminal
   const time = elapsed(task)
   return (
@@ -437,6 +450,53 @@ function TaskRow({ task }: { task: ActivityTaskDTO }) {
           {task.summary}
         </p>
       ) : null}
+      {workflow ? (
+        <div className="pl-9 text-caption">
+          {workflow.agents_total > 0 ? (
+            <p aria-live="polite" className="text-muted-foreground">
+              {t('activity.workflowProgress', {
+                done: workflow.agents_done,
+                total: workflow.agents_total,
+              })}
+            </p>
+          ) : null}
+          {workflow.phases.length ? (
+            <ol
+              aria-label={t('activity.workflowPhases')}
+              className="mt-1 flex flex-col gap-1"
+            >
+              {workflow.phases.map((phase) => (
+                <li key={phase.index}>
+                  <div className="flex items-center gap-1.5">
+                    {phase.state ? (
+                      <StateGlyph state={phase.state} />
+                    ) : (
+                      <Circle
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                      />
+                    )}
+                    <span className="min-w-0 break-words text-foreground">
+                      {phase.title}
+                    </span>
+                  </div>
+                  {phase.agents_total > 0 ? (
+                    <p className="pl-5 text-muted-foreground">
+                      {t('activity.workflowProgress', {
+                        done: phase.agents_done,
+                        total: phase.agents_total,
+                      })}
+                    </p>
+                  ) : null}
+                  {phase.detail ? (
+                    <p className="pl-5 text-muted-foreground">{phase.detail}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -445,7 +505,9 @@ function AgentRow({ run, agent }: { run: RunDTO; agent: ActivityAgentDTO }) {
   const { t } = useTranslation('sessions')
   const [open, setOpen] = useState(false)
   const time = elapsed(agent)
-  const agentId = agent.agent_id
+  // Codex reports the child state in its root rollout; child transcript reads
+  // are currently offered only for Claude's per-session subagents directory.
+  const agentId = run.provider_driver === 'claude' ? agent.agent_id : undefined
   return (
     <div className="flex flex-col py-0.5" data-testid="activity-agent">
       <button

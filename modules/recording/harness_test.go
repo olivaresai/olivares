@@ -150,7 +150,19 @@ type harness struct {
 	setupTok string
 }
 
+// newHarness is the module as a Business engine composes it.
 func newHarness(t *testing.T, opts ...recording.Option) *harness {
+	t.Helper()
+	return newEditionHarness(t, append([]recording.Option{recording.WithBusinessEdition()}, opts...)...)
+}
+
+// newCommunityHarness is the module as a Community engine composes it: no Business edition.
+func newCommunityHarness(t *testing.T) *harness {
+	t.Helper()
+	return newEditionHarness(t)
+}
+
+func newEditionHarness(t *testing.T, opts ...recording.Option) *harness {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()

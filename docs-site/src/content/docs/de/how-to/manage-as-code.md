@@ -99,7 +99,7 @@ Engine auditiert jede Mutation mit dem echten Akteur.
 `olivares_deployment` verwaltet eine Deployment-**Definition** — deklarativer,
 versionierter Soll-Zustand. Sie wird auf Modul VII (Deploy) abgebildet, dessen
 Live-Aktuierung eine **deny-closed-Naht** ist: Bis ein Executor bereitgestellt ist, *plant
-und governt* die Engine ein Deployment, aber **`apply`/`retire` liefern `503`** zurück,
+und governt* die Engine ein Deployment, aber **`apply`/`retire` liefern `503`** zurück (Business; Community antwortet auf jede Deploy-Route mit `501`),
 statt auf Infrastruktur einzuwirken. Eine `olivares_deployment`-Ressource erfasst und
 governt heute also Absicht; sie gleicht für sich genommen keine reale Infrastruktur ab.
 Siehe [Modul VII](/de/reference/modules/vii-deploy/) und

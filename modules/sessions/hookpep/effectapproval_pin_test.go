@@ -22,6 +22,13 @@ type pinBridge struct {
 	granted, replay    bool
 
 	opened, sessions, scoped, spent []string
+	unspent                         int // lookups that asked for an unspent grant
+}
+
+// GateUnspentForSession answers as GateOnceForSession does and counts the ask.
+func (b *pinBridge) GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (string, string, string, error) {
+	b.unspent++
+	return b.GateOnceForSession(ctx, tenant, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef)
 }
 
 func (b *pinBridge) GateOnceForSession(_ context.Context, _ model.TenantID, action, subjectKind, subjectRef, planHash, _, _, sessionRef string) (string, string, string, error) {
@@ -81,6 +88,17 @@ func TestPinHookHITLApprovalOutcomes(t *testing.T) {
 				t.Fatalf("opened %q", got)
 			}
 			assertPinSpend(t, tc.bridge.spent, tc.spend)
+			// A call under its own tool_use_id may retry inside the engine's window and keeps
+			// the lookup that finds its spent grant. A call without one spends under a fresh
+			// nonce and never matches an earlier spend, so it must not be handed one: a spent
+			// grant opens a new request for a human instead of a replay denial.
+			wantUnspent := 0
+			if tc.toolUseID == "" {
+				wantUnspent = 1
+			}
+			if tc.bridge.unspent != wantUnspent {
+				t.Fatalf("unspent lookups = %d, want %d", tc.bridge.unspent, wantUnspent)
+			}
 		})
 	}
 	res := (&Decider{}).gateViaHITL(context.Background(), model.TenantID("t"), claude.HookDecisionInput{Tool: "Bash", PlanHash: "plan-1"}, hookDisposition{}, "agent:a", "firm", "v7")

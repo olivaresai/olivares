@@ -100,7 +100,7 @@ describe('assurance step-up i18n', () => {
 
 // Reading registered resource keys does not import the feature's i18n registrar;
 // the self-registration counterfactual at the top of this file remains intact.
-describe('seven-locale enrollment copy', () => {
+describe('nine-locale enrollment copy', () => {
   afterEach(async () => {
     await act(async () => {
       await i18n.changeLanguage('en')

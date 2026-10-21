@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import {
+  apiFetchRaw,
   http,
   type RequestOptions,
   type TenantRequestOptions,
@@ -45,7 +46,10 @@ import type {
   RunWorktreeDiffDTO,
   RunWorktreeDiffFileDTO,
   RunActivityDTO,
+  RunMessagesDTO,
+  RunMessagesParams,
   RunDTO,
+  RunPinDTO,
   RunEventDTO,
   HandoffPreviewDTO,
   HandoffRunRequest,
@@ -68,15 +72,15 @@ import type {
  * Workspace root_path/state filters apply before the limit. File listings
  * are keyset-paginated (cursor + has_more).
  *
- * The two run filters are NOT the same kind of filter, and the difference is visible
- * from here (modules/sessions/runtime_api.go:80):
- *  - `state` narrows the PAGE after it is read, so it answers "…among the N most
- *    recent runs". For a facet over a list the operator is already scrolling, that is
- *    a narrowing they can see.
- *  - `claude_session_id` narrows the STORE, so it answers "…among all runs".
- *    It has to: it is how a session card learns whether Olivares LAUNCHED this session
- *    or merely FOUND it, and a page-bound answer would report "discovered" for a
- *    session whose run has simply scrolled off.
+ * Every run filter narrows the STORE (modules/sessions/runtime_api.go, handleListRuns),
+ * so each answers "…among all runs", never "…among the N most recent":
+ *  - `state` and `provider_profile_ref` (the account), so a count of the running
+ *    sessions of one account holds for a session older than the newest page. The
+ *    displayed `running` and `idle` are both stored as running; the engine derives
+ *    which one a run shows, over every stored-running run.
+ *  - `claude_session_id` is how a session card learns whether Olivares
+ *    LAUNCHED this session or merely FOUND it; a page-bound answer would report
+ *    "discovered" for a session whose run has simply scrolled off.
  */
 const RUNS = '/v1/m/sessions/runs'
 const WORKSPACES = '/v1/m/sessions/workspaces'
@@ -223,6 +227,47 @@ export const agentOpsApi = {
         : { text, work_lease_fence: workLeaseFence },
       options,
     ),
+  /**
+   * Store one image with the session (201). It is sent with the next message by the id
+   * this returns; the engine refuses a type it does not take, a file over the tool's
+   * limit, and a tool that takes no images, before anything is sent.
+   */
+  uploadAttachment: (
+    r: string,
+    body: { media_type: string; data: string },
+    options?: RequestOptions,
+  ) =>
+    http.post<{ id: string; media_type: string; size_bytes: number }>(
+      `${RUNS}/${ref(r)}/attachments`,
+      body,
+      options,
+    ),
+  /** One stored image, as the engine serves it (the console cannot put its tenant and
+   * token on an <img>, so the bytes come through the authenticated client). */
+  attachmentImage: async (
+    r: string,
+    id: string,
+    options?: Pick<RequestOptions, 'signal'>,
+  ): Promise<Blob> => {
+    const res = await apiFetchRaw(
+      `${RUNS}/${ref(r)}/attachments/${encodeURIComponent(id)}`,
+      { ...options, method: 'GET' },
+    )
+    return res.blob()
+  },
+  /** Send one message with stored images (202). The engine encodes it for the
+   * session's tool; a work-bound session takes none. */
+  inputWithAttachments: (
+    r: string,
+    text: string,
+    attachments: string[],
+    options?: RequestOptions,
+  ) =>
+    http.post<{ accepted: boolean }>(
+      `${RUNS}/${ref(r)}/input`,
+      { text, attachments },
+      options,
+    ),
   /** Cancel the active turn while retaining the owned process and conversation.
    * Work-bound runs must present the fence observed on that exact run. */
   interrupt: (r: string, workLeaseFence?: number) =>
@@ -334,6 +379,11 @@ export const agentOpsApi = {
         : { work_lease_fence: workLeaseFence },
     ),
   resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
+  /** Pin the session for the signed-in person, or unpin it: their own mark, kept on the
+   * server so it follows them to another browser. Both are idempotent. */
+  pin: (r: string, opts?: Pick<RequestOptions, 'tenant'>) =>
+    http.post<RunPinDTO>(`${RUNS}/${ref(r)}/pin`, undefined, opts),
+  unpin: (r: string) => http.delete<RunPinDTO>(`${RUNS}/${ref(r)}/pin`),
   /** Rebinds a stopped session to another profile of its tool, carrying the tool's own
    * conversation state. Starts nothing; the next resume is the ordinary one. */
   move: (r: string, profileRef: string) =>
@@ -344,6 +394,17 @@ export const agentOpsApi = {
    * tasks, changed files, its task list and its context. Read-only. */
   activity: (r: string, opts?: { signal?: AbortSignal }) =>
     http.get<RunActivityDTO>(`${RUNS}/${ref(r)}/activity`, {
+      signal: opts?.signal,
+    }),
+  /** The session's messages from the transcript its tool keeps (#2129): the index of what
+   * the person sent, a phrase search, a start time, one message whole by `id`. Paged. */
+  messages: (
+    r: string,
+    params?: RunMessagesParams,
+    opts?: { signal?: AbortSignal },
+  ) =>
+    http.get<RunMessagesDTO>(`${RUNS}/${ref(r)}/messages`, {
+      query: { ...params },
       signal: opts?.signal,
     }),
   /** One subagent's transcript, in plain turns. */
@@ -393,8 +454,9 @@ export const agentOpsApi = {
    * login when signed in, otherwise a key or local model from Providers): the
    * readiness reads its answer for every tool, the resolve acts on it. Clients never
    * choose. */
-  toolsReadiness: (opts?: { signal?: AbortSignal }) =>
+  toolsReadiness: (opts?: Pick<RequestOptions, 'tenant' | 'signal'>) =>
     http.get<{ tools: ToolReadinessDTO[] }>(`${PROFILES}/readiness`, {
+      tenant: opts?.tenant,
       signal: opts?.signal,
     }),
   /** The models and effort levels one profile's tool or bound provider reports now
@@ -561,6 +623,15 @@ export const agentOpsApi = {
   ) => http.post<WorkspaceDTO>(WORKSPACES, body, opts),
   deleteWorkspace: (r: string) =>
     http.delete<{ deleted: boolean }>(`${WORKSPACES}/${ref(r)}`),
+  initWiki: (
+    r: string,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
+  ) =>
+    http.post<{ workspace_ref: string; created: string[] }>(
+      `${WORKSPACES}/${ref(r)}/wiki`,
+      undefined,
+      opts,
+    ),
   /** Replaces the whole list; [] removes every folder. The answer is the workspace as saved. */
   setWorkspaceReadOnlyFolders: (r: string, folders: string[]) =>
     http.patch<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`, {
@@ -568,25 +639,45 @@ export const agentOpsApi = {
     }),
 
   // --- Files (jailed, DLP-labelled) --------------------------------------------
-  listFiles: (r: string, params?: FileListParams) =>
+  listFiles: (r: string, params?: FileListParams, scope?: AgentOpsReadScope) =>
     http.get<FileListResponse>(`${WORKSPACES}/${ref(r)}/files`, {
       query: { ...params },
+      tenant: scope?.tenant,
+      signal: scope?.signal,
     }),
-  statFile: (r: string, path: string) =>
+  statFile: (r: string, path: string, scope?: AgentOpsReadScope) =>
     http.get<FileEntry>(`${WORKSPACES}/${ref(r)}/files/stat`, {
       query: { path },
+      tenant: scope?.tenant,
+      signal: scope?.signal,
     }),
   /** A file's content, or with `rev: 'HEAD'` the content git HEAD holds for it (404: no
    * readable repository, or the file is not in HEAD). */
-  readFile: (r: string, path: string, rev?: 'HEAD') =>
+  readFile: (
+    r: string,
+    path: string,
+    rev?: 'HEAD',
+    scope?: AgentOpsReadScope,
+  ) =>
     http.get<FileReadResponse>(`${WORKSPACES}/${ref(r)}/files/raw`, {
       query: { path, rev },
+      tenant: scope?.tenant,
+      signal: scope?.signal,
     }),
   /** Write file content as RAW bytes (the API reads the body verbatim, never JSON). */
-  writeFile: (r: string, path: string, content: string) =>
+  writeFile: (
+    r: string,
+    path: string,
+    content: string | Blob,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
+  ) =>
     http.putRaw<WriteResponse>(`${WORKSPACES}/${ref(r)}/files/raw`, content, {
+      ...opts,
       query: { path },
-      contentType: 'text/plain; charset=utf-8',
+      contentType:
+        typeof content === 'string'
+          ? 'text/plain; charset=utf-8'
+          : 'application/octet-stream',
     }),
   mkdir: (r: string, path: string) =>
     http.post<FileEntry>(`${WORKSPACES}/${ref(r)}/files/dir`, undefined, {
@@ -638,8 +729,12 @@ export const agentOpsKeys = {
     ['agentops', tenant, 'run', r, 'changes'] as const,
   runActivity: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'activity'] as const,
+  runMessages: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'messages'] as const,
   runCommands: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'commands'] as const,
+  runAttachment: (tenant: string | null, r: string, id: string) =>
+    ['agentops', tenant, 'run', r, 'attachment', id] as const,
   runPreviewPorts: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'preview'] as const,
   runWorktreeDiff: (tenant: string | null, r: string) =>
@@ -662,6 +757,13 @@ export const agentOpsKeys = {
    */
   boundaryScope: (tenant: string | null, epoch: number) =>
     ['agentops', tenant, 'b', epoch] as const,
+  /** One workspace's wiki reads, under the authority boundary; `rest` narrows to one read. */
+  wiki: (
+    tenant: string | null,
+    epoch: number,
+    ref: string,
+    ...rest: readonly unknown[]
+  ) => ['agentops', tenant, 'b', epoch, 'wiki', ref, ...rest] as const,
   profiles: (
     tenant: string | null,
     epoch: number,

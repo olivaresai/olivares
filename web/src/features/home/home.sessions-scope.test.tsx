@@ -310,7 +310,13 @@ describe('HomeView — neither the Sessions nor the Inventory tile pretends the 
 
       renderIntel(<HomeView />)
 
-      expect(await screen.findByText(/Couldn't load/i)).toBeInTheDocument()
+      // The Today tile reads the same page and says it failed too (#2245), so the
+      // hint is looked for on this tile.
+      await waitFor(() =>
+        expect(
+          within(sessionsTile()).getByText(/Couldn't load/i),
+        ).toBeInTheDocument(),
+      )
       const tile = sessionsTile()
       expect(within(tile).getByText('—')).toBeInTheDocument()
       expect(within(tile).queryByText('0')).toBeNull()

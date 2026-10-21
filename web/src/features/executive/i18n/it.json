@@ -1,0 +1,129 @@
+{
+  "title": "Panoramica esecutiva",
+  "description": "Costi, utilizzo, rischio e compliance a colpo d'occhio: approfondisci nella vista operativa per i dettagli.",
+  "asOfNote": "Rischio, compliance e affidabilità riflettono lo stato attuale; i costi coprono l'intervallo selezionato.",
+  "range": {
+    "label": "Intervallo",
+    "7d": "Ultimi 7 giorni",
+    "30d": "Ultimi 30 giorni",
+    "90d": "Ultimi 90 giorni",
+    "mtd": "Da inizio mese"
+  },
+  "export": {
+    "action": "Esporta PDF",
+    "hint": "Stampa o salva questo report come PDF"
+  },
+  "report": {
+    "title": "Report esecutivo",
+    "generated": "Generato il {{date}}",
+    "generatedLabel": "Generato",
+    "tenant": "Organizzazione",
+    "allOrgs": "Tutte le organizzazioni",
+    "range": "Intervallo dei costi",
+    "footer": "Olivares AI: solo KPI aggregati; nessun payload né secret."
+  },
+  "empty": {
+    "title": "Nessun KPI esecutivo disponibile",
+    "description": "Non hai accesso in lettura a nessuna delle fonti di costi, rischio, compliance o affidabilità per questa organizzazione."
+  },
+  "restricted": {
+    "label": "Riservato",
+    "hint": "Il tuo ruolo non può leggere questa fonte."
+  },
+  "pillars": {
+    "cost": "Spesa",
+    "costCaption": "nell'intervallo selezionato",
+    "usage": "Agenti attivi",
+    "usageCaption": "{{live}} live · {{entities}} monitorati",
+    "sourceRestricted": "{{source}}: riservato al tuo ruolo",
+    "sourceUnavailable": "{{source}}: impossibile caricare",
+    "sourcePendingPaused": "{{source}}: query in pausa, in attesa di riprendere",
+    "sourcePendingIdle": "{{source}}: query non avviata",
+    "partialWhy": "Perché dati parziali?",
+    "risk": "Rischio aperto",
+    "riskCaption": "{{count}} critici/alti",
+    "silentEvasion": "{{count}} con elusione silenziosa",
+    "compliance": "Copertura dei controlli",
+    "complianceCaption": "{{gap}} lacune · {{unmapped}} non mappati"
+  },
+  "availability": {
+    "restricted": "{{source}}: riservato al tuo ruolo.",
+    "unavailable": "{{source}}: impossibile caricare.",
+    "pendingPaused": "{{source}}: query in pausa, in attesa di riprendere.",
+    "pendingIdle": "{{source}}: query non avviata.",
+    "loading": "{{source}}: caricamento.",
+    "partial": "{{source}}: cifre disponibili, dati parziali.",
+    "current": "{{source}}: cifre disponibili."
+  },
+  "cost": {
+    "title": "Costi",
+    "trendTitle": "Andamento della spesa",
+    "trendDescription": "Spesa giornaliera di token nell'intervallo selezionato.",
+    "seriesCost": "Spesa",
+    "forecast": "Previsione",
+    "atRunRate": "proiettato (andamento della finestra recente)",
+    "runRateNote": "Proiezione dall'andamento giornaliero della finestra recente, estesa al resto del periodo: non è un modello di previsione.",
+    "deltaUp": "{{pct}} rispetto al periodo precedente",
+    "deltaDown": "{{pct}} rispetto al periodo precedente",
+    "deltaFlat": "stabile rispetto al periodo precedente",
+    "tokens": "Token",
+    "samples": "Record di costo",
+    "models": "Modelli attivi",
+    "breakdownTitle": "Ripartizione della spesa",
+    "breakdownDescription": "Dove va la spesa: riepiloga per team, progetto, agente, modello o provider.",
+    "noAttribution": "Nessuna attribuzione per questa dimensione nell'intervallo selezionato."
+  },
+  "dimensions": {
+    "team": "Per team",
+    "project": "Per progetto",
+    "agent": "Per agente",
+    "model": "Per modello",
+    "provider": "Per provider"
+  },
+  "risk": {
+    "title": "Postura di rischio",
+    "description": "Rilevamenti di sicurezza aperti, robustezza agli attacchi e deriva degli accessi.",
+    "openFindings": "Rilevamenti aperti",
+    "bySeverity": "Rilevamenti per gravità",
+    "robustness": "Robustezza red-team",
+    "robustnessCaption": "ultima esecuzione completata",
+    "robustnessPending": "Esecuzione in sospeso",
+    "robustnessPendingHint": "L'ultima esecuzione red-team non ha potuto completare le sue prove: non è un esito positivo.",
+    "drift": "Deriva degli accessi",
+    "driftFirm": "Accessi imprevisti",
+    "driftPending": "In attesa del collegamento all'identità",
+    "driftUnused": "Concessioni inutilizzate",
+    "coverageNote": "Alcuni accessi sono osservati con copertura parziale (acquisizione approssimata od opaca); le cifre della deriva sono un limite inferiore.",
+    "driftTruncated": "La lettura della deriva è parziale; le cifre della deriva degli accessi sono un limite inferiore.",
+    "driftUnavailable": "Impossibile leggere la deriva degli accessi.",
+    "noFindings": "Nessun rilevamento aperto.",
+    "noRuns": "Ancora nessuna esecuzione red-team.",
+    "sharedDescription": "Rilevamenti di sicurezza aperti e deriva degli accessi."
+  },
+  "compliance": {
+    "title": "Compliance",
+    "description": "Stato dei controlli nei framework che monitori: copertura dei controlli, mai un'attestazione di conformità.",
+    "coverage": "Copertura dei controlli",
+    "ofControls": "su {{total}} controlli in {{frameworks}} framework",
+    "satisfied": "Soddisfatti",
+    "byDesign": "Per progettazione",
+    "partial": "Parziali",
+    "gap": "Lacune",
+    "unmapped": "Non mappati",
+    "frameworks": "Framework",
+    "riskTiers": "Livelli di rischio degli agenti",
+    "noFrameworks": "Ancora nessun framework mappato."
+  },
+  "reliability": {
+    "title": "Affidabilità",
+    "description": "Salute di agenti e MCP in questo momento, più gli incidenti aperti.",
+    "healthy": "Integri",
+    "degraded": "Degradati",
+    "down": "Non attivi",
+    "unknown": "Sconosciuti",
+    "slaBreaches": "Violazioni SLA aperte",
+    "incidents": "Incidenti aperti",
+    "nowNote": "La salute è un'istantanea del momento; \"sconosciuto\" significa che nessun controllo segue il soggetto: non significa integro.",
+    "noData": "Ancora nessun controllo di salute riporta dati."
+  }
+}

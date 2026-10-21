@@ -1,6 +1,6 @@
 {
-  "title": "アイデンティティと NHI",
-  "subtitle": "SSO、SCIM、アイデンティティインベントリ、NHI ライフサイクル、WIF グラフ、特権ログインを観測・統制・監査します。",
+  "title": "アイデンティティとアクセス",
+  "subtitle": "誰がサインインでき、何ができ、それをどう証明するか。",
   "sections": "アイデンティティのセクション",
   "groups": {
     "people": "ユーザー",
@@ -84,7 +84,7 @@
       "webauthn": "NIST SP 800-63B-4（認証器の保証レベル）",
       "certManager": "cert-manager（CNCF）",
       "pqc": "NIST SP 800-57 Part 1 r6（鍵管理）",
-      "wifReference": "Anthropic WIF リファレンス",
+      "wifReference": "Anthropic ワークロード ID の参照",
       "workloadIdentity": "Anthropic Workload Identity Federation",
       "externalKeys": "Anthropic External Keys（CMEK）",
       "workspaceUpdate": "Anthropic ワークスペースレジデンシー"
@@ -128,6 +128,7 @@
     "title": "SCIM 2.0 プロビジョニング",
     "description": "ユーザーとグループのインバウンドプロビジョニングです。サービスプロバイダー、同期されたユーザー、退職者の証拠を読み取り専用の状態として表示します。",
     "seamWhat": "SCIM サービスプロバイダーの構成",
+    "businessOnly": "受信側 SCIM サーバーには Business が必要です。組織からユーザーを外すには「ユーザー」を使います。",
     "patch": "PATCH",
     "filter": "フィルター",
     "filterMax": "サポート対象（最大 {{n}}）",
@@ -318,7 +319,7 @@
     "loadFailed": "この設定を読み込めませんでした。ページを再読み込みしてもう一度お試しください。",
     "note": "パスキーを必須にするには、まずここでパスキーでサインインしてください。認証コードを必須にするには、まずコードでサインインしてください。オフにする、または弱めるには、まず現在の確認を済ませてください。変更は数秒以内にすべてのサーバーで有効になります。",
     "refused": {
-      "passkey_not_enrolled": "先にアカウントにパスキーを追加してから (アイデンティティとNHI > パスキー)、オンにしてください。",
+      "passkey_not_enrolled": "先にアカウントにパスキーを追加してから (アイデンティティとアクセス > パスキー)、オンにしてください。",
       "totp_sign_in_required": "先に認証アプリを設定し、そのコードでサインインしてから、オンにしてください。"
     }
   },

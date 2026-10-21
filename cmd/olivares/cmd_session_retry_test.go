@@ -25,7 +25,7 @@ func TestSessionViewSaysWhyTheToolRetriesOnce(t *testing.T) {
 	for attempt := 1; attempt <= 10; attempt++ {
 		v.render(retry(attempt, 401, "authentication_failed"))
 	}
-	want := "✗ Claude Code's provider refused its credential (HTTP 401). Replace the API key in AI tools › API keys, " +
+	want := "✗ Claude Code's provider refused its credential (HTTP 401). Replace the API key in AI tools › Providers, " +
 		"or sign it in: olivares tool login claude\n"
 	if got := b.String(); got != want {
 		t.Fatalf("refused key =\n%q\nwant one line\n%q", got, want)

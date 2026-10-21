@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const DIR = 'src/features/console/i18n'
-const LOCALES = ['en', 'es', 'de', 'fr', 'ja', 'zh', 'ru'] as const
+const LOCALES = ['en', 'es', 'de', 'fr', 'it', 'ja', 'zh', 'ru', 'ko'] as const
 
 type LocaleFile = {
   license: { helpBody: string; communityNote: string }
@@ -43,6 +43,12 @@ const expected = {
     helpCommunity:
       'En Community, appliquer une licence vérifiée en affiche les détails ici ; cela ne modifie pas cette compilation.',
   },
+  it: {
+    communityNote:
+      'Edizione Community: applicare una licenza verificata ne mostra qui i dettagli; la build non cambia.',
+    helpCommunity:
+      'Su Community, applicare una licenza verificata ne mostra qui i dettagli; la build non cambia.',
+  },
   ja: {
     communityNote:
       'Community エディション: 検証済みライセンスを適用すると、その詳細がここに表示されます。このビルドは変わりません。',
@@ -61,6 +67,12 @@ const expected = {
     helpCommunity:
       'В Community применение проверенной лицензии показывает её сведения здесь; это не меняет эту сборку.',
   },
+  ko: {
+    communityNote:
+      'Community 에디션: 확인된 라이선스를 적용하면 여기에 세부 정보가 표시될 뿐 이 빌드는 바뀌지 않습니다.',
+    helpCommunity:
+      'Community에서는 확인된 라이선스를 적용하면 여기에 세부 정보가 표시될 뿐 이 빌드는 바뀌지 않습니다.',
+  },
 } as const
 
 const leftoverShown = [
@@ -70,14 +82,16 @@ const leftoverShown = [
   /eine verifizierte Lizenz wird angezeigt/i,
   /wird eine verifizierte Lizenz hier angezeigt/i,
   /une licence vérifiée s'affiche/i,
+  /una licenza verificata viene mostrata/i,
   /検証済みライセンスは表示され/,
   /显示已验证的许可证/,
   /已验证的许可证会显示在此/,
   /проверенная лицензия показывается/,
+  /확인된 라이선스가 여기에 표시됩니다/,
 ]
 
 describe('license copy honesty (CLC-R2)', () => {
-  it('covers the seven shipped console locales and no others', () => {
+  it('covers the nine shipped console locales and no others', () => {
     const files = readdirSync(DIR)
       .filter((name) => name.endsWith('.json'))
       .map((name) => name.replace(/\.json$/, ''))

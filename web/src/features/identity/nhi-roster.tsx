@@ -43,6 +43,9 @@ const NHI_KINDS = [
   'service_account',
   'federation_issuer',
   'secret_store',
+  'credential',
+  'agent_nhi',
+  'nhi',
 ] as const
 
 /** An account state the source never reported is unknown, not active. */

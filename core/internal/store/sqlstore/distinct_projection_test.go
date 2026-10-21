@@ -547,7 +547,7 @@ func TestDistinctProjectionSQLite(t *testing.T) {
 // is configured and fails when OLIVARES_TEST_POSTGRES_REQUIRED demands the leg.
 func TestDistinctProjectionPostgres(t *testing.T) {
 	pg := isolatedPGSplit(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	st, err := Open(ctx, store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner,

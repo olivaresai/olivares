@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
 :::
 
 Eine Control Plane für KI ist ein Sicherheitsprodukt. Wenn sie überzeichnet, was
@@ -47,7 +47,7 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
   [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
   Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
-  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.2<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.3<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
 
 ## Open Core — was offen ist vs. kommerziell
 
@@ -60,9 +60,10 @@ vorzutäuschen:
 
 - **SSO ist offen für einen einzelnen IdP.** Single-IdP-Login — **OIDC**
   (Authorization Code + PKCE) und **SAML 2.0** (signierte Responses, Anti-Replay) —
-  läuft im Standard-Binary **ohne** `-tags enterprise`, ebenso das eingehende
-  **SCIM**. **Mehr als einen aktiven IdP** zu betreiben (pro Tenant / nach Domain)
-  und die **SSO-Durchsetzung** (SSO-Pflicht / Passwort-Login blockieren) gehören zu
+  läuft im Standard-Binary **ohne** `-tags enterprise`.
+  **Mehr als einen aktiven IdP** zu betreiben (pro Tenant / nach Domain),
+  die **SSO-Durchsetzung** (SSO-Pflicht / Passwort-Login blockieren) und der eingehende
+  **SCIM**-Server gehören zu
   Business (Identity & Scale); das Aktivieren eines zweiten aktiven IdP gibt
   `multi_idp_requires_enterprise` zurück — eine explizite Produktgrenze, niemals ein
   vorgetäuschtes 501.
@@ -76,8 +77,8 @@ vorzutäuschen:
   eine Abrechnung pro Sitzplatz.
 - **Der Rest der Plattform ist offen.** Die gesamte Governance-Schleife — Inventar,
   die R/RW-Access-Map, RBAC-/ABAC-/Cedar-Policy, das versiegelte Audit-Ledger,
-  FinOps, Compliance, SIEM-Egress, MCP, HA/verteilt — läuft im offenen Binary ohne
-  Lizenzprüfung. Die additiven `enterprise/`-Module sind neuer Code, der nie im
+  FinOps, Compliance, SIEM-Egress, MCP — läuft im offenen Binary ohne
+  Lizenzprüfung. Aktiv-passives HA-Leader-Routing und der Edge-Collector sind Business. Die additiven `enterprise/`-Module sind neuer Code, der nie im
   offenen Produkt enthalten war, keine daraus entfernten Funktionen; welche Fähigkeit
   in welcher Edition liegt, steht nur einmal, in
   `docs/editions.md` im Repository. Die Lizenzvalidierung im offenen Binary ist **attestierungs-only** —
@@ -104,12 +105,12 @@ Progress**, sofern eine Seite nichts anderes angibt.
 - **Die kanonischen R/RW-Quellen sind im Standard-`serve` verdrahtet.** Die
   Composition-Root registriert die Observer auf Host-Ebene — `pgaudit`,
   `s3cloudtrail`, `ebpf`, `runtime` und die `mcp`-Introspektionsquelle — neben den
-  Warehouse-/Lake-Observern (snowflake/databricks/bigquery/mssql/oracle/mongo/redshift/gcs/
+  Warehouse-/Lake-Observern (snowflake/databricks/bigquery/mssql/mongo/redshift/gcs/
   azure-blob/iceberg/openlineage/delta-sharing), alle konfigurierbar über
   `OLIVARES_SOURCES_CONFIG` (der
   [Quickstart](/de/start/quickstart/) verdrahtet eine echte `pgaudit`-Quelle gegen das
   Standard-Binary, und der Smoke-Test überprüft das). Die
-  **Dokumentenquellen** der Wissensbasis (gdrive/confluence/notion/sharepoint/s3content)
+  **Dokumentenquellen** der Wissensbasis (gdrive/confluence/notion/s3content)
   sind bewusst *keine* Laufzeitquellen — sie werden bei Bedarf durch
   Knowledge-Ingest-Anfragen geladen. Die
   [Connectors-Referenz](/de/reference/connectors/) kennzeichnet jede Art.
@@ -118,7 +119,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   **In-Process**-Event-Bus. Der **Datenpfad vom Remote-Collector zum Core ist gebaut
   und ausgeliefert**: Edge-Collectors führen Source-Connectors lokal aus und pushen
   Beobachtungen über verified-client-cert-mTLS an einen zentralen Core, ohne
-  eingehenden Listener (der `collector`-Modus). Der **verteilte Event-Bus** wurde mit
+  eingehenden Listener (der `collector`-Modus, ein Business-Feature). Der **verteilte Event-Bus** wurde mit
   der Scale-out-Arbeit ausgeliefert: ein Hybrid, der das In-Process-Fan-out
   für die lokale Zustellung beibehält (blockierender Backpressure, kein lokaler
   Verlust) und Events über **NATS** über Knoten hinweg überbrückt, aktiviert durch
@@ -136,7 +137,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   (per Konstruktion isoliert). Mehrere weitere sind **on-demand verdrahtet** — das
   Backend ist gebaut und verdrahtet, bleibt aber **deny-closed oder degradiert, bis
   ein Operator es bereitstellt** via Env-Konfiguration: Modul VII (Deploy)
-  `apply`/`retire` (ein `503`, bis ein Executor bereitgestellt ist), Modul-IV-Orchestrierung
+  `apply`/`retire` (nur Business: in Community `501`, sonst ein `503`, bis ein Executor bereitgestellt ist), Modul-IV-Orchestrierung
   *fire* und Modul-XVI-Voice-Dispatch (beide deny-closed, bis ein Dispatcher
   konfiguriert ist), die OS-isolierte Sandbox-/Red-Team-Laufzeit (synthetisch /
   DEGRADED, bis bereitgestellt), modellgestütztes **semantisches** Retrieval (lexikalisch
@@ -162,7 +163,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   vermittelte Frontier-Modelle können das nicht.
 - **Modul-Routen sind ein separater, Beta-Vertrag.** Die Modul-Endpunkte (zum
   Beispiel der Access-Map-Graph und der Drift) sind nicht Teil des stabilen
-  128-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
+  {{core-paths}}-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
   die [Modul-Routen-Referenz](/reference/api-beta/) (ausgeliefert unter
   `/openapi.beta.json`). Beta bedeutet, dass sich die Formen mit Vorankündigung
   ändern können, und der Detailgrad auf Feldebene lebt weiterhin in den typisierten

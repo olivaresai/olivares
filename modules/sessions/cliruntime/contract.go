@@ -73,11 +73,13 @@ type Session interface {
 // point of one table — a field a vendor does not have is dropped HERE, once,
 // instead of being invented per caller.
 type LaunchRequest struct {
-	WorkDir        string
-	ConfigHome     string
-	UserHome       string
-	Model          string
-	Effort         string
+	WorkDir    string
+	ConfigHome string
+	UserHome   string
+	Model      string
+	Effort     string
+	// Settings is server-built, non-secret inline Claude settings JSON.
+	Settings       string
 	PermissionMode string
 	ResumeID       string
 	// AllowedTools is the workspace template's governed tool allowlist. It

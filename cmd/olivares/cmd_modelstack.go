@@ -585,12 +585,13 @@ func newModelstackListCmd(c modelstackClient, spec modelstackListSpec) *cobra.Co
 		filters = make([]string, len(spec.Filters))
 	)
 	cmd := &cobra.Command{
-		Use:     spec.Use,
-		Aliases: spec.Aliases,
-		Short:   spec.Short,
-		Long:    spec.Long,
-		Example: spec.Example,
-		Args:    cobra.ExactArgs(spec.Target.IDs),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         spec.Use,
+		Aliases:     spec.Aliases,
+		Short:       spec.Short,
+		Long:        spec.Long,
+		Example:     spec.Example,
+		Args:        cobra.ExactArgs(spec.Target.IDs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := spec.Target.path(args)
 			if err != nil {
@@ -764,11 +765,12 @@ type modelstackGetSpec struct {
 func newModelstackGetCmd(c modelstackClient, spec modelstackGetSpec) *cobra.Command {
 	filters := make([]string, len(spec.Filters))
 	cmd := &cobra.Command{
-		Use:     spec.Use,
-		Short:   spec.Short,
-		Long:    spec.Long,
-		Example: spec.Example,
-		Args:    cobra.ExactArgs(spec.Target.IDs),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         spec.Use,
+		Short:       spec.Short,
+		Long:        spec.Long,
+		Example:     spec.Example,
+		Args:        cobra.ExactArgs(spec.Target.IDs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := spec.Target.path(args)
 			if err != nil {
@@ -795,6 +797,7 @@ func newModelstackGetCmd(c modelstackClient, spec modelstackGetSpec) *cobra.Comm
 
 // modelstackWriteSpec declares a POST or PUT verb.
 type modelstackWriteSpec struct {
+	ChangesData               string
 	Use, Short, Long, Example string
 	Method                    string
 	Target                    modelstackTarget
@@ -808,11 +811,12 @@ func newModelstackWriteCmd(c modelstackClient, spec modelstackWriteSpec) *cobra.
 		filters = make([]string, len(spec.Filters))
 	)
 	cmd := &cobra.Command{
-		Use:     spec.Use,
-		Short:   spec.Short,
-		Long:    spec.Long,
-		Example: spec.Example,
-		Args:    cobra.ExactArgs(spec.Target.IDs),
+		Annotations: map[string]string{"changes_data": spec.ChangesData},
+		Use:         spec.Use,
+		Short:       spec.Short,
+		Long:        spec.Long,
+		Example:     spec.Example,
+		Args:        cobra.ExactArgs(spec.Target.IDs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := spec.Target.path(args)
 			if err != nil {
@@ -881,12 +885,13 @@ type modelstackDeleteSpec struct {
 func newModelstackDeleteCmd(c modelstackClient, spec modelstackDeleteSpec) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     spec.Use,
-		Aliases: modelstackDeleteAliases(spec.Use),
-		Short:   spec.Short,
-		Long:    spec.Long,
-		Example: spec.Example,
-		Args:    cobra.ExactArgs(spec.Target.IDs),
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         spec.Use,
+		Aliases:     modelstackDeleteAliases(spec.Use),
+		Short:       spec.Short,
+		Long:        spec.Long,
+		Example:     spec.Example,
+		Args:        cobra.ExactArgs(spec.Target.IDs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path, err := spec.Target.path(args)
 			if err != nil {

@@ -41,7 +41,8 @@
     "console": "管理",
     "sourceDiff": "ソースの差分",
     "permissions": "権限",
-    "identity": "アイデンティティとNHI",
+    "identity": "アイデンティティとアクセス",
+    "vault": "ボールト",
     "claudePolicy": "Claude Codeガバナンス",
     "routinePolicies": "ルーチンポリシー",
     "deploy": "デプロイ",
@@ -50,7 +51,7 @@
     "catalog": "カタログ",
     "killswitch": "キルスイッチ",
     "work": "作業",
-    "agentops": "セッション",
+    "agentops": "セッションを運用",
     "agentArtifacts": "エージェントアーティファクト",
     "models": "モデル",
     "modelOps": "モデル運用",
@@ -68,6 +69,7 @@
     "attestation": "サプライチェーン",
     "apiPlayground": "API Playground",
     "audit": "監査台帳",
+    "retention": "保持期間",
     "workspaceDashboard": "ワークスペース",
     "settings": "設定",
     "workspace-templates": "ワークスペーステンプレート",
@@ -108,15 +110,16 @@
     "skills": "スキルパックを閲覧し、部門、エージェントグループ、エージェントに割り当てる",
     "protocolBindings": "管理された A2A/MCP バインディングを構成・調整",
     "communications": "選択中ワークスペースのチャネル、ダイレクト通知、個人受信箱",
-    "communicationsInbox": "自分宛ての配信だけを新規に読み取り、明示的に確認する正確な受信箱",
+    "communicationsInbox": "自分宛てのメッセージ：1 件ずつ開いて確認します",
     "communicationsNew": "明示的な初期付与でチャネルを作成します",
-    "communicationsAdministration": "チャネルを管理：設定と付与履歴、各操作はチャネルの現在の ETag のもとで",
+    "communicationsAdministration": "チャネルを管理：設定と付与履歴",
     "communicationsHandoffs": "あなた宛ての作業責任のオファー: コンテキストを読んで承諾または拒否します",
     "console": "ユーザー、SSO/IdP、ワークスペース、エージェントグループ、ロール、シークレット、コネクター、API キー、このインストールのライセンス",
     "permissions": "アイデンティティ、ロール、承認",
-    "identity": "SSO、SCIM、NHIロスター、WIFグラフ",
+    "identity": "SSO、SCIM、エージェントが使うアイデンティティ",
+    "vault": "パスワード、メモ、認証コード",
     "claudePolicy": "管理対象ポリシー、フック、MCP、サンドボックス、ポリシーアズコード",
-    "deploy": "エージェントをプロビジョニングしインフラに配線",
+    "deploy": "エージェントをプロビジョニングしインフラに接続",
     "gitPublication": "承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う",
     "knowledge": "ナレッジベース、RAG、データリネージ",
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
@@ -142,6 +145,7 @@
     "attestation": "リリース証明 — SLSA、SBOM、VEX、Scorecard",
     "apiPlayground": "API Playground",
     "audit": "改ざん検知可能な証拠台帳",
+    "retention": "記録クラスごとの保持期間、それを適用するスイープ、封印された証明書",
     "workspaceDashboard": "ワークスペースのエージェント、セッション、リソース、アクティビティ",
     "settings": "ワークスペースとアカウントの設定",
     "inferenceProxy": "プロキシゲート、エグレス DLP ルール、デバイス承認",
@@ -150,7 +154,7 @@
     "postureExport": "コントロールタワー向けにグラウンドトゥルースのポスチャをエクスポート",
     "providers": "セッションが起動するときに使う API キーとエンドポイントを登録し、テスト・交換・失効を行います",
     "providerProfiles": "セッションの起動元となるプロバイダーのホームを登録・管理し、必要に応じてその設定を読み取る",
-    "providerBindings": "構成済みソースを、このノードが適用したリビジョンでプロバイダープロファイルに専用化する",
+    "providerBindings": "構成済みソースをプロバイダープロファイルにリンクする",
     "providerAccounts": "名前付きのプロバイダーアカウントを一覧し、既存のプロバイダープロファイルをアカウントとして採用する",
     "routinePolicies": "Claude Code ルーチンのための実行間隔の下限、同時実行の上限、承認要件、cron 許可リスト、ブロックされた環境",
     "agentcoreExport": "このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません",
@@ -175,7 +179,7 @@
       "createSchedule": "新しいスケジュール"
     },
     "killswitch": {
-      "engage": "キルスイッチを発動"
+      "engage": "すべてのエージェントを停止"
     },
     "identity": {
       "invite": "ユーザーを招待"
@@ -274,8 +278,7 @@
     "empty": "このエリアで利用できる項目はありません",
     "emptyHint": "現在の組織でのロールがこのエリアのモジュールへのアクセスを許可すると、ここに項目が表示されます。",
     "backHome": "ホームへ",
-    "area": "エリア",
-    "off": "オフ"
+    "area": "エリア"
   },
   "personal": {
     "favorites": "お気に入り",
@@ -332,6 +335,7 @@
     "wirePlaceholder": "NDJSON 行を stdin に送信…",
     "wireAria": "セッション入力行",
     "turnFailed": "セッションはこのターンを受け付けられませんでした。",
+    "draftSaveFailed": "このタブに下書きを保存できませんでした。このページを開いたままにするか、離れる前にメッセージをコピーしてください。",
     "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。",
     "messagePlaceholder": "{{title}} にメッセージ…",
     "slashLabel": "コマンドとスキル",
@@ -351,7 +355,7 @@
       }
     },
     "modelAria": "このセッションのモデルと Effort: {{value}}",
-    "sessionKeeps": "このセッションは {{value}} のままです。別のモデルや Effort を使うには新しいセッションを開始します。",
+    "sessionKeeps": "このセッションは {{value}} のままです。別の設定を使うには新しいセッションを開始します。",
     "startWithChoice": "この選択で新しいセッションを開始"
   },
   "shell": {

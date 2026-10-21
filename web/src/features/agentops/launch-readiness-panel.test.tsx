@@ -93,9 +93,7 @@ describe('LaunchReadinessPanel — current observation', () => {
     )
     expect(qc.getQueryCache().getAll()[0].state.status).toBe('error')
     expect(
-      screen.getByText(
-        /Your role cannot read this profile’s requirements \(sessions:profile:read\)/,
-      ),
+      screen.getByText(/Your role cannot read this profile’s requirements\./),
     ).toBeInTheDocument()
     expect(
       screen.queryByText('Local requirements checked'),
@@ -211,7 +209,7 @@ describe('LaunchReadinessPanel — current observation', () => {
     expect(await screen.findByText('Could not be checked')).toBeInTheDocument()
     expect(
       screen.getByText(
-        /The wired runner cannot be inspected without launching/,
+        /The configured runner cannot be inspected without launching/,
       ),
     ).toBeInTheDocument()
     expect(

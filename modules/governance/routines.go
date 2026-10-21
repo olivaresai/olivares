@@ -210,7 +210,7 @@ func validateRoutinePolicyScopeKind(kind string) bool {
 // handleListRoutinePolicies lists routine policies, optionally filtered by
 // scope_kind or enabled.
 func (m *Module) handleListRoutinePolicies(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	if v := r.URL.Query().Get("scope_kind"); v != "" {
 		q.Filters = append(q.Filters, eq(colRPScopeKind, v))
 	}

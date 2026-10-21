@@ -33,15 +33,24 @@ import (
 // machine-diffable; this is).
 func newCommandsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "commands",
-		Short: "Print the full command tree of this binary (diagnostic)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "commands",
+		Short:       "Print the full command tree of this binary (diagnostic)",
 		Long: "commands is a hidden diagnostic that prints every command path registered in this\n" +
 			"binary (including hidden ones), sorted and one per line. The release smoke diffs this\n" +
-			"output between the packaged artifact and a source build to detect a stale binary.",
-		Example: "  olivares commands",
+			"output between the packaged artifact and a source build to detect a stale binary.\n" +
+			"With -o json, print summaries, flags and declared data effects for visible commands\n" +
+			"in this binary. Hidden subtrees, including unavailable Business commands, are omitted.",
+		Example: "  olivares commands\n  olivares commands -o json",
 		Hidden:  true,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if outputIsJSON(cmd) {
+				// The root version flag is normally initialized only when the root
+				// executes. Include it while describing the actual running tree.
+				cmd.Root().InitDefaultVersionFlag()
+				return renderOut(cmd, nil, collectCLIRefDump(cmd.Root(), false))
+			}
 			paths := commandPaths(cmd.Root())
 			sort.Strings(paths)
 			for _, p := range paths {
@@ -72,8 +81,9 @@ func commandPaths(c *cobra.Command) []string {
 func newFirstPartyBinsCmd() *cobra.Command {
 	var require []string
 	cmd := &cobra.Command{
-		Use:   "firstparty-bins",
-		Short: "List the first-party connector plugins embedded in this binary (diagnostic)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "firstparty-bins",
+		Short:       "List the first-party connector plugins embedded in this binary (diagnostic)",
 		Long: "firstparty-bins is a hidden diagnostic that lists every first-party connector plugin\n" +
 			"binary embedded in this build and extract-verifies each one through the same\n" +
 			"firstparty.Extract path serve uses. A plain dev build honestly reports zero\n" +

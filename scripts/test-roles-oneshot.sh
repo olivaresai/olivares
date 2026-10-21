@@ -190,7 +190,7 @@ fi
 # ── C-01 · UNA credencial de menos. Es el defecto entero, en su forma mínima ─
 mkpsql "$ALL_ROLES"; base_env
 sed -i "/^$(env_for cloud_cp_billing)=/d" "$TMP/env.sh"
-expected_message='ninguna DATABASE_*_URL trae ese'  # language-data: private producer assertion
+expected_message='no DATABASE_*_URL carries that'
 expect 1 "$expected_message" "one missing credential blocks BEFORE invoking psql"
 if [ -s "$TMP/psql-calls" ]; then
   bad "with one missing credential, psql must NOT be invoked, but was"
@@ -201,35 +201,35 @@ fi
 # ── C-02 · Ninguna credencial: el caso con el que nació el defecto ──────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i '/^DATABASE_/d' "$TMP/env.sh"
-expected_message='no llega ninguna DATABASE'  # language-data: private producer assertion
+expected_message='no DATABASE_*_URL arrives'
 expect 1 "$expected_message" "without any URL, blocks and reports it"
 
 # ── C-03 · Una URL que no casa con ningún rol del SQL ────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 echo 'DATABASE_GHOST_URL=postgres://cloud_cp_ghost:pw@db.internal:5432/cloudcp' >> "$TMP/env.sh"
-expect 1 "no declara ningun rol con ese" "a URL claimed by no role is a finding"
+expect 1 "declares no role with that" "a URL claimed by no role is a finding"
 
 # ── C-04 · Las URLs describen DOS bases distintas ───────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://[^@]*@\)db.internal:5432/cloudcp|\1otra.internal:5432/cloudcp|" "$TMP/env.sh"
-expect 1 "tienen que describir una sola base" "URLs pointing to two databases are a finding"
+expect 1 "must describe a single database" "URLs pointing to two databases are a finding"
 
 # ── C-05 · Sin la credencial del master ─────────────────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i '/^PGMASTER_USER=/d' "$TMP/env.sh"
-expected_message='falta PGMASTER_USER'  # language-data: private producer assertion
+expected_message='PGMASTER_USER is missing'
 expect 1 "$expected_message" "without the master credential, blocks before connecting"
 
 # ── C-06 · Una URL sin contraseña ───────────────────────────────────────────
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_tenant)=postgres://cloud_cp_tenant\):[^@]*@|\1:@|" "$TMP/env.sh"
-expect 1 "no trae contrasena" "a URL without a password is a finding"
+expect 1 "carries no password" "a URL without a password is a finding"
 
 # ── C-07 · ⛔ EL RECUENTO POSTERIOR, que es lo que separa esto de un psql a pelo.
 #           psql sale 0 —el SQL siempre sale 0— y los roles NO están.
 mkpsql "$ALL_ROLES"; base_env
 echo "FAKE_ROLE_NAMES=" >> "$TMP/env.sh"
-expect 1 "estos roles NO estan" "psql success with zero created roles is a finding"
+expect 1 "these roles are NOT present" "psql success with zero created roles is a finding"
 
 # ── C-08 · Y su dirección de NO disparo: el recuento correcto no dispara ────
 mkpsql "$ALL_ROLES"; base_env
@@ -278,7 +278,7 @@ fi
 mkpsql "$ALL_ROLES"; base_env
 _swapped="$(printf '%s' "$ALL_ROLES" | sed 's/cloud_cp_billing /cloud_cp_ranciodeotrointento /')"
 echo "FAKE_ROLE_NAMES=\"$_swapped\"" >> "$TMP/env.sh"
-expect 1 "estos roles NO estan: cloud_cp_billing" \
+expect 1 "these roles are NOT present: cloud_cp_billing" \
   "a missing role offset by another with the same prefix is a finding (count alone is insufficient)"
 
 # ── C-15 · ⛔ UN PARAMETRO QUE CAMBIA EL DESTINO. `?host=` lo honra el cliente del runtime
@@ -287,7 +287,7 @@ expect 1 "estos roles NO estan: cloud_cp_billing" \
 #           OK. Es el peor sintoma posible de un falso verde (contraste `sol max`).
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=.*cloudcp\)$|\1?host=otro.internal|" "$TMP/env.sh"
-expect 1 "puede cambiar el servidor o la base" \
+expect 1 "can change the server or the database" \
   "a query parameter that can change the destination is a finding"
 
 # ── C-16 · Y la direccion de NO disparo: `sslmode` no mueve el destino y no debe rechazarse.
@@ -299,14 +299,14 @@ expect 0 "OK" "sslmode is NOT rejected (allowlist no-trigger direction)"
 # ── C-17 · Multi-host: libpq elige uno y este paso no puede saber cual.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|@db.internal:5432/cloudcp|@db.internal,replica.internal:5432/cloudcp|" "$TMP/env.sh"
-expect 1 "declara varios hosts" \
+expect 1 "declares several hosts" \
   "a URL with multiple hosts is a finding"
 
 # ── C-18 · Un `%` que no abre un octeto valido: libpq lo rechaza y la version anterior lo
 #           dejaba pasar tal cual, cambiando la contrasena en silencio.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_tenant)=postgres://cloud_cp_tenant\):[^@]*@|\1:100%pura@|" "$TMP/env.sh"
-expect 1 "no abre un octeto valido" \
+expect 1 "does not open a valid octet" \
   "malformed percent encoding is a finding"
 
 # ── C-19 · ⛔ «EXISTE» NO ES «SIRVE» (F-05, la mitad larga). Un rol creado, presente en el censo
@@ -316,7 +316,7 @@ expect 1 "no abre un octeto valido" \
 #           instalaba una TRUNCADA y todo lo demas salia bien.
 mkpsql "$ALL_ROLES"; base_env
 echo 'FAKE_LOGIN_FAIL="cloud_cp_billing"' >> "$TMP/env.sh"
-expect 1 "NO conecta" \
+expect 1 "does NOT connect" \
   "an existing role unable to connect with its password is a finding"
 
 # ── C-20 · Y que la sonda se haga DE VERDAD, una por rol de login: si no se invocara, el caso
@@ -341,7 +341,7 @@ fi
 #           transportar, y la sonda se conecta con la URL ORIGINAL en vez de reconstruirla.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://cloud_cp_billing\):[^@]*@|\1:alpha%0A@|" "$TMP/env.sh"
-expect 1 "lleva un salto de linea" \
+expect 1 "carries a newline" \
   "a password containing a newline is rejected rather than installed truncated"
 
 # ── C-22 · Y el porcentaje mal formado que la validacion no veia porque miraba el valor YA
@@ -350,7 +350,7 @@ expect 1 "lleva un salto de linea" \
 #           parsea el runtime.
 mkpsql "$ALL_ROLES"; base_env
 sed -i "s|^\($(env_for cloud_cp_billing)=postgres://cloud_cp_billing\):[^@]*@|\1:good%25abc%zz@|" "$TMP/env.sh"
-expect 1 "no abre un octeto valido" \
+expect 1 "does not open a valid octet" \
   "a malformed % after a valid one is a finding (validates the URL, not the decoded value)"
 
 # ── C-23 · ⛔ Y LA SONDA TIENE QUE USAR LA URL, no una reconstruccion: es lo unico que impide
@@ -371,14 +371,14 @@ fi
 #           lo que cambio es el camino y no el rol.
 mkpsql "$ALL_ROLES"; base_env
 echo 'FAKE_ALL_DOWN=1' >> "$TMP/env.sh"
-expect 2 "no he podido comprobar el login de" \
+expect 2 "could not check the login of" \
   "if nothing connects, the response is 2 «cannot inspect», not 1"
 
 # ── C-25 · Y la direccion contraria, que es la que da valor a la de arriba: si el master SI
 #           entra y el rol no, el rol es el problema y eso sigue siendo 1.
 mkpsql "$ALL_ROLES"; base_env
 echo 'FAKE_LOGIN_FAIL="cloud_cp_tenant"' >> "$TMP/env.sh"
-expect 1 "y el master SI" \
+expect 1 "and the master DOES" \
   "if the master connects but the role does not, still a finding (1, not 2)"
 
 # ── C-10 · Sin psql: es «no he podido mirar», no un hallazgo ────────────────
@@ -397,7 +397,7 @@ if [ -x "$TMP/nopsql/sed" ] && [ ! -e "$TMP/nopsql/psql" ]; then
   _rc=0
   ( set -a; . "$TMP/env.sh"; set +a
     PATH="$TMP/nopsql" OLIVARES_ROLES_SQL="$SQL" sh "$SUT" ) > "$TMP/out" 2>&1 || _rc=$?
-  if [ "$_rc" = 2 ] && command grep -qF "no hay psql" "$TMP/out"; then
+  if [ "$_rc" = 2 ] && command grep -qF "psql is not in this image" "$TMP/out"; then
     ok "without psql, the response is 2, not 1 or 0"
   else
     bad "without psql, the response was $_rc: $(head -c 300 "$TMP/out")"
@@ -421,7 +421,7 @@ if command grep -q '^alter role cloud_cp_billing' "$TMP/mutant.sql"; then
   ( set -a; . "$TMP/env.sh"; set +a
     PATH="$TMP/bin:$PATH" OLIVARES_ROLES_SQL="$TMP/mutant.sql" sh "$SUT" ) > "$TMP/out" 2>&1 || rc=$?
   # El SQL mutado sigue teniendo su guarda `\if`, así que la pareja perdida se detecta.
-  if [ "$rc" = 2 ] && command grep -qF "no cubre la guarda" "$TMP/out"; then
+  if [ "$rc" = 2 ] && command grep -qF "does not cover the guard" "$TMP/out"; then
     ok "extraction losing a pair blocks with «cannot inspect»"
   else
     bad "incomplete extraction did not block — rc=$rc: $(head -c 300 "$TMP/out")"

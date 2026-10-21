@@ -6,22 +6,28 @@ import { CodeLine } from './code-line'
 
 /**
  * A translated or engine-written sentence whose `backticked` parts are commands: each becomes
- * the inline command chip, the rest stays text. The backticks are the markup, so no locale
+ * the inline command chip, the rest stays text. Use `kind='code'` for field or permission names,
+ * which need code formatting without a Copy button. The backticks are the markup, so no locale
  * string changes and every language reads the same way. A sentence with no backtick comes
  * back as its own text; a blank pair, or a pair that spans lines, is text, not a chip (CodeLine
  * refuses an empty command, and one odd string must not blank a screen); a missing sentence is nothing.
  */
 export function withInlineCommands(
   text: string | null | undefined,
+  kind: 'command' | 'code' = 'command',
 ): ReactNode[] {
   if (typeof text !== 'string') return []
-  return text
-    .split(/`([^`\r\n]+)`/)
-    .map((part, i) =>
-      i % 2 === 1 && part.trim() !== '' ? (
-        <CodeLine key={i} command={part} inline />
+  return text.split(/`([^`\r\n]+)`/).map((part, i) =>
+    i % 2 === 1 && part.trim() !== '' ? (
+      kind === 'code' ? (
+        <code key={i} className="font-mono text-mono-s break-all">
+          {part}
+        </code>
       ) : (
-        part
-      ),
-    )
+        <CodeLine key={i} command={part} inline />
+      )
+    ) : (
+      part
+    ),
+  )
 }

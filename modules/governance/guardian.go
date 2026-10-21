@@ -529,7 +529,7 @@ func (m *Module) handleDeleteGuardianRule(w http.ResponseWriter, r *http.Request
 
 // handleListGuardianRules lists rules.
 func (m *Module) handleListGuardianRules(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	out := listResponse[guardianRuleDTO]{Items: []guardianRuleDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(guardianRuleKind)
@@ -555,7 +555,7 @@ func (m *Module) handleListGuardianRules(w http.ResponseWriter, r *http.Request,
 
 // handleListGuardianActions lists the containment trail, optionally by status.
 func (m *Module) handleListGuardianActions(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	if v := r.URL.Query().Get("status"); v != "" {
 		q.Filters = append(q.Filters, eq(colGAStatus, v))
 	}

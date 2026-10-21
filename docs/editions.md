@@ -11,6 +11,11 @@ Business adds what larger and regulated organizations need, as separate commerci
 terms agreed in a contract and the few capabilities that depend on them. Prices and license scope are on the
 [offer page](https://olivares.ai/pricing).
 
+An active commercial license displays a small Business or Enterprise badge in the navigation,
+Search and commands, Settings > Edition, and Edition & license. Turn off **Show edition badge** in
+Settings > Edition to hide it; the choice follows your account within the organization. Community
+and installations without a valid commercial license show no badge.
+
 ## How a capability is placed
 
 - Community has everything one person or one team needs to run AI on its own: install, providers, running
@@ -19,13 +24,18 @@ terms agreed in a contract and the few capabilities that depend on them. Prices 
   provider, native deny-overlay rules, the kill switch and its two-person re-enable, and the deny-closed
   checks.
 - Business includes everything in Community and adds what businesses and professional, regulated or large
-  environments need: the session cockpit, directories and several identity providers, departments and
-  delegated administration, compliance and reporting, regulated records, deeper runtime inspection, key
-  management, fleet deployment, integrations with enterprise systems, the commercial license and support. One
-  subscription includes the Business base line and four capability families (Regulated Operations, AI Runtime
+  environments need (the console quotes the two marked summaries, one item per line):
+  <!-- console-business-summary:start -->
+  - Session cockpit and fleet deployment.
+  - Directories and several identity providers, departments and delegated administration.
+  - Compliance and reporting, regulated records.
+  - Deeper runtime inspection and key management.
+  - Integrations with enterprise systems, commercial license and support.
+  <!-- console-business-summary:end -->
+
+  One subscription includes the Business base line and four capability families (Regulated Operations, AI Runtime
   Security, Compliance Packs, Identity & Scale); an administrator turns each family on or off.
-- Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that
-  depend on them.
+- <!-- console-enterprise-summary:start -->Enterprise includes everything in Business, plus terms agreed in a contract and the capabilities that depend on them.<!-- console-enterprise-summary:end -->
 
 From 0.1, no edition:
 
@@ -36,19 +46,19 @@ From 0.1, no edition:
   before 1.0: a Community binary keeps enforcing stored custom Cedar permits and forbids, custom roles, permission groups and scoped grants,
   the review and quorum restrictions of stored approval policies, budgets and group-to-role mappings,
   and the department tree, department membership, group nesting, and agent groups with their members that
-  forbid rules match. Approval policies may still require review or raise tier/quorum in Community; lowering is inert there.
+  forbid rules match. A stored approval policy that raises the tier or the quorum keeps applying in Community; lowering is inert there. A legal hold a Business engine stored keeps vetoing every purge, knowledge delete and account retirement in Community; Community cannot list or release it, and Business can.
   It lists custom authorization data read-only and can delete roles, permission groups and grants or disable the
   authored Cedar surface (`DELETE /v1/m/governance/pdp/active?engine=cedar`) without deleting revision history.
   Business makes the same stored data editable, with no migration. It can remove the stored budgets and other restricted policies, and clear a stored group-to-role mapping
   (`PUT /v1/groups/{id}/role` with an empty role), which only narrows access; it cannot create, widen or
-  otherwise change any of these. The inbound SCIM server keeps applying what your identity provider pushes:
-  deleting a group it provisioned removes the group, its members and its role mapping, which cuts the groups
-  nested under it off from their ancestors; SCIM never adds a nesting edge or a role mapping;
+  otherwise change any of these. The inbound SCIM server that applied what your identity provider pushed is
+  Business: a Community binary answers it with 501, so a group the provider pushed before stays stored and listed
+  and nothing more arrives from the provider;
 - makes the Community binary read a license to turn a capability on or off;
 - silently drops a protection that was in force: apart from the stored items above, a Community binary that finds
   a Business protection that was in force on that deployment (a CMEK key source, a login requirement or network
-  allow-list, durable delivery, a runtime check or records control, a CAEP receiver or transmitter, required
-  consent for privileged-action recording) refuses to start and names the edition.
+  allow-list, durable delivery, a runtime check or records control, a CAEP receiver or transmitter) refuses to start
+  and names the edition.
 
 The behaviors that do not follow these rules yet are listed under "Where the product differs from this page
 today".
@@ -89,55 +99,93 @@ How a hotfix is delivered and rolled back is in
 |---|---|---|---|
 | Install | Static binary with embedded console, deb and rpm packages, container; SQLite or PostgreSQL; backup and restore | Community | Every user starts here. |
 | Install | Helm chart, Kubernetes operator, Terraform provider, appliance images, FIPS and STIG images | Business: base line | Fleet and regulated deployment. |
+| Install | Deployment and integration: declare, plan, apply, verify, roll back and retire agents and MCP servers on company infrastructure, with the saved executor setup and the ledger of declared wirings (`olivares deploy`, `/v1/m/deploy`) | Business: base line | Acting on company infrastructure is fleet deployment. Community keeps the routes, which answer 501 and name Business, and the stored tables. `olivares agent deploy` (finding an official CLI on this host and registering its profile) stays in Community. |
 | Install | Air-gapped install and offline update bundles | Enterprise | Disconnected sites are set up per contract. Verifying a bundle without installing it (`olivares upgrade --bundle --check`) stays in Community. |
+| Install | Air-gap DDIL transfer of governance state between disconnected sites: `olivares ddil keygen`, `export`, `verify` and `import` | Business: base line | Air-gapped and disconnected operations. Community answers exit code 9 to every `ddil` command. |
 | Providers | Provider tools sign in with their own login, or with your own provider keys | Community | Every session starts with a provider. |
 | Sessions | Launch, list, show the status of, stop and remove official CLIs (Claude Code, Codex, Grok Build) from the CLI and the console: `olivares session start`, `ls`, `show`, `stop`, `rm`; `olivares agent session create`, `ls`, `get`, `stop`, `cleanup`, `rm` | Community | Running the tools is the first job of the product. |
+| Sessions | Optional instance-wide idle auto-stop for finished sessions, off by default, with audited policy stops and resume in the same folder and conversation | Community | A person or team can reclaim memory on a shared host without losing its work. |
 | Sessions | Follow a session and stop it doing harm from the CLI: `olivares session follow`, `events` and `interrupt`; `olivares agent session events` and `interrupt` | Community | One person watching their own session, and interrupting it, is part of running the tools safely. |
 | Sessions | Prepare local Git work in the session console: status, stage and unstage files, commit with the signed-in user's profile, and create or switch local branches inside the session's OS boundary | Community | Preparing one's own session changes is part of running the tools. Existing governed publication prepares pushes and pull requests. |
 | Sessions | Preview in the session console the app a session serves on a local port: the engine proxies it under a short-lived link, sandboxed away from the console, with reload and open in a new tab | Community | Seeing what one's own session builds is part of running the tools. |
-| Sessions | Session cockpit: the workspace sidebar, live terminals in the console (attach, send input, interrupt, resume), several panes at once, the agent dashboard, the agent listener over mutual TLS, and steering from the CLI (`olivares session send`, `resume`, `peers`; `olivares agent session attach`, `input`, `resume`) | Business: Identity & Scale | The cockpit is a working environment for steering live sessions; launching, watching and stopping them, and interrupting them from the CLI, stay in Community. |
+| Sessions | Steer a session you started, from the CLI and the console: `olivares session send`, `resume` and `peers`; `olivares agent session attach`, `input` and `resume`; the message box, Resume and live view of one session | Community | Directing the session you started is part of running the tools. |
+| Sessions | Steer a session another person started: the same commands and console actions on a colleague's session | Business: base line | Directing a colleague's session is team operation. Community answers `501 business_required` to these calls; the `sessions:run:write` role check is the same in both editions. |
+| Sessions | Session cockpit: the workspace sidebar, several live terminals in panes at once, the agent dashboard, and the agent listener over mutual TLS | Business: Identity & Scale | The cockpit is a working environment for a team's live sessions; launching, watching, steering, interrupting and stopping the sessions you started stay in Community. |
 | Visibility | Inventory of agents, sessions, models, MCP servers and tools; live timelines; health | Community | Governance starts with seeing what runs. |
 | Visibility | Access map (graph, neighbors, permitted-versus-observed drift and attack paths) and identity inventory (identities, the groups mirrored with them, and the agent-to-identity bindings) | Community | Seeing who reaches what is the first job of governance. Filling the inventory from a directory is Business (see Identity sources). |
 | Work | Work items | Community | Part of running AI at any size. |
 | Work | Orchestration, A2A delegation to authorized peers | Business: Identity & Scale | Coordinating agents across systems. |
-| Knowledge | Content sources, governed retrieval, model catalog, inference proxy | Community | Connecting your own data is the core job. |
+| Knowledge | Content sources for files, Google Drive, Confluence, Notion, S3, Snowflake, Azure AI Search and PostgreSQL; governed retrieval, model catalog, inference proxy | Community | Connecting your own data is the core job. |
+| Knowledge | Enterprise-system connectors: the SharePoint, SAP OData and Salesforce content sources, and the ServiceNow CMDB, Oracle audit, KMIP and Claude Compliance API sources | Business: base line | Integration with enterprise systems. Community does not construct them: a configured one stops startup and names Business, and the API answers 501 `connector_unavailable`. |
 | Knowledge | Workspace wiki: built-in olivares-wiki skill, folder initialization, ingest, cited query, and lint through tool sessions | Community | A person or team needs to maintain its own sources and linked pages. |
 | Authorization | Built-in roles, native deny overlay, kill switch | Community | Who reaches what is the safety boundary, and it is never paid. Stored custom permits, forbids, roles and scoped grants keep their existing effect. Read and revoke stay available; create/update returns 501. |
 | Authorization | Custom Cedar policies (permits and forbids), custom roles, permission groups and scoped grants | Business: base line | Policy as code for organizations with their own rules. |
-| Authorization | Approval engine with its fixed floors (re-enabling the kill switch and every critical action need two distinct people), and any number of approval policies that require review or raise the approval count or the risk tier | Community | The floors are fixed in code and guard Community's own safety boundary. A tenant keeps as many such policies as it needs. When several enabled policies match an action, the earliest created one applies. Only a policy that lowers a tier below the action's default is Business (next row). |
-| Authorization | Tier-lowering approval policies and break-glass | Business: base line | Community keeps the approval engine, the two-human CRITICAL floor, kill-switch dual control, and authoring/enforcement of review, tier-raising and quorum-raising policies. Stored lowering policies remain readable/exportable but cannot lower Community defaults or floors; stored emergency grants are inert there. Business retains lowering and the audited, recorded emergency lifecycle. |
+| Authorization | External policy engine: a Cedar policy file or Open Policy Agent, selected with `OLIVARES_PDP_ENGINE` | Business: base line | Policy as code for organizations with their own rules. Community refuses to serve with an engine selected (exit code 9); unset, blank or `none` is the native engine alone. |
+| Authorization | Approval engine with its fixed floors (re-enabling the kill switch and every critical action need two distinct people), and any number of approval policies that require a review of an action | Community | The floors are fixed in code and guard Community's own safety boundary. A tenant keeps as many such policies as it needs. When several enabled policies match an action, the earliest created one applies. A policy that sets a tier or an approval count different from the action's default is Business (next row). |
+| Authorization | Approval by what a publication touches: a session's push or pull request is classified `docs_only`, `code` or `sensitive` from the paths its exact commit changes (a rename counts both paths; a push that names a lease counts every path that differs from the old tip), by the tenant's sensitive globs, which are the defaults plus the `sensitive_paths` of its approval policies (the defaults cover CI and release configuration, `CODEOWNERS`, dependency manifests and lockfiles, build recipes, migrations, and the files that steer other agents); an approval policy may match on the class to raise the tier or the quorum, or require someone other than the launcher to approve; the approval card and the ledger entry show the class and the matched paths, never diff content | Business: base line | Community publication approval is unchanged: one approval of the proposal as a whole, and authoring a policy that names a class, lists sensitive paths or excludes the launcher is refused with 501 there (a stored one, written before a downgrade, keeps raising scrutiny and cannot lower a tier). In Business a policy that names a class is preferred, for a change of that class, over one that names none, except that excluding the launcher is the sum of the policies that apply. |
+| Authorization | Approval policies that change the risk tier or the approval count (raising or lowering) and break-glass | Business: base line | Community keeps the approval engine, the two-human CRITICAL floor, kill-switch dual control, and authoring/enforcement of review policies; authoring a policy that sets a tier or an approval count different from the action's default is refused with 501 `business_required`. Stored raising policies keep applying and can be read, switched off and deleted, but saving a change to one is Business; stored lowering policies remain readable/exportable but cannot lower Community defaults or floors; stored emergency grants are inert there. Business retains authoring tier and quorum policies, lowering, and the audited, recorded emergency lifecycle. |
+| Governance | Fleet-wide Claude Code managed settings: publishing a revision of the `managed-settings`, `hooks`, `managed-mcp` and `sandbox` policy and its revision history, the signed artifact that agents pull, the attested check-in, the drift view (`olivares claude-policy publish`, `versions`, `artifact`, `checkin`, `distribution`), and the inventory of the AI tools each workstation reports on that check-in: the driver, its version and its sign-in state (`/v1/m/claude-policy/inventory`) | Business: base line | Managing the policy and the tools of a fleet of workstations is fleet management. A Community server answers these routes with 501 and names Business, and keeps the stored table. Validating and previewing a document (`olivares claude-policy validate`, `dry-run`) stays in Community, and `olivares agent managed-settings` still renders the file for the hosts you manage yourself. |
 | Enforcement | Four deny-closed enforcement points: Claude Code hook, inline inference proxy, MCP `tools/call` gate, A2A delegation gate | Community | The deny-closed checks are part of the safety boundary. Without the Business A2A delegation, its gate refuses every delegation. |
 | Data protection | Inline guardrails (PII, prompt injection, jailbreak), DLP on egress, hybrid post-quantum TLS (the Go default key exchange on the product's TLS listeners) | Community | Data that reaches a provider is part of the safety boundary. The inference proxy is a Community module that a new install leaves off until an administrator turns it on (`olivares modules on inferenceproxy`). Once it is on, and while its request DLP gate is on (the default), it denies a prompt in which its classifier finds a secret (the `secret.credential` class). An administrator edits the DLP rules in the console under Inference proxy, in every edition. |
-| Data protection | Signing keys you provide (`OLIVARES_AUDIT_SIGNING_KEY[_FILE]`, and the catalog and policy keys), the off-box checkpoint signer (`OLIVARES_LEDGER_SIGNER`), the custody assertions `OLIVARES_KEY_CUSTODY=byok` (the audit key must be one you provide, never a minted one) and `OLIVARES_LEDGER_CUSTODY=hyok` (checkpoints must be signed off-box), `olivares keys status` | Community | An HA pair needs one shared ledger key, or the ledger forks at failover; `olivares audit key-transition` needs the off-box signer. |
+| Data protection | Signing keys you provide (`OLIVARES_AUDIT_SIGNING_KEY[_FILE]`, and the catalog and policy keys) and `olivares keys status` | Community | The audit ledger needs a key you can back up and restore on another host, and an operator reads the custody of an installation to recover it. |
+| Data protection | Custody assertions `OLIVARES_KEY_CUSTODY=byok` (the audit key must be one you provide, never a minted one) and `OLIVARES_LEDGER_CUSTODY=hyok` (checkpoints must be signed off-box), the off-box checkpoint signer (`OLIVARES_LEDGER_SIGNER`) and the signing-key transition (`olivares audit key-transition`) | Business: base line | Regulated key management. A Community binary refuses to start, or to run a command that opens the engine, when `OLIVARES_KEY_CUSTODY=byok`, `OLIVARES_LEDGER_CUSTODY=hyok` or an off-box `OLIVARES_LEDGER_SIGNER` is set, names Business and exits with code 9; `audit key-transition` answers the same way. The data is kept: unset the variable, or run the Business build. |
 | Data protection | CMEK: signing keys and operator configuration files sealed in envelopes that only your key management service opens (`OLIVARES_KEY_WRAP`; `olivares keys wrap`, `rotate`, `rewrap`, `seal`, `unseal`) | Business: base line | Key management for organizations that hold their keys in a key service. A CMEK source is any of `OLIVARES_AUDIT_SIGNING_KEY_WRAPPED_FILE`, `OLIVARES_CATALOG_SIGNING_KEY_WRAPPED_FILE`, `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE`, `OLIVARES_KEY_CUSTODY=cmek`, or a sealed configuration file. From 0.1, a Community binary that finds one refuses to start the server and every command that opens the store (`olivares dr backup` and `olivares audit verify` among them), and never mints a replacement key. The data is kept: a Business build opens the envelopes and backs it up, with no license or an expired one. |
 | Testing and spend | Evals, sandboxes, spend shown per session | Community | Every user tests AI and sees what it costs. |
 | Testing and spend | Red team, budgets that alert, throttle or block, FinOps spend analysis across teams and projects | Business: base line | Assurance and cost control for organizations. A budget configured before 1.0 stays enforced in every edition: a Community binary keeps enforcing it while the FinOps module is on, can remove it, and cannot create or change one. |
-| AI runtime security | Content firewall, hook firewall, server-tool egress, elicitation mediator, computer-use gate, render inspector, retrieval scan, circuit breaker, CAEP transmitter, eBPF runtime sensor | Business: AI Runtime Security | Deeper inspection and automatic response on top of the Community checks. |
+| AI runtime security | Content firewall, hook firewall, server-tool egress, elicitation mediator, computer-use gate, render inspector, retrieval scan, circuit breaker, CAEP transmitter, eBPF runtime sensor, reversible PII tokens in session MCP tool results | Business: AI Runtime Security | Deeper inspection and automatic response on top of the Community checks. |
 | AI runtime security | MCP tool-definition pinning, threat-intelligence catalog | Business: base line | Detection depth beyond the Community deny-closed checks. |
 | Accounts | Unlimited local users, passkeys (WebAuthn/FIDO2), step-up authentication | Community | No edition counts users. |
 | Accounts | PIV/CAC smart cards | Business: Identity & Scale | Government and enterprise credentials. |
 | Single sign-on | One active OIDC or SAML identity provider, SAML SP metadata | Community | One organization signs in with its own provider. |
-| Provisioning | Inbound SCIM 2.0 server: your identity provider creates, updates and deprovisions users, and pushes its groups, in Olivares | Community | The SCIM server is open-core and stays that way. |
-| Provisioning | Managed SCIM (outbound provisioning): the client that pushes create, update and deprovision to the identity provider | Business: Identity & Scale | Available in the Business Identity & Scale artifact: tenant users and groups reconcile automatically to a configured HTTPS SCIM 2.0 target, with native audit entries for each effect. Supports complete and paginated SCIM inventories and equivalent DNS, port and IPv6 endpoint spellings. The Community port remains nil and links no outbound client; its inbound SCIM server stays available. |
+| Provisioning | Inbound SCIM 2.0 server: your identity provider creates, updates and deprovisions users, pushes its groups, and sends security events (the SET receiver), in Olivares (`/v1/scim/v2`) | Business: Identity & Scale | Managed provisioning from a company identity provider. A Community server mounts the same URLs, authenticates the token as before and answers 501 in the SCIM error shape, naming Business; nothing is read or written. Removing a member from the organization stays in Community: the console's People tab and `DELETE /v1/members/{id}` do it with no SCIM server. Accounts and groups an identity provider provisioned before the move stay stored. |
+| Provisioning | Managed SCIM (outbound provisioning): the client that pushes create, update and deprovision to the identity provider | Business: Identity & Scale | Available in the Business Identity & Scale artifact: tenant users and groups reconcile automatically to a configured HTTPS SCIM 2.0 target, with native audit entries for each effect. Supports complete and paginated SCIM inventories and equivalent DNS, port and IPv6 endpoint spellings. The Community port remains nil and links no outbound client. |
 | Identity sources | Directories and rosters (AD/LDAP, Okta, Entra, Keycloak, Vault and others), several active identity providers, login-time group mapping, require-SSO and network allow-list, LDAP/AD login and directory sync, agent identity federation, CAEP receiver, CyberArk Conjur | Business: Identity & Scale | Organizations with directories and more than one identity provider. |
-| Identity sources | The operator's group list and group-to-role mapping set in Olivares (`GET /v1/groups`, `PUT /v1/groups/{id}/role`), agent groups and their members (`/v1/agent-groups`) | Business: Identity & Scale | Groups structure an organization. The inbound SCIM server still accepts groups your identity provider pushes (`/v1/scim/v2/Groups`). Role mappings and agent groups with their members stored before 1.0 follow the one exception above: they keep applying in Community, and a stored role mapping can be cleared there. |
-| Identity sources | Group nesting (`PUT /v1/groups/{id}/parent`), departments (`PUT /v1/workspaces/{id}/parent`), filing a group in a workspace (`PUT /v1/groups/{id}/workspace`), delegated department administrators, department budgets | Business: Identity & Scale | Structuring an organization. The stored department tree, department membership and group nesting follow the one exception above: they keep counting for forbid rules in Community. Group nesting has been public API since v26.8.0<!-- release-fixed -->, so it stays in Community until its move follows the deprecation path. |
+| Identity sources | The operator's group list and group-to-role mapping set in Olivares (`GET /v1/groups`, `PUT /v1/groups/{id}/role`), agent groups and their members (`/v1/agent-groups`) | Business: Identity & Scale | Groups structure an organization. Groups an identity provider pushed stay listed; the inbound SCIM server that receives them is Business (the Provisioning row). Role mappings and agent groups with their members stored before 1.0 follow the one exception above: they keep applying in Community, and a stored role mapping can be cleared there. |
+| Identity sources | Group nesting (`PUT /v1/groups/{id}/parent`), departments (`PUT /v1/workspaces/{id}/parent`), filing a group in a workspace (`PUT /v1/groups/{id}/workspace`), delegated department administrators, department budgets | Business: Identity & Scale | Structuring an organization. The stored department tree, department membership and group nesting follow the one exception above: they keep counting for forbid rules in Community, which can neither change nor clear them (clearing a nesting could lift a forbid rule that matches through the parent group). A Community server answers the three `PUT` routes with 501 `departments_unavailable` and names Business. |
+| Identity sources | Assigning provider profiles and AI tools to departments, groups and people, so each sees and launches only the tools, accounts and model paths assigned to it (`olivares sourcescope bindings create --source-type profile` or `tool`; a department assignment reaches its sub-departments, a forbid is absolute and an inheritance filter on the `provider` class cuts what reaches a node from above) | Business: Identity & Scale | A department with its own tools and accounts is how an organization is structured. A profile or tool nobody was assigned stays open to everyone, and a Community server keeps applying the assignments already stored, lists and revokes them, and answers a create or an update with 501 `business_required`. |
 | Identity sources | Scoped upstream credentials minted by OAuth 2.0 token exchange (RFC 8693) | Enterprise | Depends on the customer's own token service; scoped per contract. |
-| Audit | Signed hash-chained audit ledger, viewed in the console and the CLI (`olivares audit ls`), checkpointed, verified and recovered (`olivares audit verify`, `checkpoint`, `tree`, `key-transition`, `recover`) | Community | Seeing what AI did, and proving the ledger is intact, is part of governing it. |
-| Audit | `olivares audit export` (CEF, LEEF, syslog, OTLP, OCSF), `olivares audit archive export` and `verify` to a directory, `olivares audit observe-report`, the examiner-grade evidence bundle (`olivares audit archive bundle`) | Business: base line | Evidence handed to auditors and to other systems. Your data export keeps working in every edition: `olivares dr backup` (a CMEK install backs up with a Business build, which needs no live license for it). |
+| Audit | Signed hash-chained audit ledger, viewed in the console and the CLI (`olivares audit ls`), checkpointed, verified and recovered (`olivares audit verify`, `checkpoint`, `tree`, `recover`) | Community | Seeing what AI did, and proving the ledger is intact, is part of governing it. Appending a recovery marker (`recover`) and the key transition are signed by the off-box signer, so they run in the Business build. |
+| Audit | `olivares audit export` (CEF, LEEF, syslog, OTLP, OCSF), `olivares audit archive export` and `verify` to a directory, `olivares audit observe-report`, the examiner-grade evidence bundle (`olivares audit archive bundle`) | Business: base line | Evidence handed to auditors and to other systems. Your data export keeps working in every edition: `olivares dr backup` (a CMEK install, or one that sets a Business custody or off-box signer setting, backs up with a Business build, which needs no live license for it, or in Community after the setting is unset). |
 | Observability | Local trace and metrics views, W3C trace-context propagation | Community | Seeing local activity and carrying request context are part of governing AI. |
-| Audit | SIEM and ITSM push connectors, OTLP trace downloads, trace and metric delivery to an external collector | Business: base line | Integration with enterprise operations. Local observability stays in Community. |
-| Records | Retention, legal hold, right to erasure with key shred | Community | Every organization has these obligations. |
-| Records | Recording of privileged actions with notice and consent, WORM archive (S3 Object Lock, Azure, GCS), regulatory retention floors with a compliance lock, legal-hold reconciliation on archives, erasure depth, incident close-loop with PagerDuty and Opsgenie | Business: Regulated Operations | What regulated industries need on top of the Community records. |
+| Audit | SIEM and ITSM push connectors, OTLP trace downloads, trace and metric delivery to an external collector | Business: base line | Integration with enterprise operations. Local observability stays in Community. In Community, a create or update of an event subscription that carries a SIEM sink (`sink_kind` set) answers `501 business_required`. Generic webhook subscriptions stay in Community. A sink stored before delivers nothing: an update that omits it disables or clears the subscription's sink, and `DELETE` removes the subscription. |
+| Records | Retention schedules and the hold-checked sweep | Community | Every organization keeps its own data as long as it needs to. |
+| Records | Legal hold, right to erasure with key shred | Business: Regulated Operations | Litigation and regulated records. Community keeps the `/v1/m/compliance` hold and erasure routes (`/holds`, `/erasure`, `/data-subjects`, `/claude-files`), which answer `501 business_required`; `olivares compliance holds`, `erasure` and `subject` are hidden and exit 9. Deleting your own data (sessions, memory, knowledge) is not an erasure request and stays in Community. |
+| Records | Recording of privileged actions with notice and consent, WORM archive (S3 Object Lock, Azure, GCS), regulatory retention floors with a compliance lock, legal-hold reconciliation on archives, erasure depth, incident close-loop with PagerDuty and Opsgenie | Business: Regulated Operations | What regulated industries need on top of the Community records. Community keeps the `/v1/m/recording/` routes, which answer `501 business_required`, and records nothing; sessions already stored stay in the store. |
 | Compliance | Framework catalogs, OSCAL export, DORA ICT-risk view, on-demand reports | Business: Compliance Packs | Compliance work is for organizations that answer to auditors. |
 | Compliance | DORA register of information, ISO/IEC 42001 pack, compliance depth (US state and sector packs, FedRAMP 20x), OSCAL ingest and POA&M | Business: Compliance Packs | Drafts for auditors when audits recur. They certify nothing. |
 | Compliance | Scheduled reports, report branding and templates, posture and risk summaries, posture export, evidence bundles (signed once you configure a signing key), NIS 2 incident classification, post-quantum posture check, deployment readiness | Business: base line | Reporting for organizations that answer to auditors and boards. Schedule choices and bundle-signing readiness remain available with base Business, even when Compliance Packs is disabled; generating an on-demand report still requires Compliance Packs. |
 | Platform | One organization with tenant isolation in the store (row-level security on PostgreSQL), API, client SDKs, the open connectors, in-process event bus | Community | Olivares composes with what you already run. |
 | Platform | Core NATS bridge; at-least-once delivery of enforcement events, with deduplication, over your NATS JetStream | Business: Identity & Scale | Event delivery across systems and nodes. |
+| Platform | Active-passive HA leader routing (`OLIVARES_HA_LEADER_GATE`, `OLIVARES_HA_LEADER_LABEL`: the leader gate and the pod-label publisher) and the edge collector (`olivares collector`) | Business: base line | Availability and scale across nodes and sites. A Community server with a leader-routing switch set refuses to start and names Business; `olivares collector` is hidden from its help and exits 9. |
 | Platform | Several organizations served from one deployment | Enterprise | Organization management uses the private Enterprise implementation. In Community, `/v1/system/orgs` routes answer 501 and `olivares tenants` is hidden from help and exits 9 when invoked. Stored organizations and tenant isolation are retained; Community still exports their data. Hosting several organizations is agreed per contract. |
 | License and support | AGPL-3.0, signed public releases with SBOM and provenance, public security fixes, community support in the public repository | Community | Anyone can read, build and verify it. |
 | License and support | Commercial license (an AGPL exception), signed release channel where you approve every upgrade, business-hours email support (best effort, no response target; details in [SUPPORT.md](../SUPPORT.md)) | Business: base line | For organizations whose policy rules out AGPL, or that need someone to write to. |
 | License and support | More legal entities, deployments and identity providers; LTS; OTA update mirrors; OEM, MSP and redistribution rights; support terms agreed in the contract, with non-binding first-response targets unless the contract says otherwise | Enterprise | Negotiated for each organization. |
+
+## Console pages
+
+The Community console registers no page for a Business capability: its navigation, area
+directories and command palette list only Community pages, and none of its pages asks for a
+Business route (which answers 501). A bookmark of a Business page opens one sentence that says
+the page is part of Business, with a link to it and no action. Retention schedules, a Community
+capability, have their own Community page, `/retention`; the Compliance page that also holds that
+tab is Business. These are the Business pages;
+`web/src/features/route-census.json` records the same paths as `business_paths`, and a test
+keeps the two lists equal.
+
+<!-- console-business-pages:start -->
+- `/automations`
+- `/compliance`
+- `/deploy`
+- `/finops`
+- `/orchestration`
+- `/recordings`
+- `/red-team`
+- `/residency`
+- `/session-viewer/$id`
+- `/team-costs`
+- `/tenants`
+<!-- console-business-pages:end -->
 
 ## Identity & Scale extraction
 
@@ -146,7 +194,7 @@ agent identity federation and the CAEP receiver are private Business source. Com
 their authenticated route contracts with explicit 501 refusal and hides their CLI commands
 and console views. The access map and the identity inventory (identities, mirrored groups, agent bindings)
 stay in Community with the routes, fields and status codes of 0.1. Local login, passkeys, TOTP, one OIDC/SAML
-provider, inbound SCIM and their account standing protections remain in Community.
+provider and their account standing protections remain in Community.
 
 The shared schema and backup preserve existing identities, bindings, access edges and lifecycle
 records. Business reads those records without a migration. Community continues enforcing stored
@@ -159,13 +207,20 @@ Active directory ingestion, managed lifecycle configuration and WIF opt-in refus
 
 - Red-team targets, runs and scoring, FinOps budget authoring, and team and project spend analysis are Business base capabilities. Community keeps their published routes with edition refusals, retains their stored data for backup, and keeps enforcing existing budgets while FinOps is on. It can read and remove those budgets. Evals, sandbox execution, and spend shown per session remain Community capabilities.
 
+- Community 0.2 and earlier let any caller with `sessions:run:write` steer a session another person
+  started (input, resume and peers). That is a Business capability, and from the next release a Community
+  engine answers `501 business_required` to those calls on a colleague's session. Steering the session you
+  started stays in Community.
+
 - Releases before 1.0 shipped some capabilities that this page places in Business or Enterprise in the public
-  build: live terminals in the console, directory rosters, departments and nested groups, the
+  build: several live terminals in panes at once, directory rosters, departments and nested groups, the
   group list and group-to-role mapping, agent groups, compliance views and reports, the CAEP
   receiver, privileged-action recording, and several organizations, among others. 0.1<!-- release-fixed --> moves them to the
   Business build.
   Their stored data is kept: Business reads it, and Community keeps exporting it with `olivares dr backup`
   (a CMEK install, with a Business build, which needs no live license for it).
+- A Community engine whose stored recording consent is `required` enforces nothing and logs one warning at start;
+  it does not refuse to start.
 - Releases before 1.0 install an offline update bundle built with
   the historical offline bundle producer without a license, and check a license for any other
   bundle in the public build. From 0.1 the Community binary installs no offline bundle and reads no license for a bundle:
@@ -178,12 +233,26 @@ Active directory ingestion, managed lifecycle configuration and WIF opt-in refus
 - Login enforcement already refuses to start a Community binary on a deployment where it was enforced before; a
   login requirement or network allow-list stored on a Community install that never enforced it stays inert. The
   durable event bus already refuses to start a Community binary when configured.
-  Every other seam in `cmd/olivares/wire_noenterprise.go` that is passed the configuration ignores it today
-  instead: server-tool egress, the content firewall, the hook firewall, threat intelligence, the incident
-  close-loop, regulatory retention floors, legal-hold reconciliation on archives, erasure depth, the computer-use
-  gate, MCP tool-definition pinning, the render inspector, the elicitation mediator, the CAEP transmitter and the
-  circuit breaker. NIS 2 incident classification and the posture, risk and evidence-bundle reports ignore theirs
-  too, and their routes answer 501. The CAEP receiver is private Business source. Community refuses its HTTP/configuration operations and refuses server startup while an enabled receiver remains stored; offline backup stays available.
+  Every other Business protection that is configured through an environment key refuses the same way: a
+  Community `olivares serve` or `olivares quickstart` exits with the Edition exit code (9), names the key and
+  Business, and opens nothing, when one of these is set, in the environment or by an active entry of the data
+  directory's activation manifest: server-tool egress
+  (`OLIVARES_SERVERTOOL_EGRESS_CONFIG`), the content firewall (`OLIVARES_CONTENT_FIREWALL_CONFIG`), the hook
+  firewall (`OLIVARES_HOOK_FIREWALL_CONFIG`), threat intelligence (`OLIVARES_THREATINTEL_CONFIG`), the incident
+  close-loop (`OLIVARES_INCIDENTLOOP_CONFIG`), regulatory retention floors (`OLIVARES_RETENTION_GOVERNOR_CONFIG`),
+  legal-hold reconciliation on archives (`OLIVARES_AUDIT_LEGALHOLD_RECONCILE=true`), erasure depth
+  (`OLIVARES_RTBF_DEPTH_CONFIG`), the computer-use gate (`OLIVARES_COMPUTER_USE_CONFIG`), MCP tool-definition pinning
+  (`OLIVARES_TOOL_PIN_CONFIG`), the render inspector (`OLIVARES_RENDER_INSPECTOR_CONFIG`), the elicitation mediator
+  (`OLIVARES_ELICITATION_MEDIATOR_CONFIG`), the CAEP transmitter (`OLIVARES_CAEP_TRANSMITTER_CONFIG`), the circuit
+  breaker (`OLIVARES_CIRCUIT_BREAKER_CONFIG=true`), NIS 2 incident classification (`OLIVARES_NIS2INCIDENT_CONFIG`), the NIS 2
+  posture, risk and evidence-bundle reports (`OLIVARES_REPORTING_CONFIG`) and reversible PII tokens for session tool data
+  (`OLIVARES_PII_TOKENS_CONFIG`).
+  A blank key, or a switch that is not true, protects nothing and is not refused; commands that do not serve (`db`,
+  `dr`, `audit`) are not refused. Tool-definition pinning runs in Business with or without its key, so a Community binary
+  cannot tell that pins were in force from the key alone. The CAEP receiver is private Business source. Community refuses its HTTP/configuration operations and refuses server startup while an enabled receiver remains stored; offline backup stays available.
+
+- A same-version Business build starts on a Community-created directory after Community has started successfully
+  and been stopped cleanly. Your accounts, settings and audit history stay in place; no license is needed to start.
 
 - A Community server may stop at boot on a data directory that a Business build has initialized: its store
   admission compares the stored guard history with the one it was built with and refuses before login, naming the

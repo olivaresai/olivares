@@ -1,0 +1,88 @@
+{
+  "title": "ボールト",
+  "subtitle": "パスワード、メモ、認証コード。このサーバーで封印され、開けるのはあなただけです。",
+  "add": "項目を追加",
+  "search": "項目を検索",
+  "noMatch": "「{{query}}」に一致する項目はありません",
+  "sealerUnavailable": "このサーバーはまだシークレットを封印できないため、項目を保存できません。",
+  "created": "項目を追加しました",
+  "saved": "項目を保存しました",
+  "deleted": "項目を削除しました",
+  "copyBlocked": "ブラウザーがコピーを許可しませんでした",
+  "nothingToCopy": "この項目にはコピーできるものがありません",
+  "needPerson": "ボールトは個人のものです。ご自身のボールトを使うには、アカウントでサインインしてください。",
+  "needOrganization": "組織を選ぶと、その組織内のボールトを開けます。",
+  "copied": "{{field}}をコピーしました。{{seconds}}秒後にクリップボードから消去されます。",
+  "rowCopied": "{{what}}をコピーしました。{{seconds}}秒後にクリップボードから消去されます。",
+  "what": {
+    "password": "パスワード",
+    "code": "コード",
+    "note": "メモ"
+  },
+  "kind": {
+    "login": "ログイン",
+    "note": "メモ",
+    "totp": "認証アプリ",
+    "code": "コード"
+  },
+  "empty": {
+    "title": "ボールトは空です",
+    "description": "ログイン、メモ、または認証キーを追加してください。項目を開いたりコピーしたりすると、監査台帳に記録されます。"
+  },
+  "row": {
+    "open": "{{label}}を開く",
+    "openItem": "開く",
+    "delete": "削除",
+    "menu": "{{label}}の操作",
+    "copyPassword": "{{label}}のパスワードをコピー",
+    "copyNote": "{{label}}のメモをコピー",
+    "copyCode": "{{label}}のコードをコピー"
+  },
+  "delete": {
+    "title": "{{label}}を削除しますか？",
+    "body": "項目は完全に削除されます。元に戻せません。",
+    "confirm": "削除"
+  },
+  "detail": {
+    "locked": "ロック中です。項目を表示すると監査台帳に記録され、1分後に再び非表示になります。",
+    "hidden": "非表示",
+    "reveal": "表示",
+    "edit": "編集",
+    "totpKey": "認証キー",
+    "code": "コード",
+    "codeHidden": "非表示",
+    "codeLeft": "残り{{n}}秒",
+    "showCode": "コードを表示",
+    "copyField": "{{field}}をコピー",
+    "showField": "{{field}}を表示",
+    "hideField": "{{field}}を非表示"
+  },
+  "form": {
+    "addTitle": "項目を追加",
+    "editTitle": "{{label}}を編集",
+    "name": "名前",
+    "nameHint": "英数字、ドット、ハイフン、アンダースコア。この名前で項目を探せます（CLI でも同じです）。",
+    "nameTaken": "この名前の項目はすでにあります",
+    "nameInvalid": "英数字、ドット、ハイフン、アンダースコアを使ってください",
+    "type": "種類",
+    "username": "ユーザー名",
+    "password": "パスワード",
+    "show": "パスワードを表示",
+    "hide": "パスワードを非表示",
+    "generate": "生成",
+    "generateOptions": "ジェネレーターの設定",
+    "generateFailed": "パスワードを生成できませんでした",
+    "length": "長さ",
+    "lower": "小文字",
+    "upper": "大文字",
+    "digits": "数字",
+    "symbols": "記号",
+    "url": "ウェブサイト",
+    "totp": "認証キー",
+    "totpHint": "base32 のキー、またはサービスの QR コードにある otpauth:// リンク",
+    "note": "メモ",
+    "description": "説明",
+    "descriptionHint": "一覧に表示されます。機密ではありません。",
+    "save": "保存"
+  }
+}

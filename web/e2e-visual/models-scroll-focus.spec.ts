@@ -8,7 +8,7 @@ import { fixtureFor, modelsCatalog } from './fixtures'
 import { platformsReferenceFixture } from '../src/features/platforms/fixtures'
 import type { CatalogResponse } from '../src/features/models/types'
 
-// The retained at-run.ts catalog has no rows, but its pricing headers overflow.
+// The empty catalog fits on desktop; narrow tables must expose keyboard scrolling.
 // VISUAL_PORT=5217 pnpm exec playwright test -c playwright.visual.config.ts models-scroll-focus.spec.ts
 const populatedCatalog: CatalogResponse = {
   ...modelsCatalog,
@@ -61,17 +61,6 @@ async function prepare(
     localStorage.setItem('olivares.theme', selectedTheme)
     localStorage.setItem('olivares.lang', 'en')
     localStorage.setItem(
-      'olivares.session',
-      JSON.stringify({
-        state: {
-          token: 'olvs_demo',
-          sessionId: 's1',
-          expiresAt: '2030-01-01T00:00:00Z',
-        },
-        version: 0,
-      }),
-    )
-    localStorage.setItem(
       'olivares.tenant',
       JSON.stringify({
         state: { activeTenant: 't-demo' },
@@ -93,7 +82,7 @@ for (const { theme, width, populated } of [
       viewport: { width, height: 900 },
       contextOptions: { reducedMotion: 'reduce' },
     })
-    test('models tables support keyboard scrolling', async ({
+    test('models tables focus only when scrolling is needed', async ({
       page,
       baseURL,
     }, testInfo) => {
@@ -156,6 +145,8 @@ for (const { theme, width, populated } of [
         )
         if (!overflowing) {
           await expect(scroller).not.toHaveAttribute('tabindex')
+          await expect(scroller).not.toHaveAttribute('role')
+          await expect(scroller).not.toHaveAttribute('aria-label')
           continue
         }
         overflowingTables++
@@ -185,7 +176,8 @@ for (const { theme, width, populated } of [
         await page.keyboard.press('Tab')
         await expect(scroller).not.toBeFocused()
       }
-      expect(overflowingTables).toBeGreaterThan(0)
+      if (width === 1440) expect(overflowingTables).toBe(0)
+      else expect(overflowingTables).toBeGreaterThan(0)
       await writeFile(
         testInfo.outputPath('dimensions.json'),
         JSON.stringify(dimensions, null, 2),
@@ -209,7 +201,7 @@ test('platforms keeps the existing unlabelled XScroll behavior', async ({
   const table = page.getByRole('table', {
     name: 'Anthropic API support by surface',
   })
-  await expect(table).toBeVisible()
+  await table.waitFor({ state: 'visible' })
   const scroller = table.locator('..')
   await expect(scroller).not.toHaveAttribute('tabindex')
   await expect(scroller).not.toHaveAttribute('role')

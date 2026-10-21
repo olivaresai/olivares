@@ -74,6 +74,93 @@ class UserspaceCheck(unittest.TestCase):
             'oneOf': [{'$ref': '#/components/schemas/SessionResponse'}]}
         self.compare(old, new, 0)
 
+    def test_union_branches_apply_with_the_keywords_beside_them(self):
+        def request(new):
+            return new['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']
+        old = snapshot()
+        request(old)['schema'] = {'type': 'object', 'additionalProperties': False, 'required': ['name'],
+                                  'properties': {'name': {'type': 'string', 'enum': ['full', 'rail']}}}
+        # A second optional field: a request must name at least one of the two, and the old one still suffices.
+        new = copy.deepcopy(old)
+        schema = request(new)['schema']
+        del schema['required']
+        schema['properties']['badge'] = {'type': 'boolean'}
+        schema['anyOf'] = [{'required': ['name']}, {'required': ['badge']}]
+        self.compare(old, new, 0)
+        for change, finding in (
+                (lambda s: s['properties'].pop('name'), 'request.name: field removed'),
+                (lambda s: s.update(type='array'), 'request: changed type'),
+                (lambda s: s.update(anyOf=[{'required': ['badge']}]), 'request: new required inputs')):
+            with self.subTest(finding=finding):
+                narrowed = copy.deepcopy(new)
+                change(request(narrowed)['schema'])
+                self.assertIn(finding, self.compare(old, narrowed, 1).stdout)
+        # Beside a published union, a removed field is still a removed field.
+        self.compare(new, copy.deepcopy(new), 0)
+        dropped = copy.deepcopy(new)
+        request(dropped)['schema']['properties'].pop('badge')
+        self.assertIn('request.badge: field removed', self.compare(new, dropped, 1).stdout)
+
+    def test_union_beside_keywords_terminates_and_keeps_the_stricter_sibling(self):
+        def request(snap):
+            return snap['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']
+        old = snapshot()
+        old['openapi']['components'] = {'schemas': {'Node': {'type': 'object', 'properties': {'name': {'type': 'string'}},
+            'anyOf': [{'$ref': '#/components/schemas/Node'}, {'required': ['name']}]}}}
+        request(old)['schema'] = {'$ref': '#/components/schemas/Node'}
+        self.compare(old, copy.deepcopy(old), 0)
+        old = snapshot()
+        old['openapi']['components'] = {'schemas': {
+            'B': {'type': 'object', 'properties': {'y': {'$ref': '#/components/schemas/B'}}},
+            'C': {'type': 'object', 'properties': {'y': {'$ref': '#/components/schemas/C'}, 'z': {'type': 'string'}}}}}
+        request(old)['schema'] = {'type': 'object', 'properties': {'x': {'$ref': '#/components/schemas/B'}},
+                                  'anyOf': [{'properties': {'x': {'$ref': '#/components/schemas/C'}}}]}
+        self.compare(old, copy.deepcopy(old), 0)
+        old = snapshot()
+        request(old)['schema'] = {'type': 'number', 'maximum': 10, 'exclusiveMaximum': False}
+        new = copy.deepcopy(old)
+        request(new)['schema']['anyOf'] = [{'exclusiveMaximum': True}]
+        self.compare(old, new, 1)
+        old = snapshot()
+        request(old)['schema'] = {'type': 'string', 'maxLength': 64}
+        new = copy.deepcopy(old)
+        request(new)['schema'] = {'type': 'string', 'maxLength': 5, 'anyOf': [{'maxLength': 64}]}
+        self.compare(old, new, 1)
+
+    def test_a_branch_refining_a_sibling_property_is_compared_as_both_constraints(self):
+        def request(snap):
+            return snap['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']
+        old = snapshot()
+        request(old)['schema'] = {'type': 'object', 'properties': {'name': {'type': 'string', 'maxLength': 128}},
+                                  'anyOf': [{'properties': {'name': {'type': 'string', 'minLength': 2}}, 'required': ['name']}]}
+        widened = copy.deepcopy(old)
+        request(widened)['schema']['anyOf'][0]['properties']['name']['minLength'] = 1
+        self.compare(old, widened, 0)
+        for bound, finding in (({'minLength': 3}, 'request.name: tightened minLength'),
+                               ({'maxLength': 64}, 'request.name: tightened maxLength')):
+            with self.subTest(bound=bound):
+                narrowed = copy.deepcopy(old)
+                request(narrowed)['schema']['anyOf'][0]['properties']['name'].update(bound)
+                self.assertIn(finding, self.compare(old, narrowed, 1).stdout)
+        retyped = copy.deepcopy(old)
+        request(retyped)['schema']['anyOf'][0]['properties']['name']['type'] = 'integer'
+        self.compare(old, retyped, 1)
+
+    def test_a_field_defined_only_in_a_branch_is_refused_by_a_closed_sibling(self):
+        def request(snap):
+            return snap['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']
+        # additionalProperties: false beside the union admits only the properties beside it.
+        old = snapshot()
+        request(old)['schema'] = {'type': 'object', 'additionalProperties': False,
+                                  'properties': {'name': {'type': 'string'}, 'x': {'type': 'string'}}}
+        moved = copy.deepcopy(old)
+        request(moved)['schema'] = {'type': 'object', 'additionalProperties': False, 'properties': {'name': {'type': 'string'}},
+                                    'anyOf': [{'properties': {'x': {'type': 'string'}}}, {'required': ['name']}]}
+        self.compare(old, moved, 1)
+        open_beside = copy.deepcopy(moved)
+        del request(open_beside)['schema']['additionalProperties']
+        self.compare(old, open_beside, 0)
+
     def test_optional_secret_environment_input(self):
         old = snapshot()
         new = copy.deepcopy(old)
@@ -100,6 +187,27 @@ class UserspaceCheck(unittest.TestCase):
         schema['properties']['owner'] = {'type': 'string'}
         schema['required'].append('owner')
         self.compare(old, new, 1)
+
+    def test_input_enum_widened_to_a_bound_every_published_value_meets(self):
+        old = snapshot()
+        properties = old['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']['schema']['properties']
+        properties['name'] = {'type': 'string', 'enum': ['', 'low', 'xhigh']}
+        properties['count'] = {'type': 'integer', 'enum': [1, 5]}
+        new = copy.deepcopy(old)
+        properties = new['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']['schema']['properties']
+        properties['name'] = {'type': 'string', 'maxLength': 64}
+        properties['count'] = {'type': 'integer', 'minimum': 1, 'maximum': 10}
+        self.compare(old, new, 0)
+        for name, bound, finding in (('name', {'maxLength': 4}, 'request.name: tightened maxLength'),
+                                     ('name', {'minLength': 1}, 'request.name: tightened minLength'),
+                                     ('count', {'minimum': 2}, 'request.count: tightened minimum'),
+                                     ('count', {'exclusiveMaximum': 5}, 'request.count: tightened exclusiveMaximum')):
+            with self.subTest(name=name, bound=bound):
+                narrowed = copy.deepcopy(new)
+                narrowed['openapi']['paths']['/v1/items']['post']['requestBody']['content']['application/json']['schema']['properties'][name].update(bound)
+                self.assertIn(finding, self.compare(old, narrowed, 1).stdout)
+        unbounded = snapshot()
+        self.assertIn('request.name: tightened maxLength', self.compare(unbounded, new, 1).stdout)
 
     def test_null_required_counts_as_no_required_fields(self):
         old = snapshot()

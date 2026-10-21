@@ -4,8 +4,11 @@
 package pricing
 
 import (
+	"errors"
 	"sync"
 	"testing"
+
+	genai_prices "github.com/pydantic/genai-prices/packages/go"
 
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
@@ -162,4 +165,77 @@ func TestClaudePricingForConcurrentLookups(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+// TestForRetriesTransientCalculateError reproduces the red main of issue #2620. The
+// dataset guards each regex match with a 100 ms wall-clock timeout, and a CPU stall
+// can trip it on a model the dataset does carry. One errored lookup must not read as
+// an unpriced model: the lookup runs again and answers the tariff.
+func TestForRetriesTransientCalculateError(t *testing.T) {
+	original := calculate
+	t.Cleanup(func() { calculate = original })
+	timeouts := 1
+	calculate = func(request genai_prices.PriceRequest) (genai_prices.PriceCalculation, error) {
+		if timeouts > 0 {
+			timeouts--
+			return genai_prices.PriceCalculation{}, errors.New("match timeout after 100ms")
+		}
+		return original(request)
+	}
+	p, ok := For(modelprovider.ProviderAnthropic, "claude-opus-5-5")
+	if !ok || p.InputPerMTokUSD != 4 || p.OutputPerMTokUSD != 20 {
+		t.Fatalf("pricing = %+v ok=%v, want the opus-5-5 $4/$20 tariff after one timed-out match", p, ok)
+	}
+}
+
+// TestForAnswersNotFoundWhenEveryAttemptErrors keeps the never-guess rule under the
+// retry: a lookup that keeps failing still answers not-found, never a price.
+func TestForAnswersNotFoundWhenEveryAttemptErrors(t *testing.T) {
+	original := calculate
+	t.Cleanup(func() { calculate = original })
+	calls := 0
+	calculate = func(genai_prices.PriceRequest) (genai_prices.PriceCalculation, error) {
+		calls++
+		return genai_prices.PriceCalculation{}, errors.New("match timeout after 100ms")
+	}
+	if p, ok := For(modelprovider.ProviderAnthropic, "claude-opus-5-5"); ok || p != (modelprovider.ModelPricing{}) {
+		t.Fatalf("pricing = %+v ok=%v, want no price while every attempt errors", p, ok)
+	}
+	if calls != 3 {
+		t.Fatalf("calls = %d, want three attempts before not-found", calls)
+	}
+}
+
+// TestForAnswersNotFoundWhenALaterProbeKeepsFailing guards the probes after input and
+// output: a cache tier that keeps failing must not read as a free $0 tier.
+func TestForAnswersNotFoundWhenALaterProbeKeepsFailing(t *testing.T) {
+	original := calculate
+	t.Cleanup(func() { calculate = original })
+	calculate = func(request genai_prices.PriceRequest) (genai_prices.PriceCalculation, error) {
+		if _, cacheRead := request.Usage[genai_prices.UsageCacheReadTokens]; cacheRead {
+			return genai_prices.PriceCalculation{}, errors.New("match timeout after 100ms")
+		}
+		return original(request)
+	}
+	if p, ok := For(modelprovider.ProviderAnthropic, "claude-opus-5-5"); ok || p != (modelprovider.ModelPricing{}) {
+		t.Fatalf("pricing = %+v ok=%v, want no price while the cache-read probe keeps failing", p, ok)
+	}
+}
+
+// TestForDoesNotRetryAMissingModel: a model the dataset lacks errors the same way on
+// every run, so For looks it up once and answers not-found.
+func TestForDoesNotRetryAMissingModel(t *testing.T) {
+	original := calculate
+	t.Cleanup(func() { calculate = original })
+	calls := 0
+	calculate = func(request genai_prices.PriceRequest) (genai_prices.PriceCalculation, error) {
+		calls++
+		return original(request)
+	}
+	if p, ok := For(modelprovider.ProviderAnthropic, "claude-opus-9-9"); ok || p != (modelprovider.ModelPricing{}) {
+		t.Fatalf("pricing = %+v ok=%v, want no price for an unknown model", p, ok)
+	}
+	if calls != 1 {
+		t.Fatalf("calls = %d, want one lookup for a missing model", calls)
+	}
 }

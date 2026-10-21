@@ -69,8 +69,9 @@ func (c *evalsClientConfig) resolve() error {
 
 func newEvalsCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "evals",
-		Short: "Eval methodology tools: the CI regression gate and the judge-calibration labeler",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "evals",
+		Short:       "Eval methodology tools: the CI regression gate and the judge-calibration labeler",
 		Long: "evals holds the two halves of the eval methodology that a CI pipeline needs: the\n" +
 			"regression gate that decides whether a candidate's outputs may ship, and the\n" +
 			"guided labeling session that keeps an automated judge calibrated against human\n" +
@@ -103,12 +104,15 @@ func newEvalsGateCmd() *cobra.Command {
 		checkID        string
 	)
 	cmd := &cobra.Command{
-		Use:   "gate",
-		Short: "Run the CI regression gate (exit 0 pass/warn, 1 fail) or re-check one after a governed override",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "gate",
+		Short:       "Run the CI regression gate (exit 0 pass/warn, 1 fail) or re-check one after a governed override",
 		Long: "evals gate scores candidate outputs against a golden suite on the engine and\n" +
 			"maps the gate's EFFECTIVE verdict onto the exit code a CI pipeline blocks on:\n" +
 			"  pass → 0    warn → 0 (printed loudly: declared degradation, e.g. no judge credential)\n" +
-			"  fail → 1    (regression vs baseline, pass-rate below threshold, uncalibrated judge, budget block)\n\n" +
+			"  fail → 1    (regression vs baseline beyond noise, pass-rate below threshold, uncalibrated judge, budget block)\n\n" +
+			"A score drop over the suite's threshold counts as a regression only when the 95% interval of the\n" +
+			"pass-rate difference excludes zero; otherwise the gate notes inconclusive_noise and prints the interval.\n\n" +
 			"A failed gate is overridable ONLY via the governed override (admin + written reason, audited):\n" +
 			"  POST /v1/m/evals/gate/{id}/override — then re-run this command with --check-id {id}.\n\n" +
 			"--outputs is a JSON object file mapping case_key → candidate output ('-' reads stdin).",
@@ -154,6 +158,19 @@ func newEvalsGateCmd() *cobra.Command {
 					Status string `json:"status"`
 					Reason string `json:"reason"`
 					Mode   string `json:"mode"`
+					// Drop is baseline minus candidate pass rate; the CI excludes zero
+					// only when the drop is distinguishable from noise at these n.
+					PassRateDiff *struct {
+						BaselinePassed int     `json:"baseline_passed"`
+						BaselineN      int     `json:"baseline_n"`
+						Passed         int     `json:"passed"`
+						N              int     `json:"n"`
+						Drop           float64 `json:"drop"`
+						DropCI         struct {
+							Lo float64 `json:"lo"`
+							Hi float64 `json:"hi"`
+						} `json:"drop_ci"`
+					} `json:"pass_rate_diff"`
 				} `json:"comparison"`
 				ID               string   `json:"id"`
 				Verdict          string   `json:"verdict"`
@@ -175,6 +192,12 @@ func newEvalsGateCmd() *cobra.Command {
 				}
 				if gate.Comparison.Status != "" {
 					if _, err := fmt.Fprintf(out, "comparison=%s reason=%s mode=%s\n", gate.Comparison.Status, gate.Comparison.Reason, gate.Comparison.Mode); err != nil {
+						return err
+					}
+				}
+				if d := gate.Comparison.PassRateDiff; d != nil && d.N > 0 && d.BaselineN > 0 {
+					if _, err := fmt.Fprintf(out, "pass_rate_drop=%+.1fpt ci95=[%+.1f,%+.1f]pt baseline=%d/%d candidate=%d/%d\n",
+						d.Drop*100, d.DropCI.Lo*100, d.DropCI.Hi*100, d.BaselinePassed, d.BaselineN, d.Passed, d.N); err != nil {
 						return err
 					}
 				}
@@ -261,8 +284,9 @@ func newEvalsLabelCmd() *cobra.Command {
 		criterion string
 	)
 	cmd := &cobra.Command{
-		Use:   "label",
-		Short: "Guided human-labeling session for the judge↔human calibration set",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "label",
+		Short:       "Guided human-labeling session for the judge↔human calibration set",
 		Long: "evals label walks a JSONL file of candidate items (one JSON object per line:\n" +
 			"  {\"case_key\":..., \"input\":..., \"output\":..., \"expected\":..., \"criterion\":..., \"notes\":...})\n" +
 			"and asks for the HUMAN verdict per item: [p]ass, [f]ail, [s]kip, [q]uit. Each label is\n" +

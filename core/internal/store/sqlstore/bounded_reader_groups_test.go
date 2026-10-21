@@ -1218,7 +1218,7 @@ func TestBoundedReaderGroupsSQLite(t *testing.T) {
 
 func openBoundedGroupPG(t *testing.T, pg pgtest.DSNs, mode pgExecModeFact) store.Store {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	sep := "?"
 	if strings.Contains(pg.App, "?") {

@@ -23,8 +23,9 @@ import (
 func newPolicyCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use:   "policy",
-		Short: "Reconstruct historical policy decisions from the evidence ledger",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "policy",
+		Short:       "Reconstruct historical policy decisions from the evidence ledger",
 		Long: "policy answers historical authorization questions from the access-evidence\n" +
 			"ledger: the recorded policy version and inputs, never the live PDP. When the\n" +
 			"record is not enough it prints COULD NOT RECONSTRUCT and names the missing fact.",
@@ -65,8 +66,9 @@ func newPolicyReplayCmd(flags *authClientFlags) *cobra.Command {
 		decisionID       string
 	)
 	cmd := &cobra.Command{
-		Use:   "replay",
-		Short: "Replay a past authorization from the ledger, never from the live policy",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "replay",
+		Short:       "Replay a past authorization from the ledger, never from the live policy",
 		Long: "Reconstruct what the enforcement point decided for a principal, resource and\n" +
 			"action at a past instant. The answer is computed from the recorded policy\n" +
 			"artifact and inputs. It never consults the currently active authoring revision.\n\n" +

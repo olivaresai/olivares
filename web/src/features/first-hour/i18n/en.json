@@ -14,7 +14,7 @@
     "notSignedIn": "Not signed in",
     "usesKey": "Uses your API key: {{name}}",
     "usesLocal": "Uses the local model server: {{name}}",
-    "keyRefused": "The API key {{name}} was refused. Replace it under API keys.",
+    "keyRefused": "The API key {{name}} was refused. Replace it under Providers.",
     "noSignIn": "This tool has no official sign-in to run here. Use the terminal command under Other ways."
   },
   "actions": {

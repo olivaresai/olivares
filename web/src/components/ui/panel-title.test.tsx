@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Dialog and sheet titles are panel titles: 16 px on a 22 px line, weight 600, tracking
-// -0.01em — the `heading` step of the type ladder. The page title (22/28) stays on the page
+// Dialog and sheet titles are panel titles: 17 px on a 22 px line, weight 600, tracking
+// -0.01em — the `heading` step of the type ladder. The page title (26/30) stays on the page
 // header; a panel that repeats it competes with the page it opens over.
 /// <reference types="node" />
 import { readFileSync } from 'node:fs'
@@ -27,10 +27,10 @@ function step(name: string): Record<string, string> {
   return out
 }
 
-describe('panel titles take the heading step (16/22)', () => {
-  it('the heading step is 16 px on a 22 px line, weight 600', () => {
+describe('panel titles take the heading step (17/22)', () => {
+  it('the heading step is 17 px on a 22 px line, weight 600', () => {
     expect(step('heading')).toEqual({
-      size: '1rem',
+      size: '1.0625rem',
       'line-height': '1.375rem',
       'letter-spacing': '-0.01em',
       'font-weight': '600',

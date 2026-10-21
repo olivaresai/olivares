@@ -1,10 +1,62 @@
 {
   "title": "Benachrichtigungen",
-  "description": "Leiten Sie Befunde an Ziele weiter und prüfen Sie das Zustellungsprotokoll. Eine Route referenziert ein Ziel per Name; das Credential liegt im verdrahteten Transport.",
+  "description": "Leiten Sie Befunde an Ziele weiter und prüfen Sie das Zustellungsprotokoll. Eine Route referenziert ein Ziel per Name; das Credential liegt im konfigurierten Transport.",
   "tabs": {
     "routes": "Routen",
+    "destinations": "Ziele",
     "deliveries": "Zustellungen",
     "outbox": "Unzustellbar"
+  },
+  "destinations": {
+    "adminOnly": "Ziele verwaltet ein Administrator",
+    "adminOnlyHint": "Zum Hinzufügen oder Ändern eines Ziels ist ein Instanzadministrator nötig. Bitten Sie ihn darum oder richten Sie es in der Operator-Datei ein.",
+    "intro": "Ein Ziel ist der Ort, an den eine Route Benachrichtigungen sendet. Fügen Sie hier Slack oder Microsoft Teams hinzu; die Webhook-URL wird versiegelt und nie wieder angezeigt.",
+    "add": "Ziel hinzufügen",
+    "empty": "Noch keine Ziele",
+    "emptyHint": "Fügen Sie ein Slack- oder Teams-Ziel hinzu und richten Sie dann eine Route darauf.",
+    "noSealer": "Speichern ist deaktiviert: Diese Bereitstellung hat keinen Secret-Sealer, daher kann eine Webhook-URL nicht sicher gespeichert werden.",
+    "fileNote": "Ziele aus der Operator-Datei (OLIVARES_NOTIFY_CONFIG) werden schreibgeschützt aufgelistet. Andere Arten werden dort eingerichtet.",
+    "colName": "Name",
+    "colKind": "Art",
+    "colHost": "Webhook-Host",
+    "colSource": "Quelle",
+    "colStatus": "Status",
+    "colActions": "Aktionen",
+    "sourceConsole": "Konsole",
+    "sourceFile": "Operator-Datei",
+    "open": "Geöffnet",
+    "notOpen": "Nicht geöffnet",
+    "testAction": "Testnachricht an {{name}} senden",
+    "editAction": "Ziel {{name}} bearbeiten",
+    "deleteAction": "Ziel {{name}} löschen",
+    "tested": "Testnachricht an {{name}} gesendet",
+    "testSent": "Testnachricht gesendet",
+    "testFailed": "Das Ziel hat die Testnachricht nicht angenommen. Prüfen Sie die Webhook-URL.",
+    "saved": "Ziel gespeichert",
+    "savedNotOpen": "Ziel gespeichert, aber nicht geöffnet. Prüfen Sie die Webhook-URL und senden Sie eine Testnachricht.",
+    "deleted": "Ziel gelöscht",
+    "deleteDialog": {
+      "title": "Ziel löschen?",
+      "description": "Dadurch werden „{{name}}“ und seine gespeicherte Webhook-URL entfernt. Routen, die darauf zeigen, protokollieren ein unbekanntes Ziel, bis Sie ein anderes wählen.",
+      "confirm": "Ziel löschen"
+    },
+    "dialog": {
+      "title": "Ziel hinzufügen",
+      "editTitle": "Ziel bearbeiten",
+      "subtitle": "Senden Sie Benachrichtigungen an Slack oder Microsoft Teams. Senden Sie vor dem Speichern eine Testnachricht.",
+      "kind": "Art",
+      "name": "Name",
+      "nameHint": "Kleinbuchstaben, Ziffern, Punkt, Bindestrich oder Unterstrich. Routen verweisen auf diesen Namen.",
+      "url": "Webhook-URL",
+      "urlHint": {
+        "slack": "Die eingehende Webhook-URL Ihrer Slack-App (hooks.slack.com).",
+        "teams": "Die Workflows-Webhook-URL für „Beim Empfang einer Teams-Webhook-Anforderung“.",
+        "default": "Die eingehende Webhook-URL."
+      },
+      "urlKeep": "Leer lassen, um die gespeicherte URL ({{host}}) zu behalten.",
+      "urlStored": "Gespeichert — Eingabe ersetzt sie",
+      "test": "Testnachricht senden"
+    }
   },
   "severities": {
     "any": "Beliebiger Schweregrad",

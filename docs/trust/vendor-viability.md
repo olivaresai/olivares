@@ -14,8 +14,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 ## 1. The AGPL survival guarantee (structural, not contractual)
 
 The core product — core, modules, web console — is **AGPL-3.0-only with
-nothing feature-capped from within to upsell** (`LICENSING.md`): the full
-governance loop runs in the public binary with no license check. The commercial
+nothing feature-capped from within to upsell** (`LICENSING.md`): the public binary is the
+complete product for one person or one team and runs with no license check; the edition is
+the build you run (`docs/editions.md`). The commercial
 offering adds a *small, additive `enterprise/` line* (built only with
 `-tags enterprise`, never in the public binary) and is both an AGPL *license
 exception* and the entitlement to that line — not a paywall over the open
@@ -42,8 +43,9 @@ redundant by construction (§1).
 ## 3. You can verify and rebuild what we ship
 
 - Releases are signed (cosign), with SBOM, **SLSA Build L3 (SLSA v1.2) provenance**, OpenVEX, and
-  checksums — verified end-to-end by `scripts/verify-release.sh`, including an
-  **air-gapped** mode.
+  checksums. `scripts/verify-release.sh` verifies the signature, the checksums and the SLSA
+  provenance end to end, including an **air-gapped** mode; the SBOM and OpenVEX attestations
+  verify against the container image by digest (`cosign verify-attestation`).
 - Builds are **reproducible** (`task build:repro` — two builds, identical SHA-256),
   so a third party can confirm the binary matches the source you'd be maintaining.
 - A single static Go binary on a conventional stack (Go, Postgres/SQLite,

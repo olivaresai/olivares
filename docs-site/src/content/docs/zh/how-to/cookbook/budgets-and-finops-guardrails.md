@@ -76,10 +76,7 @@ curl -ks "$BASE/v1/m/finops/alerts" \
 PagerDuty [目的地](/zh/how-to/forward-audit-to-splunk/)会在 100% 拒绝之前就听到 80%
 的越线。
 
-在控制台中，**Cost & FinOps** 按 dimension 展示支出，并内联显示预算状态：
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="带支出趋势与预算态势的 Cost & FinOps 视图。" />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="带支出趋势与预算态势的 Cost & FinOps 视图。" />
+在控制台中，**Budgets** 展示各限额的消耗情况，并附按当前速率的预测。
 
 ## 给支出一个分母：outcome
 

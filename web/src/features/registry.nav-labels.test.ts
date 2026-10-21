@@ -27,7 +27,7 @@
 // they are, and names the language that owes the translation.
 //
 // parity.test.ts and scripts/check-i18n-parity.mjs are the complement, not a
-// substitute: they prove the seven languages carry the SAME keys as English,
+// substitute: they prove the nine languages carry the SAME keys as English,
 // which stays true when English is the one missing the key. Only this file
 // crosses the registry against the translations.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -35,7 +35,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import i18n, { LANGUAGE_CODES } from '@/lib/i18n'
 import { EXTENSION_ROUTES } from './extensions'
-import { FEATURE_VIEWS } from './registry'
+import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from './registry'
 
 const LOCALES_ROOT = resolve(__dirname, '../lib/i18n/locales')
 
@@ -57,8 +57,12 @@ const NON_REGISTRY_ITEM_KEYS = ['settings'] as const
  * and labels the breadcrumb with it like any other view.
  */
 const REQUIRED_ITEM_KEYS: readonly string[] = [
-  ...FEATURE_VIEWS.map((v) => v.id),
-  ...NON_REGISTRY_ITEM_KEYS,
+  ...new Set([
+    ...FEATURE_VIEWS.map((v) => v.id),
+    // Pages only a Business build serves keep their labels with their source.
+    ...BUSINESS_ONLY_VIEW_IDS,
+    ...NON_REGISTRY_ITEM_KEYS,
+  ]),
 ]
 
 /** The `items` map of one language's nav.json, straight off disk. */
@@ -133,6 +137,46 @@ describe('nav labels for every registered view', () => {
         raw,
         `Language "${lng}" labels these views with their own identifier: ${raw.join(', ')}\n` +
           `That renders exactly like the missing-key bug it was meant to fix. Write a real label.`,
+      ).toEqual([])
+    },
+  )
+
+  // The audit of 2026-10-16 (E1): English labelled the Providers page "API keys" while
+  // the six translations said "providers". The entry and the page it opens are one name.
+  it.each([...LANGUAGE_CODES])(
+    '"%s" names the Providers entry as the Providers page is titled',
+    (lng) => {
+      const page = JSON.parse(
+        readFileSync(
+          resolve(__dirname, 'providers/i18n', `${lng}.json`),
+          'utf8',
+        ),
+      ) as { title?: unknown }
+      expect(isUsableLabel(page.title), 'the Providers page has no title').toBe(
+        true,
+      )
+      expect(navItems(lng).providers).toBe(page.title)
+    },
+  )
+
+  // The audit (E2) found two entries labelled Sessions. /agentops is the second door into
+  // the one Sessions screen (`doorTo`) and reads "Operate sessions"; no two entries
+  // of the registry share a label in any language, a door and its own room included.
+  it.each([...LANGUAGE_CODES])(
+    '"%s" gives every entry its own label',
+    (lng) => {
+      const items = navItems(lng)
+      const byLabel = new Map<string, string[]>()
+      for (const v of FEATURE_VIEWS) {
+        const value = items[v.id]
+        if (!isUsableLabel(value)) continue // reported by the missing-label test
+        const label = value.trim().normalize('NFKC').toLowerCase()
+        byLabel.set(label, [...(byLabel.get(label) ?? []), v.id])
+      }
+      const shared = [...byLabel].filter(([, ids]) => ids.length > 1)
+      expect(
+        shared,
+        `Language "${lng}" gives these entries the same label: ${JSON.stringify(shared)}`,
       ).toEqual([])
     },
   )

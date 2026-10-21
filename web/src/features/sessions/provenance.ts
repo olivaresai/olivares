@@ -19,9 +19,14 @@
 // recording credential through that same identity, and runtime_bridge.go:80 captures
 // it off the stream-json init frame).
 
+import { toolName } from '@/features/agentops/tool-names'
 import type { RunDTO, RunState, Transport } from '@/features/agentops/types'
-import { sessionNameLadder } from '@/features/home/work-line'
+import {
+  sessionNameLadder,
+  type SessionNameSource,
+} from '@/features/home/work-line'
 import { refTail } from '@/features/shared/entity-names'
+import { runFolder } from './folder'
 import type { Attribution, LiveDTO } from './types'
 import type { SessionTarget } from './session-target'
 
@@ -118,13 +123,15 @@ export function isWorkingRun(run: RunDTO): boolean {
 }
 
 /** A run is asking for a person: its provider needs a login, its launch waits for an
- * approval, or a tool call of a live run waits on one (HU-R12). The one rule for every
+ * approval, a tool call of a live run waits on one (HU-R12), or it was interrupted after
+ * repeated policy denials (`needs_person`). The one rule for every
  * list that says a session needs you: the sidebar and Sessions read it alike. */
 export function runWantsAPerson(run: RunDTO): boolean {
   return (
     run.provider_auth_state === 'required' ||
     run.state === 'waiting_approval' ||
-    !!runAwaitedApproval(run)
+    !!runAwaitedApproval(run) ||
+    (isLiveRun(run) && !!run.needs_person)
   )
 }
 
@@ -169,12 +176,27 @@ export function startsAgain(run: RunDTO): boolean {
 }
 
 /**
- * Whether the engine can move this session to another account or hand it off at all:
- * only a Claude Code session has a stored conversation it reads, so no other session
- * is offered either (session_move.go, session_handoff.go).
+ * Whether the engine can move this session to another account of its tool: only a
+ * Claude Code session has a stored conversation it carries between homes
+ * (session_move.go).
  */
 export function canMoveSession(run: RunDTO): boolean {
   return run.provider_driver === 'claude'
+}
+
+/** The tools whose stored conversation the engine reads for a handoff (session_handoff.go). */
+const HANDOFF_DRIVERS = ['claude', 'codex', 'gemini-cli', 'opencode']
+
+/**
+ * Whether the session can be handed off to another tool: its tool's conversation is one
+ * the engine reads and the session has reported it. A running session is stopped by the
+ * handoff itself, so it is offered the same as a stopped one.
+ */
+export function canHandoffSession(run: RunDTO): boolean {
+  return (
+    HANDOFF_DRIVERS.includes(run.provider_driver ?? '') &&
+    !!run.claude_session_id
+  )
 }
 
 /** A stopped, failed or cleaned run can be deleted; one not yet cleaned is cleaned first. */
@@ -648,8 +670,62 @@ export function operatorName(s: UnifiedSession): string | null {
 }
 
 /**
- * WHAT A ONE-LINE ROW PAINTS: the ladder's word, the distinguishing tail when the word
- * is the caller's "untitled", and the whole reference for a `title=`.
+ * WHERE A SESSION WORKS AND WITH WHAT: its tool and, when a run knows one, its folder
+ * ("Claude Code · billing-api"); `null` when nothing declared a tool.
+ *
+ * Every part is a fact somebody sent: the run's driver, else the profile's driver or the
+ * engine label the connector declared on the observed row, and the name of the folder the
+ * run works in (never the one Olivares made for the run, which `runFolder` refuses), else
+ * the project the observed session's own hooks reported. A session whose hooks said
+ * nothing is named by its tool alone.
+ */
+export function sessionPlace(s: UnifiedSession): string | null {
+  const tool = sessionTool(s)
+  const run = primaryRun(s.runs)
+  // A launched run's own folder is named by its id and means nothing to a person
+  // (`runFolder` refuses it), and its hooks report that same folder as the project.
+  const reported = s.live?.project
+  const folder =
+    runFolder(run) ?? (reported && reported !== run?.run_ref ? reported : null)
+  if (!tool) return folder
+  return folder ? `${tool} \u00b7 ${folder}` : tool
+}
+
+/** The tool a session runs, by its product name; `null` when nothing declared one. */
+export function sessionTool(s: UnifiedSession): string | null {
+  const driver =
+    primaryRun(s.runs)?.provider_driver || s.live?.provider || s.live?.engine
+  return driver ? toolName(driver) : null
+}
+
+/**
+ * WHAT A LIST CALLS A SESSION: the ladder's answer, with one policy on its last two rungs.
+ *
+ * ⛔ THE ACTION IS NEVER THE NAME. A 50-session capture titled every observed row by its
+ *    only tool event ("Read · src/ma…", "Write · READM…"): the file of the last event cut
+ *    by the row's own ellipsis, and the same shape fifty times. Where the ladder would
+ *    stop at the action or at nothing, the session is named by `sessionPlace` — its tool
+ *    and its folder — and the word the caller supplies is left for a session with
+ *    neither. The action stays on the row's hover and in the detail.
+ *
+ * It is a POLICY on the rung that answered, read from `from`, not a second walk of the
+ * ladder; the rail, the table, the sidebar and the filter all ask it.
+ */
+export function sessionListName(
+  s: UnifiedSession,
+  untitled: string,
+): { text: string; from: SessionNameSource | 'place' } {
+  const named = sessionNameLadder(operatorName(s), s.live, untitled)
+  if (named.from !== 'action' && named.from !== 'untitled') return named
+  const place = sessionPlace(s)
+  return place
+    ? { text: place, from: 'place' }
+    : { text: untitled, from: 'untitled' }
+}
+
+/**
+ * WHAT A ONE-LINE ROW PAINTS: the list's word, the distinguishing tail when the word is
+ * the caller's "untitled" or another row's name, and the whole reference for a `title=`.
  *
  * The ladder itself is `sessionNameLadder`'s and is CALLED, not repeated: this function
  * only decides what a row with no name of its own carries beside the word.
@@ -659,11 +735,12 @@ export function sessionNaming(
   untitled: string,
   shared?: ReadonlySet<string>,
 ): { name: string; shortId: string | null; reference: string } {
-  const { text, from } = sessionNameLadder(operatorName(s), s.live, untitled)
+  const { text, from } = sessionListName(s, untitled)
   return {
     name: text,
     // The tail tells apart an untitled row, and any row whose name another row of the
-    // same list also carries (HU 029: two long first messages cut to the same words).
+    // same list also carries (HU 029: two long first messages cut to the same words;
+    // #2266: fifty observed sessions of one tool).
     shortId:
       from === 'untitled' || shared?.has(text) ? sessionShortId(s) : null,
     reference: sessionReference(s),
@@ -678,7 +755,7 @@ export function sharedNames(
   const seen = new Set<string>()
   const shared = new Set<string>()
   for (const s of sessions) {
-    const { text } = sessionNameLadder(operatorName(s), s.live, untitled)
+    const { text } = sessionListName(s, untitled)
     if (seen.has(text)) shared.add(text)
     seen.add(text)
   }
@@ -689,19 +766,12 @@ export function sharedNames(
  * What a TABLE CELL paints: a name, never a raw session reference. The reference stays
  * on `title=` and in the inspector's identifiers block.
  *
- * ⛔ IT STOPS ONE RUNG ABOVE `sessionNaming`, AND THAT IS THE DIFFERENCE BETWEEN A TABLE
- *    AND A RAIL, not a second opinion about the ladder. A table row carries its own
- *    columns for state, origin, cost and what the session is doing, so its NAME cell
- *    answers "which session is this" and the current action would repeat a column three
- *    centimetres to the right. A rail row is ONE line with no columns: the clause is the
- *    only thing on it an operator can choose by, which is why `sessionNaming` takes the
- *    action rung and this does not. Both refuse the reference as a name.
+ * It is the list's name, so a table row, a rail row and the sidebar call one session the
+ * same thing; the current action has a column of its own three centimetres to the right
+ * and is not the name anywhere (`sessionListName`).
  */
 export function sessionTitle(s: UnifiedSession, untitled: string): string {
-  const { text, from } = sessionNameLadder(operatorName(s), s.live, untitled)
-  // The ceiling is a POLICY on the rung that answered, not a second walk of the ladder:
-  // that is the whole difference between one ladder and two.
-  return from === 'action' ? untitled : text
+  return sessionListName(s, untitled).text
 }
 
 /** Everything a row can be searched by: its label, its session reference and every
@@ -714,6 +784,8 @@ export function sessionSearchKey(s: UnifiedSession): string {
     s.sessionRef ?? '',
     s.liveRef ?? '',
     s.profileRef ?? '',
+    // What the row paints, so a visible title is searchable by its own text.
+    sessionListName(s, '').text,
     ...s.runs.map((r) => r.run_ref),
     ...s.runs.map((r) => r.name ?? ''),
     ...(s.echoes ?? []).map((e) => e.live_ref),

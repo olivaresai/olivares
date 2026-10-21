@@ -267,6 +267,10 @@ func (m *Module) handleProfileModelCatalog(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	ref := chi.URLParam(r, "ref")
+	if err := m.requireProfileAccess(r.Context(), mc, ref); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	out, err := m.ProfileModelCatalog(r.Context(), mc.Tenant, ref, q.Get("refresh") == "true")
 	if err != nil {
 		writeRunErr(w, err)

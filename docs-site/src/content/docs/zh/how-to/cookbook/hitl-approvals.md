@@ -86,4 +86,4 @@ curl -ks -X POST "$BASE/v1/m/governance/approvals/$ID/decisions" \
 
 ## 审批版本边界（0.1）
 
-Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求审核或提高风险等级、审批人数的策略。降低风险等级的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的数据仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。
+Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求对某项操作进行审核的策略。更改风险等级或审批人数的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的、提高风险等级或审批人数的策略继续生效；已保存的降低风险等级的策略和紧急授权仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。

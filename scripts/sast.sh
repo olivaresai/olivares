@@ -17,6 +17,13 @@
 #                                   # .gosec.json block_rules; ANY finding fails.
 #   scripts/sast.sh --report FILE   # INFORMATIONAL full scan (every rule) to a
 #                                   # JSON file; never fails (feeds security:report).
+#   scripts/sast.sh --packages ./dir...
+#                                   # The BLOCKING gate over just those workspace package
+#                                   # directories (same rules, flags and fail-closed checks).
+#                                   # The pre-push hook runs it on the packages a push
+#                                   # changes, so a new subprocess with variable arguments
+#                                   # meets the gate before CI does. A whole-module scan of
+#                                   # cmd/olivares needs more than 4 GiB; a package does not.
 #
 # The blocking gate runs one curated set of rules (SQL/command/template injection,
 # SSRF, weak crypto, TLS misconfig) and requires ZERO findings. Every genuine
@@ -61,9 +68,15 @@ mapfile -t MODULES < <(go work edit -json | sed -n 's/.*"DiskPath": "\(.*\)".*/\
 [ "${#MODULES[@]}" -gt 0 ] || { echo "sast: no modules in go.work" >&2; exit 1; }
 
 REPORT=""
-if [ "${1:-}" = "--report" ]; then
-	REPORT="${2:?--report needs an output path}"
-fi
+PKGS=()
+case "${1:-}" in
+--report) REPORT="${2:?--report needs an output path}" ;;
+--packages)
+	shift
+	PKGS=("$@")
+	[ "${#PKGS[@]}" -gt 0 ] || { echo "sast: --packages needs at least one ./dir" >&2; exit 1; }
+	;;
+esac
 
 run_gosec_block() {
 	# Blocking scan for one module dir. -exclude-generated drops go:generate'd files
@@ -82,12 +95,14 @@ run_gosec_block() {
 	case "${dir}" in
 	cloud/control-plane) goenv="GOWORK=off" ;;
 	esac
+	local targets=("$@")
+	[ "${#targets[@]}" -gt 0 ] || targets=(./...)
 	( cd "${dir}" && env ${goenv} "${GOSEC}" -no-fail \
 		-include="${INCLUDE}" \
 		-exclude-generated \
 		-nosec-require-rules \
 		-nosec-require-justification \
-		-fmt=json "$@" ./... )
+		-fmt=json "${targets[@]}" )
 }
 
 if [ -n "${REPORT}" ]; then
@@ -256,6 +271,35 @@ PY
 		findings=$((findings + n))
 	fi
 }
+if [ "${#PKGS[@]}" -gt 0 ]; then
+	# Package mode: each ./dir goes to the longest-named module that holds it, as a path
+	# relative to that module. A directory no module holds is named, never silently skipped.
+	# One gosec run per package, so the zero-files, unreadable-output and compile-error
+	# refusals judge each package: a package gosec did not scan cannot hide behind a sibling
+	# that it did.
+	for p in "${PKGS[@]}"; do
+		p="${p#./}"
+		best=""
+		for m in "${MODULES[@]}" cloud/control-plane; do
+			mm="${m#./}"
+			case "${p}/" in
+			"${mm}/"*) [ "${#mm}" -gt "${#best}" ] && best="${mm}" ;;
+			esac
+		done
+		[ -n "${best}" ] || { echo "sast: ./${p} is in no workspace module; refusing." >&2; exit 2; }
+		rel="${p#"${best}"}"
+		scan_dir "${best}" "${best}" ".${rel}"
+	done
+	if [ "${findings}" -gt 0 ]; then
+		echo ""
+		echo "sast: ${findings} blocking SAST finding(s) in ${#PKGS[@]} package(s). Fix them, or if a" >&2
+		echo "finding is a reviewed false positive add '// #nosec Gxxx -- <reason>' on the flagged line" >&2
+		echo "(see docs/security/SECURITY-GATE.md#justifying-a-finding)." >&2
+		exit 1
+	fi
+	echo "sast: clean — 0 blocking findings in ${#PKGS[@]} package(s), ${total_files} files, ${total_lines} lines."
+	exit 0
+fi
 for m in "${MODULES[@]}"; do
 	scan_dir "${m}" "${m}"
 done

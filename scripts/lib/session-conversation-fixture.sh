@@ -63,3 +63,37 @@ PY
   E2E_CLI_RUN_NAME="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])' <<<"$fixture")"
   export E2E_CAPTURE_RUN_REF E2E_CLI_RUN_NAME
 }
+
+# A long conversation in the tool's own transcript, for the message navigator's journey
+# (#2129): 600 requests and answers a minute apart from 2026-10-14T08:00Z, one phrase on
+# the second line of request 137, and the sentence the journey sends last. Needs the
+# session of seed_conversation_fixture, whose provider id the engine learns from the
+# fixture driver's init frame.
+seed_messages_transcript() {
+  local sid="" run
+  for _ in $(seq 1 120); do
+    run="$(printf 'Authorization: Bearer %s\nX-Olivares-Tenant: %s\n' "$TOKEN" "$TENANT" |
+      curl -sf "http://127.0.0.1:$PORT/v1/m/sessions/runs/$E2E_CAPTURE_RUN_REF" -H @-)" || true
+    sid="$(python3 -c 'import sys,json;print(json.load(sys.stdin).get("claude_session_id",""))' <<<"$run" 2>/dev/null || true)"
+    [ -n "$sid" ] && break
+    sleep 0.5
+  done
+  [ -n "$sid" ] || { echo "seed_messages_transcript: the session reported no provider id" >&2; return 1; }
+  # The driver echoes what is sent, as the tool does, so the thread holds the row of it.
+  : >"$DATA/ws/.fixture-echo-user"
+  mkdir -p "$DATA/claude-config/projects/messages-journey"
+  python3 - "$DATA/claude-config/projects/messages-journey/$sid.jsonl" <<'PY'
+import datetime
+import json
+import sys
+
+t0 = datetime.datetime(2026, 10, 14, 8, 0, 0, tzinfo=datetime.timezone.utc)
+stamp = lambda minutes: (t0 + datetime.timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+with open(sys.argv[1], "w") as out:
+    for i in range(1, 601):
+        text = "migrate the sqlite schema\nthen the needle-137 index" if i == 137 else f"request {i}"
+        out.write(json.dumps({"type": "user", "timestamp": stamp(i), "message": {"role": "user", "content": text}}) + "\n")
+        out.write(json.dumps({"type": "assistant", "timestamp": stamp(i), "message": {"content": [{"type": "text", "text": f"answer {i}"}]}}) + "\n")
+    out.write(json.dumps({"type": "user", "timestamp": stamp(601), "message": {"role": "user", "content": "Look up the readme"}}) + "\n")
+PY
+}

@@ -39,9 +39,7 @@ for key in ("hub", "overlay"):
 PY
 
 FILES='
-core/api/handlers_scim.go
-core/api/handlers_scim_groups.go
-core/api/handlers_scim_events.go
+core/api/handlers_scim_noenterprise.go
 core/auth/scim.go
 core/auth/scim_groups.go
 core/auth/scim_events.go

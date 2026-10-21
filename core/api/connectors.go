@@ -40,6 +40,10 @@ import (
 // the secret store and the source roster.
 var errConnectorOnboardingUnavailable = errors.New("api: connector onboarding unavailable")
 
+// ErrConnectorUnavailable: the connector kind is a Business capability and this build is
+// Community. 501 connector_unavailable, like the other edition seams.
+var ErrConnectorUnavailable = errors.New("connector unavailable in this edition")
+
 // ErrConnectorTestFailed is the SAFE result of a failed connectivity test: the
 // candidate connector could not be opened with the supplied configuration. Its
 // message is deliberately generic — a connector's own Open error runs against the

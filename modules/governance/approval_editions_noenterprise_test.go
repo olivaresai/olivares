@@ -259,13 +259,15 @@ func TestCommunityStoredBreakGlassGrantIsInert(t *testing.T) {
 	}
 }
 
-func TestCommunityRestrictivePoliciesRemainAvailable(t *testing.T) {
+// A raising policy stored before a downgrade, or written by a Business build,
+// keeps its effect in Community: the edition only refuses authoring one.
+func TestCommunityStoredRaisingPoliciesKeepEnforcing(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	reviewers := make([]string, 3)
 	for i := range reviewers {
-		_, reviewers[i] = h.roleUser(admin, tenant, fmt.Sprintf("restrictive-reviewer-%d@x.io", i), "admin")
+		_, reviewers[i] = h.roleUser(admin, tenant, fmt.Sprintf("stored-reviewer-%d@x.io", i), "admin")
 	}
 	for _, spec := range []map[string]any{
 		{"match": map[string]any{"action": "claude.tool.use"}},
@@ -282,9 +284,9 @@ func TestCommunityRestrictivePoliciesRemainAvailable(t *testing.T) {
 		if n, ok := spec["required_approvals"].(int); ok {
 			required = n
 		}
-		request := h.createApproval(admin, tenant, map[string]any{"action": action, "subject_kind": "tool", "subject_ref": "restrictive-policy-journey"})
+		request := h.createApproval(admin, tenant, map[string]any{"action": action, "subject_kind": "tool", "subject_ref": "stored-policy-journey"})
 		if request.code != http.StatusCreated || request.body["required_approvals"] != float64(required) {
-			t.Fatalf("restrictive policy for %s = %d %s, want quorum %d", action, request.code, request.raw, required)
+			t.Fatalf("stored raising policy for %s = %d %s, want quorum %d", action, request.code, request.raw, required)
 		}
 		for i := range required {
 			want := "pending"
@@ -293,7 +295,7 @@ func TestCommunityRestrictivePoliciesRemainAvailable(t *testing.T) {
 			}
 			decision := h.decide(reviewers[i], tenant, request.body["id"].(string), "approve")
 			if decision.code != http.StatusOK || decision.body["status"] != want {
-				t.Fatalf("restrictive policy for %s decision %d = %d %s, want %s", action, i+1, decision.code, decision.raw, want)
+				t.Fatalf("stored raising policy for %s decision %d = %d %s, want %s", action, i+1, decision.code, decision.raw, want)
 			}
 		}
 	}
@@ -342,23 +344,30 @@ func TestCommunityDisablesStoredLoweringPolicy(t *testing.T) {
 	}
 }
 
-// Community has no cap on approval policies: only a stored tier below the action's
-// default is Business. These bodies are what the console editor sends (no risk_tier),
-// plus two policies that raise the quorum or the tier.
-func TestCommunityAcceptsSeveralReviewAndRaisingPolicies(t *testing.T) {
+// Community keeps the basic "ask": any number of policies that require one
+// review of the matched action. These bodies are what the console editor sends
+// (no risk_tier), plus an explicit tier and quorum equal to the action's default,
+// which change nothing.
+func TestCommunityAcceptsReviewPolicies(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
-	for _, tc := range []struct {
+	specs := []struct {
 		name string
 		spec map[string]any
 	}{
 		{"review-all", map[string]any{"required_approvals": 1, "match": map[string]any{}}},
 		{"review-deploy", map[string]any{"required_approvals": 1, "match": map[string]any{"action": "deploy.apply"}}},
 		{"review-tool", map[string]any{"required_approvals": 1, "match": map[string]any{"action": "claude.tool.use", "subject_kind": "session"}}},
-		{"raise-quorum", map[string]any{"required_approvals": 3, "match": map[string]any{"action": "deploy.apply"}}},
-		{"raise-tier", map[string]any{"risk_tier": "critical", "match": map[string]any{"action": "claude.tool.use"}}},
-	} {
+		{"default-tier-high", map[string]any{"risk_tier": "high", "match": map[string]any{"action": "claude.tool.use"}}},
+		{"default-tier-critical", map[string]any{"risk_tier": "critical", "required_approvals": 2, "match": map[string]any{"action": "deploy.apply"}}},
+		{"critical floor quorum, no tier", map[string]any{"required_approvals": 2, "match": map[string]any{"action": "deploy.apply"}}},
+		{"explicit zero quorum", map[string]any{"required_approvals": 0, "match": map[string]any{"action": "claude.tool.use"}}},
+		{"session launch, one reviewer", map[string]any{"required_approvals": 1, "match": map[string]any{"action": "sessions.run.launch"}}},
+		{"default tier, mixed case and spaces", map[string]any{"risk_tier": " HIGH ", "match": map[string]any{"action": "claude.tool.use"}}},
+		{"critical floor, mixed case and spaces", map[string]any{"risk_tier": " Critical ", "required_approvals": 2, "match": map[string]any{"action": " deploy.apply "}}},
+	}
+	for _, tc := range specs {
 		r := h.do("POST", govPath+"/policies", admin, map[string]any{
 			"name": tc.name, "kind": "approval", "enabled": true, "spec": tc.spec,
 		}, tenantHdr(tenant))
@@ -367,25 +376,83 @@ func TestCommunityAcceptsSeveralReviewAndRaisingPolicies(t *testing.T) {
 		}
 	}
 	list := h.do("GET", govPath+"/policies?kind=approval", admin, nil, tenantHdr(tenant))
-	if items, _ := list.body["items"].([]any); len(items) != 5 {
-		t.Errorf("approval policies stored = %d, want 5: %s", len(items), list.raw)
+	if items, _ := list.body["items"].([]any); len(items) != len(specs) {
+		t.Errorf("approval policies stored = %d, want %d: %s", len(items), len(specs), list.raw)
 	}
 }
 
-// An explicit tier equal to the default lowers nothing: Community accepts it.
-func TestCommunityAcceptsDefaultEqualTierPolicies(t *testing.T) {
+// Raising the risk tier or the approval count above the action's default is an
+// advanced approval policy: Community answers 501 business_required on create
+// and on update, and stores nothing.
+func TestCommunityRejectsTierAndQuorumRaisingPolicies(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
-	for _, tc := range []struct{ action, tier string }{
-		{"deploy.apply", "critical"}, {"claude.tool.use", "high"}, {"", "critical"},
+	review := h.createApprovalPolicy(admin, tenant, "review", map[string]any{"required_approvals": 1, "match": map[string]any{"action": "claude.tool.use"}})
+	for name, spec := range map[string]map[string]any{
+		"quorum above a high default":       {"required_approvals": 2, "match": map[string]any{"action": "claude.tool.use"}},
+		"quorum above a critical floor":     {"required_approvals": 3, "match": map[string]any{"action": "deploy.apply"}},
+		"quorum on every action":            {"required_approvals": 2, "match": map[string]any{}},
+		"tier above a high default":         {"risk_tier": "critical", "match": map[string]any{"action": "claude.tool.use"}},
+		"critical tier on every action":     {"risk_tier": "critical", "match": map[string]any{}},
+		"tier and quorum together":          {"risk_tier": "critical", "required_approvals": 2, "match": map[string]any{"action": "mcp.tool.call"}},
+		"tier and quorum, session launch":   {"risk_tier": "critical", "required_approvals": 3, "match": map[string]any{"action": "sessions.run.launch"}},
+		"quorum alone, session launch":      {"required_approvals": 2, "match": map[string]any{"action": "sessions.run.launch"}},
+		"default tier with a raised quorum": {"risk_tier": "high", "required_approvals": 2, "match": map[string]any{"action": "claude.tool.use"}},
 	} {
-		r := h.do("POST", govPath+"/policies", admin, map[string]any{
-			"name": "equal-" + tc.action + "-" + tc.tier, "kind": "approval", "enabled": true,
-			"spec": map[string]any{"risk_tier": tc.tier, "match": map[string]any{"action": tc.action}},
-		}, tenantHdr(tenant))
-		if r.code != http.StatusCreated {
-			t.Errorf("equal-tier policy for %q at %s = %d %s, want 201", tc.action, tc.tier, r.code, r.raw)
+		for _, call := range []struct{ method, path string }{{"POST", govPath + "/policies"}, {"PUT", govPath + "/policies/" + review}} {
+			r := h.do(call.method, call.path, admin, map[string]any{"name": "raise", "kind": "approval", "enabled": true, "spec": spec}, tenantHdr(tenant))
+			if e, _ := r.body["error"].(map[string]any); r.code != http.StatusNotImplemented || e["code"] != "business_required" {
+				t.Errorf("%s %s = %d %s, want 501 business_required", call.method, name, r.code, r.raw)
+			}
 		}
+	}
+	list := h.do("GET", govPath+"/policies?kind=approval", admin, nil, tenantHdr(tenant))
+	if items, _ := list.body["items"].([]any); len(items) != 1 {
+		t.Errorf("approval policies stored = %d, want only the review policy: %s", len(items), list.raw)
+	}
+	read := h.do("GET", govPath+"/policies/"+review, admin, nil, tenantHdr(tenant))
+	if spec, _ := read.body["spec"].(map[string]any); spec["required_approvals"] != float64(1) || spec["risk_tier"] != nil {
+		t.Errorf("a refused update changed the review policy: %s", read.raw)
+	}
+}
+
+// A tenant back on Community can still switch a stored raising policy off or
+// delete it: a disabled policy is never applied.
+func TestCommunityDisablesStoredRaisingPolicy(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	spec := map[string]any{"risk_tier": "critical", "required_approvals": 2, "match": map[string]any{"action": "claude.tool.use"}}
+	id := h.createApprovalPolicy(admin, tenant, "stored raise", spec)
+	path := govPath + "/policies/" + id
+	r := h.do("PUT", path, admin, map[string]any{"name": "stored raise", "kind": "approval", "enabled": false, "spec": spec}, tenantHdr(tenant))
+	if r.code != http.StatusOK || r.body["enabled"] != false {
+		t.Fatalf("disable stored raising policy = %d %s, want 200", r.code, r.raw)
+	}
+	if r := h.do("DELETE", path, admin, nil, tenantHdr(tenant)); r.code != http.StatusNoContent {
+		t.Fatalf("delete stored raising policy = %d %s, want 204", r.code, r.raw)
+	}
+}
+
+// A raising policy can be stored switched off, but switching it on is the act
+// the edition check guards: the update is refused and the policy stays off.
+func TestCommunityRefusesSwitchingOnARaisingPolicy(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	spec := map[string]any{"risk_tier": "critical", "required_approvals": 3, "match": map[string]any{"action": "claude.tool.use"}}
+	off := h.do("POST", govPath+"/policies", admin, map[string]any{"name": "raise, off", "kind": "approval", "enabled": false, "spec": spec}, tenantHdr(tenant))
+	if off.code != http.StatusCreated {
+		t.Fatalf("store switched off = %d %s, want 201", off.code, off.raw)
+	}
+	id, _ := off.body["id"].(string)
+	on := h.do("PUT", govPath+"/policies/"+id, admin, map[string]any{"name": "raise, off", "kind": "approval", "enabled": true, "spec": spec}, tenantHdr(tenant))
+	if e, _ := on.body["error"].(map[string]any); on.code != http.StatusNotImplemented || e["code"] != "business_required" {
+		t.Fatalf("switch on = %d %s, want 501 business_required", on.code, on.raw)
+	}
+	read := h.do("GET", govPath+"/policies/"+id, admin, nil, tenantHdr(tenant))
+	if read.code != http.StatusOK || read.body["enabled"] != false {
+		t.Fatalf("a refused switch-on changed the policy: %d %s", read.code, read.raw)
 	}
 }

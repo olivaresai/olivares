@@ -58,7 +58,7 @@ Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts. Welch
 | Edition | Preis | Umfang |
 | --- | --- | --- |
 | Community | Kostenlos, AGPL-3.0-only | Unbegrenzte Benutzer; ein aktiver Identitätsanbieter (IdP). |
-| Business | 129 USD/Monat oder 1.290 USD/Jahr | Unbegrenzte Benutzer; eine juristische Person; eine gleichzeitig aktive Instanz. |
+| Business | 99 USD/Monat oder 990 USD/Jahr | Unbegrenzte Benutzer; eine juristische Person; eine gleichzeitig aktive Instanz. |
 | Enterprise | Kontaktieren Sie uns | Vertraglich vereinbarte Bedingungen und die Fähigkeiten, die von ihnen abhängen: mehrere juristische Personen, weitere Deployments oder IdPs, Air-Gap-Mirrors, individuelles LTS und begrenzte Upstream-Credentials per OAuth-2.0-Token-Exchange (RFC 8693). |
 
 Business enthält **Regulated Operations**, **AI Runtime Security**,
@@ -86,9 +86,9 @@ Das offene Binary ist die gesamte Governance-Plattform; die kommerzielle `enterp
 **additiv**. Zwei Grenzen sind besonders hervorzuheben, weil der offene Build sie
 ehrlich beantwortet, statt sie vorzutäuschen:
 
-- **SSO** — Single-IdP-Login (OIDC + SAML 2.0) und eingehendes SCIM sind im
+- **SSO** — Single-IdP-Login (OIDC + SAML 2.0) ist im
   Standard-Binary **offen**: echtes Login, kein `-tags enterprise`. Mehrere aktive
-  IdPs (pro Tenant / nach Domain), Gruppenzuordnung beim Login und SSO-Pflicht
+  IdPs (pro Tenant / nach Domain), Gruppenzuordnung beim Login, SSO-Pflicht und der eingehende SCIM-Server
   gehören zu Business (Identity & Scale); das Aktivieren eines zweiten aktiven IdP gibt `multi_idp_requires_enterprise`
   zurück.
 - **Benutzerkonten** — **unbegrenzt in jeder Edition**. Der Community-Build hat kein

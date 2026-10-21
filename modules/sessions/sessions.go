@@ -150,7 +150,8 @@ func (m *Module) Init(_ context.Context, host sdk.Host) error {
 // Engine-composed modules refuse missing required ports before lifecycle work.
 // Once validated, the sweep starts before best-effort approval recovery: an emergency stop reaches
 // running sessions even when the recovery of waiting launches cannot run. Start
-// never fails over that recovery (RecoverWaitingLaunchesForAllTenants).
+// never fails over that recovery (RecoverWaitingLaunchesForAllTenants), nor over
+// reading the runs a crashed engine left running as stopped (stopOrphanedRuns).
 func (m *Module) Start(ctx context.Context) error {
 	if err := m.checkDependencies(); err != nil {
 		return err
@@ -164,12 +165,14 @@ func (m *Module) Start(ctx context.Context) error {
 		m.log.Warn("sessions: started without a data handle; live operation will not persist")
 	}
 	m.startStopSweep()
+	m.stopOrphanedRuns(ctx)
 	m.RecoverWaitingLaunchesForAllTenants(ctx)
 	return nil
 }
 
 // RecoverWaitingLaunchesForAllTenants resumes watching launches awaiting approval,
-// in every tenant the composition names (Dependencies.ApprovalRecoveryTenants). It is best
+// in every tenant the composition names (Dependencies.ApprovalRecoveryTenants), and
+// resumes the runs the engine's own stop ended (resumeEngineStoppedRuns). It is best
 // effort: a tenant list or a tenant it cannot read is logged, the other tenants
 // still recover, and the next start or leader promotion tries again. Composition
 // calls it on promotion only after the module has started; Start also calls it.
@@ -189,6 +192,7 @@ func (m *Module) RecoverWaitingLaunchesForAllTenants(ctx context.Context) {
 				"tenant", tenant.String(), "err", redactErr(err))
 		}
 	}
+	m.resumeEngineStoppedRuns(tenants)
 }
 
 // Stop unsubscribes, terminates every supervised Claude Code process (their

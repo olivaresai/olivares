@@ -115,7 +115,7 @@ func TestWebhookPathUnchangedWithRendererWired(t *testing.T) {
 // Deny-closed: a SIEM-sink subscription with NO renderer wired never sends — the
 // delivery records the un-wired outcome and the sink receives nothing.
 func TestSinkDenyClosedWithoutRenderer(t *testing.T) {
-	h := newHarness(t) // no WithSinkRenderer
+	h := newHarness(t, WithSinkRenderer(&fakeRenderer{}))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	rc := newReceiver(t)
@@ -125,6 +125,7 @@ func TestSinkDenyClosedWithoutRenderer(t *testing.T) {
 		"endpoint": rc.srv.URL, "role": "admin",
 		"sink_kind": "datadog", "sink_format": "ocsf", "sink_cred": "ddkey",
 	})
+	h.mod.renderer = nil // the stored sink under a build that wires no renderer
 	h.publishFinding(tenant, "module:security", "guardrail", "x")
 	h.dispatch(tenant)
 

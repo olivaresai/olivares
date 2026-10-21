@@ -309,8 +309,9 @@ func fixedSeed(b byte) []byte {
 // sha256 digest — the open≡enterprise parity gate's oracle.
 func migrateManifestCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "manifest",
-		Short: "Print this binary's registered schema manifest (deterministic; the Community≡Business parity oracle)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "manifest",
+		Short:       "Print this binary's registered schema manifest (deterministic; the Community≡Business parity oracle)",
 		Long: "manifest serializes the EXACT schema this binary registers at boot — every module's entity\n" +
 			"descriptors (tables/columns/indexes/guards) and file migrations (by content hash) — as canonical\n" +
 			"JSON plus a trailing sha256. It opens no database. The Community≡Business parity gate runs this\n" +

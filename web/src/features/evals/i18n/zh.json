@@ -56,12 +56,14 @@
       "startedAt": "开始时间"
     },
     "regressed": "已回退 · 漂移 {{drift}}",
+    "withinNoise": "噪声范围内下降 · 漂移 {{drift}}",
+    "passRateDiff": "通过率下降 {{drop}}（95% CI {{lo}}–{{hi}}）— {{passed}}/{{n}} 对比基线 {{baselinePassed}}/{{baselineN}}",
     "noRegression": "无",
     "empty": "该范围内无运行。",
     "emptyHint": "所选时间范围内的每次评估运行及其得分都会列在这里。放宽时间范围，或启动一次运行。",
     "overN": "共 {{n}}",
-    "notScored": "not scored — no verdict",
-    "noBaseline": "no baseline — nothing compared"
+    "notScored": "未评分——没有结论",
+    "noBaseline": "没有基线——未作任何比较"
   },
   "cases": {
     "title": "{{subject}} —— 用例结果",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "漂移 —— {{subject}}",
-    "description": "分数随时间相对于套件通过阈值的变化。回归是与一次基线运行的分数点比较。那次运行可以使用另一个套件版本、模型或评分器，比较不会报告哪一项发生了变化。套件版本变更后，请固定一条基线。",
+    "description": "分数随时间相对于套件通过阈值的变化。回归是与一次基线运行的比较：分数降幅必须超过套件阈值，且通过率之差的 95% 区间不包含 0。那次运行可以使用另一个套件版本、模型或评分器，比较不会报告哪一项发生了变化。套件版本变更后，请固定一条基线。",
     "score": "分数",
     "threshold": "通过阈值",
     "pickerTitle": "对象",
@@ -159,8 +161,8 @@
     "confirmOverride": "覆盖门禁",
     "overrideDone": "门禁已覆盖",
     "cancel": "取消",
-    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
-    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+    "correctedRate": "经偏差校正的通过率 {{rate}}（评判器灵敏度 {{sens}}，特异度 {{spec}}）——与原始通过率并列显示，绝不取而代之。",
+    "noCorrection": "没有偏差校正估计：没有可信的校准可用于校正，因此原始通过率未经调整——这不等同于两者一致。"
   },
   "calibration": {
     "title": "评判器校准",
@@ -180,23 +182,23 @@
   },
   "calibItems": {
     "title": "Reference set",
-    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "description": "评判器据以衡量的人工标注，也决定一份报告能否认证。",
     "run": "Run calibration",
-    "empty": "No labelled items yet",
+    "empty": "还没有已标注项",
     "emptyHint": "已标注项是校准报告据以评分的人工判断。标注一个用例即可添加第一条。",
-    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
-    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "distribution": "{{pass}} 条标注为通过 · {{fail}} 条标注为未通过",
+    "degenerate": "⛔ 所有标注都相同，因此无法计算 kappa，这组数据生成的任何报告都无法认证。请标注另一类用例。",
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
-    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+    "noJudge": "未配置评判器，因此没有可测量的内容。这不是故障，也不是版本限制：校准无法被模拟。"
   },
   "baseline": {
     "pin": "Pin as baseline",
     "confirm": "Replace the baseline",
     "pinned": "Baseline pinned",
-    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
-    "thisRunScores": "This run passed {{score}} over n={{n}}.",
-    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+    "replaceWarning": "⛔ 每个套件和主体只有一条基线，且它可以被修改。固定并不是新增——它会替换 {{suite}} / {{subject}} 当前的基线。此后所有回归都以它为准衡量。",
+    "thisRunScores": "本次运行在 n={{n}} 的样本上通过 {{score}}。",
+    "cannotShowCurrent": "控制台无法显示被替换的内容：引擎只开放 POST /baselines 这一条路由，此前的参照记录在自审计中，而不在可读取的端点里。固定一次更差的运行会降低门槛，质量门禁就是这样在没有任何人停用它的情况下不再触发的。"
   }
 }

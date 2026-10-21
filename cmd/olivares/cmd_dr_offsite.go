@@ -307,11 +307,12 @@ func drPushCmd() *cobra.Command {
 	var of offsiteFlags
 	var in string
 	cmd := &cobra.Command{
-		Use:     "push",
-		Short:   "Upload an existing DR bundle to the offsite S3/R2 target",
-		Long:    "push uploads an existing local DR bundle to the configured S3-compatible offsite bucket and prefix.",
-		Example: "  olivares dr push --in ./backup.drbundle --offsite-bucket olivares-dr --offsite-region eu-west-1",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "push",
+		Short:       "Upload an existing DR bundle to the offsite S3/R2 target",
+		Long:        "push uploads an existing local DR bundle to the configured S3-compatible offsite bucket and prefix.",
+		Example:     "  olivares dr push --in ./backup.drbundle --offsite-bucket olivares-dr --offsite-region eu-west-1",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if in == "" {
 				return fmt.Errorf("--in is required")
@@ -344,11 +345,12 @@ func drPullCmd() *cobra.Command {
 	var of offsiteFlags
 	var name, out string
 	cmd := &cobra.Command{
-		Use:     "pull",
-		Short:   "Download a DR bundle from the offsite S3/R2 target",
-		Long:    "pull downloads one named DR bundle from the configured S3-compatible offsite bucket to a local 0600 file.",
-		Example: "  olivares dr pull --name backup.drbundle --out ./backup.drbundle --offsite-bucket olivares-dr",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "pull",
+		Short:       "Download a DR bundle from the offsite S3/R2 target",
+		Long:        "pull downloads one named DR bundle from the configured S3-compatible offsite bucket to a local 0600 file.",
+		Example:     "  olivares dr pull --name backup.drbundle --out ./backup.drbundle --offsite-bucket olivares-dr",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if name == "" || out == "" {
 				return fmt.Errorf("--name and --out are required")
@@ -401,6 +403,7 @@ func drListCmd() *cobra.Command {
 	var dir string
 	var offsite bool
 	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "read"},
 		// Canonical short verb first (`ls`/`rm` across the CLI); the old
 		// name stays as an alias so nothing breaks.
 		Use:     "ls",

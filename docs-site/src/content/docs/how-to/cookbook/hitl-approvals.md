@@ -97,4 +97,4 @@ silently forgets.
 
 ## Approval editions (0.1)
 
-Community retains the approval engine, the two-distinct-human CRITICAL floor, kill-switch dual control, and policies that require review or raise tier or quorum. Tier-lowering approval policies and break-glass belong to the Business base line. Stored lowering policies and emergency grants remain readable/exportable, but cannot lower Community defaults or authorize emergency access.
+Community retains the approval engine, the two-distinct-human CRITICAL floor, kill-switch dual control, and policies that require a review of an action. Approval policies that change the risk tier or the approval count, and break-glass, belong to the Business base line. Stored policies that raise the tier or the approval count keep applying; stored lowering policies and emergency grants remain readable/exportable, but cannot lower Community defaults or authorize emergency access.

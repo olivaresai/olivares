@@ -2,108 +2,115 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 
 /*
- * Olivares AI console — design tokens (v26.10 visual system).
+ * Olivares AI console — design tokens (the website's B2 system).
  *
  * GENERATED FILE — DO NOT EDIT. Source of truth: web/tokens/console/*.tokens.json
  * (DTCG 2025.10). Regenerate with `pnpm tokens`; `pnpm tokens:check` guards drift in CI.
  * Blocks, in order: the LIGHT theme (:root), the DARK theme (.dark), the Tailwind 4
  * @theme inline mapping, density (comfortable by default, compact by attribute) and
  * motion (stopped under prefers-reduced-motion and under the Reduce motion setting).
- * Each theme holds the palette — four layered neutrals, three text tones, the single
- * brand orange #f08000 by role, status colors with soft fills — and the role names the
- * components use, each resolved from the palette. Every text token is at least 4.5:1 and
+ * Each theme holds the palette — four neutrals, three text tones, the single brand
+ * orange #f08000 by role, status colors with soft fills, four tool data colours and two
+ * neutral shadows — and the role names the components use, each resolved from the
+ * palette. scripts/check-brand-parity.mjs pins the subset the website shares to this
+ * file. Every text token is at least 4.5:1 and
  * every control boundary, focus ring and selection border at least 3:1 on every surface
- * of its theme (src/styles/tokens.test.ts measures the 372 pairs).
+ * of its theme (src/styles/tokens.test.ts measures the 500 pairs).
  */
 
 :root {
   /* Palette — neutrals — LIGHT */
-  --frame: #efeee9;
-  --canvas: #ffffff;
-  --surface: #f8f7f4;
+  --frame: #f2f2f1;
+  --canvas: #fafaf9;
+  --surface: #ffffff;
   --raised: #ffffff;
-  --hover: rgba(20, 18, 14, 0.04);
-  --active: rgba(20, 18, 14, 0.075);
-  --line: rgba(20, 18, 14, 0.09);
-  --line-strong: rgba(20, 18, 14, 0.16);
-  --ctl-border: #8a8883;
-  --scrim: rgba(26, 25, 23, 0.32);
+  --hover: rgba(40, 40, 43, 0.04);
+  --active: #f1f1ef;
+  --line: #e6e6e4;
+  --line-strong: #d6d6d3;
+  --ctl-border: #8f8a83;
+  --scrim: rgba(28, 28, 31, 0.28);
 
   /* Palette — text — LIGHT */
-  --text: #1a1917;
-  --text-2: #4a4742;
-  --text-3: #5f5c55;
+  --text: #28282b;
+  --text-2: #5c564e;
+  --text-3: #635d54;
 
   /* Palette — the brand orange, by role — LIGHT */
   --accent: #f08000;
   --on-accent: #1a1206;
-  --accent-text: #9c4a00;
+  --accent-text: #a84f00;
   --accent-soft: rgba(240, 128, 0, 0.12);
   --accent-line: rgba(194, 96, 0, 0.45);
   --accent-border: #c26000;
-  --focus: #b45500;
+  --focus: #a84f00;
 
   /* Palette — status and diff — LIGHT */
-  --ok: #18693f;
-  --ok-soft: rgba(24, 105, 63, 0.09);
-  --warn: #7d5400;
-  --warn-soft: rgba(125, 84, 0, 0.09);
-  --bad: #a8231c;
-  --bad-soft: rgba(168, 35, 28, 0.08);
-  --info: #1c58a3;
-  --info-soft: rgba(28, 88, 163, 0.08);
-  --diff-add: rgba(29, 122, 75, 0.1);
-  --diff-del: rgba(179, 38, 30, 0.09);
+  --ok: #2f6b2c;
+  --ok-soft: rgba(47, 107, 44, 0.09);
+  --warn: #665c00;
+  --warn-soft: rgba(102, 92, 0, 0.09);
+  --bad: #b0201b;
+  --bad-soft: rgba(176, 32, 27, 0.08);
+  --info: #1e5a86;
+  --info-soft: rgba(30, 90, 134, 0.08);
+  --diff-add: rgba(47, 107, 44, 0.1);
+  --diff-del: rgba(176, 32, 27, 0.09);
 
-  /* Palette — depth and atmosphere — LIGHT */
+  /* Palette — tool data colours — LIGHT */
+  --tool-claude: #2a78d6;
+  --tool-codex: #1baf7a;
+  --tool-opencode: #6250d6;
+  --tool-gemini: #d55181;
+
+  /* Palette — depth — LIGHT */
+  --shadow-raised:
+    0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22);
   --shadow-pop:
-    0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08);
-  --shadow-card: 0 1px 2px rgba(30, 24, 16, 0.05);
-  --ember: radial-gradient(
-    720px 260px at 50% -110px,
-    rgba(240, 128, 0, 0.09),
-    transparent 70%
-  );
+    0 2px 6px -2px rgba(28, 28, 31, 0.1),
+    0 24px 48px -24px rgba(28, 28, 31, 0.3);
+  --shadow-card: none;
 
   /* Roles — surfaces and text */
-  --background: #ffffff;
+  --background: #fafaf9;
   --elevated: #ffffff;
-  --overlay: rgba(26, 25, 23, 0.32);
-  --muted: #ededed;
-  --muted-foreground: #4a4742;
-  --foreground: #1a1917;
-  --border: rgba(20, 18, 14, 0.09);
-  --border-strong: rgba(20, 18, 14, 0.16);
-  --ring: #b45500;
+  --overlay: rgba(28, 28, 31, 0.28);
+  --muted: #f1f1ef;
+  --muted-foreground: #5c564e;
+  --foreground: #28282b;
+  --border: #e6e6e4;
+  --border-strong: #d6d6d3;
+  --ring: #a84f00;
 
   /* Roles — the orange */
   --accent-foreground: #1a1206;
-  --accent-hover: #fe8800;
+  --accent-hover: #df6d00;
   --accent-active: #cc6a00;
-  --accent-soft-foreground: #9c4a00;
+  --accent-soft-foreground: #a84f00;
 
   /* Roles — status */
-  --success: #18693f;
-  --warning: #7d5400;
-  --danger: #a8231c;
+  --success: #2f6b2c;
+  --warning: #665c00;
+  --danger: #b0201b;
   --danger-solid: #b0201b;
   --danger-solid-foreground: #fff8f0;
-  --success-soft: rgba(24, 105, 63, 0.09);
-  --warning-soft: rgba(125, 84, 0, 0.09);
-  --danger-soft: rgba(168, 35, 28, 0.08);
+  --success-soft: rgba(47, 107, 44, 0.09);
+  --warning-soft: rgba(102, 92, 0, 0.09);
+  --danger-soft: rgba(176, 32, 27, 0.08);
 
   /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #0a7c77;
   --confidence-approximate: #5b6470;
 
   /* Roles — elevation */
-  --elev-xs: 0 1px 2px rgba(30, 24, 16, 0.05);
-  --elev-sm: 0 1px 2px rgba(30, 24, 16, 0.05);
-  --elev-md: 0 1px 2px rgba(30, 24, 16, 0.05);
+  --elev-xs: none;
+  --elev-sm: none;
+  --elev-md: none;
   --elev-lg:
-    0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08);
+    0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22);
   --elev-xl:
-    0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08);
+    0 2px 6px -2px rgba(28, 28, 31, 0.1),
+    0 24px 48px -24px rgba(28, 28, 31, 0.3);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
   --accent-strong: #c26000;
@@ -117,79 +124,82 @@
 
 .dark {
   /* Palette — neutrals — DARK */
-  --frame: #0a0a0c;
-  --canvas: #111113;
-  --surface: #17171a;
-  --raised: #1d1d21;
-  --hover: rgba(255, 255, 255, 0.045);
-  --active: rgba(255, 255, 255, 0.08);
+  --frame: #1b1b1e;
+  --canvas: #28282b;
+  --surface: #343434;
+  --raised: #343434;
+  --hover: rgba(255, 255, 255, 0.05);
+  --active: #38383b;
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.14);
-  --ctl-border: #6e6e72;
-  --scrim: rgba(5, 5, 6, 0.62);
+  --ctl-border: #8a8783;
+  --scrim: rgba(0, 0, 0, 0.5);
 
   /* Palette — text — DARK */
-  --text: #f3f2ef;
-  --text-2: #b0aea8;
-  --text-3: #9a9892;
+  --text: #fafaf9;
+  --text-2: #b4aeaa;
+  --text-3: #b4aea5;
 
   /* Palette — the brand orange, by role — DARK */
   --accent: #f08000;
   --on-accent: #1a1206;
   --accent-text: #ff9b3d;
-  --accent-soft: rgba(240, 128, 0, 0.13);
+  --accent-soft: #3c3127;
   --accent-line: rgba(240, 128, 0, 0.42);
-  --accent-border: #f08000;
-  --focus: #ffb366;
+  --accent-border: #ff9b3d;
+  --focus: #f08000;
 
   /* Palette — status and diff — DARK */
-  --ok: #52c98f;
-  --ok-soft: rgba(82, 201, 143, 0.12);
-  --warn: #e8c14a;
-  --warn-soft: rgba(232, 193, 74, 0.12);
-  --bad: #f47a70;
-  --bad-soft: rgba(244, 122, 112, 0.12);
-  --info: #72aef5;
-  --info-soft: rgba(114, 174, 245, 0.12);
-  --diff-add: rgba(82, 201, 143, 0.13);
-  --diff-del: rgba(244, 122, 112, 0.13);
+  --ok: #9cc79c;
+  --ok-soft: #343836;
+  --warn: #d9b45c;
+  --warn-soft: #3a3630;
+  --bad: #eb9999;
+  --bad-soft: #3c3336;
+  --info: #9db9cf;
+  --info-soft: #34363b;
+  --diff-add: #343836;
+  --diff-del: #3c3336;
 
-  /* Palette — depth and atmosphere — DARK */
+  /* Palette — tool data colours — DARK */
+  --tool-claude: #3987e5;
+  --tool-codex: #199e70;
+  --tool-opencode: #9085e9;
+  --tool-gemini: #d55181;
+
+  /* Palette — depth — DARK */
+  --shadow-raised:
+    0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
   --shadow-pop:
-    0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4);
+    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
   --shadow-card: none;
-  --ember: radial-gradient(
-    720px 260px at 50% -110px,
-    rgba(240, 128, 0, 0.12),
-    transparent 70%
-  );
 
   /* Roles — surfaces and text */
-  --background: #111113;
-  --elevated: #1d1d21;
-  --overlay: rgba(5, 5, 6, 0.62);
-  --muted: #242426;
-  --muted-foreground: #b0aea8;
-  --foreground: #f3f2ef;
+  --background: #28282b;
+  --elevated: #343434;
+  --overlay: rgba(0, 0, 0, 0.5);
+  --muted: #38383b;
+  --muted-foreground: #b4aeaa;
+  --foreground: #fafaf9;
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
-  --ring: #ffb366;
+  --ring: #f08000;
 
   /* Roles — the orange */
   --accent-foreground: #1a1206;
-  --accent-hover: #fe8800;
+  --accent-hover: #df6d00;
   --accent-active: #d87000;
   --accent-soft-foreground: #ff9b3d;
 
   /* Roles — status */
-  --success: #52c98f;
-  --warning: #e8c14a;
-  --danger: #f47a70;
+  --success: #9cc79c;
+  --warning: #d9b45c;
+  --danger: #eb9999;
   --danger-solid: #c5362f;
   --danger-solid-foreground: #fff1ef;
-  --success-soft: rgba(82, 201, 143, 0.12);
-  --warning-soft: rgba(232, 193, 74, 0.12);
-  --danger-soft: rgba(244, 122, 112, 0.12);
+  --success-soft: #343836;
+  --warning-soft: #3a3630;
+  --danger-soft: #3c3336;
 
   /* Roles — access-graph confidence (a cool axis apart from status) */
   --confidence-attributed: #5be0d8;
@@ -199,13 +209,12 @@
   --elev-xs: none;
   --elev-sm: none;
   --elev-md: none;
-  --elev-lg:
-    0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --elev-lg: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
   --elev-xl:
-    0 18px 48px -12px rgba(0, 0, 0, 0.72), 0 2px 6px rgba(0, 0, 0, 0.4);
+    0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 24px 48px -24px rgba(0, 0, 0, 0.85);
 
   /* Roles — selection indicator, >=3:1 on its neighbours (SC 1.4.11) */
-  --accent-strong: #f08000;
+  --accent-strong: #ff9b3d;
 }
 
 @theme inline {
@@ -240,6 +249,10 @@
   --color-info-soft: var(--info-soft);
   --color-diff-add: var(--diff-add);
   --color-diff-del: var(--diff-del);
+  --color-tool-claude: var(--tool-claude);
+  --color-tool-codex: var(--tool-codex);
+  --color-tool-opencode: var(--tool-opencode);
+  --color-tool-gemini: var(--tool-gemini);
   --color-background: var(--background);
   --color-elevated: var(--elevated);
   --color-overlay: var(--overlay);
@@ -284,14 +297,12 @@
 
   /* Typography — self-hosted in src/styles/fonts.css */
   --font-sans:
-    'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC',
+    'Inter', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC',
     'PingFang SC', 'Microsoft YaHei', 'Yu Gothic', sans-serif;
   --font-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
     'Liberation Mono', monospace;
-  --font-display:
-    'Geist', system-ui, -apple-system, 'Segoe UI', 'Noto Sans CJK SC',
-    'PingFang SC', 'Microsoft YaHei', 'Yu Gothic', sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
 
   /* Radii — controls, cards, panels */
   --radius-ctl: 0.4375rem;
@@ -317,28 +328,28 @@
   --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* Type ladder — size + leading + tracking + weight per step */
-  --text-hero: 2.5rem;
-  --text-hero--line-height: 2.75rem;
-  --text-hero--letter-spacing: -0.035em;
+  --text-hero: 2.25rem;
+  --text-hero--line-height: 2.5rem;
+  --text-hero--letter-spacing: -0.03em;
   --text-hero--font-weight: 600;
-  --text-display-lg: 1.875rem;
-  --text-display-lg--line-height: 2.25rem;
+  --text-display-lg: 2.25rem;
+  --text-display-lg--line-height: 2.5rem;
   --text-display-lg--letter-spacing: -0.03em;
   --text-display-lg--font-weight: 600;
-  --text-display: 1.375rem;
-  --text-display--line-height: 1.75rem;
+  --text-display: 1.625rem;
+  --text-display--line-height: 1.875rem;
   --text-display--letter-spacing: -0.02em;
   --text-display--font-weight: 600;
-  --text-title: 1.375rem;
-  --text-title--line-height: 1.75rem;
+  --text-title: 1.625rem;
+  --text-title--line-height: 1.875rem;
   --text-title--letter-spacing: -0.02em;
   --text-title--font-weight: 600;
-  --text-heading: 1rem;
+  --text-heading: 1.0625rem;
   --text-heading--line-height: 1.375rem;
   --text-heading--letter-spacing: -0.01em;
   --text-heading--font-weight: 600;
-  --text-body-l: 0.9375rem;
-  --text-body-l--line-height: 1.5rem;
+  --text-body-l: 0.875rem;
+  --text-body-l--line-height: 1.375rem;
   --text-body: 0.875rem;
   --text-body--line-height: 1.25rem;
   --text-caption: 0.8125rem;

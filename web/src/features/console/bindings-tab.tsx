@@ -85,6 +85,8 @@ const SOURCE_TYPES: SourceScopeSourceType[] = [
   'provider',
   'knowledge',
   'data',
+  'profile',
+  'tool',
 ]
 
 const SCOPE_TREES: SourceScopeTree[] = [

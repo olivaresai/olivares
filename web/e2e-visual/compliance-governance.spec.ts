@@ -15,6 +15,12 @@
 // which a shared 200-for-everything fixture cannot express — and mocking here
 // keeps this spec from colliding with other edits to fixtures.ts.
 import { expect, test, type Page } from '@playwright/test'
+import { fixtureFor } from './fixtures'
+import { BUSINESS_BUILD } from '../src/features/business-build'
+import { PANEL_EXTENSIONS } from '../src/features/extensions'
+
+// Compliance is a Business page (docs/editions.md): a Community console opens the Business notice there.
+test.skip(!BUSINESS_BUILD, 'Compliance is a Business page')
 
 const ACTIVE_HOLD = {
   id: 'lh-1',
@@ -41,7 +47,7 @@ const ERASURE_REQUEST = {
   created_at: '2026-08-01T10:00:00Z',
 }
 
-/** Seed an authenticated session and answer every /v1 call. `overrides` maps a
+/** Recover a synthetic browser session and answer every /v1 call. `overrides` maps a
  *  path suffix to a [status, body] pair so a test can make the engine answer 202
  *  or 423 on exactly one route. */
 async function mockEngine(
@@ -49,17 +55,6 @@ async function mockEngine(
   overrides: Record<string, [number, unknown]> = {},
 ) {
   await page.addInitScript(() => {
-    localStorage.setItem(
-      'olivares.session',
-      JSON.stringify({
-        state: {
-          token: 'olvs_demo',
-          sessionId: 's1',
-          expiresAt: '2030-01-01T00:00:00Z',
-        },
-        version: 0,
-      }),
-    )
     localStorage.setItem(
       'olivares.tenant',
       JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
@@ -89,24 +84,11 @@ async function mockEngine(
         body: JSON.stringify(body),
       })
 
-    if (p.endsWith('/v1/auth/whoami')) {
-      return json({
-        kind: 'user',
-        user_id: 'u-demo',
-        actor: 'user:admin@demo',
-        display_name: 'Demo Admin',
-        superadmin: true,
-        grants: [{ tenant: 't-demo', role: 'owner' }],
-      })
-    }
     if (p.endsWith('/v1/m/compliance/holds') && method === 'GET') {
       return json({ items: [ACTIVE_HOLD] })
     }
     if (p.endsWith('/v1/m/compliance/erasure') && method === 'GET') {
       return json({ items: [ERASURE_REQUEST] })
-    }
-    if (p.endsWith('/v1/m/compliance/summary')) {
-      return json({ frameworks: [], disclaimer: 'not a certification' })
     }
     if (p.endsWith('/stream')) {
       return route.fulfill({
@@ -115,12 +97,15 @@ async function mockEngine(
         body: ': connected\n\n',
       })
     }
-    return json({ items: [], has_more: false })
+    return json(fixtureFor(p) ?? { items: [], has_more: false })
   })
 }
 
 async function openTab(page: Page, name: RegExp) {
   await page.goto('/compliance')
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Compliance', exact: true }),
+  ).toBeVisible()
   await page.getByRole('tab', { name }).click()
 }
 
@@ -404,10 +389,14 @@ test.describe('GDPR erasure flow', () => {
   })
 })
 
-test.describe('the regulatory calendar reaches an operator', () => {
-  test('renders milestones with their source, and marks what is not law', async ({
+test.describe('regulatory calendar composition', () => {
+  test('matches the composed panels and verifies milestone sources and status', async ({
     page,
   }) => {
+    const requests: string[] = []
+    page.on('request', (request) =>
+      requests.push(new URL(request.url()).pathname),
+    )
     await mockEngine(page, {
       '/v1/m/compliance/calendar': [
         200,
@@ -447,6 +436,20 @@ test.describe('the regulatory calendar reaches an operator', () => {
         },
       ],
     })
+    // The default console has records; the paid composition supplies the calendar.
+    // Keep the milestone/source checks below for that composition, and prove the
+    // Community page neither offers nor requests a calendar it cannot render.
+    if (
+      !PANEL_EXTENSIONS.complianceView &&
+      !PANEL_EXTENSIONS.complianceTabs.some((tab) => tab.id === 'calendar')
+    ) {
+      await openTab(page, /^evidence$/i)
+      await expect(
+        page.getByRole('tab', { name: /regulatory calendar/i }),
+      ).toHaveCount(0)
+      expect(requests).not.toContain('/v1/m/compliance/calendar')
+      return
+    }
     await openTab(page, /regulatory calendar/i)
 
     await expect(page.getByText('In force')).toBeVisible()

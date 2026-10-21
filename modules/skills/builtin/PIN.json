@@ -51,7 +51,19 @@
       "sha256": "dda8cb4dad601f307c5da734e885e58239b98bf94563b7bc77de9757ff871127",
       "tar_sha256": "07d0b9007113aa2cb0d76e86b08267ae28fab60dc57c29e7cc24f1b18cc5208c",
       "skills": 35,
+      "members": 35,
       "files": 44
+    },
+    {
+      "id": "ecc-agents",
+      "source": "ecc",
+      "description": "Claude Code agents.",
+      "file": "ecc-agents.tar.gz",
+      "sha256": "90164809e1028afb055acc03f657ce1a982905b1c7f98f8fd194f058cd873619",
+      "tar_sha256": "9a760434c4c7ee9eac82d5d2f11f9cc26b9bf94e0219a59434eeced80f50b51a",
+      "skills": 0,
+      "members": 68,
+      "files": 69
     },
     {
       "id": "ecc-business-content",
@@ -61,7 +73,19 @@
       "sha256": "5aec18647e440b9fe55fb142a24c4c00798d072d4392fbd3977767475ae1a14a",
       "tar_sha256": "6b705d088ad4ab4b18732bbac52b14442382f8f3725954ebedcce3bd6d1863f4",
       "skills": 14,
+      "members": 14,
       "files": 28
+    },
+    {
+      "id": "ecc-commands",
+      "source": "ecc",
+      "description": "Claude Code commands.",
+      "file": "ecc-commands.tar.gz",
+      "sha256": "c70bb2d6e542f9c93629e4d3493cdd5d728ebb2add6dc6b9172e399a9536a625",
+      "tar_sha256": "d523696335a0005f382f1d29eaf8e34c6be9a234bf9db60cc060e9d4229e9324",
+      "skills": 0,
+      "members": 94,
+      "files": 95
     },
     {
       "id": "ecc-database",
@@ -71,6 +95,7 @@
       "sha256": "1bdb3ad335329dce9821ebe1f8da99fdb082e49a650c5b500d3d68e4ecc5a9c8",
       "tar_sha256": "55d9d4f71d6739cba57971d6a88228fc8cef21d45cde2fba618b0ceda8f1f287",
       "skills": 7,
+      "members": 7,
       "files": 8
     },
     {
@@ -81,6 +106,7 @@
       "sha256": "8de91f1bb05dbc2df99ef86d4a9d8db0554f0115c33218c4d0a5e7f4edd5d01c",
       "tar_sha256": "8cda61c96a41d7c6437da4905e7045a045769ea89576ee60eec22c2ca6eea9bc",
       "skills": 17,
+      "members": 17,
       "files": 20
     },
     {
@@ -91,6 +117,7 @@
       "sha256": "5e266422825306edc99971509a8f5368bfa26bb85bfbad50f097d75e5a622f1f",
       "tar_sha256": "2d19a4cf882eeed7cbbda4dec50625b2277cfe7ee6f4770fdd2de2b7667b96d6",
       "skills": 2,
+      "members": 2,
       "files": 4
     },
     {
@@ -101,6 +128,7 @@
       "sha256": "6b466eb368780a9be177fed358e277de59f33606010fa47b61c7b224cc284573",
       "tar_sha256": "20188e80c0736f09ef4a39f23a108836a3df7baedb46137fdc122a9592258412",
       "skills": 70,
+      "members": 70,
       "files": 118
     },
     {
@@ -111,6 +139,7 @@
       "sha256": "67fd1521c917c28cc370297419f6e76646e3e76f2bc5c66ff5790bf58d245343",
       "tar_sha256": "c22561ebd674293b297ec4001768593f8ef30bb03700be862d4cb5ec04a001fb",
       "skills": 3,
+      "members": 3,
       "files": 5
     },
     {
@@ -121,6 +150,7 @@
       "sha256": "5f72b98c80b185a8e5b8b12df933bae37df2be48c2b3d510aec2033333dfc353",
       "tar_sha256": "a5b9280e292622348c6a5de5d74b4b93456aa6e405c92590f092590da6f5964e",
       "skills": 4,
+      "members": 4,
       "files": 5
     },
     {
@@ -131,6 +161,7 @@
       "sha256": "1465870c82dd7b4a669257b1750a5c7610124559834defde0222c3036fb49553",
       "tar_sha256": "a09464550bbd7cd9aebf03a49141a70faea495a83252bf56cd815027b1f3c712",
       "skills": 11,
+      "members": 11,
       "files": 162
     },
     {
@@ -141,6 +172,7 @@
       "sha256": "37abb20c6e5f649e82cf424e06c73d5eba26b88250b2b971356ed037a0e56e4f",
       "tar_sha256": "a0f9f73f437991de869045d113ab9f6ee8647947e4fc0a155b9e4d61cc3de520",
       "skills": 1,
+      "members": 1,
       "files": 3
     },
     {
@@ -151,6 +183,7 @@
       "sha256": "603824855eaa32fbee3820c303c1f6d603b6aa0256e1d12dd9eeed43f8c8751c",
       "tar_sha256": "cde9b5a39c663997b0b458cc6b2b79da9f985ae5c0a6e281608e9451f976e127",
       "skills": 4,
+      "members": 4,
       "files": 13
     },
     {
@@ -161,6 +194,7 @@
       "sha256": "5b838f167cffadd05a905364d28c398d0d745f9a0e58b9798c4309108df50c9c",
       "tar_sha256": "8541e63b3b8163922244bc2664be9f1cc048c2fb63cd784bb9a4c5704bc01291",
       "skills": 19,
+      "members": 19,
       "files": 21
     },
     {
@@ -171,6 +205,7 @@
       "sha256": "d3da0ae725d0efe9bc17369c8d17a67e2573fde89873fd525d173cd6228c71ac",
       "tar_sha256": "a07ff3380e1c2abfbfec55088b706c108bfa92a56d540e1b1308bf8a07597d70",
       "skills": 8,
+      "members": 8,
       "files": 9
     },
     {
@@ -181,6 +216,7 @@
       "sha256": "946dd143f3f5e6761aca2580640bc68ef7e36bdf8de4afad9a079741d367d74b",
       "tar_sha256": "504c2f61f1d113a916ea25def30ed46c24f10364e0689917206ae071cb47253f",
       "skills": 1,
+      "members": 1,
       "files": 2
     },
     {
@@ -191,6 +227,7 @@
       "sha256": "fa6c20678f8e6ead7fac79bc3400231d19184ed104d9deda1290137f833bcf39",
       "tar_sha256": "5ac09d35d0808c3013b51077f2e30ffdeef1870e149ad256808fc0984086b620",
       "skills": 3,
+      "members": 3,
       "files": 6
     },
     {
@@ -201,7 +238,250 @@
       "sha256": "27c6059e2c2af8c3ee42b80700c6f861c0aee68b6d45f34d6655a7edd117b9d9",
       "tar_sha256": "56bb851435450b70f2eec1574368c1c920de58b4cae29ea3295d875604852982",
       "skills": 9,
+      "members": 9,
       "files": 10
+    },
+    {
+      "id": "ecc-rules-angular",
+      "source": "ecc",
+      "description": "Claude Code angular rules.",
+      "file": "ecc-rules-angular.tar.gz",
+      "sha256": "f40786004331c55786b07208cbdcfb74c51a10a7479314c8f7a7a19963a26857",
+      "tar_sha256": "080290303d9fc8324eb433b1180f320d800b58e5bf7507d063562c29df37d278",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-arkts",
+      "source": "ecc",
+      "description": "Claude Code arkts rules.",
+      "file": "ecc-rules-arkts.tar.gz",
+      "sha256": "fd11419b2dec5126fe5d955cbb154d0be08ff6a2bbe068826bdf9f3d9181c9e3",
+      "tar_sha256": "950be2bd117b48d483fe701a069b407f2c90e92c422a0057ba41941e1fb6ee84",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-common",
+      "source": "ecc",
+      "description": "Claude Code common rules.",
+      "file": "ecc-rules-common.tar.gz",
+      "sha256": "92501c26ee6ea41f26f8c7ea344dde583bb6bf2741db2e3820e46b51871a83a4",
+      "tar_sha256": "45219cd793b210d64a3e42fb3d2a00a14ad58948f8c32e929a4d54adb8d18b37",
+      "skills": 0,
+      "members": 10,
+      "files": 11
+    },
+    {
+      "id": "ecc-rules-cpp",
+      "source": "ecc",
+      "description": "Claude Code cpp rules.",
+      "file": "ecc-rules-cpp.tar.gz",
+      "sha256": "342ab86b6aff195933edded9b8f079013072e7d59759545c6a2ed8300c48ceac",
+      "tar_sha256": "9148083facf4222faabd6617c0c53f6a1cc68f278e8d2d131225f1b085785c14",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-csharp",
+      "source": "ecc",
+      "description": "Claude Code csharp rules.",
+      "file": "ecc-rules-csharp.tar.gz",
+      "sha256": "79304cb97da6613d7a53ae32a0409a2304ab036566b69640eee3b09c4fcd0cba",
+      "tar_sha256": "cc4939620f6d85f812680011d2692b0a45e8b2ad35341e4c7116fac8a104681f",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-dart",
+      "source": "ecc",
+      "description": "Claude Code dart rules.",
+      "file": "ecc-rules-dart.tar.gz",
+      "sha256": "09777ea9b5d9f9a2603d768ac39989f5fdbbb2aefc26fb2a9bf7304a169b793d",
+      "tar_sha256": "746d568eb8f3d95ebb86629e642197dd5ce5ca0de7d0be1df34f6faa5563f7ba",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-fsharp",
+      "source": "ecc",
+      "description": "Claude Code fsharp rules.",
+      "file": "ecc-rules-fsharp.tar.gz",
+      "sha256": "5b6ee40221805e6667067a1a4c866be4df7ce089ce3762f62181535540b09a2c",
+      "tar_sha256": "fb27cf612bad639f4f7cd573571e9998c5051f22538a816b691dd801297f9da1",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-golang",
+      "source": "ecc",
+      "description": "Claude Code golang rules.",
+      "file": "ecc-rules-golang.tar.gz",
+      "sha256": "c98845d9c5d7e78d6a0effe7ae452eafb43187eabe43bd3b7c70d615171ffe29",
+      "tar_sha256": "84c86fe5f0829fc92b5c087e48e8fa03c605511f916e13f412f641e21a107286",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-java",
+      "source": "ecc",
+      "description": "Claude Code java rules.",
+      "file": "ecc-rules-java.tar.gz",
+      "sha256": "0404fdab9f59afc3191515c75f2d12563482b4a623263a1281526499232c3a26",
+      "tar_sha256": "5f5643577917d666bad0c58ad1c2ebc6f5d8cb8e6427ae2937aa8f775ab293ae",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-kotlin",
+      "source": "ecc",
+      "description": "Claude Code kotlin rules.",
+      "file": "ecc-rules-kotlin.tar.gz",
+      "sha256": "92101d12d7a6824cf765c7fced9b897b38e414269cb84a57397ef2d223140bdf",
+      "tar_sha256": "d1af7a06b40c5a6b7116aacb735f05c9f9b744cae693afaf745e460e6cca5058",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-nuxt",
+      "source": "ecc",
+      "description": "Claude Code nuxt rules.",
+      "file": "ecc-rules-nuxt.tar.gz",
+      "sha256": "7574290cb032b4669c4c3a02bc955d339375b8900048d14a9df75b08c985e89d",
+      "tar_sha256": "c42e8552b88024c93bb0e1b5f121fac4be8c55ac0f9d41baaefcb31e72a95f62",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-perl",
+      "source": "ecc",
+      "description": "Claude Code perl rules.",
+      "file": "ecc-rules-perl.tar.gz",
+      "sha256": "8a5c40fcef235f8e48db0778de26aae5f6fb96c0d9b61afb563f2d1064c700e0",
+      "tar_sha256": "732a322f4352e9a691f732be6df80164c0aa9edec0270f7c11873618e5ec640c",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-php",
+      "source": "ecc",
+      "description": "Claude Code php rules.",
+      "file": "ecc-rules-php.tar.gz",
+      "sha256": "3ad3dec99451a92639f6a90538912db16027fcedd31a692ef4dab102d5c6007d",
+      "tar_sha256": "8d1ef96cda63356b2ab25ef067713cea771efc3fd0c0e2d32d80b95a326ef632",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-python",
+      "source": "ecc",
+      "description": "Claude Code python rules.",
+      "file": "ecc-rules-python.tar.gz",
+      "sha256": "f80599e856e626a2760b36158214476bbc071d605d7e9efc5fef6b47d125a66b",
+      "tar_sha256": "c630fd14058ac411313fb5373da1fd8da7bc1fb019236d7bb6db3b0d7ae3f38b",
+      "skills": 0,
+      "members": 6,
+      "files": 7
+    },
+    {
+      "id": "ecc-rules-react",
+      "source": "ecc",
+      "description": "Claude Code react rules.",
+      "file": "ecc-rules-react.tar.gz",
+      "sha256": "1bed2d1b463ad52e504ad1e418e8b6d0e4256f4a0ce0c6235682fc82c278a300",
+      "tar_sha256": "1a9f8dc75a8361b0bfffa67885978477c03562c0171f1dcf4ad04e9427a65f10",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-react-native",
+      "source": "ecc",
+      "description": "Claude Code react-native rules.",
+      "file": "ecc-rules-react-native.tar.gz",
+      "sha256": "72910c9938d30c6bf81f70c696ebe76e18aada9727339a3eba179a246b54f977",
+      "tar_sha256": "04ce897f6e0651cc7bd71b2c27627869f9c949ecb1588da4ab0ed3f83254fddc",
+      "skills": 0,
+      "members": 8,
+      "files": 9
+    },
+    {
+      "id": "ecc-rules-ruby",
+      "source": "ecc",
+      "description": "Claude Code ruby rules.",
+      "file": "ecc-rules-ruby.tar.gz",
+      "sha256": "eb148837f83202b62a53439d85d5ded64d4b42d085b06a6c320aac083f5c3208",
+      "tar_sha256": "af7c4755650730d547613e51185b4100d464d2051eee1fbad3be12924ba89bde",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-rust",
+      "source": "ecc",
+      "description": "Claude Code rust rules.",
+      "file": "ecc-rules-rust.tar.gz",
+      "sha256": "301fc205296463937589c99fbcd7d8af85327b513e8f6b09944add5726cb1c38",
+      "tar_sha256": "a4a8b265af002298bb141b8de469e4c363f60147ded07d8a0b5c0eca2b67e5ef",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-swift",
+      "source": "ecc",
+      "description": "Claude Code swift rules.",
+      "file": "ecc-rules-swift.tar.gz",
+      "sha256": "90c8b4ef78fa695f6b18638fde2be9100eadd45d5114081d8617d7f8bbeb5d46",
+      "tar_sha256": "d25c05be05788ce3a1cbbd9552f4a1c1e00cbef6607666c4d7d95c7857b2e4e3",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-typescript",
+      "source": "ecc",
+      "description": "Claude Code typescript rules.",
+      "file": "ecc-rules-typescript.tar.gz",
+      "sha256": "7cdd57405497d87964f3ed8cfb4889de1afe84090794b2b2e782d6abe3551d79",
+      "tar_sha256": "5d5e65e99afd1cb6344cc3961ac65ef37c88e3068e8bf60efdba4356b2e92ee5",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-vue",
+      "source": "ecc",
+      "description": "Claude Code vue rules.",
+      "file": "ecc-rules-vue.tar.gz",
+      "sha256": "21e0303ada3d1781a031f68a758a2bc018d11ba8e69f020fbd8a0c6c5f75498e",
+      "tar_sha256": "cb9f4a9c62b2f4725b1ef9f01519621828c00a99a661eb50c613a7fed510238c",
+      "skills": 0,
+      "members": 5,
+      "files": 6
+    },
+    {
+      "id": "ecc-rules-web",
+      "source": "ecc",
+      "description": "Claude Code web rules.",
+      "file": "ecc-rules-web.tar.gz",
+      "sha256": "2dc08f104942abd4dd4a131ff34acc3b15d6705df30f15c0be228b66f0b66028",
+      "tar_sha256": "83b34a0e7a8fcea92ae2813741a13c4d33832d34c90ef2fd049278d10f754522",
+      "skills": 0,
+      "members": 7,
+      "files": 8
     },
     {
       "id": "ecc-security",
@@ -211,6 +491,7 @@
       "sha256": "e60ee1f9e8e3f0e3b336d17280f27ae7bf91eb7a3088a7e8ac2f002fb412a7f0",
       "tar_sha256": "93587910a7735689af15ff7b4361804bd0add0630e9e825a4493a718d8b9510e",
       "skills": 19,
+      "members": 19,
       "files": 21
     },
     {
@@ -221,6 +502,7 @@
       "sha256": "9dfbf2227f94fe10ab412c12a09f35048512f1bf66d08eccd9c0054152f76083",
       "tar_sha256": "3d8fd30a0b3d8d040c12eec6ec5e1376a39324789d2497a6ff842a5e16bc4734",
       "skills": 1,
+      "members": 1,
       "files": 2
     },
     {
@@ -231,6 +513,7 @@
       "sha256": "0d3267e2b11a5574a795f3a701dd53c4a145af0483b26c8d07424bcc9bbe9bc3",
       "tar_sha256": "129b00bbb81c5cd19e4434079e9d490222408243ea4d5c4aa8de9335c54da77e",
       "skills": 3,
+      "members": 3,
       "files": 4
     },
     {
@@ -241,6 +524,7 @@
       "sha256": "e3dcc5d810f55a63f06766d7c06adecc92e4af440c51e2d1f0f89d72c84dfda0",
       "tar_sha256": "45568da6fdf65dc811362c06222d5bee19575f5ebb32ca385f9127f165856bca",
       "skills": 7,
+      "members": 7,
       "files": 10
     },
     {
@@ -251,6 +535,7 @@
       "sha256": "b750b537191880ac7b20604bfe0832c349324050e20399a3b252463307b7d45f",
       "tar_sha256": "9b3875d7a581d1b2f3e86285fcc8d398ae74929e1ce9cfd62a5f497523306797",
       "skills": 47,
+      "members": 47,
       "files": 103
     },
     {
@@ -261,6 +546,7 @@
       "sha256": "ea0a2f492dfa79aef79112e8f4610c96599b887c737673307c1ce14fcdbbe9d8",
       "tar_sha256": "a015a385c4cf5a6a771e156cac0f7f40b0300190e0970ac872fc48d8e4c67ce0",
       "skills": 19,
+      "members": 19,
       "files": 59
     },
     {
@@ -271,6 +557,7 @@
       "sha256": "a7095f5c142de957349f77d8893ac196018738d4f486e08c2784e2b58b706cae",
       "tar_sha256": "fb61639959e6440d4d7334eee3f5a5356907598c90b2fbf61ea5723cb5252c0b",
       "skills": 7,
+      "members": 7,
       "files": 21
     },
     {
@@ -281,29 +568,9 @@
       "sha256": "a767a72ba04baf9a693be26b444f75173031d47a58fab0dd64f79f68adc721dd",
       "tar_sha256": "37ef510f1ca4cdf0fa8dc885a173a5b978c75bbc391fcd2dcf52007a25d13e7c",
       "skills": 1,
+      "members": 1,
       "files": 3
     }
   ],
-  "data": [
-    {
-      "id": "ecc-agents",
-      "source": "ecc",
-      "description": "Agent definitions (data).",
-      "file": "data/ecc-agents.tar.gz",
-      "sha256": "8bb5fec48d9f3fa81d16bfba7307654b6b667886e258732d50298bd1041b257d",
-      "tar_sha256": "e916f632a65c7e573d27674c9e2bbde52d1b3f0d8eb164bc2b858de815c31c26",
-      "skills": 0,
-      "files": 69
-    },
-    {
-      "id": "ecc-rules",
-      "source": "ecc",
-      "description": "Rules (data).",
-      "file": "data/ecc-rules.tar.gz",
-      "sha256": "db5782f1a099dc8be87268cc801557f0d539d0f4879386c2e94d8a03704a21f9",
-      "tar_sha256": "1080d764f3772b2357ca89401b06fd93b16856bea8dadaf61f46182345aae252",
-      "skills": 0,
-      "files": 123
-    }
-  ]
+  "data": []
 }

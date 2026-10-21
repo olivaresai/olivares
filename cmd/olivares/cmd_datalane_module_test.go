@@ -87,3 +87,23 @@ func TestDatalaneModuleOffWithoutANameKeepsTheNote(t *testing.T) {
 		t.Fatalf("a nameless module-off refusal lost its cause note: %q", got)
 	}
 }
+
+// Assigning a provider profile or tool is Business: the source-scope verbs give the edition
+// exit code (9) with the engine's sentence, as every Business command does in Community. The
+// other data-lane families keep the generic answer for their own 501s.
+func TestSourcescopeAssignmentRefusalIsTheEditionAnswer(t *testing.T) {
+	body := []byte(`{"error":{"code":"business_required","message":"Assigning provider profiles and AI tools to departments and groups requires Olivares Business."}}`)
+	err := datalaneHTTPError("sourcescope", http.StatusNotImplemented, body)
+	if got := exitcode.From(err); got != exitcode.Edition {
+		t.Fatalf("exit = %d, want the edition answer %d", got, exitcode.Edition)
+	}
+	if !strings.Contains(err.Error(), "requires Olivares Business") {
+		t.Fatalf("refusal = %q, want the engine's sentence", err.Error())
+	}
+	if got := exitcode.From(datalaneHTTPError("knowledge", http.StatusNotImplemented, body)); got == exitcode.Edition {
+		t.Fatalf("another data-lane family changed its exit code for a 501: %d", got)
+	}
+	if got := exitcode.From(datalaneHTTPError("sourcescope", http.StatusNotImplemented, []byte(`{"error":{"code":"connector_unavailable","message":"x"}}`))); got == exitcode.Edition {
+		t.Fatalf("a 501 that does not name Business became the edition answer: %d", got)
+	}
+}

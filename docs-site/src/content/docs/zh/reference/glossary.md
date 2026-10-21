@@ -73,7 +73,7 @@ push sink 与离线验证（`olivares audit verify`）形式暴露。
 ### Collector（采集器）
 
 仅推送的边缘进程（`olivares collector`），在被观测系统附近运行 [source](#source)，并将观测经 gRPC
-（可选 mTLS）推送到核心。Collector **没有入站监听器**。
+（可选 mTLS）推送到核心。Collector **没有入站监听器**。Collector 属于 Business 功能。
 
 ### Cooperative path（协作路径）
 
@@ -146,7 +146,7 @@ agent identity）。名册来自[身份 source](/zh/how-to/connectors/sso-scim-i
 
 ### live_ref
 
-服务器为 **一行** 实时会话分配的身份。Olivares <!-- release -->0.2<!-- /release --> 按 `(观察范围, 外部 id)` 为观察
+服务器为 **一行** 实时会话分配的身份。Olivares <!-- release -->0.3<!-- /release --> 按 `(观察范围, 外部 id)` 为观察
 编制键，使两个宣布同一会话 id 的提供商主目录仍是两行。表示「这一行」的控制台
 和 API 读取使用 `live_ref`，而不是裸提供商 id。裸外部 id 路由是遗留的，只回答
 遗留行（`CHANGELOG.md` `[26.9.0]` B2）。见

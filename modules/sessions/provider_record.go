@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -354,18 +353,6 @@ func validProviderBaseURL(kind, s string) (string, error) {
 	return strings.TrimRight(s, "/"), nil
 }
 
-// providerLocalHTTPHostAllowed is the one host rule for a plain-http endpoint:
-// localhost, a loopback address, or a private-network address (RFC 1918 /
-// fc00::/7). A public host over plain http fails here, never by accident of a
-// parse that accepted something else.
-func providerLocalHTTPHostAllowed(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	ip, err := netip.ParseAddr(host)
-	return err == nil && (ip.IsLoopback() || ip.IsPrivate())
-}
-
 // validLocalHTTPBaseURL is the openai_compatible, xai and anthropic plain-http branch of
 // validProviderBaseURL: the same shape rule validOllamaBaseURL applies, with
 // this kind's own messages.
@@ -374,7 +361,7 @@ func validLocalHTTPBaseURL(s string) (string, error) {
 	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
 		return "", badRequest("a plain-http base_url must be an endpoint without credentials, query or fragment")
 	}
-	if !providerLocalHTTPHostAllowed(u.Hostname()) {
+	if !driverfacts.LocalHost(u.Hostname()) {
 		return "", badRequest("plain HTTP base_url must be loopback or a private IP address")
 	}
 	return strings.TrimRight(u.String(), "/"), nil
@@ -394,7 +381,7 @@ func validOllamaBaseURL(s string) (string, error) {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return "", badRequest("Ollama base_url must use http or https")
 	}
-	if u.Scheme == "http" && !providerLocalHTTPHostAllowed(u.Hostname()) {
+	if u.Scheme == "http" && !driverfacts.LocalHost(u.Hostname()) {
 		return "", badRequest("plain HTTP Ollama endpoints must be loopback or a private IP address")
 	}
 	return strings.TrimRight(u.String(), "/"), nil
@@ -537,6 +524,15 @@ func providerRecordEnv(kind, baseURL, key string) []EnvVar {
 		return out
 	}
 	return nil
+}
+
+// providerRecordKeyEnv is the variable of providerRecordEnv that carries the key
+// ("" for a kind with none).
+func providerRecordKeyEnv(kind string) string {
+	if env := providerRecordEnv(kind, "", "x"); len(env) > 0 {
+		return env[0].Name
+	}
+	return ""
 }
 
 // providerRecordEnvNames is the CLOSED set of variable names a record of this kind

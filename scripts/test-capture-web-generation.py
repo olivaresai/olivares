@@ -115,8 +115,10 @@ if mode == 'empty':
             self.write("fault-driver.py", '''import errno, os, pathlib, runpy, subprocess, sys, tarfile
 from unittest.mock import patch
 fault = sys.argv[1]
-if fault == 'archive':
-    with patch.object(tarfile, 'open', side_effect=OSError('fixture archive failure')):
+if fault in ('archive', 'tar', 'value'):
+    error = {'archive': OSError('fixture archive failure'), 'tar': tarfile.TarError('fixture tar failure'),
+             'value': ValueError('fixture value text')}[fault]
+    with patch.object(tarfile, 'open', side_effect=error):
         runpy.run_path('scripts/capture-web-generation.py', run_name='__main__')
 elif fault.startswith('enumeration-'):
     original_run, original_scan = subprocess.run, os.scandir
@@ -413,6 +415,120 @@ else:
         self.write("web/.env.local", "VITE_FIXTURE=untracked\n")
         self.refuse(self.capture())
         self.assertTrue((self.repo / DIST / "assets/old.js").exists())
+
+    def leave_artifact_of_earlier_job(self):
+        stale = self.runner / "web-generation-artifact"
+        stale.mkdir()
+        (stale / "manifest.json").write_text("left by an earlier job\n")
+        return stale
+
+    def test_artifact_left_by_an_earlier_job_is_replaced(self):
+        # A self-hosted runner can keep RUNNER_TEMP between jobs, and a leftover must not stop
+        # the next capture. (2026-10-17: batteries jobs died 50 ms into this step, no reason logged.)
+        stale = self.leave_artifact_of_earlier_job()
+        result = self.capture()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        manifest = json.loads((stale / "manifest.json").read_text())
+        self.assertEqual(manifest["run_id"], "123")
+        self.assertEqual(sorted(p.name for p in stale.iterdir()),
+                         ["SHA256SUMS", "dist.tar.gz", "manifest.json"])
+
+    def test_failed_capture_leaves_no_artifact_of_an_earlier_job(self):
+        # Once the destination is established, a failure of the build inputs and a failure of the
+        # build alike: a later step must not take the artifact of an earlier job for this one.
+        for label, prepare, mode in [
+            ("build failure", lambda: None, "failed"),
+            ("dirty input", lambda: self.write("web/src/main.tsx", "dirty before build"), "good"),
+        ]:
+            with self.subTest(label):
+                stale = self.leave_artifact_of_earlier_job()
+                prepare()
+                result = self.capture(mode)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(stale.exists(), "the old artifact outlived a failed capture")
+                self.git("checkout", "--", "web/src/main.tsx")
+
+    def test_destination_that_is_not_a_plain_directory_is_refused_untouched(self):
+        outside = self.top / "outside"
+        outside.mkdir()
+        (outside / "keep").write_text("keep")
+        destination = self.runner / "web-generation-artifact"
+        regular = self.top / "regular"
+        regular.write_text("a regular file")
+        for label, plant, kept in [
+            ("symlink", lambda: destination.symlink_to(outside, target_is_directory=True),
+             lambda: destination.is_symlink() and (outside / "keep").read_text() == "keep"),
+            ("regular file", lambda: destination.write_text("a regular file"),
+             lambda: destination.is_file() and destination.read_text() == "a regular file"),
+            ("dangling symlink", lambda: destination.symlink_to(self.top / "nowhere"),
+             lambda: destination.is_symlink() and not destination.exists()),
+        ]:
+            with self.subTest(label):
+                plant()
+                result = self.capture()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("artifact destination is not a plain directory", result.stderr)
+                self.assertTrue(kept())
+                destination.unlink()
+
+    def test_every_refusal_names_its_reason(self):
+        git_only = self.top / "git-only"
+        git_only.mkdir()
+        (git_only / "git").symlink_to(shutil.which("git"))
+        fixture_path = str(self.bin) + os.pathsep + os.environ["PATH"]
+        for label, reason, mutate, restore in [
+            ("identity", "unexpected PR checkout identity",
+             lambda: self.env.update(PR_HEAD="c" * 40), lambda: self.env.update(PR_HEAD=self.head)),
+            ("environment", "missing environment variable GITHUB_RUN_ID",
+             lambda: self.env.pop("GITHUB_RUN_ID"), lambda: self.env.update(GITHUB_RUN_ID="123")),
+            ("dirty input", "a tracked build input differs from HEAD",
+             lambda: self.write("web/src/main.tsx", "dirty before build"),
+             lambda: self.git("checkout", "--", "web/src/main.tsx")),
+            ("untracked configuration", "untracked build configuration",
+             lambda: self.write("web/.env.local", "VITE_FIXTURE=untracked\n"),
+             lambda: (self.repo / "web/.env.local").unlink()),
+            ("missing tool", "node not found",
+             lambda: self.env.update(PATH=str(git_only)), lambda: self.env.update(PATH=fixture_path)),
+        ]:
+            with self.subTest(label):
+                mutate()
+                result = self.capture()
+                restore()
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("capture failed (" + reason + ")", result.stderr)
+        with self.subTest("build failure"):
+            result = self.capture("failed")
+            self.assertIn("capture failed (task exited 23)", result.stderr)
+        with self.subTest("git diff cannot look"):
+            # Exit 1 is "differs"; any other non-zero exit must refuse too, never read as clean.
+            broken = self.top / "broken-git"
+            broken.mkdir()
+            wrapper = broken / "git"
+            wrapper.write_text('#!/bin/sh\nfor arg in "$@"; do [ "$arg" = diff ] && exit 128; done\n'
+                               'exec ' + shutil.which("git") + ' "$@"\n')
+            wrapper.chmod(0o755)
+            self.env["PATH"] = str(broken) + os.pathsep + fixture_path
+            result = self.capture()
+            self.env["PATH"] = fixture_path
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("capture failed (git exited 128)", result.stderr)
+
+    def test_refusal_log_carries_no_exception_text_path_or_environment_value(self):
+        self.env["FIXTURE_TOKEN"] = "fixture-token-7f3a91"
+        for fault, error_text, shown in [
+                ("archive", "fixture archive failure", "I/O error"),
+                ("manifest", "fixture manifest failure", "I/O error"),
+                ("enumeration-permission", "fixture directory read denied", "I/O error EACCES"),
+                ("tar", "fixture tar failure", "TarError"),
+                ("value", "fixture value text", "ValueError)")]:
+            with self.subTest(fault):
+                result = self.capture(fault=fault)
+                log = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, log)
+                self.assertIn("capture failed (" + shown, result.stderr)
+                self.assertNotIn("Traceback", log)
+                for leaked in [error_text, str(self.top), "fixture-token-7f3a91"]:
+                    self.assertNotIn(leaked, log)
 
 
 if __name__ == "__main__":

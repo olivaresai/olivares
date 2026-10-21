@@ -4,10 +4,10 @@ description: "Olivares AI コントロールプレーンの検証済み設定サ
 ---
 
 :::note[Business]
-監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送およびエアギャップ間の DDIL 転送にも Business が必要です。
 :::
 
-0.1 以降、KMS で封印した署名鍵と設定ファイル（CMEK）には Business バイナリが必要です。BYOK、ホスト外でのチェックポイント署名（HYOK）、`keys status` は Community に残ります。Community は CMEK が設定された環境で、ストアを開く前や鍵を作成する前に処理を拒否します。`dr backup` と `keys unseal` には、お客様の KMS と Business を使用してください。復旧に有効なライセンスは不要です。
+0.1 以降、KMS で封印した署名鍵と設定ファイル（CMEK）には Business バイナリが必要です。オペレーターが用意した署名鍵と `keys status` は Community に残ります。保管の宣言 BYOK（`OLIVARES_KEY_CUSTODY=byok`）と HYOK（`OLIVARES_LEDGER_CUSTODY=hyok`）、ホスト外でのチェックポイント署名（`OLIVARES_LEDGER_SIGNER`）、`olivares audit key-transition` には Business バイナリが必要で、Community は終了コード 9 で拒否します。Community は CMEK が設定された環境で、ストアを開く前や鍵を作成する前に処理を拒否します。`dr backup` と `keys unseal` には、お客様の KMS と Business を使用してください。復旧に有効なライセンスは不要です。
 
 このページは、コントロールプレーンエンジン — `olivares` という名前の単一 Go バイナリ — の設定サーフェスを文書化します。`serve` サブコマンドが受け付けるフラグ、エンジンが起動時に読み取る環境変数、ストアとポリシー決定点がどのように選択されるか、そして設定がまったくない状態で有効になるセキュアなデフォルトをカバーします。
 
@@ -77,6 +77,8 @@ TLS はデフォルトでオンです。`--tls-cert`/`--tls-key` が供給され
 ファイルを指定した場合は、パス、読み取り権限、または JSON を修正して再起動してください。エンジンはオペレーター設定を黙って省略することを拒否します。 アクセスマップをデータで満たすには、少なくとも 1 つのソースを設定してください — [ソースを接続する](/ja/how-to/connect-a-source/) と、OpenTelemetry および MCP 経由の協調的な Claude Code パスについては [Claude Code を接続する](/ja/how-to/connect-claude-code/) を参照してください。
 
 ### 認可決定点（PDP）
+
+**エディション:** 外部 PDP は Business の機能です。Community ビルドは、`OLIVARES_PDP_ENGINE` に `cedar`、`opa`、またはその他のエンジン値が設定されていると起動を拒否します。拒否メッセージは Business を示し、終了コード 9 で終了します。未設定、空、または `none` はどのエディションでも有効です。
 
 認可ポリシー決定点（policy decision point）はコンポジションルートで環境によって選択されます。ネイティブの属性ベースアクセス制御（ABAC）エンジンとロールベースアクセス制御（RBAC）が常に統治します。外部 PDP は、選択された場合、アクセスを決して広げることのできない追加の **制限専用（restrict-only）** レイヤーです。
 
@@ -227,8 +229,8 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_GROK_HOOK_TOKEN` | No | — | Bearer credential the Grok Build hook client presents to the enforcement point. |
 | `OLIVARES_GROK_HOOK_URL` | No | — | Endpoint of the enforcement point the Grok Build hook client calls; unset denies, deny-closed. |
 | `OLIVARES_GUARDIAN_SWEEP_INTERVAL` | No | — | How often the guardian sweep runs, as a Go duration. `0` disables it. |
-| `OLIVARES_HA_LEADER_GATE` | No | — | Set to `1` to make background loops run only on the elected leader, so a multi-replica deployment does not run them twice. |
-| `OLIVARES_HA_LEADER_LABEL` | No | — | Label this replica publishes when it holds leadership, so an operator can route to the leader. |
+| `OLIVARES_HA_LEADER_GATE` | No | — | Set to `1` to make background loops run only on the elected leader, so a multi-replica deployment does not run them twice. Business edition only: a Community binary with this set refuses to start and names Business. |
+| `OLIVARES_HA_LEADER_LABEL` | No | — | Label this replica publishes when it holds leadership, so an operator can route to the leader. Business edition only: a Community binary with this set refuses to start and names Business. |
 | `OLIVARES_HITL_CONFIG` | No | — | Path to the JSON configuration of the human-in-the-loop review path. |
 | `OLIVARES_HOOK_FIREWALL_CONFIG` | No | — | Path to the JSON configuration of the data-loss firewall that runs inside the hook. Unset leaves that half off. |
 | `OLIVARES_HOOK_PEP_ACCOUNT` | No | — | Account the Claude Code hook client reports. |
@@ -243,7 +245,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_INGEST_TOKEN` | No | — | Bearer token the collector ingest endpoint requires from telemetry senders. |
 | `OLIVARES_INSECURE` | No | — | Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only. |
 | `OLIVARES_INVITE_MAIL_DESTINATION` | No | — | Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable. |
-| `OLIVARES_KEY_CUSTODY` | No | — | Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. |
+| `OLIVARES_KEY_CUSTODY` | No | — | Business edition only. Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. Community refuses to run with `byok` or `cmek`; unset is valid in every edition. |
 | `OLIVARES_KEY_WRAP_AWS_KEY_ID` | No | — | Key identifier in AWS KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_AWS_REGION` | No | — | Region of the AWS KMS key. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_AZURE_KEY_NAME` | No | — | Key name in Azure Key Vault. Used by the backend that wraps the signing keys. |
@@ -254,18 +256,18 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_KEY_WRAP_GCP_TOKEN` | No | — | Token used against Google Cloud KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_GCP_TOKEN_FILE` | No | — | Path to the file holding the token used against Google Cloud KMS. Used by the backend that wraps the signing keys. |
 | `OLIVARES_KEY_WRAP_OLD` | No | — | Previous key management backend during a rewrap migration, so keys wrapped by it can still be unwrapped. |
-| `OLIVARES_LEDGER_CUSTODY` | No | — | Custody posture required of the ledger checkpoint signer, the ledger counterpart of the audit key posture. |
-| `OLIVARES_LEDGER_KMS_AWS_KEY_ID` | No | — | Key identifier in AWS KMS. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_AWS_REGION` | No | — | Region of the AWS KMS key. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_AWS_SIGNING_ALG` | No | — | Signing algorithm requested from AWS KMS. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_AZURE_KEY_NAME` | No | — | Key name in Azure Key Vault. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_AZURE_KEY_VERSION` | No | — | Key version in Azure Key Vault. Unset uses the current version. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_AZURE_TOKEN` | No | — | Token used against Azure Key Vault. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_AZURE_VAULT_URL` | No | — | Azure Key Vault URL. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_GCP_KEY` | No | — | Fully qualified key version name in Google Cloud KMS. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_GCP_TOKEN` | No | — | Token used against Google Cloud KMS. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_KMS_GCP_TOKEN_FILE` | No | — | Path to the file holding the token used against Google Cloud KMS. Used by the backend that signs audit checkpoints. |
-| `OLIVARES_LEDGER_SIGNER` | No | — | Off-box checkpoint signer to use: which key management backend signs audit checkpoints instead of a local key. |
+| `OLIVARES_LEDGER_CUSTODY` | No | — | Business edition only. Custody posture required of the ledger checkpoint signer, the ledger counterpart of the audit key posture. Community refuses to run with `hyok`; unset is valid in every edition. |
+| `OLIVARES_LEDGER_KMS_AWS_KEY_ID` | No | — | Business edition only. Key identifier in AWS KMS. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_AWS_REGION` | No | — | Business edition only. Region of the AWS KMS key. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_AWS_SIGNING_ALG` | No | — | Business edition only. Signing algorithm requested from AWS KMS. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_AZURE_KEY_NAME` | No | — | Business edition only. Key name in Azure Key Vault. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_AZURE_KEY_VERSION` | No | — | Business edition only. Key version in Azure Key Vault. Unset uses the current version. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_AZURE_TOKEN` | No | — | Business edition only. Token used against Azure Key Vault. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_AZURE_VAULT_URL` | No | — | Business edition only. Azure Key Vault URL. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_GCP_KEY` | No | — | Business edition only. Fully qualified key version name in Google Cloud KMS. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_GCP_TOKEN` | No | — | Business edition only. Token used against Google Cloud KMS. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_KMS_GCP_TOKEN_FILE` | No | — | Business edition only. Path to the file holding the token used against Google Cloud KMS. Used by the backend that signs audit checkpoints. |
+| `OLIVARES_LEDGER_SIGNER` | No | — | Business edition only. Off-box checkpoint signer to use: which key management backend signs audit checkpoints instead of a local key. Community refuses to run with any value except unset, `on-box` or `ed25519`. |
 | `OLIVARES_LICENSE` | No | — | License document itself, inline, for deployments that cannot mount a file. |
 | `OLIVARES_LICENSE_PATH` | No | — | Path to the license document on disk. Takes effect before the inline form. |
 | `OLIVARES_LICENSE_PUBKEY` | No | — | Public key the engine verifies the license signature against. |
@@ -302,11 +304,11 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_OTEL_SAMPLE_RATIO` | No | — | Fraction of traces sampled, between 0 and 1. |
 | `OLIVARES_OTEL_SERVICE_NAME` | No | — | Service name reported on exported traces. |
 | `OLIVARES_PDF_RENDER_TIMEOUT` | No | `30s` | Chromium による PDF レポートの 1 回のレンダリングに許可する最大時間。単位付きの正の Go duration で指定します。レポート用アドオンがレンダリングごとに読み込み、正の duration でない値は Chromium の起動前に変数名を示して拒否されます。低速なホストで構造的なレンダリングがデフォルトの制限時間内に終わらない場合は、この値を増やしてください。 |
-| `OLIVARES_PDP_CEDAR_FILE` | No | — | Path to the Cedar policy file, for the `cedar` decision point. |
-| `OLIVARES_PDP_ENGINE` | No | — | External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`. |
-| `OLIVARES_PDP_OPA_PATH` | No | — | Decision path queried under the Open Policy Agent endpoint. |
-| `OLIVARES_PDP_OPA_TOKEN` | No | — | Bearer token for the Open Policy Agent endpoint. |
-| `OLIVARES_PDP_OPA_URL` | No | — | Base URL of the Open Policy Agent endpoint, for the `opa` decision point. |
+| `OLIVARES_PDP_CEDAR_FILE` | No | — | Business edition only. Path to the Cedar policy file, for the `cedar` decision point. |
+| `OLIVARES_PDP_ENGINE` | No | — | Business edition only. External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`. Community refuses serving with `cedar`, `opa` or any other engine value; unset, blank or `none` is valid there. |
+| `OLIVARES_PDP_OPA_PATH` | No | — | Business edition only. Decision path queried under the Open Policy Agent endpoint. |
+| `OLIVARES_PDP_OPA_TOKEN` | No | — | Business edition only. Bearer token for the Open Policy Agent endpoint. |
+| `OLIVARES_PDP_OPA_URL` | No | — | Business edition only. Base URL of the Open Policy Agent endpoint, for the `opa` decision point. |
 | `OLIVARES_PIV_CONFIG` | No | — | Path to the JSON configuration for Business Identity & Scale smart-card privileged login. Community refuses serving with this setting; data backup remains available. |
 | `OLIVARES_PLUGIN` | No | — | Handshake cookie an out-of-process connector plugin must present. Set by the engine when it launches the plugin, not by the operator. |
 | `OLIVARES_POLICY_MAX_STALENESS` | No | — | How stale a cached policy decision may be before it is refused, as a Go duration. |
@@ -422,7 +424,7 @@ These prefixes name families whose member variables are built at runtime — the
 | `OLIVARES_HOOK_PEP_` | No | — | Family prefix for the Claude Code hook client and server settings listed above. |
 | `OLIVARES_KEY_WRAP` | No | — | Family stem naming the key management backend that wraps signing keys. |
 | `OLIVARES_KEY_WRAP_` | No | — | Family prefix from which the per-backend key-wrapping keys are built. |
-| `OLIVARES_LEDGER_KMS_` | No | — | Family prefix from which the per-backend ledger signer keys are built. |
+| `OLIVARES_LEDGER_KMS_` | No | — | Business edition only. Family prefix from which the per-backend ledger signer keys are built. |
 | `OLIVARES_OIDC_` | No | — | Family prefix for the OIDC federation settings listed above. |
 | `OLIVARES_OTEL_` | No | — | Family prefix for the trace export settings listed above. |
 | `OLIVARES_SAML_` | No | — | Family prefix for the SAML federation settings listed above. |

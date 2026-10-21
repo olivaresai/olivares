@@ -90,7 +90,7 @@
       "jailbreak": "Обход ограничений",
       "content": "Контент",
       "output_validation": "Проверка вывода",
-      "owasp_agentic": "OWASP agentic"
+      "owasp_agentic": "OWASP для агентных систем"
     },
     "form": {
       "surface": "Поверхность",
@@ -206,7 +206,7 @@
     "attestedSeq": "Аттестованный seq",
     "headSeq": "seq вершины реестра {{seq}}",
     "reverifyNote": "Каждое событие несёт seq · hash · prev_hash, поэтому читатель может перепроверить связь офлайн по внешнему хранилищу WORM.",
-    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+    "chainEmptyNote": "Проверять пока нечего — в реестре нет событий."
   },
   "empty": {
     "enforcement": {

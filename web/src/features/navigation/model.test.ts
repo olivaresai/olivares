@@ -77,23 +77,21 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   accessMap: ['security-identity', 'access'],
   permissions: ['security-identity', 'access'],
   identity: ['security-identity', 'access'],
+  vault: ['security-identity', 'access'],
   claudePolicy: ['security-identity', 'policy'],
   routinePolicies: ['security-identity', 'policy'],
   inferenceProxy: ['security-identity', 'policy'],
   security: ['security-identity', 'defense'],
   killswitch: ['security-identity', 'defense'],
   agentcoreExport: ['security-identity', 'policy'],
-  deploy: ['deployment', 'deployments'],
   gitPublication: ['deployment', 'deployments'],
   health: ['observation', 'operations'],
   observability: ['observation', 'operations'],
   dashboards: ['observation', 'operations'],
   adoption: ['observation', 'cost-adoption'],
   audit: ['observation', 'audit-recordings'],
-  recordings: ['observation', 'audit-recordings'],
-  'session-viewer': ['observation', 'audit-recordings'],
   evals: ['observation', 'audit-recordings'],
-  compliance: ['observation', 'audit-recordings'],
+  retention: ['observation', 'audit-recordings'],
   attestation: ['observation', 'audit-recordings'],
   console: ['system', 'administration'],
   sourceDiff: ['system', 'administration'],
@@ -102,6 +100,15 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   logs: ['system', 'maintenance'],
   apiPlayground: ['system', 'development'],
 }
+
+/** Pages only a Business build serves (business-views.tsx); Community registers none of them. */
+const BUSINESS_ONLY_PLACEMENTS: Record<string, [string, string]> = {
+  deploy: ['deployment', 'deployments'],
+  recordings: ['observation', 'audit-recordings'],
+  compliance: ['observation', 'audit-recordings'],
+  'session-viewer': ['observation', 'audit-recordings'],
+}
+const businessBuild = FEATURE_EXTENSIONS.length > 0
 
 const t = i18n.getFixedT(null, 'nav') as never
 /** The two extreme permission sets, as view gates. They go through `permissionGate` on
@@ -123,7 +130,9 @@ describe('route map — every route sits where root ratified it', () => {
           ? 'root'
           : [v.navigation.areaId, v.navigation.sectionId]
     }
-    expect(actual).toEqual(RATIFIED)
+    expect(actual).toEqual(
+      businessBuild ? { ...RATIFIED, ...BUSINESS_ONLY_PLACEMENTS } : RATIFIED,
+    )
   })
 
   it('names only sections the area declares, in a declared area', () => {
@@ -159,7 +168,15 @@ describe('route map — every route sits where root ratified it', () => {
   })
 
   it('keeps the recording viewer a detail of Recordings, hidden from every list', () => {
-    const viewer = FEATURE_VIEWS.find((v) => v.id === 'session-viewer')!
+    const viewer = FEATURE_VIEWS.find((v) => v.id === 'session-viewer')
+    // Recordings and its viewer are Business pages: Community registers neither.
+    if (!viewer) {
+      expect(businessBuild).toBe(false)
+      expect(
+        buildNavSearchIndex(t).some((e) => e.id === 'session-viewer'),
+      ).toBe(false)
+      return
+    }
     expect(viewer.hideInNav).toBe(true)
     expect(viewer.navigation).toEqual({
       kind: 'detail',
@@ -170,7 +187,7 @@ describe('route map — every route sits where root ratified it', () => {
     const listed = viewsByArea('observation').flatMap((s) =>
       s.views.map((v) => v.id),
     )
-    expect(listed).toContain('recordings')
+    expect(listed.includes('recordings')).toBe(businessBuild)
     expect(listed).not.toContain('session-viewer')
     expect(buildNavSearchIndex(t).some((e) => e.id === 'session-viewer')).toBe(
       false,
@@ -253,11 +270,15 @@ describe('resolveLocation and the trail', () => {
       area: { id: 'ai' },
       parent: null,
     })
-    expect(resolveLocation('/session-viewer/sess-a11y')).toMatchObject({
-      kind: 'view',
-      view: { id: 'session-viewer' },
-      parent: { id: 'recordings' },
-    })
+    expect(resolveLocation('/session-viewer/sess-a11y')).toMatchObject(
+      businessBuild
+        ? {
+            kind: 'view',
+            view: { id: 'session-viewer' },
+            parent: { id: 'recordings' },
+          }
+        : { kind: 'unknown' },
+    )
     expect(resolveLocation('/settings').kind).toBe('settings')
     expect(resolveLocation('/areas/nope').kind).toBe('unknown')
     expect(resolveLocation('/areas/ai/extra').kind).toBe('unknown')
@@ -280,13 +301,17 @@ describe('resolveLocation and the trail', () => {
     ])
     expect(labels('/agentops')).toEqual([
       ['AI', '/areas/ai'],
-      ['Sessions', undefined],
+      ['Operate sessions', undefined],
     ])
-    expect(labels('/session-viewer/sess-a11y')).toEqual([
-      ['Observability & evidence', '/areas/observation'],
-      ['Recordings', '/recordings'],
-      ['Session viewer', undefined],
-    ])
+    expect(labels('/session-viewer/sess-a11y')).toEqual(
+      businessBuild
+        ? [
+            ['Observability & evidence', '/areas/observation'],
+            ['Recordings', '/recordings'],
+            ['Session viewer', undefined],
+          ]
+        : [],
+    )
     expect(labels('/settings')).toEqual([
       ['System & settings', '/areas/system'],
       ['Settings', undefined],
@@ -335,6 +360,29 @@ describe('visibility is the union of authorized leaves', () => {
     ).toBe(false)
   })
 
+  // #2240: Provider profiles, Source bindings and Provider accounts fold into AI tools, whose
+  // tool menu opens their room. Each page stays a door under its own permission for a
+  // principal who cannot open AI tools, and its address keeps working.
+  it('folds the provider profile, binding and account pages into AI tools', () => {
+    const folded = ['providerProfiles', 'providerBindings', 'providerAccounts']
+    const leaves = (gate: typeof allow) =>
+      authorizedSections('ai', gate).flatMap((s) => s.views.map((v) => v.id))
+    expect(leaves(allow)).toContain('agent-tools')
+    for (const id of folded) expect(leaves(allow)).not.toContain(id)
+    for (const [permission, id] of [
+      ['sessions:profile:read', 'providerProfiles'],
+      ['sessions:profile-binding:read', 'providerBindings'],
+      ['sessions:account:read', 'providerAccounts'],
+    ])
+      expect(leaves(permissionGate((p: string) => p === permission))).toEqual([
+        id,
+      ])
+    for (const id of folded)
+      expect(
+        resolveLocation(FEATURE_VIEWS.find((v) => v.id === id)!.path),
+      ).toMatchObject({ kind: 'view', view: { id, doorTo: 'agent-tools' } })
+  })
+
   // 26.10.1 review: Sessions, Observe sessions and Operate sessions were three
   // entries for one screen. /agentops is a second door into it, under its own
   // permission: navigation lists it only to a principal who cannot open /sessions.
@@ -353,10 +401,10 @@ describe('visibility is the union of authorized leaves', () => {
     expect(leaves(runsOnly)).toEqual(['agentops'])
     expect(listed(runsOnly)).toContain('agentops')
     expect(listed(runsOnly)).not.toContain('sessions')
-    // Both doors read as the one screen they open.
+    // Each door reads as what it is: Sessions observes, Operate sessions is the other door.
     const label = i18n.getFixedT(null, 'nav')
     expect(label('items.sessions')).toBe('Sessions')
-    expect(label('items.agentops')).toBe('Sessions')
+    expect(label('items.agentops')).toBe('Operate sessions')
     // The former names still find it.
     const found = (q: string) =>
       rankNavMatches(authorizedEntries(buildNavSearchIndex(t), allow), q).map(

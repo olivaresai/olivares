@@ -35,7 +35,7 @@
   "returnToSources": "Return to sources",
   "openSource": "Open the source",
   "unavailable": "Not available on this installation yet.",
-  "unavailableBody": "Git host diff is not wired on this deployment.",
+  "unavailableBody": "Git host diff is not set up on this deployment.",
   "tooLarge": "This comparison is too large for one read. Narrow the refs.",
   "rateLimited": "The Git host rate limit was reached.",
   "retryIn": "Try again in {{seconds}} s.",

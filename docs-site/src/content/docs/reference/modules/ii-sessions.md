@@ -13,7 +13,7 @@ and a reconstructable timeline. Where module I (inventory) materializes the dura
 estate, module II keeps a **live operational overlay** per session over the same
 observation stream — and shows only what that stream honestly carries.
 
-Olivares <!-- release -->0.2<!-- /release --> also **launches** official provider CLIs as owned children under a
+Olivares <!-- release -->0.3<!-- /release --> also **launches** official provider CLIs as owned children under a
 [provider profile](/how-to/operate-provider-sessions/). That managed path is
 the same module. It does not replace the overlay, and it does not merge two
 homes that announce the same provider session id (`CHANGELOG.md` `[26.9.0]` B1/B2).
@@ -102,6 +102,16 @@ olivares session stop <session>
 olivares session resume <session>
 ```
 
+A message can carry images. `olivares session send <session> --attach shot.png "what
+is wrong here?"` and the console composer (paste, drop or the paperclip) store each
+PNG, JPEG, WebP or GIF with the session, up to four per message and 3.75 MB each, then
+send them with the text; a message needs its text, so an image alone is not sent
+(the CLI and the composer ask for it). Claude Code receives an image content block and Codex its own
+image input; a tool with no image input refuses the message by name before anything is
+sent. The API is `POST /v1/m/sessions/runs/{ref}/attachments` (the image, base64),
+`GET .../attachments/{id}` and `attachments` on `.../input`. Images live under the data
+directory, per tenant and session, and are removed with the session.
+
 Stopped runs, their provider-profile and workspace references, and lifecycle
 events survive an engine restart. Resume starts a new owned child for the
 existing run. Live attach output is an in-memory bounded ring; retained run
@@ -120,6 +130,43 @@ Confined children receive access to their session folder, profile homes and a
 private temporary directory. The engine database, secret-store key and engine
 configuration stay outside those grants. This filesystem boundary does not
 provide network isolation or container isolation.
+
+A session's folder is writable, and the Git metadata inside it would otherwise be
+too: a hook or a `core.hooksPath` the session wrote runs the next time you use `git`
+there. Landlock cannot deny a path inside a directory it grants, so the session (and
+a local MCP server started in the folder) runs in a mount namespace of its own in
+which the repository's `hooks` directory and `config` file, `config.worktree`, and in
+a linked worktree the files that name the common directory, are read-only; the Git
+directory cannot be moved away. Git reads `commondir` and `config.worktree` from a Git
+directory when they exist, so the launch creates them where they are missing (a
+`commondir` that names the directory itself, an empty `config.worktree`; both mean
+nothing to git) and binds them read-only, so the session cannot create its own. `git add`, `git commit` and new files work as
+before. `git config` in the folder is refused: a session with no Git identity
+commits with `git -c user.name=... -c user.email=... commit` or the `GIT_AUTHOR_*`
+and `GIT_COMMITTER_*` variables. A branch made from a remote-tracking branch is
+created without its upstream (git reports that it could not write the
+configuration file).
+
+The protection of a file lasts as long as the file. It is a mount on the file in the
+session's namespace, and when something outside the session deletes the file or
+renames another over it, the mount is gone there and the running session can write the
+new file. Git replaces `config` that way for `git config`, `git remote add`,
+`git push -u`, `git branch -u`, `git checkout -b <branch> <remote>/<branch>` and
+`git sparse-checkout`, so run them before a session starts, or start a new session
+after them. An empty `hooks` directory that is removed is the
+same case; one with files in it cannot be replaced. This does not cover other
+ways a repository can run code, such as a `core.hooksPath` that points into the
+folder, a sibling worktree's entry, a submodule's Git directory, a repository nested
+in the folder, a folder that has no `.git` yet, or the same files reachable through a
+second mount point.
+
+This needs unprivileged user and mount namespaces. Where the host lacks them, the
+session still starts and its confinement line says that the Git hooks and
+configuration stay writable. The packaged systemd units and the Compose profiles allow
+the mount namespace and the `mount` call this needs. A host that has the
+namespaces but cannot bind one of the files at launch (a path removed in between, an
+unusual filesystem) does not start the session: a protection the host should give
+and does not is a failure, not a limit.
 
 ## What it consumes (and what it derives)
 

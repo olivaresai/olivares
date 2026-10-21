@@ -7,6 +7,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { densityHeightToken, usePreferencesStore } from '@/stores/preferences'
 import { mergeSessions, type UnifiedSession } from './provenance'
 import { addressOf } from './session-address'
 import type { LiveDTO } from './types'
@@ -43,6 +45,7 @@ const working = row({
   session_ref: 'sess-a',
   live_ref: 'lr-a',
   cc_state: 'active',
+  provider: 'claude',
   current_action: 'create_issue',
   current_resource: 'github/create_issue',
 })
@@ -53,6 +56,27 @@ const asking = row({
   summary: 'Reviewed the migration',
 })
 const done = row({ session_ref: 'sess-c', live_ref: 'lr-c', cc_state: 'ended' })
+
+/** A launched session: it has a run, so the engine can keep a pin for it. */
+function launchedRow(ref: string): UnifiedSession {
+  return mergeSessions(
+    [],
+    [
+      {
+        run_ref: ref,
+        transport: 'stream-json',
+        permission_mode: 'default',
+        isolation: 'native',
+        state: 'running',
+        last_event_seq: 0,
+        pep_provisioned: true,
+        record_io: false,
+        critical: false,
+        last_activity_at: '2026-09-18T09:01:00Z',
+      },
+    ],
+  )[0]
+}
 
 function renderRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
   const onOpen = vi.fn()
@@ -113,12 +137,16 @@ describe('WorkRail — what a row says', () => {
     // identifier the row does not paint stays reachable from it.
     expect(nameEl.getAttribute('title')).toContain(name)
     expect(nameEl.getAttribute('title')).toContain('run-long')
-    // A row is 52 px: the title is one line and is cut with an ellipsis.
+    // A row is one line at the list's standard row height: the title is cut with an
+    // ellipsis.
     expect(nameEl.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['truncate', 'min-w-0']),
     )
     expect(rowEl.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['h-14', 'min-[761px]:h-[52px]']),
+      expect.arrayContaining([
+        'h-11',
+        `min-[761px]:${densityHeightToken(usePreferencesStore.getState().density)}`,
+      ]),
     )
     // The state is a dot with the state's word as its name; the time is whole.
     expect(within(rowEl).getByRole('img', { name: 'Working' })).toBeTruthy()
@@ -129,7 +157,7 @@ describe('WorkRail — what a row says', () => {
     )
   })
 
-  it('says the tool and the folder NAME on the second line, never the path', () => {
+  it('keeps the tool and the folder on the hover, one line, never the path in the name', () => {
     const launched = mergeSessions(
       [],
       [
@@ -150,19 +178,144 @@ describe('WorkRail — what a row says', () => {
       ],
     )[0]
     renderRail({ sessions: [launched] })
-    const meta = within(rows()[0]).getByTestId('rail-row-meta')
-    expect(meta).toHaveTextContent('Claude Code · repo')
-    expect(meta.textContent).not.toContain('/srv/work')
-    // The whole path is on the folder's own hover.
-    expect(within(meta).getByTestId('rail-row-folder')).toHaveAttribute(
-      'title',
-      '/srv/work/repo',
-    )
-    // A folder NAME is a word and is set in the sans face; only a path is machine text.
-    expect(
-      within(meta).getByTestId('rail-row-folder').className.split(/\s+/),
-    ).not.toContain('font-mono')
+    const first = rows()[0]
+    // ONE LINE: there is no second line to leave blank (#2266).
+    expect(within(first).queryByTestId('rail-row-meta')).toBeNull()
+    const name = within(first).getByTestId('rail-row-name')
+    expect(name).toHaveTextContent('fix-tests')
+    expect(name.textContent).not.toContain('/srv/work')
+    // The tool, the folder and its whole path are one hover away.
+    expect(first.getAttribute('title')).toContain('Claude Code · repo')
+    expect(first.getAttribute('title')).toContain('/srv/work/repo')
   })
+
+  it('names a launched session with no prompt by its tool and folder, never Untitled', () => {
+    const launched = mergeSessions(
+      [],
+      [
+        {
+          run_ref: 'run-g',
+          transport: 'stream-json',
+          permission_mode: 'default',
+          isolation: 'native',
+          state: 'running',
+          last_event_seq: 0,
+          pep_provisioned: true,
+          record_io: false,
+          critical: false,
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/billing-api',
+        },
+      ],
+    )[0]
+    renderRail({ sessions: [launched] })
+    const name = within(rows()[0]).getByTestId('rail-row-name')
+    expect(name).toHaveTextContent('Claude Code · billing-api')
+    expect(name.textContent).not.toContain('Untitled session')
+  })
+
+  it('keeps the title its room: the Open beside button takes the time\u2019s place on hover, not a column', () => {
+    render(
+      <TooltipProvider delayDuration={0}>
+        <WorkRail
+          sessions={[working, asking, done]}
+          selected={addressOf(done)}
+          onOpen={vi.fn()}
+          onOpenBeside={vi.fn()}
+          pinned={new Set()}
+          onTogglePin={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+    const first = rows()[0]
+    // No permanent padding for the button from the shell breakpoint up (a title had 103 px
+    // of 300 left); a phone paints the button always and keeps its column.
+    const cls = first.className.split(/\s+/)
+    expect(cls).not.toContain('pr-12')
+    expect(cls).toContain('max-[760px]:pr-12')
+    // The time yields to the button by fading on hover: it is never `visibility:hidden`
+    // (that leaves the row's accessible name) and a focused row keeps it.
+    const time = first.querySelector('time') as HTMLElement
+    const timeCls = time.className.split(/\s+/)
+    expect(timeCls).toContain('min-[761px]:group-hover/row:opacity-0')
+    expect(time.className).not.toMatch(/invisible|focus-within/)
+    // The button yields the same way: it appears on hover (always on a phone) and NEVER on
+    // focus. A clicked or arrowed-to row matches `group-focus-within/row` with the pointer
+    // elsewhere, and the button is absolutely placed over the time's last 40 px, with
+    // the reserve gone: painting it there covered the time and state of the focused row.
+    const button = first.parentElement?.querySelector('button')
+    expect(button).not.toBeNull()
+    const buttonCls = (button as HTMLElement).className.split(/\s+/)
+    expect(buttonCls).toContain('group-hover/row:opacity-100')
+    expect(buttonCls).toContain('max-[760px]:opacity-100')
+    expect((button as HTMLElement).className).not.toMatch(/focus-within/)
+    // A touch screen has no hover to reveal it (`group-hover` is gated by
+    // `(hover: hover)`), and a tap used to reveal it by focus: a coarse pointer paints the
+    // button always and keeps its column, exactly as a phone does.
+    expect(cls).toContain('pointer-coarse:pr-12')
+    expect(buttonCls).toContain('pointer-coarse:opacity-100')
+  })
+
+  it('puts the folder\u2019s path on the hover only for a folder an operator chose', () => {
+    const base = {
+      transport: 'stream-json',
+      permission_mode: 'default',
+      isolation: 'native',
+      state: 'running',
+      last_event_seq: 0,
+      pep_provisioned: true,
+      record_io: false,
+      critical: false,
+      provider_driver: 'claude',
+    } as const
+    const chosen = mergeSessions(
+      [],
+      [
+        {
+          ...base,
+          run_ref: 'run-c',
+          name: 'fix',
+          workspace_path: '/srv/work/repo',
+        },
+      ],
+    )[0]
+    const made = mergeSessions(
+      [],
+      [
+        {
+          ...base,
+          run_ref: 'run-m',
+          name: 'fix',
+          workspace_path: '/var/lib/olivares/runs/run-m',
+        },
+      ],
+    )[0]
+    renderRail({ sessions: [chosen, made] })
+    const [a, b] = rows()
+    const titles = [a.getAttribute('title'), b.getAttribute('title')]
+    expect(titles.some((t) => t?.includes('/srv/work/repo'))).toBe(true)
+    expect(titles.some((t) => t?.includes('/var/lib/olivares'))).toBe(false)
+  })
+
+  it.each(['compact', 'comfortable'] as const)(
+    'a row is one standard %s row high, from the shell breakpoint up',
+    (density) => {
+      usePreferencesStore.setState({ density })
+      try {
+        renderRail()
+        for (const r of rows()) {
+          expect(r.className.split(/\s+/)).toEqual(
+            expect.arrayContaining([
+              'h-11',
+              `min-[761px]:${densityHeightToken(density)}`,
+            ]),
+          )
+        }
+      } finally {
+        usePreferencesStore.setState({ density: 'comfortable' })
+      }
+    },
+  )
 
   it('names the session and its state on the line, and carries the rest on the row', () => {
     renderRail()
@@ -175,13 +328,12 @@ describe('WorkRail — what a row says', () => {
     // …and the NAME is what the session is doing, never its reference. `sess-a` was
     // the second rung of the old label, so a rail of discovered sessions read as six
     // machine ids. The reference is on the name's own `title`.
-    // The clause is the action and resource the engine reported: both identifiers, each
-    // in its own code element, with only the separator as copy.
+    // The title is the tool: the action and resource the engine reported are the
+    // secondary fact, on the hover, never the name (#2266).
     const name = within(first).getByTestId('rail-row-name')
-    expect(name).toHaveTextContent('create_issue · github/create_issue')
-    expect(
-      Array.from(name.querySelectorAll('code')).map((c) => c.textContent),
-    ).toEqual(['create_issue', 'github/create_issue'])
+    expect(name).toHaveTextContent('Claude Code')
+    expect(name.textContent).not.toContain('create_issue')
+    expect(name.querySelectorAll('code')).toHaveLength(0)
     expect(within(first).queryByText('sess-a')).toBeNull()
     expect(
       within(first).getByTestId('rail-row-name').getAttribute('title'),
@@ -258,34 +410,27 @@ describe('WorkRail — what a row says', () => {
     expect(within(row).getByText(/pinned/i)).toBeInTheDocument()
   })
 
-  it('a row pinned under its run name shows the pin, and `p` unpins that name', async () => {
-    // F1 09b sweep: the row is live:<ref> now; the pin was stored while it was run:<ref>.
-    const launched = row(
-      {
-        live_ref: 'lr-l',
-        session_ref: 'sess-l',
-        attribution: 'managed',
-        run_ref: 'run-l',
-      },
-      [
-        {
-          run_ref: 'run-l',
-          live_ref: 'lr-l',
-          provider_profile_ref: 'ppf_1',
-          state: 'running',
-        } as unknown as RunDTO,
-      ],
-    )
-    expect(addressOf(launched)).toBe('live:lr-l')
-    const user = userEvent.setup()
-    const { onTogglePin } = renderRail({
-      sessions: [launched],
-      pinned: new Set(['run:run-l']),
-    })
-    expect(within(rows()[0]).getByText(/pinned/i)).toBeInTheDocument()
-    await user.tab()
-    await user.keyboard('p')
-    expect(onTogglePin).toHaveBeenCalledWith('run:run-l')
+  it('lists the pinned sessions in their own section FIRST, above Needs you', () => {
+    // #2130: a pin is "always first in my list". The pinned row leaves its state
+    // section (Earlier is not drawn once its only row is pinned) and the section above
+    // all the others carries the count like every other.
+    renderRail({ pinned: new Set([addressOf(done)]) })
+    const pinnedGroup = screen.getByRole('group', { name: /^Pinned\s*1$/ })
+    expect(pinnedGroup.contains(rows()[0])).toBe(true)
+    const attention = screen.getByRole('group', { name: /^Needs you\s*1$/ })
+    expect(
+      pinnedGroup.compareDocumentPosition(attention) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(screen.queryByText('Earlier')).toBeNull()
+    expect(
+      within(pinnedGroup).getByText(/pinned/i, { selector: '.sr-only' }),
+    ).toBeTruthy()
+  })
+
+  it('draws no Pinned section while nothing is pinned', () => {
+    renderRail()
+    expect(screen.queryByRole('group', { name: /^Pinned/ })).toBeNull()
   })
 
   it('groups by what the session needs, as "label count", and draws no empty group', () => {
@@ -388,18 +533,33 @@ describe('WorkRail — arrows move, Enter opens', () => {
 describe('WorkRail — no gesture without a keyboard path', () => {
   it('pins the focused row with `p`', async () => {
     const user = userEvent.setup()
-    const { onTogglePin } = renderRail()
+    const { onTogglePin } = renderRail({
+      sessions: [launchedRow('run-a'), launchedRow('run-b')],
+    })
     await user.tab()
     await user.keyboard('p')
-    expect(onTogglePin).toHaveBeenCalledWith('live:lr-b')
+    expect(onTogglePin).toHaveBeenCalledWith('run:run-a')
   })
 
   it('pins the row the keyboard is ON, not the one that is open', async () => {
     const user = userEvent.setup()
-    const { onTogglePin } = renderRail({ selected: 'live:lr-a' })
+    const { onTogglePin } = renderRail({
+      sessions: [launchedRow('run-a'), launchedRow('run-b')],
+      selected: 'run:run-a',
+    })
     await user.tab()
     await user.keyboard('{ArrowDown}p')
-    expect(onTogglePin).toHaveBeenCalledWith('live:lr-c')
+    expect(onTogglePin).toHaveBeenCalledWith('run:run-b')
+  })
+
+  it('does nothing on `p` for a session with no run: the engine has nothing to pin it on', async () => {
+    // An observed session. The pin is kept by the engine against a run, so the key is
+    // not bound here rather than bound to a no-op.
+    const user = userEvent.setup()
+    const { onTogglePin } = renderRail()
+    await user.tab()
+    await user.keyboard('p')
+    expect(onTogglePin).not.toHaveBeenCalled()
   })
 
   it('does nothing on `p` when there is nowhere to store a preference', async () => {

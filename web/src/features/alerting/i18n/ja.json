@@ -1,10 +1,62 @@
 {
   "title": "アラート",
-  "description": "検出結果を宛先にルーティングし、配信ログを確認します。ルートは宛先を名前で参照します。認証情報は配線されたトランスポートに存在します。",
+  "description": "検出結果を宛先にルーティングし、配信ログを確認します。ルートは宛先を名前で参照します。認証情報は設定済みのトランスポートに存在します。",
   "tabs": {
     "routes": "ルート",
+    "destinations": "宛先",
     "deliveries": "配信",
     "outbox": "配信不能"
+  },
+  "destinations": {
+    "adminOnly": "宛先は管理者が管理します",
+    "adminOnlyHint": "宛先の追加や変更にはインスタンス管理者が必要です。管理者に追加を依頼するか、オペレーターファイルで設定してください。",
+    "intro": "宛先は、ルートがアラートを送る先です。ここで Slack または Microsoft Teams を追加します。Webhook URL は暗号化して保存され、再表示されません。",
+    "add": "宛先を追加",
+    "empty": "宛先はまだありません",
+    "emptyHint": "Slack または Teams の宛先を追加し、ルートをそこに向けます。",
+    "noSealer": "保存は無効です。このデプロイにはシークレットのシーラーがないため、Webhook URL を安全に保存できません。",
+    "fileNote": "オペレーターファイル（OLIVARES_NOTIFY_CONFIG）の宛先は読み取り専用で表示されます。ほかの種類はそこで設定します。",
+    "colName": "名前",
+    "colKind": "種類",
+    "colHost": "Webhook ホスト",
+    "colSource": "提供元",
+    "colStatus": "状態",
+    "colActions": "操作",
+    "sourceConsole": "コンソール",
+    "sourceFile": "オペレーターファイル",
+    "open": "開いています",
+    "notOpen": "開いていません",
+    "testAction": "{{name}} にテストメッセージを送信",
+    "editAction": "宛先 {{name}} を編集",
+    "deleteAction": "宛先 {{name}} を削除",
+    "tested": "{{name}} にテストメッセージを送信しました",
+    "testSent": "テストメッセージを送信しました",
+    "testFailed": "宛先がテストメッセージを受け付けませんでした。Webhook URL を確認してください。",
+    "saved": "宛先を保存しました",
+    "savedNotOpen": "宛先を保存しましたが、開いていません。Webhook URL を確認し、テストメッセージを送信してください。",
+    "deleted": "宛先を削除しました",
+    "deleteDialog": {
+      "title": "宛先を削除しますか？",
+      "description": "「{{name}}」と保存済みの Webhook URL を削除します。この宛先を指すルートは、別の宛先を選ぶまで不明な宛先として記録されます。",
+      "confirm": "宛先を削除"
+    },
+    "dialog": {
+      "title": "宛先を追加",
+      "editTitle": "宛先を編集",
+      "subtitle": "アラートを Slack または Microsoft Teams に送信します。保存する前にテストメッセージを送信してください。",
+      "kind": "種類",
+      "name": "名前",
+      "nameHint": "小文字、数字、ドット、ハイフン、アンダースコア。ルートはこの名前で参照します。",
+      "url": "Webhook URL",
+      "urlHint": {
+        "slack": "Slack アプリの受信 Webhook URL（hooks.slack.com）。",
+        "teams": "「Teams の Webhook 要求を受信したとき」ワークフローの Webhook URL。",
+        "default": "受信 Webhook URL。"
+      },
+      "urlKeep": "空欄のままにすると保存済みの URL（{{host}}）を保持します。",
+      "urlStored": "保存済み — 入力すると置き換えます",
+      "test": "テストメッセージを送信"
+    }
   },
   "severities": {
     "any": "すべての重大度",

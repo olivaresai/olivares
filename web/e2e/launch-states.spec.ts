@@ -309,18 +309,19 @@ test.describe('Launch-copy STATES over real seeded data', () => {
     ).toBeVisible({
       timeout: 15_000,
     })
-    // El motivo es OBLIGATORIO — «who reads this later: the post-review and the regulator» — así
-    // que se rellena con uno que explique la captura a quien la audite, no con relleno.
-    const motivo = page.getByRole('textbox').first()
-    await motivo.fill(
-      'Launch documentation capture — synthetic demo estate, disposable data dir.',
-    )
-    await page.getByRole('button', { name: /^Emergency stop$/ }).click()
+    await page.getByRole('button', { name: /^Stop all agents$/ }).click()
     // ⛔ HAY UN DIÁLOGO DE CONFIRMACIÓN, y saltárselo fue el primer defecto de este test: la captura
     //    salió mostrando «Stop the entire estate?» con Cancel/Engage — el paro NO activado, con la
     //    página de detrás diciendo todavía «No active stops».
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 10_000 })
-    await page.getByRole('button', { name: /^Engage kill switch$/ }).click()
+    const dialogo = page.getByRole('dialog')
+    await expect(dialogo).toBeVisible({ timeout: 10_000 })
+    // El motivo es opcional, pero quien audite la captura la entiende mejor con uno.
+    await dialogo
+      .getByRole('textbox')
+      .fill(
+        'Launch documentation capture — synthetic demo estate, disposable data dir.',
+      )
+    await dialogo.getByRole('button', { name: /^Stop all agents$/ }).click()
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 20_000 })
 
     // ⛔⛔ Y EL TESTIGO NO PUEDE SER LA PALABRA «engaged», que es como pasó la primera versión: el

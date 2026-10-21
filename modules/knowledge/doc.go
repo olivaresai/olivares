@@ -87,8 +87,8 @@
 // Document CONTENT for RAG is bulk reference data, not a flow fact: it cannot ride
 // the sealed Observation bus and must not be broadcast (minimal data). It travels a
 // typed Apache contract, connectors/contentsource (the twin of identitysource),
-// which the read-only data connectors (gdrive/confluence/notion/sharepoint/
-// s3content) implement and this module pulls from. The module imports that Apache
+// which the read-only data connectors (gdrive/confluence/notion/
+// s3content; sharepoint is Business) implement and this module pulls from. The module imports that Apache
 // package (Apache → AGPL is allowed); a connector never imports the module.
 //
 // # Seams wired at the composition root (honest Fase C caveat)

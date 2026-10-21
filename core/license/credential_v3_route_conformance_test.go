@@ -9,8 +9,8 @@
 // and it is silent about the VALUES the fulfillment route chooses. Those values are decided in
 // commercial/license-worker/src/license/issue-context.ts — the entity id taken from the
 // provider's customer, a deployment id derived because "the purchase creates deployment #1",
-// purpose "production", the clock fields deliberately omitted for want of an activated
-// deployment, and the refund-window phase with its 14-day guarantee and 72 h lease.
+// purpose "production", the instance-lease-v1 clock policy for connected Business,
+// and the refund-window phase with its 14-day guarantee and 72 h lease.
 //
 // EVERY ONE OF THOSE IS A FIELD THIS PARSER CAN REFUSE. A blank entity_id or deployment_id is a
 // hard error here, an unrecognized purpose is a hard error, a provisional grant without a
@@ -66,6 +66,9 @@ func TestV3RouteVectorIsAcceptedByTheVerifier(t *testing.T) {
 	}
 	if c.MaxUsers != 0 {
 		t.Errorf("max_users = %d, want 0 (unlimited since B10)", c.MaxUsers)
+	}
+	if c.ClockPolicy != "instance-lease-v1" {
+		t.Errorf("clock_policy = %q, want instance-lease-v1 for a new Business purchase", c.ClockPolicy)
 	}
 
 	// ONE GRANT PER PURCHASED LINE, which is the whole reason v3 exists: the flat container

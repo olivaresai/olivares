@@ -12,7 +12,7 @@ const origin = 'https://console.example.test:8443'
 
 it.each([
   '/audit?from=2026-09-30&kind=write#entry-7',
-  '/session-viewer/run-17?at=4#output',
+  '/audit/run-17?at=4#output',
   '/settings',
   '/areas/ai',
   '/',

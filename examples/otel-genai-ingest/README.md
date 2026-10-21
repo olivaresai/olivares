@@ -14,6 +14,13 @@ this is the vendor-neutral on-ramp for the rest of your agent fleet.
 > task build:bin              # the OTEL source ships as an embedded plugin
 > examples/otel-genai-ingest/smoke.sh
 > ```
+>
+> **Editions.** The OTLP receiver and the `gen_ai.*` mapping are in every edition.
+> Reading the attributed cost back (`/v1/m/finops/spend/summary`, step 3) is FinOps
+> spend analysis, a Business feature: a Community binary accepts the span and answers
+> that route `501` ("FinOps is a Business feature"). The smoke asserts the `501` on
+> Community and the cost below on a Business binary (`OLIVARES_BIN=<business binary>`);
+> any other status fails and names itself.
 
 ## How it works
 
@@ -86,6 +93,7 @@ Any OTel SDK exports this shape; here is one span as plain OTLP/HTTP JSON
 curl -sf -X POST localhost:4318/v1/traces \
   -H 'Content-Type: application/json' --data-binary @span.json
 
+# Business edition (a Community binary answers 501 here):
 printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf localhost:8443/v1/m/finops/spend/summary -H @- \
   -H "X-Olivares-Tenant: $TENANT" | jq
 # {

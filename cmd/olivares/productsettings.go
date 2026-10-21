@@ -41,9 +41,10 @@ const settingsRestartMarker = "settings-restart.marker"
 
 // productSettingsDoc is the record's document.
 type productSettingsDoc struct {
-	Tracing    *obstrace.Settings  `json:"tracing,omitempty"`
-	Version    string              `json:"version"`
-	Activation *ActivationManifest `json:"activation,omitempty"`
+	SessionIdle *api.SessionIdleSettings `json:"session_idle,omitempty"`
+	Tracing     *obstrace.Settings       `json:"tracing,omitempty"`
+	Version     string                   `json:"version"`
+	Activation  *ActivationManifest      `json:"activation,omitempty"`
 	// Modules is the module selection (moduleprofile.go); absent until the
 	// first start that records one.
 	Modules          *moduleSelectionDoc     `json:"modules,omitempty"`
@@ -53,6 +54,9 @@ type productSettingsDoc struct {
 	// other page keeps its address. An installation that existed before never
 	// has it, so its navigation lists everything it did.
 	PreviewsHidden bool `json:"previews_hidden,omitempty"`
+	// NotifyDestinations are the Slack and Teams destinations added in the console
+	// (notifydestinations.go). They hold secret references only, never a webhook URL.
+	NotifyDestinations []storedNotifyDestination `json:"notify_destinations,omitempty"`
 }
 
 // productSettings reads and writes the record and keeps this node's file copy

@@ -280,7 +280,7 @@ mark された host でテストする必要があります。
 | **Control console > Connectors**（`/console`） | source、mode、頻度、secret ではない設定、Test/Save/Reload action。 | 永続化した source はすぐ表示されますが、データは表示されません。 |
 | **Health > Connectors**（`/health`） | コネクター状態、メッセージ、傾向、最新 activity。 | roster の再読み込み後。 |
 | **Observability > Ingestion**（`/observability`） | `olivares.codex` の counter、observation type、最初と最後の受信。 | `Gather` がデータを出力した後。process 全体の counter は boot 時に開始し、再起動でリセットされます。 |
-| **Cost & FinOps**（`/finops`） | 推定 Analytics usage と、有効時の日次請求 cost。 | 有効な credential、`workspace_id`、authorized API が必要です。`costs` は明示的な opt-in が必要です。 |
+| **Budgets**（`/stored-budgets`） | 保存済みの各予算上限に対する消費量。推定 Analytics usage と、有効時の日次請求 cost から算出。 | 有効な credential、`workspace_id`、authorized API が必要です。`costs` は明示的な opt-in が必要です。 |
 | **Security**（`/security`） | adoption finding、利用できない enterprise surface、Compliance data の opt-in 構造分析。 | collection 後。enterprise surface の 403/404 response は成功ではなく posture evidence になります。 |
 | **Sessions**（`/sessions`） | action、model、identity、cost、posture を含む session と timeline。 | ガバナンス対象の hook から得られます。batch source だけでは live session を作りません。 |
 | **Audit**（`/audit`） | import した activity evidence と ledger に anchor された PEP decision。 | 帰属可能な log または decision の受信後。 |
@@ -290,8 +290,6 @@ offline catalog を、model panel に remote inventory があることの証明�
 
 <img class="light:sl-hidden" src="/console/health-dark.png" alt="エステート全体の稼働状況、信頼性、依存関係。観測されたアクティビティと陳腐化スイープから導出され、インフラを能動的に探査することはありません。">
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="エステート全体の稼働状況、信頼性、依存関係。観測されたアクティビティと陳腐化スイープから導出され、インフラを能動的に探査することはありません。">
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="エステート全体のトークンコスト — トレンド、チャージバック、突合、予算、予測。数値はFinOps台帳が報告するとおりに正確に表示されます。">
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="エステート全体のトークンコスト — トレンド、チャージバック、突合、予算、予測。数値はFinOps台帳が報告するとおりに正確に表示されます。">
 <img class="light:sl-hidden" src="/console/security-dark.png" alt="ガードレールの検出結果、エンフォースメント態勢、異常キュー、改ざん検知可能なインシデントフォレンジック。このプレーンはデフォルトで検出型です。記録は行いますが、エンフォースメントが有効化されガバナンス下にない限り、それ自体がブロックすることはありません。">
 <img class="dark:sl-hidden" src="/console/security-light.png" alt="ガードレールの検出結果、エンフォースメント態勢、異常キュー、改ざん検知可能なインシデントフォレンジック。このプレーンはデフォルトで検出型です。記録は行いますが、エンフォースメントが有効化されガバナンス下にない限り、それ自体がブロックすることはありません。">
 

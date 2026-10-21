@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDE PANE HAS TABS: Context, Activity (Claude Code), Changes, Files, then whatever a
+// THE SIDE PANE HAS TABS: Context, Activity (Claude Code and Codex), Changes, Files, then whatever a
 // build registers.
 import { act, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -207,6 +207,13 @@ describe('the side pane tabs', () => {
     expect(screen.getByTestId('context-details')).toBeInTheDocument()
     expect(screen.queryByTestId('changes-block')).toBeNull()
     expect(screen.queryByTestId('files-browser')).toBeNull()
+  })
+
+  // #2267: an address that names no evidence block leaves `evidence` undefined; the
+  // pane used to read that as "no overview" and dropped the session's work from it.
+  it('shows the overview when the address names no evidence block', async () => {
+    renderPane({ evidence: undefined })
+    expect(await screen.findByTestId('session-overview')).toBeInTheDocument()
   })
 
   it("shows the same four tabs when a build's extension object has no sessionPanels at all", async () => {
@@ -432,51 +439,54 @@ describe('the side pane tabs', () => {
     })
   })
 
-  it('offers Activity, after Context, for a Claude Code session and reads it only once opened', async () => {
-    const user = userEvent.setup()
-    const onPanel = vi.fn()
-    ops.activity.mockResolvedValue({
-      driver: 'claude',
-      transcript: 'read',
-      context_tokens: 1200,
-      compactions: [],
-      agents: [],
-      tasks: [],
-      files: [],
-      todos: [],
-      skills: [],
-      mcp_servers: [],
-    })
-    const claudeRun = resolution([{ ...RUN, provider_driver: 'claude' }])
-    const view = renderPane({ resolution: claudeRun, onPanel })
-    await screen.findByTestId('session-context')
-    expect(tabs()).toEqual([
-      'Context',
-      'Activity',
-      'Changes',
-      'Files',
-      'Preview',
-    ])
-    expect(ops.activity).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('radio', { name: 'Activity' }))
-    expect(onPanel).toHaveBeenLastCalledWith('activity')
-    // The address holds the tab in front.
-    view.rerender(
-      <SessionContextPane
-        resolution={claudeRun}
-        evidence="checks"
-        onExpandEvidence={() => {}}
-        onPanel={onPanel}
-        panel="activity"
-      />,
-    )
-    expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
-    expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
-  })
+  it.each(['claude', 'codex'])(
+    'offers Activity, after Context, for %s and reads it only once opened',
+    async (driver) => {
+      const user = userEvent.setup()
+      const onPanel = vi.fn()
+      ops.activity.mockResolvedValue({
+        driver,
+        transcript: 'read',
+        context_tokens: 1200,
+        compactions: [],
+        agents: [],
+        tasks: [],
+        files: [],
+        todos: [],
+        skills: [],
+        mcp_servers: [],
+      })
+      const claudeRun = resolution([{ ...RUN, provider_driver: driver }])
+      const view = renderPane({ resolution: claudeRun, onPanel })
+      await screen.findByTestId('session-context')
+      expect(tabs()).toEqual([
+        'Context',
+        'Activity',
+        'Changes',
+        'Files',
+        'Preview',
+      ])
+      expect(ops.activity).not.toHaveBeenCalled()
+      await user.click(screen.getByRole('radio', { name: 'Activity' }))
+      expect(onPanel).toHaveBeenLastCalledWith('activity')
+      // The address holds the tab in front.
+      view.rerender(
+        <SessionContextPane
+          resolution={claudeRun}
+          evidence="checks"
+          onExpandEvidence={() => {}}
+          onPanel={onPanel}
+          panel="activity"
+        />,
+      )
+      expect(await screen.findByTestId('session-activity')).toBeInTheDocument()
+      expect(ops.activity).toHaveBeenCalledWith('run-1', expect.anything())
+    },
+  )
 
   it('offers no Activity for another tool, whose record is not read that way yet', async () => {
     renderPane({
-      resolution: resolution([{ ...RUN, provider_driver: 'codex' }]),
+      resolution: resolution([{ ...RUN, provider_driver: 'opencode' }]),
     })
     await screen.findByTestId('session-context')
     expect(tabs()).toEqual(['Context', 'Changes', 'Files', 'Preview'])

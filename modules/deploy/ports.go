@@ -6,6 +6,7 @@ package deploy
 
 import (
 	"context"
+	"errors"
 
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -165,6 +166,8 @@ type Executor interface {
 // errNoExecutor is the fail-closed error every executor method returns when no
 // runtime executor is wired. It is a deliberate, explicit failure — never a
 // pretend success that would let the control plane believe it mutated infra.
+var errNoExecutor = errors.New("deploy: no runtime executor configured; cannot reconcile to infrastructure")
+
 type unwiredExecutor struct{}
 
 func (unwiredExecutor) Plan(context.Context, ExecRequest) ([]Change, error) {

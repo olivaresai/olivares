@@ -6,9 +6,15 @@
 // own transcript. The answer below is the engine's for the real Claude Code session in
 // modules/sessions/testdata/claude-2.1.296-activity.jsonl, plus a task list.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1', can: () => true }),
@@ -21,8 +27,9 @@ vi.mock('@/features/agentops/api', async (orig) => ({
 import { agentOpsApi } from '@/features/agentops/api'
 import type { RunActivityDTO, RunDTO } from '@/features/agentops/types'
 import { ApiError } from '@/lib/api/errors'
+import i18n from '@/lib/i18n'
 import { SessionActivity } from './session-activity'
-import './i18n'
+import { en, es, zh, ja, de, ru, fr } from './i18n'
 
 const run = {
   run_ref: 'run_1',
@@ -112,12 +119,183 @@ function show(onOpenChanges?: () => void, shown: RunDTO = run) {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
   vi.clearAllMocks()
   vi.mocked(agentOpsApi.activity).mockResolvedValue(ACTIVITY)
 })
 
+afterEach(async () => {
+  // Unmount language subscribers before restoring the shared i18n instance.
+  cleanup()
+  await i18n.changeLanguage('en')
+})
+
 describe('SessionActivity', () => {
+  it('shows the context window reported by Codex', async () => {
+    vi.mocked(agentOpsApi.activity).mockResolvedValue({
+      ...ACTIVITY,
+      driver: 'codex',
+      ...{ context_window: 258400 },
+    })
+    show(undefined, { ...run, provider_driver: 'codex' })
+    const context = await screen.findByTestId('activity-context')
+    expect(within(context).getByText('78,582 / 258,400')).toBeInTheDocument()
+  })
+
+  it.each(Object.entries({ en, es, zh, ja, de, ru, fr }))(
+    '%s compaction plural forms retain the formatted count placeholder',
+    (_language, catalog) => {
+      const forms = Object.entries(catalog.activity).filter(([key]) =>
+        key.startsWith('compactedTimes_'),
+      )
+      expect(forms.length).toBeGreaterThan(0)
+      for (const [key, value] of forms) {
+        expect(value, key).toContain('{{n}}')
+      }
+    },
+  )
+
+  const frenchCompactedOne = 'Compacté 1 fois' // language-data: French expected translation
+  const frenchCompactedTwo = 'Compacté 2 fois' // language-data: French expected translation
+  it.each([
+    ['en', 1, 'Compacted 1 time'],
+    ['en', 2, 'Compacted 2 times'],
+    ['es', 1, 'Compactado 1 vez'],
+    ['es', 2, 'Compactado 2 veces'],
+    ['fr', 1, frenchCompactedOne],
+    ['fr', 2, frenchCompactedTwo],
+    ['de', 1, '1-mal verdichtet'],
+    ['de', 2, '2-mal verdichtet'],
+    ['ru', 1, 'Сжат 1 раз'],
+    ['ru', 2, 'Сжат 2 раза'],
+    ['ja', 1, '1 回圧縮'],
+    ['ja', 2, '2 回圧縮'],
+    ['zh', 1, '已压缩 1 次'],
+    ['zh', 2, '已压缩 2 次'],
+  ] as const)(
+    'renders %s compactions with count %i as "%s"',
+    async (language, count, expected) => {
+      await i18n.changeLanguage(language)
+      vi.mocked(agentOpsApi.activity).mockResolvedValue({
+        ...ACTIVITY,
+        compactions: Array.from(
+          { length: count },
+          () => ACTIVITY.compactions[0]!,
+        ),
+      })
+      show()
+      const context = await screen.findByTestId('activity-context')
+      expect(within(context).getByText(expected)).toBeInTheDocument()
+    },
+  )
+
+  it('shows workflow progress when agents have no phase assignment', async () => {
+    vi.mocked(agentOpsApi.activity).mockResolvedValue({
+      ...ACTIVITY,
+      tasks: [
+        {
+          tool_use_id: 'w1',
+          kind: 'workflow',
+          state: 'running',
+          workflow: {
+            run_id: 'wf_1',
+            agents_total: 2,
+            agents_done: 1,
+            phases: [],
+          },
+        },
+      ],
+    })
+    show()
+    expect(await screen.findByText('1 of 2 agents done')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Phases' })).toBeNull()
+  })
+
+  const frenchProgress = 'Agents terminés : 1 sur 2' // language-data: French expected translation
+  it.each([
+    ['en', 'Phases', '1 of 2 agents done'],
+    ['es', 'Fases', '1 de 2 agentes completados'],
+    ['fr', 'Phases', frenchProgress],
+    ['de', 'Phasen', '1 von 2 Agenten fertig'],
+    ['ja', 'フェーズ', '2 エージェント中 1 完了'],
+    ['ru', 'Этапы', 'Завершено агентов: 1 из 2'],
+    ['zh', '阶段', '2 个智能体中 1 个已完成'],
+  ])(
+    'shows workflow phases and agent progress in %s',
+    async (lang, label, progress) => {
+      await i18n.changeLanguage(lang)
+      try {
+        const answer = {
+          ...ACTIVITY,
+          tasks: [
+            {
+              tool_use_id: 'w1',
+              kind: 'workflow',
+              description: 'Build',
+              state: 'running',
+              workflow: {
+                run_id: 'wf_1',
+                name: 'Build',
+                agents_total: 2,
+                agents_done: 1,
+                phases: [
+                  {
+                    index: 1,
+                    title: 'Prepare',
+                    state: 'completed',
+                    agents_total: 1,
+                    agents_done: 1,
+                  },
+                  {
+                    index: 2,
+                    title: 'Finish',
+                    detail: 'Run final checks',
+                    state: 'running',
+                    agents_total: 1,
+                    agents_done: 0,
+                  },
+                ],
+              },
+            },
+          ],
+        }
+        vi.mocked(agentOpsApi.activity).mockResolvedValue(
+          answer as RunActivityDTO,
+        )
+        show()
+        const phases = await screen.findByRole('list', { name: label })
+        expect(within(phases).getByText('Prepare')).toBeInTheDocument()
+        expect(within(phases).getByText('Finish')).toBeInTheDocument()
+        expect(within(phases).getByText('Run final checks')).toBeInTheDocument()
+        const items = within(phases).getAllByRole('listitem')
+        expect(items[0]).not.toHaveAttribute('aria-current')
+        if (lang === 'en') {
+          expect(items[0]).toHaveTextContent('1 of 1 agents done')
+          expect(items[1]).toHaveTextContent('0 of 1 agents done')
+        }
+        expect(items[1]).not.toHaveAttribute('aria-current')
+        expect(screen.getByText(progress)).toBeInTheDocument()
+      } finally {
+        await i18n.changeLanguage('en')
+      }
+    },
+  )
+
+  it.each([
+    [200000, 39.291, '78,582 tokens · 39.3% of 200,000'],
+    [1000000, 7.8582, '78,582 tokens · 7.9% of 1,000,000'],
+    [null, null, '78,582 tokens · window unknown'],
+  ])('shows the reported context window %s', async (window, percent, label) => {
+    vi.mocked(agentOpsApi.activity).mockResolvedValue({
+      ...ACTIVITY,
+      ...{ context_window: window, context_percent: percent },
+    })
+    show()
+    const context = await screen.findByTestId('activity-context')
+    expect(within(context).getByText(label)).toBeInTheDocument()
+  })
+
   it('shows the plan, the agents, the background work, the files and the context', async () => {
     show()
     const todos = await screen.findByTestId('activity-todos')
@@ -154,8 +332,10 @@ describe('SessionActivity', () => {
     expect(
       within(context).getByText('claude-haiku-5-5 · medium'),
     ).toBeInTheDocument()
-    expect(within(context).getByText('78,582')).toBeInTheDocument()
-    expect(within(context).getByText('Compacted once')).toBeInTheDocument()
+    expect(
+      within(context).getByText('78,582 tokens · window unknown'),
+    ).toBeInTheDocument()
+    expect(within(context).getByText('Compacted 1 time')).toBeInTheDocument()
     expect(within(context).getByText('tdd-workflow')).toBeInTheDocument()
     expect(within(context).getByText('github')).toBeInTheDocument()
     expect(agentOpsApi.activity).toHaveBeenCalledWith(

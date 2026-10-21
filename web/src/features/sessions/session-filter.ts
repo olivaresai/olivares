@@ -6,11 +6,11 @@
 // else: the name the row is called by, its distinguishing tail, the tool's product name and
 // the folder's name. A reference or a path the row does not paint is not searched, so the
 // field never keeps a row for a reason the person cannot see.
-import { toolName } from '@/features/agentops/tool-names'
 import { runFolder } from './folder'
 import {
   primaryRun,
   sessionNaming,
+  sessionPlace,
   sharedNames,
   type UnifiedSession,
 } from './provenance'
@@ -25,13 +25,9 @@ function haystack(
 ): string {
   const run = primaryRun(session.runs)
   const naming = sessionNaming(session, untitled, shared)
-  const driver = run?.provider_driver || session.live?.provider
-  return [
-    naming.name,
-    naming.shortId,
-    driver ? toolName(driver) : '',
-    runFolder(run),
-  ]
+  // The tool by the one rule the name uses (the run's driver, the profile's, the engine
+  // the connector declared), so a session named by its summary is still found by its tool.
+  return [naming.name, naming.shortId, sessionPlace(session), runFolder(run)]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()

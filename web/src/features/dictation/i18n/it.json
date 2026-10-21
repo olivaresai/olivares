@@ -1,0 +1,10 @@
+{
+  "dictate": "Detta",
+  "hint": "Detta. La tua voce resta in questo browser.",
+  "loading": "Caricamento del riconoscimento vocale…",
+  "listening": "In ascolto. Premi di nuovo o Esc per fermare.",
+  "transcribing": "Trascrizione in corso…",
+  "nothing": "Nessuna voce rilevata.",
+  "failed": "Dettatura non riuscita. Riprova.",
+  "blocked": "Il browser ha bloccato il microfono."
+}

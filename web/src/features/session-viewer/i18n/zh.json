@@ -1,6 +1,6 @@
 {
   "title": "会话录制查看器",
-  "subtitle": "单个会话的代理活动和治理证据的统一时间线。",
+  "subtitle": "单个会话的智能体活动和治理证据的统一时间线。",
   "back": "返回录制列表",
   "header": {
     "subject": "主体",
@@ -16,7 +16,7 @@
     "sealSeq": "封存账本 seq"
   },
   "lanes": {
-    "activity": "代理活动",
+    "activity": "智能体活动",
     "evidence": "治理证据"
   },
   "panels": {

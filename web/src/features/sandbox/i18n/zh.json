@@ -119,9 +119,9 @@
       "title": "新建场景",
       "description": "场景是一份合成测试样例：主体收到的步骤输入，以及它们所解析到的模拟 MCP/资源响应。其中没有任何内容会触及真实资源。",
       "name": "名称",
-      "namePlaceholder": "结账代理——正常路径",
+      "namePlaceholder": "结账智能体——正常路径",
       "subjectKind": "主体",
-      "subjectKindHint": "场景所检验的对象——代理、模型、提示词或会话。自由文本：首尾空白会被去除，最多保存 200 个字符。",
+      "subjectKindHint": "场景所检验的对象——智能体、模型、提示词或会话。自由文本：首尾空白会被去除，最多保存 200 个字符。",
       "subjectKindPlaceholder": "agent",
       "descriptionLabel": "描述",
       "descriptionPlaceholder": "这份样例检验什么，以及它为何存在。",
@@ -180,8 +180,8 @@
     "scenarioRef": "Scenario ref (optional)",
     "baseline": "Baseline variant",
     "candidate": "Candidate variant",
-    "replayHint": "Re-executes a historical session deterministically against mocks. If the timeline cannot be reconstructed the replay comes back DEGRADED with zero steps — that is not a session that did nothing, it is a timeline that could not be rebuilt.",
-    "compareHint": "A comparison is pre/post-deploy DECISION evidence and is stored append-only, which is why it needs the admin tier rather than the one that merely runs.",
+    "replayHint": "对模拟对象确定性地重新执行一次历史会话。如果无法重建时间线，回放会以“降级”状态返回，且步骤为零——这不是一个什么都没做的会话，而是一条无法重建的时间线。",
+    "compareHint": "对比是部署前后的决策证据，并以仅追加方式存储，因此需要管理员级别，而不是仅能运行的级别。",
     "liveRef": "会话实例引用",
     "legacySessionRef": "旧版会话引用（替代项）"
   }

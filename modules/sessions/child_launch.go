@@ -6,14 +6,18 @@ package sessions
 
 import (
 	"context"
+	"crypto/sha256"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
@@ -56,14 +60,31 @@ type childDecision struct {
 // the spec is returned whatever happened, as the runner may hand back a process
 // together with an error.
 func (m *Module) launchChild(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, d childDecision) (LaunchSpec, Process, string, error) {
+	if err := d.ws.noDeleteIsolationRefusal(p.Isolation); err != nil {
+		return LaunchSpec{}, nil, "folder access mode", err
+	}
+	if p.Isolation == IsolationContainer {
+		if err := m.containerRefusal(*p, d); err != nil {
+			return LaunchSpec{}, nil, "container isolation", err
+		}
+	}
 	program, err := m.resolveRunProgram(ctx, tenant, *p)
 	if err != nil {
 		return LaunchSpec{}, nil, "tool version selection", err
 	}
 	p.resolvedProgram, p.resolvedIdentity = toolProgramIdentity(program)
 	spec := m.childSpec(*p, d)
+	m.watchEgressRefusals(tenant, runRef, spec.NetworkPolicy)
+	if spec.NetworkPolicy != nil && keyHeaderKinds[d.cred.bound.Kind] && spec.NetworkPolicy.CredentialSHA256 == ([sha256.Size]byte{}) {
+		m.warnf("sessions: a launch on a provider key has no key to pin; the session proxy does not check which key it forwards",
+			"run_ref", runRef, "kind", d.cred.bound.Kind)
+	}
 	if stage, err := m.prepareSessionLaunch(ctx, runCtx, tenant, runRef, p, &spec); err != nil {
 		return spec, nil, stage, err
+	}
+	// The files may have changed since the check that let this start through.
+	if verdict := m.checkProjectConfig(ctx, tenant, *p, d.ws); verdict.refusal != nil && !m.claudeHooksApply(*p, spec.Env) {
+		return spec, nil, "project agent configuration check", verdict.refusal
 	}
 	proc, err := m.rt.Runner.Launch(runCtx, spec)
 	return spec, proc, "tool process launch", err
@@ -163,6 +184,17 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 			Instructions:        p.Instructions,
 			Name:                p.Name,
 		}
+		if p.Transport != TransportRemoteControl && d.cred.bound.Kind != "" {
+			claude.Settings = claudeBoundSettings
+		}
+		if p.FastMode != nil {
+			fast := `{"fastMode":` + strconv.FormatBool(*p.FastMode)
+			if claude.Settings == "" {
+				claude.Settings = fast + `}`
+			} else {
+				claude.Settings = fast + `,` + claude.Settings[1:]
+			}
+		}
 		if p.Transport == TransportRemoteControl {
 			// Lifecycle-only: I/O is relayed to Anthropic's cloud, not bridged.
 			args = cliruntime.ClaudeRemoteControlArgs(claude)
@@ -173,9 +205,6 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 			// argv with no form flag at all — that would launch the vendor CLI
 			// INTERACTIVELY under a row that claims a bridged session.
 			args = cliruntime.ClaudeArgs(claude)
-			if d.cred.bound.Kind != "" {
-				args = append(args, claudeSettingsFlag, claudeBoundSettings)
-			}
 		}
 	}
 
@@ -280,10 +309,38 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 	env = append(env, d.gateEnv...)
 
 	preset := launchPreset(p)
-	policy := m.sessionConfinement(dir, p.ProviderHome, preset)
+	var policy *confine.Policy
 	var confinementFiles []*os.File
-	if policy != nil && d.ws != nil {
-		confinementFiles = d.ws.readOnlyHandles
+	var noDelete []string
+	var mounts confine.Mounts
+	var mountsNote string
+	var binds []ContainerBind
+	if p.Isolation == IsolationContainer {
+		// A container is held by what it is given, not by a Landlock policy: dir is a
+		// path inside it, so nothing here may be computed from it on the host.
+		binds = m.containerFolderBinds(p, d, preset)
+		if driverKey == providerDriverClaude {
+			// Claude Code reads its managed (policy-tier) settings from the system directory
+			// of the image it runs in; the host's policy is what applies.
+			if bind, ok := claudeManagedSettingsBind(); ok {
+				binds = append(binds, bind)
+			}
+		}
+		if mount != nil && preset == PresetReadOnly {
+			mount.ReadOnly = true
+		}
+	} else {
+		policy = m.sessionConfinement(dir, p.ProviderHome, preset)
+		if policy != nil && d.ws != nil {
+			confinementFiles = d.ws.readOnlyHandles
+			if d.ws.mountMode == mountNoDelete && preset != PresetReadOnly {
+				noDelete = withoutDelete(policy, dir)
+			}
+		}
+		if policy != nil && preset != PresetReadOnly && dir != "" {
+			// A read-only session cannot write its folder at all.
+			mounts, mountsNote = m.GitMounts(dir)
+		}
 	}
 	return LaunchSpec{
 		Program:       program,
@@ -291,18 +348,22 @@ func (m *Module) childSpec(p CreateRunParams, d childDecision) LaunchSpec {
 		Dir:           dir,
 		Env:           env,
 		BoundProvider: d.cred.bound,
-		NetworkPolicy: sessionNetworkPolicy(driverKey, d.cred.bound, d.gateEnv),
+		NetworkPolicy: sessionNetworkPolicy(driverKey, d.cred.bound, d.gateEnv, d.providerEnv),
 		EnvAllow:      p.EnvAllow,
 		Isolation:     p.Isolation,
 		WaitDelay:     m.rt.waitDelay,
 		Workspace:     mount,
+		Binds:         binds,
 		// The child may write its folder and its account homes, and nothing of
 		// the engine (runtime_confinement.go).
-		Confinement: policy, ConfinementFiles: confinementFiles,
+		Confinement: policy, ConfinementFiles: confinementFiles, ConfinementNoDelete: noDelete,
+		ConfinementMounts: mounts, ConfinementMountsNote: mountsNote,
+		files:                                newFileScope(dir, p.Isolation != IsolationNative && p.Isolation != "", preset, d.ws, policy, mounts),
 		ConfinementRequireTruncateProtection: p.requireTruncateProtection,
-		// A read-only session's promise is the operating system's: it does not start
-		// where it cannot be confined, whatever the node's own setting.
-		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly || (d.ws != nil && len(d.ws.readOnlyFolders) > 0),
+		// A read-only session's promise, like a no-delete folder's, is the operating
+		// system's: it does not start where it cannot be confined, whatever the node's
+		// own setting.
+		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly || (d.ws != nil && (len(d.ws.readOnlyFolders) > 0 || d.ws.mountMode == mountNoDelete)),
 	}
 }
 
@@ -337,10 +398,18 @@ func launchWorkspaceTarget(p CreateRunParams, ws *resolvedWorkspace) (string, *W
 	}
 }
 
-const sessionLaunchSetupTimeout = 5 * time.Second
+// sessionLaunchSetupTimeout bounds a session MCP setup that never answers. Its only
+// slow step is the tenant roster read, which queues on the engine's one store
+// connection behind every other launch (the file it writes takes under 5 ms), so on
+// slow storage a burst of starts waits there: 7.7 s at most with 40 processes
+// syncing the same disk, against a 5 s bound that refused a start every other
+// step of the same launch waited out. The API server cuts a response at 60 s
+// (core/api/server.go WriteTimeout), so the refusal must come well before that.
+const sessionLaunchSetupTimeout = 30 * time.Second
 
 // Setup diagnostics name a fixed stage, never a lower-trust error that has seen
-// injected credentials. A registry outage cannot hold the create request open.
+// injected credentials. A registry outage cannot hold the create request open
+// longer than sessionLaunchSetupTimeout.
 func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, spec *LaunchSpec) (string, error) {
 	if err := m.prepareSessionSkills(ctx, runCtx, tenant, runRef, *p, spec); err != nil {
 		return "assigned skills delivery", err
@@ -352,13 +421,16 @@ func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.
 		return "repository read credential", err
 	}
 	if err := m.configureProfilePackages(ctx, runCtx, tenant, runRef, p, spec); err != nil {
-		return "profile programs and package registries", err
+		return "profile programs, package registries and egress hosts", err
 	}
 	if err := m.prepareCodexSandbox(ctx, p, spec); err != nil {
 		return "Codex sandbox check", err
 	}
 	if err := m.prepareClaudeHooks(spec, *p, runRef); err != nil {
 		return "session hook setup", err
+	}
+	if err := m.prepareSessionDecoys(ctx, runCtx, tenant, runRef, spec); err != nil {
+		return "decoy credentials", err
 	}
 	if m.rt.SessionMCP == nil {
 		return "", nil
@@ -372,6 +444,23 @@ func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.
 	return "session MCP setup", err
 }
 
+// claudeHooksApply says whether a launch gets the engine's tool hooks, and with
+// them --setting-sources "" (ConfigureClaudeHookPEP): env is the launch's
+// environment once the launch gate has granted its PEP endpoint. One predicate
+// serves the hook setup and the project configuration check, so the check
+// never assumes an exclusion the launch does not carry.
+func (m *Module) claudeHooksApply(p CreateRunParams, env []EnvVar) bool {
+	if launchDriverKey(p) != providerDriverClaude || p.Transport != TransportStreamJSON || m.rt.hookDataDir == "" {
+		return false
+	}
+	for _, v := range env {
+		if v.Name == envHookPEPURL && v.Value != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // prepareClaudeHooks installs Olivares' tool-call hooks into a Claude Code
 // stream-json launch, create and resume alike, once the launch gate has put the
 // PEP endpoint and credential in its environment (ConfigureClaudeHookPEP). A
@@ -379,16 +468,7 @@ func (m *Module) prepareSessionLaunch(ctx, runCtx context.Context, tenant model.
 // it never runs ungoverned. A launch without them (no PEP mounted on this
 // engine) is launched as before.
 func (m *Module) prepareClaudeHooks(spec *LaunchSpec, p CreateRunParams, runRef string) error {
-	if launchDriverKey(p) != providerDriverClaude || p.Transport != TransportStreamJSON || m.rt.hookDataDir == "" {
-		return nil
-	}
-	pep := false
-	for _, v := range spec.Env {
-		if v.Name == envHookPEPURL && v.Value != "" {
-			pep = true
-		}
-	}
-	if !pep {
+	if !m.claudeHooksApply(p, spec.Env) {
 		return nil
 	}
 	if err := ConfigureClaudeHookPEP(spec, m.rt.hookDataDir, runRef, m.rt.hookBinary); err != nil {
@@ -396,6 +476,11 @@ func (m *Module) prepareClaudeHooks(spec *LaunchSpec, p CreateRunParams, runRef 
 	}
 	// Grant only this launch's settings directory to the confined child.
 	spec.AllowRead(filepath.Join(m.rt.hookDataDir, "run", runRef))
+	if spec.Isolation == IsolationContainer {
+		// The hook command is the engine's own program, wherever it lives on the host:
+		// a container that lacked it would run its tool calls with no hook to ask.
+		spec.Binds = append(spec.Binds, ContainerBind{HostPath: m.rt.hookBinary, Target: m.rt.hookBinary, ReadOnly: true, NoRelabel: true})
+	}
 	return nil
 }
 
@@ -403,11 +488,24 @@ func (m *Module) prepareClaudeHooks(spec *LaunchSpec, p CreateRunParams, runRef 
 // record-bound launch of a tool whose hosts were measured behind the proxy is
 // confined: to its record's endpoint and the engine's own hook control endpoints.
 // Every other launch keeps today's network.
-func sessionNetworkPolicy(driver string, bound BoundProvider, injected []EnvVar) *egress.Policy {
+//
+// The provider's endpoint accepts any key, so the policy also carries the SHA-256 of
+// the record's key (never the key) and the proxy forwards only that one. Only the
+// kinds whose tool sends its key in a header the proxy compares are pinned: Claude
+// Code (X-Api-Key) and Codex (bearer). Gemini CLI and xAI keys are not checked.
+func sessionNetworkPolicy(driver string, bound BoundProvider, injected, credentials []EnvVar) *egress.Policy {
 	if facts, ok := driverfacts.Lookup(driver); bound.Kind == "" || !ok || !facts.EgressMeasured {
 		return nil
 	}
 	p := &egress.Policy{Providers: []string{bound.Endpoint}}
+	if keyHeaderKinds[bound.Kind] {
+		keyEnv := providerRecordKeyEnv(bound.Kind)
+		for _, item := range credentials {
+			if key := strings.TrimSpace(item.Value); item.Name == keyEnv && key != "" {
+				p.CredentialSHA256 = sha256.Sum256([]byte(key))
+			}
+		}
+	}
 	for _, item := range injected {
 		if slices.Contains(hookControlEnv, item.Name) {
 			p.Controls = append(p.Controls, item.Value)
@@ -415,3 +513,7 @@ func sessionNetworkPolicy(driver string, bound BoundProvider, injected []EnvVar)
 	}
 	return p
 }
+
+// keyHeaderKinds are the record kinds whose launched tool sends the record's key
+// in a header the egress proxy compares (egress.credentialHeaders).
+var keyHeaderKinds = map[string]bool{ProviderKindAnthropic: true, ProviderKindOpenAI: true, ProviderKindOpenAICompatible: true}

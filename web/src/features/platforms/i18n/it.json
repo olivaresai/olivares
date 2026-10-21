@@ -1,0 +1,105 @@
+{
+  "title": "Piattaforme e ciclo di vita",
+  "description": "La matrice di deployment multi-superficie e il ciclo di vita dei modelli per piattaforma per il parco Claude: postura di compliance per superficie e scadenze di ritiro divergenti. Riferimento fornito dal motore, mai ricalcolato.",
+  "tabs": {
+    "surfaces": "Superfici e compliance",
+    "lifecycle": "Ciclo di vita dei modelli"
+  },
+  "liveReference": "Riferimento fornito dal motore: AsOf {{date}}, fonte {{source}}.",
+  "unavailable": "Il riferimento delle piattaforme non è disponibile su questo motore",
+  "confirm": {
+    "confirmed": "Confermato",
+    "toConfirm": "Da confermare"
+  },
+  "surfaces": {
+    "title": "Superfici di deployment",
+    "description": "Le sei superfici Claude modellate (ANT2-01/17). Ognuna differisce per URL di base, autenticazione, forma dell'ID modello, fatturazione, residenza dei dati e postura di compliance: non sono intercambiabili.",
+    "matrixTitle": "Matrice degli attributi delle superfici",
+    "matrixSummary": "Sei superfici di deployment a confronto per operatore, endpoint, autenticazione, forma dell'ID modello, supporto API, fatturazione, HIPAA, ZDR e residenza.",
+    "unmodeled": "Superficie non modellata: nessuna matrice di attributi.",
+    "unmodeledHint": "Questo gateway non è una delle sei superfici Claude modellate; i suoi attributi di compliance e residenza non sono dichiarati e non vengono dedotti.",
+    "deprecatedBadge": "Deprecata",
+    "noWorkspaceHeader": "nessuno",
+    "noSigv4": "n/d",
+    "apiSupportTitle": "Supporto delle API Anthropic per superficie",
+    "apiSupportDescription": "Quali famiglie di API Anthropic si applicano a ciascuna superficie. Una superficie senza le API Admin/Models/Compliance non può servire l'ingestione di governance lato Anthropic: degrada in modo esplicito e non segnala mai un risultato vuoto come \"nessun rilevamento\".",
+    "columns": {
+      "surface": "Superficie",
+      "operator": "Operatore",
+      "baseUrl": "URL di base",
+      "sigv4": "Servizio SigV4",
+      "workspaceHeader": "Header del workspace",
+      "modelIdForm": "Forma dell'ID modello",
+      "billing": "Fatturazione",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "Residenza / area di inferenza",
+      "apiSupport": "Supporto API",
+      "messages": "Messages",
+      "admin": "Admin",
+      "compliance": "Compliance",
+      "models": "Models",
+      "batches": "Batches",
+      "mcp": "Connettore MCP"
+    },
+    "api": {
+      "supported": "Supportata",
+      "unsupported": "Non supportata"
+    },
+    "fedramp": {
+      "eligible": "Idonea a HIPAA / FedRAMP / IL4-5",
+      "na": "Non dichiarato"
+    },
+    "notesTitle": "Note sulle superfici",
+    "compliance": {
+      "title": "Postura di compliance",
+      "description": "HIPAA / FedRAMP / IL / ZDR sono un asse per superficie (dove gira l'inferenza), distinto dalla postura GPAI di un modello o di un provider. Non confonderli.",
+      "hipaaNote": "HIPAA è mostrato con il suo stato di conferma. Una postura \"da confermare\" non viene mai resa come un sì o un no netto."
+    }
+  },
+  "lifecycle": {
+    "title": "Ciclo di vita dei modelli per piattaforma",
+    "description": "Il ritiro dei modelli è per piattaforma, non globale (ANT2-03). Le superfici gestite da Anthropic ritirano un modello in una data diversa da Bedrock e Vertex: un unico flag \"ritirato\" darebbe una scadenza di migrazione errata su metà del parco.",
+    "datePending": "data non pubblicata / da confermare",
+    "noSuccessor": "Nessun successore dichiarato",
+    "noSuccessorHint": "L'autorità non ha indicato alcun modello sostitutivo per questa famiglia. Non ne viene dedotto nessuno.",
+    "matrixTitle": "Scadenze di ritiro per superficie",
+    "columns": {
+      "model": "Modello",
+      "surface": "Superficie",
+      "retiresOn": "Data di ritiro",
+      "status": "Stato",
+      "replacement": "Sostituto"
+    },
+    "paramDeprecation": {
+      "title": "Preavviso di deprecazione dei parametri",
+      "badge": "Informativo",
+      "body": "{{affected}} rifiutano valori non predefiniti per {{params}} con un HTTP {{status}}. Si tratta di una deprecazione di Anthropic (ANT2-03), non di un bug del prodotto e non di un errore correggibile: il piano di inferenza trattiene questi parametri come preavviso.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Note su ID Bedrock e residenza",
+      "declaredNote": "Riferimento dichiarato dal web: queste note citano fatti di modules/models/bedrock.go che l'endpoint delle piattaforme non fornisce. Ognuna ha il proprio stato di conferma.",
+      "crisIdFormat": "Il formato dell'ID del profilo di inferenza cross-region è \"<geo>.anthropic.<model>\", con geo ∈ {us, eu, apac, global}. L'attuale superficie Bedrock Mantle usa l'ID semplice \"anthropic.<model>\".",
+      "crisOpusId": "L'ID concreto del profilo di inferenza opus Global-CRIS di Bedrock non è verificato rispetto alla pagina AWS: il formato è confermato, quell'ID specifico non è presentato come autorevole.",
+      "globalRegionalPremium": "La documentazione AWS indica che i profili di inferenza regionali hanno un sovrapprezzo di circa il 10% rispetto a quelli globali (il globale è la base più economica), l'opposto dell'ipotesi \"globale +10%\"; il moltiplicatore esatto non è verificato, quindi non si modella alcun sovrapprezzo.",
+      "usBurndown": "Il burndown dell'inferenza solo US è 1,1× (Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "Nessuna pianificazione di ritiro dei modelli dichiarata",
+      "description": "Il riferimento compilato del ciclo di vita di Claude nel motore deve fornire queste scadenze; l'attività del tenant e l'input della console non le popolano."
+    },
+    "surface": {
+      "title": "Nessuna superficie di deployment dichiarata",
+      "description": "Il riferimento compilato delle superfici Claude nel motore deve fornire queste righe; l'attività del tenant e l'input della console non le popolano."
+    }
+  },
+  "effectiveState": {
+    "label": "In questo parco:",
+    "models": "Catalogo dei modelli",
+    "modelOps": "Operazioni sui modelli"
+  }
+}

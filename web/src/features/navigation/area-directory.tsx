@@ -24,8 +24,6 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PageHeader } from '@/components/ui/page-header'
-import { cn } from '@/lib/utils'
-import { OffTag } from './off-tag'
 import { useViewAccess } from './authorization'
 import type { AreaId, FeatureView } from '@/features/registry'
 import {
@@ -45,8 +43,6 @@ interface DirectoryEntry {
   icon: FeatureView['icon']
   label: string
   description: string
-  /** The page's module is off here: dimmed, with an Off tag. */
-  off: boolean
 }
 
 function EntryRow({ entry }: { entry: DirectoryEntry }) {
@@ -61,13 +57,9 @@ function EntryRow({ entry }: { entry: DirectoryEntry }) {
         <h3 className="min-w-0 break-words text-body font-medium">
           <Link
             to={entry.path as never}
-            className={cn(
-              'rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              entry.off ? 'text-text-3' : 'text-foreground',
-            )}
+            className="rounded-sm text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {entry.label}
-            {entry.off ? <OffTag className="ml-2 inline-block" /> : null}
           </Link>
         </h3>
         {entry.description ? (
@@ -85,7 +77,7 @@ function EntryRow({ entry }: { entry: DirectoryEntry }) {
 
 export function AreaDirectoryView({ areaId }: { areaId: AreaId }) {
   const { t } = useTranslation(['nav', 'common'])
-  const { listed, isOff } = useViewAccess()
+  const { listed } = useViewAccess()
   const area = areaById(areaId)
   if (!area) return null
   const label = areaLabel(t, areaId)
@@ -98,7 +90,6 @@ export function AreaDirectoryView({ areaId }: { areaId: AreaId }) {
       icon: v.icon,
       label: viewLabel(t, v.id),
       description: viewDescription(t, v.id),
-      off: isOff(v),
     })),
   }))
   // The Settings utility has no permission and no registry entry; it is the Preferences
@@ -114,7 +105,6 @@ export function AreaDirectoryView({ areaId }: { areaId: AreaId }) {
           icon: SETTINGS_UTILITY.icon,
           label: viewLabel(t, SETTINGS_UTILITY.id),
           description: viewDescription(t, SETTINGS_UTILITY.id),
-          off: false,
         },
       ],
     })

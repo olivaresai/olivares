@@ -96,7 +96,7 @@ data "olivares_access_edges" "estate" {
 `olivares_deployment` はデプロイメント **定義** を管理します。これは宣言的でバージョン管理された
 望ましい状態です。モジュール VII（デプロイ）にマッピングされ、そのライブな実行は **拒否クローズドな
 シーム（deny-closed seam）** です。エグゼキューターがプロビジョニングされるまで、エンジンはデプロイメントを
-*計画しガバナンスする* ものの、インフラに対して動作する代わりに **`apply`/`retire` は `503` を返します**。
+*計画しガバナンスする* ものの、インフラに対して動作する代わりに **`apply`/`retire` は `503` を返します**（Business。Community はすべての deploy ルートに `501` を返します）。
 したがって `olivares_deployment` リソースは今日のところ意図を記録しガバナンスするものであり、それ自体で
 実際のインフラを調整するものではありません。[モジュール VII](/ja/reference/modules/vii-deploy/) と
 [誠実さと制限](/ja/start/honesty-and-limits/) を参照してください。

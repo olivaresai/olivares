@@ -7,6 +7,10 @@ sidebar:
   order: 4
 ---
 
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出路由和命令返回 HTTP 501 或退出码 9。审计转发和物理隔离网络之间的 DDIL 传输也需要 Business。
+:::
+
 **AI 控制塔（AI control tower）** 是面向 AI 治理的全组织级仪表盘与工作流层：一个集中之处，用于查看已注册的智能体、
 路由审批、提交工单，并向管理层汇报态势。典型例子包括 **ServiceNow AI Control Tower** 以及超大规模云厂商的智能体管理平面
 （Microsoft 的 Entra Agent ID / Agent 365 界面、AWS AgentCore 的治理功能）。

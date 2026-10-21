@@ -237,8 +237,8 @@ func TestIdentityInventoryListsStoredIdentitiesWithoutPII(t *testing.T) {
 	if g := h.do("GET", govPath+"/groups", admin, nil, tenantHdr(tenant)); g.code != http.StatusOK {
 		t.Fatalf("groups = %d %s", g.code, g.raw)
 	}
-	if m := h.do("GET", govPath+"/groups/grp:none/members?transitive=true", admin, nil, tenantHdr(tenant)); m.code != http.StatusOK || len(items(m)) != 0 {
-		t.Fatalf("members of an unknown group = %d %s", m.code, m.raw)
+	if m := h.do("GET", govPath+"/groups/grp:none/members?transitive=true", admin, nil, tenantHdr(tenant)); m.code != http.StatusOK || m.body["not_found"] != true {
+		t.Fatalf("members of an unknown group = %d %s, want 200 with not_found", m.code, m.raw)
 	}
 }
 
@@ -360,7 +360,18 @@ func (h *harness) linkMembers(tenant model.TenantID, links [][3]string) {
 		if err != nil {
 			return err
 		}
+		groups, err := sc.Ext("governance.collection")
+		if err != nil {
+			return err
+		}
+		seen := map[string]bool{}
 		for _, l := range links {
+			if !seen[l[0]] {
+				if _, err := groups.Create(ctx, model.Record{"source": "dir", "col_ref": l[0], "col_kind": "group"}); err != nil {
+					return err
+				}
+				seen[l[0]] = true
+			}
 			if _, err := repo.Create(ctx, model.Record{"source": "dir", "collection_ref": l[0], "member_ref": l[1], "member_kind": l[2]}); err != nil {
 				return err
 			}

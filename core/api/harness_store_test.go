@@ -105,3 +105,60 @@ func TestDRHarnessAcquisitionControlAndEstateIsolation(t *testing.T) {
 	}
 	_ = ownerHarness.adminLogin()
 }
+
+// TestDefaultHarnessStoresShareOneInitializationNotOneDatabase guards the race timeout of this package.
+// Every newHarness used to migrate a fresh store from nothing, which is most of the time of
+// the package (measured under -race: 5.2 s for a fresh store, 1.0 s to reopen an initialized
+// copy), so core/api no longer fit its race binary's timeout. The first initialization runs
+// once per test binary; each harness still receives its own database.
+func TestDefaultHarnessStoresShareOneInitializationNotOneDatabase(t *testing.T) {
+	ctx := context.Background()
+	a, b := defaultHarnessStore(t), defaultHarnessStore(t)
+	if n := harnessStoreInitializations.Load(); n != 1 {
+		t.Errorf("default harness stores ran %d first initializations in this test binary, want 1", n)
+	}
+
+	if err := a.System(ctx, func(sys store.SystemScope) error {
+		_, err := sys.CreateOrg(ctx, model.Org{Name: "only-a", Slug: "only-a", Status: model.StatusActive})
+		return err
+	}); err != nil {
+		t.Fatalf("create an organization in the first store: %v", err)
+	}
+	systemOrg := map[string]model.Org{}
+	for name, st := range map[string]store.Store{"first": a, "second": b} {
+		var orgs []model.Org
+		var chain store.VerifyReport
+		if err := st.System(ctx, func(sys store.SystemScope) error {
+			var err error
+			if orgs, err = sys.ListOrgs(ctx); err != nil {
+				return err
+			}
+			chain, err = sys.Verify(ctx, model.SystemTenantID, 0)
+			return err
+		}); err != nil {
+			t.Fatalf("%s store: list organizations and verify the system chain: %v", name, err)
+		}
+		if !chain.OK || chain.BreakAt != 0 {
+			t.Errorf("%s store: system audit chain broken at %d (%s)", name, chain.BreakAt, chain.Reason)
+		}
+		slugs := map[string]bool{}
+		for _, o := range orgs {
+			slugs[o.Slug] = true
+			if o.TenantID == model.SystemTenantID {
+				systemOrg[name] = o
+			}
+		}
+		if _, ok := systemOrg[name]; !ok {
+			t.Errorf("%s store holds no system tenant", name)
+		}
+		if want := name == "first"; slugs["only-a"] != want {
+			t.Errorf("%s store sees the first store's organization = %v, want %v", name, slugs["only-a"], want)
+		}
+	}
+	// The counter sees only the template. A harness that opened and initialized its own store
+	// again would still create the system tenant, at its own time: both stores must carry the
+	// row of the one initialization they were copied from.
+	if fa, fb := systemOrg["first"].CreatedAt, systemOrg["second"].CreatedAt; fa.IsZero() || fa.String() != fb.String() {
+		t.Errorf("system tenant created at %v and %v, want the one initialization both stores copy", fa, fb)
+	}
+}

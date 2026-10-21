@@ -1,0 +1,70 @@
+{
+  "truncation": {
+    "label": "Caricati {{n}} rilevamenti; ce ne sono altri",
+    "hint": "Il riepilogo dei limiti di frequenza è stato cercato solo tra i rilevamenti caricati. Un riepilogo mancante potrebbe esistere oltre questa pagina."
+  },
+  "title": "Limiti di frequenza",
+  "description": "Inventario in sola lettura dei limiti di frequenza a livello di organizzazione e di workspace che un gateway o un proxy deve mantenere sincronizzati. Proviene dall'API Rate Limits di Anthropic (sola lettura); questa vista non modifica mai un limite.",
+  "caveats": {
+    "keepInSync": "Gateway e proxy devono restare sincronizzati: questi limiti sono l'inventario che un gateway o un proxy a monte deve rispecchiare. Qui non vengono imposti e si modificano presso il provider, non in questa console.",
+    "managedAgents": "Managed Agents NON è coperto dall'API Rate Limits. I suoi limiti sono una lacuna documentata, non un valore pari a zero: non viene mostrata alcuna riga di Managed Agents perché l'API non ne riporta."
+  },
+  "summary": {
+    "title": "Stato della sincronizzazione",
+    "description": "Quanti limiti di frequenza un gateway o un proxy deve mantenere sincronizzati, come riportato dall'ingestione di governance in sola lettura."
+  },
+  "count": {
+    "label": "Limiti da mantenere sincronizzati",
+    "observedAt": "Osservato {{at}}",
+    "unknown": "Conteggio non disponibile"
+  },
+  "degraded": {
+    "title": "Ingestione di governance dell'API Admin non disponibile",
+    "hint": "Questa superficie di deployment (per esempio un gateway Bedrock, Vertex o Foundry) non espone l'API Admin di Anthropic, quindi qui non si può leggere l'inventario dei limiti di frequenza. È una vera indisponibilità, non un inventario vuoto."
+  },
+  "inventory": {
+    "title": "Inventario per limitatore",
+    "description": "Ogni limitatore riportato dal provider, raggruppato per ambito: prima i gruppi validi per tutta l'organizzazione, poi i gruppi di override per workspace.",
+    "unavailable": "Inventario non disponibile",
+    "unavailableHint": "Il connettore Admin in sola lettura non è configurato, quindi qui non si può leggere l'inventario per limitatore. È una vera indisponibilità, non un inventario vuoto.",
+    "tableLabel": "Inventario dei limiti di frequenza",
+    "empty": "Nessun limite di frequenza riportato",
+    "emptyHint": "Il provider non ha restituito voci per limitatore per questa organizzazione.",
+    "scope": {
+      "org": "Organizzazione"
+    },
+    "columns": {
+      "scope": "Ambito",
+      "groupType": "Gruppo",
+      "models": "Modelli",
+      "limiterType": "Limitatore",
+      "value": "Valore",
+      "orgLimit": "Limite org."
+    }
+  },
+  "groupType": {
+    "model_group": "Gruppo di modelli",
+    "batch": "Batch",
+    "token_count": "Conteggio token",
+    "files": "File",
+    "skills": "Skill",
+    "web_search": "Ricerca web"
+  },
+  "limitType": {
+    "requests_per_minute": "Richieste al minuto",
+    "input_tokens_per_minute": "Token di input al minuto",
+    "output_tokens_per_minute": "Token di output al minuto",
+    "enqueued_batch_requests": "Richieste batch in coda"
+  },
+  "empty": {
+    "rateLimitInventory": {
+      "title": "Ancora nessun limite di frequenza riportato",
+      "description": "Le voci compaiono quando l'API Rate Limits di Anthropic, in sola lettura, restituisce i limiti per limitatore di questa organizzazione."
+    }
+  },
+  "effectiveState": {
+    "label": "Cosa puoi modificare qui:",
+    "proxy": "Proxy di inferenza",
+    "finops": "Spesa"
+  }
+}

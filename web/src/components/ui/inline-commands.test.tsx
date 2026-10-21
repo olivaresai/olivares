@@ -8,6 +8,22 @@ import { describe, expect, it } from 'vitest'
 import { withInlineCommands } from './inline-commands'
 
 describe('withInlineCommands', () => {
+  it('renders names as plain code when the caller chooses code instead of commands', () => {
+    const { container } = render(
+      <p>
+        {withInlineCommands(
+          'Ordered by `executed_at`; needs `voice:session:read`.',
+          'code',
+        )}
+      </p>,
+    )
+    expect(
+      [...container.querySelectorAll('code')].map((c) => c.textContent),
+    ).toEqual(['executed_at', 'voice:session:read'])
+    expect(container.querySelector('button')).toBeNull()
+    expect(container.textContent).not.toContain('`')
+  })
+
   it('turns each backticked part into a command chip and keeps the rest as text', () => {
     const { container } = render(
       <p>

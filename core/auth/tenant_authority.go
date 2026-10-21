@@ -185,20 +185,24 @@ func (a *Authenticator) OffboardFromTenant(ctx context.Context, as store.AuthSco
 	return a.scopedOffboard(ctx, as, actor, user, t, cause)
 }
 
-// scimLeaverAction is the tenant-ledger action of a SCIM leaver: the name the
-// Identity leaver card reads (GET /v1/audit?action=scim.user.deprovision) and
-// docs/contracts-identity.md publishes.
-const scimLeaverAction = "scim.user.deprovision"
+// leaverAction is the tenant-ledger action of a leaver, however the member left:
+// the name the Identity leaver card reads (GET /v1/audit?action=scim.user.deprovision)
+// and docs/contracts-identity.md publishes. It predates the console's
+// removal and is kept so a published reader finds every leaver under one name; the
+// cause in the event says how the member left.
+const leaverAction = "scim.user.deprovision"
 
-// The causes a SCIM offboard records (membership.offboard and scimLeaverAction):
-// a DELETE, a PATCH active:false and a SET deactivate.
+// The causes an offboard records (membership.offboard and leaverAction): a SCIM
+// DELETE, a SCIM PATCH active:false, a SCIM SET deactivate, and an administrator's
+// removal of a member (DELETE /v1/members/{id}).
 const (
 	scimDeprovisionCause   = "scim.deprovision"
 	scimDeactivateCause    = "scim.deactivate"
 	scimSetDeactivateCause = "scim.set.deactivate"
+	memberRemoveCause      = "member.remove"
 )
 
-// recordSCIMLeaver puts a SCIM offboard that has committed on the TENANT's own
+// recordLeaver puts an offboard that has committed on the TENANT's own
 // chain. scopedOffboard runs in the auth partition, whose events land on the
 // system chain a tenant admin cannot read, so without this the tenant holds no
 // evidence of its own leavers. cause is the offboard's cause, as recorded in
@@ -216,17 +220,18 @@ const (
 // the auth partition is bound to the system tenant and no one transaction spans
 // both chains. A crash or a refused append (a suspended tenant's chain is
 // frozen) leaves membership.offboard on the system chain as the only record,
-// and an IdP retry finds no member, so it cannot repair the tenant ledger.
+// and a retry (an IdP's, or a second DELETE /v1/members/{id}) finds no member, so
+// it cannot repair the tenant ledger.
 // Upgrade trigger: an outbox row written inside the offboard transaction.
-func (a *Authenticator) recordSCIMLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) {
-	err := a.appendSCIMLeaver(context.WithoutCancel(ctx), actor, tenant, user, cause)
+func (a *Authenticator) recordLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) {
+	err := a.appendLeaver(context.WithoutCancel(ctx), actor, tenant, user, cause)
 	if err != nil {
-		a.log.Error("auth: SCIM leaver not recorded on the tenant ledger; membership.offboard is on the system chain",
+		a.log.Error("auth: leaver not recorded on the tenant ledger; membership.offboard is on the system chain",
 			"tenant", tenant.String(), "user", user.String(), "cause", cause, "err", err)
 	}
 }
 
-func (a *Authenticator) appendSCIMLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) error {
+func (a *Authenticator) appendLeaver(ctx context.Context, actor Principal, tenant model.TenantID, user model.ID, cause string) error {
 	// Fail closed on an unattributable principal, as metaAudit does.
 	subject, err := actor.AttributableActor()
 	if err != nil {
@@ -235,7 +240,7 @@ func (a *Authenticator) appendSCIMLeaver(ctx context.Context, actor Principal, t
 	return a.st.Mutate(ctx, tenant, func(sc store.Scope) error {
 		_, err := sc.Audit().Append(ctx, model.AuditDraft{
 			Actor: subject, ActorKind: actor.ActorKind(),
-			Action: scimLeaverAction, TargetKind: "core.user", TargetID: user,
+			Action: leaverAction, TargetKind: "core.user", TargetID: user,
 			Meta: map[string]any{"cause": cause},
 		})
 		return err

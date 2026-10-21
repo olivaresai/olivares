@@ -302,3 +302,27 @@ func (m *Module) refreshProvider(in providerInstance, e *providerEntry) {
 	close(e.done)
 	e.done = nil
 }
+
+// LimitResetsAt is when the used-up usage windows of one instance lift: the latest reset
+// among its windows at 100 percent, from the last answer the instance gave. It waits for
+// no probe: a login that has not answered yet reports none, and a refresh that is due
+// starts in the background, as for any background read. The caller decides whether the
+// time is still ahead.
+func (m *Module) LimitResetsAt(ctx context.Context, tenant model.TenantID, instance string) (time.Time, bool) {
+	snaps, _, err := m.providerSnapshotsRead(ctx, tenant, true)
+	if err != nil {
+		return time.Time{}, false
+	}
+	var latest time.Time
+	for _, snap := range snaps {
+		if snap.Instance != instance {
+			continue
+		}
+		for _, l := range snap.Limits {
+			if l.Percent >= 100 && l.ResetsAt != nil && l.ResetsAt.After(latest) {
+				latest = *l.ResetsAt
+			}
+		}
+	}
+	return latest, !latest.IsZero()
+}

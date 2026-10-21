@@ -47,14 +47,40 @@ Existing profile routes, launch fields, and ID-only discovery readers retain
 their contracts. This read supplies choices; it does not change a running
 session's model or effort.
 
-What a launch honors today (`model` and `effort` on `CreateRunRequest`):
+Launch choices (`POST /v1/m/sessions/runs`):
 
-- `model` is passed to the tool as written; the tool validates it.
+- `model` is passed to the tool as written; the tool validates it. Enabling
+  Fast mode checks the reported capability and pins the checked model selector,
+  including the catalog's default when no model was chosen.
 - `effort` is an open term for Codex and the other drivers. Claude Code
   accepts only `low`, `medium`, `high`, `xhigh` and `max`; a vendor effort
-  outside that set can be listed here but is refused at launch with 400.
-- There is no launch or update field for Fast mode or a service tier.
-  `supports_fast_mode` and `service_tiers` are informational: a client must not
-  offer a toggle for them until a launch field exists.
-- There is no mid-session settings operation. A client that wants another model
-  or effort starts a new session with that preset.
+  outside that set can be listed here but is refused at launch with 400. This
+  five-value set is the final Claude launch contract. The console must keep
+  filtering its reported effort list to those accepted values.
+- Optional `fast_mode` is a Claude Code choice: `true` or `false` is carried in
+  its native `fastMode` settings. Omitted or null keeps the tool default;
+  explicit false turns it off. True needs a model whose catalog entry reports
+  `supports_fast_mode: true`. Failed discovery returns 503, and an unsupported
+  or unknown capability returns 400. Provider-bound launches refuse true:
+  Claude's Fast-mode availability check reaches Anthropic directly instead of
+  following the bound provider endpoint. Other drivers refuse either boolean.
+- Optional `service_tier` is a Codex choice. A non-empty value from its model's
+  `service_tiers` is passed unchanged on native `thread/start` and
+  `thread/resume`. Values are bounded to 200 bytes with no whitespace or control
+  characters. Empty, omitted or null keeps the tool default; other drivers
+  refuse a non-empty choice. Codex must confirm the requested tier in its
+  response before the engine sends a prompt; a fallback is refused.
+- Both choices are returned on the run and survive stop/resume and queued
+  launches. Nullable storage preserves existing sessions without inventing a
+  Fast-mode or tier preference. Both New session forms and the session message
+  bar offer the matching control when the selected model reports support, before
+  advanced options. Provider-bound profiles do not offer Fast On. Each control
+  offers the tool default; a changed profile or model cannot receive another
+  selection's choice. Unavailable choices block launch and offer the tool default.
+- There is no mid-session settings operation. The message bar shows the session's
+  choices; changing its model, effort, Fast mode or tier opens a new session with
+  that preset. The running session keeps its settings.
+
+Native interfaces: [Claude Code Fast mode](https://code.claude.com/docs/en/fast-mode)
+and [Codex thread protocol](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/app-server-protocol/src/protocol/v2/thread.rs).
+The tool still decides account availability and its own speed restrictions.

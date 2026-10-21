@@ -4,7 +4,7 @@
 //
 // Model and effort, from the live catalog of the session's profile: grouped, searchable,
 // favorites kept, an effort that follows its model, and free text when the tool cannot
-// list its models. Fast mode is never offered: a launch has no field for it.
+// list its models. Launch speed choices belong to the full launch dialog.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

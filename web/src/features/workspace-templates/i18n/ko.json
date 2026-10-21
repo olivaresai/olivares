@@ -1,0 +1,95 @@
+{
+  "truncation": {
+    "label": "{{n}}개 템플릿을 불러왔으며 더 있습니다",
+    "hint": "이 카탈로그에서는 불러온 템플릿만 사용할 수 있습니다. 여기 표시되지 않은 템플릿이 이 페이지 뒤에 있을 수 있습니다."
+  },
+  "title": "Workspace 템플릿",
+  "subtitle": "Workspace 세션에 사용할 훅, 설정, 커넥터 및 정책의 재사용 가능한 스냅샷입니다.",
+  "catalog": {
+    "builtin": "기본 제공",
+    "version": "v{{version}}",
+    "author": "{{author}} 작성",
+    "archived": "보관됨",
+    "noTemplates": "템플릿을 찾을 수 없습니다.",
+    "noTemplatesHint": "Workspace 구성을 재사용하려면 첫 템플릿을 만드십시오.",
+    "filterAll": "전체",
+    "filterBuiltin": "기본 제공",
+    "filterCustom": "사용자 지정",
+    "showArchived": "보관된 항목 표시"
+  },
+  "editor": {
+    "nameLabel": "이름",
+    "namePlaceholder": "예: 보안 코딩 세션",
+    "descriptionLabel": "설명",
+    "descriptionPlaceholder": "이 템플릿은 무엇을 구성합니까?",
+    "sections": {
+      "hooks": "훅",
+      "hooksHint": "도구 및 세션 전후에 실행되는 명령입니다.",
+      "settings": "에이전트 설정",
+      "settingsHint": "권한 모드, 노력 수준, 모델 및 사용자 지정 지침입니다.",
+      "connectors": "커넥터",
+      "connectorsHint": "이 템플릿을 적용할 때 연결할 커넥터 ID입니다.",
+      "policies": "거버넌스 정책",
+      "policiesHint": "DLP 모드, 세션 기간 제한, 허용 도구 및 I/O 기록입니다."
+    },
+    "hooks": {
+      "preTool": "도구 전",
+      "postTool": "도구 후",
+      "preSession": "세션 전",
+      "postSession": "세션 후",
+      "command": "명령",
+      "timeoutMs": "시간 초과(ms)",
+      "addHook": "훅 추가",
+      "removeHook": "제거"
+    },
+    "settings": {
+      "permissionMode": "권한 모드",
+      "effort": "노력 수준",
+      "model": "모델",
+      "customInstructions": "사용자 지정 지침",
+      "secretEnv": "환경 변수로 제공되는 비밀",
+      "secretEnvHint": "VARIABLE=env/secret, 쉼표로 구분합니다. 이 템플릿의 세션은 각 보관함 비밀을 해당 변수에서 읽으며, 테넌트 비밀을 관리하는 사람만 실행할 수 있습니다."
+    },
+    "policies": {
+      "dlpMode": "DLP 모드",
+      "maxDuration": "최대 세션 기간(분)",
+      "allowedTools": "허용된 도구",
+      "allowedToolsPlaceholder": "예: Bash,Read,Edit",
+      "requireTruncateProtection": "읽기 전용 세션에 잘림 방지 필요",
+      "truncateProtectionHint": "이 템플릿의 읽기 전용 세션은 이를 강제할 수 없는 이전 커널에서는 시작되지 않습니다.",
+      "recordIo": "I/O 기록",
+      "peersSameTemplate": "이 템플릿의 세션끼리 메시지를 주고받을 수 있음"
+    }
+  },
+  "actions": {
+    "create": "새 템플릿",
+    "edit": "편집",
+    "duplicate": "복제",
+    "archive": "보관",
+    "restore": "복원",
+    "apply": "세션에 적용",
+    "save": "저장",
+    "cancel": "취소",
+    "confirmArchive": "이 템플릿을 보관하시겠습니까?",
+    "confirmArchiveHint": "보관된 템플릿은 카탈로그에서 숨겨지지만 복원할 수 있습니다.",
+    "confirmApply": "템플릿을 적용하시겠습니까?",
+    "confirmApplyHint": "현재 세션 설정을 템플릿 값으로 덮어씁니다.",
+    "duplicateName": "{{name}}의 사본"
+  },
+  "apply": {
+    "success": "템플릿을 적용했습니다.",
+    "conflicts": "충돌 {{count}}건과 함께 적용했습니다.",
+    "conflictField": "필드",
+    "conflictOld": "이전 값",
+    "conflictNew": "새 값",
+    "unenforceable": "이 템플릿을 적용할 수 없습니다: {{reasons}}"
+  },
+  "errors": {
+    "loadFailed": "템플릿을 불러오지 못했습니다.",
+    "saveFailed": "템플릿을 저장하지 못했습니다.",
+    "applyFailed": "템플릿을 적용하지 못했습니다.",
+    "archiveFailed": "템플릿을 보관하지 못했습니다.",
+    "duplicateFailed": "템플릿을 복제하지 못했습니다."
+  },
+  "notFound": "템플릿을 찾을 수 없습니다."
+}

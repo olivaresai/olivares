@@ -56,6 +56,8 @@
       "startedAt": "開始日時"
     },
     "regressed": "回帰あり · ドリフト {{drift}}",
+    "withinNoise": "ノイズ範囲内の下落 · ドリフト {{drift}}",
+    "passRateDiff": "合格率の下落 {{drop}}（95% CI {{lo}}–{{hi}}）— {{passed}}/{{n}} 件をベースライン {{baselinePassed}}/{{baselineN}} 件と比較",
     "noRegression": "なし",
     "empty": "範囲内に実行はありません。",
     "emptyHint": "選択した期間の評価実行が、スコアとともに一覧表示されます。期間を広げるか、実行を開始してください。",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "ドリフト — {{subject}}",
-    "description": "スイートの合格しきい値に対する時系列のスコアです。回帰は 1 件のベースラインランとの点数比較です。そのランは別のスイートバージョン、モデル、またはスコアラーを使っていることがあり、比較はどれが変わったかを報告しません。スイートバージョンを変えた後は、ベースラインを 1 件ピンしてください。",
+    "description": "スイートの合格しきい値に対する時系列のスコアです。回帰は 1 件のベースラインランとの比較です。スコアの低下がスイートのしきい値を超え、かつ合格率の差の 95% 区間が 0 を含まない必要があります。そのランは別のスイートバージョン、モデル、またはスコアラーを使っていることがあり、比較はどれが変わったかを報告しません。スイートバージョンを変えた後は、ベースラインを 1 件ピンしてください。",
     "score": "スコア",
     "threshold": "合格しきい値",
     "pickerTitle": "サブジェクト",
@@ -189,7 +191,7 @@
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
-    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+    "noJudge": "ジャッジが設定されていないため、測定するものがありません。これは障害でもエディションの制限でもありません。較正は模擬できません。"
   },
   "baseline": {
     "pin": "Pin as baseline",

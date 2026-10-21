@@ -80,7 +80,7 @@ func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, erro
 		Approvals:     eng.engineApprovals,
 		// Hook content firewall: the real inspector under -tags enterprise WITH a config,
 		// else nil (no deep inspection, unchanged). Findings/metering ride the engine bus.
-		Inspector: thisEdition.hookContentInspector.get(osGetenv, log),
+		Inspector: chainInspectors(thisEdition.hookContentInspector.get(osGetenv, log), eng.sessionDecoys),
 		Bus:       eng.bus,
 		Clock:     time.Now,
 		Log:       log,
@@ -90,6 +90,7 @@ func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, erro
 		dec.SessionTrace = eng.sessionsMod.SessionTrace
 		dec.RedactSecrets = eng.sessionsMod.RedactSessionSecretsWithSpans
 		dec.SessionObservation = eng.sessionsMod.RecordSessionObservation
+		dec.SessionDecision = eng.sessionsMod.RecordToolDecision
 	}
 	// Assign the bridge only when one is configured: storing a nil *approvalBridge in the
 	// interface would make d.Bridge != nil (typed-nil) and defeat the deny-closed guard.

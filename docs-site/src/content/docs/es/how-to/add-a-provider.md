@@ -124,10 +124,10 @@ vez al lanzar; no una sesión que falla a mitad de un handshake.
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-Para `anthropic`, `openai` y `xai`, OpenCode solo acepta el endpoint del propio proveedor: deja `base_url` vacía. Usa `codex` para un proveedor `openai_compatible`; usa `codex` u `opencode` para `ollama`.
+Para `anthropic`, `openai` y `xai`, OpenCode solo acepta el endpoint del propio proveedor: deja `base_url` vacía. Usa `codex` para una pasarela `openai_compatible`; usa `codex` u `opencode` para `ollama` y para un servidor local `openai_compatible` cuya `base_url` sea `http` simple en una dirección de loopback o privada, como `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). La `base_url` incluye `/v1`.
 
 ## 4. Lanza la primera sesión
 

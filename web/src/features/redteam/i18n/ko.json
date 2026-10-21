@@ -1,0 +1,173 @@
+{
+  "title": "레드팀",
+  "description": "적대적 견고성 테스트 — 직접 등록하고 승인한 에이전트에만 수행합니다. API는 방어적 분류 체계와 스코어카드만 전달하며 공격 페이로드는 절대 전달하지 않습니다.",
+  "tabs": {
+    "targets": "대상",
+    "runs": "실행",
+    "catalog": "카탈로그"
+  },
+  "suites": {
+    "all": "모든 스위트",
+    "injection": "프롬프트 인젝션",
+    "jailbreak": "탈옥",
+    "exfil": "데이터 유출",
+    "tool_poisoning": "도구 중독"
+  },
+  "targets": {
+    "title": "대상",
+    "description": "동의 경계입니다. 실행은 등록하고 승인한 에이전트에만 닿습니다.",
+    "consentNote": "에이전트 등록은 동의가 아닙니다. 대상은 승인되지 않은 상태로 생성되며, 승인해야 동의가 부여되고 언제든 철회할 수 있습니다.",
+    "register": "에이전트 등록",
+    "authorize": "승인",
+    "revoke": "철회",
+    "authorizedBy": "{{who}} 승인",
+    "empty": "등록된 대상 없음",
+    "emptyHint": "자신의 에이전트를 후보로 등록한 뒤 프로브 실행을 승인하십시오.",
+    "columns": {
+      "name": "대상",
+      "endpoint": "엔드포인트",
+      "scope": "범위",
+      "consent": "동의",
+      "actions": "작업"
+    },
+    "dialog": {
+      "registerTitle": "후보 에이전트 등록",
+      "registerHint": "자신의 에이전트를 레드팀 후보로 등록합니다.",
+      "registerCta": "등록",
+      "notConsentNote": "등록은 동의가 아닙니다 — 후보는 승인되지 않은 상태로 생성되며 승인하기 전까지 어떤 실행도 닿지 않습니다.",
+      "registered": "에이전트가 후보로 등록되었습니다",
+      "agentRef": "에이전트 참조",
+      "name": "표시 이름",
+      "endpoint": "엔드포인트",
+      "scope": "범위",
+      "scopeHint": "쉼표로 구분한 서피스(예: input, output, tool_args).",
+      "authorizeTitle": "이 대상 승인",
+      "authorizeHint": "동의를 부여하면 레드팀 실행이 {{name}}을(를) 프로브할 수 있습니다. 이 작업은 감사 원장에 기록됩니다.",
+      "revokeTitle": "동의 철회",
+      "revokeHint": "동의를 철회하면 {{name}}에 대한 이후 실행이 중지됩니다. 이 작업은 감사 원장에 기록됩니다.",
+      "granted": "동의가 부여되었습니다",
+      "revoked": "동의가 철회되었습니다"
+    },
+    "truncated": "대상 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 등록된 대상이 더 많으며 이 페이지는 id로 행을 가져옵니다. 이 목록에 없다고 해서 등록되지 않았거나 승인되지 않았다는 증거는 아닙니다 — 이 페이지 너머에 있을 수 있습니다."
+  },
+  "runs": {
+    "title": "실행",
+    "description": "각 실행은 승인된 대상을 프로브하고 견고성 스코어카드를 생성합니다. 실패한 프로브는 발견 사항이 됩니다.",
+    "detailTitle": "실행 세부 정보",
+    "closeDetail": "닫기",
+    "launch": "실행 시작",
+    "launchGatedHint": "이 대상이 승인될 때까지 시작이 비활성화됩니다 — 에이전트 등록은 동의가 아닙니다.",
+    "robustness": "견고성",
+    "noScore": "점수 없음",
+    "degradedHint": "모든 프로브가 건너뛰어졌습니다 — 사용 가능한 샌드박스가 없습니다. 통과가 아니라 샌드박스 대기 상태입니다.",
+    "errorHint": "모든 프로브가 실행 오류로 실패했습니다. 견고성 판정이 아니며 문제를 해결한 뒤 다시 실행하십시오.",
+    "empty": "아직 실행 없음",
+    "emptyHint": "승인된 대상에 대해 실행을 시작하여 스코어카드를 생성하십시오.",
+    "status": {
+      "completed": "완료됨",
+      "degraded": "샌드박스 대기 중",
+      "error": "실행 오류"
+    },
+    "columns": {
+      "started": "시작됨",
+      "target": "대상",
+      "suite": "스위트",
+      "status": "상태",
+      "score": "점수",
+      "passFail": "통과 / 실패"
+    },
+    "stats": {
+      "passed": "통과",
+      "passedCaption": "차단 + 거부 — 방어 유지",
+      "failed": "실패",
+      "failedCaption": "준수 + 유출 — 실제 취약점",
+      "errors": "오류",
+      "skipped": "건너뜀",
+      "excludedCaption": "점수에서 제외"
+    },
+    "scorecard": {
+      "title": "스코어카드",
+      "description": "견고성 = 통과 / (통과 + 실패) × 100. 오류와 건너뛴 프로브는 제외되며 높을수록 좋습니다."
+    },
+    "byFamily": {
+      "title": "패밀리별 실패",
+      "description": "실패한 프로브가 하나 이상 있는 프로브 패밀리입니다.",
+      "empty": "패밀리 전반에 실패가 없습니다.",
+      "summary": "패밀리별 실패: 실패가 있는 패밀리 {{count}}개, 최악은 {{family}}이며 실패 프로브 {{failed}}개입니다.",
+      "summaryEmpty": "실패가 있는 프로브 패밀리가 없습니다.",
+      "colFamily": "패밀리",
+      "colFailed": "실패"
+    },
+    "owasp": {
+      "title": "OWASP 실패",
+      "description": "실패한 프로브가 있는 OWASP 행(참조별 개수)입니다.",
+      "empty": "실패한 OWASP 행이 없습니다."
+    },
+    "dialog": {
+      "title": "실행 시작",
+      "hint": "선택한 스위트로 {{name}}을(를) 프로브합니다. 이 적대적 작업은 감사 원장에 기록됩니다.",
+      "suite": "스위트",
+      "launched": "실행이 시작되었습니다"
+    },
+    "truncated": "실행 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 실행이 더 많으며 이 페이지는 날짜가 아니라 id로 행을 가져오므로 최신 실행이 반드시 여기에 있지는 않습니다. 실행이 없다고 해서 대상이 프로브된 적 없다는 증거는 아닙니다."
+  },
+  "results": {
+    "title": "프로브별 결과",
+    "description": "각 프로브의 결과입니다. 지문은 단방향 해시이며 공격 페이로드는 절대 아닙니다.",
+    "empty": "이 실행의 결과가 없습니다.",
+    "emptyHint": "실행의 모든 프로브가 판정과 근거와 함께 여기에 나열됩니다. 이 실행은 결과를 기록하지 않았습니다.",
+    "columns": {
+      "probe": "프로브",
+      "family": "패밀리",
+      "frameworks": "프레임워크",
+      "outcome": "결과",
+      "severity": "심각도",
+      "fingerprint": "지문",
+      "occurredAt": "발생 시각"
+    }
+  },
+  "catalog": {
+    "title": "프로브 카탈로그",
+    "description": "배터리 분류 체계와 프레임워크 커버리지 — 방어적 메타데이터만 포함합니다.",
+    "suiteLabel": "스위트별 필터",
+    "metadataNote": "방어적 메타데이터이며 익스플로잇 모음이 아닙니다. API는 공격 페이로드를 전달하지 않습니다.",
+    "stats": {
+      "probes": "프로브",
+      "families": "패밀리",
+      "owasp": "OWASP 참조",
+      "atlas": "ATLAS 참조"
+    },
+    "columns": {
+      "id": "프로브 ID",
+      "family": "패밀리",
+      "title": "제목",
+      "frameworks": "프레임워크",
+      "surface": "서피스",
+      "severity": "심각도"
+    }
+  },
+  "empty": {
+    "catalog": {
+      "title": "카탈로그에 방어적 프로브 없음",
+      "description": "이 읽기 전용 분류 체계는 컨트롤 플레인에 컴파일된 프로브 정의로만 채워집니다."
+    },
+    "familyFailureChart": {
+      "title": "기록된 프로브 패밀리 실패 없음",
+      "description": "선택한 실행의 채점된 프로브가 적대적 요청을 준수하거나 금지 마커를 유출할 때 패밀리가 표시됩니다."
+    },
+    "results": {
+      "title": "아직 기록된 프로브 결과 없음",
+      "description": "승인된 대상에 대해 스위트를 시작하십시오. 각 프로브 결과는 단방향 지문과 함께 여기에 기록되며 공격 페이로드는 저장되지 않습니다."
+    },
+    "runs": {
+      "title": "아직 시작된 레드팀 실행 없음",
+      "description": "소유한 에이전트를 등록하고 승인한 뒤 프로브 스위트를 시작하여 견고성 스코어카드를 기록하십시오."
+    },
+    "targets": {
+      "title": "아직 등록된 레드팀 대상 없음",
+      "description": "이 테넌트의 인벤토리에서 에이전트를 후보로 등록하십시오. 승인은 별도의 동의 단계로 남습니다."
+    }
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "title": "세션 기록 뷰어",
+  "subtitle": "단일 세션에 대한 에이전트 활동과 거버넌스 증거의 통합 타임라인입니다.",
+  "back": "기록으로 돌아가기",
+  "header": {
+    "subject": "주체",
+    "status": "상태",
+    "opened": "열림",
+    "duration": "기간",
+    "model": "모델",
+    "frames": "프레임",
+    "live": "LIVE",
+    "tipHash": "체인 팁",
+    "openSeq": "열기 원장 seq",
+    "anchorSeq": "최신 앵커 seq",
+    "sealSeq": "봉인 원장 seq"
+  },
+  "lanes": {
+    "activity": "에이전트 활동",
+    "evidence": "거버넌스 증거"
+  },
+  "panels": {
+    "tools": "사용된 도구",
+    "files": "접근한 파일",
+    "decisions": "결정"
+  },
+  "timeline": {
+    "loadMore": "더 불러오기",
+    "empty": "기록된 이벤트 없음",
+    "emptyHint": "기록이 캡처한 모든 이벤트가 순서대로 여기에 표시됩니다. 이 기록은 아무것도 캡처하지 않았습니다.",
+    "activityUnavailable": "타임라인 해석기가 설정되지 않았거나 응답하지 않아 에이전트 활동을 사용할 수 없습니다. 거버넌스 증거는 계속 사용할 수 있습니다.",
+    "tool": "도구 호출",
+    "mcp": "MCP 호출",
+    "cost": "비용 샘플",
+    "finding": "발견 사항"
+  },
+  "redaction": {
+    "hidden": "[REDACTED — 클릭하여 표시]",
+    "reveal": "표시",
+    "hide": "숨기기"
+  },
+  "verify": {
+    "passive": "인라인 검증",
+    "fresh": "새 검증",
+    "intact": "체인 온전함",
+    "broken": "체인 끊김",
+    "frames": "프레임 {{count}}개 검증됨",
+    "anchors": "앵커 {{count}}개 검증됨",
+    "anchorsOk": "앵커 {{count}}개 검증됨",
+    "anchorsBroken": "앵커 {{count}}개 실패",
+    "tipMatch": "팁 일치",
+    "tipMismatch": "팁 불일치",
+    "anchoredThrough": "검증된 원장 앵커가 프레임 {{idx}}까지 포함합니다.",
+    "breakAt": "프레임 {{idx}}에서 끊김 — {{reason}}",
+    "gap": "프레임 공백",
+    "failures": "앵커 실패",
+    "failure": "{{kind}} 앵커 · seq {{seq}} · 프레임 {{idx}} · {{reason}}",
+    "failed": "검증 실패"
+  },
+  "export": {
+    "json": "JSON 내보내기",
+    "summary": "요약 내보내기",
+    "verify": "체인 검증"
+  },
+  "tools": {
+    "success": "성공",
+    "fail": "실패",
+    "calls": "호출 {{count}}개"
+  },
+  "files": {
+    "read": "읽기",
+    "write": "쓰기",
+    "edit": "편집",
+    "create": "생성"
+  },
+  "decisions": {
+    "group": "작업 {{idx}}",
+    "tools": "도구 호출 {{count}}개",
+    "fileCount": "파일 {{count}}개"
+  },
+  "detail": {
+    "toolRef": "도구 참조",
+    "resourceRef": "리소스 참조",
+    "mode": "모드",
+    "source": "소스",
+    "titleField": "제목",
+    "at": "시각",
+    "frameIdx": "#",
+    "namespace": "네임스페이스",
+    "method": "메서드",
+    "pattern": "패턴",
+    "outcome": "결과",
+    "actor": "행위자",
+    "actAs": "대리",
+    "params": "매개변수",
+    "httpStatus": "HTTP 상태",
+    "durMs": "기간",
+    "hash": "프레임 해시",
+    "prevHash": "이전 해시",
+    "anchorSeq": "앵커 seq",
+    "close": "이벤트 세부 정보 닫기"
+  },
+  "seal": {
+    "action": "세션 봉인",
+    "title": "이 기록 세션을 봉인하시겠습니까?",
+    "body": "봉인은 되돌릴 수 없습니다. 세션을 닫고 체인 팁을 고정하며 추가 프레임이 추가되는 것을 막습니다.",
+    "confirm": "세션 봉인",
+    "done": "세션 봉인됨",
+    "alreadySealed": "이 세션은 이미 봉인되었습니다."
+  },
+  "summarize": {
+    "action": "요약 생성",
+    "done": "요약을 생성했습니다.",
+    "unavailable": "요약기가 구성되지 않았습니다. 기록은 원시 증거로 계속 사용할 수 있습니다.",
+    "disabled": "기록 내용이 신뢰 경계를 벗어나게 되므로 이 테넌트에서는 AI 요약이 비활성화됩니다.",
+    "active": "이 세션은 아직 활성 상태입니다. 완전한 요약을 생성하려면 먼저 봉인하십시오.",
+    "failed": "요약을 생성하지 못했습니다. 기록 자체는 영향을 받지 않습니다."
+  },
+  "ledger": {
+    "title": "원장",
+    "subtitle": "증거 원장의 상관된 의미 이벤트입니다.",
+    "seq": "seq {{seq}}",
+    "empty": "상관된 원장 이벤트 없음",
+    "emptyHint": "이 기록과 상관되는 감사 원장 이벤트가 여기에 표시됩니다. 상관되는 이벤트가 없습니다.",
+    "truncated": "원장 보기가 잘렸습니다. 이 제한된 창 너머에 추가 상관 이벤트가 있습니다."
+  },
+  "notFound": "기록 세션을 찾을 수 없습니다",
+  "notFoundHint": "보존 정책이 기록을 삭제했거나 링크가 잘못되었을 수 있습니다. 기록 목록을 열어 찾으십시오."
+}

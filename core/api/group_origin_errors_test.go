@@ -13,7 +13,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/olivaresai/olivares/core/api/scim"
 	"github.com/olivaresai/olivares/core/auth"
 )
 
@@ -41,15 +40,6 @@ func TestGroupOriginErrorsHaveFixedForbiddenEnvelopes(t *testing.T) {
 				}
 				if w.Code != http.StatusForbidden || native.Error.Code != tc.code || native.Error.Message != tc.message {
 					t.Errorf("native envelope: status=%d code=%q message=%q", w.Code, native.Error.Code, native.Error.Message)
-				}
-				w = httptest.NewRecorder()
-				s.writeSCIMGroupError(w, r, err)
-				var provision scim.Error
-				if decodeErr := json.Unmarshal(w.Body.Bytes(), &provision); decodeErr != nil {
-					t.Fatal(decodeErr)
-				}
-				if w.Code != http.StatusForbidden || provision.Status != "403" || provision.ScimType != scim.TypeMutability || provision.Detail != tc.message {
-					t.Errorf("SCIM envelope: status=%d body=%+v", w.Code, provision)
 				}
 			})
 		}

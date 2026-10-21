@@ -140,7 +140,7 @@ describe('handler evidence in the console', () => {
   })
 })
 describe('bounded lossless micro-USD formatter', () => {
-  it.each(['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'])(
+  it.each(['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko'])(
     'retains all micro digits in %s',
     (locale) => {
       const rendered = formatEvidenceMoney('9007199254740993', locale)!

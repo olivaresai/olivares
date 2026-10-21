@@ -60,6 +60,9 @@ const microUSDPerUSD = 1_000_000
 // frame BODY stays undecoded, exactly as streamjson.go promises — a token count
 // is not content.
 type resultUsage struct {
+	// ContextWindows is Claude Code's own effective window per reported model.
+	// It is metadata, not cumulative token volume and never contributes to billing.
+	ContextWindows map[string]int64
 	// Models is the per-model breakdown, keyed by the model reference the provider
 	// itself used. It is the authoritative cumulative source when the driver
 	// reports it (`modelUsage`).
@@ -117,10 +120,24 @@ func resultFrameUsage(line []byte) (resultUsage, bool) {
 		return resultUsage{}, false
 	}
 	out := resultUsage{Models: map[string]modelUsage{}}
+	if len(raw.ModelUsage) > 0 {
+		// A frame that names no model, such as an error result, says nothing about
+		// the window, so it must not erase the last report.
+		out.ContextWindows = map[string]int64{}
+	}
 	for name, entry := range raw.ModelUsage {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
+		}
+		var window int64
+		if len(raw.ModelUsage) <= 128 && modelRefValue(name) != "" {
+			if json.Unmarshal(entry.ContextWindow, &window) != nil || window < 0 {
+				window = 0
+			}
+			// Retain unknown entries too: a known variant cannot erase uncertainty
+			// about another variant of the transcript's API model.
+			out.ContextWindows[name] = window
 		}
 		if u := entry.usage(); !u.empty() {
 			out.Models[name] = u
@@ -144,8 +161,11 @@ func resultFrameUsage(line []byte) (resultUsage, bool) {
 // object. Every field is a pointer so "absent" and "zero" stay distinguishable at
 // the decoding layer, which is the whole difference between unknown and free.
 type usageJSON struct {
-	InputTokens      *int64 `json:"input_tokens"`
-	InputTokensCamel *int64 `json:"inputTokens"`
+	// Decode independently: malformed optional window metadata must not discard
+	// the usage/cost fields of an otherwise valid result.
+	ContextWindow    json.RawMessage `json:"contextWindow"`
+	InputTokens      *int64          `json:"input_tokens"`
+	InputTokensCamel *int64          `json:"inputTokens"`
 
 	OutputTokens      *int64 `json:"output_tokens"`
 	OutputTokensCamel *int64 `json:"outputTokens"`
@@ -367,10 +387,28 @@ func primaryModel(in map[string]modelUsage) string {
 // which is the defect this file was written for.
 func (m *Module) recordTurnUsage(ctx context.Context, lr *liveRun, line []byte, at time.Time) bool {
 	r, ok := resultFrameUsage(line)
+	if r.ContextWindows != nil {
+		m.recordContextWindows(ctx, lr, r.ContextWindows)
+	}
 	if !ok {
 		return false
 	}
 	return m.creditUsage(ctx, lr, r, at)
+}
+
+// Keep the tool's report on the existing run, across stop and reconnect. A result
+// that names models without a window replaces an older report with unknown; one
+// that names no model leaves it. Nothing is inferred from model families or launch
+// settings.
+//
+// ponytail: best-effort like every mutateRunBest writer. A write that fails keeps the
+// previous report until the next result frame, which rewrites the whole map; a
+// failure on a session's last result persists. Upgrade trigger: a second consumer
+// of the stored report, or mutateRunBest returning its error to all callers.
+func (m *Module) recordContextWindows(ctx context.Context, lr *liveRun, windows map[string]int64) {
+	// A string-keyed map of integers cannot fail JSON encoding.
+	raw, _ := json.Marshal(windows)
+	m.mutateRunBest(ctx, lr, func(rec model.Record) { rec[colRunContextWindows] = string(raw) })
 }
 
 // recordDriverUsage is a provider driver's entry point (runtime_driver.go,

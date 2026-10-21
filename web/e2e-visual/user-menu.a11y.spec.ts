@@ -25,17 +25,6 @@ async function prepare(page: Page, baseURL: string | undefined, theme: string) {
     localStorage.setItem('olivares.theme', selectedTheme)
     localStorage.setItem('olivares.lang', 'en')
     localStorage.setItem(
-      'olivares.session',
-      JSON.stringify({
-        state: {
-          token: 'olvs_demo',
-          sessionId: 's1',
-          expiresAt: '2030-01-01T00:00:00Z',
-        },
-        version: 0,
-      }),
-    )
-    localStorage.setItem(
       'olivares.tenant',
       JSON.stringify({ state: { activeTenant: 't-demo' }, version: 0 }),
     )
@@ -76,9 +65,18 @@ for (const width of [1280, 390]) {
           await account.press(key)
           await expect(menu).toBeVisible()
           await expect(settings).toBeFocused()
-          await page.keyboard.press('ArrowDown')
-          await expect(signOut).toBeFocused()
-          await page.keyboard.press('ArrowUp')
+          for (const name of ['Command line', 'Change password', 'Sign out']) {
+            await page.keyboard.press('ArrowDown')
+            await expect(
+              menu.getByRole('menuitem', { name, exact: true }),
+            ).toBeFocused()
+          }
+          for (const name of ['Change password', 'Command line', 'Settings']) {
+            await page.keyboard.press('ArrowUp')
+            await expect(
+              menu.getByRole('menuitem', { name, exact: true }),
+            ).toBeFocused()
+          }
           await expect(settings).toBeFocused()
           await page.keyboard.press('End')
           await expect(signOut).toBeFocused()

@@ -1,0 +1,418 @@
+{
+  "edition": {
+    "viewPolicy": "Visualizza policy",
+    "editingRequiresBusiness": "Per modificare policy, ruoli e concessioni personalizzati serve Business.",
+    "disablePolicy": "Disattiva policy",
+    "disablePolicyDescription": "La policy creata smette di applicarsi. La sua cronologia e le altre policy in vigore restano invariate."
+  },
+  "errors": {
+    "generic": "Qualcosa è andato storto"
+  },
+  "app": {
+    "name": "Olivares AI",
+    "tagline": "Control plane"
+  },
+  "actions": {
+    "save": "Salva",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "confirm": "Conferma",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "create": "Crea",
+    "retry": "Riprova",
+    "search": "Cerca",
+    "filter": "Filtra",
+    "refresh": "Aggiorna",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "back": "Indietro",
+    "next": "Avanti",
+    "previous": "Precedente",
+    "viewAll": "Vedi tutto",
+    "learnMore": "Scopri di più",
+    "openMenu": "Apri il menu",
+    "expandSidebar": "Espandi la barra laterale",
+    "collapseSidebar": "Comprimi la barra laterale",
+    "help": "Apri la documentazione di questa vista"
+  },
+  "states": {
+    "loading": "Caricamento…",
+    "empty": "Ancora niente qui",
+    "noResults": "Nessun risultato",
+    "noResultsHint": "Nessuna riga corrisponde al filtro attuale. Cancellalo o amplia la ricerca per rivedere le righe.",
+    "comingSoon": "In arrivo",
+    "loaded": "Caricato",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "theme": {
+    "label": "Tema",
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "system": "Sistema",
+    "toggle": "Cambia tema"
+  },
+  "density": {
+    "label": "Densità",
+    "comfortable": "Comoda",
+    "compact": "Compatta"
+  },
+  "language": {
+    "label": "Lingua"
+  },
+  "table": {
+    "label": "Tabella dati",
+    "rowsPerPage": "Righe per pagina",
+    "page": "Pagina",
+    "of": "di",
+    "noRows": "Nessuna riga da mostrare",
+    "loadMore": "Carica altro",
+    "sortAscending": "Ordina in modo crescente",
+    "sortDescending": "Ordina in modo decrescente",
+    "search": "Cerca nelle righe…",
+    "selectAllVisible": "Seleziona tutte le righe visibili",
+    "selectRow": "Seleziona la riga {{id}}"
+  },
+  "bulk": {
+    "selected": "{{count}} selezionati",
+    "clear": "Annulla selezione",
+    "progress": "Elaborazione di {{current}} su {{total}}",
+    "summary": "{{success}} riusciti, {{failed}} falliti",
+    "confirmTitle": "Conferma l'azione di gruppo",
+    "confirmDescription": "“{{action}}” verrà eseguita separatamente per {{count}} elementi selezionati."
+  },
+  "chart": {
+    "showTable": "Mostra come tabella",
+    "showChart": "Mostra il grafico"
+  },
+  "commandPalette": {
+    "placeholder": "Cerca o vai a…",
+    "empty": "Nessuna corrispondenza.",
+    "navigation": "Navigazione",
+    "actions": "Azioni",
+    "startSession": "Avvia una sessione",
+    "results": "Risultati",
+    "searchResults": "Risultati nei tuoi dati",
+    "searchTruncated": "Ci sono altre corrispondenze: affina la ricerca.",
+    "searchDegraded": "Non è stato possibile cercare in alcune fonti: l'elenco è incompleto.",
+    "deniedReason": "Richiede {{permission}} per questa azione.",
+    "deniedHelp": "Chiedi a un amministratore che possa concederlo.",
+    "noTargetReason": "Serve un'organizzazione in cui eseguirla.",
+    "noTargetHelp": "Seleziona un'organizzazione e riprova.",
+    "goTo": "Vai a",
+    "recentSessions": "Sessioni recenti",
+    "settingsGroup": "Impostazioni",
+    "scope": "in {{name}}",
+    "footerMove": "sposta",
+    "footerOpen": "apri",
+    "footerCommands": "solo comandi"
+  },
+  "permissionWords": {
+    "read": "accesso in lettura",
+    "write": "accesso in scrittura",
+    "admin": "accesso da amministratore",
+    "other": "più accessi"
+  },
+  "status": {
+    "active": "Attivo",
+    "inactive": "Inattivo",
+    "healthy": "Integro",
+    "degraded": "Degradato",
+    "pending": "In attesa",
+    "error": "Errore",
+    "revoked": "Revocato",
+    "unknown": "Sconosciuto",
+    "running": "In esecuzione",
+    "ok": "OK",
+    "enabled": "Abilitato",
+    "disabled": "Disabilitato",
+    "approved": "Approvato",
+    "rejected": "Rifiutato",
+    "requested": "Richiesto",
+    "queued": "In coda",
+    "provisioning": "In provisioning",
+    "draft": "Bozza",
+    "warning": "Avviso",
+    "deprecated": "Deprecato",
+    "unused": "Inutilizzato",
+    "failed": "Non riuscito",
+    "down": "Non raggiungibile",
+    "unexpected": "Inatteso",
+    "idle": "Inattiva",
+    "completed": "Completato",
+    "archived": "Archiviato",
+    "retired": "Ritirato",
+    "drifted": "Divergente",
+    "declared": "Dichiarato",
+    "applied": "Applicato"
+  },
+  "accessMode": {
+    "read": "Lettura",
+    "readwrite": "Lettura/scrittura",
+    "write": "Scrittura",
+    "unknown": "Sconosciuto"
+  },
+  "confidence": {
+    "attributed": "Attribuito",
+    "attributedHint": "Attribuito con certezza a questo agente.",
+    "approximate": "Approssimato",
+    "approximateHint": "Attribuito per inferenza: non ancora riconciliato con l'agente."
+  },
+  "validation": {
+    "required": "Questo campo è obbligatorio.",
+    "email": "Inserisci un indirizzo email valido."
+  },
+  "a11y": {
+    "breadcrumb": "Percorso di navigazione",
+    "skipToContent": "Vai al contenuto",
+    "primarySidebar": "Principale",
+    "mainNavigation": "Navigazione principale",
+    "graphControls": "Controlli del grafo",
+    "graphMinimap": "Minimappa del grafo",
+    "pageActions": "Azioni della pagina"
+  },
+  "privileged": {
+    "auditedNotice": "Questa azione viene registrata nel registro di audit a prova di manomissione.",
+    "confirm": "Conferma",
+    "typeToConfirm": "Scrivi {{phrase}} per confermare",
+    "typeToConfirmAria": "Frase di conferma",
+    "notAuthorized": "Il tuo ruolo può vederlo, ma non eseguire questa azione.",
+    "notAuthorizedToast": "Non autorizzato: il tuo ruolo non può eseguire questa azione.",
+    "tenantChangedToast": "L'organizzazione è cambiata durante la verifica: l'azione non è stata ripresa. Torna all'organizzazione precedente e riprova.",
+    "stepUp": {
+      "title": "Questa azione richiede una sessione con privilegi elevati",
+      "description": "Il tuo ruolo la consente, ma il livello di garanzia di questa sessione è scaduto. Completa la verifica aggiuntiva qui sotto e l'azione riprende. Se chiudi, resta negata.",
+      "busyToast": "Un'altra verifica aggiuntiva è già aperta. Completala, poi riprova questa azione.",
+      "abandonedToast": "L'azione è stata chiusa prima del termine della verifica aggiuntiva, quindi non è stata ripresa. Avviala di nuovo.",
+      "descriptionNoResume": "Il tuo ruolo la consente, ma il livello di garanzia di questa sessione è scaduto. Completa la verifica aggiuntiva qui sotto, poi avvia di nuovo l'azione. Se chiudi, resta negata."
+    },
+    "working": "In corso…"
+  },
+  "secretRef": {
+    "label": "Riferimento al secret",
+    "hint": "Un riferimento a un secret conservato fuori dalla console: il suo valore non viene mai mostrato qui.",
+    "none": "Nessun secret",
+    "prefix": "ref"
+  },
+  "untrusted": {
+    "label": "Non verificato",
+    "hint": "Dichiarato dalla capability stessa: solo un indizio. Il control plane non lo verifica e non lo applica mai."
+  },
+  "risk": {
+    "low": "Rischio basso",
+    "medium": "Rischio medio",
+    "high": "Rischio alto"
+  },
+  "notifications": {
+    "title": "Attività recente",
+    "empty": "Nessuna attività recente.",
+    "viewAll": "Vedi tutto nel registro di audit",
+    "events": {
+      "auditCheckpoint": "Checkpoint di audit creato",
+      "orgCreated": "Organizzazione creata",
+      "loginBlocked": "Un accesso è stato bloccato per {{actor}}",
+      "loginBlocked_you": "Un tuo accesso è stato bloccato",
+      "ssoLogin": "{{actor}} ha effettuato l'accesso con SSO",
+      "ssoLogin_you": "Hai effettuato l'accesso con SSO",
+      "userInvited": "{{actor}} ha invitato qualcuno",
+      "userInvited_you": "Hai invitato qualcuno",
+      "userJoined": "{{actor}} ha aderito",
+      "userJoined_you": "Hai aderito",
+      "sessionStarted": "{{actor}} ha avviato una sessione",
+      "sessionStarted_you": "Hai avviato una sessione",
+      "sessionStopped": "{{actor}} ha fermato una sessione",
+      "sessionStopped_you": "Hai fermato una sessione",
+      "sessionResumed": "{{actor}} ha ripreso una sessione",
+      "sessionResumed_you": "Hai ripreso una sessione",
+      "sessionFailed": "Una sessione non è riuscita ad avviarsi",
+      "approvalRequested": "{{actor}} ha richiesto un'approvazione",
+      "approvalRequested_you": "Hai richiesto un'approvazione",
+      "killswitchEngaged": "Kill switch attivato da {{actor}}",
+      "killswitchEngaged_you": "Hai attivato il kill switch",
+      "killswitchReleased": "Kill switch rilasciato da {{actor}}",
+      "killswitchReleased_you": "Hai rilasciato il kill switch",
+      "killswitchDenied": "Una sessione è stata fermata dal kill switch",
+      "toolInstalled": "È stato installato uno strumento per agenti",
+      "secretStored": "È stato salvato un secret",
+      "viewSaved": "{{actor}} ha salvato una vista",
+      "viewSaved_you": "Hai salvato una vista",
+      "workspaceCreated": "{{actor}} ha creato un workspace",
+      "workspaceCreated_you": "Hai creato un workspace",
+      "workspaceUpdated": "{{actor}} ha aggiornato un workspace",
+      "workspaceUpdated_you": "Hai aggiornato un workspace",
+      "signedIn": "{{actor}} ha effettuato l'accesso",
+      "workCreated": "{{actor}} ha creato un elemento di lavoro",
+      "workReady": "{{actor}} ha segnato un elemento di lavoro come pronto",
+      "workCompleted": "{{actor}} ha completato un elemento di lavoro",
+      "workBlocked": "{{actor}} ha bloccato un elemento di lavoro",
+      "workCanceled": "{{actor}} ha annullato un elemento di lavoro",
+      "approvalDecided": "{{actor}} ha registrato una decisione di approvazione",
+      "approvalCanceled": "{{actor}} ha annullato una richiesta di approvazione",
+      "policyCreated": "{{actor}} ha creato una policy",
+      "policyUpdated": "{{actor}} ha aggiornato una policy",
+      "policyDeleted": "{{actor}} ha eliminato una policy",
+      "signedIn_you": "Hai effettuato l'accesso",
+      "workCreated_you": "Hai creato un elemento di lavoro",
+      "workReady_you": "Hai segnato un elemento di lavoro come pronto",
+      "workCompleted_you": "Hai completato un elemento di lavoro",
+      "workBlocked_you": "Hai bloccato un elemento di lavoro",
+      "workCanceled_you": "Hai annullato un elemento di lavoro",
+      "approvalDecided_you": "Hai registrato una decisione di approvazione",
+      "approvalCanceled_you": "Hai annullato una richiesta di approvazione",
+      "policyCreated_you": "Hai creato una policy",
+      "policyUpdated_you": "Hai aggiornato una policy",
+      "policyDeleted_you": "Hai eliminato una policy"
+    },
+    "actors": {
+      "you": "Tu",
+      "member": "Un membro",
+      "token": "Un token API",
+      "system": "Olivares"
+    },
+    "includeInternal": "Includi i record interni"
+  },
+  "passphrase": {
+    "tooShort": "La passphrase deve avere almeno {{min}} caratteri",
+    "strengthLabel": "Robustezza della passphrase",
+    "strength": {
+      "weak": "Debole",
+      "fair": "Discreta",
+      "good": "Buona",
+      "strong": "Forte"
+    }
+  },
+  "shortcuts": {
+    "title": "Scorciatoie da tastiera",
+    "description": "Muoviti nella console senza staccare le mani dalla tastiera.",
+    "general": "Generali",
+    "navigation": "Vai a",
+    "openPalette": "Apri la palette dei comandi",
+    "showHelp": "Mostra questa guida"
+  },
+  "keys": {
+    "group": {
+      "general": "Generali",
+      "launcher": "Avvio di una sessione",
+      "surface": "L'area di lavoro",
+      "navRail": "Barra di navigazione"
+    },
+    "command": {
+      "palette": {
+        "open": "Apri la palette dei comandi",
+        "recent1": "Apri la sessione recente 1",
+        "recent2": "Apri la sessione recente 2",
+        "recent3": "Apri la sessione recente 3",
+        "recent4": "Apri la sessione recente 4",
+        "recent5": "Apri la sessione recente 5",
+        "recent6": "Apri la sessione recente 6"
+      },
+      "help": {
+        "toggle": "Mostra queste scorciatoie"
+      },
+      "launcher": {
+        "focus": "Vai al launcher",
+        "start": "Avvia la sessione",
+        "startBackground": "Avviala e resta qui"
+      },
+      "surface": {
+        "openBeside": "Apri accanto",
+        "closeBeside": "Chiudi la sessione accanto",
+        "focusBeside": "Sposta il focus tra le sessioni",
+        "nextPane": "Riquadro successivo",
+        "previousPane": "Riquadro precedente"
+      },
+      "rail": {
+        "next": "Sessione successiva",
+        "previous": "Sessione precedente",
+        "first": "Prima sessione",
+        "last": "Ultima sessione",
+        "open": "Apri la sessione",
+        "pin": "Fissa o sblocca"
+      },
+      "nav": {
+        "toggleRail": "Comprimi o espandi la barra di navigazione"
+      },
+      "navRail": {
+        "next": "Modulo successivo",
+        "previous": "Modulo precedente",
+        "expand": "Apri l'area o entra al suo interno",
+        "fold": "Comprimi l'area o torna ad essa",
+        "first": "Primo modulo",
+        "last": "Ultimo modulo",
+        "pin": "Fissa o sblocca questo modulo"
+      },
+      "session": {
+        "new": "Nuova sessione",
+        "previous": "Torna alla sessione precedente"
+      },
+      "sourceDiff": {
+        "nextFile": "File successivo",
+        "previousFile": "File precedente",
+        "nextHunk": "Modifica successiva",
+        "previousHunk": "Modifica precedente"
+      }
+    },
+    "when": {
+      "railFocused": "nella barra delle sessioni",
+      "launcherFocused": "nel campo del launcher",
+      "workSurface": "nella schermata delle sessioni",
+      "sessionHistory": "quando è disponibile una sessione precedente",
+      "paletteRecent": "nei risultati della palette con ricerca vuota"
+    },
+    "precedence": "Quando due righe condividono gli stessi tasti, vale l'ultima che si applica.",
+    "modNote": "⌘ è Control su Windows e Linux.",
+    "problems_one": "{{count}} scorciatoia non è leggibile e non si attiva: {{commands}}",
+    "problems_many": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}",
+    "problems_other": "{{count}} scorciatoie non sono leggibili e non si attivano: {{commands}}",
+    "navRailNote": "La barra è un unico punto di tabulazione. Questi tasti funzionano quando ha il focus."
+  },
+  "ui": {
+    "status": {
+      "working": "In corso",
+      "needsYou": "Ti aspetta",
+      "done": "Completata",
+      "failed": "Non riuscita",
+      "paused": "In pausa",
+      "idle": "Non avviata"
+    },
+    "state": {
+      "loading": "Caricamento…",
+      "filtered": {
+        "hidden_one": "{{count}} elemento è nascosto dai filtri.",
+        "hidden_many": "{{count}} elementi sono nascosti dai filtri.",
+        "hidden_other": "{{count}} elementi sono nascosti dai filtri.",
+        "clear": "Cancella i filtri"
+      },
+      "error": {
+        "title": "Impossibile raggiungere il motore.",
+        "description": "L'elenco non è vuoto. Non è stato possibile leggerlo.",
+        "retry": "Riprova",
+        "diagnostics": "Apri la diagnostica",
+        "request": "Richiesta {{id}} · {{time}}",
+        "requestId": "Richiesta {{id}}"
+      },
+      "stale": {
+        "message": "Risultati di <0>{{lastGood}}</0>. L'aggiornamento delle {{failedAt}} non è riuscito.",
+        "retry": "Riprova"
+      },
+      "noAccess": {
+        "title": "Non puoi aprire questo elemento",
+        "description": "Il tuo ruolo non lo include. Non viene mostrato altro al riguardo."
+      },
+      "unknown": {
+        "title": "La richiesta è stata inviata, ma la risposta è andata persa.",
+        "description": "Stiamo verificando la stessa richiesta con il motore. Non inviarla di nuovo.",
+        "checking": "Richiesta {{id}} · verifica in corso da {{elapsed}}",
+        "retry": "Invia di nuovo",
+        "retryReason": "Disponibile quando il motore conferma che non è partito nulla."
+      }
+    },
+    "codeLine": {
+      "label": "Lo stesso in un terminale",
+      "copy": "Copia il comando",
+      "copied": "Copiato",
+      "copyFailed": "Impossibile copiare. Seleziona il comando e copialo."
+    }
+  }
+}

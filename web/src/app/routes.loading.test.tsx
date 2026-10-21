@@ -41,6 +41,11 @@ vi.mock('@/features/registry', () => ({
     {
       id: 'audit',
       path: '/audit',
+      navigation: {
+        kind: 'feature',
+        areaId: 'observation',
+        sectionId: 'audit-recordings',
+      },
       permission: 'audit:read',
       element: () => <p>Protected audit screen</p>,
     },
@@ -86,6 +91,8 @@ vi.mock('@/features/navigation/personal-navigation', () => ({
   PersonalNavigationProvider: ({ children }: { children: ReactNode }) => (
     <>{children}</>
   ),
+  // No provider state in this test: SidebarSync reads `personal?.scope`.
+  usePersonalNavigation: () => null,
 }))
 vi.mock('@/features/navigation/permitted-visit', () => ({
   SettingsVisit: () => null,

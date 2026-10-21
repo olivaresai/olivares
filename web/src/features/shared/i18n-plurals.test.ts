@@ -26,7 +26,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const LOCALES = ['en', 'es', 'de', 'fr', 'ru', 'ja', 'zh'] as const
+const LOCALES = ['en', 'es', 'de', 'fr', 'it', 'ru', 'ja', 'zh', 'ko'] as const
 
 /** Todos los `<algo>/i18n/<loc>.json` bajo `src`, a cualquier profundidad. */
 function recursos(loc: string): string[] {

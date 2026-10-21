@@ -487,6 +487,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// it never DECIDES. Deny-closed: a non-approved request cannot be consumed.
 	reg.Handle("POST", "/approvals/{id}/consume", permApprovalWrite, m.handleConsumeApproval)
 	reg.Handle("POST", "/approvals/sweep", permApprovalAdmin, m.handleSweep)
+	// Approval review quality: how meaningful the human decisions are. Business
+	// implementation; Community keeps the published 501 route.
+	m.registerApprovalReviewQualityRoutes(reg)
 
 	// Subsystem E — break-glass emergency access: audited, notified,
 	// time-boxed, forced post-review. Business implementation; Community keeps the published 501 routes.
@@ -538,7 +541,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// ceiling (scopedadmin.go / scopedadmin_handlers.go). read=catalog+listings;
 	// admin=authoring (definitions need tenant-admin; grants need delegation authority).
 	reg.Handle("GET", "/rbac/catalog", permRBACRead, m.handleRBACCatalog)
-	reg.Handle("GET", "/rbac/delegation-authority", permRBACRead, m.handleDelegationAuthority)
+	m.registerScopedGrantReads(reg)
 	reg.Handle("GET", "/rbac/roles", permRBACRead, m.handleListCustomRoles)
 	reg.Handle("POST", "/rbac/roles", permRBACAdmin, m.handleCreateCustomRole)
 	reg.Handle("GET", "/rbac/roles/{name}", permRBACRead, m.handleGetCustomRole)
@@ -549,7 +552,6 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/rbac/permission-groups/{name}", permRBACRead, m.handleGetPermGroup)
 	reg.Handle("PUT", "/rbac/permission-groups/{name}", permRBACAdmin, m.handleUpdatePermGroup)
 	reg.Handle("DELETE", "/rbac/permission-groups/{name}", permRBACAdmin, m.handleDeletePermGroup)
-	reg.Handle("GET", "/rbac/grants", permRBACRead, m.handleListScopedGrants)
 	m.registerCreateScopedGrant(reg)
 	reg.Handle("GET", "/rbac/grants/{id}", permRBACRead, m.handleGetScopedGrant)
 	reg.Handle("DELETE", "/rbac/grants/{id}", permRBACAdmin, m.handleRevokeScopedGrant)
@@ -599,5 +601,13 @@ func tenantOf(ref string) (model.TenantID, bool) {
 func (m *Module) debugf(msg string, args ...any) {
 	if m.log != nil {
 		m.log.Debug(msg, args...)
+	}
+}
+
+// warnf logs at warn level if a logger is set, for a failure an operator should see
+// by default (a debugf line is invisible in a normal run).
+func (m *Module) warnf(msg string, args ...any) {
+	if m.log != nil {
+		m.log.Warn(msg, args...)
 	}
 }

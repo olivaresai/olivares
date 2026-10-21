@@ -4,6 +4,11 @@
     "description": "This page does not exist or has moved.",
     "back": "Back to overview"
   },
+  "businessOnly": {
+    "title": "Part of Business",
+    "description": "This page is part of Olivares AI Business. This edition does not include it.",
+    "link": "About Business"
+  },
   "forbidden": {
     "title": "Not authorized",
     "description": "You do not have permission to view this. Ask an administrator for access.",

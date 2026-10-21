@@ -31,6 +31,9 @@ type setRunPeersRequest struct {
 // handleSetRunPeers stores one operator choice on the existing run row. The
 // route supplies run-write authorization in the run's recorded workspace.
 func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if m.refuseForeignSteering(w, r, mc) {
+		return
+	}
 	var body setRunPeersRequest
 	if !decodeJSONBody(w, r, &body) {
 		return
@@ -96,6 +99,15 @@ func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc ap
 			}
 		}
 	}
+	// The tenant's peer links change only under this lock, so the idle policy's
+	// peer check and its stop never straddle a link; held for the write alone, not
+	// for the authorizer callouts above.
+	releasePeers, err := m.rt.lockRunContext(r.Context(), idlePeerAdmissionKey(mc.Tenant))
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	defer releasePeers()
 	var dto runDTO
 	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)

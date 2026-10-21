@@ -510,7 +510,7 @@ describe('AgentCore export — the frontiers', () => {
     await user.click(screen.getByRole('button', { name: /compute plan/i }))
 
     expect(
-      await screen.findByText(/not wired in this deployment/i),
+      await screen.findByText(/not set up in this deployment/i),
     ).toBeInTheDocument()
     expect(
       screen.getByText('OLIVARES_AGENTCORE_EXPORT_CONFIG'),

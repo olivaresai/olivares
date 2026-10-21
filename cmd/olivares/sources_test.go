@@ -83,7 +83,6 @@ func TestBuildInProcSourceDataPlatforms(t *testing.T) {
 		"databricks-uc":    "olivares.databricks-uc",
 		"bigquery-audit":   "olivares.bigquery-audit",
 		"mssql-audit":      "olivares.mssql-audit",
-		"oracle-audit":     "olivares.oracle-audit",
 		"mongo-audit":      "olivares.mongo-audit",
 		"redshift-audit":   "olivares.redshift-audit",
 		"gcs-audit":        "olivares.gcs-audit",
@@ -225,7 +224,7 @@ func TestBuildInProcSourceOpencodeAgentSurface(t *testing.T) {
 }
 
 // TestClaudeComplianceGatherE2E is the integration proof: the connector
-// constructed via the composition root path (buildInProcSource) ingests Activity
+// (Business: the Business edition wires it by kind) ingests Activity
 // Feed events and emits minimal-data FindingReport observations through the
 // sdk.Sink contract — the same interface the engine ledger consumes. It proves:
 //   - Findings carry Kind "external_activity" (the compliance module's evidence key)
@@ -234,15 +233,10 @@ func TestBuildInProcSourceOpencodeAgentSurface(t *testing.T) {
 //   - The CAK-absent honest degradation note is emitted in feed-only mode
 //   - Coverage gaps are documented once per Gather
 //
-// This exercises the connector end-to-end at the composition root level (package
-// main), not just the connector unit tests (package claudecompliance).
+// This exercises the connector end-to-end from package main, not just the connector
+// unit tests (package claudecompliance).
 func TestClaudeComplianceGatherE2E(t *testing.T) {
-	// Proof 1: the composition root resolves it as an in-process source.
-	if _, ok := buildInProcSource("claude-compliance"); !ok {
-		t.Fatal("claude-compliance: not wired (buildInProcSource returned ok=false)")
-	}
-
-	// Proof 2: the connector ingests and emits minimal-data evidence through the
+	// The connector ingests and emits minimal-data evidence through the
 	// sdk.Sink contract. We construct it with an injected transport so the test
 	// exercises the full Gather → Sink path without a live Anthropic key.
 	src := claudecompliancePkg.New()
@@ -442,8 +436,7 @@ func TestBuildInProcSourceRRWGraph(t *testing.T) {
 }
 
 // TestBuildContentSourceKnowledgeDocs pins the document-source registry: the
-// gdrive/confluence/notion/sharepoint/s3content/sap_odata/salesforce/snowflake/
-// azure_ai_search connectors resolve to a
+// gdrive/confluence/notion/s3content/snowflake/azure_ai_search connectors resolve to a
 // contentsource.Source whose Kind() is ClassDocument (the boundary — a content
 // source is never confused with an audit/inventory feed). They are NOT
 // sdk.SourceConnector and are never registered with the runtime; the knowledge module
@@ -453,10 +446,7 @@ func TestBuildContentSourceKnowledgeDocs(t *testing.T) {
 		"gdrive":          "olivares.gdrive-content",
 		"confluence":      "olivares.confluence-content",
 		"notion":          "olivares.notion-content",
-		"sharepoint":      "olivares.sharepoint-content",
 		"s3content":       "olivares.s3-content",
-		"sap_odata":       "olivares.sapodata-content",
-		"salesforce":      "olivares.salesforce-content",
 		"snowflake":       "olivares.snowflake-content",
 		"azure_ai_search": "olivares.azureaisearch-content",
 		"postgres":        "olivares.pg-content", //

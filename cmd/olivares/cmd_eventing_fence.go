@@ -40,8 +40,9 @@ import (
 
 func newEventingFenceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "fence",
-		Short: "Inspect, arm and verify the cross-version egress writer fence",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "fence",
+		Short:       "Inspect, arm and verify the cross-version egress writer fence",
 		Long: "The writer fence refuses a mutation that introduces or moves an event\n" +
 			"destination unless the writer proves, in the same transaction, that it consults\n" +
 			"the egress destination control. A deployment whose fleet predates the fence is\n" +
@@ -411,8 +412,9 @@ func newEventingFenceStatusCmd() *cobra.Command {
 	var dataDir, engine, dsn, adminDSN, ownerDSN string
 	var asJSON bool
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Report the writer fence's posture and whether the database enforces it",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Report the writer fence's posture and whether the database enforces it",
 		Long: "Reads the deployment's durable disposition for the egress writer fence and, when\n" +
 			"it is armed, establishes whether the database actually refuses an unproved write\n" +
 			"by attempting one inside a transaction that is always rolled back.\n\n" +
@@ -469,8 +471,9 @@ func newEventingFenceStatusCmd() *cobra.Command {
 func newEventingFenceVerifyCmd() *cobra.Command {
 	var dataDir, engine, dsn, adminDSN, ownerDSN string
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Fail unless the database is actually enforcing an armed writer fence",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Fail unless the database is actually enforcing an armed writer fence",
 		Long: "Attempts the exact mutation the fence exists to stop — a subscription carrying no\n" +
 			"capability attestation — inside a transaction that is always rolled back, and\n" +
 			"exits non-zero unless the engine refused it.\n\n" +
@@ -529,8 +532,9 @@ func newEventingFenceArmCmd() *cobra.Command {
 	var dataDir, engine, dsn, adminDSN, ownerDSN, reason, actor string
 	var assertWritersUpgraded bool
 	cmd := &cobra.Command{
-		Use:   "arm",
-		Short: "Require every writer to prove it carries the egress gate",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "arm",
+		Short:       "Require every writer to prove it carries the egress gate",
 		Long: "Moves the fence's durable disposition to ENFORCED. From then on, a mutation that\n" +
 			"introduces or moves an event destination is refused unless the writer proves, in\n" +
 			"the same transaction, that it consults the egress destination control.\n\n" +

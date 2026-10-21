@@ -30,6 +30,10 @@ type toolCallGrant struct {
 	pin      pinBinding
 	coaz     coazBinding
 	approval askApproval
+	// forward is the params the upstream receives: canon.Forward, or its copy
+	// with reversible tokens restored (dataflow.go). restored counts them.
+	forward  json.RawMessage
+	restored map[string]int
 	// ticket holds a retained-task slot until the dispatch consumes or releases it.
 	ticket *taskAdmissionTicket
 }
@@ -200,6 +204,14 @@ func (rs *ResourceServer) decideToolCall(ctx context.Context, req rsRequest, tok
 		return toolCallGrant{}, rs.deny(c, verdict.Reason, "MCP02", http.StatusForbidden, rpcAccessDenied, "tool call not permitted by server policy")
 	}
 
+	// Reversible tokens: a token bound for a tool its class may not reach stops
+	// here, before any slot, approval or evidence claim. The policy above, the
+	// approval and the evidence below all read the tokenized call.
+	forward, restored, f := rs.restoreArguments(ctx, c, canon)
+	if f != nil {
+		return toolCallGrant{}, f
+	}
+
 	// ROUND-4 R4-05: the RETAINED task-inventory bound, checked BEFORE the forward.
 	//
 	// Any tools/call may answer with a durable task handle, and once the upstream
@@ -266,7 +278,8 @@ func (rs *ResourceServer) decideToolCall(ctx context.Context, req rsRequest, tok
 	}
 
 	granted = true
-	return toolCallGrant{canon: canon, policy: policy, verdict: verdict, pin: pin, coaz: coaz, approval: approval, ticket: ticket}, nil
+	return toolCallGrant{canon: canon, policy: policy, verdict: verdict, pin: pin, coaz: coaz, approval: approval,
+		forward: forward, restored: restored, ticket: ticket}, nil
 }
 
 // verifyPin is the pin gate: a tool whose definition changed since the

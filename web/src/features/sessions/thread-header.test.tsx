@@ -44,6 +44,7 @@ vi.mock('@/components/ui/toaster', () => ({ toast: toasts }))
 const ops = vi.hoisted(() => ({
   interrupt: vi.fn(),
   stop: vi.fn(),
+  resume: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -168,6 +169,7 @@ beforeEach(() => {
   useClientSettings.setState({ confirmStop: true })
   ops.interrupt.mockResolvedValue({ accepted: true })
   ops.stop.mockResolvedValue({})
+  ops.resume.mockResolvedValue({})
 })
 
 describe('thread header — one line', () => {
@@ -432,3 +434,32 @@ describe('thread header — model and effort', () => {
     )
   })
 })
+
+it('explains an idle-policy stop and resumes with one click', async () => {
+  renderThread(
+    run({
+      state: 'stopped',
+      reason: 'idle_policy',
+      claude_session_id: 'conversation-1',
+    }),
+  )
+  expect(screen.getByText('Stopped to free memory.')).toBeInTheDocument()
+  await userEvent.click(
+    within(header()).getByRole('button', { name: 'Resume' }),
+  )
+  await waitFor(() => expect(ops.resume).toHaveBeenCalledWith('run-1'))
+})
+
+it.each([[''], ['user'], ['Stopped by Ada']])(
+  'does not call a stop with reason %j a stop to free memory',
+  (reason) => {
+    renderThread(
+      run({
+        state: 'stopped',
+        reason,
+        claude_session_id: 'conversation-1',
+      }),
+    )
+    expect(screen.queryByText('Stopped to free memory.')).toBeNull()
+  },
+)

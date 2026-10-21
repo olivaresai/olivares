@@ -1,0 +1,88 @@
+{
+  "title": "Coffre-fort",
+  "subtitle": "Vos mots de passe, notes et codes d’authentification. Ils sont scellés sur ce serveur et vous seul pouvez les ouvrir.",
+  "add": "Ajouter un élément",
+  "search": "Rechercher un élément",
+  "noMatch": "Aucun élément ne correspond à « {{query}} »",
+  "sealerUnavailable": "Ce serveur ne peut pas encore sceller de secrets : les éléments ne peuvent pas être enregistrés.",
+  "created": "Élément ajouté",
+  "saved": "Élément enregistré",
+  "deleted": "Élément supprimé",
+  "copyBlocked": "Le navigateur n’a pas autorisé la copie",
+  "nothingToCopy": "Cet élément n’a rien à copier",
+  "needPerson": "Le coffre-fort appartient à une personne. Connectez-vous avec votre compte pour utiliser le vôtre.",
+  "needOrganization": "Choisissez une organisation pour y ouvrir votre coffre-fort.",
+  "copied": "{{field}} copié. Il disparaît du presse-papiers dans {{seconds}} s.",
+  "rowCopied": "{{what}} copié. Il disparaît du presse-papiers dans {{seconds}} s.",
+  "what": {
+    "password": "Mot de passe",
+    "code": "Code",
+    "note": "Note"
+  },
+  "kind": {
+    "login": "Identifiant",
+    "note": "Note",
+    "totp": "Authentificateur",
+    "code": "Code"
+  },
+  "empty": {
+    "title": "Votre coffre-fort est vide",
+    "description": "Ajoutez un identifiant, une note ou une clé d’authentificateur. L’ouverture ou la copie d’un élément est consignée dans le journal d’audit."
+  },
+  "row": {
+    "open": "Ouvrir {{label}}",
+    "openItem": "Ouvrir",
+    "delete": "Supprimer",
+    "menu": "Actions pour {{label}}",
+    "copyPassword": "Copier le mot de passe de {{label}}",
+    "copyNote": "Copier la note de {{label}}",
+    "copyCode": "Copier le code de {{label}}"
+  },
+  "delete": {
+    "title": "Supprimer {{label}} ?",
+    "body": "L’élément est supprimé définitivement. Cette action est irréversible.",
+    "confirm": "Supprimer"
+  },
+  "detail": {
+    "locked": "Verrouillé. Révéler un élément est consigné dans le journal d’audit, et il se masque de nouveau au bout d’une minute.",
+    "hidden": "Masqué",
+    "reveal": "Révéler",
+    "edit": "Modifier",
+    "totpKey": "Clé d’authentificateur",
+    "code": "Code",
+    "codeHidden": "Non affiché",
+    "codeLeft": "{{n}} s restantes",
+    "showCode": "Afficher le code",
+    "copyField": "Copier {{field}}",
+    "showField": "Afficher {{field}}",
+    "hideField": "Masquer {{field}}"
+  },
+  "form": {
+    "addTitle": "Ajouter un élément",
+    "editTitle": "Modifier {{label}}",
+    "name": "Nom",
+    "nameHint": "Lettres, chiffres, points, tirets et tirets bas. Vous retrouvez l’élément par ce nom, y compris dans la CLI.",
+    "nameTaken": "Un élément portant ce nom existe déjà",
+    "nameInvalid": "Utilisez des lettres, chiffres, points, tirets et tirets bas",
+    "type": "Type",
+    "username": "Nom d’utilisateur",
+    "password": "Mot de passe",
+    "show": "Afficher le mot de passe",
+    "hide": "Masquer le mot de passe",
+    "generate": "Générer",
+    "generateOptions": "Options du générateur",
+    "generateFailed": "Impossible de générer un mot de passe",
+    "length": "Longueur",
+    "lower": "Lettres minuscules",
+    "upper": "Lettres majuscules",
+    "digits": "Chiffres",
+    "symbols": "Symboles",
+    "url": "Site web",
+    "totp": "Clé d’authentificateur",
+    "totpHint": "Une clé base32, ou le lien otpauth:// derrière le code QR du service",
+    "note": "Note",
+    "description": "Description",
+    "descriptionHint": "Affichée dans la liste. Non secrète.",
+    "save": "Enregistrer"
+  }
+}

@@ -339,7 +339,7 @@ function architecture(t, counts) {
     ['agent surfaces', 'claude code · codex · grok', 104],
     ['audit sources', 'pgaudit · cloudtrail · ebpf', 196],
     ['mcp & a2a peers', 'tools · servers · agents', 288],
-    ['content sources', 'sharepoint · s3 · postgres', 380],
+    ['content sources', 'gdrive · s3 · postgres', 380],
   ]
   for (const [title, sub, y] of sources) {
     c.node({ x: 58, y, w: 248, h: 76, title, sub, variant: 'outline', behind: left })

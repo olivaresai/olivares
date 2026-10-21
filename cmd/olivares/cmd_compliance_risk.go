@@ -14,12 +14,14 @@ import (
 // records a governed suggestion; declared intent never proves observed safety.
 func newComplianceRiskCmd(flags *authClientFlags) *cobra.Command {
 	risk := &cobra.Command{
-		Use: "risk", Short: "Classify agents and read the governed risk register",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "risk", Short: "Classify agents and read the governed risk register",
 		Long:    "List recorded risk classifications; use olivares compliance risk classify to record a suggestion.",
 		Example: "  olivares compliance risk ls",
 	}
 	risk.AddCommand(&cobra.Command{
-		Use: "ls", Aliases: []string{"list"}, Short: "Read retained risk classifications and their evidence", Args: cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls", Aliases: []string{"list"}, Short: "Read retained risk classifications and their evidence", Args: cobra.NoArgs,
 		Long:    "List recorded classifications and their evidence for this tenant; use olivares compliance risk classify to record a suggestion.",
 		Example: "  olivares compliance risk ls",
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -32,7 +34,8 @@ func newComplianceRiskCmd(flags *authClientFlags) *cobra.Command {
 	})
 	var subjectKind, agentID string
 	classify := &cobra.Command{
-		Use: "classify SUBJECT-REF", Short: "Record a risk suggestion from observed signals and declared intent", Args: cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "classify SUBJECT-REF", Short: "Record a risk suggestion from observed signals and declared intent", Args: cobra.ExactArgs(1),
 		Long:    "Record a risk suggestion for one subject; inspect the register with olivares compliance risk ls.",
 		Example: "  olivares compliance risk classify AGENT-ID -o json",
 		RunE: func(cmd *cobra.Command, args []string) error {

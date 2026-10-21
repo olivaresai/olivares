@@ -19,8 +19,9 @@ import (
 
 func newKeysCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "keys",
-		Short: "Inspect signing-key custody",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "keys",
+		Short:       "Inspect signing-key custody",
 		Long: "Inspect the local signing-key custody configuration and envelope metadata.\n" +
 			"Use status to report declared and configured custody, KEK details and FIPS mode.",
 		Example: "  olivares keys status",
@@ -77,8 +78,9 @@ func keysStatusCmd() *cobra.Command {
 	var auditEnv, catalogEnv, policyEnv string
 	var verifyEnvelopes bool
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show the key-custody posture (declared vs configured, envelopes, FIPS mode)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show the key-custody posture (declared vs configured, envelopes, FIPS mode)",
 		Long: "status reports declared and configured key custody, KEK details, signing-envelope metadata,\n" +
 			"prior verification keys and this binary's FIPS mode.\n\n" +
 			"By default it reads envelope files and makes NO KMS call, which is deliberate: this is the\n" +

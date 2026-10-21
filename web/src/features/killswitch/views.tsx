@@ -23,8 +23,8 @@ export const VIEWS = [
     helpHref: '/how-to/cookbook/kill-switch-drill',
     icon: OctagonAlert,
     permission: 'governance:killswitch:read',
-    // ⌘K "Engage kill switch" (console remake 26.10, CONCEPT-IA command menu): opens the
-    // engage form at its mandatory reason; engaging stays the form's own confirmation.
+    // ⌘K "Stop all agents" (console remake 26.10, CONCEPT-IA command menu): opens the
+    // stop-all confirmation; engaging stays that confirmation's own button.
     commandActions: [
       { id: 'engage', permission: 'governance:killswitch:admin' },
     ],

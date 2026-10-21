@@ -50,8 +50,9 @@ const identityNS = "identity"
 func newIdentityCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "identity",
-		Short: "Read identity connection state",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "identity",
+		Short:       "Read identity connection state",
 		Long: "Read SSO connection state without changing its configuration. " +
 			"An unmeasured state exits 8; --strict=false keeps the report and exits 0. " +
 			"Business Identity & Scale adds managed identity posture views.",
@@ -96,8 +97,9 @@ type identitySso struct {
 func newIdentitySsoCmd(flags *authClientFlags) *cobra.Command {
 	var strict bool
 	cmd := &cobra.Command{
-		Use:   "sso",
-		Short: "Report the SSO connection state",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sso",
+		Short:       "Report the SSO connection state",
 		Long: "sso reports whether an identity provider currently backs sign-in, which protocol\n" +
 			"it speaks, and the redirect URI to register with that provider. The redirect URI\n" +
 			"is derived through the engine's own rule, so what this prints is what the login\n" +

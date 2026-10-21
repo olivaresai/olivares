@@ -29,8 +29,9 @@ const profilesPath = "/v1/m/sessions/provider-profiles"
 
 func newAgentProfileCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "profile",
-		Short: "Register and inspect provider profiles (which home an official CLI runs under)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "profile",
+		Short:       "Register and inspect provider profiles (which home an official CLI runs under)",
 		Long: "profile is the identity a session launches under: a driver, this node's execution\n" +
 			"environment, and the two home directories the official CLI reads — its configuration\n" +
 			"home and the child's user home.\n\n" +
@@ -59,18 +60,21 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 		name, state, authSource     string
 		providerRef, permissionMode string
 		tools, programs, registries []string
+		egressHosts                 []string
 		unbind                      bool
 	)
 	cmd := &cobra.Command{
-		Use:   "update <profile-ref>",
-		Short: "Change a profile's label, state, authorization or session policy",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "update <profile-ref>",
+		Short:       "Change a profile's label, state, authorization or session policy",
 		Long: "update changes what a profile AUTHORIZES, never what it IS. The driver, the\n" +
 			"execution environment and the two homes are the profile's identity and are\n" +
 			"immutable: changing one of those is creating another profile.\n\n" +
 			"Everything else is repairable in place — the label, active/disabled, the\n" +
 			"authorized authentication source, the bound provider, and the session policy\n" +
 			"(--tools and --permission-mode), and the installed programs and npm registries\n" +
-			"its sessions get (--program and --npm-registry). A running child keeps what\n" +
+			"its sessions get (--program and --npm-registry), and the hosts an API-key\n" +
+			"session may reach beside its provider (--egress-host). A running child keeps what\n" +
 			"its own launch resolved; the change governs the next launch and the next resume.\n\n" +
 			"Use `agent profile rm` to retire a profile for good.",
 		Example: "  olivares agent profile update ppf_01J8ABCDEF --name \"Claude (prod)\"\n" +
@@ -79,6 +83,8 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 			"  olivares agent profile update ppf_01J8ABCDEF --program rea --program jq\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --npm-registry url=https://npm.acme.dev/,scope=@acme,secret=env/npm-acme\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --npm-registry \"\"   # withdraw the registries\n" +
+			"  olivares agent profile update ppf_01J8ABCDEF --egress-host github.com --egress-host api.github.com\n" +
+			"  olivares agent profile update ppf_01J8ABCDEF --egress-host \"\"   # withdraw the hosts\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --state disabled\n" +
 			"  olivares agent profile update ppf_01J8ABCDEF --unbind-provider",
 		Args: exactRef("profile-ref"),
@@ -129,8 +135,11 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 				}
 				body["session_registries"] = parsed
 			}
+			if cmd.Flags().Changed("egress-host") {
+				body["session_egress_hosts"] = nonEmpty(egressHosts)
+			}
 			if len(body) == 0 {
-				return sessionCLIUsage("name what to change: --name, --state, --auth-source, --provider, --unbind-provider, --tools, --permission-mode, --program or --npm-registry")
+				return sessionCLIUsage("name what to change: --name, --state, --auth-source, --provider, --unbind-provider, --tools, --permission-mode, --program, --npm-registry or --egress-host")
 			}
 			status, b, err := cfg.do(cmd.Context(), "PATCH", profilesPath+"/"+args[0], body, 200)
 			if err != nil {
@@ -163,6 +172,8 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 		"an installed program put first on those sessions' PATH (repeatable; --program \"\" withdraws them all)")
 	cmd.Flags().StringArrayVar(&registries, "npm-registry", nil,
 		"an npm registry those sessions install from: url=<https URL>[,scope=@name][,secret=env/<vault secret>] (repeatable; --npm-registry \"\" withdraws them all)")
+	cmd.Flags().StringSliceVar(&egressHosts, "egress-host", nil,
+		"a host those sessions may reach beside their provider, such as github.com (repeatable or comma-separated; --egress-host \"\" withdraws them all; needs tenant administration)")
 	_ = cmd.RegisterFlagCompletionFunc("state", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"active\taccepts launches, resumes and bindings",
@@ -182,9 +193,10 @@ func newAgentProfileRemoveCmd() *cobra.Command {
 		yes bool
 	)
 	cmd := &cobra.Command{
-		Use:     "rm <profile-ref>",
-		Aliases: []string{"retire"},
-		Short:   "Retire a provider profile for good",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <profile-ref>",
+		Aliases:     []string{"retire"},
+		Short:       "Retire a provider profile for good",
 		Long: "rm retires a profile. It is irreversible for that reference: the id keeps its\n" +
 			"history and its sessions, and the HOME becomes free for a new profile id.\n\n" +
 			"Nothing else is rewritten — the runs, aliases and ledger entries that name this\n" +
@@ -227,9 +239,10 @@ func newAgentProfileListCmd() *cobra.Command {
 		state string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the provider profiles this tenant has registered",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the provider profiles this tenant has registered",
 		Long: "ls shows each profile's reference, driver, state and bound provider. It shows no\n" +
 			"path: the homes are an authorized read of their own, so a list an operator leaves on\n" +
 			"screen does not publish the filesystem layout of the engine host.",
@@ -270,11 +283,12 @@ func newAgentProfileListCmd() *cobra.Command {
 func newAgentProfileGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:     "get <profile-ref>",
-		Short:   "Show one provider profile",
-		Long:    "get prints one profile's driver, environment, state, authorized source and bound provider.",
-		Example: "  olivares agent profile get ppf_01J8ABCDEF -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <profile-ref>",
+		Short:       "Show one provider profile",
+		Long:        "get prints one profile's driver, environment, state, authorized source and bound provider.",
+		Example:     "  olivares agent profile get ppf_01J8ABCDEF -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -310,8 +324,9 @@ func newAgentProfileCreateCmd() *cobra.Command {
 		errNoProfile                                   = "the engine did not return a provider profile"
 	)
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Register a provider profile for homes that already exist on this node",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Register a provider profile for homes that already exist on this node",
 		Long: "create registers one profile. The server canonicalises both paths on the node that\n" +
 			"owns them — absolute, symlinks resolved, existing, a directory — and refuses anything\n" +
 			"else. It creates nothing, installs nothing and logs in to nothing.\n\n" +
@@ -547,6 +562,18 @@ func parseNPMRegistryFlags(values []string) ([]map[string]string, error) {
 	return out, nil
 }
 
+// egressHostsLine lists the declared egress hosts, "" when none.
+func egressHostsLine(rec map[string]any) string {
+	raw, _ := rec["session_egress_hosts"].([]any)
+	hosts := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			hosts = append(hosts, s)
+		}
+	}
+	return strings.Join(hosts, ", ")
+}
+
 // profilePackagesFields shows the declared programs and registries, only when
 // declared, so the form of every other profile is as it was.
 func profilePackagesFields(rec map[string]any) []termrender.Field {
@@ -568,6 +595,9 @@ func profilePackagesFields(rec map[string]any) []termrender.Field {
 			line += " (token from " + secret + ")"
 		}
 		fields = append(fields, termrender.Field{Key: "npm registry", Value: line})
+	}
+	if hosts := egressHostsLine(rec); hosts != "" {
+		fields = append(fields, termrender.Field{Key: "egress hosts", Value: hosts})
 	}
 	return fields
 }

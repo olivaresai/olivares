@@ -1,7 +1,6 @@
 {
   "title": "Resumen",
   "description": "Lo que hicieron tus agentes de IA en los últimos 30 días, en las áreas que puedes abrir.",
-  "openReport": "Informe ejecutivo",
   "aside": "Resumen del entorno",
   "range": "últimos 30 días",
   "next": {
@@ -30,7 +29,19 @@
     "open": "Abrir la sesión: {{what}}",
     "untitled": "Sesión sin título"
   },
+  "live": {
+    "title": "En curso"
+  },
   "tiles": {
+    "today": {
+      "label": "Hoy",
+      "caption_one": "Coste de la sesión que trabajó hoy",
+      "caption_many": "Coste de las {{count}} sesiones que trabajaron hoy",
+      "caption_other": "Coste de las {{count}} sesiones que trabajaron hoy",
+      "unpriced_one": "{{count}} sin coste informado",
+      "unpriced_many": "{{count}} sin coste informado",
+      "unpriced_other": "{{count}} sin coste informado"
+    },
     "inventory": {
       "label": "Inventario",
       "caption": "{{agents}} agentes · {{active}} activos"

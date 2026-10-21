@@ -320,3 +320,36 @@ it.each(['full', 'rail'] as const)(
     view.unmount()
   },
 )
+
+const badgeFixture = vi.hoisted(() => ({ edition: null as string | null }))
+vi.mock('@/features/console/use-edition-badge', () => ({
+  useEditionBadge: () => ({
+    edition: badgeFixture.edition,
+    shown: true,
+    canSave: true,
+    setShown: async () => {},
+    saving: false,
+    saveError: false,
+    loadError: false,
+  }),
+}))
+
+it.each(['full', 'rail'] as const)(
+  'shows the commercial badge in the %s sidebar',
+  (mode) => {
+    badgeFixture.edition = 'enterprise'
+    renderIntel(
+      <AppSidebar
+        mode={mode}
+        onToggle={() => {}}
+        areasOpen={false}
+        onOpenAreas={() => {}}
+      />,
+    )
+    expect(screen.getByLabelText('Enterprise edition')).toBeInTheDocument()
+  },
+)
+
+afterEach(() => {
+  badgeFixture.edition = null
+})

@@ -28,7 +28,7 @@
     "loadMore": "Load more",
     "empty": "No events recorded",
     "emptyHint": "Every event the recording captured appears here in order. This recording captured none.",
-    "activityUnavailable": "Agent activity is unavailable because the timeline resolver is not wired or did not answer. Governance evidence remains available.",
+    "activityUnavailable": "Agent activity is unavailable because the timeline resolver is not set up or did not answer. Governance evidence remains available.",
     "tool": "Tool call",
     "mcp": "MCP invocation",
     "cost": "Cost sample",

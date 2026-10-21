@@ -504,11 +504,16 @@ wf_mutant "a missing dedicated owner declaration is caught" \
 # only that an UNMUTATED workflow passes. The sed now edits the element, not the whole line,
 # and the derived `keep` line asserts that the other five dependencies are still there byte
 # for byte, so "removes race-sessions" and "removes race-sessions ONLY" are both measured.
-AGG_NEEDS="$(grep -m1 -E '^    needs: \[.*, race-sessions[],]' "${WF}" || true)"
+#
+# The anchor is race-hot's own job block, not the first `needs:` line that names race-sessions:
+# race-core is chained after race-sessions (dev#2367), so its `needs:` line names it too and comes
+# first in the file. The range ends at race-hot's `if:`, which follows its `needs:`.
+AGG_RANGE='/^  race-hot:/,/^    if:/'
+AGG_NEEDS="$(sed -n "${AGG_RANGE}"'{/^    needs: \[.*, race-sessions[],]/p}' "${WF}" | head -n1)"
 [ -n "${AGG_NEEDS}" ] ||
 	blind "no aggregator 'needs:' line names race-sessions in ${WF}; the dependency mutation would have nothing to remove"
 wf_mutant "an aggregator that stops depending on race-sessions is caught" \
-	'/^    needs: \[.*, race-sessions[],]/ s|, race-sessions||' \
+	"${AGG_RANGE}"'{/^    needs: \[.*, race-sessions[],]/ s|, race-sessions||}' \
 	'does not depend on race-sessions' \
 	"${AGG_NEEDS/, race-sessions/}"
 wf_mutant "an aggregator that stops judging race-sessions is caught" \

@@ -52,6 +52,8 @@ el inicio de sesión único.
 
 ### TLS mutuo para colectores remotos
 
+El collector de borde es una función Business; una compilación Community rechaza `olivares collector`. La opción `--grpc-client-ca` de abajo se aplica en el core.
+
 En la topología distribuida, los colectores de borde envían observaciones al core mediante
 **TLS mutuo** con certificado de cliente verificado. Actívalo dando al core una CA de cliente para que
 **exija y verifique** un certificado de cliente:

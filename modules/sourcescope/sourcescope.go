@@ -43,6 +43,10 @@ type Module struct {
 	// workspace connector inline secrets are unavailable (reference-only mode).
 	wsSealer WorkspaceConnectorSealer
 
+	// profileAssignment lets this build write bindings for provider profiles and AI
+	// tools (the Business edition). Deciding is every edition; only writing is gated.
+	profileAssignment bool
+
 	mu   sync.RWMutex
 	data api.ModuleData // tenant-parameterized handle (late-bound via UseData)
 	host sdk.Host       // kept for Publish (the access-map permitted-edge projection)
@@ -71,6 +75,13 @@ func WithScopedAuthorizer(s auth.ScopedAuthorizer) Option {
 // workspace connectors operate in reference-only mode (inline secrets are rejected).
 func WithWorkspaceSealer(s WorkspaceConnectorSealer) Option {
 	return func(m *Module) { m.wsSealer = s }
+}
+
+// WithProfileAssignment turns on writing bindings whose source is a provider profile or
+// an AI tool. Only the Business edition passes it: a Community engine answers those
+// writes 501 business_required, and keeps applying the bindings already stored.
+func WithProfileAssignment() Option {
+	return func(m *Module) { m.profileAssignment = true }
 }
 
 // New returns a source-scoping module.

@@ -155,6 +155,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("GET", "/live/{ref}/timeline", permLiveRead, m.handleTimeline)
 	reg.Handle("GET", "/stream", permLiveRead, m.handleStream)
 	m.runtimeRoutes(reg)
+	// Tool version rings: a candidate release tried on one agent group first.
+	// Business implementation; Community keeps the published 501 routes.
+	m.registerToolRingRoutes(reg)
 	m.workspaceRoutes(reg)
 	m.templateRoutes(reg)
 	m.providerProfileRoutes(reg)

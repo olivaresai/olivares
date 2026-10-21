@@ -127,7 +127,7 @@ func WithRetrievalContentScanner(s RetrievalContentScanner) Option {
 
 // WithSource registers a named contentsource.Source (a data connector) the module
 // can drive from POST /kbs/{id}/ingest {"source":"<name>"}. The composition root
-// registers the real gdrive/confluence/notion/sharepoint/s3content connectors;
+// registers the real gdrive/confluence/notion/s3content connectors (sharepoint in Business);
 // tests register a fake source. A source whose Kind() is not ClassDocument is
 // rejected at ingest (the boundary).
 func WithSource(name string, src contentsource.Source) Option {

@@ -1,0 +1,6 @@
+Third-party public signing key
+
+A file under this identifier is an OpenPGP public key published by another project so that others can verify what that
+project signs. It is redistributed here unmodified, pinned by its sha256 in the recipe, and used only to verify
+packages. Olivares AI does not relicense it and makes no copyright claim over it; the project that published the key
+owns whatever rights exist in it.

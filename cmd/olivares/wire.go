@@ -9,10 +9,12 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/model"
 	obstrace "github.com/olivaresai/olivares/core/observability/trace"
 	"github.com/olivaresai/olivares/core/runtime/executor"
@@ -47,6 +49,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -130,7 +133,7 @@ import (
 //
 // Wired on demand (operator config, no code change):
 //   - knowledge.Source: the `documents` section of OLIVARES_SOURCES_CONFIG wires
-//     contentsource connectors (gdrive/confluence/notion/sharepoint/s3content) via
+//     contentsource connectors (gdrive/confluence/notion/s3content; sharepoint is Business) via
 //     knowledge.WithSource. See sources.go (knowledgeContentOptions,
 //     buildContentSource). No documents configured => the module has no pull sources.
 
@@ -205,12 +208,10 @@ type moduleSet struct {
 	// tenant — the at-least-once driver that walks the ledger into the eventing
 	// engine for SIEM control-tower delivery.
 	siemforward *siemforward.Module
-	// the policy truth loop's store-backed seams, late-bound to the data
-	// handle by boot() (the knowledgeGuard pattern). policyDist is nil when no
-	// policy signing key was provided (e.g. the e2e harness) — the console then
-	// keeps the honest seam-pending posture; policyObserved is always present.
-	policyDist     *governance.PolicyArtifactDistributor
-	policyObserved *governance.PolicyObservedStore
+	// binds the data handle into the fleet policy truth loop's store-backed
+	// seams once the store opens (the knowledgeGuard pattern). nil in Community, which
+	// has no fleet distribution (governance.FleetPolicyOptions).
+	policyBind func(api.ModuleData)
 	// module II (sessions) and FinOps, kept so boot() can late-bind the OPERATE
 	// governance (the kill-switch StopGate, the budget/HITL/PEP LaunchGate, the I/O
 	// Recorder, the active-termination sweep) once the store / bridge are live — module
@@ -322,6 +323,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	if err != nil {
 		return moduleSet{}, err
 	}
+	deployExecCfg = editionDeployExecutorConfig(deployExecCfg, log)
 	voiceDispatchCfg, err := loadVoiceDispatchConfig(log)
 	if err != nil {
 		return moduleSet{}, err
@@ -356,7 +358,13 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// below; its store handle is late-bound by boot() (UseData), exactly like the
 	// scoped-grant engine it consults (gov.ScopedGrants()).
 	workspaceSecrets := &workspaceConnectorSecrets{}
-	ss := sourcescope.New(sourcescope.WithScopedAuthorizer(gov.ScopedGrants()), sourcescope.WithWorkspaceSealer(workspaceSecrets))
+	ssOpts := []sourcescope.Option{sourcescope.WithScopedAuthorizer(gov.ScopedGrants()), sourcescope.WithWorkspaceSealer(workspaceSecrets)}
+	if thisEdition.name != "community" {
+		// Assigning provider profiles and AI tools to departments and groups is Business;
+		// a Community build keeps applying the assignments already stored.
+		ssOpts = append(ssOpts, sourcescope.WithProfileAssignment())
+	}
+	ss := sourcescope.New(ssOpts...)
 	ssResolver := ss.Resolver()
 	// CLA-17-A: resolve the Claude inference seams (Judge / model-backed Embedder)
 	// from env. Both stay fail-closed (offline judge / zero-egress local embedder) when
@@ -446,7 +454,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	vecOpts, vecAdapter := knowledgeVectorOptions(osGetenv, log)
 	knowledgeOpts = append(knowledgeOpts, vecOpts...)
 	// (B1): wire the configured knowledge DOCUMENT sources (gdrive/confluence/
-	// notion/sharepoint/s3content) the module drives on ingest. They are NOT runtime
+	// notion/s3content) the module drives on ingest. They are NOT runtime
 	// observation sources (no R/RW edge) — they are pulled by the module — so they are
 	// wired here at construction, not in wireSources. Deny-closed: none configured ⇒ no
 	// pull sources (knowledgeContentOptions warns per honest-posture).
@@ -650,6 +658,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		log.Info("compliance: NIS 2 incident packager wired (Art 23 significant-incident classification; enterprise)")
 	}
 	compOpts = append(compOpts, compliance.WithCompliancePacksAuthorizer(compliancePacksAuthorizerForBuild()))
+	compOpts = append(compOpts, complianceRecordsOptions(thisEdition.name)...)
 	comp := compliance.New(compOpts...)
 	knowledgeOpts = append(knowledgeOpts, knowledge.WithHoldGate(complianceHoldGate{m: comp}))
 
@@ -791,13 +800,14 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 
 	// the policy/identity AUTHORING consoles the web already calls.
 	// Closed the truth loop — the seams that were honest nils are now real:
-	//   - claudePolicy (B): managed-* validate/dry-run/publish/versions at
-	//     /v1/m/claude-policy, PLUS the distribution seam made real (the decided
-	//     v1 mechanism: signed artifact in the plane + agent PULL with attestation;
-	//     deny-closed — "distributed" only after the signed record committed) and the
-	//     OBSERVED-config provider over the attested check-ins, so publish computes
-	//     PERMITTED-vs-OBSERVED drift fleet-wide and records it as REAL findings.
-	//     Both are store-backed: their data handles are late-bound by boot() (the
+	//   - claudePolicy (B): managed-* validate/dry-run at /v1/m/claude-policy in every
+	//     edition. The fleet half is Business: publish and versions, the signed-artifact
+	//     distribution seam (the decided v1 mechanism: signed artifact in the plane +
+	//     agent PULL with attestation; deny-closed — "distributed" only after the signed
+	//     record committed) and the OBSERVED-config provider over the attested check-ins,
+	//     so publish computes PERMITTED-vs-OBSERVED drift fleet-wide and records it as REAL
+	//     findings. governance.FleetPolicyOptions builds them (none in Community, whose
+	//     fleet routes answer 501); their data handles are late-bound by boot() (the
 	//     knowledgeGuard pattern). A nil policy signing key (e.g. the e2e harness)
 	//     keeps the honest seam-pending posture, exactly as before.
 	//   - agents (D): managed-agent tool-confirmation at /v1/m/claude-agents, bound to
@@ -810,12 +820,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	//     federation rules, via wifAdapter (populated by wireRoster).
 	// wifAdapter is created earlier (it feeds both the identity console and the WIF
 	// credential broker); here it backs the read-only WIF graph console.
-	policyDistributor := governance.NewPolicyArtifactDistributor(policySigner)
-	policyObserved := governance.NewPolicyObservedStore()
-	policyOpts := []governance.PolicyConsoleOption{governance.WithObservedConfig(policyObserved)}
-	if policyDistributor != nil {
-		policyOpts = append(policyOpts, governance.WithManagedDistributor(policyDistributor))
-	}
+	policyOpts, policyBind := governance.FleetPolicyOptions(policySigner)
 	claudePolicyConsole := governance.NewPolicyConsole(policyOpts...)
 	// the thread-event provider is always wired (non-nil); its per-tenant
 	// readers are POPULATED post-store by deferredSecretWiring.openAll, because a
@@ -843,6 +848,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 	// summarizer rides the same inference credential as the judge (honest 501
 	// when unconfigured).
 	recOpts := append(ci.recordingOptions(), recording.WithTimelineResolver(&sessionsTimelineAdapter{sessions: sm}))
+	recOpts = append(recOpts, recordingEditionOptions(thisEdition.name)...)
 	recmod := recording.New(recOpts...)
 	gov.UseRecordingGate(recmod)
 
@@ -988,7 +994,7 @@ func buildModules(sessionDependencies *sessions.Dependencies, signer *audit.Sign
 		known = append(known, m.APINamespace())
 	}
 	recmod.UseKnownNamespaces(known)
-	return moduleSet{deploySetup: deploySetup, orchestrationExecutor: deployEngine(deployExec), all: all, catalogDeploy: catalogBridge, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyDist: policyDistributor, policyObserved: policyObserved, sessions: sm, sessionDependencies: sessionDependencies, skills: skillsMod, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall,
+	return moduleSet{deploySetup: deploySetup, orchestrationExecutor: deployEngine(deployExec), all: all, catalogDeploy: catalogBridge, gov: gov, approvalBridge: bridge, compliance: comp, deployBinder: deployBinder, deployDrift: deployDrift, knowledgeGuard: knowledgeGuard, vectorIndex: vecAdapter, live: live, wif: wifAdapter, wifBroker: wifBroker, recorder: recmod, accountEraser: accEraser, eventing: evtm, notify: nm, orchestration: orch, siemforward: siemfwd, policyBind: policyBind, sessions: sm, sessionDependencies: sessionDependencies, skills: skillsMod, protocolBindingReconciler: protocolBindingReconciler, finops: fin, finopsBackstop: finBackstop, models: mdl, inferenceProxy: ipx, contentFirewall: contentFirewall,
 		knowledge:           km,
 		knowledgeStatus:     ci.knowledgeStatus,
 		knowledgeEmbedder:   governedEmbedder,
@@ -1015,6 +1021,109 @@ var (
 	errPDPOPASettingsInvalid  = errors.New("OLIVARES_PDP_OPA_URL and OLIVARES_PDP_OPA_PATH must both be non-empty after normalization (the decision path has no default): refusing to build the module set instead of silently dropping the configured external PDP")
 	errPDPEngineUnsupported   = errors.New("OLIVARES_PDP_ENGINE is not a supported external policy engine (want cedar, opa, none, or unset): refusing to build the module set instead of silently dropping the configured external PDP")
 )
+
+// errPDPEngineBusiness is the Community refusal of an external policy engine. Like the
+// errors above it is FIXED: it never carries the supplied engine string, path, URL or token.
+var errPDPEngineBusiness = errors.New("OLIVARES_PDP_ENGINE selects an external policy engine (a Cedar file or Open Policy Agent), " +
+	"which is a Business capability: run the Business edition, or unset OLIVARES_PDP_ENGINE (or set it to none) " +
+	"to use the native engine alone: " + pricingURL)
+
+// pdpEngineSelector is the trimmed OLIVARES_PDP_ENGINE, or "" when it is unset, blank or
+// a case-insensitive "none": the native ABAC engine alone, valid in every edition.
+func pdpEngineSelector(getenv func(string) string) string {
+	engine := strings.TrimSpace(getenv("OLIVARES_PDP_ENGINE"))
+	if strings.EqualFold(engine, "none") {
+		return ""
+	}
+	return engine
+}
+
+// refuseExternalPDPInCommunity makes an external policy engine a Business capability.
+// boot calls it for the serving path only (ServeMode: serve and quickstart): Community
+// refuses to serve with an engine selected, before anything is opened or any policy
+// file is read, instead of ignoring the setting: the operator would believe an external
+// restriction is enforced. Offline commands (db, dr, audit, openapi) enforce no policy,
+// so they are not refused and a restore never waits on this setting. The class is the
+// Edition exit code, as for every other Business refusal; Business builds are unchanged.
+func refuseExternalPDPInCommunity(getenv func(string) string) error {
+	if thisEdition.name == "community" && pdpEngineSelector(getenv) != "" {
+		return exitcode.New(exitcode.Edition, errPDPEngineBusiness)
+	}
+	return nil
+}
+
+// businessProtectionKeys are the operator inputs of the Business protections whose seams a
+// Community binary does not link (edition_ports.go). Set, each one would be dropped in
+// silence: nothing reads it. switchKey marks the two the Business readers parse with
+// strconv.ParseBool, where only true turns the protection on.
+var businessProtectionKeys = []struct {
+	env       string
+	switchKey bool
+}{
+	{"OLIVARES_SERVERTOOL_EGRESS_CONFIG", false},
+	{"OLIVARES_CONTENT_FIREWALL_CONFIG", false},
+	{"OLIVARES_HOOK_FIREWALL_CONFIG", false},
+	{"OLIVARES_THREATINTEL_CONFIG", false},
+	{"OLIVARES_INCIDENTLOOP_CONFIG", false},
+	{"OLIVARES_RETENTION_GOVERNOR_CONFIG", false},
+	{"OLIVARES_AUDIT_LEGALHOLD_RECONCILE", true},
+	{"OLIVARES_RTBF_DEPTH_CONFIG", false},
+	{"OLIVARES_COMPUTER_USE_CONFIG", false},
+	{"OLIVARES_TOOL_PIN_CONFIG", false},
+	{"OLIVARES_RENDER_INSPECTOR_CONFIG", false},
+	{"OLIVARES_ELICITATION_MEDIATOR_CONFIG", false},
+	{"OLIVARES_CAEP_TRANSMITTER_CONFIG", false},
+	{"OLIVARES_CIRCUIT_BREAKER_CONFIG", true},
+	{"OLIVARES_NIS2INCIDENT_CONFIG", false},
+	{"OLIVARES_REPORTING_CONFIG", false},
+	{"OLIVARES_PII_TOKENS_CONFIG", false},
+}
+
+// environmentWithActivationManifest is osGetenv as it will read after boot loads the
+// activation manifest (initActivationManifest), but available before: the process
+// environment first, then the active entries of the manifest in dataDir, read-only. A
+// Business add-on turned on with `olivares enterprise enable` lives only in that
+// manifest, so the downgrade check cannot wait for the overlay. A missing or unreadable
+// manifest is "nothing activated", as in boot. An empty dataDir resolves as checkCMEKInstall does.
+func environmentWithActivationManifest(dataDir string) func(string) string {
+	if dataDir == "" {
+		if resolved, err := defaultDataDir(); err == nil {
+			dataDir = resolved
+		}
+	}
+	overlay := map[string]string{}
+	if dataDir != "" {
+		if manifest, err := LoadActivationManifest(dataDir); err == nil {
+			overlay = manifest.activeOverlay()
+		}
+	}
+	reader := envconfig.Reader{Fallback: func(key string) string { return overlay[key] }}
+	return reader.Get
+}
+
+// refuseBusinessProtectionsInCommunity makes a configured Business protection refuse the
+// serving boot of a Community binary, as refuseExternalPDPInCommunity does for the policy
+// engine, instead of ignoring the key: the operator would believe the protection is in
+// force. The message names the key, never its value. A blank key, or a switch that is not
+// true, protects nothing in either edition and is not refused. Business builds are unchanged.
+// getenv must see the activation manifest (environmentWithActivationManifest).
+func refuseBusinessProtectionsInCommunity(getenv func(string) string) error {
+	if thisEdition.name != "community" {
+		return nil
+	}
+	for _, k := range businessProtectionKeys {
+		raw := strings.TrimSpace(getenv(k.env))
+		if raw == "" {
+			continue
+		}
+		if on, _ := strconv.ParseBool(raw); k.switchKey && !on {
+			continue
+		}
+		return exitcode.New(exitcode.Edition, fmt.Errorf("%s configures a Business protection, which this Community binary does not enforce: "+
+			"run the Business edition, or unset %s: %s", k.env, k.env, pricingURL))
+	}
+	return nil
+}
 
 // loadGovernanceOptions assembles every governance.Option from the environment: the
 // optional external PDP (Cedar/OPA deny-overlay) AND the offline-staleness bound,
@@ -1059,8 +1168,8 @@ func loadGovernanceOptions(getenv func(string) string, log *slog.Logger) ([]gove
 // configurations keep their prior construction and evaluation behavior, and
 // construction still issues no OPA request and no reachability probe.
 func loadGovernancePDP(getenv func(string) string, log *slog.Logger) ([]governance.Option, error) {
-	engine := strings.TrimSpace(getenv("OLIVARES_PDP_ENGINE"))
-	if engine == "" || strings.EqualFold(engine, "none") {
+	engine := pdpEngineSelector(getenv)
+	if engine == "" {
 		return nil, nil
 	}
 	// Normalized once: cfg.Engine is what the factory switches on, and past the switch
@@ -1101,6 +1210,17 @@ func loadGovernancePDP(getenv func(string) string, log *slog.Logger) ([]governan
 	}
 	log.Info("pdp: external policy engine enabled", "engine", string(cfg.Engine))
 	return []governance.Option{governance.WithExternalPDP(pdp)}, nil
+}
+
+// complianceRecordsOptions enables legal holds and erasure in every edition but Community: they
+// are Business capabilities (docs/editions.md), and the compliance module answers their routes
+// 501 business_required without the option (modules/compliance/records_edition.go). The hold
+// gate below keeps reading stored holds in every edition.
+func complianceRecordsOptions(edition string) []compliance.Option {
+	if edition == "community" {
+		return nil
+	}
+	return []compliance.Option{compliance.WithBusinessRecords()}
 }
 
 // complianceHoldGate bridges the knowledge.HoldGate seam to the compliance

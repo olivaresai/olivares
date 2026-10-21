@@ -53,6 +53,8 @@ permet de configurer l’authentification unique.
 
 ### TLS mutuel pour les collectors distants
 
+Le collector en périphérie est une fonctionnalité Business ; un build Community refuse `olivares collector`. L'option `--grpc-client-ca` ci-dessous se définit sur le core.
+
 Dans la topologie distribuée, les collectors en périphérie poussent des observations vers le core via un
 **TLS mutuel** à certificat-client vérifié. Activez-le en donnant au core une CA cliente afin qu'il
 **exige et vérifie** un certificat client :

@@ -76,6 +76,7 @@ no_ports=deploy/compose/docker-compose.ready-no-ports.ci.yml
 compose=deploy/compose/docker-compose.yml
 agentops=deploy/compose/docker-compose.agentops.yml
 postgres=deploy/compose/docker-compose.postgres.yml
+compose_readme=deploy/compose/README.md
 view() (
 	shopt -s dotglob nullglob
 	dest="$scratch/$1"
@@ -97,8 +98,8 @@ view() (
 	link_except .github/workflows compose-ready.yml mainline-ci.yml
 	link_except .github/actions olivares-tool-cache
 	link_except .github/actions/olivares-tool-cache action.yml
-	link_except deploy compose
-	link_except deploy/compose docker-compose.ready-no-ports.ci.yml docker-compose.yml docker-compose.agentops.yml docker-compose.postgres.yml
+	link_except deploy compose seccomp apparmor
+	link_except deploy/compose docker-compose.ready-no-ports.ci.yml docker-compose.yml docker-compose.agentops.yml docker-compose.postgres.yml README.md
 	cp "$root/$workflow" "$dest/$workflow"
 	cp "$root/$mainline" "$dest/$mainline"
 	cp "$root/$cache_action" "$dest/$cache_action"
@@ -106,6 +107,9 @@ view() (
 	cp "$root/$compose" "$dest/$compose"
 	cp "$root/$agentops" "$dest/$agentops"
 	cp "$root/$postgres" "$dest/$postgres"
+	cp "$root/$compose_readme" "$dest/$compose_readme"
+	# The session profiles are copies too: a mutant must not write through a link.
+	cp -R "$root/deploy/seccomp" "$root/deploy/apparmor" "$dest/deploy/"
 )
 anchor() {
 	local file="$1" want="$2" pattern="$3" hits
@@ -233,6 +237,18 @@ wiring 17p project-volume-undeclared 1 'must mount the host project folder at /p
 	sed -e '/^  olivares-project:$/d'
 wiring 17q checkout-witness-dropped 1 'must check that /project in the running container is not the checkout' "$workflow" \
 	sed -e '/docker exec "\$cid" test -d \/project -a ! -e \/project\/deploy\/compose\/docker-compose\.yml$/d'
+# /tmp is named with a size (a bare tmpfs is half the host's RAM, above the memory limit it is
+# charged to) and the README keeps the rule for sizing memory, pids and /tmp for many sessions.
+anchor "$compose" 1 '^      - /tmp:size=\$\{OLIVARES_TMP_SIZE:-2g\},noexec,nosuid,nodev$'
+anchor "$compose_readme" 1 '^## Size it for many sessions$'
+wiring 17r base-tmpfs-unsized 1 'must name /tmp with a size' "$compose" \
+	sed -e 's#^      - /tmp:size=.*#      - /tmp#'
+wiring 17s base-tmpfs-size-not-overridable 1 'must name /tmp with a size' "$compose" \
+	sed -e 's#^      - /tmp:size=.*#      - /tmp:size=2g#'
+wiring 17t sizing-rule-dropped-from-readme 1 'must keep its sizing rule' "$compose_readme" \
+	sed -e 's/^## Size it for many sessions$/## Sizing/'
+wiring 17u sizing-override-dropped-from-readme 1 'must keep its sizing rule' "$compose_readme" \
+	sed -e 's/^          pids: /          # pids: /'
 wiring 18 effective-config-not-before-up 1 \
 	"'name: reference SQLite Compose reaches healthy' does not refuse unsupported Compose or a published port before up" \
 	"$workflow" sed -e '/check-compose-ready\.sh effective-config "\$config" "\$READY_POSITIVE_PROJECT"/d'
@@ -263,6 +279,46 @@ for trigger in '["2*", "3*"]' '["v[0-9]*.[0-9]*"]' '["[0-9]*.[0-9]*.[0-9]*"]' '[
 	wiring 28 "release-trigger-$trigger" 1 'must qualify bare MAJOR.MINOR release tags' "$workflow" \
 		awk -v tags="$trigger" '/^    tags:/ { print "    tags: " tags; next } { print }'
 done
+
+# The session profiles allow exactly the mount namespace and the two mount flags the session helper
+# uses. Each mutant restores one way that allowance was too wide, too narrow or absent.
+seccomp=deploy/seccomp/olivares-sessions.json
+apparmor=deploy/apparmor/olivares-sessions.conf
+seccomp_edit() {
+	python3 -I -c 'import json, sys
+d = json.load(sys.stdin)
+rules = d["syscalls"]
+'"$1"'
+json.dump(d, sys.stdout, indent="\t")'
+}
+wiring 29a seccomp-clone-mask-reverted 1 'clone namespace masks' "$seccomp" \
+	sed -e 's/771751936/771883008/g'
+wiring 29b seccomp-clone-rule-dropped 1 'clone namespace masks' "$seccomp" \
+	seccomp_edit 'rules.remove(next(r for r in rules if r["names"] == ["clone"] and r.get("args")))'
+wiring 29c seccomp-mount-unconditional 1 'a mount rule must test only the mount flags' "$seccomp" \
+	seccomp_edit 'for r in rules:
+    if r["names"] == ["mount"]:
+        r.pop("args", None)'
+wiring 29d seccomp-mount-any-flags 1 'want exactly the MS_BIND and MS_PRIVATE rules' "$seccomp" \
+	seccomp_edit 'for r in rules:
+    if r["names"] == ["mount"]:
+        r["args"][0]["value"] = r["args"][0]["valueTwo"] = 0x1000 | 0x40000'
+wiring 29e seccomp-mount-magic-bit-allowed 1 'want exactly the MS_BIND and MS_PRIVATE rules' "$seccomp" \
+	seccomp_edit 'for r in rules:
+    if r["names"] == ["mount"]:
+        r["args"] = [a for a in r["args"] if a["value"] != 0x80000000]'
+wiring 29f seccomp-mount-remount-allowed 1 'want exactly the MS_BIND and MS_PRIVATE rules' "$seccomp" \
+	seccomp_edit 'for r in rules:
+    if r["names"] == ["mount"]:
+        r["args"] = [a for a in r["args"] if a["value"] != 0x20]'
+wiring 29g seccomp-unshare-unmasked 1 'allows namespace creation without a mask or CAP_SYS_ADMIN' "$seccomp" \
+	seccomp_edit 'rules.append({"names": ["unshare"], "action": "SCMP_ACT_ALLOW"})'
+wiring 29h seccomp-mount-after-denied 1 'a later non-allow mount rule' "$seccomp" \
+	seccomp_edit 'rules.append({"names": ["mount"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1})'
+wiring 29i apparmor-deny-mount-restored 1 'must not deny mount, umount or remount' "$apparmor" \
+	sed -e 's/^  deny @{PROC}\/sysrq-trigger rwklx,$/  deny mount,\n&/'
+wiring 29j apparmor-mount-removed 1 "must allow the session helper's bind mounts" "$apparmor" \
+	sed -e '/^  mount,$/d'
 
 # The runtime refusals the workflow runs before touching Docker and before `up`, on JSON and
 # environment fixtures shaped like `docker compose config --format json`. They are not a Docker

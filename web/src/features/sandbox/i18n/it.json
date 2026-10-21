@@ -1,0 +1,190 @@
+{
+  "truncation": {
+    "label": "Caricate {{n}} righe; ce ne sono altre",
+    "hint": "Questo elenco della sandbox ha un limite. Vengono mostrate solo le righe caricate."
+  },
+  "title": "Sandbox di test",
+  "description": "Esecuzioni isolate ed effimere su risorse simulate — simulazioni di scenario, riesecuzioni deterministiche e confronti pre/post-deploy. Gli output sono sintetici; nessun testo reale del target viene mai conservato.",
+  "tabs": {
+    "runs": "Esecuzioni",
+    "comparisons": "Confronti",
+    "scenarios": "Scenari"
+  },
+  "kind": {
+    "scenario": "Scenario",
+    "replay": "Riesecuzione",
+    "compare": "Confronto"
+  },
+  "runner": {
+    "inproc-mock": "in-proc mock",
+    "container": "Container",
+    "microvm": "microVM"
+  },
+  "subjectKind": {
+    "agent": "Agente",
+    "model": "Modello",
+    "prompt": "Prompt",
+    "session": "Sessione",
+    "sandbox_run": "Esecuzione in sandbox"
+  },
+  "verdict": {
+    "improved": "Migliorato",
+    "regressed": "Peggiorato",
+    "unchanged": "Invariato",
+    "inconclusive": "Non conclusivo"
+  },
+  "run": {
+    "isolated": "Isolata",
+    "isolatedHint": "Il runner garantisce l'isolamento: nessun egress, nessun segreto, nessuna produzione. Registrato come dichiarato dal runner, non dedotto.",
+    "notIsolated": "Non isolata",
+    "notIsolatedHint": "Questo backend non garantisce l'isolamento — mostrato così com'è, non nascosto.",
+    "destroyed": "Distrutta",
+    "destroyedHint": "Lo stato dell'ambiente effimero è stato scartato dopo l'esecuzione.",
+    "notScored": "Eseguita, non valutata",
+    "pass": "Superata",
+    "fail": "Non superata"
+  },
+  "runs": {
+    "title": "Esecuzioni",
+    "description": "Ogni esecuzione isolata, con il backend che l'ha eseguita e se è stata valutata.",
+    "isolationNote": "L'isolamento è reale, non simulato: il runner e il flag di isolamento sono mostrati esattamente come registrati. Un'esecuzione degradata è stata eseguita ma non valutata — non è un'esecuzione superata.",
+    "empty": "Nessuna esecuzione",
+    "emptyHint": "Ogni esecuzione di scenario è elencata qui con il suo verdetto e i suoi output. Esegui uno scenario per registrare la prima.",
+    "errored": "{{count}} errore",
+    "errored_one": "{{count}} errore",
+    "errored_many": "{{count}} errori",
+    "errored_other": "{{count}} errori",
+    "columns": {
+      "kind": "Tipo",
+      "subject": "Soggetto",
+      "runner": "Runner",
+      "isolation": "Isolamento",
+      "status": "Stato",
+      "steps": "Passi",
+      "score": "Punteggio",
+      "started": "Avviata"
+    }
+  },
+  "outputs": {
+    "title": "Output dei passi",
+    "empty": "Nessun output registrato",
+    "emptyHint": "Tutto ciò che un passo dello scenario scrive viene acquisito qui. Questa esecuzione non ha registrato alcun output.",
+    "syntheticNote": "Sono output sintetici e limitati del runner simulato — non output di produzione. Un mock-miss è un indicatore deterministico; non ha mai raggiunto una risorsa reale.",
+    "mockHit": "Mock hit",
+    "mockMiss": "Mock-miss"
+  },
+  "stream": {
+    "replayNote": "Il motore riproduce gli output dei passi registrati per questa esecuzione su una sola connessione e poi la chiude. Un'esecuzione in sandbox viene eseguita in modo sincrono all'avvio, quindi questa è un'evidenza già consolidata che arriva in modo progressivo — non la vista di un'esecuzione ancora in corso.",
+    "waiting": "In attesa dell'output del primo passo — lo stato della connessione è mostrato sopra.",
+    "connecting": "Connessione in corso…",
+    "receiving": "Ricezione della riesecuzione",
+    "complete": "Riesecuzione completata",
+    "completePartial": "La riesecuzione è terminata, ma non è il registro completo",
+    "unreadable": "Frame che questa vista non ha potuto leggere: {{n}}. Sono arrivati e sono stati scartati, quindi l'evidenza che contenevano qui manca — non è una riesecuzione pulita.",
+    "emptyUnreadable": "Impossibile leggere alcun output dei passi",
+    "emptyUnreadableHint": "L'output dei passi viene trasmesso in streaming dalla sandbox mentre l'esecuzione procede. Per questo passo non è stato possibile rileggere nulla.",
+    "disconnected": "Non connesso",
+    "lost": "Connessione persa — hai smesso di vedere questa esecuzione.",
+    "lostHint": "Questo NON significa che l'esecuzione sia terminata: la connessione si è chiusa prima che il motore segnalasse la fine della riesecuzione. Lo stato dell'esecuzione è quello registrato dal motore, mostrato nella tabella delle esecuzioni — non è mai ricavato da questa connessione. Riconnettiti per riprendere; gli output già mostrati non vengono ripetuti.",
+    "reconnect": "Riconnetti",
+    "snapshot": "Lo stream non ha consegnato nulla, quindi questi sono gli output salvati letti tramite l'API JSON — uno snapshot, non la vista in tempo reale.",
+    "summary": "Riepilogo del motore: {{ok}} passi su {{total}} risolti con un mock, {{error}} mock-miss."
+  },
+  "comparisons": {
+    "title": "Confronti pre/post-deploy",
+    "description": "Baseline e candidata valutate sulla stessa suite — il verdetto che autorizza un deploy.",
+    "empty": "Nessun confronto",
+    "emptyHint": "Esegui un confronto per valutare una variante candidata rispetto alla sua baseline.",
+    "baseline": "Baseline",
+    "candidate": "Candidata",
+    "delta": "Delta",
+    "decidedBy": "Deciso da",
+    "scoredAgainst": "Valutato su",
+    "noSuite": "Nessuna suite — il verdetto non è conclusivo senza una baseline e una candidata valutate."
+  },
+  "scenarios": {
+    "title": "Scenari",
+    "description": "Specifiche riutilizzabili di input sintetici dei passi più risposte simulate di MCP/risorse.",
+    "empty": "Nessuno scenario",
+    "emptyHintAuthor": "Registra la prima fixture sintetica: gli input dei passi che un soggetto riceve, più le risposte simulate con cui vengono risolti.",
+    "emptyHintReadOnly": "Gli scenari sono creati da chi ha il permesso di scrittura sugli scenari della sandbox. Senza di esso puoi leggere quelli esistenti e le loro esecuzioni.",
+    "emptyHintConfined": "La tua appartenenza è limitata a un workspace. Uno scenario è una fixture a livello di tenant, quindi il motore rifiuta di registrarne uno da un'appartenenza limitata — deve crearlo un membro con accesso all'intero tenant.",
+    "columns": {
+      "name": "Nome",
+      "subjectKind": "Soggetto",
+      "steps": "Passi",
+      "status": "Stato",
+      "actions": "Azioni"
+    },
+    "create": {
+      "action": "Nuovo scenario",
+      "title": "Nuovo scenario",
+      "description": "Uno scenario è una fixture sintetica: gli input dei passi che un soggetto riceve e le risposte simulate di MCP/risorse con cui vengono risolti. Nulla qui raggiunge una risorsa reale.",
+      "name": "Nome",
+      "namePlaceholder": "Agente checkout — percorso ideale",
+      "subjectKind": "Soggetto",
+      "subjectKindHint": "Ciò che lo scenario mette alla prova — agente, modello, prompt o sessione. Testo libero, ripulito dagli spazi e salvato fino a 200 caratteri.",
+      "subjectKindPlaceholder": "agent",
+      "descriptionLabel": "Descrizione",
+      "descriptionPlaceholder": "Cosa mette alla prova questa fixture e perché esiste.",
+      "steps": "Passi",
+      "stepsHint": "Gli input che il soggetto riceve, in ordine. Lascia vuota una chiave e il motore assegna step-1, step-2 e così via.",
+      "stepsEmpty": "Nessun passo — un'esecuzione di questo scenario non produrrebbe alcun output.",
+      "addStep": "Aggiungi passo",
+      "removeStep": "Rimuovi il passo {{index}}",
+      "stepKey": "Chiave del passo {{index}}",
+      "stepKeyPlaceholder": "step-1-classify",
+      "stepInput": "Input del passo {{index}}",
+      "stepInputPlaceholder": "Classifica questa richiesta di rimborso.",
+      "mocks": "Mock",
+      "mocksHint": "La risposta restituita da ogni MCP/risorsa simulato. Un passo che non trova alcun mock registra un indicatore deterministico di mock-miss — non chiama mai l'esterno.",
+      "mocksEmpty": "Nessun mock — ogni passo registrerebbe un indicatore di mock-miss.",
+      "addMock": "Aggiungi mock",
+      "removeMock": "Rimuovi il mock {{index}}",
+      "mockResource": "Risorsa del mock {{index}}",
+      "mockResourcePlaceholder": "catalog.lookup",
+      "mockResponse": "Risposta del mock {{index}}",
+      "mockResponsePlaceholder": "{\"status\":\"authorized\"}",
+      "syntheticNote": "Inserisci solo testo sintetico: nulla qui viene classificato, oscurato o rifiutato, quindi un segreto che incolli è un segreto che hai salvato. Il motore limita soltanto la lunghezza — un nome a 200 caratteri, una descrizione a 1024, ogni corpo di passo o di mock a 8192 — aggiungendo un'ellissi quando tronca.",
+      "submit": "Crea scenario",
+      "submitting": "Creazione in corso…",
+      "success": "Scenario creato",
+      "failed": "Lo scenario non è stato creato."
+    },
+    "archive": {
+      "action": "Archivia",
+      "alreadyArchived": "Già archiviato",
+      "confirmTitle": "Archiviare questo scenario?",
+      "confirmBody": "“{{name}}” viene contrassegnato come archiviato e la decisione è registrata nel registro di audit. Le esecuzioni e i confronti che lo hanno già usato vengono conservati — archiviare non elimina mai le evidenze. È un cambio di stato, non un blocco: il motore esegue comunque uno scenario in questo stato se qualcosa glielo chiede.",
+      "success": "Scenario archiviato"
+    }
+  },
+  "seam": {
+    "synthetic": "Generazione locale dei dati",
+    "syntheticData": "Genera input di scenario riproducibili tramite l'API della sandbox usando template locali limitati. Non viene fatta alcuna richiesta a modelli o alla rete."
+  },
+  "empty": {
+    "runs": {
+      "title": "Nessuna esecuzione in sandbox registrata",
+      "description": "Le esecuzioni compaiono dopo che un chiamante autorizzato avvia uno scenario salvato, una riesecuzione o un confronto tramite l'API della sandbox."
+    },
+    "scenarios": {
+      "title": "Nessuno scenario di sandbox definito",
+      "description": "Uno scenario è una fixture sintetica creata da un operatore, registrata da un chiamante con il permesso di scrittura sugli scenari della sandbox — da questa schermata o tramite l'API della sandbox."
+    }
+  },
+  "actions": {
+    "replay": "Riesegui una sessione",
+    "compare": "Confronta varianti",
+    "run": "Riesegui",
+    "compareRun": "Confronta",
+    "sessionRef": "Riferimento della sessione",
+    "scenarioRef": "Riferimento dello scenario (facoltativo)",
+    "baseline": "Variante baseline",
+    "candidate": "Variante candidata",
+    "replayHint": "Riesegue in modo deterministico una sessione storica su mock. Se la timeline non può essere ricostruita, la riesecuzione risulta DEGRADED con zero passi — non è una sessione che non ha fatto nulla, è una timeline che non si è potuta ricostruire.",
+    "compareHint": "Un confronto è un'evidenza di DECISIONE pre/post-deploy e viene salvato in sola aggiunta, per questo richiede il livello di amministrazione e non quello che si limita a eseguire.",
+    "liveRef": "Riferimento dell'istanza di sessione",
+    "legacySessionRef": "Riferimento della sessione legacy (alternativa)"
+  }
+}

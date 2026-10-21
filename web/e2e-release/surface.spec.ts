@@ -12,6 +12,7 @@ import {
   expectReleaseVersion,
   openToolInstall,
   RELEASE_VERSION,
+  recordSlowLoads,
   surfaceOptions,
   watchSurface,
 } from './surface'
@@ -204,6 +205,281 @@ test('first-hour guard records a slow load the page left, and says when it is re
   expect(await page.evaluate(() => window.__firstHourLoading?.())).toBe(false)
 })
 
+// A slow load names the requests the page made while it waited (#2608). The page
+// shows a spinner and holds one POST open past the 5 s target, as a session start does.
+const SESSIONS_PAGE = 'https://first-hour.invalid/sessions'
+const RUNS_PATH = '/v1/m/sessions/runs'
+
+async function holdRunsRequest(page: Page) {
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
+  await page.route('https://first-hour.invalid/**', async (route) => {
+    if (new URL(route.request().url()).pathname !== RUNS_PATH)
+      return route.fulfill({
+        contentType: 'text/html',
+        body: '<main><i class="animate-spin"></i></main>',
+      })
+    await held
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      headers: { 'x-request-id': 'req-held-1' },
+      body: '{}',
+    })
+  })
+  return release
+}
+
+test('first-hour guard names the request a slow load waited on, with its status and engine request id', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  const slowLoads = await recordSlowLoads(page)
+  const release = await holdRunsRequest(page)
+  await page.goto(SESSIONS_PAGE)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  const answered = page.evaluate(
+    (path) =>
+      fetch(`${path}?token=must-not-be-kept`, { method: 'POST' }).then(
+        (response) => response.status,
+      ),
+    RUNS_PATH,
+  )
+  await page.clock.runFor(6000)
+  const finished = page.waitForEvent('requestfinished', (request) =>
+    request.url().includes(RUNS_PATH),
+  )
+  release()
+  expect(await answered).toBe(201)
+  await finished
+  await page.evaluate(() => document.querySelector('i')!.remove())
+  await page.clock.runFor(200)
+  await expect.poll(() => slowLoads.length).toBe(1)
+  expect(slowLoads[0].load).toMatch(/^\/sessions: loading took 6\.\d s$/)
+  expect(slowLoads[0].requests).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        method: 'POST',
+        path: RUNS_PATH,
+        type: 'fetch',
+        status: 201,
+        requestId: 'req-held-1',
+        startedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:.]+Z$/),
+        ms: expect.any(Number),
+      }),
+    ]),
+  )
+  expect(JSON.stringify(slowLoads)).not.toContain('must-not-be-kept')
+})
+
+test('first-hour guard names a request still open when the page leaves a slow load', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  const slowLoads = await recordSlowLoads(page)
+  const release = await holdRunsRequest(page)
+  await page.goto(SESSIONS_PAGE)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  void page.evaluate(
+    (path) => void fetch(path, { method: 'POST' }).catch(() => undefined),
+    RUNS_PATH,
+  )
+  await page.clock.runFor(6000)
+  await page.evaluate(() => {
+    history.pushState({}, '', '/sessions?session=run:1')
+    document.querySelector('i')!.remove()
+  })
+  await page.clock.runFor(200)
+  await expect.poll(() => slowLoads.length).toBe(1)
+  expect(slowLoads[0].load).toMatch(
+    /^\/sessions: left while loading after 6\.\d s$/,
+  )
+  expect(slowLoads[0].requests).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        method: 'POST',
+        path: RUNS_PATH,
+        pending: true,
+      }),
+    ]),
+  )
+  release()
+})
+
+test('first-hour guard closes the requests a new document tears down, and only those', async ({
+  page,
+}) => {
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  const slowLoads = await recordSlowLoads(page)
+  const release = await holdRunsRequest(page)
+  await page.goto(SESSIONS_PAGE)
+  const sent = page.waitForRequest((request) =>
+    request.url().includes(RUNS_PATH),
+  )
+  void page.evaluate(
+    (path) => void fetch(path, { method: 'POST' }).catch(() => undefined),
+    RUNS_PATH,
+  )
+  await sent
+  // A fetch answering and a frame loading its own document do not end the page's
+  // other requests: only the main frame's next document does.
+  await page.evaluate(async () => {
+    await fetch('/v1/other').then((response) => response.text())
+    await new Promise<void>((done) => {
+      const frame = document.createElement('iframe')
+      frame.src = '/frame'
+      frame.onload = () => done()
+      document.body.append(frame)
+    })
+  })
+  await page.evaluate(() =>
+    window.__firstHourSlow?.('/sessions: before', 60_000),
+  )
+  // The browser reports neither a response nor a failure for a request that the next
+  // document tears down, so it must not stay "open" for the rest of the run (#2608).
+  await page.goto('https://first-hour.invalid/agent-tools')
+  await page.evaluate(() =>
+    window.__firstHourSlow?.('/agent-tools: after', 60_000),
+  )
+  await expect.poll(() => slowLoads.length).toBe(2)
+  const [before, after] = slowLoads.map(
+    ({ requests }) =>
+      new Map(requests.map((request) => [request.path, request])),
+  )
+  expect(before.get(RUNS_PATH)).toEqual(
+    expect.objectContaining({ pending: true }),
+  )
+  expect(before.get(RUNS_PATH)?.error).toBeUndefined()
+  expect(after.get(RUNS_PATH)?.pending).toBeUndefined()
+  expect(after.get(RUNS_PATH)?.error).toBe('the page loaded another document')
+  expect(after.get('/agent-tools')?.error).toBeUndefined()
+  expect(after.get('/v1/other')?.error).toBeUndefined()
+  release()
+})
+
+test('first-hour guard keeps only the requests that overlapped the slow load, scripts included, and redacts what it writes', async ({
+  page,
+}) => {
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  const slowLoads = await recordSlowLoads(page, (text) =>
+    text.replaceAll('during', '<redacted>'),
+  )
+  await page.route('https://first-hour.invalid/**', (route) =>
+    new URL(route.request().url()).pathname === '/asset.js'
+      ? route.fulfill({ contentType: 'text/javascript', body: '' })
+      : route.fulfill({
+          contentType: 'text/html',
+          body: '<main>ready</main>',
+        }),
+  )
+  await page.goto(SESSIONS_PAGE)
+  await page.evaluate(() => fetch('/v1/before').then((r) => r.status))
+  await page.waitForTimeout(800)
+  await page.evaluate(
+    () =>
+      new Promise<void>((done) => {
+        const script = document.createElement('script')
+        script.src = '/asset.js'
+        script.onload = () => done()
+        document.head.append(script)
+      }),
+  )
+  await page.evaluate(() => fetch('/v1/during').then((r) => r.status))
+  await page.evaluate(() =>
+    window.__firstHourSlow?.('/sessions: window during', 400),
+  )
+  await expect.poll(() => slowLoads.length).toBe(1)
+  const { load, requests, omitted } = slowLoads[0]
+  expect(load).toBe('/sessions: window <redacted>')
+  expect(requests.map(({ path, type }) => [path, type])).toEqual(
+    expect.arrayContaining([
+      ['/asset.js', 'script'],
+      ['/v1/<redacted>', 'fetch'],
+    ]),
+  )
+  const paths = requests.map((request) => request.path)
+  expect(paths).not.toContain('/v1/before')
+  expect(paths).not.toContain('/sessions')
+  expect(omitted).toBe(0)
+})
+
+test('first-hour guard lists the requests with the longest share of the wait and counts the rest', async ({
+  page,
+}) => {
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  const slowLoads = await recordSlowLoads(page)
+  await page.route('https://first-hour.invalid/**', async (route) => {
+    if (new URL(route.request().url()).pathname === '/v1/slow')
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    return route.fulfill({
+      contentType: 'text/html',
+      body: '<main>ready</main>',
+    })
+  })
+  await page.goto(SESSIONS_PAGE)
+  // Bodies are read so every request has finished, and the browser's finish events
+  // have a moment to reach the recorder before the load is reported.
+  await page.evaluate(() =>
+    Promise.all(
+      [...Array.from({ length: 25 }, (_, n) => `/v1/n/${n}`), '/v1/slow'].map(
+        (path) => fetch(path).then((response) => response.text()),
+      ),
+    ).then((all) => all.length),
+  )
+  await page.waitForTimeout(200)
+  await page.evaluate(() => window.__firstHourSlow?.('/sessions: many', 5000))
+  await expect.poll(() => slowLoads.length).toBe(1)
+  const { requests, omitted } = slowLoads[0]
+  expect(requests).toHaveLength(20)
+  // The document, 25 fetches and the slow one overlapped the wait.
+  expect(requests.length + omitted).toBe(27)
+  expect(requests.map((request) => request.path)).toContain('/v1/slow')
+  expect(requests.map((request) => request.startedAt)).toEqual(
+    requests.map((request) => request.startedAt).sort(),
+  )
+  expect(requests.every((request) => request.pending === undefined)).toBe(true)
+})
+
+test('first-hour guard names a request the browser could not complete', async ({
+  page,
+}) => {
+  await page.clock.install()
+  await page.exposeFunction('__firstHourFinding', () => undefined)
+  const slowLoads = await recordSlowLoads(page)
+  await page.route('https://first-hour.invalid/**', (route) =>
+    new URL(route.request().url()).pathname === RUNS_PATH
+      ? route.abort('connectionreset')
+      : route.fulfill({
+          contentType: 'text/html',
+          body: '<main><i class="animate-spin"></i></main>',
+        }),
+  )
+  await page.goto(SESSIONS_PAGE)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  const failed = page.waitForEvent('requestfailed')
+  await page.evaluate(
+    (path) => void fetch(path, { method: 'POST' }).catch(() => undefined),
+    RUNS_PATH,
+  )
+  await failed
+  await page.clock.runFor(6000)
+  await page.evaluate(() => document.querySelector('i')!.remove())
+  await page.clock.runFor(200)
+  await expect.poll(() => slowLoads.length).toBe(1)
+  expect(slowLoads[0].requests).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        method: 'POST',
+        path: RUNS_PATH,
+        status: null,
+        error: expect.stringContaining('ERR_CONNECTION_RESET'),
+      }),
+    ]),
+  )
+})
+
 test('first-hour guard rejects unexplained actions even with an ellipsis or hidden reason', async ({
   page,
 }) => {
@@ -213,13 +489,45 @@ test('first-hour guard rejects unexplained actions even with an ellipsis or hidd
   )
   await page.setContent(`<button type="submit" disabled>Start…</button>
     <button type="submit" disabled aria-describedby="hidden">Continue</button>
-    <p id="hidden" hidden>Install a tool first.</p>`)
+    <p id="hidden" hidden>Install a tool first.</p>
+    <button type="submit" disabled aria-describedby="invisible">Save</button>
+    <p id="invisible" style="visibility: hidden">Choose a model first.</p>`)
   await page.evaluate(watchSurface, surfaceOptions('0.1'))
   await expect
     .poll(() => findings)
     .toEqual([
       'blank: disabled primary button without a visible reason: Start…',
       'blank: disabled primary button without a visible reason: Continue',
+      'blank: disabled primary button without a visible reason: Save',
+    ])
+})
+
+test('first-hour guard ignores a disabled action inside a closed disclosure, and checks it once open', async ({
+  page,
+}) => {
+  const findings: string[] = []
+  await page.exposeFunction('__firstHourFinding', (message: string) =>
+    findings.push(message),
+  )
+  // AI tools' "install from a source" form: closed by default, its Review disabled
+  // until the inventory loads. Chromium keeps a closed disclosure's content laid out
+  // (content-visibility: hidden), so it has boxes but no rendered text (#330).
+  await page.setContent(`<details><summary>Install from a source</summary>
+    <form><button type="submit" disabled>Review</button></form></details>`)
+  // The premise: the closed button still has boxes, so rects alone cannot hide it.
+  expect(
+    await page.evaluate(
+      () => document.querySelector('button')!.getClientRects().length,
+    ),
+  ).toBeGreaterThan(0)
+  await page.evaluate(watchSurface, surfaceOptions('0.1'))
+  await page.waitForTimeout(500)
+  expect(findings).toEqual([])
+  await page.getByText('Install from a source').click()
+  await expect
+    .poll(() => findings)
+    .toEqual([
+      'blank: disabled primary button without a visible reason: Review',
     ])
 })
 

@@ -56,6 +56,17 @@ vi.mock('./license-tab', () => ({
 
 import ConsoleView from './console-view'
 
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ can: () => true, confinedWorkspace: null }),
+}))
+vi.mock('@/features/extensions', async (original) => {
+  const actual = await original<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: { ...actual.PANEL_EXTENSIONS, consoleAccess: undefined },
+  }
+})
+
 const ALL_TABS = [
   ['people', 'PeopleTab mounted'],
   ['agents', 'AgentsTab mounted'],

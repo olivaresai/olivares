@@ -40,8 +40,9 @@ const recordingModule = "recording"
 func newRecordingCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "recording",
-		Short: "Read the session-recording trail, verify its chain and set the recording policy",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "recording",
+		Short:       "Read the session-recording trail, verify its chain and set the recording policy",
 		Long: "recording exercises the session-recording plane from a terminal: the consent\n" +
 			"notice, the hash-chained frame trail of each recorded session, its verification,\n" +
 			"export and seal, and the tenant policy that decides what gets recorded.\n\n" +
@@ -67,8 +68,9 @@ func newRecordingCmd() *cobra.Command {
 
 func newRecordingNoticeCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "notice",
-		Short: "Show what is recorded for this caller, and whether consent is required",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "notice",
+		Short:       "Show what is recorded for this caller, and whether consent is required",
 		Long: "notice reports the recorded namespaces, whether break-glass is always recorded,\n" +
 			"the consent mode, and whether this caller has already acknowledged it. It is\n" +
 			"the read every operator is entitled to before working in a recorded session.",
@@ -89,8 +91,9 @@ func newRecordingNoticeCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingAckCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "ack",
-		Short: "Acknowledge the recording notice for this caller",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "ack",
+		Short:       "Acknowledge the recording notice for this caller",
 		Long: "ack records this caller's acknowledgement of the recording notice and returns\n" +
 			"the session it was attached to. Where the tenant's consent mode is `required`,\n" +
 			"this is the step that unblocks work in a recorded namespace.",
@@ -118,10 +121,11 @@ var recordingSessionColumns = []string{
 
 func newRecordingSessionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "sessions",
-		Short:   "List, verify, export and seal recorded sessions",
-		Long:    "A recorded session is a hash-chained trail of frames with an anchored open and a sealed close. Reading one is itself audited.",
-		Example: "  olivares recording sessions ls --status sealed",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sessions",
+		Short:       "List, verify, export and seal recorded sessions",
+		Long:        "A recorded session is a hash-chained trail of frames with an anchored open and a sealed close. Reading one is itself audited.",
+		Example:     "  olivares recording sessions ls --status sealed",
 	}
 	cmd.AddCommand(
 		newRecordingSessionsListCmd(flags),
@@ -148,8 +152,9 @@ func newRecordingSessionsListCmd(flags *authClientFlags) *cobra.Command {
 		subjectContains string
 	)
 	cmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List recorded sessions",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List recorded sessions",
 		Long: "ls lists recorded sessions with their seal state and frame counters. Every\n" +
 			"filter is applied server-side.\n\n" +
 			"`gap` is the column to watch: it marks a session whose frame chain has a hole,\n" +
@@ -192,11 +197,12 @@ func newRecordingSessionsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingSessionsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <id>",
-		Short:   "Show one recorded session",
-		Long:    "get returns one session's header: subject, seal state, frame counters and chain tip.",
-		Example: "  olivares recording sessions get rs-1",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <id>",
+		Short:       "Show one recorded session",
+		Long:        "get returns one session's header: subject, seal state, frame counters and chain tip.",
+		Example:     "  olivares recording sessions get rs-1",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: recordingModule,
@@ -213,8 +219,9 @@ func newRecordingSessionsGetCmd(flags *authClientFlags) *cobra.Command {
 func newRecordingSessionsReplayCmd(flags *authClientFlags) *cobra.Command {
 	var page agentExecPageFlags
 	cmd := &cobra.Command{
-		Use:   "replay <id>",
-		Short: "Reconstruct one session's frames and ledger window",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "replay <id>",
+		Short:       "Reconstruct one session's frames and ledger window",
 		Long: "replay returns the session header, a page of frames and the audit-ledger events\n" +
 			"covering the session's window — a reconstruction, not a blob. Viewing it is\n" +
 			"itself an audited action.\n\n" +
@@ -283,8 +290,9 @@ func newRecordingSessionsUnifiedCmd(flags *authClientFlags) *cobra.Command {
 		frameCursor string
 	)
 	cmd := &cobra.Command{
-		Use:   "unified <id>",
-		Short: "Show one session's frames and audit timeline merged",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "unified <id>",
+		Short:       "Show one session's frames and audit timeline merged",
 		Long: "unified merges the frame trail with the audit timeline so an incident reviewer\n" +
 			"reads one sequence instead of correlating two.\n\n" +
 			"--frame-cursor pages the FRAMES independently of the timeline, which is why it\n" +
@@ -315,8 +323,9 @@ func newRecordingSessionsUnifiedCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingSessionsVerifyCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "verify <id>",
-		Short: "Verify a session's hash chain — exit 7 when it does not verify",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify <id>",
+		Short:       "Verify a session's hash chain — exit 7 when it does not verify",
 		Long: "verify recomputes the session's hash chain and reports the verdict.\n\n" +
 			"THE EXIT CODE IS THE POINT. The route answers 200 whether or not the chain\n" +
 			"holds, so this command reads the VERDICT: a chain that verifies exits 0, and a\n" +
@@ -391,8 +400,9 @@ func newRecordingSessionsVerifyCmd(flags *authClientFlags) *cobra.Command {
 func newRecordingSessionsExportCmd(flags *authClientFlags) *cobra.Command {
 	var format string
 	cmd := &cobra.Command{
-		Use:   "export <id>",
-		Short: "Export one session as evidence (json or summary)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "export <id>",
+		Short:       "Export one session as evidence (json or summary)",
 		Long: "export produces the evidence artifact for one session.\n\n" +
 			"--format here is a REAL export-format flag, exactly like the one on `audit\n" +
 			"export`: it selects json (the full trail) or summary (the header and counters).\n" +
@@ -427,8 +437,9 @@ func newRecordingSessionsExportCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingSessionsSealCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "seal <id>",
-		Short: "Close one active session explicitly",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "seal <id>",
+		Short:       "Close one active session explicitly",
 		Long: "seal closes an ACTIVE session and anchors its chain. A session that is already\n" +
 			"sealed is a conflict (exit 5), never a silent second seal — the first seal is\n" +
 			"what the evidence is anchored to.",
@@ -449,8 +460,9 @@ func newRecordingSessionsSealCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingSessionsSummarizeCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "summarize <id>",
-		Short: "Produce the derived reviewer summary of a sealed session",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "summarize <id>",
+		Short:       "Produce the derived reviewer summary of a sealed session",
 		Long: "summarize asks the wired summarizer for a reviewer summary of a SEALED session.\n" +
 			"The summary is a DERIVED artifact and is marked as one: it never substitutes for\n" +
 			"the frames.\n\n" +
@@ -477,8 +489,9 @@ func newRecordingSessionsSummarizeCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingSweepCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "sweep",
-		Short: "Seal every idle active session (the lazy-seal safety net)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "sweep",
+		Short:       "Seal every idle active session (the lazy-seal safety net)",
 		Long: "sweep seals every ACTIVE session that has been idle longer than the tenant's\n" +
 			"idle_seconds. It is the safety net for credentials that never came back.\n\n" +
 			"It is NOT gated behind --yes, and that is deliberate: sealing preserves\n" +
@@ -522,10 +535,11 @@ func newRecordingSweepCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingConfigCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "config",
-		Short:   "Read and replace the tenant's recording policy",
-		Long:    "The recording policy decides which namespaces are recorded, whether consent is merely noticed or required, when an idle session is swept, and how long trails are kept.",
-		Example: "  olivares recording config get",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "config",
+		Short:       "Read and replace the tenant's recording policy",
+		Long:        "The recording policy decides which namespaces are recorded, whether consent is merely noticed or required, when an idle session is swept, and how long trails are kept.",
+		Example:     "  olivares recording config get",
 	}
 	cmd.AddCommand(newRecordingConfigGetCmd(flags), newRecordingConfigSetCmd(flags))
 	return cmd
@@ -533,11 +547,12 @@ func newRecordingConfigCmd(flags *authClientFlags) *cobra.Command {
 
 func newRecordingConfigGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get",
-		Short:   "Show the tenant's recording policy",
-		Long:    "get returns the policy in force: recorded namespaces, consent mode, idle window, retention and whether AI summaries are permitted.",
-		Example: "  olivares recording config get -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get",
+		Short:       "Show the tenant's recording policy",
+		Long:        "get returns the policy in force: recorded namespaces, consent mode, idle window, retention and whether AI summaries are permitted.",
+		Example:     "  olivares recording config get -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := agentExecCall{
 				flags: flags, module: recordingModule,
@@ -560,8 +575,9 @@ func newRecordingConfigSetCmd(flags *authClientFlags) *cobra.Command {
 		aiSummaries   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "set",
-		Short: "Replace the tenant's recording policy (PUT — the whole policy)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Replace the tenant's recording policy (PUT — the whole policy)",
 		Long: "set REPLACES the policy. It is a PUT, not a patch, so every field you do not\n" +
 			"pass takes this command's stated default rather than the stored value — read\n" +
 			"`config get` first and pass the whole policy you intend.\n\n" +

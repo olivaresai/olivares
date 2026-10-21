@@ -28,6 +28,7 @@ const maxNoteLen = 512
 // validSourceTypes are the connected-source kinds a binding may target.
 var validSourceTypes = map[string]bool{
 	sourceMCP: true, sourceModel: true, sourceProvider: true, sourceKnowledge: true, sourceData: true,
+	sourceProfile: true, sourceTool: true,
 }
 
 // Binding effect, mirroring model-access vocabulary. An empty stored value
@@ -97,11 +98,14 @@ type bindingDTO struct {
 func (d *bindingDTO) validate() string {
 	d.SourceType = strings.TrimSpace(strings.ToLower(d.SourceType))
 	if !validSourceTypes[d.SourceType] {
-		return "source_type must be one of mcp, model, provider, knowledge, data"
+		return "source_type must be one of mcp, model, provider, knowledge, data, profile, tool"
 	}
 	d.SourceRef = strings.TrimSpace(d.SourceRef)
 	if d.SourceRef == "" {
 		return "source_ref is required"
+	}
+	if msg := normalizeProfileSourceRef(d.SourceType, &d.SourceRef); msg != "" {
+		return msg
 	}
 	d.ScopeTree = strings.TrimSpace(strings.ToLower(d.ScopeTree))
 	if !validScopeTrees[d.ScopeTree] {
@@ -404,6 +408,10 @@ func (m *Module) handleCreateBinding(w http.ResponseWriter, r *http.Request, mc 
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
+	if !m.mayWriteSource(in.SourceType) {
+		writeProfileAssignmentBusiness(w)
+		return
+	}
 	var (
 		out     bindingDTO
 		pending *postureRequestDTO
@@ -503,6 +511,9 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		// The source identity is the immutable natural key; force it to the stored row.
 		in.SourceType = rec.String(colSourceType)
 		in.SourceRef = rec.String(colSourceRef)
+		if !m.mayWriteSource(in.SourceType) {
+			return errProfileAssignmentBusiness
+		}
 		if msg := in.validate(); msg != "" {
 			return validationError(msg)
 		}
@@ -535,6 +546,10 @@ func (m *Module) handleUpdateBinding(w http.ResponseWriter, r *http.Request, mc 
 		out = toBindingDTO(rec)
 		return auditBinding(r.Context(), sc, mc, "update", in)
 	})
+	if errors.Is(err, errProfileAssignmentBusiness) {
+		writeProfileAssignmentBusiness(w)
+		return
+	}
 	if writeFenceRefusal(w, err) {
 		return
 	}

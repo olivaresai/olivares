@@ -1,4 +1,4 @@
 # The next Community and Enterprise release. Run task release:stamp after changing it.
 # Releases use bare MAJOR.MINOR only: 1.0, 1.1, 1.10. A breaking release increments MAJOR.
 # Published tags and dated changelog entries remain unchanged.
-0.2
+0.3

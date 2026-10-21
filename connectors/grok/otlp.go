@@ -16,6 +16,7 @@ import (
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/olivaresai/olivares/connectors/internal/otlptime"
 	"github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -151,11 +152,8 @@ func (r *OTLPReceiver) Ingest(export *coltracepb.ExportTraceServiceRequest) {
 				} else {
 					s.SessionID = attrStr(res, "session_id")
 				}
-				if ns := sp.GetStartTimeUnixNano(); ns > 0 {
-					s.At = time.Unix(0, int64(ns)).UTC()
-				} else {
-					s.At = r.now()
-				}
+				sent, _ := otlptime.Sender(sp.GetStartTimeUnixNano())
+				s.At = otlptime.Stamp(sent, r.now())
 				if len(r.spans) >= r.max {
 					r.spans = r.spans[1:]
 					r.dropped++

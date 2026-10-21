@@ -114,7 +114,7 @@ instantiating are **privileged, RBAC-gated and self-audited** to the real princi
 :::caution[Honest limits]
 - **No actuation, no provisioning.** Module XIV records and governs the *request*; it
   never stands a capability up. The approval decision is governance's and the wiring is
-  deployment's — and live `apply`/`retire` there is itself a deny-closed seam (`503`
+  deployment's (a Business feature; Community answers `501` on activation) — and live `apply`/`retire` there is itself a deny-closed seam (`503`
   until an executor is provisioned). See [Honesty & limits](/start/honesty-and-limits/).
 - **Signing is real but key-dependent.** Ed25519 signing is implemented and the signing
   key is provisioned at boot on-by-default. On a node with **no key configured** (or an

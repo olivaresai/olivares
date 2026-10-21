@@ -218,7 +218,7 @@ func TestTerminalEvidenceOrphanBindsOnlyARecordedGeneration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := m.reconcileTerminal(ctx, tenant, ref, rec, "user:u1", model.ActorUser); err != nil {
+			if _, err := m.reconcileTerminal(ctx, tenant, ref, rec, "user:u1", model.ActorUser, orphanedDetail); err != nil {
 				t.Fatalf("reconcileTerminal: %v", err)
 			}
 			ev, _ := terminalEventOf(t, m, st, tenant, ref)

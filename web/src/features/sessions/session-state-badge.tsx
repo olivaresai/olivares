@@ -5,6 +5,7 @@ import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import type { RunDTO } from '@/features/agentops/types'
 import { CcStateBadge } from './cc-state-badge'
 import type { LiveDTO } from './types'
+import { sessionDisplayState } from './session-display-state'
 
 /**
  * ONE STATE PER SESSION. A launched session's state is its run's; the observed state is
@@ -21,8 +22,11 @@ export function SessionStateBadge({
   live?: LiveDTO
   className?: string
 }) {
-  if (run) return <RunStateBadge state={run.state} className={className} />
-  if (live) return <CcStateBadge state={live.cc_state} className={className} />
+  const display = sessionDisplayState({ runs: run ? [run] : [], live })
+  if (display.runState)
+    return <RunStateBadge state={display.runState} className={className} />
+  if (display.observedState)
+    return <CcStateBadge state={display.observedState} className={className} />
   return null
 }
 

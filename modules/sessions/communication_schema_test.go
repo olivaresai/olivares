@@ -91,6 +91,13 @@ var providerProfileDescriptorKinds = map[model.Kind]string{
 	accountHomeOperationKind: accountHomeOperationTable,
 }
 
+// personalStateDescriptorKinds is the manifest of a person's own interface state: the
+// pins on operated sessions (#2130). Like B1 and K5 it is absent from the pre-K3
+// schema the upgrade tests reopen from, and a new kind must be listed here.
+var personalStateDescriptorKinds = map[model.Kind]string{
+	runPinKind: runPinTable,
+}
+
 type communicationCapturedMigration struct {
 	namespace string
 	fs        fs.FS
@@ -199,6 +206,7 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 	legacySeen := make(map[model.Kind]struct{}, len(communicationLegacyDescriptorKinds))
 	protocolSeen := make(map[model.Kind]struct{}, len(protocolBindingDescriptorKinds))
 	profileSeen := make(map[model.Kind]struct{}, len(providerProfileDescriptorKinds))
+	personalSeen := make(map[model.Kind]struct{}, len(personalStateDescriptorKinds))
 	tables := make(map[string]model.Kind, len(want))
 	for _, descriptor := range reg.descriptors {
 		entity, isCommunication := want[descriptor.Kind]
@@ -226,8 +234,18 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 				protocolSeen[descriptor.Kind] = struct{}{}
 				continue
 			}
+			if table, personal := personalStateDescriptorKinds[descriptor.Kind]; personal {
+				if descriptor.Table != table {
+					t.Fatalf("personal state kind %s table = %q, want %q", descriptor.Kind, descriptor.Table, table)
+				}
+				if defects := descriptor.PrincipalDefects(); len(defects) != 0 {
+					t.Errorf("personal state kind %s has incomplete principal declarations: %v", descriptor.Kind, defects)
+				}
+				personalSeen[descriptor.Kind] = struct{}{}
+				continue
+			}
 			if _, legacy := communicationLegacyDescriptorKinds[descriptor.Kind]; !legacy {
-				t.Fatalf("unexpected sessions descriptor outside the K1/K2 + exact-20 K3 + K5 + B1 manifests: %s", descriptor.Kind)
+				t.Fatalf("unexpected sessions descriptor outside the K1/K2 + exact-20 K3 + K5 + B1 + personal state manifests: %s", descriptor.Kind)
 			}
 			if _, duplicate := legacySeen[descriptor.Kind]; duplicate {
 				t.Fatalf("legacy sessions kind %s registered more than once", descriptor.Kind)
@@ -276,9 +294,10 @@ func TestCommunicationSchemaInventoryIsExactlyTwenty(t *testing.T) {
 	if len(legacySeen) != len(communicationLegacyDescriptorKinds) ||
 		len(protocolSeen) != len(protocolBindingDescriptorKinds) ||
 		len(profileSeen) != len(providerProfileDescriptorKinds) ||
-		len(reg.descriptors) != len(communicationLegacyDescriptorKinds)+len(communicationSchemaEntities)+len(protocolBindingDescriptorKinds)+len(providerProfileDescriptorKinds) {
-		t.Fatalf("registered sessions descriptors = %d (%d legacy + %d K3 + %d K5 + %d B1), want exactly %d + 20 + 6 + %d",
-			len(reg.descriptors), len(legacySeen), len(got), len(protocolSeen), len(profileSeen), len(communicationLegacyDescriptorKinds), len(providerProfileDescriptorKinds))
+		len(personalSeen) != len(personalStateDescriptorKinds) ||
+		len(reg.descriptors) != len(communicationLegacyDescriptorKinds)+len(communicationSchemaEntities)+len(protocolBindingDescriptorKinds)+len(providerProfileDescriptorKinds)+len(personalStateDescriptorKinds) {
+		t.Fatalf("registered sessions descriptors = %d (%d legacy + %d K3 + %d K5 + %d B1 + %d personal state), want exactly %d + 20 + 6 + %d + %d",
+			len(reg.descriptors), len(legacySeen), len(got), len(protocolSeen), len(profileSeen), len(personalSeen), len(communicationLegacyDescriptorKinds), len(providerProfileDescriptorKinds), len(personalStateDescriptorKinds))
 	}
 
 	if got[handoffKind].Table != "sessions_work_handoff" {
@@ -1803,6 +1822,9 @@ func communicationK2Registration(
 		}
 		if _, profile := providerProfileDescriptorKinds[descriptor.Kind]; profile {
 			continue // B1, like K5: not part of the pre-K3 schema this reopens from
+		}
+		if _, personal := personalStateDescriptorKinds[descriptor.Kind]; personal {
+			continue // a person's pins (#2130): not part of the pre-K3 schema either
 		}
 		if _, legacy := communicationLegacyDescriptorKinds[descriptor.Kind]; !legacy {
 			t.Fatalf("unexpected descriptor %s cannot be classified as K2, K3, K5 or B1", descriptor.Kind)

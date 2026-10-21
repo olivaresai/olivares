@@ -13,26 +13,33 @@
     "revoked_other": "已取消 {{count}} 个待处理的审批请求"
   },
   "engage": {
-    "title": "紧急停止",
-    "caption": "停止所有智能体或其中一个：正在运行的会话结束，工具调用、MCP、计划任务和工作流、语音、模型调用、部署和事件投递都会被拒绝。这些操作的待处理审批请求会被取消。停止无需批准，重新启动则需要。控制台、审计记录和登录仍可使用。",
-    "scope": "范围",
-    "scopeEstate": "所有智能体",
-    "scopeAgent": "单个智能体",
     "agentRef": "智能体",
     "agentRefHint": "智能体 UUID 或外部引用。未知引用同样会触发——停止随后将按该精确字符串进行匹配。",
     "reason": "原因",
-    "reasonHint": "必填：说明原因。此次停止的复核和后续审计都会读取。",
-    "button": "紧急停止",
+    "reasonHint": "可选：说明原因。此次停止的复核和后续审计都会读取。",
     "confirmTitleEstate": "停止所有智能体？",
     "confirmBodyEstate": "所有智能体会立即停止：正在运行的会话结束，其操作被拒绝，这些操作的待处理审批请求被取消。要重新启动，必须有两个不同的用户账户批准，并且事后必须复核这次停止。没有任何紧急途径可以绕过。",
     "confirmBodyEstateNoRestart": "所有智能体会立即停止：正在运行的会话结束，其操作被拒绝，这些操作的待处理审批请求被取消。没有任何紧急途径可以绕过。",
     "confirmTitleAgent": "停止此智能体？",
     "confirmBodyAgent": "此智能体会立即停止：其操作被拒绝，其待处理的审批请求被取消。要重新启动它，必须有两个不同的用户账户批准，并且事后必须复核这次停止。",
-    "confirm": "触发紧急关停开关",
     "done": "紧急关停开关已触发",
     "doneBody": "停止 {{id}} 已生效。重新启用需要双人控制。",
     "alreadyStopped": "此范围已存在一项生效的停止",
-    "restartNeedsAdmins": "重新启动需要另外两个管理员账户批准，并由其中一个在之后复核。"
+    "restartNeedsAdmins": "重新启动需要另外两个管理员账户批准，并由其中一个在之后复核。",
+    "stopAll": "停止所有智能体",
+    "more": "更多",
+    "stopOne": "停止一个智能体…",
+    "stopAgent": "停止此智能体"
+  },
+  "runs": {
+    "title": "会话",
+    "caption": "当前正在运行的会话。列表会自动更新。",
+    "captionStopped": "当前正在运行的会话，以及停止开始后结束的会话。列表会自动更新。",
+    "empty": "没有正在运行的会话。",
+    "error": "无法读取会话列表。停止本身不受影响。",
+    "truncated": "已加载前 {{n}} 个会话",
+    "truncatedHint": "会话数量多于显示数量，因此正在运行的会话可能不在此列表中。停止仍然作用于所有会话。",
+    "status": "运行中 {{live}} 个，已结束 {{ended}} 个。"
   },
   "stops": {
     "title": "停止记录",
@@ -109,8 +116,8 @@
     "download": "下载证据包",
     "done": "证据包已下载",
     "doneBody": "防篡改事件证据包 {{file}}——时间线、双人控制凭证、发现项与回滚计划。",
-    "truncated": "Evidence pack downloaded — but it is BOUNDED",
-    "truncatedBody": "{{file}} is saved, and the engine capped its timeline or findings. It is not the whole incident: read the truncation flags at the head of the file before drawing conclusions from it."
+    "truncated": "证据包已下载——但内容有上限",
+    "truncatedBody": "{{file}} 已保存，引擎对其时间线或发现项设置了上限。它并非事件的全部：请先阅读文件开头的截断标记，再据此下结论。"
   },
   "guardian": {
     "title": "Guardian 规则",
@@ -120,7 +127,7 @@
     "kinds": "发现项类别",
     "kindsAny": "任意类别",
     "minSeverity": "最低严重程度",
-    "agentTier": "代理层级",
+    "agentTier": "智能体层级",
     "action": "操作",
     "mode": "模式",
     "enabled": "已启用",
@@ -144,7 +151,7 @@
     },
     "actionLabel": {
       "stop_agent": "停止智能体",
-      "quarantine_nhi": "隔离 NHI",
+      "quarantine_nhi": "隔离身份",
       "stop_estate": "停止所有智能体"
     },
     "modeLabel": {
@@ -160,8 +167,8 @@
       "kindsHint": "以逗号分隔的待匹配发现项类别；留空则匹配任意类别。Guardian 自身的 'killswitch_*' / 'guardian_*' 发现项始终被排除。",
       "minSeverity": "最低严重程度",
       "minSeverityHint": "低于此严重程度的发现项从不匹配（默认为 high）。",
-      "agentTier": "代理风险层级",
-      "agentTierHint": "将规则限定为该层级的代理。保留“任意”则规则适用于所有层级。",
+      "agentTier": "智能体风险层级",
+      "agentTierHint": "将规则限定为该层级的智能体。保留“任意”则规则适用于所有层级。",
       "agentTierAny": "任意",
       "action": "操作",
       "actionHint": "规则触发的单一遏制。",

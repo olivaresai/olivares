@@ -810,7 +810,7 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 			if err := verifyDirectoryWriterControlPerBoot(ctx, mdb, dia); err != nil {
 				return err
 			}
-			_, herr := verifyGuardCompletedV7History(ctx, mdb, dia, guardManifestForBoot)
+			_, herr := guardAdmissionVerifyCompletedV7History(ctx, mdb, dia, guardManifestForBoot)
 			if herr != nil {
 				return fmt.Errorf("sqlstore: preflight core v7 guard witness: %w", herr)
 			}
@@ -1111,7 +1111,7 @@ func (b *storePreparation) openPrepared(ctx context.Context, cfg store.Config, r
 		// It stays a SEPARATE leg from the append-only ACL reconcile below, on purpose: a row
 		// trigger cannot observe TRUNCATE, so the receipt of a trigger unit does not and cannot
 		// attest an ACL. Whatever this reports about guards says nothing about privileges.
-		if _, err := runAppendOnlyGuardUnits(ctx, mdb, dia, reg.appendOnlyTables(),
+		if _, err := runGuardAdmissionUnits(ctx, mdb, dia, reg.appendOnlyTables(),
 			observerDSN(cfg), hardened, guardReconcileSession); err != nil {
 			return fmt.Errorf("sqlstore: append-only guard units: %w", err)
 		}

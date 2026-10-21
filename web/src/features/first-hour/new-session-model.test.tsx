@@ -107,6 +107,77 @@ beforeEach(() => {
 })
 
 describe('the model in the New session dialog', () => {
+  it.each([
+    {
+      driver: 'claude',
+      tool: 'Claude Code',
+      label: 'Fast mode',
+      option: 'On',
+      speed: { fastMode: true },
+    },
+    {
+      driver: 'claude',
+      tool: 'Claude Code',
+      label: 'Fast mode',
+      option: 'Off',
+      speed: { fastMode: false },
+    },
+    {
+      driver: 'codex',
+      tool: 'Codex',
+      label: 'Service tier',
+      option: 'priority',
+      speed: { serviceTier: 'priority' },
+    },
+  ])(
+    'chooses $label $option on New session with More options closed',
+    async ({ driver, tool, label, option, speed }) => {
+      const user = userEvent.setup()
+      vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+        readinessOf({ claude: 'own_login', codex: 'own_login' }),
+      )
+      vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(async (d) => ({
+        reason: 'own_login',
+        profile: {
+          profile_ref: `ppf_${d}`,
+          driver: d,
+          environment_ref: 'xenv_1',
+          state: 'active',
+          local_environment: true,
+          operable: true,
+        },
+      }))
+      vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+        profile_ref: `ppf_${driver}`,
+        driver,
+        state: 'fresh',
+        default_model: 'current-model',
+        free_text: true,
+        checked_at: '',
+        refresh_interval_seconds: 120,
+        models: [
+          {
+            id: 'current-model',
+            supports_fast_mode: true,
+            service_tiers: ['priority'],
+          },
+        ],
+      })
+      wrap(<StartSessionForm />)
+      await user.click(await screen.findByRole('radio', { name: tool }))
+      await user.click(await screen.findByLabelText(label))
+      await user.click(screen.getByRole('option', { name: option }))
+      expect(
+        screen.getByRole('button', { name: 'More options' }),
+      ).toHaveAttribute('aria-expanded', 'false')
+      await user.click(screen.getByRole('button', { name: 'Start' }))
+      await waitFor(() => expect(launch.launchSession).toHaveBeenCalledOnce())
+      expect(launch.launchSession.mock.calls[0][0].quick).toMatchObject({
+        driver,
+        ...speed,
+      })
+    },
+  )
   it("shows the bound key's saved default and its tested models", async () => {
     const user = userEvent.setup()
     given(key())

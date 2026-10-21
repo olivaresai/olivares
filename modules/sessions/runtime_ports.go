@@ -58,11 +58,11 @@ const (
 	// IsolationNative runs `claude` as a host process (the default, fully
 	// implemented and tested, for self-hosted single-tenant).
 	IsolationNative Isolation = "native"
-	// IsolationContainer is a FORWARD-COMPAT seam value: a per-session hardened
-	// container via core/runtime/executor with a docker attach/hijack stdio bridge.
-	// It is NOT wired: the release ships the socket-free combined image and the
-	// native procRunner; the container Runner is a documented follow-up. The native
-	// runner REFUSES this value rather than run unisolated (procrunner.go).
+	// IsolationContainer runs the tool in a container of its own (container_runner.go):
+	// podman, rootless where it can be, or Docker, driven through the CLI with the
+	// same stdio bridge as a native child. It is available only where the composition
+	// root found a container CLI and wired NewRunnerWithContainers; the native runner
+	// REFUSES this value rather than run unisolated (procrunner.go).
 	IsolationContainer Isolation = "container"
 	// IsolationSandbox is a FORWARD-COMPAT seam value (gVisor/Firecracker + egress
 	// control via core/runtime/sandboxrt). NOT wired this release — same as container.
@@ -161,23 +161,58 @@ type LaunchSpec struct {
 	// the container hardened read-only. The HostPath is already canonicalized/jailed
 	// by the module — the runner never resolves a path.
 	Workspace *WorkspaceMount
+	// Binds are the other host paths a container launch needs, each already
+	// decided by the module: the profile's homes, the folders a workspace holds
+	// read-only, the Git hooks and configuration the session may not change. Only
+	// the container runner reads them; they are empty for a native child.
+	Binds []ContainerBind
 	// Confinement, when set, is where the child may write and read; the native
 	// runner starts it through package confine. Nil runs the child unconfined.
 	Confinement *confine.Policy
 	// ConfinementFiles are borrowed native launch handles, never a serialized policy.
 	ConfinementFiles []*os.File `json:"-"`
+	// ConfinementNoDelete are folders the child may write but never remove a name
+	// from or move one out of (workspace mount_mode write_no_delete). They are not in
+	// Confinement.ReadWrite: a writable grant over one would give the rights back.
+	ConfinementNoDelete []string `json:"-"`
+	// ConfinementMounts name paths of a writable grant the child sees read-only
+	// (a mount namespace of its own; Landlock cannot deny inside a grant). A host
+	// without namespaces starts the child without them and says so in the state.
+	ConfinementMounts confine.Mounts `json:"-"`
+	// ConfinementMountsNote says what the mounts could not cover; the run's
+	// confinement reason carries it.
+	ConfinementMountsNote string `json:"-"`
+	// files is where the engine may write a file the provider's agent asks its
+	// client for; nil refuses every such request (acp_fs.go).
+	files *fileScope
 	// ConfinementRequireTruncateProtection is the saved template launch requirement.
 	ConfinementRequireTruncateProtection bool `json:"-"`
 	// ConfinementRequired refuses the launch when the host cannot confine.
 	ConfinementRequired bool
+	// ScratchHome, when set, is called by the native runner with the private temporary
+	// directory it has just made and named HOME for a confined child whose Env names
+	// none. An error refuses the launch. It is how a launch learns a home that does not
+	// exist until the runner makes it.
+	ScratchHome func(home string) error `json:"-"`
+	// StripImageData drops the bytes of every inline image (a data URL) from the child's
+	// stdout, keeping its `data:<type>;base64,` head. Only the stored-conversation reader
+	// sets it: the tool lists every image a person attached in its history answers, and
+	// one screenshot would be a line over the pump's limit. Honoured by the pipe and the
+	// terminal runner alike.
+	StripImageData bool `json:"-"`
 }
 
 // AllowRead lets a confined child read path (a file the launch wrote for it,
-// such as hook settings under the engine data directory). It does nothing for
-// an unconfined launch.
+// such as hook settings under the engine data directory). A container child gets the
+// same as a read-only mount, except under the system directories its image provides
+// itself. It does nothing for an unconfined native launch.
 func (s *LaunchSpec) AllowRead(path string) {
-	if s.Confinement != nil && path != "" {
+	switch {
+	case path == "":
+	case s.Confinement != nil:
 		s.Confinement.ReadOnly = append(s.Confinement.ReadOnly, path)
+	case s.Isolation == IsolationContainer && !underImageSystemDir(path):
+		s.Binds = append(s.Binds, ContainerBind{HostPath: path, Target: path, ReadOnly: true})
 	}
 }
 
@@ -189,6 +224,17 @@ type WorkspaceMount struct {
 	HostPath        string
 	ContainerTarget string
 	ReadOnly        bool
+}
+
+// ContainerBind is one host path made visible in a container. The module decides
+// which paths a session may see; the runner only renders them as mounts.
+type ContainerBind struct {
+	HostPath string
+	Target   string
+	ReadOnly bool
+	// NoRelabel keeps SELinux from relabelling the host path for the container: for a
+	// file the host itself executes or reads as policy, such as the engine's own program.
+	NoRelabel bool
 }
 
 // OutputFrame is one chunk of the process's output stream, tagged with which
@@ -489,6 +535,12 @@ type LaunchIntent struct {
 	// variables: variable and secret NAMES, never values. Here for the same reason
 	// as AllowedTools: an approval opened for these secrets cannot be spent on more.
 	SecretEnv []SecretEnvRef `json:"SecretEnv,omitempty"`
+	// RegistrySecrets names the vault secrets holding the package registry tokens
+	// the profile's registries open for the launch (provider_profile_packages.go).
+	// They are not the child's environment, so they are not SecretEnv and not in the
+	// approval's plan hash; the session credential's scope names them so the hook
+	// and the approval apply the run's redactor to the tool input.
+	RegistrySecrets []SecretEnvRef `json:"RegistrySecrets,omitempty"`
 	// GitRead names the repository binding the child gets a read credential for
 	// (session_git_read.go): an approval opened without it cannot be spent with it.
 	GitRead string `json:"GitRead,omitempty"`
@@ -725,6 +777,12 @@ type TurnTokens struct {
 // in micro-USD; ok is false when it has no price for them. The composition root
 // supplies the release-embedded genai-prices table.
 type ListPricer func(provider, modelRef string, t TurnTokens) (costMicroUSD int64, ok bool)
+
+// LimitResetSource is when the used-up usage windows of one AI tools login lift: the
+// windows `olivares tool providers` shows for that instance. ok is false when none of
+// them is used up, or the login has not reported its windows yet. The run's limit falls
+// back to it when its tool's own result names no reset time (runtime_limit.go).
+type LimitResetSource func(ctx context.Context, tenant model.TenantID, instance string) (resetsAt time.Time, ok bool)
 
 // SessionCostSink posts a governed turn's cost to the tenant's spend ledger.
 //

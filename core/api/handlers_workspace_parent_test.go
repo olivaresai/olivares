@@ -32,6 +32,10 @@ func (d authDepartments) SetWorkspaceParent(context.Context, auth.Principal, mod
 	return model.Workspace{}, errors.New("the workspace move is not under test here")
 }
 
+func (d authDepartments) SetGroupParent(ctx context.Context, p auth.Principal, tenant model.TenantID, id, parent model.ID) (model.UserGroup, error) {
+	return d.authr.ConfigureGroupParent(ctx, p, tenant, id, parent)
+}
+
 func (d authDepartments) SetGroupWorkspace(ctx context.Context, p auth.Principal, tenant model.TenantID, id, workspace model.ID) (model.UserGroup, error) {
 	return d.authr.ConfigureGroupWorkspace(ctx, p, tenant, id, workspace)
 }
@@ -59,8 +63,10 @@ func errorCodeOf(r resp) string {
 // a group in a workspace answer 501 departments_unavailable to the owner and to an
 // administrator alike (the seam answers before any role check), and change nothing.
 // A tree, a nesting edge and a place stored before stay readable, and a confined
-// caller still sees no parent in its reads. Group nesting is published Community
-// API (since v26.8.0): it keeps working with no department service wired.
+// caller still sees no parent in its reads. Group nesting (PUT /v1/groups/{id}/parent)
+// is the same Business surface: it answers 501 departments_unavailable with no
+// department service wired, to the owner and to an administrator alike, and the
+// nesting already stored stays listed.
 func TestDepartmentsAreBusiness(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()
@@ -169,11 +175,66 @@ func TestDepartmentsAreBusiness(t *testing.T) {
 	if r := h.do(http.MethodPut, "/v1/groups/"+child+"/parent", "", map[string]any{"parent_id": ""}, tenantHdr(tenant)); r.code != http.StatusUnauthorized {
 		t.Errorf("unauthenticated nesting = %d %s, want 401", r.code, r.raw)
 	}
+	// The route's own admission runs before the seam: a viewer is a 403, not a 501.
+	inViewer := map[string]any{"email": "viewer@departments.test", "password": "departments-test1", "tenant": tenant.String(), "role": auth.RoleViewer}
+	if r := h.do(http.MethodPost, "/v1/users", admin, inViewer, nil); r.code != http.StatusCreated {
+		t.Fatalf("create viewer = %d %s", r.code, r.raw)
+	}
+	viewer := h.login("viewer@departments.test", "departments-test1")
+	if r := h.do(http.MethodPut, "/v1/groups/"+child+"/parent", viewer, map[string]any{"parent_id": ""}, tenantHdr(tenant)); r.code != http.StatusForbidden {
+		t.Errorf("viewer nesting = %d %s, want 403", r.code, r.raw)
+	}
+	// Every refused call leaves the stored edge as a Business install wrote it.
 	for _, parent := range []string{"", groups["parent"].ID.String()} {
-		r := h.do(http.MethodPut, "/v1/groups/"+child+"/parent", admin, map[string]any{"parent_id": parent}, tenantHdr(tenant))
-		if r.code != http.StatusOK || r.body["parent_group_id"] != parent {
-			t.Errorf("Community nesting parent_id=%q = %d %s, want 200 with that parent", parent, r.code, r.raw)
+		for name, token := range map[string]string{"owner": admin, "administrator": tenantAdmin} {
+			r := h.do(http.MethodPut, "/v1/groups/"+child+"/parent", token, map[string]any{"parent_id": parent}, tenantHdr(tenant))
+			if r.code != http.StatusNotImplemented || errorCodeOf(r) != "departments_unavailable" {
+				t.Errorf("Community %s nesting parent_id=%q = %d %s, want 501 departments_unavailable", name, parent, r.code, r.raw)
+			}
+			if g, err := h.authr.SCIMGetGroup(context.Background(), tenant, groups["child"].ID); err != nil || g.Group.ParentGroupID != groups["parent"].ID {
+				t.Errorf("Community %s nesting parent_id=%q changed the stored edge: parent %q, %v; want %q", name, parent, g.Group.ParentGroupID, err, groups["parent"].ID)
+			}
 		}
+	}
+}
+
+// With the Business department service wired, nesting works as before: the owner
+// nests a group under another and un-nests it, and a cycle is a 409.
+func TestGroupNestingWorksWithTheDepartmentService(t *testing.T) {
+	h := newHarnessOpts(t, groupDepartments)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "group-nesting-business")
+	h.elevate(admin)
+	ctx := context.Background()
+	actor := h.principalOf(admin)
+	mk := func(name string) model.ID {
+		t.Helper()
+		g, err := h.authr.SCIMCreateGroup(ctx, actor, tenant, auth.SCIMGroupInput{DisplayName: name})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g.Group.ID
+	}
+	child, parent := mk("child"), mk("parent")
+	put := func(id, to model.ID) resp {
+		return h.do(http.MethodPut, "/v1/groups/"+id.String()+"/parent", admin, map[string]any{"parent_id": to.String()}, tenantHdr(tenant))
+	}
+	storedParent := func() model.ID {
+		t.Helper()
+		g, err := h.authr.SCIMGetGroup(ctx, tenant, child)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return g.Group.ParentGroupID
+	}
+	if r := put(child, parent); r.code != http.StatusOK || r.body["parent_group_id"] != parent.String() || storedParent() != parent {
+		t.Fatalf("Business nesting = %d %s, want 200 with parent %s stored (stored %q)", r.code, r.raw, parent, storedParent())
+	}
+	if r := put(parent, child); r.code != http.StatusConflict {
+		t.Errorf("a nesting cycle = %d %s, want 409", r.code, r.raw)
+	}
+	if r := put(child, ""); r.code != http.StatusOK || r.body["parent_group_id"] != "" || storedParent() != "" {
+		t.Errorf("Business un-nesting = %d %s, want 200 with no parent stored (stored %q)", r.code, r.raw, storedParent())
 	}
 }
 

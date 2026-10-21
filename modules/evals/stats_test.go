@@ -55,6 +55,24 @@ func TestMeanInterval(t *testing.T) {
 	}
 }
 
+// The exported helpers serve callers that report counts, tokens and money: the t
+// interval must not be clamped to the score range, and the Wilson interval is the
+// package's own.
+func TestExportedIntervals(t *testing.T) {
+	// Hand-checked: {10,20,30} → mean 20, sd 10, t(2)=4.303 → half = 4.303*10/√3 ≈ 24.84.
+	mean, lo, hi, ok := MeanInterval95([]float64{10, 20, 30})
+	if !ok || !approx(mean, 20, 1e-9) || !approx(lo, -4.84, 0.01) || !approx(hi, 44.84, 0.01) {
+		t.Errorf("{10,20,30} = mean %v [%v,%v] ok=%v, want 20 ≈[-4.84,44.84] true", mean, lo, hi, ok)
+	}
+	if _, _, _, ok := MeanInterval95([]float64{7}); ok {
+		t.Error("n=1 must not yield an interval")
+	}
+	wlo, whi := wilsonInterval(8, 10)
+	if lo, hi := WilsonInterval95(8, 10); lo != wlo || hi != whi {
+		t.Errorf("WilsonInterval95(8,10) = [%v,%v], want [%v,%v]", lo, hi, wlo, whi)
+	}
+}
+
 func TestCohenKappa(t *testing.T) {
 	// Perfect agreement on a balanced set: kappa 1.
 	k, ok := cohenKappa([]bool{true, false, true, false}, []bool{true, false, true, false})
@@ -172,5 +190,34 @@ func TestDeterministicSample(t *testing.T) {
 	}
 	if !diff {
 		t.Error("no probed seed changed the subset — sampling looks seed-independent")
+	}
+}
+
+func TestNewcombeDifference(t *testing.T) {
+	// Newcombe 1998, example 1 (56/70 vs 48/80), method 10: 0.2000 (0.0524, 0.3339).
+	d, lo, hi, ok := newcombeDifference(56, 70, 48, 80)
+	if !ok || !approx(d, 0.2, 1e-9) || !approx(lo, 0.0524, 0.0005) || !approx(hi, 0.3339, 0.0005) {
+		t.Errorf("56/70 vs 48/80 = %v [%v,%v] ok=%v, want 0.2 [0.0524,0.3339]", d, lo, hi, ok)
+	}
+	// The same 10 point drop: inside the noise at n=10, outside it at n=100.
+	d, lo, hi, _ = newcombeDifference(10, 10, 9, 10)
+	if !approx(d, 0.1, 1e-9) || lo > 0 || !approx(lo, -0.1894, 0.0005) || !approx(hi, 0.4042, 0.0005) {
+		t.Errorf("10/10 vs 9/10 = %v [%v,%v], want 0.1 [-0.1894,0.4042]", d, lo, hi)
+	}
+	_, lo, hi, _ = newcombeDifference(100, 100, 90, 100)
+	if !approx(lo, 0.0419, 0.0005) || !approx(hi, 0.1744, 0.0005) {
+		t.Errorf("100/100 vs 90/100 = [%v,%v], want [0.0419,0.1744]", lo, hi)
+	}
+	// Identical rates: the interval straddles zero symmetrically.
+	d, lo, hi, _ = newcombeDifference(50, 100, 50, 100)
+	if d != 0 || !approx(lo, -hi, 1e-9) || lo >= 0 {
+		t.Errorf("50/100 vs 50/100 = %v [%v,%v], want 0 and a symmetric interval around it", d, lo, hi)
+	}
+	// An extreme difference stays inside [-1,1]; an empty side has no difference.
+	if _, lo, hi, _ = newcombeDifference(0, 5, 5, 5); lo < -1 || hi > 1 {
+		t.Errorf("0/5 vs 5/5 = [%v,%v], want inside [-1,1]", lo, hi)
+	}
+	if _, _, _, ok = newcombeDifference(1, 0, 1, 1); ok {
+		t.Error("n1=0 reported ok; there is no denominator to put an interval on")
 	}
 }

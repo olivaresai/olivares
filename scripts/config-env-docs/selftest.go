@@ -169,6 +169,19 @@ func family(getenv func(string) string, provider string) string {
 			},
 		},
 		{
+			// The appliance recipe is exported to olivares-server and never to the public
+			// tree (export-public.sh TOP_BLOCK). A key only it reads needs no row: the row
+			// would fail direction 2 on the exported tree, where no source declares it.
+			name: "name-only-in-the-appliance-recipe", want: exitClean,
+			wantNames: []string{"OK config-env-docs", "OLIVARES_ONLY_IN_THE_APPLIANCE", "never to this tree"},
+			mutate: func(t *tree) {
+				t.appendGo("appliance/layer/portal/serve.go", `package portal
+
+func dir(getenv func(string) string) string { return getenv("OLIVARES_ONLY_IN_THE_APPLIANCE") }
+`)
+			},
+		},
+		{
 			// A new test-only sentinel: the registry declares the prefix, so it is not
 			// product configuration and the page must not grow a row for it.
 			name: "new-test-only-sentinel", want: exitClean,

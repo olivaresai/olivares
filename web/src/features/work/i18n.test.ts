@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import { de, en, es, fr, ja, ru, zh } from './i18n'
+import { de, en, es, fr, it as itBundle, ja, ko, ru, zh } from './i18n'
 
 /**
  * — THE POLARITY GUARD.
@@ -21,7 +21,7 @@ import { de, en, es, fr, ja, ru, zh } from './i18n'
  * edit to any of them has to come here and change the expected string deliberately,
  * which is exactly the moment to ask whether the new wording still says "unknown".
  */
-const LANGS = { en, es, zh, ja, de, ru, fr } as const
+const LANGS = { en, es, zh, ja, de, ru, fr, it: itBundle, ko } as const
 
 /** The wording each language must carry for the third outcome. Every one of these says
  * some form of "could not look" — none says "none", "empty", "fine" or "passed". */
@@ -33,6 +33,8 @@ const EXPECTED_UNKNOWN_LABEL: Record<keyof typeof LANGS, string> = {
   de: 'Konnte nicht nachsehen',
   ru: 'Не удалось проверить',
   fr: 'Vérification impossible',
+  it: 'Impossibile verificare',
+  ko: '조회할 수 없음',
 }
 
 /** Words that would turn the third outcome into the first or into an absence. Checked
@@ -66,11 +68,20 @@ const FORBIDDEN_IN_UNKNOWN: Record<keyof typeof LANGS, string[]> = {
     'в порядке',
   ],
   fr: ['aucun résultat', 'non trouvé', 'succès', 'réussi', 'propre', 'correct'],
+  it: [
+    'nessun risultato',
+    'non trovato',
+    'successo',
+    'superato',
+    'pulito',
+    'corretto',
+  ],
+  ko: ['결과 없음', '찾을 수 없음', '성공', '통과', '깨끗함', '정상'],
 }
 
 type WorkBundle = (typeof LANGS)[keyof typeof LANGS]
 
-describe('the third outcome survives translation in all seven languages', () => {
+describe('the third outcome survives translation in every pinned language', () => {
   for (const [lang, bundle] of Object.entries(LANGS) as [
     keyof typeof LANGS,
     WorkBundle,

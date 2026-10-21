@@ -374,9 +374,22 @@ func respondError(w http.ResponseWriter, err error) {
 	respond(w, status, map[string]any{"error": map[string]string{"code": code, "message": api.RequestBodyErrorMessage(err, message)}})
 }
 
+// ownerRefusalCodes names the client refusals an owner outside this module (the
+// registered-folder reader) reports with its own HTTP status. Only an owner whose
+// messages are written for the caller may implement HTTPStatusCode: its text is
+// passed through as is. Any other status or error stays the generic 503.
+var ownerRefusalCodes = map[int]string{
+	http.StatusBadRequest: "invalid_request", http.StatusForbidden: "forbidden",
+	http.StatusNotFound: "not_found", http.StatusConflict: "conflict",
+}
+
 func operationError(err error) (int, string, string) {
 	status, code, message := http.StatusServiceUnavailable, "skills_unavailable", "Skills could not complete this operation. Retry after checking the service."
 	var refusal *ImportError
+	var owner interface {
+		error
+		HTTPStatusCode() int
+	}
 	switch {
 	case errors.As(err, &refusal):
 		status, code, message = http.StatusBadRequest, refusal.Code, refusal.Message
@@ -393,6 +406,8 @@ func operationError(err error) (int, string, string) {
 		status, code, message = http.StatusConflict, "conflict", "The request conflicts with the recorded version or import. Read the current state and retry."
 	case errors.Is(err, errInvalidRequest):
 		status, code, message = http.StatusBadRequest, "invalid_request", "The skills request is invalid."
+	case errors.As(err, &owner) && ownerRefusalCodes[owner.HTTPStatusCode()] != "":
+		status, code, message = owner.HTTPStatusCode(), ownerRefusalCodes[owner.HTTPStatusCode()], owner.Error()
 	}
 	return status, code, message
 }

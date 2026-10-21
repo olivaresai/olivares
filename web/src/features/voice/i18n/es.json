@@ -115,14 +115,14 @@
       "opened": "Abierta.",
       "approval": "Aprobación solicitada — reenvía con esta referencia:",
       "denied": "Denegada por política: ninguna permite esta combinación (agente, modelo, proveedor). Es una decisión default-deny, no un fallo.",
-      "noGate": "No hay puerta de aprobación cableada en este despliegue, así que la apertura sigue denegada. Es un hueco del patrimonio, no una denegación de política.",
+      "noGate": "No hay puerta de aprobación configurada en este despliegue, así que la apertura sigue denegada. Es un hueco del patrimonio, no una denegación de política.",
       "unavailable": "La puerta de aprobación no respondió, así que no se decidió nada."
     }
   },
   "ledger": {
     "title": "Registro de decisiones de apertura",
     "description": "Todas las decisiones de abrir una sesión de voz del parque, en registro de solo anexión y de más reciente a más antigua — incluidas las DENEGADAS, que por eso nunca llegaron a ser una sesión.",
-    "caveat": "Una apertura denegada no crea por sí misma fila de sesión, así que ésta es la primera vista dedicada que la enseña entera con sólo `voice:session:read`. Los otros caminos la enseñan a medias o piden otro permiso: el playground de API (admin de tenant), el explorador de auditoría (la acción, sin su motivo) y los hallazgos de Security (sólo algunos caminos).",
+    "caveat": "Una apertura denegada no crea por sí misma fila de sesión, así que ésta es la primera vista dedicada que la enseña entera con sólo el permiso de leer sesiones de voz. Los otros caminos la enseñan a medias o piden otro permiso: el playground de API (admin de tenant), el explorador de auditoría (la acción, sin su motivo) y los hallazgos de Security (sólo algunos caminos).",
     "empty": "Todavía no hay decisiones de apertura",
     "emptyHint": "Aquí quedan las decisiones que el motor consiguió persistir. La escritura de evidencia es best-effort a propósito —la denegación vale aunque su fila se pierda—, así que un registro vacío no prueba que no se haya rechazado nada.",
     "truncated": "Se muestran las {{count}} decisiones más recientes y el motor informa de más: esta lista está RECORTADA. Léela como una muestra, no como el registro completo.",

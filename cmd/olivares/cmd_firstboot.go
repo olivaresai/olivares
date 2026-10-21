@@ -69,6 +69,7 @@ type firstBootOptions struct {
 func newFirstBootCmd() *cobra.Command {
 	o := firstBootOptions{}
 	cmd := &cobra.Command{
+		Annotations:   map[string]string{"changes_data": "write"},
 		Use:           "first-boot",
 		Short:         "Show this installation's console address and the state of first setup",
 		SilenceErrors: true,

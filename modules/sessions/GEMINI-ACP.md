@@ -58,7 +58,33 @@ against Google's own service.
   review: any tool that is not a read, a search or a thought and has no command or
   path fact. A shell call is always that, so a Gemini session cannot run a command
   under Olivares until the CLI names the command in `rawInput`. An edit carries its
-  path from `locations` and reaches the policy.
+  path from `locations` and reaches the policy. One request with no facts reaches the
+  policy all the same: a call to a tool of the session MCP server, and only when the
+  launch proved that server is the only one the CLI can start. 0.62.0 sends it as kind
+  `other` with an empty `locations` and no `rawInput`, and a `toolCallId` such as
+  `mcp_olivares_whoami__mcp_olivares_whoami_<ms>_<n>`: the CLI registers the tool as
+  `mcp_<server>_<tool>` and puts that name in front of the call id whatever id the
+  model API sent, so with one server the id's `mcp_olivares_` prefix names it. The
+  request's `title` is never read. For an MCP tool the CLI builds it from the call's
+  own arguments (`<tool>(key: value, ...)`, and the string in a `command` argument
+  as it stands), which the model controls. The CLI also turns every character of a
+  server name outside `[a-zA-Z0-9_.:-]` into `_`, so the prefix cannot tell a server
+  named `olivares/x` from ours either. `launchOwnMCPOnly` therefore proves there is
+  no other server, on every create and resume, after the child is spawned and before
+  the handshake. Neither the profile's nor the workspace's `.gemini` may hold a
+  non-empty `mcpServers`, an `mcp.serverCommand`, an `agents.overrides.*.mcpServers`,
+  or any entry in `extensions` or `agents` (an extension or a subagent definition can
+  carry servers of its own). A file it cannot read, parse or classify is not proved:
+  an empty `settings.json`, a top-level `null`, a comment, a file over 1 MiB, or an
+  `extensions` that is not a directory. When it is not proved, a launch log line says
+  so, the call is refused with no question, as on every other launch (its log line
+  carries `own_mcp_only=false`), and the run's `mcp_governance_warning` says the
+  session tools are refused if any of those is defined. A writer that changes those
+  files between the spawn and the check is not caught, the same as for the home check
+  below. The check does not read the administrator's system settings, which no folder
+  controls. The policy is shown no command or path, as for any other tool request
+  (the request has no tool name field), and the call itself reaches `/session/mcp`
+  under the session's policy.
 - It refuses a launch whose profile home pre-approves tools, on every create and
   resume, and one whose configuration home is not named `.gemini`. Refused: a
   non-empty `tools.allowed`, `tools.core`, `mcp.allowed`, `policyPaths` or
@@ -103,8 +129,25 @@ against Google's own service.
   found for this project." for a conversation it had just written, so a resume is
   refused rather than started as a new conversation. The success path is tested
   against a fake peer only.
-- The Olivares session MCP edge is not connected; MCP servers in the CLI's own
-  settings are not governed. The run says so in `mcp_governance_warning`.
+- The Olivares session MCP edge is carried in `session/new` and `session/load` as
+  one HTTP server named `olivares`, authenticated with the launch's bearer. A CLI
+  that does not advertise HTTP MCP is refused rather than started without it.
+  Measured against 0.62.0 with a loopback stand-in for the edge: the CLI connects
+  (`initialize`, `tools/list`, `Authorization: Bearer` present) only when the
+  folder is trusted, by the profile home's own `trustedFolders.json` or
+  `GEMINI_CLI_TRUST_WORKSPACE=true`. In an untrusted folder it skips every
+  configured MCP server, this one included, and reports nothing. In a trusted one
+  the CLI connected before `session/new` answered, and a call to a tool of the
+  server reached the edge with the bearer after the driver let its permission
+  request through (recorded with a loopback stand-in for the model API as well).
+  Olivares never trusts a folder for the person: the relay sets neither, because
+  trusting a folder also applies that folder's settings, and the CLI's `isTrustedFolder`
+  rule (JSONC rules, `TRUST_PARENT`, real paths, the folder-trust switch, a fatal
+  error on a malformed file) is the CLI's to evaluate, not ours to copy. The person
+  trusts the folder in the profile's `.gemini/trustedFolders.json`, and the run says so
+  in `mcp_governance_warning`. The bearer did not appear on the CLI's stdout, stderr
+  or under its home. MCP servers in the CLI's own settings are not governed; the same
+  field says that too.
 - Bound-key sessions disable native OpenTelemetry and prompt logging switches.
   CLI 0.62.0 still attempts Clearcut requests to `play.googleapis.com`; the
   enforced session network boundary must block these attempts.

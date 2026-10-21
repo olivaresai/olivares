@@ -109,6 +109,10 @@ func (m *Module) handleProfileLaunchReadiness(w http.ResponseWriter, r *http.Req
 		writeReadinessErr(w, err)
 		return
 	}
+	if err := m.requireProfileAccess(r.Context(), mc, chi.URLParam(r, "ref")); err != nil {
+		writeReadinessErr(w, err)
+		return
+	}
 	out, err := m.EvaluateLaunchReadiness(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), LaunchReadinessSelection{
 		Transport: string(q.transport), Isolation: string(q.isolation),
 	})

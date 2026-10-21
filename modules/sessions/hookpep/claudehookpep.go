@@ -72,8 +72,12 @@ type TenantConfig struct {
 	// json.Unmarshal drops an unknown key, so "observe_until" reads as absent ⇒ enforce). The
 	// window auto-reverts to enforce at ObserveUntil with NO restart (evaluated per decision);
 	// EARLY revocation is a config edit + restart (the operator config is a boot snapshot).
-	ObserveUntil string    `json:"observe_until,omitempty"`
-	Policy       PolicyDoc `json:"policy"`
+	ObserveUntil string `json:"observe_until,omitempty"`
+	// DenialBudget caps the policy denials of one session run before it is handed to a
+	// person: DenialBudget.Consecutive in a row or DenialBudget.Total in the run
+	// (defaults 3 and 20). A zero field keeps its default; a negative one is refused.
+	DenialBudget sessions.DenialBudget `json:"denial_budget,omitempty"`
+	Policy       PolicyDoc             `json:"policy"`
 }
 
 // hookEnforcementMode is the per-tenant mode. Its zero value is modeEnforce (fail-safe:
@@ -228,6 +232,7 @@ type ResolvedTenant struct {
 	observeBootMono time.Time
 	observeWindow   time.Duration
 	observeGrantID  string
+	denialBudget    sessions.DenialBudget
 	policy          PolicyDoc
 }
 
@@ -256,8 +261,11 @@ func ResolveTenant(tid model.TenantID, tc TenantConfig, now time.Time, log *slog
 	if err := validateHookPolicy(tc.Policy); err != nil {
 		return ResolvedTenant{}, fmt.Errorf("hook PEP tenant policy: %w", err)
 	}
+	if tc.DenialBudget.Consecutive < 0 || tc.DenialBudget.Total < 0 {
+		return ResolvedTenant{}, errors.New("hook PEP tenant denial_budget must not be negative")
+	}
 	mode, grant := resolveObserveGrant(tid, tc, now, log)
-	return ResolvedTenant{tenant: tid, requireFirm: tc.RequireFirm, enforceNHI: tc.EnforceNHILifecycle, mode: mode, observeUntil: grant.until, observeBootMono: grant.bootMono, observeWindow: grant.window, observeGrantID: grant.id, policy: tc.Policy}, nil
+	return ResolvedTenant{tenant: tid, requireFirm: tc.RequireFirm, enforceNHI: tc.EnforceNHILifecycle, mode: mode, observeUntil: grant.until, observeBootMono: grant.bootMono, observeWindow: grant.window, observeGrantID: grant.id, denialBudget: tc.DenialBudget, policy: tc.Policy}, nil
 }
 
 // Handler serves the governed hooks PEP: the Claude Code hook endpoint at "/", the Agent
@@ -362,6 +370,9 @@ type Decider struct {
 	ApprovalWait       func(context.Context, auth.Principal, string, time.Time) (func(), error)
 	RedactSecrets      func(model.TenantID, string, []byte) ([]byte, []sessions.SecretMaskSpan, bool)
 	SessionObservation func(context.Context, auth.Principal, sdkmodel.Observation) error
+	// SessionDecision counts a governed tool-call decision against its run's denial budget
+	// (sessions.Module.RecordToolDecision). nil ⇒ no budget. It never changes the verdict.
+	SessionDecision func(principal auth.Principal, denied bool, reason string, budget sessions.DenialBudget) error
 
 	// Inspector is the OPTIONAL commercial hooks-hardening DLP firewall (enterprise/hookhardening). nil in the default AGPL build ⇒ no deep tool_input
 	// inspection (the PEP behaves exactly as before — no rug-pull); under -tags enterprise
@@ -490,6 +501,8 @@ func (d *Decider) Decide(ctx context.Context, in claude.HookDecisionInput, beare
 	var tenant model.TenantID
 	var shadow *shadowVerdict
 	stopped := false
+	answer := &humanAnswer{}
+	ctx = context.WithValue(ctx, humanAnswerKey{}, answer)
 	if authErr != nil && !scope.TenantID.IsZero() && d.Stops != nil && claude.HookEnforcementFor(in.Event).Enforceable {
 		actor := "session:" + scope.SessionRef
 		reason, err := d.stopReason(ctx, scope.TenantID, scope.AgentRef, in, actor)
@@ -551,6 +564,7 @@ func (d *Decider) Decide(ctx context.Context, in claude.HookDecisionInput, beare
 	// an allow into a deny or the other way round — the verdict is already decided
 	// and already recorded before anything is published.
 	d.publishDecisionSignal(ctx, tenant, in, out.Permission == claude.DecisionAllow, out.Reason)
+	d.countSessionDecision(tenant, principal, authErr, in, out, answer)
 	toolSpan.SetDecision(out.Permission)
 	return out, nil
 }

@@ -484,7 +484,7 @@ func (sr *sourceReconciler) defaultPrepare(ctx context.Context, def model.Source
 
 	conn, ok := buildInProcSource(def.Kind)
 	if !ok {
-		return nil, sdk.Config{}, fmt.Sprintf("unknown or unsupported source kind %q", def.Kind)
+		return nil, sdk.Config{}, unsupportedSourceKindReason(def.Kind)
 	}
 	scfg, rerr := resolveConfig(ctx, sr.resolver, conn.Descriptor(), rawCfg)
 	if rerr != nil {
@@ -538,13 +538,18 @@ func fingerprintDef(def model.SourceDef) string {
 // applies only to in-process kinds whose descriptor the host knows; an external or
 // out-of-process plugin's secret fields are not known to the host, so its config
 // is operator discipline (the same limitation as the file-config model), and the
-// apply path still resolves references either way.
+// apply path still resolves references either way. It also refuses a Business kind
+// this build cannot construct, so a Community write answers 501 instead of storing a row
+// that can never run.
 func checkInlineSecrets(def model.SourceDef) error {
 	if def.Plugin != nil {
 		return nil
 	}
 	if _, isPlugin := pluginBinaryForKind[def.Kind]; isPlugin {
 		return nil
+	}
+	if businessKindUnavailable(def.Kind) {
+		return errBusinessSourceKind(def.Kind) // a Community write never stores a Business kind
 	}
 	conn, ok := buildInProcSource(def.Kind)
 	if !ok {

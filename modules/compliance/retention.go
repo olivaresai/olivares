@@ -40,7 +40,7 @@ const (
 
 // actionRetentionEnable is the governed action enabling a purge disposition opens
 // an approval for (HIGH by default ⇒ ≥1 human approver + SoD; a tenant may raise it
-// to CRITICAL by approval policy).
+// to CRITICAL by approval policy in Business).
 const actionRetentionEnable = "compliance.retention.enable"
 
 // retentionEnableQuorum is the floor the module re-verifies independently of the

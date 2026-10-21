@@ -49,6 +49,8 @@ Use **Manage identity providers** to configure single sign-on.
 
 ### Mutual TLS for remote collectors
 
+The edge collector is a Business feature; a Community build refuses `olivares collector`. The `--grpc-client-ca` flag below is set on the core.
+
 In the distributed topology, edge collectors push observations to the core over
 verified-client-cert **mutual TLS**. Turn it on by giving the core a client CA so it
 **requires and verifies** a client certificate:

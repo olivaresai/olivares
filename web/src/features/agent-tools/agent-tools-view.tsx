@@ -567,6 +567,15 @@ function InstalledTool({
   const [adding, setAdding] = useState(false)
   const { can } = useAuth()
   const service = SERVICE_DRIVERS.includes(driver)
+  // The provider pages fold into AI tools (#2240): the menu opens their room on the first
+  // door this person may read, and the room's tabs reach the others.
+  const providerRoomHref = can('sessions:account:read')
+    ? '/provider-accounts'
+    : can('sessions:profile:read')
+      ? '/provider-profiles'
+      : can('sessions:profile-binding:read')
+        ? '/provider-bindings'
+        : undefined
   return (
     <>
       <ToolBox
@@ -576,7 +585,7 @@ function InstalledTool({
         onUpdate={() => onReview(driver, defaultVersion(driver))}
         updateDisabled={!!disabledReason}
         onDetails={() => setDetails(true)}
-        profilesHref={service ? undefined : '/provider-accounts'}
+        profilesHref={service ? undefined : providerRoomHref}
         onAdd={
           service || !can('sessions:account:write')
             ? undefined

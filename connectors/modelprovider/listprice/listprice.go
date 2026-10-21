@@ -13,7 +13,8 @@ import (
 )
 
 // CostMicroUSD is u at provider's list price for model, in micro-USD. ok is false
-// when the dataset has no price for that provider and model: never a guess, never
+// when the dataset has no price for that provider and model, or a lookup keeps failing:
+// never a guess, never
 // a zero that would read as free.
 func CostMicroUSD(provider, model string, u modelprovider.Usage) (int64, bool) {
 	p, ok := pricing.For(provider, model)

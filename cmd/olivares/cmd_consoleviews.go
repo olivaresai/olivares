@@ -44,9 +44,10 @@ const consoleViewsNS = "consoleviews"
 func newConsoleViewsCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:     "consoleviews",
-		Aliases: []string{"views"},
-		Short:   "Manage saved console views (filter and parameter sets)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "consoleviews",
+		Aliases:     []string{"views"},
+		Short:       "Manage saved console views (filter and parameter sets)",
 		Long: "consoleviews manages the saved views a console feature keeps: a named set of\n" +
 			"parameters for one feature, private to you or shared with the tenant.\n\n" +
 			"You see your own views plus the tenant's shared ones, and you may change only\n" +
@@ -179,9 +180,10 @@ func renderConsoleView(cmd *cobra.Command, raw []byte, v consoleView, headline s
 func newConsoleViewsListCmd(flags *authClientFlags) *cobra.Command {
 	var featureID string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the views you can see",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the views you can see",
 		Long: "ls lists your own saved views plus the tenant's shared ones, newest-touched\n" +
 			"first. The MINE column separates the two, because it decides which of them you\n" +
 			"can change.\n\n" +
@@ -233,8 +235,9 @@ func newConsoleViewsListCmd(flags *authClientFlags) *cobra.Command {
 
 func newConsoleViewsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <view-id>",
-		Short: "Show one saved view in full",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <view-id>",
+		Short:       "Show one saved view in full",
 		Long: "get shows one view with its parameter document.\n\n" +
 			"A view you cannot see is reported as NOT FOUND rather than as forbidden. That\n" +
 			"is the engine's decision and it is deliberate: a 403 would confirm the view\n" +
@@ -263,8 +266,9 @@ func newConsoleViewsCreateCmd(flags *authClientFlags) *cobra.Command {
 	var shared bool
 	var params consoleViewParamsFlags
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Save a new view",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Save a new view",
 		Long: "create saves a new view owned by you. The (feature, owner, name) triple is the\n" +
 			"natural key, so re-running create with the same name refuses with a conflict\n" +
 			"rather than silently replacing your view — use `update` to change one.\n\n" +
@@ -320,8 +324,9 @@ func newConsoleViewsUpdateCmd(flags *authClientFlags) *cobra.Command {
 	var shared bool
 	var params consoleViewParamsFlags
 	cmd := &cobra.Command{
-		Use:   "update <view-id>",
-		Short: "Replace the writable fields of your own view",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "update <view-id>",
+		Short:       "Replace the writable fields of your own view",
 		Long: "update replaces the name, description, parameters and shared flag of a view YOU\n" +
 			"OWN. It is a replace, not a patch: every writable field is sent, so an omitted\n" +
 			"--description clears the stored one.\n\n" +
@@ -369,9 +374,10 @@ func newConsoleViewsUpdateCmd(flags *authClientFlags) *cobra.Command {
 func newConsoleViewsRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <view-id>",
-		Aliases: []string{"delete", "remove"},
-		Short:   "Delete your own saved view",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <view-id>",
+		Aliases:     []string{"delete", "remove"},
+		Short:       "Delete your own saved view",
 		Long: "rm deletes a view you own. There is no undo and no revision history on this\n" +
 			"namespace: the parameter document is gone with the row.\n\n" +
 			"It requires --yes in any non-interactive session. A shared view may be relied\n" +

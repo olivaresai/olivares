@@ -212,7 +212,7 @@ curl -sf "$BASE/v1/m/accessmap/drift" \
 
 :::note[端点的形态]
 Permitted-vs-Observed 结果由 `/v1/m/accessmap/drift` 提供（没有 `/diff`）。
-`/v1/m/accessmap/*` 路由不属于包含 128 条路径的稳定核心契约；它们以独立的
+`/v1/m/accessmap/*` 路由不属于包含 {{core-paths}} 条路径的稳定核心契约；它们以独立的
 **beta** 文档发布——见[模块路由参考](/reference/api-beta/)。[API 参考](/reference/api/)
 记录稳定核心表面。
 :::

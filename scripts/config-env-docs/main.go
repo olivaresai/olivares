@@ -145,6 +145,11 @@ var skipRelDirs = map[string]string{
 	// linked into `olivares`: OLIVARES_PG_LOCAL_DEFAULTS is checkpgwiring's local
 	// opt-in.
 	"cmd/olivares/tools": "build-time wiring checkers, not linked into the engine",
+	// The Community appliance recipe: scripts/export-public.sh puts appliance in TOP_BLOCK,
+	// so it is exported to olivares-server and never to this tree. The public tree runs this
+	// gate too; a row for a key only the appliance reads would fail direction 2 there, and
+	// the page would document a variable no public source reads.
+	"appliance": "Community appliance recipe, exported to olivares-server and never to this tree (scripts/export-public.sh TOP_BLOCK); not engine configuration",
 }
 
 // skipRelFiles are named single-file exclusions, same contract as skipRelDirs.

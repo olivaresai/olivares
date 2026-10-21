@@ -16,16 +16,12 @@ import (
 // dual-authorization floor — the quorum/SoD/duplicate-decider primitives are
 // own (approvals_test.go) and are consumed, not re-proven.
 
-// createApprovalPolicy authors an enabled approval policy and returns its id.
-func (h *harness) createApprovalPolicy(token string, tenant model.TenantID, name string, spec map[string]any) string {
+// createApprovalPolicy stores an enabled approval policy and returns its id. It
+// bypasses the edition check on purpose: these tests are about what the engine
+// does with a policy, and that policy may have been authored by a Business build.
+func (h *harness) createApprovalPolicy(_ string, tenant model.TenantID, name string, spec map[string]any) string {
 	h.t.Helper()
-	r := h.do("POST", govPath+"/policies", token, map[string]any{
-		"name": name, "kind": "approval", "enabled": true, "spec": spec,
-	}, tenantHdr(tenant))
-	if r.code != http.StatusCreated {
-		h.t.Fatalf("create approval policy %s = %d %s", name, r.code, r.raw)
-	}
-	return r.body["id"].(string)
+	return storePolicy(h.t, h, tenant, name, spec)
 }
 
 // A CRITICAL action with NO matching policy starts at the AC-3(2) floor: two
@@ -151,7 +147,8 @@ func TestDecideTimeFloorTracksLivePolicy(t *testing.T) {
 	}
 }
 
-// Community accepts an explicit tier that raises the default; Business also lowers it.
+// A stored policy with an explicit tier above the default applies in every edition;
+// authoring one is Business, so the test stores it.
 func TestPolicyExplicitTierRaises(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

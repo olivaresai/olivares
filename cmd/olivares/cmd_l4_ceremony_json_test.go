@@ -1038,7 +1038,7 @@ func (b *l4BundleFixture) mirror(t *testing.T) string {
 // does not: a consumer never branches before it can read.
 var l4UpgradeKeys = []string{
 	"action", "advisories", "available", "backup", "channel", "crl_recorded", "current",
-	"current_declared", "eligible", "eol_at", "installed", "min_version", "notes",
+	"current_declared", "edition_available", "edition_current", "eligible", "eol_at", "installed", "min_version", "notes",
 	"ota_key", "ota_key_fingerprint", "released_at", "security", "source", "status",
 	"target", "warnings",
 }

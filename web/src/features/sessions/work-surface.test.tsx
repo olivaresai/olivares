@@ -106,7 +106,211 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
 
 const pane = (id: string) => document.getElementById(`work-pane-${id}`)
 
+// Two managed conversations, each with its own run, so each column mounts a real composer.
+const managedA = live({ attribution: 'managed' })
+const managedB = live({
+  session_ref: 'sess-b',
+  live_ref: 'lr-b',
+  attribution: 'managed',
+})
+const RUN_B: RunDTO = {
+  ...RUN,
+  run_ref: 'run-b',
+  name: 'review',
+  live_ref: 'lr-b',
+}
+const paired = mergeSessions([managedA, managedB], [RUN, RUN_B])
+const pairedA = paired.find((s) => s.live?.live_ref === 'lr-a')!
+const pairedB = paired.find((s) => s.live?.live_ref === 'lr-b')!
+
+function renderSplit(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
+  return renderSurface({
+    sessions: paired,
+    address: {
+      address: pairedA.key,
+      beside: pairedB.key,
+      pane: 'narrative',
+      evidence: 'checks',
+    },
+    resolution: {
+      ...resolution,
+      session: pairedA,
+      live: managedA,
+      runs: [RUN],
+    },
+    besideResolution: {
+      ...resolution,
+      target: { liveRef: 'lr-b' },
+      session: pairedB,
+      live: managedB,
+      runs: [RUN_B],
+    },
+    ...over,
+  })
+}
+const composerOf = (column: string) =>
+  within(screen.getByRole('region', { name: column })).getByTestId(
+    'launcher-input',
+  ) as HTMLTextAreaElement
+
 describe('WorkSurface', () => {
+  it.each(['{Enter}', ' '])(
+    'activates a focused Open beside button with %s without opening a primary session',
+    async (key) => {
+      const onOpenBeside = vi.fn()
+      const { onOpen } = renderSurface({ onOpenBeside })
+      screen.getAllByLabelText('Open beside')[0].focus()
+      await userEvent.keyboard(key)
+      expect(onOpenBeside).toHaveBeenCalledWith(sessions[1])
+      expect(onOpen).not.toHaveBeenCalled()
+    },
+  )
+
+  it('keeps the focused narrative in the URL so narrowing does not hide it', () => {
+    const onPane = vi.fn()
+    renderSurface({
+      address: {
+        address: 'live:lr-a',
+        beside: 'live:lr-b',
+        pane: 'narrative',
+        evidence: 'checks',
+      },
+      besideResolution: {
+        ...resolution,
+        target: { liveRef: 'lr-b' },
+        session: sessions[1],
+        live: live({ live_ref: 'lr-b' }),
+      },
+      onPane,
+    })
+    screen.getByRole('region', { name: 'Session beside' }).focus()
+    expect(onPane).toHaveBeenCalledWith('beside')
+  })
+
+  it('names both narratives and moves keyboard focus without sending a turn', async () => {
+    const onPane = vi.fn()
+    const onCloseBeside = vi.fn()
+    renderSurface({
+      address: {
+        address: 'live:lr-a',
+        beside: 'live:lr-b',
+        pane: 'narrative',
+        evidence: 'checks',
+      },
+      besideResolution: {
+        ...resolution,
+        target: { liveRef: 'lr-b' },
+        session: sessions[1],
+        live: live({ live_ref: 'lr-b' }),
+      },
+      onCloseBeside,
+      onPane,
+    })
+    const primary = screen.getByRole('region', { name: 'Current session' })
+    const beside = screen.getByRole('region', { name: 'Session beside' })
+    primary.focus()
+    fireEvent.keyDown(primary, {
+      key: 'ArrowRight',
+      altKey: true,
+      shiftKey: true,
+    })
+    expect(beside).toHaveFocus()
+    expect(onPane).toHaveBeenCalledWith('beside')
+    fireEvent.keyDown(beside, { key: 'w', altKey: true, shiftKey: true })
+    expect(onCloseBeside).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the pointer Open beside button out of the listbox tree and the tab order', async () => {
+    const onOpenBeside = vi.fn()
+    renderSurface({ onOpenBeside })
+    // Only the OTHER row offers it; the selected row is already the primary session.
+    const buttons = screen.getAllByLabelText('Open beside')
+    expect(buttons).toHaveLength(1)
+    // A listbox owns options, so the pointer convenience is not part of its accessible
+    // tree and adds no tab stop; the keyboard routes are the command and the palette.
+    expect(screen.queryByRole('button', { name: 'Open beside' })).toBeNull()
+    expect(buttons[0]).toHaveAttribute('aria-hidden', 'true')
+    expect(buttons[0]).toHaveAttribute('tabindex', '-1')
+    for (const option of screen.getAllByRole('option'))
+      expect(option.querySelector('button')).toBeNull()
+    await userEvent.click(buttons[0])
+    expect(onOpenBeside).toHaveBeenCalledWith(sessions[1])
+  })
+
+  it('opens the focused rail row beside with the declared command, and nothing else', () => {
+    const onOpenBeside = vi.fn()
+    renderSurface({ onOpenBeside })
+    const [selected, other] = screen.getAllByRole('option')
+    other.focus()
+    fireEvent.keyDown(other, { key: 'o', altKey: true, shiftKey: true })
+    expect(onOpenBeside).toHaveBeenCalledTimes(1)
+    expect(onOpenBeside).toHaveBeenCalledWith(sessions[1])
+    // The command names a row. With focus on the open session's own row, or outside the
+    // rail, it opens nothing: it never picks a session the person did not point at.
+    onOpenBeside.mockClear()
+    selected.focus()
+    fireEvent.keyDown(selected, { key: 'o', altKey: true, shiftKey: true })
+    ;(document.activeElement as HTMLElement).blur()
+    fireEvent.keyDown(document.body, { key: 'o', altKey: true, shiftKey: true })
+    expect(onOpenBeside).not.toHaveBeenCalled()
+  })
+
+  it('hops focus and closes from inside a composer without typing into either draft', async () => {
+    const user = userEvent.setup()
+    const onPane = vi.fn()
+    const onCloseBeside = vi.fn()
+    renderSplit({ onPane, onCloseBeside })
+    const primary = composerOf('Current session')
+    const beside = composerOf('Session beside')
+    await user.click(primary)
+    await user.keyboard('first draft')
+    await user.keyboard('{Alt>}{Shift>}{ArrowRight}{/Shift}{/Alt}')
+    expect(onPane).toHaveBeenCalledWith('beside')
+    expect(beside).toHaveFocus()
+    await user.keyboard('second draft')
+    expect(primary.value).toBe('first draft')
+    expect(beside.value).toBe('second draft')
+    await user.keyboard('{Alt>}{Shift>}W{/Shift}{/Alt}')
+    expect(onCloseBeside).toHaveBeenCalledOnce()
+    expect(beside.value).toBe('second draft')
+  })
+
+  it('gives each column its own composer, and only the focused one receives keys', async () => {
+    const user = userEvent.setup()
+    renderSplit()
+    const primary = composerOf('Current session')
+    const beside = composerOf('Session beside')
+    expect(primary.id).not.toBe(beside.id)
+    await user.click(beside)
+    await user.keyboard('to the second')
+    expect(beside.value).toBe('to the second')
+    expect(primary.value).toBe('')
+    await user.click(primary)
+    await user.keyboard('to the first')
+    expect(primary.value).toBe('to the first')
+    expect(beside.value).toBe('to the second')
+  })
+
+  it('draws no focus ring and no tab target around a single narrative', () => {
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
+    })
+    const narrative = pane('narrative')!
+    expect(narrative).not.toHaveAttribute('tabindex')
+    expect(narrative.className).not.toContain('focus-within:ring')
+  })
+
+  it('names the switch between two columns as a group', () => {
+    renderSplit()
+    const bar = screen.getByRole('group', { name: 'Switch session' })
+    expect(
+      within(bar).getByRole('button', { name: 'Current session' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      within(bar).getByRole('button', { name: 'Session beside' }),
+    ).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('does not offer a composer for a host isolation refusal', () => {
     const failed = {
       ...RUN,
@@ -165,12 +369,12 @@ describe('WorkSurface', () => {
     expect(pane('narrative')?.className.split(/\s+/)).not.toContain('hidden')
   })
 
-  it('lays the list out at 300 px, 280 px at 1360 px and below, with no card chrome', async () => {
+  it('lays the list out at 360 px, 280 px at 1360 px and below, with no card chrome', async () => {
     renderSurface()
     await screen.findByTestId('work-rail')
     const grid = document.querySelector('[data-context]') as HTMLElement
     const cls = grid.className
-    expect(cls).toContain('[--list-w:300px]')
+    expect(cls).toContain('[--list-w:360px]')
     expect(cls).toContain('max-[1360px]:[--list-w:280px]')
     expect(cls).toContain('min-[761px]:grid-cols-[var(--list-w)_minmax(0,1fr)]')
     for (const id of ['rail', 'narrative', 'context'])
@@ -392,19 +596,9 @@ describe('WorkSurface', () => {
     expect(screen.queryByTestId('work-composer')).toBeNull()
   })
 
-  it('the menu says Unpin for a pinned session the address names by its run', async () => {
-    const user = userEvent.setup()
-    renderSurface({
-      address: { address: 'run:run-a', pane: 'narrative', evidence: 'checks' },
-      pinned: new Set(['live:lr-a']),
-    })
-    await user.click(await screen.findByTestId('narrative-menu'))
-    expect(
-      await screen.findByRole('menuitem', { name: /unpin/i }),
-    ).toBeInTheDocument()
-  })
-
-  it('a pin stored under the run name is found once the session is live, and Unpin removes it', async () => {
+  // The pin is the engine's, kept against a run (#2130): the card's menu reads it from the
+  // list's set or from the session's own runs, and hands its own session to the toggle.
+  it('the menu says Unpin for a pinned session, and Unpin acts on the open session', async () => {
     const user = userEvent.setup()
     const managed = mergeSessions(
       [live({ attribution: 'managed', run_ref: 'run-a' })],
@@ -415,12 +609,96 @@ describe('WorkSurface', () => {
     renderSurface({
       address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
       resolution: { ...resolution, session: managed },
-      pinned: new Set(['run:run-a']),
+      pinned: new Set([managed.key]),
       onTogglePin,
     })
     await user.click(await screen.findByTestId('narrative-menu'))
     await user.click(await screen.findByRole('menuitem', { name: /unpin/i }))
-    expect(onTogglePin).toHaveBeenCalledWith('run:run-a')
+    expect(onTogglePin).toHaveBeenCalledWith('live:lr-a', managed)
+  })
+
+  it('a session the list does not hold still says Unpin when its own run is pinned', async () => {
+    // A cold deep link past the loaded page: the set is empty, the engine's answer is on the run.
+    const user = userEvent.setup()
+    const deepLinked = mergeSessions([], [{ ...RUN, pinned: true }])[0]
+    renderSurface({
+      address: {
+        address: deepLinked.key,
+        pane: 'narrative',
+        evidence: 'checks',
+      },
+      resolution: { ...resolution, session: deepLinked },
+      pinned: new Set(),
+    })
+    await user.click(await screen.findByTestId('narrative-menu'))
+    expect(
+      await screen.findByRole('menuitem', { name: /unpin/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers no Pin for a session with no run: the engine has nothing to pin it on', async () => {
+    const user = userEvent.setup()
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
+    })
+    await user.click(await screen.findByTestId('narrative-menu'))
+    expect(screen.queryByRole('menuitem', { name: /pin/i })).toBeNull()
+  })
+
+  it('offers Pin for a launched session that is not pinned', async () => {
+    const user = userEvent.setup()
+    const launched = mergeSessions([], [RUN])[0]
+    renderSurface({
+      address: { address: launched.key, pane: 'narrative', evidence: 'checks' },
+      resolution: { ...resolution, session: launched },
+    })
+    await user.click(await screen.findByTestId('narrative-menu'))
+    expect(
+      await screen.findByRole('menuitem', { name: /^pin/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('pins the beside session from the beside column, not the primary', async () => {
+    // Each column hands its own session to the toggle; the beside column's menu must
+    // not act on the primary session. Both runs never started (no host isolation), so
+    // no composer mounts in either column and the menus stand alone.
+    const user = userEvent.setup()
+    const onTogglePin = vi.fn()
+    const refused = (run: RunDTO): RunDTO => ({
+      ...run,
+      state: 'failed',
+      reason:
+        'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+    })
+    const split = mergeSessions(
+      [managedA, managedB],
+      [refused(RUN), refused(RUN_B)],
+    )
+    const refusedA = split.find((s) => s.live?.live_ref === 'lr-a')!
+    const refusedB = split.find((s) => s.live?.live_ref === 'lr-b')!
+    renderSplit({
+      sessions: split,
+      onTogglePin,
+      resolution: {
+        ...resolution,
+        session: refusedA,
+        live: managedA,
+        runs: [refused(RUN)],
+      },
+      besideResolution: {
+        ...resolution,
+        target: { liveRef: 'lr-b' },
+        session: refusedB,
+        live: managedB,
+        runs: [refused(RUN_B)],
+      },
+    })
+    const beside = screen.getByRole('region', { name: 'Session beside' })
+    await user.click(await within(beside).findByTestId('narrative-menu'))
+    // The opened menu is the portaled one this column's button opened; the payload
+    // assertion below is what ties it to the beside session.
+    await user.click(await screen.findByRole('menuitem', { name: /^pin/i }))
+    expect(onTogglePin).toHaveBeenCalledWith('live:lr-b', refusedB)
   })
 })
 

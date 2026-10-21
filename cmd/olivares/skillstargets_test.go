@@ -137,14 +137,21 @@ func (c skillsComposition) assign(who skillsComposition, kind, id, revision stri
 // installPack publishes a one-skill pack and returns its first revision ID.
 func (c skillsComposition) installPack(name string) string {
 	c.t.Helper()
+	return c.installPackMembers(name, "research")
+}
+
+func (c skillsComposition) installPackMembers(name string, members ...string) string {
+	c.t.Helper()
 	var archive bytes.Buffer
 	zw := zip.NewWriter(&archive)
-	file, err := zw.Create("research/SKILL.md")
-	if err != nil {
-		c.t.Fatal(err)
-	}
-	if _, err := file.Write([]byte("---\nname: research\ndescription: Review primary sources.\nlicense: MIT\n---\nRead the cited source.\n")); err != nil {
-		c.t.Fatal(err)
+	for _, member := range members {
+		file, err := zw.Create(member + "/SKILL.md")
+		if err != nil {
+			c.t.Fatal(err)
+		}
+		if _, err := file.Write([]byte("---\nname: " + member + "\ndescription: Review primary sources.\nlicense: MIT\n---\nRead the cited source.\n")); err != nil {
+			c.t.Fatal(err)
+		}
 	}
 	if err := zw.Close(); err != nil {
 		c.t.Fatal(err)

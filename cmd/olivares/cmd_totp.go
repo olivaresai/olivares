@@ -36,8 +36,9 @@ type cliTOTPStatus struct {
 
 func usersTOTPCmd(client bootstrapClient) *cobra.Command {
 	return &cobra.Command{
-		Use:   "totp <user-id>",
-		Short: "Show an account's TOTP second factor (non-secret)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "totp <user-id>",
+		Short:       "Show an account's TOTP second factor (non-secret)",
 		Long: "Report whether a local account holds a confirmed TOTP factor: algorithm, activation\n" +
 			"time and how many recovery codes remain. Never key material. Tenant-scoped read\n" +
 			"(membership:read) resolved from --tenant like every tenant verb.",
@@ -70,8 +71,9 @@ func usersTOTPCmd(client bootstrapClient) *cobra.Command {
 func usersTOTPResetCmd(client bootstrapClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "totp-reset <user-id>",
-		Short: "Reset an account's TOTP factor (destructive)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "totp-reset <user-id>",
+		Short:       "Reset an account's TOTP factor (destructive)",
 		Long: "Delete an account's TOTP factor and every recovery code — the lost-device path.\n" +
 			"The account enroles again at next login when the require-for-administrators policy\n" +
 			"demands one, or whenever it chooses to. Needs tenant-scoped membership:write and a\n" +
@@ -110,8 +112,9 @@ func authTOTPPolicyCmd(flags *authClientFlags) *cobra.Command {
 	client := bootstrapClient{flags: flags, surface: "auth totp-policy"}
 	var requireForAdmins bool
 	cmd := &cobra.Command{
-		Use:   "totp-policy",
-		Short: "Read or set the require-TOTP-for-administrators policy (system:admin)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "totp-policy",
+		Short:       "Read or set the require-TOTP-for-administrators policy (system:admin)",
 		Long: "The deployment-wide local-account policy: when on, administrators (superadmins and\n" +
 			"any tenant admin/owner) must enrol a TOTP factor before their password login\n" +
 			"completes. Reading needs system:admin; setting it also needs a signed-in session, not an\n" +
@@ -120,21 +123,23 @@ func authTOTPPolicyCmd(flags *authClientFlags) *cobra.Command {
   olivares auth totp-policy set --require-for-admins`,
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:     "get",
-		Short:   "Read the policy",
-		Long:    "Read whether local administrators must enrol a TOTP factor before password login completes. Requires system:admin; returns no factor or recovery-code material.",
-		Example: "  olivares auth totp-policy get",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get",
+		Short:       "Read the policy",
+		Long:        "Read whether local administrators must enrol a TOTP factor before password login completes. Requires system:admin; returns no factor or recovery-code material.",
+		Example:     "  olivares auth totp-policy get",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return totpPolicyRender(cmd, client, http.MethodGet, nil)
 		},
 	})
 	set := &cobra.Command{
-		Use:     "set",
-		Short:   "Set the policy",
-		Long:    "Set the deployment-wide TOTP requirement for local administrators. Requires system:admin and a signed-in session (an API token is never enough); it may also ask for an extra check if your administrator turned one on. Set --require-for-admins=false to turn the requirement off; existing factors remain enrolled.",
-		Example: "  olivares auth totp-policy set --require-for-admins",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set",
+		Short:       "Set the policy",
+		Long:        "Set the deployment-wide TOTP requirement for local administrators. Requires system:admin and a signed-in session (an API token is never enough); it may also ask for an extra check if your administrator turned one on. Set --require-for-admins=false to turn the requirement off; existing factors remain enrolled.",
+		Example:     "  olivares auth totp-policy set --require-for-admins",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return totpPolicyRender(cmd, client, http.MethodPut, map[string]any{"require_for_admins": requireForAdmins})
 		},

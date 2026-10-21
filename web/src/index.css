@@ -17,7 +17,7 @@
 /* Generated design tokens (DTCG → Style Dictionary). DO NOT edit the output;
  * edit web/tokens/*.tokens.json and run `pnpm tokens` (CI: `pnpm tokens:check`). */
 @import './styles/tokens.css';
-/* Geist Variable and JetBrains Mono 400/500, self-hosted (SIL OFL 1.1). */
+/* Inter, Space Grotesk and JetBrains Mono 400/500, self-hosted (SIL OFL 1.1). */
 @import './styles/fonts.css';
 
 /* ⛔ THE DTCG SOURCES ARE NOT A TEMPLATE, AND TAILWIND WAS READING THEM AS ONE.
@@ -56,8 +56,10 @@
     /* The body step of the ladder (14/20); the root stays 16px for rem math. */
     font-size: var(--text-body);
     line-height: var(--text-body--line-height);
-    /* Geist's first stylistic set, as the approved design renders it. */
-    font-feature-settings: 'ss01' 1;
+    /* Inter's open digits (ss01) and alternate one (cv01), as the website sets them. */
+    font-feature-settings:
+      'ss01' 1,
+      'cv01' 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;

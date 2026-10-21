@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -53,13 +54,27 @@ type hookSecretTestRun struct {
 	h      *harness
 	tenant model.TenantID
 	vault  *hookSecretVault
+	opens  int // vault opens the launch itself made; a hook never adds one
 	token  string
 	runRef string
 	server *http.Server
 	logs   *bytes.Buffer
 }
 
+// hookSecretLaunch is what the session under test is given: vault secrets as
+// environment variables, and/or a profile's package registries whose token is
+// opened at launch and recorded in no secret_env.
+type hookSecretLaunch struct {
+	secretEnv  []sessions.SecretEnvRef
+	registries []sessions.SessionRegistry
+}
+
 func newHookSecretTestRun(t *testing.T, value string, wrap func(auth.PolicyEvaluator) auth.PolicyEvaluator, configure ...func(*engine)) *hookSecretTestRun {
+	t.Helper()
+	return newHookSecretLaunchTestRun(t, value, hookSecretLaunch{secretEnv: []sessions.SecretEnvRef{{Env: "TEST_SECRET", Secret: "env/test"}}}, wrap, configure...)
+}
+
+func newHookSecretLaunchTestRun(t *testing.T, value string, launch hookSecretLaunch, wrap func(auth.PolicyEvaluator) auth.PolicyEvaluator, configure ...func(*engine)) *hookSecretTestRun {
 	t.Helper()
 	h := newHarness(t)
 	tenant := model.TenantID(h.tenantA)
@@ -77,19 +92,40 @@ func newHookSecretTestRun(t *testing.T, value string, wrap func(auth.PolicyEvalu
 		fixture.token, err = credentials.mint(ctx, tenant, intent)
 		return sessions.LaunchDecision{Allowed: err == nil}, err
 	}))(m)
+	profileBody := map[string]any{"driver": "claude", "auth_source": "provider_account_home", "config_home": t.TempDir(), "user_home": t.TempDir()}
+	runBody := map[string]any{"transport": "stream-json", "permission_mode": "default", "isolation": "native"}
+	if len(launch.registries) > 0 {
+		// A profile's registries are written into the run's own npm configuration,
+		// which needs the engine's hook data directory.
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		sessions.WithClaudeHookPEP(t.TempDir(), executable)(m)
+		profileBody["session_registries"] = launch.registries
+	}
+	if len(launch.secretEnv) > 0 {
+		runBody["secret_env"] = launch.secretEnv
+	}
 	var profile struct {
 		Ref string `json:"profile_ref"`
 	}
-	if code := h.reqInto(http.MethodPost, "/v1/m/sessions/provider-profiles", h.adminToken, h.tenantA, map[string]any{"driver": "claude", "auth_source": "provider_account_home", "config_home": t.TempDir(), "user_home": t.TempDir()}, &profile); code != http.StatusCreated {
-		t.Fatalf("profile=%d", code)
+	if code, raw := h.req(http.MethodPost, "/v1/m/sessions/provider-profiles", h.adminToken, h.tenantA, profileBody); code != http.StatusCreated {
+		t.Fatalf("profile=%d: %s", code, raw)
+	} else if err := json.Unmarshal(raw, &profile); err != nil {
+		t.Fatal(err)
 	}
+	runBody["provider_profile_ref"] = profile.Ref
 	var run struct {
 		Ref string `json:"run_ref"`
 	}
-	if code := h.reqInto(http.MethodPost, "/v1/m/sessions/runs", h.adminToken, h.tenantA, map[string]any{"transport": "stream-json", "permission_mode": "default", "isolation": "native", "provider_profile_ref": profile.Ref, "secret_env": []sessions.SecretEnvRef{{Env: "TEST_SECRET", Secret: "env/test"}}}, &run); code != http.StatusCreated {
-		t.Fatalf("launch=%d", code)
+	if code, raw := h.req(http.MethodPost, "/v1/m/sessions/runs", h.adminToken, h.tenantA, runBody); code != http.StatusCreated {
+		t.Fatalf("launch=%d: %s", code, raw)
+	} else if err := json.Unmarshal(raw, &run); err != nil {
+		t.Fatal(err)
 	}
 	fixture.runRef = run.Ref
+	fixture.opens = vault.openCount()
 	t.Cleanup(func() { h.req(http.MethodPost, "/v1/m/sessions/runs/"+run.Ref+"/stop", h.adminToken, h.tenantA, nil) })
 	service := h.set.gov.EngineApprovals()
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
@@ -634,7 +670,7 @@ func reviewHookSecretInput(t *testing.T, fixture *hookSecretTestRun, tool string
 		t.Error("safe input was not allowed after review")
 	}
 	assertHookSecretNotRetained(t, fixture, hookSecretCanary)
-	if fixture.vault.openCount() != 1 {
+	if fixture.vault.openCount() != fixture.opens {
 		t.Error("hook reopened the vault")
 	}
 }
@@ -659,4 +695,81 @@ func assertHookSecretNotRetained(t *testing.T, fixture *hookSecretTestRun, value
 			t.Error("canonical audit retained the vault value")
 		}
 	}
+}
+
+// A session whose only secret is a profile's package registry token has no
+// secret_env: the token is armed in the run's redactor and recorded in no
+// secret_env_names, so the hook and the approval must still apply that redactor.
+var hookRegistryLaunch = hookSecretLaunch{registries: []sessions.SessionRegistry{
+	{Kind: "npm", URL: "https://npm.acme.example/api/npm/", Scope: "@acme", Secret: "env/npm-acme"},
+}}
+
+func TestSessionClaudeHookWithholdsRegistryTokenOfASessionWithNoVaultSecrets(t *testing.T) {
+	for _, scenario := range []struct {
+		name  string
+		tool  string
+		input map[string]any
+		want  string
+	}{
+		{"environment assignment", "Bash",
+			map[string]any{"command": "PASSWORD=" + hookSecretCanary + " printf visible"},
+			"Claude Code requests Bash\ncommand: PASSWORD=[secret env/npm-acme] printf visible"},
+		{"a path", "Write",
+			map[string]any{"file_path": "/tmp/" + hookSecretCanary, "content": "x"},
+			"Claude Code requests Write\npath: /tmp/[secret env/npm-acme]"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			fixture := newHookSecretLaunchTestRun(t, hookSecretCanary, hookRegistryLaunch, nil)
+			reviewHookSecretInput(t, fixture, scenario.tool, scenario.input, scenario.want)
+		})
+	}
+}
+
+// A masked operand the human could not review is refused before review, and its
+// evidence keeps no token: the issue's scenario, after reading the 0600 .npmrc.
+func TestSessionClaudeHookRefusesRegistryTokenOperationsWithoutRetainingIt(t *testing.T) {
+	for _, command := range []string{
+		"npm whoami --//npm.acme.example/:_authToken=" + hookSecretCanary,
+		"printf " + hookSecretCanary,
+	} {
+		t.Run(command, func(t *testing.T) {
+			fixture := newHookSecretLaunchTestRun(t, hookSecretCanary, hookRegistryLaunch, nil)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			raw, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": command}})
+			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(raw)).WithContext(ctx)
+			req.Header.Set("Authorization", "Bearer "+fixture.token)
+			rec := httptest.NewRecorder()
+			fixture.server.Handler.ServeHTTP(rec, req)
+			if !strings.Contains(rec.Body.String(), `"permissionDecision":"deny"`) {
+				t.Error("registry token operation was not refused before human review")
+			}
+			all, _, err := fixture.h.set.gov.EngineApprovals().List(t.Context(), fixture.tenant, hookpep.ActionCapability, "", "")
+			if err != nil || len(all) != 0 {
+				t.Error("unreviewable operation entered the human queue")
+			}
+			assertHookSecretNotRetained(t, fixture, hookSecretCanary)
+		})
+	}
+}
+
+// A resume is a second launch: the stored profile's registries must reach its
+// intent again, or the resumed generation's credential would name nothing.
+func TestSessionClaudeHookWithholdsRegistryTokenAfterResume(t *testing.T) {
+	fixture := newHookSecretLaunchTestRun(t, hookSecretCanary, hookRegistryLaunch, nil)
+	h := fixture.h
+	if code, raw := h.req(http.MethodPost, "/v1/m/sessions/runs/"+fixture.runRef+"/stop", h.adminToken, h.tenantA, nil); code != http.StatusOK {
+		t.Fatalf("stop=%d: %s", code, raw)
+	}
+	if code, raw := h.req(http.MethodPost, "/v1/m/sessions/runs/"+fixture.runRef+"/resume", h.adminToken, h.tenantA, nil); code != http.StatusOK {
+		t.Fatalf("resume=%d: %s", code, raw)
+	}
+	fixture.opens = fixture.vault.openCount() // the resume reopened the token; a hook never does
+	reviewHookSecretInput(t, fixture, "Bash", map[string]any{"command": "PASSWORD=" + hookSecretCanary + " printf visible"},
+		"Claude Code requests Bash\ncommand: PASSWORD=[secret env/npm-acme] printf visible")
+}
+
+func TestSessionClaudeHookKeepsEvidenceOfASessionWithNoSecrets(t *testing.T) {
+	fixture := newHookSecretLaunchTestRun(t, hookSecretCanary, hookSecretLaunch{}, nil)
+	reviewHookSecretInput(t, fixture, "Bash", map[string]any{"command": "printf visible-literal"}, "Claude Code requests Bash\ncommand: printf visible-literal")
 }

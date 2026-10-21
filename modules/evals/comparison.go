@@ -6,6 +6,7 @@ package evals
 
 import (
 	"context"
+	"math"
 	"sort"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -42,7 +43,24 @@ const (
 	ComparisonRegressionDisabled ComparisonReason = "regression_disabled"
 	ComparisonLegacyUnknown      ComparisonReason = "legacy_evidence_unknown"
 	ComparisonBudgetNotScored    ComparisonReason = "budget_not_scored"
+	// ComparisonInconclusiveNoise marks a comparable run whose score drop is over the
+	// regression threshold but whose pass-rate difference interval includes zero:
+	// at this n the drop cannot be told from noise, so it is not a regression.
+	ComparisonInconclusiveNoise ComparisonReason = "inconclusive_noise"
 )
+
+// PassRateDiff is the pass-rate difference against the baseline with its 95%
+// Newcombe interval and both denominators. Drop is baseline minus this run, so a
+// positive drop is a worse run; DropCI excluding zero (Lo > 0) is what makes a
+// drop over the threshold a regression.
+type PassRateDiff struct {
+	BaselinePassed int     `json:"baseline_passed"`
+	BaselineN      int     `json:"baseline_n"`
+	Passed         int     `json:"passed"`
+	N              int     `json:"n"`
+	Drop           float64 `json:"drop"`
+	DropCI         ciDTO   `json:"drop_ci"`
+}
 
 // ComparisonEvidence is immutable. Metrics belong to this receipt, not to the
 // mutable historical aggregate. No raw outputs or case bodies are stored here.
@@ -66,6 +84,7 @@ type ComparisonEvidence struct {
 	BaselineScore       float64            `json:"baseline_score,omitempty"`
 	Drift               float64            `json:"drift"`
 	Regressed           bool               `json:"regressed"`
+	PassRateDiff        *PassRateDiff      `json:"pass_rate_diff,omitempty"`
 	Changed             []string           `json:"changed,omitempty"`
 	ObservedModels      []string           `json:"observed_models,omitempty"`
 	CacheHits           int                `json:"cache_hits"`
@@ -322,7 +341,42 @@ func (p *comparisonPlan) complete(agg runAggregate) (ComparisonEvidence, error) 
 	}
 	if c.Status == ComparisonComparable {
 		c.Drift = c.BaselineScore - c.Score
-		c.Regressed = c.Drift > c.Identity.RegressionThreshold
+		c.PassRateDiff = passRateDiff(*p.baseline, agg)
+		if c.Drift > c.Identity.RegressionThreshold {
+			switch {
+			case c.PassRateDiff == nil:
+				// No usable denominator in the baseline receipt: unknown evidence, which
+				// the gate fails closed on, never "noise".
+				c.Status = ComparisonUnknown
+				c.Reason = ComparisonBaselineUnknown
+			case c.PassRateDiff.DropCI.Lo > 0:
+				c.Regressed = true
+			default:
+				// Over the threshold, but the interval of the pass-rate difference
+				// includes zero: at this n the drop cannot be told from noise.
+				c.Reason = ComparisonInconclusiveNoise
+			}
+		}
 	}
 	return c, nil
+}
+
+// passRateDiff derives the baseline's pass count from its receipt (pass rate over
+// the scored population, which a complete baseline guarantees equals the selected
+// cases) and puts the Newcombe interval on baseline minus this run. It returns nil
+// when the receipt does not carry a usable denominator or pass rate (no scored
+// cases, or a rate outside [0,1]) or this run scored nothing: no denominator, no
+// interval.
+func passRateDiff(baseline ComparisonEvidence, agg runAggregate) *PassRateDiff {
+	baselineN := baseline.Scored.Count
+	if baselineN <= 0 || !(baseline.PassRate >= 0 && baseline.PassRate <= 1) {
+		return nil
+	}
+	baselinePassed := int(math.Round(baseline.PassRate * float64(baselineN)))
+	n := agg.passed + agg.failed
+	d, lo, hi, ok := newcombeDifference(baselinePassed, baselineN, agg.passed, n)
+	if !ok {
+		return nil
+	}
+	return &PassRateDiff{BaselinePassed: baselinePassed, BaselineN: baselineN, Passed: agg.passed, N: n, Drop: d, DropCI: ciDTO{Lo: lo, Hi: hi}}
 }

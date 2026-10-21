@@ -38,7 +38,7 @@ trust an attestation for the runtime; most rows below end in an API call or a fi
 | **Incident handling** | Immutable, hash-chained audit ledger; reconstructable forensic timeline; continuous WORM/SIEM export; published SEV model. | `docs/STATUS-AND-INCIDENT-COMMS.md`; SIEM export (CEF/LEEF/syslog/OTLP/OCSF) |
 | **Business continuity / DR** | Self-hosted: the institution owns backups/DR of its estate; the plane ships backup/restore of its own stores + integrity re-verification. | backup/restore UI + audit re-verify |
 | **Datacenter / physical / network** | **Not applicable — self-hosted.** The institution's datacenter/cloud controls apply; the engine's console and API listen on every interface by default (TLS on, no default credentials; `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` restricts them to the host), push-only collectors, no other inbound listener. | `ARCHITECTURE.md` (topology) |
-| **Privacy / data subject rights** | RTBF erasure workflow (hold-gate, dual-control, crypto-shredding) with ledger-anchored receipts; retention/legal-hold. | `GET /v1/m/compliance/…erasure`; `modules/compliance/` |
+| **Privacy / data subject rights** | Business (Regulated Operations): RTBF erasure workflow (hold-gate, dual-control, crypto-shredding) with ledger-anchored receipts, and legal holds; retention schedules in Community. | `GET /v1/m/compliance/…erasure`; `modules/compliance/` |
 | **Accessibility (procurement often bundles)** | VPAT 2.5Rev / EN 301 549 / WCAG 2.1 AA (+2.2 tested) self-assessment with an automated AT-verification gate. | `docs/accessibility/VPAT-olivares-admin.md` |
 
 ## Honest gaps (the same organizational distance as SOC 2)

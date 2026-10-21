@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -102,4 +103,63 @@ func TestProviderLaunchSetupFailureNamesSafeStageAndIsBounded(t *testing.T) {
 	if !strings.Contains(refusal, "session MCP setup") || strings.Contains(refusal, "fixture-secret") {
 		t.Fatalf("unsafe or unhelpful refusal: %s", refusal)
 	}
+}
+
+// queuedMCP is a session MCP source whose store read waits its turn behind the
+// other launches on the engine's one store connection, then succeeds.
+type queuedMCP struct{ wait time.Duration }
+
+func (f queuedMCP) ConfigureSessionMCP(ctx context.Context, _ model.TenantID, _, _ string, _ *LaunchSpec) (func(), error) {
+	select {
+	case <-time.After(f.wait):
+		return func() {}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// A start that queues behind a burst of other starts is slow, not refused: the
+// store read of a setup waited 4 s on a disk under sync load, and a burst can
+// wait longer than the 5 s this deadline used to be.
+func TestProviderLaunchSetupWaitsBehindOtherLaunches(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m := New()
+		m.SessionMCP = queuedMCP{wait: 20 * time.Second}
+		p, spec := CreateRunParams{ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, LaunchSpec{}
+		stage, err := m.prepareSessionLaunch(t.Context(), t.Context(), model.TenantID("fixture"), "run", &p, &spec)
+		if err != nil {
+			t.Fatalf("a setup that queued 20 s was refused at %q: %v", stage, err)
+		}
+	})
+}
+
+// The wait stays bounded: a setup that never answers is refused at the deadline.
+func TestProviderLaunchSetupStillRefusesAtTheDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m := New()
+		m.SessionMCP = queuedMCP{wait: 24 * time.Hour}
+		p, spec := CreateRunParams{ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, LaunchSpec{}
+		start := time.Now()
+		stage, err := m.prepareSessionLaunch(t.Context(), t.Context(), model.TenantID("fixture"), "run", &p, &spec)
+		if !errors.Is(err, context.DeadlineExceeded) || stage != "session MCP setup" || time.Since(start) != sessionLaunchSetupTimeout {
+			t.Fatalf("stage=%q err=%v after %v, want a refusal at %v", stage, err, time.Since(start), sessionLaunchSetupTimeout)
+		}
+	})
+}
+
+// The deadline derives from the create request: a request the client abandoned
+// stops the setup at once, not at the deadline.
+func TestProviderLaunchSetupStopsWhenTheRequestIsCancelled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m := New()
+		m.SessionMCP = queuedMCP{wait: 24 * time.Hour}
+		p, spec := CreateRunParams{ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverClaude}}, LaunchSpec{}
+		ctx, cancel := context.WithCancel(t.Context())
+		time.AfterFunc(10*time.Second, cancel)
+		start := time.Now()
+		stage, err := m.prepareSessionLaunch(ctx, t.Context(), model.TenantID("fixture"), "run", &p, &spec)
+		if !errors.Is(err, context.Canceled) || stage != "session MCP setup" || time.Since(start) != 10*time.Second {
+			t.Fatalf("stage=%q err=%v after %v, want a cancelled setup at 10s", stage, err, time.Since(start))
+		}
+	})
 }

@@ -183,8 +183,9 @@ func resolveWorkClientConfig(cfg *agentClientConfig) error {
 
 func newWorkCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "work",
-		Short: "Manage durable cross-session work, leases, decisions, and acceptance",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "work",
+		Short:       "Manage durable cross-session work, leases, decisions, and acceptance",
 		Long: "work is the durable operator surface for backlog, ownership, leases, dependencies,\n" +
 			"acceptance criteria, and decisions. Mutations always cross the engine\n" +
 			"REST API through validate, plan, or apply; this CLI holds no local work state.",
@@ -194,9 +195,9 @@ func newWorkCmd() *cobra.Command {
 			"  olivares work watch --cursor 01989d7d-32ac-7bb0-878d-3254f349a102",
 	}
 	cmd.AddCommand(
-		newWorkMutationCmd("validate"),
-		newWorkMutationCmd("plan"),
-		newWorkMutationCmd("apply"),
+		newWorkMutationCmd("validate", "read"),
+		newWorkMutationCmd("plan", "write"),
+		newWorkMutationCmd("apply", "delete"),
 		newProtocolBindingCmd(),
 		newWorkGetCmd(),
 		newWorkListCmd(),
@@ -208,8 +209,9 @@ func newWorkCmd() *cobra.Command {
 
 func newWorkReplayCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "replay",
-		Short: "Replay a dead-lettered durable work event",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "replay",
+		Short:       "Replay a dead-lettered durable work event",
 		Long: "replay exposes governed recovery for a durable work event whose outbox delivery reached " +
 			"dead-letter. Recovery keeps the original event ID and uses the same validate, plan, and " +
 			"apply envelope as other work mutations.",
@@ -222,8 +224,9 @@ func newWorkReplayCmd() *cobra.Command {
 		version              uint64
 	)
 	event := &cobra.Command{
-		Use:   "event <event-id>",
-		Short: "Requeue one dead-lettered WorkEvent under its stable event ID",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "event <event-id>",
+		Short:       "Requeue one dead-lettered WorkEvent under its stable event ID",
 		Long: "event validates, plans, or applies one tenant-admin outbox recovery. Apply requires the " +
 			"plan hash and row version returned by plan, plus an idempotency key for exact retries.",
 		Example: "  olivares work replay event 01989d7d-32ac-7bb0-878d-3254f349a102 --mode plan\n" +
@@ -293,16 +296,17 @@ func newWorkReplayCmd() *cobra.Command {
 	return cmd
 }
 
-func newWorkMutationCmd(mode string) *cobra.Command {
+func newWorkMutationCmd(mode, changesData string) *cobra.Command {
 	var (
 		cfg  agentClientConfig
 		opts workMutationOptions
 	)
 	cmd := &cobra.Command{
-		Use:     mode + " <command>",
-		Short:   workMutationShort(mode),
-		Long:    fmt.Sprintf("%s executes the %s phase for one durable work command. It sends the same command document used by the other phases and never performs work locally.", mode, mode),
-		Example: workMutationExample(mode),
+		Annotations: map[string]string{"changes_data": changesData},
+		Use:         mode + " <command>",
+		Short:       workMutationShort(mode),
+		Long:        fmt.Sprintf("%s executes the %s phase for one durable work command. It sends the same command document used by the other phases and never performs work locally.", mode, mode),
+		Example:     workMutationExample(mode),
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return workUsagef("%s requires exactly one work command", mode)
@@ -961,9 +965,10 @@ func workUsagef(format string, args ...any) error {
 func newWorkGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "get item|decision|lease <id>",
-		Short: "Get one durable work item, decision, or lease",
-		Long:  "get retrieves one tenant-visible work item snapshot, append-only decision, or WorkItem lease from the engine.",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get item|decision|lease <id>",
+		Short:       "Get one durable work item, decision, or lease",
+		Long:        "get retrieves one tenant-visible work item snapshot, append-only decision, or WorkItem lease from the engine.",
 		Example: "  olivares work get item 01989d7d-32ac-7bb0-878d-3254f349a102\n" +
 			"  olivares work get decision 01989d7d-4221-7429-ac66-d118af429159 -o json\n" +
 			"  olivares work get lease 01989d7d-32ac-7bb0-878d-3254f349a102",
@@ -1052,9 +1057,10 @@ func newWorkListCmd() *cobra.Command {
 		opts workListOptions
 	)
 	cmd := &cobra.Command{
-		Use:     "list items|decisions|leases",
-		Aliases: []string{"ls"},
-		Short:   "List durable work items, decisions, or leases with keyset pagination",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "list items|decisions|leases",
+		Aliases:     []string{"ls"},
+		Short:       "List durable work items, decisions, or leases with keyset pagination",
 		Long: "list returns one tenant-visible keyset page. Filters are an allowlist and are combined with AND by the engine. " +
 			"Decision lists are append-only history unless --effective or --revoked selects the current-head projection.",
 		Example: "  olivares work list items --status ready --limit 50\n" +
@@ -1229,9 +1235,10 @@ func newWorkWatchCmd() *cobra.Command {
 		opts workWatchOptions
 	)
 	cmd := &cobra.Command{
-		Use:   "watch",
-		Short: "Watch the durable work-event stream from a resumable cursor",
-		Long:  "watch opens the sessions work-stream SSE endpoint without a client deadline. Each persisted event is printed once by the server cursor; pass the last id back with --cursor to resume.",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "watch",
+		Short:       "Watch the durable work-event stream from a resumable cursor",
+		Long:        "watch opens the sessions work-stream SSE endpoint without a client deadline. Each persisted event is printed once by the server cursor; pass the last id back with --cursor to resume.",
 		Example: "  olivares work watch\n" +
 			"  olivares work watch --cursor 01989d7d-32ac-7bb0-878d-3254f349a102 -o json",
 		Args: cobra.NoArgs,

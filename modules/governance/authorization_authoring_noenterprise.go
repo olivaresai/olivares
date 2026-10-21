@@ -36,6 +36,11 @@ func (m *Module) handleCreateScopedGrant(w http.ResponseWriter, _ *http.Request,
 	authorizationRequiresBusiness(w)
 }
 
+func (m *Module) registerScopedGrantReads(reg api.RouteRegistrar) {
+	reg.Handle("GET", "/rbac/delegation-authority", permRBACRead, m.handleDelegationAuthority)
+	reg.Handle("GET", "/rbac/grants", permRBACRead, m.handleListScopedGrants)
+}
+
 func (m *Module) registerCreateScopedGrant(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/rbac/grants", permRBACAdmin, m.handleCreateScopedGrant)
 }

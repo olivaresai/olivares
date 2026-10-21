@@ -97,15 +97,21 @@ type EdgeObservation struct {
 // contract agreeing by inspection is a contract waiting to drift; the Claude PEP
 // having none is how a governed session and an ungoverned one painted the same.
 //
-// A producer MUST set both. A consumer that sees neither is looking at an edge
-// from a producer that has not declared itself, and must say "unknown" rather
-// than assume either value.
+// A producer sets the ones it can speak for: the ENGINE is a fact of the producer, the
+// POSTURE is a fact of the policy point, so a telemetry-only producer (the Claude OTLP
+// connector) declares the engine and leaves the posture out. A consumer that sees a
+// label absent must say "unknown" rather than assume a value.
 const (
 	// LabelEngine names the agent engine: EngineClaude, EngineCodex, EngineGrok.
 	LabelEngine = "engine"
 	// LabelPosture says whether the decision could impede: PostureEnforced or
 	// PostureObserved.
 	LabelPosture = "posture"
+	// LabelProjectFolder names the project a session works in: the last element of the
+	// working directory the agent reported, never the path. It is the producer's word
+	// and not an operator's `project` resource attribute (a FinOps dimension, another
+	// key), so one source names the session.
+	LabelProjectFolder = "project_folder"
 )
 
 // Engine keys. Lowercase is canonical (the same string is the provider alias).

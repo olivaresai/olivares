@@ -265,21 +265,163 @@ func attachmentsIn(t *testing.T, home string) []string {
 	return out
 }
 
-// A handoff reads a conversation that is finished. A running session is still
-// writing its file, and neither the preview nor the start answers for it.
-func TestHandoff_ARunningSessionIsRefused(t *testing.T) {
+// A handoff reads a conversation that is finished, so a running session is stopped
+// first, the way a person would stop it, and only then read. The preview reads it as
+// it is.
+func TestHandoff_ARunningSessionIsStoppedThenHandedOff(t *testing.T) {
 	f := newMoveFixture(t)
 	r := f.h.doJSON("GET", "/v1/m/sessions/runs/"+f.runRef+"/handoff", f.admin, nil, f.hdr)
-	if r.code != http.StatusConflict || !strings.Contains(r.raw, "stop the session first") {
+	if r.code != http.StatusOK || !strings.Contains(r.raw, "BLUE-HERON") {
 		t.Fatalf("preview of a running session = %d %s", r.code, r.raw)
 	}
+	if d, _ := f.m.getRun(context.Background(), f.tenant, f.runRef); d.State != stateRunning {
+		t.Fatalf("a preview changed the session: %s", d.State)
+	}
+
+	h := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b})
+	if h.code != http.StatusCreated || h.body["handoff_of"] != f.runRef {
+		t.Fatalf("handoff of a running session = %d %s", h.code, h.raw)
+	}
+	if d, _ := f.m.getRun(context.Background(), f.tenant, f.runRef); d.State != stateStopped {
+		t.Fatalf("the source is %s after its handoff, want stopped", d.State)
+	}
+	var stopped, handed bool
+	for _, ev := range f.events(t) {
+		detail, _ := ev["detail"].(string)
+		stopped = stopped || (ev["event"] == "stopping" && strings.Contains(detail, "hand it off"))
+		handed = handed || ev["event"] == "handed_off"
+	}
+	if !stopped || !handed {
+		t.Fatalf("the ledger of the source says stopped-for-handoff=%v handed-off=%v", stopped, handed)
+	}
+	files := attachmentsIn(t, f.homeB)
+	if len(files) != 1 {
+		t.Fatalf("attachments = %v", files)
+	}
+	body, _ := os.ReadFile(filepath.Join(f.homeB, handoffAttachmentDir, files[0]))
+	if !strings.Contains(string(body), "The codename is BLUE-HERON.") || !strings.HasPrefix(string(body), "# Transcript of an earlier Claude Code session") {
+		t.Fatalf("attachment:\n%s", body)
+	}
+}
+
+// Everything that can be refused without touching the running session is refused
+// before it is stopped: a person who gets a refusal still has a running session.
+func TestHandoff_ARunningSessionIsNotStoppedByARefusal(t *testing.T) {
+	f := newMoveFixture(t)
 	runs := f.runCount(t)
-	if r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b}); r.code != http.StatusConflict {
-		t.Fatalf("handoff of a running session = %d %s", r.code, r.raw)
+	still := func(name string) {
+		t.Helper()
+		if d, _ := f.m.getRun(context.Background(), f.tenant, f.runRef); d.State != stateRunning {
+			t.Fatalf("%s stopped the session (%s)", name, d.State)
+		}
+		if f.runCount(t) != runs || len(attachmentsIn(t, f.homeB)) != 0 {
+			t.Fatalf("%s started a session or wrote an attachment", name)
+		}
 	}
-	if f.runCount(t) != runs || len(attachmentsIn(t, f.homeB)) != 0 {
-		t.Fatal("a refused handoff started a session or wrote an attachment")
+	if r := f.post(t, "handoff", map[string]any{"provider_profile_ref": "ppf_" + model.NewID().String()}); r.code != http.StatusNotFound {
+		t.Fatalf("unknown profile = %d %s", r.code, r.raw)
 	}
+	still("an unknown target")
+	setRunSecretEnv(t, f, `[{"env":"DEPLOY_KEY","secret":"env/deploy"}]`)
+	if r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b}); r.code != http.StatusConflict || !strings.Contains(r.raw, "vault secrets") {
+		t.Fatalf("session with vault secrets = %d %s", r.code, r.raw)
+	}
+	still("a session with vault secrets")
+	setRunSecretEnv(t, f, "")
+
+	// A session whose tool has not started has no conversation yet.
+	setRunColumn(t, f, colState, statePending)
+	if r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b}); r.code != http.StatusConflict || !strings.Contains(r.raw, "not started") {
+		t.Fatalf("pending session = %d %s", r.code, r.raw)
+	}
+	setRunColumn(t, f, colState, stateRunning)
+	still("a session that has not started")
+}
+
+// The conversation is read once the tool has exited, not before: what it writes on its
+// way out is in the transcript.
+func TestHandoff_ReadsWhatTheToolWritesWhileItStops(t *testing.T) {
+	f := newMoveFixture(t)
+	transcript := filepath.Join(f.homeA, "projects", moveTestProject, moveTestSID+".jsonl")
+	f.fr.procs[0].onStop = func() {
+		fh, err := os.OpenFile(transcript, os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer fh.Close()
+		_, _ = fh.WriteString(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"WRITTEN-ON-THE-WAY-OUT"}]}}` + "\n")
+	}
+	r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b})
+	if r.code != http.StatusCreated {
+		t.Fatalf("handoff = %d %s", r.code, r.raw)
+	}
+	names := attachmentsIn(t, f.homeB)
+	if len(names) != 1 {
+		t.Fatalf("attachments = %v", names)
+	}
+	body, _ := os.ReadFile(filepath.Join(f.homeB, handoffAttachmentDir, names[0]))
+	if !strings.Contains(string(body), "WRITTEN-ON-THE-WAY-OUT") {
+		t.Fatalf("the transcript was read before the tool exited:\n%s", body)
+	}
+}
+
+// Everything the row and the home can refuse is refused while the session still runs.
+func TestHandoff_ARunningSessionIsNotStoppedForWhatItCouldNotBeHandedOff(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		want  int
+		msg   string
+		setup func(*testing.T, *moveFixture)
+	}{
+		{"a tool whose conversation is not read", http.StatusUnprocessableEntity, "another way",
+			func(t *testing.T, f *moveFixture) { setRunColumn(t, f, colRunProfileDriver, providerDriverGrok) }},
+		{"a home its profile does not own", http.StatusConflict, "unproven home",
+			func(t *testing.T, f *moveFixture) { setRunColumn(t, f, colRunProfileConfigHome, t.TempDir()) }},
+		{"no conversation id yet", http.StatusConflict, "no stored conversation",
+			func(t *testing.T, f *moveFixture) { setClaudeSessionID(t, f, "") }},
+		{"a repository credential", http.StatusConflict, "repository credential",
+			func(t *testing.T, f *moveFixture) { setRunColumn(t, f, colRunGitRead, "binding:owner/name") }},
+		{"a launch waiting for approval", http.StatusConflict, "not started",
+			func(t *testing.T, f *moveFixture) { setRunColumn(t, f, colState, stateWaitingApproval) }},
+		{"a conversation file the tool never wrote", http.StatusConflict, "nothing to hand off",
+			func(t *testing.T, f *moveFixture) {
+				if err := os.Remove(filepath.Join(f.homeA, "projects", moveTestProject, moveTestSID+".jsonl")); err != nil {
+					t.Fatal(err)
+				}
+			}},
+		{"a conversation too large to hand off", http.StatusUnprocessableEntity, "too large",
+			func(t *testing.T, f *moveFixture) {
+				if err := os.Truncate(filepath.Join(f.homeA, "projects", moveTestProject, moveTestSID+".jsonl"), handoffFileMax+1); err != nil {
+					t.Fatal(err)
+				}
+			}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newMoveFixture(t)
+			tc.setup(t, f)
+			before := f.stateOf(t)
+			r := f.post(t, "handoff", map[string]any{"provider_profile_ref": f.b})
+			if r.code != tc.want || !strings.Contains(r.raw, tc.msg) || strings.Contains(r.raw, "was stopped") {
+				t.Fatalf("handoff = %d %s, want %d containing %q and no mention of a stop", r.code, r.raw, tc.want, tc.msg)
+			}
+			if got := f.stateOf(t); got != before {
+				t.Fatalf("the refusal changed the session from %s to %s", before, got)
+			}
+			if len(attachmentsIn(t, f.homeB)) != 0 {
+				t.Fatal("a refused handoff wrote an attachment")
+			}
+		})
+	}
+}
+
+func (f *moveFixture) stateOf(t *testing.T) string {
+	t.Helper()
+	rec, err := f.m.loadRun(context.Background(), f.tenant, f.runRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rec.String(colState)
 }
 
 // What the engine cannot prove it may forward, it does not forward.
@@ -306,8 +448,8 @@ func TestHandoff_RefusesWhatCannotBeProven(t *testing.T) {
 	refuse("unproven home", http.StatusConflict, "unproven home")
 	setRunColumn(t, f, colRunProfileConfigHome, real)
 
-	setRunColumn(t, f, colRunProfileDriver, "codex")
-	refuse("another tool's session", http.StatusUnprocessableEntity, "Claude Code conversations only")
+	setRunColumn(t, f, colRunProfileDriver, providerDriverGrok)
+	refuse("a tool whose conversation is not read", http.StatusUnprocessableEntity, "keeps its conversation another way")
 	setRunColumn(t, f, colRunProfileDriver, "claude")
 
 	setClaudeSessionID(t, f, "")

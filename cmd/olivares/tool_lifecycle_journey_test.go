@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
@@ -175,6 +176,9 @@ func TestToolLifecycleJourneyStartsReceiptBytesAndAuditsRemoval(t *testing.T) {
 if [ "$1" = "--version" ]; then printf '%%s (Claude Code)\n' '%s'; exit 0; fi
 if [ "$1" = "auth" ]; then printf '{"loggedIn":false}\n'; exit 0; fi
 trap 'exit 0' TERM
+# The marker is truncated, then written: a reader must wait for the complete line.
+: > ./started.sha256
+sleep 0.3
 sha256sum "$0" > ./started.sha256
 printf '{"type":"system","subtype":"init","session_id":"fixture-session"}\n'
 while IFS= read -r line; do printf '{"type":"assistant","echo":true}\n'; done
@@ -211,11 +215,11 @@ while IFS= read -r line; do printf '{"type":"assistant","echo":true}\n'; done
 	var started []byte
 	for deadline := time.Now().Add(5 * time.Second); ; {
 		started, err = os.ReadFile(filepath.Join(workspaceDir, "started.sha256"))
-		if err == nil {
+		if err == nil && bytes.HasSuffix(started, []byte("\n")) {
 			break
 		}
-		if !os.IsNotExist(err) || time.Now().After(deadline) {
-			t.Fatalf("native child receipt marker: %v", err)
+		if err != nil && !os.IsNotExist(err) || time.Now().After(deadline) {
+			t.Fatalf("native child receipt marker %q: %v", started, err)
 		}
 		select {
 		case <-time.After(10 * time.Millisecond):

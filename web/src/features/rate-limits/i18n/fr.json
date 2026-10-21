@@ -26,7 +26,7 @@
     "title": "Inventaire par limiteur",
     "description": "Chaque limiteur rapporté par le fournisseur, regroupé par périmètre : d’abord les groupes à l’échelle de l’organisation, puis les groupes de remplacement par espace de travail.",
     "unavailable": "Inventaire indisponible",
-    "unavailableHint": "Le connecteur Admin en lecture seule n’est pas câblé ; l’inventaire par limiteur ne peut donc pas être lu ici. Il s’agit d’une indisponibilité honnête, et non d’un inventaire vide.",
+    "unavailableHint": "Le connecteur Admin en lecture seule n’est pas configuré ; l’inventaire par limiteur ne peut donc pas être lu ici. Il s’agit d’une indisponibilité honnête, et non d’un inventaire vide.",
     "tableLabel": "Inventaire des limites de débit",
     "empty": "Aucune limite de débit rapportée",
     "emptyHint": "Le fournisseur n’a renvoyé aucune entrée par limiteur pour cette organisation.",

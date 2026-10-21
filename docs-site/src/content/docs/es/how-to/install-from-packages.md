@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-La próxima release es <!-- release -->`0.2`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release -->.
+La próxima release es <!-- release -->`0.3`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
 
 :::note[Nombres de paquete publicados]
-La release <!-- release -->0.2<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
+La release <!-- release -->0.3<!-- /release --> de GitHub publica artefactos `.deb`, `.rpm` y `.apk` para `amd64` y
 `arm64`, con `checksums.txt`, `checksums.txt.sig` y `checksums.txt.pem`. Los comandos
 de abajo usan los nombres literales `amd64` de esa release; sustituye `amd64` por
 `arm64` en un host ARM de 64 bits. Instala desde esos artefactos de release verificados.
@@ -85,13 +85,13 @@ adaptadores de servicio: `scripts/install-service.sh` y `packaging/service/`.
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -140,8 +140,10 @@ acotación — y `NoNewPrivileges=true`, de modo que nada de lo que lance puede 
 ninguna. Encima lleva `ProtectSystem=full` (`/usr`, `/boot`, `/efi` y `/etc` son de solo
 lectura), `PrivateDevices=true`, `ProtectClock=true`, `ProtectKernelTunables=true`,
 `ProtectKernelModules=true`, `ProtectKernelLogs=true`, `ProtectControlGroups=true`,
-`RestrictNamespaces=user net` (una sesión obtiene su propio namespace de usuario y de red;
-se deniega cualquier otro tipo), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
+`RestrictNamespaces=user net mnt` (una sesión obtiene su propio namespace de usuario y de
+red, y el ayudante que mantiene de solo lectura los hooks y la configuración de Git de una
+carpeta obtiene su propio namespace de montaje, donde el filtro de syscalls permite
+`mount`; se deniega cualquier otro tipo), `RestrictSUIDSGID=true`, `RestrictRealtime=true`,
 `LockPersonality=true`, `SystemCallArchitectures=native`, un filtro de syscalls
 `@system-service` que además descarta `@privileged` y `@resources`, y `UMask=0027`.
 

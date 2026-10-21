@@ -347,13 +347,25 @@ export function EgressPolicyPanel({ canAdmin }: { canAdmin: boolean }) {
 export function EgressCompatReport({ canAdmin }: { canAdmin: boolean }) {
   const { t } = useTranslation('eventing')
   const { activeTenant } = useAuth()
+  // The same read the policy panel makes, so it costs one request, not two. Only a deployment the engine
+  // classified as having had compatibility mode has a record to draw: a fresh install (enforced) and one
+  // without a rollout store (policy_optional) never had one, and the card would only say it was never drawn.
+  // A mode the engine cannot say, or a status that cannot be read, keeps the card: the page does not decide
+  // what it was not told.
+  const status = useQuery({
+    queryKey: eventingKeys.egressPolicy(activeTenant),
+    queryFn: () => eventingApi.egressPolicyStatus(),
+    enabled: canAdmin,
+  })
+  const classified = status.data?.classified_mode
+  const neverHadRecord = !!classified && classified !== 'legacy_compat'
   const q = useQuery({
     queryKey: eventingKeys.egressCompat(activeTenant),
     queryFn: () => eventingApi.egressCompatReport(),
-    enabled: canAdmin,
+    enabled: canAdmin && !status.isPending && !neverHadRecord,
   })
 
-  if (!canAdmin) return null
+  if (!canAdmin || neverHadRecord) return null
   if (q.isPending) return <Skeleton className="h-32 w-full" />
   if (q.isError || !q.data) {
     return (

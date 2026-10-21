@@ -71,6 +71,8 @@ export interface QuickLaunch {
   model?: string
   /** An effort level of that model. Absent leaves the model's own. */
   effort?: string
+  fastMode?: boolean
+  serviceTier?: string
   /** Vault secrets the session receives as environment variables, by name. */
   secretEnv?: SecretEnvRef[]
   /** The profile the person chose when the tool has several: it is the session's, and the
@@ -152,6 +154,8 @@ async function quickRun(
     transport: 'stream-json',
     permission_mode: PERMISSION_MODE[quick.permission],
     effort: quick.effort ?? '',
+    ...(quick.fastMode !== undefined ? { fast_mode: quick.fastMode } : {}),
+    ...(quick.serviceTier ? { service_tier: quick.serviceTier } : {}),
     ...(quick.model ? { model: quick.model } : {}),
     workspace_ref: workspaceRef,
     isolation: 'native',

@@ -340,11 +340,11 @@ func TestProfileRegistries_ResumeUsesTheCurrentDeclaration(t *testing.T) {
 // A corrupt stored declaration refuses the launch instead of reading as none.
 func TestProfileRegistries_AnUnreadableDeclarationRefusesTheLaunch(t *testing.T) {
 	t.Parallel()
-	_, _, ok := decodeProfilePackages(model.Record{colPPSessionRegistries: `[{"kind":"npm","scope":7}]`})
+	_, _, _, ok := decodeProfilePackages(model.Record{colPPSessionRegistries: `[{"kind":"npm","scope":7}]`})
 	if ok {
 		t.Fatal("a corrupt registry declaration read as valid")
 	}
-	if _, _, ok := decodeProfilePackages(model.Record{}); !ok {
+	if _, _, _, ok := decodeProfilePackages(model.Record{}); !ok {
 		t.Fatal("no declaration read as corrupt")
 	}
 	p := CreateRunParams{}

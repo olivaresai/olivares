@@ -166,6 +166,8 @@ nicht (`CHANGELOG.md` `[26.9.0]` Fixed).
    darunter, was fehlt. Nur die Profil-**Referenz** wird gepostet. Der Server
    löst die Homes auf.
 
+Ein Tool mit einem Provider-Key verwendet sein gespeichertes Modell oder lässt Sie ein Modell auswählen, das der Verbindungstest zurückgegeben hat. Ist das Modell erforderlich, hat der Test aber keines zurückgegeben, testen Sie zuerst die Verbindung unter **Providers**. Claude Code kann sein natives Standardmodell verwenden.
+
 Die Auswahl **Ordner** legt fest, wo das Tool arbeitet. **Temporärer Ordner für
 diese Sitzung** gibt dem Lauf ein eigenes Verzeichnis; ein registrierter Ordner
 verwendet diesen Ordner. Dies ist vom Workspace getrennt, der die Sitzung
@@ -237,7 +239,11 @@ dem Text an der Branch-Spitze. Sichtbar ist nur committed Arbeit innerhalb der
 erlaubten Workspace-Unterpfade und DLP-Posture; uncommitted Änderungen stehen in
 **Änderungen**.
 
+Ein Ordner kann einen Setup-Befehl für neue Worktrees speichern. Eine Person muss seinen exakten Text anhand des SHA-256 genehmigen, bevor ein Worktree-Start akzeptiert wird; schon die Änderung eines einzigen Zeichens erfordert erneut eine Genehmigung. Noch führt nichts den Befehl aus. Siehe [Den Setup-Befehl eines Ordners genehmigen](/de/reference/session-runtime-api/#den-setup-befehl-eines-ordners-genehmigen).
+
 ### CLI
+
+Wenn Sie einen Provider-Key mit einem Tool verwenden, das ein Modell verlangt, etwa Codex, speichern Sie unter **Providers** einen Standard, bevor Sie `session start` ausführen. Haben weder der Provider noch das Profil des Tools ein konfiguriertes Modell, hängen Sie `--model <tested-model-id>` an den Befehl `session start` an und ersetzen Sie den Platzhalter durch eine Modell-ID, die der Verbindungstest zurückgegeben hat. Ein in **New session** gewähltes Modell gilt nur für diesen Konsolenstart; es legt kein Modell für einen CLI-Start fest.
 
 ```sh
 olivares agent session create --provider-profile <profile_ref>

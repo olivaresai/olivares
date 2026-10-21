@@ -9,7 +9,7 @@ sidebar:
 ---
 
 :::note[版本]
-目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）和托管身份生命周期需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、用户/组入站 SCIM、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
 :::
 
 身份是整个 access map 之下的硬依赖：原生审计把一次访问归属到一个**凭据
@@ -36,12 +36,16 @@ sidebar:
 IdP 的 redirect URI，并显示连接状态 —— 在某个面板的后端只是已声明的契约而尚未上线时，它会
 显示 “backend pending”，而不是渲染编造的数据：
 
-<img class="light:sl-hidden" src="/console/identity-dark.png" alt="Identity & NHI 视图：带精确 redirect-URI 检查的 SSO 配置、NHI 名册以及关键的密钥态势选项卡。" />
-<img class="dark:sl-hidden" src="/console/identity-light.png" alt="Identity & NHI 视图：带精确 redirect-URI 检查的 SSO 配置、NHI 名册以及关键的密钥态势选项卡。" />
+<img class="light:sl-hidden" src="/console/identity-dark.png" alt="Identity & access 视图：用户与组、SSO 登录、机器身份（NHI）以及密钥态势。" />
+<img class="dark:sl-hidden" src="/console/identity-light.png" alt="Identity & access 视图：用户与组、SSO 登录、机器身份（NHI）以及密钥态势。" />
 
-## 2. SCIM 预配（入站）
+## 2. SCIM 预配（入站） — Business
 
-control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于：
+入站 SCIM 服务器是 Business（Identity & Scale）的功能。Community 服务器会挂载相同的
+URL，验证 token 后以 SCIM 错误格式返回 HTTP `501`，并指明 Business；不会读取或写入任何内容。
+在 Community 中，请在控制台（人员）中或通过 `DELETE /v1/members/{id}` 将人员移出组织。
+
+在 Business 中，control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于：
 
 ```
 /v1/scim/v2/Users
@@ -49,8 +53,8 @@ control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于�
 ```
 
 - **认证：** 在 SCIM 集成上使用一个绑定租户的 **admin/owner API token** —— 与 API 其余
-  部分相同的不透明 token 模型，不存在单独的 SCIM 密钥类型。该端点始终存在（不受特性门控）。
-- **Users** 在所有版本（包括 Community）中预配及撤销预配身份。
+  部分相同的不透明 token 模型，不存在单独的 SCIM 密钥类型。这些 URL 始终已挂载（不受特性门控）；Community 在此返回 `501`。
+- **Users** 预配及撤销预配身份。
   变更取决于 SCIM 请求的送达和成功处理；应检查响应及受影响的访问权限，
   不要仅凭人事事件就认定权限吊销已完成。SCIM 不会删除操作系统账户。
 - **Groups** 承载身份到组的引用数据。每个组都可以通过 `mapped_role` 映射到一个 control-plane

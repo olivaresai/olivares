@@ -110,6 +110,18 @@ beforeEach(() => {
 })
 
 describe('ProvidersView', () => {
+  it('renders the truncated-list command as a copyable chip without backticks', async () => {
+    providersApi.list.mockResolvedValue({ items: [registered], has_more: true })
+    wrap(<ProvidersView />)
+    const command = await screen.findByText('olivares provider ls')
+    expect(command.tagName).toBe('CODE')
+    const hint = command.closest('p')!
+    expect(hint.textContent).not.toContain('`')
+    expect(
+      within(hint).getByRole('button', { name: 'Copy command' }),
+    ).toBeInTheDocument()
+  })
+
   it('reads, changes and clears the saved default through the provider patch', async () => {
     const user = userEvent.setup()
     let record = {

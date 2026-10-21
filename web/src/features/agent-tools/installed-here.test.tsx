@@ -324,6 +324,35 @@ it("lists the programs and npm registries of each tool's launch profile, never t
   ])
 })
 
+it("lists the hosts a tool's launch profile declares for its sessions, and no row when none", async () => {
+  agentOps.previewProfile.mockImplementation(async (driver: string) =>
+    driver === 'claude'
+      ? profile('ppf_claude', {
+          session_egress_hosts: ['api.github.com', 'github.com'],
+        })
+      : { reason: 'own_login' },
+  )
+  mount()
+  const hosts = within(await row('Network hosts'))
+  expect(
+    await hosts.findByRole('link', { name: 'github.com' }),
+  ).toHaveAttribute('href', '#tool-claude')
+  expect(
+    hosts.getByRole('link', { name: 'api.github.com' }),
+  ).toBeInTheDocument()
+})
+
+it('shows no network hosts row when no profile declares one', async () => {
+  agentOps.previewProfile.mockImplementation(async (driver: string) =>
+    driver === 'claude' ? profile('ppf_claude', {}) : { reason: 'own_login' },
+  )
+  mount()
+  await within(await row('Programs and registries')).findByText(
+    /each tool's new session uses/,
+  )
+  expect(screen.queryByText('Network hosts')).toBeNull()
+})
+
 it('names the launch profile by its account name when it has no display name', async () => {
   agentOps.previewProfile.mockImplementation(async (driver: string) =>
     driver === 'claude'
@@ -366,6 +395,9 @@ it('names the tools no session can start on, and shows any other failure as unre
       /Not listed because no session can start yet: Claude Code, Grok Build/,
     ),
   ).toBeInTheDocument()
+  const refusedSkills = within(await row('Skills'))
+  expect(await refusedSkills.findByText('None')).toBeInTheDocument()
+  expect(refusedSkills.queryByRole('link', { name: 'research' })).toBeNull()
   unmount()
   // Another conflict (a saved default model no longer valid) is not a refused tool.
   agentOps.previewProfile.mockRejectedValue(
@@ -397,4 +429,42 @@ it('says the role cannot read provider profiles instead of "None"', async () => 
     packages.getByText('Your role cannot read provider profiles.'),
   ).toBeInTheDocument()
   expect(agentOps.previewProfile).not.toHaveBeenCalled()
+})
+
+it('resolves workspace and profile skills together for each launchable tool', async () => {
+  useWorkspaceStore.getState().setActiveWorkspace('ws-sales', 'Sales')
+  agentOps.previewProfile.mockImplementation(async (driver: string) =>
+    profile('ppf_' + driver, {}),
+  )
+  skills.selection.mockImplementation(
+    async (_kind, _id, _signal, profileRef) => ({
+      members: [
+        {
+          name: profileRef === 'ppf_claude' ? 'claude-review' : 'grok-review',
+          pack_id: 'pack-profile',
+          pack_revision_id: 'rev-profile',
+        },
+      ],
+    }),
+  )
+  mount()
+  const skillRow = within(await row('Skills'))
+  expect(
+    await skillRow.findByRole('link', { name: 'claude-review' }),
+  ).toHaveAttribute('href', '/skills?pack=pack-profile')
+  expect(
+    await skillRow.findByRole('link', { name: 'grok-review' }),
+  ).toBeInTheDocument()
+  expect(skills.selection).toHaveBeenCalledWith(
+    'workspace',
+    'ws-sales',
+    expect.any(AbortSignal),
+    'ppf_claude',
+  )
+  expect(skills.selection).toHaveBeenCalledWith(
+    'workspace',
+    'ws-sales',
+    expect.any(AbortSignal),
+    'ppf_grok',
+  )
 })

@@ -2,23 +2,23 @@
   "doors": {
     "catalog": {
       "title": "Kommunikation",
-      "description": "Kanäle des gewählten Workspace, die dieser Principal jetzt lesen darf, die darüber gesendeten direkten Mitteilungen und der persönliche Posteingang. Jedes Lesen und jede Handlung entscheidet die Engine unter ihrer eigenen Berechtigung."
+      "description": "Kanäle des ausgewählten Workspace, die Sie jetzt lesen dürfen, die darüber gesendeten Direktnachrichten und Ihr Posteingang. Die Engine entscheidet über jedes Lesen und jede Aktion."
     },
     "inbox": {
       "title": "Kommunikations-Posteingang",
-      "description": "Das exakte persönliche Postfach dieses Principals im gewählten Workspace: an ihn adressierte Zustellungen, frisch geöffnet und nur durch eine ausdrückliche Handlung bestätigt."
+      "description": "An Sie adressierte Nachrichten im ausgewählten Workspace: jede öffnen und bestätigen."
     },
     "new": {
       "title": "Neuer Kanal",
-      "description": "Legt einen Kanal mit ausdrücklichen Anfangsberechtigungen an. Nichts wird stillschweigend gewährt, und die Quittung der Handlung ist keine dauerhafte Liste derer, die ihn später lesen dürfen."
+      "description": "Erstellen Sie einen Kanal und legen Sie von Anfang an fest, wer ihn nutzen darf. Niemand erhält stillschweigend Zugriff, und die Quittung ist keine dauerhafte Liste, wer ihn später lesen darf."
     },
     "administration": {
       "title": "Kanalverwaltung",
-      "description": "Die Kanäle, die dieser Principal im ausgewählten Workspace verwalten darf: Konfiguration und Berechtigungsverlauf, jeder Akt unter dem aktuellen ETag des Kanals bestätigt. Die Verwaltung erfordert die Berechtigung channel:admin und ein gültiges lokales Admin-Bit; sie erfordert und gewährt kein Recht, den Inhalt des Kanals zu lesen."
+      "description": "Die Kanäle, die Sie im ausgewählten Workspace verwalten dürfen: Konfiguration und Berechtigungsverlauf. Jede Änderung gilt nur für die gelesene Version. Einen Kanal zu verwalten erfordert und gewährt kein Recht, seinen Inhalt zu lesen."
     },
     "handoffs": {
       "title": "Übergaben",
-      "description": "An dieses Principal gerichtete Angebote zur Übernahme von Arbeitsverantwortung im ausgewählten Workspace. Die Liste enthält den Angebotsinhalt nicht; beim Öffnen wird der geschützte Kontext frisch gelesen, und Annehmen oder Ablehnen ist eine ausdrückliche Handlung, über die die Engine entscheidet."
+      "description": "An Sie adressierte Arbeitsangebote im ausgewählten Workspace. Die Liste zeigt keinen Angebotsinhalt; beim Öffnen wird der Kontext gelesen, und die Engine entscheidet über jedes Annehmen oder Ablehnen."
     }
   },
   "tabs": {
@@ -104,7 +104,7 @@
       "updated": "Aktualisiert"
     },
     "openById": "Kanal per ID öffnen",
-    "openByIdHint": "Ein per ID geöffneter Kanal wird frisch mit seinem ETag gelesen; dieses Lesen meldet Ihre lokalen Bits nicht."
+    "openByIdHint": "Ein per ID geöffneter Kanal wird frisch gelesen; dieses Lesen zeigt Ihren eigenen Zugriff nicht."
   },
   "access": {
     "label": "Ihr lokaler Zugriff",
@@ -143,7 +143,7 @@
   },
   "channel": {
     "title": "Kanal",
-    "description": "Frisch von der Engine mit seinem ETag gelesen. Dieses Lesen enthält weder Berechtigungen noch lokale Bits.",
+    "description": "Frisch von der Engine gelesen. Dieses Lesen enthält weder Berechtigungen noch Ihren eigenen Zugriff.",
     "fields": {
       "id": "Kanal-ID",
       "slug": "Slug",
@@ -164,7 +164,7 @@
       "routeRevision": "Routen-Revision",
       "subscriptionRevision": "Abonnement-Revision",
       "version": "Version",
-      "etag": "ETag",
+      "etag": "Version",
       "created": "Erstellt",
       "updated": "Aktualisiert",
       "workspace": "Workspace",
@@ -222,7 +222,7 @@
       "grants": "Aufgezeichnete Berechtigungen",
       "noGrants": "Es wurde keine Berechtigungszeile zurückgegeben.",
       "auditSeq": "Audit-Sequenz",
-      "etag": "ETag"
+      "etag": "Version"
     },
     "unknown": {
       "title": "Ergebnis unbekannt",
@@ -360,9 +360,9 @@
     },
     "ack": {
       "title": "Diese Zustellung bestätigen",
-      "body": "Die Handlung sendet If-Match {{etag}} — die gelesene Version — und einen eigenen Schlüssel. Hat sich die Zustellung inzwischen geändert, antwortet die Engine mit 412 und Sie lesen neu, bevor Sie erneut bestätigen; die Konsole ersetzt die Version nie.",
+      "body": "Dies sendet die gelesene Version ({{etag}}) und einen eigenen Schlüssel. Hat sich die Zustellung inzwischen geändert, lehnt die Engine ab und Sie lesen neu, bevor Sie erneut bestätigen; die Konsole ersetzt die Version nie.",
       "key": "Idempotenzschlüssel",
-      "ifMatch": "If-Match",
+      "ifMatch": "Gelesene Version",
       "appliedTitle": "Bestätigt",
       "appliedBody": "Die Engine hat die Bestätigung aufgezeichnet.",
       "replayedTitle": "Bereits bestätigt",
@@ -371,7 +371,7 @@
       "conflictTitle": "Die Zustellung hat sich seit dem Lesen geändert",
       "conflictBody": "Die Engine hat die Bestätigung abgelehnt: die gelesene Version ist nicht mehr aktuell, oder die Zustellung ist bereits bestätigt. Lesen Sie die Zustellung erneut und bestätigen Sie nur, wenn es noch zutrifft. Es wurde nichts erneut gesendet.",
       "ambiguousTitle": "Ergebnis unbekannt",
-      "ambiguousBody": "Der Transport ist fehlgeschlagen, bevor eine Antwort ankam. Eine Wiederholung sendet denselben Schlüssel und dasselbe If-Match erneut; die Engine wendet sie genau einmal an, wiederholt sie oder lehnt sie mit der aktuellen Version ab.",
+      "ambiguousBody": "Die Verbindung ist fehlgeschlagen, bevor eine Antwort ankam. Eine Wiederholung sendet denselben Schlüssel und dieselbe Version erneut; die Engine wendet sie genau einmal an, wiederholt sie oder lehnt sie mit der aktuellen Version ab.",
       "refusedTitle": "Bestätigung abgelehnt",
       "noPermission": "Sie halten die Schreibberechtigung für Zustellungen nicht, daher wird Bestätigen nicht angeboten."
     },
@@ -427,7 +427,7 @@
     "eventId": "Ereignis-ID",
     "auditSeq": "Audit-Sequenz",
     "version": "Version",
-    "etag": "ETag",
+    "etag": "Version",
     "state": "Zustand",
     "verdict": "Urteil",
     "code": "Code",
@@ -484,7 +484,7 @@
       "state": "Zustand",
       "sensitivity": "Sensibilität",
       "protection": "Schutz",
-      "etag": "ETag",
+      "etag": "Version",
       "updated": "Aktualisiert"
     },
     "openById": "Kanal per ID verwalten",
@@ -505,7 +505,7 @@
   },
   "admin": {
     "title": "Kanalverwaltung",
-    "description": "Frisch über den Berechtigungsverlauf mit dem Vorbedingungs-ETag des Kanals gelesen; kein Inhalt wird geöffnet.",
+    "description": "Frisch über den Berechtigungsverlauf mit der aktuellen Version des Kanals gelesen; kein Inhalt wird geöffnet.",
     "observedAt": "Beobachtet um",
     "tabs": {
       "config": "Konfiguration",
@@ -552,12 +552,12 @@
     },
     "confirm": {
       "title": "Konfigurationsänderung bestätigen",
-      "body": "Nur die Felder unten werden gesendet, mit If-Match {{etag}} — dem ETag der Lesung auf dem Bildschirm. Hat sich der Kanal inzwischen geändert, lehnt die Engine ab und Sie lesen neu, bevor Sie erneut bestätigen; die Konsole ersetzt den ETag nie.",
+      "body": "Nur die Felder unten werden gesendet, mit der Version auf dem Bildschirm ({{etag}}). Hat sich der Kanal inzwischen geändert, lehnt die Engine ab und Sie lesen neu, bevor Sie erneut bestätigen; die Konsole ersetzt die Version nie.",
       "archiving": "Dies archiviert den Kanal. Archivieren ist unumkehrbar: Er kehrt nicht zu aktiv zurück.",
-      "ifMatch": "If-Match"
+      "ifMatch": "Gelesene Version"
     },
     "appliedTitle": "Konfiguration angewendet",
-    "appliedBody": "Die Engine hat die Änderung festgeschrieben. Das Blatt liest den Kanal neu; der nächste Akt nutzt den ETag dieser Lesung.",
+    "appliedBody": "Die Engine hat die Änderung gespeichert. Das Blatt liest den Kanal neu; die nächste Änderung nutzt diese Version.",
     "conflictTitle": "Der Kanal hat sich seit Ihrer Lesung geändert",
     "conflictBody": "Die Engine hat die Änderung abgelehnt: Ihre Vorbedingung passt nicht mehr zum aktuellen Kanal. Nichts wurde erneut gesendet. Lesen Sie neu, prüfen Sie Ihre Änderungen gegen die aktuellen Werte und bestätigen Sie nur erneut, wenn sie noch zutreffen.",
     "unknownTitle": "Ergebnis noch zu prüfen",
@@ -614,7 +614,7 @@
     },
     "confirm": {
       "title": "Berechtigung bestätigen",
-      "body": "Dies sendet genau die Generation unten mit dem If-Match der Lesung auf dem Bildschirm. Die Engine lehnt sie ab, wenn das Subjekt bereits eine aktive Generation hält oder sich der Kanal inzwischen geändert hat; dann lesen Sie neu und bestätigen erneut. Nichts wird von selbst wiederholt.",
+      "body": "Dies sendet genau die Generation unten mit der Version auf dem Bildschirm. Die Engine lehnt sie ab, wenn das Subjekt bereits eine aktive Generation hält oder sich der Kanal inzwischen geändert hat; dann lesen Sie neu und bestätigen erneut. Nichts wird von selbst wiederholt.",
       "successorOf": "Nachfolger der widerrufenen Generation {{id}}. Es ist ein getrennter Akt: Der Widerruf oben ist bereits festgeschrieben."
     },
     "appliedTitle": "Berechtigung erfasst",
@@ -629,7 +629,7 @@
     "refusedTitle": "Berechtigung abgelehnt",
     "revoke": {
       "title": "Genau diese Generation widerrufen",
-      "body": "Dies widerruft die gezeigte Generation anhand ihrer ID mit dem If-Match der Lesung auf dem Bildschirm. Ihr Verlauf bleibt erhalten. Ein Nachfolger für das Subjekt ist ein getrennter Akt nach erneutem Lesen.",
+      "body": "Dies widerruft die gezeigte Generation anhand ihrer ID mit der Version auf dem Bildschirm. Ihr Verlauf bleibt erhalten. Ein Nachfolger für das Subjekt ist ein getrennter Akt nach erneutem Lesen.",
       "bodyThenGrant": "Erster von zwei Akten: die gezeigte Generation widerrufen. Nachdem die Antwort der Engine gelesen wurde, wird Ihnen eine getrennte Bestätigung für eine Nachfolgegeneration angeboten; nichts wird automatisch verkettet.",
       "ownAdminWarning": "Diese Generation ist eine Admin-Berechtigung für Ihr eigenes Konto. Sie könnte Ihren administrativen Zugriff auf diesen Kanal tragen; die Konsole berechnet nicht Ihre gesamte Autorität, und die Engine entscheidet Ihre nächste Anfrage.",
       "appliedTitle": "Generation widerrufen",
@@ -680,12 +680,12 @@
     "prepareFailedBody": "Nichts wurde vorgerückt. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
     "confirm": {
       "title": "Vorrücken bestätigen",
-      "body": "Dies sendet das vorbereitete Ziel und die Zustellung oben mit dem If-Match der gelesenen Cursorversion und einem eigenen Schlüssel. Nur das Bestätigen rückt etwas vor. Eine Wiederholung nach einem mehrdeutigen Ergebnis sendet genau dies erneut."
+      "body": "Dies sendet das vorbereitete Ziel und die Zustellung oben mit der gelesenen Cursorversion und einem eigenen Schlüssel. Nur das Bestätigen rückt etwas vor. Eine Wiederholung nach einem mehrdeutigen Ergebnis sendet genau dies erneut."
     },
     "conflictTitle": "Der Cursor hat sich seit der Vorbereitung geändert",
     "conflictBody": "Die Engine hat das Vorrücken abgelehnt: Die Cursorversion oder das Ziel sind nicht mehr aktuell. Nichts wurde erneut gesendet. Aktualisieren Sie den Posteingang und bereiten Sie erneut von einer aktuellen Seite vor.",
     "ambiguousTitle": "Ergebnis unbekannt",
-    "ambiguousBody": "Der Transport ist ausgefallen, bevor eine Antwort ankam. Eine Wiederholung sendet dasselbe Ziel, dasselbe If-Match und denselben Schlüssel; die Engine wendet es einmal an, wiederholt es oder lehnt es mit ihrer aktuellen Version ab. Unbestimmt lassen hält das vorherige Ergebnis unbekannt.",
+    "ambiguousBody": "Die Verbindung ist ausgefallen, bevor eine Antwort ankam. Eine Wiederholung sendet dasselbe Ziel, dieselbe Version und denselben Schlüssel; die Engine wendet es einmal an, wiederholt es oder lehnt es mit ihrer aktuellen Version ab. Unbestimmt lassen hält das vorherige Ergebnis unbekannt.",
     "refusedTitle": "Vorrücken abgelehnt",
     "refusedBody": "Die Engine hat den Cursor nicht vorgerückt. Aktualisieren Sie den Posteingang, bevor Sie erneut vorbereiten.",
     "result": {
@@ -771,13 +771,13 @@
       "currentOwner": "Aktuelle Inhaberschaft",
       "ownerEpoch": "Inhaber-Epoche",
       "itemWorkspace": "Workspace des Elements",
-      "precondition": "Vorbedingung (If-Match)",
+      "precondition": "Gelesene Version",
       "itemMismatch": "Der Lesevorgang lieferte ein anderes Arbeitselement als das angeforderte. Unter diesem Lesevorgang kann nichts angeboten werden.",
       "workspaceMismatchTitle": "Wählen Sie den Workspace des Elements",
       "workspaceMismatchBody": "Dieses Element gehört zum Workspace {{itemWorkspace}}, ausgewählt ist {{selected}}. Wählen Sie im Umschalter den Workspace des Elements, um es anzubieten; die Konsole wählt niemals einen für Sie aus.",
       "workspaceNone": "Es ist kein ausdrücklicher Workspace ausgewählt. Ein Angebot ist auf einen Workspace beschränkt, wählen Sie also im Umschalter den des Elements; die Konsole wählt niemals einen für Sie aus.",
-      "noPrecondition": "Der Lesevorgang des Arbeitselements enthielt kein ETag, also gibt es keine Vorbedingung zum Senden. Lesen Sie das Element erneut; eine Version wird hier nicht in einen Validator verwandelt.",
-      "noPermission": "Eine Übergabe anzubieten erfordert sessions:message-send:write. Die Engine prüft zusätzlich die Inhaberschaft des Elements und die Kanalautorität.",
+      "noPrecondition": "Das Arbeitselement wurde ohne Version gelesen, daher gibt es nichts, woran das Angebot geprüft werden kann. Lesen Sie das Element erneut.",
+      "noPermission": "Ihre Rolle kann keine Übergabe anbieten. Die Engine prüft zusätzlich, wem das Element gehört und wer den Kanal nutzen darf.",
       "channel": "Kanal",
       "channelHint": "Die kanonische Kanal-ID, über die der Träger veröffentlicht wird. Sie kann immer eingegeben werden.",
       "channelPick": "Kanal auswählen",
@@ -876,8 +876,8 @@
       "deadline": "Antwortfrist",
       "created": "Erstellt",
       "observed": "Beobachtet",
-      "precondition": "Übergabe-ETag (If-Match)",
-      "preconditionHint": "Eine Antwort ist an das obige Übergabe-ETag gebunden, niemals an die daneben stehende Version der Träger-Zustellung.",
+      "precondition": "Übergabe-Version",
+      "preconditionHint": "Eine Antwort gilt für die obige Übergabe-Version, niemals für die daneben stehende Zustellversion.",
       "carrierDelivery": "Träger-Zustellung",
       "carrierVersion": "Version der Träger-Zustellung",
       "channel": "Kanal",
@@ -888,7 +888,7 @@
         "terminal": "Dieses Angebot ist bereits abgeschlossen"
       },
       "notCurrentBody": "Die Engine meldet, dass jetzt nicht geantwortet werden kann, daher wird kein Antwortelement angeboten. Lesen Sie erneut, um den aktuellen Zustand zu sehen.",
-      "noRespondPermission": "Antworten erfordert sessions:handoff-response:write."
+      "noRespondPermission": "Ihre Rolle kann nicht auf Übergaben antworten."
     },
     "respond": {
       "acceptTitle": "Verantwortung übernehmen",

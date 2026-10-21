@@ -5,12 +5,15 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +32,13 @@ type fakeSessionEngine struct {
 	profiles   []map[string]any
 	posts      map[string][]map[string]any // path -> decoded bodies
 	hits       []string
+	runQueries []url.Values     // the query of every GET on the runs list
+	accounts   []map[string]any // GET provider-accounts: account_ref, name, driver
+	// ignoresRunFilters makes the runs list answer as an engine older than the
+	// state and account filters does: every run, whatever the query.
+	ignoresRunFilters bool
+	// attachRefusal, when set, is the sentence the engine refuses an attached image with.
+	attachRefusal string
 	// replay is written on attach before any input; reply after the first input.
 	replay, reply []string
 	sent          chan struct{}
@@ -43,8 +53,10 @@ type fakeSessionEngine struct {
 	launchWaits  bool
 	launchDriver string
 	// launchRefusal, when set, answers a new run with 422 and this sentence, as the
-	// engine does for a permission preset the tool cannot honour.
-	launchRefusal string
+	// engine does for a permission preset the tool cannot honour. launchRefusalStatus
+	// replaces the 422 (403: the caller is not a run administrator).
+	launchRefusal       string
+	launchRefusalStatus int
 	// cleanupRefusal, when set, answers a release (POST …/cleanup) with 409 and this
 	// sentence, as the engine does for a worktree it will not remove unconfirmed.
 	cleanupRefusal string
@@ -78,6 +90,8 @@ type fakeSessionEngine struct {
 	moveRefusal    string
 	handoffPreview map[string]any
 	handoffState   string
+	// pinSeq numbers the pins POST …/pin sets, so pinned_at orders them as it does.
+	pinSeq int
 }
 
 // handoffStateOrDelivered is what POST …/handoff answers for the first turn.
@@ -216,10 +230,28 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			"run_ref": "r-handoff", "name": body["name"], "state": "running", "provider_driver": "codex",
 			"handoff_of": "r1", "summary_state": f.handoffStateOrDelivered(), "first_turn": f.handoffFirstTurn(),
 		})
+	case r.Method == "GET" && path == providerAccountsPath:
+		writeJSON(200, map[string]any{"items": f.accounts})
 	case r.Method == "GET" && path == sessionRunsPath:
-		writeJSON(200, map[string]any{"items": f.runs})
+		// The engine applies state and provider_profile_ref before it pages; so does this.
+		query := r.URL.Query()
+		f.mu.Lock()
+		f.runQueries = append(f.runQueries, query)
+		f.mu.Unlock()
+		items := []map[string]any{}
+		for _, run := range f.runs {
+			if f.ignoresRunFilters || ((query.Get("state") == "" || run["state"] == query.Get("state")) &&
+				(query.Get("provider_profile_ref") == "" || run["provider_profile_ref"] == query.Get("provider_profile_ref"))) {
+				items = append(items, run)
+			}
+		}
+		writeJSON(200, map[string]any{"items": items})
 	case r.Method == "POST" && path == sessionRunsPath && f.launchRefusal != "":
-		writeJSON(422, map[string]any{"error": map[string]any{"code": "unsupported_permission", "message": f.launchRefusal}})
+		status := http.StatusUnprocessableEntity
+		if f.launchRefusalStatus != 0 {
+			status = f.launchRefusalStatus
+		}
+		writeJSON(status, map[string]any{"error": map[string]any{"code": "unsupported_permission", "message": f.launchRefusal}})
 	case r.Method == "POST" && path == sessionRunsPath && f.launchWaits:
 		w.Header().Set("Location", "/v1/m/governance/approvals/apr-1")
 		writeJSON(202, map[string]any{
@@ -240,6 +272,15 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.cleanupRefusal}})
 	case strings.HasSuffix(path, "/attach"):
 		f.attach(w, r)
+	case r.Method == "POST" && strings.HasSuffix(path, "/attachments"):
+		if f.attachRefusal != "" {
+			writeJSON(422, map[string]any{"error": map[string]any{"message": f.attachRefusal}})
+			return
+		}
+		f.mu.Lock()
+		n := len(f.posts[path])
+		f.mu.Unlock()
+		writeJSON(201, map[string]any{"id": fmt.Sprintf("att_%d", n), "media_type": body["media_type"]})
 	case strings.HasSuffix(path, "/input"):
 		select {
 		case <-f.sent:
@@ -289,6 +330,22 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 						run["peers"] = body["peers"]
 					}
 					out["peers"], out["peers_rule"] = run["peers"], run["peers_rule"]
+				// The caller's own pin (#2130): POST sets it, DELETE clears it, both answer
+				// the pin state, and the run reads carry it as the engine's do.
+				case strings.HasSuffix(path, "/pin"):
+					pinned := r.Method == http.MethodPost
+					answer := map[string]any{"run_ref": ref, "pinned": pinned}
+					f.mu.Lock()
+					run["pinned"] = pinned
+					delete(run, "pinned_at")
+					if pinned {
+						f.pinSeq++
+						run["pinned_at"] = fmt.Sprintf("2026-10-14T10:00:%02dZ", f.pinSeq)
+						answer["pinned_at"] = run["pinned_at"]
+					}
+					f.mu.Unlock()
+					writeJSON(200, answer)
+					return
 				case strings.HasSuffix(path, "/stop"):
 					out["state"] = "stopped"
 				case strings.HasSuffix(path, "/cleanup"):
@@ -753,5 +810,72 @@ func TestSessionStartUsesTheConsolesDefaultsForAClaudeSession(t *testing.T) {
 	_, _, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--permission", "everything"}, sessionCreds(f.URL)...)...)
 	if exitcode.From(err) != exitcode.Usage {
 		t.Fatalf("unknown permission: err = %v, want usage", err)
+	}
+}
+
+// A tiny PNG: the signature and an IHDR are all http.DetectContentType needs.
+var sessionTestPNG = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89")
+
+func TestSessionSendAttachStoresTheImageThenSendsItsIdWithTheText(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	f.runs = []map[string]any{{"run_ref": "r1", "name": "demo", "state": "running", "provider_driver": "claude", "transport": "stream-json"}}
+	f.replay = []string{claudeInitFrame}
+	f.reply = []string{`{"type":"result","subtype":"success","is_error":false,"result":"ok","total_cost_usd":0,"duration_ms":1}`}
+	shot := filepath.Join(t.TempDir(), "shot.png")
+	if err := os.WriteFile(shot, sessionTestPNG, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, errb, err := execSessionCLI(t, nil, append([]string{"session", "send", "demo", "--attach", shot, "what is wrong here?"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("send --attach: %v\n%s", err, errb)
+	}
+	up := f.postsTo(sessionRunsPath + "/r1/attachments")
+	if len(up) != 1 || up[0]["media_type"] != "image/png" || up[0]["data"] != base64.StdEncoding.EncodeToString(sessionTestPNG) {
+		t.Fatalf("upload = %v, want the PNG as base64 with its type read from the bytes", up)
+	}
+	in := f.postsTo(sessionRunsPath + "/r1/input")
+	if len(in) != 1 || in[0]["text"] != "what is wrong here?" || fmt.Sprint(in[0]["attachments"]) != "[att_1]" {
+		t.Fatalf("input = %v, want the text and the stored id", in)
+	}
+	if _, raw := in[0]["line"]; raw {
+		t.Fatalf("a raw frame was sent with the image: %v", in[0])
+	}
+	var order []string
+	for _, h := range f.hits {
+		if strings.HasSuffix(h, "/attachments") || strings.HasSuffix(h, "/input") {
+			order = append(order, h[strings.LastIndex(h, "/")+1:])
+		}
+	}
+	if strings.Join(order, ",") != "attachments,input" {
+		t.Fatalf("order = %v, want the image stored before the message", order)
+	}
+}
+
+func TestSessionSendAttachSendsNothingWhenTheEngineRefusesTheImage(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	f.runs = []map[string]any{{"run_ref": "r1", "name": "demo", "state": "running", "provider_driver": "opencode", "transport": "stream-json"}}
+	f.attachRefusal = "OpenCode does not take images"
+	shot := filepath.Join(t.TempDir(), "shot.png")
+	if err := os.WriteFile(shot, sessionTestPNG, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := execSessionCLI(t, nil, append([]string{"session", "send", "demo", "--attach", shot, "look"}, sessionCreds(f.URL)...)...)
+	if err == nil || !strings.Contains(err.Error(), "OpenCode does not take images") {
+		t.Fatalf("err = %v, want the engine's sentence that names the tool", err)
+	}
+	if n := len(f.postsTo(sessionRunsPath + "/r1/input")); n != 0 {
+		t.Fatalf("the message was sent after the image was refused (%d inputs)", n)
+	}
+}
+
+func TestSessionSendAttachNamesAFileItCannotRead(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	f.runs = []map[string]any{{"run_ref": "r1", "name": "demo", "state": "running", "provider_driver": "claude", "transport": "stream-json"}}
+	_, _, err := execSessionCLI(t, nil, append([]string{"session", "send", "demo", "--attach", "/no/such/shot.png", "look"}, sessionCreds(f.URL)...)...)
+	if err == nil || !strings.Contains(err.Error(), "Cannot read /no/such/shot.png: no such file or directory") {
+		t.Fatalf("err = %v, want a sentence that names the file", err)
+	}
+	if n := len(f.postsTo(sessionRunsPath + "/r1/input")); n != 0 {
+		t.Fatalf("the message was sent without its image (%d inputs)", n)
 	}
 }

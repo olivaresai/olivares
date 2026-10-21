@@ -1,0 +1,6 @@
+type,name,url,email,username,password,note,totp,createTime,modifyTime,vault
+login,Cloud,https://cloud.example,ann@mail.example,,pw-pp-cloud-2388,,otpauth://totp/Cloud:ann?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ,1767323045,1767323045,Personal
+login,Games,https://games.example,ann@mail.example,annie,pw-pp-games-2388,,,1767323045,1767323045,Personal
+note,Passport,,,,,number is pp-2388,,1767323045,1767323045,Personal
+alias,Spam,,,,,,,1767323045,1767323045,Personal
+creditCard,Visa,,,,,,,1767323045,1767323045,Personal

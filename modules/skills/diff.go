@@ -44,6 +44,7 @@ type FileChange struct {
 // ActiveContent describe the new side; NewActiveContent is what the old side
 // did not already carry, which is what a reviewer must look at first.
 type MemberChange struct {
+	Kind             string   `json:"kind,omitempty"`
 	Name             string   `json:"name"`
 	Change           string   `json:"change"`
 	Description      string   `json:"description,omitempty"`
@@ -93,9 +94,9 @@ func DiffPacks(from, to *ValidatedPack) PackDiff {
 		next, hasNext := newMembers[name]
 		switch {
 		case hadPrev && !hasNext:
-			out.Members = append(out.Members, MemberChange{Name: name, Change: "removed"})
+			out.Members = append(out.Members, MemberChange{Kind: prev.Kind, Name: name, Change: "removed"})
 		case !hadPrev || prev.ContentDigest != next.ContentDigest:
-			change := MemberChange{Name: name, Change: "changed", Description: next.Description, Scripts: next.Scripts, ActiveContent: next.ActiveContent()}
+			change := MemberChange{Kind: next.Kind, Name: name, Change: "changed", Description: next.Description, Scripts: next.Scripts, ActiveContent: next.ActiveContent()}
 			if !hadPrev {
 				change.Change = "added"
 			}

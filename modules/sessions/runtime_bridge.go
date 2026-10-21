@@ -7,6 +7,7 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -69,9 +70,16 @@ func (lr *liveRun) cierraVentanaYVuelca() {
 func (m *Module) bridge(lr *liveRun) {
 	ctx := context.Background() // a fresh ctx: the per-run ctx governs the PROCESS, not these DB writes
 	sequenceExhausted := false
+	replayWithheld := false
 	for frame := range lr.proc.Output() {
 		at := m.now()
+		lr.noteIdleActivity(at)
 		if codex, ok := lr.session.(*codexSession); ok && frame.Stream == streamStdout {
+			// An answer to the engine's own skills/list, well formed or not, goes
+			// to its waiter only: its paths are for whoever may read /commands.
+			if codex.takeCatalogResponse(lr.redact.apply(frame.Data)) {
+				continue
+			}
 			frame.Data = codex.projectProfileModelResponse(frame.Data)
 		}
 		if frame.Stream == streamStdout {
@@ -81,6 +89,16 @@ func (m *Module) bridge(lr *liveRun) {
 				m.publishRuntimeOutput(lr, streamStdout, lr.redact.apply(prompt), at)
 			}
 		}
+		// A tool's echo of a message with images is replaced by a compact frame
+		// before anything else sees it (image_echo.go).
+		if frame.Stream == streamStdout {
+			if compact, handled := lr.imageEcho.replace(frame.Data); handled {
+				if compact == nil {
+					continue
+				}
+				frame.Data = compact
+			}
+		}
 		// A session's vault secret values never leave it through its output: they
 		// are withheld before the ring (the attach stream), the recorder and the
 		// frame parser see the line (session_secret_env.go).
@@ -88,6 +106,16 @@ func (m *Module) bridge(lr *liveRun) {
 		// The tool's answer to the engine's own request for its commands is handed to
 		// the waiter and goes no further (tool_commands.go).
 		if frame.Stream == streamStdout && lr.takeCommandsResponse(frame.Data) {
+			continue
+		}
+		// The stored conversation an ACP tool replays when it is resumed is not
+		// published when this launch's redactor cannot withhold what it holds. The
+		// driver still sees the frame: it classifies it as history.
+		if frame.Stream == streamStdout && lr.withholdsReplay(frame.Data) {
+			if !replayWithheld && m.publishRuntimeOutput(lr, streamStdout, replayWithheldNotice, at) != 0 {
+				replayWithheld = true // not set when nothing was published: the next line says it
+			}
+			m.onStdout(ctx, lr, frame.Data, at)
 			continue
 		}
 		seq := m.publishRuntimeOutput(lr, frame.Stream, frame.Data, at)
@@ -132,6 +160,54 @@ func (m *Module) bridge(lr *liveRun) {
 	exit, waitErr := lr.proc.Wait()
 	m.finalize(lr, exit, waitErr)
 }
+
+// replayingSession is a driver session whose tool replays its stored conversation
+// as notifications before it answers the resume that asked for it (ACP's
+// session/load and session/resume: acpSession).
+type replayingSession interface{ replaying() bool }
+
+// withholdsReplay reports whether a stdout line may be part of a replayed
+// conversation that this launch must not publish. The launch's redactor holds the
+// secrets' current values and the tokens of this launch only, so after a resume
+// that follows a launch of a run given vault secrets, a repository credential or
+// a registry token it cannot withhold what the replay quotes (a secret rotated or
+// removed since, the earlier launch's read token): the same condition under which
+// a stored conversation is not read (earlierLaunchValuesMayBeUnheld).
+//
+// From the request that asks for the replay until its answer has been read, the
+// only line published is a well-formed response: a notification of any method may
+// carry the history, and so may a line that is not JSON, so what cannot be shown
+// to be a response is held back. The output after the answer is published as for
+// any session. Not covered: what the tool writes to stderr, a response that
+// itself holds history, and history sent after the answer.
+func (lr *liveRun) withholdsReplay(data []byte) bool {
+	if lr.redactsEveryEarlierValue {
+		return false
+	}
+	session, ok := lr.session.(replayingSession)
+	if !ok || !session.replaying() {
+		return false
+	}
+	var f struct {
+		ID     json.RawMessage `json:"id"`
+		Method string          `json:"method"`
+		Result json.RawMessage `json:"result"`
+		Error  json.RawMessage `json:"error"`
+	}
+	// A response names a request (an id) and says how it ended (a result, which may
+	// be null, or an error); a line that is only shaped like one is held.
+	isResponse := json.Unmarshal(data, &f) == nil && f.Method == "" &&
+		len(f.ID) > 0 && string(f.ID) != "null" && (len(f.Result) > 0 || len(f.Error) > 0)
+	return !isResponse
+}
+
+// replayWithheldNotice is the one line a launch says in its stream when it holds
+// a tool's replay back, so that an empty history is not mistaken for a lost one.
+// It says what was held (what the tool sent while restoring), not that it was history.
+var replayWithheldNotice = []byte(`{"type":"olivares_notice","code":"history_withheld",` +
+	`"message":"Olivares held back what this tool sent while it restored the conversation, ` +
+	`because an earlier launch of this session used a vault secret, a repository credential or a package registry token ` +
+	`that this launch may not be able to withhold."}`)
 
 // onStdout drives stored state from a stream-json output line: it captures the
 // resumable session id from the init message and tracks activity (throttled).
@@ -184,6 +260,9 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 			m.touchActivity(ctx, lr, at)
 			return
 		}
+		// A turn the account's limit refused, or the success that lifts the fact
+		// (runtime_limit.go). Read on its own, so it cannot cost the frame its other uses.
+		m.observeStreamLimit(ctx, lr, data)
 		if sj, ok := parseStreamJSON(data); ok {
 			// The tool's own mode, from the init frame and from the status frame it
 			// sends when the mode changes (runtime_tool_mode.go).
@@ -204,8 +283,8 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 	}
 	// Only this is deferred. The ring and the recorder have already run above, in the
 	// same turn of the loop: the deferral takes out of the way EXACTLY the writes that
-	// collide with the reservation's CAS and nothing else. mutateRunBest's two callers
-	// are the two this dispatch reaches, so deferring here covers all of them.
+	// collide with the reservation's CAS and nothing else. The bridge-side mutations
+	// are all reached by this dispatch, so deferring here covers all of them.
 	if lr.difiereSiLaReservaSigueAbierta(aplicar) {
 		return
 	}
@@ -514,8 +593,14 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 // bridge for activity/session-id capture), retrying once on a concurrency
 // conflict and otherwise ignoring the error (the next frame retries).
 func (m *Module) mutateRunBest(ctx context.Context, lr *liveRun, fn func(rec model.Record)) {
+	_ = m.mutateRun(ctx, lr, fn)
+}
+
+// mutateRun is mutateRunBest for a caller whose next step depends on the write
+// having committed.
+func (m *Module) mutateRun(ctx context.Context, lr *liveRun, fn func(rec model.Record)) error {
 	if lr == nil {
-		return
+		return nil
 	}
 	attempt := func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
@@ -535,9 +620,11 @@ func (m *Module) mutateRunBest(ctx context.Context, lr *liveRun, fn func(rec mod
 		_, err = repo.Update(ctx, rec)
 		return err
 	}
-	if err := m.Data.Mutate(ctx, lr.tenant, attempt); errors.Is(err, store.ErrConflict) {
-		_ = m.Data.Mutate(ctx, lr.tenant, attempt)
+	err := m.Data.Mutate(ctx, lr.tenant, attempt)
+	if errors.Is(err, store.ErrConflict) {
+		err = m.Data.Mutate(ctx, lr.tenant, attempt)
 	}
+	return err
 }
 
 // conservaElSelloMasNuevo applies max(old, new) to last_activity_at.

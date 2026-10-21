@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE FIRST SCREENS, from a keyboard, in both themes and in all seven console
+// THE FIRST SCREENS, from a keyboard, in both themes and in all nine console
 // languages, against a live `--seed-demo` engine. Nothing here is intercepted.
 //
 // ⛔ IT CARRIES THE DEMO GUARD, AND FOR A MEASURED REASON. `scripts/web-e2e.sh` puts
@@ -20,7 +20,7 @@
 //   · that an empty state PAINTED by a live engine has a description under its title,
 //     which is the other half of the static census in `empty-state.census.test.ts`:
 //     the census reads source, this reads pixels' DOM;
-//   · that seven languages render, because a missing key falls back to the raw key
+//   · that nine languages render, because a missing key falls back to the raw key
 //     and the only place that is visible is a running console.
 import { expect, test, type Page } from '@playwright/test'
 import { rawKeyProbe } from './raw-i18n'
@@ -29,8 +29,18 @@ const demoTenant = process.env.DEMO_TENANT ?? ''
 const EMAIL = 'demo@olivares.local'
 const PASSWORD = 'olivares-demo-estate'
 
-/** The seven the console ships; `lint:i18n` proves the resources exist for each. */
-const LANGUAGES = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'] as const
+/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+const LANGUAGES = [
+  'en',
+  'es',
+  'de',
+  'fr',
+  'it',
+  'ja',
+  'ko',
+  'ru',
+  'zh',
+] as const
 
 async function signIn(page: Page) {
   await page.goto('/login')
@@ -149,14 +159,18 @@ test.describe('the first screens', () => {
       await expect(action).not.toHaveText('')
       await expect(page.getByTestId('home-next-step')).toHaveCount(0)
 
-      // The work narrative: the seeded estate has sessions, so rows, not the empty
-      // state. Which one appears is data, so accept either and require one of them.
-      const rows = page.getByTestId('home-recent-rows')
-      await expect(rows).toBeVisible()
-      await expect(page.getByTestId('home-recent-all')).toHaveAttribute(
-        'href',
-        '/sessions',
-      )
+      // The work narrative: the seeded estate has sessions, so cards or rows, not the
+      // empty state. Live sessions are cards and ended ones rows (#2245); which appear
+      // is data, so accept either and require one, with the one link to all sessions.
+      const work = page
+        .getByTestId('now-live-cards')
+        .or(page.getByTestId('home-recent-rows'))
+      await expect(work.first()).toBeVisible()
+      await expect(
+        page
+          .getByTestId('home-recent-all')
+          .or(page.getByTestId('now-live-all')),
+      ).toHaveAttribute('href', '/sessions')
     })
   }
 
@@ -222,9 +236,8 @@ test.describe('the first screens', () => {
       ...((await (await page.request.get('/v1/server-info')).json()).edition ===
       'community'
         ? []
-        : ['/orchestration']),
+        : ['/orchestration', '/compliance']),
       '/knowledge',
-      '/compliance',
       '/security',
       '/console',
     ]
@@ -261,12 +274,27 @@ test.describe('the first screens', () => {
       await page.goto('/login')
       await page.locator('input[type=password]').waitFor()
       await expect(page.locator('html')).toHaveAttribute('lang', lang)
+      if (lang === 'ko') {
+        // A raw-key probe cannot tell Korean copy from an English fallback.
+        await expect(
+          page.getByRole('button', { name: '로그인', exact: true }),
+        ).toBeVisible()
+      }
       const rawOnLogin = await page.evaluate(rawKeyProbe)
       expect(rawOnLogin, `raw i18n keys on /login in ${lang}`).toEqual([])
 
       await signIn(page)
       await page.goto('/')
       await page.waitForLoadState('networkidle').catch(() => {})
+      if (lang === 'ko') {
+        // After auth the shell must be Korean too: a raw-key probe passes on the
+        // English fallback, so name the sidebar controls the catalogs supply.
+        const sidebar = page.locator('[data-sidebar-mode]')
+        await expect(sidebar).toBeVisible()
+        await expect(
+          sidebar.getByRole('link', { name: '설정', exact: true }),
+        ).toBeVisible()
+      }
       const rawOnHome = await page.evaluate(rawKeyProbe)
       expect(rawOnHome, `raw i18n keys on / in ${lang}`).toEqual([])
     })

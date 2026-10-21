@@ -7,7 +7,7 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
-import { FEATURE_VIEWS } from '@/features/registry'
+import { BUSINESS_ONLY_VIEW_IDS, FEATURE_VIEWS } from '@/features/registry'
 import { NextStep } from './next-step'
 import { NEXT_STEPS, stepView } from './next-step-catalog'
 import './i18n'
@@ -41,21 +41,32 @@ afterEach(() => {
 })
 
 describe('NextStep', () => {
-  it('every declared step still resolves to a registry view', () => {
+  it('every declared step still resolves to a registry view, or to a page only Business serves', () => {
     // The drift guard. The paths are NOT typed in the component; if a view id is
     // renamed or retired, the card would silently disappear from the front door
     // instead of failing here.
     for (const step of NEXT_STEPS) {
       expect(
-        stepView(step.viewId),
+        stepView(step.viewId) !== undefined ||
+          BUSINESS_ONLY_VIEW_IDS.includes(step.viewId),
         `${step.viewId} is not in FEATURE_VIEWS`,
-      ).toBeDefined()
+      ).toBe(true)
+    }
+  })
+
+  it('offers no card for a page this edition does not serve', () => {
+    renderIntel(<NextStep />)
+    for (const step of NEXT_STEPS) {
+      expect(
+        screen.queryByTestId(`home-next-step-${step.id}`) !== null,
+        step.id,
+      ).toBe(stepView(step.viewId) !== undefined)
     }
   })
 
   it('links each verb to the path the registry publishes for it', () => {
     renderIntel(<NextStep />)
-    for (const step of NEXT_STEPS) {
+    for (const step of NEXT_STEPS.filter((s) => stepView(s.viewId))) {
       const view = FEATURE_VIEWS.find((v) => v.id === step.viewId)!
       expect(screen.getByTestId(`home-next-step-${step.id}`)).toHaveAttribute(
         'href',
@@ -126,6 +137,8 @@ describe('NextStep', () => {
     // The labels wrap now (next-step.wrap.test.tsx): no cut line, so no hover title is
     // needed to finish one. The link keeps the whole label on title= as before.
     expect(container.querySelectorAll('.truncate')).toHaveLength(0)
+    // The agent card opens the Business deployment page: only a Business build offers it.
+    if (!stepView('deploy')) return
     const agent = screen.getByTestId('home-next-step-agent')
     expect(agent).toHaveTextContent(/Deploy an agent/)
     expect(agent).toHaveTextContent(/Roll an agent out/)

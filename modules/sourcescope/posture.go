@@ -7,6 +7,7 @@ package sourcescope
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -857,6 +858,10 @@ func (m *Module) decidePostureRequest(w http.ResponseWriter, r *http.Request, mc
 		out = toPostureRequestDTO(rec)
 		return auditPosture(r.Context(), sc, mc, verb, out)
 	})
+	if errors.Is(err, errProfileAssignmentBusiness) {
+		writeProfileAssignmentBusiness(w)
+		return
+	}
 	if writeFenceRefusal(w, err) {
 		return
 	}
@@ -939,6 +944,11 @@ func (m *Module) applyPosture(ctx context.Context, sc store.Scope, mc api.Module
 		return nil, err
 	}
 	storedReason := rec.String(colPRReason)
+	// A proposal a Business install queued to assign or change an assignment is not applied
+	// by a Community one. Deleting one and disabling the scoping of its source only relax.
+	if op := rec.String(colPROp); (op == postureOpCreate || op == postureOpUpdate) && !m.mayWriteSource(rec.String(colPRSourceType)) {
+		return nil, errProfileAssignmentBusiness
+	}
 	switch rec.String(colPROp) {
 	case postureOpDelete:
 		target, gerr := brepo.Get(ctx, model.ID(rec.String(colPRTargetID)))

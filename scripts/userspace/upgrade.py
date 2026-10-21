@@ -26,6 +26,8 @@ spec.loader.exec_module(check)
 
 # Approved edition move; all stored rows remain covered by row_diff.
 REDTEAM_EDITION_ROUTES = frozenset(('/v1/m/redteam/targets', '/v1/m/redteam/runs', '/v1/m/redteam/catalog'))
+# Privileged-session recording is a Business capability: a Community candidate answers 501 business_required.
+RECORDING_EDITION_ROUTES = frozenset(('/v1/m/recording/sessions',))
 # The boot naming of provider profiles that predate account names (AdoptUnnamedProfiles):
 # it fills these three empty columns of an unnamed profile and never rewrites a set one.
 PROFILE_NAMING = ('account_name', 'home_mode', 'isolation_level')
@@ -173,8 +175,9 @@ class Upgrade:
     def read(self, path: str) -> tuple[int, object]:
         status, data = self.call('GET', path)
         error = data.get('error') if isinstance(data, dict) else None
-        edition_refusal = (status == 501 and path in REDTEAM_EDITION_ROUTES
-                           and isinstance(error, str) and 'Business' in error)
+        edition_refusal = status == 501 and (
+            (path in REDTEAM_EDITION_ROUTES and isinstance(error, str) and 'Business' in error) or
+            (path in RECORDING_EDITION_ROUTES and isinstance(error, dict) and error.get('code') == 'business_required'))
         if status != 200 and not edition_refusal and not (
                 status == 404 and path.startswith('/v1/m/') and
                 isinstance(error, dict) and error.get('code') == 'module_not_enabled'):
@@ -376,7 +379,7 @@ class Upgrade:
             self.login()
             for path, (old_status, old) in before_reads.items():
                 status, new = self.read(path)
-                if path in REDTEAM_EDITION_ROUTES and old_status in (200, 501) and status == 501:
+                if path in REDTEAM_EDITION_ROUTES | RECORDING_EDITION_ROUTES and old_status in (200, 501) and status == 501:
                     continue
                 if status != old_status:
                     self.result['failures'].append(f'{path}: HTTP status changed from {old_status} to {status}')

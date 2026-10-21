@@ -6,8 +6,8 @@
 # Fedora 44 DNF5 client for one rpm-md repository: a local directory (the
 # transaction container has --network none), or with --baseurl the reviewed
 # HTTPS origin, staged or promoted (the container then has network).
-# The image is pinned by digest. pkg_gpgcheck=1 and repo_gpgcheck=1 come from
-# dnf-repo.template, and the trust anchor is always the pinned --gpgkey file,
+# The image is pinned by digest. gpgcheck=1, pkg_gpgcheck=1 and repo_gpgcheck=1
+# come from dnf-repo.template, and the trust anchor is always the pinned --gpgkey file,
 # never a key fetched from the repository.
 #
 # The pinned image has no python3. Inside it the client runs only bash, the
@@ -40,12 +40,9 @@ repo_template_path() {
 repo_file_is_closed() {
 	local file="$1"
 	[[ -f "$file" ]] || return 1
-	grep -qx 'pkg_gpgcheck=1' "$file" || return 1
-	grep -qx 'repo_gpgcheck=1' "$file" || return 1
-	if grep -E '^[[:space:]]*gpgcheck=' "$file" >/dev/null; then
-		return 1
-	fi
-	return 0
+	# Exactly these three settings, once each (see assert_closed_text in test-rpm-repository.sh).
+	[[ "$(grep -E '^[[:space:]]*(pkg_|repo_)?gpgcheck[[:space:]]*=' "$file" | LC_ALL=C sort)" == \
+		$'gpgcheck=1\npkg_gpgcheck=1\nrepo_gpgcheck=1' ]]
 }
 
 render_repo_file() {

@@ -1,0 +1,253 @@
+{
+  "title": "보안 및 포렌식",
+  "description": "가드레일 발견 사항, 강제 태세, 이상 대기열 및 변조 감지 사건 포렌식입니다. 이 플레인은 기본적으로 탐지형입니다 — 강제가 활성화되고 거버넌스되지 않는 한 자체적으로 차단하지 않고 기록합니다.",
+  "tabs": {
+    "safety": "안전 태세",
+    "findings": "발견 사항",
+    "guardrails": "가드레일",
+    "anomalies": "이상",
+    "forensics": "포렌식"
+  },
+  "findings": {
+    "title": "발견 사항",
+    "description": "가드레일, 이상 및 포렌식 발견 사항입니다. 증거는 지문이므로 확장할 페이로드가 없습니다.",
+    "empty": "발견 사항 없음",
+    "emptyHint": "가드레일, 이상 탐지 및 포렌식이 증거를 기록하면 발견 사항이 나타납니다.",
+    "namesUnread": "일부 세션 이름을 읽을 수 없어 해당 행에는 참조가 표시됩니다.",
+    "export": {
+      "action": "SARIF 내보내기",
+      "busy": "내보내는 중…",
+      "done": "SARIF 내보내기가 다운로드되었습니다.",
+      "truncated": "SARIF 내보내기가 다운로드되었지만 서버의 결과 한도에서 중단되었습니다 — 유효한 실행이지만 전체 집합은 아닙니다."
+    },
+    "search": "발견 사항 검색",
+    "fingerprint": "지문",
+    "columns": {
+      "severity": "심각도",
+      "kind": "종류",
+      "source": "소스",
+      "title": "발견 사항",
+      "evidence": "증거",
+      "status": "상태",
+      "actions": "작업"
+    },
+    "kind": {
+      "guardrail": "가드레일",
+      "anomaly": "이상",
+      "forensic": "포렌식"
+    },
+    "status": {
+      "open": "열림",
+      "triaged": "분류됨",
+      "resolved": "해결됨",
+      "dismissed": "기각됨"
+    },
+    "triage": {
+      "action": "분류",
+      "title": "발견 사항 분류",
+      "description": "분류는 흐름 상태만 변경합니다. 증거 — 종류, 심각도 및 세부 지문 — 는 변경할 수 없습니다.",
+      "statusLabel": "상태",
+      "submit": "상태 업데이트",
+      "updated": "발견 사항 상태가 업데이트되었습니다",
+      "immutableNote": "심각도, 종류 및 세부 지문은 변경할 수 없으며 흐름 상태만 변경할 수 있습니다."
+    },
+    "subjectKinds": {
+      "local_residency": "상주 로컬 모델"
+    },
+    "truncated": "수집된 처음 {{n}}개 표시",
+    "truncatedHint": "표시된 것보다 많은 발견 사항이 있으며 이 페이지는 문제 발생 시각이 아니라 수집 id로 정렬되므로 최근 발견 사항이 누락될 수 있습니다. 나머지가 보이지 않는다고 해서 다른 발견이 없었다는 증거는 아닙니다."
+  },
+  "safetyPosture": {
+    "title": "프로바이더 안전 태세",
+    "description": "프로바이더 자체 제어에서 수집한 읽기 우선 AI 안전 태세입니다 — OpenAI Moderation, AWS Bedrock Guardrails 및 Azure Responsible AI. 플레인은 이를 읽고 기록하며 강제는 프로바이더에 남습니다.",
+    "empty": "안전 태세 발견 사항 없음",
+    "emptyHint": "OpenAI, AWS 또는 Azure 커넥터를 안전 읽기가 활성화된 상태로 연결하여 이 보기를 채우십시오.",
+    "countsPartial": "부분 롤업 표시 중 — 이 테넌트에는 요약 스캔이 다루는 것보다 많은 안전 태세 발견 사항이 있습니다.",
+    "columns": {
+      "open": "열림"
+    }
+  },
+  "guardrails": {
+    "title": "가드레일 점검",
+    "description": "서피스에서 가드레일 검사 서비스를 실행합니다. 텍스트는 해시되고 마스킹되며 절대 저장되지 않습니다 — 결과는 판정과 최소한의 이미 마스킹된 증거입니다.",
+    "verdictTitle": "판정",
+    "clean": "탐지 없음 — 깨끗함.",
+    "detectiveNote": "이 판정은 탐지 플레인에서 나왔습니다: 적발은 탐지되고 기록되었지만 차단되지 않았습니다. 차단은 강제가 활성화되고 거버넌스될 때만 가능합니다.",
+    "wouldBlock": "차단 예정(강제됨)",
+    "detectOnly": "탐지만",
+    "findingsRecorded": "발견 사항 {{count}}개 기록됨",
+    "findingsRecorded_other": "발견 사항 {{count}}개 기록됨",
+    "enforcement": {
+      "detective": "탐지형",
+      "enforced": "강제됨"
+    },
+    "class": {
+      "pii": "PII",
+      "prompt_injection": "프롬프트 인젝션",
+      "jailbreak": "탈옥",
+      "content": "콘텐츠",
+      "output_validation": "출력 검증",
+      "owasp_agentic": "OWASP 에이전트"
+    },
+    "form": {
+      "surface": "서피스",
+      "text": "검사할 텍스트",
+      "textHint": "검사 후 해시되어 마스킹됩니다 — 절대 저장되거나 반환되지 않습니다.",
+      "enforce": "강제 요청",
+      "enforceHint": "강제 정책에서 이 클래스가 활성화되고 거버넌스된 경우에만 차단하며, 그렇지 않으면 판정은 플래그입니다.",
+      "submit": "검사",
+      "running": "검사 중…",
+      "surfaceLabel": "서피스"
+    },
+    "surface": {
+      "input": "입력",
+      "output": "출력",
+      "tool_args": "도구 인수"
+    }
+  },
+  "enforcement": {
+    "title": "강제 태세",
+    "description": "프로덕션에 닿는 유일한 작업입니다. 각 가드레일 클래스는 기본적으로 탐지형이며, 인라인 강제 활성화는 관리자 작업이고 게이트가 설정된 곳에서는 거버넌스됩니다.",
+    "defaultDetectiveNote": "기본 플레인은 탐지형입니다: 클래스는 여기서 명시적으로 활성화되고 거버넌스될 때만 차단합니다.",
+    "fullyDetective": "활성화된 강제가 없습니다 — 플레인은 완전히 탐지형이며 안전한 기본값입니다. 아무것도 자체적으로 차단하지 않습니다.",
+    "detective": "탐지형",
+    "enforced": "강제됨",
+    "governed": "거버넌스됨",
+    "ungoverned": "사람 거버넌스 없이 활성화됨",
+    "wildcard": "모든 클래스",
+    "change": "변경",
+    "columns": {
+      "class": "클래스",
+      "posture": "태세",
+      "minSeverity": "최소 심각도",
+      "governance": "거버넌스",
+      "updated": "업데이트됨",
+      "actions": "작업"
+    },
+    "dialog": {
+      "title": "강제 변경",
+      "description": "비활성화(탐지형으로 복귀)는 항상 허용됩니다. 인라인 강제 활성화는 게이트가 설정된 곳에서 거버넌스됩니다 — 거버넌스 거부는 사유로 표시됩니다.",
+      "enabledLabel": "인라인 강제 활성화",
+      "minSeverity": "최소 심각도",
+      "reason": "사유",
+      "reasonHint": "감사 원장을 위해 변경과 함께 기록됩니다.",
+      "submit": "적용",
+      "applied": "강제 태세가 업데이트되었습니다",
+      "ungovernedWarning": "거버넌스 게이트 없이 이 클래스를 활성화하면 거버넌스되지 않은 상태로 남습니다 — 변경은 허용되지만 플래그가 지정됩니다.",
+      "deniedTitle": "거버넌스가 이 변경을 거부했습니다"
+    }
+  },
+  "anomalies": {
+    "title": "이상 대기열",
+    "description": "우선순위로 정렬된 드리프트 및 상관된 발견 사항입니다. 근사 항목은 조정되지 않은 드리프트이며 확정된 위반이 아닙니다.",
+    "empty": "대기열에 이상 없음",
+    "emptyHint": "이상은 탐지기가 사람의 판단을 위해 플래그한 동작입니다. 대기열이 비어 있습니다.",
+    "orderNote": "우선순위 기준, 높은 순.",
+    "priority": "우선순위",
+    "approximate": "근사",
+    "suspectedTitle": "의심: {{title}}",
+    "unreconciledNote": "조정되지 않은 드리프트 — 조정된 권한은 접근 맵입니다. 우선순위가 할인되며 확정된 위반이 아닙니다.",
+    "kind": {
+      "access_drift": "접근 드리프트",
+      "egress_exfil_suspected": "이그레스 유출 (의심)",
+      "anti_evasion_correlated": "상관된 회피"
+    }
+  },
+  "forensics": {
+    "title": "포렌식 사건",
+    "description": "사고 대응 — 각 사건은 개설 시점의 무결성 상태를 고정하므로 이후 변조를 탐지할 수 있습니다. 타임라인은 추가 전용 원장에서 재구성됩니다.",
+    "empty": "포렌식 사건 없음",
+    "emptyHint": "포렌식 사건은 하나의 조사를 위한 증거를 모읍니다. 사건을 열어 시작하십시오.",
+    "openCase": "사건 열기",
+    "back": "사건 목록으로",
+    "summary": "요약",
+    "openedBy": "개설자",
+    "opened": "개설됨",
+    "closed": "종료됨",
+    "integrity": "증거 보관 연속성 무결성",
+    "timeline": "재구성된 타임라인",
+    "timelineNote": "각 이벤트는 seq · hash · prev_hash를 전달하므로 읽는 사람이 링크를 독립적으로 재검증할 수 있습니다. 이벤트 뒤의 페이로드는 결코 없습니다.",
+    "columns": {
+      "severity": "심각도",
+      "title": "사건",
+      "status": "상태",
+      "opened": "개설됨"
+    },
+    "status": {
+      "open": "열림",
+      "investigating": "조사 중",
+      "contained": "격리됨",
+      "closed": "종료됨"
+    },
+    "truncated": "개설된 처음 {{n}}개 표시",
+    "truncatedHint": "표시된 것보다 많은 사건이 있으며 이 페이지는 개설 id로 정렬되므로 최근 사건이 누락될 수 있습니다. 여기서 볼 수 없는 조사가 존재하지 않는 조사는 아닙니다."
+  },
+  "integrity": {
+    "title": "원장 무결성",
+    "description": "두 가지 판정입니다: 해시 체인이 내부적으로 일관되고, 서명된 체크포인트가 있습니다. 검증 자체도 검증하는 체인에 기록됩니다.",
+    "chain": "해시 체인",
+    "chainChecked": "이벤트 {{count}}개 검증됨",
+    "chainChecked_other": "이벤트 {{count}}개 검증됨",
+    "checkpoints": "서명된 체크포인트",
+    "checkpointsCount": "체크포인트 {{count}}개 검증됨",
+    "checkpointsCount_other": "체크포인트 {{count}}개 검증됨",
+    "signingUnavailable": "서명 키가 설정되지 않았습니다 — 서명된 증명을 위조하지 않습니다.",
+    "checkpointsPendingNote": "아직 작성된 체크포인트가 없습니다 — 체인 판정이 이 원장을 증명합니다.",
+    "signingSeam": "체크포인트 서명 미설정",
+    "attestedSeq": "증명된 seq",
+    "headSeq": "원장 헤드 seq {{seq}}",
+    "reverifyNote": "각 이벤트는 seq · hash · prev_hash를 전달하므로 읽는 사람이 외부 WORM 저장소에 대해 오프라인으로 링크를 재검증할 수 있습니다.",
+    "chainEmptyNote": "아직 검증할 것이 없습니다 — 원장에 이벤트가 없습니다."
+  },
+  "empty": {
+    "enforcement": {
+      "title": "구성된 강제 클래스 없음",
+      "description": "가드레일 클래스 태세가 설정된 후에야 행이 나타나며, 그때까지 모든 클래스는 탐지형으로 남고 인라인으로 차단하는 것은 없습니다."
+    },
+    "findings": {
+      "title": "아직 기록된 보안 발견 사항 없음",
+      "description": "가드레일 검사, 관측된 드리프트 검사 또는 프로바이더 안전 태세가 신호를 기록하거나 다른 모듈이 고심각도 발견 사항을 제기하면 발견 사항이 나타납니다."
+    }
+  },
+  "cases": {
+    "new": "새 사건",
+    "newHint": "포렌식 사건을 엽니다. 엔진이 상태를 “open”으로 설정합니다.",
+    "title": "제목",
+    "severity": "심각도",
+    "create": "생성",
+    "cancel": "취소",
+    "created": "사건이 개설되었습니다",
+    "status": "상태",
+    "save": "변경 사항 저장",
+    "updated": "사건이 업데이트되었습니다",
+    "statusName": {
+      "open": "열림",
+      "investigating": "조사 중",
+      "contained": "격리됨",
+      "closed": "종료됨"
+    },
+    "exportFormat": "내보내기 형식",
+    "export": "내보내기",
+    "exported": "내보내기 요청됨",
+    "links": "증거 보관 연속성",
+    "linksHint": "이 사건이 연결된 대상: 발견 사항, 원장 시퀀스, 이상 또는 메모입니다.",
+    "noLinks": "아직 연결된 것 없음",
+    "noLinksHint": "발견 사항, 세션 및 증거를 이 사건에 연결하여 전체 이야기를 한곳에 모으십시오. 아직 연결된 것이 없습니다.",
+    "link": "연결",
+    "linked": "연결됨",
+    "linkKindLabel": "종류",
+    "linkRef": "참조",
+    "linkKind": {
+      "finding": "발견 사항",
+      "audit_seq": "원장 시퀀스",
+      "anomaly": "이상",
+      "note": "메모"
+    }
+  },
+  "severity": {
+    "low": "낮음",
+    "medium": "보통",
+    "high": "높음",
+    "critical": "심각"
+  }
+}

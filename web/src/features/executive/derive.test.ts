@@ -7,7 +7,10 @@ import type { Finding } from '@/features/security/types'
 import type { ComplianceSummaryResponse } from '@/features/compliance/types'
 import type { StatusDTO, IncidentDTO } from '@/features/health/types'
 import type { InventorySummary } from '@/features/inventory/types'
+import type { RunDTO } from '@/features/agentops/types'
 import type { LiveDTO } from '@/features/sessions/types'
+import { groupOf } from '@/features/sessions/session-groups'
+import { mergeSessions } from '@/features/sessions/provenance'
 import type { ListResponse } from '@/lib/api/types'
 import {
   deriveCompliance,
@@ -37,18 +40,55 @@ const finding = (severity: string, status = 'open'): Finding =>
 
 // --- usage -------------------------------------------------------------------
 
+// Rows are built whole: `mergeSessions` keys a row by its reference, so a bare
+// `{ cc_state }` would collapse every row into one.
+function liveRow(ref: string, over: Partial<LiveDTO> = {}): LiveDTO {
+  return {
+    session_ref: ref,
+    live_ref: `lr-${ref}`,
+    attribution: 'legacy',
+    cc_state: 'active',
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_micro_usd: 0,
+    event_count: 1,
+    tool_call_count: 0,
+    first_event_at: '2026-10-15T09:00:00Z',
+    last_event_at: '2026-10-15T09:01:00Z',
+    duration_seconds: 60,
+    ...over,
+  }
+}
+
+function runRow(ref: string, over: Partial<RunDTO> = {}): RunDTO {
+  return {
+    run_ref: ref,
+    transport: 'stream-json',
+    permission_mode: 'default',
+    isolation: 'native',
+    state: 'running',
+    last_event_seq: 0,
+    pep_provisioned: true,
+    record_io: false,
+    critical: false,
+    ...over,
+  }
+}
+
 describe('deriveUsage', () => {
   it('counts active agents, live states and surfaces silent-evasion', () => {
     const live = list<LiveDTO>([
-      { cc_state: 'active' } as LiveDTO,
-      { cc_state: 'active' } as LiveDTO,
-      { cc_state: 'idle' } as LiveDTO,
-      { cc_state: 'silent_evasion' } as LiveDTO,
+      liveRow('s1', { cc_state: 'active' }),
+      liveRow('s2', { cc_state: 'active' }),
+      liveRow('s3', { cc_state: 'idle' }),
+      liveRow('s4', { cc_state: 'silent_evasion' }),
     ])
     const usage = deriveUsage(inventorySummaryFixture, live)
     expect(usage.activeAgents).toBe(
       inventorySummaryFixture.by_kind.agent.active,
     )
+    // The headline is the Working set, not the inventory's catalog count.
+    expect(usage.working).toBe(2)
     expect(usage.liveActive).toBe(2)
     expect(usage.silentEvasion).toBe(1)
     expect(usage.totalEntities).toBe(inventorySummaryFixture.total)
@@ -70,6 +110,8 @@ describe('deriveUsage', () => {
     expect(usage.activeAgents).toBe(
       inventorySummaryFixture.by_kind.agent.active,
     )
+    // Who is working now is the live half's fact; without it the figure is unknown.
+    expect(usage.working).toBeNull()
     expect(usage.totalEntities).toBe(inventorySummaryFixture.total)
     expect(usage.liveActive).toBeNull()
     expect(usage.liveIdle).toBeNull()
@@ -79,11 +121,12 @@ describe('deriveUsage', () => {
 
   it('an absent inventory leaves every inventory figure null, and keeps the live half', () => {
     const live = list<LiveDTO>([
-      { cc_state: 'active' } as LiveDTO,
-      { cc_state: 'silent_evasion' } as LiveDTO,
+      liveRow('s1', { cc_state: 'active' }),
+      liveRow('s2', { cc_state: 'silent_evasion' }),
     ])
     const usage = deriveUsage(undefined, live)
     expect(usage.activeAgents).toBeNull()
+    expect(usage.working).toBe(1)
     expect(usage.totalAgents).toBeNull()
     expect(usage.totalEntities).toBeNull()
     expect(usage.liveActive).toBe(1)
@@ -99,6 +142,7 @@ describe('deriveUsage', () => {
       activeAgents: null,
       totalAgents: null,
       totalEntities: null,
+      working: null,
       liveActive: null,
       liveIdle: null,
       liveNow: null,
@@ -116,6 +160,7 @@ describe('deriveUsage', () => {
       activeAgents: 0,
       totalAgents: 0,
       totalEntities: 0,
+      working: 0,
       liveActive: 0,
       liveIdle: 0,
       liveNow: 0,
@@ -212,6 +257,88 @@ describe('currentAnswer', () => {
     expect(
       currentAnswer(true, { isSuccess: false, data: undefined }),
     ).toBeUndefined()
+  })
+})
+
+// ⛔ THE CARD AND THE LIST AGREE (#2268). The headline used to read the inventory
+//    catalog (agents seen recently), so a dashboard could say "3 active agents" over a
+//    Sessions list showing 9 Working, or the other way round. It is now the Working
+//    set itself: the sessions the Sessions view files under Working, launched or
+//    observed, from the same join and the same rule (`mergeSessions` + `groupOf`).
+describe('deriveUsage — the Active agents card is the Sessions Working set', () => {
+  const workingInSessionsView = (live: LiveDTO[], runs: RunDTO[]) =>
+    mergeSessions(live, runs).filter((s) => groupOf(s) === 'active').length
+
+  it('equals the Working count of the Sessions view for observed and launched sessions', () => {
+    const live = [
+      liveRow('obs-working', { cc_state: 'active' }),
+      liveRow('obs-idle', { cc_state: 'idle' }),
+      liveRow('obs-ended', { cc_state: 'ended' }),
+      liveRow('obs-evasion', { cc_state: 'silent_evasion' }),
+      // A launched session: its observed row says active, its run says it answered
+      // and waits for its person. The run decides, so it is NOT working.
+      liveRow('launched-idle', { cc_state: 'active' }),
+      liveRow('launched-working', { cc_state: 'active' }),
+    ]
+    const runs = [
+      runRow('run-a', { state: 'idle', claude_session_id: 'launched-idle' }),
+      runRow('run-b', {
+        state: 'running',
+        claude_session_id: 'launched-working',
+      }),
+      // A launched session whose telemetry has not arrived is still working.
+      runRow('run-c', { state: 'running' }),
+    ]
+    const usage = deriveUsage(inventorySummaryFixture, list(live), list(runs))
+    expect(usage.working).toBe(workingInSessionsView(live, runs))
+    expect(usage.working).toBe(3)
+  })
+
+  it('does not read the inventory catalog for the headline', () => {
+    const inv: InventorySummary = {
+      by_kind: { agent: { total: 9, active: 9, stale: 0 } },
+      by_source: {},
+      total: 9,
+    }
+    const usage = deriveUsage(
+      inv,
+      list([liveRow('only', { cc_state: 'idle' })]),
+    )
+    expect(usage.working).toBe(0)
+    expect(usage.activeAgents).toBe(9)
+  })
+
+  it('counts a launched session once, not once per half', () => {
+    const live = [liveRow('same', { cc_state: 'active' })]
+    const runs = [
+      runRow('run-1', { state: 'running', claude_session_id: 'same' }),
+    ]
+    expect(deriveUsage(undefined, list(live), list(runs)).working).toBe(1)
+  })
+
+  it('a run page with more behind it floors the figure like the observed page does', () => {
+    const live = [liveRow('a')]
+    const runs: ListResponse<RunDTO> = {
+      items: [runRow('r1', { claude_session_id: 'a' })],
+      has_more: true,
+    }
+    expect(deriveUsage(undefined, list(live), runs).livePartial).toBe(true)
+    // Nothing to qualify without the live half it joins.
+    expect(deriveUsage(undefined, undefined, runs).livePartial).toBe(false)
+  })
+
+  it('is unknown while the run half is in scope and not established', () => {
+    // A launched session's state is its run's: counting it by the observed row would
+    // print a number the Sessions view does not.
+    const live = [liveRow('a'), liveRow('b')]
+    expect(deriveUsage(undefined, list(live), null).working).toBeNull()
+  })
+
+  it('without the run half it counts what the Sessions view lists without it', () => {
+    const live = [liveRow('a'), liveRow('b', { cc_state: 'idle' })]
+    expect(deriveUsage(undefined, list(live), undefined).working).toBe(
+      workingInSessionsView(live, []),
+    )
   })
 })
 

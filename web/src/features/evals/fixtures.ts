@@ -12,7 +12,10 @@ import type { AbResult, CaseResult, EvalRun, Scorecard, Suite } from './types'
 
 export const scorecardsFixture: Scorecard[] = [
   {
-    key: 'support-triage',
+    key: JSON.stringify(['suite-triage-v3', 'support-triage', '']),
+    name: 'support-triage',
+    suite_ref: 'suite-triage-v3',
+    subject_ref: 'support-triage',
     subject_kind: 'agent',
     // `pass_rate` es la MEDIA por corrida; `pooled_pass_rate` es la tasa real
     // (aprobados/puntuados sobre todas las corridas). El motor manda las dos y
@@ -35,7 +38,10 @@ export const scorecardsFixture: Scorecard[] = [
   },
   {
     // The degradation case the Drift tab and the regression badge surface.
-    key: 'code-reviewer',
+    key: JSON.stringify(['suite-review-v2', 'code-reviewer', '']),
+    name: 'code-reviewer',
+    suite_ref: 'suite-review-v2',
+    subject_ref: 'code-reviewer',
     subject_kind: 'agent',
     pass_rate: 0.71,
     pooled_pass_rate: { rate: 0.61, n: 148, ci: { lo: 0.53, hi: 0.69 } },
@@ -53,7 +59,10 @@ export const scorecardsFixture: Scorecard[] = [
     regressed: true,
   },
   {
-    key: 'claude-opus-4-8',
+    key: JSON.stringify(['suite-model-v1', 'claude-opus-4-8', '']),
+    name: 'claude-opus-4-8',
+    suite_ref: 'suite-model-v1',
+    subject_ref: 'claude-opus-4-8',
     subject_kind: 'model',
     pass_rate: 0.97,
     pooled_pass_rate: { rate: 0.93, n: 296, ci: { lo: 0.9, hi: 0.95 } },

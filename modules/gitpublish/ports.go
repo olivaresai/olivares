@@ -104,6 +104,10 @@ type Git interface {
 	CommitTree(ctx context.Context, repo, commit string) (string, error)
 	// PathsChanged reports whether any CI-configuration path differs.
 	PathsChanged(ctx context.Context, repo, from, to string, paths []string) (bool, error)
+	// ChangedPaths lists the paths of the commit to: those it adds since the
+	// merge base with from, or, without sinceMergeBase, every path whose
+	// content differs between from and to.
+	ChangedPaths(ctx context.Context, repo, from, to string, sinceMergeBase bool) ([]string, error)
 	Push(ctx context.Context, r gp.PushRequest) (gp.Result, error)
 	// Fetch feeds commit from a session folder into the server repository.
 	Fetch(ctx context.Context, repo, source, commit string) error

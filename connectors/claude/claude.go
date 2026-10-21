@@ -536,6 +536,7 @@ func toolSignalFromHook(h hookEvent) toolSignal {
 		resRef:      ref,
 		mode:        mode,
 		hasResource: kind != resTool,
+		project:     h.project,
 	}
 }
 

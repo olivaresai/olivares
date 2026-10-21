@@ -159,6 +159,10 @@ func TestComplianceGateDefaultInstallCarriesTwoPersonEvidence(t *testing.T) {
 // answers 403 "lacks dual-control quorum evidence" when the gate hands back no
 // evidence. Two distinct humans approving must let the same request execute.
 func TestDataSubjectEraseDefaultInstallRunsAfterTwoApprovals(t *testing.T) {
+	// Erasure with key shred is a Business capability: compose the module set as the Business edition.
+	previous := thisEdition
+	t.Cleanup(func() { thisEdition = previous })
+	thisEdition.name = "enterprise"
 	h := newHarness(t)
 	_, approverB := h.createApprover(t, "dflt-erase-b@bridge.test")
 	_, approverC := h.createApprover(t, "dflt-erase-c@bridge.test")
@@ -224,6 +228,10 @@ func TestComplianceHoldGateAdapterPropagatesErrors(t *testing.T) {
 // field-for-field (id/matter_ref/scope_kind) through the composition-root
 // adapter — knowledge never imports compliance.
 func TestHoldGateBlocksKnowledgeKBDeleteE2E(t *testing.T) {
+	// Placing a hold is a Business capability: compose the module set as the Business edition.
+	previous := thisEdition
+	t.Cleanup(func() { thisEdition = previous })
+	thisEdition.name = "enterprise"
 	h := newHarness(t)
 
 	var kb struct {

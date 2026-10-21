@@ -50,7 +50,8 @@ export function SessionSecrets({
   const { can } = useAuth()
   const boundary = useAuthBoundary()
   const [manage, setManage] = useState(false)
-  // The same permission the vault's tenant scope asks for, and the server asks again.
+  // The env/ names this lists stay with the organization's administrators (the tenant scope
+  // admits every member for their own vault), and the server asks again.
   const admitted = !!boundary.tenant && !!can?.('tenant:admin')
   const query = useQuery({
     queryKey: [

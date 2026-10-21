@@ -14,6 +14,7 @@ import (
 // Community links no organization-management verbs or HTTP client implementation.
 func newTenantsCmd() *cobra.Command {
 	return &cobra.Command{
+		Annotations:        map[string]string{"changes_data": "read"},
 		Use:                "tenants",
 		Aliases:            []string{"orgs"},
 		Hidden:             true,

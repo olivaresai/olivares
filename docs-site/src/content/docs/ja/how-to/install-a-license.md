@@ -107,6 +107,13 @@ olivares license status --data-dir /var/lib/olivares
 
 ## 3 · Community → Business、インプレース
 
+Community ビルドに有効な Business または Enterprise ライセンスをインストールしても、そのビルドは
+そのまま動作し続けます。セッションコックピットとその他の商用ページは、このインストールを
+Business に切り替えて初めて表示されます。コンソールの **Edition & license** ビューには、
+インストール済みのライセンスがビルドとは別に表示されます。**Expires** は有料の期間で、
+**Lease until** は、表示される場合、それとは別の暫定的なインスタンスリースです。
+Docker で実行している場合は、下の [Docker と Compose](#docker-と-compose) に進んでください。
+
 :::note[Business と商用アーティファクトチャネル]
 `--enterprise` フラグは商用アーティファクトチャネルを示し、エディション名ではありません。
 エディションは Community、Business、Enterprise です。Business は Regulated Operations、
@@ -124,7 +131,9 @@ olivares upgrade --enterprise --token <TOKEN>
 プラットフォーム用の署名済み商用ビルドを取得し、**署名をオフラインで
 検証します**。改ざんされたアーティファクトはアップグレードを中止させ、稼働中の
 バイナリは変更されないままです。その後アトミックに置き換え、以前のバイナリの
-バックアップを保持します。適用せずに計画を確認するには、先に `--check` を実行します。
+バックアップを保持します。Business は Community と同じバージョン番号なので、すでにそのバージョンを
+実行している場合にも使えます。適用せずに計画を確認するには、先に `--check` を実行します。この変更は
+`edition: community -> enterprise` と表示されます。
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN> --check
@@ -148,6 +157,70 @@ olivares enterprise enable <preset>     # starter | regulated | full
 [アップグレードとロールバック](/ja/how-to/upgrade-and-rollback/)で求めているものと同じ
 バックアップを作成してください。そのページでは以前のバイナリへ戻す方法も説明します。
 :::
+
+### Docker と Compose
+
+公開されている `docker.io/olivaresai/olivares` イメージは Community です。コンテナ内では、
+`olivares upgrade` はリリースをイメージではなくデータボリュームにインストールするため、
+コンテナを再作成すると再びそのリリースが起動します。これは、Business リリースがイメージより
+新しい場合、または同じバージョンの場合にそれを適用します（`--check` は変更を `edition: community -> enterprise` と表示します）。
+以下の説明に従って自分でイメージをビルドすることもできます。
+ライセンスをインストールしてあれば（セクション 2）、稼働中のコンテナ内でアップグレードを
+実行し、再起動します。トークンは納品メールに記載されています。プロセス一覧に表示されないよう、
+名前で渡します。
+
+```sh
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
+docker compose up -d --force-recreate olivares
+```
+
+リリースは、データディレクトリ配下の `ota/`（同梱イメージでは `/var/lib/olivares/ota`）に、
+検証に使った署名付きマニフェストおよびアーティファクトとともに保存されます。イメージのバイナリは、
+そのリリースがイメージより新しい場合、または同じバージョンで異なるビルドの場合（Business として
+適用したバージョンの Community イメージ）に、それを起動します。ボリューム内のものはそれだけでは
+信頼されません。起動のたびに、マニフェストの署名をイメージに埋め込まれた OTA 鍵で、
+アーティファクトをマニフェストが署名したダイジェストで検証します。検証の証明はボリュームではなく
+コンテナの一時ディレクトリ（同梱の Compose ファイルは `tmpfs` をマウントします）に保持され、
+再作成すると空になります。イメージが適用済みのリリースより新しい場合はイメージが動作し、
+起動ログにその旨が出ます。もう一度アップグレードを実行してください。検証できない証拠は
+メッセージを出して無視され、イメージが動作します。ボリュームには以前のバイナリの
+バックアップは残りません。イメージのバイナリに戻すには `ota/` を削除します。ファイルの実行を
+許可するボリュームが必要です（名前付きボリュームは許可します。`noexec` マウントでは
+`olivares serve` が停止して理由を示し、イメージのバイナリを黙って実行することはありません）。
+
+自分でイメージをビルドすることもできます。Business バイナリの**同じバージョンと同じ Linux アーキテクチャ**を[ライセンス付きダウンロードポータル](https://licenses.olivares.ai/portal)から
+ダウンロードし、ダウンロードに付属する手順に従って署名とチェックサムを検証します。
+そのうえで、検証済みのバイナリを、一致する Community ランタイムイメージの上に自分のホストで
+重ねることができます。検証済みのバイナリを `olivares` という名前で置いたディレクトリで、
+次の `Dockerfile` を使用します。
+
+```dockerfile
+ARG COMMUNITY_IMAGE
+FROM ${COMMUNITY_IMAGE}
+COPY --chmod=0755 olivares /usr/local/bin/olivares
+```
+
+そのバージョンの Community イメージのダイジェストを指定してビルドします。ダイジェストは
+[リリースを検証する](/ja/how-to/verify-a-release/)の手順で検証したものを使います。
+出来上がるイメージは、元のイメージの非 root ユーザー、エントリポイント、ポートを引き継ぐため、
+`Dockerfile` に `USER` 行は不要です。
+
+```sh
+docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+  --tag olivares-business-local:X.Y .
+```
+
+このイメージは非公開のまま保管し、ダウンロードに付属する商用ライセンスと通知を保管してください。
+ライセンスファイルやダウンロードトークンをビルドコンテキストに入れないでください。
+Compose サービスの `image` を `olivares-business-local:X.Y` に設定してから、
+`docker compose up -d --no-deps --force-recreate olivares` でそのサービスを再作成します。
+単体の Docker では、このイメージと同じボリューム、同じ引数でコンテナを再作成します。
+データボリュームは保持してください。`down --volumes` は使わないでください。
+
+再起動後に **Edition & license** を確認します。エディションが **Business** と表示され、
+インストール済みのライセンスはデータボリューム内に残っているはずです。Enterprise の契約も
+この商用ビルドを使用します。契約固有のアーティファクトは、そのダウンロードの手順に従います。
 
 ## ライセンスを削除する
 

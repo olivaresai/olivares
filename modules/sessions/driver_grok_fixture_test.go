@@ -99,6 +99,8 @@ type grokFixture struct {
 	// ReplayUpdates is how many session/update frames the peer replays BEFORE
 	// answering session/resume.
 	ReplayUpdates int `json:"replay_updates"`
+	// ReplayText is what each replayed update says ("" = "history-<n>").
+	ReplayText string `json:"replay_text"`
 	// UnsupportedRequest asks the client for a capability it never advertised.
 	UnsupportedRequest string `json:"unsupported_request"`
 	// SpawnChild forks a grandchild that inherits stdout, so a stop has something
@@ -313,7 +315,11 @@ func (p *grokFixturePeer) handle(frame map[string]json.RawMessage) {
 		for i := 0; i < p.cfg.ReplayUpdates; i++ {
 			// Replayed history, sent BEFORE the correlated response, exactly as the
 			// protocol describes a load.
-			p.sendUpdate(p.session, "agent_message_chunk", fmt.Sprintf("history-%d", i))
+			text := fmt.Sprintf("history-%d", i)
+			if p.cfg.ReplayText != "" {
+				text = p.cfg.ReplayText
+			}
+			p.sendUpdate(p.session, "agent_message_chunk", text)
 		}
 		switch {
 		case p.cfg.ResumeSessionID != "":

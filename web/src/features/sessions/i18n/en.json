@@ -123,12 +123,12 @@
     "table": "Table"
   },
   "partial": {
-    "noLiveRead": "Observed sessions are not shown: your role does not include sessions:live:read. The launched ones below are the part that could be read, not the whole picture.",
-    "noRunRead": "Launched sessions are not shown: your role does not include sessions:run:read. A session below reading as discovered may still have been launched by Olivares — this list could not check.",
+    "noLiveRead": "Observed sessions are not shown: your role cannot read them. The launched ones below are the part that could be read, not the whole picture.",
+    "noRunRead": "Launched sessions are not shown: your role cannot read them. A session below reading as discovered may still have been launched by Olivares — this list could not check.",
     "truncated": "This is the most recent page, not the whole estate. Origin here is joined over what is loaded, so a session whose run has scrolled off can read as discovered; open a session to have the engine answer for it.",
     "runLookupFailed": "The launched half could not be read: the run lookup failed. Rows below show what the observed half returned; origin is reported as not read rather than guessed.",
     "liveLookupFailed": "The observed half could not be read: the live lookup failed. Rows below are the launched ones; the telemetry columns are empty because nothing could be read, not because there is none.",
-    "noProfileRead": "Provider profile names are not shown: your role does not include sessions:profile:read. The Instance column carries each row's profile reference instead.",
+    "noProfileRead": "Provider profile names are not shown: your role cannot read profiles. The Instance column carries each row’s profile reference instead.",
     "profileLookupFailed": "Provider profile names could not be read: the profile lookup failed. The Instance column carries each row's profile reference instead."
   },
   "move": {
@@ -156,7 +156,10 @@
     "firstTurn": "First message",
     "close": "Close",
     "profilesFailed": "The accounts could not be listed.",
-    "profilesDenied": "You are not allowed to list accounts, so none can be chosen."
+    "profilesDenied": "You are not allowed to list accounts, so none can be chosen.",
+    "stopsFirst": "This session is still running: it is stopped first, then moved.",
+    "handoffStopsFirst": "This session is still running: it is stopped first, then handed off.",
+    "stoppedNotMoved": "The session was stopped, but the move failed. Try the move again."
   },
   "card": {
     "tabs": {
@@ -171,7 +174,7 @@
       "discovered": "Discovered",
       "launchedExplain": "A launch record links this session to Olivares: it started this session. What can be done with it now is below — a launch is not the same as a live process.",
       "discoveredExplain": "No launch record links this session, so as far as this plane can prove, Olivares did not start it. It can be read and audited, not steered.",
-      "unknownExplain": "Whether Olivares launched this session could not be checked — no permission for sessions:run:read, or the lookup failed. This is “not read”, not “not launched”.",
+      "unknownExplain": "Whether Olivares launched this session could not be checked — your role cannot read launched sessions, or the lookup failed. This is “not read”, not “not launched”.",
       "multipleRuns": "{{n}} runs drive this session",
       "unknown": "Origin not read"
     },
@@ -183,7 +186,7 @@
       "fullExplain": "Olivares holds the process and bridges its I/O: it can be watched, driven and stopped.",
       "lifecycleExplain": "Start and stop, nothing in between: either Olivares holds the process but not its I/O, or the process is stopped and can be resumed.",
       "observeExplain": "Olivares holds no process for this session. It can be read and audited; stopping it is not something this plane can do.",
-      "unknownExplain": "The operate half was not read (sessions:run:read), so this is what is visible from the observed half alone."
+      "unknownExplain": "The operate half was not read (your role cannot read launched sessions), so this is what is visible from the observed half alone."
     },
     "cap": {
       "watch": "Watch its live telemetry and timeline",
@@ -227,7 +230,7 @@
     "notDeclared": "Not declared",
     "unclaimed": "Activity seen from a session holding no live claim. The engine reports it; it is not the same signal as a possible evasion.",
     "relayedIO": "Its I/O is relayed to Anthropic’s cloud, so Olivares cannot show it here. Lifecycle control still applies.",
-    "observedNotRead": "The observed half was not read: your role does not include sessions:live:read.",
+    "observedNotRead": "The observed half was not read: your role cannot read observed sessions.",
     "noObservationYet": "No session activity yet.",
     "failureReasonMissing": "This session failed. The server did not report a reason.",
     "hostIsolationRemedy": "Ask the server administrator to allow unprivileged user and network namespaces and Landlock, then start the session again.",
@@ -257,7 +260,8 @@
       "title": "Also observed through bound sources",
       "explain": "These rows share this run's profile and provider session id but arrived through a source, not through the process Olivares holds. They are shown beside the run, never merged into it.",
       "open": "Open"
-    }
+    },
+    "idlePolicyStopped": "Stopped to free memory."
   },
   "facet": {
     "observed": "Observed: {{state}}",
@@ -287,9 +291,15 @@
     "unpin": "Unpin",
     "pinnedMark": "Pinned",
     "rowMenu": "Actions for {{name}}",
-    "noObservation": "No telemetry has arrived for this session yet."
+    "noObservation": "No telemetry has arrived for this session yet.",
+    "pinFailed": "The pin could not be changed."
   },
   "surface": {
+    "openBeside": "Open beside",
+    "closeBeside": "Close session beside",
+    "currentSession": "Current session",
+    "besideSession": "Session beside",
+    "switchSession": "Switch session",
     "closeContext": "Close the context",
     "backTo": "Back to {{pane}}",
     "pane": {
@@ -310,10 +320,20 @@
     "mode": "Mode: {{mode}}",
     "modeTitle": "{{tool}} reports: {{mode}}",
     "theTool": "the tool",
+    "toolWord": {
+      "bypassPermissions": "Never asks for permission",
+      "untrusted": "Asks before commands it does not trust",
+      "onFailure": "Asks when a command fails",
+      "onRequest": "Asks when it needs to",
+      "never": "Never asks for permission",
+      "granular": "Asks by its own rules"
+    },
     "usageLabel": "This session's usage",
     "tokens": "{{input}} in / {{output}} out tokens",
     "costTitle": "An estimate, not an invoice: the tool's own figure, or the list price of a turn it did not price",
     "costUnknown": "cost not reported",
+    "costPartial": "{{cost}} (partial)",
+    "viewCosts": "View costs",
     "planLabel": "The plan's usage windows of this session's login",
     "planNotRead": "plan window not read",
     "resets": "Resets {{when}} ({{at}})",
@@ -334,6 +354,7 @@
     "forbiddenDescription": "Your role does not include permission to read session telemetry.",
     "errorTitle": "The evidence could not be read",
     "errorDescription": "The timeline read did not answer. An empty list here would mean the session did nothing, which is a different fact.",
+    "repeat": "×{{count}}",
     "atLeast_one": "at least {{count}}",
     "atLeast_other": "at least {{count}}",
     "touches_one": "{{count}} entry",
@@ -371,9 +392,9 @@
     "copyRef": "Copy {{value}}",
     "identifiersTitle": "Identifiers",
     "identifiersHint": "References to copy. They are not the names on the scope line.",
-    "wireTitle": "Wire",
-    "wireHint": "The raw frame for the selected line. The conversation is the default view.",
-    "wireEmpty": "Select a line in the conversation to see its raw frame.",
+    "wireTitle": "Selected line",
+    "wireHint": "The selected line exactly as the tool sent it. The conversation is the default view.",
+    "wireEmpty": "Select a line in the conversation to see it exactly as the tool sent it.",
     "thisNode": "This node",
     "workTitle": "Session work authority",
     "workHint": "Recorded for the last launch. Every action checks current authorization.",
@@ -433,8 +454,11 @@
     },
     "turnFailed": "The turn failed: {{message}}",
     "retrying": "Retrying ({{count}}): {{message}}",
-    "keyRefused": "The provider refused the API key. Replace it under API keys.",
+    "keyRefused": "The provider refused the API key. Replace it under Providers.",
     "output": "Tool output ({{count}}): {{first}}",
+    "started": "Session started",
+    "startedTools_one": "{{count}} tool",
+    "startedTools_other": "{{count}} tools",
     "notSent": "Not sent: {{reason}}",
     "waitingApproval": "Sent when the launch is approved and the session starts.",
     "workingFolder": "Working folder: {{cwd}}",
@@ -505,6 +529,7 @@
   },
   "list": {
     "group": {
+      "pinned": "Pinned",
       "attention": "Needs you",
       "active": "Working",
       "settled": "Earlier"
@@ -520,6 +545,8 @@
     "terminalHint": "The same session from a terminal."
   },
   "activity": {
+    "workflowPhases": "Phases",
+    "workflowProgress": "{{done}} of {{total}} agents done",
     "empty": "Nothing yet. The tool's task list, the agents it spawns, the work it runs in the background and the files it changes appear here as it works.",
     "missing": "This session's transcript is not in its account home, so what its tool did cannot be shown.",
     "failed": "The activity could not be read.",
@@ -539,8 +566,10 @@
     "context": "Context",
     "model": "Model",
     "tokens": "In context",
+    "contextUsage": "{{tokens}} tokens · {{percent}} of {{window}}",
+    "contextUnknown": "{{tokens}} tokens · window unknown",
     "compactions": "Compactions",
-    "compactedTimes_one": "Compacted once",
+    "compactedTimes_one": "Compacted {{n}} time",
     "compactedTimes_other": "Compacted {{n}} times",
     "neverCompacted": "Not compacted",
     "skills": "Skills",
@@ -572,5 +601,36 @@
       "tool": "Tool",
       "result": "Result"
     }
+  },
+  "messages": {
+    "title": "Messages",
+    "rail": "Messages you sent",
+    "mark": "Message {{n}}, {{time}}: {{line}}",
+    "search": "Search this session's messages",
+    "searchHint": "A word or phrase",
+    "goToTime": "Go to date and time",
+    "go": "Go",
+    "includeAnswers": "Include answers",
+    "count": "{{shown}} of {{total}} messages",
+    "none": "No messages match.",
+    "loading": "Reading messages…",
+    "older": "Show earlier messages",
+    "answer": "Answer",
+    "timeNone": "No message at or after that time.",
+    "error": "The messages could not be read.",
+    "pending": "The tool has not written this session's transcript yet.",
+    "missing": "This session's transcript is not in its account home, so its messages cannot be shown.",
+    "jumped": "Jumped to message {{n}}.",
+    "farNotice": "Message {{n}} is shown below: it is older than the conversation on screen.",
+    "farTitle": "Older message",
+    "farBody": "Message {{n}}, {{time}}. It is older than the conversation on screen.",
+    "close": "Close",
+    "refused": "This session was given secrets, so its messages cannot be listed. Its live output is still shown.",
+    "unreadable": "{{n}} records of the transcript could not be read."
+  },
+  "limit": {
+    "usageUntil": "Out of quota until {{time}}",
+    "usage": "Out of quota",
+    "rate": "Rate limited by the provider. Try again in a moment."
   }
 }

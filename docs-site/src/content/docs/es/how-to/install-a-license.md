@@ -109,6 +109,14 @@ Ejecútalo después de cada instalación y después de retirar un override.
 
 ## 3 · Community → Business, in-place
 
+Instalar una licencia Business o Enterprise válida en una compilación Community no
+detiene esa compilación. El cockpit de sesiones y las demás páginas comerciales solo
+aparecen después de que cambies esta instalación a Business. La vista **Edition & license**
+de la consola nombra la licencia instalada por separado de la compilación. **Expires** es el
+plazo de pago; **Lease until**, cuando se muestra, es el arrendamiento provisional de la
+instancia, que es independiente. ¿Ejecutas en Docker? Ve a
+[Docker y Compose](#docker-y-compose) más abajo.
+
 :::note[Business y el canal de artefactos comerciales]
 La opción `--enterprise` nombra el canal de artefactos comerciales, no la edición.
 Las ediciones son Community, Business y Enterprise. Business incluye Regulated Operations,
@@ -126,7 +134,9 @@ olivares upgrade --enterprise --token <TOKEN>
 Descarga la compilación comercial firmada para tu plataforma y **verifica la firma
 offline**; un artefacto manipulado aborta la actualización y deja intacto el binario en
 ejecución. Después lo sustituye de forma atómica y conserva una copia de seguridad del
-anterior. Usa primero `--check` si quieres ver el plan sin aplicarlo:
+anterior. Business usa el mismo número de versión que Community, así que también funciona cuando ya
+ejecutas esa versión. Usa primero `--check` si quieres ver el plan sin aplicarlo; indica el cambio como
+`edition: community -> enterprise`:
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN> --check
@@ -150,6 +160,69 @@ El cambio sustituye un binario, no tus datos, pero haz igualmente la misma copia
 que pide [Actualizar y revertir](/es/how-to/upgrade-and-rollback/). Esa página también explica
 cómo volver al binario anterior.
 :::
+
+### Docker y Compose
+
+La imagen pública `docker.io/olivaresai/olivares` es Community. En un contenedor,
+`olivares upgrade` instala la versión en el volumen de datos y no en la imagen, así que
+recrear el contenedor la vuelve a iniciar. Esto aplica la versión Business cuando es más
+reciente que la imagen o tiene la misma versión (`--check` indica el cambio como `edition: community -> enterprise`);
+construir tú mismo la imagen, como se describe más abajo, es la alternativa. Con la licencia instalada
+(sección 2), ejecuta la actualización en el contenedor en ejecución y reinícialo. El token viene
+en tu correo de entrega; pásalo por nombre para que no aparezca en la lista de procesos:
+
+```sh
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
+docker compose up -d --force-recreate olivares
+```
+
+La versión se guarda en `ota/` bajo el directorio de datos (`/var/lib/olivares/ota` en la
+imagen publicada), junto con el manifiesto firmado y el artefacto con los que se verificó. El
+binario de la imagen la inicia cuando es más reciente que la imagen, o cuando es la misma
+versión compilada de otra forma (una imagen Community de la versión que aplicaste como
+Business). Nada del volumen se da por bueno por sí solo: cada arranque comprueba la firma del
+manifiesto con la clave OTA incrustada en la imagen y el artefacto con el digest que firma el
+manifiesto. La prueba se guarda en el directorio temporal del contenedor (el Compose publicado
+monta ahí un `tmpfs`), no en el volumen; al recrear el contenedor se vacía. Si la imagen es más
+reciente que la versión aplicada, se ejecuta la imagen y el registro de arranque lo indica;
+vuelve a ejecutar la actualización. La evidencia que no se verifica se ignora con un mensaje y
+se ejecuta la imagen. El volumen no guarda copia del binario anterior: para volver al binario de
+la imagen, elimina `ota/`. Hace falta un volumen que permita ejecutar archivos (un volumen con
+nombre lo permite; en un montaje `noexec`, `olivares serve` se detiene y explica por qué, en
+lugar de ejecutar en silencio el binario de la imagen).
+
+También puedes construir la imagen tú mismo. Descarga el binario Business de la **misma versión y la misma arquitectura Linux** a través del
+[portal de descargas con licencia](https://licenses.olivares.ai/portal) y verifica su firma y su
+suma de verificación con las instrucciones de la descarga. Después puedes superponer ese binario
+verificado sobre la imagen de ejecución Community correspondiente, en tu propio host. En un
+directorio que contenga el binario verificado con el nombre `olivares`, usa este `Dockerfile`:
+
+```dockerfile
+ARG COMMUNITY_IMAGE
+FROM ${COMMUNITY_IMAGE}
+COPY --chmod=0755 olivares /usr/local/bin/olivares
+```
+
+Compila con el digest de la imagen Community de esa versión, verificado como en
+[Verificar una release](/es/how-to/verify-a-release/). El resultado conserva el usuario no root, el
+entrypoint y los puertos de esa imagen, así que el `Dockerfile` no necesita ninguna línea `USER`:
+
+```sh
+docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+  --tag olivares-business-local:X.Y .
+```
+
+Mantén esta imagen privada y conserva la licencia comercial y los avisos que acompañan a la
+descarga. No pongas tu fichero de licencia ni el token de descarga en el contexto de compilación.
+Establece el `image` de tu servicio de Compose en `olivares-business-local:X.Y` y recrea
+ese servicio con `docker compose up -d --no-deps --force-recreate olivares`. Con Docker
+independiente, recrea el contenedor con esta imagen y el mismo volumen y los mismos
+argumentos. Conserva el volumen de datos: no uses `down --volumes`.
+
+Comprueba **Edition & license** tras el reinicio: la edición debe indicar **Business**, y la
+licencia instalada permanece en el volumen de datos. Los contratos Enterprise usan también esta
+compilación comercial; cualquier artefacto específico del contrato sigue las instrucciones de su descarga.
 
 ## Retirar una licencia
 

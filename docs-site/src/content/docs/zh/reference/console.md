@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[版本]
-目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）和托管身份生命周期需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、用户/组入站 SCIM、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
 :::
 
 本页是控制台的地图。它列出**应用挂载的每条路由**——不是选集，也不是某人记得
@@ -52,7 +52,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **75 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **73 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 主页
@@ -74,13 +74,13 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 智能体工具 | `/agent-tools` | 检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员 | `system:admin` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
-| 会话 | `/agentops` | 启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
+| 运营会话 | `/agentops` | 启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
 | MCP 服务器 | `/mcp-servers` | 将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具 | `tenant:admin` | [how-to/connectors/mcp-governance](/zh/how-to/connectors/mcp-governance/) |
 | 模型运维 | `/model-operations` | 自有模型、准入和部署 | `models:registry:read` | [reference/modules/xxiii-model-operations](/zh/reference/modules/xxiii-model-operations/) |
 | 模型 | `/models` | 模型、路由和提供商密钥 | `models:catalog:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
 | 平台 | `/platforms` | 部署表面、合规矩阵和各平台模型生命周期 | `models:platforms:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
 | 提供商账户 | `/provider-accounts` | 列出已命名的提供商账户，并将现有提供商配置文件采纳为账户 | `sessions:account:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 来源绑定 | `/provider-bindings` | 将已配置的来源，以本节点应用的修订版本，专用于提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 来源绑定 | `/provider-bindings` | 将已配置的来源关联到提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供方 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 速率限制 | `/rate-limits` | Anthropic 速率限制清单（只读） | `models:ratelimits:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
@@ -104,9 +104,9 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 通信 | `/communications` | 所选工作区的频道、直接通知与个人收件箱 | `sessions:channel:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 频道管理 | `/communications/administration` | 管理频道：配置与授权历史，每次操作都在频道当前 ETag 下 | `sessions:channel:admin` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 频道管理 | `/communications/administration` | 管理频道：配置与授权历史 | `sessions:channel:admin` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 交接 | `/communications/handoffs` | 发给你的工作责任交接提议：阅读上下文后接受或拒绝 | `sessions:delivery:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 通信收件箱 | `/communications/inbox` | 你的精确收件箱：仅发给你的投递，每次重新读取并显式确认 | `sessions:delivery:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 通信收件箱 | `/communications/inbox` | 发给您的消息：逐条打开并确认 | `sessions:delivery:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 新建频道 | `/communications/new` | 以显式初始授权创建频道 | `sessions:channel:write` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 协议绑定 | `/communications/protocol-bindings` | 组合并协调受治理的 A2A 和 MCP 绑定 | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 工作 | `/work` | 共享工作：工作项、依赖关系、验收和决定 | `sessions:work:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
@@ -125,18 +125,18 @@ description: >-
 | 访问图 | `/access-map` | 每个 Agent 读取和写入的内容（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
 | AgentCore 导出 | `/agentcore-export` | 规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | Claude Code 治理 | `/claude-policy` | 托管策略、hook、MCP、沙箱和策略即代码 | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/zh/how-to/connectors/claude-code-hooks-pep/) |
-| 身份与 NHI | `/identity` | SSO、SCIM、NHI 名册和 WIF 图 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
+| 身份与访问 | `/identity` | SSO、SCIM 以及智能体使用的身份 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 推理代理 | `/inference-proxy` | 代理门禁、出站 DLP 规则和设备批准 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/zh/reference/modules/inferenceproxy/) |
 | 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
 | 权限 | `/permissions` | 身份、角色和批准 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 例行策略 | `/routine-policies` | Claude Code 例行任务的周期下限、并发上限、批准要求和 cron allowlist。 | `governance:routine:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 安全 | `/security` | 护栏、取证和异常 | `security:finding:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
+| 保险库 | `/vault` | 您的密码、笔记和验证码 | `tenant:read` | [reference/console](/zh/reference/console/) |
 
 ### 部署
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 部署 | `/deploy` | 配置 Agent 并将其接入基础设施 | `deploy:deployment:read` | [reference/modules/vii-deploy](/zh/reference/modules/vii-deploy/) |
 | Git 发布 | `/git-publication` | 通过已批准的 Git 目标推送提交、创建拉取请求并合并 | `gitpublish:target:read` | [reference/modules/gitpublish](/zh/reference/modules/gitpublish/) |
 
 ### 可观测性与证据
@@ -146,13 +146,11 @@ description: >-
 | Claude Code 采用情况 | `/adoption` | 生产力、接受率和模型组合 | `adoption:metrics:read` | [reference/modules/claudeadoption](/zh/reference/modules/claudeadoption/) |
 | 供应链 | `/attestation` | 发布证明——SLSA、SBOM、VEX 和 Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/zh/how-to/verify-a-release/) |
 | 审计账本 | `/audit` | 可检测篡改的证据账本 | `audit:read` | [reference/modules/ix-security](/zh/reference/modules/ix-security/) |
-| 合规 | `/compliance` | 框架、控制和证据 | `compliance:framework:read` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 仪表板 | `/dashboards` | 管理层 KPI 和报告 | 任何已登录用户 | [reference/modules/xxi-executive-dashboards](/zh/reference/modules/xxi-executive-dashboards/) |
 | 评估 | `/evals` | 质量、评估和回归 | `evals:run:read` | [reference/modules/xii-evals](/zh/reference/modules/xii-evals/) |
 | 健康与 SLA | `/health` | Agent 和 MCP 的运行时间及 SLA | `health:status:read` | [reference/modules/xxii-health](/zh/reference/modules/xxii-health/) |
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
-| 录制 | `/recordings` | 特权会话录制和重放 | `recording:session:admin` | [reference/modules/recording](/zh/reference/modules/recording/) |
-| 会话查看器 | `/session-viewer/$id`（仅深层链接） | 一个已录制会话的完整时间线；从“录制”中的行进入，而不是从侧边栏进入。 | `recording:session:admin` | [reference/modules/recording](/zh/reference/modules/recording/) |
+| 保留策略 | `/retention` | 每类记录的保留期限、执行保留的清理以及已封存的证书 | `compliance:retention:read` | [reference/modules/xiii-compliance](/zh/reference/modules/xiii-compliance/) |
 | 预算 | `/stored-budgets` | 针对每个已保存限额的消耗情况。预留容量计入限额。 | `finops:budget:read` | [reference/modules/xi-finops](/zh/reference/modules/xi-finops/) |
 
 ### 系统与设置

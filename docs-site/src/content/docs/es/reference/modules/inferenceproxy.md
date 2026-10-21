@@ -68,6 +68,14 @@ incluye la plataforma.
   **CERRADO** (un proxy que no puede decidir no debe reenviar) y no se monta
   salvo que un operador lo aprovisione.
 
+El valor por defecto sigue siendo el endpoint publicado en 26.10.1<!-- release-fixed -->; las configuraciones
+y las URL de cliente existentes no necesitan migración. Los hooks de Codex también usan por defecto
+`127.0.0.1:8448` cuando se usan solos. Para habilitar ambos listeners, da explícitamente a uno una
+dirección distinta: por ejemplo, establece `listen` en `127.0.0.1:8450` en el archivo seleccionado por
+`OLIVARES_CODEX_HOOK_PEP_CONFIG` y establece `OLIVARES_CODEX_HOOK_URL` del cliente del hook en
+`http://127.0.0.1:8450/`. El motor rechaza las direcciones solapadas antes de enlazar, en lugar de
+reubicar silenciosamente cualquiera de los dos endpoints.
+
 Este módulo **no decide nada** sobre una petición en vivo. Es la política
 durable y autorable desde consola que la raíz de composición lee vía `Policy()`;
 la decisión se compone a partir de seams existentes (`EvaluateModelAccess`,

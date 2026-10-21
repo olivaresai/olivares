@@ -1,0 +1,204 @@
+{
+  "truncation": {
+    "label": "행 {{n}}개를 불러왔으며 더 있습니다",
+    "hint": "이 목록은 제한되어 있습니다. 불러온 행만 표시되며 여기에 없다고 해서 평가 레코드가 존재하지 않는다는 증거는 아닙니다."
+  },
+  "title": "평가",
+  "description": "품질 스코어카드, 실행 결과, A/B 비교 및 드리프트 — 버전이 지정된 골든 스위트에 대해 측정합니다. 출력은 절대 저장하지 않으며 점수와 해시 지문만 저장합니다.",
+  "forbidden": {
+    "title": "권한 없음",
+    "description": "품질 측정을 보려면 평가 읽기 권한이 필요합니다."
+  },
+  "tabs": {
+    "scorecards": "스코어카드",
+    "runs": "실행",
+    "ab": "A/B",
+    "drift": "드리프트",
+    "gate": "CI 게이트",
+    "calibration": "판정자 보정"
+  },
+  "subjectKind": {
+    "suite": "스위트",
+    "agent": "에이전트",
+    "model": "모델",
+    "prompt_variant": "프롬프트 변형",
+    "prompt": "프롬프트",
+    "session": "세션",
+    "sandbox_run": "샌드박스 실행"
+  },
+  "scorecards": {
+    "title": "품질 스코어카드",
+    "description": "주체별 평균 점수, 통과율 및 추세를 읽기 시점에 집계합니다.",
+    "groupBy": "그룹 기준",
+    "by": {
+      "agent": "에이전트별",
+      "model": "모델별",
+      "suite": "스위트별",
+      "prompt_variant": "프롬프트 변형별"
+    },
+    "meanScore": "평균 점수",
+    "passRate": "통과율",
+    "runs": "실행",
+    "lastScore": "마지막 점수",
+    "regressed": "퇴행함",
+    "empty": "아직 스코어카드 없음 — 골든 스위트에 대해 평가를 실행하십시오.",
+    "emptyHint": "스코어카드는 모델이 스위트 사례 전반에서 어떻게 점수를 받았는지 요약합니다. 골든 스위트에 대해 평가를 실행하여 생성하십시오."
+  },
+  "runs": {
+    "title": "평가 실행",
+    "description": "각 실행은 스위트 버전에 대해 주체를 채점합니다. 퇴행은 여기에 표시되며 발견 사항은 보안 보기에서 처리합니다.",
+    "columns": {
+      "subject": "주체",
+      "status": "상태",
+      "score": "점수",
+      "passRate": "통과율",
+      "regression": "퇴행",
+      "startedAt": "시작됨"
+    },
+    "regressed": "퇴행함 · 드리프트 {{drift}}",
+    "withinNoise": "노이즈 범위 내 하락 · 드리프트 {{drift}}",
+    "passRateDiff": "통과율 하락 {{drop}} (95% CI {{lo}}–{{hi}}) — 기준선 {{baselinePassed}}/{{baselineN}} 대비 {{passed}}/{{n}} 채점됨",
+    "noRegression": "없음",
+    "empty": "범위 내 실행 없음.",
+    "emptyHint": "선택한 범위의 모든 평가 실행이 점수와 함께 여기에 나열됩니다. 범위를 넓히거나 실행을 시작하십시오.",
+    "overN": "{{n}}개 중",
+    "notScored": "채점 안 됨 — 판정 없음",
+    "noBaseline": "기준선 없음 — 비교 없음"
+  },
+  "cases": {
+    "title": "{{subject}} — 사례 결과",
+    "titleEmpty": "사례 결과",
+    "description": "이 실행의 사례별 결과 및 점수입니다.",
+    "noPayload": "후보 출력은 절대 저장하지 않습니다 — 각 사례는 단방향 지문과 짧게 잘린 레이블만 가지며 확장 가능한 페이로드는 없습니다.",
+    "fingerprint": "지문",
+    "columns": {
+      "case": "사례",
+      "outcome": "결과",
+      "score": "점수",
+      "label": "레이블",
+      "fingerprint": "지문"
+    },
+    "empty": "이 실행의 사례 결과가 없습니다.",
+    "emptyHint": "스위트의 각 사례가 판정자의 판정과 함께 여기에 나열됩니다. 이 실행은 사례 결과를 기록하지 않았습니다."
+  },
+  "ab": {
+    "title": "A/B 비교",
+    "description": "동일한 스위트에 대해 채점된 두 프롬프트 변형입니다. 점수가 높은 쪽이 이기며 동점은 명시됩니다.",
+    "winner": "승자: {{label}} · Δ {{delta}}",
+    "winnerTag": "승자",
+    "tie": "동점",
+    "passRate": "통과율 {{value}}",
+    "seamNote": "A/B 비교는 POST /ab를 통한 권한이 필요한 쓰기이며 엔진은 다시 읽을 저장된 비교를 노출하지 않습니다.",
+    "seamLabel": "권한이 필요한 쓰기",
+    "pickerTitle": "A/B 비교 실행",
+    "pickerDescription": "스위트를 선택한 뒤 각 변형이 생성한 후보 출력을 제공하십시오.",
+    "runComparison": "비교 실행",
+    "runError": "A/B 비교를 실행할 수 없습니다. 다시 시도하십시오.",
+    "empty": "이 세션에서 실행된 A/B 비교가 없습니다.",
+    "emptyDescription": "권한이 필요한 POST /ab 쓰기가 완료된 후에만 결과가 표시됩니다. 저장된 비교를 위한 GET 엔드포인트는 없습니다.",
+    "suiteLabel": "스위트",
+    "selectSuite": "스위트 선택",
+    "noSuites": "아직 스위트 없음. 비교는 스위트 사례에 대해 채점되므로 먼저 하나를 생성하십시오.",
+    "noSuitesHint": "비교는 스위트 사례에 대해 채점되므로 스위트가 먼저 존재해야 합니다. 스위트 탭에서 생성하십시오.",
+    "labelA": "변형 A 레이블",
+    "labelB": "변형 B 레이블",
+    "outputsA": "변형 A 출력",
+    "outputsB": "변형 B 출력",
+    "outputsHint": "case_key를 변형이 생성한 출력에 매핑하는 JSON 객체입니다. 엔진이 채점하고 해시만 보관합니다 — 텍스트는 절대 저장하지 않습니다.",
+    "outputsInvalid": "case_key를 출력 텍스트에 매핑하는 JSON 객체가 아닙니다.",
+    "outputsEmpty": "사례 출력을 최소 하나 제공하십시오. 빈 집합은 아무것도 채점하지 않으며 결과 없는 실행으로 저장됩니다.",
+    "pairwiseLabel": "변형을 직접 비교 판정",
+    "pairwiseHint": "두 후보의 순서를 바꿔 각 공유 사례를 두 번 판정하며 두 순서가 일치할 때만 승리로 계산합니다. 사례당 판정자 호출 두 번(과금됨)이며 스위트에 기준이 있어야 합니다.",
+    "pairwiseTitle": "직접 비교 판정",
+    "pairwiseSkippedTag": "건너뜀",
+    "pairwiseWinner": "판정 승자: {{label}}",
+    "pairwiseCounts": "{{compared}}개 비교 · A {{aWins}} · B {{bWins}} · 동점 {{ties}} · 순서 불일치 {{inconsistent}} · 오류 {{errors}}",
+    "pairwiseConsistency": "위치 일관성 {{rate}} (n={{n}}, 95% CI {{lo}}–{{hi}})",
+    "outputsTooLong": "사례 키는 최대 {{maxKey}}자, 출력은 최대 {{maxOutput}}자여야 합니다. 엔진은 더 긴 값을 잘라내고 잘린 텍스트를 채점합니다.",
+    "outputsPlaceholder": "{\"case-1\": \"변형이 생성한 출력\"}",
+    "pairwiseSkippedBody": "엔진이 직접 비교 판정을 실행하지 않았습니다. 사유:"
+  },
+  "drift": {
+    "title": "드리프트 — {{subject}}",
+    "description": "스위트 통과 임계값에 대한 시간별 점수입니다. 퇴행은 하나의 기준선 실행과의 비교입니다: 점수 하락이 스위트 임계값을 넘고 통과율 차이의 95% 구간이 0을 배제해야 합니다. 그 실행은 다른 스위트 버전, 모델 또는 채점자를 사용할 수 있으며 비교는 무엇이 바뀌었는지 보고하지 않습니다. 스위트 버전이 바뀐 뒤에는 기준선을 고정하십시오.",
+    "score": "점수",
+    "threshold": "통과 임계값",
+    "pickerTitle": "주체",
+    "note": "임계값 선은 스위트 통과 임계값이며 그 아래 점수는 당시 기준을 통과하지 못했습니다.",
+    "empty": "아직 추세 데이터 없음.",
+    "emptyHint": "드리프트는 모델의 최근 점수를 자체 이력과 비교합니다. 같은 스위트를 두 번 이상 실행하면 첫 추세가 생성됩니다."
+  },
+  "outcomeBar": {
+    "passed": "통과",
+    "failed": "실패",
+    "errors": "오류",
+    "skipped": "건너뜀"
+  },
+  "empty": {
+    "caseResults": {
+      "title": "이 실행에 기록된 사례 결과 없음",
+      "description": "실행이 선택한 스위트의 사례를 채점하거나 건너뛰어야 사례별 결과, 점수 및 지문이 여기에 표시됩니다."
+    },
+    "runs": {
+      "title": "아직 기록된 평가 실행 없음",
+      "description": "호출자가 평가 실행 API를 통해 버전이 지정된 골든 스위트에 대해 후보 출력을 제출해야 채점된 실행이 여기에 표시됩니다."
+    }
+  },
+  "gate": {
+    "title": "CI 게이트",
+    "description": "퇴행 게이트 평가: 게이트가 측정한 내용과 CI가 조치해야 할 내용입니다.",
+    "empty": "게이트 평가 없음",
+    "emptyHint": "게이트 평가는 후보가 출하될 수 있는지 결정합니다. 게이트가 설정된 스위트에 대해 평가를 실행하여 기록하십시오.",
+    "measured": "측정됨 {{verdict}}",
+    "effective": "CI가 조치함 {{verdict}}",
+    "sampled": "{{total}}개 사례 중 {{sampled}}개 샘플링됨",
+    "overriddenBy": "{{actor}}이(가) 재정의함",
+    "override": "재정의",
+    "overrideTitle": "{{verdict}} 게이트 재정의",
+    "overrideDescription": "서면 사유가 필요합니다. 원래 판정 옆에, 행과 증거 원장에 기록됩니다.",
+    "reason": "사유",
+    "reasonHint": "이 게이트를 재정의하는 이유입니다. 원래 판정은 지워지지 않습니다.",
+    "confirmOverride": "게이트 재정의",
+    "overrideDone": "게이트가 재정의되었습니다",
+    "cancel": "취소",
+    "correctedRate": "편향 보정 통과율 {{rate}} (판정자 민감도 {{sens}}, 특이도 {{spec}}) — 원시 통과율과 함께 표시되며 이를 대체하지 않습니다.",
+    "noCorrection": "편향 보정 추정치 없음: 보정에 사용할 신뢰할 수 있는 캘리브레이션이 없어 원시 통과율은 조정되지 않습니다 — 이는 둘이 일치한다는 것과 다릅니다."
+  },
+  "calibration": {
+    "title": "판정자 보정",
+    "description": "LLM 판정자가 인간 레이블과 얼마나 일치하는지입니다. 우연 보정 일치도를 측정할 수 없는 집합은 아무것도 인증할 수 없습니다.",
+    "empty": "보정 보고서 없음",
+    "emptyHint": "보정 보고서는 판정자의 점수를 인간 레이블과 비교합니다. 보정을 실행하여 생성하십시오.",
+    "meets": "목표 충족",
+    "below": "목표 미달",
+    "cannotCertify": "인증 불가 — 카파 정의 불가",
+    "agreement": "일치도",
+    "kappa": "카파",
+    "sensitivity": "민감도",
+    "specificity": "특이도",
+    "ciOverN": "95% CI {{lo}}–{{hi}}, n={{n}}",
+    "degradedWithErrors": "성능 저하 · 오류 {{n}}개",
+    "verbosityCorr": "장황성 상관"
+  },
+  "calibItems": {
+    "title": "참조 집합",
+    "description": "판정자를 측정하는 기준이 되는 인간 레이블 — 그리고 보고서가 인증할 수 있는지 없는지의 이유입니다.",
+    "run": "보정 실행",
+    "empty": "아직 레이블된 항목 없음",
+    "emptyHint": "레이블된 항목은 보정 보고서가 채점되는 기준이 되는 인간 판단입니다. 사례에 레이블을 지정하여 첫 항목을 추가하십시오.",
+    "distribution": "통과 레이블 {{pass}}개 · 실패 레이블 {{fail}}개",
+    "degenerate": "⛔ 모든 레이블이 같아 카파를 계산할 수 없으며 이 집합의 어떤 보고서도 인증할 수 없습니다. 다른 종류의 사례에 레이블을 지정하십시오.",
+    "humanPass": "인간: 통과",
+    "humanFail": "인간: 실패",
+    "unscored": "채점 안 됨",
+    "noJudge": "판정자가 설정되지 않아 측정할 것이 없습니다. 장애도 에디션 제한도 아닙니다: 보정은 시뮬레이션할 수 없습니다."
+  },
+  "baseline": {
+    "pin": "기준선으로 고정",
+    "confirm": "기준선 교체",
+    "pinned": "기준선이 고정되었습니다",
+    "replaceWarning": "⛔ 스위트와 주체당 기준선은 하나이며 변경 가능합니다. 고정은 추가가 아니라 {{suite}} / {{subject}}의 현재 기준선을 교체합니다. 이후 모든 퇴행이 이에 대해 측정됩니다.",
+    "thisRunScores": "이 실행은 n={{n}}에서 {{score}}를 통과했습니다.",
+    "cannotShowCurrent": "콘솔은 이것이 무엇을 교체하는지 표시할 수 없습니다: POST /baselines는 엔진이 노출하는 유일한 경로이며 이전 참조는 읽을 수 있는 엔드포인트가 아니라 자체 감사에 기록됩니다. 더 나쁜 실행을 고정하면 기준이 낮아지며, 이는 누구도 품질 게이트를 비활성화하지 않았는데 게이트가 작동을 멈추는 방식입니다."
+  }
+}

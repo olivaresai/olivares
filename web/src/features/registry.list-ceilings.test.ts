@@ -291,6 +291,31 @@ describe('registro · toda ruta de lista pide su techo, en TODAS las features co
     expect(pideTecho(cero, 0)).toBe(false)
   })
 
+  it('recognizes wrapped ListResponse intersections in both API method forms', () => {
+    for (const source of [
+      `  members: () =>
+    http.get<
+      ListResponse<X> & { truncated?: boolean; not_found?: boolean }
+    >('/members', { query: {} })`,
+      `  members() {
+    return http.get<
+      ListResponse<X> & { truncated?: boolean; not_found?: boolean }
+    >('/members', { query: {} })
+  }`,
+    ]) {
+      expect(rutasSinTecho(source)).toEqual({
+        rutas: ['members'],
+        sinTecho: ['members'],
+      })
+      expect(
+        rutasSinTecho(source.replace('query: {}', 'query: { limit: 25 }')),
+      ).toEqual({
+        rutas: ['members'],
+        sinTecho: [],
+      })
+    }
+  })
+
   it('las exenciones declaradas siguen siendo ciertas: ninguna sobra', () => {
     // El caso anti-podredumbre. Sin él la lista sólo crece, y una exención que ya no hace falta
     // esconde una regresión futura: la ruta puede perder su techo y nadie se entera.

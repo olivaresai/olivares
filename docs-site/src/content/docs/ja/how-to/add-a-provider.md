@@ -124,10 +124,10 @@ olivares provider bind prv_01J8ABCDEF --profile ppf_01J8ZZZZZZ
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-`anthropic`、`openai`、`xai` では、OpenCode は提供元のエンドポイントのみを受け付けます。`base_url` は空のままにしてください。`openai_compatible` のプロバイダーには `codex` を、`ollama` には `codex` または `opencode` を使います。
+`anthropic`、`openai`、`xai` では、OpenCode は提供元のエンドポイントのみを受け付けます。`base_url` は空のままにしてください。`openai_compatible` のゲートウェイには `codex` を使います。`ollama`、および `base_url` がループバックまたはプライベートアドレスのプレーン `http`（例: `http://127.0.0.1:8080/v1`、vLLM や llama.cpp）であるローカルの `openai_compatible` サーバーには `codex` または `opencode` を使います。`base_url` には `/v1` を含めます。
 
 ## 4. 最初のセッションを起動する
 

@@ -4,7 +4,7 @@ description: "Cablea una fuente de observación real al control plane, comprende
 ---
 
 :::note[Edición]
-Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas) y el ciclo de vida de identidades gestionadas requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, SCIM entrante de usuarios/grupos, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
+Las fuentes de directorio (LDAP, Okta/Entra e IdP de agentes/cargas), el ciclo de vida de identidades gestionadas y el servidor SCIM entrante requieren los complementos Business/Enterprise. Community conserva la ingestión genérica, el catálogo de recursos, los hallazgos de seguridad, el Access Map, el inventario de identidades, SSO con un IdP, roles y bindings locales, políticas y aprobaciones. Oculta los paneles y comandos CLI de pago; sus rutas API publicadas devuelven HTTP `501`. Activar un módulo no añade su implementación Business.
 :::
 
 Esta página explica el modelo general de connectors y cómo cablear una fuente real al motor. Si solo quieres conectar un agente de programación, empieza por [Conectar Claude Code](/es/how-to/connect-claude-code/) — esa es una fuente concreta en la ruta cooperativa, y esta página es el modelo que la sustenta.

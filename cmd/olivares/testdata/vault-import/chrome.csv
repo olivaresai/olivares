@@ -1,0 +1,4 @@
+name,url,username,password,note
+news.example,https://news.example/login,ann,pw-ch-news-2388,
+映画,https://movies.example,ann,pw-ch-movies-2388,"likes, and ""quotes"""
+Only a bookmark,https://bookmark.example,,,

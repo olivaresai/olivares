@@ -44,7 +44,7 @@ func TestRetirementPumpFailuresReachMetrics(t *testing.T) {
 		for _, email := range users {
 			user := e.onboard(e.tT, email, "viewer")
 			ids = append(ids, user)
-			e.scimDelete(e.tT, user)
+			e.deprovision(e.tT, user)
 		}
 		p := e.pump()
 		complete := p.modules

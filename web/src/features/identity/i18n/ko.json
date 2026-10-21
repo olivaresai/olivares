@@ -1,0 +1,331 @@
+{
+  "title": "ID 및 접근",
+  "subtitle": "누가 로그인할 수 있는지, 무엇을 할 수 있는지, 그리고 그것을 어떻게 증명하는지입니다.",
+  "sections": "ID 섹션",
+  "groups": {
+    "people": "사람",
+    "signIn": "로그인",
+    "machines": "머신 ID"
+  },
+  "tabs": {
+    "federation": "SSO 및 SCIM",
+    "inventory": "ID 인벤토리",
+    "mcp": "MCP 인증",
+    "login": "권한 있는 로그인",
+    "totp": "TOTP 요소"
+  },
+  "seam": {
+    "badge": "백엔드 대기 중",
+    "body": "{{what}}은(는) 선언된 계약입니다 — 백엔드 엔드포인트가 아직 라이브가 아니므로 표시할 것이 없습니다. 준비되는 즉시 이 패널이 채워지며 데이터를 절대 꾸며내지 않습니다."
+  },
+  "assurance": {
+    "address": {
+      "addressTitle": "이 주소에서는 패스키를 사용할 수 없습니다.",
+      "ipBody": "패스키 신뢰 당사자는 이 배포의 검증기가 허용하는 도메인 이름이어야 하며 IP 주소는 해당하지 않습니다. 패스키를 등록하거나 사용하려면 호스트 이름으로 이 콘솔에 접근하십시오.",
+      "nameBody": "패스키 신뢰 당사자는 이 배포의 검증기가 허용하는 도메인 이름이어야 하며 이 호스트 이름은 해당하지 않습니다: 점이 있어야 하고 ASCII 문자, 숫자 및 하이픈만 사용할 수 있습니다.",
+      "insecureTitle": "이 페이지는 보안 컨텍스트가 아닙니다.",
+      "insecureBody": "브라우저는 보안 컨텍스트에서만 패스키 API를 실행하므로 여기서는 패스키를 등록하거나 사용할 수 없습니다. HTTPS 또는 로컬 호스트로 이 콘솔에 접근하십시오.",
+      "unsupportedTitle": "이 브라우저는 패스키를 지원하지 않습니다.",
+      "unsupportedBody": "이 브라우저는 WebAuthn API를 노출하지 않으므로 여기서 패스키를 등록하거나 사용할 수 없습니다. 패스키를 지원하는 브라우저를 사용하십시오.",
+      "sameDevice": "이 기기에서는 같은 콘솔이 다음에서도 응답합니다:"
+    },
+    "stepUpTitle": "단계 상향 인증이 필요합니다",
+    "stepUpBody": "{{action}}에는 {{required}}이(가) 필요합니다. 현재 세션은 {{current}}입니다. 계속하려면 기기의 패스키나 보안 키를 사용하십시오.",
+    "authenticate": "패스키로 인증",
+    "authenticating": "인증기를 기다리는 중…",
+    "seamWhat": "WebAuthn 단계 상향을 사용하는 권한 있는 로그인",
+    "unsupported": "이 브라우저는 WebAuthn을 지원하지 않습니다. 권한 있는 작업에는 피싱 저항 인증기를 지원하는 플랫폼이 필요합니다.",
+    "failed": "단계 상향이 완료되지 않았습니다. 작업은 계속 거부됩니다.",
+    "relyingPartyUnusable": "이 배포에서는 패스키를 사용할 수 없습니다: 콘솔이 제공되는 주소에 대해 엔진에 사용 가능한 신뢰 당사자가 없습니다. 운영자가 유효한 신뢰 당사자 도메인(점이 있는 호스트 이름 또는 적절한 경우 localhost)을 구성하고, 그 선언된 보안 오리진에서 콘솔에 접근하고, 변경 후 엔진을 재시작해야 합니다. 다른 주소에서 다시 시도하는 것만으로는 해결되지 않습니다.",
+    "actions": {
+      "identity": "ID 관리",
+      "providers": "프로바이더 자격 증명 등록 또는 철회",
+      "generic": "이 작업",
+      "console": "커넥터 관리",
+      "stepUpPolicy": "관리 작업에 대한 추가 확인 변경",
+      "modules": "모듈 켜기 또는 끄기",
+      "signing": "보고서 서명 켜기 또는 끄기"
+    },
+    "aal": {
+      "aal1": "AAL1(비밀번호)",
+      "aal2": "AAL2(다중 요소)",
+      "aal3": "AAL3(피싱 저항)"
+    },
+    "unenrolled": "귀하의 계정에는 아직 등록된 패스키가 없습니다. 권한 있는 로그인 탭에서 기기나 보안 키에 패스키를 등록한 뒤 인증하십시오.",
+    "unenrolledInline": "귀하의 계정에는 아직 등록된 패스키가 없습니다. 아래에서 등록하십시오.",
+    "enrollHint": "이 기기나 보안 키에 첫 패스키를 등록하십시오. 등록만으로는 세션이 인증되거나 대기 중인 작업이 완료되지 않습니다.",
+    "passkeyName": "패스키 이름",
+    "enrollUnsupported": "이 브라우저는 패스키를 등록할 수 없습니다. 패스키를 지원하는 브라우저를 사용하십시오.",
+    "registered": "패스키가 등록되었습니다. 이 세션을 확인하려면 인증한 뒤 대기 중인 작업을 검토하고 완료하십시오.",
+    "registrationUnknown": "등록을 확인할 수 없습니다. 패스키가 저장되었을 수 있습니다. 인증을 선택하여 확인하십시오. 등록이 자동으로 다시 전송되지 않습니다.",
+    "authenticationUnknown": "인증을 확인할 수 없습니다. 세션이 이미 상향되었을 수 있습니다. 다시 시도하기 전에 세션을 확인하십시오.",
+    "needsAuthentication": "다른 패스키를 등록하려면 기존 패스키로 이 세션을 인증해야 합니다. 인증을 선택하십시오.",
+    "checkSession": "세션 확인",
+    "sessionExpired": "이 세션이 거부되었습니다. 이 작업을 닫고 다시 로그인한 뒤 재시도하십시오.",
+    "verificationFailed": "이 작업에 대해 세션을 확인할 수 없습니다. 인증이 완료되었을 수 있지만 작업은 계속되지 않았습니다.",
+    "cancelled": "패스키 작업이 해제되거나 시간 초과되었습니다. 새 시도를 시작할 수 있습니다. 작업은 계속되지 않았습니다.",
+    "cancelHint": "닫으면 이 작업이 취소됩니다. 이미 전송된 등록이나 인증은 여전히 완료될 수 있습니다.",
+    "registrationUnknownElsewhere": "등록을 확인할 수 없습니다. 패스키가 저장되었을 수 있습니다. 이 대화 상자를 닫고 다른 등록을 시작하기 전에 패스키를 확인하십시오.",
+    "code": {
+      "title": "인증기 코드로 로그인",
+      "body": "{{action}}에는 이 배포에서 인증기 코드로 로그인해야 합니다. 다시 로그인하고 코드를 입력하십시오.",
+      "signInAgain": "다시 로그인"
+    }
+  },
+  "references": {
+    "note": "이 패널이 반영하는 표준입니다. 패널은 관측하고 검증할 뿐 인증을 주장하지 않습니다.",
+    "labels": {
+      "scim": "SCIM 2.0 (RFC 7644)",
+      "prm": "보호 리소스 메타데이터(RFC 9728)",
+      "asMetadata": "인가 서버 메타데이터(RFC 8414)",
+      "resourceIndicators": "리소스 지표(RFC 8707)",
+      "pkce": "PKCE (RFC 7636)",
+      "oauthSecurityBcp": "OAuth 2.0 보안 BCP (RFC 9700)",
+      "webauthn": "NIST SP 800-63B-4 (인증기 보증)",
+      "certManager": "cert-manager (CNCF)",
+      "pqc": "NIST SP 800-57 Part 1 r6 (키 관리)",
+      "wifReference": "Anthropic 워크로드 ID 참조",
+      "workloadIdentity": "Anthropic 워크로드 ID 연동",
+      "externalKeys": "Anthropic 외부 키(CMEK)",
+      "workspaceUpdate": "Anthropic 워크스페이스 상주"
+    },
+    "sso": {
+      "title": "SSO 및 SCIM 표준"
+    },
+    "mcpAuth": {
+      "title": "MCP 인가 표준"
+    },
+    "login": {
+      "title": "권한 있는 로그인 표준"
+    }
+  },
+  "sso": {
+    "title": "싱글 사인온(OIDC / SAML)",
+    "description": "연동 로그인은 SSO / IdP에서 또는 부팅 시 환경으로 구성됩니다. 이 패널은 구성을 문서화하고 정확한 리디렉트 URI를 확인하며 연결 상태를 표시합니다 — 구성을 쓰지 않습니다.",
+    "notConfigured": "구성되지 않음",
+    "notConfiguredHint": "ID 프로바이더가 구성되지 않아 연동 요청이 501을 반환합니다. 아래 환경 키를 설정하고 엔진을 재시작하여 SSO를 활성화하십시오.",
+    "seamWhat": "SSO 연결 상태 요약",
+    "protocol": "프로토콜",
+    "state": "연결",
+    "redirectUri": "리디렉트 URI(정확히)",
+    "pkce": "PKCE",
+    "pkceValue": "인가 코드 + S256(항상)",
+    "redirectCheckLabel": "IdP 리디렉트 URI 확인",
+    "redirectCheckHint": "ID 프로바이더에 구성된 리디렉트/ACS URI를 붙여 넣으십시오. 위 값과 정확히 일치해야 합니다(RFC 9700).",
+    "redirectMatch": "정확히 일치합니다 — 이 리디렉트 URI는 유효합니다.",
+    "redirectMismatch": "정확히 일치하지 않습니다. IdP는 위 리디렉트 URI를 문자 단위로 그대로 사용해야 합니다.",
+    "proto": {
+      "common": "공통",
+      "oidc": "OIDC",
+      "saml": "SAML"
+    },
+    "required": "필수",
+    "secret": "비밀",
+    "envNote": "구성은 부팅 시 환경에서 한 번 읽히며 구성 쓰기 API는 없습니다. 비밀은 다시 읽히지 않습니다.",
+    "testLogin": "테스트 로그인 시작"
+  },
+  "scim": {
+    "title": "SCIM 2.0 프로비저닝",
+    "description": "사용자 및 그룹의 인바운드 프로비저닝입니다. 서비스 프로바이더, 동기화된 사용자 및 퇴사 증거의 읽기 전용 상태입니다.",
+    "seamWhat": "SCIM 서비스 프로바이더 구성",
+    "businessOnly": "인바운드 SCIM 서버에는 Business가 필요합니다. People에서 조직에서 사람을 제거하십시오.",
+    "patch": "PATCH",
+    "filter": "필터",
+    "filterMax": "지원됨(최대 {{n}})",
+    "auth": "인증",
+    "bearerName": "테넌트 SCIM 베어러",
+    "bearerNote": "인증은 테넌트에 바인딩된 베어러 토큰입니다. 토큰 값은 절대 표시되지 않으며 참조만 표시됩니다.",
+    "usersTitle": "동기화된 사용자",
+    "noUsers": "동기화된 사용자 없음",
+    "noUsersHint": "IdP가 SCIM으로 사용자를 프로비저닝하면 여기에 나타납니다. 비활성화된(이동/퇴사) 사용자는 비활성으로 표시됩니다.",
+    "groupsSupported": "그룹 프로비저닝은 인바운드(그룹 및 구성원 자격)로 지원됩니다. 디렉터리 그룹을 역할에 매핑하는 것은 Identity → Groups에서 운영자 전용입니다.",
+    "leaverTitle": "퇴사 증거",
+    "leaverSeamWhat": "퇴사 감사 증거",
+    "noLeaver": "프로비저닝 해제 이벤트 없음",
+    "noLeaverHint": "SCIM 퇴사(delete / prov:delete)가 처리되면 백엔드가 사용자의 세션과 토큰을 철회하고 여기에 기록합니다.",
+    "leaverTruncated": "최신 퇴사 이벤트 {{n}}개, 더 오래된 것이 있음",
+    "leaverTruncatedHint": "표시된 것보다 많은 퇴사 이벤트가 있습니다. 이 카드는 최근 것들을 나열하므로 잘린 이벤트는 더 오래된 것입니다. 이 목록에 없는 사용자가 프로비저닝 해제된 적 없다는 증거는 아닙니다.",
+    "revoked": "세션 + 토큰 철회됨",
+    "col": {
+      "userName": "사용자",
+      "state": "상태",
+      "externalId": "외부 ID",
+      "lastModified": "마지막 수정"
+    }
+  },
+  "roster": {
+    "label": "비인간 및 인간 ID",
+    "search": "ID 검색…",
+    "convergenceNote": "이 ID는 관측 측이 사용하는 것과 같은 외부 ID로 수렴하므로 접근 맵이 허용된 것과 관측된 것을 비교할 수 있습니다.",
+    "openInAccessMap": "접근 맵에서 보기",
+    "col": {
+      "name": "이름",
+      "externalId": "외부 ID",
+      "kind": "종류",
+      "principalType": "주체",
+      "source": "소스",
+      "state": "상태"
+    },
+    "principal": {
+      "nhi": "비인간",
+      "human": "인간",
+      "unknown": "알 수 없음"
+    },
+    "filter": {
+      "principalType": "주체로 필터",
+      "kind": "종류로 필터",
+      "all": "전체"
+    }
+  },
+  "empty": {
+    "nhiRoster": {
+      "title": "아직 ID 없음",
+      "description": "에이전트가 리소스에 도달하거나 에이전트를 ID에 바인딩하면 ID가 여기에 나타납니다."
+    }
+  },
+  "mcp": {
+    "title": "MCP 인가",
+    "description": "각 MCP 서버의 OAuth 토큰 바인딩이 검증되었는지 여부입니다. 방어적 태세일 뿐이며 패널은 토큰을 프록시하거나 재생하지 않습니다.",
+    "seamWhat": "MCP 인가 발견",
+    "noFindings": "MCP 인가 발견 없음",
+    "noFindingsHint": "OAuth로 보호된 MCP 서버가 발견되면 토큰 바인딩 태세가 여기에 기록됩니다.",
+    "truncated": "발견 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 MCP 인가 발견이 있으며 이 페이지는 행 한 페이지를 불러옵니다. 이 목록에 없는 서버가 그에 대한 발견이 없다는 증거는 아닙니다.",
+    "prmTitle": "대상 바인딩 인가(RFC 9728)",
+    "prmDescription": "OAuth로 보호된 MCP 서버가 토큰을 하나의 구체적 리소스에 바인딩하는 방식 — 한 서버용으로 발급된 토큰을 다른 서버에서 재생할 수 없습니다.",
+    "flow": {
+      "prm": {
+        "title": "보호 리소스 메타데이터",
+        "body": "서버가 /.well-known/oauth-protected-resource에서 인가 서버를 알립니다(RFC 9728)."
+      },
+      "asDiscovery": {
+        "title": "인가 서버 검색",
+        "body": "알려진 인가 서버의 메타데이터를 가져옵니다(RFC 8414)."
+      },
+      "pkce": {
+        "title": "PKCE S256",
+        "body": "인가 코드 흐름이 S256 챌린지를 사용합니다(RFC 7636) — plain은 절대 사용하지 않습니다."
+      },
+      "resourceBound": {
+        "title": "리소스 바인딩 토큰",
+        "body": "리소스 지표(RFC 8707)가 정식 서버 URI이므로 토큰 대상은 하나의 구체적 서버입니다."
+      },
+      "introspect": {
+        "title": "읽기 전용 인트로스펙션",
+        "body": "토큰 바인딩은 읽기 전용 인트로스펙션으로 검증되며 패널은 도구를 호출하거나 토큰을 프록시하지 않습니다."
+      }
+    },
+    "noPassthrough": "토큰 통과는 설계상 금지됩니다: 패널은 관측하고 인트로스펙트할 뿐 MCP 토큰을 전달하거나 재생하지 않습니다."
+  },
+  "login": {
+    "statusTitle": "세션 보증",
+    "statusDescription": "이 세션에 어떻게 로그인했는지입니다.",
+    "currentAal": "현재 수준",
+    "methods": "방법",
+    "methodsUnknown": "보고되지 않음",
+    "policy": {
+      "none": "이 배포는 관리 작업 전에 추가 확인을 요구하지 않습니다. 시스템 관리자가 설정 › 로그인 및 보안에서 켤 수 있습니다.",
+      "totp": "이 배포의 관리 작업은 인증기 코드로 로그인을 요구합니다.",
+      "passkey": "이 배포의 관리 작업은 패스키를 요구합니다."
+    },
+    "passkeyTitle": "패스키 등록",
+    "passkeyDescription": "피싱 저항 권한 있는 로그인을 위해 하드웨어 보안 키 또는 플랫폼 인증기(WebAuthn / FIDO2)를 등록하십시오.",
+    "registerPasskey": "패스키 등록",
+    "registering": "인증기를 따르십시오…",
+    "passkeySeamWhat": "WebAuthn 패스키 등록",
+    "registered": "패스키가 등록되었습니다.",
+    "unsupported": "이 브라우저는 WebAuthn을 지원하지 않습니다.",
+    "registerFailed": "등록이 완료되지 않았습니다.",
+    "ocsp": {
+      "good": "양호",
+      "revoked": "철회됨",
+      "unknown": "알 수 없음"
+    },
+    "passkeys": {
+      "title": "등록된 패스키",
+      "description": "FIDO2/WebAuthn 인증기를 관리하십시오. 각 패스키는 피싱 저항 하드웨어 바인딩 로그인을 제공합니다.",
+      "register": "패스키 등록",
+      "registerTitle": "새 패스키 등록",
+      "registerHint": "선택 사항입니다. 비워 두면 이 기기 이름으로 지정됩니다.",
+      "nameLabel": "패스키 이름",
+      "namePlaceholder": "예: YubiKey 5C, MacBook Touch ID",
+      "defaultName": "{{device}}의 패스키",
+      "defaultNameNoDevice": "패스키",
+      "registering": "패스키 등록 중…",
+      "registered": "패스키가 등록되었습니다.",
+      "registerFailed": "패스키 등록에 실패했습니다. 브라우저가 WebAuthn을 지원하지 않거나 등록이 취소되었을 수 있습니다.",
+      "unsupported": "이 브라우저는 WebAuthn/FIDO2를 지원하지 않습니다.",
+      "none": "등록된 패스키 없음",
+      "noneHint": "피싱 저항 하드웨어 바인딩 로그인(AAL3)을 활성화하려면 패스키를 등록하십시오.",
+      "colName": "이름",
+      "colCreated": "등록됨",
+      "colBackup": "백업",
+      "backupEligible": "다중 기기",
+      "backupBound": "하드웨어 바인딩",
+      "rename": "이름 변경",
+      "renameTitle": "패스키 이름 변경",
+      "renamed": "패스키 이름이 변경되었습니다.",
+      "delete": "삭제",
+      "deleteTitle": "패스키 삭제",
+      "deleteBody": "패스키 \"{{name}}\"을(를) 삭제하시겠습니까? 영구적입니다. AAL3 접근을 유지하려면 다른 등록된 패스키가 필요합니다.",
+      "deleted": "패스키가 삭제되었습니다.",
+      "lastCredential": "유일한 패스키는 삭제할 수 없습니다. 먼저 다른 패스키를 등록하십시오."
+    }
+  },
+  "totp": {
+    "title": "TOTP 2차 요소",
+    "description": "로컬 계정의 추가 요소로서 시간 기반 일회용 비밀번호(RFC 6238)입니다. 패스키에 더해지며 절대 대체하지 않습니다.",
+    "state": "요소",
+    "enrolled": "등록됨",
+    "notEnrolled": "등록되지 않음",
+    "algorithm": "매개변수",
+    "everySeconds": "{{period}}초 코드",
+    "activatedAt": "활성화됨",
+    "recoveryRemaining": "복구 코드",
+    "recoveryCount": "{{count}}개 남음",
+    "enrol": "요소 등록",
+    "replace": "요소 교체",
+    "remove": "요소 제거",
+    "confirmRemove": "정말 제거하시겠습니까?",
+    "activate": "활성화",
+    "scanPrompt": "인증기 앱으로 QR을 스캔하거나 비밀을 직접 입력한 뒤 표시되는 코드를 입력하십시오.",
+    "qrAlt": "TOTP 프로비저닝 URI가 있는 QR 코드",
+    "manualEntry": "수동 입력 비밀",
+    "codeLabel": "앱의 코드",
+    "recoveryWarning": "이 복구 코드는 한 번만 표시됩니다. 지금 저장하십시오 — 기기를 잃으면 각 코드를 한 번씩 사용할 수 있습니다.",
+    "savedCodes": "코드를 저장했습니다",
+    "stepUpRequired": "이 작업에는 이 배포가 요구하는 관리 작업 추가 확인이 필요합니다. 먼저 완료하십시오.",
+    "sealerUnavailable": "이 배포에서는 TOTP 시드 봉인기를 사용할 수 없으므로 운영자가 수정할 때까지 등록이 비활성화됩니다.",
+    "loadFailed": "요소 상태를 불러올 수 없습니다.",
+    "policyTitle": "관리자에게 TOTP 요구",
+    "policyDescription": "켜면 관리자(슈퍼관리자 및 모든 테넌트 관리자 또는 소유자)는 비밀번호 로그인이 완료되기 전에 요소를 등록해야 합니다.",
+    "policyState": "정책",
+    "policyOn": "필수",
+    "policyOff": "꺼짐",
+    "policyEnable": "관리자에게 요구",
+    "policyConfirmOn": "확인: 요구",
+    "policyDisable": "끄기",
+    "policyAal3Note": "코드가 없는 계정은 다음 로그인 시 설정하라는 요청을 받으며 잠기지 않습니다."
+  },
+  "stepUpPolicy": {
+    "title": "관리 작업에 대한 추가 확인",
+    "description": "기본적으로 꺼져 있습니다. 켜면 사용자, ID 프로바이더, 비밀 또는 도구 설치와 같은 관리 변경 전에 인증기 코드나 패스키를 요구합니다.",
+    "options": {
+      "none": "꺼짐",
+      "totp": "인증기 코드",
+      "passkey": "패스키"
+    },
+    "saved": "저장되었습니다.",
+    "loadFailed": "이 설정을 읽을 수 없습니다. 페이지를 새로 고쳐 다시 시도하십시오.",
+    "note": "패스키를 요구하려면 먼저 여기서 패스키로 로그인하십시오. 인증기 코드를 요구하려면 먼저 코드로 로그인하십시오. 끄거나 낮추려면 먼저 현재 확인을 통과하십시오. 변경은 몇 초 안에 모든 서버에 적용됩니다.",
+    "refused": {
+      "passkey_not_enrolled": "먼저 계정에 패스키를 추가한 뒤(Identity > Passkeys) 이것을 켜십시오.",
+      "totp_sign_in_required": "먼저 인증기 앱을 설정하고 그 코드로 로그인한 뒤 이것을 켜십시오."
+    }
+  },
+  "posture": {
+    "unavailable": {
+      "badge": "읽을 수 없음"
+    }
+  }
+}

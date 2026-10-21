@@ -189,7 +189,7 @@ func parsePublish(flags byte, body []byte) (Publish, error) {
 		return Publish{}, fmt.Errorf("mqtt: publish properties overrun")
 	}
 
-	pub := Publish{Topic: topic}
+	pub := Publish{Topic: topic, Retain: flags&1 == 1}
 	for off < propEnd {
 		id := body[off]
 		off++
@@ -312,6 +312,12 @@ func buildConnect(clientID, username, password string, keepalive time.Duration) 
 // fixed-header flags for SUBSCRIBE are reserved as 0b0010. packetID identifies the
 // SUBACK. Each filter carries a one-byte subscription-options field (QoS 0).
 func buildSubscribe(packetID uint16, filters []string) []byte {
+	return buildSubscribeOptions(packetID, filters, 0x00)
+}
+
+// buildSubscribeOptions is buildSubscribe with the subscription-options byte given for
+// every filter (MQTT 5 section 3.8.3.1: QoS, No Local, Retain As Published, Retain Handling).
+func buildSubscribeOptions(packetID uint16, filters []string, options byte) []byte {
 	var vh []byte
 	var idb [2]byte
 	binary.BigEndian.PutUint16(idb[:], packetID)
@@ -320,7 +326,7 @@ func buildSubscribe(packetID uint16, filters []string) []byte {
 
 	for _, f := range filters {
 		vh = appendString(vh, f)
-		vh = append(vh, 0x00) // subscription options: QoS 0, no-local off, etc.
+		vh = append(vh, options)
 	}
 	return frame(pktSUBSCRIBE, 0x02, vh)
 }
@@ -551,6 +557,17 @@ func (c *conn) Close() error {
 // type (high nibble), the flags (low nibble) and the body. A remaining-length beyond
 // maxRemainingLen is rejected to bound allocation.
 func readPacket(r *bufio.Reader) (pktType, flags byte, body []byte, err error) {
+	return readPacketMax(r, maxRemainingLen)
+}
+
+// errRemainingTooLarge is wrapped by the error readPacketMax returns for a packet whose declared
+// remaining length is over the caller's limit; nothing of the body has been read or allocated.
+var errRemainingTooLarge = errors.New("remaining length out of bounds")
+
+// readPacketMax is readPacket with the caller's limit on the remaining length, at most
+// maxRemainingLen. A reader that expects small packets passes a small limit, so a hostile
+// declared length costs no allocation.
+func readPacketMax(r *bufio.Reader, limit int) (pktType, flags byte, body []byte, err error) {
 	fh, err := r.ReadByte()
 	if err != nil {
 		return 0, 0, nil, err
@@ -559,8 +576,8 @@ func readPacket(r *bufio.Reader) (pktType, flags byte, body []byte, err error) {
 	if err != nil {
 		return 0, 0, nil, err
 	}
-	if rem < 0 || rem > maxRemainingLen {
-		return 0, 0, nil, fmt.Errorf("mqtt: remaining length %d out of bounds", rem)
+	if rem < 0 || rem > limit || rem > maxRemainingLen {
+		return 0, 0, nil, fmt.Errorf("mqtt: remaining length %d out of bounds: %w", rem, errRemainingTooLarge)
 	}
 	body = make([]byte, rem)
 	if _, err := io.ReadFull(r, body); err != nil {

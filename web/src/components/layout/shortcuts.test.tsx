@@ -1,26 +1,50 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 
 const navigateMock = vi.fn()
+// The table the page prints, extended for one test to prove the page reads it and not a copy.
+const keyTable = vi.hoisted(() => ({
+  rules: [] as { command: string; keys: string; when?: string }[],
+  declared: 0,
+}))
+vi.mock('@/lib/keybindings/table', async (importOriginal) => {
+  const table = await importOriginal<typeof import('@/lib/keybindings/table')>()
+  keyTable.rules.push(...table.KEYBINDINGS)
+  keyTable.declared = keyTable.rules.length
+  return { ...table, KEYBINDINGS: keyTable.rules }
+})
+let route = { pathname: '/sessions', search: { session: 'run:a' } }
+let tenant = 'tnt-1'
 vi.mock('@tanstack/react-router', () => ({
   //useUrlState follows the location, so the mock has to answer it.
-  useRouterState: () => '',
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: route }),
   useNavigate: () => navigateMock,
 }))
 
 const canMock = vi.fn((_permission: string) => true)
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ can: (p: string) => canMock(p) }),
+  useAuth: () => ({
+    activeTenant: tenant,
+    principal: { user_id: 'u1' },
+    can: (p: string) => canMock(p),
+  }),
 }))
 
 import { GlobalShortcuts, NAV_SHORTCUTS } from './shortcuts'
 import { FEATURE_VIEWS } from '@/features/registry'
+import { useSessionStore } from '@/stores/session'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 afterEach(() => {
+  route = { pathname: '/sessions', search: { session: 'run:a' } }
+  tenant = 'tnt-1'
+  keyTable.rules.length = keyTable.declared
+  useWorkspaceStore.setState({ activeWorkspace: null })
   navigateMock.mockReset()
   canMock.mockReset()
   canMock.mockReturnValue(true)
@@ -126,6 +150,33 @@ describe('GlobalShortcuts — the declared table', () => {
     other.remove()
   })
 
+  it("focuses the focused column's composer on `/`, and never the other column's", () => {
+    renderIntel(<GlobalShortcuts />)
+    const column = (focused: boolean, withComposer: boolean) => {
+      const section = document.createElement('section')
+      section.dataset.focused = String(focused)
+      if (withComposer) section.appendChild(document.createElement('textarea'))
+      document.body.appendChild(section)
+      return section
+    }
+    const first = column(false, true)
+    // The one-narrative id sits on the unfocused column: the old fallback landed there.
+    first.querySelector('textarea')!.id = 'work-composer-input'
+    const second = column(true, true)
+    fireEvent.keyDown(window, { key: '/' })
+    expect(document.activeElement).toBe(second.querySelector('textarea'))
+    // The focused column has nothing to type to: the key goes to /sessions, it does not
+    // land in the column that is not focused.
+    second.querySelector('textarea')!.remove()
+    ;(document.activeElement as HTMLElement).blur()
+    navigateMock.mockClear()
+    fireEvent.keyDown(window, { key: '/' })
+    expect(document.activeElement).not.toBe(first.querySelector('textarea'))
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/sessions' })
+    first.remove()
+    second.remove()
+  })
+
   it('prints the table it resolves, with the context each row needs', () => {
     renderIntel(<GlobalShortcuts />)
     fireEvent.keyDown(window, { key: '?' })
@@ -180,5 +231,170 @@ describe('the palette focus contract, from the launcher', () => {
     expect(useCommandStore.getState().opener).toBe(field)
     expect(useCommandStore.getState().takeOpener()).toBe(field)
     field.remove()
+  })
+})
+
+describe('previous opened session', () => {
+  it('toggles between opened sessions, ignores pane changes and pauses behind a modal', () => {
+    const view = renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).toHaveBeenLastCalledWith({
+      to: '/sessions',
+      search: { session: 'run:a' },
+    })
+    route = { pathname: '/sessions', search: { session: 'run:a' } }
+    view.rerender(<GlobalShortcuts />)
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', metaKey: true, shiftKey: true })
+    expect(navigateMock).toHaveBeenLastCalledWith({
+      to: '/sessions',
+      search: { session: 'run:b' },
+    })
+    navigateMock.mockClear()
+    fireEvent.keyDown(window, { key: '?' })
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('still fires from inside a field: it is a modified chord, like ⌘K and ⌘B', () => {
+    const view = renderIntel(
+      <>
+        <input aria-label="field" />
+        <GlobalShortcuts />
+      </>,
+    )
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(
+      <>
+        <input aria-label="field" />
+        <GlobalShortcuts />
+      </>,
+    )
+    const field = screen.getByLabelText('field')
+    field.focus()
+    fireEvent.keyDown(field, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).toHaveBeenLastCalledWith({
+      to: '/sessions',
+      search: { session: 'run:a' },
+    })
+  })
+
+  it('discards history on a tenant round trip and rechecks view permission', () => {
+    const view = renderIntel(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    canMock.mockReturnValue(false)
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+    canMock.mockReturnValue(true)
+    tenant = 'tnt-2'
+    view.rerender(<GlobalShortcuts />)
+    tenant = 'tnt-1'
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it("does not carry the old workspace's open session into the new one", () => {
+    useWorkspaceStore.setState({ activeWorkspace: 'ws-1' })
+    const view = renderIntel(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    // The switcher leaves the URL on run:b, which belongs to ws-1.
+    act(() => useWorkspaceStore.setState({ activeWorkspace: 'ws-2' }))
+    view.rerender(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:c' } }
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it("ignores the old scope's session across two switches in a row", () => {
+    useWorkspaceStore.setState({ activeWorkspace: 'ws-1' })
+    const view = renderIntel(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    // Passing through ws-2 on the way to ws-3: the URL still names ws-1's run:b.
+    act(() => useWorkspaceStore.setState({ activeWorkspace: 'ws-2' }))
+    view.rerender(<GlobalShortcuts />)
+    act(() => useWorkspaceStore.setState({ activeWorkspace: 'ws-3' }))
+    view.rerender(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:c' } }
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the previous session across a credential renewal', () => {
+    const view = renderIntel(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    act(() =>
+      useSessionStore.setState((s) => ({
+        credentialGeneration: s.credentialGeneration + 1,
+      })),
+    )
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).toHaveBeenLastCalledWith({
+      to: '/sessions',
+      search: { session: 'run:a' },
+    })
+  })
+
+  it('remembers the route a session was last opened on', () => {
+    const view = renderIntel(<GlobalShortcuts />)
+    route = { pathname: '/agentops', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:b' } }
+    view.rerender(<GlobalShortcuts />)
+    route = { pathname: '/sessions', search: { session: 'run:c' } }
+    view.rerender(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true, shiftKey: true })
+    expect(navigateMock).toHaveBeenLastCalledWith({
+      to: '/sessions',
+      search: { session: 'run:b' },
+    })
+  })
+
+  it('prints a rule the table gains, with its own keys', () => {
+    keyTable.rules.push({
+      command: 'session.new',
+      keys: 'Alt+Q',
+      when: 'outsideField',
+    })
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    const rows = screen.getAllByTestId('keybinding-session.new')
+    const added = rows.find((row) => row.textContent?.includes('Q'))
+    expect(added).toBeDefined()
+    expect(added).toHaveTextContent('Alt')
+  })
+
+  it('prints every declared switching command from the table', async () => {
+    const { KEYBINDINGS } = await import('@/lib/keybindings/table')
+    renderIntel(<GlobalShortcuts />)
+    fireEvent.keyDown(window, { key: '?' })
+    const rules = KEYBINDINGS.filter(
+      (r) =>
+        r.command === 'session.previous' ||
+        r.command.startsWith('palette.recent'),
+    )
+    expect(rules).toHaveLength(7)
+    for (const rule of rules) {
+      const row = screen.getByTestId(`keybinding-${rule.command}`)
+      for (const token of rule.keys.split('+'))
+        expect(
+          within(row).getByText(token === 'Mod' ? '⌘' : token, {
+            selector: 'kbd',
+          }),
+        ).toBeInTheDocument()
+      expect(row.textContent).not.toMatch(/keys\.command|keys\.when/)
+    }
   })
 })

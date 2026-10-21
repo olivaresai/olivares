@@ -8,6 +8,8 @@
 package driverfacts
 
 import (
+	"net/netip"
+	"net/url"
 	"slices"
 	"strings"
 )
@@ -34,7 +36,28 @@ const (
 	// boundary. Native confinement and protocol enforcement remain launch work.
 	EgressConfigured = "configured-endpoint"
 	EgressVendor     = "vendor-default-only"
+	// EgressLocal: the endpoint may be configured, but only as plain http at a loopback or
+	// private-network address (a model server on this network, LocalHTTPEndpoint).
+	EgressLocal = "local-endpoint-only"
 )
+
+// LocalHost is the one host rule for a plain-http endpoint: localhost, a loopback
+// address, or a private-network address (RFC 1918 / fc00::/7). A public host fails here,
+// never by accident of a parse that accepted something else.
+func LocalHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && (ip.IsLoopback() || ip.IsPrivate())
+}
+
+// LocalHTTPEndpoint reports whether baseURL is plain http at a local host, without
+// credentials, query or fragment.
+func LocalHTTPEndpoint(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	return err == nil && u.Scheme == "http" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.Opaque == "" && LocalHost(u.Hostname())
+}
 
 // ProxyEnv and TrustEnv are the standard variables the tools read, in either
 // case, to reach their vendor from this host: the HTTP(S) proxy, and the CA
@@ -162,8 +185,8 @@ var rows = []Facts{
 		StatusArgs:         []string{"auth", "list"},
 		AuthFailures:       []string{"no provider", "api key", "unauthorized", "not authenticated"},
 		KeyPhrase:          "a key or a local model (Ollama)",
-		BindingDescription: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama)",
-		Bindings:           []Binding{{"anthropic", EgressVendor}, {"openai", EgressVendor}, {"xai", EgressVendor}, {"ollama", EgressConfigured}},
+		BindingDescription: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)",
+		Bindings:           []Binding{{"anthropic", EgressVendor}, {"openai", EgressVendor}, {"xai", EgressVendor}, {"ollama", EgressConfigured}, {"openai_compatible", EgressLocal}},
 	},
 	// GEMINI_CLI_HOME names the home that holds .gemini, not .gemini itself.
 	{
@@ -187,7 +210,8 @@ var rows = []Facts{
 func (f Facts) CanBind(kind, baseURL string) bool {
 	for _, b := range f.Bindings {
 		if b.Kind == kind {
-			return b.Egress == EgressConfigured || b.Egress == EgressVendor && strings.TrimSpace(baseURL) == ""
+			return b.Egress == EgressConfigured || b.Egress == EgressVendor && strings.TrimSpace(baseURL) == "" ||
+				b.Egress == EgressLocal && LocalHTTPEndpoint(baseURL)
 		}
 	}
 	return false

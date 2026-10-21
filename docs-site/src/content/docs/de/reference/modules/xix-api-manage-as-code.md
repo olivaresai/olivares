@@ -70,7 +70,7 @@ deny-closed Naht.
 :::caution[Ehrliche Grenzen]
 - **`olivares_deployment` deklariert; es deployt nicht.** Die Resource schreibt eine
   Deployment-*Definition* über die Routen von Modul VII. Ein Live-`apply`/`retire` gegen reale
-  Infrastruktur ist eine **deny-closed Naht, die `503` zurückgibt**, bis ein Betreiber einen Executor
+  Infrastruktur ist eine Business-Funktion (Community antwortet mit `501`) und eine **deny-closed Naht, die `503` zurückgibt**, bis ein Betreiber einen Executor
   bereitstellt — ein Deployment in HCL zu deklarieren mutiert niemals Ihr Estate.
 - **Die stabile OpenAPI ist nicht die ganze Leitung.** Die stabile Kernfläche steht im
   veröffentlichten Vertrag (`/openapi.json`); die Modulrouten (etwa die Access-Map- und Drift-Reads
@@ -120,7 +120,7 @@ Findings — nur als Refs/Hashes/Relationen, wobei der Export selbst auditiert w
 - [Die Client-SDKs nutzen](/de/how-to/use-the-client-sdks/) — die First-Party-Clients für Go/Python/TypeScript.
 - [CLI-Referenz](/de/reference/cli/) — dieselbe Funktionalität vom `olivares`-Binary.
 - [Den Control Plane als Code verwalten](/de/how-to/manage-as-code/) — die Anleitung zum Terraform-Provider.
-- [Modul VII — Deployment](/de/reference/modules/vii-deploy/) — wo `olivares_deployment` aktuiert (die `503`-Naht).
+- [Modul VII — Deployment](/de/reference/modules/vii-deploy/) — wo `olivares_deployment` aktuiert (Business; die `503`-Naht).
 - [Modulkatalog](/de/reference/modules/overview/) — die Trennung von Govern/Observe vs. Actuate.
 - [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/) — was heute aktuiert und was nicht.
 - [Architekturüberblick](/de/explanation/architecture/overview/) — die Engine-Schicht, auf der diese Fläche sitzt.

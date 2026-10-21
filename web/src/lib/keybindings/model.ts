@@ -83,6 +83,8 @@ export function parseChord(keys: string): Chord | null {
 /** The parts of a keyboard event this matches on — so a test needs no real event. */
 export interface KeyEventLike {
   key: string
+  /** The physical key (`KeyO`): what an Alt chord names, since Option retypes `key` on macOS. */
+  code?: string
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
@@ -102,7 +104,12 @@ export function chordMatches(chord: Chord, event: KeyEventLike): boolean {
   const printable = chord.key.length === 1
   const key = printable ? event.key.toLowerCase() : event.key
   const want = printable ? chord.key.toLowerCase() : chord.key
-  if (key !== want) return false
+  // Option+Shift+O types "Ø" on a Mac, so an Alt+letter chord also matches its physical key.
+  const physical =
+    chord.alt && /^[a-z]$/i.test(chord.key)
+      ? event.code === `Key${chord.key.toUpperCase()}`
+      : false
+  if (key !== want && !physical) return false
   const mod = !!event.metaKey || !!event.ctrlKey
   if (mod !== chord.mod) return false
   if (!!event.altKey !== chord.alt) return false

@@ -22,5 +22,7 @@ func init() {
 		model.Leaf("risk_tier", model.None("a closed risk-tier set: policy.go:197, risktier.go:55")),
 		model.Leaf("match.action", model.None("an action name an approval matches: policy.go:193")),
 		model.Leaf("match.subject_kind", model.None("a subject kind an approval matches: policy.go:193")),
+		model.Leaf("match.change_class", model.None("a closed change-class set an approval matches: policy.go:225, changeclass.go:57")),
+		model.Leaf("sensitive_paths[]", model.None("a repository path glob that makes a change sensitive, never an account: policy.go:233, changeclass.go:62")),
 	))
 }

@@ -219,9 +219,62 @@ tenant cap**; the bound is aggregate write throughput plus per-tenant fixed stor
 costs the same whether spread across 100 distinct tenants or hammering one (**~10.4k/sec**, p99 0.14 ms) — the
 sample did not show an additional per-tenant cost between those two cases. It does
 not establish behavior for arbitrary tenant counts. There is no separate agent-count
-capacity result here: the historical ~4.8k hook / ~1.7k proxy decisions/sec samples
-omit full provider execution. Size the complete concurrent workload, including its
-writes, from a new measurement of the intended deployment.
+capacity result in this section: the historical ~4.8k hook / ~1.7k proxy decisions/sec
+samples omit full provider execution. Concurrent sessions are measured in §2-ter.4a.
+Size the complete concurrent workload, including its writes, from a new measurement
+of the intended deployment.
+
+### 2-ter.4a Concurrent sessions (measured 2026-10-16)
+
+One engine held **600 live sessions** with no limit of its own in the way. The run used 1.0 candidate 36
+(commit `53e46945c3fa`, binary sha256 `ad370e2d02d1…`), fresh SQLite, default settings, and
+`scripts/loadtest-sessions.py`: it starts sessions step by step (1, 5, 25, 50, 100, 128, 129, 200, 300, 400, 500, 600) with 16
+parallel starters, sends one turn to every live session, times the replies on the output stream, then stops them all.
+
+**What was not measured.** The sessions ran a stand-in for Claude Code (`scripts/loadtest-sessions-standin.sh`, a
+shell script of about 1.7 MiB RSS) because no vendor account is available to the test. The numbers are the
+engine's own cost. The agent tool's memory and CPU come on top, per session, and for a real coding agent they
+dominate; size them from the tool you run.
+
+| Measure | 16-core container (shared host) | 6 vCPU lab VM (virtio disk) |
+|---|---|---|
+| Live sessions reached / starts refused | 600 / 0 | 599 / 1 (see below) |
+| Engine memory per session (fit over the ladder) | 0.30 MiB RSS (357 MiB at 600) | 0.34 MiB RSS (365 MiB at 599) |
+| Engine threads / file descriptors per session | 1.0 / 4.0 | 1.0 / 4.0 |
+| Engine CPU per session start | 36 ms | 46 ms |
+| Session starts per second, 16 parallel starters | 28.8 | 2.5 |
+| API with all sessions live: list 100 runs / get one / `/readyz`, p99 | 18 ms / 8 ms / 2 ms | 28 ms / 6 ms / 2 ms |
+| One turn to every live session: accepted, p50 / p99 | 0.12 s / 0.29 s | 1.1 s / 5.0 s |
+| Stopping all sessions | 17 s, no process left | 132 s, no process left |
+
+Reading it:
+- **No session cap.** Crossing 128 changed nothing: the 129th to the 600th session started and stayed live. The
+  limit people may remember, 128, was in the MCP gateway's table of upstream sessions, not in session start (it
+  is now bounded at 4096; see below).
+- **The cost of a session is small and linear.** Plan 4 file descriptors per session (the runs had a limit of 524,288)
+  and one thread. After the stop the engine's file descriptors are back to 13 and its memory back near the baseline
+(236 and 250 MiB against 269 and 260 MiB at the start).
+- **Start rate is the limit you will feel, and it follows storage, not CPU.** The engine spent a similar CPU per start on
+  both hosts, but the VM's disk made starts 11 times slower. At 16 parallel starters on the VM, 1 of 600 starts was refused:
+  its session MCP setup passed the 5 s launch deadline, and the engine answered 502 "session MCP setup failed; the session
+  was not started" without starting it. The slow step of that setup is a read that waits for the engine's one database
+  connection behind every other start, so the deadline (`sessionLaunchSetupTimeout`) is now 30 s. Measured on the same VM with
+  40 processes syncing writes to its disk: the 5 s build refused 1 of 600 (the read reached 5.0 s); the 30 s build started
+  600 of 600 in one run (read at most 3.4 s) and, in another, waited 7.7 s for the read without a refusal, but lost one start
+  to the API's 60 s limit on a whole request (that start took 59.7 s). On storage that slow, start sessions in smaller batches.
+- Repeat the run on your own host and storage: `python3 scripts/loadtest-sessions.py ./olivares /tmp/loadtest 5,50,128,200,600`.
+- Sizing a Compose stack for real agent tools is a different question from the engine's cost above: the memory
+  limit, the process limit and where `/tmp` lives are in [Size it for many sessions](../deploy/compose/README.md#size-it-for-many-sessions).
+
+**MCP gateway.** A managed MCP server keeps one upstream session per client (subject, client id, scopes). That table
+refused every new client after 128 and never released an entry, and one lock covered the whole upstream call, so all
+clients of a server waited on each other. Calls of different clients now overlap, a client's own calls stay in order, and the table
+is bounded at 4096 (an entry is about 105 bytes, so 0.4 MiB): when full, the client idle longest is dropped and
+initializes again on its next call. 600 clients of one managed server each keep a session. Against an upstream that
+takes 20 ms per call, 128 clients calling together took 2.66 s before (one at a time, p99 2.62 s); 600 clients
+calling together take 0.06 s now (p99 53 ms, all 600 in flight at once). This is the gateway's forwarder
+measured in its package, not through a running engine: the 600-session runs above use the sessions' own
+forwarders, one per session, which never reached the 128 limit.
 
 ### 2-ter.5 Recovery time (RTO) is part of the envelope
 

@@ -41,6 +41,8 @@ import (
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/olivaresai/olivares/connectors/internal/otlptime"
 )
 
 // Límite de cuerpo. Un receptor sin tope es un vector de agotamiento de memoria en un puerto que,
@@ -135,10 +137,8 @@ func (r *otlpReceiver) ingest(export *collogspb.ExportLogsServiceRequest) {
 				if name == "" {
 					continue
 				}
-				at := time.Unix(0, int64(rec.GetTimeUnixNano())).UTC()
-				if rec.GetTimeUnixNano() == 0 {
-					at = r.now().UTC()
-				}
+				sent, _ := otlptime.Sender(rec.GetTimeUnixNano())
+				at := otlptime.Stamp(sent, r.now()).UTC()
 				ev := otlpEvent{
 					Name:      name,
 					Service:   svc,

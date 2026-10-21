@@ -24,19 +24,30 @@ const (
 // R/RW map is recon-relevant (docs/SECURITY-HARDENING.md), so the self-audit event seals in the
 // same transaction before any edge is returned (docs/SECURITY-HARDENING.md/§5).
 func (m *Module) Graph(ctx context.Context, tenant model.TenantID, actor, actorKind string, q model.Query) ([]model.AccessEdge, error) {
+	edges, _, err := m.graphPage(ctx, tenant, actor, actorKind, q)
+	return edges, err
+}
+
+// graphPage is Graph with the store's page, so the response can say there are
+// more edges (and where to continue) instead of presenting a limited read as the
+// whole graph.
+func (m *Module) graphPage(ctx context.Context, tenant model.TenantID, actor, actorKind string, q model.Query) ([]model.AccessEdge, model.Page, error) {
 	if m.data == nil {
-		return nil, errNoData
+		return nil, model.Page{}, errNoData
 	}
-	var edges []model.AccessEdge
+	var (
+		edges []model.AccessEdge
+		page  model.Page
+	)
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		if _, err := sc.Audit().Append(ctx, model.AuditDraft{Actor: actor, ActorKind: actorKind, Action: actionGraphRead}); err != nil {
 			return err
 		}
 		var e error
-		edges, _, e = sc.AccessEdges().List(ctx, q)
+		edges, page, e = sc.AccessEdges().List(ctx, q)
 		return e
 	})
-	return edges, err
+	return edges, page, err
 }
 
 // AuditedNeighbors performs a privileged, self-audited read of the edges touching
@@ -44,8 +55,20 @@ func (m *Module) Graph(ctx context.Context, tenant model.TenantID, actor, actorK
 // read share one Mutate transaction, so a read whose audit cannot be sealed
 // commits nothing and yields nothing.
 func (m *Module) AuditedNeighbors(ctx context.Context, tenant model.TenantID, actor, actorKind string, node model.NodeRef, dir model.Direction) ([]model.AccessEdge, error) {
+	edges, _, err := m.neighborsPage(ctx, tenant, actor, actorKind, node, dir)
+	return edges, err
+}
+
+// neighborsPage is AuditedNeighbors with a page. The store's Neighbors takes no
+// cursor and returns at most edgeReadCap rows per direction, so the only honest
+// statement at the ceiling is "there may be more", with no cursor to follow.
+//
+// ponytail: a node with exactly edgeReadCap edges, or a both-direction read whose
+// merged sides reach it, is flagged though nothing was cut; upgrade when
+// Neighbors grows a cursor.
+func (m *Module) neighborsPage(ctx context.Context, tenant model.TenantID, actor, actorKind string, node model.NodeRef, dir model.Direction) ([]model.AccessEdge, model.Page, error) {
 	if m.data == nil {
-		return nil, errNoData
+		return nil, model.Page{}, errNoData
 	}
 	var edges []model.AccessEdge
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
@@ -60,7 +83,7 @@ func (m *Module) AuditedNeighbors(ctx context.Context, tenant model.TenantID, ac
 		edges, e = sc.AccessEdges().Neighbors(ctx, node, dir)
 		return e
 	})
-	return edges, err
+	return edges, model.Page{HasMore: len(edges) >= edgeReadCap}, err
 }
 
 // PrivilegeDiff is the permitted-vs-observed result for a tenant (ARCHITECTURE.md —

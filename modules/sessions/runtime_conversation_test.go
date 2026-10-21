@@ -11,6 +11,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -137,6 +139,9 @@ func TestConversationHistoryDoesNotReadSecretsOrUnprovenHomes(t *testing.T) {
 		{colRunSecretEnv: `[{"env":"SECRET","secret":"env/old"}]`},
 		{colRunSecretEnv: `invalid`},
 		{colRunGitRead: "approved-binding:owner/repository"},
+		// A package registry token: the stored thread is the tool's own, unredacted.
+		{colRunRegistrySecrets: `[{"env":"env/npm","secret":"env/npm"}]`},
+		{colRunRegistrySecrets: `invalid`},
 	} {
 		rec[colRunProfileDriver], rec[colClaudeSessionID] = providerDriverCodex, "root"
 		line, err := m.conversationHistory(t.Context(), model.TenantID(model.NewID()), rec)
@@ -348,5 +353,66 @@ func TestConversationHistoryPartialLaunchKeepsUnconfirmedCustody(t *testing.T) {
 				time.Sleep(time.Millisecond)
 			}
 		})
+	}
+}
+
+// fixtureHistoryRunner starts the test binary's Codex peer in place of the tool the
+// module resolved, through the real pump and with the launch's own flags. The network
+// and confinement of the launch are not under test and need user namespaces.
+type fixtureHistoryRunner struct {
+	inner Runner
+	exe   string
+}
+
+func (r fixtureHistoryRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, error) {
+	spec.Program, spec.Args = r.exe, []string{"app-server"}
+	spec.NetworkPolicy, spec.Confinement = nil, nil
+	return r.inner.Launch(ctx, spec)
+}
+
+// The stored history of a conversation that was sent a screenshot, read the way an
+// attach asks for it: through the module, the real pump and a real child. The
+// answer lists the picture as one line far over the runner's 1 MiB (a 25 MiB image
+// here, over the pump's 24 MiB overflow ceiling too), and the reader must neither end
+// for it nor hand the picture's bytes to the console.
+func TestConversationHistoryOfAThreadWithAnImageIsReadThroughTheRealPump(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, st, _ := openProfiledRuntime(t, profileBackends(t)[0], WithRunner(fixtureHistoryRunner{inner: NewProcRunner(), exe: exe}), WithProviderDriver(NewCodexDriver()), WithDriverProgram(providerDriverCodex, exe))
+	defer st.Close()
+	tenant := ensureTenant(t, st, "history-with-image")
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "codex", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	raw, err := json.Marshal(codexFixture{StoredImageBytes: 25 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profile.ConfigHome, codexFixtureConfigFile), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rec := model.Record{colRunProfileID: profile.Ref, colRunProfileDriver: profile.Driver, colRunProfileEnvRef: profile.EnvironmentRef, colRunProfileConfigHome: profile.ConfigHome, colRunProfileUserHome: profile.UserHome, colClaudeSessionID: "fixture-thread"}
+	line, err := m.conversationHistory(t.Context(), tenant, rec)
+	if err != nil {
+		t.Fatalf("a thread that holds a 25 MiB image could not be read: %v", err)
+	}
+	var history struct {
+		Turns []struct {
+			ID    string `json:"id"`
+			Items []struct {
+				Text    string `json:"text"`
+				Content []struct {
+					Text string `json:"text"`
+					URL  string `json:"url"`
+				} `json:"content"`
+			} `json:"items"`
+		} `json:"turns"`
+	}
+	if err := json.Unmarshal([]byte(line), &history); err != nil || len(history.Turns) != 2 {
+		t.Fatalf("history = %.300s (%v)", line, err)
+	}
+	first := history.Turns[0].Items[0].Content
+	if first[0].Text != "what is in this picture" || first[1].URL != "data:image/png;base64," || history.Turns[1].Items[0].Text != "a cat on a sofa" || len(line) > 4096 {
+		t.Fatalf("history = %.400s (%d bytes)", line, len(line))
 	}
 }

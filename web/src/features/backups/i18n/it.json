@@ -1,0 +1,155 @@
+{
+  "title": "Backup e ripristino",
+  "description": "Gestisci gli snapshot di disaster recovery di Olivares AI.",
+  "tabs": {
+    "backups": "Backup",
+    "schedule": "Pianificazione"
+  },
+  "actions": {
+    "restore": "Ripristina",
+    "createBackup": "Crea backup",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "upload": "Carica",
+    "delete": "Elimina"
+  },
+  "units": {
+    "bytes": "{{value}} B",
+    "kilobytes": "{{value}} KB",
+    "megabytes": "{{value}} MB",
+    "gigabytes": "{{value}} GB",
+    "terabytes": "{{value}} TB"
+  },
+  "list": {
+    "label": "Backup",
+    "searchPlaceholder": "Cerca backup...",
+    "deleted": "Backup eliminato",
+    "deleteTitle": "Elimina backup",
+    "deleteDescription": "Eliminare definitivamente \"{{filename}}\"? L'operazione non può essere annullata.",
+    "columns": {
+      "date": "Data",
+      "filename": "Nome file",
+      "size": "Dimensione",
+      "engine": "Engine",
+      "tenants": "Tenant",
+      "notes": "Note"
+    },
+    "actions": {
+      "download": "Scarica",
+      "inspect": "Ispeziona",
+      "downloadAria": "Scarica {{filename}}",
+      "inspectAria": "Ispeziona {{filename}}",
+      "deleteAria": "Elimina {{filename}}",
+      "downloadFailed": "Download non riuscito: {{status}}"
+    }
+  },
+  "schedule": {
+    "updated": "Pianificazione dei backup aggiornata",
+    "loading": "Caricamento della pianificazione...",
+    "title": "Pianificazione dei backup automatici",
+    "description": "Configura i backup ricorrenti. L'engine esegue la pianificazione; la passphrase è derivata dal segreto dell'istanza.",
+    "enableAria": "Abilita i backup automatici",
+    "enabled": "Abilitata",
+    "disabled": "Disabilitata",
+    "cronLabel": "Espressione cron",
+    "cronPlaceholder": "0 2 * * *",
+    "cronPreview": {
+      "empty": "—",
+      "dailyMidnight": "Ogni giorno a mezzanotte",
+      "daily0200": "Ogni giorno alle 02:00",
+      "daily0300": "Ogni giorno alle 03:00",
+      "weeklySundayMidnight": "Ogni domenica a mezzanotte",
+      "weeklyMondayMidnight": "Ogni lunedì a mezzanotte",
+      "monthlyFirstMidnight": "Il 1° di ogni mese a mezzanotte",
+      "dailyAt": "Ogni giorno alle {{time}}"
+    },
+    "retentionLabel": "Conservazione (giorni)",
+    "retentionDescription": "I backup più vecchi di questo valore vengono eliminati automaticamente.",
+    "dualControlAria": "Richiedi il doppio controllo per il ripristino",
+    "dualControlLabel": "Richiedi il doppio controllo per il ripristino",
+    "dualControlDescription": "Se abilitato, un ripristino avviato da QUESTA CONSOLE deve essere approvato da un secondo amministratore, diverso dal primo, prima di essere eseguito. Disattivarlo viene registrato e ha effetto un'ora dopo: il gate non si può rimuovere nella stessa sessione del ripristino che protegge; riabilitarlo annulla una rimozione in sospeso. Non copre `olivares dr restore` sull'host, che sostituisce un parco fuori da questo gate e registra invece un operatore dichiarato (i parchi Postgres si ripristinano solo così). Lascialo disattivato se lavori da solo.",
+    "dualControlDisarmPending": "Rimozione richiesta: registrata, ha effetto {{when}}. Fino ad allora un ripristino richiede ancora un secondo amministratore. Riabilita per annullare.",
+    "dualControlDisarmRequestedBy": "Richiesta da {{who}}.",
+    "save": "Salva pianificazione"
+  },
+  "trigger": {
+    "started": "Backup avviato",
+    "title": "Crea backup",
+    "description": "Crea uno snapshot cifrato di Olivares AI.",
+    "notes": "Note",
+    "notesPlaceholder": "Descrizione facoltativa di questo backup",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Usata per cifrare il bundle del backup.",
+    "start": "Avvia backup"
+  },
+  "job": {
+    "initializing": "Inizializzazione",
+    "status": {
+      "running": "In esecuzione",
+      "completed": "Completato",
+      "failed": "Non riuscito"
+    },
+    "progressAria": "{{phase}} {{progress}}%",
+    "complete": "{{progress}}% completato"
+  },
+  "pending": {
+    "title": "Ripristini in attesa di approvazione (doppio controllo)",
+    "requestedByPrefix": "Richiesto da",
+    "approveRestore": "Approva e ripristina",
+    "approved": "Ripristino approvato",
+    "dialogTitle": "Approva ripristino",
+    "dialogDescription": "Stai approvando un ripristino richiesto da {{initiator}}. Devi essere un amministratore diverso da chi lo ha richiesto.",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Inserisci la passphrase con cui è stato creato il backup.",
+    "confirmTitle": "Conferma il ripristino",
+    "confirmDescription": "Una volta verificato, sovrascriverà tutti i dati attuali con il contenuto del backup. L'operazione non può essere annullata.",
+    "confirmLabel": "Approva e ripristina ora"
+  },
+  "restore": {
+    "notAuthorized": "Non autorizzato",
+    "uploadFailed": "Caricamento non riuscito",
+    "started": "Ripristino avviato",
+    "title": "Ripristina da backup",
+    "description": "Carica un file .drbundle per ripristinare lo stato di Olivares AI.",
+    "apply": "Applica ripristino",
+    "confirmTitle": "Conferma il ripristino",
+    "confirmDescription": "Sovrascriverà tutti i dati attuali con il contenuto del backup. L'operazione non può essere annullata.",
+    "confirmPhrase": "RESTORE",
+    "confirmLabel": "Ripristina ora",
+    "confirmSummaryPrefix": "Ripristino da",
+    "confirmSummarySuffix": "con {{count}} tenant.",
+    "awaitingTitle": "In attesa di un secondo approvatore",
+    "awaitingDescription": "Il doppio controllo è abilitato. Questo ripristino non verrà eseguito finché un amministratore diverso non lo approva e fornisce la passphrase dalla scheda Backup.",
+    "requestId": "ID della richiesta",
+    "selectFile": "Seleziona un file .drbundle",
+    "chooseFile": "Scegli file",
+    "passphrase": "Passphrase",
+    "passphraseDescription": "Inserisci la passphrase usata alla creazione di questo backup.",
+    "manifestTitle": "Manifest del bundle",
+    "manifest": {
+      "file": "File",
+      "engine": "Engine",
+      "created": "Creato",
+      "tenants": "Tenant",
+      "keys": "Chiavi"
+    }
+  },
+  "inspect": {
+    "title": "Dettaglio del backup",
+    "description": "Manifest decodificato del bundle sigillato: esattamente ciò che un ripristino riporterebbe.",
+    "filename": "Nome file",
+    "size": "Dimensione",
+    "engine": "Engine",
+    "createdAt": "Creato",
+    "tenants": "Tenant",
+    "keys": "Chiavi sigillate",
+    "empty": "Nessuno",
+    "loadFailed": "Impossibile caricare il dettaglio del backup."
+  },
+  "empty": {
+    "backup": {
+      "title": "Nessuno snapshot di backup creato",
+      "description": "Crea un backup cifrato da questa console."
+    }
+  }
+}

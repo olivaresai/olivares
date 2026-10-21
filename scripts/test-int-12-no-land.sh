@@ -31,6 +31,8 @@ mkdir -p "$_tmp_base"
 TMP="$(mktemp -d "$_tmp_base/int-12.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
+# The overlay history the subject counts on is the bench's own (stage_hub), never one inherited from the caller.
+unset HUB
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass+1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail+1)); }
 
@@ -60,6 +62,39 @@ stage() {
   done <<DEPS
 $(grep -oE 'scripts/lib/[a-z0-9._-]+\.sh' "$CHECK" | sed 's#.*/##' | sort -u)
 DEPS
+  stage_hub linear
+}
+
+# The record pins commits of the old hub history, which this repository does not carry (it
+# starts from a later line), so the bench cannot count them in the real tree. It builds its own
+# hub: two commits chained pin -> mid -> overlay-main pin (distance 2), or `divergent`, where the
+# overlay-main pin is NOT a descendant of the pin. The staged record is rewritten to name them.
+stage_hub() {
+  local mode="$1" tree c1 c2 c3
+  rm -rf "$TMP/hub"
+  git init -q "$TMP/hub"
+  git -C "$TMP/hub" config user.name "INT-12 fixture"
+  git -C "$TMP/hub" config user.email "int12@example.invalid"
+  tree="$(git -C "$TMP/hub" mktree </dev/null)"
+  c1="$(printf 'pin\n' | git -C "$TMP/hub" commit-tree "$tree")"
+  if [ "$mode" = divergent ]; then
+    c2="$(printf 'other root\n' | git -C "$TMP/hub" commit-tree "$tree")"
+    c3="$(printf 'overlay\n' | git -C "$TMP/hub" commit-tree "$tree" -p "$c2")"
+  else
+    c2="$(printf 'mid\n' | git -C "$TMP/hub" commit-tree "$tree" -p "$c1")"
+    c3="$(printf 'overlay\n' | git -C "$TMP/hub" commit-tree "$tree" -p "$c2")"
+  fi
+  PIN58="$c1"
+  python3 - "$TMP/tree/design/$(basename "$ACTA")" "$c1" "$c3" <<'PY'
+import re, sys
+p, pin, ovl = sys.argv[1:4]
+t = open(p, encoding="utf-8").read()
+for key, val in (("int-12-pin", pin), ("overlay-main-pin", ovl), ("int-12-pin-behind-overlay-main-pin", "2")):
+    t, n = re.subn(rf"^{key}:.*$", f"{key}: {val}", t, count=1, flags=re.M)
+    if n != 1:
+        sys.exit(f"record lost {key}")
+open(p, "w", encoding="utf-8").write(t)
+PY
 }
 
 # ⛔ EL ACTA VIVA YA DICE `closed`, ASI QUE EL CAMINO ABIERTO NECESITA SU PROPIO FIXTURE O DEJA DE
@@ -97,7 +132,7 @@ run() {
     if [ "$allow_state" != unset ]; then
       export OLIVARES_INT12_ALLOW_NO_OVERLAY="$allow_state"
     fi
-    OLIVARES_ROOT="$TMP/tree" OLIVARES_HUB_GIT_DIR="$ROOT" OLIVARES_ACT_ID="$OLIVARES_ACT_ID" \
+    OLIVARES_ROOT="$TMP/tree" OLIVARES_HUB_GIT_DIR="${HUB:-$TMP/hub}" OLIVARES_ACT_ID="$OLIVARES_ACT_ID" \
       bash "$TMP/tree/scripts/check-int-12-no-land.sh"
   ) >"$TMP/out" 2>"$TMP/err" || rc=$?
   printf '%s\n' "$rc" >"$TMP/rc"
@@ -217,7 +252,7 @@ else bad "missing AllowsAdditionalActiveIdP stayed CLEAN rc=$(cat "$TMP/rc") ($(
 
 stage_abierto
 python3 - "$TMP/tree/design/$(basename "$ACTA")" <<'PY'
-import sys
+import re, sys
 p = sys.argv[1]
 t = open(p, encoding="utf-8").read()
 # Present the #58 pin as if it were hub main (no regression).
@@ -225,7 +260,7 @@ hub = None
 for ln in t.splitlines():
     if ln.startswith("hub-main-sha:"):
         hub = ln.split(":",1)[1].strip()
-t = t.replace("int-12-pin: 76221568428d8e4c882731d8660b787b63ea9826", f"int-12-pin: {hub}")
+t = re.sub(r"^int-12-pin:.*$", f"int-12-pin: {hub}", t, count=1, flags=re.M)
 open(p, "w", encoding="utf-8").write(t)
 PY
 run unset 1
@@ -273,6 +308,7 @@ fake_overlay "$PIN_MOVIDO" con58
 run "$TMP/ent" unset
 if [ "$(cat "$TMP/rc")" = "0" ] &&
    grep -q 'CLEAN — ent#58 closed' "$TMP/out" &&
+   grep -q 'behind overlay-main pin' "$TMP/out" &&
    ! grep -q 'NOTICE' "$TMP/out"; then
   ok "closed: with refs/pull/58/head present and not landed, CLEAN without NOTICE"
 else bad "closed with the pull ref present should be CLEAN and silent rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
@@ -295,7 +331,7 @@ else bad "closed without overlay and without opt-in should be exit 2 rc=$(cat "$
 # ⛔ EL HALLAZGO QUE ESTE DOCUMENTO EXISTE PARA NOMBRAR, primera forma: el gitlink `public` de
 #    `origin/main` ES el pin de #58, o sea que el arbol de #58 esta puesto.
 stage
-fake_overlay 76221568428d8e4c882731d8660b787b63ea9826 sin58
+fake_overlay "$PIN58" sin58
 run "$TMP/ent" unset
 if [ "$(cat "$TMP/rc")" = "1" ] && grep -q "public gitlink IS the #58 pin" "$TMP/err"; then
   ok "closed: overlay main carrying the #58 pin is the finding"
@@ -388,6 +424,102 @@ mutar 'snapshot-on-overlay-main: deliberately-ungated' 'snapshot-on-overlay-main
 run unset 1
 if [ "$(cat "$TMP/rc")" = "1" ]; then ok "closed: mutant (Snapshot already gated) is still killed"
 else bad "closed+Snapshot gated stayed CLEAN rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+
+printf '\n--- the pin range is counted on the overlay tree, or its absence is said\n'
+
+# This repository does not carry the commits the record pins. A tree like that cannot count the
+# range: an overlay-free runner that opted in gets a NOTICE and the static verdict; anyone else
+# gets COULD NOT LOOK naming the opt-in. Both rows run on an empty hub, open and closed record.
+git init -q "$TMP/nohub"
+for form in stage_abierto stage; do
+  "$form"
+  HUB="$TMP/nohub" run unset 1
+  if [ "$(cat "$TMP/rc")" = "0" ] &&
+     grep -q 'NOTICE.*pin range not re-counted' "$TMP/out" &&
+     grep -q 'NOTICE.*live overlay remasure skipped' "$TMP/out" &&
+     grep -q 'CLEAN' "$TMP/out"; then
+    ok "$form: pins absent from the overlay tree, opt-in: NOTICE plus CLEAN"
+  else bad "$form: absent pins with opt-in should be NOTICE+CLEAN rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
+
+  "$form"
+  HUB="$TMP/nohub" run unset unset
+  if [ "$(cat "$TMP/rc")" = "2" ] &&
+     grep -q 'COULD NOT LOOK.*not commits of.*OLIVARES_INT12_ALLOW_NO_OVERLAY=1' "$TMP/err"; then
+    ok "$form: pins absent from the overlay tree, no opt-in: COULD NOT LOOK naming the opt-in"
+  else bad "$form: absent pins without opt-in should be exit 2 rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+done
+
+# A shallow clone cannot tell "the commits never existed" from "the clone is too short to hold them",
+# so absence read from one is not a verdict: it stays COULD NOT LOOK even with the opt-in.
+git init -q "$TMP/deep"
+git -C "$TMP/deep" config user.name "INT-12 fixture"
+git -C "$TMP/deep" config user.email "int12@example.invalid"
+git -C "$TMP/deep" commit -q --allow-empty -m one
+git -C "$TMP/deep" commit -q --allow-empty -m two
+git clone -q --depth 1 "file://$TMP/deep" "$TMP/shallow"
+stage_abierto
+HUB="$TMP/shallow" run unset 1
+if [ "$(cat "$TMP/rc")" = "2" ] && grep -q 'COULD NOT LOOK.*shallow' "$TMP/err"; then
+  ok "shallow overlay tree, pins absent: COULD NOT LOOK even with the opt-in"
+else bad "a shallow tree without the pins should be exit 2 rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
+
+# An unreadable hub is not an absent history: only a readable git tree that lacks the commits may
+# skip, so a path that is not a repository (or does not exist) stays COULD NOT LOOK even with the opt-in,
+# and so does a tree that has one of the two pins (the record or the tree is damaged).
+mkdir -p "$TMP/notgit"
+for hubdir in "$TMP/notgit" "$TMP/no-such-dir"; do
+  stage_abierto
+  HUB="$hubdir" GIT_CEILING_DIRECTORIES="$TMP" run unset 1
+  if [ "$(cat "$TMP/rc")" = "2" ] && grep -q 'COULD NOT LOOK.*is not a git repository' "$TMP/err"; then
+    ok "hub path $(basename "$hubdir"): not a repository is COULD NOT LOOK even with the opt-in"
+  else bad "hub path $(basename "$hubdir") should be exit 2 rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
+done
+
+for key in int-12-pin overlay-main-pin; do
+  stage_abierto
+  mutar "$key: $(sed -n "s/^$key: *//p" "$TMP/tree/design/$(basename "$ACTA")")" \
+        "$key: 0123456789012345678901234567890123456789"
+  run unset 1
+  if [ "$(cat "$TMP/rc")" = "2" ] && grep -q 'COULD NOT LOOK.*only one of' "$TMP/err"; then
+    ok "only one pin in the overlay tree ($key missing) is COULD NOT LOOK even with the opt-in"
+  else bad "a half-present pair ($key missing) should be exit 2 rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
+done
+
+# With a configured overlay and no pins in the tree, the verdict must not say the range was counted:
+# the CI step reads that phrase as "both halves measured".
+stage_abierto
+fake_overlay
+HUB="$TMP/nohub" run "$TMP/ent" 1
+if [ "$(cat "$TMP/rc")" = "0" ] &&
+   grep -q 'NOTICE.*pin range not re-counted' "$TMP/out" &&
+   ! grep -q 'behind overlay-main pin' "$TMP/out"; then
+  ok "open: overlay present, pins absent: CLEAN without claiming a recount"
+else bad "open with overlay and absent pins should be CLEAN without the recount phrase rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
+
+stage
+fake_overlay "$PIN_MOVIDO" con58
+HUB="$TMP/nohub" run "$TMP/ent" 1
+if [ "$(cat "$TMP/rc")" = "0" ] &&
+   grep -q 'CLEAN — ent#58 closed' "$TMP/out" &&
+   ! grep -q 'behind overlay-main pin' "$TMP/out"; then
+  ok "closed: overlay present, pins absent: CLEAN without claiming a recount"
+else bad "closed with overlay and absent pins should be CLEAN without the recount phrase rc=$(cat "$TMP/rc") ($(cat "$TMP/err") $(cat "$TMP/out"))"; fi
+
+# And the count stays a check when the pins ARE there: a recorded distance that is not the live one,
+# and a pin that is not an ancestor of the overlay-main pin, are findings even with the opt-in.
+stage_abierto
+mutar 'int-12-pin-behind-overlay-main-pin: 2' 'int-12-pin-behind-overlay-main-pin: 5'
+run unset 1
+if [ "$(cat "$TMP/rc")" = "1" ] && grep -q 'live pin-behind-overlay-main-pin 2 != measured 5' "$TMP/err"; then
+  ok "a recorded distance that is not the live one is the finding"
+else bad "a wrong recorded distance should be rc 1 rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
+
+stage_abierto
+stage_hub divergent
+run unset 1
+if [ "$(cat "$TMP/rc")" = "1" ] && grep -q 'is not an ancestor of overlay-main-pin' "$TMP/err"; then
+  ok "a pin that is not an ancestor of the overlay-main pin is the finding"
+else bad "a non-ancestor pin should be rc 1 rc=$(cat "$TMP/rc") ($(cat "$TMP/err"))"; fi
 
 printf '\ncheck-int-12-no-land selftest: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

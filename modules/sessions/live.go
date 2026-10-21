@@ -31,8 +31,9 @@ import (
 // (connectors/codex/session) — the SDK has no typed field for either, so the wire is
 // the label map.
 const (
-	labelEngine  = "engine"
-	labelPosture = "posture"
+	labelEngine        = "engine"
+	labelPosture       = "posture"
+	labelProjectFolder = "project_folder"
 	// postureObserved is the WEAKER of the two postures; see the fold in onEdge.
 	postureObserved = "observed"
 )
@@ -41,6 +42,7 @@ const (
 	resIdentityAgent    = "identity.agent" // session→agent attribution edge (OBS-09)
 	forensicFindingKind = "forensic"       // context-compaction continuity finding (ANT2-09)
 	maxSummaryLen       = 256              // defensive bound on the derived summary
+	maxProjectLen       = 128              // defensive bound on a producer's project name
 )
 
 // onEdge folds one of a session's actions into its live state: it bumps the
@@ -333,15 +335,15 @@ func edgeTitle(edge sdkmodel.EdgeObservation) string {
 	}
 }
 
-// clampSummary bounds a derived summary to maxSummaryLen bytes on a rune boundary:
-// it trims trailing bytes until the prefix is valid UTF-8, dropping any rune the byte
-// cut left incomplete (its lead byte too, not only continuation bytes), so a long
-// finding title never becomes an unbounded or invalid-UTF-8 value in the live row.
-func clampSummary(s string) string {
-	if len(s) <= maxSummaryLen {
+// clampText bounds a producer's text to limit bytes on a rune boundary: it trims
+// trailing bytes until the prefix is valid UTF-8, dropping any rune the byte cut left
+// incomplete (its lead byte too, not only continuation bytes), so a long finding title
+// or project name never becomes an unbounded or invalid-UTF-8 value in the live row.
+func clampText(s string, limit int) string {
+	if len(s) <= limit {
 		return s
 	}
-	b := s[:maxSummaryLen]
+	b := s[:limit]
 	for len(b) > 0 && !utf8.ValidString(b) {
 		b = b[:len(b)-1]
 	}
@@ -388,6 +390,12 @@ func applyLiveEdge(rec model.Record, scope liveScope, edge sdkmodel.EdgeObservat
 	} else if v := edge.Labels[labelEngine]; v != "" {
 		rec[colEngine] = v
 	}
+	// The project is the folder a hook saw the session work in (the only producer of
+	// this label). An absent label never clears a known one; a new folder (the agent
+	// changed directory) replaces it.
+	if v := edge.Labels[labelProjectFolder]; v != "" {
+		rec[colProject] = clampText(v, maxProjectLen)
+	}
 	if v := edge.Labels[labelPosture]; v != "" {
 		if rec.String(colPosture) != postureObserved {
 			rec[colPosture] = v
@@ -422,7 +430,7 @@ func applyLiveFinding(rec model.Record, f sdkmodel.FindingReport, at time.Time) 
 	// Title is a safe-to-display summary by contract, never raw transcript.
 	// Empty until such metadata arrives; NEVER an LLM-fabricated summary.
 	if f.Kind == forensicFindingKind && f.Title != "" {
-		rec[colSummary] = clampSummary(f.Title)
+		rec[colSummary] = clampText(f.Title, maxSummaryLen)
 	}
 	advanceLast(rec, at)
 }

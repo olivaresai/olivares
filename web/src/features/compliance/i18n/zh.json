@@ -118,7 +118,7 @@
     "title": "智能体风险登记册",
     "description": "按智能体划分的 EU AI Act 风险层级，并与 NIST AI RMF 职能交叉映射。该启发式规则从不指派不可接受层级——该层级仅在人工审查后出现。",
     "empty": "尚未对任何智能体进行分类。",
-    "emptyHint": "代理会连同其分级所对应的风险等级列在这里。为代理完成分级后即可看到。",
+    "emptyHint": "智能体会连同其分级所对应的风险等级列在这里。为智能体完成分级后即可看到。",
     "columns": {
       "agent": "智能体",
       "tier": "层级",
@@ -206,8 +206,8 @@
     "rowUnscheduled": "无计划：此处不会按时间表处置任何数据。",
     "rowUnscheduledAdvised": "无计划：此处不会按时间表处置任何数据。参考建议：{{days}} 天。",
     "basis": "依据",
-    "disclosure": "{{days}} 天后各处均已删除——这是可以如实对外声明的期限，已计入服务商自身的下限。",
-    "disclosureUnknown": "服务商的保留下限未知，因此无法为该类别声明“多少天后各处均已删除”。",
+    "disclosure": "{{days}} 天后各处均已删除——这是可以如实对外声明的期限，已计入提供商自身的下限。",
+    "disclosureUnknown": "提供商的保留下限未知，因此无法为该类别声明“多少天后各处均已删除”。",
     "regulatoryFloor": "监管下限：{{days}} 天（{{basis}}，{{mode}} 模式）。更新的数据不会被删除。",
     "approvalRef": "批准",
     "edit": "编辑计划",
@@ -464,10 +464,10 @@
     "accountLeg": "账户删除阶段",
     "providerLeg": "提供商删除阶段",
     "custody": "Custody",
-    "noCustody": "No custody events recorded for this request.",
+    "noCustody": "此请求没有记录任何保管事件。",
     "approvedBy": "approved by {{list}}",
     "anchored": "ledger #{{seq}} · {{hash}}",
-    "unanchored": "NOT anchored to the ledger — recorded, not provable"
+    "unanchored": "未锚定到账本——已记录，但无法证明"
   },
   "calendar": {
     "title": "监管日历",
@@ -499,7 +499,7 @@
     }
   },
   "claudeFiles": {
-    "title": "提供方文件存储",
+    "title": "提供商文件存储",
     "noAccess": "你没有查看文件存储清单的权限。",
     "noAccessHint": "此标签页清点文件存储为受治理会话保存的文件。请向管理员申请文件存储读取权限。",
     "col": {

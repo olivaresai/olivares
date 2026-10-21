@@ -285,7 +285,7 @@ en un host donde el hook esté marcado como confiable.
 | **Control console > Connectors** (`/console`) | Fuente, modo, frecuencia, configuración no secreta y acciones Test/Save/Reload. | El alta persistida aparece de inmediato; los datos no. |
 | **Health > Connectors** (`/health`) | Estado del conector, mensaje, tendencia y última actividad. | Tras recargar el roster. |
 | **Observability > Ingestion** (`/observability`) | Contadores por `olivares.codex`, tipos de observación y primera/última recepción. | Después de que `Gather` emita datos. Son contadores globales desde el arranque y se reinician. |
-| **Cost & FinOps** (`/finops`) | Uso estimado de Analytics y, si se habilita, coste diario facturado. | Credencial válida, `workspace_id` y APIs autorizadas; `costs` requiere su opt-in. |
+| **Budgets** (`/stored-budgets`) | Consumo frente a cada límite de presupuesto guardado, calculado a partir del uso estimado de Analytics y, si se habilita, del coste diario facturado. | Credencial válida, `workspace_id` y APIs autorizadas; `costs` requiere su opt-in. |
 | **Security** (`/security`) | Hallazgos de adopción, superficies enterprise no disponibles y análisis estructural opt-in de Compliance. | Después de una recogida; los 403/404 de superficies enterprise se materializan como postura, no como éxito. |
 | **Sessions** (`/sessions`) | Sesiones y timeline con acción, modelo, identidad, coste y postura. | Procede del hook gobernado. La fuente batch por sí sola no crea la sesión en vivo. |
 | **Audit** (`/audit`) | Evidencia de actividad importada y decisiones del PEP ancladas en el ledger. | Una vez recibidos logs o decisiones atribuibles. |
@@ -296,8 +296,6 @@ publique en esa pantalla.
 
 <img class="light:sl-hidden" src="/console/health-dark.png" alt="Liveness, fiabilidad y dependencias de tu infraestructura — derivado de la actividad observada y del barrido de inactividad, nunca sondeando la infraestructura.">
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="Liveness, fiabilidad y dependencias de tu infraestructura — derivado de la actividad observada y del barrido de inactividad, nunca sondeando la infraestructura.">
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Coste de tokens en todo el estate — tendencias, imputación, conciliación, presupuestos y previsión. Las cifras son tal cual las reporta el ledger de FinOps.">
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Coste de tokens en todo el estate — tendencias, imputación, conciliación, presupuestos y previsión. Las cifras son tal cual las reporta el ledger de FinOps.">
 <img class="light:sl-hidden" src="/console/security-dark.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
 <img class="dark:sl-hidden" src="/console/security-light.png" alt="Hallazgos de guardrail, la postura de enforcement, la cola de anomalías y el forense de incidentes con evidencias cuya manipulación puede detectarse. El plano es detective por defecto: registra, no bloquea por su cuenta salvo que el enforcement esté habilitado y gobernado.">
 

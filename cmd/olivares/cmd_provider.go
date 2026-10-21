@@ -43,8 +43,9 @@ var providerKindChoices = []string{
 
 func newProviderCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "provider",
-		Short: "API-key accounts sessions can use instead of a tool's own sign-in",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "provider",
+		Short:       "API-key accounts sessions can use instead of a tool's own sign-in",
 		Long: "provider is where an API key becomes something the product owns: the engine seals it,\n" +
 			"reports a four-character hint, can test the connection, and hands it to a session at\n" +
 			"launch. Nothing here needs a variable in the server's shell.\n\n" +
@@ -121,8 +122,9 @@ func newProviderAddCmd() *cobra.Command {
 		errNotAProviderRecord                      = "the engine did not return a provider record"
 	)
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Register a provider credential with the engine",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "add",
+		Short:       "Register a provider credential with the engine",
 		Long: "add seals one provider credential in the engine and returns its reference and a\n" +
 			"four-character hint. The value is never returned, logged or printed again.\n\n" +
 			"Without --kind the kind comes from the key (sk-ant-… Anthropic, xai-… xAI, sk-… OpenAI;\n" +
@@ -259,9 +261,10 @@ func newProviderListCmd() *cobra.Command {
 		state, kind string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the registered provider credentials",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the registered provider credentials",
 		Long: "ls shows each registered provider, its kind, the four-character hint, and what its\n" +
 			"last connection test found. A provider nobody has tested says so; it never reads as\n" +
 			"working because it was registered.",
@@ -314,11 +317,12 @@ func providerListQuery(state, kind string) string {
 func newProviderGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:     "get <provider-ref>",
-		Short:   "Show one registered provider",
-		Long:    "get prints one provider's kind, name, endpoint, hint and last test result. Never its value.",
-		Example: "  olivares provider get prv_01J8ABCDEF -o json",
-		Args:    exactRef("provider-ref"),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <provider-ref>",
+		Short:       "Show one registered provider",
+		Long:        "get prints one provider's kind, name, endpoint, hint and last test result. Never its value.",
+		Example:     "  olivares provider get prv_01J8ABCDEF -o json",
+		Args:        exactRef("provider-ref"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -334,7 +338,8 @@ func newProviderGetCmd() *cobra.Command {
 func newProviderTestCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use: "test <provider-ref>",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "test <provider-ref>",
 		// The exit codes are in the SUMMARY and not only in the Long help, and that
 		// is the whole point of the wording: the published CLI reference renders a
 		// command's Short and never its Long, so a contract stated only below is
@@ -372,11 +377,12 @@ func newProviderSetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var defaultModel string
 	cmd := &cobra.Command{
-		Use:     "set <provider-ref>",
-		Short:   "Choose the default model for new sessions on this provider",
-		Long:    "Set the default model for future sessions, or pass an empty --default-model to clear it; inspect providers with olivares provider ls.",
-		Example: "  olivares provider set <provider-ref> --default-model <model>",
-		Args:    exactRef("provider-ref"),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "set <provider-ref>",
+		Short:       "Choose the default model for new sessions on this provider",
+		Long:        "Set the default model for future sessions, or pass an empty --default-model to clear it; inspect providers with olivares provider ls.",
+		Example:     "  olivares provider set <provider-ref> --default-model <model>",
+		Args:        exactRef("provider-ref"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !cmd.Flags().Changed("default-model") {
 				return exitcode.New(exitcode.Usage, fmt.Errorf("pass --default-model MODEL (or --default-model '' to clear it)"))
@@ -399,8 +405,9 @@ func newProviderRotateCmd() *cobra.Command {
 		keyEnv string
 	)
 	cmd := &cobra.Command{
-		Use:   "rotate <provider-ref>",
-		Short: "Replace a provider's credential in place",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rotate <provider-ref>",
+		Short:       "Replace a provider's credential in place",
 		Long: "rotate reseals a new value under the same provider reference, so every profile bound\n" +
 			"to it keeps working and the NEXT session launched uses the new credential. A session\n" +
 			"already running keeps the credential it started with.\n\n" +
@@ -432,8 +439,9 @@ func newProviderBindCmd() *cobra.Command {
 		unbind  bool
 	)
 	cmd := &cobra.Command{
-		Use:   "bind <provider-ref>",
-		Short: "Make a provider profile launch with this credential",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "bind <provider-ref>",
+		Short:       "Make a provider profile launch with this credential",
 		Long: "bind joins a registered provider to a provider profile. From then on a session\n" +
 			"launched under that profile resolves its credential from this provider, and the host's\n" +
 			"own credential variables are not consulted for it.\n\n" +
@@ -517,9 +525,10 @@ func newProviderRemoveCmd() *cobra.Command {
 		yes bool
 	)
 	cmd := &cobra.Command{
-		Use:     "rm <provider-ref>",
-		Aliases: []string{"revoke"},
-		Short:   "Withdraw a provider credential for good",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <provider-ref>",
+		Aliases:     []string{"revoke"},
+		Short:       "Withdraw a provider credential for good",
 		Long: "rm destroys the sealed credential and marks the provider revoked. It is irreversible\n" +
 			"for that reference.\n\n" +
 			"The record itself is KEPT, and so is every profile binding that names it: a session\n" +

@@ -4,7 +4,7 @@ description: "The secure-by-design posture behind Olivares AI — why read-first
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL air-gap transfer also require Business.
 :::
 
 Olivares AI is a security product that runs **inside the customer's own
@@ -152,7 +152,7 @@ not give.
 :::note[Two paths off-box: pull, and a real push]
 The verifiable ledger reaches a SIEM two ways. The **pull** export (`GET
 /v1/audit/export`) requires Business and is the artifact an operator archives. A
-**push** is real when configured: an `audit.recorded` eventing subscription starts a
+**push** requires Business too, and is real when configured: an `audit.recorded` eventing subscription starts a
 per-tenant ledger pump that walks each sealed record and delivers it **at-least-once**
 through the durable, SSRF-guarded, retrying/dead-lettering transport
 (`modules/siemforward/forwarder.go`, wired in `cmd/olivares/boot.go`). `NopForwarder`

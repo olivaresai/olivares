@@ -5,9 +5,16 @@
 package sessions
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions/egress"
 )
 
@@ -83,5 +90,103 @@ func TestCodexSandboxDetailNamesTheNetworkBoundary(t *testing.T) {
 		if got := codexSandboxDetail(CreateRunParams{codexSandboxFallback: tc.fallback}, tc.spec); got != tc.want {
 			t.Errorf("fallback=%v confined=%v: %q, want %q", tc.fallback, tc.spec.NetworkPolicy != nil, got, tc.want)
 		}
+	}
+}
+
+// The proxy forwards only the key the record mint put in the child's environment:
+// the policy carries its SHA-256, and only for the kinds whose tool sends the key
+// as a bearer or key header the proxy compares (Claude Code, Codex).
+func TestLaunchSpecNetworkPolicyPinsTheBoundKey(t *testing.T) {
+	m := New(WithConfinement([]string{"/engine-data"}, true))
+	const key = "sk-own-0123456789"
+	for _, tc := range []struct {
+		driver, kind, env string
+		pinned            bool
+	}{
+		{"claude", "anthropic", "ANTHROPIC_API_KEY", true},
+		{"codex", "openai", "OPENAI_API_KEY", true},
+		{"codex", "openai_compatible", "OPENAI_API_KEY", true},
+		{"codex", "ollama", "", false},
+		{"gemini-cli", "gemini", "GEMINI_API_KEY", false}, // the key header is not measured: not checked
+		{"claude", "anthropic", "", false},                // no key in the environment: nothing to pin
+	} {
+		var providerEnv []EnvVar
+		if tc.env != "" {
+			providerEnv = []EnvVar{{Name: tc.env, Value: " " + key + "\n"}, {Name: "ANTHROPIC_BASE_URL", Value: "https://selected.example/v1"}}
+		}
+		spec := m.childSpec(CreateRunParams{WorkspaceDir: "/work", ProviderHome: &ProviderHomeSnapshot{Driver: tc.driver, AuthSource: AuthSourceManagedInjection}},
+			childDecision{cred: Credential{bound: BoundProvider{Kind: tc.kind, Endpoint: "https://selected.example/v1"}}, providerEnv: providerEnv})
+		if spec.NetworkPolicy == nil {
+			t.Fatalf("%s/%s: no network policy", tc.driver, tc.kind)
+		}
+		want := [sha256.Size]byte{}
+		if tc.pinned {
+			want = sha256.Sum256([]byte(key))
+		}
+		if spec.NetworkPolicy.CredentialSHA256 != want {
+			t.Errorf("%s/%s env=%q: digest %x, want %x", tc.driver, tc.kind, tc.env, spec.NetworkPolicy.CredentialSHA256, want)
+		}
+		// The helper's policy travels in argv: neither the digest nor the callback may be in it.
+		raw, err := json.Marshal(spec.NetworkPolicy)
+		if err != nil || strings.Contains(string(raw), "CredentialSHA256") || strings.Contains(string(raw), "OnRefusal") {
+			t.Errorf("%s/%s: policy JSON %s (%v)", tc.driver, tc.kind, raw, err)
+		}
+	}
+}
+
+// A refused key is one core Finding on the session's core Session. It names the
+// session, host and header and carries no header value.
+func TestEgressRefusalRecordsOneFindingOnTheSession(t *testing.T) {
+	for _, be := range profileBackends(t) {
+		t.Run(be.name, func(t *testing.T) {
+			ctx := context.Background()
+			fr := &fakeRunner{initSID: "core-session"}
+			m, st, _ := openProfiledRuntime(t, be, WithRunner(fr), WithCredentialSource(staticCred()))
+			tenant := ensureTenant(t, st, "egress-refusal-"+be.name)
+			config, user, _, _ := twoHomes(t)
+			prof := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: config, UserHome: user, DisplayName: "A"})
+			run, err := m.createRun(ctx, tenant, CreateRunParams{
+				Transport: TransportStreamJSON, PermissionMode: "default", Isolation: IsolationNative,
+				Actor: "user:u1", ActorKind: model.ActorUser, ProviderProfileRef: prof.Ref,
+			})
+			if err != nil || run.CoreSessionID == "" {
+				t.Fatalf("run: %+v (%v)", run, err)
+			}
+			policy := &egress.Policy{Providers: []string{"https://api.example"}, CredentialSHA256: sha256.Sum256([]byte("sk-own"))}
+			m.watchEgressRefusals(tenant, run.RunRef, policy)
+			if policy.OnRefusal == nil {
+				t.Fatal("a policy with a key digest has no refusal callback")
+			}
+			if err := policy.OnRefusal(egress.Refusal{Host: "api.example", Header: "X-Api-Key"}); err != nil {
+				t.Fatal(err)
+			}
+			var found []model.Finding
+			if err := st.View(ctx, tenant, func(sc store.Scope) error {
+				var err error
+				found, _, err = sc.Findings().List(ctx, model.Query{Filters: []model.Filter{eq("subject_kind", "session"), eq("subject_id", run.CoreSessionID)}, Limit: 10})
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(found) != 1 {
+				t.Fatalf("%d findings on the session, want 1", len(found))
+			}
+			f := found[0]
+			text := fmt.Sprint(f.Title, f.Kind, f.Metadata)
+			for _, want := range []string{run.RunRef, "api.example", "X-Api-Key"} {
+				if !strings.Contains(text, want) {
+					t.Errorf("finding does not name %q: %s", want, text)
+				}
+			}
+			if f.Severity != model.SeverityHigh || f.Status != model.FindingOpen || f.Source != Name {
+				t.Errorf("finding severity %s status %s source %s", f.Severity, f.Status, f.Source)
+			}
+			// A policy without a key digest gets no callback.
+			bare := &egress.Policy{Providers: []string{"https://api.example"}}
+			m.watchEgressRefusals(tenant, run.RunRef, bare)
+			if bare.OnRefusal != nil {
+				t.Error("an unkeyed policy was given a refusal callback")
+			}
+		})
 	}
 }

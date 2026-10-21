@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -40,7 +39,7 @@ func TestWorkspaceUpdateConfinementSQLite(t *testing.T) {
 
 func TestWorkspaceUpdateConfinementPostgres(t *testing.T) {
 	pg := isolatedPGSplit(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	st, err := Open(ctx, store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner,

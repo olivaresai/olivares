@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/spf13/cobra"
@@ -33,17 +34,32 @@ var paidCommands = map[string]string{
 	"orchestration":       "Orchestration",
 	"mcp pins":            "MCP tool pinning",
 	"reporting schedules": "Report scheduling",
-	"threatintel":         "The threat-intel feed",
-	"hooks":               "Hook hardening",
-	"redteam":             "Red team",
-	"finops":              "FinOps",
+	// Preserve the generic refusal wording for the previously visible report paths.
+	"reporting enterprise": "This capability",
+	"reporting branding":   "This capability",
+	"reporting templates":  "This capability",
+	"reporting signing":    "This capability",
+	"threatintel":          "The threat-intel feed",
+	"hooks":                "Hook hardening",
+	"redteam":              "Red team",
+	"finops":               "FinOps",
+	"recording":            "Session recording",
+	"collector":            "The edge collector",
+	"ddil":                 "DDIL air-gap transfer",
+	"deploy":               "Deployment",
+	// The compliance group stays open (risk, retention); these verbs are Business.
+	"compliance holds":   "Legal holds",
+	"compliance erasure": "Erasure",
+	"compliance subject": "Erasure",
 }
 
 // editionNames names the paid verbs of groups that are otherwise open: those groups
 // stay in the help, and only a refused verb gets the sentence.
 var editionNames = map[string]string{
-	"governance breakglass": "Break-glass",
-	"compliance":            "Compliance Packs",
+	"governance breakglass":        "Break-glass",
+	"compliance":                   "Compliance Packs",
+	"catalog instances transition": "Deploying a catalog entry",
+	"audit key-transition":         "Key transition",
 }
 
 // installEditionAnswers hides the paid groups in a Community build and makes every
@@ -51,22 +67,37 @@ var editionNames = map[string]string{
 func installEditionAnswers(root *cobra.Command) {
 	walkCommands(root, func(c *cobra.Command) {
 		path := commandPathWithoutBinary(c)
-		baseBusiness := thisEdition.name == "enterprise" && (path == "redteam" || path == "finops")
+		baseBusiness := thisEdition.name == "enterprise" && (path == "redteam" || path == "finops" || path == "recording" || path == "collector" || path == "ddil" || path == "deploy" || path == "compliance holds" || path == "compliance erasure" || path == "compliance subject" || strings.HasPrefix(path, "reporting "))
 		if _, paid := paidCommands[path]; paid && !thisEdition.addOnsLinked && !baseBusiness {
 			c.Hidden = true
+		}
+		// A group that refuses in PersistentPreRunE does so before cobra validates required flags.
+		if pre := c.PersistentPreRunE; pre != nil {
+			c.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+				return businessSentence(cmd, pre(cmd, args))
+			}
 		}
 		if c.RunE == nil {
 			return
 		}
 		run := c.RunE
 		c.RunE = func(cmd *cobra.Command, args []string) error {
-			err := run(cmd, args)
-			if errors.Is(err, errNotInEdition) {
-				return sentence(exitcode.Edition, "%s is a Business feature: %s", paidFeatureName(cmd), pricingURL)
-			}
-			return err
+			return businessSentence(cmd, run(cmd, args))
 		}
 	})
+}
+
+// editionRefusal is the one sentence a Business capability answers in a Community build.
+func editionRefusal(cmd *cobra.Command) error {
+	return sentence(exitcode.Edition, "%s is a Business feature: %s", paidFeatureName(cmd), pricingURL)
+}
+
+// businessSentence words errNotInEdition as editionRefusal and returns any other error unchanged.
+func businessSentence(cmd *cobra.Command, err error) error {
+	if errors.Is(err, errNotInEdition) {
+		return editionRefusal(cmd)
+	}
+	return err
 }
 
 // paidFeatureName is the feature of the nearest paid command at or above c.

@@ -166,6 +166,7 @@ func (a skillsTargetAuthority) AssignmentTargetRefs() map[string]api.EntityRef {
 		"workspace":   {CoreKind: api.CoreKindWorkspace, BodyIDField: "target_id", ResourceKind: "workspace", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsWorkspaceRead},
 		"agent_group": {CoreKind: api.CoreKindAgentGroup, BodyIDField: "target_id", ResourceKind: "agent_group", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsAgentRead},
 		"agent":       {CoreKind: api.CoreKindAgent, BodyIDField: "target_id", ResourceKind: "agent", ConcealDeniedAsNotFound: true, DeniedReadPermission: skillsAgentRead},
+		"profile":     {Kind: "sessions.provider_profile", BodyIDField: "target_id", LookupColumn: "profile_ref", ConcealDeniedAsNotFound: true},
 		"folder":      {Kind: "sessions.workspace", BodyIDField: "target_id", LookupColumn: "workspace_ref", ConcealDeniedAsNotFound: true},
 		"template":    {Kind: "sessions.template", BodyIDField: "target_id", ConcealDeniedAsNotFound: true},
 		"session":     {Kind: "sessions.run", BodyIDField: "target_id", LookupColumn: "run_ref", WorkspaceColumn: "authz_workspace_id", ConcealDeniedAsNotFound: true},
@@ -235,6 +236,11 @@ func (a skillsTargetAuthority) PrepareSkillsTarget(ctx context.Context, mc api.M
 	} else if !a.authz.Authorize(bounded, request).Allow {
 		return ctx, noop, auth.ErrRouteDenied
 	}
+	if !write {
+		if err := a.authorizeProfilePinsRead(bounded, request, t); err != nil {
+			return ctx, noop, err
+		}
+	}
 
 	prepared := skillsPreparedTarget{assignmentRequest: assignmentRequest, assignmentAuthority: assignmentAuthority, tenant: tenant, actor: p.Actor(), target: fact.stored, write: write, epoch: epoch, principal: p, request: request, authority: authority}
 	return prepared.requestContext(ctx)
@@ -268,6 +274,11 @@ func (a skillsTargetAuthority) prepareSessionTarget(ctx, bounded context.Context
 		}
 	} else if err := refusedBy(a.authz.Authorize(bounded, request)); err != nil {
 		return ctx, noop, err
+	}
+	if !write {
+		if err := a.authorizeProfilePinsRead(bounded, request, t); err != nil {
+			return ctx, noop, err
+		}
 	}
 	return prepared.requestContext(ctx)
 }
@@ -330,6 +341,17 @@ func targetWritePermission(t skills.Target, read auth.Permission, write bool) au
 		return skillsWorkspaceWrite
 	}
 	return auth.Permission(strings.TrimSuffix(string(read), ":read") + ":write")
+}
+
+// Profile pins configure all sessions using an account. Reading the profile's
+// labels does not disclose those pins: the caller must also be allowed to manage
+// that profile. Reads retain the same policy epoch as the native read decision.
+func (a skillsTargetAuthority) authorizeProfilePinsRead(ctx context.Context, request auth.Request, target skills.Target) error {
+	if target.Kind != "profile" {
+		return nil
+	}
+	request.Permission = targetWritePermission(target, request.Permission, true)
+	return refusedBy(a.authz.Authorize(ctx, request))
 }
 
 // refusedBy maps a boolean authorization decision for a session credential's
@@ -413,8 +435,14 @@ func (a skillsTargetAuthority) ResolveSkillsTarget(ctx context.Context, sc store
 	if a.st != nil || a.authz == nil {
 		return skills.StoredTarget{}, auth.ErrRouteDenied
 	}
-	if !a.authz.Authorize(ctx, auth.Request{Principal: p, Tenant: sc.Tenant(), Permission: fact.permission, Resource: fact.resource}).Allow {
+	request := auth.Request{Principal: p, Tenant: sc.Tenant(), Permission: fact.permission, Resource: fact.resource}
+	if !a.authz.Authorize(ctx, request).Allow {
 		return skills.StoredTarget{}, auth.ErrRouteDenied
+	}
+	if !write {
+		if err := a.authorizeProfilePinsRead(ctx, request, t); err != nil {
+			return skills.StoredTarget{}, err
+		}
 	}
 	return fact.stored, nil
 }
@@ -599,6 +627,9 @@ func (a skillsTargetAuthority) targetFact(ctx context.Context, sc store.Scope, t
 		permission, stored.Version, stored.WorkspaceID, resourceID = row.Permission, row.Version, row.WorkspaceID, row.ID.String()
 		if t.Kind == "folder" {
 			entity = "sessions.workspace"
+		}
+		if t.Kind == "profile" {
+			entity = "sessions.provider_profile"
 		}
 	}
 	resource := auth.ResourceFor(permission)

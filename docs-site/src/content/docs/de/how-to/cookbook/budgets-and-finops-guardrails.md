@@ -85,11 +85,8 @@ Verweigerung benennt ihren Grund. Alerts reiten auch auf dem
 Benachrichtigungs-Stream, sodass ein Slack- oder PagerDuty-[Ziel](/de/how-to/forward-audit-to-splunk/)
 die 80%-Überschreitung hört, bevor die 100%-Verweigerung erfolgt.
 
-In der Konsole zeigt **Cost & FinOps** die Ausgaben nach Dimension mit dem
-Budget-Status inline:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Die Cost-&-FinOps-Ansicht mit Ausgabentrends und Budget-Posture." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Die Cost-&-FinOps-Ansicht mit Ausgabentrends und Budget-Posture." />
+In der Konsole zeigt **Budgets** den Verbrauch gegenüber jedem Limit, mit der
+Hochrechnung der Verbrauchsrate.
 
 ## Den Ausgaben einen Nenner geben: Outcomes
 

@@ -6,6 +6,9 @@ package sessions
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -77,6 +80,45 @@ func TestResultFrameUsageReadsBothSpellingsAndTheCost(t *testing.T) {
 	}
 	if _, ok := resultFrameUsage([]byte(`{"type":"result","subtype":"success","result":"OK"}`)); ok {
 		t.Fatal("a result frame with no usage was read as reporting zero")
+	}
+	for _, window := range []string{`200000`, `1000000`, `null`, `-1`, `"bad"`, `{}`} {
+		frame := strings.Replace(resultFrame, `"inputTokens":2`, `"contextWindow":`+window+`,"inputTokens":2`, 1)
+		got, ok := resultFrameUsage([]byte(frame))
+		if !ok || got.CostMicroUSD != 27430 || got.Models["claude-opus-5[1m]"].totalInputTokens() != 52755 {
+			t.Fatalf("window %s changed metering: %+v", window, got)
+		}
+	}
+}
+
+// The window report follows what the frame names: a model without a window is an
+// explicit unknown, a frame that names no model says nothing (so it cannot erase
+// the last report), and window metadata alone never counts as billable usage.
+func TestResultFrameUsageWindowReport(t *testing.T) {
+	var tooMany strings.Builder
+	for i := range 129 {
+		fmt.Fprintf(&tooMany, `,"m%d":{"contextWindow":1}`, i)
+	}
+	for _, tc := range []struct {
+		name, frame string
+		want        map[string]int64
+		billed      bool
+	}{
+		{"window only", `{"type":"result","modelUsage":{"m[1m]":{"contextWindow":1000000}}}`, map[string]int64{"m[1m]": 1000000}, false},
+		{"model without a window", `{"type":"result","modelUsage":{"m":{"inputTokens":1}}}`, map[string]int64{"m": 0}, true},
+		{"error result naming no model", `{"type":"result","subtype":"error_during_execution"}`, nil, false},
+		{"not a result", `{"type":"assistant","modelUsage":{"m":{"contextWindow":5}}}`, nil, false},
+		{"model key the product refuses", `{"type":"result","modelUsage":{"bad key!":{"contextWindow":5}}}`, map[string]int64{}, false},
+		{"more models than the cap", `{"type":"result","modelUsage":{"m":{"contextWindow":1}` + tooMany.String() + `}}`, map[string]int64{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := resultFrameUsage([]byte(tc.frame))
+			if !reflect.DeepEqual(got.ContextWindows, tc.want) {
+				t.Fatalf("windows = %#v, want %#v", got.ContextWindows, tc.want)
+			}
+			if ok != tc.billed {
+				t.Fatalf("billed = %v, want %v", ok, tc.billed)
+			}
+		})
 	}
 }
 

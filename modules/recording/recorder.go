@@ -146,9 +146,10 @@ func consentExempt(call api.RecordedCall) bool {
 // Gate implements api.SessionRecorder. It classifies the call and, on a
 // recorded surface, ensures an appendable, consent-satisfied session exists and
 // reserves a frame slot — DENY-CLOSED: any failure here keeps the privileged
-// handler from running. See doc.go for the scope rules.
+// handler from running. See doc.go for the scope rules. Recording is a Business
+// capability (edition.go): outside it nothing is recorded, consented or denied.
 func (m *Module) Gate(ctx context.Context, call api.RecordedCall) (api.RecordingDecision, error) {
-	if consentExempt(call) {
+	if !m.business || consentExempt(call) {
 		return api.RecordingDecision{}, nil
 	}
 	mandatory := isBreakGlassCall(call)

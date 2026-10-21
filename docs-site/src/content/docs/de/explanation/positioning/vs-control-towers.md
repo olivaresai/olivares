@@ -8,6 +8,10 @@ sidebar:
   order: 4
 ---
 
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
+:::
+
 Ein **AI Control Tower** ist die organisationsweite Dashboard- und Workflow-Schicht für
 AI-Governance: ein zentraler Ort, um registrierte Agenten zu sehen, Freigaben zu
 steuern, Tickets zu erstellen und der Führungsebene über die Posture zu berichten.

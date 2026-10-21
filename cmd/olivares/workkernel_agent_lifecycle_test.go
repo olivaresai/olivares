@@ -230,6 +230,65 @@ func TestWiredResolverRealLifecycleSnapshotSurvivesWorkspaceConfinement(t *testi
 	}
 
 	resolver := workIdentityResolver{st: st, agentLifecycle: gov}
+	// Exercise live sponsor state through the real composition and SQLite store.
+	// Both participant resolution and the transaction authority observer must
+	// refuse unknown state without waiting for a lifecycle sweep.
+	setSponsorState := func(reported, disabled bool) error {
+		return st.Mutate(ctx, tenant, func(sc store.Scope) error {
+			identities, _, err := sc.Identities().List(ctx, model.Query{
+				Filters: []model.Filter{{Column: "external_id", Op: model.OpEq, Value: sponsorExternal}}, Limit: 1,
+			})
+			if err != nil {
+				return err
+			}
+			if len(identities) != 1 {
+				return errors.New("authority sponsor not found")
+			}
+			sponsor := identities[0]
+			delete(sponsor.Metadata, "disabled")
+			if reported {
+				sponsor.Metadata["disabled"] = disabled
+			}
+			_, err = sc.Identities().Update(ctx, sponsor)
+			return err
+		})
+	}
+	for _, tc := range []struct {
+		name     string
+		reported bool
+		disabled bool
+		want     bool
+	}{
+		{"disabled", true, true, false},
+		{"unreported", false, false, false},
+		{"enabled", true, false, true},
+	} {
+		t.Run("sponsor_"+tc.name, func(t *testing.T) {
+			t.Cleanup(func() {
+				if err := setSponsorState(true, false); err != nil {
+					t.Errorf("restore enabled sponsor: %v", err)
+				}
+			})
+			if err := setSponsorState(tc.reported, tc.disabled); err != nil {
+				t.Fatalf("set sponsor state: %v", err)
+			}
+			participant, err := resolver.ResolveParticipant(ctx, tenant, workspace, "agent", ownerID.String())
+			if err != nil || participant.Active != tc.want {
+				t.Errorf("participant active = %v, %v; want %v, nil", participant.Active, err, tc.want)
+			}
+			directory, err := readDirectoryAgent(ctx, st, gov, tenant, workspace, ownerID)
+			if err != nil || directory.LifecycleEligible != tc.want {
+				t.Errorf("directory lifecycle eligible = %v, %v; want %v, nil", directory.LifecycleEligible, err, tc.want)
+			}
+			authority, err := resolver.ObserveAgentWorkAuthority(ctx, tenant, workspace, ownerID.String(), ownerExternal)
+			if err != nil || authority.Eligible != tc.want {
+				t.Errorf("authority eligible = %v, %v; want %v, nil", authority.Eligible, err, tc.want)
+			}
+			if !tc.want && (authority.Digest != "" || authority.Token != nil) {
+				t.Errorf("ineligible sponsor returned authority: %#v", authority)
+			}
+		})
+	}
 	// validateConfined is the Plan/Validate half of the seam: the same opaque
 	// snapshot, read-validated through the request's confined View.
 	validateConfined := func(snapshot sessions.WorkAgentAuthoritySnapshot) error {

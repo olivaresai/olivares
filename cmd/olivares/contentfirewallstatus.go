@@ -9,6 +9,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // messagesInspectorBinding records the startup content-inspector attachment of the
@@ -26,8 +27,9 @@ type messagesInspectorBinding struct {
 var _ inferenceproxy.ContentFirewallStatusSource = (*messagesInspectorBinding)(nil)
 
 // record stores the attachment of dec, the decider the built Messages proxy serves, or
-// pep_not_composed when dec is nil. It applies the proxy's own nil test to dec.Inspector.
-// Only the first record is kept.
+// pep_not_composed when dec is nil. It applies the proxy's own nil test to dec.Inspector,
+// except that an inspector that is only the edition's decoy engine is not the content
+// firewall and is reported absent. Only the first record is kept.
 func (b *messagesInspectorBinding) record(dec *inferencepep.Decider) {
 	if b == nil {
 		return
@@ -35,7 +37,7 @@ func (b *messagesInspectorBinding) record(dec *inferencepep.Decider) {
 	state := inferenceproxy.ContentFirewallPEPNotComposed
 	if dec != nil {
 		state = inferenceproxy.ContentFirewallInspectorAbsent
-		if dec.Inspector != nil {
+		if _, decoyOnly := dec.Inspector.(sessions.SessionDecoySource); dec.Inspector != nil && !decoyOnly {
 			state = inferenceproxy.ContentFirewallInspectorAttached
 		}
 	}

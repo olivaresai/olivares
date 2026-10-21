@@ -112,6 +112,14 @@ Führen Sie ihn nach jeder Installation und nach dem Entfernen eines Overrides a
 
 ## 3 · Community → Business, in-place
 
+Wenn Sie eine gültige Business- oder Enterprise-Lizenz auf einem Community-Build installieren,
+läuft dieser Build weiter. Das Session-Cockpit und die übrigen kommerziellen Seiten erscheinen
+erst, nachdem Sie diese Installation auf Business umgestellt haben. Die Ansicht
+**Edition & license** der Konsole nennt die installierte Lizenz getrennt vom Build. **Expires**
+ist die bezahlte Laufzeit; **Lease until**, sofern angezeigt, ist die davon getrennte
+vorläufige Instanz-Lease. Läuft die Installation in Docker? Gehen Sie unten zu
+[Docker und Compose](#docker-und-compose).
+
 :::note[Business und der kommerzielle Artefaktkanal]
 Das Flag `--enterprise` bezeichnet den kommerziellen Artefaktkanal, nicht die Edition.
 Die Editionen sind Community, Business und Enterprise. Business enthält Regulated Operations,
@@ -129,8 +137,9 @@ olivares upgrade --enterprise --token <TOKEN>
 Der Befehl lädt den signierten kommerziellen Build für Ihre Plattform herunter und **verifiziert
 die Signatur offline** — ein manipuliertes Artefakt bricht das Upgrade ab, während das
 laufende Binary unverändert bleibt. Anschließend tauscht er es atomar aus und behält ein
-Backup des vorigen Binary. Verwenden Sie zuerst `--check`, wenn Sie den Plan sehen möchten,
-ohne ihn auszuführen:
+Backup des vorigen Binary. Business hat dieselbe Versionsnummer wie Community; der Befehl funktioniert
+also auch, wenn Sie diese Version bereits ausführen. Verwenden Sie zuerst `--check`, wenn Sie den Plan
+sehen möchten, ohne ihn auszuführen; er nennt den Wechsel `edition: community -> enterprise`:
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN> --check
@@ -154,6 +163,71 @@ Der Austausch ersetzt ein Binary, nicht Ihre Daten — erstellen Sie trotzdem da
 das [Upgrade und Rollback](/de/how-to/upgrade-and-rollback/) verlangt. Dort wird auch die
 Rückkehr zum vorigen Binary beschrieben.
 :::
+
+### Docker und Compose
+
+Das öffentliche Image `docker.io/olivaresai/olivares` ist Community. In einem Container
+installiert `olivares upgrade` das Release in das Datenvolume statt in das Image, sodass das
+Neuerstellen des Containers es erneut startet. Das wendet das Business-Release an, wenn es
+neuer ist als das Image oder dieselbe Version hat (`--check` nennt den Wechsel `edition: community -> enterprise`);
+das Image selbst zu bauen, wie unten beschrieben, ist die Alternative. Ist die Lizenz installiert
+(Abschnitt 2), führen Sie das Upgrade im laufenden Container aus und starten ihn neu. Das Token
+steht in Ihrer Fulfilment-E-Mail; übergeben Sie es per Namen, damit es nicht in der
+Prozessliste erscheint:
+
+```sh
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
+docker compose up -d --force-recreate olivares
+```
+
+Das Release liegt in `ota/` im Datenverzeichnis (`/var/lib/olivares/ota` im ausgelieferten
+Image), zusammen mit dem signierten Manifest und dem Artefakt, aus dem es verifiziert wurde.
+Das Image-Binary startet es, wenn es neuer ist als das Image oder dieselbe Version anders
+gebaut wurde (ein Community-Image der Version, die Sie als Business angewendet haben). Dem
+Volume wird nichts für sich allein vertraut: Jeder Start prüft die Signatur des Manifests
+gegen den im Image eingebetteten OTA-Schlüssel und das Artefakt gegen den Digest, den das
+Manifest signiert. Der Nachweis wird im temporären Verzeichnis des Containers gehalten (die
+ausgelieferte Compose-Datei mountet dort ein `tmpfs`), nicht im Volume; ein Neuerstellen leert
+ihn. Ist das Image neuer als das angewendete Release, läuft das Image und das Startlog sagt es;
+führen Sie das Upgrade dann erneut aus. Evidenz, die sich nicht verifizieren lässt, wird mit
+einer Meldung ignoriert, und das Image läuft. Das Volume hält keine Sicherung des vorigen
+Binary: Um zum Binary des Images zurückzukehren, entfernen Sie `ota/`. Das erfordert ein Volume,
+das Ausführen erlaubt (ein benanntes Volume tut das; bei einem `noexec`-Mount stoppt
+`olivares serve` und nennt den Grund, statt stillschweigend das Binary des Images auszuführen).
+
+Sie können das Image auch selbst bauen. Laden Sie das Business-Binary **derselben Version und Linux-Architektur** über das
+[Portal für lizenzierte Downloads](https://licenses.olivares.ai/portal) herunter und verifizieren
+Sie Signatur und Prüfsumme anhand der Anleitung des Downloads. Anschließend können Sie dieses
+verifizierte Binary auf Ihrem eigenen Host als zusätzliche Schicht auf das passende
+Community-Runtime-Image legen. Verwenden Sie in einem Verzeichnis, das das verifizierte Binary
+mit dem Namen `olivares` enthält, dieses `Dockerfile`:
+
+```dockerfile
+ARG COMMUNITY_IMAGE
+FROM ${COMMUNITY_IMAGE}
+COPY --chmod=0755 olivares /usr/local/bin/olivares
+```
+
+Bauen Sie mit dem Digest des Community-Images dieser Version, verifiziert wie in
+[Ein Release verifizieren](/de/how-to/verify-a-release/). Das Ergebnis behält den Non-Root-Benutzer,
+den Entrypoint und die Ports dieses Images, daher braucht das `Dockerfile` keine `USER`-Zeile:
+
+```sh
+docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+  --tag olivares-business-local:X.Y .
+```
+
+Halten Sie dieses Image privat und bewahren Sie die mit dem Download gelieferte kommerzielle
+Lizenz und die Hinweise (notices) auf. Legen Sie weder Ihre Lizenzdatei noch Ihr Download-Token in den
+Build-Kontext. Setzen Sie das `image` Ihres Compose-Dienstes auf `olivares-business-local:X.Y` und
+erstellen Sie diesen Dienst dann mit `docker compose up -d --no-deps --force-recreate olivares`
+neu. Erstellen Sie bei eigenständigem Docker den Container mit diesem Image und demselben Volume
+und denselben Argumenten neu. Behalten Sie das Datenvolume: Verwenden Sie nicht `down --volumes`.
+
+Prüfen Sie nach dem Neustart **Edition & license**: Die Edition sollte **Business** anzeigen, und
+die installierte Lizenz bleibt im Datenvolume. Enterprise-Verträge verwenden ebenfalls diesen
+kommerziellen Build; ein vertragsspezifisches Artefakt folgt den Anweisungen seines Downloads.
 
 ## Lizenz entfernen
 

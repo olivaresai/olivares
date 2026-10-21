@@ -212,7 +212,7 @@ describe('ProviderAccountsPanel — the list', () => {
     wrap()
     expect(await screen.findByText('No provider accounts')).toBeInTheDocument()
     expect(
-      screen.getByText(/needs the sessions:account:write permission/),
+      screen.getByText(/Your role cannot name a profile as an account/),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Name a profile as an account' }),

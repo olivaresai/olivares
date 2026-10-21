@@ -117,3 +117,74 @@ func TestReadSkillsTargetReadsTemplateAndSessionRows(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSkillsProfileTargetReadsPublicRefAndFencesNativeRow(t *testing.T) {
+	m, st, tenant, _ := newRuntimeHarness(t)
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	if err := st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+		read, err := m.ReadSkillsTarget(t.Context(), sc, "profile", profile.Ref, false)
+		if err != nil || read.ID != profile.ID || read.Permission != permProfileRead || !read.WorkspaceID.IsZero() {
+			t.Fatalf("profile read: %+v %v", read, err)
+		}
+		write, err := m.ReadSkillsTarget(t.Context(), sc, "profile", profile.Ref, true)
+		if err != nil || write.ID != read.ID || write.Version != read.Version+1 || write.Permission != permProfileWrite {
+			t.Fatalf("profile fence: %+v %v", write, err)
+		}
+		if _, err := m.ReadSkillsTarget(t.Context(), sc, "profile", profile.ID.String(), false); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("row ID used as public ref: %v", err)
+		}
+		workspace, err := sc.DefaultWorkspace(t.Context())
+		if err != nil {
+			return err
+		}
+		confined, err := store.ConfineWorkspace(t.Context(), sc, workspace.ID)
+		if err != nil {
+			return err
+		}
+		if _, err := m.ReadSkillsTarget(t.Context(), confined, "profile", profile.Ref, false); !errors.Is(err, auth.ErrRouteDenied) {
+			t.Fatalf("confined profile disclosure: %v", err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunSkillsTargetsIncludesOnlyTheAdmittedProfile(t *testing.T) {
+	m, st, tenant, _ := newRuntimeHarness(t)
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	first := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	second := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	if err := st.View(t.Context(), tenant, func(sc store.Scope) error {
+		for _, ref := range []string{first.Ref, second.Ref, ""} {
+			targets, err := m.runSkillsTargets(t.Context(), sc, model.Record{colRunProfileID: ref, colRunRef: model.NewID().String(), model.ColVersion: int64(1)})
+			if err != nil {
+				return err
+			}
+			count := 0
+			for _, target := range targets {
+				if target.Kind == "profile" {
+					count++
+					if target.ID != ref || target.Version < 1 {
+						t.Fatalf("wrong profile: %+v", target)
+					}
+				}
+			}
+			want := 1
+			if ref == "" {
+				want = 0
+			}
+			if count != want {
+				t.Fatalf("profile %q: %d targets, want %d", ref, count, want)
+			}
+		}
+		_, err := m.runSkillsTargets(t.Context(), sc, model.Record{colRunProfileID: newProfileRef()})
+		if !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("missing admitted profile ignored: %v", err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

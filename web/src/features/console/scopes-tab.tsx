@@ -57,6 +57,16 @@ import {
 } from './api'
 import { FormError } from './roles-shared'
 import { StaticTable } from '@/components/data/static-table'
+import {
+  useConsoleDraft,
+  useDiscardConsoleDraft,
+  useConsoleDraftDispatch,
+} from './console-drafts'
+import {
+  GROUP_CREATION,
+  useConsoleOperation,
+  useConsolePreflight,
+} from './console-authority'
 
 const WORKSPACE_NONE = '__none__'
 const GROUP_STATUSES = ['active', 'inactive'] as const
@@ -65,13 +75,25 @@ const AGENT_LIST_PARAMS = { limit: 200 }
 export function ScopesTab() {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant, activeRole, isSuperadmin, can } = useAuth()
-  const { workspaceId, queryKey: wsKey } = useWorkspaceFilter()
+  const creation = useConsoleOperation(GROUP_CREATION, 'agent:write')
+  const filter = useWorkspaceFilter()
+  const workspaceId = creation.workspace ?? filter.workspaceId
+  const wsKey = workspaceId ?? '__all__'
   const canReadGroups = can('agent:read')
-  const canManageGroups = can('agent:write')
+  const canManageGroups = can('agent:write') && creation.current
+  const canCreateGroups = creation.current
   const isOwner = isSuperadmin || activeRole === 'owner'
 
   const [wsCreateOpen, setWsCreateOpen] = useState(false)
-  const [groupCreateOpen, setGroupCreateOpen] = useState(false)
+  const [groupCreateOpen, setGroupCreateOpen] = useConsoleDraft(
+    'group:create:open',
+    false,
+  )
+  const discardDraft = useDiscardConsoleDraft()
+  const closeCreate = () => {
+    setGroupCreateOpen(false)
+    discardDraft('group:create:')
+  }
   const [editGroup, setEditGroup] = useState<AgentGroupDTO | null>(null)
   const [membersGroup, setMembersGroup] = useState<AgentGroupDTO | null>(null)
   const [renameWorkspace, setRenameWorkspace] = useState<WorkspaceDTO | null>(
@@ -242,7 +264,7 @@ export function ScopesTab() {
               {t('console:groups.caption')}
             </p>
           </div>
-          {canManageGroups && (
+          {canCreateGroups && (
             <Button onClick={() => setGroupCreateOpen(true)}>
               <Plus />
               {t('console:groups.create')}
@@ -266,7 +288,7 @@ export function ScopesTab() {
         ) : groupItems.length === 0 ? (
           <EmptyState
             action={
-              canManageGroups ? (
+              canCreateGroups ? (
                 <Button onClick={() => setGroupCreateOpen(true)}>
                   <Plus />
                   {t('console:groups.create')}
@@ -370,13 +392,19 @@ export function ScopesTab() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={groupCreateOpen} onOpenChange={setGroupCreateOpen}>
+      <Dialog
+        open={groupCreateOpen && canCreateGroups}
+        onOpenChange={(open) =>
+          open ? setGroupCreateOpen(true) : closeCreate()
+        }
+      >
         <DialogContent className="max-w-lg">
-          {groupCreateOpen && (
+          {groupCreateOpen && canCreateGroups && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <AgentGroupForm
                 workspaces={wsItems}
-                onClose={() => setGroupCreateOpen(false)}
+                department={creation.workspace}
+                onClose={closeCreate}
               />
             </RequireAssurance>
           )}
@@ -582,44 +610,62 @@ function WorkspaceForm({ onClose }: { onClose: () => void }) {
 function AgentGroupForm({
   group,
   workspaces,
+  department,
   onClose,
 }: {
   group?: AgentGroupDTO
   workspaces: WorkspaceDTO[]
+  department?: string | null
   onClose: () => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const isEdit = !!group
-  const [name, setName] = useState(group?.name ?? '')
-  const [slug, setSlug] = useState(group?.slug ?? '')
-  const [workspaceId, setWorkspaceId] = useState(
-    group?.workspace_id ?? WORKSPACE_NONE,
+  const preflight = useConsolePreflight(GROUP_CREATION, department)
+  const draftDispatch = useConsoleDraftDispatch('group:create:')
+  const [name, setName] = useConsoleDraft(
+    isEdit ? null : 'group:create:name',
+    group?.name ?? '',
   )
-  const [description, setDescription] = useState(group?.description ?? '')
-  const [status, setStatus] = useState<(typeof GROUP_STATUSES)[number]>(
+  const [slug, setSlug] = useConsoleDraft(
+    isEdit ? null : 'group:create:slug',
+    group?.slug ?? '',
+  )
+  const [workspaceId, setWorkspaceId] = useState(
+    group?.workspace_id ?? department ?? WORKSPACE_NONE,
+  )
+  const [description, setDescription] = useConsoleDraft(
+    isEdit ? null : 'group:create:description',
+    group?.description ?? '',
+  )
+  const [status, setStatus] = useConsoleDraft<(typeof GROUP_STATUSES)[number]>(
+    isEdit ? null : 'group:create:status',
     group?.status === 'inactive' ? 'inactive' : 'active',
   )
   const mutation = usePrivilegedMutation<void, AgentGroupDTO>({
-    mutationFn: () =>
-      isEdit && group
-        ? consoleApi.updateAgentGroup(group.id, {
-            name: name.trim(),
-            description: description.trim(),
-            status,
-            // Always send the scope on edit: a chosen workspace re-scopes the group,
-            // "none" sends "" which clears it back to tenant-wide (the backend treats
-            // an absent field as "leave untouched", so the sentinel must become "").
-            workspace_id: workspaceId === WORKSPACE_NONE ? '' : workspaceId,
-          })
-        : consoleApi.createAgentGroup({
-            name: name.trim(),
-            slug: slug.trim(),
-            workspace_id:
-              workspaceId === WORKSPACE_NONE ? undefined : workspaceId,
-            description: description.trim() || undefined,
-            status,
-          }),
+    mutationFn: async (_vars, authority) => {
+      if (isEdit && group)
+        return consoleApi.updateAgentGroup(group.id, {
+          name: name.trim(),
+          description: description.trim(),
+          status,
+          // An empty value clears the scope; omission leaves it unchanged.
+          workspace_id: workspaceId === WORKSPACE_NONE ? '' : workspaceId,
+        })
+      const input = {
+        name: name.trim(),
+        slug: slug.trim(),
+        workspace_id: workspaceId === WORKSPACE_NONE ? undefined : workspaceId,
+        description: description.trim() || undefined,
+        status,
+      }
+      return department
+        ? consoleApi.createAgentGroup(
+            input,
+            draftDispatch(await preflight(authority)),
+          )
+        : consoleApi.createAgentGroup(input)
+    },
     invalidateKeys: () => [consoleKeys.agentGroups(activeTenant)],
     successMessage: isEdit
       ? t('console:groups.updated')
@@ -661,7 +707,11 @@ function AgentGroupForm({
           />
         </Field>
         <Field label={t('console:groups.workspace')} htmlFor="ag-workspace">
-          <Select value={workspaceId} onValueChange={setWorkspaceId}>
+          <Select
+            value={workspaceId}
+            onValueChange={setWorkspaceId}
+            disabled={!!department}
+          >
             <SelectTrigger
               id="ag-workspace"
               aria-label={t('console:groups.workspace')}

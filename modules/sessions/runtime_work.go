@@ -190,7 +190,7 @@ func (m *Module) TextForWork(
 	if err != nil {
 		return err
 	}
-	attempted, err := m.sendTextInputLoaded(ctx, tenant, runRef, text, rec)
+	attempted, err := m.sendTextInputLoaded(ctx, tenant, runRef, text, nil, rec)
 	if err != nil {
 		if !attempted {
 			return err
@@ -313,7 +313,9 @@ func (m *Module) StopForWork(
 	presentedFence int64,
 	reason string,
 ) error {
-	if reason != "" && !boundedText(reason, 1, 512) {
+	// The caller's reason becomes the run's reason. One that reads as the engine's own would
+	// make the next start resume a run the engine did not stop, as its launcher.
+	if reason != "" && (!boundedText(reason, 1, 512) || endedByTheEngine(reason)) {
 		return broken(400, "invalid_command")
 	}
 	// Admission is cancellation-aware: a fenced caller that has gone away stops

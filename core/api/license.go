@@ -62,6 +62,8 @@ type LicenseDisplayInfo struct {
 	Licensee    string
 	Plan        string
 	SupportTier string
+	// SupportProfile is the signed v3 product tier, distinct from support relationship.
+	SupportProfile string
 }
 
 // LicenseStatus is the rendered edition/license view returned to the console/CLI.
@@ -86,12 +88,14 @@ type LicenseStatus struct {
 	ManagedExternally bool `json:"managed_externally"`
 
 	// The attested, DISPLAY-ONLY claims (present when verified — valid/expired/perpetual).
-	Licensee    string     `json:"licensee,omitempty"`
-	Plan        string     `json:"plan,omitempty"`
-	SupportTier string     `json:"support_tier,omitempty"` // attested support relationship (display-only; never gates — SUPPORT.md)
-	Features    []string   `json:"features,omitempty"`
-	MaxUsers    int        `json:"max_users"` // Deprecated: attested seat figure (0 = unlimited); IGNORED by every build since B10
-	IssuedAt    *time.Time `json:"issued_at,omitempty"`
+	Licensee    string `json:"licensee,omitempty"`
+	Plan        string `json:"plan,omitempty"`
+	SupportTier string `json:"support_tier,omitempty"` // attested support relationship (display-only; never gates — SUPPORT.md)
+	// SupportProfile is the signed v3 product profile, not the legacy support relationship.
+	SupportProfile string     `json:"support_profile,omitempty"`
+	Features       []string   `json:"features,omitempty"`
+	MaxUsers       int        `json:"max_users"` // Deprecated: attested seat figure (0 = unlimited); IGNORED by every build since B10
+	IssuedAt       *time.Time `json:"issued_at,omitempty"`
 	// ExpiresAt is the end of the base line's term before any grace: its effective boundary while
 	// provisional, its paid_through otherwise. While the base line is provisional that is the
 	// short lease, not the paid term, so a console must not present it as the licence expiry.

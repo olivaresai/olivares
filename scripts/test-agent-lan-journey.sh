@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
+# Deployment is a Business capability: the engine must be the Business build.
 # The engine and CLI are real. The default Docker target is a loopback protocol
 # fixture. Catalog mode can use a real daemon via OLIVARES_JOURNEY_DOCKER_SOCKET;
 # only that mode qualifies actual containers. Run under the heavy-job wrapper.
@@ -236,6 +237,8 @@ try:
             status, _ = call('GET', '/v1/m/deploy/definitions')
             if status == 200:
                 break
+            if status == 501:
+                raise RuntimeError('deployment is a Business capability: run this journey against the Business engine')
         except OSError:
             pass
         if engine.poll() is not None:

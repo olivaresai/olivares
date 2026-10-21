@@ -63,14 +63,14 @@
   },
   "policy": {
     "title": "Política de grabación",
-    "subtitle": "Qué se graba en este plano de control y cómo se clasifica la evidencia. Editar requiere el permiso recording:config:admin; cada cambio aquí es en sí mismo una acción privilegiada grabada.",
+    "subtitle": "Qué se graba en este plano de control y cómo se clasifica la evidencia. Editar requiere un rol que administre la política de grabación; cada cambio aquí es en sí mismo una acción privilegiada grabada.",
     "loading": "Cargando la política de grabación…",
     "saved": "Política de grabación guardada",
     "save": "Guardar política",
     "saveFailed": "La política no se guardó.",
     "forbidden": {
-      "title": "Editar la política de grabación requiere recording:config:admin",
-      "description": "Tu rol puede administrar las sesiones de grabación, pero cambiar la política de grabación necesita el permiso distinto recording:config:admin. Pídele a un administrador que te lo conceda."
+      "title": "Tu rol no puede editar la política de grabación",
+      "description": "Tu rol puede administrar las sesiones de grabación, pero cambiar la política de grabación necesita un permiso aparte. Pídele a un administrador que te lo conceda."
     },
     "error": {
       "title": "No se pudo cargar la política de grabación",
@@ -108,7 +108,7 @@
       "hint": "Una etiqueta de clasificación aplicada a las grabaciones selladas: indica cuánto deberían conservarse. Entre 1 y 3650 días.",
       "tag": "Solo etiqueta",
       "enforced": "Aplicada",
-      "notEnforced": "La retención es solo una etiqueta de clasificación: las grabaciones se etiquetan, nunca se purgan. Ninguna política elimina todavía una grabación (no hay purga cableada).",
+      "notEnforced": "La retención es solo una etiqueta de clasificación: las grabaciones se etiquetan, nunca se purgan. Ninguna política elimina todavía una grabación (no hay purga disponible).",
       "error": "Introduce un número entero de días entre 1 y 3650."
     },
     "ai": {

@@ -420,6 +420,9 @@ func gateVerdict(suite suiteDTO, agg runAggregate, reg regressionInfo, judged, j
 	if reg.comparison.Status == ComparisonNoBaseline || (reg.comparison.Status == ComparisonDisabled && reg.comparison.FirstRun) || (reg.comparison.Status == ComparisonIncomplete && offlineFirst) {
 		notes = append(notes, reasonNoBaseline)
 	}
+	if reg.comparison.Reason == ComparisonInconclusiveNoise {
+		notes = append(notes, string(ComparisonInconclusiveNoise))
+	}
 
 	switch {
 	case len(fails) > 0:

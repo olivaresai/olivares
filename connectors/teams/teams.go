@@ -104,6 +104,14 @@ func New() *Output {
 	return &Output{maxAttempts: defaultMaxAttempts, cardVersion: defaultCardVersion}
 }
 
+// WithHTTPClient sets the transport deliveries use, in place of http.DefaultClient (which
+// follows redirects), and returns the connector. The console passes a client that does not
+// follow redirects, so a webhook on an allowed host cannot send the engine elsewhere.
+func (o *Output) WithHTTPClient(c delivery.Doer) *Output {
+	o.doer = c
+	return o
+}
+
 // Descriptor returns the connector's self-description and declared configuration.
 func (o *Output) Descriptor() sdk.Descriptor {
 	return sdk.Descriptor{

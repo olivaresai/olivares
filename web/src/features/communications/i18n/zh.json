@@ -2,23 +2,23 @@
   "doors": {
     "catalog": {
       "title": "通信",
-      "description": "所选工作区中此主体当前可读的频道、经由这些频道发送的直接通知，以及个人收件箱。每次读取和每个操作都由引擎在各自的权限下决定。"
+      "description": "所选工作区中您现在可以读取的频道、通过它们发送的直接通知以及您的收件箱。每次读取和每个操作都由引擎决定。"
     },
     "inbox": {
       "title": "通信收件箱",
-      "description": "此主体在所选工作区中的精确个人邮箱：发给它的投递，每次重新打开，只有通过显式操作才会确认。"
+      "description": "所选工作区中发给您的消息：逐条打开并确认。"
     },
     "new": {
       "title": "新建频道",
-      "description": "以显式初始授权创建频道。不会有任何隐含授权，操作回执也不是日后谁可以读取的持久名单。"
+      "description": "创建频道并从一开始就选择谁可以使用它。任何人都不会默认获得访问权限，回执也不是日后谁可以读取它的长期名单。"
     },
     "administration": {
       "title": "频道管理",
-      "description": "此主体在所选工作区中可管理的频道：配置与授权历史，每次操作都在频道当前 ETag 下确认。管理需要 channel:admin 权限和有效的本地 admin 位；它既不要求也不授予读取频道内容的权利。"
+      "description": "您在所选工作区中可管理的频道：配置与授权历史。每次更改只作用于您读取的版本。管理频道既不需要也不授予读取其内容的权利。"
     },
     "handoffs": {
       "title": "交接",
-      "description": "在所选工作区中发给该主体的工作责任交接提议。列表不携带提议内容；打开某一条会重新读取其受保护上下文，接受或拒绝都是由引擎裁决的显式操作。"
+      "description": "所选工作区中发给您的工作提议。列表不显示提议内容；打开时会读取其上下文，每次接受或拒绝都由引擎决定。"
     }
   },
   "tabs": {
@@ -104,7 +104,7 @@
       "updated": "更新时间"
     },
     "openById": "按 ID 打开频道",
-    "openByIdHint": "按 ID 打开的频道会连同其 ETag 重新读取；该读取不会报告您的本地位。"
+    "openByIdHint": "按 ID 打开的频道会重新读取；该读取不会显示您自己的访问权限。"
   },
   "access": {
     "label": "您的本地访问",
@@ -143,7 +143,7 @@
   },
   "channel": {
     "title": "频道",
-    "description": "从引擎连同其 ETag 重新读取。此读取不包含授权，也不包含本地位。",
+    "description": "从引擎重新读取。此读取不包含授权，也不包含您自己的访问权限。",
     "fields": {
       "id": "频道 ID",
       "slug": "Slug",
@@ -164,7 +164,7 @@
       "routeRevision": "路由修订",
       "subscriptionRevision": "订阅修订",
       "version": "版本",
-      "etag": "ETag",
+      "etag": "版本",
       "created": "创建时间",
       "updated": "更新时间",
       "workspace": "工作区",
@@ -222,7 +222,7 @@
       "grants": "已记录的授权",
       "noGrants": "未返回授权行。",
       "auditSeq": "审计序号",
-      "etag": "ETag"
+      "etag": "版本"
     },
     "unknown": {
       "title": "结果未知",
@@ -235,15 +235,15 @@
     "kinds": {
       "user": "用户",
       "user_group": "用户组",
-      "agent": "代理",
-      "agent_group": "代理组",
+      "agent": "智能体",
+      "agent_group": "智能体组",
       "session": "会话"
     },
     "pickUser": "选择用户",
-    "pickAgent": "选择代理",
+    "pickAgent": "选择智能体",
     "manualRef": "引用 (ID)",
     "userRefHint": "规范用户 ID。目录中的用户并不因此成为此频道的合格收件人：引擎在发送时决定。",
-    "agentRefHint": "代理的身份 ID，而非其行 ID 或外部 ID。",
+    "agentRefHint": "智能体的身份 ID，而非其行 ID 或外部 ID。",
     "sessionRefHint": "规范会话 ID。此控制台尚无会话目录；请从其权威来源输入 ID。",
     "groupRefHint": "组 ID。",
     "noDirectory": "未向您提供目录（缺少读取权限）。请直接输入引用。",
@@ -254,7 +254,7 @@
   },
   "compose": {
     "title": "发送直接通知",
-    "description": "在频道“{{channel}}”上向一个用户、代理或会话发送一条通知。内容为类型化块；引擎在发送时检查收件人当前的资格与授权。",
+    "description": "在频道“{{channel}}”上向一个用户、智能体或会话发送一条通知。内容为类型化块；引擎在发送时检查收件人当前的资格与授权。",
     "recipient": "收件人",
     "subjectField": "主题",
     "blocks": "内容块",
@@ -360,9 +360,9 @@
     },
     "ack": {
       "title": "确认收到此投递",
-      "body": "此操作发送 If-Match {{etag}}（您读取的版本）以及其自身的密钥。若投递在此期间发生变化，引擎会应答 412，您需在再次确认前重新读取；控制台绝不会替换版本。",
+      "body": "此操作发送您读取的版本（{{etag}}）以及其自身的密钥。若投递在此期间发生变化，引擎会拒绝，您需在再次确认前重新读取；控制台绝不会替换版本。",
       "key": "幂等密钥",
-      "ifMatch": "If-Match",
+      "ifMatch": "已读取的版本",
       "appliedTitle": "已确认",
       "appliedBody": "引擎已记录该确认。",
       "replayedTitle": "已确认过",
@@ -371,7 +371,7 @@
       "conflictTitle": "自您读取以来投递已变化",
       "conflictBody": "引擎拒绝了确认：您读取的版本已不是最新，或该投递已被确认。请重新读取投递，仅在仍然适用时再次确认。没有任何内容被重新发送。",
       "ambiguousTitle": "结果未知",
-      "ambiguousBody": "传输在收到应答前失败。重试会重发相同的密钥和相同的 If-Match；引擎要么只应用一次，要么重放，要么以当前版本拒绝。",
+      "ambiguousBody": "连接在收到应答前失败。重试会重发相同的密钥和相同的版本；引擎要么只应用一次，要么重放，要么以当前版本拒绝。",
       "refusedTitle": "确认被拒绝",
       "noPermission": "您不持有投递写权限，因此不提供确认。"
     },
@@ -427,7 +427,7 @@
     "eventId": "事件 ID",
     "auditSeq": "审计序号",
     "version": "版本",
-    "etag": "ETag",
+    "etag": "版本",
     "state": "状态",
     "verdict": "裁定",
     "code": "代码",
@@ -484,7 +484,7 @@
       "state": "状态",
       "sensitivity": "敏感度",
       "protection": "保护",
-      "etag": "ETag",
+      "etag": "版本",
       "updated": "更新时间"
     },
     "openById": "按 ID 管理频道",
@@ -505,7 +505,7 @@
   },
   "admin": {
     "title": "频道管理",
-    "description": "通过授权历史结合频道的前提条件 ETag 全新读取；不打开任何内容。",
+    "description": "通过授权历史结合频道的当前版本全新读取；不打开任何内容。",
     "observedAt": "观测时间",
     "tabs": {
       "config": "配置",
@@ -552,12 +552,12 @@
     },
     "confirm": {
       "title": "确认配置更改",
-      "body": "仅发送下列字段，附带 If-Match {{etag}}，即屏幕上读取的 ETag。若频道在此期间已更改，引擎会拒绝，您需要在再次确认前重新读取；控制台绝不会替换 ETag。",
+      "body": "仅发送下列字段，附带屏幕上的版本（{{etag}}）。若频道在此期间已更改，引擎会拒绝，您需要在再次确认前重新读取；控制台绝不会替换版本。",
       "archiving": "这将归档该频道。归档是单向的：它不会恢复为活动。",
-      "ifMatch": "If-Match"
+      "ifMatch": "已读取的版本"
     },
     "appliedTitle": "配置已应用",
-    "appliedBody": "引擎已提交更改。面板重新读取频道；下一个操作使用该次读取的 ETag。",
+    "appliedBody": "引擎已保存更改。面板重新读取频道；下一次更改使用该版本。",
     "conflictTitle": "频道在您读取后已更改",
     "conflictBody": "引擎拒绝了更改：其前提条件不再与当前频道匹配。未重新发送任何内容。请重新读取，对照当前值审阅您的编辑，仅在仍适用时再次确认。",
     "unknownTitle": "结果待核实",
@@ -614,7 +614,7 @@
     },
     "confirm": {
       "title": "确认授权",
-      "body": "这将精确发送下面的代，附带屏幕上读取的 If-Match。若主体已持有活动代，或频道在此期间已更改，引擎会拒绝；然后您重新读取并再次确认。不会自动重试。",
+      "body": "这将精确发送下面的代，附带屏幕上的版本。若主体已持有活动代，或频道在此期间已更改，引擎会拒绝；然后您重新读取并再次确认。不会自动重试。",
       "successorOf": "已撤销的代 {{id}} 的后继。这是单独的操作：上面的撤销已经提交。"
     },
     "appliedTitle": "授权已记录",
@@ -629,7 +629,7 @@
     "refusedTitle": "授权被拒绝",
     "revoke": {
       "title": "精确撤销此代",
-      "body": "这将按 ID 撤销所显示的代，附带屏幕上读取的 If-Match。其历史将保留。该主体的后继是重新读取后的单独操作。",
+      "body": "这将按 ID 撤销所显示的代，附带屏幕上的版本。其历史将保留。该主体的后继是重新读取后的单独操作。",
       "bodyThenGrant": "两个操作中的第一个：撤销所显示的代。读取引擎的应答后，将为后继代提供单独的确认；不会自动链接任何操作。",
       "ownAdminWarning": "此代是对您自己账户的 admin 授权。它可能正是支撑您对此频道管理访问的授权；控制台不会计算您的全部权限，引擎将判定您的下一个请求。",
       "appliedTitle": "代已撤销",
@@ -680,12 +680,12 @@
     "prepareFailedBody": "未推进任何内容。请刷新收件箱并从当前页面重新准备。",
     "confirm": {
       "title": "确认推进",
-      "body": "这将发送准备好的目标和上面的投递，附带已读取游标版本的 If-Match 和自身的键。只有确认才会推进。模糊结果后的重试将精确重新发送相同内容。"
+      "body": "这将发送准备好的目标和上面的投递，附带已读取的游标版本和自身的键。只有确认才会推进。模糊结果后的重试将精确重新发送相同内容。"
     },
     "conflictTitle": "游标自准备后已更改",
     "conflictBody": "引擎拒绝了推进：游标版本或目标已不是当前的。未重新发送任何内容。请刷新收件箱并从当前页面重新准备。",
     "ambiguousTitle": "结果未知",
-    "ambiguousBody": "传输在收到响应前失败。重试会重新发送相同的目标、相同的 If-Match 和相同的键；引擎要么应用一次，要么重放，要么以当前版本拒绝。保持未定则之前的结果仍未知。",
+    "ambiguousBody": "连接在收到响应前失败。重试会重新发送相同的目标、相同的版本和相同的键；引擎要么应用一次，要么重放，要么以当前版本拒绝。保持未定则之前的结果仍未知。",
     "refusedTitle": "推进被拒绝",
     "refusedBody": "引擎未推进游标。请在重新准备前刷新收件箱。",
     "result": {
@@ -771,13 +771,13 @@
       "currentOwner": "当前归属人",
       "ownerEpoch": "归属纪元",
       "itemWorkspace": "工作项所属工作区",
-      "precondition": "前置条件 (If-Match)",
+      "precondition": "已读取的版本",
       "itemMismatch": "这次读取返回的工作项与所请求的不同。基于这次读取无法提议任何内容。",
       "workspaceMismatchTitle": "请选择该工作项所属的工作区",
       "workspaceMismatchBody": "该工作项属于工作区 {{itemWorkspace}}，而当前选中的是 {{selected}}。请在切换器中选择该工作项的工作区后再提议；控制台绝不会替你选择。",
       "workspaceNone": "尚未显式选择工作区。提议是按工作区限定的，请在切换器中选择该工作项的工作区；控制台绝不会替你选择。",
-      "noPrecondition": "这次工作项读取没有携带 ETag，因此没有可发送的前置条件。请重新读取该工作项；这里不会把版本号当成校验器。",
-      "noPermission": "提议交接需要 sessions:message-send:write。引擎还会检查工作项归属和频道权限。",
+      "noPrecondition": "该工作项读取时没有版本，因此没有可用来核对此提议的依据。请重新读取该工作项。",
+      "noPermission": "你的角色无法提议交接。引擎还会检查工作项归谁所有以及谁可以使用该频道。",
       "channel": "频道",
       "channelHint": "承载消息发布所用频道的规范 ID。随时都可以直接输入。",
       "channelPick": "选择频道",
@@ -876,8 +876,8 @@
       "deadline": "答复期限",
       "created": "创建时间",
       "observed": "观测时刻",
-      "precondition": "交接 ETag (If-Match)",
-      "preconditionHint": "答复绑定的是上面的交接 ETag，而不是旁边那个承载投递的版本号。",
+      "precondition": "交接版本",
+      "preconditionHint": "答复作用于上面的交接版本，而不是旁边的投递版本。",
       "carrierDelivery": "承载投递",
       "carrierVersion": "承载投递版本",
       "channel": "频道",
@@ -888,7 +888,7 @@
         "terminal": "这条提议已经了结"
       },
       "notCurrentBody": "引擎报告现在无法答复，因此不提供答复操作。重新读取即可看到其当前状态。",
-      "noRespondPermission": "答复需要 sessions:handoff-response:write。"
+      "noRespondPermission": "你的角色无法答复交接。"
     },
     "respond": {
       "acceptTitle": "接受责任",

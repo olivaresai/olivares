@@ -66,19 +66,12 @@ export interface ViewAccess {
    */
   navigable: ViewGate
   /**
-   * Whether navigation lists the view: every view the person may open, from the first
-   * sign-in, whether or not its module runs here. This is the single rule the sidebar,
+   * Whether navigation lists the view: `navigable`. This is the single rule the sidebar,
    * palette, shortcuts, All areas and the phone bar share, which is what stops them
-   * disagreeing. Only an established refusal hides a view; an off module is listed and
-   * flagged by `isOff`. A view it does not list keeps its route.
+   * disagreeing. A module that is off folds out of navigation; Settings > Modules shows it
+   * as Off and turns it on (#2240). A view it does not list keeps its route.
    */
   listed: ViewGate
-  /**
-   * Whether the view's module is off on this installation (or the section's, when one is
-   * given). Navigation draws such an entry dimmed with an "Off" tag; its page offers to
-   * turn the module on. Meaningful only for a view that is `listed`.
-   */
-  isOff: ViewGate
 }
 
 /**
@@ -89,7 +82,10 @@ export interface ViewAccess {
 const CAPABILITY_VIEWS = FEATURE_VIEWS.filter((v) => v.capability !== undefined)
 
 /** The single capability view of this lot, or undefined in a tree that has none. */
-const ADMINISTRATION_VIEW = CAPABILITY_VIEWS[0]
+const ADMINISTRATION_VIEW = CAPABILITY_VIEWS.find(
+  (view) => view.id === 'communicationsAdministration',
+)
+const CONSOLE_VIEW = CAPABILITY_VIEWS.find((view) => view.id === 'console')
 
 function stateOfObservation(access: CapabilityAccess): ViewAccessState {
   switch (access) {
@@ -113,7 +109,7 @@ function stateOfObservation(access: CapabilityAccess): ViewAccessState {
  * request rather than five.
  */
 export function useViewAccess(): ViewAccess {
-  const { can, principal, activeTenant } = useAuth()
+  const { can, principal, activeTenant, confinedWorkspace } = useAuth()
   const modulesOff = useModulesStore((s) => s.off)
   const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   // The declared surface question of the one capability view, or null when this tree has
@@ -126,9 +122,50 @@ export function useViewAccess(): ViewAccess {
   const observation = useCapability(
     isGlobalAccount(principal, activeTenant) ? null : declared,
   )
+  const consoleCapability = CONSOLE_VIEW?.capability
+  const consoleWorkspace =
+    consoleCapability?.scope?.(workspace, confinedWorkspace ?? null) ??
+    workspace
+  const suppressConsole = isGlobalAccount(principal, activeTenant)
+  const siblings = consoleCapability?.navigation?.(consoleWorkspace)
+  const consoleAgents = useCapability(
+    suppressConsole
+      ? null
+      : (consoleCapability?.surface(consoleWorkspace) ?? null),
+  )
+  const consoleGroups = useCapability(
+    suppressConsole ? null : (siblings?.[0] ?? null),
+  )
+  const consoleGrants = useCapability(
+    suppressConsole ? null : (siblings?.[1] ?? null),
+  )
+  const agentAccess = consoleAgents.access
+  const groupAccess = consoleGroups.access
+  const grantAccess = consoleGrants.access
   return useMemo<ViewAccess>(() => {
     const state = (view: FeatureView): ViewAccessState => {
       if (view.capability !== undefined) {
+        if (view.id === CONSOLE_VIEW?.id) {
+          if (
+            consoleCapability?.reflectedRoute?.(
+              '',
+              confinedWorkspace ?? null,
+              !!view.permission && can(view.permission),
+              suppressConsole,
+            ) === true
+          )
+            return 'allowed'
+          if (!consoleWorkspace && (!view.permission || can(view.permission)))
+            return 'allowed'
+          const states = [agentAccess, groupAccess, grantAccess].map((access) =>
+            stateOfObservation(access),
+          )
+          return states.includes('allowed')
+            ? 'allowed'
+            : states.every((state) => state === 'denied')
+              ? 'denied'
+              : 'unknown'
+        }
         if (view.id !== ADMINISTRATION_VIEW?.id) return 'unknown'
         return stateOfObservation(observation.access)
       }
@@ -149,15 +186,19 @@ export function useViewAccess(): ViewAccess {
       moduleEnabled(modulesOff, view.permission, view.id) &&
       (!section ||
         (can(section.requires) && moduleEnabled(modulesOff, section.requires)))
-    // Navigation lists everything not refused (a person never sees a door they may not
-    // open) and flags what is off. A section is asked with its own permission.
-    const listed: ViewGate = (view, section) =>
-      state(view) !== 'denied' && (!section || can(section.requires))
-    const isOff: ViewGate = (view, section) =>
-      !moduleEnabled(modulesOff, view.permission, view.id) ||
-      (!!section && !moduleEnabled(modulesOff, section.requires))
-    return { state, navigable, listed, isOff }
-  }, [can, observation.access, modulesOff])
+    return { state, navigable, listed: navigable }
+  }, [
+    can,
+    observation.access,
+    modulesOff,
+    consoleWorkspace,
+    agentAccess,
+    groupAccess,
+    grantAccess,
+    consoleCapability,
+    confinedWorkspace,
+    suppressConsole,
+  ])
 }
 
 /* ── the route gate's own answer ──────────────────────────────────────────────── */
@@ -253,17 +294,32 @@ const SUPPRESSED: RouteAccess = {
  * collection is not evidence about a row.
  */
 export function useRouteAccess(view: FeatureView, search: string): RouteAccess {
-  const { can, principal, activeTenant } = useAuth()
-  const workspace = useWorkspaceStore((s) => s.activeWorkspace)
+  const { can, principal, activeTenant, confinedWorkspace } = useAuth()
+  const selected = useWorkspaceStore((s) => s.activeWorkspace)
   const capability = view.capability
+  const workspace =
+    capability?.scope?.(selected, confinedWorkspace ?? null) ?? selected
+  const reflected =
+    capability?.reflectedRoute?.(
+      search,
+      confinedWorkspace ?? null,
+      !!view.permission && can(view.permission),
+      isGlobalAccount(principal, activeTenant),
+    ) ?? null
   const suppressed = isGlobalAccount(principal, activeTenant)
   const deepLinkQuestion = useMemo(
-    () => capability?.deepLink?.(workspace, search) ?? null,
-    [capability, workspace, search],
+    () =>
+      reflected !== null
+        ? null
+        : (capability?.deepLink?.(workspace, search) ?? null),
+    [capability, workspace, search, reflected],
   )
   const surfaceQuestion = useMemo(
-    () => (deepLinkQuestion ? null : (capability?.surface(workspace) ?? null)),
-    [capability, workspace, deepLinkQuestion],
+    () =>
+      reflected !== null || deepLinkQuestion
+        ? null
+        : (capability?.surface(workspace) ?? null),
+    [capability, workspace, deepLinkQuestion, reflected],
   )
   // ⛔ DECLARED ABOVE, SUBMITTED HERE, AND THE TWO ARE NOT THE SAME FACT. Both questions
   //    are still probed on every render, so the hook count does not depend on the url or
@@ -271,8 +327,14 @@ export function useRouteAccess(view: FeatureView, search: string): RouteAccess {
   //    submitted question is null, so no request is made and no cadence is started.
   const deepLink = useCapability(suppressed ? null : deepLinkQuestion)
   const surface = useCapability(suppressed ? null : surfaceQuestion)
-  if (!capability)
-    return !view.permission || can(view.permission)
+  // A room's default door uses the same independent collection answers as its
+  // navigation. Explicit tab/entity links continue to require their exact answer.
+  const landing =
+    reflected === null ? capability?.navigation?.(workspace, search) : undefined
+  const landingOne = useCapability(suppressed ? null : (landing?.[0] ?? null))
+  const landingTwo = useCapability(suppressed ? null : (landing?.[1] ?? null))
+  if (!capability || reflected !== null)
+    return reflected !== false && (!view.permission || can(view.permission))
       ? REFLECTED('permitted')
       : REFLECTED('forbidden')
   // ⛔ NOTHING TO ASK IS NOT THE SAME AS NO ANSWER YET, and conflating them costs the
@@ -293,7 +355,19 @@ export function useRouteAccess(view: FeatureView, search: string): RouteAccess {
   //    hazard this branch is ordered against, and it is why the family check comes after.
   if (!deepLinkQuestion && !surfaceQuestion) return REFLECTED('permitted')
   if (suppressed) return SUPPRESSED
-  return routeOf(deepLinkQuestion ? deepLink : surface)
+  const primary = deepLinkQuestion ? deepLink : surface
+  if (landing) {
+    const candidates = [primary, landingOne, landingTwo]
+    const positive = candidates.find(
+      (answer) => stateOfObservation(answer.access) === 'allowed',
+    )
+    if (positive) return routeOf(positive)
+    const unsettled = candidates.find(
+      (answer) => stateOfObservation(answer.access) !== 'denied',
+    )
+    return routeOf(unsettled ?? primary)
+  }
+  return routeOf(primary)
 }
 
 /**

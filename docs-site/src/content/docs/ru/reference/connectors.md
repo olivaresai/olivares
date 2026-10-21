@@ -7,6 +7,10 @@ description: >-
   плюс пункты назначения вывода.
 ---
 
+:::note[Business]
+Экспорт аудита (`GET /v1/audit/export`, `olivares audit export`), архивы в каталогах и проверка внешних архивов требуют Business. Community сохраняет подписанный журнал, `olivares audit verify` и `olivares dr backup`; экспорт возвращает HTTP 501 или код выхода 9. Пересылка аудита и перенос DDIL между изолированными сетями также требуют Business.
+:::
+
 Эта страница — **каталог** первичных (first-party) коннекторов и, для каждого, **честный
 уровень покрытия**, который он способен поддерживать. Она дополняет
 [подключение источника](/ru/how-to/connect-a-source/), где объясняется *модель* коннектора
@@ -107,7 +111,7 @@ description: >-
 |---|---|---|
 | `claude` | Телеметрия инструментов Claude Code OTLP + интроспекция MCP → рёбра / стоимость / находки | Плагин вне процесса; `attributed` при наличии идентичности на уровне агента, иначе `approximate` |
 | `claude-api` | Образцы стоимости Claude Admin-API + находки о состоянии управления | В процессе; no-op в офлайне (нет административного ключа) |
-| `claude-compliance` | Доказательства из ленты активности Claude Compliance → находки | Только GET по построению; no-op в офлайне |
+| `claude-compliance` | Доказательства из ленты активности Claude Compliance → находки | Только GET по построению; no-op в офлайне (Business) |
 | `claude-config` | Статическое дерево конфигурации Claude (субагенты / Skills / плагины) → рёбра **заявленной возможности** | Только метаданные — поверхность возможностей, а не наблюдаемый доступ |
 | `claude-console` | IAM организации Claude → находки о состоянии SSO/SCIM (реестр идентичностей + источник) | Business: Identity & Scale;  |
 | `claude-wif` | Реестр нечеловеческих идентичностей / рабочих идентичностей Anthropic + рёбра разрешённой области | Business: Identity & Scale; Моделирует объявленную оператором федерацию; помечает риски статических ключей |
@@ -273,7 +277,7 @@ gen-ai (они переехали в `open-telemetry/semantic-conventions-genai`
 | `bigquery-audit` | Аудит доступа к данным BigQuery |
 | `redshift-audit` | Аудит Amazon Redshift |
 | `mssql-audit` | Аудит SQL Server |
-| `oracle-audit` | Унифицированный аудит Oracle |
+| `oracle-audit` | Унифицированный аудит Oracle (Business) |
 | `gcs-audit` | Аудит доступа к данным Google Cloud Storage |
 | `azure-blob-audit` | Аудит Azure Blob Storage |
 
@@ -367,7 +371,7 @@ Self-hosted inference всегда в области действия, поэт�
 | `iceberg-catalog` | Iceberg REST catalog → разрешённые гранты + выданные идентичности | permitted |
 | `inference-gateway` | Маршрутизация K8s Gateway API Inference-Extension → разрешённые маршруты инференса | permitted |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | Аудит облачного KMS → рёбра доступа к ключам (никогда — материал ключа) | approximate |
-| `external-secrets` / `sops` / `kmip` | Манифесты управления секретами / KMIP locate → рёбра выдачи/хранения | approximate (существование, а не использование) |
+| `external-secrets` / `sops` / `kmip` | Манифесты управления секретами / KMIP locate → рёбра выдачи/хранения | approximate (существование, а не использование); `kmip`: Business |
 | `istio-telemetry` | CRD Istio Telemetry → рёбра L7-меша | approximate (распарсенные CRD, а не живые потоки) |
 | `egress-proxy` | Лог вердиктов egress-прокси → рёбра L7-egress | approximate |
 | `kong-audit` | Логи аудита Kong → находки об изменении конфигурации | approximate |
@@ -505,10 +509,10 @@ blueprint, поставщики учётных данных, агенты на �
 | `gdrive` | Документы Google Drive (Docs/Sheets/Slides/файлы) |
 | `confluence` | Пространства и страницы Atlassian Confluence |
 | `notion` | Рабочие пространства, базы данных и страницы Notion |
-| `sharepoint` | Сайты и документы Microsoft SharePoint / OneDrive |
+| `sharepoint` | Сайты и документы Microsoft SharePoint / OneDrive (Business) |
 | `s3content` | Содержимое объектного хранилища (объекты S3 / R2 / GCS) |
-| `sap_odata` | Сущности сервиса SAP OData как управляемые документы |
-| `salesforce` | Объекты/записи Salesforce как управляемые документы |
+| `sap_odata` | Сущности сервиса SAP OData как управляемые документы (Business) |
+| `salesforce` | Объекты/записи Salesforce как управляемые документы (Business) |
 | `snowflake` | Таблицы/строки Snowflake как управляемые документы (отличается от наблюдателя R/RW `snowflake-audit`) |
 | `azure_ai_search` | Документы индекса Azure AI Search |
 | `postgres` | Строки PostgreSQL как управляемые документы — только чтение по построению, объявленная ACL каждой строки, классификация каждого столбца (отличается от наблюдателя R/RW `pgaudit`; не NL-to-SQL). См. [Postgres как источник управляемого контекста](/ru/how-to/govern-postgres-content/). |

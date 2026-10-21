@@ -49,8 +49,10 @@ var corePermissions = map[string]string{
 	"resetUserTOTP":     "membership:write",
 	// Deployment tracing choices (server.go: systemRoute("system:admin"); the PUT
 	// additionally requires the configured step-up inside the handler).
-	"getTracingSettings":  "system:admin",
-	"saveTracingSettings": "system:admin",
+	"getSessionIdleSettings":  "system:admin",
+	"saveSessionIdleSettings": "system:admin",
+	"getTracingSettings":      "system:admin",
+	"saveTracingSettings":     "system:admin",
 	// Agents + access graph (handlers_core.go).
 	"listAgents":      "agent:read",
 	"getAgent":        "agent:read",
@@ -71,6 +73,7 @@ var corePermissions = map[string]string{
 	"listUsers":         "user:read",
 	"listSuperadmins":   "user:read",
 	"listMembers":       "user:read",
+	"removeMember":      "user:write",
 	"createUser":        "user:write",
 	"disableSuperadmin": "user:write",
 	"enableSuperadmin":  "user:write",
@@ -113,6 +116,9 @@ var corePermissions = map[string]string{
 	"listSecrets":          "system:admin",
 	"putSecret":            "system:admin",
 	"deleteSecret":         "system:admin",
+	"revealSecret":         "tenant:read",
+	"getVaultCode":         "tenant:read",
+	"generatePassword":     "tenant:read",
 	"getLicenseStatus":     "system:admin",
 	"installLicense":       "system:admin",
 	"uninstallLicense":     "system:admin",
@@ -127,6 +133,12 @@ var corePermissions = map[string]string{
 	"putSSOConfig":         "system:admin",
 	"deleteSSOConfig":      "system:admin",
 	"testSSOConfig":        "system:admin",
+
+	// Notification destinations (handlers_notify_destinations.go).
+	"listNotifyDestinations":  "system:admin",
+	"putNotifyDestination":    "system:admin",
+	"deleteNotifyDestination": "system:admin",
+	"testNotifyDestination":   "system:admin",
 
 	// Completed surfaces: each value is the gate the route registration in
 	// server.go applies (tenantRoute/entityRoute/systemRoute/authzenRoute).
@@ -169,6 +181,8 @@ var corePermissions = map[string]string{
 	"streamLogs":             "system:admin",
 	"getModuleSelection":     "system:admin",
 	"selectModules":          "system:admin",
+	"getEngineUpdate":        "system:admin",
+	"applyEngineUpdate":      "system:admin",
 	"reloadRuntime":          "system:admin",
 	"getSourceContentDiff":   "system:admin",
 	"listSSOIdPs":            "system:admin",

@@ -38,6 +38,8 @@ import { ModelGovernanceSection } from './roles-model-section'
 import { scopeLabel } from './roles-shared'
 import { StaticTable } from '@/components/data/static-table'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { GRANT_CREATION, useConsoleOperation } from './console-authority'
+import { useConsoleDraft, useDiscardConsoleDraft } from './console-drafts'
 
 /**
  * RolesTab is the FASE X Roles & delegation panel — the console UI over the
@@ -51,8 +53,14 @@ import { PANEL_EXTENSIONS } from '@/features/extensions'
 export function RolesTab() {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant, can } = useAuth()
-  const canRead = can('governance:rbac:read')
-  const canAdmin = can('governance:rbac:admin')
+  const delegation = useConsoleOperation(
+    GRANT_CREATION,
+    'governance:rbac:admin',
+  )
+  const canRead = can('governance:rbac:read') || delegation.current
+  const tenantAdmin = useConsoleOperation('', 'tenant:admin').current
+  const canAdmin = useConsoleOperation('', 'governance:rbac:admin').current
+  const departmentOnly = !!delegation.workspace && !tenantAdmin
 
   const catalog = useQuery({
     queryKey: consoleKeys.rbacCatalog(),
@@ -61,34 +69,57 @@ export function RolesTab() {
     staleTime: 5 * 60_000,
   })
   const authority = useQuery({
-    queryKey: consoleKeys.delegationAuthority(activeTenant),
-    queryFn: () => consoleApi.delegationAuthority(),
+    queryKey: delegation.workspace
+      ? [...consoleKeys.delegationAuthority(activeTenant), delegation.workspace]
+      : consoleKeys.delegationAuthority(activeTenant),
+    queryFn: () =>
+      delegation.workspace
+        ? consoleApi.delegationAuthority(delegation.workspace)
+        : consoleApi.delegationAuthority(),
     enabled: canRead,
   })
   const roles = useQuery({
     queryKey: consoleKeys.roles(activeTenant),
     queryFn: () => consoleApi.listRoles(),
-    enabled: canRead,
+    enabled: canRead && !departmentOnly,
   })
   const groups = useQuery({
     queryKey: consoleKeys.permGroups(activeTenant),
     queryFn: () => consoleApi.listPermGroups(),
-    enabled: canRead,
+    enabled: canRead && !departmentOnly,
   })
   const grants = useQuery({
-    queryKey: consoleKeys.grants(activeTenant),
-    queryFn: () => consoleApi.listGrants(),
+    queryKey: delegation.workspace
+      ? [...consoleKeys.grants(activeTenant), delegation.workspace]
+      : consoleKeys.grants(activeTenant),
+    queryFn: () =>
+      delegation.workspace
+        ? consoleApi.listGrants(delegation.workspace)
+        : consoleApi.listGrants(),
     enabled: canRead,
   })
   const workspaces = useQuery({
     queryKey: consoleKeys.workspaces(activeTenant),
     queryFn: () => consoleApi.listWorkspaces(),
-    enabled: canRead && can('tenant:read'),
+    enabled: canRead && !departmentOnly && can('tenant:read'),
+  })
+  const selectedDepartment = useQuery({
+    queryKey: consoleKeys.workspace(activeTenant, delegation.workspace ?? ''),
+    queryFn: ({ signal }) =>
+      consoleApi.getWorkspaceByID(delegation.workspace!, { signal }),
+    enabled: canRead && departmentOnly,
   })
   const agentGroups = useQuery({
-    queryKey: consoleKeys.agentGroups(activeTenant),
-    queryFn: () => consoleApi.listAgentGroups(),
-    enabled: canRead && can('agent:read'),
+    queryKey: delegation.workspace
+      ? [...consoleKeys.agentGroups(activeTenant), delegation.workspace]
+      : consoleKeys.agentGroups(activeTenant),
+    queryFn: () =>
+      consoleApi.listAgentGroups(
+        delegation.workspace
+          ? { workspace_id: delegation.workspace }
+          : undefined,
+      ),
+    enabled: canRead && !departmentOnly && can('agent:read'),
   })
 
   if (!canRead) {
@@ -103,12 +134,31 @@ export function RolesTab() {
     )
   }
 
+  if (departmentOnly && selectedDepartment.isError)
+    return (
+      <QueryErrorState
+        error={selectedDepartment.error}
+        retry={() => void selectedDepartment.refetch()}
+      />
+    )
+  if (departmentOnly && selectedDepartment.isPending)
+    return (
+      <div className="flex py-3">
+        <Spinner />
+      </div>
+    )
+
   const cat = catalog.data
-  const roleItems = roles.data?.items ?? []
-  const groupItems = groups.data?.items ?? []
-  const grantItems = grants.data?.items ?? []
-  const wsItems = workspaces.data?.items ?? []
+  const roleItems = departmentOnly ? [] : (roles.data?.items ?? [])
+  const groupItems = departmentOnly ? [] : (groups.data?.items ?? [])
+  const department = selectedDepartment.data
+  const wsItems = departmentOnly
+    ? department
+      ? [department]
+      : []
+    : (workspaces.data?.items ?? [])
   const agItems = agentGroups.data?.items ?? []
+  const grantItems = grants.data?.items ?? []
 
   return (
     <div className="flex flex-col gap-8 pt-4">
@@ -130,41 +180,47 @@ export function RolesTab() {
         error={grants.error}
         refetch={() => void grants.refetch()}
         canAdmin={canAdmin}
+        canCreate={delegation.current && (!departmentOnly || !!department)}
+        department={departmentOnly ? department : undefined}
       />
 
-      <InheritanceFiltersSection
-        catalog={cat}
-        workspaces={wsItems}
-        agentGroups={agItems}
-        canAdmin={canAdmin}
-      />
+      {tenantAdmin && (
+        <>
+          <InheritanceFiltersSection
+            catalog={cat}
+            workspaces={wsItems}
+            agentGroups={agItems}
+            canAdmin={canAdmin}
+          />
 
-      <RolesSection
-        catalog={cat}
-        roles={roleItems}
-        groups={groupItems}
-        loading={roles.isLoading}
-        isError={roles.isError}
-        error={roles.error}
-        refetch={() => void roles.refetch()}
-        canAdmin={canAdmin}
-      />
+          <RolesSection
+            catalog={cat}
+            roles={roleItems}
+            groups={groupItems}
+            loading={roles.isLoading}
+            isError={roles.isError}
+            error={roles.error}
+            refetch={() => void roles.refetch()}
+            canAdmin={canAdmin}
+          />
 
-      <GroupsSection
-        catalog={cat}
-        groups={groupItems}
-        loading={groups.isLoading}
-        isError={groups.isError}
-        error={groups.error}
-        refetch={() => void groups.refetch()}
-        canAdmin={canAdmin}
-      />
+          <GroupsSection
+            catalog={cat}
+            groups={groupItems}
+            loading={groups.isLoading}
+            isError={groups.isError}
+            error={groups.error}
+            refetch={() => void groups.refetch()}
+            canAdmin={canAdmin}
+          />
 
-      <GroupHierarchySection canAdmin={canAdmin} />
+          <GroupHierarchySection canAdmin={canAdmin} />
 
-      <ModelGovernanceSection />
+          <ModelGovernanceSection />
 
-      <AccessReviewSection />
+          <AccessReviewSection />
+        </>
+      )}
     </div>
   )
 }
@@ -225,7 +281,12 @@ function DelegationAuthorityCard({
                     </span>
                   )}
                 </div>
-                <div className="mt-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+                <div
+                  aria-label={scopeLabel(t, d.scope_tree, d.scope_ref)}
+                  className="mt-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto"
+                  role="region"
+                  tabIndex={0}
+                >
                   {d.permissions.map((p) => (
                     <code
                       key={p}
@@ -257,6 +318,8 @@ function GrantsSection({
   error,
   refetch,
   canAdmin,
+  canCreate,
+  department,
 }: {
   catalog?: RBACCatalogDTO
   grants: ScopedGrantDTO[]
@@ -269,11 +332,21 @@ function GrantsSection({
   error?: unknown
   refetch: () => void
   canAdmin: boolean
+  canCreate: boolean
+  department?: { id: string; slug: string; name: string }
 }) {
   const GrantForm = PANEL_EXTENSIONS.authorizationForms?.GrantForm
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useConsoleDraft(
+    'grant:create:open',
+    false,
+  )
+  const discardDraft = useDiscardConsoleDraft()
+  const closeCreate = () => {
+    setCreateOpen(false)
+    discardDraft('grant:create:')
+  }
   const [revoke, setRevoke] = useState<ScopedGrantDTO | null>(null)
 
   const revokeMutation = usePrivilegedMutation<string, void>({
@@ -297,7 +370,7 @@ function GrantsSection({
             {t('console:roles.grants.caption')}
           </p>
         </div>
-        {canAdmin && GrantForm && (
+        {canCreate && GrantForm && (
           <Button onClick={() => setCreateOpen(true)}>
             <Plus />
             {t('console:roles.grants.create')}
@@ -313,7 +386,7 @@ function GrantsSection({
       ) : grants.length === 0 ? (
         <EmptyState
           action={
-            canAdmin && GrantForm ? (
+            canCreate && GrantForm ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus />
                 {t('console:roles.grants.create')}
@@ -384,16 +457,20 @@ function GrantsSection({
         </div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen && canCreate}
+        onOpenChange={(open) => (open ? setCreateOpen(true) : closeCreate())}
+      >
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          {createOpen && GrantForm && (
+          {createOpen && canCreate && GrantForm && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <GrantForm
                 catalog={catalog}
                 roles={roles}
                 workspaces={workspaces}
                 agentGroups={agentGroups}
-                onClose={() => setCreateOpen(false)}
+                department={department}
+                onClose={closeCreate}
               />
             </RequireAssurance>
           )}

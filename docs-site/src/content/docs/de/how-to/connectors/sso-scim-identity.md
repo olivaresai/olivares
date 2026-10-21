@@ -10,7 +10,7 @@ sidebar:
 ---
 
 :::note[Edition]
-Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs) sowie der Lebenszyklus verwalteter Identitäten benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, eingehendes SCIM für Benutzer/Gruppen, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
+Verzeichnisquellen (LDAP, Okta/Entra und Agent-/Workload-IdPs), der Lebenszyklus verwalteter Identitäten sowie der eingehende SCIM-Server benötigen Business/Enterprise-Erweiterungen. Community behält allgemeinen Source-Ingest, Ressourcenkatalog, Sicherheitsbefunde, Access Map, Identitätsinventar, Single-IdP-SSO, lokale Rollen und Bindungen, Policies und Freigaben. Kostenpflichtige Konsolenbereiche und CLI-Befehle sind ausgeblendet; ihre veröffentlichten API-Routen liefern HTTP `501`. Das Aktivieren eines Moduls fügt seine Business-Implementierung nicht hinzu.
 :::
 
 Identität ist die harte Abhängigkeit unter der gesamten Access Map: natives
@@ -45,13 +45,20 @@ erwarteten Wert und zeigt den Verbindungszustand — und wo das Backend eines
 Panels ein deklarierter Vertrag ist, der noch nicht live ist, sagt es
 „backend pending“, statt fabrizierte Daten zu rendern:
 
-<img class="light:sl-hidden" src="/console/identity-dark.png" alt="Die Identity-&-NHI-Ansicht: SSO-Konfiguration mit exakter Redirect-URI-Prüfung, das NHI-Roster und Schlüssel-Posture-Tabs." />
-<img class="dark:sl-hidden" src="/console/identity-light.png" alt="Die Identity-&-NHI-Ansicht: SSO-Konfiguration mit exakter Redirect-URI-Prüfung, das NHI-Roster und Schlüssel-Posture-Tabs." />
+<img class="light:sl-hidden" src="/console/identity-dark.png" alt="Die Identity-&-access-Ansicht: Benutzer und Gruppen, SSO-Anmeldung, Maschinenidentitäten (NHI) und Schlüssel-Posture." />
+<img class="dark:sl-hidden" src="/console/identity-light.png" alt="Die Identity-&-access-Ansicht: Benutzer und Gruppen, SSO-Anmeldung, Maschinenidentitäten (NHI) und Schlüssel-Posture." />
 
-## 2. SCIM-Provisionierung (inbound)
+## 2. SCIM-Provisionierung (inbound) — Business
 
-Die Control Plane ist ein standardkonformer SCIM-2.0-Service-Provider (RFC
-7644) unter:
+Der eingehende SCIM-Server ist eine Business-Funktion (Identity & Scale). Ein
+Community-Server stellt dieselben URLs bereit, authentifiziert das Token und
+antwortet dann mit HTTP `501` im SCIM-Fehlerformat, wobei Business genannt wird;
+es wird nichts gelesen oder geschrieben. In Community entfernen Sie eine Person
+aus der Organisation in der Konsole (Personen) oder mit
+`DELETE /v1/members/{id}`.
+
+Mit Business ist die Control Plane ein standardkonformer SCIM-2.0-Service-Provider
+(RFC 7644) unter:
 
 ```
 /v1/scim/v2/Users
@@ -60,9 +67,9 @@ Die Control Plane ist ein standardkonformer SCIM-2.0-Service-Provider (RFC
 
 - **Auth:** ein tenant-gebundenes **Admin-/Owner-API-Token** auf der
   SCIM-Integration — dasselbe Opaque-Token-Modell wie der Rest der API, kein
-  separater SCIM-Geheimnistyp. Der Endpunkt ist immer vorhanden (nicht
-  feature-gated).
-- **Users** provisioniert und deprovisioniert Identitäten in jeder Edition, Community eingeschlossen.
+  separater SCIM-Geheimnistyp. Die URLs sind immer eingehängt (nicht
+  feature-gated); Community antwortet dort mit `501`.
+- **Users** provisioniert und deprovisioniert Identitäten.
   Änderungen setzen die Zustellung und erfolgreiche Verarbeitung der SCIM-Anfrage
   voraus. Prüfen Sie die Antwort und die betroffenen Zugriffsrechte; ein HR-Ereignis
   allein belegt keinen abgeschlossenen Entzug. SCIM entfernt keine Betriebssystemkonten.

@@ -19,8 +19,9 @@ import (
 
 func newWikiCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "wiki",
-		Short: "Initialize a folder wiki and run its ingest, query or lint skill",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "wiki",
+		Short:       "Initialize a folder wiki and run its ingest, query or lint skill",
 		Long: "Initialize a folder wiki and run its ingest, query or lint skill in governed sessions.\n" +
 			"Use an engine-host folder path or a registered session workspace reference.\n" +
 			"Initialize the wiki before running an operation; use session follow or session show\n" +
@@ -67,8 +68,9 @@ func wikiFolder(cmd *cobra.Command, cfg *agentClientConfig, value string) (map[s
 func newWikiInitCmd() *cobra.Command {
 	cfg := &agentClientConfig{}
 	cmd := &cobra.Command{
-		Use:   "init <workspace>",
-		Short: "Create a wiki and assign its bundled skill without replacing files",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "init <workspace>",
+		Short:       "Create a wiki and assign its bundled skill without replacing files",
 		Long: "Create missing wiki files in an engine-host folder and assign its bundled skill.\n" +
 			"Existing files are preserved. Accepts a folder path or a registered session workspace\n" +
 			"reference.",

@@ -2928,7 +2928,7 @@ describe('SessionsWorkspaceView — with no driver on the row, the cell paints n
    * ⛔ AND THE FOURTH CAUSE IS SILENT ON PURPOSE: there the read ANSWERED. A line saying
    *    the names could not be read would be false about a read that succeeded.
    */
-  it('profiles refused by the GRANT: the screen says so once, and names the grant', async () => {
+  it('profiles refused by the GRANT: the screen says so once, and blames the role', async () => {
     grant(...BOTH_READ_AND_RUN_WRITE)
     renderView()
     await rowFor(DRIVERLESS_AT, 'spr-auth/driverless/refused-row')
@@ -2936,8 +2936,8 @@ describe('SessionsWorkspaceView — with no driver on the row, the cell paints n
     const notice = await screen.findByTestId('sessions-profile-names-refused')
     expect(
       notice.textContent,
-      'spr-auth/driverless/notice-names-the-grant',
-    ).toContain('sessions:profile:read')
+      'spr-auth/driverless/notice-blames-the-role',
+    ).toContain('your role cannot read profiles')
     expect(
       screen.queryByTestId('sessions-profile-names-failed'),
       'spr-auth/driverless/one-cause-one-line',

@@ -47,6 +47,9 @@ func TestHonestSeamRefusalsKeepAnActionableMessage(t *testing.T) {
 	}{
 		{auth.ErrSSONotConfigured, http.StatusNotImplemented, "sso_not_configured", "SSO is not configured"},
 		{auth.ErrNoFederationSealer, http.StatusServiceUnavailable, "sso_unavailable", "no secret sealer"},
+		// A Business connector asked of a Community build: the one status and sentence for
+		// "Business capability", even when the composition root wraps the sentinel.
+		{fmt.Errorf("%w: the \"kmip\" connector is a Business capability", ErrConnectorUnavailable), http.StatusNotImplemented, "connector_unavailable", "Business"},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()

@@ -83,7 +83,6 @@
     "activeUsers": "Cuentas de usuario activas",
     "noUserLimit": "self-hosted: sin límite",
     "expires": "Caduca",
-    "paidThrough": "Pagada hasta",
     "leaseUntil": "Periodo provisional hasta",
     "leaseNote": "Periodo provisional (ventana de reembolso). Renuévalo antes de esta fecha para seguir válida hasta la fecha pagada.",
     "issued": "Emitida",
@@ -96,6 +95,9 @@
       "data-dir": "directorio de datos"
     },
     "communityNote": "Edición Community: aplicar una licencia verificada muestra sus datos aquí; no cambia esta compilación.",
+    "buildMismatch": "Tu licencia es para {{edition}}; esta instalación ejecuta la compilación Community.",
+    "switchBuild": "Cambiar a {{edition}}",
+    "editionAdds": "{{edition}} añade (según la documentación de ediciones):",
     "expiredBanner": "Esta licencia comercial ha caducado: los módulos Business quedan inactivos y el deployment se comporta como la edición community. Tus datos y tus cuentas de usuario están intactos — ninguna cuenta se ha limitado, desactivado ni borrado. Instala una licencia renovada para restaurar los módulos.",
     "managedExternally": "La licencia se gestiona fuera de banda (origen: {{source}}). Edita ese origen para cambiarla — instalar desde la consola está desactivado para evitar un fichero ensombrecido.",
     "installTitle": "Instalar o actualizar la licencia",
@@ -914,7 +916,7 @@
     "addon": "Módulo",
     "state": "Estado",
     "tier": "Preset",
-    "restartNote": "La activación se aplica al reiniciar el motor (los módulos se cablean en el arranque).",
+    "restartNote": "La activación se aplica al reiniciar el motor (los módulos se cargan en el arranque).",
     "promote": "Activar",
     "promoted": "{{addon}} activado.",
     "promoteFailed": "No se pudo activar el módulo.",
@@ -939,7 +941,9 @@
       "model": "Modelo",
       "provider": "Proveedor",
       "knowledge": "Conocimiento",
-      "data": "Datos"
+      "data": "Datos",
+      "profile": "Perfil de proveedor",
+      "tool": "Herramienta de IA"
     },
     "sourceRef": "Referencia de fuente",
     "sourceRefHint": "Usa la referencia exacta de la fuente. No existe un catálogo único para todos los tipos de fuente.",
@@ -1076,7 +1080,7 @@
         "rw": "Lectura/escritura",
         "ro": "Sólo lectura",
         "disabled": "Desactivada",
-        "forbidden": "sin resolver — te falta sourcescope:assignment:read",
+        "forbidden": "sin resolver — tu rol no puede leer las asignaciones de fuentes",
         "unknown": "sin resolver — el listado de asignaciones no cargó entero",
         "notFound": "ninguna asignación coincide",
         "notApplicable": "el objetivo no es una asignación — este resolvedor no aplica"

@@ -70,12 +70,22 @@ func (m *Module) BeginApprovalWait(ctx context.Context, principal auth.Principal
 	}, nil
 }
 
-func (m *Module) pendingRunApproval(rec model.Record) string {
+// currentLiveOf is the supervised handle of a running row: the same launch, session and
+// fence the row records. A row this runtime does not supervise has none.
+func (m *Module) currentLiveOf(rec model.Record) (*liveRun, bool) {
 	if rec.String(colState) != stateRunning {
-		return ""
+		return nil, false
 	}
 	lr, ok := m.rt.getLive(model.TenantID(rec.String(model.ColTenantID)), rec.String(colRunRef))
 	if !ok || lr.launchID.String() != rec.String(colRuntimeLaunchID) || lr.claim.SID != rec.String(colRunClaimSID) || lr.claim.Fence != rec.Int(colClaimFence) {
+		return nil, false
+	}
+	return lr, true
+}
+
+func (m *Module) pendingRunApproval(rec model.Record) string {
+	lr, ok := m.currentLiveOf(rec)
+	if !ok {
 		return ""
 	}
 	lr.mu.Lock()

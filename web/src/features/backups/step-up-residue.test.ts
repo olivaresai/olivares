@@ -52,7 +52,7 @@ const sinComentarios = (src: string): string[] => {
   })
 }
 
-// The six remaining subjects in the public console; RegOps and NIS 2 panels ship with
+// The five remaining subjects in the public console; RegOps and NIS 2 panels ship with
 // Business. Extend the list while fixing subjects, not afterward: a check that covers only
 // the initial subjects can silently pass without inspecting later ones.
 const SUJETOS = [
@@ -228,7 +228,7 @@ describe('el residuo de ceremonia: la acusación nunca va sin la salida delante'
 
   it('checks every subject in this edition with one decision each', () => {
     // Un cero sobre cero ficheros no es un cero.
-    expect(SUJETOS.length).toBe(6)
+    expect(SUJETOS.length).toBe(5)
     for (const rel of SUJETOS) {
       const l = leer(rel)
       expect(l.length, `${rel} vacío`).toBeGreaterThan(50)

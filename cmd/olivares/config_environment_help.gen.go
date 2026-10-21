@@ -127,6 +127,8 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Data directory used when `--data-dir` is not given: audit signing key, TLS material and, for SQLite, the store file.\n" +
 	"  OLIVARES_DB_MAX_CONNS\n" +
 	"    Upper bound on pooled database connections. Unset leaves the driver default.\n" +
+	"  OLIVARES_DECOY_CREDENTIALS_CONFIG\n" +
+	"    Path to the JSON file that turns on decoy credentials: credential-shaped files with random per-session values planted in a session home, and a high-severity finding when a tool call names one or a request carries its value. Read only by the Business edition (AI Runtime Security). The file may be `{}`; `stop_session` makes a touch deny the call and end the session. Unset leaves the control off; a file that cannot be read or parsed makes launches refuse to start until it is fixed and the engine is restarted.\n" +
 	"  OLIVARES_DEPLOY_EXECUTOR_CONFIG\n" +
 	"    Path to the JSON configuration of the executor that applies deployment changes.\n" +
 	"  OLIVARES_DR_KEK_FILE\n" +
@@ -252,9 +254,9 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_GUARDIAN_SWEEP_INTERVAL\n" +
 	"    How often the guardian sweep runs, as a Go duration. `0` disables it.\n" +
 	"  OLIVARES_HA_LEADER_GATE\n" +
-	"    Set to `1` to make background loops run only on the elected leader, so a multi-replica deployment does not run them twice.\n" +
+	"    Set to `1` to make background loops run only on the elected leader, so a multi-replica deployment does not run them twice. Business edition only: a Community binary with this set refuses to start and names Business.\n" +
 	"  OLIVARES_HA_LEADER_LABEL\n" +
-	"    Label this replica publishes when it holds leadership, so an operator can route to the leader.\n" +
+	"    Label this replica publishes when it holds leadership, so an operator can route to the leader. Business edition only: a Community binary with this set refuses to start and names Business.\n" +
 	"  OLIVARES_HITL_CONFIG\n" +
 	"    Path to the JSON configuration of the human-in-the-loop review path.\n" +
 	"  OLIVARES_HOOK_FIREWALL_CONFIG\n" +
@@ -286,7 +288,7 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_INVITE_MAIL_DESTINATION\n" +
 	"    Name of the email destination in the notification file, scoped to no tenant, that invitations are mailed through. Without it, and without a declared console address, invite mode is unavailable.\n" +
 	"  OLIVARES_KEY_CUSTODY\n" +
-	"    Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded.\n" +
+	"    Business edition only. Custody posture required of the audit signing key: whether a raw on-disk key is accepted or a wrapped one is demanded. Community refuses to run with `byok` or `cmek`; unset is valid in every edition.\n" +
 	"  OLIVARES_KEY_WRAP*\n" +
 	"    Family stem naming the key management backend that wraps signing keys.\n" +
 	"  OLIVARES_KEY_WRAP_*\n" +
@@ -312,31 +314,31 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_KEY_WRAP_OLD\n" +
 	"    Previous key management backend during a rewrap migration, so keys wrapped by it can still be unwrapped.\n" +
 	"  OLIVARES_LEDGER_CUSTODY\n" +
-	"    Custody posture required of the ledger checkpoint signer, the ledger counterpart of the audit key posture.\n" +
+	"    Business edition only. Custody posture required of the ledger checkpoint signer, the ledger counterpart of the audit key posture. Community refuses to run with `hyok`; unset is valid in every edition.\n" +
 	"  OLIVARES_LEDGER_KMS_*\n" +
-	"    Family prefix from which the per-backend ledger signer keys are built.\n" +
+	"    Business edition only. Family prefix from which the per-backend ledger signer keys are built.\n" +
 	"  OLIVARES_LEDGER_KMS_AWS_KEY_ID\n" +
-	"    Key identifier in AWS KMS. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Key identifier in AWS KMS. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_AWS_REGION\n" +
-	"    Region of the AWS KMS key. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Region of the AWS KMS key. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_AWS_SIGNING_ALG\n" +
-	"    Signing algorithm requested from AWS KMS. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Signing algorithm requested from AWS KMS. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_AZURE_KEY_NAME\n" +
-	"    Key name in Azure Key Vault. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Key name in Azure Key Vault. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_AZURE_KEY_VERSION\n" +
-	"    Key version in Azure Key Vault. Unset uses the current version. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Key version in Azure Key Vault. Unset uses the current version. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_AZURE_TOKEN\n" +
-	"    Token used against Azure Key Vault. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Token used against Azure Key Vault. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_AZURE_VAULT_URL\n" +
-	"    Azure Key Vault URL. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Azure Key Vault URL. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_GCP_KEY\n" +
-	"    Fully qualified key version name in Google Cloud KMS. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Fully qualified key version name in Google Cloud KMS. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_GCP_TOKEN\n" +
-	"    Token used against Google Cloud KMS. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Token used against Google Cloud KMS. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_KMS_GCP_TOKEN_FILE\n" +
-	"    Path to the file holding the token used against Google Cloud KMS. Used by the backend that signs audit checkpoints.\n" +
+	"    Business edition only. Path to the file holding the token used against Google Cloud KMS. Used by the backend that signs audit checkpoints.\n" +
 	"  OLIVARES_LEDGER_SIGNER\n" +
-	"    Off-box checkpoint signer to use: which key management backend signs audit checkpoints instead of a local key.\n" +
+	"    Business edition only. Off-box checkpoint signer to use: which key management backend signs audit checkpoints instead of a local key. Community refuses to run with any value except unset, `on-box` or `ed25519`.\n" +
 	"  OLIVARES_LICENSE\n" +
 	"    License document itself, inline, for deployments that cannot mount a file.\n" +
 	"  OLIVARES_LICENSE_PATH\n" +
@@ -414,15 +416,17 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"  OLIVARES_PDF_RENDER_TIMEOUT\n" +
 	"    Maximum time one Chromium render of a PDF report may take, as a positive Go duration with units. Read by the reporting add-on for each render; a value that is not a positive duration is refused by name before Chromium is started. Raise it on slow hosts where a structural render does not fit the default. Default: 30s.\n" +
 	"  OLIVARES_PDP_CEDAR_FILE\n" +
-	"    Path to the Cedar policy file, for the `cedar` decision point.\n" +
+	"    Business edition only. Path to the Cedar policy file, for the `cedar` decision point.\n" +
 	"  OLIVARES_PDP_ENGINE\n" +
-	"    External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`.\n" +
+	"    Business edition only. External policy decision point to add on top of the native engine: `cedar`, `opa` or `none`. Community refuses serving with `cedar`, `opa` or any other engine value; unset, blank or `none` is valid there.\n" +
 	"  OLIVARES_PDP_OPA_PATH\n" +
-	"    Decision path queried under the Open Policy Agent endpoint.\n" +
+	"    Business edition only. Decision path queried under the Open Policy Agent endpoint.\n" +
 	"  OLIVARES_PDP_OPA_TOKEN\n" +
-	"    Bearer token for the Open Policy Agent endpoint.\n" +
+	"    Business edition only. Bearer token for the Open Policy Agent endpoint.\n" +
 	"  OLIVARES_PDP_OPA_URL\n" +
-	"    Base URL of the Open Policy Agent endpoint, for the `opa` decision point.\n" +
+	"    Business edition only. Base URL of the Open Policy Agent endpoint, for the `opa` decision point.\n" +
+	"  OLIVARES_PII_TOKENS_CONFIG\n" +
+	"    Path to the JSON configuration of the reversible PII token flow for session MCP tools. Read only by the Business edition (AI Runtime Security). Unset leaves tool arguments and results untouched; a file that cannot be read or parsed makes the engine refuse every token restore and withhold every session tool result until the file is fixed and the engine is restarted.\n" +
 	"  OLIVARES_PIV_CONFIG\n" +
 	"    Path to the JSON configuration for Business Identity & Scale smart-card privileged login. Community refuses serving with this setting; data backup remains available.\n" +
 	"  OLIVARES_POLICY_MAX_STALENESS\n" +
@@ -527,6 +531,10 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. Default: 10s.\n" +
 	"  OLIVARES_SESSION_BUDGET_AVAILABILITY\n" +
 	"    Whether session budget enforcement is required, and what happens when the budget service cannot answer.\n" +
+	"  OLIVARES_SESSION_CONTAINER_IMAGE\n" +
+	"    Image that container sessions (`isolation=container`) run in. It must hold what the tool shells out to, such as git and a shell, and run the host's tool program, which is mounted into it read-only. Default: localhost/olivares-session:latest.\n" +
+	"  OLIVARES_SESSION_CONTAINER_RUNTIME\n" +
+	"    Container runtime for `isolation=container`: `auto` uses podman, then docker, whichever is installed; `podman` or `docker` pins one; `off` turns container isolation off. Read at engine start. Default: auto.\n" +
 	"  OLIVARES_SESSION_CONTEXT_AVAILABILITY\n" +
 	"    Whether session context governance is required, and what happens when the context service cannot answer.\n" +
 	"  OLIVARES_SESSION_KILLSWITCH_SWEEP\n" +
@@ -627,5 +635,7 @@ const configEnvironmentHelp = "Environment variables (process values override ac
 	"    SPIFFE trust domain accepted for workload identity.\n" +
 	"  OLIVARES_WORK_OUTBOX_INTERVAL\n" +
 	"    How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump.\n" +
+	"  OLIVARES_WORK_SESSION_ID\n" +
+	"    Session identity set by the engine in a launched tool; session show, events and peers resolve self or current from it. It does not grant permissions.\n" +
 	"  OLIVARES_WORK_TOKEN\n" +
 	"    The session's own scoped work credential, injected by the session launcher and read by work commands. Operators must not supply it. Its value is always redacted.\n"

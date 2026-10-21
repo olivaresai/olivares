@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](../../docs/editions.md).
 
-> **Editions from 0.1:** CMEK ceremonies and sealed configuration loading require the Business build. Operator-provided signing keys (BYOK), off-box checkpoint signing (HYOK) and `keys status` remain Community. A Community binary refuses a configured CMEK installation before opening its store or creating keys. Use the Business build with the customer's key service for `dr backup` and `keys unseal`; no active license is required for recovery.
+> **Editions from 0.1:** CMEK ceremonies and sealed configuration loading require the Business build. Operator-provided signing keys and `keys status` remain Community. The custody assertions BYOK (`OLIVARES_KEY_CUSTODY=byok`) and HYOK (`OLIVARES_LEDGER_CUSTODY=hyok`), the off-box checkpoint signer (`OLIVARES_LEDGER_SIGNER`) and `olivares audit key-transition` require the Business build; a Community binary refuses them with exit code 9. A Community binary refuses a configured CMEK installation before opening its store or creating keys. Use the Business build with the customer's key service for `dr backup` and `keys unseal`; no active license is required for recovery.
 
 **Severity:** planned maintenance, or **SEV1** on suspected key compromise.
 
@@ -27,7 +27,7 @@ Audit SIEM export, directory archives and external archive verification require 
   - **BYOK/minted:** a plaintext base64 key (`<data-dir>/audit-signing.key`, `0600`, fails closed on loose
     perms) or a mounted/env Secret. No envelope history — fence externally (see path C).
 - Off-box checkpoint + boundary signer: `OLIVARES_LEDGER_SIGNER=aws-kms|gcp-kms|azure-kv` (+ provider vars,
-  `cmd/olivares/ledgersigner.go`). **Required** to seal an in-chain rotation boundary (`audit key-transition`).
+  `cmd/olivares/ledgersigner.go`). **Required** to seal an in-chain rotation boundary (`audit key-transition`). Business only.
 - `<data-dir>/catalog-signing.key` — a **separate** artifact-signing key; **not** the audit key.
 
 ## A) Supported path — chain-continuous rotation under CMEK (engine STOPPED)

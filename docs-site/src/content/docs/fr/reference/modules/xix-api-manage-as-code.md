@@ -70,7 +70,7 @@ et est une jointure deny-closed.
 :::caution[Limites honnêtes]
 - **`olivares_deployment` déclare ; il ne déploie pas.** La resource écrit une
   *définition* de déploiement via les routes du module VII. L'`apply`/`retire` live contre une vraie
-  infrastructure est une **jointure deny-closed qui retourne `503`** jusqu'à ce qu'un opérateur
+  infrastructure est une fonction Business (Community répond `501`) et une **jointure deny-closed qui retourne `503`** jusqu'à ce qu'un opérateur
   provisionne un exécuteur — déclarer un déploiement en HCL ne mute jamais votre estate.
 - **L'OpenAPI stable n'est pas tout le fil.** La surface stable du cœur figure dans le
   contrat publié (`/openapi.json`) ; les routes de module (par exemple les lectures de
@@ -120,7 +120,7 @@ findings — uniquement sous forme de refs/hachages/relations, l'export lui-mêm
 - [Utiliser les SDK clients](/fr/how-to/use-the-client-sdks/) — les clients first-party Go/Python/TypeScript.
 - [Référence CLI](/fr/reference/cli/) — la même fonctionnalité depuis le binaire `olivares`.
 - [Gérer le control plane sous forme de code](/fr/how-to/manage-as-code/) — le guide du provider Terraform.
-- [Module VII — déploiement](/fr/reference/modules/vii-deploy/) — où `olivares_deployment` actionne (la jointure `503`).
+- [Module VII — déploiement](/fr/reference/modules/vii-deploy/) — où `olivares_deployment` actionne (Business ; la jointure `503`).
 - [Catalogue des modules](/fr/reference/modules/overview/) — la séparation Gouverner/Observer vs Actionner.
 - [Honnêteté & limites](/fr/start/honesty-and-limits/) — ce qui actionne aujourd'hui et ce qui n'actionne pas.
 - [Vue d'ensemble de l'architecture](/fr/explanation/architecture/overview/) — la couche moteur sur laquelle repose cette surface.

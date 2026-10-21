@@ -9,6 +9,8 @@ import (
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
+
+	"github.com/olivaresai/olivares/connectors/internal/otlptime"
 )
 
 // Cowork OTEL event names. Source: claude.com/docs/cowork/monitoring (jun-2026),
@@ -263,11 +265,11 @@ func parseLogRecord(rec *logspb.LogRecord, resource []*commonpb.KeyValue, requir
 // TimeUnixNano and falling back to ObservedTimeUnixNano; if both are zero it
 // returns the zero time, which the caller stamps to receive time.
 func recordTime(rec *logspb.LogRecord) time.Time {
-	if t := rec.GetTimeUnixNano(); t != 0 {
-		return time.Unix(0, int64(t)).UTC()
+	if t, ok := otlptime.Sender(rec.GetTimeUnixNano()); ok {
+		return t
 	}
-	if t := rec.GetObservedTimeUnixNano(); t != 0 {
-		return time.Unix(0, int64(t)).UTC()
+	if t, ok := otlptime.Sender(rec.GetObservedTimeUnixNano()); ok {
+		return t
 	}
 	return time.Time{}
 }

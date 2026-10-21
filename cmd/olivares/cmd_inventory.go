@@ -23,8 +23,9 @@ const inventoryNS = "inventory"
 func newInventoryCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "inventory",
-		Short: "List the observed entity catalog and its coverage summary",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "inventory",
+		Short:       "List the observed entity catalog and its coverage summary",
 		Long: "inventory is the catalog of entities the engine has actually OBSERVED — agents,\n" +
 			"tools, resources, skills, models, providers — with the signal sources that saw\n" +
 			"each one and whether it is still being seen.\n\n" +
@@ -60,8 +61,9 @@ type inventorySummary struct {
 
 func newInventorySummaryCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "summary",
-		Short: "Count catalog entities by kind and by signal source",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "summary",
+		Short:       "Count catalog entities by kind and by signal source",
 		Long: "summary counts the catalog two ways: by entity kind (with the active/stale\n" +
 			"split) and by the signal source that observed them.\n\n" +
 			"THE ENGINE CAPS THIS SCAN. When it does, the response says so and this command\n" +
@@ -168,9 +170,10 @@ type inventoryEntryDetail struct {
 
 func newInventoryEntitiesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "entities",
-		Aliases: []string{"entity"},
-		Short:   "List and open catalog entities",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "entities",
+		Aliases:     []string{"entity"},
+		Short:       "List and open catalog entities",
 		Long: "entities lists the observed catalog, filtered by kind and status, and opens one\n" +
 			"entry with the projection of the core entity it overlays.",
 		Example: "  olivares inventory entities ls\n" +
@@ -185,9 +188,10 @@ func newInventoryEntitiesListCmd(flags *authClientFlags) *cobra.Command {
 	var kind, status string
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List catalog entities",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List catalog entities",
 		Long: "ls lists catalog entries newest-cursor-first, optionally narrowed by --kind and\n" +
 			"--status. The signal-source column is the answer to \"how do we know this\n" +
 			"exists\", which is usually the next question after \"what is this\".",
@@ -261,8 +265,9 @@ func observeJoinList(v []string) string {
 
 func newInventoryEntitiesGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <kind> <id>",
-		Short: "Show one catalog entity and the core entity it overlays",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <kind> <id>",
+		Short:       "Show one catalog entity and the core entity it overlays",
 		Long: "get takes the KIND and the ID because the route is keyed on both: an id is only\n" +
 			"unique within its kind, so `get ag-7` alone could not address a row.\n\n" +
 			"The `detail` block is a minimal projection of the underlying core entity and\n" +

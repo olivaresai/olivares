@@ -352,25 +352,30 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 		return bridgeSpec{Holder: holder, Codes: codes, Objects: objects, Tokens: []bridgeToken{{Name: "link8", Version: "26.800"}}}, files
 	}
 
-	t.Run("an add-on holder cannot fall back to a base-only publication", func(t *testing.T) {
+	// The Worker's artifactSetFor maps every allowlisted Business slug onto the ONE
+	// biz build: add-ons are enabled by the licence grant on that same binary, ent
+	// stays its own build, and the licence slug remains the identity for grants,
+	// tokens and the answered tuple. These journeys pin that contract over the
+	// bridge: an add-on holder reads the biz publication, never a per-set one.
+	t.Run("an add-on holder installs the one biz build, not a per-set publication", func(t *testing.T) {
 		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
-		_, err := run(t, b, b.tokens["link8"], target, t.TempDir())
-		if err == nil || !strings.Contains(err.Error(), "release_unavailable") {
-			t.Fatalf("want release_unavailable for the unpublished entitled set, got %v", err)
+		if _, err := run(t, b, b.tokens["link8"], target, t.TempDir()); err != nil {
+			t.Fatalf("the one biz build must serve the add-on holder: %v", err)
 		}
-		assertTargetRuns(t, target, "26.700")
-		if reqs := b.requests(); countServed(reqs, "manifest", 404) != 1 || countServed(reqs, "", 200) != 0 {
-			t.Fatalf("served: %+v (want an unavailable manifest and no artifact bytes)", reqs)
+		assertTargetRuns(t, target, "26.800")
+		reqs := b.requests()
+		if countServed(reqs, "manifest", 200) != 1 || countServed(reqs, "manifest.sig", 200) != 1 || countServed(reqs, "", 200) != 1 {
+			t.Fatalf("served: %+v (want one resolved pair and the artifact)", reqs)
 		}
-		if reads := b.reads(); !readsContain(reads, bridgeManifestKey("stable", "biz+reg")) || readsContain(reads, "/biz/") || readsContain(reads, "olivares_") {
-			t.Fatalf("object reads %v: want only the unpublished biz+reg manifest, without a biz fallback", reads)
+		if reads := b.reads(); !readsContain(reads, bridgeManifestKey("stable", "biz")) || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) || readsContain(reads, "biz+reg") {
+			t.Fatalf("object reads %v: want the one biz publication and artifact, and no per-set object", reads)
 		}
 	})
 
-	t.Run("the complete same-version authenticated journey installs the entitled set's bytes", func(t *testing.T) {
-		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"})
+	t.Run("the complete same-version authenticated journey installs the one build's bytes", func(t *testing.T) {
+		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
 		if _, err := run(t, b, b.tokens["link8"], target, t.TempDir()); err != nil {
@@ -382,8 +387,8 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 			t.Fatalf("served requests: %+v", reqs)
 		}
 		reads := b.reads()
-		if !readsContain(reads, bridgeManifestKey("stable", "biz+reg")) || !readsContain(reads, bridgeManifestKey("stable", "biz+reg")+".sig") || !readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || readsContain(reads, "/biz/") {
-			t.Fatalf("the Worker read %v; want the biz+reg publication and artifact, and no biz object", reads)
+		if !readsContain(reads, bridgeManifestKey("stable", "biz")) || !readsContain(reads, bridgeManifestKey("stable", "biz")+".sig") || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) || readsContain(reads, "biz+reg") {
+			t.Fatalf("the Worker read %v; want the biz publication and artifact, and no per-set object", reads)
 		}
 	})
 
@@ -435,10 +440,10 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 	})
 
 	t.Run("a channel advance after mint is a named conflict; a properly reissued token installs the next version", func(t *testing.T) {
-		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"})
+		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
-		b.publishRelease(publishedRelease{rel9, "stable", "biz+reg"})
+		b.publishRelease(publishedRelease{rel9, "stable", "biz"})
 		_, err := run(t, b, b.tokens["link8"], target, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), v1ErrTokenVersionStale) {
 			t.Fatalf("want %s, got %v", v1ErrTokenVersionStale, err)
@@ -457,9 +462,11 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 	})
 
 	t.Run("a grant change after resolution is a set conflict; one fresh resolution installs the same release for the new set", func(t *testing.T) {
-		// Each entitlement set has its own publication. The client must resolve the new set
-		// after the grant change, even when both publications name the same version.
-		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"}, publishedRelease{rel8, "stable", "biz"})
+		// Both grant sets resolve the ONE biz build, but the answered tuple still
+		// names the licence slug: a grant change mid-flight breaks the tuple
+		// corroboration, and the client must restart resolution even though the
+		// publication it re-reads is the same one.
+		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
 		b.after("manifest.sig", map[string]any{"op": "grants", "codes": []string{"biz"}})
@@ -472,16 +479,17 @@ func TestUpgradeThroughTheRealWorkerBridge(t *testing.T) {
 			t.Fatalf("served: %+v (want one 409 artifact, then a full second resolution and one artifact)", reqs)
 		}
 		reads := b.reads()
-		if !readsContain(reads, bridgeManifestKey("stable", "biz+reg")) || !readsContain(reads, bridgeManifestKey("stable", "biz")) || readsContain(reads, bridgeArtifactKey("26.800", "biz+reg")) || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) {
-			t.Fatalf("object reads %v: want both sets resolved, but only the new set's biz artifact", reads)
+		if !readsContain(reads, bridgeManifestKey("stable", "biz")) || !readsContain(reads, bridgeArtifactKey("26.800", "biz")) || readsContain(reads, "biz+reg") {
+			t.Fatalf("object reads %v: want both resolutions on the one biz publication and only its artifact", reads)
 		}
 	})
 
 	t.Run("a grant change to a set with no publication ends in unavailability, target intact", func(t *testing.T) {
-		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz+reg"})
+		spec, files := baseSpec([]string{"biz", "reg"}, publishedRelease{rel8, "stable", "biz"})
 		b := startWorkerBridge(t, spec, files)
 		target := writeTarget(t, old)
-		// ent has no publication here; the initial biz+reg resolution must succeed first.
+		// ent is its own build and has no publication here; the initial biz-family
+		// resolution must succeed first.
 		b.after("manifest.sig", map[string]any{"op": "grants", "codes": []string{"ent"}})
 		_, err := run(t, b, b.tokens["link8"], target, t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "release_unavailable") {

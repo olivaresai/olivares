@@ -1,0 +1,217 @@
+{
+  "info": {
+    "id": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+    "slug": "mighty-island",
+    "projectID": "global",
+    "directory": "/work",
+    "path": "work",
+    "title": "New session - 2026-10-16T03:11:14.769Z",
+    "agent": "build",
+    "model": {
+      "id": "m",
+      "providerID": "stub"
+    },
+    "version": "1.19.2",
+    "summary": {
+      "additions": 0,
+      "deletions": 0,
+      "files": 0
+    },
+    "cost": 0,
+    "tokens": {
+      "input": 20,
+      "output": 6,
+      "reasoning": 0,
+      "cache": {
+        "read": 0,
+        "write": 0
+      }
+    },
+    "time": {
+      "created": 1792120274769,
+      "updated": 1792120275667
+    }
+  },
+  "messages": [
+    {
+      "info": {
+        "role": "user",
+        "time": {
+          "created": 1792120274798
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "stub",
+          "modelID": "m"
+        },
+        "summary": {
+          "diffs": []
+        },
+        "id": "msg_142b13f6e001D2aNwL1kMIzDzy",
+        "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv"
+      },
+      "parts": [
+        {
+          "type": "text",
+          "text": "please list the directory",
+          "id": "prt_142b13f700012Br15JaYl7orK3",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b13f6e001D2aNwL1kMIzDzy"
+        }
+      ]
+    },
+    {
+      "info": {
+        "parentID": "msg_142b13f6e001D2aNwL1kMIzDzy",
+        "role": "assistant",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/work",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 13,
+          "input": 10,
+          "output": 3,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "modelID": "m",
+        "providerID": "stub",
+        "time": {
+          "created": 1792120274818,
+          "completed": 1792120275586
+        },
+        "finish": "tool-calls",
+        "id": "msg_142b13f820019lJtHD2O5LZ5Zk",
+        "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "id": "prt_142b1422b001Bu84fP6kDOz23D",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b13f820019lJtHD2O5LZ5Zk"
+        },
+        {
+          "type": "tool",
+          "tool": "bash",
+          "callID": "call_1",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "ls",
+              "description": "list files"
+            },
+            "output": "(no output)",
+            "metadata": {
+              "output": "(no output)",
+              "exit": 0,
+              "truncated": false
+            },
+            "title": "ls",
+            "time": {
+              "start": 1792120275512,
+              "end": 1792120275577
+            }
+          },
+          "id": "prt_142b1422e001e4Q0Oo4FxhtkwR",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b13f820019lJtHD2O5LZ5Zk"
+        },
+        {
+          "reason": "tool-calls",
+          "type": "step-finish",
+          "tokens": {
+            "total": 13,
+            "input": 10,
+            "output": 3,
+            "reasoning": 0,
+            "cache": {
+              "write": 0,
+              "read": 0
+            }
+          },
+          "cost": 0,
+          "id": "prt_142b1427d001iV0AFUx4HJMC15",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b13f820019lJtHD2O5LZ5Zk"
+        }
+      ]
+    },
+    {
+      "info": {
+        "parentID": "msg_142b13f6e001D2aNwL1kMIzDzy",
+        "role": "assistant",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/work",
+          "root": "/"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 13,
+          "input": 10,
+          "output": 3,
+          "reasoning": 0,
+          "cache": {
+            "write": 0,
+            "read": 0
+          }
+        },
+        "modelID": "m",
+        "providerID": "stub",
+        "time": {
+          "created": 1792120275589,
+          "completed": 1792120275662
+        },
+        "finish": "stop",
+        "id": "msg_142b14285001EnsirBLXUg933k",
+        "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv"
+      },
+      "parts": [
+        {
+          "type": "step-start",
+          "id": "prt_142b142c1001ae6V2APNLrTpNX",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b14285001EnsirBLXUg933k"
+        },
+        {
+          "type": "text",
+          "text": "ok, done",
+          "time": {
+            "start": 1792120275652,
+            "end": 1792120275655
+          },
+          "id": "prt_142b142c4001b0FjGPaHwbihRM",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b14285001EnsirBLXUg933k"
+        },
+        {
+          "reason": "stop",
+          "type": "step-finish",
+          "tokens": {
+            "total": 13,
+            "input": 10,
+            "output": 3,
+            "reasoning": 0,
+            "cache": {
+              "write": 0,
+              "read": 0
+            }
+          },
+          "cost": 0,
+          "id": "prt_142b142ca001RYWMtuXDZCP867",
+          "sessionID": "ses_ebd4ec0aeffeCqQUs7Zjq6Rmhv",
+          "messageID": "msg_142b14285001EnsirBLXUg933k"
+        }
+      ]
+    }
+  ]
+}

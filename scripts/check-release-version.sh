@@ -512,11 +512,12 @@ BOUND = re.compile(r"""(?:>=|≥|--min-version|introduced["']?\s*:)\s*["']?v?$""
 #      `// release` before the lines and `# /release` or `// /release` after them. A Markdown mark
 #      may wrap a word, a line or a fenced code block from outside it, so the reader sees none of it.
 #   2. --stamp rewrites the versions inside marks from RELEASE-VERSION, and nothing else.
-#   3. The census needs no context words. Every version literal of the product's version lines
-#      (product_line) outside a mark is refused unless it is a record the rules below admit (an
-#      annotated fixed version, a recorded floor or contract, a dated record of a past release, a
-#      changelog citation), a NOT_RELEASES row names what it versions, or it numbers a section
-#      under its numbered parent (section_number).
+#   3. The census needs no context words, except for a bare decimal in documentation (wordless_decimal
+#      below). Every version literal of the product's version lines (product_line) outside a mark is
+#      refused unless it is a record the rules below admit (an annotated fixed version, a recorded
+#      floor or contract, a dated record of a past release, a changelog citation), a NOT_RELEASES row
+#      names what it versions, it numbers a section under its numbered parent (section_number), or it
+#      is a bare N.N with no release word near it.
 # A mark that does not close, a close with no open, a mark inside a mark and a mark holding no
 # version are malformed: the run stops with rc 1 and names the line.
 MARK_FORMS = (
@@ -768,7 +769,6 @@ NOT_RELEASES = (
      r"^\|[ \t]*(?:Critical|High|Medium|Low)[ \t]*\((?:<[ \t]*)?\x00[0-9]{1,2}\.[0-9](?:–[0-9]{1,2}\.[0-9])?\x01\)[ \t]*\|"),
     ("a dashboard's Grafana requirement", None, r"\"name\":[ \t]*\"Grafana\",[ \t]*\"version\":[ \t]*\"\x00"),
     ("a seccomp rule's minimum kernel", None, r"\"minKernel\":[ \t]*\"\x00"),
-    ("the Helm release that made OCI the default", None, r"\bOCI-default since \x00v3\.8\.0\x01"),
     ("the Docker AppArmor policy's provenance tag", None,
      r"(?:\bmoby/moby[ \t]+|https://github\.com/moby/moby/blob/)\x00"),
     ("an AppArmor policy's ABI", ("deploy/apparmor/*.conf", "packaging/apparmor/*.conf"),
@@ -809,10 +809,7 @@ NOT_RELEASES = (
      r"|\(\x007\.[24]\x01 row\)|listed in \x003\.4\x01|doing \x006\.4\x01|\(see \x006\.3\x01\)|;[ \t]*\x005\.2-5\.3\x01;"),
     ("an evaluation step number", ("docs/trust/evaluation-guide.md", "docs/trust/evaluation-report-template.md"),
      r"^\|[ \t]*\x00(?:1\.[1-6]|1\.2b|2\.(?:[1-9]|10)|3\.[1-9])\x01[ \t]*\||\bIf[ \t]+\x001\.3\x01"),
-    ("a budget fraction, where 1.0 is the limit itself", ("docs/finops-alert-evidence.md",),
-     r"\(threshold \x001\.0\x01\)|authoritative \x001\.0\x01 decision"),
     ("the CRA FAQ document's version", ("docs/CRA-READINESS.md",), r"non-binding; \x00v1\.3\x01 of"),
-    ("a measured slowdown factor or query rate", ("docs/SIZING-AND-CAPACITY.md",), r"\*\*\x00(?:1\.06|10\.7)\x01\*\*"),
     ("the Kyverno CLI default of the policy-gate template",
      ("deploy/ci/gitlab/templates/olivares-policy-gate/template.yml",), r"default:[ \t]*\"\x00"),
     ("the versioning section's examples of the grammar", ("INSTALL.md",),
@@ -837,6 +834,8 @@ NOT_RELEASES = (
       *localized("explanation/positioning/claude-apps-gateway-co-deployment.md"), *localized("how-to/first-hour.md")),
      r"(?:" + word("claude-client-before") + r")[ \t]*\x00v?2\.1\.[0-9]{2,3}x?\x01"
      r"|^[ \t]*\x00v2\.1\.195\x01(?:;| " + word("claude-client-after") + r")"),
+    ("the Claude Code release a hooks launch was measured on", localized("reference/session-runtime-api.md"),
+     r"\x002\.1\.299\x01"),
     ("the TAK Server guide and CoT event schema versions", localized("how-to/connectors/tak.md"),
      r"Guide(?:\*|[ \t])*\x00v5\.2\x01|Event-PUBLIC\.xsd[^\n]*[(（](?i:" + word("tak-version")
      + r")[ \t]*\x002\.0\x01[)）]"),
@@ -1328,9 +1327,10 @@ def go_test_fixture(path):
 # constant: a third directory member that is neither tied nor self-bound fails there.
 #
 # EVERY OTHER MEMBER IS AN EXACT FILE, which is the shape DERIVED_ALLOW has always used: a named
-# path, a named kind, a written reason, reviewable on sight. Two of them ship (the VPAT and
-# docs/RELEASE-INSTALLER.md), and that is exactly why they are files and not the directories
-# they sit in — a published subtree may not carry an allowance for prose that does not exist yet.
+# path, a named kind, a written reason, reviewable on sight. Three of them ship (the VPAT,
+# docs/RELEASE-INSTALLER.md and the console capture manifest), and that is exactly why they are
+# files and not the directories they sit in — a published subtree may not carry an allowance for
+# prose that does not exist yet.
 HISTORICAL_ALLOW = [
     # (exact path or exact directory, kind, reason)
     ("CHANGELOG.md", "changelog-history",
@@ -1382,6 +1382,17 @@ HISTORICAL_ALLOW = [
     ("docs/emitted-urls-hub-record.txt", "excluded-url-record",
      "the emitted-URL declarations of files the export drops, among them a posted launch record's "
      "link to a past release page; tied to the one exact entry that curates the record out"),
+    # The console capture manifest is the dated record of the run that took the published PNGs:
+    # scripts/docs-captures.sh writes release_image from DOCS_CAPTURE_IMAGE beside taken_at, the
+    # commit and the engine digest, and the captures were taken from the RELEASED image of an
+    # earlier release (0.1 under the 0.2 canon, measured 2026-10-14). Sweeping the field to the
+    # canon would state those PNGs ran under an image they did not run under; a recapture under a
+    # new release rewrites it by itself. A shipped file, so an exact member as the header's rule
+    # for shipped records requires, never a directory. (added 2026-10-14)
+    ("docs-site/public/console/manifest.json", "capture-record",
+     "the capture manifest's release_image is the released image the published PNGs beside it "
+     "were taken from; the dated record of a capture run may not be swept to a canon that run "
+     "did not use"),
 ]
 
 # Directory members whose allowance is granted only while the export curation removes them.
@@ -1785,11 +1796,63 @@ README_IMAGE = re.compile(
     r"(?:@sha256:[a-fA-F0-9]+)?(?![\w/+-]|\.\w)"
 )
 
+# A release URL of ours in a root README, judged as one unit like an image coordinate (dev#2175):
+# the package blocks are what a reader copies, and their version is a bare 0.N that
+# product_line() leaves to prose as a decimal, so an unmarked stale URL is invisible to the
+# token judge (measured 2026-10-14: README x7 shipped releases/download/0.1/... under canon
+# 0.2). The unit reaches the URL the token judge cannot: unmarked it is refused whatever it
+# names — the stamp owns a live coordinate — and marked, every coordinate inside it must state
+# the canon. The tokens within keep their own hits: the stamp still sweeps them one by one.
+# Review-pinned edges (2026-10-14): a word character glued straight to the link (CJK, Cyrillic,
+# a missing space) must not hide it, so only `/ . -` may precede the scheme; scheme, host and
+# owner spell the case-insensitive forms GitHub itself serves (http, www, any casing); the
+# moving pointer `releases/latest/download/<asset>` is the never-stale shape and names no
+# release, so a versionless asset under it is green while a versioned one still states the
+# canon; the URL ends at the same delimiters a tag does (_TAG_STOP), so CJK punctuation glued
+# after a link is not swallowed into the coordinate. Scheme-less `github.com/...` strings are
+# not links a reader can follow and stay to the token judge, the image rule's own boundary.
+README_RELEASE_URL = re.compile(
+    r"(?<![/.-])https?://(?:www\.)?github\.com/olivaresai/olivares/releases/"
+    r"(?:(?P<latest>latest)/download/|(?:download|tag)/)"
+    r"[^" + _TAG_STOP[1:-1] + r"]+",
+    re.IGNORECASE)
+
+
+# A BARE DECIMAL IS A RELEASE CLAIM ONLY BESIDE A RELEASE WORD (2026-10-16, dev#2299). An unmarked
+# `N.N` with no `v`, no patch and no suffix is a release of ours only when the text says so: measured
+# on main, a sizing table (`1.0 / 4.0` threads per session, `28.8` starts per second) and a build
+# name were refused as releases, one NOT_RELEASES row per page at a time (dev#2293, then this).
+# Said so = the release vocabulary of RELEASE_WORD within CONTEXT_BEFORE characters before the literal
+# or CONTEXT_AFTER after it, on its line: the product, `release`, `version`, `tag` (a download or
+# tag URL path has one, `appVersion` and `imageTag` spell one), `stable` and the same words in every
+# locale (WORDS_FILE `release-context`). hit_allowed() excuses a bare decimal with no such word last,
+# after the records had their say, only in Markdown documentation, and never in a shipped coordinate
+# (ARTIFACT_ROOTS, or any file that is not Markdown: a pin, a policy ABI, an example's config), a
+# record file (historical_kind), a changelog citation or a record structure (in_record). A patch (`1.0.1`), a `v`, a suffix, the retired 26.x line (product_line() already
+# tells its releases from decimals) and a marked position are no bare decimal and keep their shape
+# judgment.
+RELEASE_WORD = re.compile(r"(?<![A-Za-z])(?i:" + word("release-context") + r")|(?<=[a-z])(?:Olivares|Release|Version|Tag)")
+CONTEXT_BEFORE, CONTEXT_AFTER = 40, 20
+BARE_DECIMAL = re.compile(r"[0-9]+\.[0-9]+")
+
+
+def wordless_decimal(hit, curated, kept):
+    """-> True iff `hit` (unmarked: hit_allowed judges a mark first) is a bare N.N with no release word
+    near it, in Markdown documentation that is no record: a quantity, a count or a label, never a
+    claim about what ships."""
+    if (not BARE_DECIMAL.fullmatch(hit.token) or version_key(hit.token)[0] == version_key("26.0")[0]
+            or not hit.path.endswith((".md", ".mdx")) or hit.path.split("/")[0] in ARTIFACT_ROOTS
+            or historical_kind(hit.path, curated, kept) or in_record(hit) or cited_section(hit.line, hit.token)):
+        return False
+    start, end = hit.column, hit.column + len(hit.token)
+    return not (RELEASE_WORD.search(hit.line, max(0, start - CONTEXT_BEFORE), start)
+                or RELEASE_WORD.search(hit.line, end, end + CONTEXT_AFTER))
+
 
 def scan(files, rd):
     """-> [Hit] for every version literal no NOT_RELEASES row names and no numbered heading numbers
-    (section_number), and every README image of ours, each with whether it sits inside a release
-    mark (marks()).
+    (section_number), and every README image and release URL of ours, each with whether it sits
+    inside a release mark (marks()).
 
     `dated` says the hit sits at or below the file's first changelog section heading. It is read
     HERE because it is a property of the whole file, and a judge that only ever sees one line
@@ -1856,8 +1919,8 @@ def tool_install_versions(text: str) -> set[tuple[int, int]]:
 
 def file_hits(path, text, start, wanted):
     """-> [Hit] in one file: every literal inside a mark that no INSIDE_MARKS row names (and, in a
-    README, our image coordinates), plus every literal outside one that `wanted` keeps except a
-    third-party tool's version value. A mark that holds no such literal is malformed."""
+    README, our image coordinates and release URLs), plus every literal outside one that `wanted`
+    keeps except a third-party tool's version value. A mark that holds no such literal is malformed."""
     spans = marks(path, text)
     starts = [a for a, _ in spans]
     inline = next((p for suffixes, p in MARK_FORMS if path.endswith(suffixes)), None)
@@ -1880,6 +1943,10 @@ def file_hits(path, text, start, wanted):
             held = inside(image.start(), image.end())
             filled.update(held)
             hits.append(Hit(path, number, image.group(0), line, False, bool(held), image.start() - lead))
+        for url in (list(README_RELEASE_URL.finditer(body)) if readme else []):
+            held = inside(url.start(), url.end())
+            filled.update(held)
+            hits.append(Hit(path, number, url.group(0), line, False, bool(held), url.start() - lead))
         for m in tokens(body):
             if chart_metadata(m) or any(image.start() <= m.start() < image.end() for image in images):
                 continue
@@ -1910,12 +1977,34 @@ def fixed_version(line, token):
 FIXED = re.compile(r"`?<!-- release-fixed -->")
 
 
+def url_versions(url):
+    """-> the set of releases a release URL's own coordinates state, or None when one of them
+    states no release of ours: a malformed coordinate is refused, never excused by its
+    neighbours."""
+    out = set()
+    for m in tokens(url):
+        version = stated(m.group())
+        if version is None:
+            return None
+        out.add(version)
+    return out
+
+
 def marked_allowed(canon, path, tok, line):
     """-> True iff a marked position states the canon, or a derived form its path records
-    (allowed_at). A README image states its tag, which must be the canon."""
+    (allowed_at). A README image states its tag, which must be the canon; a README release URL
+    states one in every coordinate it carries — and a download or tag path must carry one: the
+    latest/download pointer alone names no release, so a versionless asset under it is green."""
     image = README_IMAGE.fullmatch(tok)
     if image:
         return image.group("tag") == canon
+    url = README_RELEASE_URL.fullmatch(tok)
+    if url:
+        versions = url_versions(tok)
+        allowed = allowed_at(canon, path)
+        if url.group("latest"):
+            return versions is not None and versions <= allowed
+        return bool(versions) and versions <= allowed
     return stated(tok, line) in allowed_at(canon, path)
 
 
@@ -1969,7 +2058,8 @@ def hit_allowed(canon, hit, curated, kept):
         return marked_allowed(canon, hit.path, hit.token, hit.line)
     if not (product_line(hit.token) or in_record(hit)):
         return True
-    return record_allowed(canon, hit.path, hit.token, hit.line, hit.dated, curated, kept, hit.column)
+    return (record_allowed(canon, hit.path, hit.token, hit.line, hit.dated, curated, kept, hit.column)
+            or wordless_decimal(hit, curated, kept))
 
 
 def judge(canon, hits, curated=None, kept=None):
@@ -2261,6 +2351,73 @@ def selftest():
     tree = {"deploy/README.md": "Registry: `docker.io/olivaresai/olivares`"}
     expect("registry names in detailed deployment docs keep their existing scope",
            judge("26.1001", scan(tree, rd(tree)))[0] == [])
+    # ── README release URLs name the release (added 2026-10-14, dev#2175) ──
+    # The public README ×7 installed 0.1 under canon 0.2: a download URL's version is a bare
+    # 0.N, which product_line() leaves to prose as a decimal, and no arm refused it. A release
+    # URL of ours in a root README is a unit like an image coordinate now: unmarked it is
+    # refused whatever it names (the stamp owns it), and marked, every coordinate it carries —
+    # the path segment and the asset filename — must state the canon.
+    for path in ("README.md", "README.es.md", "README.new.md"):
+        download = "https://github.com/olivaresai/olivares/releases/download/"
+        current = download + "0.2/olivares_0.2_linux_amd64.deb"
+        stale = download + "0.1/olivares_0.1_linux_amd64.deb"
+        mismatched = download + "0.2/olivares_0.1_linux_amd64.deb"
+        tree = {path: "<!-- release -->\ncurl -fsSLO " + current + "\n<!-- /release -->\n"}
+        expect(f"{path} accepts the marked canon download URL",
+               judge("0.2", scan(tree, rd(tree)))[0] == [])
+        tree = {path: "curl -fsSLO " + current + "\n"}
+        expect(f"{path} refuses the canon download URL outside a release mark",
+               judge("0.2", scan(tree, rd(tree)))[0] == [(path, 1, current)])
+        tree = {path: "curl -fsSLO " + stale + "\n"}
+        expect(f"{path} refuses the stale download URL the prose judge cannot see",
+               judge("0.2", scan(tree, rd(tree)))[0] == [(path, 1, stale)])
+        tree = {path: "<!-- release -->\ncurl -fsSLO " + mismatched + "\n<!-- /release -->\n"}
+        expect(f"{path} refuses a download URL whose asset names another release",
+               judge("0.2", scan(tree, rd(tree)))[0]
+               == [(path, 2, mismatched), (path, 2, "0.1")])
+        tag = "https://github.com/olivaresai/olivares/releases/tag/"
+        tree = {path: "the <!-- release -->[release page](" + tag + "0.2)<!-- /release -->\n"}
+        expect(f"{path} accepts the marked canon release-page link",
+               judge("0.2", scan(tree, rd(tree)))[0] == [])
+        tree = {path: "the [release page](" + tag + "0.1)\n"}
+        expect(f"{path} refuses a stale release-page link",
+               judge("0.2", scan(tree, rd(tree)))[0] == [(path, 1, tag + "0.1")])
+    tree = {"README.md": "https://github.com/olivaresai/olivares/releases/latest\n"}
+    expect("a releases URL without a version segment names no release",
+           judge("0.2", scan(tree, rd(tree)))[0] == [])
+    # ── the URL unit's boundary, pinned by review (2026-10-14) ──
+    # Glued prose, GitHub's case and scheme spellings, the latest/download pointer and the
+    # mark that would bless a tokenless path: each is a row so a refactor answers for it.
+    download = "https://github.com/olivaresai/olivares/releases/download/"
+    latest = "https://github.com/olivaresai/olivares/releases/latest/download/"
+    stale = download + "0.1/olivares_0.1_linux_amd64.deb"
+    tree = {"README.zh.md": "请访问" + stale + "下载\n"}
+    expect("a URL glued to CJK prose before and after is still refused, whole",
+           judge("0.2", scan(tree, rd(tree)))[0] == [("README.zh.md", 1, stale + "下载")])
+    tree = {"README.md": "Смотрите" + stale + "\n"}
+    expect("a URL glued to Cyrillic prose is still refused",
+           judge("0.2", scan(tree, rd(tree)))[0] == [("README.md", 1, stale)])
+    respelled = "https://GitHub.com/OlivaresAI/Olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb"
+    tree = {"README.md": "curl -fsSLO " + respelled + "\n"}
+    expect("a case-respelled URL serves the same release and is judged",
+           judge("0.2", scan(tree, rd(tree)))[0] == [("README.md", 1, respelled)])
+    tree = {"README.md": "<!-- release -->\ncurl -fsSLO " + latest + "olivares_0.1_linux_amd64.deb\n<!-- /release -->\n"}
+    expect("a latest/download asset that names a stale release is refused",
+           judge("0.2", scan(tree, rd(tree)))[0]
+           == [("README.md", 2, latest + "olivares_0.1_linux_amd64.deb"), ("README.md", 2, "0.1")])
+    tree = {"README.md": "<!-- release -->\ncurl -fsSLO " + latest + "checksums.txt\n<!-- /release -->\n"}
+    expect("a versionless latest/download asset names no release",
+           judge("0.2", scan(tree, rd(tree)))[0] == [])
+    tree = {"README.md": "<!-- release -->\ncurl -fsSLO " + download + "latest/checksums.txt\n<!-- /release -->\n"}
+    expect("a download path that names no version at all is refused",
+           judge("0.2", scan(tree, rd(tree)))[0] == [("README.md", 2, download + "latest/checksums.txt")])
+    tree = {"README.md": "<!-- release -->\ncurl -fsSLO " + download + "0.2/olivares_0.2.1_linux_amd64.deb\n<!-- /release -->\n"}
+    expect("a malformed coordinate inside a URL is refused, never excused by its neighbours",
+           judge("0.2", scan(tree, rd(tree)))[0]
+           == [("README.md", 2, download + "0.2/olivares_0.2.1_linux_amd64.deb"), ("README.md", 2, "0.2.1")])
+    tree = {"INSTALL.md": "curl -fsSLO " + stale + "\n"}
+    expect("the URL unit keeps the image rule's root-README scope",
+           judge("0.2", scan(tree, rd(tree)))[0] == [])
     # ── decided canon: divergence is red; derived forms only in their contexts ──
     tree = {"README.md": "ships with <!-- release -->`26.700`<!-- /release --> today",
             "CHANGELOG.md": "the first release is `26.600`"}
@@ -2615,6 +2772,21 @@ def selftest():
     expect("manifest: a NEW image pin in deploy/ stays red (a target is not what ships)",
            pins8("  image: docker.io/olivaresai/olivares:26.900\n", "deploy/manifests/install.yaml")
            == [("deploy/manifests/install.yaml", 1, "26.900")])
+    # The capture manifest is a RECORD, and its pin is judged by the record rules below:
+    # release_image names the released image the published PNGs were taken from
+    # (scripts/docs-captures.sh writes it from DOCS_CAPTURE_IMAGE), so it may name the
+    # release that happened and never one that did not.
+    expect("manifest: the capture record's released image below the canon -> green",
+           pins8('  "release_image": "olivaresai/olivares:26.700@sha256:fb9e",\n',
+                 "docs-site/public/console/manifest.json") == [])
+    expect("manifest: an image ABOVE the canon in the capture record -> red (nobody released it)",
+           pins8('  "release_image": "olivaresai/olivares:26.900@sha256:fb9e",\n',
+                 "docs-site/public/console/manifest.json")
+           == [("docs-site/public/console/manifest.json", 1, "26.900")])
+    expect("manifest: a sibling JSON is not the capture record -> red (exact file)",
+           pins8('  "release_image": "olivaresai/olivares:26.700@sha256:fb9e",\n',
+                 "docs-site/public/console/retakes.json")
+           == [("docs-site/public/console/retakes.json", 1, "26.700")])
     expect("the fixture class is Go's rule, not a directory: testdata-looking .go that is not _test.go is judged",
            len(pins8('"olivares_26.700"\n', "cmd/olivares/testdata_helpers.go")) == 1
            and go_test_fixture("a/b_test.go") and not go_test_fixture("a/b_test.go.txt"))
@@ -3386,6 +3558,11 @@ def selftest():
         ("INSTALL.md", "Set {o}export OLIVARES_VERSION={v}{c}\n", 1, ""),
     ) + tuple((f"README.{lang}.md", word("next-release-" + lang) + " {o}`{v}`{c}.\n", 1, "")
               for lang in ("de", "es", "fr", "ja", "zh", "ru"))
+    # A bare MAJOR.MINOR in documentation beside no release word is no claim (see wordless_decimal): of
+    # these wordings, only the ones that say nothing but the number. A patch, a marked canon and the
+    # same wording beside a release word are judged in every one.
+    wordless_rows = ("git checkout {o}{v}{c}\n", 'DIGEST="$(crane digest "$IMAGE:{o}{v}{c}")"\n',
+                     "To install {o}{v}{c}, run it.\n", "git push origin {o}{v}{c}\n")
     for path, text, number, suffix in context_rows:
         opening, closing = line_mark if path.endswith(".sh") else md_mark
         plain = lambda v: text.format(v=v, o="", c="")
@@ -3394,8 +3571,13 @@ def selftest():
         expect(f"any wording refuses a patch: {path}: {shown}",
                (path, number, "1.0.1" + suffix) in judge("1.0", scan({path: plain("1.0.1")}, rd({path: plain("1.0.1")})),
                                                        curated=set(), kept=set())[0])
-        expect(f"any wording refuses the canon outside a mark: {path}:{number}",
-               (path, number, "1.0" + suffix) in judge("1.0", scan({path: plain("1.0")}, rd({path: plain("1.0")})),
+        refused = (path, number, "1.0" + suffix) in judge("1.0", scan({path: plain("1.0")}, rd({path: plain("1.0")})),
+                                                        curated=set(), kept=set())[0]
+        expect(f"any wording with a release word refuses the canon outside a mark, one without is no claim: {path}:{number}",
+               refused == (text not in wordless_rows))
+        worded = plain("1.0").replace("\n", " release\n", 1)
+        expect(f"the same wording beside a release word is a claim: {path}:{number}",
+               (path, number, "1.0" + suffix) in judge("1.0", scan({path: worded}, rd({path: worded})),
                                                      curated=set(), kept=set())[0])
         expect(f"any wording judges the marked canon green: {path}:{number}",
                judge("1.0", scan({path: marked("1.0")}, rd({path: marked("1.0")})), curated=set(), kept=set())[0] == [])
@@ -3433,17 +3615,87 @@ def selftest():
                  "olivares agent tool install --driver codex --version 2.0.14 --yes"):
         tree = {"docs/x.md": text + "\n"}
         expect(f"no row hides a release: {text}", judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] != [])
+    # ── A bare decimal is a claim only beside a release word (2026-10-16, dev#2299) ──
+    # The sizing page that turned main red: a table of measured decimals and a build name.
+    sizing = ("| Measure | 16-core container | 6 vCPU lab VM |\n|---|---|---|\n"
+              "| Engine threads / file descriptors per session | 1.0 / 4.0 | 1.0 / 4.0 |\n"
+              "| Session starts per second, 16 parallel starters | 28.8 | 2.5 |\n"
+              "The run used 1.0 candidate 36 (commit 53e46945c3fa).\n")
+    tree = {"docs/SIZING-AND-CAPACITY.md": sizing}
+    expect("a table of measured decimals and a build name, beside no release word, is green",
+           judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [])
+    for claim in ("Olivares 1.5 adds clustering.", "Release 1.5 adds clustering.", "Version 1.5 adds clustering.",
+                  "https://github.com/olivaresai/olivares/releases/tag/1.5", "appVersion: 1.5", "imageTag: 1.5",
+                  "OLIVARES_VERSION=1.5", "| Latest | 1.5 | stable |", *word("release-claim-samples").split("|"),
+                  "Version" + " " * 33 + "1.5"):
+        tree = {"docs/x.md": claim + "\n"}
+        expect(f"a bare decimal beside a release word is a claim: {claim}",
+               judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [("docs/x.md", 1, "1.5")])
+    for text in ("Version" + " " * 34 + "1.5", "1.5" + " " * 14 + "version", "Version" + " " * 60 + "1.5",
+                 "1.5" + " " * 40 + "version", "a conversion of 1.5", "CONVERSION 1.5", "1.5 inversions", "ruta 1.5", "stage 1.5",
+                 "Engine threads: 1.0 / 4.0", "foo: 1.5"):
+        tree = {"docs/x.md": text + "\n"}
+        expect(f"a word that is far, or only part of another word, is no release word: {text!r}",
+               judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [])
+    # Each occurrence has its own window: the second 1.5 is beside a word, the first is not.
+    tree = {"docs/x.md": "1.5" + " " * 25 + "release 1.5\n"}
+    expect("the same bare decimal twice on a line is judged where each stands",
+           judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [("docs/x.md", 1, "1.5")])
+    # A record directory the export curates out keeps its shape judgment, and one it does not curate does not.
+    tree = {"docs/launch/x.md": "foo: 2.0\n"}
+    expect("a tied record directory keeps the shape judgment while the curation removes it",
+           judge("1.0", scan(tree, rd(tree)), curated={"docs/launch"}, kept=set())[0] == [("docs/launch/x.md", 1, "2.0")]
+           and judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [])
+    # The window edges: a word fully inside 40 characters before the literal or 20 after it counts.
+    for text in ("Version" + " " * 33 + "1.5", "1.5" + " " * 13 + "version", "latestRelease: 1.5", "fooOlivares 1.5"):
+        tree = {"docs/x.md": text + "\n"}
+        expect(f"a release word at the edge of its window, or spelled in camel case, makes a claim: {text!r}",
+               judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [("docs/x.md", 1, "1.5")])
+    # Every word of the vocabulary has a case of its own: a sample holding only that word.
+    release_samples = ("Olivares 1.5", "release 1.5", "version 1.5", "tag 1.5", "stable 1.5", "publication 1.5",
+                       *word("release-word-samples").split("|"))
+    for sample in release_samples:
+        tree = {"docs/x.md": sample + "\n"}
+        expect(f"a bare decimal beside {sample.split()[0]} is a claim",
+               judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == [("docs/x.md", 1, "1.5")])
+    vocabulary, depth, cut, alternatives = word("release-context"), 0, 0, []
+    for i, char in enumerate(vocabulary + "|"):
+        depth += (char in "([") - (char in ")]")
+        if char == "|" and depth == 0:
+            alternatives.append(vocabulary[cut:i])
+            cut = i + 1
+    expect("every word of release-context has a sample of its own",
+           all(any(re.search(alt, sample, re.I) for sample in release_samples) for alt in alternatives))
+    # Only a bare decimal in Markdown documentation is judged by its words: a patch, a v, a suffix, a marked
+    # position, a record, a changelog citation and a shipped file (any root of ARTIFACT_ROOTS, any file that is
+    # not Markdown) keep their shape judgment, and so does the retired 26.x line.
+    for path, text, token in (("packaging/nfpm/postinstall.sh", "ver=2.0", "2.0"), ("deploy/x.yaml", "foo: 1.5", "1.5"),
+                              ("examples/x/c.yaml", "foo: 1.5", "1.5"), ("docs/x.yaml", "foo: 1.5", "1.5"),
+                              ("deploy/compose/README.md", "foo: 1.5", "1.5"), ("operator/README.md", "foo: 1.5", "1.5"),
+                              ("packaging/README.md", "foo: 1.5", "1.5"),
+                              ("docs/x.md", "See CHANGELOG.md [2.0] for details.", "2.0"),
+                              ("CHANGELOG.md", "# Changelog\n\n## [1.0] - 2026-10-08\n\n- Clustering arrives in 2.0.", "2.0"),
+                              ("docs/x.md", "x 1.5.1 y", "1.5.1"), ("docs/x.md", "x v1.5 y", "v1.5"),
+                              ("docs/x.md", "x 1.5-rc.1 y", "1.5-rc.1"), ("docs/x.md", "x 26.1001 y", "26.1001"),
+                              ("docs/x.md", "Upgrading from 2.0<!-- release-fixed --> keeps", "2.0"),
+                              ("deploy/x.yaml", "x\n# release\ny: 1.5\n# /release", "1.5"),
+                              ("CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n## [2.0] - 2026-10-08", "2.0"),
+                              ("docs/HA-LEADER-ROUTING.md", "Roll `spec.image` to \u2265 2.0 first.", "2.0")):
+        tree = {path: text + "\n"}
+        expect(f"a literal that is no bare decimal, or sits in a record, is judged with no release word: {path}: {text!r}",
+               judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0]
+               == [(path, next(n for n, line in enumerate(text.splitlines(), 1) if token in line), token)])
     # A section number is one where the document numbers the parent section too.
-    for text, refused in (("## 1. Model\n\n### 1.1 Scope\n\n### 1.1bis More\n\n#### 1.1.2 Detail\n", []),
-                          ("### 1.1 Scope\n", [("docs/x.md", 1, "1.1")]),
+    for text, refused in (("## 1. Model\n\n### 1.1 Release scope\n\n### 1.1bis More\n\n#### 1.1.2 Detail\n", []),
+                          ("### 1.1 Release scope\n", [("docs/x.md", 1, "1.1")]),
                           ("## 1. Intro\n\n## 1.0.1 Release notes\n", [("docs/x.md", 3, "1.0.1")]),
                           ("## 1. Intro\n\n### 1.0 Release notes\n", [("docs/x.md", 3, "1.0")]),
-                          ("## 1. Intro\n\n### 1.2 Scope\n\n#### 1.2.0 Release\n", [("docs/x.md", 5, "1.2.0")]),
-                          ("## 1. Intro\n\nsee 1.1 below\n", [("docs/x.md", 3, "1.1")])):
+                          ("## 1. Intro\n\n### 1.2 Release scope\n\n#### 1.2.0 Release\n", [("docs/x.md", 5, "1.2.0")]),
+                          ("## 1. Intro\n\nsee release 1.1 below\n", [("docs/x.md", 3, "1.1")])):
         tree = {"docs/x.md": text}
         expect(f"a numbered heading is a section only under its numbered parent: {text!r}",
                judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0] == refused)
-    tree = {"docs/x.yaml": "# 1.\n# 1.1 Scope\n"}
+    tree = {"docs/x.yaml": "# 1.\n# 1.1 Release scope\n"}
     expect("a numbered heading is Markdown only", judge("1.0", scan(tree, rd(tree)), curated=set(), kept=set())[0]
            == [("docs/x.yaml", 2, "1.1")])
     tree = {"INSTALL.md": "sh olivares-install-v1.0.1.sh --user; then install v2.1 of the plugin.\n"}
@@ -3841,7 +4093,7 @@ def selftest():
                marked_spans("docs/x.md", text) == "malformed")
     code, _ = refusal(lambda: scan(["docs/x.md"], lambda _: "a\n\nx <!-- release -->1.0\n"))
     expect("a malformed mark names its path and line", isinstance(code, str) and "docs/x.md:3:" in code)
-    for path, text, refused in (("docs/x.md", "## [2.0] - 2026-10-08\n", [("docs/x.md", 1, "2.0")]),
+    for path, text, refused in (("docs/x.md", "## [2.0] release - 2026-10-08\n", [("docs/x.md", 1, "2.0")]),
                                 ("docs/x.md", "first_contract_version='2.0~'\n", [("docs/x.md", 1, "2.0")]),
                                 ("docs/x.md", "It was cut as 1.0 <!-- release-fixed --> once\n", [("docs/x.md", 1, "1.0")]),
                                 ("docs/x.md", "`1.0`<!-- release-fixed --> was a fresh start\n", []),
@@ -3849,7 +4101,7 @@ def selftest():
                                 ("docs/x.md", "Olivares release go" + " " * 158 + "1.0.1\n", [("docs/x.md", 1, "1.0.1")]),
                                 ("docs/x.md", "From 1.0<!-- release-fixed --> on; Kubernetes ships 2.0 later\n",
                                  [("docs/x.md", 1, "2.0")]),
-                                ("docs/x.md", "Roll the chart to >= 2.0 first.\n", [("docs/x.md", 1, "2.0")])):
+                                ("docs/x.md", "Roll the release chart to >= 2.0 first.\n", [("docs/x.md", 1, "2.0")])):
         expect(f"a record structure binds only on its path and at its occurrence: {text.strip()[:60]!r}",
                judge("1.0", scan({path: text}, rd({path: text})), curated=set(), kept=set())[0] == refused)
     with tempfile.TemporaryDirectory() as stage:

@@ -20,14 +20,15 @@ check is not a pass.
 
 | Check | Task | pre-push | mainline-ci | Needs |
 |-------|------|:--------:|:------:|-------|
-| SAST (gosec, high-signal blocking set) | `task lint:sast` | — | ✅ | `gosec` (`task tools`) |
+| SAST (gosec, high-signal blocking set) | `task lint:sast` | touched Go packages (`sast.sh --packages`) | ✅ | `gosec` (`task tools`) |
 | Fuzz smoke (bounded, every target) | `task fuzz:smoke` | — | ✅ | go toolchain |
 | Dependency vulns (fail-closed) | `task vuln:gate` | — | ✅ | `govulncheck` + network |
 | Secret scan (full history) | `task lint:secrets` | — | ✅ | `gitleaks` |
 | Security invariants (policy tests) | Go test suites | main/tags full gate | ✅ | go toolchain |
 | Consolidated evidence report | `task security:report` | — | on demand | all of the above |
 
-**Why SAST / fuzz / vuln / secrets run in mainline-ci, not pre-push.** They need installed
+**Why SAST (whole tree) / fuzz / vuln / secrets run in mainline-ci, not pre-push.** (SAST also
+runs in pre-push on the packages a push touches; see "Before CI" below.) They need installed
 tools (`gosec`, `govulncheck`, `gitleaks`) and — for `vuln`/`secrets` — network and a
 full-history checkout, which the rest of the Go-toolchain pre-push gate does not. This
 matches the pre-existing placement of `vuln` and `lint:secrets` (already CI-only). The
@@ -58,6 +59,16 @@ Their real-risk counterparts are covered elsewhere: `gitleaks` + the no-secrets-
 invariant for credentials; the plugin/rich-doc sandboxes for hostile path
 handling; `go vet` + review for error discipline. They stay visible in the informational
 full scan (`task security:report`), so nothing is hidden — just not release-blocking.
+
+### Before CI: the pre-push leg
+
+`scripts/sast.sh --packages ./dir...` runs the same blocking gate (same rules, flags and
+fail-closed checks) over just the named package directories; `/...` works as in Go. The
+pre-push hook runs it on the packages the push changes, right after `go vet`, so a new
+`exec.Command` with variable arguments meets the gate before a full CI dispatch does
+(#2313). A whole-module scan of `cmd/olivares` needs more than 4 GiB; a package does not.
+The hook prints `SAST NOT CHECKED` when the pushed tree has no such gate or the host has no
+`gosec` (`task tools`); CI still runs the whole gate.
 
 ### <a name="justifying-a-finding"></a>Justifying a finding
 

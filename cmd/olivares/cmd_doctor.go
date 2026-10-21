@@ -288,8 +288,9 @@ func relaxLocalInstallChecks(shape string, checks []doctorCheck) []doctorCheck {
 func newDoctorCmd() *cobra.Command {
 	o := &doctorOptions{mode: "auto", init: "auto", server: "https://127.0.0.1:8443", timeout: 10 * time.Second}
 	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Check this host's installation and say what to fix",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "doctor",
+		Short:       "Check this host's installation and say what to fix",
 		Long: "doctor checks the installed binary and verification anchors, local paths and modes,\n" +
 			"service account and init state, TLS live/ready probes, store status, license, and\n" +
 			"optional audit/update checks. It also reports first-hour readiness: whether an\n" +
@@ -444,6 +445,7 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(doctorInferenceRouting(deps))
 	add(doctorSessionLaunchGate(deps))
 	add(doctorSessionConfinement(deps))
+	add(doctorContainerRuntime(deps))
 	add(doctorFirstHourNextStep(deps, agentHour, pepHour))
 
 	// The required set depends on HOW this installation was made, and the relaxation
@@ -488,6 +490,33 @@ func doctorSessionConfinement(deps doctorDeps) doctorCheck {
 			// of a correct install, not a fault, so it warns instead of failing doctor.
 			c.Status = "warn"
 			c.Detail += "; sessions are not confined by Landlock on " + deps.goos
+		}
+	}
+	return c
+}
+
+// doctorContainerRuntime says which container runtime isolation=container would use. It
+// is optional: a host with none runs native sessions as always. Finding the runtime is a
+// lookup; nothing is started.
+func doctorContainerRuntime(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "container-runtime", Status: "pass", Required: false}
+	if deps.getenv == nil || deps.lookPath == nil {
+		c.Status, c.Detail = "unknown", "the container runtime on this host was not checked"
+		return c
+	}
+	rt, err := sessions.DetectContainerRuntime(deps.getenv, deps.lookPath)
+	switch {
+	case errors.Is(err, sessions.ErrNoContainerRuntime):
+		c.Detail = "no podman or docker is installed; isolation=container is not available and sessions run natively"
+	case errors.Is(err, sessions.ErrContainerRuntimeOff):
+		c.Detail = "container isolation is turned off by " + sessions.ContainerRuntimeEnv
+	case err != nil:
+		c.Status, c.Detail = "warn", err.Error()
+		c.Remediation = "fix the setting, or unset it to let the engine find podman, then docker"
+	default:
+		c.Detail = filepath.Base(rt.Path) + " at " + rt.Path + ", image " + rt.Image + " (looked up, not started: the first container session shows whether the daemon and the image work)"
+		if rt.SELinux {
+			c.Detail += "; SELinux enforces, so mounts are labelled"
 		}
 	}
 	return c

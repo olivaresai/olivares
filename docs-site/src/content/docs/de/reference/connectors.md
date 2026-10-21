@@ -7,6 +7,10 @@ description: >-
   sowie die Ausgabeziele.
 ---
 
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und der DDIL-Air-Gap-Transfer erfordern ebenfalls Business.
+:::
+
 Diese Seite ist der **Katalog** der First-Party-Connectors und nennt für jeden die **ehrliche
 Coverage-Stufe**, die er unterstützen kann. Sie ist der Begleiter zu
 [Eine Quelle anbinden](/de/how-to/connect-a-source/), die das Connector-*Modell* erklärt
@@ -100,7 +104,7 @@ ehrlich, statt gesund zu erscheinen).
 |---|---|---|
 | `claude` | Claude Code OTLP Tool-Telemetrie + MCP-Introspektion → Kanten / Kosten / Findings | Out-of-process-Plugin; `attributed` wenn eine Per-Agent-Identität vorhanden ist, sonst `approximate` |
 | `claude-api` | Claude Admin-API Kostenproben + Governance-Posture-Findings | In-process; ein No-op offline (kein Admin-Key) |
-| `claude-compliance` | Claude Compliance Activity-Feed-Evidence → Findings | GET-only per Konstruktion; No-op offline |
+| `claude-compliance` | Claude Compliance Activity-Feed-Evidence → Findings | GET-only per Konstruktion; No-op offline (Business) |
 | `claude-config` | Statischer Claude-Config-Baum (Subagents / Skills / Plugins) → **declared-capability**-Kanten | Nur Metadaten — eine Capability-Oberfläche, kein beobachteter Zugriff |
 | `claude-console` | Claude-Org-IAM → SSO/SCIM-Posture-Findings (Identitäts-Roster + Quelle) | Business: Identity & Scale;  |
 | `claude-wif` | Anthropic Non-Human-Identity / Workload-Identity-Roster + permitted-scope-Kanten | Business: Identity & Scale; Modelliert vom Operator deklarierte Föderation; markiert Static-Key-Footguns |
@@ -261,7 +265,7 @@ mit Bindestrich geschriebenen Aliase `pg-audit` / `s3-cloudtrail` lösen ebenfal
 | `bigquery-audit` | BigQuery Data-Access-Audit |
 | `redshift-audit` | Amazon Redshift Audit |
 | `mssql-audit` | SQL Server Audit |
-| `oracle-audit` | Oracle Unified Audit |
+| `oracle-audit` | Oracle Unified Audit (Business) |
 | `gcs-audit` | Google Cloud Storage Data-Access-Audit |
 | `azure-blob-audit` | Azure Blob Storage Audit |
 
@@ -354,7 +358,7 @@ Rolle / einem Prozess / einer geteilten Credential statt einem aufgelösten Agen
 | `iceberg-catalog` | Iceberg REST Catalog → permitted Grants + vended-credential-Identitäten | permitted |
 | `inference-gateway` | K8s Gateway API Inference-Extension-Routing → permitted Inference-Routes | permitted |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | Cloud KMS Audit → Key-Access-Kanten (niemals Key-Material) | approximate |
-| `external-secrets` / `sops` / `kmip` | Secret-Management-Manifeste / KMIP-Locate → Provisioning-/Custody-Kanten | approximate (Existenz, nicht Nutzung) |
+| `external-secrets` / `sops` / `kmip` | Secret-Management-Manifeste / KMIP-Locate → Provisioning-/Custody-Kanten | approximate (Existenz, nicht Nutzung); `kmip`: Business |
 | `istio-telemetry` | Istio Telemetry CRDs → L7-Mesh-Kanten | approximate (geparste CRDs, keine Live-Flows) |
 | `egress-proxy` | Egress-Proxy-Verdict-Log → L7-Egress-Kanten | approximate |
 | `kong-audit` | Kong-Audit-Logs → Config-Change-Findings | approximate |
@@ -488,10 +492,10 @@ E-Mail; das Modul maskiert den Body vor dem Persistieren).
 | `gdrive` | Google Drive Dokumente (Docs/Sheets/Slides/Dateien) |
 | `confluence` | Atlassian Confluence Spaces & Pages |
 | `notion` | Notion Workspaces, Databases & Pages |
-| `sharepoint` | Microsoft SharePoint / OneDrive Sites & Dokumente |
+| `sharepoint` | Microsoft SharePoint / OneDrive Sites & Dokumente (Business) |
 | `s3content` | Object-Storage-Content (S3 / R2 / GCS Objekte) |
-| `sap_odata` | Entitäten eines SAP-OData-Service als governierte Dokumente |
-| `salesforce` | Salesforce-Objekte/-Records als governierte Dokumente |
+| `sap_odata` | Entitäten eines SAP-OData-Service als governierte Dokumente (Business) |
+| `salesforce` | Salesforce-Objekte/-Records als governierte Dokumente (Business) |
 | `snowflake` | Snowflake-Tabellen/-Zeilen als governierte Dokumente (verschieden vom R/RW-Observer `snowflake-audit`) |
 | `azure_ai_search` | Dokumente in Azure-AI-Search-Indizes |
 | `postgres` | PostgreSQL-Zeilen als governierte Dokumente — per Konstruktion read-only, deklarierte ACL pro Zeile, Klassifizierung pro Spalte (verschieden vom R/RW-Observer `pgaudit`; kein NL-to-SQL). Siehe [Postgres als governierte Kontextquelle](/de/how-to/govern-postgres-content/). |

@@ -72,14 +72,12 @@ vi.mock('./federation', () => ({
   FederationTab: () => <div>FederationTab mounted</div>,
 }))
 
-
 vi.mock('./nhi-roster', () => ({
   NhiRosterTab: () => <div>NhiRosterTab mounted</div>,
 }))
 vi.mock('./mcp-auth', () => ({
   McpAuthTab: () => <div>McpAuthTab mounted</div>,
 }))
-
 
 vi.mock('./privileged-login', () => ({
   PrivilegedLoginTab: () => <div>PrivilegedLoginTab mounted</div>,
@@ -115,12 +113,20 @@ describe('IdentityView — ?tab= deep link', () => {
 
   it('Community keeps local sign-in and the inventory, and omits the Business identity panels', () => {
     renderAt('?tab=federation')
-    for (const name of ['NHI lifecycle', 'WIF graph', 'Key & residency posture']) {
+    for (const name of [
+      'NHI lifecycle',
+      'WIF graph',
+      'Key & residency posture',
+    ]) {
       expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument()
     }
-    expect(screen.getByRole('tab', { name: 'Identity inventory' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('tab', { name: 'Identity inventory' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('FederationTab mounted')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /privileged login/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('tab', { name: /privileged login/i }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /TOTP/i })).toBeInTheDocument()
   })
 

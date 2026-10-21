@@ -2,8 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Building2, Check, ChevronsUpDown } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +44,8 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
   const { grants, activeTenant, setActiveTenant, isSuperadmin } = useAuth()
 
   const orgs = useOrgs()
+  const [showRecovery, setShowRecovery] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
   // A PostgreSQL install without the tenant inventory (an upgrade, typically) answers the
   // organization list 501 cross_tenant_admin_pool_not_configured. The read is asked once
   // per session (useOrgs); the switcher says once, where the list would be, how to enable
@@ -91,64 +102,94 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        {/* `min-w-0 shrink` so the topbar can truncate this label instead of
+    <Dialog open={showRecovery} onOpenChange={setShowRecovery}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          {/* `min-w-0 shrink` so the topbar can truncate this label instead of
             overflowing the bar at 1024/390 px; the full name stays the accessible
             name and is offered as a tooltip. */}
-        <Button
-          variant="ghost"
-          size="base"
-          className={cn('min-w-24 max-w-[14rem] shrink gap-1.5', className)}
-          title={activeLabel}
-        >
-          <Building2 className="size-4 text-muted-foreground" />
-          <span
-            className="min-w-0 flex-1 truncate text-left"
+          <Button
+            ref={trigger}
+            variant="ghost"
+            size="base"
+            className={cn('min-w-24 max-w-[14rem] shrink gap-1.5', className)}
             title={activeLabel}
           >
-            {activeLabel}
-          </span>
-          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-56">
-        <DropdownMenuLabel>{t('auth:tenant.switch')}</DropdownMenuLabel>
-        {options.map((o) => (
-          <DropdownMenuItem
-            key={o.tenant}
-            onSelect={() => setActiveTenant(o.tenant)}
-          >
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate" title={o.label}>
-                {o.label}
-              </span>
-              {o.sub && (
-                <span
-                  className="truncate font-mono text-caption text-muted-foreground"
-                  title={o.sub}
-                >
-                  {o.sub}
-                </span>
-              )}
-            </span>
-            {o.tenant === activeTenant && (
-              <Check className="ml-auto text-accent-text" />
-            )}
-          </DropdownMenuItem>
-        ))}
-        {listUnavailable ? (
-          <>
-            <DropdownMenuSeparator />
-            <p
-              className="max-w-80 px-2 py-1.5 text-caption text-muted-foreground"
-              data-slot="org-list-unavailable"
+            <Building2 className="size-4 text-muted-foreground" />
+            <span
+              className="min-w-0 flex-1 truncate text-left"
+              title={activeLabel}
             >
-              {t('errors:codes.cross_tenant_admin_pool_not_configured')}
-            </p>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+              {activeLabel}
+            </span>
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="min-w-56"
+          onCloseAutoFocus={(event) => {
+            if (showRecovery) event.preventDefault()
+          }}
+        >
+          <DropdownMenuLabel>{t('auth:tenant.switch')}</DropdownMenuLabel>
+          {options.map((o) => (
+            <DropdownMenuItem
+              key={o.tenant}
+              onSelect={() => setActiveTenant(o.tenant)}
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate" title={o.label}>
+                  {o.label}
+                </span>
+                {o.sub && (
+                  <span
+                    className="truncate font-mono text-caption text-muted-foreground"
+                    title={o.sub}
+                  >
+                    {o.sub}
+                  </span>
+                )}
+              </span>
+              {o.tenant === activeTenant && (
+                <Check className="ml-auto text-accent-text" />
+              )}
+            </DropdownMenuItem>
+          ))}
+          {listUnavailable ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="h-auto max-w-80 flex-col items-start gap-0 py-1.5"
+                data-slot="org-list-unavailable"
+                onSelect={() => setShowRecovery(true)}
+              >
+                <span>{t('auth:tenant.listUnavailable')}</span>
+                <span className="text-caption text-muted-foreground">
+                  {t('common:actions.learnMore')}
+                </span>
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {listUnavailable && (
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            trigger.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t('auth:tenant.label')}</DialogTitle>
+            <DialogDescription>
+              {withInlineCommands(
+                t('errors:codes.cross_tenant_admin_pool_not_configured'),
+              )}
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      )}
+    </Dialog>
   )
 }

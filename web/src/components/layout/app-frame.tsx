@@ -4,7 +4,7 @@
 //
 // THE APP FRAME (redesign §3.2):
 //
-//   frame ─┬─ sidebar (240 px full or 56 px rail, the sidebar's own choice; hidden < 761 px)
+//   frame ─┬─ sidebar (256 px full or 56 px rail, the sidebar's own choice; hidden < 761 px)
 //          └─ sheet (canvas, radius 14 px, 8 px from the window edges)
 //               ├─ top bar
 //               └─ body: main [+ side panel 380 px; 340 px ≤ 1360 px; overlay < 1100 px]

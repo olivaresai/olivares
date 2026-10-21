@@ -40,11 +40,14 @@ persiste tres cosas: evidencia por caso append-only, un agregado de ejecución m
 `SubjectID`, `Score`, `Passed`, `OccurredAt`, `Metrics`) que compliance (XIII) y la UI leen
 **sin conocer las propias tablas de XII**. Las ejecuciones se ejecutan de forma síncrona; el
 stream SSE de una ejecución *reproduce la ejecución persistida* (frames por caso, luego un
-resumen), no actúa. Una regresión es una comparación de puntuación puntual con una ejecución de baseline.
-Cuando la caída de `score` supera el `regression_threshold` de la suite, la ejecución
-establece `regressed` y escribe un **`Finding`** del núcleo (`Kind = eval_regression`).
-Esa comparación no tiene intervalo. La baseline automática es la última ejecución
-completada de la misma suite y el mismo sujeto, y de la misma variante cuando hay una.
+resumen), no actúa. Una regresión es una comparación con una ejecución de baseline.
+Cuando la caída de `score` supera el `regression_threshold` de la suite y el intervalo al 95 %
+de la diferencia de pass-rate (Newcombe, diferencia de intervalos de Wilson) excluye el cero,
+la ejecución establece `regressed` y escribe un **`Finding`** del núcleo (`Kind = eval_regression`).
+Una caída sobre el umbral cuyo intervalo incluye el cero se marca `inconclusive_noise`, no
+como regresión; la comparación muestra el intervalo y ambos denominadores, así que las suites
+pequeñas generan menos findings. La baseline automática es la última ejecución
+completada de la misma suite y el mismo sujeto, y de la misma variante cuando hay una, sin contar las marcadas `inconclusive_noise`.
 Esa ejecución puede usar otra versión de suite, otro modelo u otro scorer, y la
 comparación no informa cuál cambió. Tras un cambio de versión de suite, pasa una
 baseline explícita o fija una (`POST /baselines`). El hallazgo se emite en best-effort en el bus como
@@ -96,8 +99,8 @@ el gasto. Cuando no se puede leer el almacén de presupuestos, la puerta rechaza
 y falla con `budget_blocked`. Un presupuesto que bloquea o limita detiene el gasto. La única salida
 de una puerta fallida es el **override gobernado** — de nivel admin, con motivo escrito,
 auditado — que cambia el veredicto *efectivo* que CI re-comprueba, nunca el registrado. Cada
-tasa reportada se entrega con su denominador y su intervalo al 95 %; la comparación de
-regresión, no. Consulta
+tasa reportada se entrega con su denominador y su intervalo al 95 %, y la comparación de
+regresión también. Consulta
 `docs/EVAL-METHODOLOGY.md` en el repositorio para la metodología completa y las fuentes.
 
 :::caution[Límites honestos]

@@ -83,6 +83,13 @@ func claudeEdgeFor(in claude.HookDecisionInput, allowed bool, at time.Time) (sdk
 	if in.SessionID == "" || in.Tool == "" || in.ResourceKind == "" {
 		return sdkmodel.EdgeObservation{}, false
 	}
+	labels := map[string]string{
+		sdkmodel.LabelEngine:  sdkmodel.EngineClaude,
+		sdkmodel.LabelPosture: postureForClaude(in.Event),
+	}
+	if in.Project != "" {
+		labels[sdkmodel.LabelProjectFolder] = in.Project
+	}
 	return sdkmodel.EdgeObservation{
 		OriginKind:   "session",
 		OriginRef:    in.SessionID,
@@ -99,14 +106,11 @@ func claudeEdgeFor(in claude.HookDecisionInput, allowed bool, at time.Time) (sdk
 		ObservedAt: at,
 		// Set LAST and never merged with operator-supplied attributes. The Claude
 		// connector honors operator-allowlisted OTEL resource attributes as labels
-		// (connectors/claude/identity.go), and "engine"/"posture" are not builtin
-		// keys there — so an operator who allowlisted attributes with those names
-		// could otherwise assert their own engine and posture. The engine's
-		// statement about its own governance is not an operator-supplied dimension.
-		Labels: map[string]string{
-			sdkmodel.LabelEngine:  sdkmodel.EngineClaude,
-			sdkmodel.LabelPosture: postureForClaude(in.Event),
-		},
+		// (connectors/claude/identity.go), and refuses "engine" and "posture" there
+		// (builtinAttrKeys). Written here and not merged, so an attribute map can
+		// never assert them either: the engine's statement about its own governance
+		// is not an operator-supplied dimension.
+		Labels: labels,
 	}, true
 }
 

@@ -181,7 +181,6 @@ func TestConfigGeneratePostgresProdIsTyped(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Resolved posture: postgres-prod",
-		"OLIVARES_KEY_CUSTODY=byok",
 		"OLIVARES_AUDIT_SIGNING_KEY_FILE=/etc/olivares/audit-signing.key",
 		"OLIVARES_DB_MAX_CONNS=20",
 		"--engine=postgres",
@@ -238,8 +237,29 @@ func TestRenderEnvFileHasNoSecret(t *testing.T) {
 	if !strings.Contains(out, "OLIVARES_EXTRA_ARGS=") {
 		t.Errorf("env file missing OLIVARES_EXTRA_ARGS:\n%s", out)
 	}
-	if !strings.Contains(out, "OLIVARES_KEY_CUSTODY=byok") || !strings.Contains(out, "OLIVARES_AUDIT_SIGNING_KEY_FILE=/etc/olivares/audit-signing.key") {
-		t.Errorf("env file missing resolved external audit-key custody:\n%s", out)
+	if !strings.Contains(out, "OLIVARES_AUDIT_SIGNING_KEY_FILE=/etc/olivares/audit-signing.key") {
+		t.Errorf("env file missing the external audit key file:\n%s", out)
+	}
+}
+
+// The key file is Community; the BYOK custody assertion is Business, and Community
+// refuses to start with it. The generated env file must therefore start in the edition
+// that generated it.
+func TestRenderEnvFileDeclaresByokOnlyInBusiness(t *testing.T) {
+	for _, tc := range []struct {
+		edition string
+		byok    bool
+	}{{"community", false}, {"enterprise", true}} {
+		t.Run(tc.edition, func(t *testing.T) {
+			asEdition(t, tc.edition)
+			out := validPostgresProdPlan().renderEnvFile()
+			if !strings.Contains(out, "OLIVARES_AUDIT_SIGNING_KEY_FILE=/etc/olivares/audit-signing.key") {
+				t.Errorf("env file lost the audit key file:\n%s", out)
+			}
+			if got := strings.Contains(out, "OLIVARES_KEY_CUSTODY=byok"); got != tc.byok {
+				t.Errorf("OLIVARES_KEY_CUSTODY=byok present = %v, want %v:\n%s", got, tc.byok, out)
+			}
+		})
 	}
 }
 

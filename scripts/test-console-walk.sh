@@ -102,6 +102,10 @@ SH
 # Browser installation is a separate boundary. This replay must not download
 # anything. The install fixture exposes the real dependency only when the
 # workflow provisions the locked web graph; removing that command must fail.
+# The nightly runs on a self-hosted runner without sudo (2026-10-16, dev#2309:
+# `--with-deps` died on "sudo: a password is required"), and on a GitHub-hosted one
+# that must install the system libraries, so the fixture refuses the wrong flag
+# for each runner.
 cat > "${TMP}/bin/pnpm" <<'SH'
 #!/usr/bin/env bash
 set -eu
@@ -111,7 +115,17 @@ if [ "$WALK_TEST_RC" = driver ]; then
       mkdir -p "$WALK_TEST_TMP/layout/web/node_modules/@playwright"
       ln -s "$WALK_TEST_PW_DIR" "$WALK_TEST_TMP/layout/web/node_modules/@playwright/test"
       ;;
+    '--dir web exec playwright install chromium')
+      # A GitHub-hosted runner has sudo and must install the system libraries.
+      [ "$RUNNER_ENVIRONMENT" = self-hosted ] || exit 72
+      touch "$WALK_TEST_TMP/browser-install"
+      ;;
     '--dir web exec playwright install --with-deps chromium')
+      # A self-hosted runner has no sudo: Playwright's own refusal, verbatim.
+      if [ "$RUNNER_ENVIRONMENT" = self-hosted ]; then
+        echo 'sudo: a password is required' >&2
+        exit 1
+      fi
       touch "$WALK_TEST_TMP/browser-install"
       ;;
     *) exit 72 ;;
@@ -123,15 +137,20 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "${TMP}/bin/npx"
 printf '#!/usr/bin/env bash\nexit 73\n' > "${TMP}/bin/pkill"
 chmod +x "${TMP}/bin/"*
 
-for expected in 2 1 0 driver; do
-  mkdir -p "${TMP}/workflow-${expected}"
-  : > "${TMP}/workflow-${expected}/output"
+for run in 2 1 0 driver driver-hosted; do
+  expected="${run%-hosted}"
+  runner=self-hosted
+  [ "${run}" != driver-hosted ] || runner=github-hosted
+  # Each run starts without the previous run's install, or a skipped install would pass.
+  rm -rf "${TMP}/browser-install" "${TMP}/layout/web/node_modules"
+  mkdir -p "${TMP}/workflow-${run}"
+  : > "${TMP}/workflow-${run}/output"
   set +e
   PATH="${TMP}/bin:${PATH}" WALK_TEST_TMP="${TMP}" WALK_TEST_RC="${expected}" \
-    WALK_TEST_PW_DIR="${PW_DIR}" \
-    RUNNER_TEMP="${TMP}/workflow-${expected}" \
-    GITHUB_OUTPUT="${TMP}/workflow-${expected}/output" \
-    bash -e "${TMP}/workflow.sh" > "${TMP}/workflow-${expected}/log" 2>&1
+    WALK_TEST_PW_DIR="${PW_DIR}" RUNNER_ENVIRONMENT="${runner}" \
+    RUNNER_TEMP="${TMP}/workflow-${run}" \
+    GITHUB_OUTPUT="${TMP}/workflow-${run}/output" \
+    bash -e "${TMP}/workflow.sh" > "${TMP}/workflow-${run}/log" 2>&1
   workflow_rc=$?
   set -e
   # Keep failed test attempts bounded too: the old unguarded pipeline leaves
@@ -146,24 +165,24 @@ for expected in 2 1 0 driver; do
     rm "${TMP}/workflow-engine.pid"
   fi
   [ "${workflow_rc}" = 0 ] \
-    || { cat "${TMP}/workflow-${expected}/log" >&2; fail "nightly exited ${workflow_rc} before reporting walk result ${expected}"; }
-  [ "${engine_alive}" = 0 ] || fail "nightly left its engine alive after walk result ${expected}"
+    || { cat "${TMP}/workflow-${run}/log" >&2; fail "nightly exited ${workflow_rc} before reporting walk result ${expected} (${runner})"; }
+  [ "${engine_alive}" = 0 ] || fail "nightly left its engine alive after walk result ${expected} (${runner})"
   failed=true
   [ "${expected}" != 0 ] || failed=false
-  grep -qx "failed=${failed}" "${TMP}/workflow-${expected}/output" \
-    || fail "nightly did not classify walk result ${expected} as failed=${failed}"
+  grep -qx "failed=${failed}" "${TMP}/workflow-${run}/output" \
+    || fail "nightly did not classify walk result ${expected} (${runner}) as failed=${failed}"
   if [ "${expected}" = 2 ]; then
-    grep -q 'console-walk: cannot load playwright' "${TMP}/workflow-${expected}/log" \
+    grep -q 'console-walk: cannot load playwright' "${TMP}/workflow-${run}/log" \
       || fail "the workflow's exit-2 test did not reach the real loader refusal"
   fi
   if [ "${expected}" = driver ]; then
-    grep -q 'playwright loaded via web/ @playwright/test' "${TMP}/workflow-${expected}/log" \
-      || { cat "${TMP}/workflow-${expected}/log" >&2; fail "nightly did not provision its declared web driver"; }
-    grep -q 'no browser could be launched' "${TMP}/workflow-${expected}/log" \
+    grep -q 'playwright loaded via web/ @playwright/test' "${TMP}/workflow-${run}/log" \
+      || { cat "${TMP}/workflow-${run}/log" >&2; fail "nightly did not provision its declared web driver"; }
+    grep -q 'no browser could be launched' "${TMP}/workflow-${run}/log" \
       || fail "the provisioned driver did not reach browser startup"
   fi
 done
-echo "OK: nightly provisions the declared driver, reports walk results 0/1/2, and reaps its engine."
+echo "OK: nightly provisions the declared driver on self-hosted and GitHub-hosted runners, reports walk results 0/1/2, and reaps its engine."
 
 # The browser leg reuses that pnpm layout: no root playwright and no direct
 # web/playwright link. Only @playwright/test is visible to the copied real loader.
@@ -268,7 +287,7 @@ grep -q '404.*api/missing' "${TMP}/walk.log" \
 # no es un hallazgo; uno en una ruta que nadie gatea, sí. Antes del 2026-08-13 los dos eran lo
 # mismo, y el único «hallazgo» de un walk sobre un `main` limpio resultó ser comportamiento
 # correcto — 55 pantallas para señalar la puerta comercial de reporting.
-grep -q 'GATEADO 501 .*reporting/schedules' "${TMP}/walk.log" \
+grep -q 'GATED 501 .*reporting/schedules' "${TMP}/walk.log" \
   || { cat "${TMP}/walk.log" >&2; fail "the gated 501 was not recognized"; }
 grep -q 'route/gated501.*gated=1' "${TMP}/walk.log" \
   || { cat "${TMP}/walk.log" >&2; fail "the gated 501 screen did not count it in its own bucket"; }
@@ -279,7 +298,7 @@ grep -qE '^ +501 GET /v1/m/nadie-gatea-esto/x' "${TMP}/walk.log" \
 # ⛔ Y EL CONTROL QUE DE VERDAD IMPIDE EL SILENCIADOR, escrito en negativo sobre la cadena
 # exacta. Sin esta linea, una puerta que se tragara TODOS los 501 pasaba este leg entero:
 # medido el 2026-08-13 mutando `esGateado` por `x.status === 501` — el mutante SOBREVIVIO.
-if grep -q 'GATEADO 501 .*nadie-gatea-esto' "${TMP}/walk.log"; then
+if grep -q 'GATED 501 .*nadie-gatea-esto' "${TMP}/walk.log"; then
   cat "${TMP}/walk.log" >&2
   fail "the ungated 501 was marked gated: the gate suppresses every 501"
 fi
@@ -288,7 +307,7 @@ grep -q 'route/roto501.*gated=0' "${TMP}/walk.log" \
 
 # ⛔ EL VECINO: mismo modulo que una puerta declarada, RUTA distinta. La primera version de la
 # derivacion gateaba el PREFIJO entero y se lo tragaba; lo encontro el contraste sol max.
-if grep -q 'GATEADO 501 .*reporting/otra-cosa' "${TMP}/walk.log"; then
+if grep -q 'GATED 501 .*reporting/otra-cosa' "${TMP}/walk.log"; then
   cat "${TMP}/walk.log" >&2
   fail "a 501 on ANOTHER route in the same module was marked gated: the gate covers the entire prefix"
 fi

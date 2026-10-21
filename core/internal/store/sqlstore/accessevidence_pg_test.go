@@ -63,7 +63,7 @@ type pgSplitDSNs struct {
 // owner-created relations, the store is closed and reopened, and everything —
 // including the completeness verdict — reads back exactly.
 func TestAccessEvidencePostgresSplitOwnerRoundTrip(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	st, dsns := openAccessEvidencePG(t)
 	tenant := provisionTenant(t, st, "evidence-pg-"+uniqueSuffix())
@@ -486,7 +486,7 @@ func waitForBlockedBackend(t *testing.T, ctx context.Context, observer *sql.DB, 
 // product commits — which the access-evidence boot classifier now refuses by name. The
 // allowlisted legacy profile is the one this fixture reproduces.
 func TestAccessEvidencePostgresCreatesRelationsOnASchemaThatPredatesThem(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 
@@ -579,7 +579,7 @@ func isAccessEvidenceKind(kind model.Kind) bool {
 // relation is a DIFFERENT state from one that never existed, and only the second
 // is what an upgrading deployment is in.
 func TestAccessEvidencePostgresGuardRefusesADroppedAndRecreatedRelation(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	st, dsns := openAccessEvidencePG(t)
 	tenant := provisionTenant(t, st, "evidence-pg-dropped-"+uniqueSuffix())

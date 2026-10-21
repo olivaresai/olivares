@@ -1,0 +1,336 @@
+{
+  "title": "프로토콜 바인딩",
+  "subtitle": "사용할 수 없는 증거를 성공으로 취급하지 않고 거버넌스된 A2A 및 MCP 바인딩을 작성, 검사 및 조정합니다.",
+  "actions": {
+    "newDraft": "새 초안",
+    "refresh": "새로 고침",
+    "activate": "활성화",
+    "disable": "비활성화",
+    "reconcile": "조정",
+    "test": "원격 상태 테스트",
+    "recordObservation": "관측 기록",
+    "retrySameKey": "같은 키로 재시도",
+    "rereadReplan": "다시 읽고 다시 계획"
+  },
+  "common": {
+    "back": "뒤로",
+    "next": "다음",
+    "remove": "제거"
+  },
+  "workspace": {
+    "requiredTitle": "워크스페이스 선택",
+    "requiredBody": "프로토콜 바인딩에는 명시적 워크스페이스 범위가 필요합니다. 워크스페이스 전환기에서 선택하십시오.",
+    "scope": "워크스페이스 범위"
+  },
+  "tabs": {
+    "specs": "사양",
+    "bindings": "인스턴스"
+  },
+  "specs": {
+    "title": "바인딩 사양",
+    "description": "불변의 원하는 세대 및 서버가 관측한 활성화 증인입니다.",
+    "emptyTitle": "바인딩 사양 없음",
+    "emptyBody": "이 워크스페이스 및 필터와 일치하는 사양이 없습니다."
+  },
+  "bindings": {
+    "title": "바인딩 인스턴스",
+    "description": "하나의 정확한 사양 세대에 고정된 런타임 인스턴스입니다.",
+    "emptyTitle": "바인딩 인스턴스 없음",
+    "emptyBody": "이 워크스페이스 및 필터와 일치하는 런타임 인스턴스가 없습니다."
+  },
+  "filters": {
+    "protocol": "프로토콜 필터",
+    "state": "상태 필터",
+    "verdict": "증거 판정 필터",
+    "allProtocols": "모든 프로토콜",
+    "allStates": "모든 상태",
+    "allVerdicts": "모든 판정"
+  },
+  "state": {
+    "draft": "초안",
+    "active": "활성",
+    "disabled": "비활성화됨",
+    "superseded": "대체됨"
+  },
+  "verdict": {
+    "CLEAN": "깨끗함",
+    "BROKEN": "고장",
+    "UNKNOWN": "관측되지 않음",
+    "LIMPIO": "깨끗함",
+    "ROTO": "고장",
+    "NO_HE_PODIDO_MIRAR": "관측할 수 없음"
+  },
+  "outcome": {
+    "unknownTitle": "상태 주장이 없었습니다",
+    "unknownBody": "관측을 완료할 수 없습니다. 결정하기 전에 증거를 새로 고치십시오.",
+    "brokenTitle": "요청된 조건이 충족되지 않았습니다",
+    "brokenBody": "계속하기 전에 보고된 코드와 계획을 검토하십시오.",
+    "replayed": "이전에 커밋된 결과를 반환했습니다. 두 번째 변경은 적용되지 않았습니다."
+  },
+  "composer": {
+    "title": "프로토콜 바인딩 초안 작성",
+    "description": "하나의 고정된 선언적 A2A 또는 MCP 세대를 정의합니다. 검증과 계획은 상태를 쓰지 않습니다.",
+    "progress": "작성 진행",
+    "steps": {
+      "connection": "연결",
+      "resources": "리소스",
+      "mapping": "매핑",
+      "governance": "거버넌스",
+      "review": "검토"
+    },
+    "pinnedVersionHelp": "정확한 프로토콜 버전을 사용하십시오. latest, current 및 *는 거부됩니다.",
+    "pinnedVersionError": "정확히 고정된 버전을 입력하십시오.",
+    "peerHelp": "온보딩된 피어 권한을 사용하십시오. 자격 증명이나 비밀이 포함된 URL을 붙여 넣지 마십시오.",
+    "resourceHelp": "로컬 선택기는 정확한 id 선택기로 저장됩니다. 원격 참조는 불투명하게 유지되며 자격 증명을 포함하지 않습니다.",
+    "ruleRefsHelp": "한 줄에 하나의 지속 규칙 참조입니다.",
+    "intentKey": "멱등성 키",
+    "generationMode": {
+      "label": "세대 워크플로",
+      "help": "1세대를 생성하거나 하나의 활성 사양에서 불변 후속 세대를 파생합니다.",
+      "initial": "초기 세대(1세대)",
+      "successor": "활성 세대의 후속",
+      "predecessor": "활성 선행 사양",
+      "predecessorHelp": "후속은 정확한 원하는 구성을 복사하고 세대를 증가시키며 검증 증거를 절대 복사하지 않습니다.",
+      "partialCatalog": "불러온 활성 사양 페이지만 표시됩니다. 선행 사양이 없으면 목록을 새로 고치십시오.",
+      "selectPredecessor": "활성 사양 선택"
+    },
+    "endpointCatalog": {
+      "label": "알려진 활성 사양 피어",
+      "help": "선택 항목은 귀하에게 표시되는 활성 사양에서 나옵니다. 이는 라이브 엔드포인트 하트비트가 아니라 참조입니다.",
+      "select": "알려진 피어 및 원격 리소스 재사용",
+      "none": "알려진 피어가 없습니다"
+    },
+    "resourceCatalog": {
+      "label": "권한이 부여된 로컬 리소스 카탈로그",
+      "help": "선택기는 기존 권한 필터링 제품 API를 사용합니다.",
+      "loading": "권한이 부여된 리소스를 불러오는 중…",
+      "unavailable": "이 리소스 종류에 사용할 수 있는 목록 API 또는 유효 읽기 권한이 없습니다.",
+      "truncated": "서버가 이 페이지에 있는 것보다 많은 리소스를 보고했습니다. 정확한 ID는 아래에서 계속 사용할 수 있습니다.",
+      "select": "로컬 리소스 선택",
+      "exactFallback": "정확한 ID는 여전히 서버 검증으로 확인되며 접근을 부여하지 않습니다."
+    },
+    "mapping": {
+      "title": "형식화된 매핑",
+      "help": "아래 허용 목록에 있는 선언적 변환만 보낼 수 있으며 실행 코드는 허용되지 않습니다.",
+      "add": "매핑 추가"
+    },
+    "losses": {
+      "title": "알려진 의미 손실",
+      "help": "허용된 모든 손실은 활성화 전에 명시적 지속 수락 참조가 필요합니다.",
+      "add": "손실 추가",
+      "none": "선언된 알려진 의미 손실이 없습니다."
+    },
+    "coverage": {
+      "title": "매핑 대 수락된 손실 매트릭스",
+      "help": "모든 행은 실행 가능한 매핑 카탈로그에서 나옵니다. 필수 행은 매핑되거나 수락된 손실 참조로 뒷받침되어야 합니다.",
+      "route": "경로",
+      "field": "카탈로그 필드",
+      "result": "커버리지",
+      "action": "작업",
+      "source": "소스",
+      "target": "대상",
+      "required": "필수",
+      "declareLoss": "손실 선언",
+      "status": {
+        "mapped": "매핑됨",
+        "accepted_loss": "수락된 손실",
+        "declared_loss": "손실에 수락 필요",
+        "missing": "필수 커버리지 누락",
+        "optional": "선택 사항, 매핑되지 않음"
+      }
+    },
+    "permissions": {
+      "title": "유효 권한 미리 보기",
+      "help": "이 구성원 자격은 엔진이 발급한 whoami 권한 집합에서 나옵니다. 정확한 리소스 정책과 기능은 여전히 서버 검증이 결정합니다.",
+      "granted": "유효 집합에 있음",
+      "notGranted": "유효 집합에 없음",
+      "unknown": "관측되지 않음",
+      "knownProfiles": "알려진 권한 프로필",
+      "knownProfilesHelp": "프로필은 표시되는 활성 사양에서만 재사용되며 정확한 참조는 계속 편집할 수 있습니다.",
+      "selectProfile": "알려진 프로필 선택"
+    },
+    "review": {
+      "unverifiedTitle": "이 브라우저는 활성화 증인을 발급할 수 없습니다",
+      "unverifiedBody": "브라우저가 읽기 전용 증인을 생략합니다. 검증 및 계획은 서버에서 도출한 결과를 보여주며 활성화에는 서버가 저장한 타임스탬프가 있는 깨끗함 증거가 여전히 필요합니다.",
+      "resources": "리소스",
+      "mappings": "매핑",
+      "losses": "알려진 손실",
+      "validation": "서버에서 도출한 검증",
+      "plan": "계획된 쓰기",
+      "result": "적용 결과",
+      "exportJSON": "원하는 사양과 서버 증거를 JSON으로 내보내기"
+    },
+    "diff": {
+      "title": "계획 → 적용 비교",
+      "plannedHelp": "서버 계획은 쓰기 전에 이 정확한 작업, 계보 및 해시 집합을 고정합니다.",
+      "appliedHelp": "반환된 쓰기는 고정된 계획과 필드별로 비교됩니다.",
+      "match": "계획과 일치",
+      "mismatch": "반환된 값이 다름",
+      "fields": {
+        "operation": "작업",
+        "workspace_id": "워크스페이스",
+        "generation": "세대",
+        "prior_active_id": "이전 활성 사양",
+        "plan_hash": "계획 해시",
+        "spec_hash": "사양 해시",
+        "mapping_hash": "매핑 해시",
+        "losses_hash": "손실 해시"
+      }
+    },
+    "flow": {
+      "validating": "쓰지 않고 초안을 검증하는 중…",
+      "planning": "정식 계획과 해시를 계산하는 중…",
+      "applying": "정확한 계획된 초안을 생성하는 중…",
+      "failed": "요청이 실패했습니다. 초안 상태가 주장되지 않습니다.",
+      "created": "초안 생성됨",
+      "createdVerified": "서버가 타임스탬프가 있는 깨끗함 증인을 반환했습니다. 별도 활성화가 성공할 때까지 리소스는 여전히 초안입니다.",
+      "createdUnverified": "반환된 리소스는 초안이며 검증되지 않은 상태로 남습니다. 활성이 아닙니다.",
+      "createDraft": "계획된 초안 생성",
+      "retrySameKey": "같은 키로 적용 재시도",
+      "inspect": "검증 및 계획"
+    }
+  },
+  "fields": {
+    "id": "ID",
+    "bindingKey": "바인딩 키",
+    "generation": "세대",
+    "supersedesId": "대체하는 사양 ID",
+    "protocol": "프로토콜",
+    "protocolVersion": "프로토콜 버전",
+    "direction": "방향",
+    "peerAuthority": "피어 권한",
+    "localKind": "로컬 리소스 종류",
+    "localRef": "로컬 리소스 ID",
+    "remoteResourceKind": "원격 리소스 종류",
+    "remoteResourceRef": "원격 리소스 참조",
+    "mappingSchema": "매핑 스키마",
+    "source": "소스 경로",
+    "target": "대상 경로",
+    "cardinality": "기수",
+    "transform": "변환",
+    "lossField": "손실 필드",
+    "reasonCode": "사유 코드",
+    "lossAccepted": "손실이 명시적으로 수락됨",
+    "acceptanceRef": "수락 참조",
+    "ruleRefs": "규칙 참조",
+    "permissionProfile": "권한 프로필 참조",
+    "currency": "통화 정책",
+    "code": "코드",
+    "planHash": "계획 해시",
+    "specHash": "사양 해시",
+    "mappingHash": "매핑 해시",
+    "lossesHash": "손실 해시",
+    "etag": "버전",
+    "priorActive": "이전 활성 사양",
+    "bindingSpec": "고정된 사양"
+  },
+  "direction": {
+    "inbound": "인바운드",
+    "outbound": "아웃바운드",
+    "bidirectional": "양방향"
+  },
+  "localKind": {
+    "work_item": "작업 항목",
+    "agent": "에이전트",
+    "model": "모델",
+    "channel": "채널"
+  },
+  "cardinality": {
+    "one_to_one": "일대일",
+    "one_to_many": "일대다",
+    "many_to_one": "다대일"
+  },
+  "transform": {
+    "identity": "동일",
+    "text": "텍스트",
+    "reference": "참조",
+    "metadata": "메타데이터",
+    "status": "상태"
+  },
+  "currency": {
+    "pinned": "고정됨"
+  },
+  "detail": {
+    "specTitle": "바인딩 사양",
+    "specDescription": "원하는 세대, 해시, 손실 및 활성화 증거입니다.",
+    "bindingTitle": "바인딩 인스턴스",
+    "bindingDescription": "고정된 런타임 ID, 상태 및 관측 증거입니다.",
+    "localResource": "로컬 리소스",
+    "remoteResource": "원격 리소스",
+    "validation": "활성화 증인",
+    "notObserved": "완료된 관측 없음",
+    "mapping": "형식화된 매핑",
+    "losses": "알려진 손실",
+    "noLosses": "선언된 알려진 손실이 없습니다.",
+    "accepted": "증거와 함께 수락됨",
+    "notAccepted": "수락되지 않음",
+    "lifecycle": "수명 주기"
+  },
+  "activation": {
+    "blocker": {
+      "state": "초안만 활성화할 수 있습니다.",
+      "witness": "활성화에는 서버가 발급한 타임스탬프가 있는 깨끗함 증인이 필요합니다.",
+      "currency": "활성화에는 고정된 통화가 필요합니다.",
+      "losses": "모든 알려진 손실은 지속 참조와 함께 수락되어야 합니다.",
+      "disable": "초안 또는 활성 사양만 비활성화할 수 있습니다."
+    }
+  },
+  "transition": {
+    "activate": {
+      "title": "사양 활성화",
+      "description": "활성화하기 전에 정확한 초안을 다시 읽고 검증하고 계획합니다.",
+      "applied": "반환된 사양이 활성입니다."
+    },
+    "disable": {
+      "title": "사양 비활성화",
+      "description": "비활성화하기 전에 정확한 사양을 다시 읽고 검증하고 계획합니다.",
+      "applied": "반환된 사양이 비활성화되었습니다."
+    },
+    "phase": {
+      "refreshing": "최신 사양과 버전을 읽는 중…",
+      "validating": "쓰지 않고 검증하는 중…",
+      "planning": "정확한 전환 계획을 계산하는 중…",
+      "applying": "승인된 계획을 적용하는 중…"
+    },
+    "plan": "전환 계획",
+    "broken": "전환 사전 조건이 충족되지 않았습니다.",
+    "failed": "전환이 실패했습니다. 이전 상태만 표시됩니다.",
+    "conflict": "읽은 후 사양이 변경되었습니다. 다시 읽고 새 계획을 검토하십시오."
+  },
+  "binding": {
+    "terminal": "종료됨",
+    "nonTerminal": "종료되지 않음",
+    "external": "외부 ID",
+    "states": "로컬 / 원격 상태",
+    "owner": "소유자 / 펜스",
+    "evidenceTitle": "관측 증거",
+    "created": "인스턴스 생성됨",
+    "lastObservation": "마지막 완료된 관측",
+    "lastEvent": "마지막 지속 이벤트 / 명령"
+  },
+  "reconcile": {
+    "title": "바인딩 인스턴스 조정",
+    "description": "로컬에서 검증하고 계획하고, 쓰지 않고 피어를 테스트한 뒤 정확한 관측 결과를 기록합니다.",
+    "phase": {
+      "refreshing": "최신 인스턴스와 버전을 읽는 중…",
+      "validating": "쓰지 않고 조정을 검증하는 중…",
+      "planning": "정식 조정 계획을 계산하는 중…",
+      "testing": "로컬 상태를 바꾸지 않고 원격 상태를 읽는 중…",
+      "applying": "테스트된 관측을 기록하는 중…"
+    },
+    "plan": "조정 계획",
+    "testResult": "원격 테스트 결과",
+    "recordedResult": "기록된 관측",
+    "rowEffects": "계획된 행 효과",
+    "externalCalls": "원격 읽기",
+    "noExternalCalls": "계획된 원격 읽기가 없습니다",
+    "checks": "증거 검사",
+    "unknown": "원격 관측을 완료할 수 없습니다. 깨끗함 또는 고장으로 기록된 것이 없습니다.",
+    "broken": "로컬 검증 또는 계획에서 고장 사전 조건을 찾았습니다.",
+    "failed": "조정이 실패했습니다. 새 관측이 주장되지 않습니다.",
+    "conflict": "읽은 후 인스턴스가 변경되었습니다. 다시 읽고 새 계획을 검토하십시오."
+  },
+  "pagination": {
+    "truncated": "더 많은 결과가 있습니다. 필터를 좁혀 관련 전체 집합을 검사하십시오."
+  }
+}

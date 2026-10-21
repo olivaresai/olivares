@@ -17,7 +17,7 @@ import (
 
 func newTracingCmd() *cobra.Command {
 	flags := &authClientFlags{}
-	root := &cobra.Command{Use: "tracing", Short: "Read or change saved tracing settings without restarting the engine", Long: "Manage the same tracing settings as the console. Published environment inputs override saved choices and are listed in the result.", Example: "  olivares config tracing get\n  olivares config tracing set --endpoint https://collector:4318 --protocol http/protobuf --enabled"}
+	root := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "tracing", Short: "Read or change saved tracing settings without restarting the engine", Long: "Manage the same tracing settings as the console. Published environment inputs override saved choices and are listed in the result.", Example: "  olivares config tracing get\n  olivares config tracing set --endpoint https://collector:4318 --protocol http/protobuf --enabled"}
 	flags.addPersistent(root)
 	client := bootstrapClient{flags: flags, surface: "tracing"}
 	call := func(cmd *cobra.Command, method string, body any) error {
@@ -34,10 +34,10 @@ func newTracingCmd() *cobra.Command {
 			return err
 		}, state)
 	}
-	root.AddCommand(&cobra.Command{Use: "get", Short: "Read saved and effective tracing choices and environment overrides", Long: "Read tracing settings from the running engine, including saved choices, effective settings, and the environment inputs that override them. The default text output summarizes effective settings; use -o json to inspect saved choices alongside them.", Example: "  olivares config tracing get -o json", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return call(cmd, http.MethodGet, nil) }})
+	root.AddCommand(&cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "get", Short: "Read saved and effective tracing choices and environment overrides", Long: "Read tracing settings from the running engine, including saved choices, effective settings, and the environment inputs that override them. The default text output summarizes effective settings; use -o json to inspect saved choices alongside them.", Example: "  olivares config tracing get -o json", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error { return call(cmd, http.MethodGet, nil) }})
 	choice := obstrace.DefaultSettings()
 	protocol := string(choice.Protocol)
-	set := &cobra.Command{Use: "set", Short: "Save tracing choices and apply them now", Long: "Set only the named choices, keeping other saved values. The collector belongs to you; tracing is off by default. Plaintext requires --collector-insecure and a trusted network.", Example: "  olivares config tracing set --enabled=false", Args: cobra.NoArgs}
+	set := &cobra.Command{Annotations: map[string]string{"changes_data": "write"}, Use: "set", Short: "Save tracing choices and apply them now", Long: "Set only the named choices, keeping other saved values. The collector belongs to you; tracing is off by default. Plaintext requires --collector-insecure and a trusted network.", Example: "  olivares config tracing set --enabled=false", Args: cobra.NoArgs}
 	set.Flags().BoolVar(&choice.Enabled, "enabled", false, "record and export tracing")
 	set.Flags().StringVar(&choice.Endpoint, "endpoint", "", "OTLP collector host or HTTP(S) URL (no credentials)")
 	set.Flags().StringVar(&protocol, "protocol", protocol, "grpc or http/protobuf")

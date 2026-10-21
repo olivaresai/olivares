@@ -233,6 +233,11 @@ type ResourceServer struct {
 	elicitationMediator ElicitationMediator
 	// coazEvaluator: the COAZ evaluator; nil = no AuthZEN evaluation (community build).
 	coazEvaluator COAZEvaluator
+	// dataFlow: the reversible-token seam of the session tool server (dataflow.go);
+	// nil = arguments and results cross untouched. flowServer names the managed
+	// server it reports to the flow.
+	dataFlow   ToolDataFlow
+	flowServer string
 }
 
 // NewResourceServer builds the PEP, validating the config and defaulting every seam to

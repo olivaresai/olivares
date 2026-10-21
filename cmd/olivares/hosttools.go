@@ -161,9 +161,11 @@ func (o *hostToolObserver) ObserveHostTools(ctx context.Context, driver, configu
 	if o.homeErr != nil {
 		return sessions.HostToolObservation{}, o.homeErr
 	}
+	// Only origin, match, executable and identity are kept below, so no executable is read for
+	// a digest: a native install is hundreds of MB, reached twice through its PATH symlink.
 	cands, err := o.engine.Detect(ctx, toolinstall.DetectOptions{
 		Driver: driver, Root: o.root, Home: o.home, PathEnv: o.pathEnv,
-		Probe: false, ProbePaths: nil, Material: nil,
+		Probe: false, ProbePaths: nil, Material: nil, NoDigest: true,
 	})
 	if err != nil {
 		return sessions.HostToolObservation{}, err

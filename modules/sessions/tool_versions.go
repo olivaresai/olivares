@@ -137,6 +137,11 @@ func (m *Module) SetToolVersionPin(ctx context.Context, tenant model.TenantID, p
 }
 
 func (m *Module) ToolVersion(ctx context.Context, tenant model.TenantID, driver, workspace, agent string) (string, error) {
+	// Business: a candidate ring gives its group's members the version under trial,
+	// whatever pin they would otherwise resolve. Community's hook returns "".
+	if version, err := m.ringToolVersion(ctx, tenant, driver, workspace, agent); err != nil || version != "" {
+		return version, err
+	}
 	pins, err := m.ToolVersionPins(ctx, tenant)
 	if err != nil {
 		return "", err
@@ -200,6 +205,7 @@ func (m *Module) resolveRunProgram(ctx context.Context, tenant model.TenantID, p
 		}
 		version, err := m.ToolVersion(ctx, tenant, driver, p.WorkspaceRef, agent)
 		if err != nil {
+			m.warnf("sessions: stored tool version selection could not be read", "tenant", tenant.String(), "driver", driver, "error", redactErr(err))
 			return "", &runErr{503, "Stored tool version selection could not be read; repair the organization settings before starting this session"}
 		}
 		if version != "" {

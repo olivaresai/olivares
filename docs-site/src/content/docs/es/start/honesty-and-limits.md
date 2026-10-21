@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y la transferencia DDIL entre sitios aislados también requieren Business.
 :::
 
 Un control plane para IA es un producto de seguridad. Si exagera lo que cubre,
@@ -44,7 +44,7 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
 - **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
   [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
   necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
-  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.2<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
+  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.3<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
 
 ## Open core — qué es abierto vs comercial
 
@@ -56,9 +56,9 @@ en lugar de fingirlas:
 
 - **El SSO es abierto para un único IdP.** El login con un solo IdP — **OIDC** (Authorization
   Code + PKCE) y **SAML 2.0** (respuestas firmadas, anti-replay) — corre en el binario por
-  defecto **sin** `-tags enterprise`, y también el **SCIM** entrante. Correr **más de un
-  IdP activo** (por tenant / por dominio) y la **aplicación de SSO** (exigir SSO /
-  bloquear login con contraseña) son de Business (Identity & Scale); activar un segundo
+  defecto **sin** `-tags enterprise`. Correr **más de un
+  IdP activo** (por tenant / por dominio), la **aplicación de SSO** (exigir SSO /
+  bloquear login con contraseña) y el servidor **SCIM** entrante son de Business (Identity & Scale); activar un segundo
   IdP activo devuelve `multi_idp_requires_enterprise` — un límite de producto explícito, nunca un 501
   falso.
 - **No hay tope de usuarios: las cuentas son ilimitadas en todas las ediciones.**
@@ -71,8 +71,8 @@ en lugar de fingirlas:
   cobro por asiento.
 - **El resto de la plataforma es abierto.** El bucle completo de gobierno — inventario, el
   mapa de acceso R/RW, la política RBAC/ABAC/Cedar, el audit ledger sellado, FinOps,
-  compliance, egress SIEM, MCP, HA/distribuido — corre en el binario abierto sin comprobación
-  de licencia. Los módulos aditivos de `enterprise/` son código nuevo que nunca estuvo
+  compliance, egress SIEM, MCP — corre en el binario abierto sin comprobación
+  de licencia. El enrutamiento al líder de la HA activo-pasivo y el collector de borde son Business. Los módulos aditivos de `enterprise/` son código nuevo que nunca estuvo
   en el producto abierto, no funciones quitadas de él; qué capacidad va en qué edición
   se escribe una sola vez, en `docs/editions.md` en el repositorio. La validación de
   licencia en el binario abierto es **solo de atestación** — nunca habilita, deshabilita ni
@@ -97,19 +97,19 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
 - **Las fuentes canónicas R/RW están cableadas en el `serve` de fábrica.** La raíz de composición
   registra los observadores a nivel de host — `pgaudit`, `s3cloudtrail`, `ebpf`,
   `runtime` y la fuente de introspección `mcp` — junto con los observadores de warehouse/lake
-  (snowflake/databricks/bigquery/mssql/oracle/mongo/redshift/gcs/
+  (snowflake/databricks/bigquery/mssql/mongo/redshift/gcs/
   azure-blob/iceberg/openlineage/delta-sharing), todos configurables a través de
   `OLIVARES_SOURCES_CONFIG` (el
   [quickstart](/es/start/quickstart/) cablea una fuente `pgaudit` real contra el binario
   de fábrica y el smoke test lo verifica). Las **fuentes de documentos** de conocimiento
-  (gdrive/confluence/notion/sharepoint/s3content) deliberadamente *no* son fuentes
+  (gdrive/confluence/notion/s3content) deliberadamente *no* son fuentes
   en tiempo de ejecución — se cargan bajo demanda mediante peticiones de ingesta de conocimiento. La
   [referencia de conectores](/es/reference/connectors/) marca cada tipo.
 - **El valor por defecto es un binario único; el bus de eventos distribuido existe y es honesto
   sobre su semántica.** El valor por defecto corre como un único binario con un bus de eventos
   **in-process**. La **ruta de datos del collector remoto→core está construida y distribuida**: los collectors de borde
   corren conectores de fuente localmente y empujan observaciones a un core central sobre
-  TLS mutuo con cert de cliente verificado, sin listener entrante (el modo `collector`).
+  TLS mutuo con cert de cliente verificado, sin listener entrante (el modo `collector`, una función Business).
   El **bus de eventos distribuido** se distribuyó con el trabajo de scale-out: un híbrido
   que mantiene el fan-out in-process para la entrega local (backpressure bloqueante, sin
   pérdida local) y puentea eventos entre nodos sobre **NATS**, habilitado por
@@ -125,7 +125,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   el runner de sandbox sintético in-process (aislado por construcción). Varios más están
   **cableados bajo demanda** — el backend está construido y cableado, pero permanece **deny-closed o
   degradado hasta que un operador lo aprovisiona** vía configuración de entorno: el módulo VII (deploy)
-  `apply`/`retire` (un `503` hasta que se aprovisiona un executor), la orquestación del módulo IV
+  `apply`/`retire` (solo Business: `501` en Community, y un `503` hasta que se aprovisiona un executor), la orquestación del módulo IV
   *fire* y el despacho de voz del módulo XVI (ambos deny-closed hasta que se configura un dispatcher),
   el runtime de sandbox/red-team aislado a nivel de OS (sintético / DEGRADED hasta aprovisionar),
   la recuperación **semántica** respaldada por modelo (léxica y solo pública por
@@ -148,7 +148,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   air-gapped; los modelos frontier brokered no.
 - **Las rutas de módulo son un contrato beta separado.** Los endpoints de módulo (por
   ejemplo, el grafo del access map y el drift) no forman parte del contrato estable de
-  128 rutas del núcleo; se publican como un documento **beta** separado: la
+  {{core-paths}} rutas del núcleo; se publican como un documento **beta** separado: la
   [referencia de rutas de módulo](/reference/api-beta/) (servida en
   `/openapi.beta.json`). Beta significa que las formas pueden cambiar con aviso, y el
   detalle de cada campo sigue viviendo en las interfaces tipadas del producto. La

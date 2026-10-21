@@ -1,0 +1,117 @@
+{
+  "title": "Proxy di inferenza",
+  "description": "Il proxy per tenant che applica le policy davanti a ogni chiamata a un modello: gate su richiesta/risposta, regole DLP in uscita e approvazioni di autorizzazione dei dispositivi.",
+  "config": {
+    "title": "Gate e limiti",
+    "intro": "Ogni gate viene applicato sul percorso della richiesta prima della chiamata al modello. Disattivarne uno smette di applicare quel controllo; la modifica viene registrata nel registro di audit.",
+    "failOpen": "Fail open",
+    "failOpenHint": "Quando il proxy non riesce a ottenere una decisione di policy, consenti la chiamata invece di bloccarla. Disattivato = fail closed.",
+    "recordMandatory": "Richiedi la registrazione",
+    "recordMandatoryHint": "Rifiuta una chiamata che non può essere registrata nel registro della sessione.",
+    "gates": {
+      "gate_model_access": "Accesso ai modelli",
+      "gate_budget": "Budget",
+      "gate_residency": "Residenza dei dati",
+      "gate_context_window": "Finestra di contesto",
+      "gate_dlp_request": "DLP sulla richiesta",
+      "gate_dlp_response": "DLP sulla risposta"
+    },
+    "gatesHint": {
+      "gate_model_access": "Applica quali modelli può chiamare ciascun soggetto.",
+      "gate_budget": "Applica i limiti di budget prima che la chiamata maturi costi.",
+      "gate_residency": "Applica la regione di residenza dei dati del tenant.",
+      "gate_context_window": "Applica il limite della finestra di contesto per superficie.",
+      "gate_dlp_request": "Analizza la richiesta in uscita alla ricerca di classificazioni non consentite.",
+      "gate_dlp_response": "Analizza la risposta del modello secondo la modalità DLP sulla risposta."
+    },
+    "responseDlpMode": "Modalità DLP sulla risposta",
+    "responseDlpModeHint": "Come la DLP sulla risposta gestisce una corrispondenza: disattivata (nessuna analisi), segnala (annota) o buffer (trattiene per l'analisi prima di restituire).",
+    "dlpModes": {
+      "off": "Disattivata",
+      "flag": "Segnala",
+      "buffer": "Buffer"
+    },
+    "ceilingsEnforce": "Applica i limiti",
+    "ceilingsEnforceHint": "Limita token, usi di tool e budget del task per chiamata. Disattivato = nessun limite per chiamata.",
+    "ceilingMaxTokens": "Token massimi",
+    "ceilingMaxToolUses": "Usi massimi di tool",
+    "ceilingTaskBudget": "Budget del task (token)",
+    "ceilingTaskBudgetHint": "0 = non impostato, altrimenti almeno {{min}}.",
+    "ceilingTaskBudgetError": "Deve essere 0 oppure almeno {{min}}.",
+    "reset": "Ripristina",
+    "save": "Salva configurazione",
+    "saved": "Configurazione del proxy salvata"
+  },
+  "dlp": {
+    "title": "Regole DLP in uscita",
+    "intro": "Associa una classificazione del contenuto a consenti o nega in uscita. La classificazione avviene lato server alla chiamata del modello; queste regole decidono cosa fa una corrispondenza.",
+    "truncated": "Caricate {{n}} regole DLP; ce ne sono altre",
+    "truncatedHint": "Ci sono più regole DLP di quelle mostrate; questa pagina prende le righe per id. Una regola assente da questo elenco non prova che non esista: l'uscita potrebbe essere governata da regole che qui non vedi.",
+    "add": "Aggiungi regola",
+    "noRead": "Non hai il permesso di visualizzare le regole DLP.",
+    "noReadHint": "Le regole DLP controllano prompt e risposte alla ricerca di dati che non vuoi far uscire. Chiedi a un amministratore il permesso di lettura DLP.",
+    "empty": "Nessuna regola DLP",
+    "emptyHint": "I segreti nei prompt sono negati per impostazione predefinita finché la DLP sulla richiesta è attiva. Aggiungi una regola per consentire o negare una classificazione in uscita.",
+    "colClass": "Classificazione",
+    "colAction": "Azione",
+    "colNote": "Nota",
+    "colActions": "Azioni",
+    "actions": {
+      "allow": "Consenti",
+      "deny": "Nega"
+    },
+    "editAction": "Modifica la regola per {{class}}",
+    "deleteAction": "Elimina la regola per {{class}}",
+    "created": "Regola DLP creata",
+    "updated": "Regola DLP aggiornata",
+    "deleted": "Regola DLP eliminata",
+    "deleteDialog": {
+      "title": "Eliminare la regola DLP?",
+      "description": "Rimuove la regola in uscita per “{{class}}”. Il contenuto corrispondente tornerà alla gestione predefinita.",
+      "confirm": "Elimina regola"
+    },
+    "dialog": {
+      "title": "Aggiungi regola DLP",
+      "editTitle": "Modifica regola DLP",
+      "subtitle": "Una classificazione viene consentita o negata in uscita. La regola ha come chiave la sua classificazione.",
+      "class": "Classificazione",
+      "classHint": "La classificazione del contenuto a cui si applica questa regola (es. pii, secret).",
+      "action": "Azione",
+      "note": "Nota",
+      "create": "Aggiungi regola",
+      "save": "Salva regola"
+    }
+  },
+  "device": {
+    "title": "Autorizzazione del dispositivo",
+    "intro": "Approva o nega una richiesta di autorizzazione del dispositivo tramite il suo codice utente (il codice mostrato nella schermata di abbinamento del dispositivo).",
+    "userCode": "Codice utente",
+    "userCodePlaceholder": "es. WDJB-MJHT",
+    "approve": "Approva",
+    "deny": "Nega",
+    "approved": "Codice dispositivo {{code}} approvato",
+    "denied": "Codice dispositivo {{code}} negato",
+    "notFound": "Nessuna richiesta in sospeso per quel codice utente.",
+    "expired": "Quella richiesta è scaduta o è già stata usata."
+  },
+  "firewall": {
+    "title": "Ispettore dei messaggi",
+    "intro": "Indica se questo processo del control plane è stato avviato con l'ispettore dei contenuti collegato al proxy Messages.",
+    "refresh": "Controlla di nuovo",
+    "limit": "È ciò che il processo che risponde ha registrato all'avvio. Non indica se il proxy è raggiungibile ora, quale policy è caricata o se una singola richiesta è stata ispezionata.",
+    "states": {
+      "unobserved": "Non segnalato",
+      "pep_not_composed": "Proxy non avviato",
+      "inspector_absent": "Ispettore non collegato",
+      "inspector_attached": "Ispettore collegato",
+      "unreadable": "Non leggibile"
+    },
+    "statesHint": {
+      "unobserved": "Questo processo non ha registrato uno stato di collegamento. Non si afferma nulla in un senso o nell'altro.",
+      "pep_not_composed": "Il proxy Messages non è stato avviato in questo processo, quindi nessun ispettore ha potuto collegarsi.",
+      "inspector_absent": "Il proxy è stato avviato senza un ispettore dei contenuti collegato.",
+      "inspector_attached": "All'avvio è stato collegato un ispettore. Potrebbe essere il fallback restrittivo installato quando la configurazione non può essere letta, quindi ciò non significa che il contenuto venga ispezionato come configurato.",
+      "unreadable": "La risposta non corrispondeva a uno stato che questa console riconosce. Non si afferma nulla sull'ispettore."
+    }
+  }
+}

@@ -2,39 +2,40 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SESSIONS THIS PERSON IS KEEPING AN EYE ON.
+// THE SESSIONS THIS PERSON KEEPS FIRST.
 //
-// A pin is a preference, not a permission and not a fact about the estate: it says
-// "keep this one where I can find it". So it is stored where preferences are stored in
-// this console — the browser, partitioned per (origin, user, tenant), exactly the
-// discipline `features/navigation/personal-navigation-store.ts` established for
-// favourites, and for its reasons:
+// A pin is the signed-in person's own mark on a session, and it is KEPT BY THE ENGINE
+// (`modules/sessions/run_pin.go`), not by this browser: it follows the person to another
+// browser or machine, serves `olivares session ls`, and never changes anyone else's list.
+// The engine says which sessions are pinned on the runs it already returns (`pinned`,
+// `pinned_at` on `RunDTO`), so this file only turns those fields into the set the rail
+// sorts by.
 //
-// ⛔ A TOKEN PRINCIPAL CAN CARRY ITS CREATOR'S user_id. IT IS NOT THAT USER. With no
-//    user principal, or with no tenant, there is no partition to write into and pinning
-//    is NOT OFFERED — the key is null and the rail hides the affordance rather than
-//    silently writing somebody else's preference.
+// ⛔ A PIN NAMES A RUN. A session the plane only observes (no run launched through
+//    Olivares) has no run to hang a pin on, so it is not offered one (`isPinnable`) —
+//    a control that silently does nothing is worse than one that is not there.
 //
-// ⛔ ONLY ROW KEYS ARE STORED, and every one is re-validated on the way out
-//    (`isSessionAddress`). Nothing reconstructs a label, a URL or a payload from
-//    storage: what comes back is a set of references this plane could have minted, and
-//    a session that no longer exists simply never matches a row.
+// ⛔ ONE SESSION, TWO NAMES. A launched session is `run:<ref>` until the plane proves its
+//    managed live row and `live:<ref>` after (`provenance.ts`). The engine keeps the pin
+//    on the run, so both names read it, and `pinnedKeys` returns the row's own key
+//    whichever name it has now: a pin never goes missing across that change.
 //
-// ⛔ AND THE LIST HAS A CEILING. Storage that grows with every click is storage nobody
-//    ever cleans; past the ceiling the oldest pin is dropped, which is what an operator
-//    means by pinning a twenty-first thing.
+// ⛔ PINS KEPT IN THIS BROWSER BEFORE THE ENGINE KEPT THEM ARE STORED DATA. They are read
+//    here (`decodePins`) only so `use-session-pins.ts` can move them to the engine once;
+//    nothing writes that key any more. Only session addresses are read back, each
+//    re-validated (`isSessionAddress`), and the list has the engine's ceiling.
 import type { Whoami } from '@/lib/api/types'
 import type { UnifiedSession } from './provenance'
 import { isSessionAddress } from './session-address'
 
-/** How many sessions one person may keep pinned, per tenant. */
+/** How many sessions one person keeps pinned: the engine's ceiling (`maxRunPins`), and the
+ * one this browser kept before it. */
 export const MAX_PINS = 20
 
-const VERSION = 1
+const BROWSER_PINS_VERSION = 1
 
-/** Where one named browser preference of this principal lives, or null when there is
- * no partition to write to (a token principal, or no tenant). Pins and the model
- * favorites share the rule. */
+/** Where one named browser preference of this principal lives, or null when there is no
+ * partition to write to (a token principal, or no tenant). The model favorites use it. */
 export function preferenceStorageKey(
   name: string,
   origin: string,
@@ -51,7 +52,8 @@ export function preferenceStorageKey(
   return `${name}:${JSON.stringify([origin, 'user', principal.user_id, tenant])}`
 }
 
-/** Where this principal's pins live, or null when there is no partition to write to. */
+/** Where this browser kept the principal's pins before the engine did, or null when
+ * there was no partition to write to (a token principal, or no tenant). */
 export function pinStorageKey(
   origin: string,
   principal: Whoami | null,
@@ -65,71 +67,75 @@ export function pinStorageKey(
   )
 }
 
-const EMPTY: readonly string[] = Object.freeze([])
-
-/** Read a stored value back. Anything unexpected reads as "no pins", never as a throw. */
+/** Read a stored value back, oldest pin first. Anything unexpected reads as "no pins",
+ * never as a throw. */
 export function decodePins(raw: string | null): readonly string[] {
-  if (!raw) return EMPTY
+  if (!raw) return []
   try {
     const value: unknown = JSON.parse(raw)
     if (
       !value ||
       typeof value !== 'object' ||
       !('version' in value) ||
-      value.version !== VERSION ||
+      value.version !== BROWSER_PINS_VERSION ||
       !('pins' in value) ||
       !Array.isArray(value.pins)
     )
-      return EMPTY
+      return []
     const out: string[] = []
     for (const entry of value.pins) {
-      if (typeof entry !== 'string') continue
-      if (!isSessionAddress(entry)) continue
+      if (typeof entry !== 'string' || !isSessionAddress(entry)) continue
       if (out.includes(entry)) continue
       out.push(entry)
       if (out.length === MAX_PINS) break
     }
     return out
   } catch {
-    return EMPTY
+    return []
   }
 }
 
 export function encodePins(pins: readonly string[]): string {
-  return JSON.stringify({ version: VERSION, pins })
+  return JSON.stringify({ version: BROWSER_PINS_VERSION, pins })
+}
+
+/** Whether a pin can be kept for this session: the engine keeps it against a run, and a
+ * released run is out of every list for good. */
+export function isPinnable(session: Pick<UnifiedSession, 'runs'>): boolean {
+  return session.runs.some((run) => run.state !== 'cleaned')
 }
 
 /**
- * Add or remove one address. Newest last, so the ceiling drops the OLDEST pin — the one
- * the operator has gone longest without needing.
+ * Whether this session is pinned, from the list's set or from its own runs. The open
+ * card can be a session the list does not hold (a deep link past the page), and its
+ * runs carry the engine's answer either way.
  */
-export function togglePin(
-  pins: readonly string[],
-  address: string,
-): readonly string[] {
-  if (!isSessionAddress(address)) return pins
-  if (pins.includes(address)) return pins.filter((p) => p !== address)
-  const next = [...pins, address]
-  return next.length > MAX_PINS ? next.slice(next.length - MAX_PINS) : next
-}
-
-/**
- * Which of this session's names holds its pin, if any.
- *
- * ⛔ ONE SESSION, TWO NAMES. A launched session is `run:<ref>` until the plane proves its
- *    managed live row and `live:<ref>` after (`provenance.ts`), and a reload can land on
- *    either. A pin stored under one name was lost under the other: pinned, reloaded, and
- *    the row was no longer pinned, or the list said Pinned while the menu offered Pin
- *    (F1 09b sweep). Unpinning removes the name that is stored; pinning stores the key.
- */
-export function pinnedAddress(
+export function isPinned(
   pinned: ReadonlySet<string>,
-  session: Pick<UnifiedSession, 'key' | 'liveRef' | 'runs'>,
-): string | undefined {
-  const names = [
-    session.key,
-    ...(session.liveRef ? [`live:${session.liveRef}`] : []),
-    ...session.runs.map((run) => `run:${run.run_ref}`),
-  ]
-  return names.find((name) => pinned.has(name))
+  session: Pick<UnifiedSession, 'key' | 'runs'>,
+): boolean {
+  return (
+    pinned.has(session.key) || session.runs.some((run) => run.pinned === true)
+  )
+}
+
+/**
+ * The keys of the sessions this person has pinned, in the order they pinned them (oldest
+ * pin first), which is the order the pinned section lists them in. A session with several
+ * runs is pinned when any run is, from the earliest of those pins.
+ */
+export function pinnedKeys(
+  sessions: readonly Pick<UnifiedSession, 'key' | 'runs'>[],
+): ReadonlySet<string> {
+  const pins: { key: string; at: string }[] = []
+  for (const session of sessions) {
+    const stamps = session.runs
+      .filter((run) => run.pinned === true)
+      .map((run) => run.pinned_at ?? '')
+      .sort()
+    if (stamps.length > 0) pins.push({ key: session.key, at: stamps[0] })
+  }
+  // A stable sort: two pins with one stamp keep the order the list gave them.
+  pins.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+  return new Set(pins.map((pin) => pin.key))
 }

@@ -130,7 +130,9 @@ jobs:
   control-plane:
     # The required job reports failed functional shards through always(); only
     # code-input runs execute it.
-    needs: [classify, functional-shard, web]
+    # `web` stays in the list for ORDER only (nothing reads its outputs now): control-plane has always
+    # started after it, and scripts/test-mainline-ci-schedule.py holds that.
+    needs: [classify, functional-shard, web-bundle, web]
     if: ${{ always() && needs.classify.outputs.code == 'true' }}
     # Include run_id so separate runs cannot cancel each other's jobs.
     concurrency:
@@ -166,7 +168,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -193,7 +195,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -246,10 +248,10 @@ jobs:
             echo "CLOUD_CP_INTEGRATION=1"
             echo "CLOUD_CP_REQUIRE_INTEGRATION=1"
           } >> "$GITHUB_ENV"
-      - name: download the console built by web
+      - name: download the console built by web-bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ needs.web.outputs.bundle-artifact }}
+          name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
         run: |
@@ -261,8 +263,8 @@ jobs:
         # directory.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -1061,6 +1063,11 @@ jobs:
       - name: workflow validity (actionlint)
         id: lint-actions
         run: task lint:actions
+      # Hosted minutes on a private repository are billed and the Actions budget is for storage
+      # only: a job reads vars.CI_RUNNER* or is listed, with its reason, in ci/hosted-runners.txt.
+      - name: no job on a GitHub-hosted runner outside the allowlist
+        id: lint-hosted-runners
+        run: task lint:ci-hosted-runners lint:ci-hosted-runners:selftest
       # Release mechanics (2026-08-01). Six hermetic batteries, ~5s, and until today they
       # ran ONLY in .githooks/pre-push — in no workflow at all. That is how they entered
       # main BROKEN with the 2026-07-31 train (their stubs assumed an exec-capable /tmp,
@@ -1550,8 +1557,17 @@ jobs:
         if: ${{ always() }}
         env:
           RESULT: ${{ needs.functional-shard.result }}
+          RESULT_BUNDLE: ${{ needs.web-bundle.result }}
         run: |
+          echo "web-bundle result: $RESULT_BUNDLE"
           echo "functional-shard result: $RESULT"
+          # The shards embed the console that web-bundle builds (dev#2367). When that job is red
+          # the shards are SKIPPED, and the arm below would say a check quietly stopped checking.
+          # Name the real cause first; `web` no longer carries the build verdict.
+          if [ "$RESULT_BUNDLE" != success ]; then
+            echo "::error::web-bundle did not succeed (${RESULT_BUNDLE:-no result}) — the console build failed or never ran, so the functional suite had no console to embed. Open the web-bundle job of this run."
+            exit 1
+          fi
           # AN EMPTY RESULT IS THE `missing` CASE AND IT IS RED: the expression expands to the
           # empty string when the job id does not exist (a rename, a deletion, a bad merge), and
           # an empty string matching no arm would fall through a `case` with no default.
@@ -1711,7 +1727,7 @@ jobs:
   #
   # Same route as every code-input job: journal-only pushes skip it, and control-plane with it.
   functional-shard:
-    needs: [classify, web]
+    needs: [classify, web-bundle]
     if: needs.classify.outputs.code == 'true'
     strategy:
       # `fail-fast: false`: a red shard must not cancel its siblings. A cancelled shard publishes
@@ -1719,7 +1735,7 @@ jobs:
       # aggregate in control-plane is red either way.
       fail-fast: false
       matrix:
-        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
+        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-i, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
     name: functional-shard (${{ matrix.shard }})
     # The group names the shard, and without that the matrix cancels itself: a job-level group
     # is per job instance, so the legs sharing one string with cancel-in-progress would
@@ -1749,7 +1765,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -1764,7 +1780,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -1801,10 +1817,10 @@ jobs:
           } >> "$GITHUB_ENV"
       # Full history, as in control-plane: on a persistent self-hosted runner a shallow clone
       # makes the answer depend on what an earlier job left behind.
-      - name: download the console built by web
+      - name: download the console built by web-bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ needs.web.outputs.bundle-artifact }}
+          name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
         run: |
@@ -1814,8 +1830,8 @@ jobs:
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -2306,14 +2322,22 @@ jobs:
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
     # PR-side filtering of any kind).
-    needs: [classify]
-    if: needs.classify.outputs.code == 'true'
+    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # hand the eight runners to the -race legs while the functional suite and the web unit tests
+    # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
+    # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
+    needs: [classify, functional-shard, web]
+    if: ${{ !cancelled() && needs.classify.outputs.code == 'true' }}
     strategy:
       # fail-fast: false, because the evidence is the point. Under the default the first
       # partition to fail cancels the other three, and three cancelled legs report nothing
       # about the packages they were racing. The aggregate is red either way, so all
       # fail-fast buys here is the loss of three failure reports.
       fail-fast: false
+      # max-parallel (dev#2367, Root's recipe on the issue): four legs of this family on top of the others
+      # took all eight runners of a 4-core host and every job slowed past its ceiling (race-core cut at
+      # 180 min, race-sessions at 190). Two at a time; the families also run one after the other.
+      max-parallel: 2
       matrix:
         partition: [1, 2, 3, 4]
     name: race-modules (partition ${{ matrix.partition }})
@@ -2369,7 +2393,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -2414,8 +2438,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -2586,8 +2610,12 @@ jobs:
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
     # PR-side filtering of any kind).
-    needs: [classify, web]
-    if: needs.classify.outputs.code == 'true'
+    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # hand the eight runners to the -race legs while the functional suite and the web unit tests
+    # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
+    # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
+    needs: [classify, web-bundle, functional-shard, web]
+    if: ${{ !cancelled() && needs.classify.outputs.code == 'true' }}
     # Job-level superseding (see the concurrency note above the jobs block).
     concurrency:
       group: mainline-ci-race-rest-${{ github.ref }}-${{ github.run_id }}
@@ -2636,7 +2664,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -2658,10 +2686,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: download the console built by web
+      - name: download the console built by web-bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ needs.web.outputs.bundle-artifact }}
+          name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
         run: |
@@ -2683,8 +2711,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -2889,13 +2917,24 @@ jobs:
   # Run core separately, with one package binary at a time. Coverage and
   # PostgreSQL remain required. Hosted CI must qualify the revised budgets.
   race-core:
-    needs: [classify]
-    if: needs.classify.outputs.code == 'true'
+    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # hand the eight runners to the -race legs while the functional suite and the web unit tests
+    # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
+    # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
+    # CHAIN (dev#2367): after race-sessions as well, so the big families do not start together. `!cancelled()`
+    # below keeps a red race-sessions from skipping this one. At most 2 legs of the current family run beside
+    # race-hot-manifest (4) and race-rest (1): at most 7 race jobs at once, on 8 runners.
+    needs: [classify, functional-shard, web, race-sessions]
+    if: ${{ !cancelled() && needs.classify.outputs.code == 'true' }}
     strategy:
       # fail-fast: false for the same reason race-modules carries it: under the default the
       # first partition to fail cancels the others, and a cancelled leg reports nothing about
       # the packages it was racing. The aggregate is red either way.
       fail-fast: false
+      # max-parallel (dev#2367, Root's recipe on the issue): four legs of this family on top of the others
+      # took all eight runners of a 4-core host and every job slowed past its ceiling (race-core cut at
+      # 180 min, race-sessions at 190). Two at a time; the families also run one after the other.
+      max-parallel: 2
       matrix:
         partition: [1, 2, 3, 4]
     name: race-core (partition ${{ matrix.partition }})
@@ -2919,7 +2958,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -2946,7 +2985,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -2972,8 +3011,8 @@ jobs:
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -3096,13 +3135,24 @@ jobs:
   # This job owns it, split by ENTRY POINT under an anchored -run. Its four legs are required
   # by race-hot, so removing the package from race-modules cannot silently drop it.
   race-sessions:
-    needs: [classify]
-    if: needs.classify.outputs.code == 'true'
+    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # hand the eight runners to the -race legs while the functional suite and the web unit tests
+    # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
+    # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
+    # CHAIN (dev#2367): after race-modules as well, so the big families do not start together. `!cancelled()`
+    # below keeps a red race-modules from skipping this one. At most 2 legs of the current family run beside
+    # race-hot-manifest (4) and race-rest (1): at most 7 race jobs at once, on 8 runners.
+    needs: [classify, functional-shard, web, race-modules]
+    if: ${{ !cancelled() && needs.classify.outputs.code == 'true' }}
     strategy:
       # fail-fast: false for the same reason race-modules carries it: under the default the
       # first partition to fail cancels the others, and a cancelled leg reports nothing about
       # the packages it was racing. The aggregate is red either way.
       fail-fast: false
+      # max-parallel (dev#2367, Root's recipe on the issue): four legs of this family on top of the others
+      # took all eight runners of a 4-core host and every job slowed past its ceiling (race-core cut at
+      # 180 min, race-sessions at 190). Two at a time; the families also run one after the other.
+      max-parallel: 2
       matrix:
         partition: [1, 2, 3, 4]
     name: race-sessions (partition ${{ matrix.partition }})
@@ -3126,7 +3176,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -3153,7 +3203,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -3179,8 +3229,8 @@ jobs:
       - name: Go caches under RUNNER_TEMP (this runner may have no $HOME)
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"
@@ -3335,8 +3385,12 @@ jobs:
   # executable TMPDIR and the role provisioning are race-rest's, unchanged and in the same order:
   # this leg has always run with that posture and moving it must not quietly give it another.
   race-hot-manifest:
-    needs: [classify, web]
-    if: needs.classify.outputs.code == 'true'
+    # SCHEDULE (dev#2367): this leg starts after functional-shard and `web`, so a full run does not
+    # hand the eight runners to the -race legs while the functional suite and the web unit tests
+    # wait. `!cancelled()` keeps a RED upstream job from skipping the leg: a skipped leg is a red
+    # `race-hot`, and its evidence is the point. scripts/test-mainline-ci-schedule.py holds this.
+    needs: [classify, web-bundle, functional-shard, web]
+    if: ${{ !cancelled() && needs.classify.outputs.code == 'true' }}
     strategy:
       # fail-fast: false for the reason race-modules and race-sessions carry it: under the
       # default the first partition to fail cancels the others, and a cancelled leg reports
@@ -3385,7 +3439,7 @@ jobs:
           - 5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 30s --health-start-period 60s --health-start-interval 1s
           --health-timeout 5s
           --health-retries 12
           --memory=1g
@@ -3404,10 +3458,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: download the console built by web
+      - name: download the console built by web-bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ needs.web.outputs.bundle-artifact }}
+          name: ${{ needs.web-bundle.outputs.bundle-artifact }}
           path: ${{ runner.temp }}/web-generation-artifact
       - name: embed the verified console output
         run: |
@@ -3429,8 +3483,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -3865,8 +3919,11 @@ jobs:
           retention-days: 1
 
   web:
-    outputs:
-      bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+    # The console bundle is NOT built here (dev#2367). Its upload used to be the last step of
+    # this job, behind the 20-minute permission check and the 48-minute vitest run, so a `web`
+    # that failed or hit its ceiling left functional-shard, race-rest and race-hot-manifest
+    # SKIPPED with no functional verdict (runs 38901745263 and 38860445399). `web-bundle` below
+    # builds and publishes it on its own; this job keeps every check it ran before.
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
     # PR-side filtering of any kind).
@@ -3907,8 +3964,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -3958,6 +4015,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
       - name: install go-task (pinned) — web:check is a Task, so the runner needs it
         # MEASURED 2026-09-14 (run 34854565361): compiling go-task with `go install` cost 4–6 min
         # per job; the composite action installs the pinned, SHA-256-verified release tarball
@@ -4041,9 +4099,72 @@ jobs:
         # `vitest run -- --maxWorkers=2`, and behind `--` vitest treats the flag as a
         # name filter — the cap silently never applied (proven in run 30214868317).
         run: pnpm --dir web exec vitest run --maxWorkers=2 2>&1 | tee "$RUNNER_TEMP/ci-fail-web-test.log" && rm "$RUNNER_TEMP/ci-fail-web-test.log"
+      - name: report failure (PR comment, or issue on a main push; PAT-blind)
+        if: ${{ failure() }}
+        uses: ./.github/actions/pr-failure-report
+        with:
+          steps-json: ${{ toJSON(steps) }}
+
+  # THE CONSOLE BUNDLE, ALONE (dev#2367). functional-shard, race-rest, race-hot-manifest and
+  # control-plane embed the built console and consume nothing else from `web`: not its
+  # typecheck, not the permission check, not vitest. Measured on run 38901745263 `web` ran
+  # 4 min 14 s of typecheck, 2 min 21 s of format ratchet, 20 min 04 s of permission checks and
+  # then 48 min of vitest before the 75-minute ceiling cut it; the bundle step never started.
+  # Run 38860445399 lost it the other way: the permission check failed after 16 min and the
+  # build was skipped. This job runs the same helper as before (one build from this checkout,
+  # never supplied by a source PR) and nothing in front of it, so the consumers wait for the
+  # build and for no test. Every test `web` ran still runs there, and `web` stays the required
+  # context. The build needs node, pnpm and go-task only (scripts/build-web.sh), so there is no
+  # Go setup here.
+  #
+  # CEILINGS, MEASURED (2026-10-16, dev#2367). The same install and `pnpm run build` that
+  # scripts/build-web.sh runs took 3 s and 59 s on the builder (warm store); `web` spent 20 s on
+  # the install and 3 min 40 s on tsc on the contended CI host (run 38860445399), so 2.5 to 4
+  # minutes is the expectation here. The capture step carries a 10-minute guard under the
+  # 20-minute job ceiling: a slow runner fails the step and the reporter names it, instead of a
+  # job cap cancelling the reporter. The CI duration of this step has not been recorded yet;
+  # lower the numbers from the first run that records it.
+  web-bundle:
+    outputs:
+      bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+    needs: [classify]
+    if: needs.classify.outputs.code == 'true'
+    concurrency:
+      group: mainline-ci-web-bundle-${{ github.ref }}-${{ github.run_id }}
+      cancel-in-progress: true
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write # on-failure pr-failure-report only
+      issues: write # the push-run form of the same reporter opens an issue
+    steps:
+      # The package manager's home sits under RUNNER_TEMP for the reason `web` documents: the
+      # runner service can run with HOME=/root, where the pnpm installer broke itself twice
+      # (2026-08-18, 2026-08-19).
+      - name: package-manager home under RUNNER_TEMP (this runner may have no $HOME)
+        run: |
+          echo "PNPM_HOME=$RUNNER_TEMP/pnpm" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/pnpm" >> "$GITHUB_PATH"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # NODE FIRST, then pnpm with an explicit `dest`: the order and the destination are the
+      # fixes documented in `web`'s copy of these two steps.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install go-task (pinned) — build:web is a Task, so the runner needs it
+        timeout-minutes: 5
+        uses: ./.github/actions/olivares-tool-cache
       # The console is generated from this checkout, never supplied by a source PR.
       - name: build and verify the embedded console once
         id: web-build
+        timeout-minutes: 10
         env:
           PR_HEAD: ${{ github.sha }}
         run: python3 scripts/capture-web-generation.py 2>&1 | tee "$RUNNER_TEMP/ci-fail-web-build.log" && rm "$RUNNER_TEMP/ci-fail-web-build.log"
@@ -4076,7 +4197,15 @@ jobs:
   # Deliberately UNFILTERED by path. A path filter here would be the same deadlock
   # documented for required checks, and the inputs are not only this directory: the Go
   # conformance vectors come from commercial/commerce/internal/inbox/testdata and the wire
-  # format from core/license. The job is a few minutes of Node; it runs.
+  # format from core/license. The job is a few minutes of Node on a dev box; it runs.
+  #
+  # CEILING, MEASURED (2026-10-16, #2314). The gate is 116 s on the dev box (typecheck 8 s, units
+  # 107 s, hermetic E2E 1 s). On ci-runner-1, dispatch run 38860445399 took 34 s for typecheck and
+  # 843 s for the units; the step ended at 06:33:19Z and the old 15-minute job cap fell at 06:33:26Z,
+  # during the failure reporter, so the run was reported `cancelled` (a job cap also cancels the
+  # reporter) with 20 failing tests behind it. The gate step now carries a 25-minute guard: a slow
+  # runner fails the step and the reporter names the log tail. The job ceiling is above 30 so
+  # lint:ci-step-guard keeps that guard in place.
   license-worker:
     # Gated by the internal change gate: journal-only pushes skip this code-input job.
     # On pull_request / dispatch the classify job always answers code=true (no
@@ -4088,7 +4217,7 @@ jobs:
       group: mainline-ci-license-worker-${{ github.ref }}-${{ github.run_id }}
       cancel-in-progress: true
     runs-on: ${{ vars.CI_RUNNER_LIGHT || vars.CI_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 15
+    timeout-minutes: 35
     permissions:
       contents: read
       pull-requests: write # on-failure pr-failure-report only
@@ -4101,11 +4230,13 @@ jobs:
     # Ese runner corre SIN `$HOME`. Cualquier job de Go que aterrice ahi muere en lo PRIMERO que
     # hace `setup-go` despues de instalar, y el fallo no se parece en nada a su causa.
     #
-    # Se fija con `runner.temp`, que es POR JOB y POR RUNNER a proposito: este repositorio ya midio
-    # que tres runners compartiendo una GOCACHE colisionan, asi que una ruta comun cambiaria un
-    # fallo ruidoso por uno silencioso. Esto no TAPA el aprovisionamiento —los runners 4..9 siguen
-    # sin entorno completo y eso sigue escalado (INT-07)—: quita una dependencia IMPLICITA de $HOME
-    # que este job nunca declaro tener.
+    # It is set with `runner.temp`, PER JOB and PER RUNNER, unless the runner's service environment
+    # defines GOCACHE and GOMODCACHE: then they are respected (a cache shared by the host, a decision of
+    # whoever configures it). The default stays private: a common path set by this file would trade a
+    # loud failure for a silent one (three runners colliding in one GOCACHE, measured).
+    # This does not COVER UP the provisioning (runners 4..9 still have
+    # no complete environment and that is still escalated (INT-07)): it removes an IMPLICIT dependency on $HOME
+    # that this job never declared it had.
     steps:
       - name: Go caches under RUNNER_TEMP (this runner has no $HOME)
   # ⛔ Y GOPATH TAMBIEN, porque el primer arreglo se quedo corto y el error nuevo lo dijo exacto:
@@ -4119,12 +4250,12 @@ jobs:
         #
         # POR QUE HACE FALTA: medido dos veces el 2026-08-18 en ci-runner-4, `setup-go` instala bien y el
         # comando siguiente muere con «GOCACHE is not defined and neither $XDG_CACHE_HOME nor $HOME are
-        # defined». Ese runner corre SIN $HOME. RUNNER_TEMP es por job y por runner a proposito: este
-        # repositorio ya midio que tres runners compartiendo GOCACHE colisionan.
+        # defined». That runner runs WITHOUT $HOME. RUNNER_TEMP is the default value, per job and per runner;
+        # a runner that defines GOCACHE and GOMODCACHE in its service environment keeps them (see above).
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4176,6 +4307,7 @@ jobs:
       # typecheck + conformance (Go-authored vectors) + unit tests + hermetic E2E.
       - name: licence Worker gate (typecheck · Go↔TS conformance · units · hermetic E2E)
         id: worker-gate
+        timeout-minutes: 25
         run: task test:license-worker 2>&1 | tee "$RUNNER_TEMP/ci-fail-license-worker.log" && rm "$RUNNER_TEMP/ci-fail-license-worker.log"
       - name: report failure (PR comment, or issue on a main push; PAT-blind)
         if: ${{ failure() }}
@@ -4232,8 +4364,8 @@ jobs:
           # Agrupado por DESTINO, que es lo que SC2129 pide y además lo hace legible: dos
           # ficheros distintos, dos bloques, en vez de seis redirecciones sueltas alternando.
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
             echo "PNPM_HOME=$RUNNER_TEMP/pnpm"
@@ -4260,7 +4392,7 @@ jobs:
       # Pin VERIFICADO contra la API el 2026-09-22: v6.0.1, commit de7274f0….
       # El primer SHA que escribi salio de memoria y, aunque existia, era un commit
       # cualquiera y no un tag de release. Un pin de accion no se teclea de memoria.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: '17'
@@ -4362,8 +4494,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4549,8 +4681,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4574,6 +4706,7 @@ jobs:
         id: setup-go
         with:
           go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
       - name: install go-task (pinned)
         # MEASURED 2026-09-14 (run 34854565361): `go install …/task@v3.51.1` compiled the tool in
         # every job, 4m00s–6m20s each on ci-runner-1..9. The composite action installs the pinned
@@ -4700,8 +4833,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4785,8 +4918,8 @@ jobs:
         # funcionaban y sigue rojo en los seis que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
           # Y su `bin` AL PATH, o mover GOPATH rompe todo lo que se instala con `go install`.
           # Medido en CI: con GOPATH redirigido y sin esta linea, helm-render fallo con
@@ -4997,8 +5130,8 @@ jobs:
         # sale verde en los runners que ya funcionaban y sigue rojo en los que no.
         run: |
           {
-            echo "GOCACHE=$RUNNER_TEMP/gocache"
-            echo "GOMODCACHE=$RUNNER_TEMP/gomodcache"
+            echo "GOCACHE=${GOCACHE:-$RUNNER_TEMP/gocache}"
+            echo "GOMODCACHE=${GOMODCACHE:-$RUNNER_TEMP/gomodcache}"
             echo "GOPATH=$RUNNER_TEMP/gopath"
             echo "GOBIN=$RUNNER_TEMP/gopath/bin"
           } >> "$GITHUB_ENV"

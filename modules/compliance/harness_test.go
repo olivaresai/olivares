@@ -468,11 +468,19 @@ type harness struct {
 
 	findMu   sync.Mutex
 	findings []sdkmodel.FindingReport
+	busStats eventbus.StatsProvider
 }
 
-// newHarness builds a compliance plane. opts are passed to the module (e.g. a wired
-// lineage source); a deterministic clock is always injected.
+// newHarness builds the Business compliance plane: legal holds and erasure are on, as in
+// a Business composition. opts are passed to the module (e.g. a wired lineage source).
 func newHarness(t *testing.T, opts ...Option) *harness {
+	t.Helper()
+	return newCommunityHarness(t, append([]Option{WithBusinessRecords()}, opts...)...)
+}
+
+// newCommunityHarness builds a compliance plane exactly as opts say, so without
+// WithBusinessRecords it is the Community composition. A deterministic clock is always injected.
+func newCommunityHarness(t *testing.T, opts ...Option) *harness {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
@@ -530,6 +538,7 @@ func newHarness(t *testing.T, opts ...Option) *harness {
 	mod.UseData(api.NewModuleData(st))
 
 	bus := eventbus.NewInProc(eventbus.Options{})
+	h.busStats = bus.(eventbus.StatsProvider)
 	if _, err := bus.Subscribe([]event.Type{event.TypeFindingReported}, func(_ context.Context, e event.Event) error {
 		if f, ok := event.FindingOf(e); ok {
 			h.findMu.Lock()
@@ -1024,7 +1033,59 @@ func (h *harness) deliveredFindings() []sdkmodel.FindingReport {
 	return out
 }
 
-func (h *harness) waitFindings() { time.Sleep(20 * time.Millisecond) }
+func (h *harness) waitFindings() {
+	h.t.Helper()
+	target := h.busStats.BusStats().Enqueued
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for h.busStats.BusStats().Handled < target {
+		select {
+		case <-tick.C:
+		case <-deadline.C:
+			h.t.Fatalf("finding delivery timed out: handled %d of %d", h.busStats.BusStats().Handled, target)
+		}
+	}
+}
+
+func TestWaitFindingsWaitsForHandlerCompletion(t *testing.T) {
+	bus := eventbus.NewInProc(eventbus.Options{})
+	started, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(func() { _ = bus.Close() })
+	t.Cleanup(unblock)
+	if _, err := bus.Subscribe([]event.Type{event.TypeFindingReported}, func(context.Context, event.Event) error {
+		close(started)
+		<-release
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bus.Publish(context.Background(), event.FromObservation("tenant", Name, sdkmodel.FindingReport{Kind: findingErasureCompleted})); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("finding handler did not start")
+	}
+	h := &harness{t: t, busStats: bus.(eventbus.StatsProvider)}
+	done := make(chan struct{})
+	go func() { h.waitFindings(); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("waitFindings returned while the finding handler was still blocked")
+	case <-time.After(100 * time.Millisecond):
+	}
+	unblock()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("waitFindings did not return after the finding handler completed")
+	}
+}
 
 func intOf(v any) int {
 	if f, ok := v.(float64); ok {

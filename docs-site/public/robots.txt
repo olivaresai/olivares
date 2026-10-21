@@ -1,96 +1,68 @@
 # Olivares AI documentation (docs.olivares.ai): robots policy
 #
-# Before this file was added, a check on 2026-09-01 found that /robots.txt
-# returned HTTP 200 with 1248 bytes and 24 lines, but no User-agent, Allow,
-# Disallow, or Sitemap directives. Cloudflare supplied its content-signals file
-# because the origin had no robots.txt.
+# Same decision as olivares.ai (2026-10-17): public content is open to
+# search crawlers, answer engines AND the training crawlers of the major
+# assistants. Assistants describe Olivares AI correctly only if they can read
+# it, so /llms.txt and /llms-full.txt are published for them and nothing on this
+# site is withheld from a crawler that follows robots.txt.
 #
-# The site's sitemap (2156 URLs at that check) was not advertised, and the
-# main site's training-crawler restrictions did not apply to this subdomain.
-# This file applies the project's crawler policy to the documentation site.
-# The crawler list and order match the main site.
+# Two groups, one decision each:
 #
-# A check of https://olivares.ai/robots.txt before this file was added confirmed
-# that Cloudflare served the repository's bytes without a content-signals preamble
-# when the origin supplied robots.txt.
-# scripts/check-robots.mjs checks dist/, the tree deployed from public/.
-# A crawler with its own group uses that group instead of the default group.
+#   1. Search, answer and training crawlers of the major assistants: nothing is
+#      disallowed.
+#   2. Crawlers that ignore robots rules or resell what they fetch: refused for
+#      the whole site.
+#
+# A user-agent that has its own group reads ONLY that group. Anything not named
+# here falls to the catch-all and may fetch everything.
+#
+# The legal pages (privacy, terms, imprint) are hosted on olivares.ai, not here;
+# their exclusion from AI training is in that site's robots.txt.
+#
+# Without this file Cloudflare answers with its own content-signals text, which
+# has no User-agent, Allow, Disallow or Sitemap directive (measured 2026-09-01).
+# scripts/check-robots.mjs checks dist/robots.txt, the tree deployed from public/.
+#
+# Sources for the agent names: developers.openai.com/api/docs/bots (GPTBot,
+# OAI-SearchBot, ChatGPT-User); support.claude.com article 8896518, 2026-04-07
+# (ClaudeBot, Claude-SearchBot, Claude-User); google-common-crawlers, 2026-04-23
+# (Google-Extended does not affect Search or AI Overviews).
 
-# Default: allow search engines, answer engines, and user-initiated AI requests.
+# 1. Search, answer, user-initiated and training agents: everything crawlable.
 User-agent: *
-Allow: /
-
-# Allow AI training by Anthropic / Claude.
-# Legal pages live at olivares.ai/privacy, /terms, and /imprint; their crawler
-# restrictions apply on that site, which hosts them.
-# Source: support.claude.com article 8896518, 2026-04-07.
-User-agent: ClaudeBot
-Allow: /
-
-# Claude-User and Claude-SearchBot use the default group, as on the main site.
-
-# Block AI training crawlers other than Anthropic, in the main site's order.
-# Source: developers.openai.com/api/docs/bots (GPTBot).
-User-agent: GPTBot
-Disallow: /
-
-# Source: google-common-crawlers, 2026-04-23. Google-Extended does not affect
-# Search or AI Overviews.
-User-agent: Google-Extended
-Disallow: /
-
-User-agent: CCBot
-Disallow: /
-
-User-agent: Bytespider
-Disallow: /
-
-User-agent: Applebot-Extended
-Disallow: /
-
-User-agent: meta-externalagent
-Disallow: /
-
-User-agent: Meta-ExternalAgent
-Disallow: /
-
-User-agent: FacebookBot
-Disallow: /
-
-User-agent: cohere-ai
-Disallow: /
-
-User-agent: cohere-training-data-crawler
-Disallow: /
-
-User-agent: Diffbot
-Disallow: /
-
-User-agent: Omgili
-Disallow: /
-
-User-agent: Omgilibot
-Disallow: /
-
-User-agent: ImagesiftBot
-Disallow: /
-
+User-agent: Googlebot
+User-agent: Bingbot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Applebot
+User-agent: DuckAssistBot
 User-agent: YouBot
-Disallow: /
-
-User-agent: Timpibot
-Disallow: /
-
-User-agent: PanguBot
-Disallow: /
-
-User-agent: Webzio-Extended
-Disallow: /
-
+User-agent: ClaudeBot
+User-agent: GPTBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: meta-externalagent
+User-agent: FacebookBot
+User-agent: cohere-ai
+User-agent: cohere-training-data-crawler
 User-agent: AI2Bot
-Disallow: /
-
 User-agent: Ai2Bot-Dolma
+Allow: /
+
+# 2. Refused for the whole site: they ignore robots rules or resell data.
+User-agent: Bytespider
+User-agent: Diffbot
+User-agent: Omgili
+User-agent: Omgilibot
+User-agent: ImagesiftBot
+User-agent: Webzio-Extended
+User-agent: Timpibot
+User-agent: PanguBot
 Disallow: /
 
 # Starlight generates the sitemap index on each build. Advertise it for discovery.

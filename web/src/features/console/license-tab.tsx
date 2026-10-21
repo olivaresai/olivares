@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
+import { EditionBadge } from './edition-badge'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { currentLanguage } from '@/lib/i18n'
@@ -36,6 +37,7 @@ import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
 import { useAuth } from '@/lib/auth/context'
 import { LicenseReadStatus, classifyLicenseRead } from './license-read'
+import { LicenseBuildGuidance } from './license-build-guidance'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { useOfferedPanels } from '@/features/panels'
 import {
@@ -169,7 +171,7 @@ function LicenseFacts({
             buyer can rely on once the lease has ended unrenewed (a refund looks the same). */}
         {license.paid_through && license.status !== 'expired' ? (
           <>
-            <Row label={t('console:license.paidThrough')}>
+            <Row label={t('console:license.expires')}>
               {new Date(license.paid_through).toLocaleDateString(
                 currentLanguage(),
               )}
@@ -278,8 +280,9 @@ export function LicenseTab() {
         className="flex flex-wrap items-start justify-between gap-3"
       >
         <div className="min-w-[min(100%,20rem)] flex-1 basis-[20rem]">
-          <h2 className="text-heading text-foreground">
+          <h2 className="flex flex-wrap items-center gap-2 text-heading text-foreground">
             {t('console:license.title')}
+            <EditionBadge />
           </h2>
           <p className="max-w-2xl text-body text-muted-foreground">
             {t('console:license.caption')}
@@ -349,11 +352,15 @@ export function LicenseTab() {
             </p>
           )}
           <LicenseFacts license={licenseRead.license} />
-          {licenseRead.license.edition !== 'enterprise' && (
+          {licenseRead.license.edition === 'community' &&
+          (licenseRead.license.status === 'valid' ||
+            licenseRead.license.status === 'perpetual') ? (
+            <LicenseBuildGuidance license={licenseRead.license} />
+          ) : licenseRead.license.edition !== 'enterprise' ? (
             <p className="text-body text-muted-foreground">
               {t('console:license.communityNote')}
             </p>
-          )}
+          ) : null}
         </div>
       )}
 

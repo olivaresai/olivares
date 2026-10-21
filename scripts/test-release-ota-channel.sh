@@ -163,7 +163,8 @@ run "no version argument => REFUSE" 2 "refuse	" --
 run "empty version argument => REFUSE" 2 "refuse	" -- "" "$adv"
 # A version with a path separator must never be able to read outside the advisories dir.
 run "path traversal in version => REFUSE" 2 "refuse	" -- "../../etc/passwd" "$adv"
-run "version with a slash => REFUSE" 2 "refuse	" -- "26.800/0" "$adv"
+run "version with a slash => REFUSE" 2 "refuse	" -- "26/800" "$adv"
+run "version with a slash and an extra field => REFUSE" 2 "refuse	" -- "26.800/0" "$adv"
 # The SHAPE half of the version guard, which no case reached before. A version carrying no
 # path separator at all still has to be refused, or the separator guard is the only thing
 # between a stray argument and a file read. Found by the mutation round, not by review:
@@ -250,7 +251,8 @@ run "monthly release has no zero patch" 0 "none	" -- 26.1100 "$adv"
 run "four fields are not a version" 2 "refuse" -- 1.2.3.4 "$adv"
 run "a leading zero is not a field" 2 "refuse" -- 01.2.3 "$adv"
 run "an empty pre-release suffix refuses" 2 "refuse" -- 1.2.3- "$adv"
-run "a non-numeric field is not a version" 2 "refuse" -- 1.2.x "$adv"
+run "a non-numeric field is not a version" 2 "refuse" -- 1.x "$adv"
+run "three fields with a non-numeric last field refuse" 2 "refuse" -- 1.2.x "$adv"
 # NON-FIRING: real versions must pass the grammar and reach the ordinary `none` answer.
 run "MAJOR.MINOR passes the grammar" 0 "none	" -- 9.9 "$adv"
 run "an all-zero version passes" 0 "none	" -- 0.0 "$adv"

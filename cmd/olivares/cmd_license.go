@@ -28,9 +28,10 @@ import (
 // build needs none. The help says the one that is true for this binary.
 func newLicenseCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "license",
-		Short: "See, install and remove the license (Business)",
-		Long:  licenseLongFor(thisEdition.addOnsLinked),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "license",
+		Short:       "See, install and remove the license (Business)",
+		Long:        licenseLongFor(thisEdition.addOnsLinked),
 		Example: "  olivares license status --data-dir /var/lib/olivares\n" +
 			"  olivares license install ./customer.license --data-dir /var/lib/olivares\n" +
 			"  olivares license uninstall --data-dir /var/lib/olivares --yes\n" +
@@ -67,8 +68,9 @@ func licenseInstallCmd() *cobra.Command {
 	var dataDir, pubB64 string
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "install <file|->",
-		Short: "Install a license into the data dir (verify + persist; apply live with SIGHUP / runtime reload)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "install <file|->",
+		Short:       "Install a license into the data dir (verify + persist; apply live with SIGHUP / runtime reload)",
 		Long: "install verifies a signed license against this deployment's license trust (the key embedded in this\n" +
 			"build plus <data-dir>/" + licenseTrustFileName + ", see `license trust`) and persists it to\n" +
 			"<data-dir>/" + licenseFileName + " (mode 0600) — the canonical at-rest license the engine reads by\n" +
@@ -260,8 +262,9 @@ func licenseUninstallCmd() *cobra.Command {
 	var dataDir string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove the installed license from the data dir (the offline half of DELETE /v1/console/license)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "uninstall",
+		Short:       "Remove the installed license from the data dir (the offline half of DELETE /v1/console/license)",
 		Long: "uninstall deletes <data-dir>/" + licenseFileName + ", the canonical at-rest license, and reports what the\n" +
 			"engine would resolve afterwards. The deployment reverts to the community edition on the next\n" +
 			"reload or start — it costs NO user accounts (self-hosted users are unlimited in every tier) and\n" +
@@ -337,8 +340,9 @@ func licenseUninstallCmd() *cobra.Command {
 func licenseStatusCmd() *cobra.Command {
 	var dataDir, licPath, pubB64, manifestPath, manifestSig, otaPub string
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show the installed license and its status (offline; resolves --license > env > data-dir)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show the installed license and its status (offline; resolves --license > env > data-dir)",
 		Long: "status resolves the at-rest license by the same precedence the engine uses (explicit --license >\n" +
 			"OLIVARES_LICENSE_PATH > OLIVARES_LICENSE > <data-dir>/" + licenseFileName + "), verifies it offline\n" +
 			"against this deployment's license trust (see `license trust`) and prints its source, profile, grace,\n" +
@@ -737,8 +741,9 @@ func licenseKeygenCmd() *cobra.Command {
 	var outPriv, outPub string
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "keygen",
-		Short: "Generate one Ed25519 keypair for a license or OTA trust domain",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "keygen",
+		Short:       "Generate one Ed25519 keypair for a license or OTA trust domain",
 		Long: "keygen mints one fresh Ed25519 keypair. Assign each generated pair to exactly\n" +
 			"one trust domain; invoke it twice for independent license and OTA pairs.\n\n" +
 			"Inject a LICENSE public key into release builds with:\n" +
@@ -850,8 +855,9 @@ func licenseSignCmd() *cobra.Command {
 	var licensee, plan, supportTier, holder, expires, keyB64, featuresCSV string
 	var maxUsers int
 	cmd := &cobra.Command{
-		Use:   "sign",
-		Short: "Sign a license (requires --key in a release build; uses the dev key only in dev/test builds)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sign",
+		Short:       "Sign a license (requires --key in a release build; uses the dev key only in dev/test builds)",
 		Long: "sign creates an offline Ed25519-signed license blob from the supplied organization, plan,\n" +
 			"support, holder, seat, feature tags and expiry claims. Production release builds require an explicit private key.\n" +
 			"--features attests informational tags onto Claims.Features (never a gate; LICENSING.md).\n" +
@@ -958,8 +964,9 @@ func parseLicenseFeatures(csv string) ([]string, error) {
 func licenseVerifyCmd() *cobra.Command {
 	var pubB64, manifestPath, manifestSig, otaPub, dataDir string
 	cmd := &cobra.Command{
-		Use:   "verify <license-blob>",
-		Short: "Verify a license against a public key (default: embedded key), with profile/grace and optional CRL status",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify <license-blob>",
+		Short:       "Verify a license against a public key (default: embedded key), with profile/grace and optional CRL status",
 		Long: "verify authenticates a signed license blob with the embedded or supplied Ed25519 public key and\n" +
 			"prints its claims, profile, grace and current status. With --manifest it also evaluates the\n" +
 			"license CRL an OTA-signed channel manifest carries: the manifest signature MUST verify\n" +

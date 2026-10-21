@@ -94,6 +94,8 @@ type activityResult struct {
 	ResolvedModel     string          `json:"resolvedModel"`
 	BackgroundTaskID  string          `json:"backgroundTaskId"`
 	TaskID            string          `json:"taskId"`
+	WorkflowRunID     string          `json:"runId"`
+	WorkflowName      string          `json:"workflowName"`
 	Type              string          `json:"type"`
 	FilePath          string          `json:"filePath"`
 	Content           json.RawMessage `json:"content"`
@@ -162,6 +164,9 @@ func (f *activityFold) read(ctx context.Context, r io.Reader) error {
 				return err
 			}
 		case errors.Is(err, io.EOF):
+			if len(line) > 0 {
+				f.dto.Incomplete = true
+			}
 			if len(line) > 0 && json.Valid(line) {
 				f.add(line)
 			}
@@ -388,6 +393,13 @@ func (f *activityFold) toolResult(b activityBlock, raw json.RawMessage, at strin
 		if i, ok := f.tasks[b.ToolUseID]; ok && res.TaskID != "" {
 			f.dto.Tasks[i].TaskID = res.TaskID
 			f.taskIDs[res.TaskID] = i
+			if call.name == "Workflow" && res.WorkflowRunID != "" {
+				if !claudeSessionIDPattern.MatchString(res.WorkflowRunID) {
+					f.dto.Unreadable++
+					return
+				}
+				f.dto.Tasks[i].Workflow = &activityWorkflow{RunID: res.WorkflowRunID, Name: clip(res.WorkflowName, activitySummaryMax), Phases: []activityWorkflowPhase{}}
+			}
 		}
 	case "TaskStop", "KillShell":
 		id := call.input.TaskID
@@ -585,6 +597,13 @@ func (f *activityFold) close() {
 	for i := range f.dto.Tasks {
 		if s := f.dto.Tasks[i].State; s == activityRunning || s == activityScheduled {
 			f.dto.Tasks[i].State = activityStopped
+		}
+		if w := f.dto.Tasks[i].Workflow; w != nil {
+			for j := range w.Phases {
+				if w.Phases[j].State == activityRunning {
+					w.Phases[j].State = activityStopped
+				}
+			}
 		}
 	}
 }

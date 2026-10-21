@@ -33,11 +33,49 @@ const CALIBRATION_ITEMS_CEILING = 25
 /** GET /scorecards groups by one of these dimensions. */
 export type ScorecardGroupBy = 'suite' | 'agent' | 'model' | 'prompt_variant'
 
+/** A scorecard row as the engine sends it (modules/evals/scorecards.go scorecardDTO): one row per suite,
+ * subject and variant, with no single `key`. The engine ignores the `by` grouping the console asks for. */
+type ScorecardRow = Omit<Scorecard, 'key' | 'name'> & { key?: string }
+
+/** What a card is called: its subject, and its variant when it has one. A run with no subject is named by its
+ * suite, so a name is never empty. A legacy key is retained as display text. */
+function scorecardName(row: ScorecardRow): string {
+  if (row.key) return row.key
+  return [row.subject_ref || row.suite_ref, row.prompt_variant]
+    .filter(Boolean)
+    .join(' \u00b7 ')
+}
+
+/** Disambiguate display names without changing the engine tuple's identity. JSON encodes field
+ * boundaries even when a subject or variant contains the display separator. */
+function nameScorecards(rows: ScorecardRow[]): Scorecard[] {
+  const names = rows.map(scorecardName)
+  const uses = new Map<string, number>()
+  for (const name of names) uses.set(name, (uses.get(name) ?? 0) + 1)
+  return rows.map((row, i) => ({
+    ...row,
+    key: JSON.stringify([
+      row.suite_ref,
+      row.subject_ref,
+      row.prompt_variant ?? '',
+    ]),
+    name:
+      !row.key && uses.get(names[i])! > 1 && row.suite_ref
+        ? `${names[i]} \u00b7 ${row.suite_ref}`
+        : names[i],
+  }))
+}
+
 export const evalsApi = {
-  scorecards: (groupBy: ScorecardGroupBy) =>
-    http.get<ListResponse<Scorecard>>(`${BASE}/scorecards`, {
-      query: { by: groupBy },
-    }),
+  scorecards: async (
+    groupBy: ScorecardGroupBy,
+  ): Promise<ListResponse<Scorecard>> => {
+    const page = await http.get<ListResponse<ScorecardRow>>(
+      `${BASE}/scorecards`,
+      { query: { by: groupBy } },
+    )
+    return { ...page, items: nameScorecards(page.items) }
+  },
   suites: () =>
     http.get<ListResponse<Suite>>(`${BASE}/suites`, {
       query: { limit: LIST_CEILING },

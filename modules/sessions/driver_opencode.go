@@ -100,7 +100,9 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	bound := true
 	switch {
 	case l.LocalModelEndpoint != "":
-		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(l.LocalModelEndpoint, l.LocalModels, l.Model)), &cfg)
+		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(openCodeOllama, l.LocalModelEndpoint, l.LocalModels, l.Model)), &cfg)
+	case l.BoundProvider.Kind == ProviderKindOpenAICompatible:
+		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(openCodeLocalServer, l.BoundProvider.Endpoint, l.LocalModels, l.Model)), &cfg)
 	case l.BoundProvider.Kind != "":
 		openCodeConfineToKey(cfg, l.BoundProvider, l.Model)
 	default:
@@ -139,8 +141,20 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	return env
 }
 
-// openCodeLocalProviderID names the local provider in OpenCode's configuration.
+// openCodeLocalProvider is how a local model endpoint appears in OpenCode's configuration:
+// the provider id its models are qualified with, its title, and the variable that carries
+// its key ("" when the endpoint takes none).
+type openCodeLocalProvider struct{ id, title, keyEnv string }
+
+// openCodeLocalProviderID names the Ollama provider in OpenCode's configuration.
 const openCodeLocalProviderID = "olivares_ollama"
+
+var (
+	openCodeOllama = openCodeLocalProvider{id: openCodeLocalProviderID, title: "Olivares Ollama (local)"}
+	// openCodeLocalServer is any other local OpenAI-compatible server (vLLM, llama.cpp), which
+	// holds the key Olivares gave it.
+	openCodeLocalServer = openCodeLocalProvider{id: "olivares_local", title: "Olivares local model server", keyEnv: "OPENAI_API_KEY"}
+)
 
 // A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT PROVIDER.
 //
@@ -212,9 +226,16 @@ func openCodeConfineToKey(cfg map[string]any, b BoundProvider, model string) {
 // choice already qualified on that same provider keeps its published spelling.
 func openCodeModelValue(b BoundProvider, model string, endpointID bool) string {
 	id := openCodeKeyProviders[b.Kind].id
-	if b.Kind == ProviderKindOllama {
-		id = openCodeLocalProviderID
+	switch b.Kind {
+	case ProviderKindOllama:
+		id = openCodeOllama.id
+	case ProviderKindOpenAICompatible:
+		id = openCodeLocalServer.id
 	}
+	return qualifyOpenCodeModel(id, model, endpointID)
+}
+
+func qualifyOpenCodeModel(id, model string, endpointID bool) string {
 	if id == "" || model == "" || !endpointID && strings.HasPrefix(model, id+"/") {
 		return model
 	}
@@ -265,28 +286,36 @@ func openCodeConfineTo(cfg map[string]any, providerID string) {
 // listed, the first is the default, and enabled_providers allows no other
 // provider. A launch with no listed model is refused before this is built
 // (runtime_provider_auth.go).
-func openCodeLocalProviderConfig(endpoint string, models []string, model string) string {
+//
+// A server that holds a key gets it by reference, {env:<variable>}: the variable is in the
+// child's environment (providerRecordEnv) and the configuration, which other tools may
+// log, never carries the value.
+func openCodeLocalProviderConfig(p openCodeLocalProvider, endpoint string, models []string, model string) string {
 	listed := map[string]any{}
 	for _, name := range models {
 		listed[name] = map[string]any{"name": name}
 	}
+	options := map[string]any{"baseURL": endpoint}
+	if p.keyEnv != "" {
+		options["apiKey"] = "{env:" + p.keyEnv + "}"
+	}
 	cfg := map[string]any{
 		"provider": map[string]any{
-			openCodeLocalProviderID: map[string]any{
+			p.id: map[string]any{
 				"npm":     "@ai-sdk/openai-compatible",
-				"name":    "Olivares Ollama (local)",
-				"options": map[string]any{"baseURL": endpoint},
+				"name":    p.title,
+				"options": options,
 				"models":  listed,
 			},
 		},
 	}
-	openCodeConfineTo(cfg, openCodeLocalProviderID)
+	openCodeConfineTo(cfg, p.id)
 	endpointID := model == ""
 	if endpointID && len(models) > 0 {
 		model = models[0]
 	}
 	if model != "" {
-		cfg["model"] = openCodeModelValue(BoundProvider{Kind: ProviderKindOllama}, model, endpointID)
+		cfg["model"] = qualifyOpenCodeModel(p.id, model, endpointID)
 		cfg["small_model"] = cfg["model"]
 	}
 	body, _ := json.Marshal(cfg)
@@ -301,21 +330,18 @@ func openCodeSessionMCP(spec LaunchSpec) []json.RawMessage {
 	}
 	token := ""
 	for _, env := range spec.Env {
-		if env.Name == spec.SessionMCPTokenEnv {
+		if env.Name == spec.SessionMCPTokenEnv && env.Value != "" {
 			token = env.Value
 		}
 	}
 	raw, _ := json.Marshal(map[string]any{
-		"type": "http", "name": "olivares", "url": spec.SessionMCPURL,
+		"type": "http", "name": sessionMCPServerName, "url": spec.SessionMCPURL,
 		"headers": []map[string]string{{"name": "Authorization", "value": "Bearer " + token}},
 	})
 	return []json.RawMessage{raw}
 }
 
 func (openCodeDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
-	if cfg.sessionMCP == nil {
-		cfg.sessionMCP = []json.RawMessage{}
-	}
 	s := &openCodeSession{acpSession: newACPSession(cfg, providerDriverOpenCode)}
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
@@ -357,8 +383,8 @@ func (s *openCodeSession) Handshake(ctx context.Context) (DriverHandshake, error
 	if err != nil {
 		return DriverHandshake{}, err
 	}
-	if len(s.cfg.sessionMCP) > 0 && !init.AgentCapabilities.MCP.HTTP {
-		return DriverHandshake{}, &runErr{http.StatusConflict, "OpenCode does not support the HTTP MCP connection required for this session"}
+	if err := acpRequireSessionMCP("OpenCode", s.cfg.sessionMCP, init.AgentCapabilities.MCP.HTTP); err != nil {
+		return DriverHandshake{}, err
 	}
 	s.mu.Lock()
 	s.caps = init.AgentCapabilities
@@ -403,7 +429,7 @@ func (s *openCodeSession) newConversation(ctx context.Context) (DriverHandshake,
 func (s *openCodeSession) resumeConversation(ctx context.Context, resume string) (DriverHandshake, error) {
 	s.mu.Lock()
 	caps := s.caps
-	s.replayFor = resume
+	s.beginReplay(resume)
 	s.mu.Unlock()
 
 	method := ""
@@ -413,7 +439,7 @@ func (s *openCodeSession) resumeConversation(ctx context.Context, resume string)
 	case caps.LoadSession:
 		method = acpMethodSessionLoad
 	default:
-		s.endReplay()
+		s.answerReplay() // nothing was asked, so nothing can replay
 		return DriverHandshake{}, &runErr{
 			http.StatusConflict,
 			"the provider advertises neither session resume nor session load; refusing to start a different conversation",

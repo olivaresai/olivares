@@ -74,14 +74,12 @@ import {
   fold,
   rankNavMatches,
   resolveLocation,
-  viewById,
   sectionLabel,
   viewLabel,
   type AreaSection,
   type NavSearchEntry,
   type ViewGate,
 } from '@/features/navigation/model'
-import { OffTag } from '@/features/navigation/off-tag'
 import { railKey, type RailRow } from '@/features/navigation/rail-keys'
 import { usePersonalNavigation } from '@/features/navigation/personal-navigation'
 import { personalLink } from '@/features/navigation/personal-navigation-store'
@@ -117,8 +115,6 @@ interface NavItemProps {
   pinId?: string
   /** The current page reached through a second door into this row's view (`doorTo`). */
   current?: boolean
-  /** The page's module is off here: a dimmed label and an "Off" tag; still a link. */
-  off?: boolean
 }
 
 /**
@@ -146,7 +142,6 @@ function NavItem({
   depth = 0,
   pinId,
   current,
-  off,
 }: NavItemProps) {
   const link = (
     <Link
@@ -172,19 +167,13 @@ function NavItem({
     >
       <Icon />
       {!context && (
-        <span
-          className={cn('min-w-0 flex-1 break-words', off && 'text-text-3')}
-          title={label}
-        >
+        <span className="min-w-0 flex-1 break-words" title={label}>
           {label}
         </span>
       )}
       {context && (
         <span className="flex min-w-0 flex-1 flex-col">
-          <span
-            className={cn('break-words', off && 'text-text-3')}
-            title={label}
-          >
+          <span className="break-words" title={label}>
             {label}
           </span>
           <span
@@ -195,7 +184,6 @@ function NavItem({
           </span>
         </span>
       )}
-      {off ? <OffTag /> : null}
     </Link>
   )
   if (!pinId) return link
@@ -281,7 +269,6 @@ function AreaSections({
   doorTo?: string
 }) {
   const { t } = useTranslation('nav')
-  const { isOff } = useViewAccess()
   return (
     <>
       {sections.map((s) => {
@@ -308,7 +295,6 @@ function AreaSections({
                     depth={1}
                     pinId={v.id}
                     current={v.id === doorTo}
-                    off={isOff(v)}
                   />
                 </li>
               ))}
@@ -634,12 +620,8 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   //    `useAuth().can` is no longer read here: a view whose authority is a registered
   //    capability question would answer from the reflection, and the sidebar would offer
   //    a door the route then refuses (or hide one the engine allows).
-  const { listed, isOff } = useViewAccess()
+  const { listed } = useViewAccess()
   const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
-  const isEntryOff = (e: NavSearchEntry) => {
-    const found = viewById(e.id)
-    return !!found && isOff(found)
-  }
 
   const [query, setQuery] = useState('')
   // One namespace per rendered body: the desktop sidebar, the drawer and each rail flyout
@@ -787,7 +769,6 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
                     }
                     exact={e.path === '/' || e.kind === 'area'}
                     onNavigate={onNavigate}
-                    off={e.kind === 'view' && isEntryOff(e)}
                   />
                 </li>
               ))}

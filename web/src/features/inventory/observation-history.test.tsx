@@ -407,7 +407,7 @@ describe('ObservationHistory projection and paging', () => {
 })
 
 describe('ObservationHistory locales', () => {
-  it.each(['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'] as const)(
+  it.each(['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko'] as const)(
     'renders translated history copy in %s without falling back to English keys',
     async (lang) => {
       vi.mocked(inventoryApi.observations).mockResolvedValue({

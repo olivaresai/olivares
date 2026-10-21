@@ -7,6 +7,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -220,4 +221,65 @@ func TestParseConsoleClientCallsDiscoversWhitespaceBeforeDot(t *testing.T) {
 			t.Fatalf("unresolved file attribution lost: %q", u.file)
 		}
 	})
+}
+
+// The Business overlay is not formatted by web/.prettierrc.json (singleQuote), so its
+// client calls spell the route as a double-quoted literal. The census must read them
+// in every form it reads a single-quoted one: an unread call counts a surface the
+// console has as missing (dev#2263, GET /v1/system/residency).
+func TestDoubleQuotedPathLiteralsAreConsoleSurface(t *testing.T) {
+	const source = "import { http } from '@/lib/api/client'\n" +
+		"const BASE = \"/v1/m/exports\"\n" +
+		"export const residencyApi = {\n" +
+		"  getRegistry: () => http.get<Registry>(\"/v1/system/residency\"),\n" +
+		"  setRegion: (id: string) => http.put<Org>(`/v1/system/orgs/${id}/region`, {}),\n" +
+		"}\n" +
+		"export const list = () => http.get<Rows>(`${BASE}/list`)\n" +
+		"export const importRows = (raw: string) => apiFetch(\"/v1/m/imports\", { method: 'POST', rawBody: raw })\n" +
+		"export const exportArchive = () => fetch(\"/v1/m/exports/archive\")\n" +
+		"export const watch = () => subscribeStream({ path: \"/v1/m/exports/stream\", token })\n" +
+		"// http.get(\"/v1/m/ghost\")\n" +
+		"/* fetch(\"/v1/m/ghost-raw\") */\n" +
+		"export const signIn = () => <a href=\"/v1/auth/federation/start\">sign in</a>\n" +
+		"export const lone = \"/v1/m/not/a/call\"\n"
+	calls, unresolved, raw := parseTS(t, source)
+	var gotCalls, gotRaw []string
+	for _, c := range calls {
+		gotCalls = append(gotCalls, c.method+" "+c.path)
+	}
+	for _, r := range raw {
+		gotRaw = append(gotRaw, r.path)
+	}
+	sort.Strings(gotCalls)
+	sort.Strings(gotRaw)
+	wantCalls := []string{
+		"GET /v1/m/exports/list", "GET /v1/system/residency",
+		"POST /v1/m/imports", "PUT /v1/system/orgs/{}/region",
+	}
+	wantRaw := []string{"/v1/m/exports/archive", "/v1/m/exports/stream"}
+	if !mismasRutas(gotCalls, wantCalls) || !mismasRutas(gotRaw, wantRaw) || len(unresolved) != 0 {
+		dumpClientCalls(t, calls, unresolved, raw)
+		t.Fatalf("typed calls %v, raw calls %v, unresolved %d; want %v, %v and none",
+			gotCalls, gotRaw, len(unresolved), wantCalls, wantRaw)
+	}
+}
+
+// The imported-helper reader is the second place the census reads console source.
+func TestDoubleQuotedImportedPathConstIsConsoleSurface(t *testing.T) {
+	root := t.TempDir()
+	for name, content := range map[string]string{
+		"api.ts": "const BASE = \"/v1/m/dq\"\n" +
+			"export function streamPath(ref: string): string {\n" +
+			"  return `${BASE}/runs/${encodeURIComponent(ref)}/stream`\n}\n",
+		"stream.ts": "import { streamPath } from './api'\n" +
+			"subscribeStream({ path: streamPath(ref), token })\n",
+	} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, unresolved, raw := parseConsoleClientCalls(t, root)
+	if len(unresolved) != 0 || len(raw) != 1 || raw[0].path != "/v1/m/dq/runs/{}/stream" {
+		t.Fatalf("imported double-quoted constant not resolved: raw=%v unresolved=%v", raw, unresolved)
+	}
 }

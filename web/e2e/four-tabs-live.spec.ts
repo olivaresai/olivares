@@ -65,6 +65,14 @@ import { sessionToken } from './live-session'
 
 const setupToken = process.env.PLAYWRIGHT_SETUP_TOKEN ?? ''
 const PASSWORD = 'correct-horse-battery-staple-42'
+const SURFACE_MODULES = [
+  'compliance',
+  'eventing',
+  'notify',
+  'models',
+  'orchestration',
+  'redteam',
+]
 
 /** The engine's copy for a failed read, and for the generic failure toast. Asserted
  *  ABSENT wherever a deliberate boundary is drawn: a console that shouts "something
@@ -303,7 +311,63 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     ).toBeVisible()
   })
 
-  // --- 2 · Retention (a tab of /compliance, from #693) ------------------------
+  // Compliance is a Business page (docs/editions.md): a Community build answers its address with
+  // the Business notice, so the module-off notice is read on Alerting there. Retention schedules
+  // are Community: its own page, /retention, carries that leg on both editions.
+  const communityBuild =
+    (await authenticatedFetch<{ edition?: string }>(page, '/v1/server-info'))
+      .body.edition === 'community'
+  await test.step('turn on the surface modules through Edition & modules', async () => {
+    await page.goto(communityBuild ? '/alerting' : '/compliance')
+    await expect(page.locator('[data-slot="module-not-enabled"]')).toBeVisible()
+    await page.getByRole('link', { name: 'Open Edition & modules' }).click()
+    const settings = page.locator('[data-slot="modules-settings"]')
+    await expect(settings).toBeVisible()
+    for (const name of SURFACE_MODULES) {
+      const toggle = settings
+        .locator(`[data-module="${name}"]`)
+        .getByRole('switch')
+      await expect(toggle).toBeVisible()
+      if ((await toggle.getAttribute('aria-checked')) !== 'true')
+        await toggle.check()
+    }
+
+    const updated = observeResponse(page, '/v1/console/modules', 'PUT')
+    const running = page.waitForResponse(
+      async (response) => {
+        if (
+          new URL(response.url()).pathname !== '/v1/console/modules' ||
+          response.request().method() !== 'GET'
+        )
+          return false
+        // A restart can temporarily refuse connections; an auth or schema failure
+        // must fail this setup instead of being treated as a module still starting.
+        if (response.status() === 503) return false
+        expect(response.status(), 'module readiness must be readable').toBe(200)
+        const state = (await response.json()) as {
+          modules: { name: string; running: boolean }[]
+        }
+        return SURFACE_MODULES.every((name) =>
+          state.modules.some((m) => m.name === name && m.running),
+        )
+      },
+      { timeout: 120_000 },
+    )
+    await settings.getByRole('button', { name: /^Apply \d+ changes?$/ }).click()
+    expect((await updated).status(), 'module selection must be accepted').toBe(
+      200,
+    )
+    await running
+    const state = await authenticatedFetch<{
+      modules: { name: string; running: boolean }[]
+    }>(page, '/v1/console/modules')
+    expect(state.status).toBe(200)
+    expect(
+      state.body.modules.filter((m) => m.running).map((m) => m.name),
+    ).toEqual(expect.arrayContaining(SURFACE_MODULES))
+  })
+
+  // --- 2 · Retention (its own page /retention in Community, a tab of /compliance in Business; from #693) ------------------------
   //
   // The one surface of the four that paints ENGINE-SERVED ROWS on a virgin engine: the
   // data-class registry is compiled into the binary, so an empty list here would mean a
@@ -315,8 +379,11 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       '/v1/m/compliance/retention/classes',
       200,
     )
-    await page.goto('/compliance')
-    const panel = await openTab(page, /^Retention$/i)
+    // Community serves retention as its own page; a Business build also reaches it as a tab of /compliance.
+    await page.goto(communityBuild ? '/retention' : '/compliance')
+    const panel = communityBuild
+      ? page.getByRole('main')
+      : await openTab(page, /^Retention$/i)
 
     await expectPainted(
       panel.getByText('Retention schedules', { exact: true }),
@@ -639,7 +706,9 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
         501,
       )
       await page.goto('/red-team')
-      await expect(page).toHaveURL(/\/areas\/security-identity$/)
+      await expect(
+        page.getByRole('heading', { name: 'Part of Business' }),
+      ).toBeVisible()
       await expect(
         page.getByRole('button', { name: /register agent/i }),
       ).toHaveCount(0)
@@ -987,15 +1056,15 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     ).toBeVisible()
   })
 
-  // --- 11 · Settings: all 18 controls, including its local-only preferences -----
+  // --- 11 · Settings: account facts and every preference choice ----------------
   //
-  // Settings is a real authenticated route outside FEATURE_VIEWS. Its Profile and
-  // About panels paint engine answers; Appearance intentionally persists only
+  // Settings is a real authenticated route outside FEATURE_VIEWS. About paints
+  // engine answers; General intentionally persists only
   // non-sensitive client preferences. The distinction is asserted instead of
   // manufacturing an HTTP call for controls whose source names a local state setter.
-  await test.step('Settings: 18 controls reach their handler and promised effect', async () => {
+  await test.step('Settings: sections, account facts, and preferences reach their promised effect', async () => {
     // A full navigation creates a fresh QueryClient. Arm both waits first so the
-    // assertions bind Profile/About to this live engine rather than to visible copy.
+    // assertions bind the About facts to this live engine rather than visible copy.
     const serverInfoRequest = expectResponse(page, '/v1/server-info', 200)
     const whoamiRequest = expectResponse(page, '/v1/auth/whoami', 200)
     await page.goto('/settings')
@@ -1015,11 +1084,11 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
 
     const exercised = new Set<string>()
     const expectedControls = [
-      'tab/profile',
-      'tab/appearance',
-      'tab/about',
-      'trigger/theme',
-      'trigger/density',
+      'details/actor',
+      'section/general',
+      'section/about',
+      'control/theme',
+      'control/density',
       'trigger/language',
       'theme/light',
       'theme/dark',
@@ -1035,51 +1104,55 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       'language/fr',
     ]
 
-    const tabs = page.getByRole('tab')
-    await expect(
-      tabs,
-      'settings tabs Rendered: Profile, Appearance, and About must exist',
-    ).toHaveCount(3)
-
-    // Appearance is inactive initially; visiting it first makes Profile's later
-    // activation causal rather than a click on the default-selected control.
-    const firstAppearance = await openTab(page, /^Appearance$/i)
-    await expect(
-      firstAppearance.getByRole('combobox'),
-      'settings tab/appearance Effect: expected three preference controls',
-    ).toHaveCount(3)
-    exercised.add('tab/appearance')
-
-    const profile = await openTab(page, /^Profile$/i)
+    const sections = page.getByRole('navigation', { name: 'Settings sections' })
+    await sections.getByRole('button', { name: 'About', exact: true }).click()
+    await expect(page).toHaveURL(/section=about/)
+    await page.getByText('Principal ID', { exact: true }).click()
     await expectPainted(
-      profile.getByText(whoami.actor, { exact: true }),
-      'settings tab/profile Effect: actor returned by live whoami',
+      page.getByText(whoami.actor, { exact: true }),
+      'settings About: actor returned by live whoami',
     )
-    await expect(
-      profile.getByText(String(whoami.grants.length), { exact: true }),
-      'settings tab/profile Effect: membership count returned by live whoami',
-    ).toBeVisible()
-    exercised.add('tab/profile')
+    const fact = (label: string) =>
+      page
+        .locator('dl > div')
+        .filter({ has: page.getByText(label, { exact: true }) })
+        .locator('dd')
+    await expect(fact('Organizations')).toHaveText(String(whoami.grants.length))
+    await expect(fact('Organizations')).toBeVisible()
+    exercised.add('details/actor')
+    await expectPainted(fact('Version'), 'settings About: live engine version')
+    await expect(fact('Version')).toHaveText(serverInfo.version)
+    await expect(fact('Store engine')).toHaveText(serverInfo.engine)
+    await expect(fact('Store engine')).toBeVisible()
+    if (serverInfo.license.status === 'none') {
+      await expect(fact('Edition')).toHaveText(
+        'Community edition — no license needed',
+      )
+      await expect(fact('Edition')).toBeVisible()
+    } else {
+      await expect(fact('License status')).toHaveText(serverInfo.license.status)
+      await expect(fact('License status')).toBeVisible()
+    }
+    exercised.add('section/about')
 
-    const about = await openTab(page, /^About$/i)
-    await expectPainted(
-      about.getByText(serverInfo.version, { exact: true }),
-      'settings tab/about Effect: version returned by live server-info',
-    )
-    await expect(
-      about.getByText(serverInfo.engine, { exact: true }),
-      'settings tab/about Effect: store engine returned by live server-info',
-    ).toBeVisible()
-    await expect(
-      about.getByText(serverInfo.license.status, { exact: true }),
-      'settings tab/about Effect: license status returned by live server-info',
-    ).toBeVisible()
-    exercised.add('tab/about')
-
-    await openTab(page, /^Appearance$/i)
+    await sections.getByRole('button', { name: 'General', exact: true }).click()
+    await expect(page).toHaveURL(/section=general/)
+    exercised.add('section/general')
+    for (const [label, choices, id] of [
+      ['Theme', ['Light', 'Dark', 'System'], 'theme'],
+      ['Density', ['Comfortable', 'Compact'], 'density'],
+    ] as const) {
+      const group = page.getByRole('radiogroup', { name: label, exact: true })
+      await expect(group.getByRole('radio')).toHaveCount(choices.length)
+      for (const name of choices)
+        await expect(
+          group.getByRole('radio', { name, exact: true }),
+        ).toBeVisible()
+      exercised.add(`control/${id}`)
+    }
 
     async function exerciseTrigger(
-      id: 'theme' | 'density' | 'language',
+      id: 'language',
       optionNames: readonly string[],
     ) {
       const ledgerId = `trigger/${id}`
@@ -1111,8 +1184,6 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       exercised.add(ledgerId)
     }
 
-    await exerciseTrigger('theme', ['Light', 'Dark', 'System'])
-    await exerciseTrigger('density', ['Comfortable', 'Compact'])
     await exerciseTrigger('language', [
       'English',
       'Español',
@@ -1121,6 +1192,8 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       'Deutsch',
       'Русский',
       'Français',
+      'Italiano',
+      '한국어',
     ])
 
     async function chooseOption(
@@ -1128,18 +1201,35 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       label: string,
       ledgerId: string,
     ) {
-      const trigger = page.locator(`#${selectId}`)
-      await trigger.click()
-      const option = page.getByRole('option', { name: label, exact: true })
-      await expect(
-        option,
-        `settings ${ledgerId} Rendered: option is missing`,
-      ).toBeEnabled()
-      await option.click()
-      await expect(
-        trigger,
-        `settings ${ledgerId} Fired: selected value did not reach the trigger`,
-      ).toContainText(label)
+      if (selectId === 'language') {
+        const trigger = page.locator('#language')
+        await trigger.click()
+        const option = page.getByRole('option', { name: label, exact: true })
+        await expect(
+          option,
+          `settings ${ledgerId}: option is enabled`,
+        ).toBeEnabled()
+        await option.click()
+        await expect(
+          trigger,
+          `settings ${ledgerId}: selected label`,
+        ).toContainText(label)
+      } else {
+        const group = page.getByRole('radiogroup', {
+          name: selectId === 'theme' ? 'Theme' : 'Density',
+          exact: true,
+        })
+        const radio = group.getByRole('radio', { name: label, exact: true })
+        await expect(
+          radio,
+          `settings ${ledgerId}: option is enabled`,
+        ).toBeEnabled()
+        await radio.click()
+        await expect(
+          radio,
+          `settings ${ledgerId}: selected choice`,
+        ).toHaveAttribute('aria-checked', 'true')
+      }
       exercised.add(ledgerId)
     }
 
@@ -1211,6 +1301,8 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       ['de', 'Deutsch'],
       ['ru', 'Русский'],
       ['fr', 'Français'],
+      ['it', 'Italiano'],
+      ['ko', '한국어'],
       ['en', 'English'],
     ] as const) {
       const ledgerId = `language/${code}`
@@ -1232,11 +1324,11 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     page.off('request', recordPreferenceMutation)
     expect(
       preferenceMutations,
-      'settings Appearance Effect: local preferences emitted an engine mutation',
+      'settings General Effect: local preferences emitted an engine mutation',
     ).toEqual([])
     expect(
       [...exercised].sort(),
-      'settings control ledger: Rendered/Fired/Effect did not account for exactly 18 controls',
+      'settings control ledger: every section, control, and choice must have an effect',
     ).toEqual([...expectedControls].sort())
   })
 

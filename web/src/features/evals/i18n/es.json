@@ -56,6 +56,8 @@
       "startedAt": "Inicio"
     },
     "regressed": "Regresión · deriva {{drift}}",
+    "withinNoise": "Caída dentro del ruido · deriva {{drift}}",
+    "passRateDiff": "Caída de la tasa de aprobación {{drop}} (IC 95 % {{lo}}–{{hi}}) — {{passed}}/{{n}} puntuados frente a {{baselinePassed}}/{{baselineN}} de la línea base",
     "noRegression": "Ninguna",
     "empty": "No hay ejecuciones en el rango.",
     "emptyHint": "Aquí se lista cada ejecución de evaluación del intervalo seleccionado, con su puntuación. Amplía el intervalo o inicia una ejecución.",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "Deriva — {{subject}}",
-    "description": "Puntuación en el tiempo frente al umbral de aprobación de la suite. Una regresión es una comparación de puntuación puntual con una ejecución de baseline, que puede usar otra versión de suite, otro modelo u otro scorer, y la comparación no informa cuál cambió. Tras un cambio de versión de suite, fija una baseline.",
+    "description": "Puntuación en el tiempo frente al umbral de aprobación de la suite. Una regresión es una comparación con una ejecución de baseline: la caída de puntuación debe superar el umbral de la suite y el intervalo al 95 % de la diferencia de pass-rate debe excluir el cero. Esa ejecución puede usar otra versión de suite, otro modelo u otro scorer, y la comparación no informa cuál cambió. Tras un cambio de versión de suite, fija una baseline.",
     "score": "Puntuación",
     "threshold": "Umbral de aprobación",
     "pickerTitle": "Sujeto",
@@ -189,7 +191,7 @@
     "humanPass": "humano: pasa",
     "humanFail": "humano: falla",
     "unscored": "sin puntuar",
-    "noJudge": "No hay juez cableado, así que no hay a quién medir. No es una avería ni un límite de edición: una calibración no se puede simular."
+    "noJudge": "No hay ningún juez configurado, así que no hay a quién medir. No es una avería ni un límite de edición: una calibración no se puede simular."
   },
   "baseline": {
     "pin": "Fijar como línea base",

@@ -654,6 +654,11 @@ type engine struct {
 	// UNCHANGED. It is held here because TWO consumers need the same instance: the
 	// inference proxy consults State(), and the finding rail drives OnFinding().
 	circuitBreaker circuitBreakerEngine
+	// sessionDecoys is the OPTIONAL Business decoy-credential engine (sessiondecoys.go).
+	// nil ⇒ nothing is planted and the hook PEP and the inference proxy inspect exactly
+	// as before. It is held here because the launch plants, and the hook PEP and the proxy
+	// recognize, through the SAME instance: two would not know each other's decoys.
+	sessionDecoys sessionDecoyEngine
 	// pinVerifier is the tool-pin verifier (nil in the community build),
 	// constructed once in buildModules and shared: the MCP gateway PEP consults it
 	// at tools/call and the enterprise reporting tool-pin source reads its drift
@@ -742,6 +747,17 @@ type nhiEnforcer interface {
 // into the authorizer, and builds the API server with every module's routes mounted.
 // It does not start any listener.
 func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
+	if cfg.ServeMode {
+		if err := refuseExternalPDPInCommunity(osGetenv); err != nil {
+			return nil, err
+		}
+		if err := refuseBusinessProtectionsInCommunity(environmentWithActivationManifest(cfg.DataDir)); err != nil {
+			return nil, err
+		}
+	}
+	if err := refuseBusinessCustodyInCommunity(); err != nil {
+		return nil, err
+	}
 	if err := checkCMEKInstall(cfg.DataDir); err != nil {
 		return nil, err
 	}
@@ -872,6 +888,7 @@ type bootState struct {
 	sourceStore                 *auth.SourceStore
 	connectorDir                string
 	sourceReconcilerSvc         *sourceReconciler
+	notifyDestinationsSvc       api.NotifyDestinations // nil when the notify dispatcher is not built
 	licSvc                      *licenseService
 	pivCfg                      *auth.PIVConfig
 	rlStore                     *pgstore.Store
@@ -880,6 +897,7 @@ type bootState struct {
 	gatewayManagement           *mcpManagement
 	apiSrv                      *api.Server
 	circuitBreaker              circuitBreakerEngine
+	sessionDecoys               sessionDecoyEngine
 	archCfg                     auditArchiveConfig
 	arch                        *auditArchiveLoop
 	communicationPump           *workOutboxPump
@@ -1305,7 +1323,10 @@ func (b *bootState) loadSigningCustody(ctx context.Context) (err error) {
 	// the policy-artifact signing key — INDEPENDENT of both the audit and
 	// catalog keys — backing the claude-policy distribution truth loop: publish
 	// signs the exact distributed bytes, pull agents verify against its pinned
-	// fingerprint. Same shared-or-local resolution as the catalog key.
+	// fingerprint. The truth loop is Business (governance.FleetPolicyOptions), but
+	// every edition keeps loading the key: its file, environment variables and
+	// custody modes are published contracts. Same shared-or-local resolution as
+	// the catalog key.
 	b.policyKey, err = loadPolicySigningKey(b.cfg.DataDir, b.log, keyOpts...)
 	if err != nil {
 		return err
@@ -1489,6 +1510,9 @@ func (b *bootState) buildRuntime(ctx context.Context) (err error) {
 	}
 	if !b.cfg.NoIngest {
 		if err := validateIdentitySourcesConfig(b.srcCfg); err != nil {
+			return err
+		}
+		if err := validateBusinessSourcesConfig(b.srcCfg); err != nil {
 			return err
 		}
 	}
@@ -1942,6 +1966,14 @@ func (b *bootState) bindIdentityAndLeadership(ctx context.Context) (err error) {
 		_ = b.st.Close()
 		return fmt.Errorf("ha leader-routing config: %w", haErr)
 	}
+	// Only the serving boot is refused: `audit` and `dr` boot the same engine, and a
+	// serve-only switch left in a pod's environment must not block them.
+	if b.cfg.ServeMode {
+		if err := haLeaderRoutingEdition(b.haCfg); err != nil {
+			_ = b.st.Close()
+			return err
+		}
+	}
 
 	if b.haCfg.PublishLabel {
 		b.haPublisher, haErr = newHALeaderPublisher(b.haCfg, b.log)
@@ -2166,15 +2198,12 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 	if b.set.accountEraser != nil {
 		b.set.accountEraser.use(b.st, b.authr)
 	}
-	// late-bind the same data handle into the policy truth-loop seams, both
-	// constructed in buildModules before the store existed. Until bound, the
+	// late-bind the same data handle into the Business policy truth-loop seams,
+	// both constructed in buildModules before the store existed. Until bound, the
 	// distributor is deny-closed (publish reports enqueue-failed, never
 	// "distributed") and the observed provider reports "could not be read".
-	if b.set.policyDist != nil {
-		b.set.policyDist.UseData(b.data)
-	}
-	if b.set.policyObserved != nil {
-		b.set.policyObserved.UseData(b.data)
+	if b.set.policyBind != nil {
+		b.set.policyBind(b.data)
 	}
 
 	// C: serving processes establish every tenant's active Cedar PDP inside
@@ -2358,6 +2387,9 @@ func (b *bootState) bindServices(ctx context.Context) (err error) {
 	// module selection. It reads which modules hold data, so an add-on that is
 	// disabled keeps those of its modules selected (productSettings.write).
 	b.settings = newProductSettings(b.st, b.cfg.DataDir)
+	if b.set.sessions != nil {
+		b.set.sessions.SetIdleAutoStopPolicy(b.settings.sessionIdleWindow)
+	}
 	b.settings.used = func(ctx context.Context) ([]string, error) { return usedModules(ctx, b.st, b.census) }
 	b.tracingSettings = newTracingSettingsService(b.settings, b.tracer, b.cfg.Version)
 	if err := b.tracingSettings.applyStored(ctx); err != nil {
@@ -2416,6 +2448,9 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 		}
 	})
 	b.sourceReconcilerSvc = newSourceReconciler(b.rt, b.sourceStore, b.secretResolver, b.secretStore, b.connectorDir, b.srcCfg.ConnectorTrust, b.log)
+	if nd := notifyDispatcherOf(b.set); nd != nil {
+		b.notifyDestinationsSvc = newNotifyDestinationService(b.settings, b.secretStore, b.secretResolver, nd, b.log)
+	}
 	// Sources share the identity already bound before the first promotion;
 	// binding them must not re-resolve it or rewrite the live sessions module.
 	if b.executionEnvRef != "" {
@@ -2768,6 +2803,14 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		b.set.sessionDependencies.ProfileLogin = b.agentTools.LoginStatusForProfile
 	}
 	wireModelAvailability(b.set, b.st, b.sourceReconcilerSvc)
+	if b.set.models != nil {
+		// The models of a provider key, a tool account or a tool are listed to whoever may use it.
+		var mayUseRecord func(context.Context, model.TenantID, auth.Principal, string) (bool, error)
+		if b.set.sessions != nil {
+			mayUseRecord = b.set.sessions.MayUseProviderRecord
+		}
+		b.set.models.UseAvailabilityAccess(modelsAccess(profileAccess{scopes: b.set.sourceScopeResolver}.MayUse, mayUseRecord))
+	}
 	// A confirmed product sign-in queues a model-list refresh for that tenant
 	// (MODELS CONSUMERS.md: FH owns the sign-in callback; it does no I/O itself).
 	if b.set.models != nil {
@@ -2776,20 +2819,29 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	// HU-R17: the installed Ollama, run by the engine on request, with its models under
 	// the data directory and its endpoint registered as a provider once it answers.
 	ollamaDir := filepath.Join(absOrSame(b.cfg.DataDir), "ollama")
+	auditSystem := func(ctx context.Context, draft model.AuditDraft) error {
+		return b.st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
+			_, err := sc.Audit().Append(ctx, draft)
+			return err
+		})
+	}
 	b.agentTools.UseOllama(agenttoolsapi.OllamaConfig{
 		ModelsDir: filepath.Join(ollamaDir, "models"),
 		HomeDir:   filepath.Join(ollamaDir, "home"),
 		Register:  registerLocalOllama(b.set.sessions, b.st),
 		StateFile: filepath.Join(ollamaDir, "started.json"),
-		Audit: func(ctx context.Context, draft model.AuditDraft) error {
-			return b.st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
-				_, err := sc.Audit().Append(ctx, draft)
-				return err
-			})
-		},
+		Audit:     auditSystem,
 	})
 	// The Ollama a person started comes back with the engine.
 	b.agentTools.RestartOllama()
+	// dev#2422: the llama.cpp or vLLM the operator installed, run by the engine on request,
+	// registered in Providers with a key of its own, and back with the engine.
+	b.agentTools.UseModelServers(agenttoolsapi.ModelServerConfig{
+		Dir:      filepath.Join(absOrSame(b.cfg.DataDir), "model-servers"),
+		Register: registerLocalModelServer(b.set.sessions, b.st),
+		Audit:    auditSystem,
+	})
+	b.agentTools.RestartModelServers()
 	b.cleanup = append(b.cleanup, func() {
 		if !b.bootOK {
 			b.agentTools.Close()
@@ -2804,6 +2856,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+	b.gatewayManagement.newToolDataFlow = thisEdition.mcpToolDataFlow.get(osGetenv, b.log)
 	// server-info's communication_ready, sampled at most once per ttl.
 	communicationReadiness := newCommunicationReady(func(ctx context.Context) (bool, error) {
 		r, err := b.set.sessions.EvaluateCommunicationReadiness(ctx)
@@ -2846,13 +2899,17 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		// enterprise activation surface (nil in the community build ⇒ 501).
 		Activation: actSvc,
 		// Departments and group places (nil in the community build ⇒ 501).
-		Departments:     b.departmentService(),
-		Modules:         b.set.all,
-		TracingSettings: b.tracingSettings,
+		Departments:         b.departmentService(),
+		Modules:             b.set.all,
+		TracingSettings:     b.tracingSettings,
+		SessionIdleSettings: b.settings,
 		// Which optional modules the engine runs (/v1/console/modules).
 		ModuleSelection: moduleSelectionService{settings: b.settings, running: b.profile,
 			restart: restartRequester(b.cfg.Restart), log: b.log, used: b.settings.used,
 			sessions: b.set.sessions.RunningSessions},
+		// The Updates page: `olivares upgrade` run from the console (/v1/console/updates).
+		Updates: newUpdateService(b.settings, thisEdition.name, b.cfg.Version, b.cfg.DataDir,
+			restartRequester(b.cfg.Restart), b.set.sessions.RunningSessions, b.log),
 		// whoami reports authority a tenant-scoped grant confers, not just what the
 		// ROLE confers. Same module that DECIDES the request through the ScopedAuthorizer
 		// above, in its reporting capacity — one source, two capabilities, so the set the
@@ -2880,7 +2937,11 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		// /v1/console/connectors — it seals an inline credential into the secret store
 		// and persists a reference-only source it applies live.
 		ConnectorOnboarding: b.sourceReconcilerSvc,
-		KnowledgeStatus:     b.set.knowledgeStatus,
+		// The console's Slack and Teams destinations (notifydestinations.go): the
+		// webhook is sealed in the secret store, the definition lives in the deployment
+		// settings and the dispatcher opens it without a restart.
+		NotifyDestinations: b.notifyDestinationsSvc,
+		KnowledgeStatus:    b.set.knowledgeStatus,
 		// OTA update-availability indicator (nil unless OLIVARES_UPDATE_ENDPOINT set).
 		UpdateStatus:  updateStatusFn,
 		UpdateRefresh: updateRefreshFn,
@@ -3250,8 +3311,24 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	// Bind ordinary turn costs to the same current session principal as hooks
 	// and provider approvals. The owning port publishes the cost event itself.
 	b.set.sessionDependencies.CostSink = &sessionCostSink{credentials: b.sessionHooks.SessionCredentials, sessions: b.set.sessions}
+	// Decoy credentials (Business, opt-in): one engine plants at launch and recognizes at
+	// the hook PEP and the proxy. A Community build, or an edition with no opt-in, has none.
+	if thisEdition.sessionDecoys != nil {
+		if decoys := thisEdition.sessionDecoys(osGetenv, newSessionDecoyDeps(b.sessionHooks.SessionCredentials, b.set.sessions), b.log); decoys != nil {
+			b.sessionDecoys = decoys
+			b.set.sessionDependencies.SessionDecoys = decoys
+		}
+	}
+	// Steering a session another person started (input, resume, peers) is Business; a
+	// Community build answers 501 business_required (docs/editions.md).
+	b.set.sessionDependencies.SteerOthers = thisEdition.name != "community"
+	// Who may use which provider profile and AI tool: the source-scoping bindings, asked at
+	// every launch and read of a profile. With none stored, every profile stays open.
+	b.set.sessionDependencies.ProfileAccess = profileAccess{scopes: b.set.sourceScopeResolver}
 	// A turn its tool metered and did not price (Codex) is priced at list price.
 	b.set.sessionDependencies.ListPricer = sessionListPrice
+	// A usage limit whose tool named no reset time takes it from the login's windows.
+	b.set.sessionDependencies.LimitResets = b.agentTools.LimitResetsAt
 	b.set.sessionDependencies.ProviderApprovalPrincipal = func(c context.Context, tenant model.TenantID, runRef string) (auth.Principal, string, error) {
 		p, scope, err := b.sessionHooks.ResolveRun(c, tenant, runRef)
 		return p, scope.SessionRef, err
@@ -3298,6 +3375,7 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 		b.set.deferredSecrets.rt = b.rt
 		b.set.deferredSecrets.connectorDir = b.connectorDir
 	}
+	loadStoredNotifyDestinations(ctx, b.settings, notifyDispatcherOf(b.set), b.log)
 	b.set.deferredSecrets.openAll(ctx, b.secretResolver, b.log)
 	seedSourceRosterIfEmpty(ctx, b.sourceStore, b.srcCfg, b.log)
 	wireRoster(ctx, b.rt, b.set.gov, b.set.wif, b.srcCfg, b.secretResolver, b.log)
@@ -3639,6 +3717,7 @@ func (b *bootState) composeEngine() {
 		approvalBridge:            b.set.approvalBridge, policyEval: b.policyEval, scopedGrants: b.set.gov.ScopedGrants(), nhiEnforcer: b.set.gov,
 		killSwitch: b.set.gov, stopDeny: b.stopDeny, pinVerifier: b.set.pinVerifier,
 		circuitBreaker: b.circuitBreaker,
+		sessionDecoys:  b.sessionDecoys,
 		models:         b.set.models, finops: b.set.finops, inferenceProxy: b.set.inferenceProxy, residencyReg: b.residencyReg, contentFirewall: b.set.contentFirewall,
 		auditPriors: b.auditKey.priors, pivConfig: b.pivCfg, fedSvc: b.fedSvc, secretStore: b.secretStore,
 		sourceStore: b.sourceStore, sourceReconciler: b.sourceReconcilerSvc, licenseService: b.licSvc,

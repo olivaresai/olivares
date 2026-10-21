@@ -55,7 +55,7 @@ func TestPolicyCreateNumericFieldsRefuseInPlainEnglish(t *testing.T) {
 	// The control: valid values keep working, byte-equal to before.
 	r := h.do("POST", "/v1/m/governance/policies", tok, map[string]any{
 		"name": "ok", "kind": "approval", "enabled": true,
-		"spec": map[string]any{"required_approvals": 2, "expires_in_seconds": 600, "escalate_in_seconds": 120},
+		"spec": map[string]any{"required_approvals": 1, "expires_in_seconds": 600, "escalate_in_seconds": 120},
 	}, tenantHdr(tenant))
 	if r.code != http.StatusCreated {
 		t.Fatalf("a valid policy must create, got %d %s", r.code, r.raw)

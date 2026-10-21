@@ -1,0 +1,105 @@
+{
+  "title": "플랫폼 및 수명 주기",
+  "description": "Claude 에스테이트의 멀티 서피스 배포 매트릭스와 플랫폼별 모델 수명 주기 — 서피스별 컴플라이언스 상태와 서로 다른 폐기 기한. 엔진이 제공하는 참조이며 다시 계산하지 않습니다.",
+  "tabs": {
+    "surfaces": "서피스 및 컴플라이언스",
+    "lifecycle": "모델 수명 주기"
+  },
+  "liveReference": "엔진이 제공하는 참조 — AsOf {{date}}, 소스 {{source}}.",
+  "unavailable": "이 엔진에서는 플랫폼 참조를 사용할 수 없습니다",
+  "confirm": {
+    "confirmed": "확인됨",
+    "toConfirm": "확인 필요"
+  },
+  "surfaces": {
+    "title": "배포 서피스",
+    "description": "모델링된 6개 Claude 서피스(ANT2-01/17)입니다. 기본 URL, 인증, 모델-id 형식, 청구, 레지던시 및 컴플라이언스 상태가 각기 다르며 상호 교환할 수 없습니다.",
+    "matrixTitle": "서피스 속성 매트릭스",
+    "matrixSummary": "운영자, 엔드포인트, 인증, 모델-id 형식, API 지원, 청구, HIPAA, ZDR 및 레지던시를 기준으로 6개 배포 서피스를 비교합니다.",
+    "unmodeled": "모델링되지 않은 서피스 — 속성 매트릭스가 없습니다.",
+    "unmodeledHint": "이 게이트웨이는 모델링된 6개 Claude 서피스 중 하나가 아니므로 컴플라이언스 및 레지던시 속성이 선언되지 않았으며 추론되지도 않습니다.",
+    "deprecatedBadge": "폐기됨",
+    "noWorkspaceHeader": "없음",
+    "noSigv4": "해당 없음",
+    "apiSupportTitle": "서피스별 Anthropic API 지원",
+    "apiSupportDescription": "서피스별로 적용되는 Anthropic API 제품군입니다. Admin/Models/Compliance API가 없는 서피스는 Anthropic 측 거버넌스 인제스트를 제공할 수 없으며, 이를 정직하게 저하된 상태로 표시하고 빈 결과를 \"발견 사항 없음\"으로 보고하지 않습니다.",
+    "columns": {
+      "surface": "서피스",
+      "operator": "운영자",
+      "baseUrl": "기본 URL",
+      "sigv4": "SigV4 서비스",
+      "workspaceHeader": "Workspace 헤더",
+      "modelIdForm": "모델-id 형식",
+      "billing": "청구",
+      "hipaa": "HIPAA",
+      "fedramp": "FedRAMP / IL",
+      "zdr": "ZDR",
+      "residency": "레지던시 / 추론 지역",
+      "apiSupport": "API 지원",
+      "messages": "메시지",
+      "admin": "관리",
+      "compliance": "컴플라이언스",
+      "models": "모델",
+      "batches": "배치",
+      "mcp": "MCP 커넥터"
+    },
+    "api": {
+      "supported": "지원됨",
+      "unsupported": "지원되지 않음"
+    },
+    "fedramp": {
+      "eligible": "HIPAA / FedRAMP / IL4-5 대상",
+      "na": "선언되지 않음"
+    },
+    "notesTitle": "서피스 참고 사항",
+    "compliance": {
+      "title": "컴플라이언스 상태",
+      "description": "HIPAA / FedRAMP / IL / ZDR은 추론이 실행되는 위치별 서피스 축이며 모델 또는 프로바이더의 GPAI 상태와 구별됩니다. 혼동하지 마십시오.",
+      "hipaaNote": "HIPAA는 확인 상태와 함께 표시됩니다. \"확인 필요\" 상태는 확정 예 또는 아니요로 표시되지 않습니다."
+    }
+  },
+  "lifecycle": {
+    "title": "플랫폼별 모델 수명 주기",
+    "description": "모델 폐기는 전역이 아니라 플랫폼별입니다(ANT2-03). Anthropic 운영 서피스는 Bedrock 및 Vertex와 다른 날짜에 모델을 폐기하므로 단일 \"폐기됨\" 플래그는 에스테이트의 절반에 잘못된 마이그레이션 기한을 제시합니다.",
+    "datePending": "날짜 게시되지 않음 / 확인 필요",
+    "noSuccessor": "선언된 후속 모델 없음",
+    "noSuccessorHint": "권위가 이 제품군의 대체 모델을 지정하지 않았습니다. 추론하지 않습니다.",
+    "matrixTitle": "서피스별 폐기 기한",
+    "columns": {
+      "model": "모델",
+      "surface": "서피스",
+      "retiresOn": "폐기일",
+      "status": "상태",
+      "replacement": "대체"
+    },
+    "paramDeprecation": {
+      "title": "매개변수 폐기 사전 안내",
+      "badge": "정보",
+      "body": "{{affected}}은(는) 비기본 {{params}}을(를) HTTP {{status}}로 거부합니다. 이는 Anthropic의 폐기(ANT2-03)이며 제품 버그도 수정 가능한 오류도 아닙니다 — 추론 플레인이 사전 안내로 이 매개변수를 보류합니다.",
+      "paramsJoin": ", "
+    },
+    "notes": {
+      "title": "Bedrock id 및 레지던시 참고 사항",
+      "declaredNote": "웹에 선언된 참조: 이 참고 사항은 플랫폼 엔드포인트가 제공하지 않는 modules/models/bedrock.go의 정직성 사실을 인용합니다. 각 항목은 자체 확인 상태를 가집니다.",
+      "crisIdFormat": "교차 리전 추론 프로필 id 형식은 \"<geo>.anthropic.<model>\"이며 geo ∈ {us, eu, apac, global}입니다. 현재 Bedrock Mantle 서피스는 순수한 \"anthropic.<model>\" id를 사용합니다.",
+      "crisOpusId": "구체적인 Bedrock Global-CRIS opus 추론 프로필 id는 AWS 페이지에서 검증되지 않았습니다 — 형식은 확인되었지만 해당 id는 권위 있는 것으로 제시되지 않습니다.",
+      "globalRegionalPremium": "AWS 문서에 따르면 리전 추론 프로필은 글로벌보다 약 10% 프리미엄이 있습니다(글로벌이 더 저렴한 기준) — \"글로벌 +10%\" 가정과 반대입니다. 정확한 배수는 검증되지 않아 프리미엄을 모델링하지 않습니다.",
+      "usBurndown": "미국 전용 추론 감소율은 1.1배입니다(Opus 4.6 / Sonnet 4.6+, inference_geo=\"us\")."
+    }
+  },
+  "empty": {
+    "lifecycle": {
+      "title": "선언된 모델 폐기 일정이 없습니다",
+      "description": "엔진의 컴파일된 Claude 수명 주기 참조가 이 기한을 제공해야 합니다. 테넌트 활동과 콘솔 입력으로는 채워지지 않습니다."
+    },
+    "surface": {
+      "title": "선언된 배포 서피스가 없습니다",
+      "description": "엔진의 컴파일된 Claude 서피스 참조가 이 행을 제공해야 합니다. 테넌트 활동과 콘솔 입력으로는 채워지지 않습니다."
+    }
+  },
+  "effectiveState": {
+    "label": "이 에스테이트에서:",
+    "models": "모델 카탈로그",
+    "modelOps": "모델 운영"
+  }
+}

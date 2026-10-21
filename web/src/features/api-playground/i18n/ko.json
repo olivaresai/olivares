@@ -1,0 +1,68 @@
+{
+  "title": "API 플레이그라운드",
+  "description": "Olivares AI API를 살펴보고 테스트합니다.",
+  "filterPlaceholder": "엔드포인트 필터…",
+  "selectEndpoint": "왼쪽 패널에서 엔드포인트를 선택하십시오",
+  "send": "보내기",
+  "sending": "보내는 중…",
+  "streaming": "스트리밍 중…",
+  "cancel": "취소",
+  "requiredPermission": "필요한 권한",
+  "copyAsCurl": "curl로 복사",
+  "response": "응답",
+  "history": "기록",
+  "clearHistory": "지우기",
+  "noRequests": "아직 요청이 없습니다",
+  "noMatch": "필터와 일치하는 엔드포인트가 없습니다.",
+  "pathParams": "경로 매개변수",
+  "queryParams": "쿼리",
+  "headers": "헤더",
+  "body": "본문",
+  "networkError": "네트워크 오류",
+  "beta": "베타",
+  "summary": "{{groups}}개 그룹의 엔드포인트 {{endpoints}}개",
+  "summaryWithBeta": "{{groups}}개 그룹의 엔드포인트 {{endpoints}}개 · 베타 모듈 경로 {{beta}}개",
+  "endpointTree": {
+    "ariaLabel": "API 엔드포인트"
+  },
+  "errors": {
+    "loadSpec": "OpenAPI 사양을 불러오지 못했습니다"
+  },
+  "request": {
+    "networkError": "네트워크 오류",
+    "failedNetworkHint": "요청이 실패했습니다. 네트워크 연결을 확인하십시오.",
+    "blockedDestination": "차단된 대상",
+    "blockedDestinationHint": "API 플레이그라운드는 이 Olivares AI 서버로만 요청을 보낼 수 있습니다.",
+    "enterPathParam": "{{name}} 입력",
+    "headerNamePlaceholder": "헤더 이름",
+    "headerValuePlaceholder": "값",
+    "curlCommand": "curl",
+    "removeHeaderAria": "{{header}} 헤더 제거",
+    "addHeaderAria": "사용자 지정 헤더 추가",
+    "bodyAria": "요청 본문"
+  },
+  "responsePanel": {
+    "empty": "엔드포인트를 선택하고 요청을 보내십시오",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "헤더({{count}})",
+    "bodyAria": "응답 본문"
+  },
+  "historyPanel": {
+    "recentCount": "최근({{count}})",
+    "clearAria": "요청 기록 지우기",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "방금",
+      "minutes": "{{count}}분 전",
+      "hours": "{{count}}시간 전",
+      "days": "{{count}}일 전"
+    }
+  }
+}

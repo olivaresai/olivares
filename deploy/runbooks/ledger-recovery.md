@@ -31,7 +31,7 @@ ledger-verify-failure.md). This runbook is the **guided, dual-controlled** way t
    (`cr.Checkpoints > 0`, `LatestAttestedSeq < BreakAt`). No checkpoint ⇒ no anchor ⇒ recovery is refused.
 4. The engine is running with an **off-box checkpoint signer** configured (`OLIVARES_LEDGER_SIGNER=aws-kms|
    gcp-kms|azure-kv`, per `cmd/olivares/ledgersigner.go`) — the marker and the re-notarising checkpoint are
-   signed off-box.
+   signed off-box. This is the Business build: Community refuses `OLIVARES_LEDGER_SIGNER`.
 5. **Two distinct human approvers** via the governed-approval loop (this action is classified CRITICAL with a
    two-person floor and **no break-glass**).
 

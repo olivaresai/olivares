@@ -25,8 +25,9 @@ import (
 
 func newHooksCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "hooks",
-		Short: "Hooks-hardening add-on: fleet deployed-verified attestation + conformance cert (Business: AI Runtime Security)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "hooks",
+		Short:       "Hooks-hardening add-on: fleet deployed-verified attestation + conformance cert (Business: AI Runtime Security)",
 		Example: "  olivares hooks conform --behavioral --signing-key-file attest.key --signature-out hooks.conformance\n" +
 			"  olivares hooks attest --version fleet-2026-07 --nodes node-reports.json \\\n" +
 			"    --signing-key-file attest.key --signature-out fleet.attestation",
@@ -88,8 +89,9 @@ func hooksAttestCmd() *cobra.Command {
 		signatureOut string
 	)
 	cmd := &cobra.Command{
-		Use:   "attest",
-		Short: "Attest a fleet's deployed managed-settings against the canonical PEP-hook bundle (deployed-verified)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "attest",
+		Short:       "Attest a fleet's deployed managed-settings against the canonical PEP-hook bundle (deployed-verified)",
 		Long: "attest renders the canonical, content-addressed managed-settings bundle (the PEP hook +\n" +
 			"allowManagedHooksOnly) and classifies each fleet node report as deployed_verified | governed_no_pep |\n" +
 			"drifted | ungoverned by a BYTE-EXACT hash comparison. With a signing key it emits a tamper-evident\n" +
@@ -139,8 +141,9 @@ func hooksConformCmd() *cobra.Command {
 		behavioral   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "conform",
-		Short: "Certify conformance of the managed-settings + PEP hook against the real claude binary",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "conform",
+		Short:       "Certify conformance of the managed-settings + PEP hook against the real claude binary",
 		Long: "conform drives the real `claude` binary (version pin + settings-load) and validates the rendered\n" +
 			"managed-settings carries the PreToolUse PEP hook, emitting a certificate. With --behavioral it also\n" +
 			"drives the real binary against an in-process mock model and asserts the PreToolUse PEP BLOCKS a\n" +

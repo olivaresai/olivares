@@ -30,14 +30,21 @@ import (
 //     fully checked again (hash and, for Claude, the pinned-key manifest) before use;
 //   - nothing is written to disk; an engine restart starts empty;
 //   - an install, an update and a sign-in clear that tool's entries;
-//   - only an installed result is kept: a damaged or unverified release is checked
-//     again at every read, and a refusal stays a refusal;
+//   - only an installed result is kept as a verdict: a damaged or unverified release
+//     is checked again at every read, and a refusal stays a refusal (the last bullet
+//     says what else is kept);
 //   - an entry holds only for the verification posture that established it (for
 //     Claude Code, the signature verifier and the pinned key): the host observer's
 //     unavailable verifier never reads the installing engine's verdict (SR-FH-CACHE-01);
 //   - a symbolic link in the release counts with what it points at: a link to a
 //     file adds that file's identity, and a link to a directory makes the release
-//     uncacheable, because a check reads through it and the walk would not.
+//     uncacheable, because a check reads through it and the walk would not;
+//   - what is kept for a release that is not installed is only the digest of its
+//     executable, under the same identity but for every posture (it is a fact about
+//     the bytes, not a verdict): the verdict (damaged, unverified) is decided again
+//     at every read, but an executable that has not changed is not read again. The
+//     host observer's Claude Code release is always unverified to it, so without
+//     this every observation hashed the whole executable (dev#2609).
 //
 // An engine built without a cache (EngineOptions.Verified nil) checks every read,
 // as before. Off Linux the identity is not read and nothing is cached.
@@ -51,6 +58,30 @@ type verifiedRelease struct {
 	admit  chan struct{}
 	key    string
 	in     Installed
+	// digestKey is the release identity under which exe was read.
+	digestKey string
+	exe       exeDigest
+}
+
+// exeDigest is the sha256 and size of a release's executable as one read found them.
+// set is false until a read has filled it.
+type exeDigest struct {
+	sum  string
+	size int64
+	set  bool
+}
+
+// read returns the digest d holds, or reads the executable and keeps its digest in d.
+// A nil d reads every time.
+func (d *exeDigest) read(root *os.Root, rel string) (string, int64, error) {
+	if d != nil && d.set {
+		return d.sum, d.size, nil
+	}
+	sum, size, err := fileSHA256Root(root, rel)
+	if err == nil && d != nil {
+		d.sum, d.size, d.set = sum, size, true
+	}
+	return sum, size, err
 }
 
 // NewVerifiedCache returns an empty cache; the composition makes one per process.
@@ -92,7 +123,7 @@ func (e *Engine) ForgetVerified(driver string) { e.verified.Forget(driver) }
 // changed while it was being checked.
 func (e *Engine) inspectReleaseCached(ctx context.Context, root *os.Root, rel, abs, driver string) Installed {
 	if e.verified == nil {
-		return e.inspectRelease(ctx, root, rel, abs, driver)
+		return e.inspectRelease(ctx, root, rel, abs, driver, nil)
 	}
 	// Share the first full check as well as later hits. Forget removes this
 	// entry, so an in-flight check cannot restore an invalidated verdict.
@@ -103,17 +134,33 @@ func (e *Engine) inspectReleaseCached(ctx context.Context, root *os.Root, rel, a
 	case <-ctx.Done():
 		return Installed{Driver: driver, ReleaseDir: abs, State: StateUnverified, Reason: ctx.Err().Error()}
 	}
-	posture := e.verificationPosture(driver)
-	key, ok := releaseIdentity(root, rel, posture)
+	// The verdict holds for the posture that made it; the executable's digest is a fact
+	// about its bytes and holds for whoever asks.
+	identity, ok := releaseIdentity(root, rel)
+	key := e.verificationPosture(driver) + "\x00" + identity
 	if ok {
 		if v.key == key {
 			return v.in
 		}
 	}
-	in := e.inspectRelease(ctx, root, rel, abs, driver)
-	if ok && in.State == StateInstalled {
-		if after, still := releaseIdentity(root, rel, posture); still && after == key {
-			v.key, v.in = key, in
+	// Only the v1 check (Claude Code) fills or reads the digest; v2 receipts check their
+	// payload members themselves.
+	var digest *exeDigest
+	if ok {
+		digest = &exeDigest{}
+		if v.digestKey == identity {
+			*digest = v.exe
+		}
+	}
+	in := e.inspectRelease(ctx, root, rel, abs, driver, digest)
+	if ok && (in.State == StateInstalled || digest.set) {
+		if after, still := releaseIdentity(root, rel); still && after == identity {
+			if in.State == StateInstalled {
+				v.key, v.in = key, in
+			}
+			if digest.set {
+				v.digestKey, v.exe = identity, *digest
+			}
 		}
 	}
 	return in
@@ -133,18 +180,17 @@ func (e *Engine) verificationPosture(driver string) string {
 	return "v1 provider without a named posture"
 }
 
-// releaseIdentity is the digest of the verification posture, the release's
-// receipt and every entry's identity under the release directory; a symbolic link
-// also carries the identity of the file it points at. ok is false when any of it
-// cannot be read or a link points at a directory (the release is then checked in
-// full and not cached).
-func releaseIdentity(root *os.Root, rel, posture string) (string, bool) {
+// releaseIdentity is the digest of the release's receipt and every entry's identity
+// under the release directory; a symbolic link also carries the identity of the file
+// it points at. ok is false when any of it cannot be read or a link points at a
+// directory (the release is then checked in full and not cached).
+func releaseIdentity(root *os.Root, rel string) (string, bool) {
 	receipt, err := readSmallFile(root, filepath.Join(rel, ReceiptFile), maxReceiptBytes)
 	if err != nil {
 		return "", false
 	}
 	sum := sha256.Sum256(receipt)
-	lines := []string{"receipt " + hex.EncodeToString(sum[:]), "posture " + posture}
+	lines := []string{"receipt " + hex.EncodeToString(sum[:])}
 	walkErr := fs.WalkDir(root.FS(), rel, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

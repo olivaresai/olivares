@@ -72,6 +72,14 @@ MAX_RECORD_AGE_DAYS=45
 
 # <url> <status measured> <ISO date> [owner, only when the status is not 200]
 #
+# A URL may carry ${RELEASE}: the row is a TEMPLATE for the release family, expanded against
+# the RELEASE-VERSION canon when this script runs (dev#2201). README.md derives its package
+# and tag URLs from that canon, so a literal per-version row broke at every cut. The expanded
+# row is judged exactly as a literal one — declared, aged, owned — and `--probe` hands the row
+# back paste-ready for the record it lives in (shell-escaped for the inline record's
+# double-quoted string, plain for the excluded record's raw file), never as a literal
+# per-version row.
+#
 # ⛔ THE 404s ARE REAL AND ARE NOT WAIVED, AND THEY ARE NOT ALL THE SAME KIND. The owner column
 # says which is which, and every one of them is NAMED in the verdict on every run:
 #
@@ -274,27 +282,50 @@ MAX_RECORD_AGE_DAYS=45
 # so each carries its owner.
 # 2026-10-05 · the Deploy console links the executor guide on the module VII page; it answered 200
 # in five of five probes (GET, following redirects).
+# 2026-10-14 · 0.x maintenance. README.md names the 0.1 package downloads and tag page and, in its
+# badge, the 0.2 tag page; docs-site's first hour names the repository #install anchor and two
+# qualification deep links. All eight answered 200 in five of five probes (GET, following
+# redirects; the blob links through raw.githubusercontent.com), so their rows carry no owner.
+# Three rows left the record: no file emits the appliance origin since the appliance workflow left
+# the 0.x tree, nothing emits the 1.0 tag page since the README's release links moved to the 0.x
+# line at the 0.1 cut (2b3c18af1), and no file in the census carries the favicon.
+# 2026-10-14 · 946cd91cc links the install-a-license how-to from the console's build-mismatch
+# card; it answered 200 in five of five probes (GET, following redirects).
+# 2026-10-15 · README.md takes its package URLs from RELEASE-VERSION (9f13125ba) and now names the 0.2
+# deb, rpm and apk downloads; the three answered 200 in five of five probes (GET, following
+# redirects), as did the 0.2 tag page. The 0.1 package rows and the 0.1 tag page left the record:
+# nothing emits them any more.
+# 2026-10-15 · those four rows became ${RELEASE} templates (dev#2201): README derives them from the
+# canon, so literal rows broke at every cut and cost dev#2183/PR #2187 three review rounds. The rows
+# keep their 0.2 measurements; a cut re-probes and pastes the template row back with the fresh date,
+# and the record itself no longer changes between releases.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
-https://appliance.olivares.ai 000 2026-10-01 appliance-origin-unpublished
 https://docs.olivares.ai 200 2026-09-24
 https://docs.olivares.ai/cli 200 2026-09-24
+https://docs.olivares.ai/how-to/install-a-license/#3--community--business-in-place 200 2026-10-14
 https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
 https://docs.olivares.ai/reference/configuration/ 200 2026-09-24
 https://docs.olivares.ai/reference/modules/vii-deploy/#connect-an-executor 200 2026-10-05
 https://github.com/olivaresai/olivares 200 2026-09-24
+https://github.com/olivaresai/olivares#install 200 2026-10-14
 https://github.com/olivaresai/olivares.git 200 2026-09-24
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\$ver 404 2026-10-08 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/INSTALL.md#installation-qualification 200 2026-10-14
 https://github.com/olivaresai/olivares/blob/main/INSTALL.md#operate-claude-code-co-deployment 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/SECURITY.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
+https://github.com/olivaresai/olivares/blob/main/deploy/compose/README.md#work-on-a-host-project-folder 200 2026-10-14
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
 https://github.com/olivaresai/olivares/releases 200 2026-09-24
 https://github.com/olivaresai/olivares/releases/download/\$ver 404 2026-10-08 release-asset-base-not-a-location
-https://github.com/olivaresai/olivares/releases/tag/1.0 404 2026-10-07 public-release-1.0-pending
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.apk 200 2026-10-15
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.deb 200 2026-10-15
+https://github.com/olivaresai/olivares/releases/download/\${RELEASE}/olivares_\${RELEASE}_linux_amd64.rpm 200 2026-10-15
+https://github.com/olivaresai/olivares/releases/tag/\${RELEASE} 200 2026-10-14
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
 https://licenses.olivares.ai 200 2026-09-24
@@ -306,7 +337,6 @@ https://olivares.ai/compliance/capabilities 200 2026-09-24
 https://olivares.ai/compliance/frameworks/ 200 2026-09-24
 https://olivares.ai/docs 200 2026-09-24
 https://olivares.ai/docs/reference/api-stability 404 2026-09-24 apex-serves-no-docs-depth
-https://olivares.ai/favicon.svg 200 2026-09-24
 https://olivares.ai/ns/oscal 404 2026-09-24 namespace-identifier-not-a-location
 https://olivares.ai/pricing 200 2026-09-24
 https://olivares.ai/product 200 2026-09-24
@@ -514,9 +544,53 @@ def emitted():
 #   the published tree its absence is SCOPED by the tree's profile, never assumed.
 HUB_RECORD = "docs/emitted-urls-hub-record.txt"
 
+# The release family of the record is declared by TEMPLATE, never by literal per-version rows
+# (dev#2201): README.md derives its package and tag URLs from RELEASE-VERSION, so a literal row
+# expired at every cut and main went red until someone re-edited the record by hand. A record
+# URL may carry ${RELEASE}; it expands against the canon when the record is parsed, and the
+# EXPANDED row is then judged by every rule of this gate exactly as a literal one is. The canon's
+# own gate is scripts/check-release-version.sh; this reader takes only what a URL substitution
+# needs, with the same one-record discipline, so a canon nobody could expand against is
+# UNVERIFIED here too — never a guess.
+RELEASE_CANON = "RELEASE-VERSION"
+TEMPLATE_TOKEN = "${RELEASE}"
+TEMPLATE_ROWS = {}      # expanded url -> (template url, owner): --probe hands the TEMPLATE back
+
+_canon_version = None
+
+
+def canon_version(source):
+    """-> RELEASE-VERSION's one bare MAJOR.MINOR record, read once. Any template row of
+    `source` needs it; a canon that is absent, unreadable, or not one bare MAJOR.MINOR record
+    is COULD NOT EXPAND (exit 2): expanding against a guess would certify versioned URLs
+    nobody measured at any version."""
+    global _canon_version
+    if _canon_version is not None:
+        return _canon_version
+    try:
+        with open(RELEASE_CANON, encoding="utf-8") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        unverified(f"{source} holds a {TEMPLATE_TOKEN} row and {RELEASE_CANON} is absent: the "
+                   "template cannot be expanded, and no versioned URL is certified against a guess")
+    except (OSError, UnicodeDecodeError) as exc:
+        unverified(f"{RELEASE_CANON} cannot be read ({exc}); a {TEMPLATE_TOKEN} row in {source} "
+                   "cannot be expanded")
+    records = [ln.strip() for ln in text.splitlines()
+               if ln.strip() and not ln.strip().startswith("#")]
+    if len(records) != 1 or not re.fullmatch(r"[0-9]+\.[0-9]+", records[0]):
+        unverified(f"{RELEASE_CANON} does not hold exactly one bare MAJOR.MINOR record "
+                   f"(found {records}); the {TEMPLATE_TOKEN} rows of {source} cannot be expanded "
+                   "against it")
+    _canon_version = records[0]
+    return _canon_version
+
 
 def parse_record(text, source):
-    """-> {url: (status, date, owner)} from `<url> <status> <date> [owner]` lines."""
+    """-> {url: (status, date, owner)} from `<url> <status> <date> [owner]` lines. A URL may
+    carry the ${RELEASE} template token: it expands against the RELEASE-VERSION canon, so the
+    release family is declared once and survives every cut; the EXPANDED row is what every
+    rule of this gate judges, exactly as a literal row."""
     out = {}
     for raw in text.splitlines():
         parts = raw.split()
@@ -525,7 +599,18 @@ def parse_record(text, source):
         if len(parts) < 3:
             unverified(f"{source}: record line {raw!r} is not '<url> <status> <date> [owner]'")
         url, status, when = parts[0], parts[1], parts[2]
-        out[url] = (status, when, parts[3] if len(parts) > 3 else "")
+        owner = parts[3] if len(parts) > 3 else ""
+        if TEMPLATE_TOKEN in url:
+            url = url.replace(TEMPLATE_TOKEN, canon_version(source))
+        if url in out:
+            unverified(f"{source}: {url} is declared twice — a literal row and a {TEMPLATE_TOKEN} "
+                       "row can expand to the same URL, and one URL gets one declaration (a "
+                       "duplicate would let a later row erase a known-broken one)")
+        if TEMPLATE_TOKEN in parts[0]:
+            from_inline = source == "the inline record"
+            if from_inline or url not in TEMPLATE_ROWS:
+                TEMPLATE_ROWS[url] = (parts[0], owner, from_inline)
+        out[url] = (status, when, owner)
     return out
 
 
@@ -757,7 +842,7 @@ def probe(url, attempts=5):
 
 
 def fixture_run(profile, emits, inline=None, hub_record=None, classifier=True, exporter=None,
-                files=None, unreadable=None, links=None):
+                files=None, unreadable=None, links=None, release=False, probe=False):
     """Runs THIS gate, whole and unmodified except for its inline record when `inline` is given,
     inside a throwaway tree of the named profile -> (exit code, everything it printed).
 
@@ -767,6 +852,11 @@ def fixture_run(profile, emits, inline=None, hub_record=None, classifier=True, e
     out of the tree, so the gate cannot ask. The tree's README.md emits `emits`, one per line.
     `exporter` is the text of the tree's export script (itself a hub-only path), and `files` maps
     further relative paths to their text, so that an emitter can sit where the curation drops it.
+    `release` is the fixture tree's RELEASE-VERSION canon: False (the default) copies the REAL
+    tree's canon, so fixture expansion always tracks what main expands against; a string writes
+    that version; None leaves the file out. `probe=True` runs the gate with --probe behind a
+    PATH shim whose curl answers 200, or 404 for a URL containing "selftest-404" — the probe's
+    network leg is stubbed, never skipped, so the paste-back is exercised offline.
 
     The inline record is swapped only where a case needs rows of its own: the real record ages
     and grows, and a case about the record FILE must not start failing the day a real row goes
@@ -791,6 +881,11 @@ def fixture_run(profile, emits, inline=None, hub_record=None, classifier=True, e
             os.makedirs(os.path.join(t, "design"))
         with open(os.path.join(t, "README.md"), "w", encoding="utf-8") as fh:
             fh.write("\n".join(emits) + "\n")
+        if release is False:
+            release = canon_version("the fixture tree's derived canon")
+        if release is not None:
+            with open(os.path.join(t, "RELEASE-VERSION"), "w", encoding="utf-8") as fh:
+                fh.write("# the fixture tree's canon\n" + release + "\n")
         if hub_record is not None:
             os.makedirs(os.path.join(t, "docs"), exist_ok=True)
             with open(os.path.join(t, "docs", "emitted-urls-hub-record.txt"), "w", encoding="utf-8") as fh:
@@ -809,8 +904,23 @@ def fixture_run(profile, emits, inline=None, hub_record=None, classifier=True, e
             os.symlink(target, path)
         for rel in unreadable or ():
             os.chmod(os.path.join(t, *rel.split("/")), 0)   # listed, not readable (a non-root uid)
-        r = subprocess.run(["bash", os.path.join(t, "scripts", "check-emitted-urls.sh")],
-                           capture_output=True, text=True, timeout=120)
+        env = None
+        args = []
+        if probe:
+            shim = os.path.join(t, "shim")
+            os.makedirs(shim)
+            with open(os.path.join(shim, "curl"), "w", encoding="utf-8") as fh:
+                fh.write("#!/bin/sh\n"
+                         "# the probe's network leg, stubbed: one fixed answer per URL.\n"
+                         "case \"$*\" in\n"
+                         "  *selftest-404*) printf '404\\n' ;;\n"
+                         "  *) printf '200\\n' ;;\n"
+                         "esac\n")
+            os.chmod(os.path.join(shim, "curl"), 0o755)
+            env = dict(os.environ, PATH=shim + os.pathsep + os.environ.get("PATH", ""))
+            args = ["--probe"]
+        r = subprocess.run(["bash", os.path.join(t, "scripts", "check-emitted-urls.sh")] + args,
+                           capture_output=True, text=True, timeout=120, env=env)
         for rel in unreadable or ():                        # so the throwaway tree can be removed
             path = os.path.join(t, *rel.split("/"))
             os.chmod(path, 0o755 if os.path.isdir(path) else 0o644)
@@ -929,6 +1039,105 @@ def selftest():
     expect("the real inline record refuses an emitted v26.9.1 release link",
            rc == 1 and f"{v2691} is emitted" in out and "not in the record" in out)
 
+    # --- the release family by template (dev#2201): README.md derives its package and tag URLs
+    # from RELEASE-VERSION, so literal per-version rows broke at every cut until someone
+    # re-edited the record by hand. A ${RELEASE} row expands against the tree's own canon at
+    # parse time, and the expanded row is judged by every rule above exactly as a literal one.
+    def family(ver):
+        return [f"https://github.com/olivaresai/olivares/releases/download/{ver}/olivares_{ver}_linux_amd64.{ext}"
+                for ext in ("apk", "deb", "rpm")] + \
+               [f"https://github.com/olivaresai/olivares/releases/tag/{ver}"]
+
+    pkg_t = "https://github.com/olivaresai/olivares/releases/download/\\${RELEASE}/olivares_\\${RELEASE}_linux_amd64."
+    tag_t = "https://github.com/olivaresai/olivares/releases/tag/\\${RELEASE}"
+    templates = "\n".join(pkg_t + ext + f" 200 {day}" for ext in ("apk", "deb", "rpm"))
+    templates += "\n" + tag_t + f" 200 {day}"
+    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n")
+    expect("a ${RELEASE} row expands against the canon and declares the emitted family -> OK",
+           rc == 0 and "OK check-emitted-urls" in out)
+    rc, out = fixture_run("hub", family("0.3"), inline=templates, hub_record="# empty\n", release="0.3")
+    expect("a canon bump stays green off the SAME rows: no per-cut record edit",
+           rc == 0 and "OK check-emitted-urls" in out)
+    rc, out = fixture_run("hub", family("0.3") + ["https://github.com/olivaresai/olivares/releases/tag/0.9"],
+                          inline=templates, hub_record="# empty\n", release="0.3")
+    expect("an unknown versioned URL still fails: the template widened nothing",
+           rc == 1 and "releases/tag/0.9 is emitted" in out and "not in the record" in out)
+    rc, out = fixture_run("hub", family("0.2")[:1], inline=templates, hub_record="# empty\n")
+    expect("an expanded row nothing emits is still refused as 'declared and nothing emits it'",
+           rc == 1 and "declared and nothing emits it" in out)
+    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n", release=None)
+    expect("a template row with no RELEASE-VERSION canon is UNVERIFIED, exit 2, never a guess",
+           rc == 2 and "UNVERIFIED" in out and "RELEASE-VERSION" in out
+           and "OK check-emitted-urls" not in out)
+    # The excluded record expands the same way: its template row covers a curated-out emitter
+    # at the canon version, status, date and owner carried like any literal row's. Its file is
+    # raw data, so it carries the token plain — no shell backslash like the inline record's.
+    tag_t_plain = "https://github.com/olivaresai/olivares/releases/tag/${RELEASE}"
+    dropped_release = {"docs/launch/release-copy.md":
+                       "https://github.com/olivaresai/olivares/releases/tag/0.4\n"}
+    rc, out = fixture_run("hub", [shipped], inline=inline, exporter=curation, files=dropped_release,
+                          hub_record=tag_t_plain + f" 404 {day} selftest-fixture-owner\n", release="0.4")
+    expect("a ${RELEASE} row in the excluded record expands against the canon too",
+           rc == 0 and "OK check-emitted-urls" in out and "selftest-fixture-owner" in out)
+    # The canon's own schema, which every template leans on: malformed is UNVERIFIED, never an
+    # expansion against a guess. A canon bumped without re-stamping README is red both ways at
+    # once, and a literal row colliding with a template's expansion is refused, not last-wins
+    # (a silent last-wins would let the template erase a known-broken row and its owner).
+    rc, out = fixture_run("hub", family("0.3"), inline=templates, hub_record="# empty\n", release="0.3.1")
+    expect("a canon that is not one bare MAJOR.MINOR record is UNVERIFIED, exit 2",
+           rc == 2 and "UNVERIFIED" in out and "bare MAJOR.MINOR" in out)
+    rc, out = fixture_run("hub", family("0.3"), inline=templates, hub_record="# empty\n",
+                          release="0.3\n1.0")
+    expect("a canon holding two records is UNVERIFIED, exit 2",
+           rc == 2 and "UNVERIFIED" in out and "bare MAJOR.MINOR" in out)
+    if os.geteuid() == 0:
+        expect("an unreadable canon: the mode-000 staging needs a non-root uid; not applicable at uid 0", True)
+    else:
+        rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n",
+                              unreadable=["RELEASE-VERSION"])
+        expect("an unreadable canon is UNVERIFIED, exit 2, never an expansion",
+               rc == 2 and "UNVERIFIED" in out and "RELEASE-VERSION cannot be read" in out)
+    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n", release="0.3")
+    expect("a canon bumped without re-stamping README is red in both directions at once",
+           rc == 1 and "not in the record" in out and "declared and nothing emits it" in out)
+    dup = templates + "\nhttps://github.com/olivaresai/olivares/releases/tag/0.2 404 2026-09-01 selftest-dup-owner"
+    rc, out = fixture_run("hub", family("0.2"), inline=dup, hub_record="# empty\n")
+    expect("a literal row and a template row expanding to the same URL are refused, never last-wins",
+           rc == 2 and "declared twice" in out)
+
+    # --- the probe's paste-back, offline: the network leg is stubbed, never skipped. The line
+    # handed back must be paste-ready for the record the row lives in — shell-escaped for the
+    # inline record's double-quoted string, plain for the excluded record's raw file — and the
+    # owner is kept only while the URL still does not answer 200: a resolved act must not stay
+    # named against a healthy URL, and an annotation pasted into the owner column would corrupt
+    # it, so it rides its own line.
+    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n", probe=True)
+    expect("probe hands an inline template back shell-escaped, never the expanded literal",
+           rc == 0 and "record line: https://github.com/olivaresai/olivares/releases/tag/\\${RELEASE} 200"
+           in out and "record line: https://github.com/olivaresai/olivares/releases/tag/0.2" not in out
+           and "paste-ready for the inline record" in out)
+    owned = pkg_t + "deb" + f" 404 {day} selftest-resolved-owner"
+    rc, out = fixture_run("hub", family("0.2")[:2], inline=owned, hub_record="# empty\n", probe=True)
+    expect("a template row's owner is dropped the day the URL answers 200",
+           rc == 0 and "record line: https://github.com/olivaresai/olivares/releases/download/\\${RELEASE}/"
+           "olivares_\\${RELEASE}_linux_amd64.deb 200" in out
+           and "selftest-resolved-owner" not in out)
+    hub_t404 = ("https://github.com/olivaresai/olivares/releases/download/${RELEASE}/"
+                "olivares_${RELEASE}_linux_amd64_selftest-404.deb")
+    emitted404 = ("https://github.com/olivaresai/olivares/releases/download/0.4/"
+                  "olivares_0.4_linux_amd64_selftest-404.deb")
+    dropped404 = {"docs/launch/release-copy.md": emitted404 + "\n"}
+    rc, out = fixture_run("hub", [shipped], inline=inline, exporter=curation, files=dropped404,
+                          hub_record=hub_t404 + f" 404 {day} selftest-fixture-owner\n",
+                          release="0.4", probe=True)
+    expect("probe hands an excluded-record template back plain, owner kept while it is still 404",
+           rc == 1 and "record line: " + hub_t404 + " 404" in out
+           and "selftest-fixture-owner" in out and "paste-ready for " + HUB_RECORD in out)
+    rc, out = fixture_run("hub", family("0.2"), inline=templates, hub_record="# empty\n",
+                          release=None, probe=True)
+    expect("probe with template rows and no canon refuses before measuring anything",
+           rc == 2 and "UNVERIFIED" in out and "record line:" not in out)
+
     # --- the inline invariant: a URL that a PUBLISHED file emits is declared inline, never only in
     # the excluded record. Otherwise that record certifies it, the public tree finds it undeclared, and a
     # release page nobody published could be whitelisted through the file the export drops.
@@ -1031,6 +1240,13 @@ if not urls:
 if PROBE:
     today = datetime.date.today().isoformat()
     print(f"check-emitted-urls: probing {len(urls)} emitted URL(s) (network) — {today}")
+    # Read the records first, only to learn the template rows: the paste-back below must hand
+    # a ${RELEASE} row back AS ITS TEMPLATE, measured now with its owner kept. A literal row
+    # pasted back is the per-cut break the template exists to end (dev#2201).
+    parse_record(os.environ["EMITTED_RECORD"], "the inline record")
+    hub_text = hub_record_text()
+    if hub_text is not None:
+        parse_record(hub_text, HUB_RECORD)
     bad = 0
     for url in sorted(urls):
         status, codes = probe(url)
@@ -1041,8 +1257,25 @@ if PROBE:
         # the hosts that DO resolve in the same pass.
         print(f"      dns: {host} -> " + (", ".join(addrs) if addrs
                                           else "NO ADDRESS RECORD (a 000 here is 'no server')"))
-        owner = " fran-deployment-decision" if status != "200" else ""
-        print(f"      record line: {url} {status} {today}{owner}")
+        if url in TEMPLATE_ROWS:
+            template, row_owner, from_inline = TEMPLATE_ROWS[url]
+            paste = template.replace("$", r"\$") if from_inline else template
+            # Paste-ready for the record the row lives in: the inline record is a double-quoted
+            # shell string, so a token pasted there plain would be shell-expanded (with set -u
+            # the script dies; with RELEASE exported, a wrong value substitutes silently); the
+            # excluded record's file is raw data. The owner follows the record's own contract:
+            # kept while the URL still does not answer 200, dropped the day it does — a
+            # resolved act must not stay named against a healthy URL. And the annotation is
+            # its OWN line, because parse_record reads parts[3] as the owner: pasted with the
+            # record line it would corrupt the column.
+            suffix = f" {row_owner}" if row_owner and status != "200" else ""
+            print(f"      record line: {paste} {status} {today}{suffix}")
+            where = "the inline record" if from_inline else HUB_RECORD
+            print(f"      (${{RELEASE}} template: expands to {url} at the canon; the line above "
+                  f"is paste-ready for {where})")
+        else:
+            owner = " fran-deployment-decision" if status != "200" else ""
+            print(f"      record line: {url} {status} {today}{owner}")
         if status != "200":
             bad += 1
     print(f"check-emitted-urls: {bad} of {len(urls)} do not answer 200")

@@ -5,10 +5,12 @@ import { registerTranslations } from '@/lib/i18n'
 import en from './en.json'
 import es from './es.json'
 import fr from './fr.json'
+import it from './it.json'
+import ko from './ko.json'
 import de from './de.json'
 import zh from './zh.json'
 import ja from './ja.json'
 import ru from './ru.json'
-registerTranslations('firstHour', { en, es, zh, ja, de, ru, fr })
+registerTranslations('firstHour', { en, es, zh, ja, de, ru, fr, it, ko })
 
-export { en, es, zh, ja, de, ru, fr }
+export { en, es, zh, ja, de, ru, fr, it, ko }

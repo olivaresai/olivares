@@ -10,8 +10,8 @@
 // When the tool cannot list its models, the list is only "the tool's default" and a
 // typed model, said in one sentence; the launch validates what is typed.
 //
-// ⛔ FAST MODE IS NOT OFFERED. The catalog reports it, but a launch has no field for it:
-//    a switch whose choice the engine cannot honor would be a lie on screen.
+// Launch speed choices use the same catalog in the full launch dialog; this shared
+// picker owns model and effort.
 import { Check, ChevronsUpDown, Star } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'

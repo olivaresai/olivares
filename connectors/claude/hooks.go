@@ -8,7 +8,11 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // Hook event names Claude Code passes in the payload's hook_event_name field.
@@ -274,6 +278,9 @@ type hookPayload struct {
 	ToolName      string         `json:"tool_name"`
 	ToolUseID     string         `json:"tool_use_id"`
 	ToolInput     map[string]any `json:"tool_input"`
+	// Cwd is a common field of every hook input (code.claude.com/docs/en/hooks). It
+	// is reduced to the folder's name at ingest (projectOf) and the path goes no further.
+	Cwd string `json:"cwd"`
 }
 
 // hookEvent is the connector's normalized hook signal: who (session), what
@@ -286,6 +293,7 @@ type hookEvent struct {
 	toolUseID string
 	input     map[string]any
 	at        time.Time
+	project   string
 }
 
 // emptyHookResponse is the object Claude Code treats as "no decision" (proceed):
@@ -433,5 +441,27 @@ func parseHook(body []byte, at time.Time) (hookEvent, bool) {
 		toolUseID: p.ToolUseID,
 		input:     p.ToolInput,
 		at:        at,
+		project:   projectOf(p.Cwd),
 	}, true
+}
+
+// projectOf is the project a working directory names: its last element, scrubbed. Never
+// the path, which can carry a user name or a client's directory layout; the name is what
+// tells two sessions apart in a list. "" for a directory with no name ("/", "C:\").
+func projectOf(cwd string) string {
+	trimmed := strings.TrimRight(cwd, `/\`)
+	name := trimmed[strings.LastIndexAny(trimmed, `/\`)+1:]
+	if name == "" || strings.HasSuffix(name, ":") {
+		return ""
+	}
+	// The name is an agent's word and is painted outside the console too (a notification
+	// title): no control, bidi or line-separator rune may ride in it.
+	name = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp) {
+			return -1
+		}
+		return r
+	}, name))
+	scrubbed, _ := redact.Scrub(name)
+	return scrubbed
 }

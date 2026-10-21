@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
+[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -47,12 +47,20 @@ Olivares AI собирает ответы в одном месте. Он под�
 <br><sub><b>Карта доступа</b> — что каждый агент читает и записывает, в сравнении с тем, что ему разрешено.</sub>
 </div>
 
+<div align="center">
+<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
+<br><sub><b>Каталог</b>: утверждённые агенты, MCP-серверы, навыки и коннекторы, у каждого статус и подпись.</sub>
+<br><br>
+<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
+<br><sub><b>Работа</b>: задачи, ответственные и решения, которые остаются после завершения сессии.</sub>
+</div>
+
 ## Что оно делает
 
 - **Знать, что работает.** Все агенты, сессии, модели, MCP-серверы и инструменты в одном реестре. Карта доступа показывает, что каждый читает и записывает, и отмечает доступ, который не разрешён ни одним правилом.
 - **Остановить действие до того, как оно причинит вред.** В Olivares AI есть **четыре закрытые по умолчанию (deny-closed) точки принуждения**, которые проверяют каждое действие перед выполнением: внутри Claude Code, в прокси моделей, при каждом вызове инструмента MCP и между агентами. Рискованное действие ждёт второго человека, запрещённое не выполняется. Один переключатель останавливает всех агентов сразу. Если проверка не может принять решение, действие не выполняется.
 - **Контролировать расходы на AI.** Бюджеты для команды, агента или модели предупреждают, замедляют или останавливают расходы до того, как придёт счёт.
-- **Безопасно открывать агентам знания компании.** Подключите SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 и PostgreSQL. Каждый агент видит только то, к чему имеет доступ человек, который им пользуется.
+- **Безопасно открывать агентам знания компании.** Подключите Google Drive, Confluence, Notion, Snowflake, S3 и PostgreSQL; Business добавляет SharePoint, SAP и Salesforce. Каждый агент видит только то, к чему имеет доступ человек, который им пользуется.
 - **Продолжать работу между сессиями.** Задачи, ответственные и решения сохраняются после завершения сессии. Запускайте, подключайтесь и останавливайте сессии Claude Code, Codex и Grok из браузера, без SSH.
 - **Предоставлять доказательства по запросу.** Каждое решение попадает в подписанный журнал, в котором любое изменение задним числом можно обнаружить. Business Compliance Packs сопоставляет доказательства с 26 каталогами фреймворков и создаёт отчёты для команды безопасности и аудиторов. Community сохраняет доступ к сохранённым доказательствам и их экспорту в JSON/CSV.
 
@@ -77,7 +85,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -93,26 +101,32 @@ docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 
 **Debian и Ubuntu.** Пакет добавляет пользователя `olivares` без возможности входа и службу с усиленной защитой; вы запускаете её сами.
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
-sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **RHEL, Fedora и SUSE.**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
-sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
+sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **Alpine.**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
 ```
+<!-- /release -->
 
-На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: [страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.1).
+На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: <!-- release -->[страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
 
 **Homebrew.** macOS и Linux.
 
@@ -137,7 +151,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 Затем откройте http://127.0.0.1:8901.
 
-Helm, оператор Kubernetes, Terraform, appliance и артефакты развёртывания FIPS/STIG поставляются с Business; установка без сети требует Enterprise. См. [редакции](docs/editions.md).
+Helm, оператор Kubernetes, Terraform, appliance и артефакты развёртывания FIPS/STIG поставляются с Business; установка без сети требует Enterprise. Развёртывание агентов и MCP-серверов на инфраструктуре компании (`olivares deploy`) — функция Business. См. [редакции](docs/editions.md).
 
 ## Редакции и цены
 
@@ -145,17 +159,17 @@ Community — полный продукт, бесплатный и с откры
 
 | | **Community** | **Business** | **Enterprise** |
 |---|---|---|---|
-| **Цена** | Бесплатно, AGPL-3.0 | 129 USD в месяц или 1 290 USD в год | Годовой договор |
+| **Цена** | Бесплатно, AGPL-3.0 | 99 USD в месяц или 990 USD в год | Годовой договор |
 | **Что входит** | Полный продукт: неограниченное число пользователей и все четыре deny-closed точки принуждения | Всё из Community, а также Regulated Operations, AI Runtime Security, Compliance Packs и Identity & Scale, коммерческая лицензия, подписанные обновления и поддержка по электронной почте | Всё из Business, а также больше компаний, развёртываний и провайдеров идентификации, автономные зеркала и согласованные с вами условия поддержки |
 | **Область использования** | Один активный провайдер идентификации | Одна компания, один активный экземпляр одновременно | Согласована в договоре |
 
-**Regulated Operations** добавляет нормативные минимальные сроки хранения, сверку запретов на удаление в архивах и WORM-архивы в Azure и GCS. **AI Runtime Security** добавляет более глубокую проверку того, что агенты отправляют, получают и выполняют. **Compliance Packs** готовит черновики реестра информации DORA и пакета ISO/IEC 42001 для вашего аудитора. **Identity & Scale** подключает несколько провайдеров идентификации одновременно и поддерживает более крупные развёртывания.
+**Regulated Operations** добавляет запреты на удаление, стирание данных с уничтожением ключа, нормативные минимальные сроки хранения, сверку запретов на удаление в архивах и WORM-архивы в Azure и GCS. **AI Runtime Security** добавляет более глубокую проверку того, что агенты отправляют, получают и выполняют. **Compliance Packs** готовит черновики реестра информации DORA и пакета ISO/IEC 42001 для вашего аудитора. **Identity & Scale** подключает несколько провайдеров идентификации одновременно и поддерживает более крупные развёртывания.
 
 [olivares.ai/pricing](https://olivares.ai/pricing) · [Что входит в каждую редакцию](docs/editions.md) · [Что открытое, а что коммерческое](LICENSING.md)
 
 ## Архитектура
 
-Один бинарный файл Go со встроенной консолью. Он предоставляет REST API, gRPC API, командную строку `olivares` и провайдер Terraform. Коллекторы работают внутри вашей сети, а данные остаются в SQLite или PostgreSQL на ваших серверах. [Как всё устроено](ARCHITECTURE.md).
+Один бинарный файл Go со встроенной консолью. Он предоставляет REST API, gRPC API, командную строку `olivares` и провайдер Terraform. Граничные коллекторы (Business) работают внутри вашей сети, а данные остаются в SQLite или PostgreSQL на ваших серверах. [Как всё устроено](ARCHITECTURE.md).
 
 ## Документация
 

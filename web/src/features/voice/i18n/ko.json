@@ -1,0 +1,152 @@
+{
+  "title": "음성 및 실시간",
+  "description": "에스테이트 전반의 거버넌스된 음성 및 실시간 세션. 콘솔은 참조와 집계만 표시하며 오디오, 전사 텍스트, 프롬프트 또는 PII는 절대 표시하지 않습니다.",
+  "tabs": {
+    "sessions": "세션",
+    "policies": "정책",
+    "ledger": "결정"
+  },
+  "refresh": "새로 고침",
+  "stats": {
+    "live": "라이브 세션",
+    "liveCaption": "보기 중 {{total}}개 중",
+    "avgLatency": "평균 지연",
+    "avgLatencyCaption": "세션별 평균의 평균",
+    "governed": "거버넌스 비율",
+    "governedCaption": "{{total}}개 중 {{governed}}개가 정책 게이트 적용"
+  },
+  "sessions": {
+    "title": "세션",
+    "description": "엔진이 보고하는 각 세션 — 상태는 읽기 시점에 도출됩니다. 전사는 지문으로만 표시되며 그 뒤에 오디오나 텍스트가 없습니다.",
+    "empty": "음성 세션 없음",
+    "emptyHint": "음성 정책에 대해 거버넌스된 열기가 발송되면 세션이 표시됩니다.",
+    "governed": "거버넌스됨",
+    "ungoverned": "거버넌스 안 됨",
+    "transcriptLabel": "전사",
+    "turnsBreakdown": "{{user}}u / {{agent}}a",
+    "latencyAvg": "평균 {{value}}",
+    "latencyMax": "최대 {{value}}",
+    "columns": {
+      "state": "상태",
+      "agent": "에이전트",
+      "model": "모델 / 프로바이더",
+      "turns": "턴",
+      "duration": "기간",
+      "latency": "지연",
+      "governed": "거버넌스됨",
+      "transcript": "전사",
+      "lastEvent": "마지막 이벤트"
+    }
+  },
+  "latency": {
+    "title": "세션별 지연",
+    "description": "세션별 평균 응답 지연을 순위대로 표시합니다. 표에 최대값도 함께 있으며 턴별 샘플 없이는 p50/p95를 표시하지 않습니다.",
+    "summary": "{{count}}개 세션의 평균 응답 지연 순위입니다. 가장 느린 세션은 {{session}}이며 {{latency}}입니다.",
+    "summaryEmpty": "지연 순위를 매길 세션이 없습니다.",
+    "colSession": "세션",
+    "colLatency": "평균 지연"
+  },
+  "honesty": {
+    "noContent": "참조와 집계만 포함 — 오디오, 전사 텍스트, 프롬프트 또는 PII는 여기에 노출되지 않습니다.",
+    "findingsNote": "정책 위반, 지연 저하 및 거버넌스되지 않은 열기는 이 경로가 아니라 Security 발견 사항 플레인을 통해 표시됩니다."
+  },
+  "policies": {
+    "title": "음성 정책",
+    "description": "기본 거부: 정책이 세션 열기를 허용합니다. 일치하는 정책이 없으면 열기가 거부됩니다.",
+    "empty": "음성 정책 없음",
+    "emptyHint": "에이전트의 음성 세션 열기를 허용하는 정책을 정의하십시오 — 기본 거부이므로 일치하는 정책이 없으면 아무것도 열리지 않습니다.",
+    "all": "전체",
+    "minutes": "{{value}}분",
+    "new": "새 정책",
+    "edit": "편집",
+    "columns": {
+      "agent": "에이전트",
+      "model": "허용 모델",
+      "provider": "허용 프로바이더",
+      "maxMinutes": "최대 세션",
+      "maxLatency": "최대 지연",
+      "setBy": "설정자",
+      "updated": "업데이트됨"
+    },
+    "dialog": {
+      "title": "음성 정책",
+      "description": "이 정책은 일치하는 에이전트의 세션 열기를 허용합니다(기본 거부). '*'를 사용해 모든 에이전트, 모델 또는 프로바이더와 일치시킬 수 있습니다.",
+      "agent": "에이전트",
+      "agentHint": "에이전트 참조 또는 모든 에이전트를 위한 '*'.",
+      "model": "허용 모델",
+      "modelHint": "모델 참조 또는 모든 모델을 위한 '*'.",
+      "provider": "허용 프로바이더",
+      "providerHint": "프로바이더 참조 또는 모든 프로바이더를 위한 '*'.",
+      "maxMinutes": "최대 세션 분",
+      "maxLatency": "최대 지연(ms)",
+      "save": "정책 저장",
+      "saved": "음성 정책을 저장했습니다"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "아직 순위를 매길 세션 지연 없음",
+      "description": "거버넌스된 열기 또는 실시간 텔레메트리가 음성 세션 기록을 만들면 평균 응답 지연 순위를 매길 수 있습니다."
+    },
+    "policies": {
+      "title": "아직 정의된 음성 정책 없음",
+      "description": "정책은 일치하는 에이전트, 모델 및 프로바이더 열기를 허용합니다. 없으면 모든 음성 세션 열기가 거부됩니다. 설정은 관리자 등급입니다."
+    },
+    "sessions": {
+      "title": "아직 관측된 음성 세션 없음",
+      "description": "거버넌스된 열기가 기록되거나 구성된 실시간 관찰자가 세션 텔레메트리를 게시하면 세션이 표시됩니다."
+    }
+  },
+  "surface": {
+    "chooseSession": "라이브 서피스를 보려면 세션을 선택하십시오.",
+    "loading": "불러오는 중…",
+    "decisionsError": "결정을 읽지 못했습니다.",
+    "noDecisions": "이 세션에 기록된 결정이 없습니다.",
+    "noReason": "기록된 사유 없음",
+    "frames": "라이브 업데이트 {{count}}개",
+    "open": "세션 열기(거버넌스됨)",
+    "stream": {
+      "connecting": "연결 중",
+      "open": "라이브",
+      "closed": "연결 안 됨",
+      "error": "스트림 실패"
+    },
+    "outcome": {
+      "opened": "열렸습니다.",
+      "approval": "승인 요청됨 — 이 승인 참조와 함께 다시 보내십시오:",
+      "denied": "정책에 의해 거부됨: 이를 허용하는 음성 정책이 없습니다(에이전트, 모델, 프로바이더). 기본 거부 결정이며 실패가 아닙니다.",
+      "noGate": "이 배포에는 승인 게이트가 설정되지 않아 열기가 거부된 상태로 남습니다. 정책 거부가 아니라 에스테이트 공백입니다.",
+      "unavailable": "승인 게이트가 응답하지 않아 아무것도 결정되지 않았습니다."
+    }
+  },
+  "ledger": {
+    "title": "열기 결정 원장",
+    "description": "에스테이트 전반의 모든 음성 세션 열기 결정으로, 추가 전용이며 최신 순입니다 — 거부되어 세션이 되지 않은 결정도 포함합니다.",
+    "caveat": "거부된 열기는 자체 세션 행을 만들지 않으므로, 음성 세션 읽기 권한만으로 이를 온전히 보여주는 첫 전용 보기입니다. 다른 경로는 일부만 표시하거나 다른 권한이 필요합니다: API 플레이그라운드(테넌트 관리자), 감사 탐색기(사유 없는 작업) 및 Security 발견 사항(일부 경로만).",
+    "empty": "아직 열기 결정 없음",
+    "emptyHint": "엔진이 저장하는 데 성공한 결정을 기록합니다. 증거 쓰기는 설계상 최선 노력이므로 — 원장 행이 유실되어도 거부는 유효합니다 — 빈 원장이 거부가 없었다는 증거는 아닙니다.",
+    "truncated": "최근 결정 {{count}}개를 표시하며 엔진은 더 있다고 보고합니다: 이 목록은 잘렸습니다. 전체 원장이 아닌 샘플로 읽으십시오.",
+    "columns": {
+      "when": "시각",
+      "outcome": "결과",
+      "session": "세션",
+      "agent": "에이전트",
+      "actor": "행위자",
+      "reason": "엔진 사유"
+    },
+    "opStatus": {
+      "requested": "승인 요청됨",
+      "blocked": "차단됨",
+      "dispatched": "발송됨",
+      "declared_not_opened": "선언됨, 열리지 않음",
+      "failed": "실패",
+      "budget_blocked": "차단됨 — 예산",
+      "budget_throttled": "열기 거부됨 — 예산 제한"
+    },
+    "op": {
+      "open_request": "열기 요청",
+      "open": "열기",
+      "close": "닫기"
+    }
+  }
+}

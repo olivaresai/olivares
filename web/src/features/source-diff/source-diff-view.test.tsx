@@ -718,7 +718,17 @@ describe('source diff registration', () => {
     expect(view?.helpHref).toBe('/reference/console')
     expect(view?.hideInNav).not.toBe(true)
     expect(census.paths).toContain('/console/sources/diff')
-    for (const language of ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh']) {
+    for (const language of [
+      'en',
+      'es',
+      'de',
+      'fr',
+      'it',
+      'ja',
+      'ru',
+      'zh',
+      'ko',
+    ]) {
       const nav = JSON.parse(
         readFileSync(
           resolve('src/lib/i18n/locales', language, 'nav.json'),

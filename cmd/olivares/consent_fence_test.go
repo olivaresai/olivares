@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/olivaresai/olivares/core/auth"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -219,7 +220,8 @@ func fenceWriters(collector string) []fenceWriter {
 			})},
 	}
 	if editionPortsForBuild().name == "community" {
-		writers = writers[2:]
+		// The grant, the Cedar permit and the managed document are Business.
+		writers = writers[3:]
 	}
 	return append(writers, append(editionFenceWriters(), append(editionOrchestrationFenceWriters(), businessSpendCapFenceWriters()...)...)...)
 }
@@ -233,9 +235,8 @@ func (e *consentEstate) fenceMember(label string) fenceSubject {
 	email := label + "@fence.test"
 	ext := "ext-" + label
 	id := e.onboard(e.tT, email, "admin")
-	if r := e.scim("PATCH", "/v1/scim/v2/Users/"+id.String(), e.scimToken(e.tT),
-		`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"externalId","value":"`+ext+`"}]}`); r.code != http.StatusOK {
-		e.t.Fatalf("give %s its external id = %d %s", email, r.code, r.raw)
+	if err := patchDirectoryUserErr(e.eng.authr, e.directoryActor(e.tT), e.tT, id, func(in *auth.SCIMUserInput) { in.ExternalID = ext }); err != nil {
+		e.t.Fatalf("give %s its external id: %v", email, err)
 	}
 	e.rosterHuman(e.tT, ext)
 	token := e.login(email, consentMemberPassword)
@@ -441,7 +442,7 @@ func waitForAdmissionEach(t *testing.T, e *consentEstate, writers []fenceWriter)
 // server error, and none may deadlock.
 func interleaveWithRemovals(t *testing.T, e *consentEstate, writers []fenceWriter) {
 	t.Helper()
-	scimT, scimB := e.scimToken(e.tT), e.scimToken(e.tB)
+	actorT, actorB := e.directoryActor(e.tT), e.directoryActor(e.tB)
 	failures := make(chan string, 256)
 	var wg sync.WaitGroup
 	var concurrent []func()
@@ -468,14 +469,13 @@ func interleaveWithRemovals(t *testing.T, e *consentEstate, writers []fenceWrite
 				}
 			},
 			func() {
-				if r := e.scim("DELETE", "/v1/scim/v2/Users/"+v.String(), scimT, ""); r.code >= 500 {
-					failures <- "offboard: " + r.raw
+				if err := e.eng.authr.SCIMDeprovisionUser(context.Background(), actorT, e.tT, v); err != nil && !isDirectoryRefusal(err) {
+					failures <- "offboard: " + err.Error()
 				}
 			},
 			func() {
-				if r := e.scim("PATCH", "/v1/scim/v2/Users/"+v.String(), scimB,
-					`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"x"}]}`); r.code >= 500 {
-					failures <- "account update: " + r.raw
+				if err := patchDirectoryUserErr(e.eng.authr, actorB, e.tB, v, func(in *auth.SCIMUserInput) { in.DisplayName = "x" }); err != nil && !isDirectoryRefusal(err) {
+					failures <- "account update: " + err.Error()
 				}
 			},
 			func() {

@@ -58,7 +58,7 @@ func TestProcRunner_StreamSendStop(t *testing.T) {
 	defer cancel()
 	proc, err := r.Launch(ctx, LaunchSpec{
 		Program: script, Args: []string{"--permission-mode", "default"},
-		Dir: t.TempDir(), WaitDelay: 2 * time.Second,
+		Dir: t.TempDir(), WaitDelay: 2 * time.Second, Env: raceGuardEnv,
 	})
 	if err != nil {
 		t.Fatalf("launch: %v", err)
@@ -292,8 +292,8 @@ func TestRuntime_E2E_RealProcess(t *testing.T) {
 
 // TestProcRunner_RejectsNonNativeIsolation proves the native runner REFUSES a
 // container/sandbox launch rather than silently running `claude` unisolated while the
-// row reports isolation=container. Only native is wired this release; the
-// container Runner is a documented follow-up.
+// row reports isolation=container. Container isolation is the container runner's
+// (container_runner.go); this runner stays native-only.
 func TestProcRunner_RejectsNonNativeIsolation(t *testing.T) {
 	t.Parallel()
 

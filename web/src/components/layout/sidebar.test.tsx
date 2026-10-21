@@ -287,20 +287,20 @@ describe('the area directory (N1)', () => {
   })
 })
 
-describe('the area directory search lists a page whose module is off', () => {
+// #2240: Settings > Modules is where an off module reads as Off.
+describe('the area directory search folds a page whose module is off', () => {
   afterEach(() => useModulesStore.setState({ off: new Set() }))
 
-  it('tagged Off, in the ranked results as in the tree', async () => {
+  it('in the ranked results as in the tree', async () => {
     const user = userEvent.setup()
     useModulesStore.setState({ off: new Set(['deploy']) })
     renderIntel(<AreasTree />)
-    const rowFor = () =>
-      screen
-        .getAllByRole('link')
-        .find((a) => a.getAttribute('href') === '/deploy')!
-    expect(within(rowFor()).getByText('Off')).toBeInTheDocument()
+    const shown = () =>
+      screen.queryAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(shown()).toContain('/audit')
+    expect(shown()).not.toContain('/deploy')
     await user.type(screen.getByRole('searchbox'), 'deploy')
-    expect(within(rowFor()).getByText('Off')).toBeInTheDocument()
+    expect(shown()).not.toContain('/deploy')
   })
 })
 
@@ -341,7 +341,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
   })
 
   // ⛔ THE REVIEW'S finding 1 CONTROL. "admin": Administration (System & settings, a label-prefix
-  // hit) must come BEFORE Provider profiles (AI, a description hit) — the earlier build
+  // hit) must come BEFORE AI tools (AI, a description hit) — the earlier build
   // walked the areas in canonical order and put the weak early hit first. The sidebar's
   // order must be the palette's: the shared ranking over the shared authorized projection.
   it('renders filtered results in the shared rank order: a later-area label hit before an earlier-area description hit', async () => {
@@ -356,12 +356,10 @@ describe('the area directory search (P2-12, N1 index)', () => {
     ).map((e) => e.path)
     expect(shown).toEqual(expected)
     expect(shown.indexOf('/console')).toBeLessThan(
-      shown.indexOf('/provider-profiles'),
+      shown.indexOf('/agent-tools'),
     )
     expect(shown[0]).toBe('/console')
-    expect(shown).toEqual(
-      expect.arrayContaining(['/console', '/provider-profiles']),
-    )
+    expect(shown).toEqual(expect.arrayContaining(['/console', '/agent-tools']))
     // The announced count is the number of links on screen.
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
       `Matches: ${shown.length}`,

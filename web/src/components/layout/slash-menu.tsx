@@ -79,19 +79,27 @@ export function SlashMenu({
               index === active && 'bg-muted ring-1 ring-inset ring-line-strong',
             )}
           >
-            <span className="shrink-0 font-mono text-text">
+            <span
+              title={commandLabel(command)}
+              className="min-w-0 truncate font-mono text-text"
+            >
               {commandLabel(command)}
             </span>
-            {command.argument_hint ? (
-              <span className="shrink-0 font-mono text-caption text-text-3">
-                {command.argument_hint}
+            <span className="flex min-w-0 flex-1 items-baseline gap-2">
+              {command.argument_hint ? (
+                <span
+                  title={command.argument_hint}
+                  className="min-w-0 truncate font-mono text-caption text-text-3"
+                >
+                  {command.argument_hint}
+                </span>
+              ) : null}
+              <span
+                title={command.description}
+                className="min-w-0 flex-1 truncate text-text-2"
+              >
+                {command.description}
               </span>
-            ) : null}
-            <span
-              title={command.description}
-              className="min-w-0 flex-1 truncate text-text-2"
-            >
-              {command.description}
             </span>
             <SourceTag command={command} />
           </li>

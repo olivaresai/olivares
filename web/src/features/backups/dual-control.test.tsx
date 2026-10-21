@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -74,6 +74,23 @@ describe('PendingRestores (dual-control queue)', () => {
 })
 
 describe('BackupSchedule dual-control toggle', () => {
+  it('renders the restore command in its explanation without raw backticks', async () => {
+    api.getSchedule.mockResolvedValue({
+      enabled: false,
+      cron: '',
+      retain_days: 30,
+      require_dual_control_restore: false,
+    })
+    wrap(<BackupSchedule />)
+    const command = await screen.findByText('olivares dr restore')
+    expect(command.tagName).toBe('CODE')
+    const hint = command.closest('p')!
+    expect(hint.textContent).not.toContain('`')
+    expect(
+      within(hint).getByRole('button', { name: 'Copy command' }),
+    ).toBeInTheDocument()
+  })
+
   it('persists require_dual_control_restore when toggled and saved', async () => {
     api.getSchedule.mockResolvedValue({
       enabled: false,
@@ -120,7 +137,8 @@ describe('BackupSchedule dual-control toggle', () => {
     // what actually gates a restore, not what was last asked for.
     expect(toggle).toBeChecked()
 
-    const note = await screen.findByRole('status')
+    const note = await screen.findByText(/removal requested/i)
+    expect(note).toHaveAttribute('role', 'status')
     expect(note.textContent ?? '').toMatch(/removal requested/i)
     expect(note.textContent ?? '').toMatch(
       new RegExp(new Date('2026-08-07T14:16:10Z').getFullYear().toString()),
@@ -148,7 +166,8 @@ describe('BackupSchedule dual-control toggle', () => {
     // fails for a reason that has nothing to do with the attribution.
     await screen.findByLabelText(/require dual-control for restore/i)
 
-    const note = await screen.findByRole('status')
+    const note = await screen.findByText(/removal requested/i)
+    expect(note).toHaveAttribute('role', 'status')
     expect(note.textContent ?? '').toMatch(/ada@acme\.example/)
     // The date half must survive alongside it, so this does not pass by replacing
     // one fact with another.
@@ -172,7 +191,8 @@ describe('BackupSchedule dual-control toggle', () => {
     wrap(<BackupSchedule />)
     await screen.findByLabelText(/require dual-control for restore/i)
 
-    const note = await screen.findByRole('status')
+    const note = await screen.findByText(/removal requested/i)
+    expect(note).toHaveAttribute('role', 'status')
     // The pending note still appears in full …
     expect(note.textContent ?? '').toMatch(/removal requested/i)
     expect(note.textContent ?? '').toMatch(/second administrator/i)
@@ -189,6 +209,6 @@ describe('BackupSchedule dual-control toggle', () => {
     })
     wrap(<BackupSchedule />)
     await screen.findByLabelText(/require dual-control for restore/i)
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText(/removal requested/i)).not.toBeInTheDocument()
   })
 })

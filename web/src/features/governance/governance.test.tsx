@@ -97,7 +97,9 @@ const pendingApproval: ApprovalDTO = {
   escalated: false,
 }
 
-const NO_REVIEW = 'This request does not include what will run.'
+// A request a person raised shows its own reason in the row and no "does not include what
+// will run" note (#2269): the reason is the row's sentinel.
+const ROW_REASON = 'Ship the hotfix'
 
 const escalatedApproval: ApprovalDTO = {
   ...pendingApproval,
@@ -151,7 +153,7 @@ describe('GovernanceView — approval queue (HITL)', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    expect(await screen.findAllByText(NO_REVIEW)).toHaveLength(2)
+    expect(await screen.findAllByText(ROW_REASON)).toHaveLength(2)
     expect(screen.queryByText('deploy.release')).toBeNull()
     expect(screen.queryByText('data.purge')).toBeNull()
     // requester rendered as an audit-actor handle, never an email.
@@ -204,7 +206,7 @@ describe('GovernanceView — approval queue (HITL)', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    await screen.findByText(NO_REVIEW)
+    await screen.findByText(ROW_REASON)
     expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^reject$/i })).toBeNull()
     // The sweep ("Expire and escalate overdue requests", SC item 7 wording) is also admin-only.
@@ -223,7 +225,7 @@ describe('GovernanceView — approval queue (HITL)', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    await screen.findByText(NO_REVIEW)
+    await screen.findByText(ROW_REASON)
     expect(screen.queryByRole('button', { name: /^approve$/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /^reject$/i })).toBeNull()
     // Cancel (write tier) is still offered to the requester.
@@ -240,7 +242,7 @@ describe('GovernanceView — approval queue (HITL)', () => {
     api.decide.mockResolvedValue({ ...pendingApproval, approve_count: 1 })
     wrap(<GovernanceView />)
 
-    await screen.findByText(NO_REVIEW)
+    await screen.findByText(ROW_REASON)
     await userEvent.click(screen.getByRole('button', { name: /^approve$/i }))
 
     // The confirm dialog gates the high-risk decision and collects a note.
@@ -297,7 +299,7 @@ describe('Approve after the request is no longer pending', () => {
       new ApiError(409, 'conflict', 'approval is not pending (expired)'),
     )
     wrap(<GovernanceView />)
-    await screen.findByText(NO_REVIEW)
+    await screen.findByText(ROW_REASON)
     await user.click(screen.getByRole('button', { name: /^approve$/i }))
     const dialog = await screen.findByRole('dialog')
     const reads = api.listApprovals.mock.calls.length
@@ -488,17 +490,18 @@ describe('PolicyEditorDialog — typed spec, no secret value, audited', () => {
     ).toStrictEqual({ rules: [{ deny: true, min_aal: 3 }] })
   })
 
-  // The form has no risk-tier field, but it keeps the tier of a stored policy. Saving
-  // a stored tier-lowering policy while it is on is the one way Community refuses
-  // from this form (501 business_required). The dialog says why, in a line that stays.
-  it('names the Business limit in the dialog when the server refuses a tier-lowering policy', async () => {
+  // The form has no risk-tier field, but it keeps the tier of a stored policy and asks
+  // for an approval count. Saving a tier or a count other than the action's default is
+  // how Community refuses from this form (501 business_required). The dialog says why,
+  // in a line that stays.
+  it('names the Business limit in the dialog when the server refuses a tier or an approval count', async () => {
     const limit =
-      /lowering a risk tier below the action's default needs business/i
+      /an approval count other than the action's default needs business/i
     api.updatePolicy.mockRejectedValue(
       new ApiError(
         501,
         'business_required',
-        'Tier-lowering approval policies require Olivares Business.',
+        'Approval policies that change the risk tier or the approval count require Olivares Business.',
       ),
     )
     const policy: PolicyDTO = {
@@ -707,6 +710,19 @@ describe('IdentitiesView — cursor pages and an account state nobody reported',
 })
 
 describe('GroupMembersSheet — bounded transitive walk', () => {
+  it('distinguishes an unknown group from an existing empty group', async () => {
+    api.listGroupMembers.mockResolvedValue({
+      items: [],
+      has_more: false,
+      not_found: true,
+    })
+    wrap(<GroupMembersSheet open onOpenChange={() => {}} groupRef="grp:typo" />)
+    expect(
+      await screen.findByText('This group does not exist.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No members')).toBeNull()
+  })
+
   it('says so when the walk was cut at the depth bound', async () => {
     api.listGroupMembers.mockResolvedValue({
       items: [{ member_ref: 'user:near', member_kind: 'identity' }],
@@ -801,7 +817,7 @@ describe('the decision dialog styles', () => {
       has_more: false,
     })
     wrap(<GovernanceView />)
-    await screen.findByText(NO_REVIEW)
+    await screen.findByText(ROW_REASON)
     await user.click(screen.getByRole('button', { name: /^approve$/i }))
     let dialog = await screen.findByRole('dialog')
     const approve = within(dialog).getByRole('button', { name: /^approve$/i })

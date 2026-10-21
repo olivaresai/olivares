@@ -296,6 +296,27 @@ func selfCases() []selfCase {
 			}
 			return seal(root)
 		}},
+		// The assembled Business tree holds both editions of a method side by side; the
+		// build constraint decides which one the Community documents describe.
+		{name: "edition-twins-follow-the-build-constraint", want: exitClean, mutate: func(root string) error {
+			if err := addEditionTwins(root); err != nil {
+				return err
+			}
+			return seal(root)
+		}},
+		{name: "embedded-provider-mounts-under-the-module-namespace", want: exitClean, mutate: func(root string) error {
+			if err := addProvider(root, true); err != nil {
+				return err
+			}
+			// Its handlers hang off a value of another type, which no doc comment can be
+			// followed to: the route is described by a catalog row, like any such route.
+			if err := edit(root, catalogRel, func(s string) string {
+				return s + "GET\t/v1/m/demo/gadgets/rules\tLists the gadget rules recorded in the tenant scope.\n"
+			}); err != nil {
+				return err
+			}
+			return seal(root)
+		}},
 
 		// ---- RED: drift the gate must name -------------------------------------
 		{name: "new-route-not-regenerated", want: exitDrift, mutate: func(root string) error {
@@ -312,6 +333,11 @@ func selfCases() []selfCase {
 		// The wantErr is the point of this case, not the exit code: without it, deleting
 		// the "no description" report entirely left the tree red through the generated-table
 		// and published-drift guards, and the case still passed.
+		{name: "provider-without-a-readable-namespace", want: exitCannotSee, wantErr: "could not read", mutate: func(root string) error {
+			// The same provider with nothing to promote a namespace from: the gate has
+			// to say it cannot tell where its routes mount, not guess.
+			return addProvider(root, false)
+		}},
 		{name: "handler-loses-its-doc-comment", want: exitDrift, wantErr: "have no description", mutate: func(root string) error {
 			return edit(root, "modules/demo/demo.go", func(s string) string {
 				return strings.Replace(s, "// handleGetThing returns one demo thing.\n", "", 1)
@@ -1267,6 +1293,78 @@ func (r *Recorder) Handle(method, path, perm string, handler func(int, int, int)
 			return err
 		}
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// addEditionTwins mounts GET /extra through one method declared twice, once per
+// edition, the way the assembled Business tree holds modules/governance's review-quality
+// seam. The build constraint is the only thing that says which one is the binary's.
+func addEditionTwins(root string) error {
+	if err := swap(root, "modules/demo/demo.go",
+		"\treg.Handle(\"GET\", \"/things/{id}\", \"demo:thing:read\", m.handleGetThing)\n",
+		"\treg.Handle(\"GET\", \"/things/{id}\", \"demo:thing:read\", m.handleGetThing)\n\tm.mountExtra(reg)\n"); err != nil {
+		return err
+	}
+	return writeFiles(root, map[string]string{
+		"modules/demo/extra_enterprise.go": "//go:build enterprise\n\npackage demo\n\n" +
+			"// handleExtra returns the extra demo thing of the Business edition.\n" +
+			"func (m *Module) handleExtra(w, r, mc int) {}\n\n" +
+			"func (m *Module) mountExtra(reg RouteRegistrar) {\n" +
+			"\treg.Handle(\"GET\", \"/extra\", \"demo:thing:read\", m.handleExtra)\n}\n",
+		"modules/demo/extra_noenterprise.go": "//go:build !enterprise\n\npackage demo\n\n" +
+			"// handleExtraUnavailable answers 501 in Community.\n" +
+			"func (m *Module) handleExtraUnavailable(w, r, mc int) {}\n\n" +
+			"func (m *Module) mountExtra(reg RouteRegistrar) {\n" +
+			"\treg.Handle(\"GET\", \"/extra\", \"demo:thing:read\", m.handleExtraUnavailable)\n}\n",
+	})
+}
+
+// providerSource is a composition-root provider in the shape of the Business circuit
+// breaker's: it wraps a module, keeps the module's own routes and mounts more under a
+// constant prefix, with handlers on a value of another type.
+const providerSource = `package main
+
+import "fixture/modules/demo"
+
+const providerPath = "/gadgets"
+
+type providerRoutes struct{ %s }
+
+type providerHandlers struct{}
+
+func (providerHandlers) rules(w, r, mc int) {}
+
+func (m *providerRoutes) APIRoutes(reg RouteRegistrar) {
+	m.Module.APIRoutes(reg)
+	h := providerHandlers{}
+	reg.Handle("GET", providerPath+"/rules", "demo:thing:read", h.rules)
+}
+`
+
+// addProvider writes that provider under cmd/. With embed it wraps *demo.Module, whose
+// namespace Go promotes; without it the type has none of its own to promote.
+func addProvider(root string, embed bool) error {
+	field := ""
+	if embed {
+		field = "*demo.Module"
+	}
+	return writeFiles(root, map[string]string{
+		// The import path of modules/demo is what this module path and its directory spell.
+		"go.mod":                   "module fixture\n\ngo 1.26.9\n",
+		"cmd/provider/provider.go": fmt.Sprintf(providerSource, field),
+	})
+}
+
+func writeFiles(root string, files map[string]string) error {
+	for rel, body := range files {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
 			return err
 		}
 	}

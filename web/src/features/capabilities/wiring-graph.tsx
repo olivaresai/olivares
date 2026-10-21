@@ -194,7 +194,7 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
           fitKey={`${nodes.length}:${edges.length}`}
         >
           {/* Provenance legend. */}
-          <div className="absolute top-3 left-3 z-10 flex flex-col gap-1 rounded-md border border-border bg-elevated/90 px-2.5 py-2 text-caption backdrop-blur-sm">
+          <div className="absolute top-3 left-3 z-10 flex flex-col gap-1 rounded-md border border-border bg-elevated px-2.5 py-2 text-caption">
             <span className="font-medium text-foreground">
               {t('wiring.legend')}
             </span>
@@ -209,7 +209,7 @@ export function WiringGraph({ graph }: { graph: WiringGraphDTO }) {
           </div>
 
           {selectedEdge && (
-            <div className="absolute right-3 bottom-3 z-10 w-[min(18rem,calc(100%-1.5rem))] rounded-lg border border-border bg-elevated/95 p-3 shadow-md backdrop-blur-sm">
+            <div className="absolute right-3 bottom-3 z-10 w-[min(18rem,calc(100%-1.5rem))] rounded-lg border border-border bg-elevated p-3 shadow-md">
               <div className="mb-1 truncate font-mono text-caption text-foreground">
                 {selectedEdge.origin_ref}
                 <span className="px-1 text-muted-foreground">→</span>

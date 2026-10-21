@@ -8,11 +8,14 @@ import type { WorkDecision, WorkPage } from './types'
 import './i18n'
 
 const listDecisions = vi.fn()
+const listWorkItems = vi.fn()
+const listMembers = vi.fn()
+const granted = vi.hoisted(() => new Set<string>())
 
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 'tenant-l7',
-    can: (permission: string) => permission === 'sessions:decision:read',
+    can: (permission: string) => granted.has(permission),
   }),
 }))
 
@@ -21,6 +24,18 @@ vi.mock('./api', async (importOriginal) => {
   return {
     ...actual,
     listDecisions: (...args: unknown[]) => listDecisions(...args),
+    listWorkItems: (...args: unknown[]) => listWorkItems(...args),
+  }
+})
+
+vi.mock('@/features/console/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/console/api')>()
+  return {
+    ...actual,
+    consoleApi: {
+      ...actual.consoleApi,
+      listMembers: (...args: unknown[]) => listMembers(...args),
+    },
   }
 })
 
@@ -57,9 +72,22 @@ function page(
   return { items, has_more: hasMore, next_cursor: nextCursor ?? '' }
 }
 
-describe('DecisionsPanel cursor pagination', () => {
-  beforeEach(() => listDecisions.mockReset())
+beforeEach(() => {
+  granted.clear()
+  granted.add('sessions:decision:read')
+  granted.add('sessions:work:read')
+  listDecisions.mockReset()
+  listWorkItems.mockReset()
+  listMembers.mockReset()
+  listWorkItems.mockResolvedValue({
+    items: [],
+    has_more: false,
+    next_cursor: '',
+  })
+  listMembers.mockResolvedValue({ items: [] })
+})
 
+describe('DecisionsPanel cursor pagination', () => {
   it('appends the next page instead of replacing the decisions already read', async () => {
     listDecisions.mockImplementation((params?: { cursor?: string }) =>
       params?.cursor === 'cursor-2'
@@ -87,6 +115,136 @@ describe('DecisionsPanel cursor pagination', () => {
         expect.objectContaining({ tenant: 'tenant-l7' }),
         expect.anything(),
       ),
+    )
+  })
+})
+
+describe('DecisionsPanel names what a decision is about and who decided', () => {
+  const ITEM = '01a03ed2-7563-7851-83de-88fe017065fd'
+  const PERSON = '01a03ed2-0000-7851-83de-000000000001'
+
+  /** A decision about ITEM, decided by PERSON, recorded under another work item so a lookup by the wrong
+   * field cannot pass. */
+  const about = (over: Partial<WorkDecision> = {}): WorkDecision => ({
+    ...decision('d1'),
+    work_item_id: 'another-item',
+    subject_kind: 'work.scope',
+    subject_ref: ITEM,
+    decided_by_kind: 'user',
+    decided_by_ref: PERSON,
+    ...over,
+  })
+
+  function show(items: WorkDecision[]) {
+    listDecisions.mockResolvedValue(page(items, false))
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const view = render(
+      <QueryClientProvider client={client}>
+        <DecisionsPanel />
+      </QueryClientProvider>,
+    )
+    /** Every read has answered, so a name that is missing is missing for good. */
+    const settled = async () => {
+      await screen.findByText('decision d1')
+      await waitFor(() => expect(client.isFetching()).toBe(0))
+    }
+    return { ...view, settled }
+  }
+
+  /** The line that says what the decision is about and who decided. */
+  const meta = () => screen.getByText(/decided by/i)
+
+  it('shows the work item title and the member name, with the engine address on hover', async () => {
+    listWorkItems.mockResolvedValue({
+      items: [
+        { id: ITEM, title: 'Refund idempotency' },
+        { id: 'another-item', title: 'Something else' },
+      ],
+      has_more: false,
+      next_cursor: '',
+    })
+    listMembers.mockResolvedValue({
+      items: [{ user_id: PERSON, display_name: 'Rehema Okafor' }],
+    })
+    const { container, settled } = show([about()])
+    await settled()
+    expect(meta().textContent).toContain(
+      'Scope of “Refund idempotency” · decided by Rehema Okafor',
+    )
+    expect(container.textContent).not.toContain(ITEM)
+    expect(container.textContent).not.toContain(PERSON)
+    expect(meta().getAttribute('title')).toContain(
+      `work.scope:${ITEM} · decided by user:${PERSON}`,
+    )
+  })
+
+  it('names only a work.scope subject: another kind with the same reference keeps its address', async () => {
+    listWorkItems.mockResolvedValue({
+      items: [{ id: ITEM, title: 'Refund idempotency' }],
+      has_more: false,
+      next_cursor: '',
+    })
+    listMembers.mockResolvedValue({ items: [] })
+    const { container, settled } = show([about({ subject_kind: 'agent' })])
+    await settled()
+    expect(meta().textContent).toContain(`agent:${ITEM}`)
+    expect(container.textContent).not.toContain('Refund idempotency')
+  })
+
+  it('keeps the address when nothing can name it, exactly as kind:ref', async () => {
+    listWorkItems.mockResolvedValue({
+      items: [{ id: 'x', title: 'Unrelated' }],
+      has_more: false,
+      next_cursor: '',
+    })
+    listMembers.mockResolvedValue({ items: [] })
+    const { settled } = show([
+      about({
+        subject_ref: 'unknown-item',
+        decided_by_kind: 'agent',
+        decided_by_ref: 'agent-9',
+      }),
+    ])
+    await settled()
+    expect(meta().textContent).toContain(
+      'work.scope:unknown-item · decided by agent:agent-9',
+    )
+  })
+
+  it('keeps the addresses when the item list and the roster cannot be read', async () => {
+    listWorkItems.mockRejectedValue(new Error('503'))
+    listMembers.mockRejectedValue(new Error('503'))
+    const { settled } = show([about()])
+    await settled()
+    expect(meta().textContent).toContain(
+      `work.scope:${ITEM} · decided by user:${PERSON}`,
+    )
+  })
+
+  it('does not ask for the item list without the permission to read work items', async () => {
+    granted.delete('sessions:work:read')
+    listMembers.mockResolvedValue({ items: [] })
+    const { settled } = show([about()])
+    await settled()
+    expect(listWorkItems).not.toHaveBeenCalled()
+    expect(meta().textContent).toContain(`work.scope:${ITEM}`)
+  })
+
+  it('asks for the item list in the tenant it shows, up to the engine page ceiling', async () => {
+    listWorkItems.mockResolvedValue({
+      items: [],
+      has_more: false,
+      next_cursor: '',
+    })
+    listMembers.mockResolvedValue({ items: [] })
+    const { settled } = show([about()])
+    await settled()
+    expect(listWorkItems).toHaveBeenCalledWith(
+      { limit: 200 },
+      { tenant: 'tenant-l7' },
+      expect.anything(),
     )
   })
 })

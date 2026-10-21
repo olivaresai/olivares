@@ -38,6 +38,7 @@ type ContentInspectionInput struct {
 	Model           string
 	Channels        []ContentChannel // the collected content (CollectRequestContent/CollectResponseContent)
 	Unscanned       bool             // at least one channel was opaque (the deny-closed signal the core DLP already saw)
+	SessionRef      string           // the governed run the hook credential proves ("" on the proxy and when none is bound)
 }
 
 // ContentInspectionDecision is the firewall's verdict for one inbound request or one

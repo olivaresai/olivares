@@ -26,9 +26,18 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
+		// The reexec stages sessions.RunConfinementHelper dispatches in the engine.
+		if args := os.Args[2:]; Handles(args) {
+			os.Exit(RunHelper(args, confine.RunHelperWithReady))
+		}
+		os.Exit(confine.RunHelper(os.Args[2:]))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "__relay_accept_failure" {
 		listener, err := net.Listen("tcp4", "127.0.0.1:0")
 		if err != nil {

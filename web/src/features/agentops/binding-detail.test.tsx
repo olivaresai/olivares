@@ -304,7 +304,9 @@ describe('Binding details — the engine’s answer, under the read tier alone',
     await user.click(detailsOf('psb_1'))
     const d = await dialog()
     expect(
-      await within(d).findByText(/engine refused this binding to your account/),
+      await within(d).findByText(
+        /cannot read this binding in this organization/,
+      ),
     ).toBeInTheDocument()
     expect(within(d).queryByText('list-says-this-name')).not.toBeInTheDocument()
     expect(
@@ -435,7 +437,9 @@ describe('Binding details — the cycle does not outlive its authority', () => {
     )
     expect(readSignals()[0]?.aborted).toBe(true)
     expect(
-      screen.getByText(/does not include sessions:profile-binding:read/),
+      screen.getByText(
+        /Source bindings are not shown: your role cannot read them/,
+      ),
     ).toBeInTheDocument()
     pending.resolve(engineAnswer)
     await act(async () => {})
@@ -630,7 +634,9 @@ describe('Binding details — keyboard, labelling and the rest of the table', ()
     grant(PR, 'sessions:profile:write', 'sessions:profile:admin')
     wrap()
     expect(
-      await screen.findByText(/does not include sessions:profile-binding:read/),
+      await screen.findByText(
+        /Source bindings are not shown: your role cannot read them/,
+      ),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Details of binding/ }),

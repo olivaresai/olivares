@@ -162,7 +162,7 @@ func TestVersionGlobalOutputJSONShape(t *testing.T) {
 		gotKeys = append(gotKeys, key)
 	}
 	sort.Strings(gotKeys)
-	wantKeys := []string{"arch", "commit", "date", "fips", "go", "license_key", "module", "os", "ota_key", "version"}
+	wantKeys := []string{"arch", "commit", "date", "edition", "fips", "go", "license_key", "module", "os", "ota_key", "version"}
 	if !reflect.DeepEqual(gotKeys, wantKeys) {
 		t.Fatalf("version JSON keys = %v, want %v", gotKeys, wantKeys)
 	}
@@ -170,6 +170,10 @@ func TestVersionGlobalOutputJSONShape(t *testing.T) {
 		if _, ok := got[key].(string); !ok {
 			t.Fatalf("version JSON field %q is not a string: %#v", key, got[key])
 		}
+	}
+	// `upgrade` reads this field to tell a Community build from Business of the same version.
+	if got["edition"] != thisEdition.name || thisEdition.name == "" {
+		t.Fatalf("version JSON edition = %v, want this build's edition %q", got["edition"], thisEdition.name)
 	}
 }
 

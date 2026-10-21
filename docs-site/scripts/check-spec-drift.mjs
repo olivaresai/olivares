@@ -5,7 +5,7 @@
 // test:drift — guarantee the rendered REST reference comes from the product's
 // real OpenAPI spec, not a divergent copy that could silently rot. (DOC-03)
 //
-// Three assertions:
+// Four assertions:
 //   1. astro.config.mjs points starlight-openapi at ../web/openapi/openapi.json
 //      (the single source of truth, served by core/api).
 //   2. No second copy of an openapi.json lives inside docs-site/src or public
@@ -17,6 +17,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { CORE_PATHS_TOKEN, countCorePaths } from '../src/core-paths-plugin.mjs'
 
 // starlight-openapi's operation renderer uses github-slugger for route names.
 // Resolve that dependency from the renderer package itself so this checker cannot
@@ -121,6 +122,44 @@ for (const { spec: specRel, dist: distRel } of RENDERED) {
     fail(`built reference is missing pages for current spec operations (render diverged from spec):\n  ${missing.join('\n  ')}`)
   }
   console.log(`✓ anti-drift: all ${expectedPages.length} operations of ${specRel} rendered under ${distRel}.`)
+}
+// 4. The core-path count is a build-time value (#2494): the pages carry the token, the build
+// fills in the number from the same spec. A built page that still shows the token was not
+// processed, and the English reference index must show the number the spec has right now.
+const DIST = here('../dist')
+if (existsSync(DIST)) {
+  const count = countCorePaths()
+  async function htmlFiles(dir, acc = []) {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      const full = `${dir}/${e.name}`
+      if (e.isDirectory()) await htmlFiles(full, acc)
+      else if (e.name.endsWith('.html')) acc.push(full)
+    }
+    return acc
+  }
+  // Any spelling of the token counts: a typo such as {{core-path}} or {{ core_paths }} is unfilled too.
+  const unfilled = []
+  for (const file of await htmlFiles(DIST)) {
+    if (/\{\{\s*core[-_ ]?paths?\s*\}\}/i.test(await readFile(file, 'utf8'))) unfilled.push(file)
+  }
+  if (unfilled.length > 0) {
+    fail(`built pages still carry ${CORE_PATHS_TOKEN} (the markdown plugin did not run):\n  ${unfilled.join('\n  ')}`)
+  }
+  // Each locale's reference index states the count three times; a page that still shows an older
+  // number has the old value, whatever the cache or the plugin did.
+  for (const locale of ['', 'de/', 'es/', 'fr/', 'ja/', 'ru/', 'zh/']) {
+    const page = `${DIST}/${locale}reference/index.html`
+    if (!existsSync(page)) fail(`${page} is missing: dist is a partial build, so the count cannot be checked.`)
+    const shown = (await readFile(page, 'utf8')).match(new RegExp(`(?<![0-9])${count}(?![0-9])`, 'g'))?.length ?? 0
+    if (shown < 3) {
+      fail(`dist/${locale}reference/index.html shows ${shown} of 3 places with ${count}, the core path count in web/openapi/openapi.json.`)
+    }
+  }
+  const english = await readFile(`${DIST}/reference/index.html`, 'utf8')
+  if (!new RegExp(`(?<![0-9])${count} core paths`).test(english)) {
+    fail(`dist/reference/index.html does not say '${count} core paths', the count in web/openapi/openapi.json.`)
+  }
+  console.log(`✓ anti-drift: ${count} core paths filled in from the spec; no unfilled ${CORE_PATHS_TOKEN}.`)
 }
 if (!anyBuilt) {
   console.log(`✓ anti-drift: config → real specs; no copy. (dist not built yet — page-coverage check runs post-build.)`)

@@ -452,18 +452,23 @@ render() {
   if grep -Eq '@[A-Z_]+@' "$tmp"; then rm -f "$tmp"; err "unresolved service template marker"; fi
   if [ -e "$output" ]; then
     if same_bytes "$tmp" "$output"; then rm -f "$tmp"; chmod "$mode_bits" "$output"; return 0; fi
-    legacy_match=0
-    if [ "$init" = systemd ] && [ ! -L "$output" ] && [ -r "$templates/systemd-26.10.service" ]; then
-      old_tmp="$(mktemp "${TMPDIR:-/tmp}/olivares-service-legacy.XXXXXX")"
-      render_content "$templates/systemd-26.10.service" "$old_tmp"
-      if same_bytes "$old_tmp" "$output"; then legacy_match=1; fi
-      rm -f "$old_tmp"
+    legacy_match=""
+    if [ "$init" = systemd ] && [ ! -L "$output" ]; then
+      # Frozen copies of the units earlier releases rendered, newest first.
+      for legacy in 0.2 26.10; do
+        [ -r "$templates/systemd-$legacy.service" ] || continue
+        old_tmp="$(mktemp "${TMPDIR:-/tmp}/olivares-service-legacy.XXXXXX")"
+        render_content "$templates/systemd-$legacy.service" "$old_tmp"
+        if same_bytes "$old_tmp" "$output"; then legacy_match="$legacy"; fi
+        rm -f "$old_tmp"
+        [ -z "$legacy_match" ] || break
+      done
     fi
-    if [ "$legacy_match" -ne 1 ]; then
+    if [ -z "$legacy_match" ]; then
       rm -f "$tmp"
       err "refusing to replace existing service file: $output"
     fi
-    say "  upgrading the unedited 26.10 service unit: $output"
+    say "  upgrading the unedited $legacy_match service unit: $output"
   fi
   chmod "$mode_bits" "$tmp"
   mv "$tmp" "$output"

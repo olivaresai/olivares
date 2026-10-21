@@ -30,9 +30,9 @@
     "egressNo": "无出站",
     "egressYes": "出站",
     "egressNoHint": "数据未离开边界。",
-    "egressYesHint": "接线的嵌入器将文本发送至外部提供方（已记录在溯源中）。",
-    "egressProvider": "出站提供方",
-    "egressProviderHint": "提供方的不透明哈希——绝非提供方名称或值。",
+    "egressYesHint": "已配置的嵌入器将文本发送至外部提供商（已记录在溯源中）。",
+    "egressProvider": "出站提供商",
+    "egressProviderHint": "提供商的不透明哈希——绝非提供商名称或值。",
     "hashHint": "单向哈希——底层文本绝不存储或展示。",
     "classifications": {
       "public": "公开",
@@ -94,12 +94,12 @@
   "kbEditor": {
     "createTitle": "新建知识库",
     "editTitle": "编辑治理",
-    "createBody": "声明一个知识库并记录所接线的嵌入器。local_only 禁止任何出站；model_backed 需要语义嵌入器。将以你的身份记录在审计账本中。",
+    "createBody": "声明一个知识库并记录已配置的嵌入器。local_only 禁止任何出站；model_backed 需要语义嵌入器。将以你的身份记录在审计账本中。",
     "editBody": "更新「{{name}}」的治理。更改密级分类、数据驻留地或 ACL 会改变各身份可检索的内容。embed_model 与维度保持创建时的记录不变。以你的身份审计。",
     "name": "名称",
     "classificationHint": "决定哪些身份可从此知识库检索。",
     "residencyHint": "锁定此知识库的数据可在何处处理。",
-    "embedPolicyHint": "local_only = 零出站词法索引。model_backed = 通过受治理提供方的语义向量索引。auto = 由所接线的嵌入器决定。后端会拒绝无效的策略/嵌入器组合（400）。",
+    "embedPolicyHint": "local_only = 零出站词法索引。model_backed = 通过受治理提供商的语义向量索引。auto = 由已配置的嵌入器决定。后端会拒绝无效的策略/嵌入器组合（400）。",
     "create": "创建知识库",
     "save": "保存更改",
     "created": "知识库已创建",
@@ -114,7 +114,7 @@
   },
   "ingest": {
     "title": "摄取内容",
-    "body": "将内容摄取至「{{name}}」。密钥 / PII 会在建立索引前脱敏。在 model_backed 知识库上，分块文本将通过受治理提供方进行嵌入（出站会记录在溯源中）。",
+    "body": "将内容摄取至「{{name}}」。密钥 / PII 会在建立索引前脱敏。在 model_backed 知识库上，分块文本将通过受治理提供商进行嵌入（出站会记录在溯源中）。",
     "modeConnector": "已注册的连接器",
     "modeInline": "内联文档",
     "source": "连接器名称",
@@ -156,11 +156,11 @@
     "modeAll": "全部",
     "modeFilter": "模式",
     "noModeResults": "没有与此源模式匹配的片段。",
-    "contextTruncated": "⛔ The context did not fit: {{n}} chunks were dropped. This answer was built on less evidence than the list below suggests.",
-    "excludedChunks": "{{n}} chunks excluded by the source floor ({{sources}})",
-    "sourceFloorNoEffect": "source floor applied, excluded nothing",
+    "contextTruncated": "⛔ 上下文放不下：已丢弃 {{n}} 个分块。此回答所依据的证据少于下方列表所显示的。",
+    "excludedChunks": "{{n}} 个分块被来源下限排除（{{sources}}）",
+    "sourceFloorNoEffect": "已应用来源下限，未排除任何内容",
     "redactedItems": "{{n}} items redacted",
-    "redactionNoEffect": "redaction required, nothing matched"
+    "redactionNoEffect": "要求脱敏，但没有任何匹配"
   },
   "lineage": {
     "search": "搜索溯源……",
@@ -256,7 +256,7 @@
     "caption": "受治理的智能体记忆。内容在存储前会脱敏；过期条目在读取时被筛除。",
     "empty": "暂无记忆条目",
     "emptyHint": "为某个智能体写入一条记忆条目，或按智能体引用筛选。",
-    "withheld": "⛔ {{n}} entries are NOT in this list: the read path withheld them because they failed the integrity check. The list is not the whole picture, and what is missing is what most needs looking at — run the memory verification to see them."
+    "withheld": "⛔ 有 {{n}} 条记录不在此列表中：读取路径因其未通过完整性校验而将其扣留。该列表并非全貌，而缺失的恰恰最需要关注——请运行记忆验证查看它们。"
   },
   "memoryEditor": {
     "title": "写入记忆",
@@ -464,11 +464,11 @@
     "emptyHint": "没有规则时网关不作任何强制。写入一条规则即为该租户启用 DLP。",
     "anyScope": "匹配任何带标签的类别 — 不涵盖未扫描的内容",
     "newRule": "New DLP rule",
-    "newRuleHint": "A rule binds one content class to allow or deny on egress.",
+    "newRuleHint": "一条规则把一个内容类别绑定到出站时的允许或拒绝。",
     "class": "Class",
     "action": "Action",
-    "deleteRule": "Delete the rule for {{class}}",
-    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — this is an upsert by class, not an addition. Replacing a deny with an allow opens egress for that class immediately.",
+    "deleteRule": "删除 {{class}} 的规则",
+    "willReplace": "⛔ “{{class}}”类的规则已存在。保存会替换它——这是按类别的 upsert，而不是新增。把拒绝替换为允许，会立即对该类别开放出站。",
     "mayReplace": "规则列表已截断：“{{class}}”类的规则可能已存在于本页之外。若存在，保存时将替换该规则，因为保存操作会按类执行 upsert。",
     "truncated": "已加载 {{n}} 条 DLP 规则；还有更多",
     "truncatedHint": "此列表显示第一个已加载页面；还存在更多 DLP 规则。"
@@ -492,17 +492,17 @@
     "emptyHint": "扫描会遍历数据源并记录发现的内容。启动一次扫描即可在此查看结果。",
     "sourceName": "Source name",
     "scanSource": "Scan source",
-    "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",
-    "basisNotice": "A scan records what it looked AT. \"stored\" is the post-scrub form kept after ingestion; \"raw\" is the body before redaction. The two are not comparable.",
+    "scanSourceHint": "读取数据源，但不摄取它。正文只在内存中分类，绝不存储、记录或嵌入。",
+    "basisNotice": "扫描记录的是它查看的对象。“stored”是摄取后已清理的形式；“raw”是脱敏前的正文。两者不可比较。",
     "basis": {
       "raw": "raw bodies",
       "stored": "stored (post-scrub)"
     },
-    "counts": "{{docs}} docs · {{hits}} with hits · {{markers}} redaction markers",
+    "counts": "{{docs}} 份文档 · {{hits}} 份有命中 · {{markers}} 个脱敏标记",
     "truncated": "已加载 {{n}} 条扫描记录；还有更多",
     "truncatedHint": "此列表显示第一个已加载页面；还存在更多扫描记录。",
-    "zeroOnStored": "⛔ Zero hits here means the redaction worked, NOT that the corpus holds no sensitive data — anything scrubbed at ingestion is already gone. Scan the SOURCE to ask that question.",
-    "zeroOnRaw": "Zero hits on the raw bodies: the source itself carried nothing the detectors recognise."
+    "zeroOnStored": "⛔ 此处零命中说明脱敏起了作用，并不说明语料中没有敏感数据——摄取时已清理的内容早已不在。要回答这个问题，请扫描数据源。",
+    "zeroOnRaw": "原始正文零命中：数据源本身没有包含检测器能识别的内容。"
   },
   "portability": {
     "title": "Portability",
@@ -510,12 +510,12 @@
     "bundle": "Bundle to import",
     "bundlePlaceholder": "Paste a signed bundle",
     "import": "Import bundle",
-    "exported": "{{n}} entries in the bundle",
-    "excluded": "⛔ {{n}} entries were LEFT OUT because they failed the integrity check. This bundle is not a complete copy — say so if you hand it to a data subject.",
-    "nothingExcluded": "Nothing was excluded for integrity.",
-    "noManifest": "The bundle carries no readable manifest, so its completeness cannot be stated.",
+    "exported": "数据包中有 {{n}} 条记录",
+    "excluded": "⛔ 有 {{n}} 条记录因未通过完整性校验而被排除。此数据包不是完整副本——交给数据主体时请如实说明。",
+    "nothingExcluded": "没有因完整性问题而排除任何内容。",
+    "noManifest": "该数据包没有可读取的清单，因此无法说明其完整性。",
     "imported": "{{n}} entries imported",
-    "rejectedCount": "{{n}} rows were REJECTED individually. The import partly succeeded — these rows are not in."
+    "rejectedCount": "有 {{n}} 行被逐行拒绝。导入只部分成功——这些行未导入。"
   },
   "contextPolicies": {
     "truncated": "已加载 {{n}} 条上下文策略；还有更多",

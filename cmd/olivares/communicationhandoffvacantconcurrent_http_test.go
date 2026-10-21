@@ -174,7 +174,7 @@ func (b *vacantHandoffSerializerBarrier) awaitWaiters(
 }
 
 // release ends the barrier transaction. It writes nothing, so a rollback is the
-// honest end: the requests behind it then run in the order they queued.
+// honest end: the requests behind it then contend for the gate again.
 func (b *vacantHandoffSerializerBarrier) release(t *testing.T) {
 	t.Helper()
 	if b.released {
@@ -291,17 +291,18 @@ func openVacantHandoffConnections(
 // TestCommunicationHandoffVacantGenerationConcurrentHTTPPostgres runs the six
 // overlapping cases the ratification names — vacant accept against acquire in
 // both queue orders, and competing accepts under one key and two, for a human
-// and for a session recipient — on one owned split-owner estate.
+// and for a session recipient — on one owned split-owner estate. The queue order
+// is how the requests are staged, never a promise about the winner.
 func TestCommunicationHandoffVacantGenerationConcurrentHTTPPostgres(t *testing.T) {
 	backing := communicationHTTPTestPostgresStore(t)
 	estate := bootIncomingHandoffHTTPEstate(t, backing)
 	app, monitor := openVacantHandoffConnections(t, backing)
 
-	t.Run("accept_wins_over_competing_acquire", func(t *testing.T) {
-		exerciseVacantAcceptWinsOverAcquire(t, estate, app, monitor)
+	t.Run("accept_queued_first_against_acquire", func(t *testing.T) {
+		exerciseVacantAcceptAcquireOverlap(t, estate, app, monitor, true)
 	})
-	t.Run("acquire_wins_over_competing_accept", func(t *testing.T) {
-		exerciseVacantAcquireWinsOverAccept(t, estate, app, monitor)
+	t.Run("acquire_queued_first_against_accept", func(t *testing.T) {
+		exerciseVacantAcceptAcquireOverlap(t, estate, app, monitor, false)
 	})
 	// Both keys AND both recipient kinds: the acceptance journey's recipient is a
 	// human and the breadth family's is a session, and a case that measured only
@@ -409,78 +410,130 @@ func vacantHandoffResponsePath(handoffID model.ID) string {
 	return "/v1/m/sessions/handoffs/" + handoffID.String() + "/responses"
 }
 
-// exerciseVacantAcceptWinsOverAcquire overlaps the vacant accept with the new
-// owner's own lease.acquire, with the accept queued FIRST. The transfer commits,
-// the acquire then meets the WorkItem version the transfer published and is
-// refused by its own If-Match — the C2 outcome, this time with both requests
-// genuinely in flight.
-func exerciseVacantAcceptWinsOverAcquire(
+// exerciseVacantAcceptAcquireOverlap overlaps the vacant accept with the new
+// owner's own lease.acquire, with the accept queued first at the tenant gate
+// when acceptFirst is set and the acquire otherwise. Queue order is NOT the
+// winner: the gate orders one transaction at a time and each request is several
+// (see communicationhandoffvacantoutcome_test.go), so which request reaches the
+// deciding transaction first is a matter of timing. Whichever commits first must
+// win cleanly and the other must be refused with no effect of its own: the
+// accept winning is the C2 outcome (the acquire meets the WorkItem version the
+// transfer published and is refused by its own If-Match), the acquire winning is
+// the C1 outcome (the offer sealed against the vacant generation is stale and the
+// accept is refused). Both are measured with the two requests genuinely in
+// flight; the sequential cases in communicationhandoffvacant_http_test.go pin C1
+// and C2 one at a time.
+func exerciseVacantAcceptAcquireOverlap(
 	t *testing.T,
 	estate incomingHandoffHTTPEstate,
 	app *sql.DB,
 	monitor *sql.DB,
+	acceptFirst bool,
 ) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	prepared := prepareVacantHandoffConcurrentOffer(t, estate, "accept-first", "session")
-	leaseBefore := readVacantHandoffLease(t, estate, estate.owner, prepared.work.id)
-	epochBefore := readVacantHandoffClockGuardEpoch(t, estate)
+	label, queuedFirst := "acquire-first", "acquire"
+	if acceptFirst {
+		label, queuedFirst = "accept-first", "accept"
+	}
+	prepared := prepareVacantHandoffConcurrentOffer(t, estate, label, "session")
+	race := vacantAcceptAcquireRace{
+		prepared:    prepared,
+		leaseBefore: readVacantHandoffLease(t, estate, estate.owner, prepared.work.id),
+		epochBefore: readVacantHandoffClockGuardEpoch(t, estate),
+	}
 
-	before := communicationHTTPTestEffects(t, estate.eng, estate.tenant)
 	barrier := holdVacantHandoffTenantGate(t, ctx, app, monitor, estate.tenant)
 	defer barrier.release(t)
-	accept := launchVacantHandoffRequest(t, ctx, estate, "accept",
-		http.MethodPost, vacantHandoffResponsePath(prepared.offer.HandoffID),
-		prepared.recipientToken, map[string]any{"transition": "accept"},
-		map[string]string{
-			"If-Match": prepared.offerETag, "Idempotency-Key": model.NewID().String(),
-		})
-	acceptPID := barrier.awaitWaiters(t, ctx, 1,
-		[]*vacantHandoffInFlight{accept}, "accept queued first")
+	launchAccept := func() *vacantHandoffInFlight {
+		return launchVacantHandoffRequest(t, ctx, estate, "accept",
+			http.MethodPost, vacantHandoffResponsePath(prepared.offer.HandoffID),
+			prepared.recipientToken, map[string]any{"transition": "accept"},
+			map[string]string{
+				"If-Match": prepared.offerETag, "Idempotency-Key": model.NewID().String(),
+			})
+	}
 	// The competing acquire is the CURRENT owner's, and it is admissible when it
 	// is issued: the transfer has not committed, so the route's ownership check
 	// (which happens on the read side, before the write transaction) passes. What
-	// it meets after the release is the transfer, inside the transaction.
-	acquire := launchVacantHandoffRequest(t, ctx, estate, "acquire",
-		http.MethodPost, vacantHandoffAcquirePath(prepared.work.id),
-		prepared.owner.work.Token, vacantHandoffAcquireBody(prepared.owner),
-		map[string]string{
-			"If-Match": prepared.itemETag, "Idempotency-Key": model.NewID().String(),
-		})
+	// it meets after the release is whichever of the two committed first.
+	launchAcquire := func() *vacantHandoffInFlight {
+		return launchVacantHandoffRequest(t, ctx, estate, "acquire",
+			http.MethodPost, vacantHandoffAcquirePath(prepared.work.id),
+			prepared.owner.work.Token, vacantHandoffAcquireBody(prepared.owner),
+			map[string]string{
+				"If-Match": prepared.itemETag, "Idempotency-Key": model.NewID().String(),
+			})
+	}
+	var accept, acquire *vacantHandoffInFlight
+	if acceptFirst {
+		accept = launchAccept()
+		barrier.awaitWaiters(t, ctx, 1, []*vacantHandoffInFlight{accept}, "accept queued first")
+		acquire = launchAcquire()
+	} else {
+		acquire = launchAcquire()
+		barrier.awaitWaiters(t, ctx, 1, []*vacantHandoffInFlight{acquire}, "acquire queued first")
+		accept = launchAccept()
+	}
 	both := barrier.awaitWaiters(t, ctx, 2,
-		[]*vacantHandoffInFlight{accept, acquire}, "acquire queued behind the accept")
+		[]*vacantHandoffInFlight{accept, acquire}, "the second request queued behind the first")
 	if len(both) != 2 || both[0] == both[1] {
 		t.Fatalf("the two requests share a backend: %v", both)
 	}
-	t.Logf("K3_OTV_RACE case=accept_first accept_pid=%d waiters=%v", acceptPID[0], both)
 
+	// Effects are sampled while BOTH are still blocked, so what follows is
+	// measured across the whole overlap and not merely after it.
+	race.before = communicationHTTPTestEffects(t, estate.eng, estate.tenant)
 	barrier.release(t)
-	accepted := accept.join(t, 90*time.Second)
-	refused := acquire.join(t, 90*time.Second)
+	race.accepted = accept.join(t, 90*time.Second)
+	race.acquired = acquire.join(t, 90*time.Second)
 
-	if accepted.status != http.StatusOK {
-		t.Fatalf("the accept that queued first = %d: %s", accepted.status, accepted.raw)
+	acceptWon, err := vacantAcceptAcquireWinner(race.accepted, race.acquired)
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertResultingLeaseFenceAbsent(t, accepted, "concurrent accept")
-	result := communicationHTTPTestDecode[sessions.HandoffResponseResult](t, accepted)
+	t.Logf("K3_OTV_RACE case=%s_first waiters=%v accept_won=%t accept_status=%d acquire_status=%d",
+		queuedFirst, both, acceptWon, race.accepted.status, race.acquired.status)
+	if acceptWon {
+		assertVacantAcceptWonOverAcquire(t, estate, race)
+		return
+	}
+	assertVacantAcquireWonOverAccept(t, estate, race)
+}
+
+// vacantAcceptAcquireRace is what one accept/acquire overlap measured: both
+// answers and the state around the race.
+type vacantAcceptAcquireRace struct {
+	prepared    vacantHandoffConcurrentOffer
+	accepted    communicationHTTPTestResponse
+	acquired    communicationHTTPTestResponse
+	before      communicationHTTPTestEffectCounts
+	leaseBefore sessions.WorkLease
+	epochBefore int64
+}
+
+// assertVacantAcceptWonOverAcquire states the C2 outcome: one transfer and the
+// generation untouched. The acquire's refusal is the exact one, measured rather
+// than assumed (vacantAcceptAcquireWinner): the transfer moved the WorkItem
+// version the acquire presented, and that CAS is what the write transaction
+// reaches first — 412 version_mismatch, not the 422 owner_ineligible the changed
+// owner would also justify.
+func assertVacantAcceptWonOverAcquire(
+	t *testing.T, estate incomingHandoffHTTPEstate, race vacantAcceptAcquireRace,
+) {
+	t.Helper()
+	assertResultingLeaseFenceAbsent(t, race.accepted, "concurrent accept")
+	result := communicationHTTPTestDecode[sessions.HandoffResponseResult](t, race.accepted)
 	if result.OwnerEpoch != 2 || result.State != sessions.HandoffAccepted || result.Replayed {
 		t.Fatalf("the concurrent accept = %+v, want one fresh accepted transfer at epoch 2", result)
 	}
-	// The exact refusal, measured rather than assumed: the transfer moved the
-	// WorkItem version the acquire presented, and that CAS is what the write
-	// transaction reaches first — 412 version_mismatch, not the 422
-	// owner_ineligible the changed owner would also justify. This is the C2
-	// outcome, reached here with the two requests genuinely overlapping.
-	if refused.status != http.StatusPreconditionFailed ||
-		!strings.Contains(string(refused.raw), "version_mismatch") {
-		t.Fatalf("the acquire behind the transfer = %d: %s", refused.status, refused.raw)
-	}
-	assertVacantHandoffExactlyOneAccept(t, estate, before,
+	assertVacantHandoffExactlyOneAccept(t, estate, race.before,
 		"the accept that won over a competing acquire")
 
 	// Ownership moved exactly once and the GENERATION did not move at all: the
 	// item is still unleased and still claimable, which is the whole OT-V claim
 	// restated on the far side of a race.
+	prepared := race.prepared
 	item, _ := readVacantHandoffItem(t, estate, estate.owner, prepared.work.id)
 	if item.OwnerKind != "session" || item.OwnerRef != prepared.recipientRef ||
 		item.OwnerEpoch != 2 || item.Leased || !item.Claimable {
@@ -488,70 +541,32 @@ func exerciseVacantAcceptWinsOverAcquire(
 	}
 	lease := readVacantHandoffLease(t, estate, estate.owner, prepared.work.id)
 	if lease.State != "vacant" || lease.Fence != 0 || lease.Live || lease.HolderSID != "" ||
-		lease.Version != leaseBefore.Version || lease.RenewalCount != 0 {
-		t.Fatalf("the lease moved under the race: before=%+v after=%+v", leaseBefore, lease)
+		lease.Version != race.leaseBefore.Version || lease.RenewalCount != 0 {
+		t.Fatalf("the lease moved under the race: before=%+v after=%+v", race.leaseBefore, lease)
 	}
-	if epoch := readVacantHandoffClockGuardEpoch(t, estate); epoch != epochBefore {
+	if epoch := readVacantHandoffClockGuardEpoch(t, estate); epoch != race.epochBefore {
 		t.Fatalf("the workspace lease clock advanced under the race: %d -> %d",
-			epochBefore, epoch)
+			race.epochBefore, epoch)
 	}
 }
 
-// exerciseVacantAcquireWinsOverAccept is the same overlap with the queue the
-// other way round: the owner's lease.acquire commits first, so the offer that
-// was sealed against the vacant generation is stale and the accept is refused
-// with zero effects — the C1 outcome, genuinely overlapped.
-func exerciseVacantAcquireWinsOverAccept(
-	t *testing.T,
-	estate incomingHandoffHTTPEstate,
-	app *sql.DB,
-	monitor *sql.DB,
+// assertVacantAcquireWonOverAccept states the C1 outcome: the acquire took the
+// generation, the sealed offer is stale, and the accept is refused with zero
+// effects of its own.
+func assertVacantAcquireWonOverAccept(
+	t *testing.T, estate incomingHandoffHTTPEstate, race vacantAcceptAcquireRace,
 ) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	prepared := prepareVacantHandoffConcurrentOffer(t, estate, "acquire-first", "session")
-
-	barrier := holdVacantHandoffTenantGate(t, ctx, app, monitor, estate.tenant)
-	defer barrier.release(t)
-	acquire := launchVacantHandoffRequest(t, ctx, estate, "acquire",
-		http.MethodPost, vacantHandoffAcquirePath(prepared.work.id),
-		prepared.owner.work.Token, vacantHandoffAcquireBody(prepared.owner),
-		map[string]string{
-			"If-Match": prepared.itemETag, "Idempotency-Key": model.NewID().String(),
-		})
-	barrier.awaitWaiters(t, ctx, 1, []*vacantHandoffInFlight{acquire}, "acquire queued first")
-	accept := launchVacantHandoffRequest(t, ctx, estate, "accept",
-		http.MethodPost, vacantHandoffResponsePath(prepared.offer.HandoffID),
-		prepared.recipientToken, map[string]any{"transition": "accept"},
-		map[string]string{
-			"If-Match": prepared.offerETag, "Idempotency-Key": model.NewID().String(),
-		})
-	both := barrier.awaitWaiters(t, ctx, 2,
-		[]*vacantHandoffInFlight{acquire, accept}, "accept queued behind the acquire")
-	t.Logf("K3_OTV_RACE case=acquire_first waiters=%v", both)
-
-	// Effects are sampled while BOTH are still blocked, so what follows is
-	// measured across the whole overlap and not merely after it.
-	before := communicationHTTPTestEffects(t, estate.eng, estate.tenant)
-	barrier.release(t)
-	acquired := acquire.join(t, 90*time.Second)
-	refused := accept.join(t, 90*time.Second)
-
-	if acquired.status != http.StatusOK {
-		t.Fatalf("the acquire that queued first = %d: %s", acquired.status, acquired.raw)
-	}
-	if got := communicationHTTPTestDecode[sessions.CommandResult](t, acquired); got.LeaseFence != 1 {
+	t.Helper()
+	if got := communicationHTTPTestDecode[sessions.CommandResult](t, race.acquired); got.LeaseFence != 1 {
 		t.Fatalf("the winning acquire minted fence %d, want 1", got.LeaseFence)
-	}
-	if refused.status != http.StatusConflict {
-		t.Fatalf("the accept behind the acquire = %d: %s", refused.status, refused.raw)
 	}
 	// The WINNER legitimately wrote its own WorkEvent and its outbox row, so a
 	// blanket "no effects" would be measuring the acquire, not the refusal. Every
 	// other counter — and every communication counter — is unchanged.
-	assertVacantHandoffLoserWroteNothing(t, estate, before, 1, 1,
+	assertVacantHandoffLoserWroteNothing(t, estate, race.before, 1, 1,
 		"the accept refused behind a competing acquire")
 
+	prepared := race.prepared
 	item, _ := readVacantHandoffItem(t, estate, estate.owner, prepared.work.id)
 	if item.OwnerRef != prepared.owner.sid || item.OwnerEpoch != 1 {
 		t.Fatalf("the refused accept moved ownership: %+v", item)
@@ -563,7 +578,8 @@ func exerciseVacantAcquireWinsOverAccept(
 }
 
 // exerciseVacantCompetingAccepts pins same-key replay and different-key refusal
-// while both public requests hold the same captured authority generation.
+// while both public requests hold the same captured authority generation. Which
+// of the two transfers is decided by who commits first, not by who queued first.
 func exerciseVacantCompetingAccepts(
 	t *testing.T,
 	estate incomingHandoffHTTPEstate,
@@ -604,11 +620,19 @@ func exerciseVacantCompetingAccepts(
 
 	before := communicationHTTPTestEffects(t, estate.eng, estate.tenant)
 	barrier.release(t)
-	winner := first.join(t, 90*time.Second)
-	loser := second.join(t, 90*time.Second)
+	firstAnswer := first.join(t, 90*time.Second)
+	secondAnswer := second.join(t, 90*time.Second)
 
-	if winner.status != http.StatusOK {
-		t.Fatalf("%s: the accept that queued first = %d: %s", label, winner.status, winner.raw)
+	// The accept that queued first is not necessarily the one that transfers: the
+	// gate orders one transaction at a time and each accept is several (see
+	// communicationhandoffvacantoutcome_test.go). The winner is the fresh 200.
+	firstWon, err := vacantFreshAccept(firstAnswer, secondAnswer)
+	if err != nil {
+		t.Fatalf("%s: %v", label, err)
+	}
+	winner, loser := firstAnswer, secondAnswer
+	if !firstWon {
+		winner, loser = secondAnswer, firstAnswer
 	}
 	assertResultingLeaseFenceAbsent(t, winner, label+" winning accept")
 	won := communicationHTTPTestDecode[sessions.HandoffResponseResult](t, winner)
@@ -636,8 +660,8 @@ func exerciseVacantCompetingAccepts(
 	// The winner's command identity and the loser's status, so the per-family
 	// split above is legible in the raw output. Nothing is read again here — the
 	// ownership, lease and clock assertions immediately above are the checks.
-	t.Logf("K3_OTV_RACE case=competing_accepts_%s winner_command=%s loser_status=%d",
-		label, won.CommandID, loser.status)
+	t.Logf("K3_OTV_RACE case=competing_accepts_%s first_won=%t winner_command=%s loser_status=%d",
+		label, firstWon, won.CommandID, loser.status)
 }
 
 // assertVacantHandoffLoserWroteNothing states the refusal precisely when the
@@ -669,7 +693,11 @@ func assertVacantHandoffLoserWroteNothing(
 
 // Same-key requests recognize the recorded result after current authority is
 // reestablished. A SESSION loser with a different key has no receipt to recognize
-// and remains unknown; an ordinary USER loser reaches the existing version CAS.
+// and remains unknown, or has already met the version CAS before it got that
+// far (which one depends on which transaction of the loser the winner's commit
+// lands between, so on timing, not on the queue); both refuse and write nothing,
+// and the effects assertion beside this one is what says nothing was written.
+// An ordinary USER loser reaches the existing version CAS.
 func assertVacantHandoffOverlappingSecondAccept(
 	t *testing.T,
 	label string,
@@ -682,8 +710,11 @@ func assertVacantHandoffOverlappingSecondAccept(
 	t.Helper()
 	switch {
 	case recipientKind == "session" && !sameKey:
-		if loser.status != http.StatusServiceUnavailable ||
-			!strings.Contains(string(loser.raw), "evidence_unavailable") {
+		unknown := loser.status == http.StatusServiceUnavailable &&
+			strings.Contains(string(loser.raw), "evidence_unavailable")
+		conflict := loser.status == http.StatusConflict &&
+			strings.Contains(string(loser.raw), `"code":"conflict"`)
+		if !unknown && !conflict {
 			t.Fatalf("%s: the overlapping second accept = %d: %s", label, loser.status, loser.raw)
 		}
 	case sameKey:
@@ -821,6 +852,8 @@ func awaitHandoffRecognitionHTTP(t *testing.T, ctx context.Context, signal <-cha
 
 func handoffRecognitionHTTPRows(t *testing.T, e incomingHandoffHTTPEstate) map[model.Kind][]model.Record {
 	t.Helper()
+	// Join the drains the earlier commits nudged, as the effects census does.
+	communicationHTTPTestSettleOutbox(t, e.eng)
 	rows := map[model.Kind][]model.Record{}
 	err := e.eng.store.View(context.Background(), e.tenant, func(sc store.Scope) error {
 		for _, kind := range []model.Kind{"sessions.handoff", "sessions.work_item", "sessions.work_lease", "sessions.work_guard",
@@ -857,6 +890,31 @@ func handoffRecognitionHTTPRows(t *testing.T, e incomingHandoffHTTPEstate) map[m
 	return rows
 }
 
+// A commit nudges the outbox drain, which publishes in the background and
+// rewrites that commit's outbox row (state, attempts, version). The recognition
+// test compares two snapshots, so a drain that lands between them reads as the
+// request changing domain rows (dev#2624). Start the drain late, as a loaded
+// host does: a snapshot taken before it must not exist.
+func TestCommunicationHandoffRecognitionRowsJoinNudgedDrain(t *testing.T) {
+	e := bootIncomingHandoffHTTPEstate(t, communicationHTTPTestSQLiteStore(t))
+	communicationHTTPTestSettleOutbox(t, e.eng)
+	commitOutcomeDelayOutboxDrain(t, e.eng, 4*commitOutcomeLateDrain)
+	e.offer(t, map[string]any{"kind": "user", "ref": e.recipient.id}, "late drain", time.Hour)
+	if !commitOutcomeOutboxBusy(t, e.eng) {
+		t.Fatal("COULD_NOT_LOOK: the drain the offer nudged is no longer pending, so the snapshot below proves nothing")
+	}
+
+	outbox := handoffRecognitionHTTPRows(t, e)["sessions.work_outbox"]
+	if len(outbox) == 0 {
+		t.Fatal("COULD_NOT_LOOK: the offer left no outbox row to compare")
+	}
+	for _, row := range outbox {
+		if state := row.String("state"); state != "published" {
+			t.Fatalf("snapshot read an outbox row still %q: a nudged drain can change it after the baseline", state)
+		}
+	}
+}
+
 func TestCommunicationHandoffSessionRecognitionCurrentAuthorityHTTPPostgres(t *testing.T) {
 	estate := bootIncomingHandoffHTTPEstate(t, communicationHTTPTestPostgresStore(t))
 	data := &handoffRecognitionHTTPData{inner: api.NewModuleData(estate.eng.store)}
@@ -877,6 +935,9 @@ func TestCommunicationHandoffSessionRecognitionCurrentAuthorityHTTPPostgres(t *t
 			defer resume()
 			key := model.NewID().String()
 			headers := map[string]string{"If-Match": prepared.offerETag, "Idempotency-Key": key}
+			// A drain reaches the store through this decorator too, and arm
+			// selects the first Mutate it sees: join them so that is the loser's.
+			communicationHTTPTestSettleOutbox(t, estate.eng)
 			data.arm(a)
 			loser := launchVacantHandoffRequest(t, ctx, estate, "same-key recognition", http.MethodPost,
 				vacantHandoffResponsePath(prepared.offer.HandoffID), prepared.recipientToken, map[string]any{"transition": "accept"}, headers)
@@ -935,6 +996,11 @@ func TestCommunicationHandoffSessionRecognitionCurrentAuthorityHTTPPostgres(t *t
 				t.Fatal("readiness lost its established wire code")
 			}
 			if after := handoffRecognitionHTTPRows(t, estate); !reflect.DeepEqual(before, after) {
+				for kind := range after {
+					if !reflect.DeepEqual(before[kind], after[kind]) {
+						t.Logf("row kind %s changed: %d rows before, %d after", kind, len(before[kind]), len(after[kind]))
+					}
+				}
 				t.Fatal("HTTP recognition changed domain rows or success audit anchors")
 			}
 			outer := communicationHTTPTestRequest(t, estate.eng, http.MethodPost, vacantHandoffResponsePath(prepared.offer.HandoffID), "invalid-credential", estate.tenant, map[string]any{"transition": "accept"}, headers)

@@ -18,7 +18,7 @@ description: "面向信息的参考：REST API、事件总线、模块目录、C
 
 | 领域 | 它记录什么 | 真相之源 |
 |---|---|---|
-| **[REST API](/reference/api/)** | control-plane HTTP API：auth、setup、tenancy、agent、R/RW access map、token 与 audit ledger。 | 本产品的 **OpenAPI 3.1** 契约（128 条核心路径），在构建时从真实文件渲染——不是副本。 |
+| **[REST API](/reference/api/)** | control-plane HTTP API：auth、setup、tenancy、agent、R/RW access map、token 与 audit ledger。 | 本产品的 **OpenAPI 3.1** 契约（{{core-paths}} 条核心路径），在构建时从真实文件渲染——不是副本。 |
 | **[模块路由（beta）](/reference/api-beta/)** | 产品的模块路由（`/v1/m/<ns>/…`）——finops、compliance、governance、sessions、models、knowledge 等——作为独立的 **beta** OpenAPI 文档。 | 同一份 OpenAPI 3.1 契约，在构建时从模块实际注册的路由反射得出。 |
 | **[稳定性策略](/zh/reference/api-stability/)** | 版本管理、稳定性层级、弃用/停用信令，以及 API、provider 与客户端 SDK 的最短支持窗口。 | 代码内的弃用表及其会使构建失败的窗口测试。 |
 | **[gRPC](/zh/reference/grpc/)** | 引擎的 gRPC 镜像，以及每个进程外连接器用于通信的版本化插件线协议。 | 服务器交给 gRPC 的 `grpc.ServiceDesc` 注册表。 |
@@ -37,13 +37,13 @@ description: "面向信息的参考：REST API、事件总线、模块目录、C
 tenancy、agent、读/写 access map（`GET /v1/access-edges`；其已对账的最小权限 *drift* 由
 access-map 模块而非核心面提供）、token 管理与 audit ledger。
 
-该契约描述 **128 条核心路径**。这是刻意为之：它是 control plane 稳定、带版本的面，而非引擎能应答的
+该契约描述 **{{core-paths}} 条核心路径**。这是刻意为之：它是 control plane 稳定、带版本的面，而非引擎能应答的
 每一条路由。“stable” 所承诺的内容——版本管理、弃用信令与最短支持窗口——即
 [API 稳定性策略](/zh/reference/api-stability/)。
 
 :::note[模块路由是独立的 beta 契约]
 模块路由——例如 access-map 模块的 `/v1/m/accessmap/graph`、
-`/v1/m/accessmap/neighbors` 与 `/v1/m/accessmap/drift`——**不**属于包含 128 条路径的
+`/v1/m/accessmap/neighbors` 与 `/v1/m/accessmap/drift`——**不**属于包含 {{core-paths}} 条路径的
 稳定核心文档。它们作为独立的 **beta** OpenAPI 文档发布在
 [模块路由参考](/reference/api-beta/)（服务于 `/openapi.beta.json`，并从模块实际
 注册的路由反射得出），从而让稳定面保持可识别，同时完整产品面仍可编程。
@@ -97,7 +97,7 @@ token。CLI 页面列出已验证的 `serve` flag 及其默认值。
 
 [配置参考](/zh/reference/configuration/)列出塑造一次部署的环境变量与运行时选项。承重的那些是数据目录
 （`OLIVARES_DATA_DIR`）、引擎启动前从 `OLIVARES_SOURCES_CONFIG` 读取的真实（非演示）source 配置，
-以及授权引擎选择器 `OLIVARES_PDP_ENGINE`（`cedar`、`opa` 或 `none`）。
+以及授权引擎选择器 `OLIVARES_PDP_ENGINE`（`cedar` 和 `opa` 属于 Business；`none` 或未设置在所有版本中均有效）。
 
 两条设计规则贯穿整个配置面。一个**未配置的 source 会诚实告警**而非使引擎失败。并且授权 seam
 **只会限制，绝不放宽**：RBAC 是 deny-by-default，查看 access graph 是一项特权动作，且每次此类

@@ -117,7 +117,7 @@ func (m *Module) patchWorkspace(ctx context.Context, tenant model.TenantID, ref 
 		if err != nil {
 			return err
 		}
-		rec, err := findWorkspaceRec(ctx, repo, ref)
+		rec, err := lockWorkspaceRec(ctx, repo, ref)
 		if err != nil {
 			return err
 		}

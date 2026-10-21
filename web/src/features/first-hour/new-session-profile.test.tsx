@@ -130,6 +130,39 @@ beforeEach(() => {
 const profileSelect = () => screen.findByRole('combobox', { name: 'Profile' })
 
 describe('the profile in the New session dialog', () => {
+  it('hides speed capabilities for a named provider-bound account', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.listAccounts).mockResolvedValue({
+      items: [
+        {
+          ...account('ppf_b', 'claude-b'),
+          auth_source: 'managed_injection',
+          provider_record_ref: 'prv_bound',
+        },
+      ],
+      has_more: false,
+    })
+    vi.spyOn(agentOpsApi, 'profileModels').mockResolvedValue({
+      profile_ref: 'ppf_b',
+      driver: 'claude',
+      state: 'fresh',
+      default_model: 'current-model',
+      free_text: true,
+      checked_at: '',
+      refresh_interval_seconds: 120,
+      models: [{ id: 'current-model', supports_fast_mode: true }],
+    })
+    wrap(<StartSessionForm />)
+    await user.click(await profileSelect())
+    await user.click(screen.getByRole('option', { name: 'claude-b' }))
+    await waitFor(() => expect(agentOpsApi.profileModels).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Model' })).toHaveTextContent(
+        'current-model',
+      ),
+    )
+    expect(screen.queryByLabelText('Fast mode')).toBeNull()
+  })
   it('shows nothing new for a tool with one profile', async () => {
     vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
       items: [account('ppf_x', 'codex-b', 'codex')],

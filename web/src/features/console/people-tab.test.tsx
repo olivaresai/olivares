@@ -20,7 +20,7 @@ const { api, authState, serverInfo } = vi.hoisted(() => ({
     listInvites: vi.fn(),
     revokeInvite: vi.fn(),
     listMembers: vi.fn(),
-    setMemberActive: vi.fn(),
+    removeMember: vi.fn(),
     listSuperadmins: vi.fn(),
     setSuperadminActive: vi.fn(),
   },
@@ -199,7 +199,7 @@ describe('PeopleTab members roster', () => {
 
   it('renders role, groups and status, then removes a member from the organization', async () => {
     api.listMembers.mockResolvedValue({ items: [member], has_more: false })
-    api.setMemberActive.mockResolvedValue({})
+    api.removeMember.mockResolvedValue(undefined)
     const user = userEvent.setup()
     wrap(<PeopleTab />)
 
@@ -224,9 +224,7 @@ describe('PeopleTab members roster', () => {
     ).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
 
-    await waitFor(() =>
-      expect(api.setMemberActive).toHaveBeenCalledWith('u1', false),
-    )
+    await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('u1'))
   })
 
   it('never offers to remove yourself or the only owner (HU-25)', async () => {
@@ -266,7 +264,7 @@ describe('PeopleTab members roster', () => {
       items: [{ ...member, status: 'inactive' }],
       has_more: false,
     })
-    api.setMemberActive.mockResolvedValue({})
+    api.removeMember.mockResolvedValue(undefined)
     const user = userEvent.setup()
     wrap(<PeopleTab />)
 
@@ -285,10 +283,7 @@ describe('PeopleTab members roster', () => {
     })
     await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
 
-    await waitFor(() =>
-      expect(api.setMemberActive).toHaveBeenCalledWith('u1', false),
-    )
-    expect(api.setMemberActive).not.toHaveBeenCalledWith('u1', true)
+    await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('u1'))
   })
 })
 

@@ -83,8 +83,9 @@ type serveOptions struct {
 func newServeCmd() *cobra.Command {
 	opts := serveOptions{}
 	cmd := &cobra.Command{
-		Use:   "serve",
-		Short: "Run the engine (REST + gRPC + embedded console), TLS-on-by-default",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "serve",
+		Short:       "Run the engine (REST + gRPC + embedded console), TLS-on-by-default",
 		Long: "serve starts the Olivares engine: REST API, embedded web console, gRPC ingest,\n" +
 			"configured modules and source connectors. It uses TLS by default, opens the selected SQLite\n" +
 			"or Postgres store, and prints one-time setup guidance on a first boot. It binds every\n" +

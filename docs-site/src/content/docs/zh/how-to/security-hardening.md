@@ -38,6 +38,8 @@ estate。
 
 ### 远程 collector 的双向 TLS
 
+边缘 collector 是 Business 功能；Community 构建会拒绝 `olivares collector`。下面的 `--grpc-client-ca` 标志设置在 core 上。
+
 在分布式拓扑中，边缘 collector 通过经过验证客户端证书的**双向 TLS** 将观测推送到 core。
 给 core 提供一个客户端 CA，使其**要求并验证**客户端证书，即可开启它：
 

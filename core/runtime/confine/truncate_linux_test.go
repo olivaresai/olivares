@@ -201,11 +201,11 @@ func execWithoutTruncate(p Policy, argv []string) error {
 	}
 	r := ruleset{fd: int(fd), access: acc}
 	for _, path := range append(append([]string{}, systemReadOnly...), filepath.Dir(argv[0])) {
-		if err := r.grant(path, false); err != nil {
+		if err := r.grant(path, grantRead); err != nil {
 			return err
 		}
 	}
-	if err := r.grant(p.ReadWrite[0], true); err != nil {
+	if err := r.grant(p.ReadWrite[0], grantWrite); err != nil {
 		return err
 	}
 	if err := r.addRule(p.ReadOnly[0], acc.dirRW&^unix.LANDLOCK_ACCESS_FS_TRUNCATE); err != nil {

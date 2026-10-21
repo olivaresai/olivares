@@ -1,15 +1,25 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { XScroll } from '@/components/data/scroll-edges'
 import { StaticTable } from '@/components/data/static-table'
 import { Button } from '@/components/ui/button'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet'
+import { WorkspaceWiki } from '@/features/agentops/workspace-wiki'
+import type { WorkspaceDTO } from '@/features/agentops/types'
 import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { useViewAccess } from '@/features/navigation/authorization'
 import { viewById } from '@/features/navigation/model'
 import { TAB_PARAM } from '@/features/sessions/session-address'
@@ -36,19 +46,37 @@ const folderName = (w: { name?: string; root_path: string }) =>
  */
 export function SessionFolders({ tenant }: { tenant: string | null }) {
   const { can } = useAuth()
+  const boundary = useAuthBoundary()
   const sessionsOn = useModuleOn('sessions')
   if (!tenant || !sessionsOn || !can('sessions:workspace:read')) return null
-  return <SessionFoldersList tenant={tenant} />
+  return (
+    <SessionFoldersList
+      key={boundary.epoch}
+      tenant={tenant}
+      epoch={boundary.epoch}
+    />
+  )
 }
 
-function SessionFoldersList({ tenant }: { tenant: string }) {
+function SessionFoldersList({
+  tenant,
+  epoch,
+}: {
+  tenant: string
+  epoch: number
+}) {
   const { t } = useTranslation('workspaceDashboard')
   const headingId = useId()
+  const [wiki, setWiki] = useState<WorkspaceDTO | null>(null)
   const { navigable } = useViewAccess()
   const manageable = FOLDERS_VIEW !== undefined && navigable(FOLDERS_VIEW)
   const params = { state: 'active', limit: FOLDERS } as const
   const query = useQuery({
-    queryKey: agentOpsKeys.workspaces(tenant, params),
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(tenant, epoch),
+      'workspaces',
+      params,
+    ],
     queryFn: ({ signal }) =>
       agentOpsApi.listWorkspaces(params, { tenant, signal }),
     staleTime: 30_000,
@@ -108,13 +136,47 @@ function SessionFoldersList({ tenant }: { tenant: string }) {
               {rows.map((w) => (
                 <tr key={w.workspace_ref}>
                   <td className="font-medium">{folderName(w)}</td>
-                  <td className="font-mono text-caption">{w.root_path}</td>
+                  <td>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-mono text-caption">
+                        {w.root_path}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={t('sessionFolders.wiki', {
+                          folder: folderName(w),
+                        })}
+                        onClick={() => setWiki(w)}
+                      >
+                        {t('agentops:wiki.title')}
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </StaticTable>
         </XScroll>
       )}
+      <Sheet
+        open={wiki !== null}
+        onOpenChange={(open) => !open && setWiki(null)}
+      >
+        <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-3xl">
+          {wiki && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{folderName(wiki)}</SheetTitle>
+                <SheetDescription className="break-all">
+                  {wiki.root_path}
+                </SheetDescription>
+              </SheetHeader>
+              <WorkspaceWiki workspace={wiki} />
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </section>
   )
 }

@@ -224,6 +224,36 @@ func TestExternalOutputAtomicReload(t *testing.T) {
 	}
 }
 
+// TestExternalOutputDoesNotOverwriteANameAnotherWriterPublished: reconcile checks that
+// a name is free and openExternal publishes later, and a console destination can be
+// applied in between. The name belongs to whoever published it first: the external
+// connector is refused and torn down, and the console's keeps serving.
+func TestExternalOutputDoesNotOverwriteANameAnotherWriterPublished(t *testing.T) {
+	fx := newExtFixture(t, modelsign.PredicateTypeSLSAProvenanceV1)
+	d, rd := newExtDispatcher(combinedTrust(fx))
+	console := &stubOutput{}
+	d.put("sink", console, "console-fp")
+	d.mu.Lock()
+	d.consoleOwned["sink"] = struct{}{}
+	d.mu.Unlock()
+
+	if d.openExternal(context.Background(), extSpec("sink", fx), nil, quietLog()) {
+		t.Fatal("openExternal must refuse a name another writer already published")
+	}
+	if err := d.Deliver(context.Background(), model.NewTenantID(), "sink", sdk.Notification{Title: "still-console"}); err != nil {
+		t.Fatalf("Deliver: %v", err)
+	}
+	if _, closed, delivered := console.counts(); closed != 0 || delivered != 1 {
+		t.Fatalf("console connector closed=%d delivered=%d, want 0/1 (must keep serving)", closed, delivered)
+	}
+	if _, closed, _ := rd.at(0).counts(); closed != 1 {
+		t.Fatalf("the refused external connector closed=%d, want 1 (torn down, not leaked)", closed)
+	}
+	if names := d.liveExternalNames(); len(names) != 0 {
+		t.Fatalf("live external destinations = %v, want none", names)
+	}
+}
+
 // TestExternalOutputRefusedReloadKeepsOldLive: a reload whose new build fails
 // admission is atomic — the previously admitted connector stays live and delivering,
 // never a half-open sink.

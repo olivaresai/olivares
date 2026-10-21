@@ -46,6 +46,12 @@ content gate 都通过后才会运行：被 DLP 或 firewall 拒绝的 prompt �
   配置其他监听地址；它默认**失败即关闭（fail-CLOSED）**（无法做出决策的代理绝不能
   转发），且只有在运维方主动开通后才会挂载。
 
+默认仍是已发布的 26.10.1<!-- release-fixed --> 端点；现有配置和客户端 URL 无需迁移。单独使用时，Codex 钩子也默认使用
+`127.0.0.1:8448`。要同时启用两个监听器，请显式给其中一个指定不同的地址：例如，在由
+`OLIVARES_CODEX_HOOK_PEP_CONFIG` 选定的文件中把 `listen` 设为 `127.0.0.1:8450`，并把钩子客户端的
+`OLIVARES_CODEX_HOOK_URL` 设为 `http://127.0.0.1:8450/`。引擎会在绑定之前拒绝重叠的地址，
+而不是悄悄地迁移任一端点。
+
 本模块对实时请求**不做任何决策**。它是组合根（composition root）通过 `Policy()`
 读取的、持久且可在控制台编写的策略；决策由现有的接缝（seam）在边缘处组合而成
 （`EvaluateModelAccess`、`CheckBudget`、驻留地、`ClassifySensitivity`、上下文窗口检查）。

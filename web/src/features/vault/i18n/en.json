@@ -1,0 +1,88 @@
+{
+  "title": "Vault",
+  "subtitle": "Your passwords, notes and authenticator codes. They are sealed on this server and only you can open them.",
+  "add": "Add item",
+  "search": "Find an item",
+  "noMatch": "No item matches “{{query}}”",
+  "sealerUnavailable": "This server cannot seal secrets yet, so items cannot be saved.",
+  "created": "Item added",
+  "saved": "Item saved",
+  "deleted": "Item deleted",
+  "copyBlocked": "The browser did not allow copying",
+  "nothingToCopy": "This item has nothing to copy",
+  "needPerson": "The vault belongs to a person. Sign in with your account to use yours.",
+  "needOrganization": "Choose an organization to open your vault there.",
+  "copied": "{{field}} copied. It clears from the clipboard in {{seconds}} s.",
+  "rowCopied": "{{what}} copied. It clears from the clipboard in {{seconds}} s.",
+  "what": {
+    "password": "Password",
+    "code": "Code",
+    "note": "Note"
+  },
+  "kind": {
+    "login": "Login",
+    "note": "Note",
+    "totp": "Authenticator",
+    "code": "Code"
+  },
+  "empty": {
+    "title": "Your vault is empty",
+    "description": "Add a login, a note or an authenticator key. Opening or copying an item is recorded in the audit ledger."
+  },
+  "row": {
+    "open": "Open {{label}}",
+    "openItem": "Open",
+    "delete": "Delete",
+    "menu": "Actions for {{label}}",
+    "copyPassword": "Copy the password of {{label}}",
+    "copyNote": "Copy the note of {{label}}",
+    "copyCode": "Copy the code of {{label}}"
+  },
+  "delete": {
+    "title": "Delete {{label}}?",
+    "body": "The item is removed for good. This cannot be undone.",
+    "confirm": "Delete"
+  },
+  "detail": {
+    "locked": "Locked. Revealing an item is recorded in the audit ledger, and it hides again after a minute.",
+    "hidden": "Hidden",
+    "reveal": "Reveal",
+    "edit": "Edit",
+    "totpKey": "Authenticator key",
+    "code": "Code",
+    "codeHidden": "Not shown",
+    "codeLeft": "{{n}} s left",
+    "showCode": "Show code",
+    "copyField": "Copy {{field}}",
+    "showField": "Show {{field}}",
+    "hideField": "Hide {{field}}"
+  },
+  "form": {
+    "addTitle": "Add an item",
+    "editTitle": "Edit {{label}}",
+    "name": "Name",
+    "nameHint": "Letters, digits, dots, dashes and underscores. You find the item by this name, also in the CLI.",
+    "nameTaken": "An item with this name already exists",
+    "nameInvalid": "Use letters, digits, dots, dashes and underscores",
+    "type": "Type",
+    "username": "Username",
+    "password": "Password",
+    "show": "Show password",
+    "hide": "Hide password",
+    "generate": "Generate",
+    "generateOptions": "Generator options",
+    "generateFailed": "Could not generate a password",
+    "length": "Length",
+    "lower": "Lowercase letters",
+    "upper": "Uppercase letters",
+    "digits": "Digits",
+    "symbols": "Symbols",
+    "url": "Website",
+    "totp": "Authenticator key",
+    "totpHint": "A base32 key, or the otpauth:// link behind the service's QR code",
+    "note": "Note",
+    "description": "Description",
+    "descriptionHint": "Shown in the list. Not secret.",
+    "save": "Save"
+  }
+}

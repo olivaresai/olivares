@@ -2067,6 +2067,169 @@ export function View() {
   { args: [] },
 )
 
+// ---------------------------------------------------------------------------
+// The edition seam of the console room. `PANEL_EXTENSIONS.consoleAccess` is optional: the
+// edition that owns the room's authority supplies it, and the installed Community
+// composition (`features/extensions.ts`, a frozen literal) declares nothing there. Both
+// reads of that seam — the registry's `capability` and the operation hook — must resolve to
+// "no question / the reflected hook" in that tree. The same reads stay unreadable whenever
+// the composition could be carrying something this guard cannot see.
+//
+// Each case is the real shape reduced: the registry entry that writes
+// `PANEL_EXTENSIONS.consoleAccess?.capability`, and the hook that picks
+// `PANEL_EXTENSIONS.consoleAccess?.useOperation ?? useReflectedOperation`.
+// ---------------------------------------------------------------------------
+const SEAM_EXTENSIONS = (composition) => `import type { FeatureCapability } from './registry'
+export interface ConsoleAccess {
+  readonly capability: FeatureCapability
+  readonly useOperation: (operation: string, permission: string) => boolean
+}
+export interface PanelExtensions { readonly consoleAccess?: ConsoleAccess }
+${composition}
+`
+const SEAM_REGISTRY = (spectreCapability = '{ surface: spectreSurface }') => `import { capabilityQuestion } from '@/lib/auth/capabilities'
+import { PANEL_EXTENSIONS } from './extensions'
+type Question = { kind: string; operation: string }
+export interface FeatureCapability {
+  surface: (workspace: string | null) => Question | null
+  navigation?: (workspace: string | null) => readonly [Question | null, Question | null] | undefined
+}
+export interface FeatureView {
+  id: string
+  capability?: FeatureCapability
+}
+declare function opaqueNavigation(workspace: string | null): readonly [Question | null, Question | null] | undefined
+declare const extraCapability: Partial<FeatureCapability>
+function spectreNavigation(_workspace: string | null): readonly [Question | null, Question | null] | undefined {
+  return undefined
+}
+function spectreSurface(workspace: string | null): Question | null {
+  if (!workspace) return null
+  return capabilityQuestion({ kind: 'surface', operation: '${SPECTRE_OP}', workspaceId: workspace })
+}
+export const FEATURE_VIEWS: FeatureView[] = [
+  { id: 'spectre', capability: ${spectreCapability} },
+  { id: 'console', capability: PANEL_EXTENSIONS.consoleAccess?.capability },
+]
+`
+const SEAM_VISIBLE = `import { useCapability } from '@/lib/auth/capabilities'
+import { useAuth } from '@/lib/auth/context'
+import { FEATURE_VIEWS } from './registry'
+const VIEW = FEATURE_VIEWS[0]
+export function View() {
+  const { can } = useAuth(); const control = can('voice:policy:admin')
+  const observation = useCapability(VIEW?.capability?.surface('w1') ?? null)
+  const landing = VIEW?.capability?.navigation?.('w1')
+  const landingOne = useCapability(landing?.[0] ?? null)
+  return observation.access + landingOne.access
+}
+`
+const SEAM_COMPOSITION = 'export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({})'
+const seamQuestionRepo = (composition, spectreCapability) =>
+  makeRepo(
+    {
+      'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+      'web/src/features/extensions.ts': SEAM_EXTENSIONS(composition),
+      'web/src/features/registry.ts': SEAM_REGISTRY(spectreCapability),
+      'web/src/features/visible.tsx': SEAM_VISIBLE,
+    },
+    { inventory: SPECTRE_INVENTORY },
+  )
+
+checkExit(
+  'the edition capability the installed composition omits carries no question, its sibling is still credited',
+  seamQuestionRepo(SEAM_COMPOSITION),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+check(
+  'an edition capability from a producer this guard cannot read stays unreadable',
+  seamQuestionRepo(
+    'declare function loadAccess(): ConsoleAccess\n' +
+      'export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({ consoleAccess: loadAccess() })',
+  ),
+  ['unreadable - @ web/src/features/visible.tsx:7', 'unreadable - @ web/src/features/visible.tsx:9'],
+)
+check(
+  'an unfrozen composition cannot vouch that the edition capability is absent',
+  seamQuestionRepo('export const PANEL_EXTENSIONS: PanelExtensions = {}'),
+  ['unreadable - @ web/src/features/visible.tsx:7', 'unreadable - @ web/src/features/visible.tsx:9'],
+)
+check(
+  'a navigation question from a producer this guard cannot read stays unreadable',
+  seamQuestionRepo(SEAM_COMPOSITION, '{ surface: spectreSurface, navigation: opaqueNavigation }'),
+  ['unreadable - @ web/src/features/visible.tsx:9'],
+)
+checkExit(
+  'a readable navigation writer and an element access of its result are a consumed question',
+  seamQuestionRepo(SEAM_COMPOSITION, '{ surface: spectreSurface, navigation: spectreNavigation }'),
+  0,
+  CREDIT_LINE,
+  { args: [] },
+)
+check(
+  'a spread beside the capability fields may carry them, so the registry entry is unreadable',
+  seamQuestionRepo(SEAM_COMPOSITION, '{ surface: spectreSurface, ...extraCapability }'),
+  ['unreadable - @ web/src/features/visible.tsx:7', 'unreadable - @ web/src/features/visible.tsx:9'],
+)
+// The Business shape: the edition DOES fill the seam. A present, frozen consoleAccess is not an
+// omission, so neither the capability nor the hook is read as absent.
+const SEAM_PRESENT = 'const realCapability: FeatureCapability = { surface: () => null }\n' +
+  'export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({ consoleAccess: Object.freeze({\n' +
+  '  capability: realCapability, useOperation: (_operation: string, _permission: string) => true }) })'
+check(
+  'a present edition capability is not an omission',
+  seamQuestionRepo(SEAM_PRESENT),
+  ['unreadable - @ web/src/features/visible.tsx:7', 'unreadable - @ web/src/features/visible.tsx:9'],
+)
+
+const SEAM_AUTHORITY = `import { useAuth } from '@/lib/auth/context'
+import { PANEL_EXTENSIONS } from './extensions'
+function useReflectedOperation(_operation: string, permission: string): boolean {
+  const { can } = useAuth()
+  return can(permission)
+}
+export function useConsoleOperation(operation: string, permission: string): boolean {
+  const useOperation = PANEL_EXTENSIONS.consoleAccess?.useOperation ?? useReflectedOperation
+  return useOperation(operation, permission)
+}
+`
+const seamOperationRepo = (composition, permission) =>
+  makeRepo({
+    'web/src/lib/auth/capabilities.ts': CAPS_MODULE,
+    'web/src/features/extensions.ts': SEAM_EXTENSIONS(composition),
+    'web/src/features/registry.ts': SEAM_REGISTRY(),
+    'web/src/features/authority.ts': SEAM_AUTHORITY,
+    'web/src/features/screen.tsx': view(`  return useConsoleOperation('POST /v1/things', '${permission}')`)
+      .replace("import { useAuth }", "import { useConsoleOperation } from './authority'\nimport { useAuth }"),
+  })
+
+check(
+  'the reflected operation hook beside an omitted edition hook resolves its permission',
+  seamOperationRepo(SEAM_COMPOSITION, 'session:read'),
+  [],
+)
+check(
+  'the reflected operation hook still reports a permission the engine does not declare',
+  seamOperationRepo(SEAM_COMPOSITION, 'ghost:read'),
+  ['undeclared ghost:read @ web/src/features/authority.ts:5'],
+)
+check(
+  'a present edition hook is not an omission: the reflected permission stays unreadable',
+  seamOperationRepo(SEAM_PRESENT, 'session:read'),
+  ['unreadable - @ web/src/features/authority.ts:5'],
+)
+check(
+  'an edition hook this guard cannot read leaves the reflected permission unreadable',
+  seamOperationRepo(
+    'declare function loadAccess(): ConsoleAccess\n' +
+      'export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({ consoleAccess: loadAccess() })',
+    'session:read',
+  ),
+  ['unreadable - @ web/src/features/authority.ts:5'],
+)
+
 checkExit(
   'import aliases of the real builder and hook still count as a consumed question',
   makeRepo(

@@ -58,7 +58,7 @@ Le site de documentation que vous lisez fait partie du produit AGPL. Quelle capa
 | Édition | Prix | Périmètre |
 | --- | --- | --- |
 | Community | Gratuit, AGPL-3.0-only | Utilisateurs illimités ; un fournisseur d'identité (IdP) actif. |
-| Business | 129 USD/mois ou 1 290 USD/an | Utilisateurs illimités ; une entité juridique ; une instance active à la fois. |
+| Business | 99 USD/mois ou 990 USD/an | Utilisateurs illimités ; une entité juridique ; une instance active à la fois. |
 | Enterprise | Nous contacter | Conditions convenues par contrat et capacités qui en dépendent : plusieurs entités, davantage de déploiements ou d'IdP, miroirs air-gap, LTS personnalisé et identifiants amont délimités émis par échange de jetons OAuth 2.0 (RFC 8693). |
 
 Business comprend **Regulated Operations**, **AI Runtime Security**,
@@ -86,10 +86,10 @@ Le binaire ouvert est la plateforme de gouvernance tout entière ; le volet comm
 `enterprise/` est **additif**. Deux frontières méritent d'être signalées, car la
 build ouverte y répond honnêtement au lieu de faire semblant :
 
-- **SSO** — l'authentification à IdP unique (OIDC + SAML 2.0) et le SCIM entrant sont
-  **ouverts** dans le binaire par défaut : connexion réelle, sans `-tags enterprise`.
+- **SSO** — l'authentification à IdP unique (OIDC + SAML 2.0) est
+  **ouverte** dans le binaire par défaut : connexion réelle, sans `-tags enterprise`.
   Les IdP actifs multiples (par tenant / par domaine), le mappage de groupes à la
-  connexion et l'exigence de SSO relèvent de Business (Identity & Scale) ; activer un
+  connexion, l'exigence de SSO et le serveur SCIM entrant relèvent de Business (Identity & Scale) ; activer un
   second IdP actif renvoie
   `multi_idp_requires_enterprise`.
 - **Comptes utilisateurs** — **illimités dans toutes les éditions**. La build

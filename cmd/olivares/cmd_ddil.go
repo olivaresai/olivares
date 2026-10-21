@@ -26,8 +26,9 @@ import (
 // newDDILCmd groups the disconnected-transfer operations.
 func newDDILCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ddil",
-		Short: "Air-gap DDIL bundles: export, verify and import governance state across a disconnected gap",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ddil",
+		Short:       "Air-gap DDIL bundles: export, verify and import governance state across a disconnected gap",
 		Long: "ddil moves governance state across a gap no network crosses: export signs a\n" +
 			"bundle on the connected side, a courier carries it, and import verifies,\n" +
 			"reconciles and applies it on the disconnected side.\n\n" +
@@ -37,6 +38,16 @@ func newDDILCmd() *cobra.Command {
 		Example: "  olivares ddil keygen --out ddil-private.b64 > ddil-public.b64\n" +
 			"  olivares ddil verify --bundle transfer.ddil --pubkey @ddil-public.b64 -o json\n" +
 			"  olivares ddil import --bundle transfer.ddil --pubkey @ddil-public.b64",
+		// Air-gap transfer is a Business capability: every edition but the Business build
+		// refuses every verb before cobra checks the required flags or any file is touched,
+		// and installEditionAnswers words the refusal. The bare group keeps printing its
+		// help. An unknown flag or a stray argument is still a usage error (exit code 2).
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if thisEdition.name != "enterprise" && !isGroupStub(cmd) {
+				return notInEdition()
+			}
+			return nil
+		},
 	}
 	cmd.AddCommand(newDDILExportCmd(), newDDILVerifyCmd(), newDDILImportCmd(), newDDILKeygenCmd())
 	return cmd
@@ -109,8 +120,9 @@ func newDDILExportCmd() *cobra.Command {
 		noPolicy                 bool
 	)
 	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Assemble and sign a DDIL bundle from the local governance store",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "export",
+		Short:       "Assemble and sign a DDIL bundle from the local governance store",
 		Long: "export assembles one tenant's audit segments, active policy snapshot and optional evidence\n" +
 			"into a signed courier bundle for transfer across a disconnected or air-gapped boundary.",
 		Example: `  olivares ddil export --tenant t_abc123 --out transfer.ddil \
@@ -228,8 +240,9 @@ type ddilKeygenResult struct {
 func newDDILKeygenCmd() *cobra.Command {
 	var out string
 	cmd := &cobra.Command{
-		Use:   "keygen",
-		Short: "Generate an Ed25519 DDIL transport keypair",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "keygen",
+		Short:       "Generate an Ed25519 DDIL transport keypair",
 		Long: strings.TrimSpace(`
 Generate a dedicated Ed25519 transport keypair for DDIL bundles. The private key signs
 bundles through --sign-key on export; the receiving node pins its PUBLIC half through

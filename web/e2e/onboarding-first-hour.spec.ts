@@ -206,19 +206,20 @@ test('first hour: the setup wizard asks only for what the first session needs', 
   expect(unwalked(JOURNEYS.sessions, visited)).toEqual([])
 
   // PROVIDER KEYS: the key the wizard added, the profile sessions launch with, and the
-  // accounts a tool can sign in with instead. A fresh install lists every area from the
-  // first sign-in, so the sidebar's area groups offer profiles and accounts beside the keys.
+  // accounts a tool can sign in with instead. Profiles and accounts fold into AI tools
+  // (#2240): the sidebar offers AI tools and the keys, not the two folded pages, and each
+  // page still opens at its own address.
   visited.splice(0)
   await nav.getByRole('link', { name: 'AI tools', exact: true }).click()
-  await page.getByRole('link', { name: 'API keys', exact: true }).click()
+  await page.getByRole('link', { name: 'Providers', exact: true }).click()
   await expect(page.getByRole('main')).toContainText(ollama.endpoint)
   const [, PROFILES, ACCOUNTS] = JOURNEYS.providerKeys
   const areas = page.locator('[data-slot="sidebar-areas"]')
   await expect(
-    areas.getByRole('link', { name: 'API keys', exact: true }),
+    areas.getByRole('link', { name: 'Providers', exact: true }),
   ).toBeVisible()
   for (const name of ['Provider profiles', 'Provider accounts'])
-    await expect(areas.getByRole('link', { name, exact: true })).toHaveCount(1)
+    await expect(areas.getByRole('link', { name, exact: true })).toHaveCount(0)
   await page.goto(stepHref(PROFILES))
   await expect(
     page.getByRole('heading', { name: 'Provider profiles' }),

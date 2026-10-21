@@ -42,11 +42,14 @@ zentrales **`EvalResult`** — das kanonische Artefakt (`Suite`, `SubjectKind`, 
 `Score`, `Passed`, `OccurredAt`, `Metrics`), das Compliance (XIII) und die UI lesen, **ohne die
 eigenen Tabellen von XII zu kennen**. Runs werden synchron ausgeführt; der SSE-Stream eines
 Runs *gibt den persistierten Run wieder* (Frames pro Fall, dann eine Zusammenfassung), er löst
-nichts aus. Eine Regression ist ein Punktvergleich mit einem Baseline-Run. Liegt der
-Score-Abfall über der `regression_threshold` der Suite, setzt der Run `regressed` und
-schreibt ein zentrales **`Finding`** (`Kind = eval_regression`). Dieser Vergleich hat
-kein Intervall. Die automatische Baseline ist der letzte abgeschlossene Run derselben
-Suite und desselben Subjekts, bei gesetzter Variante auch derselben Variante. Dieser
+nichts aus. Eine Regression ist ein Vergleich mit einem Baseline-Run. Liegt der
+Score-Abfall über der `regression_threshold` der Suite und schließt das 95%-Intervall der
+Pass-Rate-Differenz (Newcombe, Differenz von Wilson-Intervallen) null aus, setzt der Run
+`regressed` und schreibt ein zentrales **`Finding`** (`Kind = eval_regression`). Ein Abfall
+über dem Schwellenwert, dessen Intervall null enthält, wird als `inconclusive_noise`
+markiert und nicht als Regression; der Vergleich zeigt das Intervall und beide Nenner,
+sodass kleine Suites weniger Findings auslösen. Die automatische Baseline ist der letzte abgeschlossene Run derselben
+Suite und desselben Subjekts, bei gesetzter Variante auch derselben Variante, ohne als `inconclusive_noise` markierte Runs. Dieser
 Run kann eine andere Suite-Version, ein anderes Modell oder einen anderen Scorer
 nutzen, und der Vergleich meldet nicht, was sich geändert hat. Nach einem Wechsel der
 Suite-Version übergeben Sie eine explizite Baseline oder pinnen eine (`POST /baselines`).
@@ -98,8 +101,8 @@ Budgetspeicher nicht lesbar, verweigert das Gate die Ausgabe und scheitert mit
 `budget_blocked`. Ein Budget, das blockiert oder drosselt, stoppt die Ausgabe. Der einzige
 Ausweg aus einem gescheiterten Gate ist das **gesteuerte Override** — Admin-Stufe, schriftliche
 Begründung, auditiert —, das das *effektive* Urteil ändert, das CI erneut prüft, niemals das
-aufgezeichnete. Jede berichtete Rate kommt mit ihrem Nenner und 95%-Intervall; der Regressionsvergleich
-nicht. Siehe
+aufgezeichnete. Jede berichtete Rate kommt mit ihrem Nenner und 95%-Intervall, ebenso der Regressionsvergleich.
+Siehe
 `docs/EVAL-METHODOLOGY.md` im Repository für die vollständige Methodik und Quellen.
 
 :::caution[Ehrliche Grenzen]

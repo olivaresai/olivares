@@ -66,8 +66,8 @@
     "remove": "移除许可证",
     "edition": "版本",
     "editions": {
-      "community": "社区版",
-      "enterprise": "商业版"
+      "community": "Community",
+      "enterprise": "Business"
     },
     "status": "许可证状态",
     "statuses": {
@@ -83,7 +83,6 @@
     "activeUsers": "活动用户账户",
     "noUserLimit": "自托管：无上限",
     "expires": "过期时间",
-    "paidThrough": "已付费至",
     "leaseUntil": "临时期限至",
     "leaseNote": "临时期限（退款期）。请在此日期前续期，以便在已付费日期之前保持有效。",
     "issued": "签发时间",
@@ -96,7 +95,10 @@
       "data-dir": "数据目录"
     },
     "communityNote": "Community 版本：应用已验证的许可证会在此显示其详情；这不会改变此构建。",
-    "expiredBanner": "此商业许可证已过期：Business 模块已停用，该部署将按社区版运行。你的数据和用户账户完好无损 —— 没有任何账户被限制、停用或删除。请安装续期后的许可证以恢复模块。",
+    "buildMismatch": "你的许可证适用于 {{edition}}；此安装正在运行 Community 构建。",
+    "switchBuild": "切换到 {{edition}}",
+    "editionAdds": "{{edition}} 的新增功能（来自版本文档）：",
+    "expiredBanner": "此商业许可证已过期：Business 模块已停用，该部署将按 Community 版运行。你的数据和用户账户完好无损 —— 没有任何账户被限制、停用或删除。请安装续期后的许可证以恢复模块。",
     "managedExternally": "许可证由带外方式管理（来源：{{source}}）。请编辑该来源以进行更改——从控制台安装已禁用，以避免产生被遮蔽的文件。",
     "installTitle": "安装或更新许可证",
     "installHint": "粘贴已签名的许可证数据块，或上传许可证文件。在存储之前，它会针对此构建的密钥进行验证，然后实时应用。",
@@ -108,9 +110,9 @@
     "downgradeWarn": "引擎在应用此更改前请求了明确确认。现有账户绝不会被删除，用户账户也绝不会受到数量限制。请确认以继续。",
     "confirmDowngrade": "确认降级",
     "removeTitle": "移除许可证？",
-    "removeBody": "这将移除 {{licensee}} 的许可证并回退到社区版。你的数据完好无损；现有账户绝不会被删除。",
-    "removeBodyGeneric": "这将移除已安装的许可证并回退到社区版。你的数据完好无损；现有账户绝不会被删除。",
-    "removed": "许可证已移除；已回退到社区版。",
+    "removeBody": "这将移除 {{licensee}} 的许可证并回退到 Community 版。你的数据完好无损；现有账户绝不会被删除。",
+    "removeBodyGeneric": "这将移除已安装的许可证并回退到 Community 版。你的数据完好无损；现有账户绝不会被删除。",
+    "removed": "许可证已移除；已回退到 Community 版。",
     "removeFailed": "无法移除许可证。"
   },
   "people": {
@@ -210,9 +212,9 @@
   },
   "sso": {
     "title": "单点登录（SSO）",
-    "caption": "连接你的身份提供方（OIDC 或 SAML）。密钥在静态存储时加密，且不再显示。配置 SSO 是一项覆盖整个部署、仅限超级管理员的操作。",
+    "caption": "连接你的身份提供商（OIDC 或 SAML）。密钥在静态存储时加密，且不再显示。配置 SSO 是一项覆盖整个部署、仅限超级管理员的操作。",
     "superadminOnly": "SSO 是覆盖整个部署的设置；只有超级管理员才能查看或更改。",
-    "builderUnavailable": "此构建可以存储 SSO 配置，但无法将其激活：此引擎没有可用的 OIDC/SAML 提供方。",
+    "builderUnavailable": "此构建可以存储 SSO 配置，但无法将其激活：此引擎没有可用的 OIDC/SAML 提供商。",
     "statusConfigured": "已配置",
     "statusNotConfigured": "未配置",
     "statusEnabled": "已启用",
@@ -258,7 +260,7 @@
     "displayNameFallback": "单点登录",
     "mapping": {
       "title": "计为 MFA 的值",
-      "caption": "此提供方的哪些值计为多因素登录。联合 MFA 最多计为 AAL2，绝不满足 AAL3。每个精确值都是你信任的例外。",
+      "caption": "此提供商的哪些值计为多因素登录。联合 MFA 最多计为 AAL2，绝不满足 AAL3。每个精确值都是你信任的例外。",
       "amr": "AMR 值（OIDC）",
       "acr": "ACR 值（OIDC）",
       "samlContexts": "身份验证上下文（SAML）",
@@ -493,7 +495,7 @@
     "created": "工作区已创建。",
     "renamed": "工作区已重命名。",
     "none": "尚无工作区。",
-    "noneHint": "工作区用于在本组织内限定代理、会话与授权的范围。先创建一个。",
+    "noneHint": "工作区用于在本组织内限定智能体、会话与授权的范围。先创建一个。",
     "ownerOnly": "只有组织所有者才能创建工作区。"
   },
   "agents": {
@@ -539,10 +541,10 @@
     "updated": "智能体 {{name}} 已更新。",
     "deactivated": "智能体已停用。",
     "deleted": "智能体已删除。",
-    "truncated": "已加载 {{n}} 个代理；还有更多",
-    "truncatedHint": "已登记的代理多于此处所示；本页按行 id 取数。代理未列在此处，并不能证明它未登记。",
+    "truncated": "已加载 {{n}} 个智能体；还有更多",
+    "truncatedHint": "已登记的智能体多于此处所示；本页按行 id 取数。智能体未列在此处，并不能证明它未登记。",
     "workspacesTruncated": "已加载 {{n}} 个工作区；还有更多",
-    "workspacesTruncatedHint": "工作区数量多于已加载的。超出本页的工作区在表格中显示为原始 id，且在创建或编辑代理时无法选择：截断阻碍的是一次操作，而不只是隐藏一行。"
+    "workspacesTruncatedHint": "工作区数量多于已加载的。超出本页的工作区在表格中显示为原始 id，且在创建或编辑智能体时无法选择：截断阻碍的是一次操作，而不只是隐藏一行。"
   },
   "groups": {
     "title": "智能体组",
@@ -588,7 +590,7 @@
     "created": "智能体组已创建。",
     "updated": "智能体组已更新。",
     "none": "尚无智能体组。",
-    "noneHint": "代理组为一组代理命名，使一条策略即可治理全部代理。先创建一个。"
+    "noneHint": "智能体组为一组智能体命名，使一条策略即可治理全部智能体。先创建一个。"
   },
   "roles": {
     "readOnlyNotice": "您需要治理 RBAC 权限才能管理角色与委派。",
@@ -600,7 +602,7 @@
       "caption": "您只能在这些范围内委派，且不能超出这些权限。引擎会对每次变更重新核查。",
       "tenantWide": "租户级",
       "workspaceScope": "工作区：{{ref}}",
-      "groupScope": "代理组：{{ref}}",
+      "groupScope": "智能体组：{{ref}}",
       "classLabel": "限于 {{class}}",
       "loadError": "无法加载您的委派权限。请重试。",
       "folderScope": "文件夹：{{ref}}"
@@ -636,9 +638,9 @@
       "scopeTree": "范围",
       "scopeTenant": "租户级",
       "scopeWorkspace": "工作区",
-      "scopeAgentGroup": "代理组",
+      "scopeAgentGroup": "智能体组",
       "scopeRefWorkspace": "工作区",
-      "scopeRefGroup": "代理组",
+      "scopeRefGroup": "智能体组",
       "scopeRefPlaceholder": "请选择…",
       "scopeClass": "资源类型",
       "scopeClassAny": "任意资源",
@@ -649,13 +651,13 @@
     },
     "filters": {
       "title": "继承过滤器",
-      "caption": "在工作区、代理组或文件夹上，阻止从节点上方到达某类资源的权限。在该节点或其下方的授权仍然有效；禁止规则仍在各处生效。",
+      "caption": "在工作区、智能体组或文件夹上，阻止从节点上方到达某类资源的权限。在该节点或其下方的授权仍然有效；禁止规则仍在各处生效。",
       "create": "新建过滤器",
       "none": "暂无继承过滤器。",
       "noneHint": "每个节点都会继承其上方授予的权限。",
       "node": "节点",
       "class": "资源类型",
-      "classHint": "来自节点上方的权限在该处不再适用于此类型。代理组只能过滤代理。",
+      "classHint": "来自节点上方的权限在该处不再适用于此类型。智能体组只能过滤智能体。",
       "createdBy": "设置者",
       "actions": "操作",
       "folder": "文件夹",
@@ -826,9 +828,9 @@
       "subjectKind": "主体类型",
       "subjectUser": "用户",
       "subjectRole": "角色",
-      "subjectAgentGroup": "代理组",
+      "subjectAgentGroup": "智能体组",
       "subjectRef": "主体引用",
-      "subjectRefHint": "用户 ID、角色名称或代理组 slug。",
+      "subjectRefHint": "用户 ID、角色名称或智能体组 slug。",
       "targetKind": "目标类型",
       "targetModel": "模型",
       "targetModelGroup": "模型组",
@@ -858,7 +860,7 @@
       "exportHint": "为单个资源生成密封的证据包——记录在防篡改审计台账中。",
       "resourceType": "资源类型",
       "resourceId": "资源 ID",
-      "resourceIdHint": "资源、代理或会话的 ID。",
+      "resourceIdHint": "资源、智能体或会话的 ID。",
       "actionName": "权限",
       "actionNameHint": "要检查的权限（例如 agent:read、resource:write）。",
       "subjectType": "主体类型",
@@ -867,7 +869,7 @@
       "subjectTypeUser": "用户",
       "subjectTypeToken": "令牌",
       "resourceTypeResource": "资源",
-      "resourceTypeAgent": "代理",
+      "resourceTypeAgent": "智能体",
       "resourceTypeSession": "会话",
       "run": "搜索",
       "runExport": "导出",
@@ -888,7 +890,7 @@
       "exportIntegrity": "完整性",
       "why": {
         "tab": "原因",
-        "hint": "主体在某个代理、会话或资源上拥有八项受托权限中的哪些，以及该节点所在的容器路径。每项权限都是授权引擎自己的回答；此面板只显示它。",
+        "hint": "主体在某个智能体、会话或资源上拥有八项受托权限中的哪些，以及该节点所在的容器路径。每项权限都是授权引擎自己的回答；此面板只显示它。",
         "run": "解释",
         "path": "路径",
         "inWorkspace": "(位于工作区 {{workspace}})",
@@ -905,9 +907,9 @@
     }
   },
   "activation": {
-    "title": "商业版激活",
+    "title": "Business 激活",
     "caption": "启用您的版本包含的模块。具有安全默认值的控制项将被激活；需要密钥或策略审查的控制项将被暂存，供您填写并提升。",
-    "unavailable": "激活功能在商业版中可用。",
+    "unavailable": "激活功能在 Business 版中可用。",
     "enablePreset": "启用预设",
     "addon": "模块",
     "state": "状态",
@@ -928,16 +930,18 @@
   "bindings": {
     "readOnlyNotice": "查看绑定需要来源作用域绑定的访问权限。",
     "title": "来源绑定",
-    "caption": "将真实的来源引用绑定到工作区、文件夹、代理、会话、用户、组或角色。凭据字段仅为引用；控制台绝不在此存储实际值。",
+    "caption": "将真实的来源引用绑定到工作区、文件夹、智能体、会话、用户、组或角色。凭据字段仅为引用；控制台绝不在此存储实际值。",
     "create": "新建绑定",
     "disableScoping": "禁用作用域限定",
     "sourceType": "来源类型",
     "sourceTypes": {
       "mcp": "MCP",
       "model": "模型",
-      "provider": "提供方",
+      "provider": "提供商",
       "knowledge": "知识",
-      "data": "数据"
+      "data": "数据",
+      "profile": "提供商配置",
+      "tool": "AI 工具"
     },
     "sourceRef": "来源引用",
     "sourceRefHint": "使用准确的来源引用。并非每种来源类型都有统一的目录。",
@@ -953,10 +957,10 @@
     "note": "备注",
     "scopeTrees": {
       "workspace": "工作区",
-      "agent_group": "代理组",
+      "agent_group": "智能体组",
       "folder": "文件夹子树",
       "session": "会话",
-      "agent": "代理",
+      "agent": "智能体",
       "user": "用户",
       "user_group": "用户组",
       "role": "角色"
@@ -973,12 +977,12 @@
     "scopeTree": "作用域轴",
     "ref": {
       "workspace": "工作区",
-      "agent_group": "代理组",
+      "agent_group": "智能体组",
       "folder": "文件夹子树",
       "user_group": "用户组",
       "role": "角色",
-      "agent": "代理",
-      "agentHint": "代理通过外部 ID 选择。",
+      "agent": "智能体",
+      "agentHint": "智能体通过外部 ID 选择。",
       "session": "会话外部 ID",
       "sessionHint": "受路由控制的会话轴。未知引用不匹配任何会话。",
       "user": "用户 ID",
@@ -1037,7 +1041,7 @@
       "confined": "{{source}} 已受限，因为它至少有一条已启用的允许绑定。",
       "globalWithForbids": "{{source}} 为全局，但下列已启用的禁止绑定除外。",
       "global": "{{source}} 为全局，因为它没有已启用的允许绑定，也没有已启用的禁止绑定。",
-      "algebra": "禁止是绝对的。当至少启用一条允许绑定时，只有匹配的主体才能访问来源。作用域凭据的优先级为 会话 > 代理 > 用户 > 用户组 > 角色 > 代理组 > 文件夹 > 工作区。",
+      "algebra": "禁止是绝对的。当至少启用一条允许绑定时，只有匹配的主体才能访问来源。作用域凭据的优先级为 会话 > 智能体 > 用户 > 用户组 > 角色 > 智能体组 > 文件夹 > 工作区。",
       "noEnabled": "没有已启用的绑定参与解析。",
       "openAccessMap": "在 Access Map 中打开",
       "credential": "凭据 {{name}} {{hint}}",
@@ -1074,7 +1078,7 @@
         "rw": "读写",
         "ro": "只读",
         "disabled": "已停用",
-        "forbidden": "未解析 — 您缺少 sourcescope:assignment:read 权限",
+        "forbidden": "未解析 — 您的角色无法读取来源分配",
         "unknown": "未解析 — 分配列表未完整加载",
         "notFound": "没有匹配的分配",
         "notApplicable": "目标不是分配项 — 此解析器不适用"
@@ -1100,8 +1104,8 @@
     "pickerTruncatedHint": "引擎报告存在多于已加载数量的选项，因此该选择列表并不完整。若找不到你需要的项，并不代表它不存在——此处没有服务端搜索，请暂时使用 API。因为找不到正确项而改选其他实体，正是绑定锚定到错误对象的途径。",
     "pickerTruncated": {
       "workspaces": "工作区列表不完整",
-      "agentGroups": "代理分组列表不完整",
-      "agents": "代理列表不完整"
+      "agentGroups": "智能体分组列表不完整",
+      "agents": "智能体列表不完整"
     }
   },
   "entitlement": {

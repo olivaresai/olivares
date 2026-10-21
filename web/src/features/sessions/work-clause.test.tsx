@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// When a session has no summary and no goal, the naming ladder names it by what the engine
-// reported it doing: the action and the resource, both machine identifiers (`web.search`,
-// `appdb.public.customers`). They are shown exactly as sent, in every language, so they render
-// in the identifier element (code, machine face), and the words around them stay translated.
-// Plain dotted copy is what an untranslated key looks like, and a check for untranslated
-// keys cannot tell the two apart.
+// The session overview tells what the engine reported a session doing: the action and the
+// resource, both machine identifiers (`web.search`, `appdb.public.customers`). They are shown
+// exactly as sent, in every language, so they render in the identifier element (code, machine
+// face), and the words around them stay translated. Plain dotted copy is what an untranslated
+// key looks like, and a check for untranslated keys cannot tell the two apart. The list's names
+// are not that clause: a session is named by its tool and folder, and the action is its hover.
 /// <reference types="node" />
 import { readFileSync } from 'node:fs'
 import type { ReactNode } from 'react'
@@ -107,8 +107,8 @@ describe('the action a session reports renders as an identifier', () => {
     expect(container).toHaveTextContent('Reviewed the migration')
   })
 
-  it('the rail row names such a session with the identifier in code', () => {
-    const session = mergeSessions([live()], [])[0]
+  it('the rail row names such a session by its tool: the identifier is not its name', () => {
+    const session = mergeSessions([live({ provider: 'claude' })], [])[0]
     render(
       <WorkRail
         sessions={[session]}
@@ -120,14 +120,25 @@ describe('the action a session reports renders as an identifier', () => {
     )
     const rowEl = screen.getByTestId('rail-row')
     const nameEl = within(rowEl).getByTestId('rail-row-name')
-    expect(nameEl.querySelector('code')).toHaveTextContent('web.search')
+    expect(nameEl).toHaveTextContent('Claude Code')
+    expect(nameEl.querySelector('code')).toBeNull()
+    expect(nameEl.textContent).not.toContain('web.search')
+    // The action is the row's hover, not a plain dotted key painted in the row.
+    expect(rowEl.getAttribute('title')).toContain('web.search')
     expect(plainDotted(rowEl)).toEqual([])
   })
 
-  it('the front door row names it the same way', () => {
-    renderIntel(<RecentWork sessions={asSessions([live()])} state="ready" />)
+  it('the front door row names it the same way, and keeps the action on its hover', () => {
+    renderIntel(
+      <RecentWork
+        sessions={asSessions([live({ provider: 'claude' })])}
+        state="ready"
+      />,
+    )
     const rowEl = screen.getByTestId('home-recent-row')
-    expect(rowEl.querySelector('code')).toHaveTextContent('web.search')
+    expect(rowEl).toHaveTextContent('Claude Code')
+    expect(rowEl.querySelector('code')).toBeNull()
+    expect(rowEl.getAttribute('title')).toContain('web.search')
     expect(plainDotted(rowEl)).toEqual([])
   })
 
@@ -136,23 +147,9 @@ describe('the action a session reports renders as an identifier', () => {
     expect(plainDotted(container)).toEqual(['web.search'])
   })
 
-  it('every surface that paints the ladder paints it through WorkClause', () => {
-    for (const [file, pattern] of [
-      [
-        'src/features/sessions/work-rail.tsx',
-        /<WorkClause\b[^>]*text=\{naming\.name\}/,
-      ],
-      [
-        'src/features/sessions/session-card.tsx',
-        /<WorkClause\b[^>]*text=\{naming\.name\}/,
-      ],
-      [
-        'src/features/sessions/session-overview.tsx',
-        /<WorkClause\b[^>]*text=\{line\.text\}/,
-      ],
-      ['src/features/home/recent-work.tsx', /<WorkClause\b[^>]*text=\{name\}/],
-    ] as const) {
-      expect(readFileSync(file, 'utf8'), file).toMatch(pattern)
-    }
+  it("the session overview's clause paints its ladder through WorkClause", () => {
+    expect(
+      readFileSync('src/features/sessions/session-overview.tsx', 'utf8'),
+    ).toMatch(/<WorkClause\b[^>]*text=\{line\.text\}/)
   })
 })

@@ -24,6 +24,21 @@ func TestBindingKeepsEndpointRestrictions(t *testing.T) {
 		{"opencode", "openai", "https://api.openai.com/v1", false},
 		{"opencode", "xai", "https://gateway.example", false},
 		{"opencode", "openai_compatible", "", false},
+		// A local server (vLLM, llama.cpp) is the only OpenAI-compatible endpoint OpenCode
+		// is held to; a gateway on the public internet is still refused.
+		{"opencode", "openai_compatible", "http://127.0.0.1:8080/v1", true},
+		{"opencode", "openai_compatible", "http://localhost:8000/v1", true},
+		{"opencode", "openai_compatible", "http://10.0.0.5:8000/v1", true},
+		{"opencode", "openai_compatible", "https://llm.example.com/v1", false},
+		{"opencode", "openai_compatible", "http://llm.example.com/v1", false},
+		{"opencode", "openai_compatible", "http://user:key@127.0.0.1:8080/v1", false},
+		{"opencode", "openai_compatible", "http://127.0.0.1:8080/v1?", false},
+		{"opencode", "openai_compatible", "http://127.0.0.1:8080/v1?x=1", false},
+		{"opencode", "openai_compatible", "http://127.0.0.1:8080/v1#x", false},
+		{"opencode", "openai_compatible", "http:127.0.0.1:8080", false},
+		{"opencode", "openai_compatible", "http://LOCALHOST:8080/v1", false},
+		// Gemini CLI speaks only Google's API; no OpenAI-compatible server is its provider.
+		{"gemini-cli", "openai_compatible", "http://127.0.0.1:8080/v1", false},
 		{"opencode", "ollama", "http://127.0.0.1:11434", true},
 		{"gemini-cli", "openai", "", false},
 		{"ollama", "ollama", "", false},

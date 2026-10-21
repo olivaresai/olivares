@@ -56,6 +56,8 @@
       "startedAt": "Started"
     },
     "regressed": "Regressed · drift {{drift}}",
+    "withinNoise": "Drop within noise · drift {{drift}}",
+    "passRateDiff": "Pass-rate drop {{drop}} (95% CI {{lo}}–{{hi}}) — {{passed}}/{{n}} scored vs {{baselinePassed}}/{{baselineN}} baseline",
     "noRegression": "None",
     "empty": "No runs in range.",
     "emptyHint": "Every eval run in the selected range is listed here with its score. Widen the range, or start a run.",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "Drift — {{subject}}",
-    "description": "Score over time against the suite pass threshold. Regression is a point-score comparison with one baseline run, which may use another suite version, model or scorer, and the comparison does not report which changed. After a suite version change, pin a baseline.",
+    "description": "Score over time against the suite pass threshold. Regression is a comparison with one baseline run: the score drop must pass the suite threshold and the 95% interval of the pass-rate difference must exclude zero. That run may use another suite version, model or scorer, and the comparison does not report which changed. After a suite version change, pin a baseline.",
     "score": "Score",
     "threshold": "Pass threshold",
     "pickerTitle": "Subject",
@@ -189,7 +191,7 @@
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
-    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+    "noJudge": "No judge is set up, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
   },
   "baseline": {
     "pin": "Pin as baseline",

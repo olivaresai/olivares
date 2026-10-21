@@ -21,10 +21,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = "# Exact fixtures: setup, sign-in redaction, DR sealers, and plain-git transport."
 END_MARKER = "# End exact fixtures."
+# export-closure: absent-by-design scripts/release/README.md — scanner subject path only; its prose is generated below, never read from the repository.
+RELEASE_PROSE_PATH = "scripts/release/README.md"
 EXPECTED = collections.Counter({
     ("cmd/olivares/cmd_setup_existing_env_test.go", "generic-api-key"): 1,
     ("cmd/olivares/internal/agenttoolsapi/signin_failure_test.go", "jwt"): 1,
     ("cmd/olivares/cmd_dr_sealer_test.go", "generic-api-key"): 4,
+    (RELEASE_PROSE_PATH, "generic-api-key"): 1,
 })
 # connectors/gitpublish/plaingit_test.go is not a source here: since fcbd2917 it builds its
 # fake SSH key header at run time, so the current file has no private-key capture. Its exact
@@ -90,7 +93,11 @@ def main() -> None:
     config = Path(os.environ.get("FIXTURE_SCAN_CONFIG", ROOT / ".gitleaks.toml")).read_text()
     before, marker, after = config.partition(MARKER)
     control = before + after.partition(END_MARKER)[2] if marker else config
-    sources = {path: (ROOT / path).read_text() for path, _ in EXPECTED}
+    sources = {path: (ROOT / path).read_text() for path, _ in EXPECTED
+               if path != RELEASE_PROSE_PATH}
+    # Reproduce the historical sentence without depending on the excluded README
+    # or introducing another literal scanner capture alongside its exception.
+    sources[RELEASE_PROSE_PATH] = "API failure, " + "/".join(("published", "existing")) + "\n"
     # Keep only the sealer declarations: later uses add identifier captures in
     # directory mode, while the inherited findings are the two declarations.
     sealer = "cmd/olivares/cmd_dr_sealer_test.go"

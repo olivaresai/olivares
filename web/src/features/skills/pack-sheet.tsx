@@ -6,7 +6,12 @@
 // only those the operator can read) and the assign/unassign actions. Directory names come
 // from the console's own workspace, agent group and agent lists; an unreadable or deleted
 // target shows its ID.
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type QueryKey,
+} from '@tanstack/react-query'
 import { type FormEvent, type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryErrorState } from '@/components/layout/query-error-state'
@@ -25,7 +30,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { profileLabel } from '@/features/agentops/types'
 import { consoleApi, consoleKeys } from '@/features/console/api'
+import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/context'
 import { useModuleOn } from '@/stores/modules'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -44,11 +52,13 @@ const DIRECTORY_PAGE = { limit: 1000 }
 /** The targets the console assigns to; templates and sessions stay in the CLI. */
 const ASSIGNABLE: SkillTargetKind[] = [
   'workspace',
+  'profile',
   'folder',
   'agent_group',
   'agent',
 ]
 const FOLDER_PAGE = { state: 'active', limit: 200 } as const
+const PROFILE_PAGE = { limit: 200 }
 const selectClass =
   'h-9 w-full min-w-0 rounded-md border border-ctl-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
@@ -56,11 +66,15 @@ interface DirectoryList {
   items: Array<{ id: string; name: string }>
   isLoading: boolean
   error: unknown
+  hasMore?: boolean
+  isFetchingMore?: boolean
+  loadMore?: () => void
 }
 type Directory = Partial<Record<SkillTargetKind, DirectoryList>>
 
 function useDirectory(tenant: string | null): Directory {
   const { can } = useAuth()
+  const boundary = useAuthBoundary()
   // Session folders belong to the sessions module: without it there are none.
   const sessionsOn = useModuleOn('sessions')
   const workspaces = useQuery({
@@ -84,6 +98,23 @@ function useDirectory(tenant: string | null): Directory {
       agentOpsApi.listWorkspaces(FOLDER_PAGE, { tenant, signal }),
     enabled: sessionsOn && can('sessions:workspace:read'),
   })
+  const profiles = useInfiniteQuery({
+    queryKey: [
+      ...agentOpsKeys.profiles(tenant, boundary.epoch, PROFILE_PAGE),
+      'skill-targets',
+    ],
+    queryFn: ({ pageParam, signal }) =>
+      agentOpsApi.listProfiles(
+        { ...PROFILE_PAGE, cursor: pageParam },
+        { signal },
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => (page.has_more ? page.cursor : undefined),
+    enabled:
+      sessionsOn &&
+      can('sessions:profile:read') &&
+      can('sessions:profile:write'),
+  })
   const entry = (q: typeof workspaces | typeof groups | typeof agents) => ({
     items: q.data?.items ?? [],
     isLoading: q.isLoading,
@@ -91,6 +122,18 @@ function useDirectory(tenant: string | null): Directory {
   })
   return {
     workspace: entry(workspaces),
+    profile: {
+      items: (profiles.data?.pages.flatMap((page) => page.items) ?? []).map(
+        (p) => ({ id: p.profile_ref, name: profileLabel(p) }),
+      ),
+      isLoading: profiles.isLoading,
+      error: profiles.error,
+      hasMore: profiles.hasNextPage,
+      isFetchingMore: profiles.isFetchingNextPage,
+      loadMore: () => {
+        void profiles.fetchNextPage()
+      },
+    },
     // A folder is named by its workspace_ref; its label is the name it was
     // registered under, else the last segment of its path.
     folder: {
@@ -123,10 +166,13 @@ export function PackSheet({
   pack: SkillPack | null
   onOpenChange: (open: boolean) => void
 }) {
+  const boundary = useAuthBoundary()
   return (
     <Sheet open={pack !== null} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-        {pack && <PackDetail key={pack.id} pack={pack} />}
+        {pack && (
+          <PackDetail key={`${pack.id}:${boundary.epoch}`} pack={pack} />
+        )}
       </SheetContent>
     </Sheet>
   )
@@ -145,6 +191,12 @@ function PackDetail({ pack }: { pack: SkillPack }) {
   const { t } = useTranslation('skills')
   const { activeTenant, can } = useAuth()
   const queryClient = useQueryClient()
+  const boundary = useAuthBoundary()
+  const assignmentsKey = skillsKeys.packAssignments(
+    activeTenant,
+    pack.id,
+    boundary.epoch,
+  )
   const canAssign = can('skills:assignment:write')
   const canPublish = can('skills:catalog:write')
   const directory = useDirectory(activeTenant)
@@ -153,20 +205,21 @@ function PackDetail({ pack }: { pack: SkillPack }) {
     queryFn: () => skillsApi.pack(pack.id),
   })
   const uses = useQuery({
-    queryKey: skillsKeys.packAssignments(activeTenant, pack.id),
-    queryFn: () => skillsApi.packAssignments(pack.id),
+    queryKey: assignmentsKey,
+    queryFn: ({ signal }) => skillsApi.packAssignments(pack.id, { signal }),
   })
   const [removing, setRemoving] = useState<SkillAssignment | null>(null)
   const unassign = usePrivilegedMutation<SkillAssignment>({
+    mutationKey: [...assignmentsKey, 'unassign'],
     mutationFn: (a) => skillsApi.unassign(a, { tenant: activeTenant }),
-    invalidateKeys: () => [skillsKeys.packAssignments(activeTenant, pack.id)],
+    invalidateKeys: () => [assignmentsKey],
     successMessage: t('uses.unassigned'),
     onDone: () => setRemoving(null),
     // A changed or removed pin answers 409/404: reread the list so a retry carries
     // the current version, and let the shared handler report the refusal.
     onError: () => {
       void queryClient.invalidateQueries({
-        queryKey: skillsKeys.packAssignments(activeTenant, pack.id),
+        queryKey: assignmentsKey,
       })
       setRemoving(null)
       return false
@@ -180,16 +233,17 @@ function PackDetail({ pack }: { pack: SkillPack }) {
     assignment: SkillAssignment
     approve: boolean
   }>({
+    mutationKey: [...assignmentsKey, 'repin'],
     mutationFn: ({ assignment, approve }) =>
       skillsApi.repin(assignment, pack.latest_revision_id, approve, {
         tenant: activeTenant,
       }),
-    invalidateKeys: () => [skillsKeys.packAssignments(activeTenant, pack.id)],
+    invalidateKeys: () => [assignmentsKey],
     successMessage: t('uses.moved'),
     onDone: () => setRepinning(null),
     onError: () => {
       void queryClient.invalidateQueries({
-        queryKey: skillsKeys.packAssignments(activeTenant, pack.id),
+        queryKey: assignmentsKey,
       })
       setRepinning(null)
       return false
@@ -267,7 +321,11 @@ function PackDetail({ pack }: { pack: SkillPack }) {
         )}
 
         {canPublish && pack.state === 'enabled' && (
-          <UpdateSection pack={pack} pins={pins} />
+          <UpdateSection
+            pack={pack}
+            pins={pins}
+            assignmentsKey={assignmentsKey}
+          />
         )}
 
         <Section title={t('uses.title')}>
@@ -353,6 +411,7 @@ function PackDetail({ pack }: { pack: SkillPack }) {
             revisions={revisions}
             pinned={pins}
             directory={directory}
+            assignmentsKey={assignmentsKey}
           />
         )}
       </div>
@@ -394,6 +453,7 @@ interface AssignVars {
   target_kind: SkillTargetKind
   target_id: string
   pack_revision_id: string
+  members?: string[]
   approve_active_content?: boolean
 }
 
@@ -402,11 +462,13 @@ function AssignForm({
   revisions,
   pinned,
   directory,
+  assignmentsKey,
 }: {
   pack: SkillPack
   revisions: SkillRevision[]
   pinned: SkillAssignment[]
   directory: Directory
+  assignmentsKey: QueryKey
 }) {
   const { t } = useTranslation('skills')
   const { activeTenant } = useAuth()
@@ -414,19 +476,26 @@ function AssignForm({
   const [target, setTarget] = useState('')
   const [revision, setRevision] = useState(pack.latest_revision_id)
   const [approved, setApproved] = useState(false)
+  const [chosen, setChosen] = useState<string[] | null>(null)
   const assign = usePrivilegedMutation<AssignVars>({
+    mutationKey: [...assignmentsKey, 'assign'],
     mutationFn: (vars) => skillsApi.assign(vars, { tenant: activeTenant }),
-    invalidateKeys: () => [skillsKeys.packAssignments(activeTenant, pack.id)],
+    invalidateKeys: () => [assignmentsKey],
     successMessage: t('assign.done'),
     onDone: () => {
       setTarget('')
       setApproved(false)
     },
   })
-  // What a tool acts on when the skill loads is pinned only with approval.
-  const acting = (
-    revisions.find((r) => r.id === revision)?.members ?? []
-  ).filter((m) => (m.active_content?.length ?? 0) > 0)
+  const available = revisions.find((r) => r.id === revision)?.members ?? []
+  // Preserve whole-pack assignment for small packs. Large native packs require
+  // a choice instead of sending more members than the engine can admit.
+  const members =
+    chosen ?? (available.length <= 64 ? available.map((m) => m.name) : [])
+  const validMembers = members.length > 0 && members.length <= 64
+  const acting = available.filter(
+    (m) => members.includes(m.name) && (m.active_content?.length ?? 0) > 0,
+  )
   // The engine keeps one pin per target and pack; a pinned target is changed or
   // unassigned from its row, so it is not offered again here.
   const list = directory[kind]
@@ -448,11 +517,12 @@ function AssignForm({
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    if (target && (acting.length === 0 || approved))
+    if (target && validMembers && (acting.length === 0 || approved))
       assign.mutate({
         target_kind: kind,
         target_id: target,
         pack_revision_id: revision,
+        ...(members.length !== available.length ? { members } : {}),
         ...(acting.length > 0 ? { approve_active_content: true } : {}),
       })
   }
@@ -490,18 +560,50 @@ function AssignForm({
             ))}
           </select>
         </Field>
+        {list?.hasMore && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={list.isFetchingMore}
+            onClick={list.loadMore}
+          >
+            {t('common:table.loadMore')}
+          </Button>
+        )}
         <Field label={t('assign.revision')}>
           <select
             className={selectClass}
             value={revision}
             onChange={(e) => {
               setRevision(e.target.value)
+              setChosen(null)
               setApproved(false)
             }}
           >
             {choices.map((r) => (
               <option key={r.id} value={r.id}>
                 {t('detail.revision', { n: r.number })}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label={t('assign.members')}
+          description={t('assign.membersHint')}
+        >
+          <select
+            multiple
+            size={Math.min(6, Math.max(2, available.length))}
+            className={cn(selectClass, 'h-auto')}
+            value={members}
+            onChange={(e) => {
+              setChosen(Array.from(e.target.selectedOptions, (o) => o.value))
+              setApproved(false)
+            }}
+          >
+            {available.map((m) => (
+              <option key={m.name} value={m.name}>
+                {m.name}
               </option>
             ))}
           </select>
@@ -528,7 +630,10 @@ function AssignForm({
           size="sm"
           className="self-start"
           disabled={
-            !target || assign.isPending || (acting.length > 0 && !approved)
+            !target ||
+            !validMembers ||
+            assign.isPending ||
+            (acting.length > 0 && !approved)
           }
         >
           {t('assign.submit')}
@@ -546,9 +651,11 @@ function AssignForm({
 function UpdateSection({
   pack,
   pins,
+  assignmentsKey,
 }: {
   pack: SkillPack
   pins: SkillAssignment[]
+  assignmentsKey: QueryKey
 }) {
   const { t } = useTranslation('skills')
   const { activeTenant } = useAuth()
@@ -558,7 +665,7 @@ function UpdateSection({
   const refresh = () => [
     skillsKeys.pack(activeTenant, pack.id),
     skillsKeys.packs(activeTenant),
-    skillsKeys.packAssignments(activeTenant, pack.id),
+    assignmentsKey,
   ]
   const check = usePrivilegedMutation<void, SkillUpdateCheck>({
     mutationFn: () => skillsApi.updateCheck(pack.id, { tenant: activeTenant }),

@@ -6,15 +6,8 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { METHOD_COLORS } from './method-colors'
 import type { ParsedEndpoint, TagGroup } from './openapi-parser'
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-  POST: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  PUT: 'bg-amber-500/15 text-amber-800 dark:text-amber-400',
-  PATCH: 'bg-orange-500/15 text-orange-800 dark:text-orange-400',
-  DELETE: 'bg-red-500/15 text-red-700 dark:text-red-400',
-}
 
 function MethodBadge({ method }: { method: string }) {
   return (
@@ -102,7 +95,7 @@ export function EndpointTree({
               )}
               {group.tag}
               {group.beta && (
-                <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-normal text-amber-600 dark:text-amber-400">
+                <span className="rounded bg-warning-soft px-1 py-0.5 text-[9px] font-semibold uppercase tracking-normal text-warning">
                   {t('beta')}
                 </span>
               )}

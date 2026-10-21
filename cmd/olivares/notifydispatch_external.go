@@ -103,6 +103,15 @@ func (d *connectorDispatcher) openExternal(ctx context.Context, spec notifyDesti
 	}
 	d.rt.TrackOutputPlugin(ed.conn, ed.client)
 	d.mu.Lock()
+	// The callers checked that the name was free before the (slow) admission above; the
+	// console can publish the same name in between. The first publisher keeps it: this
+	// connector is torn down, never swapped over a live one.
+	if _, taken := d.conns[spec.Name]; taken {
+		d.mu.Unlock()
+		d.teardownExtDest(ctx, ed)
+		log.Warn("notify: external output destination name was taken while it opened; NOT wired", "name", spec.Name)
+		return false
+	}
 	d.conns[spec.Name] = ed.conn
 	d.ext[spec.Name] = ed
 	d.resolvedFP[spec.Name] = ed.resolvedFP

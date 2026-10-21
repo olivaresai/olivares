@@ -15,13 +15,16 @@
 #    Un inventario que sólo revisa una persona no es un inventario: es una foto que envejece. Y
 #    envejece hacia el lado peligroso — lo que falta no se ve, mientras que una fila de más chirría.
 #
-# ⛔ LO QUE ESTE GATE **NO** COMPRUEBA, dicho aquí para que su verde no se lea como una bendición
-#    del documento entero: el bloque «Summary» lleva **once métricas más** (alias de kind, binarios
-#    de plugin, conectores de salida, proveedores de roster, fuentes de contenido…) y este gate
-#    **sólo** comprueba «Connector directories». Re-derivar las otras once aquí sería una SEGUNDA
-#    implementación de lo que `check-public-counts.sh` ya deriva, y dos copias de un predicado
-#    divergen — que es la trampa que `web-bundle-source-digest.sh` documenta con su medida. Si
-#    alguna de esas once importa, se deriva UNA vez y se consume, no se copia.
+# ⛔ WHAT THIS GATE DOES **NOT** CHECK, stated here so its green is not read as a blessing of
+#    the whole document: the "Summary" block carries more metrics, and this gate checks **only**
+#    "Connector directories". The metrics derivable from the code (in-process source kind aliases
+#    and source directories, plugin binaries, outbound connectors, roster providers, content
+#    sources, libraries, integrations, directories without Go) are derived ONCE by
+#    `check-public-counts.sh` (check_connectors_context) and compared with that table and with the
+#    canonical sentence. Re-deriving them here would be a SECOND implementation, and two copies of
+#    a predicate diverge: the trap `web-bundle-source-digest.sh` documents with its measurement.
+#    Still unchecked here and there: the no-op Gather list, the source scaffolds, the Git-host
+#    write adapter and the unclassified directories.
 #
 # Salida: 0 la tabla cubre el árbol · 1 falta o sobra alguna fila · 2 NO HE PODIDO MIRAR.
 set -uo pipefail
@@ -126,7 +129,7 @@ if not faltan and not sobran and cifra_mal is None:
     print(
         f"check-connector-inventory: OK — {len(filas)} row(s) cover the {len(dirs)} connector(s) "
         f"with Go ({len(sin_go)} without Go, intentionally exempt: {', '.join(sorted(sin_go)) or 'none'}). "
-        f"⚠ The other 11 metrics in the Summary block are not covered by this check."
+        f"The derivable Summary metrics are compared by scripts/check-public-counts.sh; the no-op Gather, scaffold, Git-host and unclassified rows are not checked."
     )
     sys.exit(0)
 

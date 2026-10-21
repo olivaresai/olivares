@@ -111,6 +111,13 @@ Exécutez-le après chaque installation et après le retrait d'un override.
 
 ## 3 · Community → Business, sur place
 
+Installer une licence Business ou Enterprise valide sur un build Community laisse ce
+build en fonctionnement. Le cockpit de session et les autres pages commerciales
+n'apparaissent qu'une fois cette installation passée en Business. La vue **Edition & license**
+de la console nomme la licence installée séparément du build. **Expires** est la durée
+payée ; **Lease until**, lorsqu'il est affiché, est le bail d'instance provisoire
+distinct. Vous utilisez Docker ? Allez à [Docker et Compose](#docker-et-compose) ci-dessous.
+
 :::note[Business et le canal des artefacts commerciaux]
 L'option `--enterprise` désigne le canal des artefacts commerciaux, pas l'édition.
 Les éditions sont Community, Business et Enterprise. Business comprend Regulated Operations,
@@ -128,7 +135,9 @@ olivares upgrade --enterprise --token <TOKEN>
 La commande récupère le build commercial signé pour votre plateforme et **vérifie la signature
 hors ligne** — un artefact altéré interrompt la mise à niveau en laissant intact le binaire en
 cours d'exécution — puis le remplace atomiquement en conservant une sauvegarde du précédent.
-Utilisez d'abord `--check` si vous souhaitez voir le plan sans l'appliquer :
+Business porte le même numéro de version que Community : la commande fonctionne donc aussi lorsque vous
+exécutez déjà cette version. Utilisez d'abord `--check` si vous souhaitez voir le plan sans l'appliquer ;
+il indique le changement par `edition: community -> enterprise` :
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN> --check
@@ -152,6 +161,74 @@ Le remplacement porte sur un binaire, pas sur vos données — mais effectuez to
 sauvegarde demandée par [Mettre à niveau et revenir en arrière](/fr/how-to/upgrade-and-rollback/).
 Cette page explique aussi comment revenir au binaire précédent.
 :::
+
+### Docker et Compose
+
+L'image publique `docker.io/olivaresai/olivares` est Community. Dans un conteneur,
+`olivares upgrade` installe la version dans le volume de données et non dans l'image, de sorte
+que recréer le conteneur la redémarre. Cela applique la version Business lorsqu'elle est plus
+récente que l'image ou de même version (`--check` indique le changement par `edition: community -> enterprise`) ;
+construire vous-même l'image, comme décrit plus bas, est l'alternative. Une fois la licence installée
+(section 2), lancez la mise à niveau dans le conteneur en cours d'exécution, puis redémarrez-le.
+Le jeton figure dans votre e-mail de livraison ; transmettez-le par son nom pour qu'il
+n'apparaisse pas dans la liste des processus :
+
+```sh
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
+docker compose up -d --force-recreate olivares
+```
+
+La version est conservée dans `ota/` sous le répertoire de données (`/var/lib/olivares/ota`
+dans l'image fournie), avec le manifeste signé et l'artefact dont elle a été vérifiée. Le
+binaire de l'image la démarre lorsqu'elle est plus récente que l'image, ou qu'elle porte la
+même version compilée autrement (une image Community de la version que vous avez appliquée en
+Business). Rien dans le volume n'est cru sur parole : chaque démarrage vérifie la signature du
+manifeste avec la clé OTA intégrée à l'image, et l'artefact avec l'empreinte que signe le
+manifeste. La preuve est conservée dans le répertoire temporaire du conteneur (le fichier
+Compose fourni y monte un `tmpfs`), pas dans le volume ; recréer le conteneur la vide. Si
+l'image est plus récente que la version appliquée, l'image s'exécute et le journal de démarrage
+le dit ; relancez la mise à niveau. Une preuve qui ne se vérifie pas est ignorée avec un
+message, et l'image s'exécute. Le volume ne garde aucune sauvegarde du binaire précédent : pour
+revenir au binaire de l'image, supprimez `ota/`. Cela suppose un volume qui autorise
+l'exécution de fichiers (un volume nommé le permet ; sur un montage `noexec`, `olivares serve`
+s'arrête et en donne la raison au lieu d'exécuter silencieusement le binaire de l'image).
+
+Vous pouvez aussi construire l'image vous-même. Téléchargez la **même version et la même architecture Linux** du binaire Business via
+le [portail de téléchargement sous licence](https://licenses.olivares.ai/portal), puis vérifiez
+sa signature et sa somme de contrôle en suivant les instructions du téléchargement. Vous
+pouvez ensuite superposer ce binaire vérifié à l'image d'exécution Community correspondante
+sur votre propre hôte. Dans un répertoire contenant le binaire vérifié nommé `olivares`,
+utilisez ce `Dockerfile` :
+
+```dockerfile
+ARG COMMUNITY_IMAGE
+FROM ${COMMUNITY_IMAGE}
+COPY --chmod=0755 olivares /usr/local/bin/olivares
+```
+
+Construisez avec le digest de l'image Community de cette version, vérifié comme dans
+[Vérifier une version](/fr/how-to/verify-a-release/). Le résultat conserve l'utilisateur non root,
+le point d'entrée et les ports de cette image ; le `Dockerfile` n'a donc besoin d'aucune
+ligne `USER` :
+
+```sh
+docker build --build-arg COMMUNITY_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
+  --tag olivares-business-local:X.Y .
+```
+
+Gardez cette image privée et conservez la licence commerciale et les avis fournis avec
+le téléchargement. Ne placez ni votre fichier de licence ni votre jeton de téléchargement
+dans le contexte de build. Définissez l'`image` de votre service Compose sur
+`olivares-business-local:X.Y`, puis recréez ce service avec
+`docker compose up -d --no-deps --force-recreate olivares`. Pour Docker en mode
+autonome, recréez le conteneur avec cette image, le même volume et les mêmes arguments.
+Conservez le volume de données : n'utilisez pas `down --volumes`.
+
+Vérifiez **Edition & license** après le redémarrage : l'édition doit indiquer **Business**,
+et la licence installée reste dans le volume de données. Les contrats Enterprise utilisent
+aussi ce build commercial ; tout artefact propre à un contrat suit ses instructions de
+téléchargement.
 
 ## Retirer une licence
 

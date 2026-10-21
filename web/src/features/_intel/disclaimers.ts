@@ -44,7 +44,7 @@
  * modules/compliance emits it, to its key in the `intel` namespace under
  * `disclaimers.`.
  *
- * Adding an entry is a two-file change plus seven catalogs, and the gate enforces
+ * Adding an entry is a two-file change plus nine catalogs, and the gate enforces
  * both halves. Do not add one whose translation has not been reviewed for POLARITY:
  * every sentence here exists to say what the product is NOT.
  */

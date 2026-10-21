@@ -13,7 +13,7 @@
 // Lo que estos testigos vigilan no es que el panel «pinte»: es que NO FUNDA estados que el motor
 // separó a propósito. Cada fusión que aquí se caza cambia el remedio que el operador aplicaría.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
@@ -53,6 +53,14 @@ const SANO = {
   classified_mode: 'enforced',
   enforcement_committed: true,
   writer_fence: FENCE,
+}
+
+/** The report describes the compatibility record, which only a deployment that had compatibility mode has. */
+function hadCompatibilityMode() {
+  api.egressPolicyStatus.mockResolvedValue({
+    ...SANO,
+    classified_mode: 'legacy_compat',
+  })
 }
 
 function wrap(ui: ReactElement) {
@@ -218,6 +226,7 @@ describe('el informe detallado, que es de tier ADMIN', () => {
   })
 
   it('y SÍ con el permiso', async () => {
+    hadCompatibilityMode()
     wrap(<EgressCompatReport canAdmin />)
     expect(
       await screen.findByText(/what enforcing would break/i),
@@ -247,6 +256,7 @@ describe('el informe detallado, que es de tier ADMIN', () => {
         },
       ],
     })
+    hadCompatibilityMode()
     wrap(<EgressCompatReport canAdmin />)
     await screen.findByText('b.example')
     const filas = screen.getAllByRole('row').slice(1) // sin la cabecera
@@ -265,12 +275,83 @@ describe('el informe detallado, que es de tier ADMIN', () => {
       authorities: [],
       still_needed: 0,
     })
+    hadCompatibilityMode()
     wrap(<EgressCompatReport canAdmin />)
     const aviso = await screen.findByRole('alert')
     // FIRES IF: se pintan los ceros sin el aviso. «A decision approved against it would be
     // approved against an unknown» (egressrollout.go:720-722): los ceros de un informe no
     // sembrado se leen como «no rompe nada», que es la conclusión contraria a la verdadera.
     expect(aviso.textContent ?? '').toMatch(/never drawn/i)
+  })
+})
+
+describe('EgressCompatReport is for a deployment that had compatibility mode', () => {
+  const NOT_SEEDED = {
+    seeded: false,
+    intact: true,
+    subscriptions: 0,
+    unparsed: 0,
+    authorities: [],
+    still_needed: 0,
+  }
+
+  beforeEach(() => {
+    api.egressPolicyStatus.mockReset()
+    api.egressCompatReport.mockReset()
+    api.egressCompatReport.mockResolvedValue(NOT_SEEDED)
+  })
+
+  // enforced: a fresh install. policy_optional: the rollout store is not wired. Neither ever drew a record.
+  it.each(['enforced', 'policy_optional'])(
+    'draws nothing and never asks for the report when the deployment is classified %s',
+    async (classified) => {
+      api.egressPolicyStatus.mockResolvedValue({
+        ...SANO,
+        classified_mode: classified,
+        in_force: false,
+        source: undefined,
+        enforcement_committed: false,
+      })
+      const { container } = wrap(<EgressCompatReport canAdmin />)
+      // Empty, not a skeleton: the status read has settled and the card is gone.
+      await waitFor(() => expect(container).toBeEmptyDOMElement())
+      expect(api.egressCompatReport).not.toHaveBeenCalled()
+    },
+  )
+
+  it('says the record was never drawn on a deployment that left compatibility mode', async () => {
+    api.egressPolicyStatus.mockResolvedValue({
+      ...SANO,
+      classified_mode: 'legacy_compat',
+      in_force: false,
+      source: undefined,
+      enforcement_committed: false,
+    })
+    wrap(<EgressCompatReport canAdmin />)
+    expect(await screen.findByText(/never drawn/i)).toBeInTheDocument()
+  })
+
+  it('keeps the card when the engine cannot say what the deployment is', async () => {
+    api.egressPolicyStatus.mockResolvedValue({
+      ...SANO,
+      classified_mode: undefined,
+      mode_unavailable: true,
+    })
+    wrap(<EgressCompatReport canAdmin />)
+    expect(await screen.findByText(/never drawn/i)).toBeInTheDocument()
+  })
+
+  it('keeps the card when the status cannot be read', async () => {
+    api.egressPolicyStatus.mockRejectedValue(new Error('503'))
+    wrap(<EgressCompatReport canAdmin />)
+    expect(await screen.findByText(/never drawn/i)).toBeInTheDocument()
+  })
+
+  it('does not read the status at all for a caller who cannot see the report', async () => {
+    const { container } = wrap(<EgressCompatReport canAdmin={false} />)
+    await Promise.resolve()
+    expect(container).toBeEmptyDOMElement()
+    expect(api.egressPolicyStatus).not.toHaveBeenCalled()
   })
 })
 
@@ -478,6 +559,7 @@ describe('lo desconocido no se detiene en el campo que lo declara', () => {
       authorities: [],
       still_needed: 0,
     })
+    hadCompatibilityMode()
     wrap(<EgressCompatReport canAdmin />)
     const aviso = await screen.findByRole('alert')
     expect(aviso.textContent ?? '').toMatch(/never drawn/i)
@@ -497,6 +579,7 @@ describe('lo desconocido no se detiene en el campo que lo declara', () => {
       authorities: [],
       still_needed: 0,
     })
+    hadCompatibilityMode()
     wrap(<EgressCompatReport canAdmin />)
     expect(await screen.findByText(/subscriptions at the line/i)).not.toBeNull()
     expect(screen.queryByText(/no legacy destination/i)).not.toBeNull()

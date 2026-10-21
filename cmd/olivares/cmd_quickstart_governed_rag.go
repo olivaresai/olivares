@@ -97,8 +97,9 @@ func newQuickstartGovernedRAGOptions() quickstartGovernedRAGOptions {
 func newQuickstartGovernedRAGCmd() *cobra.Command {
 	opts := newQuickstartGovernedRAGOptions()
 	cmd := &cobra.Command{
-		Use:   "governed-rag",
-		Short: "Prepare live governed data for Claude Code (S3/Drive -> semantic KB -> MCP retrieval)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "governed-rag",
+		Short:       "Prepare live governed data for Claude Code (S3/Drive -> semantic KB -> MCP retrieval)",
 		Long: "Prepare the governed RAG path for Claude Code. The command writes a live\n" +
 			"content-source config (S3 or Google Drive), an MCP retrieval resource-server\n" +
 			"config, and a post-login bootstrap script that creates the KB, ingests from the\n" +

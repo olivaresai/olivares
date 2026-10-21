@@ -76,6 +76,10 @@ func callerQuestionsHarness(t *testing.T, allow map[auth.Permission]bool, opts .
 	m, _, tenant, _ := newRuntimeHarness(t, append([]Option{WithRunner(fr), WithCredentialSource(staticCred())}, opts...)...)
 	az := &questionedAuthorizer{allow: allow}
 	WithWorkAuthorizer(az)(m)
+	// callerContext is a new account on every call, so a resume here is always another
+	// person's. These tests measure the questions a launch or resume asks, not the edition
+	// of steering (steering_edition_test.go), so the Business seam is open.
+	m.rt.SteerOthers = true
 	return m, tenant, fr, az
 }
 
@@ -326,6 +330,9 @@ func TestLaunchCallerQuestionsRetainTheirAnswers(t *testing.T) {
 					fr := &fakeRunner{initSID: "sess-retained"}
 					m, st, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()), WithProviderSecretVault(vault))
 					WithWorkAuthorizer(auth.NewAuthorizer(nil))(m)
+					// The run is launched as a fixed actor and resumed by another account; this
+					// test measures the questions asked, not the edition of steering.
+					m.rt.SteerOthers = true
 					vault.values[tenant.String()+"|env/github"] = secretCanary
 					principal := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), Superadmin: allow}
 					mc := api.ModuleContext{Tenant: tenant, Principal: principal}

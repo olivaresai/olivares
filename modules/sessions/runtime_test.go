@@ -31,6 +31,9 @@ type fakeProc struct {
 	sent    [][]byte
 	exit    int
 	done    bool
+	// onStop, when set, runs as the process is stopped: a tool writing its last
+	// record while it exits.
+	onStop func()
 }
 
 func (p *fakeProc) Send(_ context.Context, line []byte) error {
@@ -44,8 +47,14 @@ func (p *fakeProc) Send(_ context.Context, line []byte) error {
 }
 func (p *fakeProc) Output() <-chan OutputFrame { return p.out }
 func (p *fakeProc) Wait() (int, error)         { <-p.stopped; return p.exit, nil }
-func (p *fakeProc) Stop(context.Context) error { p.finish(143); return nil } // SIGTERM-like
-func (p *fakeProc) PID() int                   { return 4242 }
+func (p *fakeProc) Stop(context.Context) error { // SIGTERM-like
+	if p.onStop != nil {
+		p.onStop()
+	}
+	p.finish(143)
+	return nil
+}
+func (p *fakeProc) PID() int { return 4242 }
 
 func (p *fakeProc) finish(code int) {
 	p.mu.Lock()

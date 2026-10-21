@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/sdk/model"
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 )
 
 func TestEdgeFromTool(t *testing.T) {
@@ -23,6 +24,66 @@ func TestEdgeFromTool(t *testing.T) {
 	}
 	if e.Source != model.SignalOTEL || e.Confidence != model.ConfidenceAttributed || e.ToolRef != "Read" {
 		t.Errorf("provenance = %s/%s/%s", e.Source, e.Confidence, e.ToolRef)
+	}
+}
+
+// A session this connector observed is a Claude Code session, and the connector is the
+// one that knows it: without the label the live row carries no engine, and the console
+// can only call the session by its last tool call (#2266). Posture is the PEP's to say,
+// not telemetry's, so it stays undeclared.
+func TestEdgeFromToolDeclaresTheClaudeEngine(t *testing.T) {
+	e, ok := edgeFromTool("sess-1", "Read", map[string]any{"file_path": "/x"}, testTime, model.ConfidenceAttributed)
+	if !ok {
+		t.Fatal("edge not built")
+	}
+	if got := e.Labels[model.LabelEngine]; got != model.EngineClaude {
+		t.Errorf("engine label = %q, want %q", got, model.EngineClaude)
+	}
+	if got, declared := e.Labels[model.LabelPosture]; declared {
+		t.Errorf("telemetry declared a posture (%q): only the policy point may", got)
+	}
+}
+
+// The identity edges are the first a session emits, before any tool call: a session that
+// never calls a tool is still a Claude Code session. An operator label named engine
+// cannot say otherwise, and the label set the caller shares is not mutated.
+func TestIdentityEdgesDeclareTheClaudeEngine(t *testing.T) {
+	shared := map[string]string{"team": "payments", "engine": "payments-bot"}
+	edges := identityEdges(claudeIdentity{sessionID: "s", orgID: "o", accountID: "a", labels: shared}, testTime)
+	if len(edges) != 2 {
+		t.Fatalf("edges = %d, want 2", len(edges))
+	}
+	for _, e := range edges {
+		if got := e.Labels[model.LabelEngine]; got != model.EngineClaude {
+			t.Errorf("%s edge engine = %q, want %q", e.ResourceKind, got, model.EngineClaude)
+		}
+		if e.Labels["team"] != "payments" {
+			t.Errorf("%s edge lost the operator label: %v", e.ResourceKind, e.Labels)
+		}
+		if _, declared := e.Labels[model.LabelPosture]; declared {
+			t.Errorf("%s edge declared a posture", e.ResourceKind)
+		}
+	}
+	if shared["engine"] != "payments-bot" {
+		t.Errorf("the caller's label set was mutated: %v", shared)
+	}
+}
+
+// engine and posture are the producer's and the policy point's words, never an
+// operator allowlist's: an entry naming one is skipped like any built-in.
+func TestLabelsFromAttrsRefuseEngineAndPosture(t *testing.T) {
+	a := newAttrs([]*commonpb.KeyValue{
+		kvStr("engine", "payments-bot"), kvStr("posture", "enforced"), kvStr("team", "payments"),
+	})
+	got := labelsFromAttrs(a, []string{"engine", "posture", "team"})
+	if _, has := got["engine"]; has {
+		t.Errorf("engine was collected as an operator label: %v", got)
+	}
+	if _, has := got["posture"]; has {
+		t.Errorf("posture was collected as an operator label: %v", got)
+	}
+	if got["team"] != "payments" {
+		t.Errorf("team = %q", got["team"])
 	}
 }
 

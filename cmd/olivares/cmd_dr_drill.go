@@ -33,8 +33,9 @@ func drDrillCmd() *cobra.Command {
 	var events int
 	var keepArtifacts bool
 	cmd := &cobra.Command{
-		Use:   "drill",
-		Short: "Drill synthetic-ledger continuity and print measured RTO",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "drill",
+		Short:       "Drill synthetic-ledger continuity and print measured RTO",
 		Long: "drill checks backup, restore and ledger continuity on a synthetic signed\n" +
 			"ledger in a scratch directory, then prints the measured RTO (restore + boot +\n" +
 			"verify). It does not check grants, key custody or effects after the restore\n" +

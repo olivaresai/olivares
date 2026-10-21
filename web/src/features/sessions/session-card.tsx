@@ -63,7 +63,6 @@ import { SessionFailure } from './session-failure'
 import type { Attribution, LiveDTO } from './types'
 import './i18n'
 import { ActionName } from './action-name'
-import { WorkClause } from './work-clause'
 
 export type { SessionTarget } from './session-target'
 
@@ -204,7 +203,7 @@ function CardBody({
               .filter((part, i, all) => part && all.indexOf(part) === i)
               .join(' · ')}
           >
-            <WorkClause text={naming.name} live={session.live} />
+            {naming.name}
             {naming.shortId ? (
               <span className="font-mono text-caption text-muted-foreground">
                 {' '}

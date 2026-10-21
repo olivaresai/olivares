@@ -29,8 +29,9 @@ func newSessionMoveCmd() *cobra.Command {
 	var account string
 	var resume bool
 	cmd := &cobra.Command{
-		Use:   "move <session> --account <account>",
-		Short: "Move a stopped session to another account of the same tool",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "move <session> --account <account>",
+		Short:       "Move a stopped session to another account of the same tool",
 		Long: "move continues a stopped Claude Code session on another account of the same tool, for\n" +
 			"example when the first account is out of quota. It carries that one conversation (the\n" +
 			"transcript and its subagent files) to the account's home and keeps the same session, its\n" +
@@ -112,8 +113,9 @@ func newSessionHandoffCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var account, summaryFile, name string
 	cmd := &cobra.Command{
-		Use:   "handoff <session> [--account <account>]",
-		Short: "Continue a session in another tool or account as a new, linked session",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "handoff <session> [--account <account>]",
+		Short:       "Continue a session in another tool or account as a new, linked session",
 		Long: "handoff starts a NEW session in another account, of any tool, that begins from a summary of\n" +
 			"this one and has its full transcript attached. Use it to continue in another tool: only a\n" +
 			"move keeps the same session, and only inside one tool. The new session is linked to this\n" +
@@ -121,7 +123,9 @@ func newSessionHandoffCmd() *cobra.Command {
 			"Without --account it prints the summary and starts nothing, so you can review it. The summary\n" +
 			"is generated from the stored conversation, with no model. Save it, edit it, and start with\n" +
 			"--summary-file <file> (or - for standard input); without the file the generated one is used.\n" +
-			"A session that was given vault secrets or a repository credential cannot be handed off.",
+			"A session that was given vault secrets, a repository credential or a package registry token\n" +
+			"cannot be handed off. A running session is stopped first (Claude Code, Codex, Gemini CLI and\n" +
+			"OpenCode sessions can be handed off); one that cannot be handed off is not stopped.",
 		Example: "  olivares session handoff my-app\n" +
 			"  olivares session handoff my-app --account codex-main\n" +
 			"  olivares session handoff my-app --account codex-main --summary-file summary.txt --name my-app-codex",

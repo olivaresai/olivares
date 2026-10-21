@@ -8,7 +8,7 @@ sidebar:
   order: 1
 ---
 
-**Edition:** authoring custom Cedar policies, including permits and forbids, requires Business. Community retains enforcement of stored policies, custom roles and scoped grants; they remain readable and revocable. `DELETE /v1/m/governance/pdp/active?engine=cedar` disables only the authored Cedar surface and preserves revision history, managed grants and adopted policies. Fresh Community installations retain built-in roles, native deny-overlay rules and the kill switch. This recipe’s external restrict-only PDP is distinct from authored Cedar permits, which can grant access within their scope.
+**Edition:** authoring custom Cedar policies, including permits and forbids, requires Business. Community retains enforcement of stored policies, custom roles and scoped grants; they remain readable and revocable. `DELETE /v1/m/governance/pdp/active?engine=cedar` disables only the authored Cedar surface and preserves revision history, managed grants and adopted policies. Fresh Community installations retain built-in roles, native deny-overlay rules and the kill switch. This recipe’s external restrict-only PDP is distinct from authored Cedar permits, which can grant access within their scope. Selecting that external engine (`OLIVARES_PDP_ENGINE`, a Cedar file or OPA) requires Business: Community refuses to start with an engine selected.
 
 **Goal:** add attribute-based restrictions on top of deny-by-default RBAC —
 for example, "no one touches resources tagged `secret`, whatever their role

@@ -2,90 +2,63 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// The one-click emergency stop (POST /killswitch). Engage is deliberately CHEAP
-// server-side (admin-tier + mandatory reason; no approval gate, no AAL bar — see
-// modules/governance/killswitch.go header), so the console's job is deliberation,
-// not friction: scope selection, a mandatory justification and ONE danger-toned
-// confirm step. A 409 means the scope is already stopped — the existing stop is
-// surfaced (state refetch + the engine's message naming it), never swallowed.
-import { OctagonAlert } from 'lucide-react'
+// The emergency stop (POST /killswitch). Engage is deliberately CHEAP server-side
+// (admin-tier + reason; no approval gate, no AAL bar — see modules/governance/killswitch.go
+// header), so the console offers ONE verb, "Stop all agents", behind one danger-toned
+// confirmation; stopping a single agent sits under More. The reason is optional here: the
+// engine requires one for the audit record, so an empty reason sends NO_REASON. A 409 means
+// the scope is already stopped — the existing stop is surfaced (state refetch + the
+// engine's message naming it), never swallowed.
+import { MoreHorizontal, OctagonAlert } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
 import { usePendingCommandAction } from '@/features/navigation/command-actions'
+import { agentOpsKeys } from '@/features/agentops/api'
 import { consoleApi, consoleKeys } from '@/features/console/api'
 import { killswitchApi, killswitchKeys } from './api'
 import './i18n'
-import type { EngageKillSwitchRequest, KillSwitchScopeKind } from './types'
+import type { EngageKillSwitchRequest } from './types'
 
-/** The mandatory reason field, which the ⌘K verb focuses. */
-const REASON_ID = 'ks-reason'
+/** What the stop records when the operator gave no reason. One English sentence, like the
+ * engine's own default re-enable reason (killswitch.go), not the operator's UI language:
+ * the audit record, the post-review and the evidence pack are searched across operators. */
+export const NO_REASON = 'No reason given (stopped from the console).'
 
-export function EmergencyStopCard() {
+/** The engage mutation both verbs share: refresh the stops and the session list on
+ * success, relay an existing stop on 409, and report anything else. A failure closes the
+ * confirmation and keeps what the operator typed; only a stop that landed clears it. */
+function useEngage(close: () => void, clear: () => void) {
   const { t } = useTranslation(['killswitch', 'common', 'errors'])
   const report = useFailedActionReporter()
   const { activeTenant } = useAuth()
   const queryClient = useQueryClient()
 
-  const [scope, setScope] = useState<KillSwitchScopeKind>('estate')
-  const [agentRef, setAgentRef] = useState('')
-  const [reason, setReason] = useState('')
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  // HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
-  // accounts to approve and one to review. With fewer than three active admin accounts
-  // the confirmation says so before the stop; a roster that cannot be read says it too.
-  const roster = useQuery({
-    queryKey: consoleKeys.members(activeTenant),
-    queryFn: () => consoleApi.listMembers(),
-    enabled: confirmOpen,
-    retry: false,
-  })
-  const activeAdmins = (roster.data?.items ?? []).filter(
-    (m) => m.status === 'active' && (m.role === 'admin' || m.role === 'owner'),
-  ).length
-  const fewAdmins = !roster.isSuccess || activeAdmins < 3
-  // ⌘K "Engage kill switch" (registry `killswitch.engage`, governance:killswitch:admin):
-  // bring the operator to the mandatory reason. Nothing is engaged here — the stop still
-  // goes through this form's own button and confirmation.
-  usePendingCommandAction('killswitch', 'engage', () => {
-    const reasonField = document.getElementById(REASON_ID)
-    reasonField?.scrollIntoView({ block: 'center' })
-    reasonField?.focus()
-  })
-
-  // The reason is MANDATORY (the engine 400s without it) and an agent stop needs
-  // its ref — the button stays disabled until the operator supplied both.
-  const valid =
-    reason.trim().length > 0 &&
-    (scope === 'estate' || agentRef.trim().length > 0)
-
-  const invalidate = () =>
-    queryClient.invalidateQueries({
+  // The stop's own state is awaited; the session list refreshes in the background, so a
+  // slow runs read never holds the confirmation open after the stop landed.
+  const invalidate = () => {
+    void queryClient.invalidateQueries({
+      queryKey: agentOpsKeys.runs(activeTenant),
+    })
+    return queryClient.invalidateQueries({
       queryKey: killswitchKeys.all(activeTenant),
     })
+  }
 
   const engage = useMutation({
     mutationFn: (input: EngageKillSwitchRequest) => killswitchApi.engage(input),
@@ -94,12 +67,11 @@ export function EmergencyStopCard() {
       toast.success(t('engage.done'), {
         description: t('engage.doneBody', { id: dto.id }),
       })
-      setConfirmOpen(false)
-      setReason('')
-      setAgentRef('')
+      close()
+      clear()
     },
     onError: async (err, input) => {
-      setConfirmOpen(false)
+      close()
       if (err instanceof ApiError && err.status === 409) {
         // The scope is already stopped: refetch the live posture so the existing
         // stop shows in the banner/table, and relay the engine's message (it
@@ -112,111 +84,97 @@ export function EmergencyStopCard() {
     },
   })
 
-  function payload(): EngageKillSwitchRequest {
-    return {
-      scope_kind: scope,
-      ...(scope === 'agent' ? { scope_ref: agentRef.trim() } : {}),
-      reason: reason.trim(),
-    }
-  }
+  /** The engine requires a reason for the audit record; none typed says so. */
+  const reasonOrDefault = (reason: string) => reason.trim() || NO_REASON
 
-  const isEstate = scope === 'estate'
+  return { engage, reasonOrDefault }
+}
+
+/** The optional reason, the same field in both confirmations. */
+function ReasonField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const { t } = useTranslation('killswitch')
+  return (
+    <Field
+      label={t('engage.reason')}
+      htmlFor="ks-reason"
+      description={t('engage.reasonHint')}
+    >
+      <Textarea
+        id="ks-reason"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+      />
+    </Field>
+  )
+}
+
+/** THE verb of the kill-switch screen: stop every agent, after one confirmation. */
+export function StopAllAction({ estateStopped }: { estateStopped: boolean }) {
+  const { t } = useTranslation(['killswitch', 'common'])
+  const { activeTenant } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const { engage, reasonOrDefault } = useEngage(
+    () => setOpen(false),
+    () => setReason(''),
+  )
+  // HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
+  // accounts to approve and one to review. With fewer than three active admin accounts
+  // the confirmation says so before the stop; a roster that cannot be read says it too.
+  const roster = useQuery({
+    queryKey: consoleKeys.members(activeTenant),
+    queryFn: () => consoleApi.listMembers(),
+    enabled: open,
+    retry: false,
+  })
+  const activeAdmins = (roster.data?.items ?? []).filter(
+    (m) => m.status === 'active' && (m.role === 'admin' || m.role === 'owner'),
+  ).length
+  const fewAdmins = !roster.isSuccess || activeAdmins < 3
+  // ⌘K "Stop all agents" (registry `killswitch.engage`, governance:killswitch:admin):
+  // open the confirmation. Nothing is engaged here — the stop still needs its confirm.
+  usePendingCommandAction('killswitch', 'engage', () => setOpen(true))
 
   return (
-    <Card className="border-danger-line">
-      <CardHeader>
-        <div className="flex flex-col gap-1">
-          <CardTitle className="flex items-center gap-2 text-danger">
-            <OctagonAlert className="size-4 shrink-0" aria-hidden />
-            {t('engage.title')}
-          </CardTitle>
-          <CardDescription>{t('engage.caption')}</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t('engage.scope')} htmlFor="ks-scope">
-            <Select
-              value={scope}
-              onValueChange={(v) => setScope(v as KillSwitchScopeKind)}
-            >
-              <SelectTrigger id="ks-scope">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="estate">
-                  {t('engage.scopeEstate')}
-                </SelectItem>
-                <SelectItem value="agent">{t('engage.scopeAgent')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          {!isEstate && (
-            <Field
-              label={t('engage.agentRef')}
-              htmlFor="ks-agent-ref"
-              description={t('engage.agentRefHint')}
-              required
-            >
-              <Input
-                id="ks-agent-ref"
-                value={agentRef}
-                onChange={(e) => setAgentRef(e.target.value)}
-                mono
-              />
-            </Field>
-          )}
-        </div>
-
-        <Field
-          label={t('engage.reason')}
-          htmlFor={REASON_ID}
-          description={t('engage.reasonHint')}
-          required
-        >
-          <Textarea
-            id={REASON_ID}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={2}
-          />
-        </Field>
-
-        <div className="flex justify-end">
-          <Button
-            variant="destructive-solid"
-            disabled={!valid || engage.isPending}
-            onClick={() => setConfirmOpen(true)}
-          >
-            <OctagonAlert aria-hidden />
-            {t('engage.button')}
-          </Button>
-        </div>
-      </CardContent>
-
+    <>
+      <Button
+        variant="destructive"
+        disabled={estateStopped || engage.isPending}
+        title={estateStopped ? t('banner.estateTitle') : undefined}
+        onClick={() => setOpen(true)}
+      >
+        <OctagonAlert aria-hidden />
+        {t('engage.stopAll')}
+      </Button>
       <ConfirmDialog
-        open={confirmOpen}
-        onOpenChange={(o) => !engage.isPending && setConfirmOpen(o)}
-        title={
-          isEstate
-            ? t('engage.confirmTitleEstate')
-            : t('engage.confirmTitleAgent')
-        }
+        open={open}
+        onOpenChange={(o) => !engage.isPending && setOpen(o)}
+        title={t('engage.confirmTitleEstate')}
         description={
           // With the two-admin line below, the body drops its own restart sentence: one
           // clear sentence about starting again, not two (Root, 047 review).
-          isEstate
-            ? fewAdmins
-              ? t('engage.confirmBodyEstateNoRestart')
-              : t('engage.confirmBodyEstate')
-            : t('engage.confirmBodyAgent')
+          fewAdmins
+            ? t('engage.confirmBodyEstateNoRestart')
+            : t('engage.confirmBodyEstate')
         }
         tone="danger"
-        confirmLabel={t('engage.confirm')}
+        confirmLabel={t('engage.stopAll')}
         pending={engage.isPending}
-        onConfirm={() => engage.mutate(payload())}
+        onConfirm={() =>
+          engage.mutate({
+            scope_kind: 'estate',
+            reason: reasonOrDefault(reason),
+          })
+        }
       >
-        {isEstate && fewAdmins ? (
+        {fewAdmins ? (
           <p
             className="text-body text-warning"
             data-slot="restart-needs-admins"
@@ -224,7 +182,78 @@ export function EmergencyStopCard() {
             {t('engage.restartNeedsAdmins')}
           </p>
         ) : null}
+        <ReasonField value={reason} onChange={setReason} />
       </ConfirmDialog>
-    </Card>
+    </>
+  )
+}
+
+/** More: the single-agent stop, which needs the agent and is the rarer case. */
+export function StopAgentMenu() {
+  const { t } = useTranslation(['killswitch', 'common'])
+  const [open, setOpen] = useState(false)
+  const [agentRef, setAgentRef] = useState('')
+  const [reason, setReason] = useState('')
+  const { engage, reasonOrDefault } = useEngage(
+    () => setOpen(false),
+    () => {
+      setAgentRef('')
+      setReason('')
+    },
+  )
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('engage.more')}
+            title={t('engage.more')}
+          >
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setOpen(true)}>
+            {t('engage.stopOne')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={(o) => !engage.isPending && setOpen(o)}
+        title={t('engage.confirmTitleAgent')}
+        description={t('engage.confirmBodyAgent')}
+        tone="danger"
+        confirmLabel={t('engage.stopAgent')}
+        // The engine 400s an agent stop without its ref.
+        confirmDisabled={agentRef.trim() === ''}
+        pending={engage.isPending}
+        onConfirm={() =>
+          engage.mutate({
+            scope_kind: 'agent',
+            scope_ref: agentRef.trim(),
+            reason: reasonOrDefault(reason),
+          })
+        }
+      >
+        <Field
+          label={t('engage.agentRef')}
+          htmlFor="ks-agent-ref"
+          description={t('engage.agentRefHint')}
+          required
+        >
+          <Input
+            id="ks-agent-ref"
+            value={agentRef}
+            onChange={(e) => setAgentRef(e.target.value)}
+            mono
+          />
+        </Field>
+        <ReasonField value={reason} onChange={setReason} />
+      </ConfirmDialog>
+    </>
   )
 }

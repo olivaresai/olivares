@@ -277,16 +277,21 @@ http.server.HTTPServer((host, int(port)), Handler).serve_forever()
 			if len(models) != 1 || models[0] != model {
 				t.Fatalf("model reference was not retained: %v", status)
 			}
-			ledger := call("GET", "/v1/audit/system", nil, 200)
+			// Filtered scan, not the default page: /v1/audit/system walks the chain
+			// oldest-first and caps a plain read at 50 events, so on a slow runner the
+			// pull event sits past the first page and "no matching audit event" said
+			// nothing about whether the ledger held it. The 202 already proved audit()
+			// succeeded; this must still find the exact event wherever it lies.
+			ledger := call("GET", "/v1/audit/system?action=agenttools.ollama.pull&target_id="+pull.ID, nil, 200)
 			found := false
 			for _, item := range ledger["items"].([]any) {
-				event := item.(map[string]any)
-				if event["action"] == "agenttools.ollama.pull" && event["target_id"] == pull.ID && event["actor_kind"] == "user" && event["actor"] == actor {
+				event, ok := item.(map[string]any)
+				if ok && event["action"] == "agenttools.ollama.pull" && event["target_id"] == pull.ID && event["actor_kind"] == "user" && event["actor"] == actor {
 					found = true
 				}
 			}
 			if !found {
-				t.Fatal("the completed CLI download has no matching audit event")
+				t.Fatalf("the completed CLI download has no matching audit event: %v", ledger)
 			}
 			call("POST", agentToolsPath+"/ollama/stop", nil, 200)
 		})

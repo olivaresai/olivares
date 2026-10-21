@@ -3,8 +3,8 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE FULL SIDEBAR SHOWS WHAT THE PRODUCT HOLDS. Under the pinned destinations it lists the
-// areas, grouped and folding, from the first sign-in. A page whose module is off is a calm
-// entry (dimmed, tagged Off) and still a link. The rail keeps the pins and "All areas".
+// areas, grouped and folding, from the first sign-in. A page whose module is off folds out
+// (#2240); Settings > Modules shows it as Off. The rail keeps the pins and "All areas".
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ComponentProps } from 'react'
@@ -159,13 +159,15 @@ describe('the full sidebar lists the areas under the pinned destinations', () =>
     expect(hrefs).toContain(view('console').path)
   })
 
-  it('draws a page whose module is off dimmed and tagged Off, still a link', () => {
-    useModulesStore.setState({ off: new Set(['deploy']) })
+  // #2240: Settings > Modules is where an off module reads as Off.
+  it('folds a page whose module is off out of the sidebar', () => {
+    useModulesStore.setState({ off: new Set(['gitpublish']) })
     full()
-    const link = linkTo(view('deploy').path)
-    expect(within(link).getByText('Off')).toBeInTheDocument()
-    expect(link.querySelector('.text-text-3')).not.toBeNull()
-    expect(within(linkTo(view('audit').path)).queryByText('Off')).toBeNull()
+    const hrefs = within(primary())
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+    expect(hrefs).not.toContain(view('gitPublication').path)
+    expect(hrefs).toContain(view('audit').path)
   })
 
   it('tells the overlay when a destination was chosen', async () => {

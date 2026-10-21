@@ -1,0 +1,129 @@
+{
+  "title": "Visualizzatore delle registrazioni di sessione",
+  "subtitle": "Cronologia unificata dell'attività degli agenti e delle evidenze di governance per una singola sessione.",
+  "back": "Torna alle registrazioni",
+  "header": {
+    "subject": "Soggetto",
+    "status": "Stato",
+    "opened": "Aperta",
+    "duration": "Durata",
+    "model": "Modello",
+    "frames": "Frame",
+    "live": "LIVE",
+    "tipHash": "Punta della catena",
+    "openSeq": "Seq. di apertura nel registro",
+    "anchorSeq": "Seq. dell'ultimo ancoraggio",
+    "sealSeq": "Seq. di sigillatura nel registro"
+  },
+  "lanes": {
+    "activity": "Attività dell'agente",
+    "evidence": "Evidenze di governance"
+  },
+  "panels": {
+    "tools": "Tool usati",
+    "files": "File toccati",
+    "decisions": "Decisioni"
+  },
+  "timeline": {
+    "loadMore": "Carica altro",
+    "empty": "Nessun evento registrato",
+    "emptyHint": "Ogni evento catturato dalla registrazione compare qui in ordine. Questa registrazione non ne ha catturati.",
+    "activityUnavailable": "L'attività dell'agente non è disponibile perché il resolver della cronologia non è configurato o non ha risposto. Le evidenze di governance restano disponibili.",
+    "tool": "Chiamata a un tool",
+    "mcp": "Invocazione MCP",
+    "cost": "Campione di costo",
+    "finding": "Rilevamento"
+  },
+  "redaction": {
+    "hidden": "[OSCURATO — clicca per mostrare]",
+    "reveal": "Mostra",
+    "hide": "Nascondi"
+  },
+  "verify": {
+    "passive": "Verifica in linea",
+    "fresh": "Verifica aggiornata",
+    "intact": "Catena integra",
+    "broken": "Catena interrotta",
+    "frames": "{{count}} frame verificati",
+    "anchors": "{{count}} ancoraggi verificati",
+    "anchorsOk": "{{count}} ancoraggi verificati",
+    "anchorsBroken": "{{count}} ancoraggi non riusciti",
+    "tipMatch": "Punta corrispondente",
+    "tipMismatch": "Punta non corrispondente",
+    "anchoredThrough": "Gli ancoraggi del registro verificati coprono fino al frame {{idx}}.",
+    "breakAt": "Interruzione al frame {{idx}} — {{reason}}",
+    "gap": "Vuoto tra i frame",
+    "failures": "Ancoraggi non riusciti",
+    "failure": "Ancoraggio {{kind}} · seq {{seq}} · frame {{idx}} · {{reason}}",
+    "failed": "Verifica non riuscita"
+  },
+  "export": {
+    "json": "Esporta JSON",
+    "summary": "Esporta il riepilogo",
+    "verify": "Verifica la catena"
+  },
+  "tools": {
+    "success": "riuscite",
+    "fail": "fallite",
+    "calls": "{{count}} chiamate"
+  },
+  "files": {
+    "read": "Lettura",
+    "write": "Scrittura",
+    "edit": "Modifica",
+    "create": "Creazione"
+  },
+  "decisions": {
+    "group": "Task {{idx}}",
+    "tools": "{{count}} chiamate a tool",
+    "fileCount": "{{count}} file"
+  },
+  "detail": {
+    "toolRef": "Rif. del tool",
+    "resourceRef": "Rif. della risorsa",
+    "mode": "Modalità",
+    "source": "Origine",
+    "titleField": "Titolo",
+    "at": "Ora",
+    "frameIdx": "#",
+    "namespace": "Namespace",
+    "method": "Metodo",
+    "pattern": "Pattern",
+    "outcome": "Esito",
+    "actor": "Attore",
+    "actAs": "Agisce come",
+    "params": "Parametri",
+    "httpStatus": "Stato HTTP",
+    "durMs": "Durata",
+    "hash": "Hash del frame",
+    "prevHash": "Hash precedente",
+    "anchorSeq": "Seq. dell'ancoraggio",
+    "close": "Chiudi i dettagli dell'evento"
+  },
+  "seal": {
+    "action": "Sigilla la sessione",
+    "title": "Sigillare questa sessione di registrazione?",
+    "body": "La sigillatura è irreversibile: chiude la sessione, fissa la punta della sua catena e impedisce di aggiungere altri frame.",
+    "confirm": "Sigilla la sessione",
+    "done": "Sessione sigillata",
+    "alreadySealed": "Questa sessione è già sigillata."
+  },
+  "summarize": {
+    "action": "Genera il riepilogo",
+    "done": "Riepilogo generato.",
+    "unavailable": "Nessun generatore di riepiloghi è configurato; la registrazione resta disponibile come evidenza grezza.",
+    "disabled": "I riepiloghi con AI sono disattivati per questo tenant perché la trascrizione uscirebbe dal perimetro di attendibilità.",
+    "active": "Questa sessione è ancora attiva. Sigillala prima di generare un riepilogo completo.",
+    "failed": "Non è stato possibile generare il riepilogo; la registrazione in sé non è interessata."
+  },
+  "ledger": {
+    "title": "Registro",
+    "subtitle": "Eventi semantici correlati dal registro delle evidenze.",
+    "seq": "seq {{seq}}",
+    "empty": "Nessun evento correlato nel registro",
+    "emptyHint": "Gli eventi del registro di audit correlati a questa registrazione compaiono qui. Nessuno è correlato.",
+    "truncated": "La vista del registro è troncata; esistono altri eventi correlati oltre questa finestra limitata."
+  },
+  "notFound": "Sessione di registrazione non trovata",
+  "notFoundHint": "La retention potrebbe aver eliminato la registrazione, oppure il link è sbagliato. Apri l'elenco delle registrazioni per trovarla."
+}

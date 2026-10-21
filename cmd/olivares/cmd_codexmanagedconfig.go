@@ -40,8 +40,9 @@ import (
 // FAILS the render rather than distributing a governance file that enforces nothing.
 func newCodexCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "codex",
-		Short: "Author OpenAI Codex governance artifacts (managed config)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "codex",
+		Short:       "Author OpenAI Codex governance artifacts (managed config)",
 		Long: "codex renders the configuration files that put an OpenAI Codex install under the\n" +
 			"same governance Policy the rest of the fleet answers to, so the policy is\n" +
 			"authored once and expressed per vendor rather than maintained twice.\n\n" +
@@ -61,8 +62,9 @@ func newCodexManagedConfigCmd() *cobra.Command {
 		validateOnly     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "managed-config",
-		Short: "Render the Codex requirements.toml + managed_config.toml from a governance Policy JSON",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "managed-config",
+		Short:       "Render the Codex requirements.toml + managed_config.toml from a governance Policy JSON",
 		Long: "managed-config renders the two Codex managed-config artifacts from a governance-authored\n" +
 			"Policy JSON ({\"requirements\": {...}, \"managed_config\": {...}}; read from --policy or stdin):\n" +
 			"requirements.toml (non-overridable constraints) and managed_config.toml (managed defaults).\n" +

@@ -215,7 +215,7 @@ describe('WorkView composition — the handoff offer entry', () => {
     )
     await screen.findByRole('dialog')
     expect(screen.getByRole('button', { name: 'Mark ready' })).toBeDisabled()
-    expect(screen.getByText(/sessions:work:write/)).toBeVisible()
+    expect(screen.getByText(/Your role cannot change this item/)).toBeVisible()
     expect(
       await screen.findByRole('button', { name: 'Offer handoff' }),
     ).toBeEnabled()
@@ -232,7 +232,7 @@ describe('WorkView composition — the handoff offer entry', () => {
     expect(
       await screen.findByRole('button', { name: 'Offer handoff' }),
     ).toBeDisabled()
-    expect(screen.getByText(/sessions:message-send:write/)).toBeVisible()
+    expect(screen.getByText(/Your role cannot offer a handoff/)).toBeVisible()
     // POSITIVE CONTROL: the neighbouring work permission is untouched.
     expect(
       await screen.findByRole('button', { name: 'Mark ready' }),

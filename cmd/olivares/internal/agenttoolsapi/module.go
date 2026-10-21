@@ -94,6 +94,10 @@ type Module struct {
 	signedIn func(model.TenantID)
 	// ollama is the local model service this engine runs (ollama.go).
 	ollama ollamaService
+	// modelServers are the local OpenAI-compatible servers it runs (modelserver.go); lookPath
+	// finds their programs on the engine's PATH (exec.LookPath unless a test sets it).
+	modelServers modelServers
+	lookPath     func(string) (string, error)
 	// childCommand builds every child this module starts (SetChildCommand).
 	childCommand ChildCommand
 }
@@ -203,6 +207,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSystem("POST", "/ollama/stop", m.handleOllamaStop)
 	door.HandleSystem("POST", "/ollama/pulls", m.handleOllamaPull)
 	door.HandleSystem("GET", "/ollama/pulls/{id}", m.handleOllamaPullGet)
+	door.HandleSystem("GET", "/model-servers", m.handleModelServers)
+	door.HandleSystem("POST", "/model-servers/{kind}/start", m.handleModelServerStart)
+	door.HandleSystem("POST", "/model-servers/{kind}/stop", m.handleModelServerStop)
 }
 
 // handleInventory lists managed host tools, release integrity, verification

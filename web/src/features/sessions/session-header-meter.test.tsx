@@ -8,6 +8,8 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
 import { useTenantStore } from '@/stores/tenant'
+import { useModulesStore } from '@/stores/modules'
+import { COST_VIEW } from '@/features/registry'
 import type { RunDTO } from '@/features/agentops/types'
 import type { ProviderSnapshot } from '@/features/agent-tools/api'
 import { mergeSessions } from './provenance'
@@ -17,6 +19,7 @@ import { SessionOverview } from './session-overview'
 import { sessionUsage } from './session-usage'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
+import { en, es, zh, ja, de, ru, fr } from './i18n'
 import '@/features/agentops/i18n'
 
 const auth = vi.hoisted(() => ({
@@ -119,13 +122,14 @@ function snapshot(over: Partial<ProviderSnapshot>): ProviderSnapshot {
   }
 }
 
-function renderHeader(r: RunDTO, l: LiveDTO = live()) {
-  const session = mergeSessions([l], [r])[0]!
+function renderHeader(r: RunDTO | RunDTO[], l: LiveDTO = live()) {
+  const runs = Array.isArray(r) ? r : [r]
+  const session = mergeSessions([l], runs)[0]!
   const resolution: SessionResolution = {
     target: { liveRef: 'lr-a' },
     session,
     live: l,
-    runs: [r],
+    runs,
     related: [],
     streamStatus: 'open',
     operateUnknown: false,
@@ -157,6 +161,8 @@ function renderHeader(r: RunDTO, l: LiveDTO = live()) {
 beforeEach(() => {
   vi.clearAllMocks()
   auth.isSuperadmin = false
+  auth.can = () => true
+  useModulesStore.getState().setOff([])
   // The providers read names the organization, whose own logins are the instances.
   useTenantStore.setState({ activeTenant: 'tnt-demo' })
   templates.get.mockImplementation(async (id: string) => ({
@@ -226,8 +232,11 @@ describe('session header — the tool’s own mode', () => {
     )
     await waitFor(() =>
       expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
-        'Mode: on-request · workspaceWrite',
+        'Mode: Asks when it needs to',
       ),
+    )
+    expect(screen.getByTestId('narrative-mode')).not.toHaveTextContent(
+      'workspaceWrite',
     )
   })
 
@@ -240,11 +249,23 @@ describe('session header — the tool’s own mode', () => {
       }),
     )
     expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
-      'Mode: on-request · workspaceWrite',
+      'Mode: Asks when it needs to',
     )
   })
 
-  it.each(['bypassPermissions', 'auto', 'constructor', '__proto__'])(
+  it('words Claude Code’s bypassPermissions in its own meaning, never as the launch permission', () => {
+    renderHeader(
+      run({ permission_mode: 'default', tool_mode: 'bypassPermissions' }),
+    )
+    const mode = screen.getByTestId('narrative-mode')
+    expect(mode.textContent).toBe('Mode: Never asks for permission')
+    expect(mode).toHaveAttribute(
+      'title',
+      'Claude Code reports: bypassPermissions',
+    )
+  })
+
+  it.each(['auto', 'constructor', '__proto__'])(
     'never words a Claude session in %s as the launch permission',
     (word) => {
       renderHeader(run({ permission_mode: 'default', tool_mode: word }))
@@ -262,16 +283,43 @@ describe('session header — the tool’s own mode', () => {
     expect(screen.getByTestId('narrative-mode')).toHaveTextContent(words)
   })
 
+  it.each([
+    [
+      'untrusted · dangerFullAccess',
+      'Mode: Asks before commands it does not trust',
+    ],
+    ['on-failure · workspaceWrite', 'Mode: Asks when a command fails'],
+    ['never · dangerFullAccess', 'Mode: Never asks for permission'],
+    ['granular · readOnly', 'Mode: Asks by its own rules'],
+  ])(
+    'words Codex’s approval policy in %s when the launch has no console wording, never its sandbox',
+    (toolMode, words) => {
+      renderHeader(
+        run({
+          provider_driver: 'codex',
+          permission_mode: 'bypassPermissions',
+          tool_mode: toolMode,
+        }),
+      )
+      const mode = screen.getByTestId('narrative-mode')
+      // Exactly the approval policy in plain words: no sandbox word, raw or reworded.
+      expect(mode.textContent).toBe(words)
+      expect(mode).not.toHaveTextContent(toolMode.split(' · ')[1])
+      // Codex's own words stay one hover away.
+      expect(mode).toHaveAttribute('title', `Codex reports: ${toolMode}`)
+    },
+  )
+
   it('keeps a word it has no console wording for, rather than guessing one', () => {
     renderHeader(
       run({
         provider_driver: 'codex',
         permission_mode: 'bypassPermissions',
-        tool_mode: 'never · dangerFullAccess',
+        tool_mode: 'someday · dangerFullAccess',
       }),
     )
     expect(screen.getByTestId('narrative-mode')).toHaveTextContent(
-      'Mode: never · dangerFullAccess',
+      'Mode: someday · dangerFullAccess',
     )
   })
 
@@ -282,6 +330,90 @@ describe('session header — the tool’s own mode', () => {
 })
 
 describe('session header — this session’s usage', () => {
+  it('links the meter to the installed cost view, without an unsupported session filter', () => {
+    renderHeader(run({ input_tokens: 10, cost_micro_usd: 27430 }))
+    const meter = screen.getByTestId('narrative-usage')
+    const link = within(meter).getByRole('link', { name: /View costs/ })
+    expect(link).toHaveAttribute('href', COST_VIEW.path)
+    expect(link).toHaveTextContent('$0.027')
+    expect(
+      within(screen.getByTestId('context-usage')).getByRole('link'),
+    ).toHaveAttribute('href', COST_VIEW.path)
+  })
+
+  it('keeps the figures without a cost link when the view is denied', () => {
+    auth.can = (permission) => permission !== COST_VIEW.permission
+    renderHeader(run({ input_tokens: 10, cost_micro_usd: 27430 }))
+    const meter = screen.getByTestId('narrative-usage')
+    expect(meter).toHaveTextContent('$0.027')
+    expect(within(meter).queryByRole('link')).toBeNull()
+  })
+
+  it('keeps the figures without a cost link when the module is off', () => {
+    useModulesStore.getState().setOff(['finops'])
+    renderHeader(run({ input_tokens: 10, cost_micro_usd: 27430 }))
+    const meter = screen.getByTestId('narrative-usage')
+    expect(meter).toHaveTextContent('$0.027')
+    expect(within(meter).queryByRole('link')).toBeNull()
+  })
+
+  it('marks a known subtotal as partial when another run has no amount', () => {
+    renderHeader([
+      run({ input_tokens: 10, output_tokens: 2, cost_micro_usd: 27430 }),
+      run({ run_ref: 'run-2', input_tokens: 20, output_tokens: 3 }),
+    ])
+    for (const id of ['narrative-usage', 'context-usage']) {
+      const meter = screen.getByTestId(id)
+      expect(meter).toHaveTextContent('30 in / 5 out tokens')
+      expect(meter).toHaveTextContent('$0.0274 (partial)')
+    }
+  })
+
+  it('totals known amounts across runs without a partial label', () => {
+    renderHeader([
+      run({ input_tokens: 10, cost_micro_usd: 20000 }),
+      run({ run_ref: 'run-2', input_tokens: 20, cost_micro_usd: 30000 }),
+    ])
+    const meter = screen.getByTestId('narrative-usage')
+    expect(meter).toHaveTextContent('$0.05')
+    expect(meter).not.toHaveTextContent('partial')
+  })
+
+  it('never turns entirely absent amounts into a zero total', () => {
+    renderHeader([
+      run({ input_tokens: 10 }),
+      run({ run_ref: 'run-2', input_tokens: 20 }),
+    ])
+    const meter = screen.getByTestId('narrative-usage')
+    expect(meter).toHaveTextContent('cost not reported')
+    expect(meter).not.toHaveTextContent('$0')
+    expect(meter).not.toHaveTextContent('partial')
+    expect(
+      within(meter).getByRole('link', { name: /View costs/ }),
+    ).toHaveAttribute('href', COST_VIEW.path)
+  })
+
+  it('preserves an explicitly reported zero amount', () => {
+    renderHeader(run({ input_tokens: 10, cost_micro_usd: 0 }))
+    const meter = screen.getByTestId('narrative-usage')
+    expect(meter).toHaveTextContent('$0.00')
+    expect(meter).not.toHaveTextContent('cost not reported')
+    expect(meter).not.toHaveTextContent('partial')
+  })
+
+  it.each([
+    ['en', en, '{{cost}} (partial)', 'View costs'],
+    ['es', es, '{{cost}} (parcial)', 'Ver costes'],
+    ['zh', zh, '{{cost}}（部分）', '查看费用'],
+    ['ja', ja, '{{cost}}（一部）', '費用を表示'],
+    ['de', de, '{{cost}} (teilweise)', 'Kosten ansehen'],
+    ['ru', ru, '{{cost}} (частично)', 'Посмотреть расходы'],
+    ['fr', fr, '{{cost}} (partiel)', 'Voir les coûts'],
+  ])('ships partial and link wording in %s', (_, strings, partial, link) => {
+    expect(strings.meter).toHaveProperty('costPartial', partial)
+    expect(strings.meter).toHaveProperty('viewCosts', link)
+  })
+
   it('shows the run’s tokens and cost once, not again in the facts line', () => {
     renderHeader(
       run({ input_tokens: 52755, output_tokens: 4, cost_micro_usd: 27430 }),
@@ -325,11 +457,16 @@ describe('session header — this session’s usage', () => {
 
   it('reads a launched session from its run, an observed one from its live row', () => {
     expect(
-      sessionUsage(run(), live({ input_tokens: 9, output_tokens: 1 })),
+      sessionUsage([run()], live({ input_tokens: 9, output_tokens: 1 })),
     ).toBeNull()
     expect(
-      sessionUsage(null, live({ input_tokens: 9, output_tokens: 1 })),
-    ).toEqual({ input: 9, output: 1, costMicroUsd: undefined })
+      sessionUsage([], live({ input_tokens: 9, output_tokens: 1 })),
+    ).toEqual({
+      input: 9,
+      output: 1,
+      costMicroUsd: undefined,
+      costPartial: false,
+    })
   })
 })
 

@@ -52,7 +52,7 @@ func newMCPServerCmds(flags *authClientFlags) []*cobra.Command {
 	return []*cobra.Command{
 		newMCPListCmd(flags), newMCPAddCmd(flags), newMCPSecretCmd(flags), newMCPTestCmd(flags),
 		newMCPEnableCmd(flags, "enable", true), newMCPEnableCmd(flags, "disable", false),
-		newMCPAssignCmd(flags, "assign", true), newMCPAssignCmd(flags, "unassign", false),
+		newMCPAssignCmd(flags, "assign", true, "write"), newMCPAssignCmd(flags, "unassign", false, "delete"),
 		newMCPRemoveCmd(flags), newMCPSessionsCmd(flags),
 	}
 }
@@ -78,9 +78,10 @@ func mcpClient(cmd *cobra.Command, flags *authClientFlags) (agentClientConfig, e
 
 func newMCPListCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List the MCP servers, whether each is on, and the tools its last test found",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List the MCP servers, whether each is on, and the tools its last test found",
 		Long: "ls prints one row per MCP server: its name, on or off, how it runs (a command or a URL)\n" +
 			"and the tools its last test listed. It says so when sessions do not use MCP servers yet.\n" +
 			"Use it to see what sessions can reach before you start one.",
@@ -131,8 +132,9 @@ func newMCPAddCmd(flags *authClientFlags) *cobra.Command {
 		noTest                     bool
 	)
 	cmd := &cobra.Command{
-		Use:   "add <name> (-- <command> [args...] | <https-url>)",
-		Short: "Add an MCP server (off until you enable it) and list its tools",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "add <name> (-- <command> [args...] | <https-url>)",
+		Short:       "Add an MCP server (off until you enable it) and list its tools",
 		Long: "add registers a local MCP server (a command the engine runs next to each session) or a\n" +
 			"remote one (an HTTPS URL). It is added off; add then tests it, which lists its tools\n" +
 			"without calling any. Turn it on with `olivares mcp enable <name>`.\n\n" +
@@ -259,8 +261,9 @@ func warnEnvFlagsAfterTerminator(cmd *cobra.Command, serverArgs []string) {
 func newMCPSecretCmd(flags *authClientFlags) *cobra.Command {
 	var valueFile, description string
 	cmd := &cobra.Command{
-		Use:   "secret <name> --value-file <file>",
-		Short: "Store a credential for MCP servers, referenced as store:mcp/<name>",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "secret <name> --value-file <file>",
+		Short:       "Store a credential for MCP servers, referenced as store:mcp/<name>",
 		Long: "secret seals a credential in this organization's secrets, where a local MCP server's\n" +
 			"--secret-env NAME=store:mcp/<name> finds it. Storing a name again replaces its value and\n" +
 			"description.\n" +
@@ -313,8 +316,9 @@ func newMCPSecretCmd(flags *authClientFlags) *cobra.Command {
 
 func newMCPTestCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "test <name>",
-		Short: "Start an MCP server and list its tools without calling any",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "test <name>",
+		Short:       "Start an MCP server and list its tools without calling any",
 		Long: "test starts the server the way a session would, asks it for its tools, and stops it. It\n" +
 			"prints the tool names, or why the server did not answer. No tool is called. Run it after\n" +
 			"you add or change a server, and before you turn it on.",
@@ -391,11 +395,12 @@ func newMCPEnableCmd(flags *authClientFlags, use string, on bool) *cobra.Command
 		allow         []string
 	)
 	cmd := &cobra.Command{
-		Use:     use + " <name>",
-		Short:   short,
-		Long:    long,
-		Example: example,
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         use + " <name>",
+		Short:       short,
+		Long:        long,
+		Example:     example,
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := mcpClient(cmd, flags)
 			if err != nil {
@@ -487,7 +492,7 @@ func newMCPEnableCmd(flags *authClientFlags, use string, on bool) *cobra.Command
 // newMCPAssignCmd is `mcp assign|unassign <name>`: the targets of the skills
 // assignment tree a server serves. A server with no target serves every session
 // of the organization, as before assignments existed.
-func newMCPAssignCmd(flags *authClientFlags, use string, add bool) *cobra.Command {
+func newMCPAssignCmd(flags *authClientFlags, use string, add bool, changesData string) *cobra.Command {
 	short := "Give an MCP server only to the sessions under a workspace, folder, template, group, agent or session"
 	long := "assign limits the server to sessions whose run is under the target: a workspace\n" +
 		"(department), a registered folder, a template, an agent group, an agent or one session,\n" +
@@ -502,11 +507,12 @@ func newMCPAssignCmd(flags *authClientFlags, use string, add bool) *cobra.Comman
 	}
 	var target skillsTargetFlags
 	cmd := &cobra.Command{
-		Use:     use + " <name>",
-		Short:   short,
-		Long:    long,
-		Example: example,
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": changesData},
+		Use:         use + " <name>",
+		Short:       short,
+		Long:        long,
+		Example:     example,
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t, err := target.target()
 			if err != nil {
@@ -707,9 +713,10 @@ func mcpToolPolicies(s map[string]any) (run, ask, none []string) {
 func newMCPRemoveCmd(flags *authClientFlags) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm <name>",
-		Aliases: []string{"remove", "delete"},
-		Short:   "Remove an MCP server",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm <name>",
+		Aliases:     []string{"remove", "delete"},
+		Short:       "Remove an MCP server",
 		Long: "rm deletes the server and its settings; sessions no longer get its tools. It asks\n" +
 			"before it deletes (--yes skips the question). To stop using a server and keep its\n" +
 			"settings, use olivares mcp disable instead.",
@@ -748,8 +755,9 @@ func newMCPRemoveCmd(flags *authClientFlags) *cobra.Command {
 
 func newMCPSessionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "sessions <on|off>",
-		Short: "Let sessions use the MCP servers that are on, or stop them (off by default)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "sessions <on|off>",
+		Short:       "Let sessions use the MCP servers that are on, or stop them (off by default)",
 		Long: "sessions on lets sessions use the tools of every MCP server that is on; sessions off\n" +
 			"stops that for all of them, and each server keeps its own on/off. It prints the new\n" +
 			"setting. It is off on a new installation.",
@@ -810,7 +818,12 @@ func (c *agentClientConfig) mcpWrite(ctx context.Context, method, path string, b
 	if err != nil {
 		return mcpSnapshot{}, err
 	}
+	var refusal apiErrorEnvelope
 	switch {
+	case status == http.StatusConflict && json.Unmarshal(b, &refusal) == nil && refusal.Error.Code != "" && refusal.Error.Code != "conflict":
+		// "conflict" is a stale version. Any other 409 (a held name, an operator-file
+		// roster) is a refusal a retry cannot fix, and the engine's sentence says why.
+		return mcpSnapshot{}, httpErr(status, b)
 	case status == http.StatusConflict || status == http.StatusPreconditionFailed:
 		return mcpSnapshot{}, sentence(exitcode.Conflict, "The MCP servers changed while you were editing. Run the command again.")
 	case status < 200 || status > 299:
@@ -837,6 +850,17 @@ func mcpFind(snap mcpSnapshot, key string) (map[string]any, bool) {
 
 func mcpMustFind(snap mcpSnapshot, key string) (map[string]any, error) {
 	if s, ok := mcpFind(snap, key); ok {
+		// A roster from before names were unique may hold two servers of one name.
+		// Never pick the first: name the ids and let the caller choose one.
+		var ids []string
+		for _, other := range snap.Servers {
+			if str(other, "id") != key && str(other, "name") == key {
+				ids = append(ids, str(other, "id"))
+			}
+		}
+		if str(s, "id") != key && len(ids) > 1 {
+			return nil, sentence(exitcode.Conflict, "%d MCP servers are named %q (ids %s). Use one id.", len(ids), key, strings.Join(ids, ", "))
+		}
 		return s, nil
 	}
 	return nil, sentence(exitcode.NotFound, "No MCP server is named %q. List them: olivares mcp ls", key)

@@ -134,7 +134,7 @@ func TestResolve_RefusalSentenceNamesTheToolAndItsKey(t *testing.T) {
 	t.Run("incompatible_key_is_not_a_missing_provider", func(t *testing.T) {
 		m, tenant, _ := resolveHarness(t)
 		addRecord(t, m, tenant, ProviderKindOpenAICompatible, "Gateway", "https://gateway.example.test/v1", "fixture-compatible-provider-key")
-		want := "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama)."
+		want := "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama, or an OpenAI-compatible server at a local address)."
 		for _, resolve := range []func(context.Context, model.TenantID, string) (ResolvedProfile, error){m.PreviewProfile, m.ResolveProfile} {
 			_, err := resolve(context.Background(), tenant, "opencode")
 			if statusOf(err) != http.StatusConflict || err.Error() != want {
@@ -164,6 +164,29 @@ func TestResolve_OpenCodeWithAKeyAndALocalModelUsesTheLocalModel(t *testing.T) {
 	codex, err := m.ResolveProfile(context.Background(), tenant, "codex")
 	if err != nil || codex.Profile.ProviderRecordRef != openai.Ref {
 		t.Fatalf("codex resolve = %+v %v, want the OpenAI key", codex, err)
+	}
+}
+
+// An openai_compatible record at a local address could not serve OpenCode before, so a tenant
+// that has one (an LM Studio box used from Codex) and an Anthropic key added later got the key.
+// Binding OpenCode to such a record must not move that default: the local server comes after
+// the keys, is the answer when nothing else can run the tool, and a profile can still name it.
+func TestResolve_ALocalOpenAICompatibleServerNeverTakesOverFromAKeyForOpenCode(t *testing.T) {
+	m, tenant, _ := resolveHarness(t)
+	local := addRecord(t, m, tenant, ProviderKindOpenAICompatible, "LM Studio", "http://192.168.1.5:1234/v1", "lm-studio-fixture-0123456789")
+	got, err := m.ResolveProfile(context.Background(), tenant, "opencode")
+	if err != nil || got.Profile.ProviderRecordRef != local.Ref {
+		t.Fatalf("with only the local server, opencode resolve = %+v %v, want it", got, err)
+	}
+	key := addRecord(t, m, tenant, ProviderKindAnthropic, "Team key", "", "sk-ant-fixture-0123456789")
+	got, err = m.ResolveProfile(context.Background(), tenant, "opencode")
+	if err != nil || got.Provider == nil || got.Provider.Ref != key.Ref {
+		t.Fatalf("with an older local server and a newer key, opencode resolve = %+v %v, want the key", got, err)
+	}
+	// Codex has bound such records all along and keeps its order: its own vendor first, then oldest.
+	codex, err := m.ResolveProfile(context.Background(), tenant, "codex")
+	if err != nil || codex.Provider == nil || codex.Provider.Ref != local.Ref {
+		t.Fatalf("codex resolve = %+v %v, want the older openai_compatible record as before", codex, err)
 	}
 }
 

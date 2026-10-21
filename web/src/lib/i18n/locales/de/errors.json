@@ -4,6 +4,11 @@
     "description": "Diese Seite existiert nicht oder wurde verschoben.",
     "back": "Zurück zur Übersicht"
   },
+  "businessOnly": {
+    "title": "Teil von Business",
+    "description": "Diese Seite gehört zu Olivares AI Business. Diese Edition enthält sie nicht.",
+    "link": "Mehr zu Business"
+  },
   "forbidden": {
     "title": "Nicht autorisiert",
     "description": "Sie haben keine Berechtigung, dies anzuzeigen. Bitten Sie einen Administrator um Zugriff.",

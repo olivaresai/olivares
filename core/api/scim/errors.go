@@ -2,9 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
+// Package scim carries the SCIM 2.0 error envelope (RFC 7644 §3.12) and the media
+// type every SCIM-shaped response uses, which the admission of the SCIM routes and
+// the Community refusal share. The protocol layer of the inbound SCIM server (the
+// resource codecs, the filter and PATCH parsers, the discovery documents and the
+// Security Event Token codec) is part of the Business edition.
 package scim
 
 import "strconv"
+
+// ContentType is the SCIM media type (RFC 7644 §3.1).
+const ContentType = "application/scim+json"
+
+// MsgError is the error response message schema.
+const MsgError = "urn:ietf:params:scim:api:messages:2.0:Error"
 
 // SCIM scimType keywords (RFC 7644 §3.12, Table 9).
 const (

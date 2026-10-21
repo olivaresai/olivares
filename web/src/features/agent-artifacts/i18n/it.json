@@ -1,0 +1,147 @@
+{
+  "title": "Artefatti degli agenti",
+  "subtitle": "Governa il registro a livello di tenant, la postura registrata e la BOM della supply chain degli artefatti che gli agenti eseguono.",
+  "intro": "Questo registro conserva solo identità, provenienza e postura registrata, mai il contenuto delle skill, i manifest o i testi di istruzioni.",
+  "tabs": {
+    "registry": "Registro degli artefatti",
+    "aibom": "AIBOM della supply chain degli agenti"
+  },
+  "classes": {
+    "skill": "Skill",
+    "mcpb_extension": "Estensione MCPB",
+    "mcp_app_template": "Template di app MCP",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "registry": {
+    "title": "Artefatti registrati",
+    "description": "Identità del parco del tenant, dichiarazioni di provenienza e risultati registrati degli scanner.",
+    "new": "Registra artefatto",
+    "created": "Artefatto registrato.",
+    "deleted": "Artefatto eliminato.",
+    "search": "Cerca artefatti registrati…",
+    "empty": "Nessun artefatto registrato",
+    "emptyHint": "Un artefatto mai registrato non è rappresentato nella BOM della supply chain degli agenti.",
+    "filter": {
+      "label": "Classe di artefatto",
+      "all": "Tutte le classi di artefatto"
+    },
+    "columns": {
+      "class": "Classe",
+      "name": "Nome",
+      "version": "Versione",
+      "provenance": "Provenienza",
+      "posture": "Risultato di scansione registrato",
+      "issues": "Problemi",
+      "attestedAt": "Registrato"
+    },
+    "provenance": {
+      "claim": "Dichiarazione dell'operatore",
+      "verified": "Provenienza esaminata",
+      "claimHint": "La provenienza è una dichiarazione dell'operatore e non è stata contrassegnata come esaminata.",
+      "verifiedHint": "L'operatore ha esaminato la dichiarazione di provenienza; non è una certificazione di Olivares."
+    },
+    "posture": {
+      "notScanned": "Non analizzato",
+      "grade": "Voto {{grade}}",
+      "recorded": "Risultato di scansione registrato",
+      "hint": "Un voto registra ciò che ha valutato lo scanner di un connettore o ciò che ha registrato un operatore. La console non ha eseguito alcuna scansione."
+    },
+    "drawer": {
+      "description": "Metadati del registro memorizzati e stato della dichiarazione rispetto all'esame.",
+      "identityNotice": "Vengono memorizzati solo i metadati. Dietro questo record non c'è alcun contenuto dell'artefatto.",
+      "postureNotice": "Il voto di postura è un risultato di scansione registrato, non una scansione eseguita da questa console. Non analizzato è neutro, non è un errore.",
+      "id": "ID del registro",
+      "class": "Classe di artefatto",
+      "name": "Nome",
+      "version": "Versione",
+      "provenance": "Provenienza",
+      "sourceRef": "Riferimento della sorgente",
+      "contentHash": "Impronta del contenuto",
+      "posture": "Risultato di scansione registrato",
+      "issues": "Problemi registrati",
+      "verified": "Stato della provenienza",
+      "attestedBy": "Registrato da",
+      "attestedAt": "Registrato il",
+      "note": "Nota"
+    },
+    "create": {
+      "title": "Registra artefatto dell'agente",
+      "description": "Registra i metadati di identità, provenienza e postura. Il contenuto dell'artefatto non viene mai caricato.",
+      "uniqueHint": "Classe e nome formano un'identità di registro univoca e immutabile. Non esiste una route di aggiornamento.",
+      "class": "Classe di artefatto",
+      "name": "Nome",
+      "version": "Versione",
+      "provenance": "Dichiarazione di provenienza",
+      "sourceRef": "Riferimento della sorgente",
+      "contentHash": "Hash del contenuto",
+      "contentAlg": "Algoritmo di hash",
+      "posture": "Risultato di scansione registrato",
+      "issues": "Problemi registrati",
+      "issuesHint": "Numero di problemi del risultato registrato. Disabilitato e a zero se non analizzato.",
+      "verified": "Provenienza esaminata dall'operatore",
+      "verifiedHint": "Attesta che l'operatore ha esaminato la dichiarazione di provenienza; non è una certificazione di Olivares.",
+      "note": "Nota",
+      "errorTitle": "L'artefatto non è stato registrato",
+      "duplicateTitle": "Artefatto già registrato",
+      "duplicate": "Esiste già un artefatto con questa classe e questo nome. Non esiste una route di aggiornamento: scegli un'identità diversa oppure elimina prima il record esistente."
+    },
+    "delete": {
+      "title": "Elimina artefatto registrato",
+      "description": "Eliminare “{{name}}” dal registro? Le BOM live future non lo includeranno più."
+    },
+    "truncated": "Caricati {{n}} artefatti; ce ne sono altri",
+    "truncatedHint": "Ci sono più artefatti registrati di quelli mostrati; questa pagina prende le righe per id (assegnato alla creazione), quindi quelle oltre la pagina mancano, di norma le registrate più di recente. Il filtro per classe è applicato dal MOTORE, quindi esegue una nuova query; la ricerca e l'ordinamento della tabella valgono solo per ciò che è caricato. Un artefatto non elencato qui non dimostra che non sia registrato."
+  },
+  "aibom": {
+    "difference": "Questa BOM a livello di parco copre gli artefatti degli agenti registrati; l'AIBOM per modello copre la discendenza di un singolo modello di tua proprietà.",
+    "coverage": "La copertura riflette ciò che è stato registrato: un artefatto mai registrato non è rappresentato.",
+    "live": {
+      "title": "BOM live della supply chain degli agenti",
+      "description": "Generata ora: live, non sigillata e non sottoposta ad audit.",
+      "notice": "L'anteprima genera un nuovo documento CycloneDX 1.6 dal registro corrente. È di sola lettura e non crea evidenze.",
+      "preview": "Anteprima della BOM live",
+      "loading": "Generazione della BOM live…",
+      "dialogTitle": "BOM live della supply chain degli agenti",
+      "dialogDescription": "Generata ora dal registro. Questo documento non è sigillato né sottoposto ad audit.",
+      "jsonLabel": "JSON CycloneDX live",
+      "download": "Scarica la BOM live"
+    },
+    "seal": {
+      "action": "Sigilla la BOM corrente",
+      "confirmTitle": "Sigilla la BOM della supply chain degli agenti",
+      "confirmDescription": "Rigenera la BOM e registra il suo hash canonico del contenuto nel registro di audit. Il registro non archivia il documento.",
+      "confirmBody": "Conserva la ricevuta restituita: la sua AIBOM è l'unica copia del documento sigillato.",
+      "confirm": "Sigilla e ricevi la BOM",
+      "success": "BOM della supply chain degli agenti sigillata. Scarica subito la BOM della ricevuta.",
+      "receiptTitle": "Ricevuta della BOM sigillata",
+      "receiptDescription": "L'impegno sull'hash è duraturo; questa ricevuta contiene l'unica copia del documento sigillato.",
+      "download": "Scarica la BOM sigillata"
+    },
+    "history": {
+      "title": "Cronologia dei sigilli",
+      "description": "Impegni models.agent_aibom in sola aggiunta per il parco di artefatti degli agenti registrati.",
+      "empty": "Nessuna BOM della supply chain degli agenti sigillata",
+      "emptyHint": "Sigillare crea un impegno sull'hash e restituisce l'unica copia del documento nella sua ricevuta.",
+      "loadError": "Impossibile caricare la cronologia dei sigilli.",
+      "id": "ID del sigillo",
+      "subject": "Soggetto",
+      "serial": "Numero di serie",
+      "contentHash": "Hash del contenuto",
+      "specVersion": "Versione CycloneDX",
+      "components": "Componenti registrati",
+      "ledgerSeq": "Sequenza di audit precedente",
+      "ledgerHash": "Testa di audit precedente",
+      "scope": "Nota sulla copertura",
+      "generatedBy": "Generato da",
+      "generatedAt": "Generato il",
+      "noPriorHead": "{{seq}} (nessuna testa di audit precedente)",
+      "truncated": "Caricati {{n}} sigilli; ce ne sono altri",
+      "truncatedHint": "Ci sono più AI-BOM sigillate di quelle mostrate; questa pagina prende le righe per id. Sigillare aggiunge una riga, quindi ciò che manca è di norma l'evidenza più recente."
+    }
+  }
+}

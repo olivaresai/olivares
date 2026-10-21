@@ -628,95 +628,199 @@ describe('HomeView (RBAC gating + honest states)', () => {
   })
 })
 
-describe('Now — the executive report', () => {
-  // The report rolls up what the agents did in the period. On an empty install it has
-  // nothing to say, so Now offers it once there is a session in Recent work or spend.
+describe('Now — live session cards and today’s cost (#2245)', () => {
+  // Now reads two pages: the runs Olivares operates and the live sessions it observes.
+  // A live session is a card, an ended one a Recent work row, and the Today tile sums
+  // what the sessions that worked today cost. The header holds no lone report button.
   const role = (p: string) =>
-    p === 'sessions:live:read' ||
-    p === 'sessions:run:read' ||
-    p === 'finops:spend:read'
-  const stub = ({
-    sessions,
-    spend,
-    tokens = 0,
-  }: {
-    sessions: boolean
-    spend: number
-    tokens?: number
-  }) => {
-    const page = (items: unknown[]) => ({ items, has_more: false }) as never
-    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
-    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(
-      page(
-        sessions
-          ? [
-              {
-                run_ref: 'run-1',
-                tenant_id: 'demo',
-                state: 'stopped',
-                name: 'Nightly report',
-                created_at: '2026-10-03T08:00:00Z',
-              },
-            ]
-          : [],
-      ),
-    )
-    vi.spyOn(finopsApi, 'summary').mockResolvedValue({
-      ...finopsSummaryFixture,
-      total_micro_usd: spend,
-      input_tokens: tokens,
-      output_tokens: 0,
-    })
-    vi.spyOn(finopsApi, 'trend').mockResolvedValue(finopsTrendFixture)
-    vi.spyOn(finopsApi, 'forecast').mockResolvedValue(finopsForecastFixture)
+    p === 'sessions:live:read' || p === 'sessions:run:read'
+  const page = (items: unknown[]) => ({ items, has_more: false }) as never
+  const today = () => new Date().toISOString()
+  const running = () => ({
+    run_ref: 'run-live',
+    tenant_id: 'demo',
+    state: 'running',
+    name: 'Fix the flaky login test',
+    provider_driver: 'claude',
+    cost_micro_usd: 420_000,
+    created_at: today(),
+  })
+  const ended = () => ({
+    run_ref: 'run-done',
+    tenant_id: 'demo',
+    state: 'stopped',
+    name: 'Nightly report',
+    cost_micro_usd: 80_000,
+    created_at: today(),
+  })
+  const lastWeek = {
+    run_ref: 'run-old',
+    tenant_id: 'demo',
+    state: 'stopped',
+    name: 'Last week',
+    cost_micro_usd: 9_000_000,
+    created_at: '2026-10-01T08:00:00Z',
   }
-  const report = () => screen.queryByRole('link', { name: /Executive report/ })
+  // The Today tile is a link once its reads answered (no link while loading).
+  const todayTile = async () => {
+    let tile: HTMLElement | null = null
+    await waitFor(() => {
+      tile = screen.getByText('Today').closest('a')
+      expect(tile).not.toBeNull()
+    })
+    return tile!
+  }
+  const stub = (runs: unknown[], live: unknown[] = []) => {
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page(live))
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(page(runs))
+  }
 
-  it('is not offered on an empty install', async () => {
+  it('the header holds no lone Executive report button', async () => {
     authState.can = role
-    stub({ sessions: false, spend: 0 })
+    stub([running(), ended()])
     const queryClient = createTestQueryClient()
     renderIntel(<HomeView />, { queryClient })
-    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
-    // Every read has answered (zero spend, so Now draws no Spend tile) before the header
-    // is judged.
+    expect(await screen.findByText('Nightly report')).toBeInTheDocument()
     await waitFor(() => expect(queryClient.isFetching()).toBe(0))
-    expect(report()).toBeNull()
+    expect(screen.queryByRole('link', { name: /Executive report/ })).toBeNull()
   })
 
-  it('is offered once a session is in Recent work', async () => {
+  it('a live session is a card and an ended one a Recent work row, each once', async () => {
     authState.can = role
-    stub({ sessions: true, spend: 0 })
+    stub([running(), ended()])
     renderIntel(<HomeView />)
-    await waitFor(() => expect(report()).toHaveAttribute('href', '/dashboards'))
+    const cards = await screen.findByTestId('now-live')
+    expect(within(cards).getByText('Claude Code')).toBeInTheDocument()
+    expect(
+      within(cards).getByText('Fix the flaky login test'),
+    ).toBeInTheDocument()
+    expect(within(cards).getByText('$0.42')).toBeInTheDocument()
+    expect(within(cards).queryByText('Nightly report')).toBeNull()
+    const recent = screen.getByTestId('home-recent')
+    expect(within(recent).getByText('Nightly report')).toBeInTheDocument()
+    expect(within(recent).queryByText('Fix the flaky login test')).toBeNull()
   })
 
-  it('is offered on tokens a local model ran for $0', async () => {
-    authState.can = (p) => p === 'finops:spend:read'
-    stub({ sessions: false, spend: 0, tokens: 4200 })
+  it('Today sums what the sessions that worked today cost', async () => {
+    authState.can = role
+    stub([running(), ended(), lastWeek])
     renderIntel(<HomeView />)
-    if (businessFinops) {
-      await waitFor(() =>
-        expect(report()).toHaveAttribute('href', '/dashboards'),
-      )
-    } else {
-      expect(report()).toBeNull()
-      expect(finopsApi.summary).not.toHaveBeenCalled()
-    }
+    const tile = await todayTile()
+    await waitFor(() =>
+      expect(within(tile).getByText('$0.50')).toBeInTheDocument(),
+    )
+    expect(
+      within(tile).getByText('Cost of the 2 sessions that worked today'),
+    ).toBeInTheDocument()
   })
 
-  it('is offered on spend alone, for a role that reads no sessions', async () => {
-    authState.can = (p) => p === 'finops:spend:read'
-    stub({ sessions: false, spend: 1_250_000 })
+  it('Today says which sessions reported no cost, and marks a page with more as a floor', async () => {
+    authState.can = role
+    const unpriced = { ...ended(), run_ref: 'run-free', name: 'Local model' }
+    delete (unpriced as { cost_micro_usd?: number }).cost_micro_usd
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [running(), unpriced],
+      has_more: true,
+    } as never)
     renderIntel(<HomeView />)
-    if (businessFinops) {
-      await waitFor(() =>
-        expect(report()).toHaveAttribute('href', '/dashboards'),
-      )
-    } else {
-      expect(report()).toBeNull()
-      expect(finopsApi.summary).not.toHaveBeenCalled()
-    }
+    const tile = await todayTile()
+    await waitFor(() =>
+      expect(within(tile).getByText('$0.42')).toBeInTheDocument(),
+    )
+    expect(
+      within(tile).getByText(
+        'Cost of the 2 sessions that worked today · 1 reported no cost',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('home-today-partial-note')).toBeInTheDocument()
+  })
+
+  it('a role that reads only live sessions gets cards and Today from them', async () => {
+    authState.can = (p) => p === 'sessions:live:read'
+    const runs = vi.spyOn(agentOpsApi, 'listRuns')
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(
+      page([
+        {
+          session_ref: 'sess-observed',
+          attribution: 'legacy',
+          cc_state: 'active',
+          engine: 'claude',
+          input_tokens: 10,
+          output_tokens: 10,
+          cost_micro_usd: 250_000,
+          event_count: 1,
+          tool_call_count: 0,
+          first_event_at: today(),
+          last_event_at: today(),
+          duration_seconds: 1,
+          critical: false,
+        },
+      ]),
+    )
+    renderIntel(<HomeView />)
+    const cards = await screen.findByTestId('now-live')
+    expect(within(cards).getByText('Claude Code')).toBeInTheDocument()
+    const tile = await todayTile()
+    await waitFor(() =>
+      expect(within(tile).getByText('$0.25')).toBeInTheDocument(),
+    )
+    expect(runs).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('home-today-partial-note')).toBeNull()
+  })
+
+  it('a day with no sessions draws no Today tile', async () => {
+    authState.can = role
+    stub([lastWeek])
+    const queryClient = createTestQueryClient()
+    renderIntel(<HomeView />, { queryClient })
+    expect(await screen.findByText('Last week')).toBeInTheDocument()
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+    expect(screen.queryByText('Today')).toBeNull()
+  })
+
+  it('when every session is live the cards carry the link to all sessions', async () => {
+    authState.can = role
+    stub([running()])
+    renderIntel(<HomeView />)
+    const cards = await screen.findByTestId('now-live')
+    expect(
+      within(cards).getByRole('link', { name: /All sessions/ }),
+    ).toHaveAttribute('href', '/sessions')
+    expect(screen.queryByTestId('home-recent')).toBeNull()
+  })
+
+  it('a failed Recent work read is still said beside the cards', async () => {
+    authState.can = role
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(
+      page([
+        {
+          session_ref: 'sess-observed',
+          attribution: 'legacy',
+          cc_state: 'active',
+          engine: 'codex',
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_micro_usd: 0,
+          event_count: 1,
+          tool_call_count: 0,
+          first_event_at: today(),
+          last_event_at: today(),
+          duration_seconds: 1,
+          critical: false,
+        },
+      ]),
+    )
+    vi.spyOn(agentOpsApi, 'listRuns').mockRejectedValue(
+      new ApiError(500, 'server_error', 'boom'),
+    )
+    renderIntel(<HomeView />)
+    expect(
+      within(await screen.findByTestId('now-live')).getByText('Codex'),
+    ).toBeInTheDocument()
+    expect(
+      await screen.findByText('Couldn’t load recent work'),
+    ).toBeInTheDocument()
   })
 })
 
@@ -803,7 +907,7 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     renderIntel(<HomeView />)
     const start = await screen.findByTestId('now-start')
     expect(start).toHaveTextContent(
-      'The API key Anthropic was refused. Replace it under API keys.',
+      'The API key Anthropic was refused. Replace it under Providers.',
     )
     expect(within(start).queryByRole('button', { name: 'Sign in' })).toBeNull()
     await user.click(

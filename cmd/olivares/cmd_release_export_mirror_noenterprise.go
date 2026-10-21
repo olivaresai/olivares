@@ -14,7 +14,7 @@ import (
 
 // Retain the published command and flags so callers receive an edition refusal.
 func newReleaseExportMirrorCmd() *cobra.Command {
-	c := &cobra.Command{Use: "export-mirror", Short: "Export an offline mirror (requires Enterprise)", Hidden: true, Args: cobra.NoArgs,
+	c := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "export-mirror", Short: "Export an offline mirror (requires Enterprise)", Hidden: true, Args: cobra.NoArgs,
 		Long: "export-mirror walks the licensed /download gate with your token and writes an air-gap\n" +
 			"bundle that `olivares upgrade --bundle` installs with no network at all.\n\n" +
 			"Exporting an offline mirror requires Enterprise; this build refuses with exit code 9.",

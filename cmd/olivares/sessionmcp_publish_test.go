@@ -33,9 +33,32 @@ type recordingPublisher struct {
 	started []time.Time
 	pushes  []gitpublish.PushInput
 	prs     []gitpublish.PullRequestInput
+	// changed and changeErr are the answer to a change read; the callers and
+	// workspaces record each ask.
+	changed          []string
+	changeErr        error
+	changeCallers    []gitpublish.Caller
+	changeWorkspaces []model.ID
 }
 
 func (r *recordingPublisher) PublicationBudget() time.Duration { return r.budget }
+
+// PushChanges and PullRequestChanges answer the paths the test names and
+// record who asked and in which workspace.
+func (r *recordingPublisher) PushChanges(_ context.Context, c gitpublish.Caller, ws model.ID, _ gitpublish.PushInput) ([]string, error) {
+	return r.changesFor(c, ws)
+}
+
+func (r *recordingPublisher) PullRequestChanges(_ context.Context, c gitpublish.Caller, ws model.ID, _ gitpublish.PullRequestInput) ([]string, error) {
+	return r.changesFor(c, ws)
+}
+
+func (r *recordingPublisher) changesFor(c gitpublish.Caller, ws model.ID) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.changeCallers, r.changeWorkspaces = append(r.changeCallers, c), append(r.changeWorkspaces, ws)
+	return r.changed, r.changeErr
+}
 
 func (r *recordingPublisher) Push(_ context.Context, c gitpublish.Caller, in gitpublish.PushInput) (gitpublish.Receipt, error) {
 	r.mu.Lock()

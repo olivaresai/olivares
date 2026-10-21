@@ -6,7 +6,7 @@ description: >-
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL air-gap transfer also require Business.
 :::
 
 A control plane for AI is a security product. If it overstates what it covers, it
@@ -43,12 +43,12 @@ cover something, the page says so rather than implying it does.
   in several SIEM formats.
 - **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
   [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
-  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.2<!-- /release -->**, not yet published.
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The next release is **<!-- release -->0.3<!-- /release -->**, not yet published.
 
 ## Open core — what is open vs commercial
 
-The product is **open core**: the default (AGPL) binary is the whole governance
-platform, and a small, **additive** commercial line (Business and Enterprise; the
+The product is **open core**: the default (AGPL) binary is the complete product for
+one person or one team, and a small, **additive** commercial line (Business and Enterprise; the
 `enterprise/` directory, built only with `-tags enterprise`, never in the public
 binary) holds the reserved features. Two
 boundaries matter for day-to-day use, and the open build answers for them honestly
@@ -56,9 +56,10 @@ rather than faking them:
 
 - **SSO is open for a single IdP.** Single-IdP login — **OIDC** (Authorization Code
   + PKCE) and **SAML 2.0** (signed responses, anti-replay) — runs in the default
-  binary with **no** `-tags enterprise`, and so does inbound **SCIM**. Running
-  **more than one active IdP** (per-tenant / by-domain) and **SSO-enforcement**
-  (require-SSO / block password login) are Business (Identity & Scale); activating a
+  binary with **no** `-tags enterprise`. Running
+  **more than one active IdP** (per-tenant / by-domain), **SSO-enforcement**
+  (require-SSO / block password login) and the inbound **SCIM** server are
+  Business (Identity & Scale); activating a
   second active IdP returns `multi_idp_requires_enterprise` — an explicit product
   limit, never a fake 501.
 - **There is no user cap — accounts are unlimited in every edition.** Community,
@@ -68,10 +69,14 @@ rather than faking them:
   seam is still in the code, as a compatibility no-op that refuses nothing), and a
   license lapse never caps, disables or deletes an account. The commercial model is a
   term-based entitlement to the modules, never a per-seat charge.
-- **The rest of the platform is open.** The full governance loop — inventory, the
-  R/RW access map, RBAC/ABAC/Cedar policy, the sealed audit ledger, FinOps,
-  compliance, SIEM egress, MCP, HA/distributed — runs in the open binary with no
-  license check. The additive `enterprise/` modules are new code that was never in
+- **The rest of one person's or one team's platform is open.** Inventory, the R/RW access map,
+  the built-in roles and deny rules, the sealed audit ledger and the MCP checks run in the
+  open binary. FinOps budgets and spend analysis, compliance frameworks and reports, SIEM push,
+  active-passive HA leader routing and the edge collector are Business. The open build refuses
+  them and names Business: an API route answers `501`, a CLI command exits with code 9, and a
+  server started with an HA leader-routing switch set refuses to start. The edition is the build
+  you run, not a license check in the open binary.
+  The additive `enterprise/` modules are new code that was never in
   the open product, not features removed from it; which capability is in which edition
   is written once, in
   `docs/editions.md` in the repository.
@@ -97,19 +102,20 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
 - **The canonical R/RW sources are wired in the stock `serve`.** The composition
   root registers the host-level observers — `pgaudit`, `s3cloudtrail`, `ebpf`,
   `runtime` and the `mcp` introspection source — alongside the warehouse/lake
-  observers (snowflake/databricks/bigquery/mssql/oracle/mongo/redshift/gcs/
+  observers (snowflake/databricks/bigquery/mssql/mongo/redshift/gcs/
   azure-blob/iceberg/openlineage/delta-sharing), all configurable through
   `OLIVARES_SOURCES_CONFIG` (the
   [quickstart](/start/quickstart/) wires a real `pgaudit` source against the stock
   binary and the smoke test asserts it). The knowledge **document sources**
-  (gdrive/confluence/notion/sharepoint/s3content) are deliberately *not* runtime
+  (gdrive/confluence/notion/s3content) are deliberately *not* runtime
   sources — they are loaded on demand by knowledge ingest requests. The
   [connectors reference](/reference/connectors/) marks each kind.
 - **The default is a single binary; the distributed event bus exists and is honest
   about its semantics.** The default runs as one binary with an **in-process** event
   bus. The **remote collector→core data path is built and shipped**: edge collectors
   run source connectors locally and push observations to a central core over
-  verified-client-cert mutual TLS, with no inbound listener (the `collector` mode).
+  verified-client-cert mutual TLS, with no inbound listener (the `collector` mode,
+  a Business feature).
   The **distributed event bus** shipped with the scale-out work: a hybrid
   that keeps the in-process fan-out for local delivery (blocking backpressure, no
   local loss) and bridges events across nodes over **NATS**, enabled by
@@ -125,7 +131,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   the in-process synthetic sandbox runner (isolated by construction). Several more are
   **wired on-demand** — the backend is built and wired, but stays **deny-closed or
   degraded until an operator provisions it** via env config: module VII (deploy)
-  `apply`/`retire` (a `503` until an executor is provisioned), module IV orchestration
+  `apply`/`retire` (Business only: `501` in Community, otherwise a `503` until an executor is provisioned), module IV orchestration
   *fire* and module XVI voice dispatch (both deny-closed until a dispatcher is
   configured), the OS-isolated sandbox/red-team runtime (synthetic / DEGRADED until
   provisioned), model-backed **semantic** retrieval (lexical and public-only by
@@ -147,7 +153,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   Models you genuinely self-host (e.g. via vLLM/Ollama under module XXIII) can run
   air-gapped; brokered frontier models cannot.
 - **Module routes are a separate, beta contract.** The module endpoints (for
-  example the access-map graph and drift) are not part of the 128-path stable core
+  example the access-map graph and drift) are not part of the {{core-paths}}-path stable core
   contract; they are published as a separate **beta** document — the
   [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`).
   Beta means the shapes may change with notice, and field-level detail still lives

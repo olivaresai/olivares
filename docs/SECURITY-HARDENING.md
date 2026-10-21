@@ -253,9 +253,9 @@ Boot the product with no flags and you get: **no credentials** (setup token prin
 | Control | How | Verify |
 |---|---|---|
 | **Reproducible static build** | `CGO_ENABLED=0`, `-trimpath`, `-buildid=`, build date pinned to the commit (`SOURCE_DATE_EPOCH`). Pure-Go SQLite → fully static, memory-safe | `task build:repro` twice → identical SHA-256 (demonstrated 2026-06-04) |
-| **SBOM** | syft, SPDX-JSON, per release artifact | `task sbom` / `.goreleaser.yaml` `sboms` |
+| **SBOM** | syft, SPDX-JSON; one per release, generated from the shipped image and attested to it by digest | `scripts/sbom-generate.sh` (run by `.github/workflows/release.yml`) |
 | **Checksums** | SHA-256 over every artifact | `checksums.txt` (goreleaser `checksum`) |
-| **Signed releases** | cosign — keyless/Sigstore by default (GitHub OIDC → Fulcio/Rekor); key-based path documented for air-gap | `.goreleaser.yaml` `signs`/`docker_signs`; user verifies with `scripts/verify-release.sh` |
+| **Signed releases** | cosign — keyless/Sigstore by default (GitHub OIDC → Fulcio/Rekor); key-based verification of operator-signed files (public releases publish no cosign public key) | `.goreleaser.yaml` `signs`/`docker_signs`; user verifies with `scripts/verify-release.sh` |
 | **Minimal non-root images** | Engine: `node:24-trixie-slim` pinned by digest (Debian 13 slim with Node.js 24, git, python3 and CA certificates), non-root 65532. eBPF backstop: `gcr.io/distroless/static-debian12:nonroot` | `Dockerfile`, `Dockerfile.release`, `Dockerfile.fips`; `Dockerfile.ebpf-source` |
 | **Dependency CVE gate** | `govulncheck` per module, blocking | CI `govulncheck` job |
 | **Secret scanning gate** | gitleaks (pinned v8.30.1) over full HEAD history, blocking; whole-repository audit is explicit `OLIVARES_SECRETS_SCOPE=all` | CI `secrets` job; `task lint:secrets`; config `.gitleaks.toml` |
@@ -274,7 +274,7 @@ Boot the product with no flags and you get: **no credentials** (setup token prin
 # in the directory with the downloaded artifacts + checksums.txt(.sig/.pem), using the script
 # from a source checkout of the release tag (not a release asset; see INSTALL.md)
 /path/to/olivares/scripts/verify-release.sh                  # keyless (Sigstore) — default
-/path/to/olivares/scripts/verify-release.sh --key cosign.pub # key-based (air-gap)
+/path/to/olivares/scripts/verify-release.sh --key /path/to/operator-cosign.pub # key-based (your own key pair)
 ```
 
 The script verifies the cosign signature over `checksums.txt`, then verifies each

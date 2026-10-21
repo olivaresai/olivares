@@ -18,7 +18,11 @@ import {
 import { usePreferencesStore } from '@/stores/preferences'
 import { useClientSettings } from '@/features/settings/preferences'
 import { useModulesStore } from '@/stores/modules'
+import { FEATURE_VIEWS } from '@/features/registry'
 import { renderIntel as render } from '@/test/intel'
+import { consoleApi } from '@/features/console/api'
+import { ApiError } from '@/lib/api/errors'
+import '@/features/console/i18n'
 
 // The module list has its own tests (features/settings/modules-settings.test.tsx); here it
 // only has to be where a system administrator finds it.
@@ -26,7 +30,16 @@ vi.mock('@/features/settings/modules-settings', () => ({
   ModulesSettings: () => <section aria-label="Modules list" />,
 }))
 
-const auth = vi.hoisted(() => ({ denied: new Set<string>() }))
+// The Updates panel has its own tests (features/settings/updates-settings.test.tsx); here it
+// only has to be where a system administrator finds it.
+vi.mock('@/features/settings/updates-settings', () => ({
+  UpdatesSettings: () => <section aria-label="Updates panel" />,
+}))
+
+const auth = vi.hoisted(() => ({
+  denied: new Set<string>(),
+  isSuperadmin: true,
+}))
 const location = vi.hoisted(() => ({ search: undefined as string | undefined }))
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
@@ -40,7 +53,7 @@ vi.mock('@/lib/auth/context', () => ({
       email: 'admin@example.com',
       display_name: 'Admin Operator',
     },
-    isSuperadmin: true,
+    isSuperadmin: auth.isSuperadmin,
     activeRole: 'owner',
     grants: [{ tenant: 'tenant-a' }, { tenant: 'tenant-b' }],
   }),
@@ -64,10 +77,35 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
 
 import { SettingsPage } from './settings'
 
+// Deployment is a Business page; only a Business build registers it.
+const businessDeploy = FEATURE_VIEWS.some((view) => view.id === 'deploy')
+
 beforeEach(async () => {
+  badgeFixture.edition = null
+  vi.restoreAllMocks()
   location.search = undefined
   server.license = { status: 'none', licensee: '' }
   auth.denied.clear()
+  auth.isSuperadmin = true
+  vi.spyOn(consoleApi, 'getLicense').mockImplementation(async () => ({
+    edition: server.edition ?? 'community',
+    hot_apply: true,
+    status: 'valid',
+    source: 'data-dir',
+    managed_externally: false,
+    max_users: 0,
+    seat_limit: 0,
+    seat_limited: false,
+    active_users: 1,
+    licensee: 'Settings License Owner',
+  }))
+  vi.spyOn(consoleApi, 'getActivation').mockRejectedValue(
+    new ApiError(
+      501,
+      'activation_unavailable',
+      'Activation is not wired on this deployment.',
+    ),
+  )
   useModulesStore.setState({ off: new Set() })
   localStorage.clear()
   document.documentElement.classList.remove('dark')
@@ -88,6 +126,67 @@ beforeEach(async () => {
 })
 
 describe('Settings', () => {
+  it.each(['deep link', 'navigation'])(
+    'opens the shared license status and actions through %s',
+    async (entry) => {
+      const user = userEvent.setup()
+      location.search = entry === 'deep link' ? '?section=edition' : ''
+      render(<SettingsPage />)
+      if (entry === 'navigation') {
+        await user.click(
+          screen.getByRole('button', { name: 'Edition & modules' }),
+        )
+      }
+      expect(
+        await screen.findByText('Settings License Owner'),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Install / update' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('button', { name: 'Remove license' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('region', { name: 'Modules list' }),
+      ).toBeInTheDocument()
+    },
+  )
+
+  it('keeps the license superadmin gate in Settings', async () => {
+    auth.isSuperadmin = false
+    location.search = '?section=edition'
+    render(<SettingsPage />)
+    expect(
+      screen.getByText('Only a superadmin can view or change the license.'),
+    ).toBeInTheDocument()
+    expect(consoleApi.getLicense).not.toHaveBeenCalled()
+    expect(screen.getByText('Community')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Install / update' }),
+    ).toBeNull()
+  })
+
+  it.each(['License', 'Edition'])(
+    'finds the license section in Settings search for %s',
+    async (term) => {
+      location.search = `?q=${term}`
+      render(<SettingsPage />)
+      expect(
+        screen.getByRole('link', { name: 'Edition & license' }),
+      ).toHaveAttribute('href', '/settings?section=edition')
+    },
+  )
+
+  const spanishEditionLabel = 'Edición y licencia' // language-data: Spanish expected label
+  it('finds the license section in Settings search without diacritics in Spanish', async () => {
+    await i18n.changeLanguage('es')
+    location.search = '?q=edicion'
+    render(<SettingsPage />)
+    expect(
+      screen.getByRole('link', { name: spanishEditionLabel }),
+    ).toHaveAttribute('href', '/settings?section=edition')
+  })
+
   it('opens a setting selected by navigation while the settings page is already mounted', async () => {
     window.history.replaceState(null, '', '/settings')
     location.search = ''
@@ -217,6 +316,8 @@ describe('Settings', () => {
       'Deutsch',
       'Русский',
       'Français',
+      'Italiano',
+      '한국어',
     ])
     // prettier-ignore
     const spanishName = 'Español' // language-data: native language name
@@ -239,6 +340,26 @@ describe('Settings', () => {
     await waitFor(() => expect(i18n.resolvedLanguage).toBe('de'))
     expect(document.documentElement.lang).toBe('de')
     expect(localStorage.getItem('olivares.lang')).toBe('de')
+
+    await user.click(trigger)
+    await user.click(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: 'Italiano',
+      }),
+    )
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe('it'))
+    expect(document.documentElement.lang).toBe('it')
+    expect(localStorage.getItem('olivares.lang')).toBe('it')
+
+    await user.click(trigger)
+    await user.click(
+      within(await screen.findByRole('listbox')).getByRole('option', {
+        name: '한국어',
+      }),
+    )
+    await waitFor(() => expect(i18n.resolvedLanguage).toBe('ko'))
+    expect(document.documentElement.lang).toBe('ko')
+    expect(localStorage.getItem('olivares.lang')).toBe('ko')
   })
 
   it('focuses search on / and filters to Reduce motion', async () => {
@@ -253,6 +374,19 @@ describe('Settings', () => {
     expect(
       screen.queryByText(/Records and exports stay in UTC/),
     ).not.toBeInTheDocument()
+  })
+
+  // dev#2560: the search input drops its own outline, so its field draws the 3 px focus ring.
+  it('rings the search field in the focus color while the search has keyboard focus', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    await user.keyboard('/')
+    const field = screen.getByRole('searchbox').closest('label')
+    expect(field).toHaveClass(
+      'has-focus-visible:outline-3',
+      'has-focus-visible:outline-offset-2',
+      'has-focus-visible:outline-focus',
+    )
   })
 
   it('treats System as the theme default: no marker, and reset returns to it (#478)', async () => {
@@ -304,7 +438,7 @@ describe('Settings', () => {
     expect(
       screen.getByRole('heading', { name: 'Edition & modules' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Community')).toBeInTheDocument()
+    expect(await screen.findByText('Community')).toBeInTheDocument()
     const adds = screen.getByRole('heading', { name: 'Business adds' })
     expect(adds.parentElement?.querySelectorAll('li')).toHaveLength(6)
     expect(screen.getByText('Tool pins')).toBeInTheDocument()
@@ -319,7 +453,7 @@ describe('Settings', () => {
     server.edition = 'enterprise'
     render(<SettingsPage />)
     await user.click(screen.getByRole('button', { name: 'Edition & modules' }))
-    expect(screen.getByText('Business')).toBeInTheDocument()
+    expect(await screen.findByText('Business')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Business adds' })).toBeNull()
     server.edition = 'community'
   })
@@ -367,25 +501,30 @@ describe('Settings', () => {
     const href = (name: string) =>
       screen.queryByRole('link', { name })?.getAttribute('href')
     const { unmount } = render(<SettingsPage />)
-    expect(href('Deploy and updates')).toBe('/deploy')
+    // Deployment is a Business page: Community has no page to link.
+    expect(href('Deploy and updates')).toBe(
+      businessDeploy ? '/deploy' : undefined,
+    )
     expect(href('AI tools')).toBe('/providers')
     expect(href('Workspaces')).toBe('/workspace')
     expect(screen.getByText('Work')).toBeInTheDocument()
     unmount()
 
-    // A fresh install leaves deploy off (modulespec standard=false).
-    useModulesStore.getState().setOff(['deploy'])
-    const off = render(<SettingsPage />)
-    expect(href('Deploy and updates')).toBeUndefined()
-    expect(href('AI tools')).toBe('/providers')
-    off.unmount()
+    if (businessDeploy) {
+      // A fresh install leaves deploy off (modulespec standard=false).
+      useModulesStore.getState().setOff(['deploy'])
+      const off = render(<SettingsPage />)
+      expect(href('Deploy and updates')).toBeUndefined()
+      expect(href('AI tools')).toBe('/providers')
+      off.unmount()
 
-    // Module on, permission not held.
-    useModulesStore.getState().setOff([])
-    auth.denied.add('deploy:deployment:read')
-    const denied = render(<SettingsPage />)
-    expect(href('Deploy and updates')).toBeUndefined()
-    denied.unmount()
+      // Module on, permission not held.
+      useModulesStore.getState().setOff([])
+      auth.denied.add('deploy:deployment:read')
+      const denied = render(<SettingsPage />)
+      expect(href('Deploy and updates')).toBeUndefined()
+      denied.unmount()
+    }
 
     // One link left keeps its group; none left drops the heading too.
     auth.denied.add('tenant:read')
@@ -416,13 +555,64 @@ describe('Settings', () => {
       'Now',
       'Sessions',
       'Workspace',
-      'API keys',
-      'Deployment',
+      'Providers',
+      ...(businessDeploy ? ['Deployment'] : []),
     ])
     all.unmount()
 
     useModulesStore.getState().setOff(['deploy'])
     render(<SettingsPage />)
     expect(await startPages()).not.toContain('Deployment')
+  })
+})
+
+const badgeFixture = vi.hoisted(() => ({ edition: null as string | null }))
+vi.mock('@/features/console/use-edition-badge', () => ({
+  useEditionBadge: () => ({
+    edition: badgeFixture.edition,
+    shown: true,
+    canSave: true,
+    setShown: async () => {},
+    saving: false,
+    saveError: false,
+    loadError: false,
+  }),
+}))
+
+it('shows the active commercial badge and one visibility setting in Edition', async () => {
+  badgeFixture.edition = 'enterprise'
+  location.search = '?section=edition'
+  render(<SettingsPage />)
+  expect(screen.getByLabelText('Enterprise edition')).toBeInTheDocument()
+  expect(
+    screen.getByRole('switch', { name: 'Show edition badge' }),
+  ).toBeChecked()
+})
+
+describe('Settings > Updates', () => {
+  it('offers the Updates section to a system administrator, by menu and by link', async () => {
+    const user = userEvent.setup()
+    location.search = ''
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: 'Updates' }))
+    expect(
+      await screen.findByRole('region', { name: 'Updates panel' }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens the Updates section from its address', () => {
+    location.search = '?section=updates'
+    render(<SettingsPage />)
+    expect(
+      screen.getByRole('region', { name: 'Updates panel' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not offer Updates to anyone else', () => {
+    auth.isSuperadmin = false
+    location.search = '?section=updates'
+    render(<SettingsPage />)
+    expect(screen.queryByRole('button', { name: 'Updates' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Updates panel' })).toBeNull()
   })
 })

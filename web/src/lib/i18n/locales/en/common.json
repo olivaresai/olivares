@@ -96,7 +96,7 @@
     "searchResults": "Results in your data",
     "searchTruncated": "More matches exist — refine your query.",
     "searchDegraded": "Some sources could not be searched — this list is incomplete.",
-    "deniedReason": "Needs {{permission}}.",
+    "deniedReason": "Needs {{permission}} for this.",
     "deniedHelp": "Ask an administrator who can grant it.",
     "noTargetReason": "Needs an organization to run in.",
     "noTargetHelp": "Select an organization, then try again.",
@@ -107,6 +107,12 @@
     "footerMove": "move",
     "footerOpen": "open",
     "footerCommands": "commands only"
+  },
+  "permissionWords": {
+    "read": "read access",
+    "write": "write access",
+    "admin": "admin access",
+    "other": "more access"
   },
   "status": {
     "active": "Active",
@@ -293,7 +299,13 @@
     },
     "command": {
       "palette": {
-        "open": "Open the command palette"
+        "open": "Open the command palette",
+        "recent1": "Open recent session 1",
+        "recent2": "Open recent session 2",
+        "recent3": "Open recent session 3",
+        "recent4": "Open recent session 4",
+        "recent5": "Open recent session 5",
+        "recent6": "Open recent session 6"
       },
       "help": {
         "toggle": "Show these shortcuts"
@@ -304,6 +316,9 @@
         "startBackground": "Start it and stay here"
       },
       "surface": {
+        "openBeside": "Open beside",
+        "closeBeside": "Close session beside",
+        "focusBeside": "Move focus between sessions",
         "nextPane": "Next pane",
         "previousPane": "Previous pane"
       },
@@ -328,7 +343,8 @@
         "pin": "Pin or unpin this module"
       },
       "session": {
-        "new": "New session"
+        "new": "New session",
+        "previous": "Return to the previous session"
       },
       "sourceDiff": {
         "nextFile": "Next file",
@@ -340,7 +356,9 @@
     "when": {
       "railFocused": "in the session rail",
       "launcherFocused": "in the launcher field",
-      "workSurface": "on the sessions screen"
+      "workSurface": "on the sessions screen",
+      "sessionHistory": "when a previous session is available",
+      "paletteRecent": "in palette results with an empty query"
     },
     "precedence": "When two rows share keys, the last one that applies wins.",
     "modNote": "⌘ is Control on Windows and Linux.",

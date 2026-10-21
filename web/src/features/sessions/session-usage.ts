@@ -22,30 +22,43 @@ export interface SessionUsage {
   input: number
   output: number
   costMicroUsd?: number
+  costPartial: boolean
 }
 
 /**
- * The usage the header shows. A launched session's is its run's counters, summed
- * over its launches; a session Olivares did not start has only its live row. None
- * reported is `null`: unknown, which the header leaves out.
+ * The usage the header shows, summed across the session's runs. Money absent from
+ * one run makes a known subtotal partial; absent from all runs stays unknown.
+ * A session Olivares did not start has only its live row. None reported is `null`.
  */
 export function sessionUsage(
-  run: RunDTO | null | undefined,
+  runs: readonly RunDTO[],
   live: LiveDTO | null | undefined,
 ): SessionUsage | null {
-  if (
-    run &&
-    (run.input_tokens != null ||
-      run.output_tokens != null ||
-      run.cost_micro_usd != null)
-  )
-    return {
-      input: run.input_tokens ?? 0,
-      output: run.output_tokens ?? 0,
-      costMicroUsd: run.cost_micro_usd,
+  if (runs.length > 0) {
+    let input = 0
+    let output = 0
+    let costMicroUsd: number | undefined
+    let reported = false
+    let unpriced = false
+    for (const run of runs) {
+      input += run.input_tokens ?? 0
+      output += run.output_tokens ?? 0
+      reported ||= run.input_tokens != null || run.output_tokens != null
+      if (run.cost_micro_usd != null) {
+        costMicroUsd = (costMicroUsd ?? 0) + run.cost_micro_usd
+        reported = true
+      } else unpriced = true
     }
+    return reported
+      ? {
+          input,
+          output,
+          costMicroUsd,
+          costPartial: costMicroUsd != null && unpriced,
+        }
+      : null
+  }
   if (
-    !run &&
     live &&
     (live.input_tokens > 0 || live.output_tokens > 0 || live.cost_micro_usd > 0)
   )
@@ -53,6 +66,7 @@ export function sessionUsage(
       input: live.input_tokens,
       output: live.output_tokens,
       costMicroUsd: live.cost_micro_usd > 0 ? live.cost_micro_usd : undefined,
+      costPartial: false,
     }
   return null
 }

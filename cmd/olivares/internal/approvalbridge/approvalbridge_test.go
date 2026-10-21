@@ -77,32 +77,55 @@ func TestApprovalBridgeApprovedGrantWindow(t *testing.T) {
 
 	// Pending is always reusable (idempotent open). Approved is reusable ONLY for the
 	// one-shot security gate (reuseApproved) AND only inside its grant window.
-	if !b.reusable(cred, ApprovalView{Status: Pending}, false) {
+	if !b.reusable(cred, ApprovalView{Status: Pending}, reuseNone) {
 		t.Fatal("pending must be reusable")
 	}
-	if b.reusable(cred, fresh, false) {
+	if b.reusable(cred, fresh, reuseNone) {
 		t.Fatal("two-phase gate must NOT reuse an approved approval")
 	}
-	if !b.reusable(cred, fresh, true) {
+	if !b.reusable(cred, fresh, reuseApproved) {
 		t.Fatal("security gate must reuse a fresh approved grant")
 	}
-	if b.reusable(cred, stale, true) {
+	if b.reusable(cred, stale, reuseApproved) {
 		t.Fatal("an approved grant past its window must NOT be reused (time-box)")
 	}
 	// Fail-closed: an unparseable/empty decided_at or a zero window is never reusable.
-	if b.reusable(cred, ApprovalView{Status: Approved, DecidedAt: "garbage"}, true) {
+	if b.reusable(cred, ApprovalView{Status: Approved, DecidedAt: "garbage"}, reuseApproved) {
 		t.Fatal("unparseable decided_at must fail closed")
 	}
-	if b.reusable(cred, ApprovalView{Status: Approved, DecidedAt: ""}, true) {
+	if b.reusable(cred, ApprovalView{Status: Approved, DecidedAt: ""}, reuseApproved) {
 		t.Fatal("empty decided_at must fail closed")
 	}
-	if b.reusable(ServiceCred{ExpiresIn: 0}, fresh, true) {
+	if b.reusable(ServiceCred{ExpiresIn: 0}, fresh, reuseApproved) {
 		t.Fatal("a zero grant window must never reuse an approved approval")
 	}
 	// Terminal states are never reusable.
 	for _, s := range []string{Rejected, Expired, Canceled, "garbage", ""} {
-		if b.reusable(cred, ApprovalView{Status: s, DecidedAt: fresh.DecidedAt}, true) {
+		if b.reusable(cred, ApprovalView{Status: s, DecidedAt: fresh.DecidedAt}, reuseApproved) {
 			t.Fatalf("status %q must not be reusable", s)
 		}
+	}
+}
+
+// A grant a consumer already spent is still reusable by a caller that can spend it again
+// (the same tool-call retrying inside the engine's retry window), and never by a caller
+// that spends under a fresh consumer each time: that one is refused as replayed, so it
+// needs a request of its own.
+func TestApprovalBridgeSpentGrantIsReusedOnlyByACallerThatCanSpendIt(t *testing.T) {
+	base := time.Date(2026, 6, 7, 12, 0, 0, 0, time.UTC)
+	b := &Bridge{Clock: func() time.Time { return base }}
+	cred := ServiceCred{ExpiresIn: 3600}
+	decided := model.NewTimestamp(base.Add(-time.Minute)).String()
+	unspent := ApprovalView{Status: Approved, DecidedAt: decided}
+	spent := ApprovalView{Status: Approved, DecidedAt: decided, Consumed: true}
+
+	if !b.reusable(cred, spent, reuseApproved) {
+		t.Fatal("a caller that may re-spend its own grant must still find the spent one")
+	}
+	if b.reusable(cred, spent, reuseUnspent) {
+		t.Fatal("a caller under a fresh consumer must not be handed a spent grant")
+	}
+	if !b.reusable(cred, unspent, reuseUnspent) {
+		t.Fatal("a caller under a fresh consumer must still find an unspent grant")
 	}
 }

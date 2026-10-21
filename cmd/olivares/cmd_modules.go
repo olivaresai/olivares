@@ -19,7 +19,8 @@ const modulesSelectionPath = "/v1/console/modules"
 func newModulesCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
-		Use: "modules", Short: "List, turn on and turn off optional modules",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "modules", Short: "List, turn on and turn off optional modules",
 		Long: "Manage the same module selection as Edition & modules in the console. Sign in with\n" +
 			"olivares login, then see the current selection with olivares modules ls.",
 		Example: "  olivares modules ls\n  olivares modules on adoption\n  olivares modules off adoption",
@@ -27,7 +28,8 @@ func newModulesCmd() *cobra.Command {
 	flags.addPersistent(root)
 	client := bootstrapClient{flags: flags, surface: "modules"}
 	root.AddCommand(&cobra.Command{
-		Use: "ls", Short: "List selected and running modules",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls", Short: "List selected and running modules",
 		Long: "List each module's selected and running state. Kernel modules and dependencies may\n" +
 			"keep running without being selected. To select a module, use olivares modules on <name>.",
 		Example: "  olivares modules ls", Args: cobra.NoArgs,
@@ -58,7 +60,8 @@ func newModulesCmd() *cobra.Command {
 	})
 	for _, verb := range []string{"on", "off"} {
 		root.AddCommand(&cobra.Command{
-			Use: verb + " <name>", Short: "Turn " + verb + " a module in the saved selection",
+			Annotations: map[string]string{"changes_data": "write"},
+			Use:         verb + " <name>", Short: "Turn " + verb + " a module in the saved selection",
 			Long: "Keep the other selected modules and turn " + verb + " the named module. The engine restarts\n" +
 				"once if its running modules change, and the restart stops the running sessions (each\n" +
 				"can be resumed). Kernel modules and required dependencies stay on.\n" +

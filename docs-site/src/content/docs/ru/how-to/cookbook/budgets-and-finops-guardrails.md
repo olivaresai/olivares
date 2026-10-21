@@ -83,11 +83,8 @@ curl -ks "$BASE/v1/m/finops/alerts" \
 [назначение](/ru/how-to/forward-audit-to-splunk/) Slack или PagerDuty услышит
 пересечение 80% до отказа на 100%.
 
-В консоли **Cost & FinOps** показывает расходы по измерениям с состоянием бюджета
-встроенно:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Представление Cost & FinOps с трендами расходов и состоянием бюджета." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Представление Cost & FinOps с трендами расходов и состоянием бюджета." />
+В консоли **Budgets** показывает расход относительно каждого лимита с прогнозом
+по текущему темпу.
 
 ## Дайте расходам знаменатель: результаты
 

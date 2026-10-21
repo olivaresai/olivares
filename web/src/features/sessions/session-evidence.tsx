@@ -31,7 +31,7 @@
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { AlertTriangle, ChevronDown, Coins, Plug, Wrench } from 'lucide-react'
 import { useQueries, useQuery } from '@tanstack/react-query'
-import { useMemo, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -39,7 +39,13 @@ import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { sessionsApi, sessionsKeys } from './api'
-import { EVIDENCE_PAGE, splitEvidence } from './evidence-split'
+import {
+  EVIDENCE_PAGE,
+  groupEntries,
+  rowWords,
+  splitEvidence,
+  type EntryGroup,
+} from './evidence-split'
 import { RefChip } from './ref-chip'
 import { EVIDENCE_BLOCKS, type EvidenceBlock } from './session-address'
 import type { TimelineDTO } from './types'
@@ -55,7 +61,11 @@ const KIND_ICON = {
 function EntryRow({ entry }: { entry: TimelineDTO }) {
   const { t } = useTranslation('sessions')
   const Icon = KIND_ICON[entry.kind as keyof typeof KIND_ICON] ?? Wrench
-  const label = entry.title || entry.tool_ref || t(`kind.${entry.kind}`)
+  const { title, subtitle } = rowWords(
+    entry.kind,
+    (entry.title || entry.tool_ref || '').trim() || t(`kind.${entry.kind}`),
+    entry.resource_ref,
+  )
   return (
     <li className="flex items-start gap-2 py-1">
       <Icon
@@ -67,11 +77,11 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
       />
       <span className="min-w-0 flex-1">
         <span className="block break-words text-caption text-foreground">
-          {label}
+          {title}
         </span>
-        {entry.resource_ref ? (
+        {subtitle ? (
           <span className="block font-mono text-caption text-muted-foreground [overflow-wrap:anywhere]">
-            {entry.resource_ref}
+            {subtitle}
           </span>
         ) : null}
       </span>
@@ -79,6 +89,81 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
         ts={entry.at}
         className="shrink-0 text-caption text-muted-foreground"
       />
+    </li>
+  )
+}
+
+/**
+ * IDENTICAL ENTRIES ARE ONE ROW (#2267). Three "cooperative trace gap" findings with one
+ * time told the same fact three times, and a call that wrote two entries is one turn told
+ * twice; the row says it once, with its count and when. Expanding lists the moments, so
+ * nothing is hidden, only folded.
+ */
+function EntryGroupRow({ group }: { group: EntryGroup }) {
+  const { t } = useTranslation('sessions')
+  const [open, setOpen] = useState(false)
+  const listId = useId()
+  if (group.count === 1) return <EntryRow entry={group.entries[0]} />
+  const Icon = KIND_ICON[group.kind as keyof typeof KIND_ICON] ?? Wrench
+  const { title, subtitle } = rowWords(
+    group.kind,
+    group.label || t(`kind.${group.kind}`),
+    group.resource,
+  )
+  const time = 'text-caption text-muted-foreground'
+  return (
+    <li className="py-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={listId}
+        className="flex w-full items-start gap-2 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Icon
+          className={cn(
+            'mt-0.5 size-3.5 shrink-0',
+            group.kind === 'finding' ? 'text-warning' : 'text-muted-foreground',
+          )}
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block break-words text-caption text-foreground">
+            {title}{' '}
+            <span className="tabular-nums text-muted-foreground">
+              {t('evidence.repeat', { count: group.count })}
+            </span>
+          </span>
+          {subtitle ? (
+            <span className="block font-mono text-caption text-muted-foreground [overflow-wrap:anywhere]">
+              {subtitle}
+            </span>
+          ) : null}
+        </span>
+        <span className={cn('shrink-0', time)}>
+          {group.ranged ? (
+            <>
+              <RelTimeLabel ts={group.oldest} className={time} />
+              {' – '}
+            </>
+          ) : null}
+          <RelTimeLabel ts={group.newest} className={time} />
+        </span>
+        <ChevronDown
+          className={cn(
+            'mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform',
+            open ? '' : '-rotate-90',
+          )}
+          aria-hidden
+        />
+      </button>
+      <ul id={listId} hidden={!open} className="pl-5">
+        {group.entries.map((e, i) => (
+          <li key={`${e.at}:${i}`} className="py-0.5">
+            <RelTimeLabel ts={e.at} className={time} />
+          </li>
+        ))}
+      </ul>
     </li>
   )
 }
@@ -159,8 +244,9 @@ export function SessionEvidence({
    * its turns' usage): read with it, or a finished session shows "Last turns 0" and
    * "Resources touched 0" (HU 029). */
   echoRefs?: readonly string[]
-  /** Which block is open — it lives in the URL, so a shared link opens the same one. */
-  expanded: EvidenceBlock
+  /** Which block is open — it lives in the URL, so a shared link opens the same one.
+   * Absent, the turns open (the session's work), else the first block there is. */
+  expanded?: EvidenceBlock
   onExpand: (block: EvidenceBlock) => void
 }) {
   const { t } = useTranslation('sessions')
@@ -202,6 +288,7 @@ export function SessionEvidence({
     combine: (results) => ({
       items: results.flatMap((r) => r.data?.items ?? []),
       more: results.some((r) => r.data?.has_more === true),
+      loading: results.some((r) => r.isLoading),
     }),
   })
   const split = useMemo(() => {
@@ -210,6 +297,11 @@ export function SessionEvidence({
     )
     return splitEvidence(items, (query.data?.has_more ?? false) || echoed.more)
   }, [query.data, echoed])
+  const checkGroups = useMemo(() => groupEntries(split.checks), [split.checks])
+  const turnGroups = useMemo(
+    () => groupEntries(split.activity),
+    [split.activity],
+  )
 
   if (!canRead)
     return (
@@ -219,7 +311,9 @@ export function SessionEvidence({
       />
     )
 
-  if (query.isLoading)
+  // The echo reads count too: the default block is chosen from all of them, and a pane
+  // that opens on one block and then jumps to another when they land moves under the hand.
+  if (query.isLoading || echoed.loading)
     return (
       <div className="flex flex-col gap-2 py-2" data-testid="evidence-loading">
         {Array.from({ length: 3 }, (_, i) => (
@@ -243,15 +337,15 @@ export function SessionEvidence({
   const rows: Record<EvidenceBlock, ReactNode> = {
     checks: (
       <ul>
-        {split.checks.map((e, i) => (
-          <EntryRow key={`${e.at}:${i}`} entry={e} />
+        {checkGroups.map((g) => (
+          <EntryGroupRow key={g.key} group={g} />
         ))}
       </ul>
     ),
     activity: (
       <ul>
-        {split.activity.map((e, i) => (
-          <EntryRow key={`${e.at}:${i}`} entry={e} />
+        {turnGroups.map((g) => (
+          <EntryGroupRow key={g.key} group={g} />
         ))}
       </ul>
     ),
@@ -279,6 +373,15 @@ export function SessionEvidence({
   // findings" was empty noise. Nothing at all when every block is empty.
   const shown = EVIDENCE_BLOCKS.filter((id) => counts[id] > 0)
   if (shown.length === 0) return null
+  // THE PANE SHOWS THE SESSION'S WORK, NOT A COLLAPSED LIST (#2267): with no block named
+  // the turns are open; a named block that has nothing in it opens nothing, so it falls
+  // back the same way.
+  const open: EvidenceBlock =
+    expanded && counts[expanded] > 0
+      ? expanded
+      : counts.activity > 0
+        ? 'activity'
+        : shown[0]
   return (
     <div data-testid="session-evidence">
       {shown.map((id) => (
@@ -287,7 +390,7 @@ export function SessionEvidence({
           id={id}
           count={counts[id]}
           bounded={split.bounded}
-          expanded={expanded === id}
+          expanded={open === id}
           onToggle={() => onExpand(id)}
         >
           {rows[id]}

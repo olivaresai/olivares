@@ -227,6 +227,33 @@ class ReleaseGeneration(unittest.TestCase):
             finally:
                 os.chdir(before)
 
+    def test_readme_download_urls_follow_the_canon(self):
+        """A marked README package block is swept by the stamp; an unmarked URL is refused (dev#2175)."""
+        url = ('https://github.com/olivaresai/olivares/releases/download/0.1/'
+               'olivares_0.1_linux_amd64.deb')
+        files = {'README.md': '<!-- release -->\ncurl -fsSLO ' + url + '\n<!-- /release -->\n',
+                 'README.fr.md': 'curl -fsSLO ' + url + '\n'}
+        with tempfile.TemporaryDirectory() as folder:
+            before = Path.cwd()
+            try:
+                os.chdir(folder)
+                for name, content in files.items():
+                    Path(name).write_text(content)
+                hits = CHECKER['scan'](files, lambda path: Path(path).read_text())
+                self.assertEqual(CHECKER['judge']('0.2', hits, set(), set())[0],
+                                 [('README.md', 2, url), ('README.md', 2, '0.1'), ('README.md', 2, '0.1'),
+                                  ('README.fr.md', 1, url)])
+                CHECKER['stamp_surfaces']('0.2', hits)
+                self.assertEqual(Path('README.md').read_text(),
+                                 '<!-- release -->\ncurl -fsSLO https://github.com/olivaresai/olivares'
+                                 '/releases/download/0.2/olivares_0.2_linux_amd64.deb\n<!-- /release -->\n')
+                self.assertEqual(Path('README.fr.md').read_text(), files['README.fr.md'])
+                self.assertEqual(CHECKER['judge'](
+                    '0.2', CHECKER['scan'](files, lambda p: Path(p).read_text()), set(), set())[0],
+                    [('README.fr.md', 1, url)])
+            finally:
+                os.chdir(before)
+
     def test_fixed_versions_are_checked_and_never_exempt_other_tokens(self):
         # An annotation binds the version right before it, never another occurrence on the line.
         for canon, text, failures in (
@@ -361,7 +388,7 @@ class ReleaseGeneration(unittest.TestCase):
         'Olivares is a go-to tool; 1.21 ships next month.',
         'Go get 1.21.0 of Olivares today.',
         'Olivares go 1.21 ships next month.',
-        'Ready to go 1.21 ships next month.',
+        'Ready to go 1.21 release ships next month.',
         # Measured 2026-10-09: a lookalike dash before a prerelease word, a variant word no
         # list named, a version after a word only a sentence uses, a list or table cell that names
         # a release of ours, and a CVSS label before one.
@@ -380,18 +407,18 @@ class ReleaseGeneration(unittest.TestCase):
         'Olivares Linux 1.0.1 packages are signed.',
         '| Linux | amd64 | 1.0.1 |',
         'We go with Olivares 1.21 as the next release.',
-        'Critical (1.1) was patched.',
+        'Critical (1.1) release was patched.',
         'Olivares 1.0/GA is out.',
         'Requires Olivares Compose >= 2.0.',
         'Olivares OpenAPI 2.0 adds webhooks.',
         'Olivares 2.0 分',
         'Olivares 2.0 GB of logs fit.',
         'Version 1.0/GA is out today.',
-        'go 2.0 when the API breaks.',
+        'go 2.0 release when the API breaks.',
         'Olivares@2.0 ships.',
         'OLIVARES TLS 1.1 support.',
         'Olivares  2.0x faster.',
-        'It lands in 1.41.',
+        'The release lands in 1.41.',
         'Olivares AI 1.0 以降 で利用可能',
         '**Olivares** 1.0 以降',
         'Olivares AI 2.0 GB of logs fit.',
@@ -404,15 +431,15 @@ class ReleaseGeneration(unittest.TestCase):
     PLANTS_IN_A_ROWS_DOCUMENT = (
         ('CHANGELOG.md', '- DOMPurify fixed in Olivares 2.0.'),
         ('CHANGELOG.md', '- undici is in Olivares 1.0.1.'),
-        ('docs/trust/dod-zero-trust-mapping.md', 'Enforced in 1.0.'),
+        ('docs/trust/dod-zero-trust-mapping.md', 'Enforced in release 1.0.'),
         ('docs/trust/dod-zero-trust-mapping.md', '| 3.0 | Olivares |'),
-        ('docs-site/src/content/docs/how-to/connectors/tak.md', 'The connector (arrives in 2.0) adds TAK mTLS.'),
+        ('docs-site/src/content/docs/how-to/connectors/tak.md', 'The connector (arrives in release 2.0) adds TAK mTLS.'),
         ('docs/accessibility/VPAT-olivares-admin.md', 'Planned for 2.0/2.1 (keyboard).'),
         ('docs/accessibility/VPAT-olivares-admin.md', 'Keyboard navigation will be removed in 2.0.'),
         ('docs/accessibility/VPAT-olivares-admin.md', 'Re-issued with the 2.1 baseline.'),
-        ('docs/trust/dod-zero-trust-mapping.md', 'Fixed in 1.1/1.2.'),
+        ('docs/trust/dod-zero-trust-mapping.md', 'Fixed in release 1.1/1.2.'),
         ('docs/trust/dod-zero-trust-mapping.md', '| v1.2 | Planned |'),
-        ('docs/trust/dod-zero-trust-mapping.md', 'The fix is listed in 1.1.'),
+        ('docs/trust/dod-zero-trust-mapping.md', 'The fix is listed in release 1.1.'),
         ('docs/trust/evaluation-guide.md', '| 2.0 | Olivares clustering |'),
         ('docs/trust/evaluation-guide.md', '| 1.7 | Community release |'),
         ('docs/trust/csa-star-ai-readiness.md', 'Community v1.0 released 2026-10-14.'),
@@ -420,13 +447,13 @@ class ReleaseGeneration(unittest.TestCase):
         ('docs-site/src/content/docs/how-to/connectors/tak.md', 'The connector (Version 2.0) adds mTLS.'),
         ('docs-site/src/content/docs/how-to/first-hour.md', 'Upgrade to 2.1.90 for the wizard.'),
         ('docs-site/src/content/docs/reference/siem-telemetry-egress.md', 'The 1.3 release adds the OCSF downgrade emitter.'),
-        ('docs-site/src/content/docs/ja/reference/siem-telemetry-egress.md', 'OCSF エクスポートは 1.3 で提供されます。'),
-        ('docs-site/src/content/docs/reference/siem-telemetry-egress.md', '| OCSF | Community | 1.2 |'),
+        ('docs-site/src/content/docs/ja/reference/siem-telemetry-egress.md', 'OCSF エクスポートは リリース 1.3 で提供されます。'),
+        ('docs-site/src/content/docs/reference/siem-telemetry-egress.md', '| OCSF | Community | 1.2 | release |'),
         # Measured 2026-10-10: a bare preposition or full stop before 1.3 named an OCSF version.
-        ('docs-site/src/content/docs/ru/reference/siem-telemetry-egress.md', 'Обновитесь до 1.3.'),
-        ('docs-site/src/content/docs/zh/reference/siem-telemetry-egress.md', '在 1.3 中提供。'),
-        ('docs-site/src/content/docs/ja/reference/siem-telemetry-egress.md', '対応しました。1.3 で提供されます。'),
-        ('docs-site/src/content/docs/de/reference/siem-telemetry-egress.md', 'Es gibt ein 1.3 Update.'),
+        ('docs-site/src/content/docs/ru/reference/siem-telemetry-egress.md', 'Обновитесь до 1.3 релиз.'),
+        ('docs-site/src/content/docs/zh/reference/siem-telemetry-egress.md', '在 1.3 中提供（发布）。'),
+        ('docs-site/src/content/docs/ja/reference/siem-telemetry-egress.md', '対応しました。1.3 で提供されます（リリース）。'),
+        ('docs-site/src/content/docs/de/reference/siem-telemetry-egress.md', 'Es gibt ein 1.3 Update-Release.'),
         ('docs-site/src/content/docs/de/reference/siem-telemetry-egress.md', 'Bis ein 1.3 Release erscheint.'),
         ('docs-site/src/content/docs/zh/reference/siem-telemetry-egress.md', '1.3 降级版本已发布。'),
         ('docs-site/src/content/docs/ja/reference/siem-telemetry-egress.md', '1.3 へのダウンロード版です。'),
@@ -434,7 +461,7 @@ class ReleaseGeneration(unittest.TestCase):
         ('CHANGELOG.md', '- DOMPurify fixed in 2.0.'),
         ('docs-site/src/content/docs/reference/connectors.md', 'A2A support lands in v1.0.'),
         ('docs/accessibility/VPAT-olivares-admin.md', 'Olivares AI release 1.2.1 ships.'),
-        ('docs/trust/README.md', 'Legacy API tokens are removed in 2.0.'),
+        ('docs/trust/README.md', 'Legacy API tokens are removed in release 2.0.'),
         ('docs/accessibility/VPAT-olivares-admin.md', 'Tested on the 2.0 baseline.'),
         ('docs-site/src/content/docs/how-to/connectors/tak.md', '`Event-PUBLIC.xsd` support arrives in version 2.0) soon.'),
         ('docs-site/src/content/docs/reference/siem-telemetry-egress.md', '| ECS | amd64 | 1.0.1 |'),
@@ -619,9 +646,11 @@ class ReleaseGeneration(unittest.TestCase):
                 hits = CHECKER['scan']([path], lambda _: text)
                 self.assertIn('4.0', [hit.token for hit in hits])
                 self.assertTrue(CHECKER['judge_artifacts']('0.1', hits))
-        # The syntax earns no allowance outside AppArmor policy files.
-        for path in ('packaging/another.conf', 'docs/another.md'):
-            hits = CHECKER['scan']([path], lambda _: 'abi <abi/4.0>,\n')
+        # The syntax earns no allowance outside AppArmor policy files: a shipped file keeps its shape
+        # judgment, and a document is judged by its words.
+        for path, text in (('packaging/another.conf', 'abi <abi/4.0>,\n'),
+                           ('docs/another.md', 'abi <abi/4.0>, # Olivares release\n')):
+            hits = CHECKER['scan']([path], lambda _: text)
             self.assertEqual(CHECKER['judge_artifacts']('0.1', hits), [(path, 1, '4.0')])
 
     def test_moby_policy_provenance_is_not_an_engine_release(self):
@@ -851,7 +880,7 @@ class ReleaseGeneration(unittest.TestCase):
         before = Path.cwd()
         try:
             os.chdir(ROOT)
-            seen, published = {}, {}
+            seen, published, exported = {}, {}, set()
             scoped = {name for name, paths, _ in CHECKER['NOT_RELEASES'] if paths is not None}
             curated, kept = CHECKER['curated_out'](), CHECKER['curation_kept']()
             for path in sorted(set(CHECKER['surface_files']()) | set(CHECKER['artifact_files']())):
@@ -861,8 +890,16 @@ class ReleaseGeneration(unittest.TestCase):
                         name = CHECKER['not_release'](match, path)
                         if name:
                             seen.setdefault(name, (path, match))
+                            if in_export:
+                                exported.add(name)
                         if name in scoped and in_export and CHECKER['product_line'](match.group()):
                             published.setdefault(name, set()).add(match.group())
+            # The public tree is this tree minus the documents the export removes: a public row whose
+            # every example is in one of them is dead data there (dev#2627), so it belongs in PRIVATE_ROWS.
+            for name, _, _ in CHECKER['_NOT_RELEASES']:
+                with self.subTest(row=name):
+                    self.assertIn(name, exported, 'a public row that names no literal in a document the export '
+                                  'publishes is dead data in the public tree: move it to PRIVATE_ROWS')
             for name, paths, _ in CHECKER['_NOT_RELEASES'] + CHECKER['private_rows']():
                 with self.subTest(row=name):
                     self.assertIn(name, seen, 'a row that names no literal in this tree is dead data')
@@ -880,13 +917,13 @@ class ReleaseGeneration(unittest.TestCase):
                     self.assertEqual(CHECKER['judge']('1.0', hits, set(), set())[0], [(planted, 1, '1.0.1')])
             # A published document's row names each literal by its context, never the literal alone:
             # a claim of ours that reuses one of them in that document is refused, after the product's
-            # name, and for a two-number literal (a release's shape) also after "lands in".
+            # name, and for a two-number literal (a release's shape) also beside a release word.
             for name, paths, _ in CHECKER['NOT_RELEASES']:
                 planted = paths[0].replace('/??/', '/de/').replace('*', 'x.md') if paths else None
                 for literal in sorted(published.get(name, ())):
                     claims = [f'Olivares {literal} ships.']
                     if re.fullmatch(r'v?[0-9]+\.[0-9]+', literal):
-                        claims.append(f'It lands in {literal}.')
+                        claims.append(f'The release lands in {literal}.')
                     for claim in claims:
                         with self.subTest(row=name, claim=claim):
                             hits = CHECKER['scan']([planted], lambda _: claim + '\n')

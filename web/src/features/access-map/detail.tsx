@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/sheet'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
+import { usePermissionWords } from '@/lib/auth/permission-words'
 import { cn } from '@/lib/utils'
 import {
   type Authority,
@@ -364,6 +365,7 @@ function AuthoritySection({
   canDrift?: boolean
 }) {
   const { t } = useTranslation('accessMap')
+  const permissionWords = usePermissionWords()
   const { can } = useAuth()
   const navigate = useNavigate()
 
@@ -454,7 +456,7 @@ function AuthoritySection({
             <p className="mt-2.5 text-[11px] leading-snug text-muted-foreground">
               {t('authority.needsPermission', {
                 action: t('authority.checkDrift'),
-                permission: DRIFT_PERMISSION,
+                permission: permissionWords(DRIFT_PERMISSION),
               })}
             </p>
           ) : null)}
@@ -473,7 +475,7 @@ function AuthoritySection({
                 >
                   {t('authority.needsPermission', {
                     action: t(`authority.target.${target.key}`),
-                    permission: target.permission,
+                    permission: permissionWords(target.permission),
                   })}
                 </p>
               )

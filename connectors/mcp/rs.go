@@ -459,6 +459,9 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 	if policy.AppOnly {
 		authorizedReason = "app-only tools/call authorized (UI-originated via rendered MCP App, SEP-1865)"
 	}
+	if counts := flowCounts(grant.restored); counts != "" {
+		authorizedReason += "; tokens restored: " + counts
+	}
 	opID, idKind, derr := deriveToolCallOperationID(rs.tenant, rs.resource, tok, canon.OperationKey)
 	if derr != nil {
 		// Cannot mint an operation identity (randomness failure): evidence refusal
@@ -492,13 +495,28 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		return
 	}
 
-	ureq := rs.upstreamReq(r, "tools/call", canon.Forward, tok)
+	ureq := rs.upstreamReq(r, "tools/call", grant.forward, tok)
 	ureq.OperationID = binding.OperationID
 	ureq.EffectDigest = binding.EffectDigest
 	ureq.FenceToken = rec.FenceToken
 	res, ferr := rs.upstream.Forward(ctx, ureq)
 
 	state, relay := classifyDispatch(res, ferr)
+	// Reversible tokens: the caller, the settlement digest and every relay path
+	// below see only the tokenized result. A result that cannot be tokenized is
+	// replaced by a tool error that carries nothing of it.
+	if relay && rs.dataFlow != nil {
+		tokenized, counts, terr := rs.tokenizeResult(ctx, toolName, res.Result)
+		res.Result = tokenized
+		switch {
+		case terr != nil:
+			rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, false,
+				"tool result withheld: reversible tokens unavailable (fail-closed)", "", "MCP07", trace)
+		case flowCounts(counts) != "":
+			rs.auditVerdict(ctx, tok, toolName, policy.RequiredScope, verdict, true,
+				"tool result tokenized: "+flowCounts(counts), approvalRef, "MCP07", trace)
+		}
+	}
 	// Review round 1 (S5-01/S5-06): BOTH result classifications — durable
 	// task handle and MRTR carrier — run BEFORE the settlement and the
 	// settlement NAMES the exact response-release child its caller will claim.

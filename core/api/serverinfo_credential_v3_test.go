@@ -67,6 +67,9 @@ func TestServerInfoReadsAnAggregateCredential(t *testing.T) {
 	if lic["licensee"] != "Acme GmbH" {
 		t.Fatalf("licensee = %v, want Acme GmbH (the envelope's licensee is an object; this is its display_name)", lic["licensee"])
 	}
+	if lic["support_profile"] != "enterprise" {
+		t.Fatalf("product tier = %v, want signed enterprise support_profile", lic["support_profile"])
+	}
 	// And NOTHING is invented for the two labels v3 does not carry. The badge omits them exactly
 	// as it omits labels for an absent license (docs/SECURITY-HARDENING.md: unknown is never reported as a
 	// concrete value).

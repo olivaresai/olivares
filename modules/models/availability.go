@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -90,6 +91,14 @@ type availabilityCatalog struct {
 func (m *Module) UseAvailabilitySource(source ModelDiscovery, tenants func(context.Context) ([]model.TenantID, error)) {
 	m.availability = &availabilityCatalog{source: source, tenants: tenants, now: time.Now,
 		observations: make(map[string]availabilityObservation), wake: make(chan model.TenantID, 64)}
+}
+
+// UseAvailabilityAccess wires who may see a source's models: whether the caller may use
+// that provider key, tool account or tool (the assignments of modules/sessions and
+// sourcescope). Nil lists every source to whoever may read the catalog, as before
+// assignments existed.
+func (m *Module) UseAvailabilityAccess(access func(ctx context.Context, tenant model.TenantID, principal auth.Principal, source AvailabilitySource) (bool, error)) {
+	m.availabilityAccess = access
 }
 
 func registerAvailabilitySchema(reg store.ExtensionRegistry) error {
@@ -386,6 +395,21 @@ func (m *Module) handleAvailability(w http.ResponseWriter, r *http.Request, mc a
 		}
 		if q.Get("driver") != "" && q.Get("driver") != item.Driver {
 			continue
+		}
+		if m.availabilityAccess != nil {
+			// A provider key, a tool or a tool account assigned to other departments is not
+			// listed, as it is not offered: an unreadable assignment fails the answer.
+			allowed, err := m.availabilityAccess(r.Context(), mc.Tenant, mc.Principal, item.AvailabilitySource)
+			if err != nil {
+				if m.log != nil {
+					m.log.Warn("models: provider assignment could not be read; refusing the availability list")
+				}
+				writeJSON(w, http.StatusServiceUnavailable, errorBody("provider assignment could not be read"))
+				return
+			}
+			if !allowed {
+				continue
+			}
 		}
 		out = append(out, item)
 	}

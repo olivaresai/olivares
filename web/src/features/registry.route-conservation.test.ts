@@ -19,7 +19,7 @@
 // /login, /setup, /accept-invite, /status-page and /settings.
 //
 // What it can see that the older guards cannot. registry.nav-labels.test.ts is RELATIVE —
-// registry against the seven nav.json — and a commit deleting a view from both leaves the
+// registry against the nine nav.json — and a commit deleting a view from both leaves the
 // comparison true. route-census.json is the fixed point: it records what was published,
 // so the comparison survives the deletion of everything it compares against. The AT gate
 // inventory (e2e-visual/routes.ts) is derived from the census, so this file and
@@ -74,6 +74,13 @@ describe('route conservation', () => {
       '/orchestration',
       '/tenants',
       '/residency',
+      '/compliance',
+      '/deploy',
+      '/finops',
+      '/recordings',
+      '/red-team',
+      '/session-viewer/$id',
+      '/team-costs',
     ])
     expect(
       census.business_paths.every((path) => census.paths.includes(path)),

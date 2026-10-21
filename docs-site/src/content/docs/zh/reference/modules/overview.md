@@ -19,7 +19,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 （on-demand）**的（后端已构建并接入到一个注入点，但在运营者通过环境配置进行预置之前
 保持拒止关闭或降级），在表面受门控/可选启用之处为 **PARTIAL（部分）**，其余则是一个声明
 的**拒止关闭接缝（deny-closed seam）**。特别地，**部署（deploy）**会规划并治理部署，但
-在执行器被预置之前**不会**将其应用到实时基础设施上：`apply`/`retire` 会返回明确的 `503`。
+在执行器被预置之前**不会**将其应用到实时基础设施上：`apply`/`retire` 会返回明确的 `503`。部署是 Business 功能，Community 对每个部署路由返回 `501`。
 各模块的深度有所不同，且产品的大部分在所注明之处处于 pre-1.0 / 设计阶段（参见
 [诚实与局限](/zh/start/honesty-and-limits/)）。
 
@@ -54,7 +54,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 | [身份、权限与治理](/zh/reference/modules/vi-governance/) | — | 谁以及什么能做什么，粒度化：Cedar RBAC + 拒止覆盖层 + 作用域授权、名册对账、作用域化管理员/自定义角色、应急破窗（break-glass）、紧急停止开关（kill-switch）。 |
 | [身份（`identity`）](/reference/modules/identity/) | — | 只读工作负载身份联邦、SSO、外部密钥和驻留姿态。 |
 | [源与凭据作用域化](/zh/reference/modules/sourcescope/) | — | 将源绑定到某个工作区/agent 组；拒止关闭的作用域解析器 + 解析时的作用域化凭据。 |
-| [部署与集成](/zh/reference/modules/vii-deploy/) | 按需（503） | 规划并治理向真实基础设施的部署；执行器为按需 —— 在预置之前，实时的 `apply`/`retire` 返回 `503`。 |
+| [部署与集成](/zh/reference/modules/vii-deploy/) | Business，按需（503） | Business 功能：Community 返回 `501`。规划并治理向真实基础设施的部署；执行器为按需 —— 在预置之前，实时的 `apply`/`retire` 返回 `503`。 |
 | [受治理的 Git 发布](/zh/reference/modules/gitpublish/) | on-demand | 通过批准的 Git 主机绑定推送提交、创建合并请求并合并，检查当前权限并保留操作结果。 |
 
 > **Identity** 是用于只读身份姿态控制台的独立可选模块。它共享 governance 包，并依赖拥有授权模型和身份生命周期的 [governance](/zh/reference/modules/vi-governance/)。共享包不代表共享模块开关。
@@ -63,7 +63,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 
 | 模块 | 执行 | 用途 |
 |---|---|---|
-| [Claude Code 受管策略（`claude-policy`）](/reference/modules/claude-policy/) | — | 验证、预览和发布版本化受管策略；查看分发与已观测漂移。 |
+| [Claude Code 受管策略（`claude-policy`）](/reference/modules/claude-policy/) | — | 验证和预览受管策略；Business 版可向整个机群发布，并查看分发与已观测漂移。 |
 | [Claude agent 确认（`claude-agents`）](/reference/modules/claude-agents/) | — | 读取受管 agent 线程事件，并批准或拒绝待处理工具确认。 |
 | [技能目录与分配](/zh/reference/modules/skills/) | — | 不可变的技能目录与固定分配：经摘要验证的技能包安装在 `/v1/m/skills/packs` 下，按目标固定，绝不在原地修改。 |
 | [模型与提供方管理](/zh/reference/modules/x-models/) | 按需（503） | 跨整个模型/提供方栈进行治理：模型访问、逐表面上下文窗口、模型组门控；模型*执行*为按需 —— 在推理凭据被预置之前返回 `503`。 |
@@ -113,7 +113,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 **Actuate（执行）**列：`live`（实时）= 执行已接入并在默认二进制文件中实时生效，无需预置
 （例如 FinOps 预算强制在上限处拒止、通知路由器进行调度）；`on-demand`（按需）/
 `on-demand (503)`（按需（503））= 后端已构建并接入到一个注入点，但在运营者通过环境配置
-**进行预置之前保持拒止关闭或降级**（部署在执行器存在之前应答 `503`；编排/语音调度在配置
+**进行预置之前保持拒止关闭或降级**（部署是 Business 功能，在 Community 中应答 `501`，在执行器存在之前应答 `503`；编排/语音调度在配置
 之前拒止关闭；红队在沙箱运行时被预置之前以 DEGRADED 运行；模型执行与语义嵌入在凭据被预置
 之前返回 `503`）；`PARTIAL`（部分）= 表面是真实的但受门控/可选启用，或不声称已校验的下游
 （推理代理监听器为可选启用、回环默认；实时摄取受环境门控；态势导出是一个中立的只读投影）；

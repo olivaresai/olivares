@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Редакция]
-Источники каталогов (LDAP, Okta/Entra и IdP агентов/нагрузок) и жизненный цикл управляемых идентичностей требуют дополнений Business/Enterprise. Community сохраняет общий приём наблюдений, каталог ресурсов, результаты проверок безопасности, Access Map, инвентаризацию идентичностей, SSO с одним IdP, входящий SCIM пользователей/групп, локальные роли и привязки, политики и одобрения. Платные панели и команды CLI скрыты; их опубликованные API-маршруты возвращают HTTP `501`. Включение модуля не добавляет реализацию Business.
+Источники каталогов (LDAP, Okta/Entra и IdP агентов/нагрузок), жизненный цикл управляемых идентичностей и входящий SCIM-сервер требуют дополнений Business/Enterprise. Community сохраняет общий приём наблюдений, каталог ресурсов, результаты проверок безопасности, Access Map, инвентаризацию идентичностей, SSO с одним IdP, локальные роли и привязки, политики и одобрения. Платные панели и команды CLI скрыты; их опубликованные API-маршруты возвращают HTTP `501`. Включение модуля не добавляет реализацию Business.
 :::
 
 Эта страница — карта консоли. Здесь перечислен **каждый маршрут, монтируемый приложением**,
@@ -67,7 +67,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Консоль публикует **75 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
+Консоль публикует **73 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
 разрешением и справочной страницей, которую открывает встроенная ссылка помощи.
 
 ### Главная
@@ -80,29 +80,29 @@ description: >-
 
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
-| Окружение | `/estate` | Просматривайте настроенные ресурсы и их связи, включая зависимости рабочих элементов. | `sessions:run:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Парк | `/estate` | Просматривайте настроенные ресурсы и их связи, включая зависимости рабочих элементов. | `sessions:run:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Инвентаризация | `/inventory` | Обнаружение и каталогизация агентов, MCP-серверов и моделей, которые наблюдали коннекторы. | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
-| Рабочее пространство | `/workspace` | Агенты, сессии, ресурсы и активность в пределах одного рабочего пространства | `tenant:read` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
+| Рабочая область | `/workspace` | Агенты, сессии, ресурсы и активность в пределах одной рабочей области | `tenant:read` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
 
 ### ИИ
 
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
 | Инструменты агентов | `/agent-tools` | Находите, устанавливайте и обновляйте инструменты агентов на этом хосте и отслеживайте каждую установку; только для администраторов развёртывания | `system:admin` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
-| Сессии | `/agentops` | Запускайте сессии и следите за работой каждой, включая те, что находит Olivares | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ru/how-to/run-claude-code-with-olivares/) |
+| Управление сессиями | `/agentops` | Запускайте сессии и следите за работой каждой, включая те, что находит Olivares | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ru/how-to/run-claude-code-with-olivares/) |
 | MCP-серверы | `/mcp-servers` | Подключайте удалённые MCP-серверы к этой организации, проверяйте их и выбирайте, какие инструменты могут использовать сессии | `tenant:admin` | [how-to/connectors/mcp-governance](/ru/how-to/connectors/mcp-governance/) |
 | Операции с моделями | `/model-operations` | Собственные модели, допуск и развёртывания | `models:registry:read` | [reference/modules/xxiii-model-operations](/ru/reference/modules/xxiii-model-operations/) |
 | Модели | `/models` | Модели, маршрутизация и ключи провайдеров | `models:catalog:read` | [reference/modules/x-models](/ru/reference/modules/x-models/) |
 | Платформы | `/platforms` | Поверхности развёртывания, матрица соответствия и жизненный цикл моделей по платформам | `models:platforms:read` | [reference/modules/x-models](/ru/reference/modules/x-models/) |
 | Аккаунты провайдеров | `/provider-accounts` | Список именованных аккаунтов провайдеров и принятие существующего профиля провайдера как аккаунта | `sessions:account:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
-| Привязки источников | `/provider-bindings` | Выделение настроенных источников, в применённой этим узлом ревизии, профилям провайдеров | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Привязки источников | `/provider-bindings` | Связывание настроенных источников с профилями провайдеров | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Профили провайдеров | `/provider-profiles` | Регистрация и администрирование домашних каталогов провайдеров, под которыми запускаются сессии, и чтение их конфигурации по запросу | `sessions:profile:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Провайдеры | `/providers` | Регистрация API-ключей и конечных точек, с которыми запускаются сессии; их проверка, замена и отзыв | `sessions:provider:read` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
 | Ограничения частоты | `/rate-limits` | Инвентарь ограничений частоты Anthropic (только чтение) | `models:ratelimits:read` | [reference/modules/x-models](/ru/reference/modules/x-models/) |
 | Песочница | `/sandbox` | Изолированное тестирование и воспроизведение агентов | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ru/reference/modules/xvii-sandbox/) |
 | Сессии | `/sessions` | Запускайте сессии и следите за работой каждой, включая те, что находит Olivares | `sessions:live:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Голос | `/voice` | Голосовые сессии и сессии реального времени | `voice:session:read` | [reference/modules/xvi-voice](/ru/reference/modules/xvi-voice/) |
-| Шаблоны рабочих пространств | `/workspace-templates` | Повторно используемые снимки конфигурации сессии: hooks, настройки, коннекторы и политики. | `sessions:template:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Шаблоны рабочих областей | `/workspace-templates` | Повторно используемые снимки конфигурации сессии: hooks, настройки, коннекторы и политики. | `sessions:template:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 
 ### Данные и контекст
 
@@ -119,9 +119,9 @@ description: >-
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
 | Коммуникации | `/communications` | Каналы, прямые уведомления и личный ящик выбранного рабочего пространства | `sessions:channel:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
-| Администрирование каналов | `/communications/administration` | Администрирование каналов: конфигурация и история выдач, каждое действие под текущим ETag канала | `sessions:channel:admin` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Администрирование каналов | `/communications/administration` | Администрирование каналов: конфигурация и история выдач | `sessions:channel:admin` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Передачи | `/communications/handoffs` | Адресованные вам предложения принять ответственность за работу: прочитайте контекст и примите или отклоните | `sessions:delivery:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
-| Ящик коммуникаций | `/communications/inbox` | Ваш точный ящик: доставки, адресованные вам, читаются заново и подтверждаются явно | `sessions:delivery:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Ящик коммуникаций | `/communications/inbox` | Сообщения, адресованные вам: откройте и подтвердите каждое | `sessions:delivery:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Новый канал | `/communications/new` | Создание канала с явными начальными правами | `sessions:channel:write` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Привязки протоколов | `/communications/protocol-bindings` | Компоновка и сверка управляемых привязок A2A и MCP | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Работа | `/work` | Общая работа: единицы, зависимости, приемка и решения | `sessions:work:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
@@ -140,18 +140,18 @@ description: >-
 | Карта доступа | `/access-map` | Что каждый агент читает и записывает (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/ru/reference/modules/iii-access-map/) |
 | Экспорт в AgentCore | `/agentcore-export` | Планирование, проверка и применение проекции правил управления этого тенанта на AWS AgentCore в виде политик Cedar; планирование ничего не записывает | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Управление Claude Code | `/claude-policy` | Управляемая политика, hooks, MCP, песочница и policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ru/how-to/connectors/claude-code-hooks-pep/) |
-| Идентичности и NHI | `/identity` | SSO, SCIM, реестр NHI и граф WIF | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
+| Личности и доступ | `/identity` | SSO, SCIM и личности, которые используют ваши агенты | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Прокси инференса | `/inference-proxy` | Шлюзы прокси, правила DLP исходящего трафика и одобрения устройств | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ru/reference/modules/inferenceproxy/) |
 | Аварийный выключатель | `/killswitch` | Экстренная остановка, восстановление с двойным контролем и локализация guardian | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ru/how-to/cookbook/kill-switch-drill/) |
 | Разрешения | `/permissions` | Идентичности, роли и одобрения | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Регулярные политики | `/routine-policies` | Минимальная периодичность, ограничения параллелизма, требования одобрения и allowlist cron для процедур Claude Code. | `governance:routine:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Безопасность | `/security` | Ограничители, расследования и аномалии | `security:finding:read` | [reference/modules/ix-security](/ru/reference/modules/ix-security/) |
+| Хранилище | `/vault` | Ваши пароли, заметки и коды аутентификатора | `tenant:read` | [reference/console](/ru/reference/console/) |
 
 ### Развёртывание
 
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
-| Развёртывание | `/deploy` | Подготовка агентов и их подключение к инфраструктуре | `deploy:deployment:read` | [reference/modules/vii-deploy](/ru/reference/modules/vii-deploy/) |
 | Публикация в Git | `/git-publication` | Отправка коммитов, открытие pull request и слияние через одобренные цели Git | `gitpublish:target:read` | [reference/modules/gitpublish](/ru/reference/modules/gitpublish/) |
 
 ### Наблюдаемость и свидетельства
@@ -161,13 +161,11 @@ description: >-
 | Внедрение Claude Code | `/adoption` | Продуктивность, принятие результатов и состав моделей | `adoption:metrics:read` | [reference/modules/claudeadoption](/ru/reference/modules/claudeadoption/) |
 | Цепочка поставок | `/attestation` | Аттестация релиза: SLSA, SBOM, VEX и Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/ru/how-to/verify-a-release/) |
 | Реестр аудита | `/audit` | Журнал свидетельств с обнаружением подмены | `audit:read` | [reference/modules/ix-security](/ru/reference/modules/ix-security/) |
-| Соответствие | `/compliance` | Фреймворки, контроли и свидетельства | `compliance:framework:read` | [reference/modules/xiii-compliance](/ru/reference/modules/xiii-compliance/) |
 | Панели | `/dashboards` | KPI руководства и отчётность | любой вошедший пользователь | [reference/modules/xxi-executive-dashboards](/ru/reference/modules/xxi-executive-dashboards/) |
 | Оценки | `/evals` | Качество, оценки и регрессии | `evals:run:read` | [reference/modules/xii-evals](/ru/reference/modules/xii-evals/) |
 | Здоровье и SLA | `/health` | Время работы и SLA агентов и MCP | `health:status:read` | [reference/modules/xxii-health](/ru/reference/modules/xxii-health/) |
 | Наблюдаемость | `/observability` | Здоровье приёма по стандартам и детализация трассировок | `health:status:read` | [reference/modules/observability](/ru/reference/modules/observability/) |
-| Записи | `/recordings` | Запись и воспроизведение привилегированных сессий | `recording:session:admin` | [reference/modules/recording](/ru/reference/modules/recording/) |
-| Просмотр сессии | `/session-viewer/$id` (только прямая ссылка) | Полная временная шкала одной записанной сессии, доступная из строки раздела записей, а не из боковой панели. | `recording:session:admin` | [reference/modules/recording](/ru/reference/modules/recording/) |
+| Хранение | `/retention` | Срок хранения каждого класса записей, проход, который его применяет, и его запечатанные сертификаты | `compliance:retention:read` | [reference/modules/xiii-compliance](/ru/reference/modules/xiii-compliance/) |
 | Бюджеты | `/stored-budgets` | Потребление относительно каждого сохранённого лимита. Зарезервированная ёмкость засчитывается в лимит. | `finops:budget:read` | [reference/modules/xi-finops](/ru/reference/modules/xi-finops/) |
 
 ### Система и настройки

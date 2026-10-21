@@ -34,12 +34,12 @@ scratch_dir() {
 
 assert_closed_text() {
 	local file="$1"
-	grep -qx 'pkg_gpgcheck=1' "$file" || return 1
-	grep -qx 'repo_gpgcheck=1' "$file" || return 1
-	if grep -E '^[[:space:]]*gpgcheck=' "$file" >/dev/null; then
-		return 1
-	fi
-	return 0
+	# DNF 4 (AlmaLinux 10, RHEL 10) reads the package signature check only from
+	# gpgcheck and ignores pkg_gpgcheck; DNF5 reads both. The file sets exactly these
+	# three, once each: a later line wins in an INI file, spaces around the equals sign
+	# are accepted, and one more gpgcheck line of any spelling reopens a check.
+	[[ "$(grep -E '^[[:space:]]*(pkg_|repo_)?gpgcheck[[:space:]]*=' "$file" | LC_ALL=C sort)" == \
+		$'gpgcheck=1\npkg_gpgcheck=1\nrepo_gpgcheck=1' ]]
 }
 
 write_fixture() {
@@ -262,7 +262,7 @@ PY
 STUB_FINGERPRINT=0123456789ABCDEF0123456789ABCDEF01234567
 # The olivares package the fixture repositories hold, named for the release this tree builds.
 # release
-FIXTURE_RPM=olivares-0.2-1.x86_64.rpm
+FIXTURE_RPM=olivares-0.3-1.x86_64.rpm
 # /release
 
 # Stub gpg, rpm, rpmkeys, rpmsign and createrepo_c for the path tests. Every call
@@ -614,6 +614,30 @@ self_test() {
 	printf '%s\n' "${closed_text/repo_gpgcheck=1/repo_gpgcheck=${forced}}" >"$opened"
 	if assert_closed_text "$opened"; then
 		fail "open repository file was accepted"
+	fi
+	# DNF 4 reads only gpgcheck for packages: dropping it, or setting it to 0, leaves
+	# AlmaLinux 10 hosts without a package signature check.
+	printf '%s\n' "${closed_text/$'\n'gpgcheck=1/}" >"$opened"
+	if assert_closed_text "$opened"; then
+		fail "a repository file without gpgcheck=1 was accepted"
+	fi
+	printf '%s\n' "${closed_text/$'\n'gpgcheck=1/$'\n'gpgcheck=0}" >"$opened"
+	if assert_closed_text "$opened"; then
+		fail "a repository file with gpgcheck=0 was accepted"
+	fi
+	# A later line wins in an INI file, and INI parsers accept spaces around the equals sign:
+	# an override after the three closed lines opens the check again.
+	local override
+	for override in 'gpgcheck = 0' 'gpgcheck=0' 'pkg_gpgcheck=0' 'repo_gpgcheck=0' '  repo_gpgcheck = 0'; do
+		printf '%s\n%s\n' "$closed_text" "$override" >"$opened"
+		if assert_closed_text "$opened"; then
+			fail "a repository file overridden by '${override}' was accepted"
+		fi
+	done
+	# Thousands of overrides must not slip through a closed pipe (pipefail with grep -q).
+	{ printf '%s\n' "$closed_text"; seq 1 30000 | sed 's/.*/gpgcheck=0/'; } >"$opened"
+	if assert_closed_text "$opened"; then
+		fail "a repository file with thousands of gpgcheck=0 lines was accepted"
 	fi
 	printf 'test-rpm-repository: rendered template keeps both gpg checks\n'
 
@@ -999,7 +1023,7 @@ import sys
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
     # release
-    ["olivares", "olivares-0.2-1.x86_64", "x86_64", "olivares-0.2-1.x86_64.rpm"],
+    ["olivares", "olivares-0.3-1.x86_64", "x86_64", "olivares-0.3-1.x86_64.rpm"],
     # /release
     ["olivares-appliance-base", "olivares-appliance-base-26.900-1.noarch", "noarch",
      "olivares-appliance-base-26.900-1.noarch.rpm"],
@@ -1376,6 +1400,7 @@ PY
 			fail "forbidden marker in ${path#"$root"/}"
 		fi
 	done
+	grep -qx 'gpgcheck=1' "$template" || fail "template missing gpgcheck=1 (the only package check DNF 4 reads)"
 	grep -q 'pkg_gpgcheck=1' "$template" || fail "template missing pkg_gpgcheck=1"
 	grep -q 'repo_gpgcheck=1' "$template" || fail "template missing repo_gpgcheck=1"
 	grep -q 'runs-on: ubuntu-latest' "$workflow" || fail "workflow is not pinned to ubuntu-latest"
@@ -1567,9 +1592,12 @@ PY
 
 # The signing and client toolchain, by exact NEVRA. Fedora 44 stable on
 # https://packages.fedoraproject.org/pkgs/<source>/<name>/ read 2026-09-27T15:16Z
-# for rpm, rpm-sign, createrepo_c, dnf5 and gnupg2, and 2026-09-27T16:50Z for
-# python3 and python3-libs (source python3.14). rpm, dnf5 and gnupg2 are the
-# NEVRAs the pinned base image already holds (its rpmdb, measured 16:50Z).
+# for rpm, rpm-sign, createrepo_c, dnf5 and gnupg2. python3 and python3-libs
+# (source python3.14) were re-pinned on 2026-10-18 from `dnf5 repoquery
+# --available` in the pinned base image: 3.14.7-1 had left the repositories
+# (`dnf install` answered "No match") and 3.14.8-1 is in updates. rpm, dnf5 and
+# gnupg2 are the NEVRAs the pinned base image already holds (its rpmdb, the
+# same day).
 # python3 is here because the signer and the renderer are python3 programs that
 # drive rpmsign, rpm, rpmkeys, createrepo_c and gpg-preset-passphrase, which exist
 # only in this image; the base image has no python3. When Fedora ships a newer
@@ -1581,8 +1609,8 @@ TOOL_NEVRAS=(
 	createrepo_c-1.2.1-5.fc44.x86_64
 	dnf5-5.4.5.0-1.fc44.x86_64
 	gnupg2-2.4.9-16.fc44.x86_64
-	python3-3.14.7-1.fc44.x86_64
-	python3-libs-3.14.7-1.fc44.x86_64
+	python3-3.14.8-1.fc44.x86_64
+	python3-libs-3.14.8-1.fc44.x86_64
 )
 
 # Print the tool names of TOOL_NEVRAS, in order, one per line.

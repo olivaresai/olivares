@@ -12,6 +12,27 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import whisper from './src/features/dictation/whisper-model.json' with { type: 'json' }
 
+// Quote the canonical summaries at build time: a missing document fails the build,
+// rather than a customer's console, and only the short excerpts enter the bundle.
+const editions = await readFile(
+  new URL('../docs/editions.md', import.meta.url),
+  'utf8',
+)
+function editionSummary(edition: 'business' | 'enterprise'): string[] {
+  const block = new RegExp(
+    `<!-- console-${edition}-summary:start -->([\\s\\S]*?)<!-- console-${edition}-summary:end -->`,
+  ).exec(editions)?.[1]
+  // One item per line; a list item loses its "- " marker, a plain sentence stays as is.
+  const lines = block
+    ?.split(/\r?\n/)
+    .map((line) => line.trim().replace(/^- /, ''))
+    .filter(Boolean)
+  if (!lines?.length) {
+    throw new Error(`docs/editions.md is missing its ${edition} summary`)
+  }
+  return lines
+}
+
 // The control plane serves the API and the web UI from the SAME origin (the web
 // is embedded into the engine binary via go:embed). In production the client
 // calls relative paths (/v1, /healthz, /openapi.json). In dev, Vite proxies those
@@ -100,6 +121,12 @@ function dictationModel(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __EDITION_SUMMARIES__: JSON.stringify({
+      business: editionSummary('business'),
+      enterprise: editionSummary('enterprise'),
+    }),
+  },
   plugins: [react(), tailwindcss(), dictationModel()],
   // The dictation worker imports Transformers.js, which splits into chunks: an ES worker.
   worker: { format: 'es' },

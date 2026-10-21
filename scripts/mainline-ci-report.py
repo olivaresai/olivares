@@ -28,8 +28,22 @@ def pages(request, path, field=None):
             return
 
 
+# Each reported workflow and the event that starts its main run. mainline-ci reports only from
+# the public repository; the scheduled battery pass of merge-gate-check reports wherever it runs.
+REPORTED = {"mainline-ci": "push", "merge-gate-check": "schedule"}
+
+
+def reportable(run, repo):
+    name = run.get("name", "mainline-ci")
+    # A run-name extends the workflow's name ("merge-gate-check main batteries"): match the prefix.
+    if name.startswith("merge-gate-check"):
+        name = "merge-gate-check"
+    return (name in REPORTED and run.get("event") == REPORTED[name]
+            and (name != "mainline-ci" or repo == "olivaresai/olivares"))
+
+
 def reconcile_run(run, repo, request):
-    if (repo != "olivaresai/olivares" or run.get("event") != "push"
+    if (not reportable(run, repo)
             or run.get("status") != "completed" or run.get("head_branch") != "main"
             or (run.get("head_repository") or {}).get("full_name") != repo):
         return

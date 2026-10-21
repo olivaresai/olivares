@@ -51,13 +51,22 @@ type acpNewSessionParams struct {
 	MCPServers []json.RawMessage `json:"mcpServers"`
 }
 
+// acpRequireSessionMCP refuses a launch whose session MCP server the agent cannot
+// carry: starting anyway would give the session none of the Olivares tools.
+func acpRequireSessionMCP(tool string, servers []json.RawMessage, agentHTTP bool) error {
+	if len(servers) > 0 && !agentHTTP {
+		return &runErr{http.StatusConflict, tool + " does not support the HTTP MCP connection required for this session"}
+	}
+	return nil
+}
+
 type acpPromptParams struct {
 	SessionID string            `json:"sessionId"`
 	Prompt    []acpContentBlock `json:"prompt"`
 }
 
 // initialize sends the one initialize this client speaks. It advertises no file
-// system and no terminal, because this client implements neither handler.
+// system and no terminal (see acpFSCapabilities for the write the client serves anyway).
 func (s *acpSession) initialize(ctx context.Context) (acpInitializeResponse, error) {
 	raw, err := s.conn.call(ctx, acpMethodInitialize, acpInitializeParams{
 		ProtocolVersion: acpProtocolVersion,
@@ -92,7 +101,7 @@ func (s *acpSession) resumeCall(ctx context.Context, method, resume string) (jso
 	raw, err := s.conn.callInOrder(ctx, method, acpResumeSessionParams{
 		SessionID: resume, Cwd: s.workDir(), MCPServers: s.cfg.sessionMCP,
 	}, s.cfg.CallTimeout, func(json.RawMessage) {
-		s.endReplay()
+		s.answerReplay()
 	})
 	if err != nil {
 		s.endReplay()

@@ -124,6 +124,7 @@ func TestCodexManagedConfigRendersFromAPolicy(t *testing.T) {
 // TestDDILKeygenIsOfflineAndReal — the ddil area needed one argv literal and keygen is the subverb
 // that needs nothing but entropy, so it gets exercised for real rather than parked against port 9.
 func TestDDILKeygenIsOfflineAndReal(t *testing.T) {
+	asEdition(t, "enterprise")
 	out, err := runCLI(t, "ddil", "keygen")
 	if err != nil {
 		t.Fatalf("ddil keygen must work offline: %v\n%s", err, out)

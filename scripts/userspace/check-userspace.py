@@ -17,6 +17,20 @@ import sys
 from pathlib import Path
 
 METHODS = {'get', 'post', 'put', 'patch', 'delete', 'head', 'options'}
+BOUND_MET = {'minimum': lambda v, b: v >= b, 'exclusiveMinimum': lambda v, b: v > b,
+             'maximum': lambda v, b: v <= b, 'exclusiveMaximum': lambda v, b: v < b,
+             'minLength': lambda v, b: len(v) >= b, 'maxLength': lambda v, b: len(v) <= b}
+
+
+def enum_meets(old, key, bound):
+    """A published input enum admitted only its values: a new bound they all meet refuses none."""
+    met, values = BOUND_MET.get(key), old.get('enum')
+    if met is None or not isinstance(values, list) or not values:
+        return False
+    try:
+        return all(not isinstance(value, bool) and met(value, bound) for value in values)
+    except TypeError:
+        return False
 
 
 def resolve(schema, doc):
@@ -32,6 +46,80 @@ def resolve(schema, doc):
     return schema
 
 
+# Where both a union branch and the keywords beside it bound a number, the stricter bound applies.
+STRICTER = {'minimum': max, 'exclusiveMinimum': max, 'minLength': max, 'minItems': max, 'minProperties': max,
+            'maximum': min, 'exclusiveMaximum': min, 'maxLength': min, 'maxItems': min, 'maxProperties': min}
+MERGED, CANONICAL = {}, {}
+
+
+def number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def inline(schema):
+    return isinstance(schema, dict) and '$ref' not in schema
+
+
+def fields(schema):
+    properties = schema.get('properties')
+    return properties if isinstance(properties, dict) else {}
+
+
+def conjoin(first, second):
+    """One schema both apply: shared numeric bounds take the stricter value, required and
+    properties unite (an inline property both describe is conjoined the same way) and enums
+    intersect; anything else they set differently stays under allOf, which the check reviews.
+    References are not followed, so the walk ends with the JSON it reads."""
+    out, contradicted = dict(first), False
+    for name, value in second.items():
+        if name not in out or out[name] == value:
+            out[name] = value
+        elif name == 'required':
+            out[name] = sorted(set(out[name] or []) | set(value or []))
+        elif name == 'properties' and isinstance(out[name], dict) and isinstance(value, dict):
+            properties = dict(out[name])
+            for field, schema in value.items():
+                mine = properties.setdefault(field, schema)
+                if mine != schema:
+                    if inline(mine) and inline(schema):
+                        properties[field] = conjoin(mine, schema)
+                    else:
+                        contradicted = True
+            out[name] = properties
+        elif name in STRICTER and number(out[name]) and number(value):
+            out[name] = STRICTER[name](out[name], value)
+        elif name == 'enum' and isinstance(out[name], list) and isinstance(value, list):
+            out[name] = [item for item in out[name] if item in value]
+        else:
+            contradicted = True
+    # A closed side (additionalProperties other than true or absent) refuses a field only the other defines.
+    for closed, other in ((first, second), (second, first)):
+        if (closed.get('additionalProperties', True) is not True
+                and set(fields(other)) - set(fields(closed))):
+            contradicted = True
+    if contradicted:
+        out['allOf'] = [*out.get('allOf', []), second]
+    return out
+
+
+def with_siblings(schema, keyword, index, doc):
+    """A union branch applies together with the keywords beside the union."""
+    key = (id(schema), keyword, index)
+    if key in MERGED and MERGED[key][0] is schema:
+        return MERGED[key][1]
+    branch = schema[keyword][index]
+    resolved = resolve(branch, doc)
+    beside = {name: value for name, value in schema.items() if name != keyword}
+    merged = branch
+    if beside and isinstance(resolved, dict):
+        merged = conjoin(beside, resolved)
+        # One object per content keeps schema_diff's identity-based cycle stop working
+        # when a branch refers back to its own union.
+        merged = CANONICAL.setdefault((id(doc), json.dumps(merged, sort_keys=True)), merged)
+    MERGED[key] = (schema, merged)
+    return merged
+
+
 def schema_diff(old, new, odoc, ndoc, path, input_schema, seen=(), open_enums=False, warnings=None):
     old, new = resolve(old, odoc), resolve(new, ndoc)
     pair = (id(old), id(new), input_schema)
@@ -41,11 +129,13 @@ def schema_diff(old, new, odoc, ndoc, path, input_schema, seen=(), open_enums=Fa
     # A retained union branch preserves the old contract, even when nested.
     for keyword in ('oneOf', 'anyOf'):
         if keyword in old:
-            return [finding for branch in old[keyword]
-                    for finding in schema_diff(branch, new, odoc, ndoc, path, input_schema, seen, open_enums, warnings)]
+            return [finding for index in range(len(old[keyword]))
+                    for finding in schema_diff(with_siblings(old, keyword, index, odoc), new, odoc, ndoc, path,
+                                               input_schema, seen, open_enums, warnings)]
         if keyword in new:
-            choices = [schema_diff(old, branch, odoc, ndoc, path, input_schema, seen, open_enums, warnings)
-                       for branch in new[keyword]]
+            choices = [schema_diff(old, with_siblings(new, keyword, index, ndoc), odoc, ndoc, path, input_schema,
+                                   seen, open_enums, warnings)
+                       for index in range(len(new[keyword]))]
             return min(choices, key=len) if choices else [path + ': empty union']
     findings = []
     for key in ('type', 'default'):
@@ -53,10 +143,10 @@ def schema_diff(old, new, odoc, ndoc, path, input_schema, seen=(), open_enums=Fa
             findings.append(path + ': changed ' + key)
     if input_schema:
         for key in ('minimum', 'exclusiveMinimum', 'minLength', 'minItems', 'minProperties'):
-            if key in new and (key not in old or new[key] > old[key]):
+            if key in new and (key not in old or new[key] > old[key]) and not enum_meets(old, key, new[key]):
                 findings.append(path + ': tightened ' + key)
         for key in ('maximum', 'exclusiveMaximum', 'maxLength', 'maxItems', 'maxProperties'):
-            if key in new and (key not in old or new[key] < old[key]):
+            if key in new and (key not in old or new[key] < old[key]) and not enum_meets(old, key, new[key]):
                 findings.append(path + ': tightened ' + key)
         if new.get('pattern') != old.get('pattern') and new.get('pattern') is not None:
             findings.append(path + ': changed input pattern')

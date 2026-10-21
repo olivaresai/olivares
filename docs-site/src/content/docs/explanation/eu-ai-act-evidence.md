@@ -47,6 +47,10 @@ ledger-anchored, exportable as JSON, CSV or **OSCAL**, with a live integrity
 proof. The document is *derived from what happened*, not asserted about what was
 intended.
 
+The framework mapping, assessments, DORA view, OSCAL export and reports are **Business**
+(Compliance Packs): a Community server answers those routes with `501`. Community keeps the
+signed ledger, records management, and JSON/CSV exports of stored evidence.
+
 Two honesty rules are wired into the product and carry straight into the evidence:
 
 - A control whose only backing is architectural reports **`by_design`**, never

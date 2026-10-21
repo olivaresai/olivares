@@ -11,7 +11,9 @@ import en from './i18n/en.json'
 import es from './i18n/es.json'
 import de from './i18n/de.json'
 import fr from './i18n/fr.json'
+import italian from './i18n/it.json'
 import ja from './i18n/ja.json'
+import ko from './i18n/ko.json'
 import ru from './i18n/ru.json'
 import zh from './i18n/zh.json'
 
@@ -44,6 +46,10 @@ const spanishNegativeClause = 'ni certificación ni garantía de conformidad ni 
 const frenchNegativeClause = 'ni certification, ni assurance de conformité, ni conseil juridique' // language-data: French disclaimer assertion
 // prettier-ignore
 const frenchGapClause = 'lacunes restent non comblées' // language-data: French disclaimer assertion
+// prettier-ignore
+const italianNegativeClause = 'né una certificazione, né una garanzia di conformità, né una consulenza legale' // language-data: Italian disclaimer assertion
+// prettier-ignore
+const italianGapClause = 'lacune restano non soddisfatte' // language-data: Italian disclaimer assertion
 
 const AIMS_LOCALES: [
   string,
@@ -73,6 +79,11 @@ const AIMS_LOCALES: [
   ],
   ['fr', fr, [new RegExp(frenchNegativeClause), new RegExp(frenchGapClause)]],
   [
+    'it',
+    italian,
+    [new RegExp(italianNegativeClause), new RegExp(italianGapClause)],
+  ],
+  [
     'ja',
     ja,
     [
@@ -89,6 +100,14 @@ const AIMS_LOCALES: [
     ],
   ],
   ['zh', zh, [/不提供认证、符合性保证或法律建议/, /缺口仍未满足/]],
+  [
+    'ko',
+    ko,
+    [
+      /인증, 적합성 보증 또는 법률 자문을 제공하지 않습니다/,
+      /공백은 충족되지 않은 상태/,
+    ],
+  ],
 ]
 
 afterEach(async () => {
@@ -173,12 +192,14 @@ describe('the canonical map', () => {
     ['es', es, /\bno\b[^.]*\bcertificaci/i],
     ['de', de, /\bkeine\b[^.]*\bzertifizierung/i],
     ['fr', fr, /\bpas\b[^.]*\bcertification/i],
+    ['it', italian, /\bnon\b[^.]*\bcertificazione/i],
     // NOT \b for Cyrillic: JavaScript word boundaries are defined on [A-Za-z0-9_],
     // so \bне never matches. A regex that cannot match is a check that measures
     // nothing — it failed loudly here, which is the right failure mode.
     ['ru', ru, /(?:^|[\s.])не[^.]*сертификаци/iu],
     ['ja', ja, /認証ではなく|認証では ?ありません/],
     ['zh', zh, /不是认证|并非认证/],
+    ['ko', ko, /인증이 아니며[^.]*법률 자문도 아닙니다/],
   ])(
     'the %s translation NEGATES the certification claim, in that order',
     (_loc, catalog, negatedCertification) => {

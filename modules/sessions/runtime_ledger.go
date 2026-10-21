@@ -37,6 +37,7 @@ var errInvalidTerminalEvidence = errors.New("sessions: invalid terminal evidence
 
 // runEventInput is one lifecycle transition to record.
 type runEventInput struct {
+	policyStop  bool // the runtime idle policy, recorded distinctly in audit metadata
 	confinement *confine.State
 	runID       model.ID // the sessions.run row id (the audit target)
 	runRef      string
@@ -163,6 +164,9 @@ func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int6
 
 	// 1) Seal in the global hash-chained audit ledger (anchored by PayloadHash).
 	meta := map[string]any{"run_ref": in.runRef, "event": in.event, "to_state": in.toState}
+	if in.policyStop {
+		meta["stop_cause"] = idlePolicyReason
+	}
 	switch in.accessStopCause {
 	case accessStopOwnerEnded:
 		meta["stop_cause"] = "owner_access_ended"
@@ -196,6 +200,9 @@ func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int6
 	})
 	if err != nil {
 		return 0, err
+	}
+	if in.policyStop && ev.Seq == 0 {
+		return 0, store.ErrAuditSpoolFull
 	}
 
 	// 2) Project into the queryable per-session append-only ledger.

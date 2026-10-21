@@ -57,6 +57,7 @@ if _lib is None:
     sys.exit(2)
 sys.path.insert(0, _lib)
 from redaccion import Redactor, abre, instala_excepthook  # noqa: E402
+from demo_edition import edition_of, keeps_action, keeps_surface  # noqa: E402
 
 redacta = Redactor()
 
@@ -273,8 +274,10 @@ def _cuerpo_deploy(marca, i, ctx):
 
 
 def _cuerpo_approvals(marca, i, ctx):
-    acciones = ["deploy.promote", "policy.publish", "killswitch.release"]
-    return {"subject_kind": "deployment", "subject_ref": marca, "action": acciones[i % 3],
+    # A Community estate holds no approval for a Business action (scripts/lib/demo_edition.py).
+    acciones = [a for a in ["deploy.promote", "policy.publish", "killswitch.release"]
+                if keeps_action(ctx.get("edition"), a)]
+    return {"subject_kind": "deployment", "subject_ref": marca, "action": acciones[i % len(acciones)],
             "reason": "Promote a governed path; needs a second pair of eyes."}
 
 
@@ -450,7 +453,13 @@ def main(argv):
           f"declared · {len(no_sembrables)} cannot be seeded through the API")
 
     m = Motor(a.base, a.token, a.tenant)
-    ctx = {"workspace_slug": a.workspace, "agentes": [], "libres": {}}
+    st_info, cuerpo_info = m._pide("/v1/server-info")
+    try:
+        edicion = edition_of(st_info, json.loads(cuerpo_info) if st_info == 200 else None)
+    except ValueError as e:
+        return salir(RC_UNAVAILABLE, f"{e}: {cuerpo_info[:120]}")
+    di(f"seed-estate-volume: edition {edicion}")
+    ctx = {"workspace_slug": a.workspace, "agentes": [], "libres": {}, "edition": edicion}
 
     filas, mal = m.listar("/v1/agents", "items")
     if mal:
@@ -466,6 +475,9 @@ def main(argv):
     #    se siembra fuera del reparto o no se siembra— y eso si se puede exigir por su diagnostico.
     for sid in [x for x in ORDEN if x in decl]:
         s = decl[sid]
+        if not keeps_surface(edicion, sid):
+            di(f"seed-estate-volume: `{sid}` is a Business surface; this edition holds none")
+            continue
         campo, ruta, fabrica, modo = GENERADORES[sid]
         filas, mal = m.listar(s["listar"], s["bajo"])
         if mal:

@@ -31,8 +31,9 @@ const providerAccountsPath = "/v1/m/sessions/provider-accounts"
 
 func newProviderAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "account",
-		Short: "Create, list, read, edit and adopt the named provider accounts sessions launch under",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "account",
+		Short:       "Create, list, read, edit and adopt the named provider accounts sessions launch under",
 		Long: "account is where a provider profile gets a name. An account IS a provider profile —\n" +
 			"same reference, same homes, same launch — that carries a name unique in its\n" +
 			"execution environment across every driver, archived accounts included.\n\n" +
@@ -57,7 +58,8 @@ func newProviderAccountAddCmd() *cobra.Command {
 		driver, name, retryKey string
 	)
 	cmd := &cobra.Command{
-		Use: "add",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "add",
 		Short: "Create a provider account and the home it launches under — exit 5 when the name is taken, " +
 			"6 when this node builds no homes",
 		Long: "add is the one command that makes a provider home. The engine creates it on the node\n" +
@@ -110,8 +112,9 @@ func newProviderAccountListCmd() *cobra.Command {
 		environment, driver, state string
 	)
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
 		// The exit contract is in the summary because the published reference renders
 		// a command's summary and never its long help.
 		Short: "List the named provider accounts — exit 3 when the caller may not read them",
@@ -167,8 +170,9 @@ func providerAccountListQuery(environment, driver, state string) string {
 func newProviderAccountGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "get <account-ref>",
-		Short: "Show one provider account — exit 4 when no account has that reference",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <account-ref>",
+		Short:       "Show one provider account — exit 4 when no account has that reference",
 		Long: "get prints one account's name, driver, environment, home mode and isolation level.\n" +
 			"It never prints a home path. A provider profile nobody has named answers as not\n" +
 			"found, exactly like an unknown reference.",
@@ -190,8 +194,9 @@ func newProviderAccountEditCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var name, displayName, accent string
 	cmd := &cobra.Command{
-		Use:   "edit <account-ref|name>",
-		Short: "Rename an account or edit its label and color without changing its home",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "edit <account-ref|name>",
+		Short:       "Rename an account or edit its label and color without changing its home",
 		Long: "Set the account's --name, its display label and/or its accent color. An explicit empty\n" +
 			"label or color clears that field. The account is named by its reference or by its name.\n" +
 			"A rename changes only the name: the reference, home and launch configuration stay as they\n" +
@@ -244,7 +249,8 @@ func newProviderAccountAdoptCmd() *cobra.Command {
 		name string
 	)
 	cmd := &cobra.Command{
-		Use: "adopt <profile-ref>",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "adopt <profile-ref>",
 		Short: "Make an existing provider profile a named account — exit 4 for an unknown profile, " +
 			"5 when it is already an account or the name is taken",
 		Long: "adopt names an existing provider profile, which is the only way a profile becomes an\n" +
@@ -361,6 +367,9 @@ func providerAccountFields(rec map[string]any) []termrender.Field {
 	}
 	if ref := str(rec, "provider_record_ref"); ref != "" {
 		fields = append(fields, termrender.Field{Key: "provider", Value: ref})
+	}
+	if hosts := egressHostsLine(rec); hosts != "" {
+		fields = append(fields, termrender.Field{Key: "egress hosts", Value: hosts})
 	}
 	return fields
 }

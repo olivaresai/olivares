@@ -42,9 +42,10 @@ export interface FavoritesResponse {
   updated_at?: string
 }
 
-/** The person's interface state on the engine: today only the sidebar width. */
+/** The person's interface state on the engine. Omitted fields retain their saved values. */
 export interface UiState {
-  sidebar: 'full' | 'rail'
+  sidebar?: 'full' | 'rail'
+  show_edition_badge?: boolean
 }
 
 export interface UiStateResponse extends Partial<UiState> {

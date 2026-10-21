@@ -445,7 +445,7 @@ describe('SessionViewerPage', () => {
 
     expect(
       await screen.findByText(
-        /timeline resolver is not wired or did not answer/i,
+        /timeline resolver is not set up or did not answer/i,
       ),
     ).toBeInTheDocument()
     // Recording evidence is independent and remains usable during degradation.

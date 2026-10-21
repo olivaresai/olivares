@@ -281,6 +281,8 @@ done
 
 required=(
 	olivares-packages.gpg
+	olivares.sources
+	olivares.repo
 	keys/olivares-package-repository.asc
 	keys/olivares-packages-apk.rsa.pub
 	stable/apt/dists/stable/InRelease
@@ -299,6 +301,11 @@ required=(
 for rel in "${required[@]}"; do
 	[[ -f "$tree/$rel" && ! -L "$tree/$rel" ]] || fail "publish tree lacks required object: $rel"
 done
+# The two files a host adds the repository with are what the assembler writes for the
+# canonical origin and this tree's key, not merely present.
+command -v python3 >/dev/null 2>&1 || blind 'missing required tool: python3'
+python3 "$(dirname -- "${BASH_SOURCE[0]}")/assemble-package-repository-publish-tree.py" --check-user-files "$tree" >/dev/null ||
+	fail 'olivares.sources or olivares.repo is not what the assembler writes for the canonical origin'
 
 families=(apt rpm apk)
 pacman_present=0
@@ -341,7 +348,7 @@ content_type() {
 	*.json) printf '%s\n' application/json ;;
 	*.sig) printf '%s\n' application/pgp-signature ;;
 	*.gz | *.tgz) printf '%s\n' application/gzip ;;
-	*.xml | *.repo) printf '%s\n' application/xml ;;
+	*.xml) printf '%s\n' application/xml ;;
 	*.asc | *.gpg | *.pub | */InRelease) printf '%s\n' application/pgp-keys ;;
 	*.deb | *.rpm | *.apk | *.pkg.tar.zst | */pacman/*/olivares.db | */pacman/*/olivares.files)
 		printf '%s\n' application/octet-stream ;;

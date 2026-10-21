@@ -32,9 +32,10 @@ const observabilityNS = "observability"
 func newObservabilityCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:     "observability",
-		Aliases: []string{"obs"},
-		Short:   "Inspect ingestion health, ledger traces and binary attestation",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "observability",
+		Aliases:     []string{"obs"},
+		Short:       "Inspect ingestion health, ledger traces and binary attestation",
 		Long: "observability answers three separate questions: is telemetry arriving and under\n" +
 			"which standards, what did one correlated trace do, and what is the measured\n" +
 			"identity of the running binary.\n\n" +
@@ -112,9 +113,10 @@ func obsCount(v *int64) string {
 
 func newObservabilityIngestionCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "ingestion-health",
-		Aliases: []string{"ingestion"},
-		Short:   "Report per-standard and per-source telemetry ingestion",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ingestion-health",
+		Aliases:     []string{"ingestion"},
+		Short:       "Report per-standard and per-source telemetry ingestion",
 		Long: "ingestion-health answers \"is anything actually arriving, and under which\n" +
 			"standard\". It has two halves: the standards table (what this build speaks and\n" +
 			"whether each profile's opt-in gate is on) and the live per-source counters.\n\n" +
@@ -250,8 +252,9 @@ type obsTraceDetail struct {
 
 func newObservabilityTracesCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "traces",
-		Short: "List and open ledger-derived traces",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "traces",
+		Short:       "List and open ledger-derived traces",
 		Long: "traces correlates audit-ledger events by their trace_id stamp. The LIST is the\n" +
 			"shallow read every viewer sees; opening one trace is the\n" +
 			"deeper read on its own permission, so a stricter role model can withhold the\n" +
@@ -275,9 +278,10 @@ func newObservabilityTracesCmd(flags *authClientFlags) *cobra.Command {
 func newObservabilityTracesListCmd(flags *authClientFlags) *cobra.Command {
 	var page observePageFlags
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list"},
-		Short:   "List correlated traces",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list"},
+		Short:       "List correlated traces",
 		Long: "ls lists traces newest first. The engine rejects an unusable --limit or\n" +
 			"--cursor with a 400 rather than substituting a default, so a paging bug\n" +
 			"surfaces as an error instead of as a silently different page.",
@@ -328,8 +332,9 @@ func newObservabilityTracesListCmd(flags *authClientFlags) *cobra.Command {
 
 func newObservabilityTracesGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <trace-id>",
-		Short: "Show one trace's spans",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <trace-id>",
+		Short:       "Show one trace's spans",
 		Long: "get opens one trace: one row per distinct span_id, each grouping the ledger\n" +
 			"events that engine span produced. An event with no valid span_id still widens\n" +
 			"the trace window but yields no row, which is why the span count can be lower\n" +
@@ -403,8 +408,9 @@ type obsAttestation struct {
 
 func newObservabilityAttestationCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "attestation",
-		Short: "Show the measured attestation of the running binary",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "attestation",
+		Short:       "Show the measured attestation of the running binary",
 		Long: "attestation reports what the engine can MEASURE about itself — version, commit,\n" +
 			"build date, Go toolchain, platform and FIPS mode — separately from what is only\n" +
 			"DECLARED about its pipeline, and separately again from the measured ABSENCE of\n" +

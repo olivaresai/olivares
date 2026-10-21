@@ -6,8 +6,8 @@
 // a demo to a CTO/CISO/SOC, so it must be a real overview, never a placeholder. It is
 // deliberately LIGHTER than the executive dashboard (module XXI, /dashboards): a single
 // glanceable grid of six estate pillars — inventory, live sessions, security, compliance,
-// spend run-rate and health/SLA — each a drill-down link to its module, plus a link to
-// the full executive rollup + PDF.
+// spend run-rate and health/SLA — each a drill-down link to its module. The full
+// executive rollup + PDF is its own page under Observability (#2245).
 //
 // It reuses the executive machinery, never duplicating it (ARCHITECTURE.md): the SAME read
 // hooks the technical views use, the SAME pure `derive*` rollups (the modules own the
@@ -37,12 +37,10 @@ import {
 } from './view-state'
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import {
   Activity,
-  ArrowRight,
-  BarChart3,
   Boxes,
+  Coins,
   HeartPulse,
   LayoutDashboard,
   OctagonAlert,
@@ -51,7 +49,6 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
-import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { IntelPage, StatGrid } from '@/features/_intel'
 import { ComplianceMixBar, SeverityRow } from '@/features/executive/components'
@@ -78,8 +75,11 @@ import type { LiveDTO } from '@/features/sessions/types'
 import { securityApi, securityKeys } from '@/features/security/api'
 import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
-import { formatInt, formatPercent } from '@/lib/format'
+import { formatInt, formatMicroUsd, formatPercent } from '@/lib/format'
+import { useMinuteClock } from '@/components/layout/use-session-rail'
 import { EstateTile } from './components'
+import { LiveCards } from './live-cards'
+import { isLiveSession, todayIsFloor, todaysCost } from './now-sessions'
 import { NextStep } from './next-step'
 import { NowQueue } from './now-queue'
 import { BUDGET_READ } from './budget-verdict'
@@ -247,13 +247,59 @@ export function HomeView() {
     queryFn: () => agentOpsApi.listRuns(HOME_RUN_PARAMS),
     enabled: canRuns,
   })
+  // Only CURRENT, permitted answers (`currentAnswer`, as the tiles read them): a read the
+  // role lost, or one whose refetch failed, keeps its old rows on the query, and those
+  // must not paint a live card or count toward today's cost.
+  const liveAnswer = currentAnswer(canSessions, sessionsQ)
+  const runsAnswer = currentAnswer(canRuns, runsQ)
   const recentSessions = useMemo(
     () =>
-      sessionsQ.data || runsQ.data
-        ? mergeSessions(sessionsQ.data?.items ?? [], runsQ.data?.items ?? [])
+      liveAnswer || runsAnswer
+        ? mergeSessions(liveAnswer?.items ?? [], runsAnswer?.items ?? [])
         : undefined,
-    [sessionsQ.data, runsQ.data],
+    [liveAnswer, runsAnswer],
   )
+  // Each session once: a live one is a card, an ended one a Recent work row.
+  const liveSessions = useMemo(
+    () => (recentSessions ?? []).filter(isLiveSession),
+    [recentSessions],
+  )
+  const settledSessions = useMemo(
+    () => recentSessions?.filter((s) => !isLiveSession(s)),
+    [recentSessions],
+  )
+  // What the sessions that worked today cost, from the same two pages. The minute clock
+  // moves "today" past midnight without a reload.
+  const now = useMinuteClock()
+  const today = recentSessions ? todaysCost(recentSessions, now) : null
+  const sessionReads = [
+    ...(canRuns ? [runsQ] : []),
+    ...(canSessions ? [sessionsQ] : []),
+  ]
+  const recentState = tileState(canRuns ? runsQ : sessionsQ)
+  const todayState = tileState(...sessionReads)
+  // A page cut short hides today's sessions only if all it holds is from today.
+  const todayPartial =
+    todayIsFloor(
+      liveAnswer?.has_more,
+      (liveAnswer?.items ?? []).map((l) => Date.parse(l.last_event_at)),
+      now,
+    ) ||
+    todayIsFloor(
+      runsAnswer?.has_more,
+      (runsAnswer?.items ?? []).map((r) =>
+        Date.parse(r.last_activity_at ?? r.started_at ?? r.created_at ?? ''),
+      ),
+      now,
+    )
+  // Recent work steps aside only when it has answered and every session is a card.
+  const showRecent =
+    (canSessions || canRuns) &&
+    !(
+      recentState === 'ready' &&
+      liveSessions.length > 0 &&
+      settledSessions?.length === 0
+    )
   const findingsQ = useQuery({
     queryKey: securityKeys.findings(activeTenant),
     queryFn: () => securityApi.findings(),
@@ -309,11 +355,6 @@ export function HomeView() {
 
   // --- rollups (aggregate only; the modules own the math, ARCHITECTURE.md) ---------
   const costPanels = useDashboardCost(params)
-  // The executive report rolls up what the agents did in the period. On an empty install
-  // it has nothing to say, so Now offers it once Recent work holds a session or the period
-  // has usage (spend, or tokens a local model ran for $0); the report stays one search away.
-  const hasActivity =
-    (recentSessions?.length ?? 0) > 0 || !!costPanels?.hasActivity
   // Each usage half is handed in only as its CURRENT, permitted, successful answer:
   // a denied, pending or failed half is `undefined` and comes back `null`, never as an
   // empty page counted to 0, and data a role may no longer read is not reused. The
@@ -397,6 +438,14 @@ export function HomeView() {
   // ea62fad5: "No open findings" or "$0" while the read was paused).
   const pendingOf = (...queries: SourceQuery[]) =>
     queries.map(pendingReason).find((r) => r !== null) ?? null
+  // A paused or unstarted read leaves today's sum without one of its halves: the tile
+  // says so with "—" rather than summing the other half as if it were all.
+  const todayPending = pendingOf(...sessionReads)
+  const showToday =
+    sessionReads.length > 0 &&
+    (todayState !== 'ready' ||
+      todayPending !== null ||
+      (today?.sessions ?? 0) > 0)
   const securityPending = canSecurity ? pendingOf(findingsQ) : null
   const compliancePending = canCompliance ? pendingOf(complianceQ) : null
   const healthPending = canHealth ? pendingOf(healthStatusQ, incidentsQ) : null
@@ -485,20 +534,10 @@ export function HomeView() {
          which is now ONE line. In 23 captures of the product named as the
          standard, the number of screens with a banner like this is zero.
          The TRUNCATION notice below stays: it reports a measurement limit, which is
-         the canon's own requirement and not a restatement of purpose. */
-      actions={
-        hasActivity ? (
-          <Button asChild variant="outline" size="sm" className="h-6">
-            {/* The feature registry IS the route table, so this path is valid at runtime
-              even though the generated route types don't list it (as `DrillLink` does). */}
-            <Link to={'/dashboards' as never}>
-              <BarChart3 />
-              {t('openReport')}
-              <ArrowRight />
-            </Link>
-          </Button>
-        ) : undefined
-      }
+         the canon's own requirement and not a restatement of purpose.
+         ⛔ AND NO HEADER ACTION. An "Executive report" button was the header's only
+         control, and on a quiet install it read as the page's purpose (#2245). The
+         report is under Observability, one search away; Now leads with the work. */
     >
       {/* THE LIVE REGION, once per view and OUTSIDE every tile link and disclosure:
           `role="status"` is polite and atomic, so a change is read whole and interrupts
@@ -542,15 +581,20 @@ export function HomeView() {
             />
           ) : null}
 
-          {/* WHAT IS IN PROGRESS. Reads NOTHING new: the rows are the very page `sessionsQ`
-          already fetched for the live tile. Mounted only for a role that may read live
-          sessions, like the tile below it. */}
-          {canSessions || canRuns ? (
-            <RecentWork
-              titled
-              sessions={recentSessions}
-              state={tileState(canRuns ? runsQ : sessionsQ)}
+          {/* WHAT IS IN PROGRESS. Reads NOTHING new: the runs and live pages above. Live
+              sessions are cards, then Recent work holds the sessions that ended: each
+              session once. Recent work stays for its loading, failure and empty states,
+              and steps aside only when every session it would list is a card above. */}
+          {liveSessions.length > 0 ? (
+            <LiveCards
+              sessions={liveSessions}
+              // Recent work carries the link only once it lists rows; loading, failed
+              // or stepped aside, the cards carry it, so a seventh session is reachable.
+              showAll={!showRecent || recentState !== 'ready'}
             />
+          ) : null}
+          {showRecent ? (
+            <RecentWork titled sessions={settledSessions} state={recentState} />
           ) : null}
         </div>
 
@@ -572,6 +616,52 @@ export function HomeView() {
           2026-09-17. `StatGrid`'s own default stays as it is for the views that lead
           with four figures. */}
           <StatGrid className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-1">
+            {/* TODAY'S COST (#2245): what the sessions that worked today cost, from the
+                pages Now already read. Community shows spend per session, so this is
+                their sum; spend by team stays in Business. A page with rows beyond it
+                makes the figure a floor, and a session that reported no cost is said,
+                never counted as $0. Hidden on a day with no sessions. */}
+            {showToday ? (
+              <EstateTile
+                compact
+                to="/sessions"
+                icon={<Coins />}
+                label={t('tiles.today.label')}
+                state={todayState}
+                value={todayPending ? '—' : formatMicroUsd(today?.costMicroUsd)}
+                caption={
+                  todayPending
+                    ? pendingText(todayPending)
+                    : today
+                      ? [
+                          t('tiles.today.caption', { count: today.sessions }),
+                          today.unpriced > 0
+                            ? t('tiles.today.unpriced', {
+                                count: today.unpriced,
+                              })
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      : undefined
+                }
+                partial={
+                  todayPartial
+                    ? {
+                        testId: 'home-today-partial-details',
+                        sources: [
+                          {
+                            source: t('nav:nouns.sessions'),
+                            kind: 'page',
+                            testId: 'home-today-partial-note',
+                          },
+                        ],
+                      }
+                    : undefined
+                }
+              />
+            ) : null}
+
             {showInventory ? (
               <EstateTile
                 compact

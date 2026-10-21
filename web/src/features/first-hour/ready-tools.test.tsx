@@ -141,7 +141,7 @@ describe('which tools can start a session, and why not', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'grok: The API key xAI main was refused. Replace it under API keys. | key=prv-xai default= models= required=false',
+        'grok: The API key xAI main was refused. Replace it under Providers. | key=prv-xai default= models= required=false',
       ),
     ).toBeInTheDocument()
     expect(

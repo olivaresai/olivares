@@ -9,6 +9,11 @@ import {
   esperarEncabezado,
   exigirInstanteLimpio,
   exigirMarcadores,
+  exigirPantallaTerminada,
+  filasDeDatos,
+  ocultarFechas,
+  ocultarMarcasDeRelease,
+  restaurarFechas,
 } from './capture-target'
 
 // Index English locale keys with and without namespaces to identify untranslated text.
@@ -96,32 +101,36 @@ export async function tomar(
   if (!live) await page.waitForLoadState('networkidle')
   if (settle) await page.waitForTimeout(settle)
 
-  // Check for errors after loading and settling, immediately before the screenshot.
-  await exigirInstanteLimpio(page, id)
+  // The image outlives this release: hide the build number and the shell's live counts, then check
+  // errors, dates, harness names and empty pages after loading and settling, immediately before the shot.
+  const info = await page.request.get('/v1/server-info')
+  expect(info.status(), `${id}: /v1/server-info`).toBe(200)
+  const { version } = (await info.json()) as { version?: string }
+  if (!version)
+    throw new Error(`${id}: /v1/server-info reports no version to hide`)
+  await ocultarMarcasDeRelease(page, version)
+  // Errors, unavailable features, raw markdown and placeholders are checked on the text as the product wrote it;
+  // then the dates, which are the day of the capture, are masked, and the check below refuses any left.
+  await exigirPantallaTerminada(page, id)
+  await ocultarFechas(page)
+  await exigirInstanteLimpio(page, id, { version })
 
   // Record empty-panel counts and main-text size without assigning a cause to empty
   // content.
   const vacios = await page.locator('[data-slot="empty-state"]:visible').count()
-  // Check main presence before reading it to avoid waiting on an absent element. Count
-  // data rows separately from empty-state rows, and empty tables separately from
-  // table-free forms.
-  const { filas, tablasVacias } = await page.evaluate(() => {
+  // Count empty tables separately from table-free forms; data rows come from the shared counter.
+  const filas = await filasDeDatos(page)
+  const tablasVacias = await page.evaluate(() => {
     const raiz = document.querySelector('main') ?? document.body
     const esDato = (tr: Element) =>
       !tr.querySelector('[data-slot="empty-state"]')
-    const filas = Array.from(raiz.querySelectorAll('tbody tr')).filter(
-      esDato,
-    ).length
-    const tablasVacias = Array.from(raiz.querySelectorAll('table')).filter(
-      (tabla) => {
-        const cabeceras = tabla.querySelectorAll('thead th').length
-        const datos = Array.from(tabla.querySelectorAll('tbody tr')).filter(
-          esDato,
-        ).length
-        return cabeceras > 0 && datos === 0
-      },
-    ).length
-    return { filas, tablasVacias }
+    return Array.from(raiz.querySelectorAll('table')).filter((tabla) => {
+      const cabeceras = tabla.querySelectorAll('thead th').length
+      const datos = Array.from(tabla.querySelectorAll('tbody tr')).filter(
+        esDato,
+      ).length
+      return cabeceras > 0 && datos === 0
+    }).length
   })
   // Match untranslated text against known locale keys rather than treating dotted
   // domain names as keys.
@@ -154,6 +163,8 @@ export async function tomar(
   // A declared crop preserves the viewport layout; record its rectangle with the image.
   const clip = recorte ? await recorte(page) : undefined
   await page.screenshot(clip ? { path: png, clip } : { path: png })
+  // The page is reused for the other theme: give the framework its own text nodes back.
+  await restaurarFechas(page)
   const sha = createHash('sha256').update(fs.readFileSync(png)).digest('hex')
   fs.writeFileSync(
     path.join('playwright-report', 'docs', `${id}-${theme}.evidence.json`),

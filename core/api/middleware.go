@@ -647,6 +647,16 @@ func (s *Server) authzScopedCollectionPolicy(
 		s.writeError(w, r, errBadRequest)
 		return auth.Principal{}, "", resource, none, false
 	}
+	if scope.AllowTenantFallback && scope.WorkspaceBodyField == "" {
+		if _, present := r.URL.Query()[scope.WorkspaceQueryParam]; !present {
+			if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
+				s.writeError(w, r, errForbidden)
+				return auth.Principal{}, "", resource, none, false
+			}
+			p, tenant, witness, ok := s.authzTenantResourcePolicy(w, r, perm, resource, meta, errForbidden, governed)
+			return p, tenant, resource, witness, ok
+		}
+	}
 	if scope.WorkspaceBodyField != "" {
 		// Keep tenant-authorized callers' defaults and historical inactive-target
 		// behavior. Scoped authority still needs a corroborated active workspace.

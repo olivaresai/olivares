@@ -16,10 +16,68 @@ import sys
 
 RPM_DELIVERY_SCHEMA = "olivares.ai/rpm-delivery/v1"
 RPM_ARCHES = ["aarch64", "x86_64"]
+CANONICAL_ORIGIN = "https://packages.olivares.ai"
+# Where a dnf host keeps the repository key (the install guide stores it there before the repo file
+# exists). The repo file names this file, never an address the repository answers, so a swapped tree
+# cannot hand a trusting host another key. It is the path the appliance image pins the same key at.
+RPM_KEY_PATH = "/etc/pki/rpm-gpg/RPM-GPG-KEY-olivares-package-repository"
+REPO_TEMPLATE = Path(__file__).resolve().parent.parent / "packaging/repositories/dnf-repo.template"
 
 
 class ContractError(Exception):
     pass
+
+
+def sources_file(origin: str, key_asc: str) -> str:
+    """The apt deb822 file a host drops into /etc/apt/sources.list.d, key inline."""
+    block = "".join(f" {line}\n" if line else " .\n" for line in key_asc.strip().splitlines())
+    return f"Types: deb\nURIs: {origin}/stable/apt\nSuites: stable\nComponents: main\nSigned-By:\n{block}"
+
+
+def repo_file(origin: str, template: str) -> str:
+    """The dnf file a host drops into /etc/yum.repos.d, from the one repository template."""
+    text = "".join(f"{line}\n" for line in template.splitlines() if not line.startswith("#"))
+    values = {
+        "REPO_ID": "olivares",
+        "REPO_NAME": "Olivares AI",
+        "BASEURL": f"{origin}/stable/rpm/$basearch",
+        "GPGKEY": f"file://{RPM_KEY_PATH}",
+    }
+    for name, value in values.items():
+        text = text.replace("{{" + name + "}}", value)
+    if "{{" in text:
+        raise ContractError("the repository template left a placeholder")
+    return text
+
+
+def user_files(tree: Path) -> dict[str, str]:
+    """The two files for the canonical origin, from the key this tree publishes."""
+    key_asc = (tree / "olivares-packages.asc").read_text(encoding="utf-8")
+    return {
+        "olivares.sources": sources_file(CANONICAL_ORIGIN, key_asc),
+        "olivares.repo": repo_file(CANONICAL_ORIGIN, REPO_TEMPLATE.read_text(encoding="utf-8")),
+    }
+
+
+def write_user_files(tree: Path) -> None:
+    for name, text in user_files(tree).items():
+        with (tree / name).open("x", encoding="utf-8") as writer:
+            writer.write(text)
+        (tree / name).chmod(0o644)
+
+
+def check_user_files(tree: Path) -> None:
+    """The tree's two user files are byte for byte what write_user_files writes, and the key
+    they carry is the key the repository metadata is signed with."""
+    for name in ("olivares-packages.asc", "keys/olivares-package-repository.asc", "olivares.sources", "olivares.repo"):
+        path = tree / name
+        if not path.is_file() or path.is_symlink():
+            raise ContractError(f"publish tree lacks a regular file: {name}")
+    if (tree / "olivares-packages.asc").read_bytes() != (tree / "keys/olivares-package-repository.asc").read_bytes():
+        raise ContractError("olivares-packages.asc is not the key of keys/olivares-package-repository.asc")
+    for name, expected in user_files(tree).items():
+        if (tree / name).read_text(encoding="utf-8") != expected:
+            raise ContractError(f"{name} is not what the assembler writes for {CANONICAL_ORIGIN}")
 
 
 def regular(path: Path, label: str) -> None:
@@ -110,16 +168,31 @@ def require_s3_rpm(rendered: Path, channel: str, fingerprint: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stable", required=True, type=Path)
-    parser.add_argument("--security", required=True, type=Path)
-    parser.add_argument("--key-dir", required=True, type=Path)
-    parser.add_argument("--out", required=True, type=Path)
-    return parser.parse_args()
+    parser.add_argument("--stable", type=Path)
+    parser.add_argument("--security", type=Path)
+    parser.add_argument("--key-dir", type=Path)
+    parser.add_argument("--out", type=Path)
+    # The publisher checks an assembled tree before it reads or writes R2; the fixtures of its
+    # tests write the two user files into a hand-made tree.
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--check-user-files", type=Path, metavar="TREE")
+    modes.add_argument("--write-user-files", type=Path, metavar="TREE")
+    args = parser.parse_args()
+    if not (args.check_user_files or args.write_user_files) and not (args.stable and args.security and args.key_dir and args.out):
+        parser.error("assembling needs --stable, --security, --key-dir and --out")
+    return args
 
 
 def main() -> int:
     args = parse_args()
     try:
+        if args.check_user_files:
+            check_user_files(args.check_user_files)
+            print("assemble-package-repository-publish-tree: user files OK")
+            return 0
+        if args.write_user_files:
+            write_user_files(args.write_user_files)
+            return 0
         for path, label in (
             (args.stable, "stable render"),
             (args.security, "security render"),
@@ -160,6 +233,8 @@ def main() -> int:
         copy_regular(args.key_dir / "olivares-packages.gpg", args.out / "olivares-packages.gpg")
         copy_regular(args.key_dir / "olivares-packages.asc", args.out / "olivares-packages.asc")
         copy_regular(args.key_dir / apk_name, args.out / apk_name)
+        write_user_files(args.out)
+        check_user_files(args.out)
         count = sum(1 for path in args.out.rglob("*") if path.is_file())
         if count < 40:
             raise ContractError(f"assembled tree has only {count} files")

@@ -1146,6 +1146,165 @@ else
 	malo "could not build the boundary mutant: no artifact means no verdict"
 fi
 
+# ── K · A COMMUNITY ENGINE IS NOT A SEEDING FAILURE: claude-policy is Business ────────────────
+# ⛔ Fleet managed settings (publish, artifact, check-in, drift) answer 501 naming Business on a
+#    Community engine. Without this the plain case and the claude-policy chain came out rc 1
+#    "rejected" against Community, which blamed the SEEDING for an edition. The verdict is a third
+#    thing, "Business only", and it is TERMINAL (the engine ruled: it said this is not its edition).
+#
+#    And the honest way out is NARROW: only those two ids, only a 501 whose `error.message` says
+#    "Business" with that spelling, and only if `/v1/server-info` says `community`. Anything else
+#    stays a rejection: a 501 without Business, a 500 that does say it, a Business engine, a
+#    lowercase "business", the word outside the message, or a 501 on the check-in AFTER a publish
+#    that worked. And a healthy Business engine keeps its verdict (mode `business-ok`).
+cat > "$TRABAJO/doble-community.py" <<'PYK'
+import http.server, json, subprocess, sys, threading
+
+MODO = sys.argv[2]
+REF = {"error": {"message": "Fleet-wide managed settings (publish, signed pull, attested check-in and drift) require Business."}}
+PUB = (200, {"revision": 1, "artifact": {"artifact_sha256": "ab" * 32, "key_fingerprint": "fp"}})
+ART = (200, {"revision": 1, "artifact_sha256": "ab" * 32})
+CHK = (200, {"drift": [{"kind": "policy_drift", "severity": "high"}]})
+R501 = (501, REF)
+MODOS = {
+    "community": ("community", R501, R501, R501),
+    "501-sin-business": ("community", (501, {"error": {"message": "module not wired"}}), R501, R501),
+    "501-business-minuscula": ("community", (501, {"error": {"message": "requires business"}}), R501, R501),
+    "501-business-fuera-del-mensaje": ("community", (501, {"error": {"message": "nope"}, "hint": "Business"}), R501, R501),
+    "500-con-business": ("community", (500, {"error": {"message": "internal error while resolving Business licence"}}), R501, R501),
+    "motor-business-501": ("business", R501, R501, R501),
+    "checkin-501-tras-publish": ("community", PUB, ART, R501),
+    "business-ok": ("business", PUB, ART, CHK),
+    # Otro caso plano (no claude-policy) que contesta 501 nombrando Business: sigue siendo rechazo.
+    "otro-caso-501": ("community", PUB, ART, CHK),
+}
+EDICION, PUBLISH, ARTIFACT, CHECKIN = MODOS[MODO]
+
+
+class H(http.server.BaseHTTPRequestHandler):
+    def _json(self, obj, cod=200):
+        c = json.dumps(obj).encode()
+        self.send_response(cod)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(c)))
+        self.end_headers(); self.wfile.write(c)
+
+    def do_GET(self):
+        if self.path.startswith("/v1/agents"):
+            self._json({"items": [{"id": "a1", "name": "uno"}, {"id": "a2", "name": "dos"}]})
+        elif self.path.startswith("/v1/workspaces"):
+            self._json({"items": [{"id": "w1", "slug": "ws"}]})
+        elif self.path.startswith("/v1/m/redteam/targets"):
+            self._json({"items": [{"id": "t1", "name": "t", "authorized": False}]})
+        elif self.path == "/v1/server-info":
+            self._json({"edition": EDICION})
+        elif self.path.endswith("/claude-policy/managed-settings/artifact"):
+            self._json(ARTIFACT[1], ARTIFACT[0])
+        else:
+            self._json({"items": []})
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        self.rfile.read(n)
+        if self.path.endswith("/claude-policy/managed-settings/publish"):
+            self._json(PUBLISH[1], PUBLISH[0])
+        elif self.path.endswith("/claude-policy/managed-settings/checkin"):
+            self._json(CHECKIN[1], CHECKIN[0])
+        elif MODO == "otro-caso-501" and self.path.endswith("/governance/killswitch"):
+            self._json(REF, 501)
+        elif self.path.endswith("/redteam/targets/t1/authorize"):
+            self._json({"authorized": True, "authorized_by": "banco@olivares.ai"})
+        elif "mode=plan" in self.path:
+            self._json({"plan_hash": "h"})
+        elif "mode=apply" in self.path:
+            self._json({"spec_id": "0123456789abcdef", "validation": {"code": "validated"}})
+        else:
+            self._json({}, 201)
+
+    def log_message(self, *a):
+        pass
+
+
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+out = subprocess.run([sys.executable, sys.argv[1], "http://127.0.0.1:%d" % srv.server_port, "tok", "ten"],
+                     capture_output=True, text=True, timeout=120)
+srv.shutdown()
+print("RC=%d" % out.returncode)
+for linea in (out.stdout + out.stderr).splitlines():
+    if "claude-policy" in linea or linea.startswith("  killswitch") or linea.startswith("  LEDGER") or (linea.startswith("verify-seed-payloads: ") and " rejected " in linea):
+        print(linea)
+PYK
+fila_k() { # $1 = output, $2 = row id (the line that STARTS with the id)
+	command grep -E "^  $2 " <<<"$1" | head -1
+}
+rechazados_k() { # $1 = output; the N of "N rejected" in the summary
+	command grep -oE '[0-9]+ rejected' <<<"$1" | head -1 | command grep -oE '^[0-9]+'
+}
+rc_k() { command grep -oE '^RC=[0-9]+' <<<"$1" | head -1 | command grep -oE '[0-9]+$'; }
+declare -A OUTPUT_K
+for modo in community 501-sin-business 501-business-minuscula 501-business-fuera-del-mensaje \
+	500-con-business motor-business-501 checkin-501-tras-publish business-ok otro-caso-501; do
+	output_k="$(python3 "$TRABAJO/doble-community.py" "$GUION" "$modo" 2>&1)"
+	OUTPUT_K[$modo]="$output_k"
+	plano="$(fila_k "$output_k" claude-policy-publish)"
+	cadena="$(fila_k "$output_k" claude-policy-checkin)"
+	case "$modo" in
+	community)
+		if command grep -qE ' 0 +501 +BUSINESS ONLY' <<<"$plano" &&
+			command grep -qE ' 0 +BUSINESS ONLY' <<<"$cadena" &&
+			command grep -qE ' 2 Business-only on this engine · 0 without a terminal state' <<<"$output_k" &&
+			! command grep -qE '⛔ claude-policy' <<<"$output_k" && [ "$(rc_k "$output_k")" = 0 ]; then
+			paso "a Community engine (501 naming Business): case and chain are BUSINESS ONLY, counted apart (2), terminal, and the run exits 0"
+		else
+			malo "a Community engine must not read as a seeding failure; got: [$plano] [$cadena] [$output_k]"
+		fi
+		;;
+	checkin-501-tras-publish)
+		if command grep -qE ' 0 +[0-9]+ +EXERCISED' <<<"$plano" && command grep -qE ' 1 +checkin for .* rejected' <<<"$cadena" &&
+			! command grep -q 'BUSINESS ONLY' <<<"$plano$cadena" && [ "$(rc_k "$output_k")" = 1 ]; then
+			paso "a 501 on the check-in AFTER a working publish stays rejected: the routes exist, so it is not the edition"
+		else
+			malo "$modo was swallowed or misread; got: [$plano] [$cadena]"
+		fi
+		;;
+	otro-caso-501)
+		otro="$(fila_k "$output_k" killswitch)"
+		if command grep -qE ' 1 +501 +EXERCISED . REJECTED' <<<"$otro" && ! command grep -q 'BUSINESS ONLY' <<<"$otro$plano$cadena" &&
+			[ "$(rc_k "$output_k")" = 1 ]; then
+			paso "only the claude-policy ids can be Business-only: another case answering 501 naming Business stays rejected"
+		else
+			malo "the Business-only verdict leaked to another case; got: [$otro]"
+		fi
+		;;
+	business-ok)
+		if command grep -qE ' 0 +[0-9]+ +EXERCISED . ACCEPTED' <<<"$plano" && command grep -qE ' 0 +A/seeder OK' <<<"$cadena" &&
+			command grep -qE ' 0 Business-only on this engine ' <<<"$output_k" && [ "$(rc_k "$output_k")" = 0 ]; then
+			paso "a Business engine keeps its normal verdict: case accepted, chain OK, nothing Business-only, the run exits 0"
+		else
+			malo "the Business-edition path changed; got: [$plano] [$cadena] [$output_k]"
+		fi
+		;;
+	*)
+		if command grep -qE ' 1 +[0-9]+ +EXERCISED . REJECTED' <<<"$plano" && command grep -qE ' 1 +publish rejected' <<<"$cadena" &&
+			! command grep -q 'BUSINESS ONLY' <<<"$plano$cadena" && [ "$(rc_k "$output_k")" = 1 ]; then
+			paso "$modo is NOT a Business-only verdict: the claude-policy case and chain stay rejected and the run exits 1"
+		else
+			malo "$modo was swallowed as Business-only; got: [$plano] [$cadena]"
+		fi
+		;;
+	esac
+done
+# The summary counts: going from "rejected" to "Business only" takes EXACTLY those two ids out of
+# `rejected` (the rest of the double does not change between the two modes) and puts none elsewhere.
+r_com="$(rechazados_k "${OUTPUT_K[community]}")"
+r_otro="$(rechazados_k "${OUTPUT_K[501-sin-business]}")"
+if [ -n "$r_com" ] && [ -n "$r_otro" ] && [ $((r_otro - r_com)) -eq 2 ]; then
+	paso "the summary moves exactly the two claude-policy ids out of 'rejected' ($r_otro -> $r_com)"
+else
+	malo "the summary does not account for the Business-only ids: rejected community=$r_com, 501-sin-business=$r_otro"
+fi
+
 printf '\ntest-verify-seed-payloads: %d passed, %d failed\n' "$ok" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0

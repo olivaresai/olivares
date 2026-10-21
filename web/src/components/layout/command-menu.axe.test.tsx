@@ -66,3 +66,23 @@ describe('command palette list structure', () => {
     expect(violations[0]?.id).toBe('aria-required-children')
   })
 })
+
+vi.mock('@/features/console/use-edition-badge', () => ({
+  useEditionBadge: () => ({
+    edition: 'enterprise',
+    shown: true,
+    canSave: true,
+    setShown: async () => {},
+    saving: false,
+    saveError: false,
+    loadError: false,
+  }),
+}))
+
+it('shows the commercial badge in the search header outside the result list', async () => {
+  useCommandStore.getState().setOpen(true)
+  renderIntel(<CommandMenu />)
+  const badge = await screen.findByLabelText('Enterprise edition')
+  expect(badge.closest('[cmdk-input-wrapper]')).not.toBeNull()
+  expect(badge.closest('[role="listbox"]')).toBeNull()
+})

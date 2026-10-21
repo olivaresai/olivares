@@ -156,7 +156,7 @@ printf 'fixture Arch Linux package %s\n' "$version" >"$scratch/release/$pkg_name
 base_tree() {
 	local dir="$1" rel
 	for rel in \
-		olivares-packages.gpg keys/olivares-package-repository.asc keys/olivares-packages-apk.rsa.pub \
+		olivares-packages.gpg olivares-packages.asc keys/olivares-package-repository.asc keys/olivares-packages-apk.rsa.pub \
 		stable/apt/dists/stable/InRelease stable/rpm/x86_64/repodata/repomd.xml \
 		stable/rpm/aarch64/repodata/repomd.xml stable/apk/x86_64/APKINDEX.tar.gz \
 		stable/apk/aarch64/APKINDEX.tar.gz stable/repository-manifest.json \
@@ -167,6 +167,8 @@ base_tree() {
 		mkdir -p "$dir/$(dirname "$rel")"
 		printf 'fixture %s\n' "$rel" >"$dir/$rel"
 	done
+	cp -- "$dir/olivares-packages.asc" "$dir/keys/olivares-package-repository.asc"
+	python3 "$root/scripts/assemble-package-repository-publish-tree.py" --write-user-files "$dir"
 }
 # pacman_fixture DIR [KEY]: this battery's own signed pacman repositories in DIR.
 pacman_fixture() {

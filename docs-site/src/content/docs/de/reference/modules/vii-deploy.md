@@ -4,8 +4,10 @@ description: >-
   Das einzige Modul, das auf Ihre Infrastruktur wirkt: Es plant und steuert den
   deklarativen Lebenszyklus von Agenten und MCP-Servern sowie deren Anbindung an
   das Estate. Mutationen sind HITL-gegated, Dry-run-vor-Apply und reversibel — und
-  das Live-Apply bleibt deny-closed (503), bis ein Executor bereitgestellt ist.
+  in Business bleibt das Live-Apply deny-closed (503), bis ein Executor bereitgestellt ist.
 ---
+
+Deployment-Definitionen, Pläne, Anwendungen, Rollbacks, Stilllegungen, die Executor-Einrichtung und das Verdrahtungsprotokoll gehören zu **[Business](https://olivares.ai/pricing)**. Community antwortet auf diese API-Routen mit 501 und blendet die Befehlsgruppe aus. Gespeicherte Definitionen, Revisionen, Verdrahtungen und Operationen bleiben in der Datenbank und in Wiederherstellungssicherungen erhalten. Die folgenden Abschnitte beschreiben das Business-Verhalten.
 
 Modul VII ist das **einzige** Modul, das die Kundeninfrastruktur mutiert — jeder andere
 Teil des Produkts ist read-first. Es stellt Agenten und MCP-Server bereit, aktualisiert

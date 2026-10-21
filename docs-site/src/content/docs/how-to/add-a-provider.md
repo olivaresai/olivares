@@ -138,10 +138,10 @@ session that fails halfway through a handshake.
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-For `anthropic`, `openai` and `xai`, OpenCode accepts only the vendor's own endpoint: leave `base_url` empty. Use `codex` for an `openai_compatible` provider; use `codex` or `opencode` for `ollama`.
+For `anthropic`, `openai` and `xai`, OpenCode accepts only the vendor's own endpoint: leave `base_url` empty. Use `codex` for an `openai_compatible` gateway; use `codex` or `opencode` for `ollama`, and for a local `openai_compatible` server whose `base_url` is plain `http` at a loopback or private address, such as `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). The `base_url` includes `/v1`.
 
 Gemini CLI uses a `gemini` provider key at Google's own API address; it accepts no
 custom endpoint. Install it under **AI tools** or with `olivares tool install gemini`.

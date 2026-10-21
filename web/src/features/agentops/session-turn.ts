@@ -44,6 +44,7 @@ export type SendBlockedReason =
   | 'live.blocked.notLive'
   | 'live.blocked.approval'
   | 'live.blocked.sending'
+  | 'live.blocked.uploading'
   | 'live.blocked.empty'
 
 /**
@@ -57,16 +58,20 @@ export function sendBlockedReason({
   live,
   draft,
   sending,
+  uploading = false,
   waitingApproval = false,
 }: {
   live: boolean
   draft: string
   sending: boolean
+  /** An attached image is still being stored with the session. */
+  uploading?: boolean
   waitingApproval?: boolean
 }): SendBlockedReason | null {
   if (!live)
     return waitingApproval ? 'live.blocked.approval' : 'live.blocked.notLive'
   if (sending) return 'live.blocked.sending'
+  if (uploading) return 'live.blocked.uploading'
   if (!draft.trim()) return 'live.blocked.empty'
   return null
 }

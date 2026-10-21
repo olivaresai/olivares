@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 # Required payloads: later-job downloads or release/build outputs.
 REQUIRED = {
     ('main-suite.yml', 'modules'), ('main-suite.yml', 'postgres'),
-    ('main-suite.yml', 'invariants'), ('mainline-ci.yml', 'web'),
+    ('main-suite.yml', 'invariants'), ('main-suite.yml', 'cmd-olivares-shards'),
+    ('mainline-ci.yml', 'web-bundle'),
     ('pr-ci.yml', 'pr-web'), ('race-full.yml', 'setup'),
     ('docs-site-artifact.yml', 'build'), ('security-feed.yml', 'package-and-verify'),
     ('release-candidate.yml', 'build'),

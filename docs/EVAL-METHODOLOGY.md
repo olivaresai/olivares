@@ -105,6 +105,9 @@ reporting a fabricated zero. Methods (`modules/evals/stats.go`, closed and deter
 - **pass-rate** (binomial proportion): **Wilson score** — stable with small n and p near 0/1,
   where Wald degenerates. Per run (`pass_rate_ci`, always derivable from the persisted counters) and
   case-weighted aggregate per scorecard (`pooled_pass_rate`).
+- **pass-rate difference vs a baseline** (regression comparison): **Newcombe's difference of
+  Wilson intervals** (method 10), `pass_rate_diff` on the comparison evidence, with both
+  denominators. It is the interval the regression verdict in §5 uses.
 - **mean score** (bounded mean): **Student's t interval** over the per-case scores (run) or
   over the run series (scorecard) — each CI pairs exactly with the statistic it
   accompanies. n<2 ⇒ no interval (fabricated precision = a lie).
@@ -121,7 +124,8 @@ reporting a fabricated zero. Methods (`modules/evals/stats.go`, closed and deter
 
 | Measured condition | Verdict | Reason code |
 |---|---|---|
-| Point-score drift above the suite's `regression_threshold`, against one baseline run, with no interval | **fail** | `regression_vs_baseline` |
+| Score drift above the suite's `regression_threshold` against one baseline run, AND the 95% interval of the pass-rate difference excludes zero | **fail** | `regression_vs_baseline` |
+| Same drift, but the interval includes zero (noise at this n) | note | `inconclusive_noise` |
 | `pass_rate` < the suite's `pass_threshold` | **fail** | `below_pass_threshold` |
 | Run in error state (all cases errored) | **fail** | `run_error` |
 | `llm_judge` suite with judge wired but WITHOUT calibration for the pin | **fail** | `judge_uncalibrated` |
@@ -131,11 +135,22 @@ reporting a fabricated zero. Methods (`modules/evals/stats.go`, closed and deter
 | No judge credential (honest degradation — a recorded design decision) | warn | `no_judge_credential` |
 | First execution (no baseline to compare) | note | `no_baseline` |
 
-The regression row compares one run's score with one baseline run's score. It is
-not an interval and it has no experiment design. Pass rate and mean score are still reported with the intervals in §4; the
+The regression row compares one run's score with one baseline run's score and asks the
+interval of the pass-rate difference to exclude zero before it fires. Small suites
+therefore raise fewer findings: with 10 cases a one-case drop (10/10 to 9/10) is
+`inconclusive_noise`, with 100 cases the same 10 point drop is a finding. The comparison
+carries the interval and both denominators (`comparison.pass_rate_diff`; the CLI prints
+them). Three consequences to know: a one-case suite can never show a regression (1/1 to
+0/1 has `lo` below zero; 2/2 to 0/2 does not); the interval treats the two runs as independent
+samples although they score the same cases, so it is conservative (8/10 to 10/10 is still
+noise); and the interval is on the pass rate, so a score drop with an unchanged pass rate (a
+judge that grades lower but flips no case) is not confirmed at any n. A run noted
+`inconclusive_noise` is not the next automatic baseline, so a slide of sub-noise drops is
+still caught against the last quiet run; pin a baseline to hold a reference by hand.
+It has no experiment design beyond that; it does not model case clusters. Pass rate and mean score are still reported with the intervals in §4; the
 `below_pass_threshold` row compares the point pass rate with the threshold. The automatic baseline is the latest completed run for
-the same suite and subject, and the same variant when one is set
-(`modules/evals/runs.go`). Suite version, model ref and scorer need not match,
+the same suite and subject, and the same variant when one is set,
+skipping a run noted `inconclusive_noise` (`modules/evals/comparison.go`). Suite version, model ref and scorer need not match,
 and the comparison does not report which changed. After a suite version change,
 pass `--baseline` or pin a baseline (`POST /v1/m/evals/baselines`). When no
 FinOps budget that blocks or throttles applies to the judge calls, the gate

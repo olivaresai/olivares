@@ -291,7 +291,7 @@ func (a *EngineApprovals) ReviewPolicy(ctx context.Context, tenant model.TenantI
 				return errors.New("approval policy is unreadable")
 			}
 		}
-		policyRef, _, _ = matchApprovalSpec(policies, action, subjectKind)
+		policyRef, _, _ = matchApprovalSpec(policies, action, subjectKind, "")
 		return nil
 	})
 	return policyRef, err

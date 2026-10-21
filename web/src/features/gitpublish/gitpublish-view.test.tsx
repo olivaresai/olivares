@@ -75,6 +75,15 @@ async function openTarget() {
   return screen.findByRole('dialog', { name: 'Target tg-1' })
 }
 
+/** The sheet's list row of one action, so its authority note is read beside its own label. */
+function actionRow(sheet: HTMLElement, label: string): HTMLElement {
+  const row = within(sheet)
+    .getAllByRole('listitem')
+    .find((li) => li.textContent?.startsWith(label))
+  if (!row) throw new Error(`no action row starts with ${label}`)
+  return row
+}
+
 async function pasteInto(field: HTMLElement, value: string) {
   await userEvent.click(field)
   await userEvent.paste(value)
@@ -114,9 +123,11 @@ describe('publication targets', () => {
       expect(
         within(sheet).queryByRole('button', { name: 'Merge' }),
       ).not.toBeInTheDocument()
-      expect(
-        within(sheet).queryByText('Requires gitpublish:pull_request:write'),
-      ).not.toBeInTheDocument()
+      // Only the push note: the pull request note belongs to an action this host does
+      // not offer, and the administration note asks for admin access.
+      expect(within(sheet).getAllByText('Requires write access')).toHaveLength(
+        1,
+      )
     },
   )
 
@@ -152,23 +163,21 @@ describe('publication targets', () => {
     const sheet = await openTarget()
     expect(await within(sheet).findByText('cb-github')).toBeInTheDocument()
     expect(within(sheet).getByText('rb-app')).toBeInTheDocument()
-    expect(
-      within(sheet).getByText('Requires gitpublish:push:write'),
-    ).toBeInTheDocument()
-    expect(
-      within(sheet).getByText(
-        'Requires gitpublish:merge:admin and the extra check for administrative actions',
-      ),
-    ).toBeInTheDocument()
+    expect(actionRow(sheet, 'Push')).toHaveTextContent('Requires write access')
+    expect(actionRow(sheet, 'Merge')).toHaveTextContent(
+      'Requires admin access and the extra check for administrative actions',
+    )
+    expect(within(sheet).queryByText(/gitpublish:/)).not.toBeInTheDocument()
   })
 
   it('asks for no extra check when this session already meets the deployment’s policy', async () => {
     // The default policy (none): a password session satisfies the step-up, as the engine says.
     auth.principal = { aal: 1, step_up_satisfied: true }
     const sheet = await openTarget()
-    expect(
-      await within(sheet).findByText('Requires gitpublish:merge:admin'),
-    ).toBeInTheDocument()
+    await within(sheet).findByText('cb-github')
+    expect(actionRow(sheet, 'Merge')).toHaveTextContent(
+      /^MergeRequires admin access(?!.*extra check)/,
+    )
     expect(
       within(sheet).queryByText(/AAL3|extra check/),
     ).not.toBeInTheDocument()
@@ -178,9 +187,10 @@ describe('publication targets', () => {
     // An engine without step_up_satisfied: a hardware step-up meets any policy.
     auth.principal = { aal: 3 }
     const sheet = await openTarget()
-    expect(
-      await within(sheet).findByText('Requires gitpublish:merge:admin'),
-    ).toBeInTheDocument()
+    await within(sheet).findByText('cb-github')
+    expect(actionRow(sheet, 'Merge')).toHaveTextContent(
+      /^MergeRequires admin access(?!.*extra check)/,
+    )
   })
 
   it('says the bindings are withheld when the engine does not return them', async () => {

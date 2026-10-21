@@ -143,23 +143,16 @@ func createIncomingHandoffHTTPAgent(
 	eng := estate.eng
 	// The delegation gate requires the exchanging subject to BE the agent's
 	// registered sponsor, so the owner's own external identity is set through the
-	// authenticated SCIM route before the roster row names it.
+	// account engine before the roster row names it.
 	sponsorRef := "human:k3-handoff-read-owner:" + estate.owner.id.String()
-	scimUpdate := communicationHTTPTestRequest(t, eng, http.MethodPut,
-		"/v1/scim/v2/Users/"+estate.owner.id.String(), estate.owner.token, estate.tenant,
-		map[string]any{
-			"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
-			"userName": "owner@k3-handoff-read.test", "displayName": "K3 handoff read owner",
-			"externalId": sponsorRef, "active": true,
-		}, map[string]string{"Content-Type": "application/scim+json"})
-	if scimUpdate.status != http.StatusOK {
-		t.Fatalf("set agent sponsor external identity = %d: %s", scimUpdate.status, scimUpdate.raw)
-	}
+	setDirectoryUser(t, eng, estate.owner.token, estate.tenant, estate.owner.id, auth.SCIMUserInput{
+		UserName: "owner@k3-handoff-read.test", DisplayName: "K3 handoff read owner", ExternalID: sponsorRef, Active: true,
+	})
 	if err := eng.store.Mutate(
 		context.Background(), estate.tenant, func(sc store.Scope) error {
 			_, err := sc.Identities().Create(context.Background(), model.Identity{
 				Name: "K3 handoff read owner", Kind: "user", ExternalID: sponsorRef,
-				Provider: "test-roster", Metadata: map[string]any{"principal_type": "human"},
+				Provider: "test-roster", Metadata: map[string]any{"principal_type": "human", "disabled": false},
 			})
 			return err
 		},

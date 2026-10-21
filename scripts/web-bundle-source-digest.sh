@@ -15,8 +15,9 @@ cd "$RAIZ" 2>/dev/null || {
 }
 SRC_DIR="${OLIVARES_WEB_DIR_REL:-web}"
 
+# docs/editions.md is a bundled input too: web/vite.config.ts quotes its edition summaries.
 filtra_empaquetadas() {
-	grep -E "^${SRC_DIR}/(src/|public/|index\.html|vite\.config|tsconfig|package\.json|pnpm-lock\.yaml)" |
+	grep -E "^(${SRC_DIR}/(src/|public/|index\.html|vite\.config|tsconfig|package\.json|pnpm-lock\.yaml)|docs/editions\.md)" |
 		grep -vE "$(printf '\\.(test|spec)\\.(ts|tsx|js|jsx)(\t|$)')" |
 		grep -vE "^${SRC_DIR}/(e2e|tests)/"
 }
@@ -24,7 +25,7 @@ filtra_empaquetadas() {
 if [ "$#" -ge 1 ] && [ -n "${1:-}" ]; then
 	# Desde un commit: `ls-tree` da <modo> <tipo> <sha>\t<ruta>, que ya es exactamente el par
 	# (contenido, ruta) que hace falta. No se saca nada a disco.
-	pares="$(git ls-tree -r "$1" -- "$SRC_DIR" 2>/dev/null | awk -F'\t' '{split($1,c," "); print c[3]"\t"$2}')" || {
+	pares="$(git ls-tree -r "$1" -- "$SRC_DIR" docs/editions.md 2>/dev/null | awk -F'\t' '{split($1,c," "); print c[3]"\t"$2}')" || {
 		echo "web-bundle-source-digest: ⛔ COULD NOT LOOK: '$1' is not a readable tree." >&2
 		exit 2
 	}
@@ -41,7 +42,8 @@ else
         [ ! -d "$dir" ] || dirs+=("$dir")
     done
     rutas="$( { find "$SRC_DIR" -maxdepth 1 -type f || exit 2; \
-        for dir in "${dirs[@]:1}"; do find "$dir" -type f || exit 2; done; } | filtra_empaquetadas | sort)" || {
+        for dir in "${dirs[@]:1}"; do find "$dir" -type f || exit 2; done; \
+        [ ! -f docs/editions.md ] || echo docs/editions.md; } | filtra_empaquetadas | sort)" || {
         echo "web-bundle-source-digest: cannot enumerate source files" >&2
         exit 2
     }

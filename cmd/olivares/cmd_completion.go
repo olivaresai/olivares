@@ -20,8 +20,9 @@ import (
 // subcommand's Long description contains installation instructions.
 func newCompletionCmd(root *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "completion",
-		Short: "Generate shell autocompletion scripts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "completion",
+		Short:       "Generate shell autocompletion scripts",
 		Example: "  source <(olivares completion bash)\n" +
 			"  source <(olivares completion zsh)\n" +
 			"  olivares completion fish | source",
@@ -79,8 +80,9 @@ func completionShellArgs(_ *cobra.Command, args []string) error {
 // excepción, y la excepción es la que no se podía probar.
 func completionBashCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
-		Use:   "bash",
-		Short: "Generate bash autocompletion script",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "bash",
+		Short:       "Generate bash autocompletion script",
 		Long: "Generate the autocompletion script for bash.\n\n" +
 			"To load completions in the current session:\n\n" +
 			"  source <(olivares completion bash)\n\n" +
@@ -107,8 +109,9 @@ func completionBashCmd(root *cobra.Command) *cobra.Command {
 
 func completionZshCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
-		Use:   "zsh",
-		Short: "Generate zsh autocompletion script",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "zsh",
+		Short:       "Generate zsh autocompletion script",
 		Long: "Generate the autocompletion script for zsh.\n\n" +
 			"To load completions in the current session:\n\n" +
 			"  source <(olivares completion zsh)\n\n" +
@@ -134,8 +137,9 @@ func completionZshCmd(root *cobra.Command) *cobra.Command {
 
 func completionFishCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
-		Use:   "fish",
-		Short: "Generate fish autocompletion script",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "fish",
+		Short:       "Generate fish autocompletion script",
 		Long: "Generate the autocompletion script for fish.\n\n" +
 			"To load completions in the current session:\n\n" +
 			"  olivares completion fish | source\n\n" +
@@ -159,8 +163,9 @@ func completionFishCmd(root *cobra.Command) *cobra.Command {
 
 func completionPowershellCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
-		Use:   "powershell",
-		Short: "Generate PowerShell autocompletion script",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "powershell",
+		Short:       "Generate PowerShell autocompletion script",
 		Long: "Generate the autocompletion script for PowerShell.\n\n" +
 			"To load completions in the current session:\n\n" +
 			"  olivares completion powershell | Out-String | Invoke-Expression\n\n" +

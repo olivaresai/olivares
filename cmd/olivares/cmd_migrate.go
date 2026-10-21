@@ -31,8 +31,9 @@ import (
 // a transient connection and never writes, migrates or reverts.
 func newMigrateCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "migrate",
-		Short: "Inspect migration state or explicitly apply the PostgreSQL schema",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "migrate",
+		Short:       "Inspect migration state or explicitly apply the PostgreSQL schema",
 		Example: "  olivares migrate status --data-dir /var/lib/olivares\n" +
 			"  olivares migrate manifest > schema-manifest.json",
 		Long: "Schema migrations apply automatically at boot in the online expand-contract model\n" +
@@ -93,8 +94,9 @@ func newMigrateCmd() *cobra.Command {
 func migrateApplyCmd() *cobra.Command {
 	var dsn, ownerDSN string
 	cmd := &cobra.Command{
-		Use:   "apply",
-		Short: "Apply the PostgreSQL schema and stop WITHOUT serving (migrate → grant → serve)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "apply",
+		Short:       "Apply the PostgreSQL schema and stop WITHOUT serving (migrate → grant → serve)",
 		Long: "Applies this binary's complete schema to a PostgreSQL database and returns before anything\n" +
 			"that would make the process able to serve: no runtime reconciliation, no leader election, no\n" +
 			"listeners. Use it when the application role's grants are provisioned BY HAND, so the boot-time\n" +
@@ -181,8 +183,9 @@ type migrateApplyResult struct {
 func migrateStatusCmd() *cobra.Command {
 	var engine, dataDir, dsn string
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "List applied schema migrations and their expand/contract phase (read-only)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "List applied schema migrations and their expand/contract phase (read-only)",
 		Long: "Reads the version-tracking tables (schema_migrations_core + per-module) and prints every\n" +
 			"applied migration with its phase and apply time. For sqlite it opens <data-dir>/olivares.db;\n" +
 			"for postgres pass --dsn (accepts a file:/env: reference). It never writes, migrates or reverts.",

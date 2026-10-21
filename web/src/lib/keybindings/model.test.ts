@@ -81,6 +81,21 @@ describe('chordMatches', () => {
     expect(chordMatches(question, { key: '?', shiftKey: true })).toBe(true)
     expect(chordMatches(question, { key: '?' })).toBe(true)
   })
+
+  it('names the physical key of an Alt+letter chord, because Option types another character on macOS', () => {
+    // Option+Shift+O types "Ø" and Option+Shift+W "„" on a Mac: `key` alone never matches.
+    const openBeside = parseChord('Alt+Shift+o')!
+    const mac = { key: 'Ø', code: 'KeyO', altKey: true, shiftKey: true }
+    expect(chordMatches(openBeside, mac)).toBe(true)
+    expect(chordMatches(openBeside, { ...mac, code: 'KeyW' })).toBe(false)
+    expect(chordMatches(openBeside, { ...mac, altKey: false })).toBe(false)
+    expect(chordMatches(openBeside, { ...mac, shiftKey: false })).toBe(false)
+    // A chord without Alt keeps comparing the character: the physical key of a
+    // Dvorak or AZERTY layout is not what the person typed.
+    expect(chordMatches(parseChord('p')!, { key: 'x', code: 'KeyP' })).toBe(
+      false,
+    )
+  })
 })
 
 describe('resolveBinding — last matching rule wins', () => {
@@ -216,4 +231,47 @@ describe('Space, spelled out', () => {
       resolveBinding(KEYBINDINGS, { key: ' ' }, { railFocused: true }),
     ).toBe('rail.open')
   })
+})
+
+describe('session switching rules', () => {
+  it('declares the previous-session chord only when history is available', () => {
+    for (const modifier of ['ctrlKey', 'metaKey']) {
+      const event = { key: 'Enter', shiftKey: true, [modifier]: true }
+      expect(resolveBinding(KEYBINDINGS, event, { sessionHistory: true })).toBe(
+        'session.previous',
+      )
+      expect(resolveBinding(KEYBINDINGS, event, {})).toBeNull()
+      expect(
+        resolveBinding(KEYBINDINGS, event, { sessionHistory: false }),
+      ).toBeNull()
+    }
+  })
+
+  it.each([1, 2, 3, 4, 5, 6])(
+    'narrows digit %s to the empty palette outside fields',
+    (digit) => {
+      const event = { key: String(digit) }
+      expect(resolveBinding(KEYBINDINGS, event, { paletteRecent: true })).toBe(
+        `palette.recent${digit}`,
+      )
+      expect(resolveBinding(KEYBINDINGS, event, {})).toBeNull()
+      expect(
+        resolveBinding(KEYBINDINGS, event, { paletteRecent: false }),
+      ).toBeNull()
+      expect(
+        resolveBinding(
+          KEYBINDINGS,
+          { ...event, ctrlKey: true },
+          { paletteRecent: true },
+        ),
+      ).toBeNull()
+      const later = [
+        ...KEYBINDINGS,
+        { command: 'override', keys: String(digit), when: 'paletteRecent' },
+      ]
+      expect(resolveBinding(later, event, { paletteRecent: true })).toBe(
+        'override',
+      )
+    },
+  )
 })

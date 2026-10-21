@@ -29,7 +29,7 @@ ein Operator es per Env-Konfiguration bereitstellt), **PARTIAL**, wo die
 Oberfläche gegatet/opt-in ist, und eine deklarierte **deny-closed Naht** für den
 Rest. Insbesondere **plant und regelt** deploy Deployments, **wendet** sie aber
 **nicht** auf Live-Infrastruktur an, bis ein Executor bereitgestellt ist:
-`apply`/`retire` liefern ein klares `503`. Die Tiefe variiert je nach Modul, und
+`apply`/`retire` liefern ein klares `503`. Deploy ist eine Business-Funktion; Community antwortet auf jede Deploy-Route mit `501`. Die Tiefe variiert je nach Modul, und
 ein Großteil des Produkts ist pre-1.0 / im Designstadium, wo vermerkt (siehe
 [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/)).
 
@@ -67,7 +67,7 @@ hat.
 | [Identität, Berechtigungen & Governance](/de/reference/modules/vi-governance/) | — | Wer und was was tun darf, granular: Cedar RBAC + Deny-Overlay + scoped Grants, Roster-Abgleich, scoped Admin-/Custom-Rollen, Break-Glass, Kill-Switch. |
 | [Identität (`identity`)](/reference/modules/identity/) | — | Schreibgeschützte Workload-Identity-Federation, SSO-, External-Key- und Residency-Posture. |
 | [Source- & Credential-Scoping](/de/reference/modules/sourcescope/) | — | Quellen an einen Workspace/eine Agent-Gruppe binden; deny-closed scoped Resolver + scoped Credentials zum Auflösungszeitpunkt. |
-| [Deployment & Integration](/de/reference/modules/vii-deploy/) | on-demand (503) | Deployments auf reale Infrastruktur planen und regeln; der Executor ist on-demand — live `apply`/`retire` liefern `503`, bis bereitgestellt. |
+| [Deployment & Integration](/de/reference/modules/vii-deploy/) | Business, on-demand (503) | Business-Funktion: Community antwortet mit `501`. Deployments auf reale Infrastruktur planen und regeln; der Executor ist on-demand — live `apply`/`retire` liefern `503`, bis bereitgestellt. |
 | [Gesteuerte Git-Veröffentlichung](/de/reference/modules/gitpublish/) | on-demand | Commits übertragen, Pull Requests öffnen und zusammenführen: mit genehmigten Git-Host-Bindungen, aktueller Berechtigung und aufgezeichneten Ergebnissen. |
 
 > **Identität** ist ein separat auswählbares Modul für die schreibgeschützte
@@ -80,7 +80,7 @@ hat.
 
 | Modul | Actuate | Zweck |
 |---|---|---|
-| [Claude-Code-Managed-Policy (`claude-policy`)](/reference/modules/claude-policy/) | — | Versionierte Managed-Policy validieren, in Vorschau prüfen und veröffentlichen; Verteilung und beobachteten Drift prüfen. |
+| [Claude-Code-Managed-Policy (`claude-policy`)](/reference/modules/claude-policy/) | — | Managed-Policy validieren und in Vorschau prüfen; Business veröffentlicht sie flottenweit und prüft Verteilung und beobachteten Drift. |
 | [Claude-Agentenbestätigungen (`claude-agents`)](/reference/modules/claude-agents/) | — | Managed-Agent-Thread-Events lesen und ausstehende Tool-Bestätigungen genehmigen oder ablehnen. |
 | [Skills-Katalog & Zuweisungen](/de/reference/modules/skills/) | — | Immuanter Skills-Katalog und gepinnte Zuweisungen: anhand ihres Digests validierte Packs unter `/v1/m/skills/packs` installiert, pro Ziel gepinnt, nie an Ort und Stelle editiert. |
 | [Modell- & Provider-Verwaltung](/de/reference/modules/x-models/) | on-demand (503) | Über den gesamten Modell-/Provider-Stack regeln: Model-Access, Kontextfenster pro Oberfläche, Model-Group-Gate; die Modell-*Ausführung* ist on-demand — `503`, bis ein Inferenz-Credential bereitgestellt ist. |
@@ -132,7 +132,7 @@ keine Bereitstellung nötig (z. B. die FinOps-Budgetdurchsetzung verweigert am
 Cap, der Benachrichtigungs-Router dispatcht); `on-demand` / `on-demand (503)` =
 das Backend ist gebaut und an einen Injektionspunkt verdrahtet, bleibt aber
 **deny-closed oder degradiert, bis ein Operator es bereitstellt** per
-Env-Konfiguration (deploy antwortet mit `503`, bis ein Executor existiert;
+Env-Konfiguration (deploy, eine Business-Funktion, antwortet in Community mit `501` und mit `503`, bis ein Executor existiert;
 Orchestrierungs-/Voice-Dispatch ist deny-closed, bis konfiguriert; Red-Team läuft
 DEGRADED, bis eine Sandbox-Runtime bereitgestellt ist; Modell-Ausführung und
 semantische Embeddings liefern `503`, bis ein Credential bereitgestellt ist);

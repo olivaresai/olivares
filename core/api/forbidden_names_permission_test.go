@@ -53,6 +53,8 @@ func TestForbiddenNamesTheMissingPermissionAndItsScope(t *testing.T) {
 		// authzSystem: an organization admin is not enough.
 		{"system route", "GET", "/v1/users", admin, nil, serverWide("user:read")},
 		{"system admin route", "GET", "/v1/console/modules", admin, nil, serverWide("system:admin")},
+		{"updates status", "GET", "/v1/console/updates", admin, nil, serverWide("system:admin")},
+		{"updates apply", "POST", "/v1/console/updates/apply", admin, nil, serverWide("system:admin")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

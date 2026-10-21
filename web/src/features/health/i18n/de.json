@@ -228,7 +228,7 @@
   },
   "forbiddenResolve": {
     "title": "Auflösen nicht autorisiert",
-    "description": "Das Auflösen eines Vorfalls erfordert die Berechtigung „Prüfungsadministrator“ (health:check:admin)."
+    "description": "Ihre Rolle kann keine Vorfälle auflösen."
   },
   "connectors": {
     "autoRefresh": "Automatische Aktualisierung alle 15 Sekunden.",

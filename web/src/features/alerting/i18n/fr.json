@@ -1,10 +1,62 @@
 {
   "title": "Alertes",
-  "description": "Acheminez les constats vers des destinations et inspectez le journal des livraisons. Une route référence une destination par son nom ; le credential vit dans le transport câblé.",
+  "description": "Acheminez les constats vers des destinations et inspectez le journal des livraisons. Une route référence une destination par son nom ; le credential vit dans le transport configuré.",
   "tabs": {
     "routes": "Routes",
+    "destinations": "Destinations",
     "deliveries": "Livraisons",
     "outbox": "Lettres mortes"
+  },
+  "destinations": {
+    "adminOnly": "Les destinations sont gérées par un administrateur",
+    "adminOnlyHint": "Ajouter ou modifier une destination demande un administrateur de l'instance. Demandez-lui de l'ajouter, ou provisionnez-la dans le fichier de l'opérateur.",
+    "intro": "Une destination est l'endroit où une route envoie les alertes. Ajoutez ici Slack ou Microsoft Teams ; l'URL du webhook est scellée et n'est plus jamais affichée.",
+    "add": "Ajouter une destination",
+    "empty": "Aucune destination pour l'instant",
+    "emptyHint": "Ajoutez une destination Slack ou Teams, puis dirigez une route vers elle.",
+    "noSealer": "L'enregistrement est désactivé : ce déploiement n'a pas de scelleur de secrets, donc une URL de webhook ne peut pas être stockée en toute sécurité.",
+    "fileNote": "Les destinations du fichier de l'opérateur (OLIVARES_NOTIFY_CONFIG) sont listées en lecture seule. Les autres types y sont provisionnés.",
+    "colName": "Nom",
+    "colKind": "Type",
+    "colHost": "Hôte du webhook",
+    "colSource": "Origine",
+    "colStatus": "Statut",
+    "colActions": "Actions",
+    "sourceConsole": "Console",
+    "sourceFile": "Fichier de l'opérateur",
+    "open": "Ouverte",
+    "notOpen": "Non ouverte",
+    "testAction": "Envoyer un message de test à {{name}}",
+    "editAction": "Modifier la destination {{name}}",
+    "deleteAction": "Supprimer la destination {{name}}",
+    "tested": "Message de test envoyé à {{name}}",
+    "testSent": "Message de test envoyé",
+    "testFailed": "La destination n'a pas accepté le message de test. Vérifiez l'URL du webhook.",
+    "saved": "Destination enregistrée",
+    "savedNotOpen": "Destination enregistrée, mais non ouverte. Vérifiez l'URL du webhook et envoyez un message de test.",
+    "deleted": "Destination supprimée",
+    "deleteDialog": {
+      "title": "Supprimer la destination ?",
+      "description": "Cela supprime « {{name}} » et son URL de webhook stockée. Les routes qui pointent vers elle enregistreront une destination inconnue jusqu'à ce que vous en choisissiez une autre.",
+      "confirm": "Supprimer la destination"
+    },
+    "dialog": {
+      "title": "Ajouter une destination",
+      "editTitle": "Modifier la destination",
+      "subtitle": "Envoyez les alertes à Slack ou Microsoft Teams. Envoyez un message de test avant d'enregistrer.",
+      "kind": "Type",
+      "name": "Nom",
+      "nameHint": "Minuscules, chiffres, point, tiret ou tiret bas. Les routes se réfèrent à ce nom.",
+      "url": "URL du webhook",
+      "urlHint": {
+        "slack": "L'URL du webhook entrant de votre application Slack (hooks.slack.com).",
+        "teams": "L'URL du webhook Workflows pour « Lors de la réception d'une requête webhook Teams ».",
+        "default": "L'URL du webhook entrant."
+      },
+      "urlKeep": "Laissez vide pour conserver l'URL stockée ({{host}}).",
+      "urlStored": "Stockée — saisissez pour la remplacer",
+      "test": "Envoyer un message de test"
+    }
   },
   "severities": {
     "any": "Toute sévérité",

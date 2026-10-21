@@ -56,6 +56,8 @@
       "startedAt": "Gestartet"
     },
     "regressed": "Regressiert · Abweichung {{drift}}",
+    "withinNoise": "Abfall im Rauschen · Abweichung {{drift}}",
+    "passRateDiff": "Abfall der Pass-Rate {{drop}} (95-%-KI {{lo}}–{{hi}}) — {{passed}}/{{n}} bewertet gegenüber {{baselinePassed}}/{{baselineN}} Baseline",
     "noRegression": "Keine",
     "empty": "Keine Läufe im Bereich.",
     "emptyHint": "Jeder Auswertungslauf im gewählten Zeitraum wird hier mit seinem Ergebnis aufgeführt. Erweitern Sie den Zeitraum oder starten Sie einen Lauf.",
@@ -118,7 +120,7 @@
   },
   "drift": {
     "title": "Abweichung — {{subject}}",
-    "description": "Bewertung im Zeitverlauf gegen die Bestehensschwelle der Suite. Eine Regression ist ein Punktvergleich mit einem Baseline-Lauf, der eine andere Suite-Version, ein anderes Modell oder einen anderen Scorer verwenden kann, und der Vergleich meldet nicht, was sich geändert hat. Nach einem Wechsel der Suite-Version pinnen Sie eine Baseline.",
+    "description": "Bewertung im Zeitverlauf gegen die Bestehensschwelle der Suite. Eine Regression ist ein Vergleich mit einem Baseline-Lauf: Der Score-Abfall muss die Schwelle der Suite überschreiten und das 95%-Intervall der Pass-Rate-Differenz muss null ausschließen. Dieser Lauf kann eine andere Suite-Version, ein anderes Modell oder einen anderen Scorer verwenden kann, und der Vergleich meldet nicht, was sich geändert hat. Nach einem Wechsel der Suite-Version pinnen Sie eine Baseline.",
     "score": "Bewertung",
     "threshold": "Bestehensschwelle",
     "pickerTitle": "Subjekt",
@@ -189,7 +191,7 @@
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
-    "noJudge": "No judge is wired, so there is nothing to measure. This is not an outage and not an edition limit: a calibration cannot be simulated."
+    "noJudge": "Es ist kein Judge eingerichtet, daher gibt es nichts zu messen. Das ist weder ein Ausfall noch eine Editionsgrenze: Eine Kalibrierung lässt sich nicht simulieren."
   },
   "baseline": {
     "pin": "Pin as baseline",

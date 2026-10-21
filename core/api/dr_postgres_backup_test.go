@@ -10,11 +10,14 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
@@ -53,15 +56,37 @@ func TestDRPostgresBackupUsesConfiguredSnapshot(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "audit-signing.key"), []byte(base64.StdEncoding.EncodeToString(key)), 0600); err != nil {
 				t.Fatal(err)
 			}
+			// The probe runs when the job writes its terminal log line, which the deferred publisher does after
+			// cleanup, so it reads the backup directory after the snapshot removal has run. It proves the ordering
+			// of that publisher, not the moment the status is stored. The result is sent once per job.
+			terminal := make(chan bool, 1)
 			h := newHarnessOptsFromStoreSource(t, harnessStoreSource{borrowed: st}, func(o *api.Options) {
 				o.Signer = signer
 				o.Version = "26.1002"
+				o.Logger = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+					if a.Key == slog.MessageKey && (a.Value.String() == "dr: backup completed" || a.Value.String() == "dr: backup failed") {
+						leftover := false
+						entries, _ := filepath.Glob(filepath.Join(dir, "backups", "*"))
+						for _, entry := range entries {
+							leftover = leftover || !strings.HasSuffix(entry, ".drbundle")
+						}
+						select {
+						case terminal <- leftover:
+						default:
+						}
+					}
+					return a
+				}}))
 				o.DR = &api.DRConfig{DataDir: dir, EngineKind: "postgres", PostgresSnapshot: func(ctx context.Context, out string) (api.DRBackupSnapshot, error) {
 					calls++
 					if err := ctx.Err(); err != nil {
 						return api.DRBackupSnapshot{}, err
 					}
 					if failure == "native snapshot refused" {
+						// The native tool may leave a partial dump behind; the job must remove it before it reports failure.
+						if err := os.WriteFile(out, []byte("partial dump"), 0600); err != nil {
+							return api.DRBackupSnapshot{}, err
+						}
 						return api.DRBackupSnapshot{}, errors.New(failure)
 					}
 					// A stand-in for the native snapshot boundary; native PG format/roles are
@@ -110,6 +135,14 @@ func TestDRPostgresBackupUsesConfiguredSnapshot(t *testing.T) {
 				t.Fatalf("backup: %d %s", response.code, response.raw)
 			}
 			waitForDRJob(t, h, admin, response)
+			select {
+			case left := <-terminal:
+				if left {
+					t.Fatal("DR job logged its terminal state while its snapshot was still on disk")
+				}
+			case <-time.After(30 * time.Second):
+				t.Fatal("DR job logged no terminal state")
+			}
 			jobs := h.do("GET", "/v1/console/dr/jobs", admin, nil, nil)
 			if jobs.code != http.StatusOK {
 				t.Fatalf("jobs: %d %s", jobs.code, jobs.raw)

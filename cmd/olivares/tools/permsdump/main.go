@@ -86,6 +86,9 @@ func invocationInventory() (*Inventory, error) {
 	if tags == "" {
 		return nil, fmt.Errorf("Business inventory has no compiler-reported build tags")
 	}
+	// #nosec G204 -- the program is the literal "go" and every argument is fixed except the
+	// tag list, which the compiler stamped into this very binary (debug.ReadBuildInfo);
+	// no flag, environment or operator input reaches argv. This is a developer tool.
 	cmd := exec.Command("go", "run", "-tags="+tags, ".", "openapi", "--permission-inventory")
 	cmd.Stderr = os.Stderr
 	b, err := cmd.Output()

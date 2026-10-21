@@ -53,6 +53,8 @@ kann. Über **Identitätsanbieter verwalten** konfigurieren Sie Single Sign-on.
 
 ### Mutual TLS für entfernte Collectors
 
+Der Edge-Collector ist ein Business-Feature; ein Community-Build lehnt `olivares collector` ab. Das Flag `--grpc-client-ca` unten wird am Core gesetzt.
+
 In der verteilten Topologie pushen Edge-Collectors Beobachtungen über
 **Mutual TLS** mit verifiziertem Client-Zertifikat an den Core. Schalten Sie es ein, indem
 Sie dem Core eine Client-CA geben, sodass er ein Client-Zertifikat **verlangt und

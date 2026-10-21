@@ -16,7 +16,7 @@
 // ⛔ WHAT IT ASSERTS THAT A UNIT TEST CANNOT, and each was a measured hole:
 //    · that the rail CUTS NO LABEL — `scrollWidth > clientWidth` is the browser's own
 //      answer, and jsdom has no layout at all. Measured before the fix: 65 cut labels
-//      across the seven console languages;
+//      across the console languages;
 //    · that the rail is ONE tab stop in a REAL tab order. Measured before: 85;
 //    · that the type ladder SURVIVES to the painted element. `cn` used to delete it,
 //      and no source-level census could see that;
@@ -44,8 +44,18 @@ function ladderPx(step: string): string {
   return `${Number(declared[1]) * 16}px`
 }
 
-/** The seven the console ships; `lint:i18n` proves the resources exist for each. */
-const LANGUAGES = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh'] as const
+/** The nine the console ships; `lint:i18n` proves the resources exist for each. */
+const LANGUAGES = [
+  'en',
+  'es',
+  'de',
+  'fr',
+  'it',
+  'ja',
+  'ko',
+  'ru',
+  'zh',
+] as const
 
 async function signIn(page: Page) {
   await page.goto('/login')

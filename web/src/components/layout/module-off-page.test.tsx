@@ -65,12 +65,12 @@ import {
 import { useModulesStore } from '@/stores/modules'
 import { RequirePermission } from './require-permission'
 
-const deploy = FEATURE_VIEWS.find((v) => v.id === 'deploy')!
+const publication = FEATURE_VIEWS.find((v) => v.id === 'gitPublication')!
 
 const catalog = (extra: ModuleState[] = []): ModuleSelection => ({
   modules: [
     { name: 'sessions', selected: true, running: true, always_on: true },
-    { name: 'deploy', selected: false, running: false },
+    { name: 'gitpublish', selected: false, running: false },
     ...extra,
   ],
   running_sessions: 0,
@@ -80,14 +80,14 @@ beforeEach(() => {
   vi.restoreAllMocks()
   auth.isSuperadmin = false
   route.kind = 'permitted'
-  useModulesStore.getState().setOff(['deploy'])
+  useModulesStore.getState().setOff(['gitpublish'])
 })
 afterEach(() => useModulesStore.getState().setOff([]))
 
 const page = () =>
   renderIntel(
-    <RequirePermission view={deploy}>
-      <p>Deployments screen</p>
+    <RequirePermission view={publication}>
+      <p>Git publication screen</p>
     </RequirePermission>,
   )
 
@@ -95,15 +95,17 @@ describe('the page of a view whose module is off', () => {
   it('is the view’s icon, its name, one sentence of what it does, and no refusal', async () => {
     page()
     const heading = screen.getByRole('heading', { level: 1 })
-    expect(heading).toHaveTextContent('Deploy')
+    expect(heading).toHaveTextContent('Git publication')
     expect(
-      screen.getByText('Provision and wire agents to infrastructure'),
+      screen.getByText(
+        'Push commits, open pull requests and merge through approved Git targets',
+      ),
     ).toBeInTheDocument()
     expect(
       document.querySelector('[data-slot="module-not-enabled"] svg'),
     ).not.toBeNull()
     expect(screen.queryByText(/not enabled on this installation/i)).toBeNull()
-    expect(screen.queryByText('Deployments screen')).toBeNull()
+    expect(screen.queryByText('Git publication screen')).toBeNull()
   })
 
   it('asks a person who may not change modules to ask an administrator', () => {
@@ -124,7 +126,7 @@ describe('the page of a view whose module is off', () => {
     const turnOn = await screen.findByRole('button', { name: 'Turn on' })
     expect(screen.getAllByRole('button')).toHaveLength(1)
     await userEvent.click(turnOn)
-    await waitFor(() => expect(select).toHaveBeenCalledWith(['deploy']))
+    await waitFor(() => expect(select).toHaveBeenCalledWith(['gitpublish']))
   })
 
   it('renders the view without a reload once the engine is back with the module on', async () => {
@@ -144,7 +146,7 @@ describe('the page of a view whose module is off', () => {
     await act(async () => restart.resolve(true))
     // The shell re-reads server-info and the module leaves the off list.
     act(() => useModulesStore.getState().setOff([]))
-    expect(screen.getByText('Deployments screen')).toBeInTheDocument()
+    expect(screen.getByText('Git publication screen')).toBeInTheDocument()
   })
 
   it('says in one line that more must come on and links to Settings instead of acting', async () => {
@@ -153,7 +155,7 @@ describe('the page of a view whose module is off', () => {
       modules: [
         { name: 'sessions', selected: true, running: true, always_on: true },
         {
-          name: 'deploy',
+          name: 'gitpublish',
           selected: false,
           running: false,
           requires: ['inventory'],
@@ -188,7 +190,9 @@ describe('the page of a view whose module is off', () => {
     auth.isSuperadmin = true
     page()
     expect(
-      screen.queryByText('Provision and wire agents to infrastructure'),
+      screen.queryByText(
+        'Push commits, open pull requests and merge through approved Git targets',
+      ),
     ).toBeNull()
     expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull()
     expect(screen.queryByText('Ask an administrator to turn it on.')).toBeNull()
@@ -202,7 +206,9 @@ describe('the page of a view whose module is off', () => {
     page()
     expect(screen.queryByText('Ask an administrator to turn it on.')).toBeNull()
     expect(
-      screen.queryByText('Provision and wire agents to infrastructure'),
+      screen.queryByText(
+        'Push commits, open pull requests and merge through approved Git targets',
+      ),
     ).toBeNull()
     expect(
       document.querySelector('[data-slot="capability-checking"]'),

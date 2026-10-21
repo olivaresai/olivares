@@ -6,7 +6,9 @@ package api_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -113,6 +115,15 @@ func TestConnectorsCatalogAndCRUD(t *testing.T) {
 	if r.code != http.StatusUnprocessableEntity || r.body["error"].(map[string]any)["code"] != "connector_test_failed" {
 		t.Fatalf("failed test = %d %s, want 422 connector_test_failed", r.code, r.raw)
 	}
+
+	// A connector that is a Business capability answers 501 connector_unavailable and names
+	// Business, the one status for it on every connector route.
+	fake.testErr = fmt.Errorf("%w: the \"kmip\" connector is a Business capability", api.ErrConnectorUnavailable)
+	r = h.do("POST", "/v1/console/connectors/test", admin, put, nil)
+	if r.code != http.StatusNotImplemented || r.body["error"].(map[string]any)["code"] != "connector_unavailable" || !strings.Contains(r.raw, "Business") {
+		t.Fatalf("Business connector = %d %s, want 501 connector_unavailable naming Business", r.code, r.raw)
+	}
+	fake.testErr = nil
 
 	// DELETE forwards the name.
 	if r := h.do("DELETE", "/v1/console/connectors", admin, map[string]any{"name": "vault-prod"}, nil); r.code != http.StatusOK {

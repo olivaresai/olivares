@@ -178,8 +178,9 @@ func connectContext(cmd *cobra.Command, f *connectCommonFlags) (context.Context,
 
 func licenseConnectCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "connect",
-		Short: "Bind this deployment to its purchase with an owner-approved key, and refresh, rotate, recover or deactivate it",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "connect",
+		Short:       "Bind this deployment to its purchase with an owner-approved key, and refresh, rotate, recover or deactivate it",
 		Long: "connect is the installed client of the connect-v1 licensing protocol. A deployment holds its own Ed25519\n" +
 			"key under its data directory; the purchase owner approves it once in the customer portal, from any\n" +
 			"browser; afterwards the deployment refreshes its credential and download token by proof of possession.\n" +
@@ -201,8 +202,9 @@ func licenseConnectStartCmd() *cobra.Command {
 	var common connectCommonFlags
 	var ids connectIdentifierFlags
 	cmd := &cobra.Command{
-		Use:   "start",
-		Short: "Request owner approval for this deployment's key and complete the binding once approved",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "start",
+		Short:       "Request owner approval for this deployment's key and complete the binding once approved",
 		Long: "start creates this data directory's PoP key if it has none, sends a binding request with the purchase\n" +
 			"evidence, and prints the approval URL and key fingerprint. Run it again after the owner approves: it\n" +
 			"repeats the same recorded request, learns of the approval and completes the binding, installing the\n" +
@@ -237,8 +239,9 @@ func licenseConnectRefreshCmd() *cobra.Command {
 	var common connectCommonFlags
 	var channel string
 	cmd := &cobra.Command{
-		Use:   "refresh",
-		Short: "Refresh the installed credential and download token by proof of possession",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "refresh",
+		Short:       "Refresh the installed credential and download token by proof of possession",
 		Long: "refresh proves possession of the bound key and obtains the current credential and download token. It\n" +
 			"works when the installed credential has expired, as long as the purchase is current. A refusal, a\n" +
 			"timeout or an answer that does not verify leaves the installed license and token unchanged.\n" +
@@ -281,8 +284,9 @@ func licenseConnectRefreshCmd() *cobra.Command {
 func licenseConnectAptRefreshCmd() *cobra.Command {
 	var dataDir, cycle string
 	cmd := &cobra.Command{
-		Use:   "apt-refresh",
-		Short: "Obtain this cycle's APT download credential by proof of possession and hand it to the appliance helper",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "apt-refresh",
+		Short:       "Obtain this cycle's APT download credential by proof of possession and hand it to the appliance helper",
 		Long: "apt-refresh proves possession of the bound key over a one-use challenge and obtains the download\n" +
 			"credential with which APT on this appliance fetches its entitled security packages. It uses no owner\n" +
 			"evidence, portal session or provider credential. --cycle is the appliance helper's cycle, exactly 32\n" +
@@ -324,8 +328,9 @@ func licenseConnectAptRefreshCmd() *cobra.Command {
 func licenseConnectDnfRefreshCmd() *cobra.Command {
 	var dataDir, cycle string
 	cmd := &cobra.Command{
-		Use:   "dnf-refresh",
-		Short: "Obtain this cycle's DNF download credential by proof of possession and hand it to the appliance helper",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "dnf-refresh",
+		Short:       "Obtain this cycle's DNF download credential by proof of possession and hand it to the appliance helper",
 		Long: "dnf-refresh proves possession of the bound key over a one-use challenge and obtains the download\n" +
 			"credential with which DNF on this appliance fetches its entitled packages. It uses no owner\n" +
 			"evidence, portal session or provider credential. --cycle is the appliance helper's cycle, exactly 32\n" +
@@ -364,8 +369,9 @@ func licenseConnectDnfRefreshCmd() *cobra.Command {
 func licenseConnectRotateCmd() *cobra.Command {
 	var common connectCommonFlags
 	cmd := &cobra.Command{
-		Use:   "rotate-key",
-		Short: "Replace this deployment's key, proving possession of both the bound and the new key",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rotate-key",
+		Short:       "Replace this deployment's key, proving possession of both the bound and the new key",
 		Long: "rotate-key creates a proposed key and asks the service to bind it, signing with the bound key and the\n" +
 			"proposed key over the same message. On success the proposed key becomes the identity and the binding\n" +
 			"epoch advances; credentials and tokens of the old binding stop being refreshable.",
@@ -401,8 +407,9 @@ func licenseConnectApprovedRotationCmd(intent string) *cobra.Command {
 		"reactivate": "Reactivate an explicitly deactivated deployment with a new key and the owner's approval",
 	}[intent]
 	cmd := &cobra.Command{
-		Use:   intent,
-		Short: short,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         intent,
+		Short:       short,
 		Long: intent + " creates a proposed key, requests the owner's approval for that key and deployment, and prints the\n" +
 			"approval URL. A NEW request needs the current purchase credential: --evidence <file>, or --evidence - to read\n" +
 			"it from standard input. The license installed in the data directory is not used as that evidence. Run the\n" +
@@ -454,8 +461,9 @@ func licenseConnectDeactivateCmd() *cobra.Command {
 	var deployment, evidence string
 	var ownerApproval, yes bool
 	cmd := &cobra.Command{
-		Use:   "deactivate",
-		Short: "Deactivate a deployment by proof of possession, or with the owner's approval",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "deactivate",
+		Short:       "Deactivate a deployment by proof of possession, or with the owner's approval",
 		Long: "deactivate ends a deployment's binding. By default the bound key proves possession. With --owner-approval\n" +
 			"it requests the owner's approval for that exact deployment instead, prints the approval URL, and completes\n" +
 			"when run again after approval. A NEW owner-approved request needs the current purchase credential with\n" +
@@ -507,8 +515,9 @@ func licenseConnectDeactivateCmd() *cobra.Command {
 func licenseConnectStatusCmd() *cobra.Command {
 	var common connectCommonFlags
 	cmd := &cobra.Command{
-		Use:   "status",
-		Short: "Show this data directory's connected identity, binding, pending operation and last credential",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status",
+		Short:       "Show this data directory's connected identity, binding, pending operation and last credential",
 		Long: "status reads the connected client's state without contacting the service. It shows identifiers, the key\n" +
 			"id and fingerprint, the binding, any owner-approval request and pending step, and the last installed\n" +
 			"credential's serial and digest. last.effective_until is its refresh planning boundary: the earliest\n" +
@@ -541,8 +550,9 @@ func licenseConnectAbandonCmd() *cobra.Command {
 	var common connectCommonFlags
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "abandon",
-		Short: "Discard the pending connect operation of this data directory",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "abandon",
+		Short:       "Discard the pending connect operation of this data directory",
 		Long: "abandon forgets the pending step and owner-approval request so a different operation can start. It keeps\n" +
 			"the identity, any proposed key, the binding and the installed license. A step the service already\n" +
 			"committed is not undone: a later refresh obtains the current state.",

@@ -650,7 +650,7 @@ func TestCodexRuntimeInterruptCancelsTheTurnAndKeepsTheProcessUsable(t *testing.
 	if err != nil {
 		t.Fatalf("interrupt: %v", err)
 	}
-	if after.State != stateRunning {
+	if after.State != stateIdle || after.ProcessState != stateRunning {
 		t.Fatalf("interrupt is NOT terminal; state = %q", after.State)
 	}
 	if !processRunning(pid) {
@@ -717,6 +717,34 @@ func TestCodexRuntimeStopReapsTheOwnedProcessGroup(t *testing.T) {
 }
 
 // --- row 9: exact resume, and a refusal that never becomes a new thread -------
+
+// A conversation that was sent a screenshot resumes through the real pump: the stored
+// turns list the picture as one line over the runner's limit, so the resume asks
+// Codex for none of them and the stored history is read apart, one turn at a time.
+func TestCodexRuntimeResumeOfAConversationWithImagesCompletes(t *testing.T) {
+	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)
+	setCodexFixture(t, prof, codexFixture{ThreadID: "thread-images", Account: "apikey"})
+	ctx := context.Background()
+	dto, err := codexLaunch(t, m, tenant, prof)
+	if err != nil {
+		t.Fatalf("createRun: %v", err)
+	}
+	if _, err := m.stopRun(ctx, tenant, dto.RunRef, "user:u1", model.ActorUser); err != nil {
+		t.Fatalf("stopRun: %v", err)
+	}
+	record := filepath.Join(t.TempDir(), "resume.json")
+	setCodexFixture(t, prof, codexFixture{Account: "apikey", RecordPath: record, StoredImageBytes: 1500 << 10})
+	resumed, err := m.resumeRun(ctx, tenant, dto.RunRef, "user:u1", model.ActorUser, "")
+	if err != nil {
+		t.Fatalf("a conversation holding a 1.5 MB image could not be resumed: %v", err)
+	}
+	if resumed.ProviderConversationID != "thread-images" {
+		t.Fatalf("resume conversation = %q", resumed.ProviderConversationID)
+	}
+	if peer := readFixtureRecord(t, record); countMethod(peer.Methods, codexMethodThreadResume) != 1 {
+		t.Fatalf("the resume did not use thread/resume: %v", peer.Methods)
+	}
+}
 
 func TestCodexRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *testing.T) {
 	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)

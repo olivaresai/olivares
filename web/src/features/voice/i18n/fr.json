@@ -115,14 +115,14 @@
       "opened": "Ouverte.",
       "approval": "Approbation demandée — renvoyez avec cette référence :",
       "denied": "Refusée par la politique : aucune n'autorise cette combinaison (agent, modèle, fournisseur). C'est une décision de refus par défaut, pas un échec.",
-      "noGate": "Aucune porte d'approbation n'est câblée dans ce déploiement, l'ouverture reste donc refusée. C'est une lacune du parc, pas un refus de politique.",
+      "noGate": "Aucune porte d'approbation n'est configurée dans ce déploiement, l'ouverture reste donc refusée. C'est une lacune du parc, pas un refus de politique.",
       "unavailable": "La porte d'approbation n'a pas répondu : rien n'a été décidé."
     }
   },
   "ledger": {
     "title": "Journal des décisions d’ouverture",
     "description": "Toute décision d’ouvrir une session vocale du parc, en ajout seul et de la plus récente à la plus ancienne — y compris celles qui ont été REFUSÉES et ne sont donc jamais devenues une session.",
-    "caveat": "Une ouverture refusée ne crée pas d’elle-même de ligne de session : c’est donc la première vue dédiée qui la montre entièrement avec le seul `voice:session:read`. Les autres chemins ne la montrent qu’en partie ou exigent une autre permission : le playground d’API (admin de tenant), l’explorateur d’audit (l’action, sans son motif) et les findings Security (certains chemins seulement).",
+    "caveat": "Une ouverture refusée ne crée pas d’elle-même de ligne de session : c’est donc la première vue dédiée qui la montre entièrement avec la seule permission de lire les sessions vocales. Les autres chemins ne la montrent qu’en partie ou exigent une autre permission : le playground d’API (admin de tenant), l’explorateur d’audit (l’action, sans son motif) et les findings Security (certains chemins seulement).",
     "empty": "Aucune décision d’ouverture pour l’instant",
     "emptyHint": "On trouve ici les décisions que le moteur a pu persister. L’écriture de la preuve est best-effort à dessein — un refus reste valide même si sa ligne est perdue — : un journal vide ne prouve donc pas qu’aucun refus n’a eu lieu.",
     "truncated": "Les {{count}} décisions les plus récentes sont affichées et le moteur en signale davantage : cette liste est TRONQUÉE. Lisez-la comme un échantillon, pas comme le journal complet.",

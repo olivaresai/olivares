@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -69,5 +70,44 @@ func TestSessionMCPLaunchKeepsOpenCodesInlineConfiguration(t *testing.T) {
 		if spec.SessionMCPURL != "http://127.0.0.1:8443/session/mcp" || spec.SessionMCPTokenEnv != "OLIVARES_HOOK_PEP_TOKEN" {
 			t.Fatal("ACP did not receive the session connection")
 		}
+	}
+}
+
+// Claude Code and Codex are handed the one `olivares` server and nothing else:
+// a registered server is never a second entry of the driver's own config, so
+// two servers cannot collide on a tool name inside the driver. The aggregate
+// behind the one endpoint qualifies every tool by its server (ACP drivers carry
+// the same single server: driver_session_mcp_test.go).
+func TestSessionMCPLaunchHandsClaudeAndCodexExactlyTheOneOlivaresServer(t *testing.T) {
+	for _, driver := range []string{providerDriverClaude, providerDriverCodex} {
+		t.Run(driver, func(t *testing.T) {
+			spec := LaunchSpec{Args: []string{"app-server"}, Env: []EnvVar{{Name: "OLIVARES_HOOK_PEP_TOKEN", Value: "fixture-token"}}, Confinement: &confine.Policy{ReadWrite: []string{t.TempDir()}}}
+			cleanup, err := ConfigureSessionMCP(&spec, driver, t.TempDir(), "run-one", "https://localhost:8443/session/mcp", "OLIVARES_HOOK_PEP_TOKEN")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			raw, err := os.ReadFile(spec.Confinement.ReadOnly[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if driver == providerDriverClaude {
+				var cfg struct {
+					Servers map[string]any `json:"mcpServers"`
+				}
+				if err := json.Unmarshal(raw, &cfg); err != nil || len(cfg.Servers) != 1 || cfg.Servers[sessionMCPServerName] == nil {
+					t.Fatalf("claude config has servers %v (%v), want only %q", cfg.Servers, err, sessionMCPServerName)
+				}
+				return
+			}
+			if n := strings.Count(string(raw), "[mcp_servers."); n != 1 || !strings.Contains(string(raw), "[mcp_servers."+sessionMCPServerName+"]") {
+				t.Fatalf("codex config has %d server tables, want only %q:\n%s", n, sessionMCPServerName, raw)
+			}
+			for i := 0; i+1 < len(spec.Args) && spec.Args[i] == "-c"; i += 2 {
+				if !strings.HasPrefix(spec.Args[i+1], "mcp_servers."+sessionMCPServerName+".") {
+					t.Fatalf("codex override %q is not for the %s server", spec.Args[i+1], sessionMCPServerName)
+				}
+			}
+		})
 	}
 }

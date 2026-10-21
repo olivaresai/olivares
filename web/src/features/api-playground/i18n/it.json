@@ -1,0 +1,68 @@
+{
+  "title": "API Playground",
+  "description": "Esplora e testa l'API di Olivares AI.",
+  "filterPlaceholder": "Filtra gli endpoint…",
+  "selectEndpoint": "Seleziona un endpoint dal pannello a sinistra",
+  "send": "Invia",
+  "sending": "Invio…",
+  "streaming": "Streaming…",
+  "cancel": "Annulla",
+  "requiredPermission": "Permesso richiesto",
+  "copyAsCurl": "Copia come curl",
+  "response": "Risposta",
+  "history": "Cronologia",
+  "clearHistory": "Cancella",
+  "noRequests": "Ancora nessuna richiesta",
+  "noMatch": "Nessun endpoint corrisponde al filtro.",
+  "pathParams": "Parametri di percorso",
+  "queryParams": "Query",
+  "headers": "Header",
+  "body": "Body",
+  "networkError": "Errore di rete",
+  "beta": "beta",
+  "summary": "{{endpoints}} endpoint in {{groups}} gruppi",
+  "summaryWithBeta": "{{endpoints}} endpoint in {{groups}} gruppi · {{beta}} route di moduli beta",
+  "endpointTree": {
+    "ariaLabel": "Endpoint API"
+  },
+  "errors": {
+    "loadSpec": "Impossibile caricare la specifica OpenAPI"
+  },
+  "request": {
+    "networkError": "Errore di rete",
+    "failedNetworkHint": "Richiesta non riuscita: controlla la connessione di rete.",
+    "blockedDestination": "Destinazione bloccata",
+    "blockedDestinationHint": "API Playground può inviare richieste solo a questo server Olivares AI.",
+    "enterPathParam": "Inserisci {{name}}",
+    "headerNamePlaceholder": "Nome dell'header",
+    "headerValuePlaceholder": "Valore",
+    "curlCommand": "curl",
+    "removeHeaderAria": "Rimuovi l'header {{header}}",
+    "addHeaderAria": "Aggiungi un header personalizzato",
+    "bodyAria": "Body della richiesta"
+  },
+  "responsePanel": {
+    "empty": "Seleziona un endpoint e invia una richiesta",
+    "statusError": "ERR",
+    "duration": "{{duration}} ms",
+    "size": {
+      "bytes": "{{value}} B",
+      "kilobytes": "{{value}} KB",
+      "megabytes": "{{value}} MB"
+    },
+    "headersCount": "Header ({{count}})",
+    "bodyAria": "Body della risposta"
+  },
+  "historyPanel": {
+    "recentCount": "Recenti ({{count}})",
+    "clearAria": "Cancella la cronologia delle richieste",
+    "statusError": "ERR",
+    "duration": "{{duration}}ms",
+    "relative": {
+      "justNow": "adesso",
+      "minutes": "{{count}} min fa",
+      "hours": "{{count}} h fa",
+      "days": "{{count}} g fa"
+    }
+  }
+}

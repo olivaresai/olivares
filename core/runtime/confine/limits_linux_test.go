@@ -29,7 +29,16 @@ func TestMain(m *testing.M) {
 		os.Exit(RunHelper(os.Args[3:]))
 	}
 	if len(os.Args) > 1 && os.Args[1] == HelperArg {
-		os.Exit(RunHelper(os.Args[2:]))
+		// The stages modules/sessions/confine runs in the engine: probe, mount layer, policy.
+		if IsMountsProbe(os.Args[2:]) {
+			os.Exit(RunMountsProbe(os.Args[2:]))
+		}
+		args, err := ConsumeMounts(os.Args[2:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(126)
+		}
+		os.Exit(RunHelper(args))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "__owned_limits_probe" {
 		os.Exit(limitsProbe())

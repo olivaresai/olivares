@@ -6,6 +6,7 @@ import { render, screen, within, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { ApiError } from '@/lib/api/errors'
 import { useSessionStore } from '@/stores/session'
 import './i18n'
 const toast = vi.hoisted(() => ({
@@ -42,7 +43,11 @@ vi.mock('./api', async (original) => ({
   ...(await original<typeof import('./api')>()),
   consoleApi: {
     listSecrets: vi.fn(async () => ({
-      secrets: [{ name: 'mcp/fixture', hint: 'abc' }],
+      secrets: [
+        { name: 'mcp/fixture', hint: 'abc' },
+        { name: 'env/other', hint: 'def' },
+        { name: 'vault/fixture-user/bank', hint: 'ghi' },
+      ],
       sealer_available: true,
     })),
   },
@@ -196,6 +201,24 @@ describe('MCP console governance', () => {
     expect(JSON.stringify(api.put.mock.calls[0][1])).not.toContain(
       'upstream_auth',
     )
+  })
+  it('offers only mcp/ secrets as the sign-in, never a personal vault or env name', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(await screen.findByRole('button', { name: 'Add server' }))
+    const form = await screen.findByRole('dialog')
+    await user.click(
+      await within(form).findByRole('combobox', { name: /Sign-in/ }),
+    )
+    expect(
+      await screen.findByRole('option', { name: 'store:mcp/fixture' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: 'store:env/other' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('option', { name: 'store:vault/fixture-user/bank' }),
+    ).not.toBeInTheDocument()
   })
   it('names an empty server after its host and keeps caller settings under Advanced', async () => {
     const user = userEvent.setup()
@@ -411,6 +434,32 @@ describe('MCP console governance', () => {
       allowed_tools: [policy],
     })
   })
+  it('turning a server on while its name is held shows the engine sentence, not a stale-version retry', async () => {
+    const taken =
+      'MCP server name is already in use: "Fixture MCP" is held by server other-server'
+    const tested = structuredClone(snapshot)
+    Object.assign(tested.servers[0]!, {
+      allowed_tools: [
+        { name: 'hu_echo', required_scope: 'tools:call', destructive: true },
+      ],
+      probe: { state: 'ok', tools: [{ name: 'hu_echo', fingerprint: 'f1' }] },
+    })
+    api.get.mockResolvedValue(tested)
+    api.put.mockRejectedValueOnce(
+      new ApiError(409, 'mcp_gateway_name_taken', taken),
+    )
+    setup()
+    const row = await screen.findByRole('article', { name: 'Fixture MCP' })
+    await userEvent.click(within(row).getByRole('button', { name: 'Enable' }))
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Turn on Fixture MCP',
+    })
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Turn on' }),
+    )
+    expect(await screen.findByText(taken)).toBeInTheDocument()
+    expect(screen.queryByText(/Configuration changed/)).not.toBeInTheDocument()
+  })
   it('says which tools run without approval, ask first, or are not allowed (CLX copy 19)', async () => {
     const live = structuredClone(snapshot)
     Object.assign(live.servers[0]!, {
@@ -476,6 +525,28 @@ describe('MCP console governance', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+  it('a Save refused because the name is held says so; any other 409 still says the configuration changed', async () => {
+    const taken =
+      'MCP server name is already in use: "Fixture MCP" is held by server other-server'
+    const user = userEvent.setup()
+    setup()
+    const row = await screen.findByRole('article', { name: 'Fixture MCP' })
+    await user.click(within(row).getByRole('button', { name: 'Configure' }))
+    const dialog = await screen.findByRole('dialog')
+    api.put.mockRejectedValueOnce(
+      new ApiError(409, 'mcp_gateway_name_taken', taken),
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByText(taken)).toBeInTheDocument()
+    expect(
+      within(dialog).queryByText(/Configuration changed/),
+    ).not.toBeInTheDocument()
+    api.put.mockRejectedValueOnce(new ApiError(409, 'conflict', 'conflict'))
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(
+      await within(dialog).findByText(/Configuration changed/),
+    ).toBeInTheDocument()
   })
   it('an unchanged Save keeps an enabled server on and writes no trust (HU-R19)', async () => {
     const live = structuredClone(snapshot)

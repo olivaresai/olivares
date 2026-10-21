@@ -1,0 +1,37 @@
+# Views the capture run leaves out: their published image stays as it is until the view passes the shutter
+# checks (no error, no empty page, no raw markdown or placeholder, no release number, no date, no harness name;
+# web/e2e/capture-target.ts). Dates are masked before the shot, then checked. The demo dataset
+# (scripts/seed-demo-dataset.py) fills what an API seeder can; what is left needs a connector, a credential, an
+# edition or a product fix, and each line says which.
+# Format: <view id> <#issue that owns the retake> <why, in a few words>
+# The owner is the issue whose scope covers the cause: the demo dataset, the sessions fixes, or the capture
+# harness itself. scripts/test-docs-captures-held.sh checks the format, that the view exists, that it is
+# published in both themes or in neither, and that no two published captures share their bytes.
+# Delete the line when the retake lands.
+
+communications-protocol-bindings #1965 a live binding requires reconciliation against a reachable peer; the offline draft specification is UNKNOWN and proves no live instance
+stored-budgets #1850 FinOps is a Business capability: the Community build serves this page empty
+compliance #1850 frameworks are a Business capability: no evidence package is sealed on Community
+agentcore-export #1850 AgentCore export is not configured for the demo tenant, so no plan is computed
+git-publication #1850 a publication target needs an approved Git host connector and a credential
+provider-bindings #1850 a source binding needs an applied source revision from a running connector source
+eventing #1850 the engine resolves a webhook destination when a subscription is authored, so an offline demo creates none; the compatibility error no longer shows on a fresh install
+voice #1850 a voice session needs a voice-capable provider that the offline demo lacks
+sandbox #1850 scenario runs need a sandbox executor that the demo estate does not provide
+console-bindings #1850 needs a chosen source and posture requests that the dataset does not create
+attestation #1844 the provenance note prints raw backticks and the release number in its content
+logs #1897 prints host paths from the live log stream
+api-playground #1897 prints endpoint and route counts that change every release
+communications-new #1897 is a blank form with nothing to show
+rate-limits #1850 shows only provider-unavailable panels: the Admin API connector is not wired
+settings #1897 the language list prints missing-glyph boxes for the CJK names
+sourceDiff #1897 is an empty form with a validation error
+dashboards #2265 retake after #2268: the Active agents card now counts the Working set the Sessions view lists; eight one-event adoption sessions still read working until #2272; judged on the 1440px capture
+work-apply-refused #1897 the view mocks a refusal for a request it never sends, so the page cannot show it
+session-viewer #1843 published image predates #1784/#1785; needs a real signed-in vendor session, not the demo runtime
+permissions #1966 passes the shutter checks; the repeated "This request does not include what will run." note is fixed in #2269 (shown once, only where a command is expected), so the retake waits for the next capture run
+status-page #1897 prints the clock time of the capture ("Last updated")
+setup #1844 the first-boot hint prints raw backticks around its commands
+templates-readonly #1897 the permission strip has no effect: the page shows an enabled New template
+sessions #1843 published image predates #1784/#1785; needs a real signed-in vendor session, not the demo runtime
+agentops #2265 retake after #2268: the seed names ten sessions of three engines and the adoption plane adds eight untitled ones, not 48, which read working until #2272; judged on the 1440px capture

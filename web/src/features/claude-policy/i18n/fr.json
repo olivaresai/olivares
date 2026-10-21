@@ -12,7 +12,7 @@
   },
   "seam": {
     "badge": "Backend en attente",
-    "body": "{{what}} est câblé au contrat déclaré ; l’endpoint backend n’est pas encore actif. Vous pouvez composer et valider localement — cela s’active dès l’arrivée du backend. Rien n’est simulé."
+    "body": "{{what}} suit le contrat déclaré ; l’endpoint backend n’est pas encore actif. Vous pouvez composer et valider localement — cela s’active dès l’arrivée du backend. Rien n’est simulé."
   },
   "validation": {
     "ok": "Schéma valide.",
@@ -89,7 +89,7 @@
     "postV1": "Différenciateur · candidat post-v1",
     "postV1Hint": "Le HITL des agents gérés est un différenciateur ; l’arbitrage v1-vs-post-v1 est décidé au gate.",
     "vaultsRisk": "Risque latéral : les coffres/identifiants sont délimités à l’espace de travail — quiconque dispose d’une clé API d’espace de travail peut les référencer. Les secrets sont en écriture seule ; l’archivage purge les secrets mais conserve les enregistrements pour l’audit, la suppression est une suppression définitive.",
-    "endpointNote": "Les événements de fil et l’émission autorisation/refus sont câblés au contrat déclaré. La documentation en vigueur expose les événements à /v1/sessions/{id}/events ; le connecteur lit le chemin par fil — aucun des deux n’est encore réexposé par une route du moteur.",
+    "endpointNote": "Les événements de fil et l’émission autorisation/refus suivent le contrat déclaré. La documentation en vigueur expose les événements à /v1/sessions/{id}/events ; le connecteur lit le chemin par fil — aucun des deux n’est encore réexposé par une route du moteur.",
     "listLabel": "Confirmations d’agent géré en attente",
     "pending": "En attente de confirmation",
     "session": "Session",

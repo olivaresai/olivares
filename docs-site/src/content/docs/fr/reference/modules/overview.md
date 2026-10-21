@@ -29,7 +29,7 @@ provisionne via une configuration d'environnement), **PARTIAL** là où la surfa
 est contrôlée/opt-in, et une **jonction (seam) fermée par défaut** déclarée pour
 le reste. En particulier, **deploy** planifie et gouverne les déploiements mais
 ne les **applique pas** à l'infrastructure en production tant qu'un exécuteur
-n'est pas provisionné : `apply`/`retire` renvoient un `503` clair. La profondeur
+n'est pas provisionné : `apply`/`retire` renvoient un `503` clair. Deploy est une fonction Business ; Community répond `501` sur chaque route deploy. La profondeur
 varie selon le module, et une grande partie du produit est en pré-1.0 / au stade
 de conception là où c'est indiqué (voir
 [Honnêteté et limites](/fr/start/honesty-and-limits/)).
@@ -68,7 +68,7 @@ d'actionnement.
 | [Identité, permissions et gouvernance](/fr/reference/modules/vi-governance/) | — | Qui et quoi peut faire quoi, de façon granulaire : Cedar RBAC + deny-overlay + grants à portée définie, réconciliation de roster, admin/rôles personnalisés à portée définie, break-glass, kill-switch. |
 | [Identity (`identity`)](/reference/modules/identity/) | — | Posture en lecture seule : fédération d’identité de workloads, SSO, clés externes et résidence des données. |
 | [Cadrage des sources et identifiants](/fr/reference/modules/sourcescope/) | — | Lier des sources à un workspace/groupe d'agents ; résolveur à portée définie fermé par défaut + identifiants à portée définie au moment de la résolution. |
-| [Déploiement et intégration](/fr/reference/modules/vii-deploy/) | à la demande (503) | Planifier et gouverner les déploiements vers l'infrastructure réelle ; l'exécuteur est à la demande — les `apply`/`retire` en production renvoient `503` jusqu'au provisionnement. |
+| [Déploiement et intégration](/fr/reference/modules/vii-deploy/) | Business, à la demande (503) | Fonction Business : Community répond `501`. Planifier et gouverner les déploiements vers l'infrastructure réelle ; l'exécuteur est à la demande — les `apply`/`retire` en production renvoient `503` jusqu'au provisionnement. |
 | [Publication Git gouvernée](/fr/reference/modules/gitpublish/) | on-demand | Envoyer des commits, ouvrir des pull requests et fusionner avec des liaisons Git approuvées, une autorisation actuelle et des résultats conservés. |
 
 > **Identity** est un module sélectionnable séparément pour la console de
@@ -81,7 +81,7 @@ d'actionnement.
 
 | Module | Actionner | Objet |
 |---|---|---|
-| [Politique gérée Claude Code (`claude-policy`)](/reference/modules/claude-policy/) | — | Valider, prévisualiser et publier une politique gérée versionnée ; inspecter sa distribution et le drift observé. |
+| [Politique gérée Claude Code (`claude-policy`)](/reference/modules/claude-policy/) | — | Valider et prévisualiser une politique gérée ; Business la publie sur toute la flotte et inspecte sa distribution et le drift observé. |
 | [Confirmations d’agents Claude (`claude-agents`)](/reference/modules/claude-agents/) | — | Lire les événements des threads d’agents gérés et approuver ou refuser une confirmation d’outil en attente. |
 | [Catalogue et affectations de skills](/fr/reference/modules/skills/) | — | Catalogue de skills immuable et affectations épinglées : packs validés par digest installés sous `/v1/m/skills/packs`, épinglés par cible, jamais modifiés en place. |
 | [Gestion des modèles et fournisseurs](/fr/reference/modules/x-models/) | à la demande (503) | Gouverner l'ensemble de la pile modèles/fournisseurs : accès aux modèles, fenêtre de contexte par surface, contrôle par groupe de modèles ; l'*exécution* de modèle est à la demande — `503` jusqu'à ce qu'un identifiant d'inférence soit provisionné. |
@@ -133,7 +133,7 @@ par défaut, aucun provisionnement requis (p. ex. l'application des budgets FinO
 refuse au plafond, le routeur de notifications dispatche) ; `à la demande` /
 `à la demande (503)` = le backend est construit et câblé à un point d'injection
 mais reste **fermé par défaut ou dégradé jusqu'à ce qu'un opérateur le
-provisionne** via une configuration d'environnement (deploy répond `503`
+provisionne** via une configuration d'environnement (deploy, une fonction Business, répond `501` dans Community et `503`
 jusqu'à ce qu'un exécuteur existe ; le dispatch orchestration/voice est fermé par
 défaut jusqu'à configuration ; le red-team s'exécute en mode DÉGRADÉ jusqu'à ce
 qu'un runtime de bac à sable soit provisionné ; l'exécution de modèle et les

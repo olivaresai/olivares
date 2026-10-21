@@ -110,6 +110,13 @@ Olivares 启动时，如果 `OLIVARES_HOOK_PEP_CONFIG` 指定了一个文件，P
 这种放行是临时的：timestamp 缺失、无效或过期时都会解析为 `enforce`。在观测业务规则期间，
 包括 identity、tenant、kill switch、firewall 和 fail-closed error 在内的平台 invariant 仍然强制执行。
 
+一个不断被拒绝的 session 会被移交给人。当一次 run 因 policy、firewall 或平台规则连续被拒绝 3 次，
+或累计被拒绝 20 次时，Olivares 会在有人正在查看时中断它的当前 turn，在无人查看时则停止它。
+该 run 随后显示 `needs_person` 及最近的原因，并向 ledger 写入一条 `sessions.run.denial_budget` 记录。
+人工拒绝一次 review 不计入；一次被允许的 tool-call 会让连续拒绝的计数重新开始。来自人的输入会开始一个新的预算。
+按 tenant 修改上限，写作 `"denial_budget": {"consecutive": 3,
+"total": 20}`；省略的字段保持其默认值。
+
 <img class="light:sl-hidden" src="/console/guias-config-step-up-dark.png" alt="需要升级认证 — AAL3（硬件、抗钓鱼）">
 <img class="dark:sl-hidden" src="/console/guias-config-step-up-light.png" alt="需要升级认证 — AAL3（硬件、抗钓鱼）">
 
@@ -200,9 +207,9 @@ printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{
 | **Observability > Ingestion**（`/observability`） | 按 source 分类的 record、`edge`、`cost` 和 `finding` 类型、signal，以及首个/末个 event。 | 这些是 process 自启动以来的全局 counter；重启时归零，且不按 tenant 区分。 |
 | **Sessions**（`/sessions`） | session、状态、action、model、token、cost、最近 activity，以及 `enforced` 或 `observed` posture。 | posture 汇总 event evidence，不会根据连接器注册状态推断。 |
 | **Access map**（`/access-map`） | 从已观测的 tool、MCP 和 resource 归属的 R/RW edge。 | 已观测 edge 描述 activity，不等于事先 authorization。 |
-| **Cost & FinOps**（`/finops`） | 从已接收遥测导出的 cost 和 token sample。 | 覆盖范围仅限 fleet 导出的内容；从未发出 OTLP 的 call 无法重建。 |
+| **Budgets**（`/stored-budgets`） | 各已保存预算限额的消耗情况，由从已接收遥测导出的 cost 和 token sample 计算得出。 | 覆盖范围仅限 fleet 导出的内容；从未发出 OTLP 的 call 无法重建。 |
 | **Security**（`/security`） | 遥测 gap、sandbox/MCP posture 和其他已发出的 finding。 | 没有 finding 并不能让未观测的 surface 变成合规。 |
-| **Claude Policy**（`/claude-policy`） | 受管 Claude Code surface 的 authoring、分发、version 和 check-in 状态。 | 分发与 drift verification 是两个独立事实，分别显示。 |
+| **Claude Policy**（`/claude-policy`） | 受管 Claude Code surface 的验证与预览；Business 版另提供发布、分发、version 和 check-in 状态。 | 分发与 drift verification 是两个独立事实，分别显示。 |
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="智能体实时运行情况——每个会话当前正在执行的操作、其 token、成本与节奏，通过实时流持续更新。">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="智能体实时运行情况——每个会话当前正在执行的操作、其 token、成本与节奏，通过实时流持续更新。">

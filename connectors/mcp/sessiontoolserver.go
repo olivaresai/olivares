@@ -23,6 +23,9 @@ type SessionToolServerConfig struct {
 	Upstream                     Upstream
 	Gate                         ApprovalGate
 	Auditor                      GateAuditor
+	// DataFlow is the reversible-token seam (dataflow.go); nil leaves arguments and
+	// results untouched.
+	DataFlow ToolDataFlow
 }
 
 // SessionToolServer applies the SAME tool policy, approval and durable effect
@@ -48,6 +51,7 @@ func NewSessionToolServer(cfg SessionToolServerConfig) (*SessionToolServer, erro
 		gate: cfg.Gate, auditor: cfg.Auditor, now: time.Now, taskLedger: newTaskLedger(0, time.Now),
 		revisionMode: revisionModeLegacy, upstreamRevision: "2025-11-25", instanceID: instance,
 		apps: apps, consent: denyConsentStore{},
+		dataFlow: cfg.DataFlow, flowServer: cfg.ServerID,
 	}
 	if rs.gate == nil {
 		rs.gate = denyApprovalGate{}

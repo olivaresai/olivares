@@ -4,9 +4,11 @@ description: >-
   El único módulo que actúa sobre tu infraestructura: planifica y gobierna el
   ciclo de vida declarativo de agentes y servidores MCP y su conexión con el
   estate. Las mutaciones se controlan con human-in-the-loop, son dry-run antes de
-  aplicar y reversibles — y el apply en vivo permanece deny-closed (503) hasta
+  aplicar y reversibles — y en Business el apply en vivo permanece deny-closed (503) hasta
   que se aprovisiona un ejecutor.
 ---
+
+Las definiciones de despliegue, los planes, los apply, los rollbacks, los retiros, la configuración del ejecutor y el registro de cableado son funciones **[Business](https://olivares.ai/pricing)**. Community responde 501 en estas rutas de la API y oculta el grupo de comandos. Las definiciones, revisiones, cableados y operaciones guardados permanecen en la base de datos y en las copias de recuperación ante desastres. Las secciones siguientes describen el comportamiento Business.
 
 El módulo VII es el **único** módulo que muta la infraestructura del cliente — el
 resto del producto es read-first. Aprovisiona, actualiza y retira agentes y

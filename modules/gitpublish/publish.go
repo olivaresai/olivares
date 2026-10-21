@@ -592,13 +592,7 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 		}
 		return nil
 	}
-	baseHead := func(base string) (string, *Error) {
-		o, err := host.Ref(ctx, tok, base)
-		if err != nil || o.State != gp.RefPresent {
-			return "", refuse("lookup_incomplete", http.StatusServiceUnavailable)
-		}
-		return o.SHA, nil
-	}
+	baseHead := func(base string) (string, *Error) { return hostBaseHead(ctx, host, tok, base) }
 	now := m.now()
 	switch s.effect {
 	case effectPush:
@@ -624,16 +618,9 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 				return refused("stale_lease", http.StatusConflict)
 			}
 		}
-		from := s.req.ExpectedOld
-		if from == "" {
-			if len(tg.MergeBases) == 0 {
-				return refused("content_mismatch", http.StatusUnprocessableEntity)
-			}
-			sha, e := baseHead(tg.MergeBases[0])
-			if e != nil {
-				return preflight{}, e
-			}
-			from = sha
+		from, e := pushBase(ctx, host, tok, tg, s)
+		if e != nil {
+			return preflight{}, e
 		}
 		if e := workflows(from, s.req.Commit); e != nil {
 			return preflight{}, e

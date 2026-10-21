@@ -1,0 +1,88 @@
+{
+  "title": "Caja fuerte",
+  "subtitle": "Tus contraseñas, notas y códigos de autenticación. Se sellan en este servidor y solo tú puedes abrirlos.",
+  "add": "Añadir elemento",
+  "search": "Buscar un elemento",
+  "noMatch": "Ningún elemento coincide con «{{query}}»",
+  "sealerUnavailable": "Este servidor aún no puede sellar secretos, así que no se pueden guardar elementos.",
+  "created": "Elemento añadido",
+  "saved": "Elemento guardado",
+  "deleted": "Elemento eliminado",
+  "copyBlocked": "El navegador no permitió copiar",
+  "nothingToCopy": "Este elemento no tiene nada que copiar",
+  "needPerson": "La caja fuerte pertenece a una persona. Inicia sesión con tu cuenta para usar la tuya.",
+  "needOrganization": "Elige una organización para abrir tu caja fuerte en ella.",
+  "copied": "{{field}} copiado. Se borra del portapapeles en {{seconds}} s.",
+  "rowCopied": "{{what}} copiado. Se borra del portapapeles en {{seconds}} s.",
+  "what": {
+    "password": "Contraseña",
+    "code": "Código",
+    "note": "Nota"
+  },
+  "kind": {
+    "login": "Acceso",
+    "note": "Nota",
+    "totp": "Autenticador",
+    "code": "Código"
+  },
+  "empty": {
+    "title": "Tu caja fuerte está vacía",
+    "description": "Añade un acceso, una nota o una clave de autenticador. Abrir o copiar un elemento queda registrado en el libro de auditoría."
+  },
+  "row": {
+    "open": "Abrir {{label}}",
+    "openItem": "Abrir",
+    "delete": "Eliminar",
+    "menu": "Acciones de {{label}}",
+    "copyPassword": "Copiar la contraseña de {{label}}",
+    "copyNote": "Copiar la nota de {{label}}",
+    "copyCode": "Copiar el código de {{label}}"
+  },
+  "delete": {
+    "title": "¿Eliminar {{label}}?",
+    "body": "El elemento se elimina para siempre. No se puede deshacer.",
+    "confirm": "Eliminar"
+  },
+  "detail": {
+    "locked": "Bloqueado. Revelar un elemento queda registrado en el libro de auditoría, y se vuelve a ocultar al cabo de un minuto.",
+    "hidden": "Oculto",
+    "reveal": "Revelar",
+    "edit": "Editar",
+    "totpKey": "Clave de autenticador",
+    "code": "Código",
+    "codeHidden": "No se muestra",
+    "codeLeft": "quedan {{n}} s",
+    "showCode": "Mostrar código",
+    "copyField": "Copiar {{field}}",
+    "showField": "Mostrar {{field}}",
+    "hideField": "Ocultar {{field}}"
+  },
+  "form": {
+    "addTitle": "Añadir un elemento",
+    "editTitle": "Editar {{label}}",
+    "name": "Nombre",
+    "nameHint": "Letras, dígitos, puntos, guiones y guiones bajos. Encuentras el elemento por este nombre, también en la CLI.",
+    "nameTaken": "Ya existe un elemento con este nombre",
+    "nameInvalid": "Usa letras, dígitos, puntos, guiones y guiones bajos",
+    "type": "Tipo",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "show": "Mostrar contraseña",
+    "hide": "Ocultar contraseña",
+    "generate": "Generar",
+    "generateOptions": "Opciones del generador",
+    "generateFailed": "No se pudo generar una contraseña",
+    "length": "Longitud",
+    "lower": "Letras minúsculas",
+    "upper": "Letras mayúsculas",
+    "digits": "Dígitos",
+    "symbols": "Símbolos",
+    "url": "Sitio web",
+    "totp": "Clave de autenticador",
+    "totpHint": "Una clave base32, o el enlace otpauth:// del código QR del servicio",
+    "note": "Nota",
+    "description": "Descripción",
+    "descriptionHint": "Se muestra en la lista. No es secreta.",
+    "save": "Guardar"
+  }
+}

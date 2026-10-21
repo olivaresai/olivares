@@ -674,7 +674,7 @@
 			"args": [
 				{
 					"index": 0,
-					"value": 771883008,
+					"value": 771751936,
 					"op": "SCMP_CMP_MASKED_EQ"
 				}
 			],
@@ -687,7 +687,7 @@
 					"s390x"
 				]
 			},
-			"comment": "Olivares: also allows CLONE_NEWUSER|CLONE_NEWNET for the session network namespace; the other namespace flags stay denied."
+			"comment": "Olivares: also allows CLONE_NEWUSER|CLONE_NEWNET|CLONE_NEWNS for the session network and mount namespaces; the other namespace flags stay denied."
 		},
 		{
 			"names": [
@@ -697,11 +697,11 @@
 			"args": [
 				{
 					"index": 1,
-					"value": 771883008,
+					"value": 771751936,
 					"op": "SCMP_CMP_MASKED_EQ"
 				}
 			],
-			"comment": "Olivares: also allows CLONE_NEWUSER|CLONE_NEWNET for the session network namespace; the other namespace flags stay denied. s390 parameter ordering for clone is different",
+			"comment": "Olivares: also allows CLONE_NEWUSER|CLONE_NEWNET|CLONE_NEWNS for the session network and mount namespaces; the other namespace flags stay denied. s390 parameter ordering for clone is different",
 			"includes": {
 				"arches": [
 					"s390",
@@ -725,6 +725,54 @@
 					"CAP_SYS_ADMIN"
 				]
 			}
+		},
+		{
+			"names": [
+				"mount"
+			],
+			"action": "SCMP_ACT_ALLOW",
+			"args": [
+				{
+					"index": 3,
+					"value": 4096,
+					"valueTwo": 4096,
+					"op": "SCMP_CMP_MASKED_EQ"
+				},
+				{
+					"index": 3,
+					"value": 2147483648,
+					"valueTwo": 0,
+					"op": "SCMP_CMP_MASKED_EQ"
+				}
+			],
+			"comment": "Olivares: mount with MS_BIND set, the session helper's read-only bind of a workspace's git hooks and configuration, and the remount that makes it read-only, inside its own mount namespace (CLONE_NEWNS above). A mount that creates a filesystem (tmpfs, overlay, proc) carries neither flag and stays denied, and bit 31 stays clear so the legacy MS_MGC_VAL magic, which the kernel strips and which carries propagation bits, cannot disguise one; the engine container drops every capability, so a bind outside the helper's own namespace still fails."
+		},
+		{
+			"names": [
+				"mount"
+			],
+			"action": "SCMP_ACT_ALLOW",
+			"args": [
+				{
+					"index": 3,
+					"value": 262144,
+					"valueTwo": 262144,
+					"op": "SCMP_CMP_MASKED_EQ"
+				},
+				{
+					"index": 3,
+					"value": 2147483648,
+					"valueTwo": 0,
+					"op": "SCMP_CMP_MASKED_EQ"
+				},
+				{
+					"index": 3,
+					"value": 32,
+					"valueTwo": 0,
+					"op": "SCMP_CMP_MASKED_EQ"
+				}
+			],
+			"comment": "Olivares: mount with MS_PRIVATE set, the session helper making its mount tree private before it binds. A mount that creates a filesystem (tmpfs, overlay, proc) carries neither flag and stays denied, and bit 31 stays clear so the legacy MS_MGC_VAL magic, which the kernel strips and which carries propagation bits, cannot disguise one; the engine container drops every capability, so a bind outside the helper's own namespace still fails."
 		},
 		{
 			"names": [

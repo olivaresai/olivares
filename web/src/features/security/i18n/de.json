@@ -108,7 +108,7 @@
   },
   "enforcement": {
     "title": "Durchsetzungslage",
-    "description": "Die eine Aktion, die die Produktion berührt. Jede Klasse von Schutzleitplanken ist standardmäßig detektivisch; das Aktivieren der Inline-Durchsetzung ist eine Administrator-Aktion, gesteuert dort, wo das Tor verkabelt ist.",
+    "description": "Die eine Aktion, die die Produktion berührt. Jede Klasse von Schutzleitplanken ist standardmäßig detektivisch; das Aktivieren der Inline-Durchsetzung ist eine Administrator-Aktion, gesteuert dort, wo ein Tor eingerichtet ist.",
     "defaultDetectiveNote": "Die Standardebene ist detektivisch: Klassen blockieren nur, wenn sie hier ausdrücklich aktiviert und gesteuert sind.",
     "fullyDetective": "Keine Durchsetzung ist aktiviert — die Ebene ist vollständig detektivisch, die sichere Voreinstellung. Nichts blockiert von sich aus.",
     "detective": "Detektivisch",
@@ -127,14 +127,14 @@
     },
     "dialog": {
       "title": "Durchsetzung ändern",
-      "description": "Das Deaktivieren (zurück zu detektivisch) ist stets gestattet. Das Aktivieren der Inline-Durchsetzung wird dort gesteuert, wo das Tor verkabelt ist — eine Governance-Verweigerung wird als Grund angezeigt.",
+      "description": "Das Deaktivieren (zurück zu detektivisch) ist stets gestattet. Das Aktivieren der Inline-Durchsetzung wird dort gesteuert, wo ein Tor eingerichtet ist — eine Governance-Verweigerung wird als Grund angezeigt.",
       "enabledLabel": "Inline-Durchsetzung aktivieren",
       "minSeverity": "Mindest-Schweregrad",
       "reason": "Grund",
       "reasonHint": "Wird mit der Änderung für das Audit-Hauptbuch aufgezeichnet.",
       "submit": "Anwenden",
       "applied": "Durchsetzungslage aktualisiert",
-      "ungovernedWarning": "Das Aktivieren dieser Klasse ohne verkabeltes Governance-Tor lässt sie ungesteuert — die Änderung ist gestattet, aber markiert.",
+      "ungovernedWarning": "Das Aktivieren dieser Klasse ohne eingerichtetes Governance-Tor lässt sie ungesteuert — die Änderung ist gestattet, aber markiert.",
       "deniedTitle": "Governance hat diese Änderung verweigert"
     }
   },
@@ -194,9 +194,9 @@
     "checkpointsCount": "{{count}} Prüfpunkt verifiziert",
     "checkpointsCount_one": "{{count}} Prüfpunkt verifiziert",
     "checkpointsCount_other": "{{count}} Prüfpunkte verifiziert",
-    "signingUnavailable": "Kein Signierschlüssel ist verkabelt — eine signierte Attestierung wird nicht vorgetäuscht.",
+    "signingUnavailable": "Kein Signierschlüssel ist eingerichtet — eine signierte Attestierung wird nicht vorgetäuscht.",
     "checkpointsPendingNote": "Noch kein Prüfpunkt geschrieben — der Ketten-Entscheid ist der Nachweis dieses Hauptbuchs.",
-    "signingSeam": "Prüfpunkt-Signierung nicht verkabelt",
+    "signingSeam": "Prüfpunkt-Signierung nicht eingerichtet",
     "attestedSeq": "Attestierte seq",
     "headSeq": "Hauptbuch-Kopf seq {{seq}}",
     "reverifyNote": "Jedes Ereignis trägt seq · hash · prev_hash, sodass ein Leser die Verkettung offline gegen einen externen WORM-Speicher erneut prüfen kann.",

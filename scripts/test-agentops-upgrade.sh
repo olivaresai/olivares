@@ -90,3 +90,34 @@ sed -e 's|@USER_LINE@|User=olivares|' -e 's|@GROUP_LINE@|Group=olivares|' \
 /bin/sh "$root/scripts/install-service.sh" --system --init systemd --root "$image" --binary /usr/local/bin/olivares
 grep -qx 'ProtectHome=false' "$image/etc/systemd/system/olivares.service"
 printf 'ok - native 26.10 base unit upgraded\n'
+
+# The unit of 0.1 and 0.2 is recognized the same way: unedited, it is replaced; with any
+# local edit, the installer refuses and leaves it byte for byte.
+render_unit_0_2() {
+  mkdir -p "$1/etc/systemd/system" "$1/usr/local/bin"
+  printf '#!/bin/sh\nexit 0\n' > "$1/usr/local/bin/olivares"
+  chmod 0755 "$1/usr/local/bin/olivares"
+  sed -e 's|@USER_LINE@|User=olivares|' -e 's|@GROUP_LINE@|Group=olivares|' \
+    -e 's|@CONFIG@|/etc/olivares/olivares.env|g' -e 's|@BINARY@|/usr/local/bin/olivares|g' \
+    -e 's|@DATA_DIR@|/var/lib/olivares|g' -e 's|@WANTED_BY@|multi-user.target|' \
+    -e '/^@STATE_DIRECTORY_LINE@$/d' \
+    "$root/packaging/service/systemd-0.2.service" > "$1/etc/systemd/system/olivares.service"
+}
+image02="$scratch/native-0.2"
+render_unit_0_2 "$image02"
+grep -qx 'RestrictNamespaces=user net' "$image02/etc/systemd/system/olivares.service"
+/bin/sh "$root/scripts/install-service.sh" --system --init systemd --root "$image02" --binary /usr/local/bin/olivares
+grep -qx 'RestrictNamespaces=user net mnt' "$image02/etc/systemd/system/olivares.service"
+grep -qx 'SystemCallFilter=mount' "$image02/etc/systemd/system/olivares.service"
+printf 'ok - native 0.2 base unit upgraded\n'
+image02edit="$scratch/native-0.2-edited"
+render_unit_0_2 "$image02edit"
+printf '# local edit\n' >> "$image02edit/etc/systemd/system/olivares.service"
+cp -p "$image02edit/etc/systemd/system/olivares.service" "$scratch/edited-before"
+if /bin/sh "$root/scripts/install-service.sh" --system --init systemd --root "$image02edit" \
+    --binary /usr/local/bin/olivares >"$scratch/edited.out" 2>&1; then
+  printf 'not ok - an edited 0.2 unit was replaced\n' >&2; exit 1
+fi
+grep -q 'refusing to replace existing service file' "$scratch/edited.out"
+cmp -s "$scratch/edited-before" "$image02edit/etc/systemd/system/olivares.service"
+printf 'ok - edited 0.2 base unit refused and untouched\n'

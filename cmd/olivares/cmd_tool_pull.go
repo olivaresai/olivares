@@ -35,8 +35,9 @@ type toolModelPull struct {
 func newToolPullCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "pull <model>",
-		Short: "Download an Ollama or public Hugging Face GGUF model on the engine's host",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "pull <model>",
+		Short:       "Download an Ollama or public Hugging Face GGUF model on the engine's host",
 		Long: "Download a model into the engine's running Ollama and follow its progress.\n" +
 			"Use an Ollama model name or hf.co/<user>/<repo>[:<quantization-or-filename>].\n" +
 			"Start Ollama in AI tools first. Ctrl-C stops waiting; the engine keeps downloading.",
@@ -115,6 +116,11 @@ func (c *agentClientConfig) waitModelPull(ctx context.Context, body []byte, prog
 		case <-time.After(time.Second):
 		}
 		status, next, err := c.do(ctx, "GET", agentToolsPath+"/ollama/pulls/"+url.PathEscape(pull.ID), nil, http.StatusOK, http.StatusNotFound, http.StatusForbidden)
+		// Ctrl-C can land while this read is in flight. A read that still returned a body
+		// is then not a download answer, so the wait ends here instead of parsing it.
+		if ctx.Err() != nil {
+			return pull, ctx.Err()
+		}
 		if err != nil {
 			return pull, err
 		}

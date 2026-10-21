@@ -96,7 +96,7 @@ func ir5CompleteControlWithKeyset(t *testing.T, cfg store.Config, superDSN, keys
 func TestIR5RemoteCompletedGateRequiresCustodyWithNoLocalRecord(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	authorized, digest := ir5GenuineSelection(t, [3]string{"local", "local", "local"})
@@ -192,7 +192,7 @@ func TestIR5CompletedGateAdmitsTheAuthorizedSelectionAndRefusesEveryOther(t *tes
 		t.Run(tc.name, func(t *testing.T) {
 			pg := isolatedPGSplit(t)
 			cfg := drPGConfig(pg)
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 			defer cancel()
 
 			authorized, digest := ir5GenuineSelection(t, tc.sources)
@@ -270,7 +270,7 @@ func TestIR5NoncompletedRemoteGatesRefuseBeforeAnyKeyCouldLoad(t *testing.T) {
 func TestIR5AnUnenrolledRemoteDestinationStillBootsOrdinarily(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	adm, err := BeginLocalAdmission(ctx, cfg, t.TempDir())

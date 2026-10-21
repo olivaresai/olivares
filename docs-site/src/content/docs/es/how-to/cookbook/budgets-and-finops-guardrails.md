@@ -84,11 +84,8 @@ disparó — la denegación nombra su motivo. Las alertas también viajan por el
 de notificaciones, de modo que un [destino](/es/how-to/forward-audit-to-splunk/) de
 Slack o PagerDuty oye el cruce del 80 % antes de la denegación del 100 %.
 
-En la consola, **Cost & FinOps** muestra el gasto por dimensión con el estado del
-presupuesto en línea:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="La vista Cost & FinOps con tendencias de gasto y postura de presupuesto." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="La vista Cost & FinOps con tendencias de gasto y postura de presupuesto." />
+En la consola, **Budgets** muestra el consumo frente a cada límite, con la
+proyección del ritmo de gasto.
 
 ## Darle al gasto un denominador: los resultados (outcomes)
 

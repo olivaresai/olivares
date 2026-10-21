@@ -131,7 +131,7 @@ describe('el target_id, resuelto o dicho', () => {
     // FIRES IF: alguien deja caer el caso sin permiso en la rama del «no encontrada». Es una
     // afirmación sobre el estado del mundo hecha por quien no ha podido mirarlo — y la ruta
     // exige `sourcescope:assignment:read`, que NO es el permiso con el que se monta esta cola.
-    expect(txt).toMatch(/lack sourcescope:assignment:read/i)
+    expect(txt).toMatch(/your role cannot read source assignments/i)
     expect(txt).not.toMatch(/no matching assignment/i)
     expect(api.listAssignments).not.toHaveBeenCalled()
   })
@@ -264,6 +264,6 @@ describe('lo que el contraste tumbó', () => {
     const txt = f.closest('tr')?.textContent ?? ''
     expect(txt).not.toMatch(/confluence/)
     expect(txt).not.toMatch(/ws-soporte/)
-    expect(txt).toMatch(/lack sourcescope:assignment:read/i)
+    expect(txt).toMatch(/your role cannot read source assignments/i)
   })
 })

@@ -84,11 +84,8 @@ nomme sa raison. Les alertes circulent aussi sur le flux de notifications, de
 sorte qu'une [destination](/fr/how-to/forward-audit-to-splunk/) Slack ou PagerDuty
 entend le franchissement des 80 % avant le refus à 100 %.
 
-Dans la console, **Cost & FinOps** affiche la dépense par dimension avec le
-statut du budget en ligne :
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="La vue Cost & FinOps avec les tendances de dépense et la posture des budgets." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="La vue Cost & FinOps avec les tendances de dépense et la posture des budgets." />
+Dans la console, **Budgets** affiche la consommation par rapport à chaque limite, avec la
+projection du rythme de dépense.
 
 ## Donner un dénominateur à la dépense : les résultats
 

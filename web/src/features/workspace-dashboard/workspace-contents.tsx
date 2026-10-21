@@ -5,10 +5,16 @@ import { useId } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { StaticTable } from '@/components/data/static-table'
+import { readableAction } from '@/components/layout/bell-events'
 import { formatInt } from '@/lib/format'
 import { cuentaConSuelo } from './count-floor'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
 import './i18n'
+
+/** "core.agent_group" -> "Agent group". The `core.` prefix says where the engine keeps the kind,
+ * not what it is; any other kind keeps its module, and the engine's own address stays on hover. */
+const readableKind = (kind: string) =>
+  readableAction(kind.replace(/^core\./, ''))
 
 /**
  * What a workspace holds, from the engine's one contents read: every kind that
@@ -64,7 +70,9 @@ export function WorkspaceContents({
           <tbody>
             {held.map((row) => (
               <tr key={row.kind}>
-                <td className="font-mono text-caption">{row.kind}</td>
+                <td className="text-body" title={row.kind}>
+                  {readableKind(row.kind)}
+                </td>
                 <td>{cuentaConSuelo(row.count, row.capped, formatInt)}</td>
               </tr>
             ))}

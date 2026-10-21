@@ -29,7 +29,13 @@ import {
   formatInt,
   formatScore,
 } from '@/lib/format'
-import type { AbPairwise, CaseResult, EvalRun, Scorecard } from './types'
+import type {
+  AbPairwise,
+  CaseResult,
+  ComparisonEvidence,
+  EvalRun,
+  Scorecard,
+} from './types'
 
 // --- scorecards --------------------------------------------------------------
 
@@ -37,9 +43,9 @@ import type { AbPairwise, CaseResult, EvalRun, Scorecard } from './types'
  * ⛔ EL VEREDICTO DE REGRESIÓN, COMO FUNCIÓN PURA, porque la decisión es la parte que importa y
  *    debe poder probarse sin pintar nada.
  *
- *    `regressed: false` significa CUATRO cosas y sólo una es «pasó». `resolveRegression`
- *    (`modules/evals/runs.go:257-276`) sale con el veredicto vacío en TRES caminos antes de
- *    comparar nada:
+ *    `regressed: false` means FIVE things and only one is "passed". The comparison
+ *    (`comparisonPlan.prepareComparison`/`complete`, `comparison.go`) leaves the verdict
+ *    empty on THREE paths before comparing anything:
  *      · `agg.passed+agg.failed == 0` — no se puntuó nada («A degraded/all-skipped run is never
  *        flagged (it was not actually scored)»).
  *      · `suite.RegThreshold <= 0` — la suite ni siquiera comprueba regresiones.
@@ -47,24 +53,34 @@ import type { AbPairwise, CaseResult, EvalRun, Scorecard } from './types'
  *    La columna pintaba «sin regresión» para los cuatro: una ejecución que NO MIDIÓ NADA se leía
  *    como una que midió y salió bien, en la señal que decide si una release sale.
  *
+ *    Since the interval of #2151 there is a FIFTH: a drop OVER the threshold whose 95%
+ *    pass-rate-difference interval includes zero leaves `regressed` false with
+ *    `comparison.reason = "inconclusive_noise"` (`comparison.go:352-358`: "at this n the drop
+ *    cannot be told from noise"). The receipt rides EVERY run read, the list included, so
+ *    the verdict is read from it; painting "no regression" would claim that a measured drop
+ *    passed the very test it did not pass.
+ *
  * ⚠ LO QUE LA FILA SOSTIENE, y nada más:
  *      · `n_scored === 0` ⇒ no se puntuó. Cierto y suficiente.
  *      · `baseline_ref` VACÍO ⇒ no hubo comparación. Cierto en ESA dirección.
- *    Lo converso NO vale y por eso no se afirma: `baselineScore` devuelve la ref explícita aunque
- *    `found` sea falso (`runs.go:288-296`), así que presente ≠ comparada. Con ref presente se
- *    dice «sin regresión» a secas.
+ *    The converse does NOT hold, so it is not claimed: baseline resolution returns the
+ *    explicit ref even when it then finds no receipt for it (`prepareComparison`,
+ *    `comparison.go`), so present ≠ compared. With a ref present and no receipt saying noise
+ *    the verdict is a plain "no regression".
  */
 export type VeredictoRegresion =
-  'regressed' | 'notScored' | 'noBaseline' | 'noRegression'
+  'regressed' | 'withinNoise' | 'notScored' | 'noBaseline' | 'noRegression'
 
 export function veredictoRegresion(run: {
   regressed: boolean
   n_scored?: number
   baseline_ref?: string
+  comparison?: ComparisonEvidence | null
 }): VeredictoRegresion {
   if (run.regressed) return 'regressed'
   if (run.n_scored === 0) return 'notScored'
   if (!run.baseline_ref) return 'noBaseline'
+  if (run.comparison?.reason === 'inconclusive_noise') return 'withinNoise'
   return 'noRegression'
 }
 
@@ -83,7 +99,7 @@ export function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <span className="block truncate font-mono text-body text-foreground">
-              {scorecard.key}
+              {scorecard.name}
             </span>
             <span className="text-caption text-muted-foreground">
               {/* No kind renders NOTHING. The previous form passed the missing
@@ -163,12 +179,12 @@ export function ScorecardCard({ scorecard }: { scorecard: Scorecard }) {
   )
 }
 
-/** The scorecard grid — one card per subject, positioned by stable list index. */
+/** The scorecard grid — one card per engine aggregation tuple. */
 export function ScorecardGrid({ scorecards }: { scorecards: Scorecard[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {scorecards.map((sc) => (
-        <ScorecardCard key={`${sc.subject_kind}:${sc.key}`} scorecard={sc} />
+        <ScorecardCard key={sc.key} scorecard={sc} />
       ))}
     </div>
   )
@@ -249,6 +265,18 @@ export function RunsTable({
                 })}
               </Badge>
             )
+          // Not a pass either: the drop is real and over the threshold, only
+          // unproven at this n — a warning, never the muted "None" a clean run
+          // gets.
+          if (v === 'withinNoise')
+            return (
+              <Badge variant="warning" className="gap-1">
+                <TrendingDown className="size-3" />
+                {t('runs.withinNoise', {
+                  drift: formatFraction(row.original.drift),
+                })}
+              </Badge>
+            )
           return (
             <span className="text-caption text-muted-foreground">
               {t(`runs.${v}`)}
@@ -282,6 +310,41 @@ export function RunsTable({
         />
       }
     />
+  )
+}
+
+/** The 95% interval of the pass-rate difference against the baseline, with both
+ *  denominators — the evidence behind the regression verdict (or the noise
+ *  verdict). Rendered for every run whose receipt carries a `pass_rate_diff`,
+ *  regressed or not: the interval is why the verdict is what it is, and a rate
+ *  without its n is not a defensible claim. Nothing renders when the receipt has
+ *  no interval (no baseline compared, or an unusable one) — absence is "no
+ *  comparison was made", never a zero drop. */
+export function ComparisonDiffLine({
+  comparison,
+}: {
+  comparison?: ComparisonEvidence | null
+}) {
+  const { t } = useTranslation('evals')
+  const d = comparison?.pass_rate_diff
+  if (!d) return null
+  // One decimal on drop and both bounds, like the engine's own gate line
+  // (cmd_evals.go: `pass_rate_drop=%+.1fpt ci95=[%+.1f,%+.1f]pt`): the sign of the
+  // lower bound IS the verdict, and the default rounding would print a bound of
+  // 0.4 pt as "0%", visually contradicting the badge beside it.
+  const oneDecimal = { digits: 1 } as const
+  return (
+    <p className="text-caption tabular-nums text-muted-foreground">
+      {t('runs.passRateDiff', {
+        passed: d.passed,
+        n: d.n,
+        baselinePassed: d.baseline_passed,
+        baselineN: d.baseline_n,
+        drop: formatFraction(d.drop, oneDecimal),
+        lo: formatFraction(d.drop_ci.lo, oneDecimal),
+        hi: formatFraction(d.drop_ci.hi, oneDecimal),
+      })}
+    </p>
   )
 }
 
@@ -539,7 +602,7 @@ export function DriftChart({
   }))
   return (
     <SectionCard
-      title={t('drift.title', { subject: scorecard.key })}
+      title={t('drift.title', { subject: scorecard.name })}
       description={t('drift.description')}
     >
       <TrendChart

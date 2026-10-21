@@ -260,6 +260,7 @@ func governanceApprovalPolicySpecSchema() map[string]any {
 	match := governanceClosedObject(oas.Obj(
 		"action", oas.Obj("type", "string", "maxLength", 128),
 		"subject_kind", oas.Obj("type", "string", "maxLength", 128),
+		"change_class", oas.Obj("type", "string", "enum", oas.Enum("", "docs_only", "code", "sensitive")),
 	))
 	schema := governanceClosedObject(oas.Obj(
 		"required_approvals", oas.Obj("type", "integer", "minimum", 0, "maximum", 64),
@@ -267,6 +268,8 @@ func governanceApprovalPolicySpecSchema() map[string]any {
 		"escalate_in_seconds", oas.Obj("type", "integer", "format", "int64", "minimum", 0, "maximum", 31536000),
 		"risk_tier", oas.Obj("type", "string", "enum", oas.Enum("", "low", "medium", "high", "critical")),
 		"match", match,
+		"sensitive_paths", oas.Obj("type", "array", "maxItems", 50, "items", oas.Obj("type", "string", "minLength", 1, "maxLength", 128)),
+		"require_other_than_launcher", oas.Obj("type", "boolean"),
 	))
 	// For a critical action the handler accepts an omitted/zero threshold (the
 	// engine floors it to two) or an explicitly dual-control threshold.

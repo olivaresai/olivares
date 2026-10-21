@@ -23,7 +23,7 @@ import (
 // the module hashes — a changed scope is a new question). hold.release is in
 // the default CRITICAL set (modules/governance/risktier.go), so the engine
 // floors its threshold at TWO distinct human approvers; retention.enable is
-// HIGH by default (≥1 approver + SoD), raisable per tenant by approval policy.
+// HIGH by default (≥1 approver + SoD), raisable per tenant by approval policy in Business.
 // On an approved status the adapter reads the approval's immutable decision
 // trail and returns the distinct approving principals as GateDecision.Approvers
 // — the quorum evidence the module independently re-verifies (≥2 for release,

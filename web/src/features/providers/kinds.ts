@@ -36,6 +36,39 @@ export const LOCAL_HTTP_KINDS: readonly string[] = [
 const OPENCODE_VENDOR_KEYS: readonly string[] = ['anthropic', 'openai', 'xai']
 
 /**
+ * Plain http at localhost, a loopback address or a private-network address, without
+ * credentials, query or fragment: driverfacts.LocalHTTPEndpoint, the rule that lets
+ * OpenCode be held to a local OpenAI-compatible server (vLLM, llama.cpp). It reads the
+ * address as typed, like the engine (`localhost` is exact, an IPv4 octet has no leading
+ * zero), and is deliberately a little stricter: an IPv4-mapped IPv6 form such as
+ * [::ffff:127.0.0.1] is accepted by the engine and not offered here.
+ */
+export function isLocalHttpEndpoint(baseURL: string | undefined): boolean {
+  const m =
+    /^http:\/\/(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]+)(?::\d{1,5})?(?:\/[^?#\s]*)?$/i.exec(
+      (baseURL ?? '').trim(),
+    )
+  if (!m) return false
+  const host = m[1]
+  if (host === 'localhost') return true
+  const octet = '(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)'
+  const v4 = new RegExp(`^${octet}\\.${octet}\\.${octet}\\.${octet}$`).exec(
+    host,
+  )
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])]
+    return (
+      a === 127 ||
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    )
+  }
+  // IPv6 literals: ::1 and the unique-local range fc00::/7.
+  return /^\[(::1|f[cd][0-9a-f]{2}:[0-9a-f:]*)\]$/i.test(host)
+}
+
+/**
  * Whether a session of this driver can run on a record of this kind AND be held to the
  * record's endpoint: a session bound to a provider record reaches only that endpoint, or
  * it does not start. It mirrors recordServesDriver in modules/sessions/provider_record.go
@@ -43,7 +76,8 @@ const OPENCODE_VENDOR_KEYS: readonly string[] = ['anthropic', 'openai', 'xai']
  * console only offers what the engine accepts, and kinds.test.ts pins the table. Claude
  * Code: an Anthropic key. Codex: an OpenAI key, an OpenAI-compatible endpoint or a local
  * model. Grok Build: an xAI key. OpenCode: an Anthropic, OpenAI or xAI key at the
- * provider's own address (no base URL), or a local model. Any other driver: nothing.
+ * provider's own address (no base URL), a local model, or an OpenAI-compatible server at
+ * a local http address. Any other driver: nothing.
  */
 export function recordServesDriver(
   kind: string,
@@ -64,6 +98,7 @@ export function recordServesDriver(
     case 'opencode':
       return (
         kind === 'ollama' ||
+        (kind === 'openai_compatible' && isLocalHttpEndpoint(baseURL)) ||
         (OPENCODE_VENDOR_KEYS.includes(kind) && !baseURL?.trim())
       )
     default:

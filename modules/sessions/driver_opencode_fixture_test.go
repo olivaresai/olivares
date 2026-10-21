@@ -44,6 +44,7 @@ type openCodeFixture struct {
 	PermissionOnTurn       string `json:"permission_on_turn"`
 	ForeignUpdate          bool   `json:"foreign_update"`
 	ReplayUpdates          int    `json:"replay_updates"`
+	ReplayText             string `json:"replay_text"` // what each replayed update says ("" = "history-<n>")
 	UnsupportedRequest     string `json:"unsupported_request"`
 	SpawnChild             bool   `json:"spawn_child"`
 	GroupedModel           bool   `json:"grouped_model"`
@@ -54,6 +55,12 @@ type openCodeFixture struct {
 	// EchoPrompt makes the peer send the prompt back as a user_message_chunk first,
 	// as an agent that echoes the person's message would.
 	EchoPrompt bool `json:"echo_prompt"`
+
+	// WritePath makes the peer ask the client to write WriteContent to that path on
+	// the turn, as OpenCode does after an approved edit; a relative path is joined to
+	// the session folder the client named in session/new.
+	WritePath    string `json:"write_path"`
+	WriteContent string `json:"write_content"`
 }
 
 type openCodeFixtureRecord struct {
@@ -94,6 +101,7 @@ type openCodeFixturePeer struct {
 	mu         sync.Mutex
 	rec        openCodeFixtureRecord
 	session    string
+	cwd        string
 	heldPrompt json.RawMessage
 }
 
@@ -255,6 +263,7 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 			_ = json.Unmarshal(raw, &cwd)
 		}
 		p.rec.NewCwds = append(p.rec.NewCwds, cwd)
+		p.cwd = cwd
 		p.flush()
 		p.waitFor(p.cfg.HoldNewPath)
 		if p.cfg.NewSessionAuthRequired {
@@ -276,7 +285,11 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 		}
 		p.session = requested
 		for i := 0; i < p.cfg.ReplayUpdates; i++ {
-			p.sendUpdate(p.session, "agent_message_chunk", fmt.Sprintf("history-%d", i))
+			text := fmt.Sprintf("history-%d", i)
+			if p.cfg.ReplayText != "" {
+				text = p.cfg.ReplayText
+			}
+			p.sendUpdate(p.session, "agent_message_chunk", text)
 		}
 		switch {
 		case p.cfg.ResumeSessionID != "":
@@ -339,6 +352,16 @@ func (p *openCodeFixturePeer) onPrompt(id json.RawMessage) {
 		p.send(map[string]any{
 			"jsonrpc": "2.0", "id": "srv-cap", "method": p.cfg.UnsupportedRequest,
 			"params": map[string]any{"sessionId": p.session, "path": "/etc/hostname"},
+		})
+	}
+	if p.cfg.WritePath != "" {
+		path := p.cfg.WritePath
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(p.cwd, path)
+		}
+		p.send(map[string]any{
+			"jsonrpc": "2.0", "id": "srv-write", "method": "fs/write_text_file",
+			"params": map[string]any{"sessionId": p.session, "path": path, "content": p.cfg.WriteContent},
 		})
 	}
 	if p.cfg.PermissionOnTurn != "" {

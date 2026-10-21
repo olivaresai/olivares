@@ -19,7 +19,7 @@ import (
 )
 
 func TestAuthorizationEpochPostgresSplitOwnerBackfillOCCAndLock(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 	cfg := store.Config{
@@ -126,7 +126,7 @@ func TestAuthorizationEpochPostgresSplitOwnerBackfillOCCAndLock(t *testing.T) {
 }
 
 func TestEpochReconcilePostgresForeignAdminRollsBackDirectoryBeforeAuthorization(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	primary := isolatedPGSplit(t)
 	foreign := isolatedPGSplit(t)
@@ -178,7 +178,7 @@ func TestEpochReconcilePostgresForeignAdminRollsBackDirectoryBeforeAuthorization
 }
 
 func TestAuthorizationEpochReconcilePostgresRejectsForeignAdminDirectly(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	primary := isolatedPGSplit(t)
 	foreign := isolatedPGSplit(t)
@@ -234,7 +234,7 @@ func TestAuthorizationEpochReconcilePostgresEnumeratesThroughPinnedTransaction(t
 	// The old 10-second context covered BOTH boot/migrations and the reconcile this test names.
 	// Under the loaded race runner it expired in Open's append-only inventory before the subject
 	// ran (run 33254801927). Give setup its own bound so a setup failure remains a setup failure.
-	setupCtx, setupCancel := context.WithTimeout(context.Background(), 45*time.Second)
+	setupCtx, setupCancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer setupCancel()
 	cfg := store.Config{
 		Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner,
@@ -276,7 +276,7 @@ func TestAuthorizationEpochReconcilePostgresEnumeratesThroughPinnedTransaction(t
 }
 
 func TestAuthorizationEpochReconcilePostgresRejectsLiveAdminPostureDrift(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 	cfg := store.Config{

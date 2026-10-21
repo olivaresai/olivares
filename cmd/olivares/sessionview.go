@@ -449,7 +449,7 @@ func (v *sessionView) apiRetry(frame map[string]any) {
 		name = "The tool"
 	}
 	if cause == "authentication_failed" || status == 401 || status == 403 {
-		v.say(fmt.Sprintf("✗ %s's provider refused its credential (HTTP %.0f). Replace the API key in AI tools › API keys, "+
+		v.say(fmt.Sprintf("✗ %s's provider refused its credential (HTTP %.0f). Replace the API key in AI tools › Providers, "+
 			"or sign it in: olivares tool login %s", name, status, v.driver), termrender.RoleFail)
 		return
 	}

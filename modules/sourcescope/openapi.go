@@ -90,7 +90,7 @@ func sourceScopeBindingSchema(create bool) map[string]any {
 		"id", sourceScopeOptionalString("Accepted by the DTO but ignored on input; identity comes from the store."),
 		"source_type", oas.Obj(
 			"type", "string",
-			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, or data. On update the stored value wins.",
+			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, data, profile, or tool. On update the stored value wins.",
 		),
 		"source_ref", oas.Obj("type", "string", "description", "After trimming it must be non-empty. On update the stored value wins."),
 		"scope_tree", oas.Obj(
@@ -119,7 +119,7 @@ func sourceScopeDisableScopingSchema() map[string]any {
 	return sourceScopeClosedObject(oas.Obj(
 		"source_type", oas.Obj(
 			"type", "string",
-			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, or data.",
+			"description", "Case-insensitive after trimming: mcp, model, provider, knowledge, data, profile, or tool.",
 		),
 		"source_ref", oas.Obj("type", "string", "description", "After trimming it must be non-empty."),
 	), "source_type", "source_ref")

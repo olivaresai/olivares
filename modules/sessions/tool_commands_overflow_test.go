@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // Use a real native child and the real bridge: handing a frame straight to the
@@ -114,6 +115,83 @@ done
 	}
 }
 
+// launchCodexWithSkills starts the real runtime on a real child that answers skills/list as fixture says.
+func launchCodexWithSkills(t *testing.T, fixture codexFixture) (*Module, model.TenantID, runDTO, *liveRun) {
+	t.Helper()
+	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)
+	fixture.ThreadID, fixture.Account = "thread-skills", "apikey"
+	setCodexFixture(t, prof, fixture)
+	dto, err := codexLaunch(t, m, tenant, prof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lr, ok := m.rt.getLive(tenant, dto.RunRef)
+	if !ok {
+		t.Fatal("no live session")
+	}
+	return m, tenant, dto, lr
+}
+
+func assertNoSkillsInAttach(t *testing.T, lr *liveRun) {
+	t.Helper()
+	for _, frame := range lr.ring.readFrom(0).frames {
+		if bytes.Contains(frame.Data, []byte("xxxxxxxx")) || bytes.Contains(frame.Data, []byte("fixture-skill")) {
+			t.Fatal("the skills answer reached attach output")
+		}
+	}
+}
+
+// Codex's skills/list answer is as large as the person's skill set. The real
+// runtime and a real child prove that a reply over the one-line limit fails the
+// read, not the session.
+func TestToolCommands_OversizedCodexSkillsKeepNativeSessionAlive(t *testing.T) {
+	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: maxOutputLine + 100_000})
+	ctx := context.Background()
+	pid := int(*dto.PID)
+	got, err := m.runToolCommands(ctx, tenant, dto.RunRef)
+	if statusOf(err) != http.StatusBadGateway || err.Error() != codexSkillsFailed {
+		t.Fatalf("oversized skills = %+v, %v (session ended: %v); want the fixed 502", got, err, lr.toolEnded() || !processRunning(pid))
+	}
+	if lr.toolEnded() || !processRunning(pid) {
+		t.Fatal("an oversized skills answer ended the session")
+	}
+	// The line was drained to its newline: the next answer is read from a clean stream.
+	items, reported, err := lr.session.(*codexSession).commandCatalog(ctx)
+	if err != nil || !reported || len(items) != 1 || items[0].Name != "fixture-skill" {
+		t.Fatalf("catalog after the oversized answer = %+v %v %v", items, reported, err)
+	}
+	assertNoSkillsInAttach(t, lr)
+}
+
+// A catalog read before is served, marked stale, when the next answer is over the limit.
+func TestToolCommands_OversizedCodexSkillsServeTheLastCatalogStale(t *testing.T) {
+	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: maxOutputLine + 100_000, SkillsPadRequest: 2})
+	ctx := context.Background()
+	if got, err := m.runToolCommands(ctx, tenant, dto.RunRef); err != nil || !got.Reported || got.Stale || len(got.Commands) != 1 {
+		t.Fatalf("first catalog = %+v, %v", got, err)
+	}
+	lr.commands.dirty.Store(true)
+	got, err := m.runToolCommands(ctx, tenant, dto.RunRef)
+	if err != nil || !got.Reported || !got.Stale || len(got.Commands) != 1 || got.Commands[0].Name != "fixture-skill" {
+		t.Fatalf("catalog after the oversized answer = %+v, %v; want the last one, stale", got, err)
+	}
+	if lr.toolEnded() || !processRunning(int(*dto.PID)) {
+		t.Fatal("an oversized skills answer ended the session")
+	}
+	assertNoSkillsInAttach(t, lr)
+}
+
+// Recovery is for answers to the engine's own request only: a line over the limit
+// under an id nobody issued still ends the session.
+func TestToolCommands_OversizedCodexLineOfAnotherIDStillEndsTheSession(t *testing.T) {
+	m, tenant, dto, lr := launchCodexWithSkills(t, codexFixture{SkillsPadBytes: maxOutputLine + 100_000, SkillsPadForeignID: true})
+	pid := int(*dto.PID)
+	// The read ends with the session; what it returns is not the point here.
+	_, _ = m.runToolCommands(context.Background(), tenant, dto.RunRef)
+	waitFor(t, "the over-long unissued line ended the session", func() bool { return !processRunning(pid) })
+	assertNoSkillsInAttach(t, lr)
+}
+
 func TestToolCommands_OverflowRecoveryOnlyForIssuedAnswers(t *testing.T) {
 	for _, tc := range []struct {
 		name, prefix            string
@@ -126,6 +204,8 @@ func TestToolCommands_OverflowRecoveryOnlyForIssuedAnswers(t *testing.T) {
 		{"nested id", `{"type":"control_response","response":{"response":{"request_id":"olv-commands-owned","commands":[`, true, false, false},
 		{"broken id", `{"type":"control_response","response":{"request_id":42,"response":{"commands":[`, true, false, false},
 		{"non JSON", `olv-commands-owned`, true, false, false},
+		{"duplicate id", `{"type":"control_response","response":{"request_id":"olv-commands-foreign","request_id":"olv-commands-owned","response":{"commands":[`, true, false, false},
+		{"duplicate type", `{"type":"assistant","type":"control_response","response":{"request_id":"olv-commands-owned","response":{"commands":[`, true, false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lr := &liveRun{}
@@ -196,6 +276,43 @@ exec sleep 300
 	}
 	if _, err := p.Wait(); err != nil {
 		t.Fatalf("child collection did not complete: %v", err)
+	}
+}
+
+func TestToolCommands_CodexOverflowRecoveryOnlyForIssuedAnswers(t *testing.T) {
+	for _, tc := range []struct {
+		name, prefix string
+		want         bool
+	}{
+		{"issued", `{"id":7,"result":{"data":[{"cwd":"/private","skills":[`, true},
+		{"issued error reply", `{"id":7,"error":{"code":-1,"message":"`, true},
+		{"unissued id", `{"id":8,"result":{"data":[{"cwd":"/private","skills":[`, false},
+		{"server request sharing the id", `{"id":7,"method":"item/tool/call","params":{"padding":"`, false},
+		{"server request, method first", `{"method":"item/tool/call","id":7,"params":{"padding":"`, false},
+		{"notification", `{"method":"skills/changed","params":{"padding":"`, false},
+		{"nested id", `{"result":{"id":7,"data":[`, false},
+		{"duplicate id", `{"id":7,"id":8,"result":{"data":[`, false},
+		{"id inside text", `{"result":{"text":"{\"id\":7}"`, false},
+		{"string id", `{"id":"7","result":{"data":[`, false},
+		{"non JSON", `7`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newCodexPeer(t).session.(*codexSession)
+			s.catalogRequests = map[string]struct{}{"7": {}}
+			replacement := s.oversizedCatalogResponse([]byte(tc.prefix))
+			if (replacement != nil) != tc.want {
+				t.Fatalf("recovery = %v, want %v", replacement != nil, tc.want)
+			}
+			if !tc.want {
+				return
+			}
+			if !json.Valid(replacement) || bytes.Contains(replacement, []byte("private")) || bytes.Contains(replacement, []byte("padding")) {
+				t.Fatalf("replacement = %s", replacement)
+			}
+			if !s.takeCatalogResponse(replacement) {
+				t.Fatal("replacement did not take the ordinary catalog answer path")
+			}
+		})
 	}
 }
 

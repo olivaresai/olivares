@@ -136,6 +136,7 @@
       "revoked": "Widerrufen",
       "notAttributed": "Diese Ansicht schreibt keinen Stand zu"
     },
+    "scopeOf": "Umfang von „{{item}}“",
     "meta": "{{subject}} · entschieden von {{actor}} · {{at}}",
     "revoke": "Widerrufen",
     "revokeTitle": "Entscheidung widerrufen",
@@ -261,8 +262,8 @@
     "item.fail": "Als fehlgeschlagen markieren",
     "item.cancel": "Abbrechen",
     "item.archive": "Archivieren",
-    "noWrite": "Ihre Rolle kann dieses Element nicht ändern. Dieser Vorgang braucht sessions:work:write.",
-    "noAdmin": "Fehlschlag und Archivierung brauchen sessions:work:admin."
+    "noWrite": "Ihre Rolle kann dieses Element nicht ändern.",
+    "noAdmin": "Ihre Rolle kann Elemente weder als fehlgeschlagen markieren noch archivieren."
   },
   "truncation": {
     "label": "{{n}} Zeilen geladen; es gibt mehr",
@@ -291,7 +292,7 @@
   "handoff": {
     "offer": "Übergabe anbieten",
     "offerHint": "Bieten Sie die Verantwortung für dieses Element einer empfangenden Partei über einen Kanal an. Die Inhaberschaft wechselt erst mit deren Annahme.",
-    "noPermission": "Ihre Rolle kann keine Übergabe anbieten. Dieser Vorgang braucht sessions:message-send:write."
+    "noPermission": "Ihre Rolle kann keine Übergabe anbieten."
   },
   "url": {
     "invalidItem": "Die Adresse nennt eine Elementkennung, die diese Ansicht nicht verwenden kann, und wurde ignoriert.",

@@ -109,8 +109,9 @@ func warnEventingTruncated(cmd *cobra.Command, shown int, page model.Page, what 
 
 func newEventingCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "eventing",
-		Short: "Manage the eventing platform (webhook event subscriptions, deliveries, event log)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "eventing",
+		Short:       "Manage the eventing platform (webhook event subscriptions, deliveries, event log)",
 		Long: "Offline CRUD and inspection over the eventing platform's durable entities:\n" +
 			"subscriptions, captured events, deliveries and the dead-letter queue.\n" +
 			"These commands operate against the store directly, without a running engine.",
@@ -129,8 +130,9 @@ func newEventingCmd() *cobra.Command {
 
 func newEventingSubscriptionsCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "subscriptions",
-		Short: "Manage event subscriptions (ls, get, create, update, rotate-secret, rm, test)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "subscriptions",
+		Short:       "Manage event subscriptions (ls, get, create, update, rotate-secret, rm, test)",
 		Long: "A subscription is a tenant's standing request to have matching events delivered\n" +
 			"to an endpoint it owns. These verbs create, list, edit and remove them, and send\n" +
 			"a test delivery so the endpoint can be proved reachable before real events\n" +
@@ -150,11 +152,12 @@ func newEventingSubscriptionsCmd() *cobra.Command {
 func eventingSubListCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List event subscriptions for a tenant",
-		Long:    "ls reads and lists all durable webhook event subscriptions for one tenant without requiring a running engine.",
-		Example: "  olivares eventing subscriptions ls --tenant t_abc123",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List event subscriptions for a tenant",
+		Long:        "ls reads and lists all durable webhook event subscriptions for one tenant without requiring a running engine.",
+		Example:     "  olivares eventing subscriptions ls --tenant t_abc123",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolvedTenant, err := resolveTenant(tenant)
 			if err != nil {
@@ -235,8 +238,9 @@ func eventingSubListCmd() *cobra.Command {
 func eventingSubGetCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, id string
 	cmd := &cobra.Command{
-		Use:   "get",
-		Short: "Show one event subscription in full",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get",
+		Short:       "Show one event subscription in full",
 		Long: "get reads one durable webhook event subscription by tenant and id and prints every\n" +
 			"field, including the retry policy and the auth shape that `ls` leaves out. It never\n" +
 			"prints the shared secret itself: the store keeps only a hint, and a verb that\n" +
@@ -331,8 +335,9 @@ func eventingSubCreateCmd() *cobra.Command {
 		initialInterval       int64
 	)
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Create a new event subscription",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Create a new event subscription",
 		Long: "Create a new webhook event subscription. The signing secret is generated\n" +
 			"server-side and printed ONCE — store it securely. The subscription starts enabled.",
 		Example: `  olivares eventing subscriptions create --tenant t_abc123 --name siem \
@@ -541,8 +546,9 @@ func eventingSubUpdateCmd() *cobra.Command {
 		enabled               bool
 	)
 	cmd := &cobra.Command{
-		Use:   "update",
-		Short: "Edit one event subscription in place (never reissues the secret)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "update",
+		Short:       "Edit one event subscription in place (never reissues the secret)",
 		Long: "update edits one durable webhook event subscription by tenant and id. Only the\n" +
 			"flags you pass are changed; everything else keeps its stored value.\n\n" +
 			"It NEVER reissues the signing secret. Before this verb existed, changing an\n" +
@@ -774,8 +780,9 @@ func eventingSubRotateSecretCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, id string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "rotate-secret",
-		Short: "Reissue the signing secret for one subscription (breaks delivery until the receiver is updated)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rotate-secret",
+		Short:       "Reissue the signing secret for one subscription (breaks delivery until the receiver is updated)",
 		Long: "rotate-secret generates a new signing secret for one subscription, seals it and prints\n" +
 			"it ONCE. Nothing else about the subscription changes — same id, same endpoint, same\n" +
 			"retry policy — so dashboards and runbooks that name it keep working.\n\n" +
@@ -889,12 +896,13 @@ func eventingSubRemoveCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, id string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm",
-		Short:   "Delete an event subscription",
-		Long:    "rm permanently deletes one durable event subscription identified by tenant and subscription ID.",
-		Example: "  olivares eventing subscriptions rm --tenant t_abc123 --id sub-123",
-		Args:    cobra.NoArgs,
-		Aliases: []string{"remove", "delete"},
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm",
+		Short:       "Delete an event subscription",
+		Long:        "rm permanently deletes one durable event subscription identified by tenant and subscription ID.",
+		Example:     "  olivares eventing subscriptions rm --tenant t_abc123 --id sub-123",
+		Args:        cobra.NoArgs,
+		Aliases:     []string{"remove", "delete"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolvedTenant, err := resolveTenant(tenant)
 			if err != nil {
@@ -947,8 +955,9 @@ func eventingSubRemoveCmd() *cobra.Command {
 func eventingSubTestCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, id string
 	cmd := &cobra.Command{
-		Use:   "test",
-		Short: "Send a test delivery to a subscription's endpoint",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "test",
+		Short:       "Send a test delivery to a subscription's endpoint",
 		Long: "Sends a synthetic test event to the subscription's endpoint, signed with its\n" +
 			"real signing secret. The test event is not captured in the event log and creates\n" +
 			"no delivery row. Use this to verify the receiver is wired correctly.",
@@ -1098,8 +1107,9 @@ func eventingSubTestCmd() *cobra.Command {
 
 func newEventingDeliveriesCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "deliveries",
-		Short: "Inspect delivery state (ls)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "deliveries",
+		Short:       "Inspect delivery state (ls)",
 		Long: "A delivery is one attempt to hand one event to one subscription's endpoint.\n" +
 			"Listing them, filtered by subscription or status, is how a tenant answers\n" +
 			"\"did that event actually arrive, and if not, where did it stop\".",
@@ -1112,11 +1122,12 @@ func newEventingDeliveriesCmd() *cobra.Command {
 func eventingDeliveriesListCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, subscription, status string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List deliveries (optionally filtered by --subscription, --status)",
-		Long:    "ls lists durable webhook delivery records for one tenant, optionally filtering by subscription or delivery status.",
-		Example: "  olivares eventing deliveries ls --tenant t_abc123 --status dead",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List deliveries (optionally filtered by --subscription, --status)",
+		Long:        "ls lists durable webhook delivery records for one tenant, optionally filtering by subscription or delivery status.",
+		Example:     "  olivares eventing deliveries ls --tenant t_abc123 --status dead",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolvedTenant, err := resolveTenant(tenant)
 			if err != nil {
@@ -1189,8 +1200,9 @@ func eventingDeliveriesListCmd() *cobra.Command {
 
 func newEventingDeadLettersCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "dead-letters",
-		Short: "Inspect and redeliver dead-lettered deliveries",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dead-letters",
+		Short:       "Inspect and redeliver dead-lettered deliveries",
 		Long: "A delivery that exhausted its retries is parked as dead rather than dropped, so\n" +
 			"an endpoint outage costs a redelivery and not the event itself. ls shows what\n" +
 			"is parked; redeliver puts one back on the queue once the endpoint is healthy.",
@@ -1204,11 +1216,12 @@ func newEventingDeadLettersCmd() *cobra.Command {
 func eventingDeadLettersListCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, subscription string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List dead-lettered deliveries (status=dead)",
-		Long:    "ls lists terminal dead-letter deliveries for one tenant, optionally restricted to one subscription.",
-		Example: "  olivares eventing dead-letters ls --tenant t_abc123 --subscription sub-123",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List dead-lettered deliveries (status=dead)",
+		Long:        "ls lists terminal dead-letter deliveries for one tenant, optionally restricted to one subscription.",
+		Example:     "  olivares eventing dead-letters ls --tenant t_abc123 --subscription sub-123",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolvedTenant, err := resolveTenant(tenant)
 			if err != nil {
@@ -1273,8 +1286,9 @@ func eventingDeadLettersListCmd() *cobra.Command {
 func eventingDeadLettersRedeliverCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, id string
 	cmd := &cobra.Command{
-		Use:   "redeliver",
-		Short: "Requeue a dead-lettered delivery for retry",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "redeliver",
+		Short:       "Requeue a dead-lettered delivery for retry",
 		Long: "Requeues a delivery that reached a terminal state (dead, delivered or denied)\n" +
 			"so the retry ladder restarts from attempt 0. The event's idempotency key is stable.",
 		Example: "  olivares eventing dead-letters redeliver --tenant t_abc123 --id delivery-123",
@@ -1358,8 +1372,9 @@ func eventingDeadLettersRedeliverCmd() *cobra.Command {
 
 func newEventingEventsCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "events",
-		Short: "Inspect the captured event log",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "events",
+		Short:       "Inspect the captured event log",
 		Long: "The event log is what the platform captured, independently of whether any\n" +
 			"subscription was interested at the time. Reading it from a sequence cursor is\n" +
 			"how a consumer catches up after downtime without replaying everything.",
@@ -1373,11 +1388,12 @@ func eventingEventsListCmd() *cobra.Command {
 	var dataDir, engine, dsn, tenant, eventType string
 	var sinceSeq int64
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List captured events (optionally from a seq cursor, filtered by --type)",
-		Long:    "ls lists up to 100 captured durable events for one tenant in sequence order, with optional cursor and event-type filters.",
-		Example: "  olivares eventing events ls --tenant t_abc123 --since-seq 100 --type finding.created",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List captured events (optionally from a seq cursor, filtered by --type)",
+		Long:        "ls lists up to 100 captured durable events for one tenant in sequence order, with optional cursor and event-type filters.",
+		Example:     "  olivares eventing events ls --tenant t_abc123 --since-seq 100 --type finding.created",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolvedTenant, err := resolveTenant(tenant)
 			if err != nil {

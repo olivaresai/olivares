@@ -1,0 +1,129 @@
+{
+  "title": "경영 개요",
+  "description": "비용, 사용량, 위험 및 컴플라이언스를 한눈에 — 세부 정보는 운영 보기로 드릴다운하십시오.",
+  "asOfNote": "위험, 컴플라이언스 및 안정성은 현재 상태를 반영하며 비용은 선택한 기간에 걸칩니다.",
+  "range": {
+    "label": "기간",
+    "7d": "지난 7일",
+    "30d": "지난 30일",
+    "90d": "지난 90일",
+    "mtd": "이번 달"
+  },
+  "export": {
+    "action": "PDF 내보내기",
+    "hint": "이 보고서를 PDF로 인쇄하거나 저장합니다"
+  },
+  "report": {
+    "title": "경영 보고서",
+    "generated": "{{date}} 생성됨",
+    "generatedLabel": "생성됨",
+    "tenant": "조직",
+    "allOrgs": "모든 조직",
+    "range": "비용 기간",
+    "footer": "Olivares AI — 집계 KPI만 포함하며 페이로드나 비밀은 없습니다."
+  },
+  "empty": {
+    "title": "사용 가능한 경영 KPI 없음",
+    "description": "이 조직의 비용, 위험, 컴플라이언스 또는 안정성 소스에 대한 읽기 액세스 권한이 없습니다."
+  },
+  "restricted": {
+    "label": "제한됨",
+    "hint": "현재 역할은 이 소스를 읽을 수 없습니다."
+  },
+  "pillars": {
+    "cost": "지출",
+    "costCaption": "선택한 기간",
+    "usage": "활성 에이전트",
+    "usageCaption": "{{live}}개 라이브 · {{entities}}개 추적됨",
+    "sourceRestricted": "{{source}} — 현재 역할로 제한됨",
+    "sourceUnavailable": "{{source}} — 불러오지 못했습니다",
+    "sourcePendingPaused": "{{source}} — 쿼리 일시 중지됨, 재개 대기 중",
+    "sourcePendingIdle": "{{source}} — 쿼리가 시작되지 않음",
+    "partialWhy": "부분 데이터인 이유는?",
+    "risk": "공개 위험",
+    "riskCaption": "치명적/높음 {{count}}개",
+    "silentEvasion": "조용한 회피 {{count}}개",
+    "compliance": "제어 범위",
+    "complianceCaption": "공백 {{gap}}개 · 매핑 안 됨 {{unmapped}}개"
+  },
+  "availability": {
+    "restricted": "{{source}}: 현재 역할로 제한됨.",
+    "unavailable": "{{source}}: 불러오지 못했습니다.",
+    "pendingPaused": "{{source}}: 쿼리 일시 중지됨, 재개 대기 중.",
+    "pendingIdle": "{{source}}: 쿼리가 시작되지 않았습니다.",
+    "loading": "{{source}}: 불러오는 중.",
+    "partial": "{{source}}: 수치 사용 가능, 부분 데이터.",
+    "current": "{{source}}: 수치 사용 가능."
+  },
+  "cost": {
+    "title": "비용",
+    "trendTitle": "지출 추세",
+    "trendDescription": "선택한 기간의 일별 토큰 지출입니다.",
+    "seriesCost": "지출",
+    "forecast": "예측",
+    "atRunRate": "예상(후행 창 추세)",
+    "runRateNote": "후행 창 일별 추세에서 기간의 나머지로 확장한 예상치이며 예측 모델이 아닙니다.",
+    "deltaUp": "이전 기간 대비 {{pct}}",
+    "deltaDown": "이전 기간 대비 {{pct}}",
+    "deltaFlat": "이전 기간과 동일",
+    "tokens": "토큰",
+    "samples": "비용 기록",
+    "models": "활성 모델",
+    "breakdownTitle": "지출 분석",
+    "breakdownDescription": "지출이 어디로 가는지 — 팀, 프로젝트, 에이전트, 모델 또는 프로바이더별로 요약합니다.",
+    "noAttribution": "선택한 기간에 이 차원의 귀속이 없습니다."
+  },
+  "dimensions": {
+    "team": "팀별",
+    "project": "프로젝트별",
+    "agent": "에이전트별",
+    "model": "모델별",
+    "provider": "프로바이더별"
+  },
+  "risk": {
+    "title": "위험 상태",
+    "description": "공개 보안 발견 사항, 적대적 견고성 및 액세스 드리프트.",
+    "openFindings": "공개 발견 사항",
+    "bySeverity": "심각도별 발견 사항",
+    "robustness": "레드팀 견고성",
+    "robustnessCaption": "마지막으로 완료된 실행",
+    "robustnessPending": "실행 대기 중",
+    "robustnessPendingHint": "가장 최근 레드팀 실행이 프로브를 완료하지 못했습니다 — 통과가 아닙니다.",
+    "drift": "액세스 드리프트",
+    "driftFirm": "예상치 못한 액세스",
+    "driftPending": "ID 연결 대기 중",
+    "driftUnused": "사용되지 않은 부여",
+    "coverageNote": "일부 액세스는 부분 범위(근사 또는 불투명 캡처)로 관측되며 드리프트 수치는 하한입니다.",
+    "driftTruncated": "드리프트 읽기가 부분적이며 액세스 드리프트 수치는 하한입니다.",
+    "driftUnavailable": "액세스 드리프트를 읽지 못했습니다.",
+    "noFindings": "공개 발견 사항이 없습니다.",
+    "noRuns": "아직 레드팀 실행이 없습니다.",
+    "sharedDescription": "공개 보안 발견 사항 및 액세스 드리프트."
+  },
+  "compliance": {
+    "title": "컴플라이언스",
+    "description": "추적하는 프레임워크의 제어 상태 — 제어 범위이며 컴플라이언스 주장이 아닙니다.",
+    "coverage": "제어 범위",
+    "ofControls": "{{frameworks}}개 프레임워크의 제어 {{total}}개 중",
+    "satisfied": "충족됨",
+    "byDesign": "설계상",
+    "partial": "부분",
+    "gap": "공백",
+    "unmapped": "매핑 안 됨",
+    "frameworks": "프레임워크",
+    "riskTiers": "에이전트 위험 등급",
+    "noFrameworks": "아직 매핑된 프레임워크가 없습니다."
+  },
+  "reliability": {
+    "title": "안정성",
+    "description": "현재 에이전트 및 MCP 상태와 공개 사고입니다.",
+    "healthy": "정상",
+    "degraded": "저하됨",
+    "down": "중단됨",
+    "unknown": "알 수 없음",
+    "slaBreaches": "공개 SLA 위반",
+    "incidents": "공개 사고",
+    "nowNote": "상태는 특정 시점 스냅샷입니다. \"알 수 없음\"은 대상을 추적하는 검사가 없다는 뜻이며 정상이 아닙니다.",
+    "noData": "아직 보고하는 상태 확인이 없습니다."
+  }
+}

@@ -6,10 +6,12 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
@@ -36,11 +38,25 @@ func (pr *procRunner) command(ctx context.Context, spec LaunchSpec) (*exec.Cmd, 
 	policy.ReadWrite = append(append([]string{}, policy.ReadWrite...), tmp)
 	var cmd *exec.Cmd
 	var state confine.State
-	if len(spec.ConfinementFiles) > 0 {
-		// Held read-only grants always require ABI 3, satisfying any strict template choice.
-		cmd, state, err = confine.CommandWithHandles(ctx, policy, spec.ConfinementFiles, spec.Program, spec.Args...)
+	if len(spec.ConfinementFiles) > 0 || len(spec.ConfinementNoDelete) > 0 {
+		// Held read-only grants require ABI 3, satisfying any strict template choice; a no-delete
+		// grant alone needs only Landlock.
+		cmd, state, err = confine.CommandWithNoDelete(ctx, policy, spec.ConfinementRequireTruncateProtection, spec.ConfinementFiles, spec.ConfinementNoDelete, spec.Program, spec.Args...)
 	} else {
 		cmd, state, err = confine.CommandWithTruncateProtection(ctx, policy, spec.ConfinementRequireTruncateProtection, spec.Program, spec.Args...)
+	}
+	if err == nil && state.Mode == confine.ModeLandlock {
+		mountErr := confine.WrapMounts(cmd, spec.ConfinementMounts)
+		switch {
+		case errors.Is(mountErr, confine.ErrMountsUnavailable):
+			// An honest limit, not a refusal: the session still starts, and the
+			// run's confinement reason names the protection this host cannot give.
+			state.Reason = joinReasons(state.Reason, "the folder's Git hooks and configuration stay writable ("+mountErr.Error()+")")
+		case mountErr != nil:
+			err = fmt.Errorf("sessions: guard the folder's Git hooks and configuration: %w", mountErr)
+		case spec.ConfinementMountsNote != "":
+			state.Reason = joinReasons(state.Reason, "some of the folder's Git hooks and configuration stay writable ("+spec.ConfinementMountsNote+")")
+		}
 	}
 	if err == nil && state.Mode == confine.ModeNone && spec.ConfinementRequired {
 		err = &runErr{http.StatusBadGateway, "this server cannot confine sessions; enable Landlock on the engine host and run olivares doctor; the session was not started"}
@@ -56,6 +72,12 @@ func (pr *procRunner) command(ctx context.Context, spec LaunchSpec) (*exec.Cmd, 
 	env := append([]EnvVar{{Name: "TMPDIR", Value: tmp}}, spec.Env...)
 	if !envNamed(spec.Env, envUserHome) {
 		env = append(env, EnvVar{Name: envUserHome, Value: tmp})
+		if spec.ScratchHome != nil {
+			if err := spec.ScratchHome(tmp); err != nil {
+				release()
+				return nil, nil, state, nil, err
+			}
+		}
 	}
 	return cmd, env, state, release, nil
 }
@@ -79,4 +101,15 @@ func envNamed(env []EnvVar, name string) bool {
 		}
 	}
 	return false
+}
+
+// joinReasons is one confinement reason out of the ones a launch collected.
+func joinReasons(reasons ...string) string {
+	var kept []string
+	for _, r := range reasons {
+		if r != "" {
+			kept = append(kept, r)
+		}
+	}
+	return strings.Join(kept, "; ")
 }

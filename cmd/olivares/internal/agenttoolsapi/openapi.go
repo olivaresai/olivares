@@ -93,6 +93,18 @@ func (*Module) OperationDocumentation(method, pattern string) (api.ModuleOperati
 		declaration.SuccessResponses = map[string]any{"202": jsonResponse("The model download started", ollamaPullSchema())}
 	case "GET /ollama/pulls/{id}":
 		declaration.SuccessResponses = map[string]any{"200": jsonResponse("A model download with Ollama's own progress", ollamaPullSchema())}
+	case "GET /model-servers":
+		declaration.SuccessResponses = map[string]any{"200": jsonResponse("Each local OpenAI-compatible model server (llama.cpp, vLLM): installed, running or not, its endpoint and the models it serves", jsonObject(map[string]any{"servers": map[string]any{"type": "array", "items": modelServerStatusSchema()}}, "servers"))}
+	case "POST /model-servers/{kind}/start":
+		declaration.BodyKind = api.ModuleOperationJSONBody
+		declaration.RequestBody = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": jsonObject(map[string]any{
+			"model":     map[string]any{"type": "string", "maxLength": 1024, "description": "llama-cpp: the absolute path of a .gguf file, or a Hugging Face model as user/repo[:quantization]. vllm: the absolute path of a model directory, or a Hugging Face model as user/repo."},
+			"tenant_id": map[string]any{"type": "string", "format": "uuid", "description": "The organization whose Providers get this server's endpoint and the key the engine made for it."},
+		}, "model", "tenant_id")}}}
+		declaration.SuccessResponses = map[string]any{"202": jsonResponse("The server is starting, or already runs this model, on this node", modelServerStatusSchema())}
+	case "POST /model-servers/{kind}/stop":
+		declaration.BodyKind = api.ModuleOperationBodyless
+		declaration.SuccessResponses = map[string]any{"200": jsonResponse("The server stopped; its models stay on disk", modelServerStatusSchema())}
 	default:
 		return declaration, false
 	}
@@ -118,6 +130,11 @@ func providerSchema() map[string]any {
 func ollamaStatusSchema() map[string]any {
 	text := func() map[string]any { return map[string]any{"type": "string"} }
 	return map[string]any{"type": "object", "properties": map[string]any{"installed": map[string]any{"type": "boolean"}, "state": map[string]any{"type": "string", "enum": []string{"stopped", "starting", "running", "failed"}}, "message": text(), "endpoint": text(), "models": map[string]any{"type": "array", "items": text()}}, "required": []string{"installed", "state", "models"}}
+}
+
+func modelServerStatusSchema() map[string]any {
+	text := func() map[string]any { return map[string]any{"type": "string"} }
+	return map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "string", "enum": []string{"llama-cpp", "vllm"}}, "name": text(), "installed": map[string]any{"type": "boolean"}, "state": map[string]any{"type": "string", "enum": []string{"stopped", "starting", "running", "failed"}}, "message": text(), "endpoint": text(), "model": text(), "models": map[string]any{"type": "array", "items": text()}}, "required": []string{"kind", "name", "installed", "state", "models"}}
 }
 
 func ollamaPullSchema() map[string]any {

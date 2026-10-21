@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
+[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -47,12 +47,20 @@ Olivares AI beantwortet diese Fragen an einem Ort. Es verbindet sich mit den Age
 <br><sub><b>Access Map</b> — was jeder Agent liest und schreibt, abgeglichen mit dem, was ihm gewährt wurde.</sub>
 </div>
 
+<div align="center">
+<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
+<br><sub><b>Katalog</b>: freigegebene Agenten, MCP-Server, Skills und Konnektoren, jeweils mit Status und Signatur.</sub>
+<br><br>
+<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
+<br><sub><b>Arbeit</b>: Aufgaben, Verantwortliche und Entscheidungen, die bleiben, wenn eine Sitzung endet.</sub>
+</div>
+
 ## Was es tut
 
 - **Wissen, was läuft.** Alle Agenten, Sitzungen, Modelle, MCP-Server und Tools in einem Inventar. Die Access Map zeigt, was jeder liest und schreibt, und markiert Zugriffe, die keine Regel erlaubt.
 - **Aktionen stoppen, bevor sie Schaden anrichten.** Olivares AI hat **vier deny-closed Enforcement Points**, die jede Aktion vor der Ausführung prüfen: in Claude Code, im Modell-Proxy, bei jedem MCP-Tool-Aufruf und zwischen Agenten. Eine riskante Aktion wartet auf eine zweite Person, eine verbotene wird nicht ausgeführt. Ein Schalter stoppt alle Agenten zugleich. Wenn eine Prüfung keine Entscheidung treffen kann, wird die Aktion nicht ausgeführt.
 - **KI-Ausgaben kontrollieren.** Budgets pro Team, Agent oder Modell warnen, drosseln oder stoppen Ausgaben, bevor die Rechnung kommt.
-- **Agenten sicher auf das Wissen Ihres Unternehmens zugreifen lassen.** Verbinden Sie SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 und PostgreSQL. Jeder Agent sieht nur das, was die Person dahinter sehen darf.
+- **Agenten sicher auf das Wissen Ihres Unternehmens zugreifen lassen.** Verbinden Sie Google Drive, Confluence, Notion, Snowflake, S3 und PostgreSQL; Business ergänzt SharePoint, SAP und Salesforce. Jeder Agent sieht nur das, was die Person dahinter sehen darf.
 - **Arbeit über Sitzungen hinweg fortsetzen.** Aufgaben, Verantwortliche und Entscheidungen bleiben erhalten, wenn eine Sitzung endet. Starten, betreten und stoppen Sie Sitzungen von Claude Code, Codex und Grok im Browser, ohne SSH.
 - **Nachweise liefern, wenn sie gebraucht werden.** Jede Entscheidung landet in einem signierten Protokoll, in dem jede nachträgliche Änderung erkennbar ist. Business Compliance Packs ordnet Nachweise 26 Framework-Katalogen zu und erstellt Berichte für Ihr Sicherheitsteam und Ihre Auditoren. Community behält gespeicherte Nachweise und deren JSON/CSV-Exporte.
 
@@ -77,7 +85,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -93,26 +101,32 @@ Sitzungen arbeiten in einem Host-Ordner: Setzen Sie `OLIVARES_PROJECT_DIR` vor `
 
 **Debian und Ubuntu.** Das Paket legt einen Benutzer `olivares` ohne Anmeldemöglichkeit und einen gehärteten Dienst an; Sie starten ihn.
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
-sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **RHEL, Fedora und SUSE.**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
-sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
+sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **Alpine.**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
 ```
+<!-- /release -->
 
-Verwenden Sie auf ARM-Servern `arm64` statt `amd64`. Alle Dateien der Version finden Sie auf der [Release-Seite](https://github.com/olivaresai/olivares/releases/tag/0.1).
+Verwenden Sie auf ARM-Servern `arm64` statt `amd64`. Alle Dateien der Version finden Sie auf der <!-- release -->[Release-Seite](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
 
 **Homebrew.** macOS und Linux.
 
@@ -137,7 +151,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 Öffnen Sie anschließend http://127.0.0.1:8901.
 
-Helm, der Kubernetes-Operator, Terraform, die Appliance und die FIPS/STIG-Bereitstellungsartefakte werden mit Business ausgeliefert; die Installation ohne Netzverbindung erfordert Enterprise. Siehe [Editionen](docs/editions.md).
+Helm, der Kubernetes-Operator, Terraform, die Appliance und die FIPS/STIG-Bereitstellungsartefakte werden mit Business ausgeliefert; die Installation ohne Netzverbindung erfordert Enterprise. Das Bereitstellen von Agenten und MCP-Servern auf Unternehmensinfrastruktur (`olivares deploy`) ist eine Business-Funktion. Siehe [Editionen](docs/editions.md).
 
 ## Editionen und Preise
 
@@ -145,17 +159,17 @@ Community ist das vollständige Produkt, kostenlos und Open Source. Business erg
 
 | | **Community** | **Business** | **Enterprise** |
 |---|---|---|---|
-| **Preis** | Kostenlos, AGPL-3.0 | 129 USD/Monat oder 1.290 USD/Jahr | Jahresvertrag |
+| **Preis** | Kostenlos, AGPL-3.0 | 99 USD/Monat oder 990 USD/Jahr | Jahresvertrag |
 | **Leistungsumfang** | Das vollständige Produkt: unbegrenzt viele Benutzer und alle vier deny-closed Enforcement Points | Alles aus Community sowie Regulated Operations, AI Runtime Security, Compliance Packs und Identity & Scale, die kommerzielle Lizenz, signierte Updates und E-Mail-Support | Alles aus Business sowie mehr Unternehmen, Deployments und Identitätsanbieter, Offline-Mirrors und mit Ihnen vereinbarte Supportbedingungen |
 | **Geltungsbereich** | Ein aktiver Identitätsanbieter | Ein Unternehmen, eine gleichzeitig aktive Instanz | Im Vertrag vereinbart |
 
-**Regulated Operations** ergänzt regulatorische Mindestaufbewahrungsfristen, den Abgleich von Legal Holds auf Archiven und WORM-Archive auf Azure und GCS. **AI Runtime Security** ergänzt eine tiefere Prüfung dessen, was Agenten senden, empfangen und ausführen. **Compliance Packs** erstellt Entwürfe des DORA-Informationsregisters und des ISO/IEC-42001-Pakets für Ihre Prüfer. **Identity & Scale** verbindet mehrere Identitätsanbieter gleichzeitig und wächst mit größeren Deployments.
+**Regulated Operations** ergänzt Legal Holds, das Recht auf Löschung mit Schlüsselvernichtung, regulatorische Mindestaufbewahrungsfristen, den Abgleich von Legal Holds auf Archiven und WORM-Archive auf Azure und GCS. **AI Runtime Security** ergänzt eine tiefere Prüfung dessen, was Agenten senden, empfangen und ausführen. **Compliance Packs** erstellt Entwürfe des DORA-Informationsregisters und des ISO/IEC-42001-Pakets für Ihre Prüfer. **Identity & Scale** verbindet mehrere Identitätsanbieter gleichzeitig und wächst mit größeren Deployments.
 
 [olivares.ai/pricing](https://olivares.ai/pricing) · [Was jede Edition enthält](docs/editions.md) · [Was offen und was kommerziell ist](LICENSING.md)
 
 ## Architektur
 
-Eine Go-Binärdatei mit integrierter Konsole. Sie stellt eine REST-API, eine gRPC-API, die Befehlszeile `olivares` und einen Terraform-Provider bereit. Collectors laufen in Ihrem Netzwerk; die Daten bleiben in SQLite oder PostgreSQL auf Ihren Servern. [Wie alles zusammenpasst](ARCHITECTURE.md).
+Eine Go-Binärdatei mit integrierter Konsole. Sie stellt eine REST-API, eine gRPC-API, die Befehlszeile `olivares` und einen Terraform-Provider bereit. Edge-Collectors (Business) laufen in Ihrem Netzwerk; die Daten bleiben in SQLite oder PostgreSQL auf Ihren Servern. [Wie alles zusammenpasst](ARCHITECTURE.md).
 
 ## Dokumentation
 

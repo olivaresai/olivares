@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useIsMutating, useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowUp } from 'lucide-react'
 import {
@@ -11,6 +11,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -25,10 +26,13 @@ import {
 } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { AttachButton, AttachmentTray } from '@/features/agentops/attachment-ui'
+import { imagesIn, useImageDraft } from '@/features/agentops/attachments'
 import { toolName } from '@/features/agentops/tool-names'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
+import { LaunchSpeedFields } from '@/features/agentops/launch-speed-fields'
 import {
   effortAfterModel,
   useModelChoices,
@@ -52,6 +56,14 @@ import { viewById } from '@/features/navigation/model'
 import { runAwaitedApproval } from '@/features/sessions/provenance'
 import type { WorkGroupId } from '@/features/sessions/session-groups'
 import { useAuth } from '@/lib/auth/context'
+import {
+  readSessionDraft,
+  sessionDraftKey,
+  sessionDraftRefused,
+  sessionDraftSnapshot,
+  subscribeSessionDrafts,
+  writeSessionDraft,
+} from '@/lib/session-drafts'
 import { resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
@@ -219,9 +231,40 @@ export type ComposerAttached = {
 export function WorkComposer({
   frame = 'panel',
   attached,
+  inputId = COMPOSER_INPUT_ID,
 }: {
   frame?: ComposerFrame
   attached: ComposerAttached
+  inputId?: string
+}) {
+  const { activeTenant, principal } = useAuth()
+  const draftKey = sessionDraftKey(
+    activeTenant,
+    principal,
+    attached.run.run_ref,
+  )
+  // Scope all local composer state at once, including an in-flight send's callbacks.
+  return (
+    <SessionComposer
+      key={draftKey ?? JSON.stringify([activeTenant, attached.run.run_ref])}
+      frame={frame}
+      attached={attached}
+      draftKey={draftKey}
+      inputId={inputId}
+    />
+  )
+}
+
+function SessionComposer({
+  frame,
+  attached,
+  draftKey,
+  inputId,
+}: {
+  frame: ComposerFrame
+  attached: ComposerAttached
+  draftKey: string | null
+  inputId: string
 }) {
   const { t } = useTranslation('nav')
   const { activeTenant, can } = useAuth()
@@ -252,7 +295,14 @@ export function WorkComposer({
     (w) => w.state === 'active',
   )
 
-  const [turn, setTurn] = useState('')
+  const savedTurn = useSyncExternalStore(subscribeSessionDrafts, () =>
+    readSessionDraft(draftKey),
+  )
+  // Without a scoped address there is nowhere to save: the field holds this tab's text only.
+  const [unsavedTurn, setUnsavedTurn] = useState<string | null>(null)
+  const turn = unsavedTurn ?? savedTurn
+  // The draft store keeps refused writes for this tab; the notice follows its verdict.
+  const draftSaveFailed = sessionDraftRefused(draftKey)
   // The draft as it is NOW, for a callback that fires seconds after it was made (dictation).
   const turnRef = useRef(turn)
   useEffect(() => {
@@ -267,12 +317,32 @@ export function WorkComposer({
     el.style.height = `${Math.min(el.scrollHeight, MAX_FIELD_PX)}px`
   }, [turn])
   const [wire, setWire] = useState('')
+  // The images of the message being written; they are stored with the session as they
+  // are attached and go with the message by id.
+  const images = useImageDraft(attached.run.run_ref)
   const sendReasonId = useId()
   const slashListId = useId()
   const wireReasonId = useId()
+  // A session's sends are one queue: a send that outlives its composer instance
+  // (a round trip through another session) still blocks the field it came from.
+  const turnQueue = ['session-turn', activeTenant, attached.run.run_ref]
   const sendTurn = useMutation({
-    mutationFn: async (payload: { value: string; asWire: boolean }) => {
+    mutationKey: turnQueue,
+    mutationFn: async (payload: {
+      run: string
+      value: string
+      asWire: boolean
+      draftSnapshot?: string | null
+      attachments?: string[]
+    }) => {
       const run = attached.run
+      // A message with images is one body for every tool: the engine encodes it.
+      if (payload.attachments?.length)
+        return agentOpsApi.inputWithAttachments(
+          run.run_ref,
+          payload.value,
+          payload.attachments,
+        )
       const body = sessionTurnBody(run, payload.value, payload.asWire)
       // Only an active work lease contributes a control fence.
       const fence = await currentControlFence(run)
@@ -283,7 +353,15 @@ export function WorkComposer({
     retry: false,
     onSuccess: (_ok, payload) => {
       if (payload.asWire) setWire('')
-      else changeTurn('')
+      else {
+        // A→B→A can remount the field while this send is pending. Retain newer edits.
+        if (sessionDraftSnapshot(draftKey) === payload.draftSnapshot)
+          changeTurn('')
+        // Only if the person is still in the session it went to; its images leave the
+        // draft, and one attached while the message was going stays.
+        if (payload.run === attached.run.run_ref)
+          images.discard(payload.attachments ?? [])
+      }
     },
     onError: (error: unknown) => {
       toast.error(launchFailureMessage(error, t('nav:launcher.turnFailed')))
@@ -293,6 +371,9 @@ export function WorkComposer({
   const runLive =
     attached.run.state === 'running' || attached.run.state === 'idle'
   const waitingApproval = attached.run.state === 'waiting_approval'
+  // An in-flight send counts even when this instance did not start it.
+  const sendsInQueue = useIsMutating({ mutationKey: turnQueue })
+  const sending = sendTurn.isPending || sendsInQueue > 0
 
   // THE "/" MENU: while the first word of the message is a slash command being typed,
   // the session's own tool says what it offers (commands, skills, agents), asked again
@@ -303,7 +384,11 @@ export function WorkComposer({
   const [slashActive, setSlashActive] = useState(0)
   /** Every change of the draft: the choice goes back to the first entry, and an Escape lasts only while the word is the same. */
   function changeTurn(next: string) {
-    setTurn(next)
+    if (draftKey === null) setUnsavedTurn(next)
+    else {
+      setUnsavedTurn(null)
+      writeSessionDraft(draftKey, next)
+    }
     setSlashActive(0)
     if (slashQuery(next) !== slashDismissed) setSlashDismissed(null)
   }
@@ -312,7 +397,7 @@ export function WorkComposer({
   const menuOpen =
     canWrite &&
     runLive &&
-    !sendTurn.isPending &&
+    !sending &&
     !!activeTenant &&
     slash !== null &&
     slashDismissed !== slash
@@ -382,24 +467,31 @@ export function WorkComposer({
   const sendReason = sendBlockedReason({
     live: runLive,
     draft: turn,
-    sending: sendTurn.isPending,
+    sending,
+    uploading: images.uploading,
     waitingApproval,
   })
   const wireReason = sendBlockedReason({
     live: runLive,
     draft: wire,
-    sending: sendTurn.isPending,
+    sending,
     waitingApproval,
   })
   const sendSentence = () => {
     const value = turn.trim()
-    if (!value || sendTurn.isPending || !runLive) return
-    sendTurn.mutate({ value, asWire: false })
+    if (!value || sending || images.uploading || !runLive) return
+    sendTurn.mutate({
+      run: attached.run.run_ref,
+      value,
+      asWire: false,
+      draftSnapshot: sessionDraftSnapshot(draftKey),
+      attachments: images.ids,
+    })
   }
   const sendWire = () => {
     const value = wire.trim()
-    if (!value || sendTurn.isPending || !runLive) return
-    sendTurn.mutate({ value, asWire: true })
+    if (!value || sending || !runLive) return
+    sendTurn.mutate({ run: attached.run.run_ref, value, asWire: true })
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -464,6 +556,21 @@ export function WorkComposer({
   const [draft, setDraft] = useState<{ model: string; effort: string } | null>(
     null,
   )
+  const speedScope = JSON.stringify([
+    boundary.key,
+    attached.run.run_ref,
+    attached.run.provider_profile_ref,
+    draft?.model ?? sessionModel,
+    attachedProfile?.updated_at,
+    attachedProfile?.auth_source,
+    attachedProfile?.provider_record_ref,
+  ])
+  const [speedChoice, setSpeedChoice] = useState<{
+    scope: string
+    fastMode?: boolean
+    serviceTier?: string
+  }>()
+  const speed = speedChoice?.scope === speedScope ? speedChoice : undefined
   const chosen = draft ?? { model: sessionModel, effort: sessionEffort }
   const modelChoices = useModelChoices({
     profileRef: attached.run.provider_profile_ref ?? '',
@@ -471,6 +578,25 @@ export function WorkComposer({
     model: chosen.model,
     enabled: canWrite && modelOpen,
   })
+  const chosenSpeed =
+    speed ??
+    (chosen.model === sessionModel
+      ? {
+          fastMode: attached.run.fast_mode,
+          serviceTier: attached.run.service_tier,
+        }
+      : {})
+  const speedModel = attachedProfile?.provider_record_ref
+    ? undefined
+    : modelChoices.start
+  const speedUnavailable =
+    (chosenSpeed.fastMode === true &&
+      speedModel?.supports_fast_mode !== true) ||
+    (!!chosenSpeed.serviceTier &&
+      !speedModel?.service_tiers?.includes(chosenSpeed.serviceTier))
+  const speedChanged =
+    chosenSpeed.fastMode !== attached.run.fast_mode ||
+    (chosenSpeed.serviceTier ?? '') !== (attached.run.service_tier ?? '')
   // Read-only operators still see the scope declared by the run.
   if (!canWrite) {
     return <ScopeLine {...attachedScope} className="px-3 py-2" />
@@ -516,6 +642,17 @@ export function WorkComposer({
       data-attached="true"
       data-session-state={attached.group}
       title={scopeFacts(t, org, attachedScope).title}
+      // An image dropped on the card is attached, as one pasted into the field is.
+      onDragOver={(e) => {
+        if (runLive && e.dataTransfer.types.includes('Files'))
+          e.preventDefault()
+      }}
+      onDrop={(e) => {
+        const files = imagesIn(e.dataTransfer)
+        if (!runLive || files.length === 0) return
+        e.preventDefault()
+        images.add(files)
+      }}
       className={cn(
         // THE COMPOSER IS A CARD: raised, 14 px radius, a 1 px line; its ring is the
         // card's, so the field inside carries none of its own.
@@ -554,13 +691,33 @@ export function WorkComposer({
       <p role="status" data-testid="slash-notice-status" className="sr-only">
         {slashNotice}
       </p>
+      {draftSaveFailed ? (
+        <p
+          role="status"
+          aria-label={t('common:status.draft')}
+          className="px-4 pt-3 text-caption text-text-2"
+        >
+          {t('nav:launcher.draftSaveFailed')}
+        </p>
+      ) : null}
+      <AttachmentTray
+        images={images.images}
+        uploading={images.uploading}
+        onRemove={images.remove}
+      />
       <textarea
         ref={fieldRef}
-        id={COMPOSER_INPUT_ID}
+        id={inputId}
         value={turn}
         rows={2}
         onChange={(e) => changeTurn(e.target.value)}
         onKeyDown={onKeyDown}
+        onPaste={(e) => {
+          const files = imagesIn(e.clipboardData)
+          if (files.length === 0) return
+          e.preventDefault()
+          images.add(files)
+        }}
         // Leaving the field closes the menu: its keys only reach it while it has focus.
         onBlur={() => {
           if (menuOpen) setSlashDismissed(slash)
@@ -577,7 +734,7 @@ export function WorkComposer({
             : undefined
         }
         data-testid="launcher-input"
-        disabled={!runLive || sendTurn.isPending}
+        disabled={!runLive || sending}
         className="max-h-48 min-h-14 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body-l text-text outline-none placeholder:text-text-3 disabled:cursor-not-allowed"
       />
       <div className="flex min-w-0 items-center gap-2 px-3 pb-3">
@@ -587,7 +744,10 @@ export function WorkComposer({
           open={modelOpen}
           onOpenChange={(next) => {
             setModelOpen(next)
-            if (!next) setDraft(null)
+            if (!next) {
+              setDraft(null)
+              setSpeedChoice(undefined)
+            }
           }}
         >
           <PopoverTrigger asChild>
@@ -610,7 +770,8 @@ export function WorkComposer({
               driver={attached.run.provider_driver ?? ''}
               choices={modelChoices}
               value={chosen.model}
-              onPick={(next) =>
+              onPick={(next) => {
+                setSpeedChoice(undefined)
                 setDraft({
                   model: next,
                   effort: effortAfterModel(
@@ -621,7 +782,7 @@ export function WorkComposer({
                     chosen.effort,
                   ),
                 })
-              }
+              }}
             />
             <div className="flex flex-col gap-2 border-t border-border p-3">
               <label className="flex flex-col gap-1 text-caption text-text-2">
@@ -636,14 +797,45 @@ export function WorkComposer({
                   defaultEffort={modelChoices.start?.default_effort}
                 />
               </label>
+              <LaunchSpeedFields
+                driver={attached.run.provider_driver ?? ''}
+                model={speedModel}
+                fastMode={chosenSpeed.fastMode}
+                serviceTier={chosenSpeed.serviceTier}
+                onFastMode={(fastMode) =>
+                  setSpeedChoice({ scope: speedScope, fastMode })
+                }
+                onServiceTier={(serviceTier) =>
+                  setSpeedChoice({ scope: speedScope, serviceTier })
+                }
+              />
+              {speedUnavailable ? (
+                <>
+                  <p
+                    role="alert"
+                    className="text-caption text-muted-foreground"
+                  >
+                    {t('agentops:create.speedUnavailable')}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    onClick={() => setSpeedChoice({ scope: speedScope })}
+                  >
+                    {t('agentops:create.speedDefault')}
+                  </Button>
+                </>
+              ) : null}
               {modelChoices.efforts === null ? (
                 <p className="text-caption text-muted-foreground">
                   {t('agentops:picker.effortNeedsModel')}
                 </p>
               ) : null}
-              {draft &&
-              (draft.model !== sessionModel ||
-                draft.effort !== sessionEffort) ? (
+              {(draft &&
+                (draft.model !== sessionModel ||
+                  draft.effort !== sessionEffort)) ||
+              speedChanged ? (
                 <>
                   <p className="text-caption text-muted-foreground">
                     {t('nav:launcher.sessionKeeps', {
@@ -655,18 +847,26 @@ export function WorkComposer({
                     variant="secondary"
                     size="sm"
                     data-testid="composer-new-with-choice"
+                    disabled={speedUnavailable}
                     onClick={() => {
                       useNewSessionDialog.getState().openAdvanced({
                         profileRef: attached.run.provider_profile_ref,
                         // A model the tool only reported (usage) was not chosen.
                         model:
-                          draft.model === sessionModel
+                          chosen.model === sessionModel
                             ? (attached.run.model_ref ?? '')
-                            : draft.model,
-                        effort: draft.effort,
+                            : chosen.model,
+                        effort: chosen.effort,
+                        ...(chosenSpeed.fastMode !== undefined
+                          ? { fastMode: chosenSpeed.fastMode }
+                          : {}),
+                        ...(chosenSpeed.serviceTier
+                          ? { serviceTier: chosenSpeed.serviceTier }
+                          : {}),
                       })
                       setModelOpen(false)
                       setDraft(null)
+                      setSpeedChoice(undefined)
                     }}
                   >
                     {t('nav:launcher.startWithChoice')}
@@ -693,7 +893,7 @@ export function WorkComposer({
                   placeholder={t('nav:launcher.wirePlaceholder')}
                   aria-label={t('nav:launcher.wireAria')}
                   data-testid="composer-wire-input"
-                  disabled={!runLive || sendTurn.isPending}
+                  disabled={!runLive || sending}
                   mono
                   className="h-8 min-w-0 flex-1"
                 />
@@ -726,8 +926,12 @@ export function WorkComposer({
             dashed: a control that cannot act says so by being quiet, and why in its
             name. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <DictateButton
+          <AttachButton
             disabled={!runLive || sendTurn.isPending}
+            onFiles={images.add}
+          />
+          <DictateButton
+            disabled={!runLive || sending}
             field={fieldRef}
             onText={(text) => changeTurn(joinDictation(turnRef.current, text))}
           />

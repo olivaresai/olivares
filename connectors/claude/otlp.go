@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/olivaresai/olivares/connectors/internal/otlptime"
 )
 
 // maxOTLPBody caps an OTLP/HTTP request body. Claude Code batches are small; this
@@ -88,9 +90,7 @@ func (r *receiver) ingestLogs(req *collogspb.ExportLogsServiceRequest) {
 				// through, so the existing path is unchanged.
 				if r.onGenAI != nil {
 					if gev, ok := parseGenAIRecord(rec, resAttrs); ok {
-						if gev.at.IsZero() {
-							gev.at = r.now()
-						}
+						gev.at = r.stamp(gev.at)
 						r.onGenAI(gev)
 						continue
 					}
@@ -99,9 +99,7 @@ func (r *receiver) ingestLogs(req *collogspb.ExportLogsServiceRequest) {
 				if !ok {
 					continue
 				}
-				if ev.at.IsZero() {
-					ev.at = r.now()
-				}
+				ev.at = r.stamp(ev.at)
 				// collect the operator-allowlisted resource-attribute labels
 				// here — the allowlist is CONFIG, which the pure parser does not
 				// see. Record attrs win over resource attrs (newAttrs order).
@@ -186,9 +184,7 @@ func (r *receiver) ingestTraces(req *coltracepb.ExportTraceServiceRequest) {
 				// and falls through to the identity/liveness path below.
 				if r.onGenAI != nil {
 					if gev, ok := parseGenAISpan(span, resAttrs); ok {
-						if gev.at.IsZero() {
-							gev.at = r.now()
-						}
+						gev.at = r.stamp(gev.at)
 						r.onGenAI(gev)
 						continue
 					}
@@ -198,7 +194,7 @@ func (r *receiver) ingestTraces(req *coltracepb.ExportTraceServiceRequest) {
 				if id.sessionID == "" {
 					continue
 				}
-				at := spanTime(span.GetStartTimeUnixNano(), r.now())
+				at := r.stamp(spanTime(span.GetStartTimeUnixNano(), time.Time{}))
 				if r.onSignal != nil {
 					r.onSignal(id, at)
 				}
@@ -229,7 +225,7 @@ func (r *receiver) ingestMetrics(req *colmetricspb.ExportMetricsServiceRequest) 
 		// per-operation usage, so costing the aggregate too would double-count (the same
 		// stance the claude_code metric path takes).
 		if r.onGenAIMetric != nil && isGenAIMetricBatch(rm) {
-			r.onGenAIMetric(genAIMetricKey(rm), r.now())
+			r.onGenAIMetric(genAIMetricKey(rm), batchTime(rm, r.now()))
 			continue
 		}
 		resAttrs := rm.GetResource().GetAttributes()
@@ -237,9 +233,10 @@ func (r *receiver) ingestMetrics(req *colmetricspb.ExportMetricsServiceRequest) 
 		if id.sessionID == "" {
 			continue
 		}
-		// Liveness + identity attribution (OBS-04): one signal per resource batch.
+		// Liveness + identity attribution (OBS-04): one signal per resource batch,
+		// stamped with the time the batch itself reports (spans already are).
 		if r.onSignal != nil {
-			r.onSignal(id, r.now())
+			r.onSignal(id, batchTime(rm, r.now()))
 		}
 		// persist the metric VALUES (productivity/adoption), per datapoint — the
 		// signal the receiver used to discard. Runs alongside the liveness signal above.
@@ -263,13 +260,23 @@ func identityFromAttrs(a attrs, labelKeys []string) claudeIdentity {
 	}
 }
 
+// stamp is the time a signal is recorded at. A time the producer sent is evidence of
+// when something happened, not a clock: it is kept while it is not after the receiver
+// clock, and the receiver clock stands in for one that is missing or from the future
+// (clock skew, or a lie). Every sender time passes through here before it reaches
+// liveness, the identity edges, the correlator or a stored sample, so one span or
+// record that claims the year 2262 cannot pin a session ahead of the clock for good.
+func (r *receiver) stamp(t time.Time) time.Time {
+	return otlptime.Stamp(t, r.now())
+}
+
 // spanTime converts a span's start time (unix nanos) to a UTC time, falling back
 // to the receiver clock when the producer left it zero.
 func spanTime(startNanos uint64, fallback time.Time) time.Time {
-	if startNanos == 0 {
-		return fallback
+	if t, ok := otlptime.Sender(startNanos); ok {
+		return t
 	}
-	return time.Unix(0, int64(startNanos)).UTC()
+	return fallback
 }
 
 // --- HTTP handlers -----------------------------------------------------------

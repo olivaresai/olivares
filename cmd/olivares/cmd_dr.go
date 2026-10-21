@@ -34,8 +34,9 @@ import (
 // unless the restored ledger is green.
 func newDRCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "dr",
-		Short: "Disaster recovery: ledger-continuity-safe backup and restore",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dr",
+		Short:       "Disaster recovery: ledger-continuity-safe backup and restore",
 		Example: "  olivares dr inspect --in /srv/backups/olivares-2026-07-14.drbundle\n" +
 			"  olivares dr verify --in /srv/backups/olivares-2026-07-14.drbundle --passphrase-file /run/secrets/dr-passphrase\n" +
 			"  olivares dr drill --events 100",
@@ -304,8 +305,9 @@ func drBackupCmd() *cobra.Command {
 	var pgDumpPath, snapshotFile, pitrRef string
 	var retainDays int
 	cmd := &cobra.Command{
-		Use:   "backup",
-		Short: "Write a ledger-continuity-safe DR bundle",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "backup",
+		Short:       "Write a ledger-continuity-safe DR bundle",
 		Long: "backup snapshots the configured store, verifies tenant audit chains, seals local signing\n" +
 			"keys under the supplied KEK and writes a continuity-safe DR bundle. Optional offsite and\n" +
 			"retention flags replicate and prune the completed backup.",
@@ -711,8 +713,9 @@ func drRestoreCmd() *cobra.Command {
 	var force, inPlace, allowLegacyUnsigned bool
 	var pgRestorePath, superuserDSN string
 	cmd := &cobra.Command{
-		Use:   "restore",
-		Short: "Restore a DR bundle and verify ledger continuity (non-zero exit if not safe)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "restore",
+		Short:       "Restore a DR bundle and verify ledger continuity (non-zero exit if not safe)",
 		Long: "restore validates a DR bundle, decrypts its signing keys, restores the matching store\n" +
 			"snapshot and verifies the complete ledger before reporting success. For SQLite, --in-place\n" +
 			"stages and verifies the restore before replacing a live data directory.",
@@ -1040,8 +1043,9 @@ func drVerifyCmd() *cobra.Command {
 	var in string
 	var allowLegacyUnsigned bool
 	cmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Test a DR bundle WITHOUT touching the live data dir (the DR drill)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify",
+		Short:       "Test a DR bundle WITHOUT touching the live data dir (the DR drill)",
 		Long: "verify extracts a bundle to a throwaway location, decrypts its keys and (for\n" +
 			"SQLite) restores + verifies the full chain there, so you can prove a backup is\n" +
 			"restorable on a cadence (docs/DR-RUNBOOK.md) without disturbing production.",
@@ -1145,11 +1149,12 @@ func drVerifyCmd() *cobra.Command {
 func drInspectCmd() *cobra.Command {
 	var in string
 	cmd := &cobra.Command{
-		Use:     "inspect",
-		Short:   "Print a DR bundle's manifest (no KEK needed; no secrets shown)",
-		Long:    "inspect extracts and prints a DR bundle's non-secret manifest without requiring or decrypting its KEK-protected signing keys.",
-		Example: "  olivares dr inspect --in /srv/backups/olivares-2026-07-14.drbundle",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "inspect",
+		Short:       "Print a DR bundle's manifest (no KEK needed; no secrets shown)",
+		Long:        "inspect extracts and prints a DR bundle's non-secret manifest without requiring or decrypting its KEK-protected signing keys.",
+		Example:     "  olivares dr inspect --in /srv/backups/olivares-2026-07-14.drbundle",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if in == "" {
 				return fmt.Errorf("--in is required")

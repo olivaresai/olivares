@@ -1,6 +1,6 @@
 {
-  "title": "Identité & NHI",
-  "subtitle": "SSO, SCIM, inventaire des identités, cycle de vie NHI, graphe WIF et connexion privilégiée — observés, gouvernés et audités.",
+  "title": "Identité et accès",
+  "subtitle": "Qui peut se connecter, ce qu’il peut faire et comment il le prouve.",
   "sections": "Sections d’identité",
   "groups": {
     "people": "Personnes",
@@ -84,7 +84,7 @@
       "webauthn": "NIST SP 800-63B-4 (assurance d’authentificateur)",
       "certManager": "cert-manager (CNCF)",
       "pqc": "NIST SP 800-57 Part 1 r6 (gestion des clés)",
-      "wifReference": "Référence WIF Anthropic",
+      "wifReference": "Référence d’identité de charge de travail Anthropic",
       "workloadIdentity": "Anthropic Workload Identity Federation",
       "externalKeys": "Anthropic External Keys (CMEK)",
       "workspaceUpdate": "Résidence des espaces de travail Anthropic"
@@ -128,6 +128,7 @@
     "title": "Provisionnement SCIM 2.0",
     "description": "Provisionnement entrant des utilisateurs et des groupes. État en lecture seule du fournisseur de service, des utilisateurs synchronisés et des preuves de départ.",
     "seamWhat": "La configuration du fournisseur de service SCIM",
+    "businessOnly": "Le serveur SCIM entrant nécessite Business. Retirez une personne de l’organisation dans Personnes.",
     "patch": "PATCH",
     "filter": "Filtrer",
     "filterMax": "Pris en charge (max {{n}})",
@@ -318,7 +319,7 @@
     "loadFailed": "Ce paramètre n’a pas pu être lu. Actualisez la page pour réessayer.",
     "note": "Pour exiger une passkey, connectez-vous d’abord ici avec votre passkey. Pour exiger un code d’authentification, connectez-vous d’abord avec votre code. Pour la désactiver ou l’assouplir, passez d’abord la vérification actuelle. Une modification s’applique en quelques secondes sur chaque serveur.",
     "refused": {
-      "passkey_not_enrolled": "Ajoutez d’abord une passkey à votre compte (Identité et NHI > Passkeys), puis activez-la.",
+      "passkey_not_enrolled": "Ajoutez d’abord une passkey à votre compte (Identité et accès > Passkeys), puis activez-la.",
       "totp_sign_in_required": "Configurez d’abord une application d’authentification et connectez-vous avec son code, puis activez-la."
     }
   },

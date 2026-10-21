@@ -1,4 +1,35 @@
 {
+  "wiki": {
+    "title": "Wiki",
+    "create": "Wiki を作成",
+    "created": "Wiki を作成しました",
+    "noWiki": "このフォルダーには Wiki がありません。",
+    "loading": "Wiki を読み込み中…",
+    "ingest": "取り込む",
+    "ask": "質問",
+    "lint": "点検",
+    "question": "質問",
+    "source": "ソース",
+    "chooseSource": "raw/ 内のソースを選択",
+    "upload": "ソースをアップロード",
+    "raw": "raw/ に戻る",
+    "tool": "AI ツール",
+    "chooseTool": "AI ツールを選択",
+    "needTool": "Wiki を利用するには AI ツールにサインインしてください。",
+    "tools": "AI ツール",
+    "ingestSource": "ソースを取り込む",
+    "askWiki": "Wiki に質問",
+    "started": "Wiki セッションを開始しました",
+    "openSession": "セッションを開く",
+    "index": "索引",
+    "page": "Wiki ページ",
+    "recent": "最近の活動",
+    "noEntries": "まだ記録がありません。",
+    "truncated": "ファイルの読み込みが途中で切れました。全体を表示するにはフォルダーの読み込み上限を増やしてください。",
+    "notText": "このファイルは UTF-8 Markdown ではありません。",
+    "working": "処理中…",
+    "tooLarge": "ソースがフォルダーのアップロード上限を超えています。小さいファイルを選択してください。"
+  },
   "listTruncation": {
     "label": "{{n}} 件のテンプレートを読み込みました。さらに存在します",
     "hint": "この起動では読み込み済みのテンプレートだけを選択できます。表示されないテンプレートが次のページに存在する可能性があります。"
@@ -90,6 +121,13 @@
     "hint": "ブランチがマージ済みで worktree がクリーンな場合に削除されます。未マージまたは未コミットの作業を破棄するにはチェックしてください。"
   },
   "create": {
+    "fastMode": "高速モード",
+    "serviceTier": "サービスティア",
+    "speedOn": "オン",
+    "speedOff": "オフ",
+    "speedUnavailable": "速度設定が変更されました。ツールの既定値を使用するか、別のモデルを選択してください。",
+    "speedDefault": "ツールの既定値を使用",
+    "speedLoadFailed": "速度設定を読み込めませんでした。",
     "title": "新しいセッション",
     "titleTool": "新しい {{tool}} セッション",
     "description": "最初に何をするかを書いてください。その他の起動設定は「詳細オプション」にあります。",
@@ -109,7 +147,7 @@
     "worktreeHint": "専用の worktree に新しいブランチを作成し、同じリポジトリのセッション同士でファイルを共有しません。フォルダはリポジトリの最上位フォルダである必要があります。",
     "worktreeFrom": "開始位置",
     "isolation": "分離",
-    "isolationNativeOnly": "本リリースで配線されているのはネイティブのみです。コンテナ／サンドボックスは拒否されます。",
+    "isolationContainerHint": "コンテナは、このサーバー上の podman または Docker でセッションを実行します。プロバイダー画面のプロバイダーを使うセッションには native が必要です。",
     "envAllow": "ホスト環境変数を転送（名前）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "通過させるホスト環境変数の名前の許可リスト（値は決して送信されません）。",
@@ -134,7 +172,7 @@
       "required": "オーケストレーションには独立して認証されたエージェントIDが必要です。"
     },
     "blocked": {
-      "profilesForbidden": "あなたのロールはプロバイダープロファイルを読めない (sessions:profile:read) ため、ここではセッションを開始できません。",
+      "profilesForbidden": "あなたのロールはプロバイダープロファイルを読めないため、ここではセッションを開始できません。",
       "profilesFailed": "プロバイダープロファイルを読み込めませんでした。",
       "profilesLoading": "プロバイダープロファイルを読み込み中…",
       "noProfile": "プロバイダープロファイルがまだありません。先にプロバイダーを追加してください。",
@@ -233,6 +271,7 @@
       "notLive": "送信するにはセッションを開始または再開してください。",
       "approval": "起動は承認待ちです。承認されると送信できます。",
       "sending": "送信中… セッションが受け付けるまでお待ちください。",
+      "uploading": "画像を保存しています… 添付が終わると送信できます。",
       "empty": "送信する内容を入力してください。"
     }
   },
@@ -432,14 +471,14 @@
     "empty": {
       "title": "プロバイダープロファイルはありません",
       "registerHint": "プロファイルを登録して、このサーバーに既にあるツールのインストールを追加します。以降のセッションは、その設定とサインインで実行されます。",
-      "noWrite": "プロファイルを追加するには sessions:profile:write 権限が必要ですが、あなたのロールには含まれていません。"
+      "noWrite": "あなたのロールではプロファイルを追加できません。"
     },
     "filteredEmpty": {
       "title": "この状態に一致するプロファイルはありません",
       "description": "状態が「{{state}}」のプロファイルのみを表示しています。すべての状態を表示すると、このフィルターが解除されます。",
       "clear": "すべての状態を表示"
     },
-    "noRead": "プロバイダープロファイルは表示されません。ロールに sessions:profile:read が含まれていません。",
+    "noRead": "プロバイダープロファイルは表示されません。あなたのロールでは読み取れません。",
     "listTruncation": {
       "label": "{{n}} 件のプロファイルを読み込みました。さらにあります",
       "hint": "ここで選択できるのは読み込まれたプロファイルのみです。このページ以降に表示されていないプロファイルが存在する可能性があります。"
@@ -538,7 +577,7 @@
         "title": "ソースバインディングはありません",
         "description": "構成済みソースをプロファイルにバインドすると、そのソースが観測するセッションが帰属します。"
       },
-      "noRead": "ソースバインディングは表示されません。ロールに sessions:profile-binding:read が含まれていません。",
+      "noRead": "ソースバインディングは表示されません。あなたのロールでは読み取れません。",
       "notBindable": "結び付けられるのは、このサーバー上の有効なプロファイルだけです。",
       "revoke": {
         "title": "バインディングを取り消し",
@@ -571,7 +610,7 @@
         "title": "バインディングの詳細",
         "description": "選択したテナントの現在のバインディング詳細です。変更を確認するには更新してください。",
         "loading": "エンジンからバインディングを読み取っています…",
-        "forbidden": "エンジンはたった今、このアカウントへのこのバインディングの提供を拒否しました（アクティブなテナントでの sessions:profile-binding:read）。これはキャッシュではなく、エンジンが今判断した結果です。内容は何も表示されません。",
+        "forbidden": "あなたのロールではこの組織でこのバインディングを読み取れません。エンジンがたった今確認しました。内容は何も表示されません。",
         "missing": "エンジンには現在、アクティブなテナントにこの参照のバインディングがありません。一覧の読み取り後に削除された可能性があります。現在の行を確認するには一覧を更新してください。",
         "error": "バインディングを読み取れませんでした: {{message}}",
         "ended": "権限、テナント、またはセッションが変わったため、読み取りを終了しました。現在の権限で読み直すには、もう一度「詳細」を開いてください。",
@@ -675,7 +714,7 @@
     "empty": {
       "title": "プロバイダーアカウントはありません",
       "adoptHint": "アカウントを作成するか、既存のプロファイルにアカウント名を付けます。",
-      "noWrite": "プロファイルをアカウントとして命名するには sessions:account:write 権限が必要ですが、あなたのロールには含まれていません。"
+      "noWrite": "あなたのロールではプロファイルをアカウントとして命名できません。"
     },
     "more": "これまでに表示: {{shown}}。ほかにもアカウントがあります。さらに読み込んで表示してください。",
     "moreFailed": "次のページのアカウントを読み取れませんでした。表示中のアカウントは完全な一覧ではありません。",
@@ -793,7 +832,7 @@
     "title": "ローカル起動要件",
     "loading": "選択したプロファイルのローカル要件を確認しています…",
     "unavailable": "要件を読めませんでした。これは起動の判定ではありません。",
-    "forbidden": "このロールではプロファイルの要件を読めません (sessions:profile:read)。",
+    "forbidden": "このロールではプロファイルの要件を読めません。",
     "notFound": "現在のテナントではこのプロファイルを利用できません。以前の結果は破棄しました。",
     "unauthenticated": "セッションはもう認証されていません。以前の結果は破棄しました。",
     "conflict": "検査中にプロファイルが変わりました。観測結果は破棄しました。",
@@ -804,10 +843,10 @@
     "requestHintReady": "起動の依頼は認可・発行・プロセス開始の検査をすべて通ります。プロバイダーにログイン済みである証明にはなりません。",
     "requestHintUnknown": "検査は完了していません。起動は依頼できます。サーバーがすべてを再検証します。これは ready ではありません。",
     "requestBlocked": "このプロファイルではここでセッションを開始できません。理由は「詳細オプション」の要件に表示されます。",
-    "noWrite": "セッションの開始には sessions:run:write 権限が必要です。",
+    "noWrite": "あなたのロールではセッションを開始できません。",
     "waitingPreview": "プロファイルを確認する前にテンプレートを読み込んでいます…",
     "providerAuth": "プロバイダーへのログインはここでは観測しません。有効なホームや実行ファイルは認証済みアカウントではありません。",
-    "launchAuth": "起動の認可は送信時に決まり、sessions:run:write が必要です。",
+    "launchAuth": "あなたのロールがこのセッションを開始できるかどうかは送信時に確認されます。",
     "remoteControl": "ライフサイクルのみ。会話の入出力はプロバイダー側に残り、ブリッジされたターンコンソールはありません。",
     "managedInjectionUnused": "このトランスポートは選択したマネージド注入を適用しません。推論資格情報を発行せず、アカウント認証も証明しません。",
     "codexProtocol": "Codex app-server プロトコル。入力はテキストのターンであり、Claude の NDJSON ではありません。",
@@ -840,12 +879,12 @@
       "program": "プログラム",
       "homes": "Homes",
       "auth_source": "認証ソース",
-      "credential_source": "資格情報の配線",
+      "credential_source": "資格情報のソース",
       "runtime_credentials": "ランタイム資格情報"
     },
     "code": {
       "profile_active": "プロファイルはアクティブです。",
-      "profile_disabled": "プロファイルは無効です。有効化には sessions:profile:write が必要です。退役したプロファイルは再有効化できません。",
+      "profile_disabled": "プロファイルは無効です。有効化にはプロファイルを変更できるロールが必要です。退役したプロファイルは再有効化できません。",
       "profile_retired": "プロファイルは退役済みで、新しい起動には使えません。",
       "environment_local": "このプロファイルはこのノードに属します。",
       "other_environment": "このプロファイルは別のサーバーのものです。このサーバーのプロファイルを選ぶか、それを管理するサーバーを使ってください。セッションが別のサーバーで自動的に開始されることはありません。",
@@ -855,8 +894,8 @@
       "transport_unsupported": "このトランスポートは、選択したドライバーの契約ではありません。",
       "runner_ready": "セッション Runner を検査できます。",
       "runner_not_configured": "セッション Runner はこのランタイムに構成されていません。",
-      "isolation_unsupported": "ネイティブ Runner はこの隔離を提供できません。native のままにするか、要求された封じ込めを実証する Runner を使ってください。",
-      "runner_inspection_unavailable": "配線済みの Runner は起動せずに検査できません。インストール欠如ではありません。",
+      "isolation_unsupported": "このサーバーはこの隔離を提供できません。native のままにするか、コンテナ用にサーバーへ podman または Docker をインストールしてください。",
+      "runner_inspection_unavailable": "設定済みの Runner は起動せずに検査できません。インストール欠如ではありません。",
       "program_present": "解決されたプログラムは存在し、この識別情報で実行可能です。",
       "program_missing": "解決されたプログラムがありません。既存の手順で公式 CLI を構成してください。Claude では OLIVARES_SESSION_RUNTIME_CLAUDE_BIN を指定する場合があります。この読み取りでは何もインストールしません。",
       "program_not_executable": "解決されたプログラムは、この識別情報では実行できません。",
@@ -868,15 +907,15 @@
       "auth_source_legacy_claude": "認可されたソースは、Claude 資格情報の歴史的なパスです。",
       "auth_source_required": "このドライバーには明示的な認証ソースが必要です。account-home またはマネージド注入です。その選択はプロファイル上で行い、この検査からは行いません。",
       "managed_injection_not_applied_for_transport": "マネージド注入が選択されていますが、このトランスポートはそれを適用しません。",
-      "claude_credential_source_configured": "Claude の推論資格情報ソースは配線済みです。",
-      "claude_credential_source_not_configured": "Claude の推論資格情報ソースは配線されていません。OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を構成してください。名前のみであり、値は扱いません。",
-      "provider_credential_adapter_configured": "このドライバーの資格情報アダプターは配線済みです。",
-      "provider_credential_adapter_not_configured": "このドライバーのガバナンス対象資格情報アダプターは配線されていません。別プロバイダーの bearer を流用したり、account-home にフォールバックしたりしないでください。",
+      "claude_credential_source_configured": "Claude の推論資格情報ソースは設定済みです。",
+      "claude_credential_source_not_configured": "ここには Claude Code の資格情報がありません。AI ツールで Claude Code 自身のログインでサインインするか、プロバイダーに保存した API キーを使ってください。独自の推論ゲートウェイを持つデプロイでは OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を設定します。",
+      "provider_credential_adapter_configured": "このドライバーの資格情報アダプターは設定済みです。",
+      "provider_credential_adapter_not_configured": "このドライバーのガバナンス対象資格情報アダプターは設定されていません。別プロバイダーの bearer を流用したり、account-home にフォールバックしたりしないでください。",
       "credential_source_not_injected": "この組み合わせでは推論資格情報を注入しません。",
       "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
-      "runtime_credentials_wired": "work/K3 のランタイム資格情報は配線済みです。",
+      "runtime_credentials_wired": "work/K3 のランタイム資格情報は設定済みです。",
       "runtime_credentials_not_requested": "この構成は work/K3 のランタイム資格情報を要求しません。",
-      "runtime_credential_wiring_incomplete": "work/K3 のランタイム資格情報の配線が不完全です。オペレーターがその構成を確認します。この読み取りは商用資格情報を要求しません。",
+      "runtime_credential_wiring_incomplete": "work/K3 のランタイム資格情報の設定が不完全です。オペレーターがその構成を確認します。この読み取りは商用資格情報を要求しません。",
       "runtime_readiness_unavailable": "work/K3 のランタイム readiness を観測できませんでした。",
       "inspection_unavailable": "この要件を検査できませんでした。再読み込みするか、環境の確認を依頼してください。不確実は「未インストール」ではありません。",
       "not_checked_in_this_environment": "プロファイルが別環境に属するため、このノードではこの要件を確認していません。それは「Homes がない」ではありません。"
@@ -889,9 +928,9 @@
       "configure_session_runner": "セッション Runner を構成してください。",
       "configure_provider_program": "このランタイムに公式プロバイダー CLI を構成してください。",
       "review_profile_homes": "管理用の構成読み取りで、保存済み Homes を確認してください。",
-      "authorize_auth_source": "プロファイルで account-home またはマネージド注入を認可してください (sessions:profile:write)。",
-      "configure_claude_credential_source": "OLIVARES_SESSION_RUNTIME_WIF または OLIVARES_SESSION_RUNTIME_TOKEN_FILE を配線してください。",
-      "configure_provider_credential_adapter": "このドライバーのガバナンス対象資格情報アダプターを配線してください。",
+      "authorize_auth_source": "プロファイルで account-home またはマネージド注入を認可してください。",
+      "configure_claude_credential_source": "AI ツールで Claude Code にサインインするか、プロバイダーの API キーを使ってください。",
+      "configure_provider_credential_adapter": "このツールの資格情報アダプターを設定してください。",
       "review_runtime_credential_composition": "work/K3 のランタイム資格情報の構成を確認してください。",
       "select_supported_selection": "このランタイムが実証するトランスポートと隔離を選んでください。",
       "retry_inspection": "要件を再読み込みしてください。"
@@ -929,7 +968,7 @@
     "mismatch": "応答は別のプロファイルバージョン、ドライバー、または環境のものだったため破棄しました。",
     "conflict": "観測中にプロファイルが変更されました。観測結果は破棄されました。",
     "unavailable": "ホストツールの観測結果を読み取れませんでした。ツールに関する結論ではありません。",
-    "forbidden": "あなたのロールでは、このプロファイルのホストツール観測を読み取れません（sessions:profile:read）。",
+    "forbidden": "あなたのロールでは、このプロファイルのホストにあるツールを読み取れません。",
     "notFound": "このプロファイルは現在のテナントでは利用できません。以前の観測結果は破棄されました。",
     "unauthenticated": "セッションは認証されていません。以前の観測結果は破棄されました。",
     "state": {
@@ -962,5 +1001,23 @@
       "different": "設定済みプログラムではない",
       "unknown": "設定済みプログラムとの比較は不明"
     }
+  },
+  "attach": {
+    "add": "画像を添付",
+    "tray": "添付した画像",
+    "remove": "{{name}} を外す",
+    "uploading": "保存中…",
+    "pasted": "貼り付けた画像",
+    "failed": "{{name}} を添付できませんでした: {{reason}}",
+    "notImage": "PNG、JPEG、WebP、GIF の画像ではありません",
+    "tooLarge": "{{size}} MB あり、上限は {{limit}} MB です",
+    "tooMany": "1 つのメッセージに付けられる画像は {{count}} 枚までです",
+    "notStored": "画像を保存できませんでした",
+    "sent": "添付した画像",
+    "imageN": "画像 {{n}}",
+    "open": "{{name}} を原寸で開く",
+    "fullSize": "添付した画像の原寸表示",
+    "unavailable": "画像を表示できません",
+    "movedOn": "保存の前に別のセッションへ移動しました"
   }
 }

@@ -86,7 +86,7 @@
       "newrelic": "New Relic"
     },
     "sinkFormat": "Sink-Format",
-    "sinkFormatHint": "Übertragungsdialekt des Sinks. Standard = OCSF.",
+    "sinkFormatHint": "Das Format, das der Sink empfängt. Standard: OCSF.",
     "sinkFormatDefault": "Standard (OCSF)",
     "sinkCred": "Sink-Zugangsdaten",
     "sinkCredHint": "Collector-Token/-Schlüssel für diesen Sink — versiegelt gespeichert, nie wieder angezeigt.",

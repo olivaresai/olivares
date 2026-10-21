@@ -34,8 +34,9 @@ func newSetupCmd() *cobra.Command {
 		force           bool
 	)
 	cmd := &cobra.Command{
-		Use:   "setup",
-		Short: "Guided, validated first-run configuration (profiles, Postgres onboarding, no SQL by hand)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "setup",
+		Short:       "Guided, validated first-run configuration (profiles, Postgres onboarding, no SQL by hand)",
 		Long: "Interactively choose a profile (eval, single-node-prod, postgres-prod, k8s), answer a\n" +
 			"few validated questions, and have setup write a structured env file and 0600 secret files\n" +
 			"— and, for Postgres, optionally provision the least-privilege roles (`db init`) and verify\n" +

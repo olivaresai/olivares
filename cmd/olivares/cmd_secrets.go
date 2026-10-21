@@ -25,8 +25,9 @@ import (
 // alongside a running engine.
 func newSecretsCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "secrets",
-		Short: "Manage the runtime secret store (sealed; referenced from configs as store:<name>)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "secrets",
+		Short:       "Manage the runtime secret store (sealed; referenced from configs as store:<name>)",
 		Example: "  olivares secrets ls --data-dir /var/lib/olivares\n" +
 			"  olivares secrets put --name vault/token --value-file /run/secrets/vault-token --actor ops-oncall --reason onboarding\n" +
 			"  olivares secrets rotate --name vault/token --value-file /run/secrets/vault-token-next --actor ops-oncall --reason scheduled-rotation",
@@ -44,11 +45,12 @@ func newSecretsCmd() *cobra.Command {
 func secretsListCmd() *cobra.Command {
 	var dataDir, engine, dsn string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List stored secrets (names and non-secret hints; never the value)",
-		Long:    "ls lists stored secret names, non-secret hints, descriptions and update times without revealing any secret value.",
-		Example: "  olivares secrets ls --data-dir /var/lib/olivares",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List stored secrets (names and non-secret hints; never the value)",
+		Long:        "ls lists stored secret names, non-secret hints, descriptions and update times without revealing any secret value.",
+		Example:     "  olivares secrets ls --data-dir /var/lib/olivares",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := authReadBoot(cmd, dataDir, engine, dsn)
 			if err != nil {
@@ -128,8 +130,9 @@ func secretsPutCmd() *cobra.Command {
 	var dataDir, engine, dsn, name, value, valueFile, description string
 	var actorFlag, reasonFlag string
 	cmd := &cobra.Command{
-		Use:   "put",
-		Short: "Create or update a secret (seals the value at rest)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "put",
+		Short:       "Create or update a secret (seals the value at rest)",
 		Long: "Provide the value with --value, --value-file <path>, or --value-file - (stdin).\n" +
 			"On an existing secret, an empty value keeps the stored value (edit --description only).",
 		Example: `  # Store a secret from a file (keeps it out of shell history)
@@ -183,11 +186,12 @@ func secretsRotateCmd() *cobra.Command {
 	var dataDir, engine, dsn, name, value, valueFile string
 	var actorFlag, reasonFlag string
 	cmd := &cobra.Command{
-		Use:     "rotate",
-		Short:   "Replace a secret's value (a new value is required)",
-		Long:    "rotate replaces an existing sealed secret value while preserving its description; the new value is required.",
-		Example: "  olivares secrets rotate --name vault/token --value-file /run/secrets/vault-token-next --actor ops-oncall --reason scheduled-rotation",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rotate",
+		Short:       "Replace a secret's value (a new value is required)",
+		Long:        "rotate replaces an existing sealed secret value while preserving its description; the new value is required.",
+		Example:     "  olivares secrets rotate --name vault/token --value-file /run/secrets/vault-token-next --actor ops-oncall --reason scheduled-rotation",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			val, err := readSecretValue(cmd, value, valueFile)
 			if err != nil {
@@ -241,12 +245,13 @@ func secretsRemoveCmd() *cobra.Command {
 	var actorFlag, reasonFlag string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:     "rm",
-		Short:   "Delete a secret (a reference to it then fails closed)",
-		Long:    "rm deletes one stored secret so subsequent store:<name> or db:<name> resolution fails closed.",
-		Example: "  olivares secrets rm --name vault/retired-token --yes --actor ops-oncall --reason retired-integration",
-		Args:    cobra.NoArgs,
-		Aliases: []string{"remove", "delete"},
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "rm",
+		Short:       "Delete a secret (a reference to it then fails closed)",
+		Long:        "rm deletes one stored secret so subsequent store:<name> or db:<name> resolution fails closed.",
+		Example:     "  olivares secrets rm --name vault/retired-token --yes --actor ops-oncall --reason retired-integration",
+		Args:        cobra.NoArgs,
+		Aliases:     []string{"remove", "delete"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Deleting a secret does not just remove a row: every store:<name>
 			// reference to it starts failing closed, so a connector can stop

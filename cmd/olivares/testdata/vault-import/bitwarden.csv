@@ -1,0 +1,9 @@
+folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
+Finance,1,login,Bank,"Main account
+second line",,0,https://bank.example,ann,pw-bw-bank-2388,otpauth://totp/Bank:ann?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Bank
+,,login,Forum (old),,Security answer: pw-bw-answer-2388,0,"https://forum.example
+https://forum.example/alt",bob,pw-bw-forum-2388,
+,,note,Safe code,the code is 4411-bw-2388,,0,,,,
+,,login,Forum (old),,,0,https://forum2.example,carol,pw-bw-forum2-2388,
+,,card,Visa,,,0,,,,
+,,login,Broken totp,,,0,https://x.example,dan,pw-bw-broken-2388,not-base32!!

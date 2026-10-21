@@ -239,7 +239,7 @@
       "savedPurging": "Plan gespeichert, und die Löschung ist in Kraft",
       "savedRetaining": "Plan gespeichert. Er löscht nichts.",
       "saveUnconfirmed": "Die Engine hat die Anfrage angenommen, aber den Plan nicht zurückgegeben – er lässt sich daher nicht bestätigen",
-      "noGate": "Es ist kein Genehmigungs-Gate verdrahtet, daher wird das Scharfschalten einer Löschung verweigert. Die Löschung wurde nicht scharf geschaltet.",
+      "noGate": "Es ist kein Genehmigungs-Gate eingerichtet, daher wird das Scharfschalten einer Löschung verweigert. Die Löschung wurde nicht scharf geschaltet.",
       "approvalExpired": "Die Genehmigung ist abgelaufen. Erneut speichern, um eine neue anzufordern.",
       "underFloor": "Das Fenster ist kürzer als die regulatorische Untergrenze dieser Klasse",
       "refused": "Das Scharfschalten der Löschung wurde abgelehnt",

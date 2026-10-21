@@ -60,7 +60,7 @@ export function SessionNarrative({
   onTogglePin: ((address: string) => void) | null
   /** The full session controls — attach, drive, stop, governance — live in the card. */
   onOpenDetail: () => void
-  evidence: EvidenceBlock
+  evidence?: EvidenceBlock
   onExpandEvidence: (block: EvidenceBlock) => void
   inspectedId?: string | null
   onInspect?: (item: ConversationItem) => void
@@ -147,6 +147,14 @@ export function SessionNarrative({
         contextToggle={contextToggle}
         contextPaneButton={contextPaneButton}
       />
+      {run?.state === 'stopped' && run.reason === 'idle_policy' ? (
+        <p
+          role="status"
+          className="border-b border-line px-3 py-2 text-body-sm text-text-2"
+        >
+          {t('card.idlePolicyStopped')}
+        </p>
+      ) : null}
 
       {/* MC: a Grok Build or OpenCode run can reach MCP servers named in the tool's own
           settings, outside Olivares. The engine says so; the sentence is shown as-is. */}

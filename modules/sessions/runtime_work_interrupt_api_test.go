@@ -67,8 +67,8 @@ func TestRuntimeWorkAPIInterruptBodyIsValidatedAndNeverFallsBackToStop(t *testin
 		t.Fatal("an interrupt ended the process; /interrupt never falls back to /stop")
 	}
 	state := f.h.do(http.MethodGet, "/v1/m/sessions/runs/"+f.runRef, f.admin, tenantHdr(f.tenant))
-	if state.code != http.StatusOK || state.body["state"] != stateRunning {
-		t.Fatalf("the run must still be running after an interrupt: %d %s", state.code, state.raw)
+	if state.code != http.StatusOK || state.body["state"] != stateIdle || state.body["process_state"] != stateRunning {
+		t.Fatalf("the run must read idle with a running process after an interrupt: %d %s", state.code, state.raw)
 	}
 	finishWorkRuntimeRun(t, f.m, f.tenant, f.runRef, proc)
 }

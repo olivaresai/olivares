@@ -14,7 +14,7 @@
     "notSignedIn": "未登录",
     "usesKey": "使用你的 API 密钥：{{name}}",
     "usesLocal": "使用本地模型服务器：{{name}}",
-    "keyRefused": "API 密钥 {{name}} 被拒绝。请在“提供方”中替换它。",
+    "keyRefused": "API 密钥 {{name}} 被拒绝。请在“提供商”中替换它。",
     "noSignIn": "此工具没有可在此运行的官方登录。请使用“其他方式”下的终端命令。"
   },
   "actions": {
@@ -99,8 +99,8 @@
     "nativeDefault": "{{tool}} 默认",
     "modelChoice": "通过此密钥上次连接测试的模型。",
     "chooseModel": "请选择一个模型：此密钥没有默认模型。",
-    "noTestedModel": "此密钥的模型尚未通过连接测试：请在“提供方”中测试该密钥。",
-    "openProviders": "打开提供方",
+    "noTestedModel": "此密钥的模型尚未通过连接测试：请在“提供商”中测试该密钥。",
+    "openProviders": "打开提供商",
     "profile": "配置文件",
     "profileNotSignedIn": "未登录",
     "profileNeedsKey": "需要密钥",
@@ -121,7 +121,7 @@
   "next": {
     "title": "后续步骤（需要时再做）",
     "invite": "邀请成员",
-    "identity": "连接身份提供方",
+    "identity": "连接身份提供商",
     "policies": "设置策略",
     "mcp": "添加 MCP 服务器",
     "budgets": "设置预算",

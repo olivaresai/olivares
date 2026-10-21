@@ -1,0 +1,10 @@
+{
+  "title": "Per iniziare",
+  "subtitle": "Tre passaggi per arrivare a una sessione con un agente funzionante.",
+  "dismiss": "Chiudi",
+  "dismissed": {
+    "title": "Guida alla configurazione chiusa",
+    "description": "La guida è nascosta su questo browser. Puoi riaprirla in qualsiasi momento.",
+    "resume": "Apri la guida alla configurazione"
+  }
+}

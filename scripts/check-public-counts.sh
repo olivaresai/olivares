@@ -503,11 +503,14 @@ def derive():
     except (OSError, ValueError, KeyError, TypeError) as exc:
         blind(f"UNVERIFIED check-public-counts: cannot measure private compliance catalog: {exc}")
     enforcement = proven_seams()
-    source_census = runpy.run_path("scripts/lib/source_census.py")["source_census"]
+    census_lib = runpy.run_path("scripts/lib/source_census.py")
+    source_census = census_lib["source_census"]
     try:
         roster_path = "cmd/olivares/identity_noenterprise.go"
         roster_seam = rd(roster_path) if os.path.exists(roster_path) else None
-        _, inproc_dirs, all_kinds = source_census(rd("cmd/olivares/sources.go"), roster_seam)
+        source_kinds, inproc_dirs, all_kinds = source_census(rd("cmd/olivares/sources.go"), roster_seam)
+        business_path = "cmd/olivares/sources_business.go"
+        business_dirs = census_lib["business_source_dirs"](rd(business_path) if os.path.exists(business_path) else None)
     except (OSError, ValueError) as exc:
         blind(f"UNVERIFIED check-public-counts: cannot measure source wiring: {exc}")
     kinds = len(all_kinds)
@@ -545,23 +548,24 @@ def derive():
                 break
     plugin_dirs = {p.split("/")[1] for p in glob.glob("connectors/*/cmd/*/main.go")}
     SCAFFOLD_ALLOW = {"a2a"}  # pending its source-face wiring; this set may only shrink
-    scaffolds = source_dirs - inproc_dirs - plugin_dirs - hits["roster"] - hits["output"] - hits["content"]
+    scaffolds = source_dirs - inproc_dirs - plugin_dirs - business_dirs - hits["roster"] - hits["output"] - hits["content"]
     rogue = scaffolds - SCAFFOLD_ALLOW
     if rogue and not SELFTEST:
         sys.exit("FAIL check-public-counts: source connector(s) with NO activation path "
                  f"(not in the shrink-only allowlist): {sorted(rogue)} — wire them or do not merge")
     return (modules, counts["dirs"], counts["nongo"], catalogs, enforcement, kinds, plugins,
             len(hits["output"]), len(hits["roster"]), len(hits["content"]), len(hits["content_live"]), counts["libraries"],
-            openapi_paths(), counts["integrations"])
+            openapi_paths(), counts["integrations"], len(source_kinds), len(inproc_dirs))
 
 if not SELFTEST:
     (MODULES, CONN_DIRS, NONGO, CATALOGS, ENFORCEMENT, KINDS,
-     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS, INTEGRATIONS) = derive()
+     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS, INTEGRATIONS,
+     SRC_KINDS, SRC_DIRS) = derive()
 else:
     # fixtures assume today's canon; the real run re-derives every time
     (MODULES, CONN_DIRS, NONGO, CATALOGS, ENFORCEMENT, KINDS,
-     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS, INTEGRATIONS) = (30, 170, 1, 26, 4, 110,
-                                                                     67, 22, 22, 11, 10, 12, 54, 157)
+     PLUGINS, OUTPUT, ROSTER, CONTENT, CONTENT_LIVE, LIBS, PATHS, INTEGRATIONS,
+     SRC_KINDS, SRC_DIRS) = (30, 170, 1, 26, 4, 110, 67, 22, 23, 11, 10, 12, 54, 157, 97, 95)
 # Every live catalog follows CLI/console switches, including translations.
 # Keep selectable namespaces distinct from their implementation packages.
 SELECTABLE_MODULES = 30 if SELFTEST else len([
@@ -613,6 +617,7 @@ NOUN = {
     # The other two odd forms («à N chemins», «контракт из N путей») were normalised to the
     # canonical noun in the same commit rather than pattern-matched, because a bare "N chemins"
     # or "N путей" would match unrelated prose and this gate must not fire on a true sentence.
+    # Only the beta-sentence wordings below (#2297) are pattern-matched, each anchored.
     # `paths rendered` joined on 2026-10-08 (#569): explanation/architecture/overview.md:93
     # shipped "54 paths rendered from the product's own OpenAPI 3.1 contract" for two releases
     # and NO noun above could see it. The lookbehind is defense-in-depth for the beta
@@ -620,7 +625,21 @@ NOUN = {
     # never bridge the word "module", so the beta phrase cannot match with or without it —
     # it guards a future widening of JOIN, and the selftest's beta fixture pins the
     # outcome either way.
-    "paths": r"(?:core\s+paths?|paths?\s+core|Core-Paths?|chemins?\s+de\s+cœur|コアパス|базов\w*\s+пут\w*|条?核心路径|-?\s*path\s+stable\s+core|(?<!module\s)paths?\s+rendered)",
+    # The groups after `paths rendered` are the wordings of the sentence «not part of the
+    # stable N-path core document» in the non-English reference indexes, quickstarts and
+    # honesty pages (#2297; the fr and ru honesty pages use a noun above). Each locale
+    # words it differently, so each phrase is anchored on the words next to it instead of
+    # loosening the noun: a bare «N Pfaden», «N chemins» or «N путей» is unrelated prose.
+    # The per-line check only sees an anchor that sits on the same line as the number, so
+    # a rewrap would blind it: the docs-site loop below also requires the claim over the
+    # whole text of each of those pages, where a wrap cannot hide it.
+    "paths": r"(?:core\s+paths?|paths?\s+core|Core-Paths?|chemins?\s+de\s+cœur|コアパス|базов\w*\s+пут\w*|条?核心路径|-?\s*path\s+stable\s+core|(?<!module\s)paths?\s+rendered"
+             r"|Pfaden(?=[.;]\s+[Ss]ie\s+werden\s+als\b)|Pfad-Core-Vertrag"
+             r"|(?:paths|rutas)\s+del\s+n\u00facleo|rutas(?=;\s+se\s+publican\s+en\s+un\s+documento\s+beta\b)"
+             r"|chemins\s+du\s+cœur|routes(?=\s;\s+elles\s+sont\s+publi\u00e9es\b)"
+             r"|パスの安定(?:版)?コア"
+             r"|путей(?=[.;]\s+[Оо]ни\s+опубликованы\b)"
+             r"|条路径的(?=\s*稳定核心))",
 }
 # The digit must stand alone: "v1 module" and "v1.26.0 module" are version strings, not
 # catalog counts — hence the lookbehind. ASCII-only on purpose: \w would match CJK text,
@@ -824,6 +843,38 @@ def require_digit_claim(surface, path, text, metric, minimum=1):
                       f"required {minimum} — a claim that vanished is as false as a wrong one, and "
                       "if the phrasing changed, update this gate's noun patterns")
 
+# The core-path count is NOT written in the docs-site pages. Every locale carries this token
+# and docs-site/src/core-paths-plugin.mjs fills it in at build time from the same
+# web/openapi/openapi.json the REST reference is rendered from (#2494: 42 hand-kept copies in
+# seven locales went stale on every API pull request, 129 -> 132 -> 134 in one day).
+CORE_PATHS_TOKEN = "{{core-paths}}"
+
+def require_core_paths_token(surface, path, text, minimum=1):
+    found = text.count(CORE_PATHS_TOKEN)
+    if found < minimum:
+        fail(surface, f"{path} carries the {CORE_PATHS_TOKEN} token in {found} place(s), required {minimum} — "
+                      "a page must state the core-path count through the token, never as a number, "
+                      "and a claim that vanished is as false as a wrong one")
+
+MALFORMED_TOKEN = re.compile(r"\{\{\s*core[-_ ]?paths?\s*\}\}", re.I)
+
+def forbid_hand_kept_paths(surface, path, text):
+    """A literal core-path count in a docs-site page is refused even when it is correct:
+    it is wrong at the next API change. The check_units pass still names a wrong number.
+    A token spelled any other way ({{core-path}}, {{ core-paths }}) is refused too: the
+    build only fills in the exact one, so the page would publish the braces."""
+    for i, raw in enumerate(text.splitlines(), 1):
+        for m in MALFORMED_TOKEN.finditer(raw):
+            if m.group(0) != CORE_PATHS_TOKEN:
+                fail(surface, f"{path}:{i} spells the core-path token «{m.group(0)}»; write {CORE_PATHS_TOKEN}")
+    if EXPECT["paths"] is None:
+        return
+    for i, raw in enumerate(text.splitlines(), 1):
+        for m in DIGIT_UNIT["paths"].finditer(norm(raw)):
+            if int(m.group(1)) >= FLOOR["paths"]:
+                fail(surface, f"{path}:{i} states the core-path count by hand — «{m.group(0)}»; "
+                              f"write {CORE_PATHS_TOKEN} instead")
+
 def require_nonempty(surface, path, text, floor):
     if len(text.strip()) < floor:
         fail(surface, f"{path} is empty or gutted ({len(text.strip())} chars < {floor}) — a vanished claim is as false as a wrong one")
@@ -847,6 +898,78 @@ def check_connectors_readme(text, path="connectors/README.md"):
             fail("connectors-readme", f"{path} lacks '{needle}' ({what}) — refresh the breakdown from the derivations in this gate")
     check_units("connectors-readme", path, text)
     check_hedges("connectors-readme", path, text)
+
+def first_table_rows(text):
+    """Label -> value cell of the first table row carrying each label.
+
+    The agent context files keep a retained historical snapshot below the live block, and
+    the snapshot repeats labels with old values. The first row for a label is the live one."""
+    rows = {}
+    for line in text.splitlines():
+        if line.lstrip().startswith("|"):
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if len(cells) >= 2:
+                rows.setdefault(cells[0], cells[1])
+    return rows
+
+def check_state_block(text, path="STATE.md"):
+    """The count rows of the agent state snapshot, each matched by its row label.
+
+    A needle searched anywhere in the file was satisfied by the historical snapshot while
+    the live row went stale (kind aliases 128 beside a historical 114). The first row for
+    a label is the live one and its value cell must equal the measurement. The compliance
+    and enforcement rows exist only in the retained snapshot today, so they are matched
+    there, as the substring check did before."""
+    rows = first_table_rows(text)
+    for label, want in (("Product modules", f"**{MODULES} wired**"),
+                        ("Connector dirs", f"**{CONN_DIRS}** ({WITH_GO} with Go code)"),
+                        ("Integrations", f"**{INTEGRATIONS}**"),
+                        ("In-proc kind aliases", str(KINDS)),
+                        ("Compliance frameworks", None if CATALOGS is None else f"**{CATALOGS}**"),
+                        ("Deny-closed enforcement points", f"**{ENFORCEMENT}**")):
+        if want is not None and rows.get(label) != want:
+            fail("state", f"{path} row '{label}' says {rows.get(label)!r}, measured {want!r} — "
+                          "regenerate the table from the derivations in this gate")
+
+def check_connectors_context(text, path="CONNECTORS.md"):
+    """The derivable Summary rows and the canonical phrasing of the connector context.
+
+    The source-only census (kinds and directories of inProcSourceFactories and its
+    aliases) is not the all-builder kind count of the README and STATE: the context file
+    stated 107 and 102 while the source measured 101 and 99, and nothing compared them.
+    The Summary rows for the no-op Gather allowlist, source scaffolds, the Git-host
+    adapter and unclassified dirs are not derived here and stay unchecked."""
+    rows = first_table_rows(text)
+    for label, want in (("Connector directories", CONN_DIRS),
+                        ("In-process source kind aliases", SRC_KINDS),
+                        ("In-process source directories", SRC_DIRS),
+                        ("Out-of-process plugin binaries", PLUGINS),
+                        ("Output connector dirs", OUTPUT),
+                        ("Identity roster providers", ROSTER),
+                        ("Content source dirs", CONTENT),
+                        ("Live content source dirs", CONTENT_LIVE),
+                        ("Contract/lib dirs", LIBS),
+                        ("Go integration capabilities", INTEGRATIONS),
+                        ("Non-Go dirs", NONGO)):
+        if rows.get(label) != str(want):
+            fail("connectors-context", f"{path} row '{label}' says {rows.get(label)!r}, measured '{want}' — "
+                                       "refresh the table from the derivations in this gate")
+    # Only the canonical section counts: a correct copy of the sentence elsewhere in the
+    # file must not hide a stale one here. The leading space keeps a figure from matching
+    # inside a longer number.
+    section = re.search(r"^## Canonical Public Phrasing\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    flat = " " + " ".join(section.group(1).split()) if section else ""
+    for needle in (f" ({MODULES} wired Go module packages) and {CONN_DIRS} connector directories: "
+                   f"{SRC_KINDS} in-process source kind aliases across "
+                   f"{SRC_DIRS} source directories, {PLUGINS} out-of-process plugin binaries, {OUTPUT} output "
+                   f"connector dirs, {ROSTER} identity roster providers, {CONTENT} content sources "
+                   f"({CONTENT_LIVE} live), {LIBS} contract/library dirs",
+                   f" contains {WITH_GO} Go directories; the public integration count is {INTEGRATIONS} "
+                   f"after excluding the {LIBS} libraries",
+                   f" docs-site catalog has {MODULES} wired module rows"):
+        if needle not in flat:
+            fail("connectors-context", f"{path} lacks the canonical phrasing '{needle.strip()[:70]}…' under "
+                                       "'## Canonical Public Phrasing' — refresh it from the derivations in this gate")
 
 # ── sidebar translations: the key set must EQUAL the locale roster ──────────────────────
 SIDEBAR_LOCALES = {"es", "de", "fr", "ja", "ru", "zh-CN"}
@@ -940,6 +1063,7 @@ def video_counts(readme):
 
 # ── selftest: every trap this gate exists for must fail on a fixture ────────────────────
 def selftest():
+    global CATALOGS
     def expect_red(name, fn):
         del failures[:]
         fn()
@@ -969,6 +1093,47 @@ def selftest():
     expect_red("wrong paths digit ja", lambda: check_units("t", "f.md", "契約は **24 のコアパス**を記述する。"))
     expect_red("wrong paths digit ru", lambda: check_units("t", "f.md", "Контракт описывает **24 базовых пути**."))
     expect_red("wrong paths digit zh", lambda: check_units("t", "f.md", "该契约描述 **24 条核心路径**。"))
+    # The "not part of the stable N-path core document" sentence of reference/index.md,
+    # start/quickstart.md and start/honesty-and-limits.md states the same count in a wording
+    # the nouns above never matched (#2297), in every non-English locale. One red fixture per
+    # phrase, each the real sentence of its page; a bare "N Pfaden" / "N chemins" / "N путей"
+    # must stay green, so each phrase is anchored on its neighbouring words.
+    for name, line in (
+        ("de sentence", "— sind **nicht** Teil des stabilen Core-Dokuments mit 24 Pfaden. Sie werden als"),
+        ("de hyphen compound", "  24-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —"),
+        ("de quickstart", "Kernvertrag mit 24 Pfaden; sie werden als separates **Beta**-Dokument in der"),
+        ("es paths del n\u00facleo", "**no** forman parte del documento estable de 24 paths del n\u00facleo. Se publican como un"),
+        ("es rutas del n\u00facleo", "  24 rutas del n\u00facleo; se publican como un documento **beta** separado: la"),
+        ("es quickstart", "24 rutas; se publican en un documento **beta** separado — la"),
+        ("fr chemins du cœur", "**pas** partie du document stable de 24 chemins du cœur. Elles sont publi\u00e9es dans un"),
+        ("fr quickstart", "24 routes ; elles sont publi\u00e9es dans un document **bêta** distinct — la"),
+        ("ja stable core", "`/v1/m/accessmap/drift` —— は、24 パスの安定コアドキュメントには"),
+        ("ja stable edition core", "アクセスマップのグラフとドリフト）は、24 パスの安定版コアコントラクトには含まれません。"),
+        ("ru sentence", "входят в стабильный базовый документ из 24 путей. Они опубликованы как"),
+        ("ru quickstart", "входят в стабильный основной контракт из 24 путей; они опубликованы отдельным"),
+        ("zh stable core", "`/v1/m/accessmap/*` 路由不属于包含 24 条路径的稳定核心契约；它们以独立的"),
+    ):
+        expect_red(f"wrong paths digit, beta sentence {name}", lambda line=line: check_units("t", "f.md", line))
+        expect_green(f"canon paths digit, beta sentence {name}", lambda line=line: check_units("t", "f.md", line.replace("24", "54")))
+    # A wrapped sentence hides its anchor from the per-line check, so the docs-site loop requires
+    # the claim over the whole text: found when true across the wrap, missing when stale.
+    zh_wrapped = "`/v1/m/accessmap/drift`——**不**属于包含 {} 条路径的\n稳定核心文档。它们作为独立的 **beta** 文档发布。"
+    expect_green("whole-text claim survives a wrap", lambda: require_digit_claim(
+        "t", "f.md", zh_wrapped.format(54), "paths", minimum=1))
+    expect_red("whole-text claim finds a stale count missing", lambda: require_digit_claim(
+        "t", "f.md", zh_wrapped.format(24), "paths", minimum=1))
+    # The same nouns in unrelated prose are not the core-path count.
+    for name, line in (
+        ("de", "Das Skript durchsucht 40 Pfaden im Dateisystem."),
+        ("es", "El script recorre 40 rutas del disco."),
+        ("fr", "Le script parcourt 40 chemins et 40 routes."),
+        ("ja", "スクリプトは 40 パスを走査する。"),
+        ("ru", "Скрипт обходит 40 путей на диске."),
+        ("zh", "脚本遍历 40 条路径。"),
+        ("zh possessive", "统计 40 条路径的数量。"),
+        ("zh wrapped", "该脚本扫描 40 条路径的"),
+    ):
+        expect_green(f"bare path noun is not this metric {name}", lambda line=line: check_units("t", "f.md", line))
     # The rendered form overview.md shipped for two releases with no noun watching it (#569):
     # 53 ≠ the fixture canon 54, and the beta guard below must not swallow the true one.
     expect_red("wrong paths digit rendered form", lambda: check_units("t", "f.md",
@@ -998,6 +1163,81 @@ def selftest():
     expect_red("missing spelled requirement", lambda: check_spelled("t", "f.srt", "no numbers", require=("modules",)))
     expect_red("connectors breakdown stale", lambda: check_connectors_readme(
         "x" * 1200 + " There are currently **150 connector directories** in the tree."))
+    # The retained historical snapshot carries the same labels with old values. A live row
+    # that went stale was hidden by it: the bare substring `| 114 |` matched the historical
+    # "legacy broad count" row while the live row said 128 (#1796). The historical block of
+    # these fixtures also repeats every live label with the CORRECT value, so only a check
+    # that reads the first row of a label is red on a stale live row.
+    state_rows = (("Product modules", f"**{MODULES} wired**"),
+                  ("Connector dirs", f"**{CONN_DIRS}** ({WITH_GO} with Go code)"),
+                  ("Integrations", f"**{INTEGRATIONS}**"),
+                  ("In-proc kind aliases", str(KINDS)))
+    state_history = (("Product modules", f"31 dirs / **{MODULES} wired**"),
+                     ("In-proc kind aliases (legacy broad count)", str(KINDS)),
+                     ("Compliance frameworks", f"**{CATALOGS}**"),
+                     ("Deny-closed enforcement points", f"**{ENFORCEMENT}**"))
+    def state_fixture(edit=None, drop=None):
+        """edit=(label, value) replaces a live row, or adds one for a snapshot-only label."""
+        live = {label: value for label, value in state_rows if label != drop}
+        if edit:
+            live[edit[0]] = edit[1]
+        return ("| Metric | Value | Method |\n|---|---|---|\n"
+                + "".join(f"| {label} | {value} | x |\n" for label, value in live.items())
+                + "\n## Historical snapshot — retained unchanged\n\n"
+                + "".join(f"| {label} | {value} | x |\n" for label, value in state_rows + state_history))
+    expect_green("state block current", lambda: check_state_block(state_fixture()))
+    for label, _ in state_rows + state_history[2:]:
+        expect_red(f"state live row '{label}' stale, snapshot repeats the right value",
+                   lambda label=label: check_state_block(state_fixture(edit=(label, "999"))))
+    expect_red("state live kind row carries extra text",
+               lambda: check_state_block(state_fixture(edit=("In-proc kind aliases", f"{KINDS} (all)"))))
+    expect_red("state live kind row missing, snapshot has another label",
+               lambda: check_state_block(state_fixture(drop="In-proc kind aliases") .replace(
+                   "| In-proc kind aliases | " + str(KINDS) + " | x |\n", "")))
+    # no private catalog in a Community tree: that row is skipped, not compared with zero
+    measured_catalogs, CATALOGS = CATALOGS, None
+    expect_green("state compliance row skipped without a catalog measurement",
+                 lambda: check_state_block(state_fixture(edit=("Compliance frameworks", "999"))))
+    CATALOGS = measured_catalogs
+
+    context_rows = (("Connector directories", CONN_DIRS), ("In-process source kind aliases", SRC_KINDS),
+                    ("In-process source directories", SRC_DIRS), ("Out-of-process plugin binaries", PLUGINS),
+                    ("Output connector dirs", OUTPUT), ("Identity roster providers", ROSTER),
+                    ("Content source dirs", CONTENT), ("Live content source dirs", CONTENT_LIVE),
+                    ("Contract/lib dirs", LIBS), ("Go integration capabilities", INTEGRATIONS),
+                    ("Non-Go dirs", NONGO))
+    context_phrase = (f"23 numbered capability modules ({MODULES} wired Go module packages) and "
+                      f"{CONN_DIRS} connector directories: {SRC_KINDS} in-process source kind aliases across "
+                      f"{SRC_DIRS} source directories, {PLUGINS} out-of-process plugin binaries, {OUTPUT} output "
+                      f"connector dirs, {ROSTER} identity roster providers, {CONTENT} content sources "
+                      f"({CONTENT_LIVE} live), {LIBS} contract/library dirs. The parser inventory contains {WITH_GO} "
+                      f"Go directories; the public integration count is {INTEGRATIONS} after excluding the {LIBS} "
+                      f"libraries and `interop`.\n\nThe live docs-site catalog has {MODULES} wired module rows.\n")
+    def context_fixture(edit=None, drop=None, phrase=context_phrase, history=""):
+        rows = {label: value for label, value in context_rows if label != drop}
+        if edit:
+            rows[edit[0]] = edit[1]
+        return ("## Summary\n\n" + "".join(f"| {label} | {value} | x |\n" for label, value in rows.items())
+                + "\n## Canonical Public Phrasing\n\n" + phrase + history)
+    expect_green("connector context current", lambda: check_connectors_context(context_fixture()))
+    expect_green("connector context sentence wrapped over lines", lambda: check_connectors_context(
+        context_fixture(phrase=context_phrase.replace(", ", ",\n"))))
+    for label, _ in context_rows:
+        expect_red(f"connector context row '{label}' stale",
+                   lambda label=label: check_connectors_context(context_fixture(edit=(label, "999"))))
+    expect_red("connector context row missing", lambda: check_connectors_context(
+        context_fixture(drop="In-process source directories")))
+    for what, old, new in (("kinds", f"{SRC_KINDS} in-process", f"{SRC_KINDS + 6} in-process"),
+                           ("integration count", f"integration count is {INTEGRATIONS}", "integration count is 999"),
+                           ("module packages", f"({MODULES} wired Go", "(999 wired Go"),
+                           ("catalog module rows", f"has {MODULES} wired module rows", "has 999 wired module rows")):
+        expect_red(f"connector context phrasing {what} stale", lambda old=old, new=new: check_connectors_context(
+            context_fixture(phrase=context_phrase.replace(old, new))))
+    expect_red("connector context stale phrasing hidden by a correct copy elsewhere", lambda: check_connectors_context(
+        context_fixture(phrase=context_phrase.replace(f"({MODULES} wired Go", "(999 wired Go"),
+                        history="\n## History\n\n" + context_phrase)))
+    expect_red("connector context figure matched inside a longer number", lambda: check_connectors_context(
+        context_fixture(phrase=context_phrase.replace(f"and {CONN_DIRS} connector", f"and 9{CONN_DIRS} connector"))))
     expect_red("sidebar locale deleted", lambda: check_sidebar_block("t",
         '"Overview — the 30 modules": {\n    "es": "los 30", "de": "die 30", "ja": "30個", "ru": "30", "zh-CN": "30 个"\n  }'))
     expect_red("sidebar zh key", lambda: check_sidebar_block("t",
@@ -1056,6 +1296,27 @@ def selftest():
     expect_green("paths claimed at BOTH sites", lambda: require_digit_claim(
         "t", "reference/index.md", "row: (54 core paths)\nprose: describes **54 core paths**.",
         "paths", minimum=2))
+    # #2494: a docs-site page states the count through the build-time token, never as a number.
+    # A CORRECT number is refused too (it is wrong at the next API change), in every language.
+    expect_red("hand-kept core-path count, even the correct one", lambda: forbid_hand_kept_paths(
+        "t", "f.md", "The contract describes **54 core paths**."))
+    expect_red("hand-kept core-path count, zh", lambda: forbid_hand_kept_paths(
+        "t", "f.md", "该契约描述 **54 条核心路径**。"))
+    expect_red("hand-kept core-path count, rendered form", lambda: forbid_hand_kept_paths(
+        "t", "f.md", "The stable core REST surface — 54 paths rendered from the product's own OpenAPI 3.1 contract."))
+    expect_green("core-path count through the token", lambda: forbid_hand_kept_paths(
+        "t", "f.md", "The contract describes **{{core-paths}} core paths**, not the {{core-paths}}-path beta."))
+    for name, spelling in (("singular", "{{core-path}}"), ("spaced", "{{ core-paths }}"), ("underscore", "{{core_paths}}")):
+        expect_red(f"malformed core-path token, {name}", lambda spelling=spelling: forbid_hand_kept_paths(
+            "t", "f.md", f"The contract describes **{spelling} core paths**."))
+    expect_green("beta module paths are not a hand-kept core count", lambda: forbid_hand_kept_paths(
+        "t", "f.md", "the beta document publishes 654 module paths"))
+    expect_red("token at only ONE of the two sites", lambda: require_core_paths_token(
+        "t", "reference/index.md", "row: ({{core-paths}} core paths)\nprose: describes core paths.", minimum=2))
+    expect_red("token replaced by a number at a site", lambda: require_core_paths_token(
+        "t", "reference/index.md", "row: ({{core-paths}} core paths)\nprose: describes **54 core paths**.", minimum=2))
+    expect_green("token at BOTH sites", lambda: require_core_paths_token(
+        "t", "reference/index.md", "row: ({{core-paths}} core paths)\nprose: describes **{{core-paths}} core paths**.", minimum=2))
     # Subset prose below the floor stays legal: "three core paths handle auth" is a true
     # sentence about a subset, and only the canonical magnitude carries the wrong-count trap.
     expect_green("low paths count is subset prose", lambda: check_units("t", "f.md", "three of them, 3 core paths, handle auth"))
@@ -1400,6 +1661,7 @@ for p in sorted(live_docs):
     t = rd(p)
     check_units("docs-site", p, t)
     check_hedges("docs-site", p, t)
+    forbid_hand_kept_paths("docs-site", p, t)
 
 LOCALES = ["", "es/", "de/", "fr/", "ja/", "ru/", "zh/"]
 for loc in LOCALES:
@@ -1417,18 +1679,28 @@ for loc in LOCALES:
     else:
         require_nonempty("docs-site", wi, rd(wi), 2000)
         require_digit_claim("docs-site", wi, rd(wi), "integrations")
-    # The API reference index states the core-path count TWICE — the capability-table row
-    # and the prose sentence under it — in all seven languages. Requiring it ONCE would let
-    # a session fix the sentence, leave a stale row above it, and pass: the gate would find
-    # what it was looking for and stop looking. That is not hypothetical here — it is the
-    # exact shape the drift had on 2026-08-15, when EN and ES were corrected at both sites
-    # and de/fr/ja/ru/zh kept 24 at both, while the contract had been at 53 since July.
+    # The API reference index states the core-path count THREE times — the capability-table row,
+    # the prose sentence under it and the «not part of the stable core document» sentence
+    # (#2297, whose wording differs per locale and went unwatched) — in all seven languages.
+    # Requiring it ONCE would let a session fix the sentence, leave a stale row above it, and
+    # pass: the gate would find what it was looking for and stop looking. Since #2494 the
+    # sites carry the token and the build fills the number in, so the count is required at
+    # all three and may never be a number.
     ri = f"{DOCS_ROOT}/{loc}reference/index.md"
     if not os.path.isfile(ri):
         fail("docs-site", f"{ri} missing — the API reference index is a public surface in every locale")
     else:
         require_nonempty("docs-site", ri, rd(ri), 2000)
-        require_digit_claim("docs-site", ri, rd(ri), "paths", minimum=2)
+        require_core_paths_token("docs-site", ri, rd(ri), minimum=3)
+    # The same count sits once in the quickstart, once in the honesty page and once in the
+    # architecture overview of every locale (#2297, #569); the claim over the whole text
+    # survives a rewrap that hides it from the per-line check.
+    for page in ("start/quickstart.md", "start/honesty-and-limits.md", "explanation/architecture/overview.md"):
+        pp = f"{DOCS_ROOT}/{loc}{page}"
+        if not os.path.isfile(pp):
+            fail("docs-site", f"{pp} missing — it states the core-path count in every locale")
+        else:
+            require_core_paths_token("docs-site", pp, rd(pp))
     eu = f"{DOCS_ROOT}/{loc}explanation/eu-ai-act-evidence.md"
     if not os.path.isfile(eu):
         fail("docs-site", f"{eu} missing")
@@ -1473,17 +1745,12 @@ if os.path.isfile("docs/trust/reference-architecture.md"):
         fail("trust", f"reference-architecture.md diagram must say 'core + modules' or 'core + {MODULES} modules'")
 
 if AGENT_STATE:
-    t = rd(AGENT_STATE)
-    for needle, what in ((f"**{MODULES} wired**", "wired module count"),
-                         (f"**{CONN_DIRS}** ({WITH_GO} with Go code)", "connector dir split"),
-                         (f"| Integrations | **{INTEGRATIONS}** |", "integration capability count"),
-                         (f"| {KINDS} |", "in-proc kind count"),
-                         (f"**{CATALOGS}**", "compliance framework count"),
-                         (f"| Deny-closed enforcement points | **{ENFORCEMENT}** |", "enforcement row")):
-        if what == "compliance framework count" and CATALOGS is None:
-            continue
-        if needle not in t:
-            fail("state", f"{AGENT_STATE} lacks '{needle}' ({what}) — regenerate the table from the derivations in this gate")
+    check_state_block(rd(AGENT_STATE), AGENT_STATE)
+    connectors_context = os.path.join(os.path.dirname(AGENT_STATE), "CONNECTORS.md")
+    if os.path.isfile(connectors_context):
+        check_connectors_context(rd(connectors_context), connectors_context)
+    else:
+        fail("connectors-context", f"{connectors_context} missing — the connector context the agents read")
 elif os.path.isdir("docs/ai-context"):
     fail("state", "agent state snapshot missing")
 else:
@@ -1559,10 +1826,11 @@ if os.path.isdir("design/launch-video"):
     if not re.search(rf"\({modules} / {integrations} / {catalog_pattern} / {enforcement}", rd("design/launch-video/README.md")):
         fail("video", f"launch-video/README.md honesty rule is not ({modules} / {integrations} / {catalogs} / {enforcement}, …)")
     VO_FILES = ["design/launch-video/PROMPTS.md", "design/launch-video/subtitles.cjs",
+                "design/launch-video/locales/es.json",
                 *sorted(glob.glob("design/launch-video/out/*.srt")),
                 *sorted(glob.glob("design/launch-video/out/*.vtt"))]
-    if len(VO_FILES) < 6:
-        fail("video", f"expected PROMPTS + subtitles.cjs + 4 srt/vtt, found {len(VO_FILES)} — a missing subtitle file hides a claim")
+    if len(VO_FILES) < 7:
+        fail("video", f"expected PROMPTS + subtitles.cjs + Spanish locale + 4 srt/vtt, found {len(VO_FILES)} — a missing subtitle file hides a claim")
     for p in VO_FILES:
         subtitle = p.endswith((".srt", ".vtt"))
         langs = ("en",) if ".en." in p else ("es",) if ".es." in p else ("en", "es")

@@ -10,6 +10,7 @@
 // Run it through scripts/e2e-session-conversation.sh.
 import { expect, test, type Page } from '@playwright/test'
 import { openAdvancedSession } from './session-launch-form'
+import { sessionToken } from './live-session'
 
 const demoTenant = process.env.DEMO_TENANT ?? ''
 const fixtureOn = process.env.CONVERSATION_FIXTURE === '1'
@@ -216,6 +217,66 @@ test.describe('model and effort are chosen where a session is started', () => {
       'DEMO_TENANT and CONVERSATION_FIXTURE=1 required — run through scripts/e2e-session-conversation.sh',
     )
   })
+
+  for (const width of [1280, 390]) {
+    test(`message-bar Fast Off reaches a new live session (${width})`, async ({
+      page,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.route('**/provider-profiles/*/models', (route) =>
+        route.fulfill({
+          json: {
+            state: 'fresh',
+            default_model: 'fixture-claude',
+            models: [{ id: 'fixture-claude', supports_fast_mode: true }],
+          },
+        }),
+      )
+      await signIn(page)
+      await page.goto(
+        `/sessions?session=run:${process.env.E2E_CAPTURE_RUN_REF}&pane=narrative`,
+      )
+      const composer = page.getByTestId('work-composer')
+      await composer.getByTestId('composer-tool-model').click()
+      await page
+        .getByRole('combobox', { name: 'Fast mode', exact: true })
+        .click()
+      await page.getByRole('option', { name: 'Off', exact: true }).click()
+      await page.screenshot({
+        path: info.outputPath(`composer-speed-${width}.png`),
+      })
+      await page.getByTestId('composer-new-with-choice').click()
+      const dialog = page.getByRole('dialog')
+      await expect(
+        dialog.getByRole('combobox', { name: 'Fast mode', exact: true }),
+      ).toContainText('Off')
+      await expect(
+        dialog.getByRole('button', { name: 'Advanced options', exact: true }),
+      ).toHaveAttribute('aria-expanded', 'false')
+      const response = page.waitForResponse(
+        (res) =>
+          res.url().endsWith('/v1/m/sessions/runs') &&
+          res.request().method() === 'POST',
+      )
+      await dialog.getByRole('button', { name: 'Start', exact: true }).click()
+      const launched = await response
+      expect(launched.status()).toBe(201)
+      expect(launched.request().postDataJSON().fast_mode).toBe(false)
+      const run = await launched.json()
+      expect(run.fast_mode).toBe(false)
+      const saved = await page.request.get(
+        `/v1/m/sessions/runs/${run.run_ref}`,
+        {
+          headers: {
+            Authorization: `Bearer ${await sessionToken(page)}`,
+            'X-Olivares-Tenant': demoTenant,
+          },
+        },
+      )
+      expect(saved.status()).toBe(200)
+      expect((await saved.json()).fast_mode).toBe(false)
+    })
+  }
 
   test('a model and its effort are set in front of Advanced options and shown on the session', async ({
     page,

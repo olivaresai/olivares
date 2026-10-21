@@ -204,6 +204,7 @@
     "readFailed": "No se pudo leer: {{message}}",
     "tools": "Herramientas de IA",
     "packages": "Programas y registros",
+    "egressHosts": "Hosts de red",
     "skills": "Skills",
     "mcp": "Servidores MCP",
     "none": "Ninguno",

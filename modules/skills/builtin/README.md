@@ -5,7 +5,7 @@ install, and a pack's scripts are recorded in its revision, never executed.
 
 | Source | Pinned release | What is vendored |
 | --- | --- | --- |
-| ECC (MIT) | v2.2.3 | 285 of its 293 skills, one pack per ECC install module (`ecc-<module>`); agents and rules under `data/` |
+| ECC (MIT) | v2.2.3 | 285 of its 293 skills, one pack per ECC install module (`ecc-<module>`); native agents, commands and one rule pack per rule set |
 | Olivares (AGPL-3.0-only) | bundled-wiki-v1 | Wiki schema and one `olivares-wiki` skill |
 | Matt Pocock's skills (MIT) | 1.2.3 | 26 of the 27 skills in its engineering and productivity categories (`mattpocock-engineering`, `mattpocock-productivity`) |
 
@@ -53,10 +53,13 @@ license other than the source's, when an `exclude` path is not in the commit, or
 not the pinned commit. The Go test in this package installs every pack through the importer, so a new
 upstream skill the validator refuses fails there and is either excluded with its reason or fixed upstream.
 
-## Not read yet
+## Native components
 
-`data/ecc-agents.tar.gz` and `data/ecc-rules.tar.gz` are vendored and pinned but not embedded: agents and
-rules are not skills, and nothing reads them yet.
+`ecc-agents`, `ecc-commands` and `ecc-rules-<set>` are embedded, pinned and installable
+packs. Their member names are qualified (`agent:review`, `command:review`,
+`rule:common/testing`), with the same approval, diff and target precedence as skills.
+Claude Code receives them in its documented native locations; unsupported tools or
+rules with path scopes or file imports in governed sessions refuse delivery. See [session delivery](../../../docs/skills.md).
 
 Product-authored wiki files live under `olivares-wiki/`. The catalog builder reads
 those reviewed local bytes; `bundled-wiki-v1` identifies this bundled schema, not

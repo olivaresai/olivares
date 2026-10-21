@@ -80,8 +80,9 @@ func dbActivateDirectoryWriterCmd() *cobra.Command {
 		writersUpgraded, writersDrained              bool
 	)
 	cmd := &cobra.Command{
-		Use:   "activate-directory-writer",
-		Short: "Activate the User authority writer protocol on a stopped store (reopen required)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "activate-directory-writer",
+		Short:       "Activate the User authority writer protocol on a stopped store (reopen required)",
 		Long: "Runs User authority activation on a STOPPED store: staged or enforced legacy generation N\n" +
 			"becomes enforced generation N+1 with protocol user-authority-v1 after complete H/org/G proof.\n" +
 			"The database cannot inspect two cluster facts, so you assert them explicitly: every writer\n" +

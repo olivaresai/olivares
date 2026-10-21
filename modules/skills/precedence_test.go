@@ -107,3 +107,25 @@ func TestSkillsSelectionPrecedenceHoldsAcrossAResumedSnapshot(t *testing.T) {
 		t.Fatalf("the broader pin that lost is not recorded: %+v", kept.Members[0].Overrides)
 	}
 }
+
+func TestSkillsProfilePrecedenceIsBetweenWorkspaceAndFolder(t *testing.T) {
+	folder := skills.Target{Kind: "folder", ID: model.NewID().String()}
+	h := catalogOptions(t, skills.Options{Targets: directoryAuthority{folderID: folder.ID}})
+	workspace := h.workspace(t, false)
+	profile := skills.Target{Kind: "profile", ID: "ppf_" + model.NewID().String()}
+	for _, target := range []skills.Target{workspace, profile, folder} {
+		h.assign(t, target, h.install(t, target.Kind+"-precedence", target.Kind+" support").Revision.ID)
+	}
+	for _, scenario := range []struct {
+		targets []skills.Target
+		winner  skills.Target
+	}{
+		{[]skills.Target{profile, workspace}, profile},
+		{[]skills.Target{profile, folder, workspace}, folder},
+	} {
+		got, err := h.selection(scenario.targets...)
+		if err != nil || len(got.Members) != 1 || len(got.Members[0].Origins) != 1 || got.Members[0].Origins[0].Target != scenario.winner {
+			t.Fatalf("precedence: %+v %v", got, err)
+		}
+	}
+}

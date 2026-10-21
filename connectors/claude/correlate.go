@@ -31,6 +31,7 @@ type toolSignal struct {
 	resRef      string
 	mode        model.AccessMode
 	hasResource bool
+	project     string
 }
 
 // pendingCall holds the two sides of one tool call while they are being joined.
@@ -261,6 +262,10 @@ func edgeFor(pc *pendingCall) model.Observation {
 	edge.ResourceKind = chosen.resKind
 	edge.ResourceRef = chosen.resRef
 	edge.Mode = chosen.mode
+	// The folder is a fact of the hook (the OTEL side has none), whichever side chose the resource.
+	if pc.hook != nil && pc.hook.project != "" {
+		edge.Labels[model.LabelProjectFolder] = pc.hook.project
+	}
 	return edge
 }
 

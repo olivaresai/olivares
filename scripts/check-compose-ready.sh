@@ -22,7 +22,7 @@ for tool in bash grep python3; do
 done
 
 contract() {
-	python3 - "$root" "$@" <<'PY'
+	python3 -I - "$root" "$@" <<'PY'
 import json
 import os
 import pathlib
@@ -192,6 +192,20 @@ health = (
 assert health in compose
 for token in ('user: "65532:65532"', "read_only: true", "memory: 2G"):
     assert token in compose
+# /tmp is named with a size, not left to Docker: a bare tmpfs is sized at half the host's RAM, which
+# on a large host is far above the memory ceiling it is charged to, and every session's scratch
+# lives in it. The README tells an operator how to size memory, pids and /tmp for many sessions.
+assert "    tmpfs:\n      - /tmp:size=${OLIVARES_TMP_SIZE:-2g},noexec,nosuid,nodev\n" in compose, (
+    "deploy/compose/docker-compose.yml must name /tmp with a size and its flags: "
+    "- /tmp:size=${OLIVARES_TMP_SIZE:-2g},noexec,nosuid,nodev"
+)
+compose_readme = read("deploy/compose/README.md")
+# The two override examples are pinned to the forms measured to work on Compose 2.26.1: the process
+# limit nested under deploy.resources.limits (the service-level pids_limit key was refused), and
+# `tmpfs: !reset []` to hand /tmp to a volume.
+for token in ("\n## Size it for many sessions\n", "`OLIVARES_TMP_SIZE`", "          pids: 1280\n",
+              "       tmpfs: !reset []\n", "         - olivares-tmp:/tmp\n"):
+    assert token in compose_readme, f"deploy/compose/README.md must keep its sizing rule: missing {token}"
 
 
 # A Docker daemon refuses to create a container whose CPU limit exceeds the daemon's CPU count, so
@@ -239,7 +253,76 @@ assert "## Work on a host project folder" in read("deploy/compose/README.md"), (
 # The real namespace probe covers kernel enforcement. This guard keeps its host
 # preparation reachable from every documented quick install, before Compose starts.
 assert "apparmor=${OLIVARES_APPARMOR_PROFILE:-docker-default}" in compose
-assert "  userns," in read("deploy/apparmor/olivares-sessions.conf")
+apparmor = read("deploy/apparmor/olivares-sessions.conf")
+assert "  userns," in apparmor
+# The session helper bind-mounts a workspace's git hooks and configuration
+# read-only in its own mount namespace (the guard of sessions#2172). Docker's
+# defaults deny the namespace (the clone mask) and the syscall (the CAP_SYS_ADMIN
+# seccomp rule, AppArmor's deny), so the shipped profile allows exactly those: the
+# mount namespace leaves the clone mask, and mount is allowed only with MS_BIND
+# (the bind and its read-only remount) or MS_PRIVATE (the helper's private tree).
+# A mount that creates a filesystem carries neither flag. The engine container
+# drops every capability, so a mount outside the helper's namespace still fails.
+seccomp = json.loads(read("deploy/seccomp/olivares-sessions.json"))
+rules = seccomp["syscalls"]
+MS_BIND, MS_PRIVATE = 0x1000, 0x40000
+# The clone rule is listed once per argument order (s390 passes flags second). The
+# masked flags are the namespace types still denied: cgroup, uts, ipc and pid.
+denied_clone_flags = 0x02000000 | 0x04000000 | 0x08000000 | 0x20000000
+clone_masks = [
+    arg["value"] for rule in rules
+    if rule["names"] == ["clone"] and rule.get("args")
+    for arg in rule["args"]
+]
+assert clone_masks == [denied_clone_flags] * 2, (
+    f"clone namespace masks {clone_masks}, want two rules of {denied_clone_flags} "
+    "(deny cgroup/uts/ipc/pid; allow user, net and mnt)"
+)
+# No rule may allow namespace creation without either the argument mask or the
+# capability gate that Docker's own rule carries.
+for rule in rules:
+    if rule["action"] != "SCMP_ACT_ALLOW" or not {"clone", "unshare", "setns"} & set(rule["names"]):
+        continue
+    gated = "CAP_SYS_ADMIN" in rule.get("includes", {}).get("caps", [])
+    assert gated or rule.get("args"), (
+        f"seccomp rule {rule['names']} allows namespace creation without a mask or CAP_SYS_ADMIN"
+    )
+mount_rules = [rule for rule in rules if "mount" in rule["names"] and rule["action"] == "SCMP_ACT_ALLOW"
+                and "CAP_SYS_ADMIN" not in rule.get("includes", {}).get("caps", [])]
+assert all(rule["names"] == ["mount"] for rule in mount_rules), (
+    "mount must be allowed without a capability gate only by its own rules"
+)
+# Each rule is the conjunction of its masked tests on the mount flags (argument 3):
+# (flags & mask) == datum. Bit 31 must stay clear because the legacy MS_MGC_VAL magic
+# (0xC0ED0000) carries MS_PRIVATE yet the kernel strips it into a filesystem-creating
+# mount; the propagation rule also refuses MS_REMOUNT, which would reach a superblock.
+MS_REMOUNT, MS_MGC_BIT = 0x20, 0x80000000
+want_mount_rules = [
+    {(MS_BIND, MS_BIND), (MS_MGC_BIT, 0)},
+    {(MS_PRIVATE, MS_PRIVATE), (MS_MGC_BIT, 0), (MS_REMOUNT, 0)},
+]
+got_mount_rules = []
+for rule in mount_rules:
+    assert set(rule) <= {"names", "action", "args", "comment"}, (
+        f"mount rule carries unexpected keys {sorted(rule)}"
+    )
+    args = rule.get("args", [])
+    assert args and all(a["index"] == 3 and a["op"] == "SCMP_CMP_MASKED_EQ" for a in args), (
+        "a mount rule must test only the mount flags (argument 3) with SCMP_CMP_MASKED_EQ"
+    )
+    got_mount_rules.append({(a["value"], a.get("valueTwo", 0)) for a in args})
+assert sorted(map(sorted, got_mount_rules)) == sorted(map(sorted, want_mount_rules)), (
+    f"mount allowed by {got_mount_rules}, want exactly the MS_BIND and MS_PRIVATE rules {want_mount_rules}"
+)
+assert not [rule for rule in rules if rule["names"] == ["mount"] and rule["action"] != "SCMP_ACT_ALLOW"], (
+    "a later non-allow mount rule would override the helper's mounts"
+)
+profile = apparmor.split("{", 1)[1].rsplit("}", 1)[0]
+code = [line.strip() for line in profile.splitlines() if not line.lstrip().startswith("#")]
+assert "mount," in code, "the shipped AppArmor profile must allow the session helper's bind mounts"
+assert not [line for line in code if re.match(r"^(audit\s+)?deny\s+(u|re)?mount\b", line)], (
+    "the shipped AppArmor profile must not deny mount, umount or remount"
+)
 for doc in [root / "INSTALL.md"]:
     text = doc.read_text(encoding="utf-8")
     section = text.split("### Docker Compose", 1)[1]

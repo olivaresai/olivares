@@ -28,10 +28,11 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// Handing a conversation off to another tool (#1845).
+// Handing a conversation off to another tool (#1845, #2243).
 //
-// No other tool can resume Claude Code's conversation by id, so the honest way to
-// continue it elsewhere is a NEW session, linked to the original, that starts from:
+// No other tool can resume a conversation of Claude Code, Codex, Gemini CLI or
+// OpenCode by id, so the honest way to continue it elsewhere is a NEW session,
+// linked to the original, that starts from:
 //
 //   - a summary the person reviews and may edit before anything starts, generated
 //     from the conversation the tool stored and by no model (a second provider
@@ -41,8 +42,10 @@ import (
 //     configuration home, the one place a confined session can always read, and
 //     named in the first turn.
 //
-// The original must be stopped and is only read. Its ledger gains one event naming
-// the new session, and the new run row names the original in handoff_of.
+// The original is only read. A session that is still running is stopped first, the
+// way a person would stop it, because its tool is still writing the conversation: the
+// transcript is read once the child is gone. Its ledger gains one event naming the new
+// session, and the new run row names the original in handoff_of.
 
 // handoffAttachmentDir is the directory, under the target profile's configuration
 // home, that holds the transcript a handoff attaches.
@@ -53,8 +56,10 @@ var (
 		"the stored conversation holds a record too large to summarize; continue it with a move, or start a new session"}
 	errHandoffTooLarge = &runErr{http.StatusUnprocessableEntity,
 		"the stored conversation is too large to hand off; continue it with a move, or start a new session"}
-	errHandoffRunning = &runErr{http.StatusConflict,
-		"stop the session first: a handoff reads its stored conversation, which a running session is still writing"}
+	errHandoffNotStarted = &runErr{http.StatusConflict,
+		"this session has not started yet; wait until it runs or stops, then hand it off"}
+	errHandoffStillLive = &runErr{http.StatusConflict,
+		"the session was asked to stop but its tool is still running; its conversation is not final yet, try again"}
 )
 
 const (
@@ -129,6 +134,9 @@ type handoffTurn struct {
 }
 
 type handoffConversation struct {
+	// tool is the name of the tool the conversation was stored by, as the summary and
+	// the transcript say it.
+	tool  string
 	turns []handoffTurn
 	// bytes is the size of the stored transcript this was read from.
 	bytes int64
@@ -142,9 +150,13 @@ type handoffConversation struct {
 // version adds nothing that breaks the read.
 type claudeLine struct {
 	Type        string `json:"type"`
+	Timestamp   string `json:"timestamp"`
 	IsSidechain bool   `json:"isSidechain"`
 	IsMeta      bool   `json:"isMeta"`
-	Message     struct {
+	// IsCompactSummary marks the summary the tool writes in place of a compacted
+	// conversation: it is not something the person sent.
+	IsCompactSummary bool `json:"isCompactSummary"`
+	Message          struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
 }
@@ -291,7 +303,7 @@ func (c handoffConversation) texts(role string) []string {
 // stopped. It is a starting point for review, and says so.
 func (c handoffConversation) summary() string {
 	var b strings.Builder
-	b.WriteString("This session continues work from an earlier Claude Code session. " +
+	b.WriteString("This session continues work from an earlier " + c.tool + " session. " +
 		"This summary was generated from that session's stored conversation, without a model; " +
 		"check it against the transcript before relying on it.\n")
 	users, answers := c.texts("user"), c.texts("assistant")
@@ -315,7 +327,7 @@ func (c handoffConversation) summary() string {
 // Tool calls and results are reduced to a line each; thinking is not carried.
 func (c handoffConversation) transcript() []byte {
 	var b bytes.Buffer
-	b.WriteString("# Transcript of an earlier Claude Code session\n")
+	b.WriteString("# Transcript of an earlier " + c.tool + " session\n")
 	if c.unreadable > 0 {
 		fmt.Fprintf(&b, "\n[%d records or blocks could not be read and are not shown]\n", c.unreadable)
 	}
@@ -338,53 +350,114 @@ func (c handoffConversation) transcript() []byte {
 	return b.Bytes()
 }
 
-// handoffSource is a session's stored conversation, read from the home the session
-// ran under after that home is proven to be the one its profile registered. The
-// session must be stopped: a running one is still writing the file, and a summary of
-// a half-written record would claim the conversation ended where it did not.
-func (m *Module) handoffSource(ctx context.Context, tenant model.TenantID, rec model.Record) (handoffConversation, ProviderHomeSnapshot, error) {
-	src := storedProfileSnapshot(rec)
+// handoffTool is a tool whose stored conversation a handoff reads: its name as the
+// summary and the transcript say it, and the reader of where it keeps it.
+type handoffTool struct {
+	name string
+	read func(*Module, context.Context, model.TenantID, model.Record, ProviderHomeSnapshot) (handoffConversation, error)
+}
+
+// handoffTools is every tool a handoff reads. Grok keeps its conversation where the
+// engine has no stable reader for it, so it is not offered.
+var handoffTools = map[string]handoffTool{
+	providerDriverClaude:   {"Claude Code", (*Module).readClaudeHandoff},
+	providerDriverCodex:    {"Codex", (*Module).readCodexHandoff},
+	providerDriverGemini:   {"Gemini CLI", (*Module).readGeminiHandoff},
+	providerDriverOpenCode: {"OpenCode", (*Module).readOpenCodeHandoff},
+}
+
+var errHandoffTool = &runErr{http.StatusUnprocessableEntity,
+	"a handoff reads the stored conversation of Claude Code, Codex, Gemini CLI and OpenCode; this session's tool keeps its conversation another way"}
+
+// checkHandoffSource proves, without reading the conversation, that rec may be handed
+// off: it has a proven provider home, its tool is one whose conversation is read, it
+// has reported its conversation id, it is stopped or running, and nothing it was given
+// could be in what it printed. live says the tool is still running, which a handoff
+// stops before it reads.
+func (m *Module) checkHandoffSource(ctx context.Context, tenant model.TenantID, rec model.Record) (src ProviderHomeSnapshot, live bool, err error) {
+	src = storedProfileSnapshot(rec)
 	if src.ProfileID == "" {
-		return handoffConversation{}, src, conflictErr("legacy session has no proven provider home and cannot be handed off")
+		return src, false, conflictErr("legacy session has no proven provider home and cannot be handed off")
 	}
-	if src.Driver != providerDriverClaude {
-		return handoffConversation{}, src, &runErr{http.StatusUnprocessableEntity,
-			"a handoff reads Claude Code conversations only; this session's tool keeps its conversation another way"}
+	if _, ok := handoffTools[src.Driver]; !ok {
+		return src, false, errHandoffTool
 	}
-	if state := rec.String(colState); state != stateStopped && state != stateFailed {
-		return handoffConversation{}, src, errHandoffRunning
+	switch state := rec.String(colState); state {
+	case stateStopped, stateFailed:
+	case stateRunning, stateIdle:
+		live = true
+	case statePending, stateWaitingApproval:
+		return src, false, errHandoffNotStarted
+	default:
+		return src, false, conflictErr("a " + state + " session has no conversation to hand off")
 	}
-	// What the session printed may hold what its vault secrets and repository
-	// credential were; that cannot be proven away after the fact, and a handoff sends
-	// the conversation to another provider.
-	if err := refuseSecretBearing(rec, "handed"); err != nil {
-		return handoffConversation{}, src, err
+	// Both are known from the row: a running session is not stopped for a handoff
+	// that these would refuse afterwards.
+	if sid := rec.String(colClaudeSessionID); sid == "" || !claudeSessionIDPattern.MatchString(sid) {
+		return src, live, handoffReadErr(errNoClaudeSessionID)
 	}
-	tr, err := m.openClaudeTranscript(ctx, tenant, rec, src)
+	if err := m.provenSourceHome(ctx, tenant, src); err != nil {
+		return src, live, err
+	}
+	// What the session printed may hold what its vault secrets, repository
+	// credential and package registry tokens were; that cannot be proven away after
+	// the fact, and a handoff sends the conversation to another provider.
+	return src, live, m.refuseSecretBearing(ctx, tenant, rec, "handed")
+}
+
+// readHandoffConversation reads the conversation the session's tool stored, from the
+// home the session ran under after that home is proven to be the one its profile
+// registered. The tool must not be writing it: a summary of a half-written record
+// would claim the conversation ended where it did not.
+func (m *Module) readHandoffConversation(ctx context.Context, tenant model.TenantID, rec model.Record, src ProviderHomeSnapshot) (handoffConversation, error) {
+	tool, ok := handoffTools[src.Driver]
+	if !ok {
+		return handoffConversation{}, errHandoffTool
+	}
+	conv, err := tool.read(m, ctx, tenant, rec, src)
+	conv.tool = tool.name
+	return conv, handoffReadErr(err)
+}
+
+// handoffReadErr gives what every reader's open or read failed with the answer a
+// person can act on; typed answers pass through unchanged.
+func handoffReadErr(err error) error {
 	switch {
 	case errors.Is(err, errNoClaudeSessionID):
-		return handoffConversation{}, src, conflictErr("this session has no stored conversation to hand off yet")
+		return conflictErr("this session has no stored conversation to hand off yet")
 	case errors.Is(err, errClaudeTranscriptMissing):
-		return handoffConversation{}, src, conflictErr("this session's conversation was not found in its account home, so there is nothing to hand off")
-	case err != nil:
-		return handoffConversation{}, src, err
+		return conflictErr("this session's conversation was not found in its account home, so there is nothing to hand off")
+	case errors.Is(err, errActivityTooLarge):
+		return errHandoffTooLarge
+	}
+	return err
+}
+
+func (m *Module) readClaudeHandoff(ctx context.Context, tenant model.TenantID, rec model.Record, src ProviderHomeSnapshot) (handoffConversation, error) {
+	tr, err := m.openClaudeTranscript(ctx, tenant, rec, src)
+	if err != nil {
+		return handoffConversation{}, err
 	}
 	defer tr.Close()
 	size := tr.info.Size()
 	if size > handoffFileMax {
-		return handoffConversation{}, src, errHandoffTooLarge
+		return handoffConversation{}, errHandoffTooLarge
 	}
-	conv, err := readClaudeConversation(ctx, io.LimitReader(tr.f, size), size)
-	return conv, src, err
+	return readClaudeConversation(ctx, io.LimitReader(tr.f, size), size)
 }
 
-// previewHandoff generates what a handoff of runRef would start from.
+// previewHandoff generates what a handoff of runRef would start from. A running
+// session is read as it is: the handoff itself stops it first.
 func (m *Module) previewHandoff(ctx context.Context, tenant model.TenantID, runRef string) (handoffPreviewDTO, error) {
 	rec, err := m.loadRun(ctx, tenant, runRef)
 	if err != nil {
 		return handoffPreviewDTO{}, err
 	}
-	conv, src, err := m.handoffSource(ctx, tenant, rec)
+	src, _, err := m.checkHandoffSource(ctx, tenant, rec)
+	if err != nil {
+		return handoffPreviewDTO{}, err
+	}
+	conv, err := m.readHandoffConversation(ctx, tenant, rec, src)
 	if err != nil {
 		return handoffPreviewDTO{}, err
 	}
@@ -394,12 +467,48 @@ func (m *Module) previewHandoff(ctx context.Context, tenant model.TenantID, runR
 	}, nil
 }
 
+// stopForHandoff stops a running source the way the stop route does (the same
+// refusals for work-bound sessions, the same process stop) and returns the settled
+// row. It answers only once the child is reaped: until then it may still be writing
+// the conversation.
+func (m *Module) stopForHandoff(ctx context.Context, mc api.ModuleContext, runRef string, rec model.Record) (model.Record, error) {
+	if err := m.refuseUnfencedActiveWork(ctx, mc.Tenant, rec); err != nil {
+		return nil, err
+	}
+	if _, _, err := m.stopRunLoaded(ctx, mc.Tenant, runRef, mc.Principal.Actor(), mc.Principal.ActorKind(), "stopped to hand it off", rec); err != nil {
+		return nil, err
+	}
+	stopped, err := m.loadRun(ctx, mc.Tenant, runRef)
+	if err != nil {
+		return nil, err
+	}
+	state := stopped.String(colState)
+	if state != stateStopped && state != stateFailed {
+		return nil, errHandoffStillLive
+	}
+	if err := m.refuseUncollectedProcess(mc.Tenant, runRef, state, "handoff"); err != nil {
+		return nil, afterStop(err)
+	}
+	return stopped, nil
+}
+
+// afterStop says, on a refusal that came after the source was stopped, that it was.
+func afterStop(err error) error {
+	var re *runErr
+	if errors.As(err, &re) {
+		return &runErr{re.status, re.msg + "; the session was stopped and can be resumed"}
+	}
+	return err
+}
+
 // handoffRun starts the linked session. The attachment is written before anything
 // starts, under a name of its own, so a refusal or a failed launch leaves no session
-// behind and removes only what this call wrote. The first turn is sent only once the
-// new tool is ready for it, and what became of it is reported as it is: delivered,
-// not delivered, unknown (it crossed and the answer did not come back) or waiting
-// for an approval that has to come first.
+// behind and removes only what this call wrote. A running source is stopped only after
+// everything that can be refused without touching it has been, and the new tool is
+// resolved before it is. The first turn is sent only once the new tool is ready for it,
+// and what became of it is reported as it is: delivered, not delivered, unknown (it
+// crossed and the answer did not come back) or waiting for an approval that has to
+// come first.
 func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef string, req handoffRunRequest) (handoffResultDTO, error) {
 	targetRef := strings.TrimSpace(req.ProviderProfileRef)
 	if !validProfileRef(targetRef) {
@@ -420,15 +529,49 @@ func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef st
 	if err != nil {
 		return handoffResultDTO{}, err
 	}
-	conv, _, err := m.handoffSource(ctx, tenant, rec)
+	src, live, err := m.checkHandoffSource(ctx, tenant, rec)
 	if err != nil {
 		return handoffResultDTO{}, err
 	}
-	// The target is refused here, before a byte is written, with the checks a launch
-	// under it gets; createRun repeats them.
+	// The target is refused here, before a byte is written or a session is stopped,
+	// with the checks a launch under it gets; createRun repeats them. The assignment is asked
+	// first, as for a launch, so an unassigned caller learns nothing of the profile's state.
+	if target := strings.TrimSpace(targetRef); validProfileRef(target) {
+		if err := m.refuseUnassignedTarget(ctx, mc, target); err != nil {
+			return handoffResultDTO{}, err
+		}
+	}
 	dst, _, err := m.resolveLaunchProfile(ctx, tenant, targetRef)
 	if err != nil {
 		return handoffResultDTO{}, err
+	}
+	if live {
+		// A read that would be refused (no file, two files, too large, a record too
+		// large) is refused now, while the session still runs. OpenCode's is a
+		// process, read once: after the stop.
+		if src.Driver != providerDriverOpenCode {
+			if _, err := m.readHandoffConversation(ctx, tenant, rec, src); err != nil {
+				return handoffResultDTO{}, err
+			}
+		}
+	} else if err := m.refuseUncollectedProcess(tenant, runRef, rec.String(colState), "handoff"); err != nil {
+		return handoffResultDTO{}, err
+	}
+	// From here the source is stopped, if it was running, and a refusal says so.
+	refused := func(err error) (handoffResultDTO, error) {
+		if live {
+			err = afterStop(err)
+		}
+		return handoffResultDTO{}, err
+	}
+	if live {
+		if rec, err = m.stopForHandoff(ctx, mc, runRef, rec); err != nil {
+			return handoffResultDTO{}, err
+		}
+	}
+	conv, err := m.readHandoffConversation(ctx, tenant, rec, src)
+	if err != nil {
+		return refused(err)
 	}
 	summary := strings.TrimSpace(req.Summary)
 	if summary == "" {
@@ -436,7 +579,7 @@ func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef st
 	}
 	attachment, attachmentFile, err := writeHandoffAttachment(dst.ConfigHome, runRef, conv.transcript())
 	if err != nil {
-		return handoffResultDTO{}, err
+		return refused(err)
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -467,7 +610,7 @@ func (m *Module) handoffRun(ctx context.Context, mc api.ModuleContext, runRef st
 		if rerr := removeHandoffAttachment(dst.ConfigHome, attachmentFile); rerr != nil {
 			m.warnf("sessions: the attachment of a refused handoff was not removed", "run_ref", runRef, "err", redactErr(rerr))
 		}
-		return handoffResultDTO{}, err
+		return refused(err)
 	}
 	m.recordHandedOff(ctx, tenant, runRef, dto.RunRef, dst.ProfileID, mc.Principal.Actor(), mc.Principal.ActorKind())
 
@@ -500,7 +643,7 @@ func (m *Module) deliverFirstTurn(ctx context.Context, tenant model.TenantID, re
 	if err != nil {
 		return handoffNotDelivered
 	}
-	crossed, err := m.sendTextInputLoaded(ctx, tenant, ref, text, rec)
+	crossed, err := m.sendTextInputLoaded(ctx, tenant, ref, text, nil, rec)
 	switch {
 	case err == nil:
 		return handoffDelivered

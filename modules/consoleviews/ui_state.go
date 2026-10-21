@@ -13,8 +13,8 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// A user's console INTERFACE STATE: today only the sidebar width ("full" or the 56 px
-// "rail"), kept on the server so it follows the user to another browser, as favorites do.
+// A user's console interface state: sidebar width and edition badge visibility,
+// kept on the server so it follows the user to another browser, as favorites do.
 // One private saved-view row per user and tenant under its own reserved feature slug, beside
 // the favorites row, so no new table. Gated by the module's READ permission like favorites:
 // it is the caller's own interface state, every signed-in role keeps its own, nothing is
@@ -25,11 +25,13 @@ const (
 )
 
 type uiStateBody struct {
-	Sidebar string `json:"sidebar"`
+	Sidebar          string `json:"sidebar,omitempty"`
+	ShowEditionBadge *bool  `json:"show_edition_badge,omitempty"`
 }
 
 type uiStateDTO struct {
-	Sidebar string `json:"sidebar,omitempty"`
+	Sidebar          string `json:"sidebar,omitempty"`
+	ShowEditionBadge bool   `json:"show_edition_badge"`
 	// Stored is false when the caller has no row yet (the console may then move what it
 	// kept locally to the server once).
 	Stored    bool   `json:"stored"`
@@ -37,7 +39,10 @@ type uiStateDTO struct {
 }
 
 func (b uiStateBody) validate() string {
-	if b.Sidebar != "full" && b.Sidebar != "rail" {
+	if b.Sidebar == "" && b.ShowEditionBadge == nil {
+		return "at least one interface setting is required"
+	}
+	if b.Sidebar != "" && b.Sidebar != "full" && b.Sidebar != "rail" {
 		return `sidebar must be "full" or "rail"`
 	}
 	return ""
@@ -59,14 +64,14 @@ func ownUIState(r *http.Request, sc store.Scope, caller string) (*model.Record, 
 
 func uiStateOf(rec *model.Record) uiStateDTO {
 	if rec == nil {
-		return uiStateDTO{}
+		return uiStateDTO{ShowEditionBadge: true}
 	}
 	var body uiStateBody
 	if err := json.Unmarshal([]byte(rec.String(colParams)), &body); err != nil || body.validate() != "" {
 		// A row that no longer validates is read as nothing stored rather than failing the shell.
-		return uiStateDTO{}
+		return uiStateDTO{ShowEditionBadge: true}
 	}
-	return uiStateDTO{Sidebar: body.Sidebar, Stored: true, UpdatedAt: rec.String(model.ColUpdatedAt)}
+	return uiStateDTO{Sidebar: body.Sidebar, ShowEditionBadge: body.ShowEditionBadge == nil || *body.ShowEditionBadge, Stored: true, UpdatedAt: rec.String(model.ColUpdatedAt)}
 }
 
 // handleUIStateGet returns the caller's own console interface state; stored is false when
@@ -99,19 +104,31 @@ func (m *Module) handleUIStatePut(w http.ResponseWriter, r *http.Request, mc api
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
-	params, err := json.Marshal(in)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorBody("could not encode the interface state"))
-		return
-	}
 	caller := mc.Principal.Actor()
 	var out uiStateDTO
-	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(SavedViewKind)
 		if err != nil {
 			return err
 		}
 		rec, err := ownUIState(r, sc, caller)
+		if err != nil {
+			return err
+		}
+		// Old sidebar-only clients must not erase a badge choice. Merge inside the
+		// same transaction that writes the caller's private row.
+		previous := uiStateOf(rec)
+		state := in
+		if state.Sidebar == "" {
+			state.Sidebar = previous.Sidebar
+			if state.Sidebar == "" {
+				state.Sidebar = "full"
+			}
+		}
+		if state.ShowEditionBadge == nil {
+			state.ShowEditionBadge = &previous.ShowEditionBadge
+		}
+		params, err := json.Marshal(state)
 		if err != nil {
 			return err
 		}

@@ -1033,3 +1033,41 @@ describe('mapConversationFrames — the tool’s own bookkeeping is no row (#178
     expect(items[0]?.raw).toEqual([THINKING_TOKENS(1), THINKING_TOKENS(2)])
   })
 })
+
+// An image attached to a message (#2158): the engine replaces the tool's echo of the
+// message, which holds the picture, with a frame that names the stored attachments.
+describe('a message with attached images', () => {
+  it('is an operator row that carries the attachment ids and media types', () => {
+    const items = mapConversationFrames([
+      JSON.stringify({
+        type: 'user',
+        isReplay: true,
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'what is wrong here?' }],
+        },
+        attachments: [
+          { id: 'att_1', media_type: 'image/png' },
+          { id: 'att_2', media_type: 'image/webp' },
+        ],
+      }),
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0].kind).toBe('operator')
+    expect(items[0].text).toBe('what is wrong here?')
+    expect(items[0].attachments).toEqual([
+      { id: 'att_1', mediaType: 'image/png' },
+      { id: 'att_2', mediaType: 'image/webp' },
+    ])
+  })
+
+  it('a message without images has no attachments key at all', () => {
+    const [item] = mapConversationFrames([
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: 'plain' },
+      }),
+    ])
+    expect(item.attachments).toBeUndefined()
+  })
+})

@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
+[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -47,12 +47,20 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 <br><sub><b>访问图</b> — 每个 agent 读取和写入了什么，并与授予它的权限对照。</sub>
 </div>
 
+<div align="center">
+<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
+<br><sub><b>目录</b>： 已批准的 agent、MCP 服务器、skill 和连接器，每项都有状态和签名情况。</sub>
+<br><br>
+<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
+<br><sub><b>工作</b>： 会话结束后仍然保留的任务、负责人和决定。</sub>
+</div>
+
 ## 它做什么
 
 - **知道什么在运行。** 在一份清单中查看所有 agent、会话、模型、MCP 服务器和工具。读写访问图展示每个对象读取和写入的内容，并标出没有任何规则允许的访问。
 - **在操作造成损害之前拦住它。** Olivares AI 有**四个 deny-closed 执行点**，在每次操作执行前进行检查：Claude Code 内部、模型代理、每次 MCP 工具调用，以及 agent 之间。有风险的操作等待第二个人确认，被禁止的操作不会执行，一个开关就能同时停止所有 agent。检查无法作出判断时，操作也不会执行。
 - **控制 AI 支出。** 按团队、agent 或模型设置预算，在账单到来之前发出警告、减缓或停止支出。
-- **安全地让 agent 使用公司知识。** 连接 SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3 和 PostgreSQL。每个 agent 只能看到使用它的人有权看到的内容。
+- **安全地让 agent 使用公司知识。** 连接 Google Drive、Confluence、Notion、Snowflake、S3 和 PostgreSQL；Business 版另支持 SharePoint、SAP 和 Salesforce。每个 agent 只能看到使用它的人有权看到的内容。
 - **跨会话继续工作。** 会话结束后，任务、负责人和决策仍然保留。无需 SSH，就能从浏览器启动、加入和停止 Claude Code、Codex 和 Grok 会话。
 - **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。Business Compliance Packs 将证据对应到 26 个框架目录，并为安全团队和审计人员生成报告。Community 保留已存证据的读取和 JSON/CSV 导出功能。
 
@@ -77,7 +85,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -93,26 +101,32 @@ docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 
 **Debian 和 Ubuntu。** 软件包添加一个无法登录的 `olivares` 用户和一个经过安全加固的服务；服务由你启动。
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
-sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **RHEL、Fedora 和 SUSE。**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
-sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
+sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **Alpine。**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
 ```
+<!-- /release -->
 
-ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.1)。
+ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见<!-- release -->[发布页面](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->。
 
 **Homebrew。** macOS 和 Linux。
 
@@ -137,7 +151,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 然后打开 http://127.0.0.1:8901。
 
-Helm、Kubernetes operator、Terraform、一体机以及 FIPS/STIG 部署制品随 Business 分发；离线安装需要 Enterprise。参见[版本](docs/editions.md)。
+Helm、Kubernetes operator、Terraform、一体机以及 FIPS/STIG 部署制品随 Business 分发；离线安装需要 Enterprise。在企业基础设施上部署智能体和 MCP 服务器（`olivares deploy`）是 Business 功能。参见[版本](docs/editions.md)。
 
 ## 版本与定价
 
@@ -145,17 +159,17 @@ Community 是完整产品，免费且开源。Business 增加企业在生产环�
 
 | | **Community** | **Business** | **Enterprise** |
 |---|---|---|---|
-| **价格** | 免费，AGPL-3.0 | 每月 129 美元或每年 1,290 美元 | 年度合同 |
+| **价格** | 免费，AGPL-3.0 | 每月 99 美元或每年 990 美元 | 年度合同 |
 | **包含内容** | 完整产品：不限用户数量，包含全部四个 deny-closed 执行点 | Community 的全部内容，加上 Regulated Operations、AI Runtime Security、Compliance Packs、Identity & Scale、商业许可证、签名更新和邮件支持 | Business 的全部内容，加上更多公司、部署和身份提供商、离线镜像，以及与你约定的支持条款 |
 | **使用范围** | 一个活跃身份提供商 | 一家公司，同一时间一个活跃实例 | 按合同约定 |
 
-**Regulated Operations** 增加法规要求的最短保留期限、归档上的法律保全核对，以及 Azure 和 GCS 上的 WORM 归档。**AI Runtime Security** 对 agent 发送、接收和执行的内容进行更深入的检查。**Compliance Packs** 为你的审计人员起草 DORA 信息登记册和 ISO/IEC 42001 材料包。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
+**Regulated Operations** 增加法律保全、含密钥销毁的数据擦除、法规要求的最短保留期限、归档上的法律保全核对，以及 Azure 和 GCS 上的 WORM 归档。**AI Runtime Security** 对 agent 发送、接收和执行的内容进行更深入的检查。**Compliance Packs** 为你的审计人员起草 DORA 信息登记册和 ISO/IEC 42001 材料包。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
 
 [olivares.ai/pricing](https://olivares.ai/pricing) · [各版本包含的内容](docs/editions.md) · [开源与商业范围](LICENSING.md)
 
 ## 架构
 
-一个内置控制台的 Go 二进制程序，提供 REST API、gRPC API、`olivares` 命令行和 Terraform provider。采集器在你的网络内运行，数据保留在你服务器上的 SQLite 或 PostgreSQL 中。[整体架构](ARCHITECTURE.md)。
+一个内置控制台的 Go 二进制程序，提供 REST API、gRPC API、`olivares` 命令行和 Terraform provider。边缘采集器（Business）在你的网络内运行，数据保留在你服务器上的 SQLite 或 PostgreSQL 中。[整体架构](ARCHITECTURE.md)。
 
 ## 文档
 

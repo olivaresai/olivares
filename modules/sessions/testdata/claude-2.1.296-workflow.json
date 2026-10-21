@@ -1,0 +1,35 @@
+{
+  "runId": "wf_557a7af4-74b",
+  "timestamp": "2026-10-13T22:03:25.463Z",
+  "taskId": "wser0ji6z",
+  "workflowName": "activity-probe",
+  "summary": "Two-phase deterministic local probe with 20-second pauses for issue 1930 measurement",
+  "status": "completed",
+  "startTime": 1791928965430,
+  "phases": [
+    {
+      "title": "Prepare",
+      "detail": "log start and pause 20 seconds"
+    },
+    {
+      "title": "Finish",
+      "detail": "log finish and pause 20 seconds"
+    }
+  ],
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Prepare"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Finish"
+    }
+  ],
+  "agentCount": 0,
+  "durationMs": 40015,
+  "totalTokens": 0,
+  "totalToolCalls": 0
+}

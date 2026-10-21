@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 	"github.com/olivaresai/olivares/core/driverfacts"
 )
@@ -63,14 +64,20 @@ func toolSignsIn(driver string) bool {
 
 func newToolCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "tool",
-		Aliases: []string{"tools"},
-		Short:   "Install and sign in the agent tools sessions run (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tool",
+		Aliases:     []string{"tools"},
+		Short:       "Install and sign in the agent tools sessions run (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI)",
 		Long: "Install an agent tool on the engine's host from its official signed release, sign it in\n" +
 			"with its own login (your Claude, ChatGPT or Google account), and see what is installed.",
 		Example: "  olivares tool install claude\n  olivares tool login claude\n  olivares tool ls",
 	}
-	cmd.AddCommand(newToolListCmd(), newToolProvidersCmd(), newToolInstallCmd(), newToolUpdateCmd(), newToolRemoveCmd(), newToolPinCmd(), newToolLoginCmd(), newToolStartCmd(), newToolPullCmd())
+	cmd.AddCommand(newToolListCmd(), newToolProvidersCmd(), newToolInstallCmd(), newToolUpdateCmd(), newToolRemoveCmd(), newToolPinCmd(), newToolLoginCmd(), newToolStartCmd(), newToolStopCmd(), newToolPullCmd())
+	// Business adds `ring` (a candidate version tried on one agent group first);
+	// Community's hook returns nil and the group is unchanged.
+	if ring := toolRingCmd(); ring != nil {
+		cmd.AddCommand(ring)
+	}
 	return cmd
 }
 
@@ -92,9 +99,10 @@ func newToolListCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var accountName string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Aliases: []string{"list", "status"},
-		Short:   "List the agent tools on the engine's host and whether each is signed in",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Aliases:     []string{"list", "status"},
+		Short:       "List the agent tools on the engine's host and whether each is signed in",
 		Long: "ls prints one row per agent tool: the version sessions run (or \"on this host\" when it\n" +
 			"was installed outside Olivares), and whether it is installed and signed in. When one is\n" +
 			"missing, the last line names the next step. Use it before you start a session.\n\n" +
@@ -310,8 +318,9 @@ func newToolInstallCmd() *cobra.Command {
 		from    string
 	)
 	cmd := &cobra.Command{
-		Use:   "install [tool] [--from URL --version VERSION]",
-		Short: "Install an official or catalog-admitted tool on the engine's host",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "install [tool] [--from URL --version VERSION]",
+		Short:       "Install an official or catalog-admitted tool on the engine's host",
 		Long: "install asks the engine to resolve the tool's official release, verify it (signature or\n" +
 			"published digest, per tool) and place it where sessions find it. Official sessions use it\n" +
 			"without any setting or restart. Use --from URL --version VERSION for an admitted\n" +
@@ -462,8 +471,9 @@ func newToolLoginCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var accountName, method string
 	cmd := &cobra.Command{
-		Use:   "login <" + strings.Join(signInToolWords(), "|") + ">",
-		Short: "Sign an agent tool in with its own login (Claude, ChatGPT, xAI or Google account)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "login <" + strings.Join(signInToolWords(), "|") + ">",
+		Short:       "Sign an agent tool in with its own login (Claude, ChatGPT, xAI or Google account)",
 		Long: "login runs the tool's own sign-in on the engine's host and shows you its link. For\n" +
 			"Claude Code or Gemini CLI, open the link, sign in, and paste the code the page shows. For Codex,\n" +
 			"Grok Build and OpenCode (ChatGPT headless), open the link and enter the code shown here.\n" +
@@ -782,23 +792,54 @@ func toolHTTPErr(status int, b []byte) error {
 // ollamaStartWait bounds how long `tool start ollama` waits for the service to answer.
 var ollamaStartWait = 75 * time.Second
 
-// newToolStartCmd starts the installed Ollama as the engine's own service, the CLI
-// side of AI tools › Ollama › Start (the CLI could not start it before).
+// toolServices are the tools that run as a service of the engine, by the name the CLI takes,
+// with the sentence's name for each and the route that stops it.
+var toolServices = map[string]struct{ name, stop string }{
+	"ollama":    {"Ollama", "/ollama/stop"},
+	"llama-cpp": {"llama.cpp", "/model-servers/llama-cpp/stop"},
+	"vllm":      {"vLLM", "/model-servers/vllm/stop"},
+}
+
+// modelServerStartWait bounds how long `tool start llama-cpp|vllm` waits for the server to
+// answer: it may have to download its model first.
+var modelServerStartWait = 10 * time.Minute
+
+// newToolStartCmd starts the installed Ollama, llama.cpp or vLLM as the engine's own
+// service, the CLI side of AI tools › Ollama › Start (the CLI could not start it before).
 func newToolStartCmd() *cobra.Command {
 	var cfg agentClientConfig
+	var modelRef string
 	cmd := &cobra.Command{
-		Use:   "start <tool>",
-		Short: "Start Ollama on the engine's host as the engine's own service",
-		Long: "start runs the installed Ollama as a service of the engine, as AI tools › Ollama ›\n" +
-			"Start does, and registers its endpoint in your organization's Providers once it\n" +
-			"answers, so OpenCode sessions can run on its models. The engine starts it again after a\n" +
-			"restart until it is stopped in AI tools. Ollama is the only tool that runs as a service.",
-		Example: "  olivares tool start ollama",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "start <ollama|llama-cpp|vllm>",
+		Short:       "Start Ollama, llama.cpp or vLLM on the engine's host as the engine's own service",
+		Long: "start runs the installed Ollama, llama.cpp (llama-server) or vLLM as a service of the\n" +
+			"engine, as AI tools › Ollama › Start does, and registers its endpoint in your organization's\n" +
+			"Providers once it answers, so OpenCode sessions can run on its models. The engine starts it\n" +
+			"again after a restart until it is stopped (olivares tool stop). llama.cpp and vLLM must be\n" +
+			"installed on the engine's PATH, run on loopback only and answer a key the engine makes for\n" +
+			"them; name the model with --model: for llama-cpp an absolute .gguf path or a Hugging Face\n" +
+			"user/repo[:quantization], for vllm an absolute model directory or a Hugging Face user/repo.",
+		Example: "  olivares tool start ollama\n" +
+			"  olivares tool start llama-cpp --model /srv/models/gemma-3-1b-it-Q4_K_M.gguf\n" +
+			"  olivares tool start vllm --model Qwen/Qwen3-0.6B",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			driver := strings.ToLower(strings.TrimSpace(args[0]))
+			if driver == "llama-cpp" || driver == "vllm" {
+				if strings.TrimSpace(modelRef) == "" {
+					return sentence(exitcode.Usage, "Name the model to serve: olivares tool start %s --model <model>", driver)
+				}
+				if err := cfg.resolve(); err != nil {
+					return err
+				}
+				return startModelServer(cmd, &cfg, driver, strings.TrimSpace(modelRef))
+			}
 			if driver != "ollama" {
-				return sentence(exitcode.Usage, "Only Ollama runs as a service. Start a session instead: olivares session start <folder>")
+				return sentence(exitcode.Usage, "Only Ollama, llama-cpp and vllm run as services. Start a session instead: olivares session start <folder>")
+			}
+			if modelRef != "" {
+				return sentence(exitcode.Usage, "Ollama downloads its models: olivares tool pull <model>")
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -851,6 +892,110 @@ func newToolStartCmd() *cobra.Command {
 					r.Line("It holds no model yet: download one in AI tools › Ollama, then start a session.")
 				}
 				r.Next("olivares session start <folder>")
+				return nil
+			}, st)
+		},
+	}
+	cmd.Flags().StringVar(&modelRef, "model", "", "llama-cpp: an absolute .gguf path or a Hugging Face user/repo[:quantization]; vllm: an absolute model directory or a Hugging Face user/repo")
+	cfg.addFlags(cmd)
+	return cmd
+}
+
+// startModelServer starts llama.cpp or vLLM for the organization and waits until it answers.
+// Starting the server that already runs this model answers with its state, so the same
+// command is how to keep waiting for a model that is still loading.
+func startModelServer(cmd *cobra.Command, cfg *agentClientConfig, kind, modelRef string) error {
+	ctx := cmd.Context()
+	name := toolServices[kind].name
+	if _, _, err := cfg.do(ctx, "POST", agentToolsPath+"/model-servers/"+kind+"/start", map[string]any{"model": modelRef, "tenant_id": cfg.tenant}, http.StatusAccepted); err != nil {
+		return err
+	}
+	var row agenttoolsapi.ModelServerStatus
+	deadline := time.Now().Add(modelServerStartWait)
+	for {
+		status, b, err := cfg.do(ctx, "GET", agentToolsPath+"/model-servers", nil, http.StatusOK)
+		if err != nil {
+			return err
+		}
+		var list struct {
+			Servers []agenttoolsapi.ModelServerStatus `json:"servers"`
+		}
+		if status != http.StatusOK || json.Unmarshal(b, &list) != nil {
+			return toolHTTPErr(status, b)
+		}
+		found := false
+		for _, s := range list.Servers {
+			if s.Kind == kind {
+				row, found = s, true
+			}
+		}
+		if !found {
+			return sentence(exitcode.Err, "The engine does not report %s.", name)
+		}
+		if row.State == "running" {
+			break
+		}
+		if row.State == "failed" || row.State == "stopped" {
+			return sentence(exitcode.Err, "%s did not start: %s", name, termSafe(firstNonEmptyCLI(row.Message, row.State)))
+		}
+		if time.Now().After(deadline) {
+			return sentence(exitcode.Err, "%s has not answered yet; it may still be loading its model. Keep waiting: olivares tool start %s --model %s", name, kind, termSafe(modelRef))
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	// Running with a message means the server answers but the engine could not register it: the
+	// next step would not work, so this is a failure, with the cause.
+	if msg := strings.TrimSpace(row.Message); msg != "" {
+		return sentence(exitcode.Err, "%s is running at %s. %s", name, termSafe(row.Endpoint), termSafe(msg))
+	}
+	return renderOut(cmd, func(w io.Writer) error {
+		r := renderTo(w)
+		r.Line(fmt.Sprintf("%s is running at %s.", name, termSafe(row.Endpoint)))
+		if len(row.Models) > 0 {
+			r.Line("It serves: " + termSafe(strings.Join(row.Models, ", ")) + ".")
+		}
+		r.Next("olivares session start <folder> --tool opencode")
+		return nil
+	}, row)
+}
+
+// newToolStopCmd stops a service the engine runs: Ollama, llama.cpp or vLLM. Their models
+// stay on disk, and the engine does not start them again after a restart.
+func newToolStopCmd() *cobra.Command {
+	var cfg agentClientConfig
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "stop <ollama|llama-cpp|vllm>",
+		Short:       "Stop Ollama, llama.cpp or vLLM, the engine's own service",
+		Long: "stop ends a service started with olivares tool start. Its models stay on disk, and the\n" +
+			"engine does not start it again after a restart until it is started again.",
+		Example: "  olivares tool stop llama-cpp",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, ok := toolServices[strings.ToLower(strings.TrimSpace(args[0]))]
+			if !ok {
+				return sentence(exitcode.Usage, "Only Ollama, llama-cpp and vllm run as services.")
+			}
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			status, b, err := cfg.do(cmd.Context(), "POST", agentToolsPath+svc.stop, nil, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			var st map[string]any
+			if status != http.StatusOK || json.Unmarshal(b, &st) != nil {
+				return toolHTTPErr(status, b)
+			}
+			if state, _ := st["state"].(string); state != "stopped" {
+				return sentence(exitcode.Err, "%s did not stop (it is %s). Try again in a moment.", svc.name, termSafe(firstNonEmptyCLI(state, "in an unknown state")))
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				renderTo(w).Line(svc.name + " stopped.")
 				return nil
 			}, st)
 		},

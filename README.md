@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.2](https://img.shields.io/badge/release-0.2-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.2)<!-- /release -->
+[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -46,18 +46,26 @@ Olivares AI answers them in one place. It connects to the agents and tools you a
 <br><sub><b>Access map</b> — what each agent reads and writes, checked against what it was granted.</sub>
 </div>
 
+<div align="center">
+<img src=".github/assets/console-catalog-light.png" width="840" alt="The Catalog page: approved agents, MCP servers, skills, connectors, templates and models, each with its version, status and signing.">
+<br><sub><b>Catalog</b>: approved agents, MCP servers, skills and connectors, each with its status and whether it is signed.</sub>
+<br><br>
+<img src=".github/assets/console-work-light.png" width="840" alt="The Work page: shared work items with their type, owner and status.">
+<br><sub><b>Work</b>: tasks, owners and decisions that stay when a session ends.</sub>
+</div>
+
 ## What it does
 
 - **Know what is running.** Every agent, session, model, MCP server and tool in one inventory. The access map shows what each one reads and writes, and flags access that no rule allows.
 - **Stop an action before it does damage.** Olivares AI has **four deny-closed enforcement points** that check each action before it runs: inside Claude Code, in the model proxy, at every MCP tool call and between agents. A risky action waits for a second person, a forbidden one does not run, and one switch stops every agent at once. When a check cannot decide, the action does not run.
-- **Keep AI spending in check.** Budgets per team, agent or model warn, slow down or stop spending before the invoice arrives.
-- **Give agents your company's knowledge, safely.** Connect SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 and PostgreSQL. Each agent sees only what the person behind it is allowed to see.
+- **Keep AI spending in check.** Community shows the cost of every session. Business FinOps budgets per team, agent or model warn, slow down or stop spending before the invoice arrives.
+- **Give agents your company's knowledge, safely.** Connect Google Drive, Confluence, Notion, Snowflake, S3 and PostgreSQL; Business adds SharePoint, SAP and Salesforce. Each agent sees only what the person behind it is allowed to see.
 - **Keep work going across sessions.** Tasks, owners and decisions stay when a session ends. Start, join and stop Claude Code, Codex and Grok sessions from the browser, without SSH.
 - **Show proof when someone asks.** Every decision goes into a signed, tamper-evident log. Business Compliance Packs map evidence to 26 framework catalogs and produce reports for your security team and auditors. Community retains stored evidence and its JSON/CSV exports.
 
 It works with the tools you already have: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands and local models through Ollama. **32 modules** and **136 integrations**: [every module](docs-site/src/content/docs/reference/modules/overview.md) · [every connector](connectors/README.md).
 
-Community keeps local observability, stored settings and backup export. SIEM/ITSM push, external telemetry delivery and posture export are included in the Business base edition.
+Community keeps local observability, stored settings and backup export. SIEM/ITSM push, external telemetry delivery, posture export, active-passive HA leader routing and the edge collector are included in the Business base edition.
 
 **Session network isolation covers Claude Code and Codex sessions bound to a provider
 key.** Such a session reaches only its provider's endpoint, through a per-session proxy
@@ -83,7 +91,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.2 \
+  docker.io/olivaresai/olivares:0.3 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -99,26 +107,32 @@ Sessions work on one host folder: set `OLIVARES_PROJECT_DIR` to its absolute pat
 
 **Debian and Ubuntu.** The package adds a no-login `olivares` user and a hardened service; you start it.
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.deb
-sudo dpkg -i olivares_0.1_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **RHEL, Fedora and SUSE.**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.rpm
-sudo rpm -i olivares_0.1_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
+sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
+<!-- /release -->
 
 **Alpine.**
 
+<!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.1/olivares_0.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.1_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
 ```
+<!-- /release -->
 
-On ARM servers, use `arm64` instead of `amd64`. Every file of the release: the [release page](https://github.com/olivaresai/olivares/releases/tag/0.1).
+On ARM servers, use `arm64` instead of `amd64`. Every file of the release: the <!-- release -->[release page](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
 
 **Homebrew.** macOS and Linux.
 
@@ -143,7 +157,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 
 Then open http://127.0.0.1:8901.
 
-Helm, the Kubernetes operator, Terraform, appliance and FIPS/STIG deployment artifacts are distributed with Business; air-gapped installation requires Enterprise. See [editions](docs/editions.md).
+Helm, the Kubernetes operator, Terraform, appliance and FIPS/STIG deployment artifacts are distributed with Business; air-gapped installation requires Enterprise; air-gap DDIL transfer of governance state is a Business capability. Deploying agents and MCP servers on company infrastructure (`olivares deploy`) is a Business capability. See [editions](docs/editions.md).
 
 ## Editions and pricing
 
@@ -151,17 +165,17 @@ Community is the complete product, free and open source. Business adds what a co
 
 | | **Community** | **Business** | **Enterprise** |
 |---|---|---|---|
-| **Price** | Free, AGPL-3.0 | USD 129/month or USD 1,290/year | Annual contract |
+| **Price** | Free, AGPL-3.0 | USD 99/month or USD 990/year | Annual contract |
 | **What you get** | The complete product: unlimited users and all four deny-closed enforcement points | Everything in Community, plus Regulated Operations, AI Runtime Security, Compliance Packs and Identity & Scale, the commercial licence, signed updates and email support | Everything in Business, plus more companies, deployments and identity providers, offline mirrors and support terms agreed with you |
 | **Scope** | One active identity provider | One company, one active instance at a time | Agreed in the contract |
 
-**Regulated Operations** adds regulatory retention floors, legal-hold reconciliation on archives and WORM archives on Azure and GCS. **AI Runtime Security** adds deeper inspection of what agents send, receive and run. **Compliance Packs** provide framework assessments, regulatory views, OSCAL export and on-demand HTML/PDF reports, and draft the DORA register of information and the ISO/IEC 42001 pack for your auditor. **Identity & Scale** connects several identity providers at once and grows with larger deployments.
+**Regulated Operations** adds legal holds, right to erasure with key shred, regulatory retention floors, legal-hold reconciliation on archives and WORM archives on Azure and GCS. **AI Runtime Security** adds deeper inspection of what agents send, receive and run. **Compliance Packs** provide framework assessments, regulatory views, OSCAL export and on-demand HTML/PDF reports, and draft the DORA register of information and the ISO/IEC 42001 pack for your auditor. **Identity & Scale** connects several identity providers at once and grows with larger deployments.
 
 [Compare editions and buy](https://olivares.ai/pricing) · [What each edition includes](docs/editions.md) · [What is open and what is commercial](LICENSING.md)
 
 ## Architecture
 
-One Go binary with the console built in. It serves a REST API, a gRPC API, the `olivares` command line. The Terraform provider is distributed with Business. Collectors run inside your network, and data stays in SQLite or PostgreSQL on your servers. [How it fits together](ARCHITECTURE.md).
+One Go binary with the console built in. It serves a REST API, a gRPC API, the `olivares` command line. The Terraform provider is distributed with Business. Edge collectors (Business) run inside your network, and data stays in SQLite or PostgreSQL on your servers. [How it fits together](ARCHITECTURE.md).
 
 ## Documentation
 

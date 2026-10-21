@@ -9,7 +9,7 @@ sidebar:
   order: 1
 ---
 
-**Edition:** Das Erstellen und Bearbeiten eigener Cedar-Richtlinien, einschließlich permit und forbid, erfordert Business. Community setzt gespeicherte Richtlinien, eigene Rollen und begrenzte Berechtigungen weiterhin durch; Lesen und Widerrufen bleiben möglich. `DELETE /v1/m/governance/pdp/active?engine=cedar` deaktiviert nur die selbst verfasste Cedar-Richtlinie und erhält Verlauf, verwaltete Berechtigungen und übernommene Richtlinien. Integrierte Rollen, native Verweigerungsregeln und der Notausschalter bleiben in Community. Der externe PDP dieses Rezepts schränkt nur ein; selbst verfasste Cedar-permits können innerhalb ihres Geltungsbereichs Zugriff gewähren.
+**Edition:** Das Erstellen und Bearbeiten eigener Cedar-Richtlinien, einschließlich permit und forbid, erfordert Business. Community setzt gespeicherte Richtlinien, eigene Rollen und begrenzte Berechtigungen weiterhin durch; Lesen und Widerrufen bleiben möglich. `DELETE /v1/m/governance/pdp/active?engine=cedar` deaktiviert nur die selbst verfasste Cedar-Richtlinie und erhält Verlauf, verwaltete Berechtigungen und übernommene Richtlinien. Integrierte Rollen, native Verweigerungsregeln und der Notausschalter bleiben in Community. Der externe PDP dieses Rezepts schränkt nur ein; selbst verfasste Cedar-permits können innerhalb ihres Geltungsbereichs Zugriff gewähren. Die Auswahl dieser externen Engine (`OLIVARES_PDP_ENGINE`, eine Cedar-Datei oder OPA) erfordert Business: Community verweigert den Start, wenn eine Engine ausgewählt ist.
 
 **Ziel:** attributbasierte Restriktionen oberhalb von deny-by-default RBAC
 hinzufügen — zum Beispiel „niemand fasst Ressourcen mit dem Tag `secret` an,

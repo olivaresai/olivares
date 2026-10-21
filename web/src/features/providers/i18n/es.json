@@ -16,7 +16,7 @@
   },
   "forbidden": {
     "title": "No puedes leer los proveedores de este inquilino",
-    "description": "Leer los proveedores registrados requiere sessions:provider:read. Pídeselo a una administradora de este inquilino."
+    "description": "Tu rol no puede leer los proveedores registrados. Pide acceso a una administradora de esta organización."
   },
   "columns": {
     "name": "Nombre",

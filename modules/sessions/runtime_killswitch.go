@@ -30,7 +30,7 @@ import (
 // the governed dual-control re-enable; the sweep never resurrects, only stops.
 
 // startStopSweep launches the shared active lifecycle sweep when kill-switch
-// checking or the owner-standing check is bound. It
+// checking, owner-standing checks or optional idle reclamation are bound. It
 // runs under a background context (NOT Start's ctx) so it outlives the boot call, and is
 // canceled by Stop. Idempotent: a second call without a Stop is a no-op.
 func (m *Module) startStopSweep() {
@@ -38,7 +38,7 @@ func (m *Module) startStopSweep() {
 		return
 	}
 	m.mu.Lock()
-	if m.rt.sweepCancel != nil || (m.rt.stopSweepInterval <= 0 && m.rt.SessionAccessCheck == nil) {
+	if m.rt.sweepCancel != nil || (m.rt.stopSweepInterval <= 0 && m.rt.SessionAccessCheck == nil && m.rt.idleAutoStopPolicy == nil) {
 		m.mu.Unlock()
 		return
 	}
@@ -49,6 +49,9 @@ func (m *Module) startStopSweep() {
 	// sweeping is disabled. Keep one timer and preserve the kill-switch cadence.
 	if m.rt.SessionAccessCheck != nil && (interval <= 0 || interval > 5*time.Second) {
 		interval = 5 * time.Second
+	}
+	if every := m.rt.idleSweepEvery(); m.rt.idleAutoStopPolicy != nil && (interval <= 0 || interval > every) {
+		interval = every
 	}
 	m.mu.Unlock()
 	go m.runStopSweep(ctx, interval)
@@ -83,11 +86,14 @@ func (m *Module) stopStopSweep() {
 	}
 }
 
-// runStopSweep uses one timer for both checks. It schedules their exact due
+// runStopSweep uses one timer for the lifecycle checks. It schedules their exact due
 // times, so the owner cadence never rounds or delays a configured emergency check.
 func (m *Module) runStopSweep(ctx context.Context, interval time.Duration) {
 	now := time.Now()
-	var nextAccess, nextKill time.Time
+	var nextAccess, nextKill, nextIdle time.Time
+	if m.idleAutoStopPolicy() != nil {
+		nextIdle = now.Add(m.rt.idleSweepEvery())
+	}
 	if m.sessionAccessCheck() != nil {
 		nextAccess = now.Add(interval)
 	}
@@ -96,19 +102,32 @@ func (m *Module) runStopSweep(ctx context.Context, interval time.Duration) {
 	}
 	timer := time.NewTimer(interval)
 	defer timer.Stop()
-	var ownerDone <-chan struct{}
+	var ownerDone, idleDone <-chan struct{}
 	for {
 		next := nextAccess
 		if next.IsZero() || (!nextKill.IsZero() && nextKill.Before(next)) {
 			next = nextKill
 		}
+		if next.IsZero() || (!nextIdle.IsZero() && nextIdle.Before(next)) {
+			next = nextIdle
+		}
 		timer.Reset(time.Until(next))
 		select {
 		case <-ctx.Done():
 			return
+		case <-idleDone:
+			idleDone = nil
 		case <-ownerDone:
 			ownerDone = nil
 		case now = <-timer.C:
+			if !nextIdle.IsZero() && !now.Before(nextIdle) {
+				if idleDone == nil {
+					done := make(chan struct{})
+					idleDone = done
+					go func() { defer close(done); m.sweepIdleAutoStop(ctx) }()
+				}
+				nextIdle = advanceStopSweep(nextIdle, m.rt.idleSweepEvery())
+			}
 			if !nextKill.IsZero() && !now.Before(nextKill) {
 				m.sweepKillSwitch(ctx)
 				nextKill = advanceStopSweep(nextKill, m.rt.stopSweepInterval)

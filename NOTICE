@@ -48,23 +48,31 @@ NOTICES FOR THIRD-PARTY COMPONENTS:
 
   * Docker's default seccomp profile (deploy/seccomp/olivares-sessions.json), from
     github.com/moby/profiles seccomp v0.2.3, modified only in its clone namespace
-    mask as its "comment" fields state. Copyright The Moby Authors.
+    mask and in two flag-gated mount rules, as its "comment" fields state.
+    Copyright The Moby Authors.
     Licensed under the Apache License, Version 2.0.
 
   * Docker default AppArmor policy (deploy/apparmor/olivares-sessions.conf), from
     github.com/moby/moby v26.1.5 profiles/apparmor/template.go. Profile and daemon
-    signal peer names are fixed; user namespace creation is permitted.
+    signal peer names are fixed; user namespace creation and mount are permitted.
     Copyright The Moby Authors. Licensed under the Apache License, Version 2.0.
 
   * Official OCSF schema files (sdk/siemwire/testdata/ocsf/), vendored verbatim
     from the OCSF schema project (https://github.com/ocsf/ocsf-schema).
     Copyright OCSF contributors. Licensed under the Apache License, Version 2.0.
 
-  * Geist Variable font (web/src/assets/fonts/geist/), vendored verbatim from the
-    Geist 1.7.2 release (https://github.com/vercel/geist-font).
-    Copyright (c) 2023 Vercel, in collaboration with basement.studio.
+  * Inter Variable font, Latin subset (web/src/assets/fonts/inter/), vendored
+    verbatim from the Fontsource 5.3.0 build of Inter (https://github.com/rsms/inter).
+    Copyright 2016 The Inter Project Authors.
     Licensed under the SIL Open Font License, Version 1.1; the license text ships
-    with the console as web/public/licenses/fonts/Geist-OFL.txt.
+    with the console as web/public/licenses/fonts/Inter-OFL.txt.
+
+  * Space Grotesk Variable font, Latin subset (web/src/assets/fonts/space-grotesk/),
+    vendored verbatim from the Fontsource 5.3.0 build of Space Grotesk
+    (https://github.com/floriankarsten/space-grotesk).
+    Copyright 2020 The Space Grotesk Project Authors.
+    Licensed under the SIL Open Font License, Version 1.1; the license text ships
+    with the console as web/public/licenses/fonts/SpaceGrotesk-OFL.txt.
 
   * JetBrains Mono font, Latin subset, weights 400 and 500
     (web/src/assets/fonts/jetbrains-mono/), vendored verbatim from the Fontsource

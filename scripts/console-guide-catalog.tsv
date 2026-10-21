@@ -16,7 +16,7 @@
 # row and no nav string is red, a row for a path the census does not record is red.
 #
 # When you add a screen: put its description in nav.json (it is user-facing text and the
-# console shows it in the sidebar, in seven languages). Come here only for the screens
+# console shows it in the sidebar, in nine languages). Come here only for the screens
 # that have no place in that catalog — the pre-session legs, and the deep-link pages.
 #
 # Columns, tab-separated:
@@ -40,7 +40,6 @@
 /login	Sign in	The credential and token sign-in page for an already provisioned account.
 /logs	-	-
 /routine-policies	-	-
-/session-viewer/$id	-	The full timeline of one recorded session, reached from a row in Recordings rather than from the sidebar.
 /setup	First-run setup	The one-time page that turns a fresh deployment into a usable one: it consumes the setup token and creates the first owner account.
 /status-page	Public status	Component health for people who are not signed in, refreshed on its own while the page is open.
 /workspace-templates	-	-

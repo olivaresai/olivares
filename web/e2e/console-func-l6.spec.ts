@@ -639,6 +639,10 @@ test('eventing authors, revisions, bulk work, replay, filters, and DLQ are live'
   })
   const subscriptionName = `l6-ui-event-${Date.now()}`
   const endpoint = `https://127.0.0.1:27659/${subscriptionName}`
+  // A SIEM sink is Business: a Community server answers 501 business_required.
+  const community =
+    (await (await page.request.get('/v1/server-info')).json()).edition ===
+    'community'
 
   const initialSubscriptions = observe(
     page,
@@ -691,10 +695,12 @@ test('eventing authors, revisions, bulk work, replay, filters, and DLQ are live'
   await createDialog
     .getByRole('textbox', { name: 'Auth value' })
     .fill('l6-create-bearer')
-  await fieldCombobox(createDialog, 'SIEM sink').click()
-  await page.getByRole('option', { name: 'HTTPS (OCSF)' }).click()
-  await fieldCombobox(createDialog, 'Sink format').click()
-  await page.getByRole('option', { name: 'json', exact: true }).click()
+  if (!community) {
+    await fieldCombobox(createDialog, 'SIEM sink').click()
+    await page.getByRole('option', { name: 'HTTPS (OCSF)' }).click()
+    await fieldCombobox(createDialog, 'Sink format').click()
+    await page.getByRole('option', { name: 'json', exact: true }).click()
+  }
   await createDialog.getByRole('spinbutton', { name: 'Max attempts' }).fill('1')
   await createDialog
     .getByRole('spinbutton', { name: 'Initial interval (s)' })
@@ -722,8 +728,7 @@ test('eventing authors, revisions, bulk work, replay, filters, and DLQ are live'
     enabled: true,
     endpoint,
     auth_type: 'bearer',
-    sink_kind: 'https',
-    sink_format: 'json',
+    ...(community ? {} : { sink_kind: 'https', sink_format: 'json' }),
   })
   expect(created.event_types).toContain('work.item.created')
   expect(created.secret.length).toBeGreaterThan(20)
@@ -1051,6 +1056,11 @@ test('deploy plans GitOps live and governs desired-state authoring end to end', 
   browser,
   page,
 }) => {
+  test.skip(
+    (await (await page.request.get('/v1/server-info')).json()).edition ===
+      'community',
+    'Deployment is Business; Community answers 501, pinned by TestCommunityDeployRoutesAnswerBusiness.',
+  )
   const token = await loginDemo(page)
   const definitionName = `l6-ui-deploy-${Date.now()}`
 

@@ -290,7 +290,7 @@ Codex doit aussi être testée sur un hôte où le hook est marqué comme étant
 | **Control console > Connectors** (`/console`) | Source, mode, fréquence, configuration non secrète et actions Test/Save/Reload. | La source persistée apparaît immédiatement ; ses données, non. |
 | **Health > Connectors** (`/health`) | État du connecteur, message, tendance et dernière activité. | Après rechargement du roster. |
 | **Observability > Ingestion** (`/observability`) | Compteurs pour `olivares.codex`, types d'observation et première/dernière réception. | Après que `Gather` a émis des données. Ces compteurs couvrent tout le processus, démarrent au boot et sont remis à zéro au redémarrage. |
-| **Cost & FinOps** (`/finops`) | Utilisation Analytics estimée et, si activé, coût facturé quotidien. | Un identifiant valide, `workspace_id` et des API autorisées ; `costs` exige un opt-in explicite. |
+| **Budgets** (`/stored-budgets`) | Consommation par rapport à chaque limite de budget enregistrée, calculée à partir de l'utilisation Analytics estimée et, si activé, du coût facturé quotidien. | Un identifiant valide, `workspace_id` et des API autorisées ; `costs` exige un opt-in explicite. |
 | **Security** (`/security`) | Constats d'adoption, surfaces enterprise indisponibles et analyse structurée opt-in des données Compliance. | Après collecte ; les réponses 403/404 des surfaces enterprise deviennent des preuves de posture, pas un succès. |
 | **Sessions** (`/sessions`) | Sessions et chronologie avec action, modèle, identité, coût et posture. | Provient du hook gouverné. La source batch seule ne crée pas de session active. |
 | **Audit** (`/audit`) | Preuves d'activité importées et décisions PEP ancrées dans le ledger. | Après réception de logs ou de décisions attribuables. |
@@ -301,8 +301,6 @@ module dans cet arbre ne le publie sur cet écran.
 
 <img class="light:sl-hidden" src="/console/health-dark.png" alt="Disponibilité, fiabilité et dépendances de votre parc — dérivées de l’activité observée et du balayage d’obsolescence, jamais par sondage de l’infrastructure.">
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="Disponibilité, fiabilité et dépendances de votre parc — dérivées de l’activité observée et du balayage d’obsolescence, jamais par sondage de l’infrastructure.">
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Coût en tokens sur l’ensemble du parc — tendances, refacturation, rapprochement, budgets et prévision. Les chiffres sont exactement ceux que rapporte le registre FinOps.">
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Coût en tokens sur l’ensemble du parc — tendances, refacturation, rapprochement, budgets et prévision. Les chiffres sont exactement ceux que rapporte le registre FinOps.">
 <img class="light:sl-hidden" src="/console/security-dark.png" alt="Constats de garde-fous, posture d’application, file des anomalies et investigation d’incidents inviolable. Le plan est détectif par défaut — il enregistre, il ne bloque pas de lui-même tant que l’application n’est pas activée et gouvernée.">
 <img class="dark:sl-hidden" src="/console/security-light.png" alt="Constats de garde-fous, posture d’application, file des anomalies et investigation d’incidents inviolable. Le plan est détectif par défaut — il enregistre, il ne bloque pas de lui-même tant que l’application n’est pas activée et gouvernée.">
 

@@ -4,9 +4,11 @@ description: >-
   Le seul module qui agit sur votre infrastructure : il planifie et gouverne le
   cycle de vie déclaratif des agents et des serveurs MCP ainsi que leur câblage à
   l'estate. Les mutations sont soumises à un contrôle HITL, en dry-run-avant-apply,
-  et réversibles — et l'apply en direct reste deny-closed (503) tant qu'un
+  et réversibles — et, dans Business, l'apply en direct reste deny-closed (503) tant qu'un
   exécuteur n'est pas provisionné.
 ---
+
+Les définitions de déploiement, les plans, les apply, les rollbacks, les retraits, la configuration de l'exécuteur et le registre de câblage sont des fonctions **[Business](https://olivares.ai/pricing)**. Community répond 501 sur ces routes API et masque le groupe de commandes. Les définitions, révisions, câblages et opérations enregistrés restent dans la base de données et dans les sauvegardes de reprise. Les sections ci-dessous décrivent le comportement Business.
 
 Le module VII est le **seul** module qui mute l'infrastructure du client — toute autre
 partie du produit est read-first. Il provisionne, met à jour et retire des agents et des

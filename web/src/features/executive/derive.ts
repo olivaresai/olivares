@@ -25,8 +25,11 @@ import type {
   RiskTier,
 } from '@/features/compliance/types'
 import type { IncidentDTO, StatusDTO } from '@/features/health/types'
+import type { RunDTO } from '@/features/agentops/types'
 import type { InventorySummary } from '@/features/inventory/types'
 import type { LiveDTO } from '@/features/sessions/types'
+import { mergeSessions } from '@/features/sessions/provenance'
+import { workingCount } from '@/features/sessions/session-groups'
 import type { ListResponse } from '@/lib/api/types'
 // The ONE rule for "this list is a page with rows beyond it" (`has_more === true`),
 // deep-imported the way the features that show the badge do. Writing the predicate
@@ -70,6 +73,13 @@ export interface UsageKpi {
    *  established. */
   liveActive: number | null
   liveIdle: number | null
+  /** THE WORKING SET (#2268): the sessions the Sessions view files under Working,
+   *  launched or observed, from the same join and the same rule, so the dashboard's
+   *  Active agents card and that list print one figure. It is not `activeAgents`
+   *  (the catalog's "seen recently" count, which a dashboard once printed as 3 over a
+   *  list of 9 Working sessions). `null` when the live page was not established: who
+   *  is working now is the live half's fact. */
+  working: number | null
   /** Every live session that has not ended: working, idle between turns, or gone silent.
    *  The figure Now's "Live sessions" shows (HU-R24: it showed working ones only, 3 of 5). */
   liveNow: number | null
@@ -121,6 +131,11 @@ export function currentAnswer<T>(
 export function deriveUsage(
   inventory?: InventorySummary,
   live?: ListResponse<LiveDTO>,
+  /** The run half, as the Sessions view joins it. `undefined` = not in scope (the
+   *  role has no run read): the join then holds the observed rows alone, exactly as
+   *  that view lists them without it. `null` = in scope and not established: a
+   *  launched session's state is the run's, so who is working is unknown. */
+  runs?: ListResponse<RunDTO> | null,
 ): UsageKpi {
   // A present summary with no `agent` kind is an estate with no agents: a real zero.
   const agent = inventory?.by_kind?.agent
@@ -130,6 +145,10 @@ export function deriveUsage(
     activeAgents: inventory ? (agent?.active ?? 0) : null,
     totalAgents: inventory ? (agent?.total ?? 0) : null,
     totalEntities: inventory ? inventory.total : null,
+    working:
+      live && runs !== null
+        ? workingCount(mergeSessions(live.items, runs?.items ?? []))
+        : null,
     liveActive: count('active'),
     liveIdle: count('idle'),
     liveNow: live
@@ -143,7 +162,11 @@ export function deriveUsage(
     // `live` is already the CURRENT successful answer or nothing (`currentAnswer`),
     // so the rule's `!error` half is idle here; the `has_more === true` half is the one
     // that decides, and it is the same one the list badges apply.
-    livePartial: listaRecortada({ data: live }),
+    // The Working figure is counted over both pages, so a run page with more behind
+    // it floors it just as the observed page does, and is disclosed on the same line.
+    livePartial:
+      listaRecortada({ data: live }) ||
+      (live !== undefined && listaRecortada({ data: runs ?? undefined })),
   }
 }
 

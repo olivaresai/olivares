@@ -40,8 +40,10 @@ type SessionScope struct {
 	Preset       string
 	AllowedTools []string
 	// SecretEnv names the vault secrets this session was given as environment
-	// variables, comma-joined "VARIABLE<-secret", never their values. Every mint
-	// reads them from the launch the run row records, so a resume cannot widen them.
+	// variables, the vault secrets holding its package registry tokens and its
+	// repository read binding, comma-joined "VARIABLE<-secret", never their values.
+	// Not empty means the run's redactor holds values. Every mint reads them
+	// from the launch the run row records, so a resume cannot widen them.
 	SecretEnv string
 }
 

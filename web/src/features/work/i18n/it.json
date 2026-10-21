@@ -1,0 +1,301 @@
+{
+  "acceptance": {
+    "draftNotice": "Questo elemento è in bozza, quindi i suoi criteri possono ancora essere corretti. La chiave del criterio è un'identità permanente e non viene mai riassegnata.",
+    "lockedNotice": "Questo elemento ha lasciato la bozza, quindi i criteri non si possono più modificare, solo valutare. La chiave del criterio è un'identità permanente.",
+    "none": "Nessun criterio di accettazione.",
+    "required": "Obbligatorio",
+    "state": {
+      "pending": "In sospeso",
+      "passed": "Superato",
+      "failed": "Non superato",
+      "waived": "Derogato"
+    }
+  },
+  "apply": {
+    "planning": "Pianificazione della modifica. In questo passaggio non viene scritto nulla.",
+    "planTitle": "Piano",
+    "command": "Comando",
+    "permission": "Permesso",
+    "eventType": "Evento",
+    "rowEffects": "Righe che verrebbero scritte",
+    "noRowEffects": "Questo comando non scrive righe.",
+    "externalCalls": "Chiamate esterne",
+    "planHash": "Hash del piano",
+    "keyTitle": "Chiave di idempotenza per questa modifica",
+    "keyHelp": "Generata una sola volta per questa intenzione e riusata a ogni nuovo tentativo. Conservala: se la rete cade durante l'applicazione, riprovare con questa stessa chiave evita che una modifica diventi due.",
+    "confirm": "Applica",
+    "applying": "Applicazione in corso…",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "appliedTitle": "Applicata",
+    "replayedTitle": "Già applicata",
+    "replayedBody": "Il motore ha riconosciuto questa chiave di idempotenza e ha riproposto il risultato originale. Non è stato scritto nulla una seconda volta.",
+    "commandId": "ID del comando",
+    "resultId": "ID del risultato",
+    "status": "Nuovo stato",
+    "etag": "Nuovo tag di versione",
+    "auditSeq": "Sequenza di audit",
+    "reread": "Rileggi e confronta",
+    "retrySameKey": "Riprova con la stessa chiave",
+    "failure": {
+      "conflict-version": "Qualcun altro ha modificato questo elemento",
+      "version-required": "Precondizione di versione mancante",
+      "conflict-idempotency": "Questa chiave è già stata usata per una modifica diversa",
+      "conflict-domain": "Il motore ha rifiutato questo comando",
+      "unknown": "Impossibile verificare",
+      "other": "La modifica non è riuscita",
+      "plan-changed": "Il piano non è più attuale"
+    },
+    "conflictVersionBody": "L'elemento è cambiato tra la lettura e l'applicazione di questa modifica, quindi la modifica è stata rifiutata invece di essere applicata sopra l'altra. Rileggilo e confronta prima di decidere: reinviarla sovrascriverebbe ciò che ha fatto l'altra modifica.",
+    "versionRequiredBody": "Questo comando richiede la versione corrente dell'elemento e non ne è stata inviata nessuna. Riapri l'elemento in modo che il suo tag di versione venga letto di nuovo.",
+    "conflictIdempotencyBody": "Questa chiave di idempotenza è già stata usata con un corpo, una versione o un piano diversi. Il motore ha rifiutato invece di indovinare quale intendevi. Ricomincia la modifica per ottenere una nuova chiave.",
+    "conflictDomainBody": "Le regole del kernel hanno rifiutato questo comando, per esempio per una transizione non valida o un ciclo di dipendenze. Rileggere non cambierà la risposta: va cambiato il comando.",
+    "otherBody": "La modifica non è andata a buon fine.",
+    "continue": "Continua",
+    "inputIntro": "Il motore richiede questi dati prima di poter pianificare la modifica. Senza, rifiuta il comando.",
+    "planChangedBody": "Il piano è cambiato tra la sua visualizzazione e l'applicazione, quindi non è stato scritto nulla. Riapri l'azione per pianificare di nuovo e leggi il nuovo piano prima di confermare.",
+    "field": {
+      "code": {
+        "label": "Codice",
+        "hint": "Un breve token per le macchine: lettere minuscole, cifre, punto, trattino o trattino basso.",
+        "placeholder": "es. blocked_on_review"
+      },
+      "reason": {
+        "label": "Motivo",
+        "hint": "Testo libero, registrato con la modifica. È ciò che leggerà un'altra sessione.",
+        "placeholder": "Perché sta succedendo"
+      },
+      "evidence_ref": {
+        "label": "Riferimento dell'evidenza",
+        "hint": "Dove si trova l'evidenza di questo verdetto. Obbligatorio per registrare superato o non superato.",
+        "placeholder": "es. run://ci/12345"
+      },
+      "evidence_hash": {
+        "label": "Hash dell'evidenza",
+        "hint": "Un digest sha256 di quell'evidenza. Obbligatorio per registrare superato.",
+        "placeholder": "sha256:…"
+      },
+      "waiver_decision_id": {
+        "label": "Decisione di deroga",
+        "hint": "La decisione che autorizza la deroga a questo criterio, se esiste.",
+        "placeholder": "ID della decisione (facoltativo)"
+      },
+      "holder_sid": {
+        "label": "Sessione titolare",
+        "hint": "L'ID di sessione canonico che deterrà il lease. Il motore rifiuta qualsiasi valore che non lo sia.",
+        "placeholder": "l'ID della sessione titolare"
+      },
+      "fence": {
+        "label": "Fence",
+        "hint": "Il fence del lease su cui stai agendo. Il motore rifiuta qualsiasi valore inferiore a 1, e un fence obsoleto perde contro il titolare attuale.",
+        "placeholder": "1"
+      },
+      "decision_id": {
+        "label": "Decisione",
+        "hint": "La decisione su cui si basa questo atto. Reimpostare un clock produce evidenza: il motore non lo accetta senza una decisione indicata.",
+        "placeholder": "l'ID della decisione"
+      }
+    },
+    "details": "Dettagli",
+    "readyTitle": "Segna '{{title}}' come pronto",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "'{{title}}' attende il completamento di '{{dependency}}'.",
+    "dependencyWaiting": "Questo elemento attende il completamento delle sue dipendenze."
+  },
+  "checks": {
+    "evidence": "evidenza {{ref}}"
+  },
+  "common": {
+    "refresh": "Aggiorna",
+    "loadMore": "Carica altro"
+  },
+  "create": {
+    "action": "Nuovo elemento",
+    "title": "Nuovo elemento di lavoro",
+    "description": "Registra un elemento di lavoro di cui sei titolare. Il suo piano viene mostrato prima che venga scritto qualcosa; una volta creato puoi proporlo come passaggio di consegne.",
+    "workspace": "Workspace",
+    "workspaceNone": "Qui non hai nessun workspace disponibile. Sceglilo dal selettore dei workspace o chiedi a un amministratore.",
+    "workspaceError": "Non è stato possibile leggere l'elenco dei workspace. Chiudi e riprova.",
+    "itemTitle": "Titolo",
+    "brief": "Descrizione",
+    "briefHint": "Cosa va fatto e perché.",
+    "doneWhen": "Completato quando",
+    "doneWhenHint": "Il criterio di accettazione che stabilisce che l'elemento è finito."
+  },
+  "decisions": {
+    "title": "Decisioni",
+    "subtitle": "Ogni decisione così come è stata registrata, e quelle in vigore adesso.",
+    "view": {
+      "effective": "In vigore",
+      "revoked": "Revocate",
+      "history": "Cronologia completa"
+    },
+    "historyNotice": "Questa è la cronologia in sola aggiunta. Il motore non attribuisce lo stato attuale a queste righe, quindi nessuna è etichettata come in vigore o revocata: passa a una delle altre viste per porre questa domanda.",
+    "state": {
+      "effective": "In vigore",
+      "revoked": "Revocata",
+      "notAttributed": "Stato non attribuito in questa vista"
+    },
+    "scopeOf": "Ambito di “{{item}}”",
+    "meta": "{{subject}} · deciso da {{actor}} · {{at}}",
+    "revoke": "Revoca",
+    "revokeTitle": "Revoca la decisione",
+    "revokeBody": "La revoca viene registrata come nuova voce; la decisione originale non viene mai eliminata.",
+    "empty": {
+      "effective": {
+        "title": "Nessuna decisione in vigore",
+        "body": "Nessuna decisione è in vigore."
+      },
+      "revoked": {
+        "title": "Nessuna decisione revocata",
+        "body": "Nessuna decisione è stata revocata."
+      },
+      "history": {
+        "title": "Nessuna decisione registrata",
+        "body": "Qui non è ancora stato deciso nulla."
+      }
+    }
+  },
+  "dependencies": {
+    "none": "Nessuna dipendenza."
+  },
+  "detail": {
+    "subtitle": "{{kind}} · versione {{version}}",
+    "applyTitle": "Applica la modifica",
+    "owner": "Titolare",
+    "provenance": "Provenienza",
+    "priority": "Priorità",
+    "blocked": "Bloccato",
+    "terminal": "Esito",
+    "etag": "Tag di versione",
+    "tabs": {
+      "overview": "Panoramica",
+      "acceptance": "Accettazione",
+      "dependencies": "Dipendenze",
+      "events": "Eventi",
+      "lease": "Lease"
+    }
+  },
+  "events": {
+    "none": "Nessun evento registrato per questo elemento."
+  },
+  "filters": {
+    "status": "Stato",
+    "allStatus": "Qualsiasi stato",
+    "priority": "Priorità",
+    "allPriority": "Qualsiasi priorità",
+    "archived": {
+      "label": "Archiviati",
+      "any": "Archiviati e non",
+      "false": "Solo non archiviati",
+      "true": "Solo archiviati"
+    },
+    "clear": "Azzera i filtri"
+  },
+  "items": {
+    "title": "Elementi di lavoro",
+    "subtitle": "I filtri cercano in tutti gli elementi di lavoro, non solo in questa pagina.",
+    "empty": {
+      "title": "Nessun elemento di lavoro corrisponde",
+      "body": "Nessun elemento di lavoro corrisponde a questi filtri.",
+      "allTitle": "Ancora nessun elemento di lavoro",
+      "allBody": "Gli elementi di lavoro compaiono qui man mano che sessioni, agenti e persone li registrano.",
+      "start": "Avvia una sessione"
+    }
+  },
+  "lease": {
+    "none": "Nessun lease su questo elemento.",
+    "holder": "Titolare",
+    "state": "Stato",
+    "fence": "Fence",
+    "expires": "Scade",
+    "renewals": "Rinnovi",
+    "liveness": "Attività",
+    "live": "Attivo",
+    "notLive": "Non attivo",
+    "unknown": "Impossibile verificare",
+    "reason": "Motivo",
+    "ttl": "TTL (secondi)",
+    "noWrite": "Il tuo ruolo non può modificare questo lease.",
+    "noAdmin": "Per subentrare, revocare e reimpostare il clock serve l'amministrazione dei lease.",
+    "actions": {
+      "acquire": "Acquisisci",
+      "renew": "Rinnova",
+      "release": "Rilascia",
+      "takeover": "Subentra",
+      "revoke": "Revoca",
+      "clockRebase": "Reimposta il clock"
+    },
+    "noRead": "Il tuo ruolo non può leggere questo lease."
+  },
+  "status": {
+    "draft": "Bozza",
+    "ready": "Pronto",
+    "active": "Attivo",
+    "blocked": "Bloccato",
+    "review": "In revisione",
+    "completed": "Completato",
+    "failed": "Non riuscito",
+    "canceled": "Annullato",
+    "dependencyBlocked": "Dipendenza aperta",
+    "archived": "Archiviato"
+  },
+  "stream": {
+    "open": "Live",
+    "connecting": "Riconnessione…",
+    "closed": "Nessuno streaming",
+    "error": "Stream interrotto",
+    "unavailableBody": "L'elenco a schermo potrebbe non essere aggiornato e nient'altro te lo segnalerà. Aggiorna per leggere direttamente l'archivio."
+  },
+  "subtitle": "Il lavoro condiviso da sessioni e persone: elementi, titolari, dipendenze, criteri di accettazione e decisioni. Ogni modifica viene mostrata prima di essere applicata.",
+  "tabs": {
+    "items": "Elementi di lavoro",
+    "decisions": "Decisioni"
+  },
+  "title": "Lavoro",
+  "transition": {
+    "item.ready": "Segna come pronto",
+    "item.block": "Blocca",
+    "item.unblock": "Sblocca",
+    "item.submit": "Invia in revisione",
+    "item.complete": "Completa",
+    "item.fail": "Segna come non riuscito",
+    "item.cancel": "Annulla",
+    "item.archive": "Archivia",
+    "noWrite": "Il tuo ruolo non può modificare questo elemento.",
+    "noAdmin": "Il tuo ruolo non può segnare come non riusciti né archiviare gli elementi."
+  },
+  "truncation": {
+    "label": "Caricate {{n}} righe; ce ne sono altre",
+    "hint": "Questo elenco è paginato per keyset e il motore limita una pagina a 200. Sono mostrate solo le righe caricate; usa i filtri per restringere."
+  },
+  "unavailable": {
+    "title": "Impossibile verificare",
+    "body": "Il motore non è riuscito a completare questa osservazione, quindi segnala un esito sconosciuto invece di un risultato. Non considerare confermato nulla di ciò che c'è in questo pannello.",
+    "retryHint": "Non è stabilito se la modifica sia stata scritta. Riprova con la STESSA chiave di idempotenza: è ciò che rende sicuro il nuovo tentativo, perché il motore lo riconoscerà come la stessa intenzione e non come una seconda.",
+    "code": "Codice del motore: {{code}}"
+  },
+  "verdict": {
+    "LIMPIO": {
+      "label": "Pulito",
+      "help": "Il motore ha controllato e non ha trovato nulla di sbagliato."
+    },
+    "ROTO": {
+      "label": "Violato",
+      "help": "Il motore ha controllato e ha trovato una violazione di una regola."
+    },
+    "NO_HE_PODIDO_MIRAR": {
+      "label": "Impossibile verificare",
+      "help": "Il motore NON è riuscito a completare l'osservazione. Non è un esito positivo né un risultato vuoto: la risposta è sconosciuta."
+    }
+  },
+  "handoff": {
+    "offer": "Proponi passaggio di consegne",
+    "offerHint": "Proponi la responsabilità di questo elemento a un destinatario tramite un canale. La titolarità non passa finché non accetta.",
+    "noPermission": "Il tuo ruolo non può proporre un passaggio di consegne."
+  },
+  "url": {
+    "invalidItem": "L'indirizzo indica un ID di elemento che questa schermata non può usare, quindi è stato ignorato.",
+    "invalidFilter": "L'indirizzo indica un filtro che questa schermata non offre, quindi vengono mostrati tutti gli elementi."
+  }
+}

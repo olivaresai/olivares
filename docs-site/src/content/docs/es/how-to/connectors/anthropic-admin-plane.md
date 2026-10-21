@@ -19,7 +19,7 @@ del lado del roster.
 | Fuente (`kind`) | Qué lee | Credencial |
 |---|---|---|
 | `claude-api` | uso y coste facturado, inventario de modelos/workspaces, analítica de Claude Code, gobernanza de MCP/server-tool del lado de la API | clave de Admin API (`admin_key`) |
-| `claude-compliance` | el feed de actividad de cumplimiento (eventos con valor de evidencia) + el directorio de la organización | clave del feed de actividad + una Compliance Access Key **distinta** |
+| `claude-compliance` | el feed de actividad de cumplimiento (eventos con valor de evidencia) + el directorio de la organización | clave del feed de actividad + una Compliance Access Key **distinta** (Business) |
 | `claude-console` | roster de IAM de la organización (miembros, roles) → findings de postura SSO/SCIM | credenciales de la consola |
 | `claude-wif` | identidades no humanas (cuentas de servicio `svac_…`, identidades federadas) + sus aristas de scope **permitido** | credenciales del endpoint WIF |
 
@@ -120,12 +120,9 @@ connector de lectura nunca lo posee.
 
 Gasto facturado y estimado, segmentado por las dimensiones que transporta la
 telemetría (las etiquetas de team y project pasan a ser de primer nivel), en
-**Cost & FinOps**; miembros de la organización, identidades no humanas y sus
+**Budgets**; miembros de la organización, identidades no humanas y sus
 scopes en **Identity & NHI**; findings de postura (shadow auth, degradación de
-superficie, footguns de WIF) en **Security**:
-
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="La vista Cost & FinOps: gasto por modelo y dimensión, con presupuestos y alertas." />
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="La vista Cost & FinOps: gasto por modelo y dimensión, con presupuestos y alertas." />
+superficie, footguns de WIF) en **Security**.
 
 ## Límites honestos
 

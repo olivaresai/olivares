@@ -55,7 +55,7 @@ func newDirectoryRetirementPostgresHarness(
 
 func retirementOpenPostgres(t *testing.T, cfg store.Config) store.Store {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	raw, err := Open(ctx, cfg, nil)
 	if err != nil {
@@ -67,7 +67,7 @@ func retirementOpenPostgres(t *testing.T, cfg store.Config) store.Store {
 
 func (h directoryRetirementPostgresHarness) enforce(t *testing.T) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	_, after, changed, err := ActivateDirectoryWriter(ctx, h.raw, h.cfg, 1)
 	if err != nil {
@@ -766,7 +766,7 @@ func TestRetireUserPostgresSplitOwnerAdminAttestationOnReopen(t *testing.T) {
 
 		badCfg := primary.cfg
 		badCfg.AdminDSN = foreign.pg.Admin
-		openCtx, openCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		openCtx, openCancel := context.WithTimeout(context.Background(), postgresBootBudget)
 		defer openCancel()
 		reopened, openErr := Open(openCtx, badCfg, nil)
 		if openErr == nil {

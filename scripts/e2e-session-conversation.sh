@@ -75,10 +75,17 @@ TENANT="$(python3 -c 'import sys,json;print(json.load(sys.stdin)["grants"][0]["t
 echo "==> demo tenant $TENANT"
 
 seed_conversation_fixture
+# The message navigator's journey reads a long conversation from the tool's own transcript.
+if [ -n "${E2E_MESSAGES_FIXTURE:-}" ]; then
+  seed_messages_transcript
+fi
 
-echo "==> Playwright session-conversation.spec.ts"
+# Specs to run (default: the conversation and the slash menu); the message navigator's
+# journey is `E2E_MESSAGES_FIXTURE=1 E2E_SPECS=e2e/session-messages.spec.ts`.
+SPECS="${E2E_SPECS:-e2e/session-conversation.spec.ts e2e/session-slash-menu.spec.ts}"
+echo "==> Playwright $SPECS"
 cd "$ROOT/web"
 PLAYWRIGHT_BASE_URL="http://127.0.0.1:$PORT" \
 DEMO_TENANT="$TENANT" \
 E2E_SESSION_FOLDER="$DATA/ws" \
-  nice -n 10 pnpm exec playwright test e2e/session-conversation.spec.ts e2e/session-slash-menu.spec.ts "$@"
+  nice -n 10 pnpm exec playwright test $SPECS "$@"

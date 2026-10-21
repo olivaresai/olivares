@@ -15,26 +15,33 @@
     "revoked_other": "{{count}} pending approval requests canceled"
   },
   "engage": {
-    "title": "Emergency stop",
-    "caption": "Stops all agents, or one agent: running sessions end, and tool calls, MCP, schedules and workflows, voice, model calls, deployments and event delivery are refused. Pending approval requests for these actions are canceled. Stopping needs no approval; starting again does. The console, the audit trail and sign-in keep working.",
-    "scope": "Scope",
-    "scopeEstate": "All agents",
-    "scopeAgent": "Single agent",
     "agentRef": "Agent",
     "agentRefHint": "Agent UUID or external reference. An unknown ref still engages — the stop then matches on that exact string.",
     "reason": "Reason",
-    "reasonHint": "Required: say why. The review of this stop and later audits read it.",
-    "button": "Emergency stop",
+    "reasonHint": "Optional: say why. The review of this stop and later audits read it.",
     "confirmTitleEstate": "Stop all agents?",
     "confirmBodyEstate": "Every agent stops at once: running sessions end, their actions are refused, and pending approval requests for those actions are canceled. To start again, two different user accounts must approve, and the stop must be reviewed afterwards. There is no emergency way around this.",
     "confirmBodyEstateNoRestart": "Every agent stops at once: running sessions end, their actions are refused, and pending approval requests for those actions are canceled. There is no emergency way around this.",
     "confirmTitleAgent": "Stop this agent?",
     "confirmBodyAgent": "This agent stops at once: its actions are refused and its pending approval requests are canceled. To start it again, two different user accounts must approve, and the stop must be reviewed afterwards.",
-    "confirm": "Engage kill switch",
     "done": "Kill switch engaged",
     "doneBody": "Stop {{id}} is active. Re-enabling requires dual-control.",
     "alreadyStopped": "An active stop for this scope already exists",
-    "restartNeedsAdmins": "Starting again needs two other admin accounts to approve it and one of them to review it afterwards."
+    "restartNeedsAdmins": "Starting again needs two other admin accounts to approve it and one of them to review it afterwards.",
+    "stopAll": "Stop all agents",
+    "more": "More",
+    "stopOne": "Stop one agent…",
+    "stopAgent": "Stop this agent"
+  },
+  "runs": {
+    "title": "Sessions",
+    "caption": "Sessions running now. The list updates on its own.",
+    "captionStopped": "Sessions running now and those that ended since the stop began. The list updates on its own.",
+    "empty": "No session is running.",
+    "error": "The session list could not be read. The stop itself is not affected.",
+    "truncated": "Loaded the first {{n}} sessions",
+    "truncatedHint": "There are more sessions than shown, so a running session can be missing from this list. The stop applies to every session either way.",
+    "status": "{{live}} running, {{ended}} ended."
   },
   "stops": {
     "title": "Stops",
@@ -146,7 +153,7 @@
     },
     "actionLabel": {
       "stop_agent": "Stop agent",
-      "quarantine_nhi": "Quarantine NHI",
+      "quarantine_nhi": "Quarantine identity",
       "stop_estate": "Stop all agents"
     },
     "modeLabel": {

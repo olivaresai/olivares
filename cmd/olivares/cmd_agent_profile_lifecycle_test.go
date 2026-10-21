@@ -49,7 +49,7 @@ func TestAgentProfileUpdateSendsOnlyWhatTheOperatorNamed(t *testing.T) {
 		t.Fatalf("session_tools=%v", got["session_tools"])
 	}
 	// A PATCH that sent every flag would WITHDRAW authorizations nobody touched.
-	for _, unexpected := range []string{"display_name", "state", "auth_source", "provider_record_ref", "session_permission_mode"} {
+	for _, unexpected := range []string{"display_name", "state", "auth_source", "provider_record_ref", "session_permission_mode", "session_egress_hosts"} {
 		if _, present := got[unexpected]; present {
 			t.Fatalf("update sent %q, which the operator did not name: %v", unexpected, got)
 		}
@@ -176,5 +176,46 @@ func TestAgentProfileUpdateDeclaresProgramsAndRegistries(t *testing.T) {
 	}
 	if p.calls.Load() != calls {
 		t.Fatal("a malformed registry reached the server")
+	}
+}
+
+// dev#2154: the CLI declares the hosts an API-key session may reach, shows them,
+// and withdraws them with an empty value; nothing else travels with them.
+func TestAgentProfileUpdateDeclaresEgressHosts(t *testing.T) {
+	withHosts := strings.TrimSuffix(profileJSON, "}") + `,"session_egress_hosts":["api.github.com","github.com"]}`
+	p := newCreateProbe(t, http.StatusOK, withHosts)
+	t.Setenv("HOME", t.TempDir())
+
+	out, _, err := execRoot(t, profileArgs(p.URL, "update", "ppf-1", "--egress-host", "github.com", "--egress-host", "api.github.com")...)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got := decodeCreateBody(t, p.lastBody())
+	hosts, _ := got["session_egress_hosts"].([]any)
+	if len(hosts) != 2 || hosts[0] != "github.com" || hosts[1] != "api.github.com" {
+		t.Fatalf("session_egress_hosts=%v", got["session_egress_hosts"])
+	}
+	for _, unexpected := range []string{"session_programs", "session_registries", "session_tools", "display_name"} {
+		if _, present := got[unexpected]; present {
+			t.Fatalf("update sent %q, which the operator did not name: %v", unexpected, got)
+		}
+	}
+	if !strings.Contains(strings.ToLower(out), "egress hosts") || !strings.Contains(out, "api.github.com, github.com") {
+		t.Fatalf("the printed record must show the hosts, got %q", out)
+	}
+
+	if _, _, err := execRoot(t, profileArgs(p.URL, "update", "ppf-1", "--egress-host", "")...); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	got = decodeCreateBody(t, p.lastBody())
+	if list, ok := got["session_egress_hosts"].([]any); !ok || len(list) != 0 {
+		t.Fatalf("an empty value must send an EMPTY session_egress_hosts list, got %v", got["session_egress_hosts"])
+	}
+
+	// A profile that declares none keeps the form it had.
+	plain := newCreateProbe(t, http.StatusOK, profileJSON)
+	out, _, err = execRoot(t, profileArgs(plain.URL, "get", "ppf-1")...)
+	if err != nil || strings.Contains(strings.ToLower(out), "egress hosts") {
+		t.Fatalf("a profile without hosts shows the line: %v %q", err, out)
 	}
 }

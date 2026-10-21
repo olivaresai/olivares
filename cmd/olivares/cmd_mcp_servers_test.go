@@ -479,3 +479,21 @@ func toStrings(v any) []string {
 	}
 	return out
 }
+
+// A roster from before names were unique may hold two servers of one name. A
+// command that names it must not act on whichever comes first: an id still can.
+func TestMCPMustFindRefusesAnAmbiguousName(t *testing.T) {
+	snap := mcpSnapshot{Servers: []map[string]any{
+		{"id": "id-one", "name": "files"}, {"id": "id-two", "name": "files"}, {"id": "id-three", "name": "docs"},
+	}}
+	_, err := mcpMustFind(snap, "files")
+	if err == nil || exitcode.From(err) != exitcode.Conflict || !strings.Contains(err.Error(), "id-one") || !strings.Contains(err.Error(), "id-two") {
+		t.Fatalf("an ambiguous name = %v, want a conflict naming both ids", err)
+	}
+	if s, err := mcpMustFind(snap, "id-two"); err != nil || str(s, "id") != "id-two" {
+		t.Fatalf("by id = %v %v", s, err)
+	}
+	if s, err := mcpMustFind(snap, "docs"); err != nil || str(s, "id") != "id-three" {
+		t.Fatalf("a unique name = %v %v", s, err)
+	}
+}

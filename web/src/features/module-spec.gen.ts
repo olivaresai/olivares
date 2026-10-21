@@ -13,7 +13,7 @@ export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
   sourcescope: [],
   catalog: ['catalog'],
   skills: ['skills'],
-  compliance: ['compliance'],
+  compliance: ['compliance', 'retention'],
   consoleviews: [],
   deploy: ['deploy'],
   evals: ['evals'],

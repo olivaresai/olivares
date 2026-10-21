@@ -1,0 +1,209 @@
+{
+  "title": "Inventario",
+  "unnamed": "Senza nome",
+  "subtitle": "Ogni agente, sessione, MCP, modello e identità rilevati nel tuo parco.",
+  "refresh": "Aggiorna",
+  "scope": {
+    "note": "Inventario a livello di tenant. Il selettore dei workspace non filtra questa vista."
+  },
+  "summary": {
+    "total": "Entità",
+    "active": "Attive",
+    "stale": "Obsolete",
+    "kinds": "Tipi"
+  },
+  "tabs": {
+    "catalog": "Catalogo",
+    "topology": "Topologia",
+    "coverage": "Copertura della raccolta"
+  },
+  "facets": {
+    "allKinds": "Tutti i tipi",
+    "allStatus": "Tutti gli stati"
+  },
+  "status": {
+    "active": "Attiva",
+    "stale": "Obsoleta"
+  },
+  "cols": {
+    "name": "Nome",
+    "kind": "Tipo",
+    "status": "Stato",
+    "signals": "Segnali",
+    "hosts": "Host",
+    "lastSeen": "Ultima rilevazione",
+    "occurrences": "Occorrenze"
+  },
+  "searchPlaceholder": "Cerca nome, riferimento, segnale…",
+  "hostCount": "{{count}} host",
+  "kinds": {
+    "agent": "Agente",
+    "session": "Sessione",
+    "identity": "Identità",
+    "mcp_server": "Server MCP",
+    "tool": "Strumento",
+    "resource": "Risorsa",
+    "skill": "Skill",
+    "model": "Modello",
+    "provider": "Provider"
+  },
+  "detail": {
+    "ref": "Riferimento",
+    "id": "ID",
+    "firstSeen": "Prima rilevazione",
+    "lastSeen": "Ultima rilevazione",
+    "relations": "Relazioni",
+    "viewAccess": "Mappa degli accessi",
+    "viewSessions": "Sessioni",
+    "gone": "Questa voce non è più nel catalogo.",
+    "noProjection": "Non sono disponibili altri dettagli da mostrare per questa voce. Questo non stabilisce se abbia relazioni.",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "Non registrato al momento del rilevamento. Questo endpoint AI era nuovo per l'inventario; la sua governance attuale è sconosciuta. La copertura è limitata al log del proxy e agli host AI configurati.",
+      "unknown": "Endpoint AI osservato. La sua governance è sconosciuta. La copertura è limitata al log del proxy e agli host AI configurati."
+    }
+  },
+  "freshness": {
+    "title": "Aggiornamento del catalogo",
+    "independent": "L'aggiornamento del catalogo e la cronologia delle osservazioni sono letture indipendenti, non un unico snapshot atomico.",
+    "storedState": "Stato del catalogo memorizzato",
+    "storedHint": "Attiva e obsoleta sono stati del catalogo memorizzati. Non indicano salute, disponibilità o copertura delle origini.",
+    "localReception": "Ultima ricezione locale",
+    "firstLocalReception": "Prima ricezione locale",
+    "sourceOccurred": "Occorrenza dichiarata dall'origine",
+    "sourceOccurredUnknown": "L'origine non ha dichiarato un istante di occorrenza.",
+    "timeUnknown": "Nessun istante di ricezione disponibile.",
+    "occurrenceCount": "Numero di occorrenze nel catalogo",
+    "occurrenceHint": "Conta le materializzazioni nel catalogo per l'entità. Non è un conteggio di ricevute, di consegne di fatti corrispondenti né un totale di copertura."
+  },
+  "history": {
+    "title": "Cronologia delle osservazioni",
+    "coverageUnknown": "Questa cronologia non stabilisce la copertura delle origini, la completezza del rilevamento né la salute attuale.",
+    "loaded": "{{count}} caricate",
+    "empty": "Non sono disponibili ricevute memorizzate. Questo non prova che l'entità non sia mai stata osservata.",
+    "refresh": "Aggiorna cronologia",
+    "loadMore": "Carica altro",
+    "loading": "Caricamento della cronologia delle osservazioni",
+    "loadingMore": "Caricamento di altre ricevute",
+    "receipt": "Ricevuta",
+    "eventType": "Tipo di evento",
+    "eventTypeEdge": "Arco osservato",
+    "eventTypeCost": "Costo campionato",
+    "registration": "Registrazione alla ricezione",
+    "registeredSnapshot": "Snapshot storico della registrazione",
+    "unattributed": "Non attribuita",
+    "invalid": "Snapshot storico incompleto",
+    "sourceId": "ID origine alla ricezione",
+    "sourceRevision": "Revisione della registrazione applicata",
+    "environmentRef": "Ambiente di esecuzione",
+    "sourceOccurred": "Occorrenza dichiarata dall'origine",
+    "sourceOccurredUnknown": "L'origine non ha dichiarato un istante di occorrenza.",
+    "timeUnknown": "Nessun istante di ricezione disponibile.",
+    "firstReceived": "Prima ricezione dei fatti conservati",
+    "lastReceived": "Ultima consegna con i fatti conservati",
+    "deliveries": "Consegne di fatti corrispondenti",
+    "conflict": "Riconsegna in conflitto",
+    "conflictYes": "È conservata una riconsegna con fatti diversi. Questo non conta né data tali varianti.",
+    "conflictNo": "Nessuna riconsegna in conflitto è conservata.",
+    "malformed": "Questa pagina di osservazioni non può essere mostrata. Un elenco di elementi mancante, una continuazione senza un cursore utilizzabile o un cursore che non è avanzato sono un errore, non una cronologia vuota."
+  },
+  "topology": {
+    "note": "Composizione del parco per tipo. L'uso a runtime (quale agente esegue quale modello/MCP) compare in Sessioni; l'accesso alle risorse (R/RW) nella Mappa degli accessi.",
+    "bands": {
+      "origins": "Chi agisce",
+      "capabilities": "Cosa possono usare",
+      "resources": "Cosa toccano",
+      "other": "Altri tipi"
+    },
+    "emptyTitle": "Ancora nulla rilevato",
+    "emptyHint": "Man mano che i connettori segnalano attività, il tuo parco viene catalogato qui.",
+    "truncated": "Vengono mostrate le prime {{n}} entità",
+    "countsAreLoaded": "I conteggi riguardano gli elementi caricati in questa pagina, non l'intero parco.",
+    "loadedOnPage": "{{count}} caricate in questa pagina",
+    "loadedCount": "{{count}} caricate"
+  },
+  "empty": {
+    "catalog": {
+      "title": "Ancora nessuna entità del parco rilevata",
+      "description": "Le entità compaiono quando le osservazioni dei connettori segnalano agenti, sessioni, identità, capacità MCP, modelli, provider o risorse.",
+      "action": "Apri le capacità"
+    }
+  },
+  "coverage": {
+    "title": "Copertura della raccolta",
+    "intro": "Legge le evidenze di raccolta di una registrazione di origine aperta. Inserisci i selettori della registrazione che il runtime ha attualmente aperta: un selettore più vecchio legge quella selezione storica, non l'elenco attuale.",
+    "form": {
+      "legend": "Selettori della registrazione di origine",
+      "sourceId": "ID origine",
+      "sourceIdHint": "L'ID persistente della riga dell'elenco delle origini, non il suo nome.",
+      "sourceRevision": "Revisione dell'origine",
+      "sourceRevisionHint": "La revisione dell'elenco che il runtime ha aperto per questa registrazione.",
+      "environmentRef": "Riferimento dell'ambiente",
+      "environmentRefHint": "L'ambiente di esecuzione che ha applicato la registrazione.",
+      "submit": "Leggi la copertura",
+      "required": "Inserisci un valore.",
+      "tooLong": "Usa al massimo {{max}} byte.",
+      "revisionInvalid": "Inserisci un numero intero positivo."
+    },
+    "idle": "Inserisci un ID origine, una revisione dell'origine e un riferimento dell'ambiente per leggere la copertura della raccolta. Non viene letto nulla finché tutti e tre non sono validi.",
+    "loading": "Lettura della copertura della raccolta",
+    "refresh": "Leggi di nuovo",
+    "scopeNote": "La copertura descrive questa registrazione e la sua query sull'intervallo osservato. Non è uno snapshot globale del parco né un'autorizzazione del provider. Un completamento vuoto non elimina risorse.",
+    "hasMore": "La risposta indica altre pagine. È un flag di continuazione dell'elenco, non un'evidenza di completezza della raccolta. Questa selezione ha al massimo una testa.",
+    "unknownNote": "Sconosciuta significa che le evidenze memorizzate non stabiliscono la copertura per questa selezione. Una selezione senza corrispondenze risulta sconosciuta, mai assente né una completezza ereditata.",
+    "values": {
+      "complete": "Completa",
+      "partial": "Parziale",
+      "unavailable": "Non disponibile",
+      "unsupported": "Non supportata",
+      "unknown": "Sconosciuta"
+    },
+    "projections": {
+      "pending": "In attesa",
+      "committed": "Confermata",
+      "failed": "Non riuscita"
+    },
+    "current": {
+      "title": "Evidenze di raccolta attuali",
+      "coverage": "Copertura",
+      "reason": "Motivo",
+      "reasonNone": "Nessun motivo registrato",
+      "projection": "Proiezione",
+      "projectionHint": "I membri in coda restano in attesa finché la loro ricevuta non viene confermata. La sola enumerazione non li qualifica.",
+      "runId": "ID esecuzione",
+      "runOrder": "Ordine di esecuzione",
+      "admitted": "Membri ammessi",
+      "committed": "Membri confermati",
+      "expected": "Membri attesi",
+      "expectedOpen": "Non registrato finché l'host non chiude l'esecuzione.",
+      "rejection": "Motivo del rifiuto",
+      "noRun": "Nessuna esecuzione di raccolta è registrata per questa selezione. Una copertura sconosciuta non è zero: non dice se l'origine contenga risorse.",
+      "emptyComplete": "Questa esecuzione si è completata senza membri. Un completamento vuoto non elimina risorse dal catalogo."
+    },
+    "lastQualified": {
+      "title": "Ultimo successo qualificato",
+      "note": "Qualificazione storica per questa esatta registrazione e questo ambito. È separata dall'enumerazione attuale, e un'evidenza di rifiuto successiva non la riscrive.",
+      "absent": "Nessun successo qualificato è segnalato per questa registrazione e questo ambito. Resta assente finché un'esecuzione non si qualifica, e la sua assenza non dice nulla sull'esecuzione attuale."
+    },
+    "fields": {
+      "sourceId": "ID origine",
+      "sourceRevision": "Revisione dell'origine",
+      "environmentRef": "Riferimento dell'ambiente",
+      "scopeContract": "Contratto di ambito",
+      "family": "Famiglia",
+      "requestedScope": "Impronta dell'ambito richiesto",
+      "fulfilledScope": "Impronta dell'ambito soddisfatto",
+      "hostStarted": "Avvio dell'esecuzione sull'host",
+      "hostFinished": "Chiusura dell'esecuzione sull'host",
+      "producerStarted": "Avvio dell'enumerazione del produttore",
+      "producerFinished": "Fine dell'enumerazione del produttore",
+      "qualified": "Qualificata il",
+      "notRecorded": "Non registrato"
+    },
+    "error": {
+      "invalidTitle": "Selezione rifiutata",
+      "invalid": "Il motore ha rifiutato questa selezione. L'ID origine e il riferimento dell'ambiente non devono essere vuoti e possono avere al massimo 128 byte; la revisione dell'origine deve essere un numero intero positivo.",
+      "suspendedTitle": "Servizio del tenant sospeso",
+      "suspended": "Il servizio di questo tenant è sospeso o non attivo, quindi non è possibile leggere la copertura della raccolta."
+    }
+  }
+}

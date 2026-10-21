@@ -15,13 +15,14 @@
     "truncatedHint": "使用 olivares skills ls --cursor 列出其余技能包。"
   },
   "detail": {
-    "skills": "此技能包中的技能",
+    "skills": "技能、智能体、命令和规则",
     "revisions": "修订",
     "revision": "修订 {{n}}",
     "revisionLine": "修订 {{n}}，来源 {{source}}",
     "activeContent": "加载时即生效：{{items}}"
   },
   "kind": {
+    "profile": "配置档案",
     "workspace": "部门",
     "agent_group": "智能体组",
     "agent": "智能体",
@@ -56,7 +57,9 @@
     "submit": "分配",
     "done": "已分配技能包",
     "directoryFailed": "无法加载目标。关闭并重新打开技能包以重试。",
-    "approve": "我已审阅这些技能，并批准其工具在加载时对它们执行操作：{{skills}}"
+    "approve": "我已审阅这些技能，并批准其工具在加载时对它们执行操作：{{skills}}",
+    "members": "成员",
+    "membersHint": "最多选择64个成员。技能、智能体、命令和规则可以单独选择。"
   },
   "install": {
     "title": "安装技能包",

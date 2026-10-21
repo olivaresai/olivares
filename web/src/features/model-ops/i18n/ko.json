@@ -1,0 +1,423 @@
+{
+  "title": "모델 운영",
+  "subtitle": "소유한 모델, 그 서명된 모델 승인 및 로컬 추론 배포를 거버넌스합니다.",
+  "tabs": {
+    "owned": "소유 모델",
+    "admission": "승인",
+    "deployments": "배포",
+    "datasets": "데이터셋",
+    "finetune": "파인튜닝 작업",
+    "evidence": "AIBOM 봉인"
+  },
+  "owned": {
+    "title": "소유 모델",
+    "description": "소유한 모델의 거버넌스된 레지스트리 — 호스팅, 파인튜닝 또는 가져온 모델입니다.",
+    "new": "새 모델",
+    "search": "모델 검색…",
+    "created": "모델이 생성되었습니다.",
+    "updated": "모델이 업데이트되었습니다.",
+    "deleted": "모델이 삭제되었습니다.",
+    "newTitle": "새 소유 모델",
+    "editTitle": "소유 모델 편집",
+    "formBody": "소유한 모델을 등록합니다. 거버넌스 메타데이터만 기록되며 비밀은 절대 기록하지 않습니다.",
+    "deleteTitle": "소유 모델 삭제",
+    "deleteBody": "“{{name}}”을(를) 삭제하시겠습니까? 버전과 계보 참조가 제거됩니다. 이 작업은 감사 원장에 기록됩니다.",
+    "columns": {
+      "name": "이름",
+      "kind": "종류",
+      "provider": "프로바이더",
+      "visibility": "공개 범위",
+      "status": "상태"
+    },
+    "drawer": {
+      "subtitle": "개요, 버전 및 버전별 승인 증거입니다."
+    },
+    "form": {
+      "name": "이름",
+      "kind": "종류",
+      "status": "상태",
+      "baseRef": "기본 참조",
+      "providerRef": "프로바이더 참조",
+      "visibility": "공개 범위",
+      "ownerRef": "소유자 참조",
+      "note": "메모"
+    },
+    "truncated": "모델 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 등록 모델이 있습니다. 이 페이지는 ID(생성 시 할당)로 행을 가져오므로 그 이후 행이 누락되며, 보통 가장 최근 등록된 것입니다. 표 검색과 정렬은 불러온 것에만 적용됩니다. 여기에 나열되지 않은 모델이 등록되지 않았다는 증거는 아닙니다."
+  },
+  "versions": {
+    "title": "버전",
+    "new": "새 버전",
+    "admit": "승인",
+    "empty": "아직 버전 없음",
+    "emptyHint": "버전을 만들어 아티팩트를 기록하고 그 서명을 승인하십시오.",
+    "created": "버전이 생성되었습니다.",
+    "deleted": "버전이 삭제되었습니다.",
+    "newTitle": "새 모델 버전",
+    "formBody": "버전은 생성 후 불변입니다 — 기록한 뒤 서명된 아티팩트를 승인하십시오.",
+    "deleteTitle": "버전 삭제",
+    "deleteBody": "버전 “{{version}}”을(를) 삭제하시겠습니까? 승인 판정이 제거됩니다. 이 작업은 감사 원장에 기록됩니다.",
+    "form": {
+      "version": "버전",
+      "status": "상태",
+      "artifactRef": "아티팩트 참조",
+      "parentRef": "상위 참조",
+      "sourceRef": "소스 참조",
+      "note": "메모"
+    },
+    "truncated": "버전 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "이 모델에는 표시된 것보다 많은 버전이 있습니다. 페이지는 ID로 행을 가져오므로 이후 버전이 누락될 수 있습니다. 여기서 볼 수 없는 버전은 이 화면에서 승인 증거에 닿을 수 없는 버전이기도 합니다.",
+    "loadError": "버전 목록을 읽을 수 없습니다 — 이것은 \"버전 없음\"이 아닙니다"
+  },
+  "deployments": {
+    "title": "배포",
+    "description": "모든 모델의 로컬 추론 배포입니다. 승인 게이트가 거버넌스합니다.",
+    "new": "새 배포",
+    "search": "배포 검색…",
+    "created": "배포가 생성되었습니다.",
+    "updated": "배포가 업데이트되었습니다.",
+    "deleted": "배포가 삭제되었습니다.",
+    "governed": "거버넌스됨",
+    "newTitle": "새 배포",
+    "editTitle": "배포 편집",
+    "formBody": "런타임을 거버넌스된 모델 버전으로 지정합니다. 저장 시 승인이 강제됩니다.",
+    "deleteTitle": "배포 삭제",
+    "deleteBody": "“{{name}}”을(를) 삭제하시겠습니까? 이 작업은 감사 원장에 기록됩니다.",
+    "deniedTitle": "승인에 의해 차단됨",
+    "deniedHint": "현재 신뢰 앵커 아래에서 참조된 버전을 승인한 뒤 다시 시도하십시오 — 입력은 유지됩니다.",
+    "columns": {
+      "name": "이름",
+      "runtime": "런타임",
+      "version": "버전",
+      "governed": "거버넌스됨",
+      "status": "상태"
+    },
+    "filters": {
+      "allRuntimes": "모든 런타임",
+      "allStatuses": "모든 상태"
+    },
+    "form": {
+      "name": "이름",
+      "runtime": "런타임",
+      "status": "상태",
+      "ownedRef": "모델 참조",
+      "versionRef": "버전 참조",
+      "endpointRef": "엔드포인트 참조",
+      "governed": "거버넌스됨",
+      "governedHint": "선언된 태세 플래그이며 승인 우회가 아닙니다.",
+      "note": "메모",
+      "deploymentType": "배포 유형",
+      "deploymentTypeHint": "Local은 자체 호스팅 모델 버전을 제공하며 승인 게이트가 적용됩니다. brokered는 호스팅 프로바이더를 호출하며 적용되지 않습니다.",
+      "providerRef": "프로바이더 엔드포인트",
+      "providerHint": "이 배포가 중개하는 호스팅 프로바이더입니다(예: API 엔드포인트)."
+    },
+    "types": {
+      "local": "Local(자체 호스팅)",
+      "brokered": "Brokered(호스팅 프로바이더)"
+    },
+    "truncated": "배포 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 배포가 있습니다. 이 페이지는 ID로 행을 가져옵니다. 런타임 및 상태 필터는 엔진이 적용하므로 다시 쿼리합니다 — 잘림은 이미 필터링된 집합에 대한 것입니다. 여기에 나열되지 않은 배포가 아무것도 실행 중이지 않는다는 증거는 아닙니다. 표 검색과 정렬은 불러온 것에만 적용됩니다."
+  },
+  "policy": {
+    "title": "승인 정책",
+    "description": "서명된 모델 승인에 대한 테넌트 신뢰 정책입니다. 서명 방법은 구성한 내용에서 도출됩니다.",
+    "edit": "정책 편집",
+    "editTitle": "승인 정책 편집",
+    "editBody": "신뢰 앵커를 작성합니다. 원자적으로 저장되며 엔진이 계속 권위입니다.",
+    "loadError": "승인 정책을 불러올 수 없습니다.",
+    "saved": "승인 정책이 저장되었습니다.",
+    "mode": "도출된 모드",
+    "derivedMode": "도출된 서명 모드",
+    "requireSigned": "서명된 모델 요구",
+    "requireSignedHint": "강제: 검증된 승인 판정이 없는 버전의 배포를 거부합니다.",
+    "requireDigests": "아티팩트 다이제스트 요구",
+    "requireDigestsHint": "서명된 아티팩트의 디스크 재해시가 일치할 것도 요구합니다.",
+    "identities": "허용된 ID",
+    "identitiesHint": "한 줄에 하나의 서명자 ID 정규식입니다(Sigstore 키리스).",
+    "issuers": "허용된 발급자",
+    "issuersHint": "한 줄에 하나의 OIDC 발급자 URL입니다. ID와 함께 설정하거나 둘 다 설정하지 않아야 합니다.",
+    "trustedRoots": "신뢰할 수 있는 루트",
+    "trustedRootsHint": "PEM CA 인증서(Fulcio 또는 사설 PKI). 공개 자료만 허용됩니다.",
+    "trustedKeys": "신뢰할 수 있는 키",
+    "trustedKeysHint": "베어 키 서명용 PEM 공개 키입니다. 공개 자료만 허용됩니다.",
+    "note": "메모",
+    "on": "켜짐",
+    "off": "꺼짐",
+    "attestedBy": "증명자",
+    "attestedAt": "증명 시각",
+    "confirmTitle": "신뢰 변경 확인",
+    "confirmBody": "강제를 켜거나 신뢰 앵커를 제거하면 영향을 받는 버전이 다시 승인될 때까지 향후 배포 생성 및 업데이트가 실패할 수 있습니다. 계속하시겠습니까?",
+    "state": {
+      "unconfigured": {
+        "title": "관측 모드 — 구성되지 않음",
+        "body": "정책이 설정되지 않았습니다. 승인 판정은 기록되지만 아무것도 거부되지 않습니다."
+      },
+      "observe": {
+        "title": "관측 모드",
+        "body": "정책이 구성되었지만 강제가 꺼져 있습니다. 판정은 기록되며 배포는 거부되지 않습니다."
+      },
+      "enforce": {
+        "title": "강제 모드",
+        "body": "검증되었고 여전히 앵커된 승인 판정이 없는 버전의 배포는 거부됩니다."
+      }
+    },
+    "err": {
+      "privateKey": "신뢰 자료는 공개되어야 합니다 — PRIVATE KEY 블록을 제거하십시오.",
+      "pemResidual": "불완전한 PEM 블록을 제거하십시오 — 전체 BEGIN…END 블록만 저장됩니다.",
+      "anchorMissing": "강제에는 신뢰할 수 있는 루트 또는 키가 최소 하나 필요합니다.",
+      "identityIssuer": "ID와 발급자는 함께 설정하거나 둘 다 설정하지 않아야 합니다."
+    }
+  },
+  "verdicts": {
+    "title": "승인 판정",
+    "description": "기록된 CURRENT 판정으로 버전당 하나입니다 — 다시 승인하면 REPLACES되며 행이 추가되지 않습니다. 시도가 없는 버전은 여기에 나타나지 않습니다.",
+    "search": "판정 검색…",
+    "reAdmit": "다시 승인",
+    "drawerSubtitle": "기록된 판정 — 각 사실이 독립적으로 표시됩니다.",
+    "columns": {
+      "version": "버전",
+      "posture": "태세",
+      "method": "방법",
+      "roots": "서명자 루트",
+      "tlog": "투명성 로그",
+      "attestedAt": "기록됨"
+    },
+    "filters": {
+      "all": "전체",
+      "verified": "검증된 것만",
+      "unverified": "검증되지 않은 것만"
+    },
+    "truncated": "판정 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 승인 판정이 있습니다. 이 페이지는 ID로 행을 가져옵니다. 버전당 판정은 하나입니다 — 다시 승인하면 REPLACES되며 행이 추가되지 않고 ID는 FIRST 시도의 위치를 유지합니다 — 따라서 여기에 없는 버전이 반드시 승인되지 않은 것은 아닙니다."
+  },
+  "admit": {
+    "title": "서명된 모델 승인",
+    "reAdmitTitle": "현재 신뢰로 다시 승인",
+    "body": "버전 {{version}}의 서명을 검증하고 기록합니다. 기록된 판정은 승인 여부와 관계없이 증거입니다.",
+    "bundle": "서명 번들",
+    "bundleHint": "원시 OMS / Sigstore 번들 JSON입니다.",
+    "bundlePlaceholder": "{ \"mediaType\": \"…\", … }",
+    "bundleInvalid": "JSON 객체가 필요합니다.",
+    "digests": "해석된 다이제스트",
+    "digestsHint": "디스크 아티팩트를 다시 해시하기 위한 파일 → 16진수 다이제스트의 선택적 맵입니다.",
+    "digestsInvalid": "문자열 값의 JSON 객체가 필요합니다.",
+    "modelRef": "모델 참조",
+    "aibomRef": "AIBOM 참조",
+    "note": "메모",
+    "submit": "승인",
+    "admitted": "버전이 승인되었습니다.",
+    "recordedNotAdmitted": "판정이 기록되었지만 서명이 정책을 충족하지 못했습니다."
+  },
+  "admission": {
+    "mode": {
+      "keyless": "sigstore-keyless",
+      "certificate-pki": "certificate-pki",
+      "bare-key": "bare-key",
+      "empty": "아무것도 승인하지 않음"
+    },
+    "posture": {
+      "verified": "검증됨",
+      "signedUnbound": "서명됨, 아티팩트 미바인딩",
+      "denied": "검증되지 않음"
+    }
+  },
+  "evidence": {
+    "reason": "사유",
+    "noReason": "기록된 사유가 없습니다.",
+    "subjectName": "주체",
+    "subjectDigest": "주체 다이제스트",
+    "signer": "서명자",
+    "signerRoots": "서명자 루트",
+    "artifact": "아티팩트 재해시",
+    "artifactVerified": "일치함",
+    "artifactUnverified": "확인되지 않음",
+    "tlog": "투명성 로그",
+    "tlogVerified": "검증됨",
+    "tlogPresent": "존재함(포함 미확인)",
+    "tlogAbsent": "존재하지 않음",
+    "resourceCount": "서명된 리소스",
+    "coverage": "커버리지",
+    "attestedBy": "증명자",
+    "attestedAt": "기록됨",
+    "none": "기록된 승인 시도 없음",
+    "noneHint": "이 버전을 승인하여 서명 판정을 기록하십시오."
+  },
+  "datasets": {
+    "title": "데이터셋",
+    "description": "AIBOM 계보 구성 요소 — 이름, 콘텐츠 참조 및 해시입니다. 데이터 자체는 절대 포함하지 않습니다.",
+    "new": "새 데이터셋",
+    "search": "데이터셋 검색…",
+    "created": "데이터셋이 기록되었습니다.",
+    "deleted": "데이터셋이 삭제되었습니다.",
+    "claimed": "운영자 주장",
+    "newTitle": "데이터셋 기록",
+    "formBody": "최소 데이터 계보 레코드: ID, 분류 및 콘텐츠 참조 — 데이터셋 내용은 절대 포함하지 않습니다.",
+    "deleteTitle": "데이터셋 삭제",
+    "deleteBody": "“{{name}}”을(를) 삭제하시겠습니까? 계보 참조가 제거되어 향후 BOM이 변경됩니다(과거 봉인은 변경되지 않음). 이 작업은 감사 원장에 기록됩니다.",
+    "drawerSubtitle": "계보 레코드 — 분류, 콘텐츠 참조 및 출처 주장입니다.",
+    "provenanceLabel": "출처",
+    "provenanceClaimed": "운영자 단언이 기록되었습니다 — 운영자가 기록된 출처를 검토했다고 진술합니다. Olivares는 데이터셋을 암호학적으로 검증하거나 내용을 검사하지 않았습니다.",
+    "provenanceNotClaimed": "운영자가 기록한 출처 단언이 없습니다.",
+    "attestedBy": "기록자",
+    "columns": {
+      "name": "이름",
+      "classification": "분류",
+      "ownedRef": "모델 참조",
+      "provenance": "출처",
+      "recorded": "기록됨"
+    },
+    "form": {
+      "name": "이름",
+      "classification": "분류",
+      "ownedRef": "모델 참조",
+      "ownedRefHint": "선택 사항 — 이 데이터셋을 소유 모델에 연결합니다. 해석되어야 하며 그렇지 않으면 저장이 거부됩니다.",
+      "sourceRef": "소스 참조",
+      "contentHash": "콘텐츠 해시",
+      "contentAlg": "해시 알고리즘",
+      "contentAlgHint": "해시가 설정된 경우 기본값은 sha256입니다.",
+      "governance": "거버넌스 레이블",
+      "verified": "출처 검토됨(운영자 주장)",
+      "verifiedHint": "이 데이터셋의 출처를 검토했다고 단언합니다. 이것은 운영자 주장을 기록하며 Olivares가 수행한 검증이 아닙니다. 업데이트가 없습니다: 정정하려면 삭제 후 다시 만드십시오.",
+      "note": "메모"
+    },
+    "truncated": "데이터셋 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 등록 데이터셋이 있습니다. 이 페이지는 ID로 행을 가져옵니다. 이 행들은 AI-BOM 계보 구성 요소입니다: 여기에 없는 데이터셋이 계보에 없다는 증거는 아닙니다. 표 검색과 정렬은 불러온 것에만 적용됩니다."
+  },
+  "finetune": {
+    "title": "파인튜닝 작업",
+    "description": "파인튜닝 작업과 그 작업이 생성한 버전의 기록입니다. 플레인은 모델을 학습시키거나 가중치를 보유하지 않습니다.",
+    "new": "새 작업 기록",
+    "search": "작업 검색…",
+    "created": "작업이 기록되었습니다.",
+    "updated": "작업이 업데이트되었습니다.",
+    "newTitle": "파인튜닝 작업 기록",
+    "editTitle": "파인튜닝 작업 업데이트",
+    "formBody": "작업의 상태와 그것이 생성한 버전을 기록합니다. 이것은 인벤토리 레코드입니다 — 제어 플레인은 학습을 실행하지 않습니다.",
+    "trackBanner": "이것은 외부에서 실행된 파인튜닝 작업을 기록합니다. Olivares는 학습을 시작, 취소 또는 실행하지 않으며 가중치나 데이터셋 내용을 저장하지 않습니다.",
+    "columns": {
+      "name": "이름",
+      "runtime": "런타임",
+      "status": "상태",
+      "resultVersion": "결과 버전",
+      "started": "시작됨"
+    },
+    "filters": {
+      "allStatuses": "모든 상태"
+    },
+    "form": {
+      "name": "이름",
+      "status": "상태",
+      "runtime": "런타임",
+      "runtimeNone": "지정되지 않음",
+      "baseRef": "기본 참조",
+      "datasetRef": "데이터셋 참조",
+      "resultVersionRef": "결과 버전 참조",
+      "resultVersionRefHint": "이 작업이 생성한 모델 버전입니다. 기존 버전으로 해석되어야 하며 그렇지 않으면 저장이 거부됩니다.",
+      "startedAt": "시작 시각",
+      "endedAt": "종료 시각",
+      "clearHint": "기록된 타임스탬프를 지우는 것은 효과가 없습니다 — 엔진이 이전 값을 유지합니다.",
+      "note": "메모"
+    },
+    "truncated": "작업 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 파인튜닝 레코드가 있습니다. 이 페이지는 ID로 행을 가져옵니다. 상태 필터는 엔진이 적용하므로 다시 쿼리합니다. 여기에 나열되지 않은 작업이 실행된 적 없다는 증거는 아닙니다. 표 검색과 정렬은 불러온 것에만 적용됩니다."
+  },
+  "evidenceLedger": {
+    "title": "AIBOM 봉인",
+    "description": "모든 모델에 걸친 봉인된 AIBOM 원장 — 내구성 있고 추가 전용이며 원장에 앵커된 변조 증거입니다. 각 행은 BOM 문서가 아니라 콘텐츠 해시 약정입니다.",
+    "search": "봉인 검색…",
+    "drawerSubtitle": "봉인된 AIBOM — 감사 원장에 앵커된 변조 증거입니다.",
+    "sealMeaning": "봉인은 감사 원장에 앵커된 추가 전용 콘텐츠 해시 약정이며 BOM의 아카이브가 아닙니다. 전체 문서는 저장되지 않으며 봉인에서 검색할 수 없습니다.",
+    "noPriorHead": "0(이전 감사 헤드 없음)",
+    "serialNumber": "일련번호",
+    "ledgerHash": "원장 해시",
+    "generatedBy": "봉인자",
+    "scopeNote": "범위",
+    "columns": {
+      "ownedRef": "모델 참조",
+      "contentHash": "콘텐츠 해시",
+      "components": "구성 요소",
+      "spec": "사양",
+      "ledgerSeq": "원장 순번",
+      "sealed": "봉인됨"
+    },
+    "truncated": "봉인 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 봉인된 AI-BOM이 있습니다. 이 페이지는 ID(생성 시 할당)로 행을 가져오므로 그 이후 행이 누락되며, 정상 운영에서는 최근 증거입니다. 표 검색과 정렬은 불러온 것에만 적용됩니다. 여기에 봉인이 없는 모델이 봉인된 적 없다는 증거는 아닙니다."
+  },
+  "documents": {
+    "liveTitle": "생성된 문서 — 라이브",
+    "liveSubtitle": "현재 레지스트리 상태에서 지금 생성되었습니다. 봉인되지 않았고 감사되지 않았습니다.",
+    "sealsTitle": "봉인된 AIBOM 약정",
+    "live": "라이브",
+    "preview": "미리 보기",
+    "export": "내보내기",
+    "loadError": "문서를 생성할 수 없습니다.",
+    "sealRecorded": "AIBOM 봉인이 기록되었습니다",
+    "receiptBody": "원장은 콘텐츠 해시만 저장합니다 — 봉인된 CycloneDX 문서는 여기에만 존재합니다. 사본을 보관하려면 지금 다운로드하십시오.",
+    "downloadSealed": "봉인된 BOM 다운로드",
+    "noSeals": "아직 봉인 없음",
+    "noSealsHint": "AIBOM을 봉인하여 콘텐츠 해시 약정을 감사 원장에 앵커하십시오.",
+    "sealConfirmTitle": "이 AIBOM을 봉인하시겠습니까?",
+    "sealConfirmBody": "현재 레지스트리 상태에서 추가 전용 CycloneDX 콘텐츠 해시 약정을 만드시겠습니까? 이것은 BOM 문서를 아카이브하지 않습니다.",
+    "aibom": {
+      "title": "AIBOM",
+      "cyclonedx": "CycloneDX (JSON)",
+      "spdx": "SPDX 3.0.1 (JSON)",
+      "seal": "AIBOM 봉인",
+      "sealHint": "봉인은 감사 원장에 앵커된 추가 전용 CycloneDX 콘텐츠 해시 약정을 만듭니다. BOM 문서를 아카이브하지 않습니다. 항상 CycloneDX입니다 — SPDX 내보내기는 절대 봉인할 수 없습니다.",
+      "previewTitle": "AIBOM(라이브)",
+      "previewBody": "라이브 읽기 전용 CycloneDX(또는 SPDX) 인벤토리 — 봉인하기 전까지 봉인되지 않습니다."
+    },
+    "card": {
+      "title": "모델 카드",
+      "markdown": "Markdown (.md)",
+      "json": "JSON",
+      "previewTitle": "모델 카드(라이브)",
+      "previewBody": "거버넌스된 인벤토리에서 생성되었습니다. 기록된 증거가 없는 섹션은 기록되지 않음으로 표시되며 절대 꾸며내지 않습니다.",
+      "name": "이름",
+      "kind": "종류",
+      "status": "상태",
+      "intendedUse": "의도된 용도",
+      "versions": "버전",
+      "noVersions": "기록된 버전 없음.",
+      "admitted": "승인됨",
+      "notVerified": "기록됨, 검증되지 않음",
+      "noVerdict": "판정 없음",
+      "trainingData": "학습 데이터",
+      "notRecorded": "기록되지 않음.",
+      "admissionsRecorded": "서명된 승인 기록됨",
+      "admissionsVerified": "서명된 승인 검증됨",
+      "gpaiRecorded": "공급자 GPAI 태세 기록됨",
+      "yes": "예",
+      "no": "아니요"
+    },
+    "sealsTruncated": "봉인 {{n}}개를 불러왔으며 더 있습니다",
+    "sealsTruncatedHint": "이 모델에는 표시된 것보다 많은 봉인이 있습니다. 페이지는 ID로 행을 가져오므로 이후 행(보통 최신 봉인)이 누락될 수 있습니다. 여기에 해시가 없다고 문서가 봉인된 적 없다는 증거는 아닙니다.",
+    "sealsLoadError": "봉인 이력을 읽을 수 없습니다 — 이것은 \"봉인 없음\"이 아닙니다"
+  },
+  "empty": {
+    "datasets": {
+      "title": "아직 기록된 데이터셋 없음",
+      "description": "데이터셋의 ID와 분류를 기록하고 선택적으로 콘텐츠 참조와 해시를 추가하여 내용을 저장하지 않고 AIBOM 계보에 추가하십시오."
+    },
+    "deployments": {
+      "title": "아직 기록된 추론 배포 없음",
+      "description": "로컬 또는 중개 추론 배포를 기록하십시오. 로컬 항목에는 기존 모델 버전이 필요하며 승인 정책이 서명을 요구하는 경우에만 게이트됩니다."
+    },
+    "finetune": {
+      "title": "아직 파인튜닝 작업 기록 없음",
+      "description": "Olivares 외부에서 실행된 파인튜닝 작업을 기록하여 상태, 계보 및 생성된 모델 버전을 추적하십시오. 제어 플레인은 학습을 실행하지 않습니다."
+    },
+    "modelEvidence": {
+      "title": "아직 기록된 AIBOM 봉인 없음",
+      "description": "소유 모델을 열고 해당 AIBOM을 봉인하여 추가 전용 콘텐츠 해시 약정을 감사 원장에 앵커하십시오."
+    },
+    "ownedModels": {
+      "title": "아직 등록된 소유 모델 없음",
+      "description": "호스팅, 파인튜닝 또는 가져온 모델을 등록하여 버전, 승인 증거 및 AIBOM 문서를 관리하십시오."
+    },
+    "verdict": {
+      "title": "아직 기록된 승인 판정 없음",
+      "description": "소유 모델 아래에 버전을 만든 뒤 서명된 아티팩트를 승인하십시오. 각 버전은 하나의 판정을 유지하며 다시 승인하면 교체됩니다."
+    }
+  }
+}

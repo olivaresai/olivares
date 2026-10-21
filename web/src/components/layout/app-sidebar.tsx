@@ -4,7 +4,7 @@
 //
 // THE SIDEBAR (console 1.0): navigation only, in two widths.
 //
-//   FULL (240 px)                      RAIL (56 px)
+//   FULL (256 px)                      RAIL (56 px)
 //   wordmark · fold                    brand mark · unfold
 //   organization and workspace         search
 //   Search and commands (⌘K)           destinations as icons (counts as badges)
@@ -31,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { EditionBadge } from '@/features/console/edition-badge'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
 import { cn } from '@/lib/utils'
@@ -161,6 +162,7 @@ export function AppSidebar({
             {version}
           </span>
         ) : null}
+        <EditionBadge compact />
         <RailButton
           label={t('common:actions.expandSidebar')}
           shortcut="Control+B Meta+B"
@@ -193,12 +195,16 @@ export function AppSidebar({
     <Region
       aria-label={t('common:a11y.primarySidebar')}
       data-sidebar-mode="full"
+      // ⛔ 256 PX, NOT 240: a leaf label then has 143 px. Measured 2026-10-16 at 240 px the label
+      //    had 127 px and six words were wider (de Einrichtungsassistent 135, fr
+      //    d'approvisionnement 132, ru Администрирование 139), so they split inside the word.
+      //    e2e-visual/sidebar-label-wrap.spec.ts asks the browser, per word, in five languages.
       className={cn(
-        'flex w-60 min-h-0 flex-col gap-1.5 py-2.5 pr-2 pl-2.5',
+        'flex w-64 min-h-0 flex-col gap-1.5 py-2.5 pr-2 pl-2.5',
         overlay && 'h-full',
       )}
     >
-      <div className="flex h-9 shrink-0 items-center gap-2 px-1.5">
+      <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-2 px-1.5">
         <Link
           to={'/' as never}
           onClick={onNavigate}
@@ -207,6 +213,7 @@ export function AppSidebar({
         >
           <Wordmark className="text-text" />
         </Link>
+        <EditionBadge compact />
         {version ? (
           <span className="ml-auto truncate font-mono text-mono-s text-text-3">
             {version}

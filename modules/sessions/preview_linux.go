@@ -48,12 +48,19 @@ func listenPorts(procfs string, root int, helper func(int) bool) ([]listenPort, 
 	for _, pid := range tree {
 		isHelper[pid] = helper != nil && helper(pid)
 	}
+	// A session guard is the root when there is one. It is the parent of whatever
+	// the session orphaned, so being its child says nothing: the tool is the one
+	// process it started.
+	guarded, tool := isSessionGuard(procfs, root), 0
+	if guarded {
+		tool = launchedChild(procfs, root, parent)
+	}
 	session, excluded := map[string]bool{}, map[string]bool{}
 	for _, pid := range tree {
 		held := session
 		// The tool is the topmost process that is not a helper: the root, or a
 		// helper's child (in the session's own network the root is the bridge).
-		if isHelper[pid] || pid == root || isHelper[parent[pid]] {
+		if isHelper[pid] || pid == root || pid == tool || (isHelper[parent[pid]] && !(guarded && parent[pid] == root)) {
 			held = excluded
 		}
 		dir := filepath.Join(procfs, strconv.Itoa(pid), "fd")
@@ -101,6 +108,41 @@ func listenPorts(procfs string, root int, helper func(int) bool) ([]listenPort, 
 	}
 	slices.SortFunc(out, func(a, b listenPort) int { return a.Port - b.Port })
 	return out, nil
+}
+
+// launchedChild is the process the guard started: the earliest of its children.
+// What the session orphaned is the guard's child too, but started later.
+func launchedChild(procfs string, guard int, parent map[int]int) int {
+	first, firstStart := 0, uint64(0)
+	for pid, ppid := range parent {
+		if ppid != guard {
+			continue
+		}
+		start := startTime(procfs, pid)
+		if first == 0 || start < firstStart || (start == firstStart && pid < first) {
+			first, firstStart = pid, start
+		}
+	}
+	return first
+}
+
+// startTime is when the process started, in clock ticks after boot (0 if unknown).
+func startTime(procfs string, pid int) uint64 {
+	stat, err := os.ReadFile(filepath.Join(procfs, strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return 0
+	}
+	// pid (comm) state ppid ...; starttime is the 20th field after comm.
+	i := strings.LastIndexByte(string(stat), ')')
+	if i < 0 {
+		return 0
+	}
+	fields := strings.Fields(string(stat[i+1:]))
+	if len(fields) < 20 {
+		return 0
+	}
+	start, _ := strconv.ParseUint(fields[19], 10, 64)
+	return start
 }
 
 // processTree is root and its descendants, by parent links in procfs, plus the

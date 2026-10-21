@@ -282,7 +282,7 @@
     "matchActionHint": "Empty = matches any action.",
     "matchSubjectKind": "Match subject kind",
     "matchSubjectKindHint": "Empty = matches any subject kind.",
-    "needsBusiness": "Lowering a risk tier below the action's default needs Business. Turn this policy off to keep it stored.",
+    "needsBusiness": "A risk tier or an approval count other than the action's default needs Business. Turn this policy off to keep it stored.",
     "create": "Create policy",
     "save": "Save changes",
     "confirmCreateBody": "An enabled ABAC policy further-restricts access immediately; an enabled approval policy starts requiring human approvals for matching actions. Takes effect immediately.",
@@ -313,7 +313,7 @@
     "empty": "No identities",
     "emptyHint": "Identities appear here once a directory source is reconciled for this tenant.",
     "principalTypeHuman": "Human",
-    "principalTypeNhi": "NHI",
+    "principalTypeNhi": "Non-human",
     "principalTypeUnknown": "Unknown"
   },
   "groups": {
@@ -329,6 +329,7 @@
     "emptyHint": "Groups, roles and policies appear here as directory sources are reconciled."
   },
   "members": {
+    "notFound": "This group does not exist.",
     "title": "Group members",
     "subtitle": "Members of “{{group}}”.",
     "direct": "Direct",
@@ -345,7 +346,7 @@
   },
   "bindings": {
     "title": "Agent bindings",
-    "caption": "How each agent maps to its non-human identity (NHI) — the bridge that attributes the agent’s actions in the access map.",
+    "caption": "How each agent maps to its non-human identity, which attributes the agent’s actions in the access map.",
     "search": "Search bindings…",
     "agent": "Agent",
     "identity": "Identity",
@@ -584,7 +585,7 @@
     },
     "binding": {
       "title": "No agent bindings yet",
-      "description": "Bind an agent to an existing or newly minted NHI so its actions can be attributed to that identity in the access map."
+      "description": "Bind an agent to an existing or new non-human identity so its actions are attributed to that identity in the access map."
     },
     "group": {
       "title": "No groups yet",
@@ -652,7 +653,7 @@
     "partialCount": "Failed: {{failed}} of {{total}}",
     "partialBody": "The export was approved and executed, but some writes did not succeed. The remote engine has moved, so compute the plan again to see what is left.",
     "applyFailed": "The export could not be applied.",
-    "notWiredTitle": "AgentCore export is not wired in this deployment",
+    "notWiredTitle": "AgentCore export is not set up in this deployment",
     "notWiredBody": "No AgentCore exporter is configured for this tenant, so the engine declines the request. An operator enables it on the host by pointing this variable at the export configuration file:",
     "notWiredCredentials": "That file belongs to the operator and holds AWS write credentials. The console never shows, requests or edits it.",
     "deniedTitle": "The engine refused this export",

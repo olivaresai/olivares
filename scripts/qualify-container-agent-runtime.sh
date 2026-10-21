@@ -44,6 +44,11 @@ docker run --rm --name "$container" --read-only --cap-drop ALL \
 test "$(id -u)" = 65532
 test "$HOME" = /var/lib/olivares/home
 test -w "$HOME"
+for tool in vim vi less ps top curl jq ip ss tar gzip; do
+    command -v "$tool"
+done
+test "$(readlink -f "$(command -v vi)")" = "$(readlink -f "$(command -v vim)")"
+vim --version
 for compiler in cc gcc g++ c++ clang go make claude codex grok opencode; do
     if command -v "$compiler" >/dev/null 2>&1; then
         echo "Unexpected build tool or agent CLI: $compiler" >&2
@@ -100,6 +105,34 @@ docker run -d --name "$container" --read-only --cap-drop ALL \
 	--security-opt no-new-privileges:true --tmpfs /tmp:rw,mode=1777 \
 	--sysctl net.ipv6.conf.all.disable_ipv6=0 \
 	--mount "type=volume,src=$volume,dst=/var/lib/olivares" "$image" >/dev/null
+# Use the system startup files, exactly as an operator does with docker exec.
+for user in 65532 root; do
+	if ! output=$(docker exec -t --user "$user" --env TERM=xterm "$container" bash -eic '
+if [ "$EUID" = 0 ]; then
+    test "$HOME" = /root
+else
+    test "$HOME" = /var/lib/olivares/home
+fi
+cd
+test "$PWD" = "$HOME"
+test "$(alias ll)" = "alias ll='\''ls -alF'\''"
+test "$(alias l)" = "alias l='\''ls -CF'\''"
+test "$(alias la)" = "alias la='\''ls -A'\''"
+test "$(alias lt)" = "alias lt='\''ls -altrh'\''"
+test "$(alias ls)" = "alias ls='\''ls --color=auto'\''"
+ll; l; la; lt
+test ! -w /etc
+printf "PASS interactive shell: uid=%s HOME=%s\n" "$EUID" "$HOME"
+' 2>&1); then
+		printf '%s\n' "$output" >&2
+		exit 1
+	fi
+	printf '%s\n' "$output"
+	if [[ "$output" == *'Permission denied'* ]]; then
+		echo 'Shell startup must not try to read the other user home' >&2
+		exit 1
+	fi
+done
 docker exec -i "$container" python3 - <<'PYTHON'
 import http.client
 import socket

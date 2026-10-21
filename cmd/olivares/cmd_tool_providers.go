@@ -51,8 +51,9 @@ const providerModelsShown = 6
 func newToolProvidersCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "providers",
-		Short: "Show each tool's own login: email, plan, usage windows and models",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "providers",
+		Short:       "Show each tool's own login: email, plan, usage windows and models",
 		Long: "providers asks the engine what each agent tool itself reports about its login on the\n" +
 			"engine's host: the sign-in state, the account email (masked), the plan, the usage windows\n" +
 			"with their reset time (Claude Code and Codex on a subscription), the version and the\n" +

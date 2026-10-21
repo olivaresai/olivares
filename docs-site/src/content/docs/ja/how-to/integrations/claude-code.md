@@ -118,6 +118,14 @@ mode を使用します。この許可は一時的です。timestamp がない�
 `enforce` になります。identity、tenant、kill switch、firewall、fail-closed error を含む platform
 invariant は、business rule の観測中も引き続き強制されます。
 
+拒否され続けるセッションは、人に引き渡されます。1 回の実行が policy、firewall、または platform の rule
+による拒否に、連続で 3 回、または合計で 20 回達すると、Olivares は、誰かが見ていればそのターンを中断し、
+誰も見ていなければ停止します。その実行は `needs_person` と直近の理由を表示し、
+`sessions.run.denial_budget` エントリが 1 件 ledger に書き込まれます。人がレビューを辞退した場合は
+数えません。許可されたツール呼び出しがあると、連続した拒否の数は 0 に戻ります。人からの入力は
+新しい budget を開始します。上限はテナントごとに `"denial_budget": {"consecutive": 3,
+"total": 20}` で変更できます。省略したフィールドは既定値のままです。
+
 <img class="light:sl-hidden" src="/console/guias-config-step-up-dark.png" alt="ステップアップ認証が必要です — AAL3（ハードウェア、フィッシング耐性）">
 <img class="dark:sl-hidden" src="/console/guias-config-step-up-light.png" alt="ステップアップ認証が必要です — AAL3（ハードウェア、フィッシング耐性）">
 
@@ -211,9 +219,9 @@ operator は以下の view を使用できます。
 | **Observability > Ingestion**（`/observability`） | source 別 record、`edge`、`cost`、`finding` 種別、signal、最初と最後の event。 | 起動後の process 全体の counter です。再起動でリセットされ、tenant 固有ではありません。 |
 | **Sessions**（`/sessions`） | session、状態、action、model、token、cost、最新 activity、`enforced` または `observed` posture。 | posture は event evidence を要約します。コネクター登録から推測されるものではありません。 |
 | **Access map**（`/access-map`） | 観測された tool、MCP、resource から帰属した R/RW edge。 | 観測 edge は activity を表し、事前 authorization と同義ではありません。 |
-| **Cost & FinOps**（`/finops`） | 受信テレメトリから導出した cost と token sample。 | coverage は fleet が export した範囲に限られます。OTLP を出さなかった call は再構成できません。 |
+| **Budgets**（`/stored-budgets`） | 保存済みの各予算上限に対する消費量。受信テレメトリから導出した cost と token sample から算出。 | coverage は fleet が export した範囲に限られます。OTLP を出さなかった call は再構成できません。 |
 | **Security**（`/security`） | テレメトリ gap、sandbox/MCP posture、その他の出力済み finding。 | finding がないことは、未観測の surface が compliant であることを意味しません。 |
-| **Claude Policy**（`/claude-policy`） | 管理対象 Claude Code surface の authoring、配布、version、check-in 状態。 | 配布と drift verification は別の事実であり、別々に表示されます。 |
+| **Claude Policy**（`/claude-policy`） | 管理対象 Claude Code surface の検証とプレビュー。Business では公開、配布、version、check-in 状態が加わります。 | 配布と drift verification は別の事実であり、別々に表示されます。 |
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="エージェントのライブ運用 — 各セッションが今まさに何を実行しているか、そのトークン、コスト、ケイデンスをライブストリームで随時更新します。">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="エージェントのライブ運用 — 各セッションが今まさに何を実行しているか、そのトークン、コスト、ケイデンスをライブストリームで随時更新します。">

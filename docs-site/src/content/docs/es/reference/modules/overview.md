@@ -28,7 +28,7 @@ aprovisiona vía configuración de entorno), **PARTIAL** donde la superficie est
 restringida/opt-in, y un **seam deny-closed** declarado para el resto. En
 particular, **deploy** planifica y gobierna despliegues pero **no** los aplica a
 la infraestructura en vivo hasta que se aprovisiona un executor: `apply`/`retire`
-devuelven un `503` claro. La profundidad varía según el módulo, y buena parte del
+devuelven un `503` claro. Deploy es una función Business; Community responde `501` en cada ruta de deploy. La profundidad varía según el módulo, y buena parte del
 producto está pre-1.0 / en fase de diseño donde así se indica (consulta
 [Honestidad y límites](/es/start/honesty-and-limits/)).
 
@@ -65,7 +65,7 @@ gobierna/observa por naturaleza y no tiene superficie de actuación.
 | [Identidad, permisos y gobernanza](/es/reference/modules/vi-governance/) | — | Quién y qué puede hacer qué, granular: Cedar RBAC + deny-overlay + grants acotados, reconciliación del roster, admin acotado/roles personalizados, break-glass, kill-switch. |
 | [Identidad (`identity`)](/reference/modules/identity/) | — | Postura de solo lectura de federación de identidad de cargas de trabajo, SSO, claves externas y residencia. |
 | [Acotamiento de fuentes y credenciales](/es/reference/modules/sourcescope/) | — | Vincula fuentes a un workspace/grupo-de-agentes; resolver acotado deny-closed + credenciales acotadas en el momento de la resolución. |
-| [Despliegue e integración](/es/reference/modules/vii-deploy/) | on-demand (503) | Planifica y gobierna despliegues a infraestructura real; el executor es on-demand — `apply`/`retire` en vivo devuelven `503` hasta aprovisionarse. |
+| [Despliegue e integración](/es/reference/modules/vii-deploy/) | Business, on-demand (503) | Función Business: Community responde `501`. Planifica y gobierna despliegues a infraestructura real; el executor es on-demand — `apply`/`retire` en vivo devuelven `503` hasta aprovisionarse. |
 | [Publicación Git gobernada](/es/reference/modules/gitpublish/) | on-demand | Envía commits, abre solicitudes de incorporación y fusiona mediante vínculos aprobados del host Git, con autorización vigente y resultados registrados. |
 
 > **Identity** es un módulo seleccionable por separado para la consola de
@@ -78,7 +78,7 @@ gobierna/observa por naturaleza y no tiene superficie de actuación.
 
 | Módulo | Actuar | Propósito |
 |---|---|---|
-| [Política gestionada de Claude Code (`claude-policy`)](/reference/modules/claude-policy/) | — | Valida, previsualiza y publica políticas gestionadas versionadas; inspecciona su distribución y la deriva observada. |
+| [Política gestionada de Claude Code (`claude-policy`)](/reference/modules/claude-policy/) | — | Valida y previsualiza políticas gestionadas; Business las publica en toda la flota e inspecciona su distribución y la deriva observada. |
 | [Confirmaciones de agentes Claude (`claude-agents`)](/reference/modules/claude-agents/) | — | Lee los eventos de hilos de agentes gestionados y aprueba o rechaza una confirmación de herramienta pendiente. |
 | [Gestión de modelos y proveedores](/es/reference/modules/x-models/) | on-demand (503) | Gobierna toda la pila de modelos/proveedores: acceso a modelos, ventana de contexto por superficie, gate de grupo de modelos; la *ejecución* de modelos es on-demand — `503` hasta aprovisionar una credencial de inferencia. |
 | [Proxy de inferencia inline](/es/reference/modules/inferenceproxy/) | PARTIAL | Configuración de egress de inferencia por tenant + DLP para el proxy PEP inline `/v1/messages`; la configuración del módulo está live, el listener es opt-in, loopback por defecto, fail-CLOSED. |
@@ -130,7 +130,7 @@ defecto, sin aprovisionamiento requerido (p. ej. la aplicación de presupuesto d
 FinOps deniega en el tope, el router de notificaciones despacha); `on-demand` /
 `on-demand (503)` = el backend está construido y cableado a un punto de inyección
 pero permanece **deny-closed o degradado hasta que un operador lo aprovisiona** vía
-configuración de entorno (deploy responde `503` hasta que existe un executor; el
+configuración de entorno (deploy, una función Business, responde `501` en Community y `503` hasta que existe un executor; el
 despacho de orquestación/voz es deny-closed hasta configurarse; red-team corre
 DEGRADED hasta aprovisionar un runtime de sandbox; la ejecución de modelos y los
 embeddings semánticos devuelven `503` hasta aprovisionar una credencial);

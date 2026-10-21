@@ -233,12 +233,7 @@ func TestApprovalPolicyIsAuthoritativeOverRequest(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	// An approval policy requiring two approvals for "deploy" actions.
-	if r := h.do("POST", govPath+"/policies", admin, map[string]any{
-		"name": "deploys-need-two", "kind": "approval", "enabled": true,
-		"spec": map[string]any{"required_approvals": 2, "match": map[string]any{"action": "deploy"}},
-	}, tenantHdr(tenant)); r.code != http.StatusCreated {
-		t.Fatalf("author approval policy = %d %s", r.code, r.raw)
-	}
+	h.createApprovalPolicy(admin, tenant, "deploys-need-two", map[string]any{"required_approvals": 2, "match": map[string]any{"action": "deploy"}})
 	_, editor := h.roleUser(admin, tenant, "ed@x.io", "editor")
 	// The request tries to lower the bar to 1; the policy wins.
 	r := h.createApproval(editor, tenant, map[string]any{"action": "deploy", "required_approvals": 1})

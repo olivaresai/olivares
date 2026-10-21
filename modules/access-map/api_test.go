@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,9 +70,10 @@ func newHarness(t *testing.T) *harness {
 }
 
 type resp struct {
-	code int
-	body map[string]any
-	raw  string
+	header http.Header
+	code   int
+	body   map[string]any
+	raw    string
 }
 
 func (h *harness) do(method, path, token string, hdr map[string]string) resp {
@@ -86,7 +88,7 @@ func (h *harness) do(method, path, token string, hdr map[string]string) resp {
 	}
 	rec := httptest.NewRecorder()
 	h.srv.Handler().ServeHTTP(rec, req)
-	out := resp{code: rec.Code, raw: rec.Body.String()}
+	out := resp{header: rec.Header().Clone(), code: rec.Code, raw: rec.Body.String()}
 	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
 	return out
 }
@@ -101,7 +103,7 @@ func (h *harness) post(path, token string, body any) resp {
 	}
 	rec := httptest.NewRecorder()
 	h.srv.Handler().ServeHTTP(rec, req)
-	out := resp{code: rec.Code, raw: rec.Body.String()}
+	out := resp{header: rec.Header().Clone(), code: rec.Code, raw: rec.Body.String()}
 	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
 	return out
 }
@@ -311,4 +313,107 @@ func jsonNum(v any) int {
 		return int(f)
 	}
 	return -1
+}
+
+func TestAPI_InvalidGraphFilters(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "filters")
+	for _, endpoint := range []string{"graph", "drift"} {
+		for _, tc := range []struct{ parameter, value, accepted string }{
+			{"mode", "rw", "unknown, read, write, readwrite"},
+			{"confidence", "high", "attributed, approximate"},
+		} {
+			t.Run(endpoint+"/"+tc.parameter, func(t *testing.T) {
+				r := h.do("GET", "/v1/m/accessmap/"+endpoint+"?"+tc.parameter+"="+tc.value, admin, tenantHdr(tenant))
+				if r.code != http.StatusBadRequest || !strings.Contains(r.raw, tc.parameter) || !strings.Contains(r.raw, tc.accepted) {
+					t.Errorf("invalid %s = %d %s, want 400 naming %s", tc.parameter, r.code, r.raw, tc.accepted)
+				}
+			})
+		}
+	}
+}
+
+func TestAPI_InvalidDirection(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "direction")
+	r := h.do("GET", "/v1/m/accessmap/neighbors?id=node&direction=outgoin", admin, tenantHdr(tenant))
+	if r.code != http.StatusBadRequest || !strings.Contains(r.raw, "direction") || !strings.Contains(r.raw, "outgoing, incoming, both") {
+		t.Errorf("invalid direction = %d %s, want 400 naming outgoing, incoming, both", r.code, r.raw)
+	}
+}
+
+// Accepted wire values and empty filters retain their successful read contract.
+func TestAPI_ValidGraphFilters(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "valid-filters")
+	for _, endpoint := range []string{"graph", "drift"} {
+		for _, query := range []string{"", "mode=", "confidence=", "mode=unknown", "mode=read", "mode=write", "mode=readwrite", "confidence=attributed", "confidence=approximate"} {
+			r := h.do("GET", "/v1/m/accessmap/"+endpoint+"?"+query, admin, tenantHdr(tenant))
+			if r.code != http.StatusOK {
+				t.Errorf("%s?%s = %d %s, want 200", endpoint, query, r.code, r.raw)
+			}
+		}
+	}
+
+	edge, err := h.m.Ingest(context.Background(), tenant.String(), obs("agent", "filter-agent", "postgres.table", "appdb.public.customers", sdkmodel.ModeRead, sdkmodel.SignalPGAudit, sdkmodel.ConfidenceAttributed))
+	if err != nil || edge.OriginID.IsZero() {
+		t.Fatalf("seed edge = %v, %v", edge, err)
+	}
+	other := sdkmodel.ConfidenceAttributed
+	if edge.Confidence == other {
+		other = sdkmodel.ConfidenceApproximate
+	}
+	for _, tc := range []struct {
+		query string
+		count int
+	}{
+		{"mode=read", 1}, {"mode=write", 0},
+		{"confidence=" + string(edge.Confidence), 1},
+		{"confidence=" + string(other), 0},
+	} {
+		r := h.do("GET", "/v1/m/accessmap/graph?"+tc.query, admin, tenantHdr(tenant))
+		edges, _ := r.body["edges"].([]any)
+		if r.code != http.StatusOK || len(edges) != tc.count {
+			t.Errorf("graph?%s = %d %s, want %d edges", tc.query, r.code, r.raw, tc.count)
+		}
+	}
+	for _, node := range []struct {
+		id                 model.ID
+		kind               string
+		outgoing, incoming int
+	}{{edge.OriginID, edge.OriginKind, 1, 0}, {edge.ResourceID, "", 0, 1}} {
+		for _, tc := range []struct {
+			value string
+			count int
+		}{{"", 1}, {"both", 1}, {"outgoing", node.outgoing}, {"incoming", node.incoming}} {
+			r := h.do("GET", "/v1/m/accessmap/neighbors?id="+node.id.String()+"&kind="+node.kind+"&direction="+tc.value, admin, tenantHdr(tenant))
+			edges, _ := r.body["edges"].([]any)
+			if r.code != http.StatusOK || len(edges) != tc.count {
+				t.Errorf("node=%s direction=%s = %d %s, want %d edges", node.id, tc.value, r.code, r.raw, tc.count)
+			}
+		}
+	}
+}
+
+func TestAPI_GraphFilterDocumentation(t *testing.T) {
+	h := newHarness(t)
+	r := h.do("GET", "/openapi.beta.json", "", nil)
+	if r.code != http.StatusOK {
+		t.Fatalf("OpenAPI = %d %s", r.code, r.raw)
+	}
+	paths := r.body["paths"].(map[string]any)
+	for _, tc := range []struct{ route, accepted string }{
+		{"graph", "mode: unknown, read, write, readwrite; confidence: attributed, approximate"},
+		{"drift", "mode: unknown, read, write, readwrite; confidence: attributed, approximate"},
+		{"neighbors", "direction: outgoing, incoming, both"},
+	} {
+		operation := paths["/v1/m/accessmap/"+tc.route].(map[string]any)["get"].(map[string]any)
+		description := operation["responses"].(map[string]any)["400"].(map[string]any)["description"].(string)
+		if !strings.Contains(description, tc.accepted) {
+			t.Errorf("%s 400 description = %q, want accepted values %q", tc.route, description, tc.accepted)
+		}
+	}
 }

@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { expect, test, type Page } from '@playwright/test'
-
-const TOKEN = 'olvs_source_mode_e2e'
+import { fixtureFor } from '../e2e-visual/fixtures'
 
 const whoami = {
   kind: 'user',
@@ -36,31 +35,18 @@ const kb = {
 }
 
 async function seed(page: Page) {
-  await page.addInitScript(
-    ({ token }) => {
-      localStorage.setItem(
-        'olivares.session',
-        JSON.stringify({
-          state: {
-            token,
-            sessionId: 's-e2e',
-            expiresAt: '2999-01-01T00:00:00Z',
-          },
-          version: 0,
-        }),
-      )
-      localStorage.setItem(
-        'olivares.tenant',
-        JSON.stringify({ state: { activeTenant: 't1' }, version: 0 }),
-      )
-    },
-    { token: TOKEN },
-  )
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'olivares.tenant',
+      JSON.stringify({ state: { activeTenant: 't1' }, version: 0 }),
+    )
+    localStorage.setItem('olivares.lang', 'en')
+  })
 
   await page.route('**/v1/**', async (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname
-    let body: unknown = { items: [], has_more: false }
+    let body: unknown = fixtureFor(path) ?? { items: [], has_more: false }
 
     if (path.endsWith('/v1/server-info')) body = serverInfo
     else if (path.endsWith('/v1/auth/whoami')) body = whoami

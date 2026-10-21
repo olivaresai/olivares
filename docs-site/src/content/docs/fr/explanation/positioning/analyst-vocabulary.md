@@ -96,7 +96,7 @@ Gartner.
   Code, le contrôle des outils MCP, les coupe-circuits.
 - **Gouvernance de l'information** — découverte de PII/sensibilité sur les bases de
   connaissances gouvernées, attestation de résidence des données, rétention et
-  conservation à des fins légales (legal-hold).
+  conservation à des fins légales (legal-hold, réservée à Business).
 
 Nous utilisons AI TRiSM comme une *carte de l'espace du problème qu'un acheteur
 connaît déjà*, pour montrer la couverture — pas comme un label.

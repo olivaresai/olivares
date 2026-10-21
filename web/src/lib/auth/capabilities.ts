@@ -78,6 +78,7 @@ import type {
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
+import { confinedWorkspaceIn } from '@/lib/auth/rbac'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -303,10 +304,10 @@ watchContextField(useWorkspaceStore, (s) => s.activeWorkspace)
  * by that client's own cache, so it dies exactly when the client does — a `WeakMap` key,
  * not a registry anyone has to remember to clear.
  *
- * The compared value is the kind-qualified actor, which is what the context already
- * carries and is not a secret. Comparing INSIDE the event is again what matters: a
- * whoami refetch that returns the same principal is not a movement and must not
- * invalidate anything, while P → Q → P inside one batch is two.
+ * The compared value is the kind-qualified actor and this tenant's confinement.
+ * A whoami refetch with the same actor and scope is not a movement. A confinement
+ * A → B → A is two movements even when the workspace selector remains unset; it
+ * must retire saved authority just like a selector or principal round trip.
  */
 interface PrincipalWatch {
   lifetime: number
@@ -321,7 +322,11 @@ function watchPrincipal(queryClient: QueryClient): PrincipalWatch {
   const watch: PrincipalWatch = { lifetime: 0, listeners: new Set() }
   const read = (): string | null => {
     const principal = queryClient.getQueryData<Whoami>(queryKeys.whoami) ?? null
-    return principal ? `${principal.kind}\u0000${principal.actor}` : null
+    if (!principal) return null
+    const confinement = Array.isArray(principal.grants)
+      ? confinedWorkspaceIn(principal, useTenantStore.getState().activeTenant)
+      : null
+    return JSON.stringify([principal.kind, principal.actor, confinement])
   }
   let last = read()
   queryClient.getQueryCache().subscribe(() => {
@@ -462,7 +467,7 @@ export function capabilityScopeKey(
 
 /**
  * The exact structural key of ONE observation. Ratified shape: context, then question
- * kind, operation and the two selector families as SORTED PAIRS. It carries no bearer
+ * kind, operation, workspace and the two selector families as SORTED PAIRS. It carries no bearer
  * token, session id, `observed_at`, random question id, display name, membership or role.
  */
 export function capabilityKey(
@@ -473,6 +478,7 @@ export function capabilityKey(
     ...capabilityScopeKey(context),
     question.kind,
     question.operation,
+    ['workspace', question.workspaceId],
     ['path', ...question.path],
     ['body', ...question.body],
   ]

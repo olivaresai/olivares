@@ -4,8 +4,10 @@ description: >-
   The one module that acts on your infrastructure: it plans and governs the
   declarative lifecycle of agents and MCP servers and their wiring to the estate.
   Mutations are HITL-gated, dry-run-before-apply, and reversible — and live apply
-  stays deny-closed (503) until an executor is provisioned.
+  stays deny-closed (503) in Business until an executor is provisioned.
 ---
+
+Deployment definitions, plans, applies, rollbacks, retirements, the executor setup and the wiring ledger are **[Business](https://olivares.ai/pricing)** features. Community answers these API routes with 501 and hides the command group. Stored definitions, revisions, wirings and operations remain in the database and in disaster-recovery backups. The sections below describe the Business behavior.
 
 Module VII is the **only** module that mutates customer infrastructure — every other
 part of the product is read-first. It provisions, updates and retires agents and MCP

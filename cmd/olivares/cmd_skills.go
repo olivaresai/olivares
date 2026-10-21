@@ -29,18 +29,18 @@ import (
 
 func newSkillsCmd() *cobra.Command {
 	flags := &authClientFlags{}
-	cmd := &cobra.Command{Use: "skills", Short: "Install and manage immutable skills in the catalog", Long: "Install reviewed instruction packs in the organization catalog. Assign a revision to deliver its skills to native Claude Code and Codex sessions on launch.", Args: cobra.NoArgs}
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "skills", Short: "Install and manage immutable skills in the catalog", Long: "Install reviewed instruction packs in the organization catalog. Assign a revision to deliver its members on launch. Portable skills use the selected tool's native discovery; agents, commands and rules use Claude Code.", Args: cobra.NoArgs}
 	cmd.Example = "  olivares skills ls"
 	flags.addPersistent(cmd)
 	client := datalaneClient{flags: flags, base: "/v1/m/skills", what: "skills"}
 	cmd.AddCommand(newSkillsImportCmd(client, false), newSkillsImportCmd(client, true), newSkillsListCmd(client), newSkillsGetCmd(client), newSkillsAssignCmd(client), newSkillsAssignmentsCmd(client), newSkillsUnassignCmd(client), newSkillsRemoveCmd(client),
-		newSkillsDiffCmd(client), newSkillsPinCmd(client), newSkillsSelectionCmd(client), newSkillsEnableCmd(client, true), newSkillsEnableCmd(client, false))
+		newSkillsDiffCmd(client), newSkillsPinCmd(client), newSkillsSelectionCmd(client), newSkillsEnableCmd(client, true, "write"), newSkillsEnableCmd(client, false, "delete"))
 	return cmd
 }
 func newSkillsListCmd(client datalaneClient) *cobra.Command {
 	var page datalanePageFlags
 	var builtin bool
-	cmd := &cobra.Command{Use: "ls", Aliases: []string{"list"}, Short: "List installed catalog packs", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "ls", Aliases: []string{"list"}, Short: "List installed catalog packs", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		q, err := page.values(cmd, nil)
 		if err != nil {
 			return err
@@ -72,7 +72,7 @@ func newSkillsListCmd(client datalaneClient) *cobra.Command {
 }
 func newSkillsGetCmd(client datalaneClient) *cobra.Command {
 	var page datalanePageFlags
-	cmd := &cobra.Command{Use: "get <pack-id>", Short: "Show catalog provenance and immutable revisions", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "get <pack-id>", Short: "Show catalog provenance and immutable revisions", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := datalanePath("packs", args[0])
 		if err != nil {
 			return err
@@ -104,7 +104,7 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 		use = "update <pack-id>"
 		args = cobra.ExactArgs(1)
 	}
-	cmd := &cobra.Command{Use: use, Short: "Publish a reviewed immutable catalog revision", Args: args, RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "write"}, Use: use, Short: "Publish a reviewed immutable catalog revision", Args: args, RunE: func(cmd *cobra.Command, args []string) error {
 		count := 0
 		for _, s := range []string{builtin, gitURL, folder, archive} {
 			if s != "" {
@@ -288,7 +288,7 @@ func newSkillsImportCmd(client datalaneClient, update bool) *cobra.Command {
 
 func newSkillsRemoveCmd(client datalaneClient) *cobra.Command {
 	var version int64
-	cmd := &cobra.Command{Use: "rm <pack-id>", Aliases: []string{"remove"}, Short: "Retire an unused catalog pack and retain its provenance", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "delete"}, Use: "rm <pack-id>", Aliases: []string{"remove"}, Short: "Retire an unused catalog pack and retain its provenance", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := datalanePath("packs", args[0])
 		if err != nil {
 			return err
@@ -372,7 +372,7 @@ func skillsRequest(cmd *cobra.Command, c datalaneClient, method, path string, bo
 	return raw, response.StatusCode, nil
 }
 
-type skillsTargetFlags struct{ workspace, folder, group, agent, template, session string }
+type skillsTargetFlags struct{ workspace, profile, folder, group, agent, template, session string }
 
 func (f *skillsTargetFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.workspace, "workspace", "", "stored workspace (department) identifier")
@@ -383,10 +383,17 @@ func (f *skillsTargetFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&f.session, "session", "", "stored governed session identifier")
 }
 
+// addSkills adds the profile target to skills commands. MCP shares the existing
+// target flags, but its roster does not support profile targets.
+func (f *skillsTargetFlags) addSkills(cmd *cobra.Command) {
+	f.add(cmd)
+	cmd.Flags().StringVar(&f.profile, "profile", "", "provider profile reference")
+}
+
 // targets returns the targets named on the command line, in flag order.
 func (f *skillsTargetFlags) targets() []skills.Target {
 	var out []skills.Target
-	for _, pair := range []struct{ kind, id string }{{"workspace", f.workspace}, {"folder", f.folder}, {"agent_group", f.group}, {"agent", f.agent}, {"template", f.template}, {"session", f.session}} {
+	for _, pair := range []struct{ kind, id string }{{"workspace", f.workspace}, {"profile", f.profile}, {"folder", f.folder}, {"agent_group", f.group}, {"agent", f.agent}, {"template", f.template}, {"session", f.session}} {
 		if pair.id != "" {
 			out = append(out, skills.Target{Kind: pair.kind, ID: pair.id})
 		}
@@ -396,7 +403,7 @@ func (f *skillsTargetFlags) targets() []skills.Target {
 func (f *skillsTargetFlags) target() (skills.Target, error) {
 	targets := f.targets()
 	if len(targets) != 1 {
-		return skills.Target{}, exitcode.New(exitcode.Usage, fmt.Errorf("choose exactly one of --workspace, --folder, --group, --agent, --template, or --session"))
+		return skills.Target{}, exitcode.New(exitcode.Usage, fmt.Errorf("choose exactly one target flag"))
 	}
 	return targets[0], nil
 }
@@ -406,7 +413,7 @@ func newSkillsAssignCmd(client datalaneClient) *cobra.Command {
 	var members []string
 	var version int64
 	var approve bool
-	cmd := &cobra.Command{Use: "assign <pack-id>", Short: "Pin a catalog revision for new conversations", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "write"}, Use: "assign <pack-id>", Short: "Pin a catalog revision for new conversations", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		t, err := target.target()
 		if err != nil {
 			return err
@@ -475,7 +482,7 @@ func newSkillsAssignCmd(client datalaneClient) *cobra.Command {
 	}}
 	cmd.Long = "Pin a catalog revision to a workspace (department), agent group, agent, template or session; inspect bindings with olivares skills assignments."
 	cmd.Example = "  olivares skills assign <pack-id> --revision <revision-id> --workspace <workspace-id>"
-	target.add(cmd)
+	target.addSkills(cmd)
 	cmd.Flags().StringVar(&revision, "revision", "", "immutable revision identifier")
 	cmd.Flags().StringSliceVar(&members, "member", nil, "selected member names (all revision members when omitted)")
 	cmd.Flags().StringVar(&assignment, "assignment", "", "existing binding to change")
@@ -487,7 +494,7 @@ func newSkillsAssignmentsCmd(client datalaneClient) *cobra.Command {
 	var target skillsTargetFlags
 	var page datalanePageFlags
 	var pack string
-	cmd := &cobra.Command{Use: "assignments", Short: "List pinned bindings on an authorized target or of one pack", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "assignments", Short: "List pinned bindings on an authorized target or of one pack", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		path, filter := "/assignments", url.Values{}
 		if pack != "" {
 			if len(target.targets()) != 0 {
@@ -519,14 +526,14 @@ func newSkillsAssignmentsCmd(client datalaneClient) *cobra.Command {
 	}}
 	cmd.Long = "List pinned revisions for one workspace (department), agent group, agent, template or session, or with --pack every readable target a pack is pinned to; use olivares skills get <pack-id> to inspect a pack."
 	cmd.Example = "  olivares skills assignments --workspace <workspace-id>\n  olivares skills assignments --pack <pack-id>"
-	target.add(cmd)
+	target.addSkills(cmd)
 	cmd.Flags().StringVar(&pack, "pack", "", "catalog pack identifier: list the targets it is pinned to")
 	page.add(cmd)
 	return cmd
 }
 func newSkillsUnassignCmd(client datalaneClient) *cobra.Command {
 	var version int64
-	cmd := &cobra.Command{Use: "unassign <assignment-id>", Short: "Remove future inheritance; recorded conversations retain their snapshot", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "delete"}, Use: "unassign <assignment-id>", Short: "Remove future inheritance; recorded conversations retain their snapshot", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		if version < 1 {
 			return exitcode.New(exitcode.Usage, fmt.Errorf("--version is required"))
 		}

@@ -47,6 +47,10 @@ type mcpManagement struct {
 	cache                map[string]managedMCPServer
 	sessionCache         map[string]*managedSessionServer
 	sessionAuthenticator sessionMCPAuthenticator
+	// newToolDataFlow is the edition's reversible-token flow (nil: none);
+	// sessionFlows holds one per live session launch, under cacheMu.
+	newToolDataFlow func() mcpc.ToolDataFlow
+	sessionFlows    map[string]mcpc.ToolDataFlow
 }
 
 type managedMCPServer struct {

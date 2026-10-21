@@ -10,7 +10,7 @@ sidebar:
 ---
 
 :::note[Edition]
-Directory roster sources (LDAP, Okta/Entra and agent/workload IdPs) and managed identity lifecycle require the Business/Enterprise add-ons. Community keeps generic source ingestion, the resource catalog, security findings, the access map, the identity inventory, single-IdP SSO, inbound SCIM users/groups, local roles and bindings, policies and approvals. Community hides the paid console panels and CLI commands; their published API routes return HTTP `501`. Selecting a module does not add its Business implementation.
+Directory roster sources (LDAP, Okta/Entra and agent/workload IdPs), managed identity lifecycle and the inbound SCIM server require the Business/Enterprise add-ons. Community keeps generic source ingestion, the resource catalog, security findings, the access map, the identity inventory, single-IdP SSO, local roles and bindings, policies and approvals. Community hides the paid console panels and CLI commands; their published API routes return HTTP `501`. Selecting a module does not add its Business implementation.
 :::
 
 Identity is the hard dependency under the whole access map: native audit
@@ -46,12 +46,18 @@ value, and shows the connection state — and where a panel's backend is a
 declared contract not yet live, it says "backend pending" rather than
 rendering fabricated data:
 
-<img class="light:sl-hidden" src="/console/identity-dark.png" alt="The Identity & NHI view: SSO configuration with exact redirect-URI checking, the NHI roster, and key posture tabs." />
-<img class="dark:sl-hidden" src="/console/identity-light.png" alt="The Identity & NHI view: SSO configuration with exact redirect-URI checking, the NHI roster, and key posture tabs." />
+<img class="light:sl-hidden" src="/console/identity-dark.png" alt="The Identity & access view: users and groups, SSO sign-in, machine identities (NHI) and key posture." />
+<img class="dark:sl-hidden" src="/console/identity-light.png" alt="The Identity & access view: users and groups, SSO sign-in, machine identities (NHI) and key posture." />
 
-## 2. SCIM provisioning (inbound)
+## 2. SCIM provisioning (inbound) — Business
 
-The control plane is a standard SCIM 2.0 (RFC 7644) service provider at:
+The inbound SCIM server is a Business capability (Identity & Scale). A Community
+server mounts the same URLs, authenticates the token and then answers HTTP `501` in
+the SCIM error shape, naming Business; nothing is read or written. In Community you
+remove a person from the organization in the console (People) or with
+`DELETE /v1/members/{id}`.
+
+With Business, the control plane is a standard SCIM 2.0 (RFC 7644) service provider at:
 
 ```
 /v1/scim/v2/Users
@@ -60,9 +66,9 @@ The control plane is a standard SCIM 2.0 (RFC 7644) service provider at:
 
 - **Auth:** a tenant-bound **admin/owner API token** on the SCIM
   integration — the same opaque-token model as the rest of the API, no
-  separate SCIM secret type. The endpoint is always present (not
-  feature-gated).
-- **Users** provisions and deprovisions principals in every edition, Community included.
+  separate SCIM secret type. The URLs are always mounted (not
+  feature-gated); Community answers `501` there.
+- **Users** provisions and deprovisions principals.
   Changes depend on delivery and successful processing of the SCIM request;
   check its response and the affected access rather than treating an HR event
   as proof of completed revocation. SCIM does not remove operating-system accounts.

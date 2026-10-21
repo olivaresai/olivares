@@ -9,18 +9,22 @@ import "github.com/olivaresai/olivares/core/model"
 // workspaceDTO is the API shape of one registered workspace. It carries no file
 // content and no secret — only the operator-chosen configuration and references.
 type workspaceDTO struct {
-	WorkspaceRef    string   `json:"workspace_ref"`
-	Name            string   `json:"name,omitempty"`
-	RootPath        string   `json:"root_path"`
-	MountMode       string   `json:"mount_mode"`
-	ContainerTarget string   `json:"container_target,omitempty"`
-	AllowSubpaths   []string `json:"allow_subpaths,omitempty"`
-	ReadOnlyFolders []string `json:"read_only_folders"`
-	MaxReadBytes    int64    `json:"max_read_bytes"`
-	DLPMode         string   `json:"dlp_mode"`
-	State           string   `json:"state"`
-	CreatedAt       string   `json:"created_at,omitempty"`
-	UpdatedAt       string   `json:"updated_at,omitempty"`
+	SetupCommand       string                  `json:"setup_command"`
+	SetupCommandSHA256 string                  `json:"setup_command_sha256"`
+	SetupApproval      *workspaceSetupApproval `json:"setup_approval,omitempty"`
+	SetupApproved      bool                    `json:"setup_approved"`
+	WorkspaceRef       string                  `json:"workspace_ref"`
+	Name               string                  `json:"name,omitempty"`
+	RootPath           string                  `json:"root_path"`
+	MountMode          string                  `json:"mount_mode"`
+	ContainerTarget    string                  `json:"container_target,omitempty"`
+	AllowSubpaths      []string                `json:"allow_subpaths,omitempty"`
+	ReadOnlyFolders    []string                `json:"read_only_folders"`
+	MaxReadBytes       int64                   `json:"max_read_bytes"`
+	DLPMode            string                  `json:"dlp_mode"`
+	State              string                  `json:"state"`
+	CreatedAt          string                  `json:"created_at,omitempty"`
+	UpdatedAt          string                  `json:"updated_at,omitempty"`
 }
 
 func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
@@ -32,19 +36,24 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 	if err != nil {
 		return workspaceDTO{}, err
 	}
+	command, approval := rec.String(colWsSetupCommand), storedSetupApproval(rec)
 	return workspaceDTO{
-		WorkspaceRef:    rec.String(colWsRef),
-		Name:            rec.String(colWsName),
-		RootPath:        rec.String(colWsRootPath),
-		MountMode:       rec.String(colWsMountMode),
-		ContainerTarget: rec.String(colWsContainerTgt),
-		AllowSubpaths:   subpaths,
-		ReadOnlyFolders: folders,
-		MaxReadBytes:    workspaceMaxRead(rec),
-		DLPMode:         rec.String(colWsDLPMode),
-		State:           rec.String(colWsState),
-		CreatedAt:       rec.String(model.ColCreatedAt),
-		UpdatedAt:       rec.String(model.ColUpdatedAt),
+		SetupCommand:       command,
+		SetupCommandSHA256: sha256Hex([]byte(command)),
+		SetupApproval:      approval,
+		SetupApproved:      command != "" && approval.covers(command),
+		WorkspaceRef:       rec.String(colWsRef),
+		Name:               rec.String(colWsName),
+		RootPath:           rec.String(colWsRootPath),
+		MountMode:          rec.String(colWsMountMode),
+		ContainerTarget:    rec.String(colWsContainerTgt),
+		AllowSubpaths:      subpaths,
+		ReadOnlyFolders:    folders,
+		MaxReadBytes:       workspaceMaxRead(rec),
+		DLPMode:            rec.String(colWsDLPMode),
+		State:              rec.String(colWsState),
+		CreatedAt:          rec.String(model.ColCreatedAt),
+		UpdatedAt:          rec.String(model.ColUpdatedAt),
 	}, nil
 }
 

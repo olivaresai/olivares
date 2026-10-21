@@ -179,7 +179,7 @@
   },
   "versions": {
     "title": "会话版本",
-    "hint": "选择此工作区新建和恢复会话所用的版本。代理的版本选择优先。",
+    "hint": "选择此工作区新建和恢复会话所用的版本。智能体的版本选择优先。",
     "workspace": "工作区",
     "chooseWorkspace": "选择工作区",
     "version": "会话版本",
@@ -204,6 +204,7 @@
     "readFailed": "无法读取：{{message}}",
     "tools": "AI 工具",
     "packages": "程序和注册表",
+    "egressHosts": "网络主机",
     "skills": "技能",
     "mcp": "MCP 服务器",
     "none": "无",
@@ -215,9 +216,9 @@
     "skillsHint": "绑定到文件夹、模板或智能体的会话还会获得固定在那里的技能。",
     "workspacesTruncated": "工作区列表在默认工作区之前被截断：请在工作区切换器中选择一个。",
     "toolsHint": "在工具的安装详情中保存的会话版本会在该已注册工作区或智能体中替代此版本。",
-    "profilesNotReadable": "你的角色无法读取提供方配置文件。",
-    "packagesHint": "由每个工具的新会话所用的提供方配置文件声明（{{profiles}}）。没有配置文件的工具会获得一个不声明任何内容的新配置文件。",
-    "packagesNoProfile": "它们来自每个工具的会话所运行的提供方配置文件。目前还没有，新的配置文件不声明任何内容。",
+    "profilesNotReadable": "你的角色无法读取提供商配置文件。",
+    "packagesHint": "由每个工具的新会话所用的提供商配置文件声明（{{profiles}}）。没有配置文件的工具会获得一个不声明任何内容的新配置文件。",
+    "packagesNoProfile": "它们来自每个工具的会话所运行的提供商配置文件。目前还没有，新的配置文件不声明任何内容。",
     "packagesRefused": "因尚无法启动会话而未列出：{{tools}}。"
   }
 }

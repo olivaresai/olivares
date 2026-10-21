@@ -422,7 +422,7 @@ describe('ObservabilityView — live + honesty', () => {
     expect(screen.getByText('olivares.claude')).toBeInTheDocument()
     // No pending-seam copy and no red error.
     expect(
-      screen.queryByText(/not wired to the backend/i),
+      screen.queryByText(/not connected to the backend/i),
     ).not.toBeInTheDocument()
     expect(screen.queryByText(/Something went wrong/i)).not.toBeInTheDocument()
   })

@@ -222,22 +222,49 @@ def git(*args, cwd):
     return p.returncode, p.stdout, p.stderr
 
 hub_dir = os.environ.get("OLIVARES_HUB_GIT_DIR", ".")
-rc, out, _ = git("rev-list", "--count", f"{pin58}..{ovl_pin}", cwd=hub_dir)
-if rc != 0:
-    cannot("could not count int-12-pin..overlay-main-pin on the full source tree")
-live_pair = int(out.strip() or "0")
-if live_pair != behind_pair:
-    finding(f"live pin-behind-overlay-main-pin {live_pair} != measured {behind_pair}")
-
-rc, _, _ = git("merge-base", "--is-ancestor", pin58, ovl_pin, cwd=hub_dir)
-if rc != 0:
-    finding("int-12-pin is not an ancestor of overlay-main-pin — direction of regression lost")
-
 ent = os.environ.get("OLIVARES_ENT_DIR_RESOLVED", "")
 explicit = os.environ.get("OLIVARES_ENT_EXPLICITO", "0") == "1"
 allow_no_overlay = (
     os.environ.get("OLIVARES_INT12_ALLOW_NO_OVERLAY_RESOLVED", "0") == "1"
 )
+
+# ⛔ THE PINS ARE COMMITS OF THE OLD HUB HISTORY, AND A TREE THAT STARTS FROM A LATER LINE NEVER
+# HAD THEM. Measured 2026-10-16 on this repository (full clone, not shallow): neither object exists
+# and the origin answers "not our ref", so no fetch depth can supply them and the count below can
+# only fail. That is the same "no overlay history here" a runner without the sibling clone has, so
+# it takes the same opt-in: with OLIVARES_INT12_ALLOW_NO_OVERLAY=1 the range is not re-counted and
+# the NOTICE says so; without it the answer stays 2. A tree that DOES carry both pins counts them
+# exactly as before, and a wrong distance or a lost ancestry stays a finding.
+#
+# ⛔ "ABSENT" IS A VERDICT ABOUT A READABLE GIT TREE, NOT A CATCH-ALL FOR ANY FAILURE. A hub path
+# that is not a repository, or a tree holding only ONE of the two pins (a damaged record or tree),
+# is an inability to look and stays 2 even with the opt-in; only "readable tree, both commits
+# missing" may skip. (Reproductions: opt-in plus a non-repo hub gave CLEAN rc 0.)
+if not os.path.isdir(hub_dir) or git("rev-parse", "--git-dir", cwd=hub_dir)[0] != 0:
+    cannot(f"hub tree {hub_dir!r} is not a git repository")
+have = [git("cat-file", "-e", f"{o}^{{commit}}", cwd=hub_dir)[0] == 0 for o in (pin58, ovl_pin)]
+pins_here = all(have)
+if any(have) and not pins_here:
+    cannot(f"only one of int-12-pin and overlay-main-pin is a commit of {hub_dir!r}; the record or the tree is damaged")
+if not pins_here:
+    # A shallow clone may only be too short to hold the pins: absence read from one is no verdict.
+    if git("rev-parse", "--is-shallow-repository", cwd=hub_dir)[1].strip() != "false":
+        cannot(f"{hub_dir!r} is a shallow clone (or could not be read); the pins may exist in the full history")
+    why = f"int-12-pin and overlay-main-pin are not commits of {hub_dir!r}"
+    if not allow_no_overlay:
+        cannot(f"{why}; a tree without that history must opt in with OLIVARES_INT12_ALLOW_NO_OVERLAY=1")
+    print(f"check-int-12-no-land: NOTICE — pin range not re-counted: {why}")
+else:
+    rc, out, _ = git("rev-list", "--count", f"{pin58}..{ovl_pin}", cwd=hub_dir)
+    if rc != 0:
+        cannot("could not count int-12-pin..overlay-main-pin on the full source tree")
+    live_pair = int(out.strip() or "0")
+    if live_pair != behind_pair:
+        finding(f"live pin-behind-overlay-main-pin {live_pair} != measured {behind_pair}")
+
+    rc, _, _ = git("merge-base", "--is-ancestor", pin58, ovl_pin, cwd=hub_dir)
+    if rc != 0:
+        finding("int-12-pin is not an ancestor of overlay-main-pin — direction of regression lost")
 
 def gitlink(repo, spec):
     rc, out, _ = git("ls-tree", spec, "--", "public", cwd=repo)
@@ -269,6 +296,10 @@ def linea_medida():
     # hermano. El orden de sus ramas hace el resto: el NOTICE de omision se comprueba ANTES, asi
     # que un runner sin overlay se sigue leyendo como «solo el lado estatico». Grep de contraste:
     #   grep -n 'behind overlay-main pin' .github/workflows/mainline-ci.yml
+    if not pins_here:
+        # Not the contract line: the range was not counted here, and that phrase says it was.
+        print("check-int-12-no-land: MEASURE — 2026-08-30 record read statically; pin range not re-counted on this tree")
+        return
     print(
         f"check-int-12-no-land: MEASURE — 2026-08-30 record, re-verified on this hub: #58 pin "
         f"{pin58[:12]} is {behind_pair} behind overlay-main pin {ovl_pin[:12]}"
@@ -352,10 +383,17 @@ if live_ovl != ovl_pin:
 if live_58 is not None and live_58 != pin58:
     finding(f"live #58 public pin {live_58} != measured {pin58}")
 
-print(
-    f"check-int-12-no-land: CLEAN — land-as-is=no; pin {pin58[:12]} is "
-    f"{behind_pair} behind overlay-main pin {ovl_pin[:12]}; "
-    f"AllowsAdditionalActiveIdP already on overlay main"
-)
+if pins_here:
+    print(
+        f"check-int-12-no-land: CLEAN — land-as-is=no; pin {pin58[:12]} is "
+        f"{behind_pair} behind overlay-main pin {ovl_pin[:12]}; "
+        f"AllowsAdditionalActiveIdP already on overlay main"
+    )
+else:
+    # The distance was read from the record, not counted here: do not use the contract phrase.
+    print(
+        "check-int-12-no-land: CLEAN — land-as-is=no; pin range not re-counted on this tree; "
+        "AllowsAdditionalActiveIdP already on overlay main"
+    )
 sys.exit(0)
 PY

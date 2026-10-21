@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SIDEBAR'S TWO WIDTHS (console 1.0): FULL (240 px, navigation with
+// THE SIDEBAR'S TWO WIDTHS (console 1.0): FULL (256 px, navigation with
 // labels) and RAIL (56 px, the same destinations as icons). Folding never hides it.
 //
 // Who decides:

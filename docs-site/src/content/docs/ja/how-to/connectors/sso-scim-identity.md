@@ -10,7 +10,7 @@ sidebar:
 ---
 
 :::note[エディション]
-ディレクトリソース（LDAP、Okta/Entra、エージェント・ワークロード IdP）と管理対象アイデンティティのライフサイクルには Business/Enterprise アドオンが必要です。一般的なソース取り込み、リソースカタログ、セキュリティ検出結果、Access Map、アイデンティティインベントリ、単一 IdP の SSO、受信 SCIM のユーザー・グループ、ローカルロールとバインディング、ポリシーと承認は Community でも利用できます。有料コンソールパネルと CLI コマンドは表示されず、その公開 API ルートは HTTP `501` を返します。モジュールを有効にしても Business 実装は追加されません。
+ディレクトリソース（LDAP、Okta/Entra、エージェント・ワークロード IdP）、管理対象アイデンティティのライフサイクル、受信 SCIM サーバーには Business/Enterprise アドオンが必要です。一般的なソース取り込み、リソースカタログ、セキュリティ検出結果、Access Map、アイデンティティインベントリ、単一 IdP の SSO、ローカルロールとバインディング、ポリシーと承認は Community でも利用できます。有料コンソールパネルと CLI コマンドは表示されず、その公開 API ルートは HTTP `501` を返します。モジュールを有効にしても Business 実装は追加されません。
 :::
 
 アイデンティティはアクセスマップ全体の根底にある厳しい依存関係だ: ネイティブ
@@ -45,12 +45,17 @@ IdP のリダイレクト URI を厳密に期待される値と照合し、接�
 そして、あるパネルのバックエンドが宣言された契約でまだ稼働していない場合、
 捏造データをレンダリングするのではなく「backend pending」と表示する:
 
-<img class="light:sl-hidden" src="/console/identity-dark.png" alt="Identity & NHI ビュー: 厳密なリダイレクト URI 照合付きの SSO 構成、NHI ロスター、主要な態勢タブ。" />
-<img class="dark:sl-hidden" src="/console/identity-light.png" alt="Identity & NHI ビュー: 厳密なリダイレクト URI 照合付きの SSO 構成、NHI ロスター、主要な態勢タブ。" />
+<img class="light:sl-hidden" src="/console/identity-dark.png" alt="Identity & access ビュー: ユーザーとグループ、SSO サインイン、マシンアイデンティティ(NHI)、鍵の態勢。" />
+<img class="dark:sl-hidden" src="/console/identity-light.png" alt="Identity & access ビュー: ユーザーとグループ、SSO サインイン、マシンアイデンティティ(NHI)、鍵の態勢。" />
 
-## 2. SCIM プロビジョニング（インバウンド）
+## 2. SCIM プロビジョニング（インバウンド） — Business
 
-コントロールプレーンは、次のエンドポイントで標準的な SCIM 2.0（RFC 7644）
+インバウンド SCIM サーバーは Business（Identity & Scale）の機能である。Community の
+サーバーは同じ URL をマウントし、トークンを認証したうえで、Business を名指しした
+SCIM エラー形式の HTTP `501` を返す。読み取りも書き込みも行われない。Community では、
+コンソール（ユーザー）または `DELETE /v1/members/{id}` で組織から個人を削除する。
+
+Business では、コントロールプレーンは、次のエンドポイントで標準的な SCIM 2.0（RFC 7644）
 サービスプロバイダーとして機能する:
 
 ```
@@ -60,8 +65,8 @@ IdP のリダイレクト URI を厳密に期待される値と照合し、接�
 
 - **認証:** SCIM 連携に対するテナント束縛の**管理者/オーナー API トークン**
   ——API の他の部分と同じ不透明トークンモデルであり、別個の SCIM シークレット
-  型はない。エンドポイントは常に存在する（フィーチャーゲートされない）。
-- **Users** はすべてのエディション（Community を含む）で ID をプロビジョニングおよび解除する。
+  型はない。URL は常にマウントされている（フィーチャーゲートされない）。Community ではそこで `501` を返す。
+- **Users** は ID をプロビジョニングおよび解除する。
   変更の反映には SCIM リクエストの配信と正常な処理が必要となる。人事イベントだけで
   失効の完了を判断せず、応答と対象のアクセス権を確認する。SCIM は OS のアカウントを
   削除しない。

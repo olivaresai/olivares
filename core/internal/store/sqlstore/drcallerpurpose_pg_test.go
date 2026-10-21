@@ -9,7 +9,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/dr/opgate"
 	"github.com/olivaresai/olivares/core/internal/pgtest"
@@ -31,7 +30,7 @@ import (
 func TestIR5C2MigrateApplySucceedsOnACompletedDestination(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	_, digest := ir5GenuineSelection(t, [3]string{"local", "local", "local"})
@@ -74,7 +73,7 @@ func TestIR5C2MigrateApplySucceedsOnACompletedDestination(t *testing.T) {
 func TestIR5C2ServingOpenStillRefusesTheSameCompletedDestination(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 
 	authorized, digest := ir5GenuineSelection(t, [3]string{"local", "local", "local"})
@@ -187,7 +186,7 @@ func ir5ReplaceCustodyAtFinalDecision(ctx context.Context, t *testing.T, superDS
 // callback then runs and the final successful-completion decision executes.
 func TestIR5C2DirectoryMaintenanceFinalizesOnACompletedDestination(t *testing.T) {
 	pg := isolatedPGSplit(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	cfg := ir5CompletedMaintainableDestination(ctx, t, pg)
 
@@ -217,7 +216,7 @@ func TestIR5C2DirectoryMaintenanceFinalizesOnACompletedDestination(t *testing.T)
 func TestIR5C2EveryPreparationStillRefusesAPendingTarget(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 
 	if _, err := InstallPendingRestoreControl(ctx, cfg, PendingRestoreSpec{
@@ -258,7 +257,7 @@ func TestIR5C2EveryPreparationStillRefusesAPendingTarget(t *testing.T) {
 func TestIR5C2AChangedControlRefusesSchemaOnlyFinalization(t *testing.T) {
 	pg := isolatedPGSplit(t)
 	cfg := drPGConfig(pg)
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	_, digest := ir5GenuineSelection(t, [3]string{"local", "local", "local"})
@@ -293,7 +292,7 @@ func TestIR5C2AChangedControlRefusesSchemaOnlyFinalization(t *testing.T) {
 // reduced the non-serving final decision to a formality and nothing would have measured it.
 func TestIR5C2AChangedControlRefusesDirectoryMaintenanceFinalization(t *testing.T) {
 	pg := isolatedPGSplit(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	cfg := ir5CompletedMaintainableDestination(ctx, t, pg)
 	hits := ir5ReplaceCustodyAtFinalDecision(ctx, t, pg.Superuser)

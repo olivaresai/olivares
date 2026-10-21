@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { globSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page, type Request } from '@playwright/test'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 
 /** The release grammar: bare MAJOR.MINOR, the one scripts/release-first-hour.sh admits. */
@@ -80,7 +80,7 @@ export function surfaceOptions(version: string): {
 declare global {
   interface Window {
     __firstHourFinding: (message: string) => Promise<void>
-    __firstHourSlow?: (message: string) => Promise<void>
+    __firstHourSlow?: (message: string, waitedMs: number) => Promise<void>
     __firstHourLoading?: () => boolean
     __firstHourVersions?: () => string[]
   }
@@ -100,18 +100,15 @@ export function watchSurface({
   const reported = new Set<string>()
   let loadingSince: number | undefined
   let route = location.pathname + location.search
-  const visible = (element: Element) => {
-    const style = getComputedStyle(element)
-    return (
-      element.getClientRects().length > 0 &&
-      style.visibility !== 'hidden' &&
-      style.display !== 'none'
-    )
-  }
+  // The browser's own test: a closed <details> keeps its content laid out under
+  // content-visibility: hidden, with boxes but nothing painted (#330).
+  const visible = (element: Element) =>
+    element.getClientRects().length > 0 &&
+    element.checkVisibility({ visibilityProperty: true })
   const seconds = (ms: number) => (ms / 1000).toFixed(1)
   // Evidence only; a page closing while it is sent loses nothing the run needs.
-  const slow = (message: string) =>
-    void window.__firstHourSlow?.(message).catch(() => undefined)
+  const slow = (message: string, waitedMs: number) =>
+    void window.__firstHourSlow?.(message, waitedMs).catch(() => undefined)
   // The gate asks this at every stage end, and waits for false (#1177).
   window.__firstHourLoading = () => loadingSince !== undefined
   // The versions the identity paints right now: the one thing a stale deployment
@@ -237,13 +234,14 @@ export function watchSurface({
     const nextRoute = location.pathname + location.search
     if (nextRoute !== route) {
       // A load the page left is still evidence when it was already slow.
-      if (
-        loadingSince !== undefined &&
-        performance.now() - loadingSince > slowMs
-      )
-        slow(
-          `${route.split('?')[0]}: left while loading after ${seconds(performance.now() - loadingSince)} s`,
-        )
+      if (loadingSince !== undefined) {
+        const waited = performance.now() - loadingSince
+        if (waited > slowMs)
+          slow(
+            `${route.split('?')[0]}: left while loading after ${seconds(waited)} s`,
+            waited,
+          )
+      }
       route = nextRoute
       loadingSince = undefined
     }
@@ -261,6 +259,7 @@ export function watchSurface({
       if (loadingSince !== undefined && now - loadingSince > slowMs)
         slow(
           `${location.pathname}: loading took ${seconds(now - loadingSince)} s`,
+          now - loadingSince,
         )
       loadingSince = undefined
     } else if (loadingSince === undefined) loadingSince = now
@@ -269,6 +268,123 @@ export function watchSurface({
   }
   inspect()
   setInterval(inspect, 100)
+}
+
+/** One request the page made, in the clock of the engine log (UTC), so the line that
+ * answered it can be found there by its request id or its time. */
+export interface PageRequest {
+  method: string
+  /** The path only: a query can carry a credential. */
+  path: string
+  /** The browser's resource type: a Suspense spinner waits on a `script` chunk. */
+  type: string
+  /** null: no response arrived. */
+  status: number | null
+  startedAt: string
+  ms: number
+  /** The engine's X-Request-ID, the `request_id` of its log line. */
+  requestId?: string
+  /** Still open when the load ended or was left: ms is the time it had been open. A
+   * stream the page opened earlier is listed the same way; startedAt tells them apart. */
+  pending?: true
+  error?: string
+}
+
+/** A load over the console's target and what the page asked for while it waited (#2608). */
+export interface SlowLoad {
+  load: string
+  requests: PageRequest[]
+  /** Requests that overlapped the wait but are not listed. */
+  omitted: number
+}
+
+/** A load lists the requests with the longest share of its wait, which is enough to name
+ * the one it waited on; a request open for minutes shares no more than one that took 7 s. */
+const SLOW_REQUESTS_KEPT = 20
+
+type SeenRequest = Omit<PageRequest, 'startedAt' | 'ms'> & {
+  start: number
+  end?: number
+}
+
+/** Receives the watcher's slow loads (window.__firstHourSlow) and keeps, for each, the
+ * page's own requests that overlapped it, from the browser's network events. The
+ * returned list grows as loads are reported. */
+export async function recordSlowLoads(
+  page: Page,
+  redact: (text: string) => string = (text) => text,
+): Promise<SlowLoad[]> {
+  const seen = new Map<Request, SeenRequest>()
+  page.on('request', (request) => {
+    seen.set(request, {
+      method: request.method(),
+      path: new URL(request.url()).pathname,
+      type: request.resourceType(),
+      status: null,
+      start: Date.now(),
+    })
+  })
+  page.on('response', (response) => {
+    const request = response.request()
+    const entry = seen.get(request)
+    if (!entry) return
+    entry.status = response.status()
+    entry.requestId = response.headers()['x-request-id']
+    // The browser reports neither a response nor a failure for a request in flight when the
+    // main frame loads another document, so without this it stays open for the rest of the
+    // run and is listed under every later slow load as one the page still waits on (#2608).
+    if (!request.isNavigationRequest() || request.frame() !== page.mainFrame())
+      return
+    const closedAt = Date.now()
+    for (const [other, open] of seen) {
+      if (other === request || open.end !== undefined) continue
+      open.end = closedAt
+      open.error = 'the page loaded another document'
+    }
+  })
+  page.on('requestfinished', (request) => {
+    const entry = seen.get(request)
+    if (entry) entry.end = Date.now()
+  })
+  page.on('requestfailed', (request) => {
+    const entry = seen.get(request)
+    if (entry) {
+      entry.end = Date.now()
+      entry.error = request.failure()?.errorText
+    }
+  })
+  const slowLoads: SlowLoad[] = []
+  await page.exposeFunction(
+    '__firstHourSlow',
+    (load: string, waitedMs: number) => {
+      const reported = Date.now()
+      const from = reported - waitedMs
+      const shareOfWait = ({ start, end }: SeenRequest) =>
+        (end ?? reported) - Math.max(start, from)
+      const overlapping = [...seen.values()].filter(
+        (entry) => shareOfWait(entry) >= 0,
+      )
+      const requests = overlapping
+        .sort((a, b) => shareOfWait(b) - shareOfWait(a))
+        .slice(0, SLOW_REQUESTS_KEPT)
+        .map(({ start, end, requestId, error, ...entry }): PageRequest => ({
+          ...entry,
+          path: redact(entry.path),
+          startedAt: new Date(start).toISOString(),
+          ms: (end ?? reported) - start,
+          ...(requestId && { requestId: redact(requestId) }),
+          ...(error && { error: redact(error) }),
+          ...(end === undefined && { pending: true as const }),
+        }))
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+      slowLoads.push({
+        load: redact(load),
+        requests,
+        omitted: overlapping.length - requests.length,
+      })
+    },
+  )
+  return slowLoads
 }
 
 /** Opens AI tools' install review for one tool and returns the menu item that starts it:

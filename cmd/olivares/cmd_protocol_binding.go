@@ -55,8 +55,9 @@ type protocolBindingListFlags struct {
 
 func newProtocolBindingCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "protocol-binding",
-		Short: "Compose and reconcile durable A2A and MCP protocol bindings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "protocol-binding",
+		Short:       "Compose and reconcile durable A2A and MCP protocol bindings",
 		Long: "protocol-binding manages immutable protocol mapping generations and their durable runtime " +
 			"bindings. All mutations use the engine validate, plan, test, and apply phases.",
 		Example: "  olivares work protocol-binding spec list --workspace-id 0195f1a7-8b6c-7d2e-9f10-112233445566\n" +
@@ -68,8 +69,9 @@ func newProtocolBindingCmd() *cobra.Command {
 
 func newProtocolBindingSpecCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "spec",
-		Short: "Manage immutable protocol binding specifications",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "spec",
+		Short:       "Manage immutable protocol binding specifications",
 		Long: "spec validates, plans, creates, activates, disables, and reads immutable protocol " +
 			"binding specification generations.",
 		Example: "  olivares work protocol-binding spec list --workspace-id 0195f1a7-8b6c-7d2e-9f10-112233445566\n" +
@@ -87,8 +89,9 @@ func newProtocolBindingSpecCmd() *cobra.Command {
 
 func newProtocolBindingInstanceCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "binding",
-		Short: "Inspect and reconcile durable protocol bindings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "binding",
+		Short:       "Inspect and reconcile durable protocol bindings",
 		Long: "binding reads durable protocol binding generations and reconciles one exact remote " +
 			"observation through the governed mutation phases.",
 		Example: "  olivares work protocol-binding binding list --workspace-id 0195f1a7-8b6c-7d2e-9f10-112233445566\n" +
@@ -106,8 +109,9 @@ func newProtocolBindingSpecCreateCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var flags protocolBindingMutationFlags
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Validate, plan, or create one draft protocol binding spec",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "create",
+		Short:       "Validate, plan, or create one draft protocol binding spec",
 		Long: "create validates or plans a specification document, then creates its immutable draft " +
 			"generation when apply is requested with the pinned plan and idempotency key.",
 		Example: "  olivares work protocol-binding spec create -f binding.yaml --mode plan\n" +
@@ -137,8 +141,9 @@ func newProtocolBindingSpecStateCmd(action string) *cobra.Command {
 	var cfg agentClientConfig
 	var flags protocolBindingMutationFlags
 	cmd := &cobra.Command{
-		Use:   action + " <spec-id>",
-		Short: strings.ToUpper(action[:1]) + action[1:] + " one protocol binding spec generation",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         action + " <spec-id>",
+		Short:       strings.ToUpper(action[:1]) + action[1:] + " one protocol binding spec generation",
 		Long: "The " + action + " command validates or plans the requested state transition, then " +
 			"applies it only with the expected version, pinned plan, and idempotency key.",
 		Example: "  olivares work protocol-binding spec " + action +
@@ -164,9 +169,10 @@ func newProtocolBindingSpecStateCmd(action string) *cobra.Command {
 func newProtocolBindingSpecGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "get <spec-id>",
-		Short: "Get one immutable protocol binding spec generation",
-		Long:  "get returns one tenant-confined immutable protocol binding specification generation.",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <spec-id>",
+		Short:       "Get one immutable protocol binding spec generation",
+		Long:        "get returns one tenant-confined immutable protocol binding specification generation.",
 		Example: "  olivares work protocol-binding spec get " +
 			"0195f1a7-8b6c-7d2e-9f10-112233445577 -o json",
 		Args: cobra.ExactArgs(1),
@@ -189,9 +195,10 @@ func newProtocolBindingSpecListCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var flags protocolBindingListFlags
 	cmd := &cobra.Command{
-		Use:     "list",
-		Aliases: []string{"ls"},
-		Short:   "List protocol binding spec generations in one workspace",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "list",
+		Aliases:     []string{"ls"},
+		Short:       "List protocol binding spec generations in one workspace",
 		Long: "list returns a cursor-paginated, tenant-confined collection of protocol binding " +
 			"specification generations filtered by the supplied exact selectors.",
 		Example: "  olivares work protocol-binding spec list " +
@@ -216,9 +223,10 @@ func newProtocolBindingSpecListCmd() *cobra.Command {
 func newProtocolBindingGetCmd() *cobra.Command {
 	var cfg agentClientConfig
 	cmd := &cobra.Command{
-		Use:   "get <binding-id>",
-		Short: "Get one durable protocol binding generation",
-		Long:  "get returns one tenant-confined durable protocol binding generation and its pinned lineage.",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <binding-id>",
+		Short:       "Get one durable protocol binding generation",
+		Long:        "get returns one tenant-confined durable protocol binding generation and its pinned lineage.",
 		Example: "  olivares work protocol-binding binding get " +
 			"0195f1a7-8b6c-7d2e-9f10-112233445588 -o json",
 		Args: cobra.ExactArgs(1),
@@ -241,9 +249,10 @@ func newProtocolBindingListCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var flags protocolBindingListFlags
 	cmd := &cobra.Command{
-		Use:     "list",
-		Aliases: []string{"ls"},
-		Short:   "List durable protocol bindings in one workspace",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "list",
+		Aliases:     []string{"ls"},
+		Short:       "List durable protocol bindings in one workspace",
 		Long: "list returns a cursor-paginated, tenant-confined collection of durable protocol " +
 			"binding generations filtered by the supplied exact selectors.",
 		Example: "  olivares work protocol-binding binding list " +
@@ -269,8 +278,9 @@ func newProtocolBindingReconcileCmd() *cobra.Command {
 	var cfg agentClientConfig
 	var flags protocolBindingMutationFlags
 	cmd := &cobra.Command{
-		Use:   "reconcile <binding-id>",
-		Short: "Validate, plan, test, or apply one exact-generation remote observation",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "reconcile <binding-id>",
+		Short:       "Validate, plan, test, or apply one exact-generation remote observation",
 		Long: "reconcile obtains a fresh remote observation for one exact binding generation and " +
 			"runs it through validate, plan, test, or apply without accepting caller-supplied evidence.",
 		Example: "  olivares work protocol-binding binding reconcile " +

@@ -85,7 +85,7 @@ agents are the kernel backstop's job, not a public OTLP port's.
 ## What you'll see in the console
 
 Instrumented sessions appear in **Sessions** as live activity, attributed to
-the emitting agent; their model calls feed **Cost & FinOps**; MCP and tool
+the emitting agent; their model calls feed **Budgets**; MCP and tool
 spans contribute edges to the **Access map** like any cooperative source:
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="The Sessions view showing live agent session activity from cooperative telemetry." />

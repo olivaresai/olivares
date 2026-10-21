@@ -1,0 +1,166 @@
+{
+  "title": "Provider",
+  "subtitle": "Una credenziale di un provider cloud o un endpoint di modelli locale su cui girano i tuoi strumenti per agenti.",
+  "nav": "Provider",
+  "add": "Aggiungi provider",
+  "rowMenu": "Azioni della riga per {{name}}",
+  "empty": {
+    "title": "Nessun provider registrato",
+    "description": "Collega Anthropic, OpenAI o xAI con una chiave API, oppure aggiungi un endpoint Ollama locale senza chiave, poi testa la connessione.",
+    "action": "Aggiungi il tuo primo provider"
+  },
+  "emptyFiltered": {
+    "title": "Nessun provider corrisponde a questo filtro",
+    "description": "Cancella il filtro per vedere tutti i provider registrati.",
+    "action": "Mostra tutti"
+  },
+  "forbidden": {
+    "title": "Non puoi leggere i provider di questo tenant",
+    "description": "Il tuo ruolo non può leggere i provider registrati. Chiedi l'accesso a un amministratore di questa organizzazione."
+  },
+  "columns": {
+    "name": "Nome",
+    "kind": "Tipo",
+    "key": "Chiave",
+    "state": "Stato",
+    "connection": "Connessione"
+  },
+  "kinds": {
+    "anthropic": "Anthropic",
+    "openai": "OpenAI",
+    "xai": "xAI",
+    "gemini": "Gemini",
+    "openai_compatible": "Compatibile con OpenAI",
+    "ollama": "Ollama"
+  },
+  "kindHints": {
+    "anthropic": "Claude Code. Inietta ANTHROPIC_API_KEY.",
+    "openai": "Codex. Inietta OPENAI_API_KEY.",
+    "xai": "Grok. Inietta XAI_API_KEY.",
+    "gemini": "Gemini CLI sull'indirizzo API di Google. Usa una chiave API Gemini.",
+    "openai_compatible": "Qualsiasi endpoint in stile OpenAI. Inietta OPENAI_API_KEY e OPENAI_BASE_URL; l'endpoint è obbligatorio.",
+    "ollama": "Modelli locali per OpenCode. Nessuna chiave API. Usa l'endpoint nativo di Ollama; il test legge i metadati dei modelli."
+  },
+  "states": {
+    "active": "Attivo",
+    "revoked": "Revocato"
+  },
+  "probe": {
+    "never": "Non testata",
+    "ok": "Accettata",
+    "refused": "Rifiutata",
+    "unreachable": "Non raggiungibile",
+    "neverHint": "Nessuno ha testato questa credenziale. Averla registrata non prova che funzioni.",
+    "okHint": "Il provider ha risposto e ha accettato questa credenziale.",
+    "refusedHint": "Il provider ha risposto e ha rifiutato questa credenziale. Ruotala.",
+    "unreachableHint": "L'endpoint non ha risposto. Questo non dice nulla sulla credenziale.",
+    "models": "{{n}} modelli",
+    "latency": "{{ms}} ms",
+    "at": "Testata {{when}}",
+    "local": {
+      "neverHint": "Questo endpoint non è stato testato. La registrazione non prova che funzioni.",
+      "okHint": "L'endpoint locale ha risposto e ha elencato i suoi modelli.",
+      "refusedHint": "L'endpoint ha rifiutato la richiesta dei metadati. Controlla le sue impostazioni di accesso.",
+      "unreachableHint": "L'endpoint locale non ha risposto. Controlla il suo indirizzo e la sua disponibilità."
+    }
+  },
+  "actions": {
+    "test": "Testa la connessione",
+    "testing": "Test in corso…",
+    "rotate": "Ruota chiave",
+    "revoke": "Revoca",
+    "details": "Dettagli"
+  },
+  "create": {
+    "title": "Aggiungi un provider",
+    "description": "L'engine sigilla la chiave e non la restituisce mai. Vedrai un suggerimento di quattro caratteri e nient'altro.",
+    "kind": "Provider",
+    "kindPlaceholder": "Scegli un provider",
+    "name": "Nome",
+    "nameHint": "Facoltativo. Lascia vuoto per usare il nome del provider.",
+    "namePlaceholder": "Anthropic (produzione)",
+    "baseURL": "Endpoint",
+    "baseURLHint": "Lascia vuoto per l'endpoint ufficiale del provider. Deve essere https.",
+    "baseURLLocalHint": "Lascia vuoto per l'endpoint ufficiale del provider. Altrimenti https, oppure http semplice a un indirizzo di loopback o di rete privata.",
+    "baseURLPlaceholder": "https://llm.example.com",
+    "apiKey": "Chiave API",
+    "apiKeyHint": "Inviata una sola volta, sigillata dall'engine, mai restituita a questo browser.",
+    "apiKeyPlaceholder": "Incolla la chiave",
+    "submit": "Aggiungi provider",
+    "submitting": "Sigillatura…",
+    "cancel": "Annulla",
+    "success": "Provider aggiunto.",
+    "testNext": "Testa la connessione ora",
+    "registering": "Registrazione…",
+    "localNameHint": "Facoltativo. Lascia vuoto per usare il nome del provider.",
+    "advanced": "Avanzate: endpoint personalizzato",
+    "missingFields": "Compila i campi mancanti: {{fields}}.",
+    "requiredEndpointHint": "Inserisci l'endpoint del servizio: https, oppure http semplice a un indirizzo di loopback o di rete privata."
+  },
+  "rotate": {
+    "title": "Ruota la chiave di questo provider",
+    "description": "La nuova chiave sostituisce la vecchia con lo stesso riferimento, quindi ogni profilo associato continua a funzionare. Una sessione già in corso mantiene la credenziale con cui è partita.",
+    "verdictCleared": "Il test di connessione precedente è azzerato: un verdetto misurato su una credenziale che non esiste più non è una prova su quella che la sostituisce.",
+    "submit": "Ruota chiave",
+    "submitting": "Sigillatura…",
+    "success": "Chiave ruotata. Testa la connessione per confermare che la nuova funzioni."
+  },
+  "revoke": {
+    "title": "Revoca questo provider",
+    "description": "Questo distrugge la credenziale sigillata. Per questo riferimento non si può annullare.",
+    "consequence": "Ogni profilo provider associato rifiuterà di avviarsi, indicando questo provider. La credenziale non viene revocata presso il provider stesso: fallo nella sua console.",
+    "confirm": "Revoca",
+    "success": "Provider revocato e credenziale sigillata distrutta.",
+    "localDescription": "Questo revoca la registrazione dell'endpoint. I profili associati rifiuteranno nuovi avvii. Il servizio Ollama e i suoi modelli restano sull'host.",
+    "localSuccess": "Registrazione dell'endpoint revocata."
+  },
+  "detail": {
+    "title": "Provider",
+    "reference": "Riferimento",
+    "endpoint": "Endpoint",
+    "officialEndpoint": "L'endpoint ufficiale del provider",
+    "created": "Registrato",
+    "revoked": "Revocato",
+    "models": "Modelli elencati dall'ultimo test",
+    "noModels": "Ancora nessun elenco di modelli. Testa la connessione.",
+    "close": "Chiudi"
+  },
+  "vaultUnavailable": {
+    "title": "Questo deployment non può memorizzare la credenziale di un provider",
+    "description": "Non è configurato alcun vault di credenziali sigillate, quindi l'engine si rifiuta di memorizzare una chiave invece di memorizzarne una che non può proteggere. Un amministratore deve configurare il secret sealer."
+  },
+  "truncation": {
+    "label": "Mostrati {{n}} provider; ce ne sono altri",
+    "hint": "Questo elenco è una sola pagina. Restringilo, oppure usa `olivares provider ls` per l'insieme completo."
+  },
+  "bind": {
+    "title": "Associa profilo",
+    "description": "I prossimi avvii dal profilo selezionato useranno {{name}}. Le sessioni esistenti mantengono il provider attuale.",
+    "profile": "Profilo",
+    "choose": "Scegli un profilo compatibile",
+    "empty": "Nessun profilo attivo compatibile. Creane uno in Profili provider.",
+    "more": "Carica altri profili",
+    "unavailable": "I permessi sui profili o un profilo attivo compatibile non sono disponibili.",
+    "loadError": "Non è stato possibile caricare i profili.",
+    "success": "Provider associato al profilo."
+  },
+  "defaultModel": {
+    "title": "Modello predefinito",
+    "model": "Modello",
+    "hint": "Le nuove sessioni usano questo modello se non ne viene scelto un altro.",
+    "modelsHint": "Modelli elencati dall’ultimo test di connessione di questo provider.",
+    "native": "Nessun predefinito salvato",
+    "save": "Salva",
+    "success": "Modello predefinito salvato.",
+    "createHint": "Facoltativo. Lascia vuoto per scegliere un predefinito dopo il test di connessione."
+  },
+  "prepare": {
+    "pending": "Preparazione di {{tool}} per la tua prima sessione…",
+    "installing": "Installazione di {{tool}} per la tua prima sessione: {{progress}}",
+    "ready": "Pronto per avviare una sessione.",
+    "start": "Nuova sessione",
+    "failed": "Provider salvato. Configurazione della sessione non riuscita: {{error}}",
+    "retry": "Riprova la configurazione",
+    "incomplete": "L'installazione dello strumento è {{state}}. Controlla Strumenti IA e riprova."
+  }
+}

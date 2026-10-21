@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
+	coreegress "github.com/olivaresai/olivares/core/egress"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -44,7 +45,14 @@ import (
 // npm's own settings beside them: two sources of npm configuration would be
 // resolved by npm's order, not by the profile.
 //
-// Declaring either needs tenant administration. The token is delegated to every
+// Egress hosts: the HTTPS hosts an administrator declares (session_egress_hosts)
+// are appended to the same confined network, so an API-key session can reach what
+// its work needs (a Git host, a module mirror) and nothing else. None is added by
+// default. Each is admitted only at public addresses, whatever its name resolves
+// to (egress.Policy.PublicProviders): a declared name cannot reach the engine
+// host's loopback or private services.
+//
+// Declaring any of the three needs tenant administration. The token is delegated to every
 // session launched under the profile, as the profile's provider key is: the
 // launcher needs no vault right, and the child can read the file.
 //
@@ -60,8 +68,9 @@ import (
 // colPPSessionPrograms and colPPSessionRegistries are the declarations, JSON arrays,
 // NULL when the profile declares none.
 const (
-	colPPSessionPrograms   = "session_programs"
-	colPPSessionRegistries = "session_registries"
+	colPPSessionPrograms    = "session_programs"
+	colPPSessionRegistries  = "session_registries"
+	colPPSessionEgressHosts = "session_egress_hosts"
 )
 
 const (
@@ -69,6 +78,9 @@ const (
 	// policy holds at most 16 endpoints, the provider and hook relays included.
 	maxSessionPrograms   = 16
 	maxSessionRegistries = 8
+	// maxSessionEgressHosts fits the policy's 16 with the provider, up to three
+	// hook and session relays and a full set of registries (1+3+8+4).
+	maxSessionEgressHosts = 4
 	// registryKindNPM is the one registry kind sessions get.
 	registryKindNPM = "npm"
 	// envNPMGlobalConfig selects npm's global configuration file. The profile's
@@ -122,6 +134,41 @@ func normalizeSessionPrograms(in []string) (string, error) {
 		if !slices.Contains(out, name) {
 			out = append(out, name)
 		}
+	}
+	if len(out) == 0 {
+		return "", nil
+	}
+	slices.Sort(out)
+	blob, _ := json.Marshal(out)
+	return string(blob), nil
+}
+
+// canonicalEgressHost returns the one spelling of a declared host the egress
+// policy compares (coreegress.CanonicalHost), and whether raw is a host at all: a
+// DNS name with a dot, such as github.com. An address literal, a port, a path, a
+// scheme and a wildcard are refused. The session reaches https on port 443 of
+// exactly that name.
+func canonicalEgressHost(raw string) (string, bool) {
+	host, err := coreegress.CanonicalHost(raw)
+	return host, err == nil && net.ParseIP(host) == nil && strings.Contains(host, ".")
+}
+
+// normalizeSessionEgressHosts validates a declaration: each host canonical,
+// de-duplicated and sorted, stored as a JSON array, "" (NULL) for none.
+func normalizeSessionEgressHosts(in []string) (string, error) {
+	out := make([]string, 0, maxSessionEgressHosts)
+	for _, raw := range in {
+		host, ok := canonicalEgressHost(raw)
+		if !ok {
+			return "", badRequest(fmt.Sprintf("session_egress_hosts: %q is not a host name (a DNS name such as github.com, no scheme, port, path or address)", raw))
+		}
+		if slices.Contains(out, host) {
+			continue
+		}
+		if len(out) == maxSessionEgressHosts {
+			return "", badRequest(fmt.Sprintf("a profile declares at most %d egress hosts", maxSessionEgressHosts))
+		}
+		out = append(out, host)
 	}
 	if len(out) == 0 {
 		return "", nil
@@ -216,29 +263,30 @@ func normalizeSessionRegistries(in []SessionRegistry) (string, bool, error) {
 }
 
 // validateProfilePackagesInput validates a profile's declarations and returns
-// their stored values. Declaring either needs the tenant administration
+// their stored values. Declaring any needs the tenant administration
 // secret_env needs (principalMayUseSecretEnv), not only profile write: they
 // decide which code every session under the profile runs and installs, widen a
 // confined session's network, and hand a vault secret's value to each of them.
-func validateProfilePackagesInput(programs []string, registries []SessionRegistry, declared, mayUseSecretEnv bool) (string, string, error) {
+func validateProfilePackagesInput(programs []string, registries []SessionRegistry, egressHosts []string, declared, mayUseSecretEnv bool) (storedPrograms, storedRegistries, storedHosts string, err error) {
 	if declared && !mayUseSecretEnv {
-		return "", "", forbiddenErr("declaring a profile's programs or package registries needs tenant administration")
+		return "", "", "", forbiddenErr("declaring a profile's programs, package registries or egress hosts needs tenant administration")
 	}
-	storedPrograms, err := normalizeSessionPrograms(programs)
-	if err != nil {
-		return "", "", err
+	if storedPrograms, err = normalizeSessionPrograms(programs); err != nil {
+		return "", "", "", err
 	}
-	storedRegistries, _, err := normalizeSessionRegistries(registries)
-	if err != nil {
-		return "", "", err
+	if storedRegistries, _, err = normalizeSessionRegistries(registries); err != nil {
+		return "", "", "", err
 	}
-	return storedPrograms, storedRegistries, nil
+	if storedHosts, err = normalizeSessionEgressHosts(egressHosts); err != nil {
+		return "", "", "", err
+	}
+	return storedPrograms, storedRegistries, storedHosts, nil
 }
 
-// decodeProfilePackages reads both declarations off a profile row. A value that
+// decodeProfilePackages reads the declarations off a profile row. A value that
 // cannot be read is reported, never read as none: a session without its
 // registry would install the same names from the public one.
-func decodeProfilePackages(rec model.Record) (programs []string, registries []SessionRegistry, ok bool) {
+func decodeProfilePackages(rec model.Record) (programs []string, registries []SessionRegistry, egressHosts []string, ok bool) {
 	ok = true
 	if raw := rec.String(colPPSessionPrograms); raw != "" {
 		ok = json.Unmarshal([]byte(raw), &programs) == nil
@@ -246,13 +294,23 @@ func decodeProfilePackages(rec model.Record) (programs []string, registries []Se
 	if raw := rec.String(colPPSessionRegistries); raw != "" {
 		ok = json.Unmarshal([]byte(raw), &registries) == nil && ok
 	}
-	return programs, registries, ok
+	if raw := rec.String(colPPSessionEgressHosts); raw != "" {
+		ok = json.Unmarshal([]byte(raw), &egressHosts) == nil && ok
+		// A row written outside the API is checked as a declaration is: a host that
+		// is not canonical would be granted as written.
+		for _, host := range egressHosts {
+			if canonical, valid := canonicalEgressHost(host); !valid || canonical != host {
+				ok = false
+			}
+		}
+	}
+	return programs, registries, egressHosts, ok
 }
 
-// errUnreadablePackages refuses a launch whose profile's stored programs or
-// registries cannot be read.
+// errUnreadablePackages refuses a launch whose profile's stored programs,
+// registries or egress hosts cannot be read.
 var errUnreadablePackages = &runErr{http.StatusConflict,
-	"the provider profile's programs or package registries cannot be read; declare them again with agent profile update"}
+	"the provider profile's programs, package registries or egress hosts cannot be read; declare them again with agent profile update"}
 
 // validateRegistryEnvAllow refuses a launch that forwards npm's own settings
 // beside the profile's registries.
@@ -270,19 +328,21 @@ func validateRegistryEnvAllow(registries []SessionRegistry, envAllow []string) e
 }
 
 // refuseNonNativePackages refuses a container or sandbox launch on a profile
-// with programs or registries: their files and paths are the host's.
+// with programs, registries or egress hosts: their files and paths are the
+// host's, and the egress policy is the native session's.
 func refuseNonNativePackages(p CreateRunParams) error {
-	if len(p.profilePrograms)+len(p.profileRegistries) > 0 && p.Isolation != "" && p.Isolation != IsolationNative {
+	if len(p.profilePrograms)+len(p.profileRegistries)+len(p.profileEgressHosts) > 0 && p.Isolation != "" && p.Isolation != IsolationNative {
 		return &runErr{http.StatusUnprocessableEntity,
-			"the provider profile declares programs or package registries, which reach native sessions only; launch this session natively"}
+			"the provider profile declares programs, package registries or egress hosts, which reach native sessions only; launch this session natively"}
 	}
 	return nil
 }
 
-// configureProfilePackages applies the profile's programs and registries to one
-// launch. It runs with the other launch-time contributions (prepareSessionLaunch).
+// configureProfilePackages applies the profile's programs, registries and egress
+// hosts to one launch. It runs with the other launch-time contributions
+// (prepareSessionLaunch).
 func (m *Module) configureProfilePackages(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, spec *LaunchSpec) error {
-	if len(p.profilePrograms) == 0 && len(p.profileRegistries) == 0 {
+	if len(p.profilePrograms)+len(p.profileRegistries)+len(p.profileEgressHosts) == 0 {
 		return nil
 	}
 	if err := refuseNonNativePackages(*p); err != nil {
@@ -291,7 +351,24 @@ func (m *Module) configureProfilePackages(ctx, runCtx context.Context, tenant mo
 	if err := m.applyProfilePrograms(p.profilePrograms, spec); err != nil {
 		return err
 	}
-	return m.applyProfileRegistries(ctx, runCtx, tenant, runRef, p, spec)
+	if err := m.applyProfileRegistries(ctx, runCtx, tenant, runRef, p, spec); err != nil {
+		return err
+	}
+	applyProfileEgressHosts(p, spec)
+	return nil
+}
+
+// applyProfileEgressHosts grants the declared hosts to a confined session's
+// network, as the registry hosts are. An unconfined session (account login,
+// unmeasured tool) has no boundary to widen and keeps the host network.
+func applyProfileEgressHosts(p *CreateRunParams, spec *LaunchSpec) {
+	if len(p.profileEgressHosts) == 0 || spec.NetworkPolicy == nil {
+		return
+	}
+	for _, host := range p.profileEgressHosts {
+		spec.NetworkPolicy.PublicProviders = append(spec.NetworkPolicy.PublicProviders, "https://"+host+"/")
+	}
+	p.egressDetail = "egress hosts " + strings.Join(p.profileEgressHosts, ",")
 }
 
 // applyProfilePrograms puts each declared program's install directory first on
@@ -326,6 +403,61 @@ func (m *Module) applyProfilePrograms(programs []string, spec *LaunchSpec) error
 	return nil
 }
 
+// registryTokenRefs names the vault secrets that hold the tokens of registries.
+// Each is keyed by the secret's name: the output mark and every refusal name it.
+func registryTokenRefs(registries []SessionRegistry) []SecretEnvRef {
+	var refs []SecretEnvRef
+	for _, r := range registries {
+		if r.Secret != "" {
+			refs = append(refs, SecretEnvRef{Env: r.Secret, Secret: r.Secret})
+		}
+	}
+	return refs
+}
+
+// withRegistryTokens is the run row's recorded registry token secrets with the
+// ones this launch uses added; "" when there are none. Never narrowed: the tool's
+// transcript keeps what an earlier launch printed. A stored value that cannot be
+// decoded is kept as it is, and reads as a session that used a token
+// (usedRegistryTokens).
+func withRegistryTokens(stored string, registries []SessionRegistry) string {
+	refs, err := decodeSecretEnv(stored)
+	if err != nil {
+		return stored
+	}
+	for _, ref := range registryTokenRefs(registries) {
+		if !slices.Contains(refs, ref) {
+			refs = append(refs, ref)
+		}
+	}
+	return encodeSecretEnv(refs)
+}
+
+// usedRegistryTokens reports whether a launch of the run opened a package registry
+// token. Its transcript, on disk in the tool's own home, may hold it; the live
+// redactor withholds it, and exists only while the session is live in this engine.
+//
+// A launch records its tokens, or "[]" for none, so a row with no value predates
+// the column and is unknown: it counts as used when its profile declares a
+// registry token now, the only evidence left. Everything is read fail-closed: a
+// value or a profile that cannot be read counts as used.
+func (m *Module) usedRegistryTokens(ctx context.Context, tenant model.TenantID, rec model.Record) bool {
+	if raw := rec.String(colRunRegistrySecrets); raw != "" {
+		refs, err := decodeSecretEnv(raw)
+		return err != nil || len(refs) != 0
+	}
+	profile, err := m.GetProfile(ctx, tenant, storedProfileSnapshot(rec).ProfileID)
+	return err != nil || len(registryTokenRefs(profile.SessionRegistries)) != 0
+}
+
+// earlierLaunchValuesMayBeUnheld reports whether a launch of the run may have
+// printed a value that a later launch's redactor does not hold: a vault secret
+// (rotated or removed since), a repository read token (minted for each launch) or
+// a package registry token.
+func (m *Module) earlierLaunchValuesMayBeUnheld(ctx context.Context, tenant model.TenantID, rec model.Record) bool {
+	return givenSecrets(rec) || m.usedRegistryTokens(ctx, tenant, rec)
+}
+
 // applyProfileRegistries writes this launch's npm configuration and grants its
 // hosts to a confined session's network.
 func (m *Module) applyProfileRegistries(ctx, runCtx context.Context, tenant model.TenantID, runRef string, p *CreateRunParams, spec *LaunchSpec) error {
@@ -336,14 +468,7 @@ func (m *Module) applyProfileRegistries(ctx, runCtx context.Context, tenant mode
 		return &runErr{http.StatusServiceUnavailable,
 			"the provider profile declares package registries, and this node has no data directory to write their configuration (the launch is denied)"}
 	}
-	var refs []SecretEnvRef
-	for _, r := range p.profileRegistries {
-		if r.Secret != "" {
-			// Keyed by the secret's name: the output mark and every refusal name it.
-			refs = append(refs, SecretEnvRef{Env: r.Secret, Secret: r.Secret})
-		}
-	}
-	tokens, err := m.resolveSecretEnv(ctx, tenant, refs)
+	tokens, err := m.resolveSecretEnv(ctx, tenant, registryTokenRefs(p.profileRegistries))
 	if err != nil {
 		return err
 	}

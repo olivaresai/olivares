@@ -69,20 +69,23 @@ const maxComplianceBodySize = 8 << 20
 func newComplianceCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "compliance",
-		Short: "Operate legal holds, GDPR erasure and regulatory artifacts",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "compliance",
+		Short:       "Operate legal holds, GDPR erasure and regulatory artifacts",
 		Long: "compliance exercises the governed data-lifecycle plane from a terminal:\n" +
 			"preservation orders that veto every destruction path, the right-to-erasure\n" +
 			"workflow with its dual-control gates and verifiable receipt, and the\n" +
 			"regulatory artifacts the engine seals.\n\n" +
 			"The dangerous verbs behave like the engine, not like a script: a\n" +
 			"verb that did not finish exits 7 and says exactly how far it got; an erasure\n" +
-			"a legal hold vetoes exits 5 and names the holds that blocked it.",
-		Example: "  olivares compliance holds ls\n" +
+			"a legal hold vetoes exits 5 and names the holds that blocked it.\n\n" +
+			"Legal holds (holds) and right to erasure (erasure, subject) are Business\n" +
+			"features: a Community engine refuses them and these verbs exit 9.",
+		Example: "  olivares compliance risk ls\n" +
+			"  olivares compliance calendar -o json\n" +
 			"  olivares compliance holds place --matter CASE-42 --scope subject --subject-kind user --subject-ref u-7 --reason \"litigation\"\n" +
 			"  olivares compliance erasure request --subject-ref u-7 --case-ref DSAR-9\n" +
-			"  olivares compliance erasure execute er-123 --yes\n" +
-			"  olivares compliance calendar -o json",
+			"  olivares compliance erasure execute er-123 --yes",
 	}
 	flags.addPersistent(root)
 	root.AddCommand(
@@ -441,8 +444,9 @@ type holdDecisionOut struct {
 
 func newComplianceHoldsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "holds",
-		Short: "Place, inspect and release legal holds",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "holds",
+		Short:       "Place, inspect and release legal holds",
 		Long: "holds operates the legal-hold preservation plane. Placing one takes effect\n" +
 			"immediately — the duty to preserve admits no waiting. Releasing one is\n" +
 			"dual-control with no break-glass path, so `release` can succeed without\n" +
@@ -465,12 +469,13 @@ func newComplianceHoldsCmd(flags *authClientFlags) *cobra.Command {
 func newHoldsListCmd(flags *authClientFlags) *cobra.Command {
 	var status string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List legal holds",
-		Long:    "ls lists the legal holds on this tenant. A hold suspends deletion for the\ndata it names, so this is the answer to \"what is currently un-deletable and why\".\nFilter by --status to separate the active ones from those already released.",
-		Example: "  olivares compliance holds ls\n  olivares compliance holds ls --status active -o json",
-		Args:    cobra.NoArgs,
-		Aliases: []string{"list"},
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List legal holds",
+		Long:        "ls lists the legal holds on this tenant. A hold suspends deletion for the\ndata it names, so this is the answer to \"what is currently un-deletable and why\".\nFilter by --status to separate the active ones from those already released.",
+		Example:     "  olivares compliance holds ls\n  olivares compliance holds ls --status active -o json",
+		Args:        cobra.NoArgs,
+		Aliases:     []string{"list"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if status != "" {
@@ -524,11 +529,12 @@ func holdCoversText(h holdOut) string {
 
 func newHoldsGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <hold-id>",
-		Short:   "Show one legal hold",
-		Long:    "get shows one legal hold in full: what it preserves, who placed it, when, and\nunder which matter. Use it before releasing anything — release is dual-control and\nirreversible in the sense that the preservation duty it was carrying ends.",
-		Example: "  olivares compliance holds get lh-1\n  olivares compliance holds get lh-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <hold-id>",
+		Short:       "Show one legal hold",
+		Long:        "get shows one legal hold in full: what it preserves, who placed it, when, and\nunder which matter. Use it before releasing anything — release is dual-control and\nirreversible in the sense that the preservation duty it was carrying ends.",
+		Example:     "  olivares compliance holds get lh-1\n  olivares compliance holds get lh-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := complianceCall{
 				flags: flags, method: http.MethodGet, path: "/holds/" + url.PathEscape(args[0]),
@@ -562,8 +568,9 @@ func newHoldsGetCmd(flags *authClientFlags) *cobra.Command {
 func newHoldsCheckCmd(flags *authClientFlags) *cobra.Command {
 	var subjectKind, subjectRef, dataClass string
 	cmd := &cobra.Command{
-		Use:   "check",
-		Short: "Ask whether any active hold already covers a subject or class",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "check",
+		Short:       "Ask whether any active hold already covers a subject or class",
 		Long: "check runs the SAME matching rule the erasure path enforces before it\n" +
 			"destroys anything. Use it to find out what is preserved before acting,\n" +
 			"rather than discovering it from a rejected erasure.",
@@ -620,8 +627,9 @@ func newHoldsCheckCmd(flags *authClientFlags) *cobra.Command {
 func newHoldsPlaceCmd(flags *authClientFlags) *cobra.Command {
 	var matter, title, scope, dataClass, subjectKind, subjectRef, reason, onBehalfOf string
 	cmd := &cobra.Command{
-		Use:   "place",
-		Short: "Place a legal hold (takes effect immediately)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "place",
+		Short:       "Place a legal hold (takes effect immediately)",
 		Long: "place records a preservation order that vetoes every destruction path\n" +
 			"matching its scope. It is ungated on purpose: preservation is the safe\n" +
 			"direction and the duty to preserve admits no waiting.",
@@ -698,8 +706,9 @@ func newHoldsReleaseCmd(flags *authClientFlags) *cobra.Command {
 	var reason, onBehalfOf string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "release <hold-id>",
-		Short: "Release a legal hold (dual-control, no break-glass)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "release <hold-id>",
+		Short:       "Release a legal hold (dual-control, no break-glass)",
 		Long: "release lifts a preservation order. Data the hold protected becomes\n" +
 			"eligible for deletion again, so it requires two distinct approver accounts\n" +
 			"and has no emergency override.\n\n" +
@@ -765,11 +774,12 @@ func newHoldsReleaseCmd(flags *authClientFlags) *cobra.Command {
 
 func newHoldsCustodyCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "custody <hold-id>",
-		Short:   "Show a hold's append-only chain of custody",
-		Long:    "custody prints the append-only chain of every action taken on one hold: placed,\nchecked, released, by whom and when. It is the evidence an auditor asks for when the\nquestion is not what the hold says now but what it has said all along.",
-		Example: "  olivares compliance holds custody lh-1\n  olivares compliance holds custody lh-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "custody <hold-id>",
+		Short:       "Show a hold's append-only chain of custody",
+		Long:        "custody prints the append-only chain of every action taken on one hold: placed,\nchecked, released, by whom and when. It is the evidence an auditor asks for when the\nquestion is not what the hold says now but what it has said all along.",
+		Example:     "  olivares compliance holds custody lh-1\n  olivares compliance holds custody lh-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := complianceCall{
 				flags: flags, method: http.MethodGet,
@@ -858,8 +868,9 @@ type receiptOut struct {
 
 func newComplianceErasureCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "erasure",
-		Short: "Register, execute and evidence GDPR erasure requests",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "erasure",
+		Short:       "Register, execute and evidence GDPR erasure requests",
 		Long: "erasure works the right-to-erasure lifecycle. Registering a request is\n" +
 			"safe — it mints the subject key and records the request. Executing one is\n" +
 			"irreversible: it destroys the subject key, which permanently renders every\n" +
@@ -882,12 +893,13 @@ func newComplianceErasureCmd(flags *authClientFlags) *cobra.Command {
 func newErasureListCmd(flags *authClientFlags) *cobra.Command {
 	var status string
 	cmd := &cobra.Command{
-		Use:     "ls",
-		Short:   "List erasure requests",
-		Long:    "ls lists the right-to-be-forgotten requests on this tenant and where each one\nstands. A request can be blocked by a legal hold — the hold wins, and that is the\npoint of listing both surfaces from the same CLI.",
-		Example: "  olivares compliance erasure ls\n  olivares compliance erasure ls -o json",
-		Args:    cobra.NoArgs,
-		Aliases: []string{"list"},
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "ls",
+		Short:       "List erasure requests",
+		Long:        "ls lists the right-to-be-forgotten requests on this tenant and where each one\nstands. A request can be blocked by a legal hold — the hold wins, and that is the\npoint of listing both surfaces from the same CLI.",
+		Example:     "  olivares compliance erasure ls\n  olivares compliance erasure ls -o json",
+		Args:        cobra.NoArgs,
+		Aliases:     []string{"list"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			q := url.Values{}
 			if status != "" {
@@ -928,11 +940,12 @@ func newErasureListCmd(flags *authClientFlags) *cobra.Command {
 
 func newErasureGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "get <erasure-id>",
-		Short:   "Show one erasure request",
-		Long:    "get shows one erasure request in full: the subject, the scope, its current state\nand anything blocking it. An erasure that reports a provider leg as not_wired has NOT\nerased anything there, and this is where that is visible.",
-		Example: "  olivares compliance erasure get er-1\n  olivares compliance erasure get er-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <erasure-id>",
+		Short:       "Show one erasure request",
+		Long:        "get shows one erasure request in full: the subject, the scope, its current state\nand anything blocking it. An erasure that reports a provider leg as not_wired has NOT\nerased anything there, and this is where that is visible.",
+		Example:     "  olivares compliance erasure get er-1\n  olivares compliance erasure get er-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := complianceCall{
 				flags: flags, method: http.MethodGet, path: "/erasure/" + url.PathEscape(args[0]),
@@ -962,8 +975,9 @@ func newErasureRequestCmd(flags *authClientFlags) *cobra.Command {
 	var subjectKind, subjectRef, caseRef, reason string
 	var aliases, classes []string
 	cmd := &cobra.Command{
-		Use:   "request",
-		Short: "Register an erasure request (destroys nothing)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "request",
+		Short:       "Register an erasure request (destroys nothing)",
 		Long: "request records a data-subject erasure request and mints the subject key.\n" +
 			"It is the safe half of the workflow: nothing is destroyed until `execute`.",
 		Example: "  olivares compliance erasure request --subject-ref u-7 --case-ref DSAR-9 \\\n" +
@@ -1029,8 +1043,9 @@ func newErasureExecuteCmd(flags *authClientFlags) *cobra.Command {
 	var providerIDs []string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "execute <erasure-id>",
-		Short: "Execute an erasure (IRREVERSIBLE, dual-control)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "execute <erasure-id>",
+		Short:       "Execute an erasure (IRREVERSIBLE, dual-control)",
 		Long: "execute runs the governed erasure: the legal-hold gate first, then the\n" +
 			"dual-control approval, then physical erasure, then the crypto-shred that\n" +
 			"destroys the subject key.\n\n" +
@@ -1208,9 +1223,10 @@ func renderErasureOutcome(cmd *cobra.Command, res complianceResult, flags *authC
 
 func newErasureReceiptCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "receipt <erasure-id>",
-		Example: "  olivares compliance erasure receipt er-1\n  olivares compliance erasure receipt er-1 -o json",
-		Short:   "Show the sealed, ledger-anchored erasure receipt",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "receipt <erasure-id>",
+		Example:     "  olivares compliance erasure receipt er-1\n  olivares compliance erasure receipt er-1 -o json",
+		Short:       "Show the sealed, ledger-anchored erasure receipt",
 		Long: "receipt is the verifiable artifact of an executed erasure: what was\n" +
 			"destroyed, what is deliberately retained and under which legal basis, and\n" +
 			"the provider floor that survives regardless.",
@@ -1273,11 +1289,12 @@ func newErasureReceiptCmd(flags *authClientFlags) *cobra.Command {
 
 func newErasureCustodyCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:     "custody <erasure-id>",
-		Short:   "Show an erasure's append-only chain of custody",
-		Long:    "custody prints the append-only chain of every action taken on one erasure request,\nfrom receipt to execution. It is what proves the request was handled within its statutory\nwindow, and by whom, long after the data itself is gone.",
-		Example: "  olivares compliance erasure custody er-1\n  olivares compliance erasure custody er-1 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "custody <erasure-id>",
+		Short:       "Show an erasure's append-only chain of custody",
+		Long:        "custody prints the append-only chain of every action taken on one erasure request,\nfrom receipt to execution. It is what proves the request was handled within its statutory\nwindow, and by whom, long after the data itself is gone.",
+		Example:     "  olivares compliance erasure custody er-1\n  olivares compliance erasure custody er-1 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := complianceCall{
 				flags: flags, method: http.MethodGet,
@@ -1321,8 +1338,9 @@ func newErasureCustodyCmd(flags *authClientFlags) *cobra.Command {
 
 func newComplianceSubjectCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "subject",
-		Short: "Answer a data subject's erasure request by subject id",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "subject",
+		Short:       "Answer a data subject's erasure request by subject id",
 		Long: "subject addresses a person directly rather than a request id — the shape\n" +
 			"an Article 15 or 17 answer actually takes.",
 		Example: "  olivares compliance subject status u-7\n" +
@@ -1335,11 +1353,12 @@ func newComplianceSubjectCmd(flags *authClientFlags) *cobra.Command {
 func newSubjectStatusCmd(flags *authClientFlags) *cobra.Command {
 	var kind string
 	cmd := &cobra.Command{
-		Use:     "status <subject-id>",
-		Short:   "Show erasure status for one data subject",
-		Long:    "status answers, for ONE data subject, whether anything about them is still held and\nwhat has already been erased. It is the question a regulator or the subject themselves\nasks, and it spans every erasure request that ever named them.",
-		Example: "  olivares compliance subject status sub-42\n  olivares compliance subject status sub-42 -o json",
-		Args:    cobra.ExactArgs(1),
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "status <subject-id>",
+		Short:       "Show erasure status for one data subject",
+		Long:        "status answers, for ONE data subject, whether anything about them is still held and\nwhat has already been erased. It is the question a regulator or the subject themselves\nasks, and it spans every erasure request that ever named them.",
+		Example:     "  olivares compliance subject status sub-42\n  olivares compliance subject status sub-42 -o json",
+		Args:        cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			q := url.Values{}
 			if kind != "" {
@@ -1392,8 +1411,9 @@ func newSubjectEraseCmd(flags *authClientFlags) *cobra.Command {
 	var aliases, classes, providerIDs []string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "erase <subject-id>",
-		Short: "Register and execute an erasure for one subject (IRREVERSIBLE)",
+		Annotations: map[string]string{"changes_data": "delete"},
+		Use:         "erase <subject-id>",
+		Short:       "Register and execute an erasure for one subject (IRREVERSIBLE)",
 		Long: "erase is the one-shot path: it registers the request if needed and then\n" +
 			"executes it under the same two gates. It cannot be undone.\n\n" +
 			"Exit 7 means the erasure did not FINISH — read what the command prints: it\n" +
@@ -1455,8 +1475,9 @@ func newSubjectEraseCmd(flags *authClientFlags) *cobra.Command {
 func newComplianceCalendarCmd(flags *authClientFlags) *cobra.Command {
 	var framework string
 	cmd := &cobra.Command{
-		Use:   "calendar",
-		Short: "Show the regulatory calendar and watchlist",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "calendar",
+		Short:       "Show the regulatory calendar and watchlist",
 		Long: "calendar lists dated regulatory milestones, each with its primary source\n" +
 			"and the date it was verified, plus the watchlist of rulemakings and draft\n" +
 			"standards that have no date to cite yet.\n\n" +
@@ -1535,8 +1556,9 @@ func newComplianceCalendarCmd(flags *authClientFlags) *cobra.Command {
 
 func newComplianceDoraCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "dora",
-		Short: "Inspect DORA registers and classified incidents",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "dora",
+		Short:       "Inspect DORA registers and classified incidents",
 		Long: "dora lists the Register of Information and the classified major-incident\n" +
 			"records this build has stored, and exports a stored register with its\n" +
 			"ledger anchor. Generating them is provided by\n" +
@@ -1577,8 +1599,9 @@ func newComplianceDoraCmd(flags *authClientFlags) *cobra.Command {
 
 func newComplianceAimsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "aims",
-		Short: "Inspect ISO/IEC 42001 AIMS certification-readiness packs",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "aims",
+		Short:       "Inspect ISO/IEC 42001 AIMS certification-readiness packs",
 		Long: "aims lists the ISO/IEC 42001 AIMS certification-readiness packs this\n" +
 			"tenant has generated. The packager that STRUCTURES a pack is the commercial\n" +
 			"iso42001 add-on (Compliance Packs); without it POST /aims/pack answers 501\n" +
@@ -1609,8 +1632,9 @@ func newComplianceAimsCmd(flags *authClientFlags) *cobra.Command {
 
 func newDoraExportRegisterCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "export <register-id>",
-		Short: "Export one DORA Register of Information",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "export <register-id>",
+		Short:       "Export one DORA Register of Information",
 		Long: "export fetches the structured Register of Information for one stored id,\n" +
 			"with the live ledger anchor and the honesty disclaimer. Generation is the\n" +
 			"Business capability (Compliance Packs); without it POST /dora/register answers 501\n" +
@@ -1652,10 +1676,11 @@ func newDoraExportRegisterCmd(flags *authClientFlags) *cobra.Command {
 
 func newComplianceOscalCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "oscal",
-		Long:    "oscal exposes the NIST OSCAL surface: the machine-readable control catalogs,\nprofiles and system security plans a US federal program exchanges instead of\nspreadsheets. Ingestion and OSCAL export belong to Business Compliance Packs.\nCommunity retains stored evidence and its JSON/CSV exports; OSCAL export answers 501.",
-		Short:   "Inspect ingested OSCAL profiles and SSPs",
-		Example: "  olivares compliance oscal ls\n  olivares compliance oscal get op-1 -o json",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "oscal",
+		Long:        "oscal exposes the NIST OSCAL surface: the machine-readable control catalogs,\nprofiles and system security plans a US federal program exchanges instead of\nspreadsheets. Ingestion and OSCAL export belong to Business Compliance Packs.\nCommunity retains stored evidence and its JSON/CSV exports; OSCAL export answers 501.",
+		Short:       "Inspect ingested OSCAL profiles and SSPs",
+		Example:     "  olivares compliance oscal ls\n  olivares compliance oscal get op-1 -o json",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "ls", "List registered OSCAL documents",
@@ -1676,8 +1701,9 @@ func newComplianceOscalCmd(flags *authClientFlags) *cobra.Command {
 
 func newOscalGetCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <profile-id>",
-		Short: "Show one ingested OSCAL profile or SSP",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get <profile-id>",
+		Short:       "Show one ingested OSCAL profile or SSP",
 		Long: "get shows one registered OSCAL profile or SSP: framework, document kind,\n" +
 			"selected-control count, document hash and the honesty disclaimer. Ingestion\n" +
 			"is a Business capability (Compliance Packs); without it POST\n" +
@@ -1719,10 +1745,11 @@ func newOscalGetCmd(flags *authClientFlags) *cobra.Command {
 
 func newComplianceDepthCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "depth",
-		Short:   "Inspect compliance-depth packs and control monitoring",
-		Long:    "depth groups the surfaces that go BELOW the base framework catalog: the\njurisdiction packs (US state law), the sector overlays, FedRAMP 20x KSIs, and\ncontinuous control monitoring with its snapshots and drift. All five are\nread-only listings; pack generation and monitoring are Business capabilities,\nso an open build lists honestly empty rather than fabricating rows.",
-		Example: "  olivares compliance depth us-law\n  olivares compliance depth fedramp",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "depth",
+		Short:       "Inspect compliance-depth packs and control monitoring",
+		Long:        "depth groups the surfaces that go BELOW the base framework catalog: the\njurisdiction packs (US state law), the sector overlays, FedRAMP 20x KSIs, and\ncontinuous control monitoring with its snapshots and drift. All five are\nread-only listings; pack generation and monitoring are Business capabilities,\nso an open build lists honestly empty rather than fabricating rows.",
+		Example:     "  olivares compliance depth us-law\n  olivares compliance depth fedramp",
 	}
 	cmd.AddCommand(
 		simpleListCmd(flags, "us-law", "List US state-law packs",
@@ -1792,12 +1819,13 @@ func simpleListCmd(
 	row func(map[string]any) []any,
 ) *cobra.Command {
 	return &cobra.Command{
-		Use:     use,
-		Short:   short,
-		Long:    long,
-		Example: example,
-		Args:    cobra.NoArgs,
-		Aliases: []string{"list"},
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         use,
+		Short:       short,
+		Long:        long,
+		Example:     example,
+		Args:        cobra.NoArgs,
+		Aliases:     []string{"list"},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := complianceCall{flags: flags, method: http.MethodGet, path: path}.do(cmd)
 			if err != nil {

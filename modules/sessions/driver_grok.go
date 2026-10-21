@@ -235,7 +235,12 @@ type grokInitializeParams struct {
 }
 
 type grokAgentCapabilities struct {
-	LoadSession         bool                   `json:"loadSession"`
+	LoadSession bool `json:"loadSession"`
+	// MCP is the transport set a session MCP server may use. The pinned 1.0.13
+	// binary advertises http and sse.
+	MCP struct {
+		HTTP bool `json:"http"`
+	} `json:"mcpCapabilities"`
 	SessionCapabilities acpSessionCapabilities `json:"sessionCapabilities"`
 }
 
@@ -269,8 +274,8 @@ type grokHeadlessMeta struct {
 
 type grokNewSessionParams struct {
 	Cwd string `json:"cwd"`
-	// MCPServers is REQUIRED by the protocol and is deliberately an empty, non-nil
-	// slice: this launch connects the child to no MCP server of its own.
+	// MCPServers is REQUIRED by the protocol, so it is never null: the session
+	// MCP server of this launch when there is one, otherwise an empty slice.
 	MCPServers []json.RawMessage `json:"mcpServers"`
 }
 
@@ -320,6 +325,9 @@ func (s *grokSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 			http.StatusBadGateway,
 			"the provider answered an agent protocol version this client does not implement",
 		}
+	}
+	if err := acpRequireSessionMCP("Grok Build", s.cfg.sessionMCP, init.AgentCapabilities.MCP.HTTP); err != nil {
+		return DriverHandshake{}, err
 	}
 	s.mu.Lock()
 	s.caps, s.authMethods = init.AgentCapabilities, init.AuthMethods
@@ -425,7 +433,7 @@ func grokOnlyInteractiveOffered(advertised []grokAuthMethod) bool {
 // may nominate it.
 func (s *grokSession) newConversation(ctx context.Context, state string) (DriverHandshake, error) {
 	raw, err := s.conn.call(ctx, acpMethodSessionNew, grokNewSessionParams{
-		Cwd: s.workDir(), MCPServers: []json.RawMessage{},
+		Cwd: s.workDir(), MCPServers: s.cfg.sessionMCP,
 	}, s.cfg.CallTimeout)
 	if err != nil {
 		return DriverHandshake{}, grokConversationErr(err, state)
@@ -469,7 +477,7 @@ func (s *grokSession) resumeConversation(ctx context.Context, resume, state stri
 	s.mu.Lock()
 	caps := s.caps
 	// Set BEFORE the request: replay arrives as notifications while it is in flight.
-	s.replayFor = resume
+	s.beginReplay(resume)
 	s.mu.Unlock()
 
 	method := ""
@@ -479,19 +487,19 @@ func (s *grokSession) resumeConversation(ctx context.Context, resume, state stri
 	case caps.LoadSession:
 		method = acpMethodSessionLoad
 	default:
-		s.endReplay()
+		s.answerReplay() // nothing was asked, so nothing can replay
 		return DriverHandshake{}, &runErr{
 			http.StatusConflict,
 			"the provider advertises neither session resume nor session load; refusing to start a different conversation",
 		}
 	}
 	raw, err := s.conn.callInOrder(ctx, method, acpResumeSessionParams{
-		SessionID: resume, Cwd: s.workDir(), MCPServers: []json.RawMessage{},
+		SessionID: resume, Cwd: s.workDir(), MCPServers: s.cfg.sessionMCP,
 	}, s.cfg.CallTimeout, func(json.RawMessage) {
 		// On the pump, in stream order: everything before this response was replay,
 		// everything after it is live. Clearing it on the caller's goroutine would let
 		// a live update arrive first and be filed as history.
-		s.endReplay()
+		s.answerReplay()
 	})
 	if err != nil {
 		s.endReplay()

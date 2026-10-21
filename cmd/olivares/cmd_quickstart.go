@@ -33,8 +33,9 @@ func newQuickstartCmd() *cobra.Command {
 	var quiet, verbose bool
 	var postgresRef string
 	cmd := &cobra.Command{
-		Use:   "quickstart",
-		Short: "Start the engine for the first time and open the console",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "quickstart",
+		Short:       "Start the engine for the first time and open the console",
 		Long: "quickstart runs the engine with the secure defaults (TLS on, no default\n" +
 			"credentials, a single-use setup token) and points you at the embedded console to\n" +
 			"create your first administrator with that token. The console accepts connections\n" +

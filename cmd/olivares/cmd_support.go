@@ -61,9 +61,10 @@ type supportBundleOptions struct {
 
 func newSupportCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:     "support",
-		Short:   "Collect redacted diagnostics for support and incident response",
-		Example: "  olivares support bundle --server https://127.0.0.1:8443 --journal --since \"24 hours ago\"",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "support",
+		Short:       "Collect redacted diagnostics for support and incident response",
+		Example:     "  olivares support bundle --server https://127.0.0.1:8443 --journal --since \"24 hours ago\"",
 		Long: "Collect diagnostic configuration, status, logs, manifests, verification reports and\n" +
 			"non-secret inventory metadata without resolving secret references or including key files.",
 	}
@@ -91,8 +92,9 @@ func defaultSupportBundleName(t time.Time) string {
 func supportBundleCmd() *cobra.Command {
 	o := supportBundleOptions{now: time.Now}
 	cmd := &cobra.Command{
-		Use:   "bundle",
-		Short: "Build a redacted diagnostic tarball with an integrity manifest",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "bundle",
+		Short:       "Build a redacted diagnostic tarball with an integrity manifest",
 		Long: "bundle collects an allowlisted set of diagnostics into a 0600 tar.gz. Free-text\n" +
 			"configuration, status, logs and verification reports are always redacted; file:, env:\n" +
 			"and store: references remain literal and are never resolved. Private keys, TLS material\n" +

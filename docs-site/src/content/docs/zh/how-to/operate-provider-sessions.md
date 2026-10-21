@@ -135,6 +135,10 @@ id，绝不是可编辑名称（`CHANGELOG.md` `[26.9.0]` B1；**Source bindings
 5. 点击 **Start**。无法启动时，按钮下方的一行会说明缺少什么。只发布配置文件的
    **引用**。服务器解析主目录。
 
+使用提供商密钥的工具会使用其已保存的模型，或让你选择连接测试返回的模型。
+如果必须有模型但测试没有返回任何模型，请先在 **Providers** 中测试连接。
+Claude Code 可以使用其原生默认模型。
+
 ### 打开交接所指明的工作
 
 工作树隔离文件，但仓库的 git 元数据仍共享。交接内容可选地携带 `branch` 和 `sha`（完整提交 ID），指明工作在 git 中的位置。通过 API，或使用 JSON 可包含这两个字段的 `olivares message handoff offer --context-file` 提供交接。两者都未指定的交接保持原有行为。
@@ -147,6 +151,10 @@ olivares session start . --worktree-from <commit or branch> --name review
 
 `--worktree-from` 隐含 `--worktree`。会话在该提交处建立自己的新分支，因此发送方的分支和你的检出不会移动。如果工作区仓库中没有该提交，启动会在创建任何内容之前拒绝（422）；请先在该仓库 fetch。未被任何分支、标签或远程分支持有的提交也会被拒绝。会话的**分支变更**窗格列出其分支包含、而工作区当前提交不包含的工作，并将路径在合并基点与分支顶端的文本并排打开。只显示已提交工作，且遵守工作区允许的子路径和 DLP 策略；未提交编辑位于**变更**中。
 
+文件夹可以为新工作树存储一条设置命令。在工作树启动被接受之前，必须由人按 SHA-256
+批准其确切文本；更改一个字符就需要重新批准。目前还没有任何东西会运行该命令。参见
+[批准文件夹的设置命令](/zh/reference/session-runtime-api/#批准文件夹的设置命令)。
+
 ### CLI
 
 ```sh
@@ -157,6 +165,12 @@ olivares agent session create --provider-profile <profile_ref>
 （或活动客户端上下文）。本发行版的 isolation 为 `native`；
 `container` 和 `sandbox` 在创建运行记录之前返回 HTTP 422。
 使用内置运行器时请选择 `native`。
+
+对于使用提供商密钥且需要模型的工具（例如 Codex），请在运行 `session start` 之前，
+在 **Providers** 中保存默认模型。如果提供商和该工具的配置文件都没有配置模型，
+请在 `session start` 命令后追加 `--model <tested-model-id>`，并把占位符替换为连接测试
+返回的模型 ID。在 **New session** 中选择的模型只适用于那一次控制台启动；
+它不会为 CLI 启动设置模型。
 
 结果：运行资源。受管实时行按观察范围和外部 id 唯一。指明某一行的读取使用
 `live_ref`，而不是两个主目录可能共享的裸提供商会话 id。

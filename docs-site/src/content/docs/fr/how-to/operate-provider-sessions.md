@@ -147,7 +147,8 @@ conserve l’ancien corps de requête, que cette API refuse
 Le dialogue de lancement propose les profils **actifs**. Le seul profil actif
 est présélectionné ; s’il y en a plusieurs, aucun ne l’est et **Start** demande
 d’en choisir un. Les sélections d’espace de travail et de modèle peuvent être
-effacées ; le profil non (`CHANGELOG.md` `[26.9.0]` Fixed).
+effacées ; le profil non (`CHANGELOG.md` `[26.9.0]` Fixed). Claude Code peut utiliser son
+modèle par défaut natif.
 
 ### Console
 
@@ -180,6 +181,12 @@ dans un nouveau worktree Git** sous **Dossier**, ou exécutez
 (`olivares/` plus huit caractères de son ID) dans son propre worktree ; deux sessions
 sur le même dépôt ne partagent donc pas leurs fichiers. Fusionnez cette branche
 ordinaire du dépôt depuis votre checkout comme d’habitude.
+
+Un dossier peut stocker une commande de préparation pour les nouveaux worktrees. Une
+personne doit en approuver le texte exact, par SHA-256, avant qu’un démarrage avec worktree
+soit accepté ; modifier un seul caractère exige une nouvelle approbation. Rien n’exécute
+encore la commande. Voir
+[Approuver la commande de préparation d’un dossier](/fr/reference/session-runtime-api/#approuver-la-commande-de-préparation-dun-dossier).
 
 - Les worktrees résident sous `<data directory>/session-worktrees`.
   `OLIVARES_SESSION_WORKTREE_DIR` les déplace et
@@ -245,6 +252,14 @@ Ajoutez `--server`, `--tenant` et `--token-file` (ou le contexte client actif) c
 dans la [référence CLI](/reference/cli/). L’isolation est `native` dans cette
 version ; `container` et `sandbox` renvoient HTTP 422 avant la création d’une
 exécution. Choisissez `native` pour utiliser l’exécuteur intégré.
+
+Lorsque vous utilisez une clé de fournisseur avec un outil qui exige un modèle, comme Codex,
+enregistrez un défaut dans **Providers** avant d’exécuter `session start`. Si ni le
+fournisseur ni le profil de l’outil n’a de modèle configuré, ajoutez
+`--model <tested-model-id>` à la commande `session start`, en remplaçant l’espace réservé
+par un identifiant de modèle renvoyé par le test de connexion. Un modèle choisi dans
+**New session** ne s’applique qu’à ce lancement depuis la console ; il ne définit pas le
+modèle d’un lancement par la CLI.
 
 Résultat : une ressource d’exécution. La ligne live gérée est unique par portée
 d’observation et id externe. Les lectures qui nomment une ligne utilisent

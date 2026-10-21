@@ -38,6 +38,8 @@ rewrite edits the very inline `<style>` blocks the policy hashes. See
 - `test:drift` — proves the API reference renders from the real spec (no copy).
 - `test:modules` — tests the coverage guard, then proves every selectable namespace in `core/modulespec/modules.json` has a linked reference page and the catalog count matches.
 - `test:links` — fails on any broken internal link across the built site.
+- `test:robots:selftest` / `test:robots` — proves the robots check can fail, then checks that `dist/robots.txt` opens the site to the search, answer and training crawlers of the major assistants and refuses the crawlers that ignore robots rules (the same policy as olivares.ai).
+- `test:llms:selftest` / `test:llms` — proves the llms check can fail, then checks that `dist/llms.txt` lists exactly the English pages, every URL is built, it links back to olivares.ai, and the tools it names are the sessions in `core/driverfacts/facts.go`; and that `dist/llms-full.txt` has one section per page with no JSX or import left.
 - `test:policy:selftest` / `test:policy` — proves the response-policy gate can fail, then runs it.
 
 ## Release build (publishing is separate and owner-gated)
@@ -63,6 +65,13 @@ question against the running site.
   `public/asyncapi/asyncapi.yaml` — an AsyncAPI 3.0 contract hand-derived from the
   Go SDK (there is no AsyncAPI codegen in the product, so this file is the source of
   truth; keep it in step with `sdk/event` + `sdk/model`).
+- **`/llms.txt` and `/llms-full.txt`** for AI assistants are rendered at build time
+  from the English pages of the docs collection (`src/llms.mjs`, emitted by
+  `src/pages/llms.txt.ts` and `src/pages/llms-full.txt.ts`). There is no hand-kept
+  copy of the page list. The summary names only the tools Olivares AI starts as
+  sessions today (`SESSION_TOOLS`), which `scripts/check-llms.mjs` compares with
+  `core/driverfacts/facts.go`. A page that uses a Starlight component `toMarkdown`
+  does not convert fails the build.
 - Internal development records and their publishers must stay out of this site.
   `task lint:adr-not-published` rejects their pages, links and generators.
 

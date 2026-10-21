@@ -8,6 +8,8 @@ description: >-
   LIVE.
 ---
 
+L'enregistrement des sessions privilégiées est une fonctionnalité de **[Business](https://olivares.ai/pricing)**. Community répond 501 `business_required` sur chaque route de `/v1/m/recording/`, n'enregistre rien et masque le groupe de commandes. Les sessions déjà stockées restent dans le stockage.
+
 L'enregistrement (`modules/recording`) est le plan d'**enregistrement de
 sessions privilégiées** — le contrôle aligné PAM que les acheteurs à forte
 assurance attendent pour les consoles et l'accès d'urgence. Il capture, sous

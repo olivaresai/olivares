@@ -19,9 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
-	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 // PolicyConsole is the B authoring backend the Claude Code policy console
@@ -32,13 +30,17 @@ import (
 // connectors (managedsettings, claude) — the legal arrow module→connector — to reuse
 // the VERIFIED render/drift/validation logic; it never re-implements it.
 //
+// EDITIONS: validate and dry-run are every edition's. Publish, the revision history, the
+// signed pull, the attested check-in and the drift view are Business; Community mounts the
+// same routes and answers 501 (claudepolicy_fleet_noenterprise.go).
+//
 // POSTURE (docs/SECURITY-HARDENING.md): authoring is EMISSION of policy, not autonomous enforcement.
 // validate/dry-run are no-effect reads (read tier). publish is a privileged,
 // CONFIRMED, AUDITED mutation (admin tier) that persists an immutable revision and
 // hands distribution to the seam — it NEVER writes host files. Deny-closed: an
 // invalid document, an inline credential, or any persist/audit error does NOT publish.
 //
-// Closed the truth loop behind both seams (claudepolicy_truth.go): publish
+// Closed the truth loop behind both seams (the Business overlay): publish
 // hands the rendered bytes to the PolicyArtifactDistributor (signed artifact in
 // the plane + agent PULL with attestation — the decided v1 mechanism; deny-closed
 // on any failure), agents check in their OBSERVED config, and drift is computed
@@ -74,7 +76,7 @@ type ManagedDistributor interface {
 
 // ObservedConfig is one OBSERVED (live host) configuration for a surface: the
 // raw document a scope (host id / org-distribution name) reports, as recorded by
-// the attested check-in (claudepolicy_truth.go).
+// the attested check-in (the Business overlay).
 type ObservedConfig struct {
 	Scope      string
 	Content    []byte
@@ -156,17 +158,14 @@ func (c *PolicyConsole) Permissions() []auth.Permission {
 	return []auth.Permission{permClaudePolicyRead, permClaudePolicyWrite, permClaudePolicyAdmin}
 }
 
-// APIRoutes mounts the managed-* authoring routes the web already calls, plus the
-// Truth-loop routes (signed-artifact pull, attested check-in, truth view).
+// APIRoutes mounts the managed-* authoring reads the web already calls (validate,
+// dry-run) plus the fleet routes (publish, versions, signed-artifact pull, attested
+// check-in, distribution truth view). The fleet routes are Business: Community answers
+// them 501 (claudepolicy_fleet_noenterprise.go).
 func (c *PolicyConsole) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/{surface}/validate", permClaudePolicyRead, c.handleValidate)
 	reg.Handle("POST", "/{surface}/dry-run", permClaudePolicyRead, c.handleDryRun)
-	reg.Handle("POST", "/{surface}/publish", permClaudePolicyAdmin, c.handlePublish)
-	reg.Handle("GET", "/{surface}/versions", permClaudePolicyRead, c.handleListVersions)
-	reg.Handle("GET", "/{surface}/versions/{revision}", permClaudePolicyRead, c.handleGetVersion)
-	reg.Handle("GET", "/{surface}/artifact", permClaudePolicyRead, c.handleArtifact)
-	reg.Handle("POST", "/{surface}/checkin", permClaudePolicyWrite, c.handleCheckin)
-	reg.Handle("GET", "/{surface}/distribution", permClaudePolicyRead, c.handleDistribution)
+	c.registerFleetRoutes(reg)
 }
 
 // --- request/response DTOs (mirror the frontend) -----------------------------
@@ -199,46 +198,6 @@ type dryRunResult struct {
 	Resolved []managedsettings.DryRunLine `json:"resolved,omitempty"`
 	Changes  []dryRunChange               `json:"changes,omitempty"`
 	Notes    []string                     `json:"notes,omitempty"`
-}
-
-type policyDriftDTO struct {
-	ID          string `json:"id,omitempty"`
-	Kind        string `json:"kind"`
-	Severity    string `json:"severity"`
-	Status      string `json:"status"`
-	SubjectKind string `json:"subject_kind,omitempty"`
-	SubjectRef  string `json:"subject_ref,omitempty"`
-	Title       string `json:"title,omitempty"`
-	DetailHash  string `json:"detail_hash,omitempty"`
-	OccurredAt  string `json:"occurred_at,omitempty"`
-}
-
-type publishResult struct {
-	Surface  string           `json:"surface"`
-	Revision int64            `json:"revision"`
-	Drift    []policyDriftDTO `json:"drift"`
-	// DriftComputed distinguishes a REAL empty drift list (every observed scope
-	// matches) from an honest unknown (no observation/source) — the UI must never
-	// render "no drift" off the latter.
-	DriftComputed bool   `json:"drift_computed"`
-	Distribution  string `json:"distribution"` // distributed | seam-pending | enqueue-failed
-	// Artifact summarizes the SIGNED distribution record a successful Distribute
-	// minted: the operator pins key_fingerprint and hands it to the pull
-	// agents out-of-band. Absent unless distribution == "distributed".
-	Artifact *artifactMeta `json:"artifact,omitempty"`
-	Notes    []string      `json:"notes,omitempty"`
-}
-
-func driftToDTO(f sdkmodel.FindingReport) policyDriftDTO {
-	occ := ""
-	if !f.OccurredAt.IsZero() {
-		occ = f.OccurredAt.UTC().Format("2006-01-02T15:04:05Z07:00")
-	}
-	return policyDriftDTO{
-		Kind: f.Kind, Severity: string(f.Severity), Status: "open",
-		SubjectKind: f.SubjectKind, SubjectRef: f.SubjectRef, Title: f.Title,
-		DetailHash: f.DetailHash, OccurredAt: occ,
-	}
 }
 
 // validSurface reports whether s is a managed-* authoring surface of the
@@ -330,202 +289,11 @@ func (c *PolicyConsole) handleDryRun(w http.ResponseWriter, r *http.Request, mc 
 				}
 				out.Notes = append(out.Notes, "diff computed against "+itoa(diffed)+" observed scope(s) (no host was written)")
 			}
+		} else {
+			out.Notes = append(out.Notes, "no observed-config source in this edition — precedence resolved, effect not diffed")
 		}
 	default:
 		out.Notes = append(out.Notes, "validated structurally; "+surface+" is authored at the highest managed tier (above CLI/local/project/user). No host is written by a dry-run.")
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// handlePublish persists an immutable revision and runs PERMITTED-vs-OBSERVED drift.
-// Admin tier, CONFIRMED + AUDITED. Deny-closed: an invalid document or an inline
-// credential is rejected (no publish); a persist/audit error rolls the whole thing
-// back. The host distribution is the seam — this never writes host files.
-func (c *PolicyConsole) handlePublish(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	surface, ok := surfaceOf(w, r)
-	if !ok {
-		return
-	}
-	var in contentBody
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	if len(in.Content) > maxPolicyContentBytes {
-		writeJSON(w, http.StatusBadRequest, errorBody("document too large"))
-		return
-	}
-	if containsInlineKey(in.Content) {
-		writeJSON(w, http.StatusBadRequest, errorBody("document must not contain an inline credential (sk-ant-…)"))
-		return
-	}
-	if len(in.Note) > maxNoteLen {
-		writeJSON(w, http.StatusBadRequest, errorBody("note too long"))
-		return
-	}
-	if issues, _ := validateSurfaceContent(surface, in.Content); len(issues) > 0 {
-		writeJSON(w, http.StatusBadRequest, errorBody("document is invalid: "+strings.Join(issues, "; ")))
-		return
-	}
-
-	// A managed document is untyped: every account it names, by id, credential
-	// or email, is fenced before the publish, under the tenant's directory fact.
-	subjects, serr := policySubjects(r.Context(), mc.Standing, in.Content)
-	if serr != nil {
-		writeStoreError(w, serr)
-		return
-	}
-	var revision int64
-	for attempt := 0; attempt < maxDecisionRetries; attempt++ {
-		refs, ferr := auth.FenceSubjects(r.Context(), mc.Standing, mc.Tenant, subjects)
-		if ferr != nil {
-			if !writeFenceRefusal(w, ferr) {
-				writeStoreError(w, ferr)
-			}
-			return
-		}
-		err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-			if len(refs) > 0 {
-				if _, err := auth.PinFence(r.Context(), sc, auth.FenceDirectory, refs); err != nil {
-					return err
-				}
-			}
-			num, id, aerr := appendRevision(r.Context(), sc, surface, in.Content, mc.Principal.Actor(), true, false, in.Note)
-			if aerr != nil {
-				return aerr
-			}
-			revision = num
-			// Self-audit the privileged publish in the SAME transaction (atomic with the
-			// revision): if the audit append fails, the publish rolls back (deny-closed).
-			return auditEvent(r.Context(), sc, mc, "governance.claude_policy.publish", revisionKind, id, map[string]any{
-				"surface": surface, "revision": num,
-			})
-		})
-		if err == nil {
-			break
-		}
-		if isConflict(err) {
-			continue // concurrent publish won the revision number — retry
-		}
-		writeStoreError(w, err)
-		return
-	}
-	if revision == 0 {
-		writeJSON(w, http.StatusConflict, errorBody("publish conflicted repeatedly; please retry"))
-		return
-	}
-
-	out := publishResult{Surface: surface, Revision: revision, Drift: []policyDriftDTO{}, Distribution: "seam-pending", Notes: []string{}}
-
-	// Distribution behind the seam —: the signed-artifact distributor
-	// (claudepolicy_truth.go). DENY-CLOSED: "distributed" is reported ONLY when
-	// Distribute returned nil, i.e. the signed record durably committed; any
-	// failure is "enqueue-failed", never a fabricated success.
-	if c.distributor != nil {
-		rendered := []byte(in.Content)
-		if surface == surfaceManagedSettings {
-			if canon, cerr := managedsettings.CanonicalJSON([]byte(in.Content)); cerr == nil {
-				rendered = canon
-			}
-		}
-		if derr := c.distributor.Distribute(r.Context(), mc.Tenant, surface, "", revision, rendered); derr != nil {
-			out.Distribution = "enqueue-failed"
-			out.Notes = append(out.Notes, "revision published; distribution enqueue failed (the revision is persisted and can be re-distributed)")
-		} else {
-			out.Distribution = "distributed"
-			out.Artifact = c.readArtifactMeta(r.Context(), mc, surface, revision)
-			out.Notes = append(out.Notes, "signed artifact published for agent pull (GET /"+surface+"/artifact); per-host application is reported by attested check-ins, never assumed")
-			if out.Artifact == nil {
-				// The signed record committed (Distribute returned nil) but the
-				// read-back failed — say so instead of a silently absent summary.
-				out.Notes = append(out.Notes, "the artifact summary could not be read back; pull GET /"+surface+"/artifact to obtain the hash and signer fingerprint")
-			}
-		}
-	} else {
-		out.Notes = append(out.Notes, "revision published; distribution is the deploy/VII seam (declared, not actuated here)")
-	}
-
-	// PERMITTED-policy-vs-OBSERVED-config drift, fleet-wide (managed-settings
-	// reuses the verified connector drift; computed per observed scope and
-	// recorded as REAL findings — claudepolicy_truth.go).
-	out.Drift, out.DriftComputed, out.Notes = c.runDrift(r.Context(), mc, surface, in.Content, revision, out.Notes)
-
-	writeJSON(w, http.StatusOK, out)
-}
-
-// readArtifactMeta reads back the just-minted distribution record so the publish
-// response shows the operator the artifact hash + signer fingerprint to pin. A
-// read failure degrades to nil (the publish/distribution outcome stands).
-func (c *PolicyConsole) readArtifactMeta(ctx context.Context, mc api.ModuleContext, surface string, revision int64) *artifactMeta {
-	var meta *artifactMeta
-	_ = mc.Data.View(ctx, func(sc store.Scope) error {
-		repo, err := sc.Ext(distributionKind)
-		if err != nil {
-			return err
-		}
-		rec, found, err := findOne(ctx, repo, eq(colDistSurface, surface), eq(colDistRevision, revision))
-		if err != nil || !found {
-			return err
-		}
-		meta = &artifactMeta{
-			Revision:       rec.Int(colDistRevision),
-			ArtifactSHA256: rec.String(colDistSHA),
-			KeyFingerprint: rec.String(colDistKeyFP),
-			SignedAt:       rec.String(colDistSignedAt),
-		}
-		return nil
-	})
-	return meta
-}
-
-// handleListVersions returns a surface's revision history (metadata only). Read tier.
-func (c *PolicyConsole) handleListVersions(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	surface, ok := surfaceOf(w, r)
-	if !ok {
-		return
-	}
-	out := listResponse[revisionDTO]{Items: []revisionDTO{}}
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		revs, e := listRevisions(r.Context(), sc, surface)
-		if e != nil {
-			return e
-		}
-		out.Items = revs
-		return nil
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// handleGetVersion returns one revision with its content. Read tier.
-func (c *PolicyConsole) handleGetVersion(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	surface, ok := surfaceOf(w, r)
-	if !ok {
-		return
-	}
-	num, perr := strconv.ParseInt(chi.URLParam(r, "revision"), 10, 64)
-	if perr != nil || num < 1 {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid revision"))
-		return
-	}
-	var (
-		out   revisionDTO
-		found bool
-	)
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		dto, ok, e := getRevision(r.Context(), sc, surface, num)
-		out, found = dto, ok
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	if !found {
-		writeJSON(w, http.StatusNotFound, errorBody("not found"))
-		return
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -96,6 +96,21 @@ for label in (
 ):
     assert label in battery, label
 assert "9/9 mutants red with positive controls" in battery
+# The host block: a real apt on the assembled tree, the assembler's own check of the two user
+# files, and the refusals they must keep. Deleting any of them must turn this lint red.
+for label in (
+    "user-files-check-accepts-assembled-tree", "mutant-check-repo-file-reopens-a-check",
+    "mutant-check-sources-file-other-origin", "apt-update-verifies-release-1",
+    "apt-package-is-release-1-asset", "mutant-repo-file-without-gpgcheck",
+    "mutant-repo-file-appended-override", "mutant-apt-wrong-key",
+    "mutant-repo-file-key-from-repository-address", "mutant-repo-file-second-gpgkey-line",
+    "mutant-repo-file-gpgkey-continuation",
+    "apt-offers-release-1-to-2", "apt-package-is-release-2-asset", "mutant-apt-tampered-index",
+):
+    assert label in battery, label
+# The unattended-upgrades pattern in the install guide matches these Release fields.
+for token in ('"Origin: Olivares.AI"', 'f"Suite: {channel}"'):
+    assert token in renderer, token
 for token in (
     'apt-get -y install "olivares=$version"', "repo_gpgcheck=1", "dnf -y install",
     "apk update", 'apk add "olivares=$version"', "apk fetch", "cmp -s",
@@ -108,7 +123,7 @@ assert "workflow_dispatch:" in workflow and "pull_request:" not in workflow
 guard = "if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'"
 assert workflow.count(guard) == 1
 assert "TEST-ONLY-package-repositories" in workflow
-assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
+assert "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9" in workflow
 for forbidden in ("wrangler ", "aws s3", "rclone ", "gh release upload", "pages deploy"):
     assert forbidden not in workflow.lower(), forbidden
 
@@ -124,6 +139,35 @@ docs = [
 for document in docs:
     assert "Proposed package repositories" in document
     assert "No package-repository URL is live" in document
+
+# The commands the docs give a host name the files the publish tree carries and the key
+# the tracked descriptor pins.
+import importlib.util
+import json
+import re
+
+spec = importlib.util.spec_from_file_location("assembler", root / "scripts/assemble-package-repository-publish-tree.py")
+assembler = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(assembler)
+fingerprint = json.loads((root / "packaging/repositories/production-key-descriptor.json").read_text(encoding="utf-8"))["openpgp_fingerprint"]
+page = docs[2]
+for token in (
+    fingerprint,
+    "https://packages.olivares.ai/olivares.sources -o /etc/apt/sources.list.d/olivares.sources",
+    "https://packages.olivares.ai/olivares.repo -o /etc/yum.repos.d/olivares.repo",
+    "https://packages.olivares.ai/olivares-packages.asc",
+    f"https://packages.olivares.ai/olivares-packages.asc -o {assembler.RPM_KEY_PATH}",
+    f"gpg --show-keys --fingerprint {assembler.RPM_KEY_PATH}",
+    '"origin=Olivares.AI,suite=stable,site=packages.olivares.ai"',
+):
+    assert token in page, token
+# The dnf key is stored and fingerprinted before the repo file that names it exists, and the repo
+# file the assembler renders names that stored file and no other key.
+store = page.index(f"-o {assembler.RPM_KEY_PATH}")
+assert (store < page.index(f"gpg --show-keys --fingerprint {assembler.RPM_KEY_PATH}")
+        < page.index("-o /etc/yum.repos.d/olivares.repo") < page.index("sudo dnf install olivares"))
+served_repo = assembler.repo_file(assembler.CANONICAL_ORIGIN, assembler.REPO_TEMPLATE.read_text(encoding="utf-8"))
+assert re.findall(r"(?mi)^\s*gpgkey\s*=\s*(.*)$", served_repo) == [f"file://{assembler.RPM_KEY_PATH}"], served_repo
 PY
 
 shellcheck_bin="$(bash "$root/scripts/ensure-shellcheck.sh")" || blind 'cannot provision the pinned shellcheck'

@@ -5,22 +5,15 @@
 //
 // test:robots — the published robots.txt says what the project decided it says.
 //
-// ⛔ POR QUÉ EXISTE. Hasta el 2026-09-01 este sitio no servía `robots.txt` propio:
-// lo que respondía en producción era el fichero de "content signals" que Cloudflare
-// inyecta cuando el origen no sirve ninguno — 1248 bytes, 24 líneas y CERO
-// directivas. Nadie lo notó porque NADA lo comprobaba. El efecto medido: el sitemap
-// (2156 URLs) no se anunciaba en ninguna parte, y la postura anti-entrenamiento que
-// `olivares.ai` aplica a veinte rastreadores no regía sobre las 2156 páginas de
-// documentación de producto.
+// The project decision of 2026-10-17 (the same as olivares.ai): the public docs are open to search,
+// answer AND training crawlers of the major assistants; crawlers that ignore robots rules or
+// resell data are refused for the whole site. Until 2026-09-01 this site served no robots.txt of
+// its own and nothing noticed, so this check reads dist/ — the tree that is deployed — and not
+// public/: a file in public/ is a promise that only the build keeps.
 //
-// Un fichero en `public/` es una promesa que sólo se cumple si el build lo copia,
-// así que esto NO mira `public/`: mira `dist/`, que es lo que se despliega. Es la
-// misma lección que dejó escrita `check-hub-fidelity.mjs` en el repo web — la ruta
-// de publicación es la que hay que vigilar, no la de merge.
-//
-// TRES RESPUESTAS, y las da el CÓDIGO DE SALIDA, no la prosa (canon §1.5):
-//   0  limpio · 1  hallazgo · 2  NO HE PODIDO MIRAR
-// `--self-test` fuerza las dos mitades y comprueba que cada una sale con su código.
+// Three answers, given by the EXIT CODE, not by prose:
+//   0  clean · 1  finding · 2  could not look
+// `--self-test` forces both halves and checks that each exits with its code.
 
 import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -29,28 +22,26 @@ import { fileURLToPath } from 'node:url'
 const DIST_ROBOTS = fileURLToPath(new URL('../dist/robots.txt', import.meta.url))
 const SITEMAP = 'https://docs.olivares.ai/sitemap-index.xml'
 
-// La misma lista que publica el sitio principal en su propio `robots.txt`. Se restata aquí, y no
-// se deriva, porque el otro repositorio NO está en disco cuando esto corre: una derivación que no
-// puede leer su fuente respondería "limpio" sin haber mirado.
-//
-// ⚠ Y HAY QUE DECIR LO QUE ESTO **NO** GARANTIZA, porque la versión anterior de este comentario
-// afirmaba que «si la política del apex cambia, cambian las dos listas en el mismo commit» — y eso
-// es imposible: son dos repositorios independientes con dos historias. Esta puerta comprueba que
-// ESTE fichero cumple la lista de abajo; **no puede ver** si el sitio principal se ha movido. La
-// paridad entre los dos hosts sólo la puede cerrar una comprobación con los dos árboles delante, y
-// mientras no exista, la divergencia es un riesgo declarado, no uno cubierto.
-const MUST_BLOCK = [
-  'GPTBot', 'Google-Extended', 'CCBot', 'Bytespider', 'Applebot-Extended',
-  'meta-externalagent', 'Meta-ExternalAgent', 'FacebookBot', 'cohere-ai',
-  'cohere-training-data-crawler', 'Diffbot', 'Omgili', 'Omgilibot',
-  'ImagesiftBot', 'YouBot', 'Timpibot', 'PanguBot', 'Webzio-Extended',
-  'AI2Bot', 'Ai2Bot-Dolma',
+// The same lists as olivares.ai's robots.txt, restated here and not derived: the other repository
+// is not on disk when this runs, and a derivation that cannot read its source would report
+// "clean" without having looked. This check proves THIS file matches the lists below; it cannot
+// see whether the apex moved. Parity between the two hosts is a declared risk, not a covered one.
+// Names are matched case-insensitively, as crawlers match them.
+const MUST_ALLOW = [
+  '*', 'Googlebot', 'Bingbot', 'OAI-SearchBot', 'ChatGPT-User', 'Claude-SearchBot', 'Claude-User',
+  'PerplexityBot', 'Perplexity-User', 'Applebot', 'DuckAssistBot', 'YouBot',
+  'ClaudeBot', 'GPTBot', 'Google-Extended', 'Applebot-Extended', 'CCBot', 'meta-externalagent',
+  'FacebookBot', 'cohere-ai', 'cohere-training-data-crawler', 'AI2Bot', 'Ai2Bot-Dolma',
+]
+const MUST_REFUSE = [
+  'Bytespider', 'Diffbot', 'Omgili', 'Omgilibot', 'ImagesiftBot', 'Webzio-Extended', 'Timpibot', 'PanguBot',
 ]
 
 /**
- * Parse robots.txt into groups. A blank line ends a group; consecutive
- * `User-agent:` lines share one rule block, which is what the standard says and
- * what a naive "last user-agent wins" parser gets wrong.
+ * Parse robots.txt into groups. Consecutive `User-agent:` lines share one rule block, and a new
+ * group starts at the first `User-agent:` after a rule. Blank lines and comments do not end a group:
+ * crawlers apply a rule that follows a blank line to the group above it, so a parser that closed
+ * the group there would report a crawler as open while it is not. Agent names are lower-cased.
  * @returns {{agents: string[], rules: {directive: string, value: string}[]}[]}
  */
 function parseGroups(text) {
@@ -59,21 +50,22 @@ function parseGroups(text) {
   let expectingAgents = true
   for (const raw of text.split('\n')) {
     const line = raw.replace(/#.*$/, '').trim()
-    if (!line) { current = null; expectingAgents = true; continue }
+    if (!line) continue
     const idx = line.indexOf(':')
     if (idx === -1) continue
     const directive = line.slice(0, idx).trim().toLowerCase()
     const value = line.slice(idx + 1).trim()
     if (directive === 'user-agent') {
       if (!current || !expectingAgents) { current = { agents: [], rules: [] }; groups.push(current) }
-      current.agents.push(value)
+      current.agents.push(value.toLowerCase())
       expectingAgents = true
     } else if (directive === 'sitemap') {
       groups.push({ agents: ['__sitemap__'], rules: [{ directive, value }] })
-      current = null; expectingAgents = true
     } else if (current) {
       current.rules.push({ directive, value })
       expectingAgents = false
+    } else {
+      groups.push({ agents: ['__orphan__'], rules: [{ directive, value }] })
     }
   }
   return groups
@@ -86,91 +78,87 @@ function audit(text) {
 
   const sitemaps = groups.flatMap((g) => g.rules).filter((r) => r.directive === 'sitemap').map((r) => r.value)
   if (!sitemaps.includes(SITEMAP)) {
-    found.push(`no declara \`Sitemap: ${SITEMAP}\` (encontrados: ${sitemaps.length ? sitemaps.join(', ') : 'ninguno'})`)
+    found.push(`does not declare \`Sitemap: ${SITEMAP}\` (found: ${sitemaps.length ? sitemaps.join(', ') : 'none'})`)
   }
 
-  const catchAll = groups.find((g) => g.agents.includes('*'))
-  if (!catchAll) found.push('no hay grupo `User-agent: *` — el genérico es el que leen Googlebot y los motores de respuesta')
-  else {
-    // ⛔ NO BASTA CON RECHAZAR `Disallow: /`. Esta comprobación sólo miraba eso, así que un
-    // catch-all SIN `Allow: /`, o con un `Disallow: /alguna-ruta`, pasaba en verde mientras
-    // sacaba páginas del índice. Se exige lo que de verdad se decidió: catch-all ABIERTO.
-    const disallows = catchAll.rules.filter((r) => r.directive === 'disallow' && r.value !== '')
-    if (disallows.length) {
-      found.push(
-        `el grupo \`User-agent: *\` bloquea ${disallows.length} ruta(s) — este sitio se publica entero: ` +
-          disallows.map((r) => `Disallow: ${r.value}`).join(' · '),
-      )
-    }
-    if (!catchAll.rules.some((r) => r.directive === 'allow' && r.value === '/')) {
-      found.push('el grupo `User-agent: *` no declara `Allow: /` — la apertura del sitio debe estar dicha, no supuesta')
-    }
-  }
+  if (groups.some((g) => g.agents.includes('__orphan__'))) found.push('a rule comes before the first `User-agent:` line')
+  const known = new Set(['user-agent', 'allow', 'disallow', 'sitemap'])
+  const unknown = [...new Set(groups.flatMap((g) => g.rules).map((r) => r.directive).filter((d) => !known.has(d)))]
+  if (unknown.length) found.push(`directive(s) outside the project decision: ${unknown.join(', ')}`)
 
-  // ⛔ «TIENE UN Disallow: /» NO ES «ESTÁ BLOQUEADO». Un grupo con `Disallow: /` Y `Allow: /`
-  // deja al bot dentro por la regla más específica, y la versión anterior lo contaba como
-  // bloqueado. Un bot sólo cuenta si su grupo bloquea la raíz y NO la vuelve a abrir.
-  const blocked = new Set(
-    groups
-      .filter(
-        (g) =>
-          g.rules.some((r) => r.directive === 'disallow' && r.value === '/') &&
-          !g.rules.some((r) => r.directive === 'allow' && (r.value === '/' || r.value === '*')),
-      )
-      .flatMap((g) => g.agents),
-  )
-  const missing = MUST_BLOCK.filter((ua) => !blocked.has(ua))
-  if (missing.length) {
-    found.push(`${missing.length} rastreador(es) de entrenamiento sin bloquear, contra la política del apex: ${missing.join(', ')}`)
-  }
+  // A crawler that is named in two groups is read by each parser differently: refuse it.
+  const seen = new Map()
+  for (const group of groups) for (const agent of group.agents) seen.set(agent, (seen.get(agent) ?? 0) + 1)
+  const repeated = [...seen].filter(([agent, n]) => n > 1 && !agent.startsWith('__')).map(([agent]) => agent)
+  if (repeated.length) found.push(`named in more than one group: ${repeated.join(', ')}`)
 
-  // ClaudeBot es la EXCEPCIÓN declarada del proyecto: si apareciera bloqueado,
-  // alguien habría cambiado la política sin decirlo.
-  if (blocked.has('ClaudeBot')) found.push('ClaudeBot aparece bloqueado — el proyecto lo permite a propósito; esto es un cambio de política sin declarar')
+  const groupOf = (agent) => groups.find((g) => g.agents.includes(agent.toLowerCase()))
+  const allows = (g, path) => g.rules.some((r) => r.directive === 'allow' && r.value === path)
+  const disallowed = (g) => g.rules.filter((r) => r.directive === 'disallow' && r.value !== '')
+
+  // "Has an Allow: /" is not "is open": a group that also disallows a path takes pages out of the
+  // index. A crawler counts as open only if its group allows the root and disallows nothing.
+  const notOpen = MUST_ALLOW.filter((agent) => {
+    const g = groupOf(agent)
+    return !g || !allows(g, '/') || disallowed(g).length > 0
+  })
+  if (notOpen.length) found.push(`${notOpen.length} crawler(s) not fully open (no group, no \`Allow: /\`, or a Disallow): ${notOpen.join(', ')}`)
+
+  // "Has a Disallow: /" is not "is refused": any Allow in the group (`/`, `/*`, `/llms.txt`) lets the
+  // crawler in somewhere, and the longest matching rule wins.
+  const notRefused = MUST_REFUSE.filter((agent) => {
+    const g = groupOf(agent)
+    return !g || !g.rules.some((r) => r.directive === 'disallow' && r.value === '/') || g.rules.some((r) => r.directive === 'allow')
+  })
+  if (notRefused.length) found.push(`${notRefused.length} crawler(s) not refused for the whole site: ${notRefused.join(', ')}`)
 
   return found
 }
 
 if (process.argv.includes('--exit-probe')) {
-  // Modo interno del self-test: audita el fichero que le pasen y sale con el código real, para
-  // que el control de abajo pueda medir CÓDIGOS DE SALIDA en vez de valores de retorno.
+  // Internal mode of the self-test: audit the file given and exit with the real code, so the
+  // self-test can measure EXIT CODES and not return values.
   const target = process.argv[process.argv.indexOf('--exit-probe') + 1]
   if (!target || !existsSync(target)) {
-    console.error('robots: NO HE PODIDO MIRAR — la sonda no encuentra el fichero.')
+    console.error('robots: COULD NOT LOOK — the probe cannot find the file.')
     process.exit(2)
   }
   const findings = audit(await readFile(target, 'utf8'))
   if (findings.length) { console.error('✗ ' + findings.join('\n  - ')); process.exit(1) }
-  console.log('✓ limpio'); process.exit(0)
+  console.log('✓ clean'); process.exit(0)
 }
 
 if (process.argv.includes('--self-test')) {
-  // CONTROL POSITIVO POR CADA MITAD. Sin esto, un `audit()` que devolviera
-  // siempre `[]` pasaría, y un gate que no puede fallar no es un gate.
+  // A POSITIVE CONTROL FOR EACH HALF. An `audit()` that always returned `[]` would pass, and a
+  // gate that cannot fail is not a gate.
   const good = await readFile(new URL('../public/robots.txt', import.meta.url), 'utf8')
   const clean = audit(good)
-  if (clean.length) { console.error(`✗ self-test: el robots.txt REAL sale con hallazgos y no debería:\n  - ${clean.join('\n  - ')}`); process.exit(1) }
+  if (clean.length) { console.error(`✗ self-test: the REAL robots.txt has findings and should not:\n  - ${clean.join('\n  - ')}`); process.exit(1) }
 
   const mutants = [
-    ['sin la línea Sitemap', good.replace(/^Sitemap:.*$/m, '')],
-    ['sin el bloqueo de GPTBot', good.replace(/User-agent: GPTBot\nDisallow: \/\n/, '')],
-    ['con el catch-all cerrado', good.replace('User-agent: *\nAllow: /', 'User-agent: *\nDisallow: /')],
-    ['con ClaudeBot bloqueado', good.replace('User-agent: ClaudeBot\nAllow: /', 'User-agent: ClaudeBot\nDisallow: /')],
-    // Los dos siguientes son los que el contraste demostró que se colaban con la versión anterior
-    // del predicado. Sin ellos, el endurecimiento sería una afirmación sin control.
-    ['con el catch-all bloqueando UNA ruta', good.replace('User-agent: *\nAllow: /', 'User-agent: *\nAllow: /\nDisallow: /reference/')],
-    ['con el catch-all sin declarar Allow', good.replace('User-agent: *\nAllow: /', 'User-agent: *')],
-    ['con GPTBot bloqueado y RE-ABIERTO en el mismo grupo', good.replace('User-agent: GPTBot\nDisallow: /', 'User-agent: GPTBot\nDisallow: /\nAllow: /')],
+    ['without the Sitemap line', good.replace(/^Sitemap:.*$/m, '')],
+    ['with GPTBot moved to the refused group', good.replace('User-agent: GPTBot\n', '').replace('User-agent: Bytespider\n', 'User-agent: GPTBot\nUser-agent: Bytespider\n')],
+    ['with the catch-all closed', good.replace('User-agent: *\n', '').replace('User-agent: Bytespider\n', 'User-agent: *\nUser-agent: Bytespider\n')],
+    ['with Bytespider moved to the open group', good.replace('User-agent: Bytespider\n', '').replace('User-agent: Googlebot\n', 'User-agent: Googlebot\nUser-agent: Bytespider\n')],
+    ['with the open group disallowing one path', good.replace('Allow: /\n', 'Allow: /\nDisallow: /reference/\n')],
+    ['with the open group without Allow', good.replace('Allow: /\n', '')],
+    ['with a rule after a blank line in the open group', good.replace('Allow: /\n', 'Allow: /\n\nDisallow: /reference/\n')],
+    ['with a Content-Signal line in the open group', good.replace('Allow: /\n', 'Allow: /\nContent-Signal: ai-train=no\n')],
+    ['with a rule before the first User-agent', `Disallow: /\n${good}`],
+    ['with a second group for ClaudeBot', `${good}\nUser-agent: ClaudeBot\nDisallow: /reference/\n`],
+    // The two below are the ones that slipped through a predicate which only looked for `Disallow: /`.
+    ['with a refused crawler re-opened in its own group', good.replace('Disallow: /\n', 'Disallow: /\nAllow: /\n')],
+    ['with a refused crawler allowed one file', good.replace('Disallow: /\n', 'Disallow: /\nAllow: /llms.txt\n')],
+    ['without the refused group', good.replace(/User-agent: Bytespider[\s\S]*?Disallow: \/\n/, '')],
   ]
   for (const [name, text] of mutants) {
-    if (text === good) { console.error(`✗ self-test: el mutante «${name}» NO SE APLICÓ — el control no probaría nada`); process.exit(1) }
-    if (!audit(text).length) { console.error(`✗ self-test: el mutante «${name}» SOBREVIVE — el gate no lo ve`); process.exit(1) }
-    console.log(`  ok  mutante «${name}» muere`)
+    if (text === good) { console.error(`✗ self-test: the mutant «${name}» was NOT APPLIED — the control would prove nothing`); process.exit(1) }
+    if (!audit(text).length) { console.error(`✗ self-test: the mutant «${name}» SURVIVES — the gate does not see it`); process.exit(1) }
+    console.log(`  ok  mutant «${name}» dies`)
   }
-  // ⛔ Y AHORA LA MITAD QUE FALTABA, señalada por el contraste: hasta aquí el self-test sólo
-  // llamaba a `audit()` y salía 0 — probaba la FUNCIÓN, no el PROGRAMA, mientras su mensaje
-  // prometía los tres códigos. Un control que no ejecuta lo que promete medir es exactamente el
-  // «no he podido mirar» disfrazado de verde. Esto lanza el proceso de verdad.
+  // And the half that the first version of this self-test skipped: it only called `audit()` and
+  // exited 0 — it proved the FUNCTION, not the PROGRAM, while its message promised three codes.
+  // This launches the process for real.
   const { execFileSync } = await import('node:child_process')
   const { mkdtemp, writeFile, rm } = await import('node:fs/promises')
   const { tmpdir } = await import('node:os')
@@ -181,39 +169,39 @@ if (process.argv.includes('--self-test')) {
     catch (err) { return err.status }
   }
   try {
-    const limpio = join(dir, 'ok.txt'); await writeFile(limpio, good)
-    const roto = join(dir, 'bad.txt'); await writeFile(roto, good.replace(/^Sitemap:.*$/m, ''))
-    const casos = [
-      ['0 sobre el fichero real', ['--exit-probe', limpio], 0],
-      ['1 sobre un fichero con hallazgo', ['--exit-probe', roto], 1],
-      ['2 sobre un fichero que no existe', ['--exit-probe', join(dir, 'no-existe.txt')], 2],
+    const ok = join(dir, 'ok.txt'); await writeFile(ok, good)
+    const bad = join(dir, 'bad.txt'); await writeFile(bad, good.replace(/^Sitemap:.*$/m, ''))
+    const cases = [
+      ['0 on the real file', ['--exit-probe', ok], 0],
+      ['1 on a file with a finding', ['--exit-probe', bad], 1],
+      ['2 on a file that does not exist', ['--exit-probe', join(dir, 'missing.txt')], 2],
     ]
-    for (const [nombre, args, esperado] of casos) {
+    for (const [name, args, expected] of cases) {
       const code = run(args)
-      if (code !== esperado) { console.error(`✗ self-test: «${nombre}» salió ${code}, esperado ${esperado}`); process.exit(1) }
-      console.log(`  ok  código de salida ${esperado}: ${nombre}`)
+      if (code !== expected) { console.error(`✗ self-test: «${name}» exited ${code}, expected ${expected}`); process.exit(1) }
+      console.log(`  ok  exit code ${expected}: ${name}`)
     }
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
 
-  console.log(`✓ robots self-test: el fichero real sale limpio, los ${mutants.length} mutantes mueren y los tres códigos se miden EJECUTANDO el programa`)
+  console.log(`✓ robots self-test: the real file is clean, the ${mutants.length} mutants die and the three exit codes are measured by RUNNING the program`)
   process.exit(0)
 }
 
 if (!existsSync(DIST_ROBOTS)) {
-  console.error('robots: NO HE PODIDO MIRAR — no existe dist/robots.txt.')
-  console.error('  O el build no ha corrido, o `public/robots.txt` dejó de copiarse — que es el fallo, no la excusa.')
+  console.error('robots: COULD NOT LOOK — dist/robots.txt does not exist.')
+  console.error('  Either the build did not run or `public/robots.txt` stopped being copied — which is the defect, not the excuse.')
   process.exit(2)
 }
 
 const text = await readFile(DIST_ROBOTS, 'utf8')
 const findings = audit(text)
 if (findings.length) {
-  console.error('✗ robots: la política publicada no es la que el proyecto decidió.\n')
+  console.error('✗ robots: the published policy is not the one the project decided.\n')
   for (const f of findings) console.error(`  - ${f}`)
-  console.error('\n  La política vive en docs-site/public/robots.txt y es la del apex (repo web, public/robots.txt).')
+  console.error('\n  The policy lives in docs-site/public/robots.txt and is the apex one (web repo, public/robots.txt).')
   process.exit(1)
 }
-console.log(`✓ robots: OK — Sitemap declarado, catch-all abierto y ${MUST_BLOCK.length} rastreadores de entrenamiento bloqueados.`)
+console.log(`✓ robots: OK — Sitemap declared, ${MUST_ALLOW.length} crawlers open and ${MUST_REFUSE.length} refused.`)
 process.exit(0)

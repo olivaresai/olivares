@@ -23,7 +23,9 @@
     "about": "关于",
     "sections": "设置分区",
     "signing": "报告签名",
-    "tracing": "跟踪"
+    "tracing": "跟踪",
+    "sessionIdle": "会话内存",
+    "updates": "更新"
   },
   "general": {
     "title": "常规",
@@ -33,7 +35,7 @@
     "density": "密度",
     "densityHint": "紧凑显示更多行；舒适更易阅读。",
     "language": "语言",
-    "languageHint": "English, Español, Deutsch, Français, 日本語, Русский, 中文.",
+    "languageHint": "English, Español, Deutsch, Français, Italiano, 日本語, Русский, 中文, 한국어.",
     "time": "时间",
     "timeHint": "时间按你的时区显示（{{zone}}）。记录和导出会保持 UTC。",
     "clock24": "24 小时",
@@ -49,6 +51,15 @@
     "notifications": "此安装尚未保存通知偏好。",
     "sessionDefaults": "此安装尚未保存会话默认值。"
   },
+  "sessionNotifications": {
+    "title": "会话通知",
+    "hint": "此标签页在后台时，如果会话需要我处理或已完成，就通知我。仅适用于此浏览器。",
+    "notifyMe": "通知我",
+    "denied": "此浏览器已屏蔽通知。",
+    "unavailable": "此处无法使用浏览器通知。",
+    "needsYou": "此会话需要您处理。",
+    "finished": "本轮已完成。"
+  },
   "keyboard": {
     "title": "键盘",
     "scope": "此安装响应的按键。对每个人都相同。"
@@ -57,19 +68,30 @@
     "title": "版本与模块",
     "scope": "此构建的版本、它运行的模块，以及 Business 增加的功能。",
     "label": "版本",
+    "licenseAlias": "许可证",
     "unknown": "此引擎未报告",
     "editions": {
-      "community": "社区版",
-      "enterprise": "商业版"
+      "community": "Community",
+      "enterprise": "Business"
     },
     "businessAdds": "Business 新增",
     "adds": {
       "loginEnforcement": "登录强制：要求 SSO 和网络允许列表",
-      "identityProviders": "多个身份提供方，按组织配置并按电子邮件域路由",
+      "identityProviders": "多个身份提供商，按组织配置并按电子邮件域路由",
       "groupMapping": "登录时将目录组映射为角色",
       "regulatory": "监管运营：DORA 登记册、NIS 2 事件分类、OSCAL 配置文件、美国及行业合规包，以及持续控制监控",
       "reports": "Business 报告和定时报告",
       "toolPins": "工具固定"
+    },
+    "badge": {
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "businessShort": "Biz",
+      "enterpriseShort": "Ent",
+      "accessibleName": "{{edition}} 版本",
+      "show": "显示版本徽章",
+      "loadError": "无法加载徽章偏好设置。",
+      "saveError": "无法保存徽章偏好设置。请重试。"
     }
   },
   "about": {
@@ -124,7 +146,7 @@
       "adoption": "采用情况",
       "capabilities": "MCP 与技能目录",
       "catalog": "目录",
-      "claude-agents": "Claude 代理",
+      "claude-agents": "Claude 智能体",
       "claude-policy": "Claude 策略",
       "compliance": "合规",
       "consoleviews": "已保存视图",
@@ -159,37 +181,37 @@
       "accessmap": "谁和什么可以访问哪个资源。",
       "adoption": "团队如何使用 AI 工具。",
       "capabilities": "发现的 MCP 服务器、工具和技能。",
-      "catalog": "经批准的代理和能力。",
-      "claude-agents": "受管的 Claude 代理及其审批。",
+      "catalog": "经批准的智能体和能力。",
+      "claude-agents": "受管的 Claude 智能体及其审批。",
       "claude-policy": "受管的 Claude Code 设置与偏离。",
       "compliance": "框架、控制与证据。",
       "consoleviews": "收藏和已保存的控制台视图。",
-      "deploy": "代理部署及其修订。",
-      "evals": "代理评估运行与结果。",
+      "deploy": "智能体部署及其修订。",
+      "evals": "智能体评估运行与结果。",
       "eventing": "事件路由与可靠投递。",
       "finops": "支出、预算与预测。",
-      "gitpublish": "将代理的工作发布到 Git。",
+      "gitpublish": "将智能体的工作发布到 Git。",
       "governance": "策略、审批与身份。",
       "health": "健康检查与事件。",
-      "identity": "身份提供方与保证态势。",
+      "identity": "身份提供商与保证态势。",
       "inferenceproxy": "让模型调用经过受治理的网关。",
-      "inventory": "环境中的代理、工具和资源。",
+      "inventory": "资产域中的智能体、工具和资源。",
       "knowledge": "知识库与受治理的检索。",
       "liveingest": "接收会话的实时遥测。",
       "models": "模型目录、路由与速率限制。",
       "notify": "通知渠道与投递。",
       "observability": "追踪、指标与仪表板。",
-      "orchestration": "多步骤代理工作流。",
+      "orchestration": "多步骤智能体工作流。",
       "posture": "安全态势导出。",
       "recording": "会话录制与回放。",
-      "redteam": "针对代理的对抗测试。",
+      "redteam": "针对智能体的对抗测试。",
       "reporting": "治理报告与计划。",
-      "sandbox": "代理运行的隔离环境。",
+      "sandbox": "智能体运行的隔离环境。",
       "security": "发现与安全信号。",
-      "sessions": "代理会话、运行与工作。",
+      "sessions": "智能体会话、运行与工作。",
       "siemforward": "将审计事件发送到你的 SIEM。",
-      "sourcescope": "代理可以读取哪些来源。",
-      "voice": "语音代理与通话。"
+      "sourcescope": "智能体可以读取哪些来源。",
+      "voice": "语音智能体与通话。"
     },
     "noChanges": "没有可应用的更改。请先启用或停用一个模块。",
     "saving": "正在保存模块选择…",
@@ -207,7 +229,7 @@
       "reporting": "计划报告不再运行。",
       "eventing": "事件不再投递。",
       "orchestration": "工作流不再运行。",
-      "knowledge": "知识不再提供给代理。",
+      "knowledge": "知识不再提供给智能体。",
       "sourcescope": "不再应用来源限制。",
       "claude-policy": "不再检查受管的 Claude Code 设置。"
     },
@@ -278,5 +300,43 @@
     "passwordManaged": "组织管理员负责管理密码登录。",
     "hours_other": "{{count}} 小时",
     "ssoInactive": "已要求使用单点登录，但其身份提供商未启用。此要求不会阻止密码登录。"
+  },
+  "sessionIdle": {
+    "minutes": "空闲多少分钟后停止",
+    "description": "默认关闭。停止已完成且不再打开的会话以释放内存。恢复会保留文件夹和对话。",
+    "hint": "0 表示关闭，否则为 6–10080 分钟。五分钟没有输出后开始空闲计时。有待审批事项、运行中的子进程或关联会话，或新消息的会话会继续运行。",
+    "saved": "会话内存设置已保存。"
+  },
+  "updates": {
+    "title": "更新",
+    "description": "此引擎正在运行的版本、其通道中最新的已签名版本，以及安装它的一个操作。引擎会验证版本、替换自己的二进制文件并重启一次；重启会停止正在运行的会话。",
+    "check": "重新检查",
+    "install": "更新到 {{version}}",
+    "applied": "更新已安装。",
+    "failed": "更新失败。请重试。",
+    "restarting": "正在重启引擎…",
+    "stillRestarting": "引擎尚未在新版本上恢复。请一分钟后重新加载此页面查看。",
+    "unavailable": "此引擎无法从控制台安装更新。请在服务器上运行 olivares upgrade。",
+    "loadFailed": "无法读取更新状态。请重试。",
+    "status": {
+      "available": "有可用更新",
+      "current": "已是最新",
+      "unchecked": "无法检查更新"
+    },
+    "security": "安全版本",
+    "release": "版本",
+    "running": "正在运行",
+    "channel": "通道",
+    "newest": "最新版本",
+    "advisories": "修复内容",
+    "notes": "版本说明",
+    "confirm": {
+      "title": "更新到 {{version}}？",
+      "stop_other": "{{count}} 个正在运行的会话将停止。重启后可以逐个恢复。",
+      "none": "引擎将在新版本上重启一次。",
+      "confirm": "安装并重启"
+    },
+    "alreadyCurrent": "已是最新版本，未安装任何内容。",
+    "restartRequired": "已安装更新的版本。请通过服务管理器重启引擎以运行它。"
   }
 }

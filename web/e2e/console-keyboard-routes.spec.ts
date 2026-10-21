@@ -31,8 +31,8 @@ const ROUTES = [
   '/access-map',
   '/routine-policies',
   '/sessions',
-  // `/finops` is a retired path that still resolves: it lands on `/stored-budgets`
-  // (ROUTE_ALIASES in features/registry.tsx), and this loop asserts the URL it asked for.
+  // The Community budget page. `/finops` is the Business analysis page: a Community bookmark of
+  // it opens the Business notice (route-census.json business_paths), not this page.
   '/stored-budgets',
   '/audit',
   '/alerting',
@@ -159,7 +159,11 @@ test.describe('keyboard on the named routes', () => {
       // prettier-ignore
       const spanishLabel = 'Abrir la sesión' // language-data: Spanish keyboard command label
       const label = lang === 'en' ? 'Open the session' : spanishLabel
-      const row = page.getByRole('listitem').filter({ hasText: label })
+      // The label is matched whole: the six numbered recent-session rows contain it, so a
+      // substring filter finds seven rows.
+      const row = page
+        .getByRole('listitem')
+        .filter({ has: page.getByText(label, { exact: true }) })
       await expect(row).toHaveCount(1)
       await expect(row.locator('kbd')).toHaveText(['Enter', 'Space'])
       expect(await page.evaluate(rawKeyProbe)).toEqual([])

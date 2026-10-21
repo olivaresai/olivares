@@ -228,7 +228,7 @@
   },
   "forbiddenResolve": {
     "title": "Résolution non autorisée",
-    "description": "Résoudre un incident nécessite la permission d’administration des contrôles (health:check:admin)."
+    "description": "Votre rôle ne peut pas résoudre d’incidents."
   },
   "connectors": {
     "autoRefresh": "Actualisation automatique toutes les 15 secondes.",

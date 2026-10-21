@@ -80,7 +80,7 @@ Gartner's exact model, claim conformance to it, or imply a Gartner endorsement.
 - **Runtime enforcement** — deny-closed gates where we *do* sit in a decision
   path: approvals, the Claude Code hooks PEP, MCP tool gating, kill switches.
 - **Information governance** — PII/sensitivity discovery over governed knowledge
-  bases, data-residency attestation, retention and legal-hold.
+  bases, data-residency attestation, retention and legal-hold (legal hold is Business).
 
 We use AI TRiSM as a *map of the problem space a buyer already knows*, to show
 coverage — not as a badge.

@@ -15,13 +15,14 @@
     "truncatedHint": "残りは olivares skills ls --cursor で一覧表示します。"
   },
   "detail": {
-    "skills": "このパックのスキル",
+    "skills": "スキル、エージェント、コマンド、ルール",
     "revisions": "リビジョン",
     "revision": "リビジョン {{n}}",
     "revisionLine": "リビジョン {{n}}（{{source}}）",
     "activeContent": "読み込み時に動作: {{items}}"
   },
   "kind": {
+    "profile": "プロファイル",
     "workspace": "部門",
     "agent_group": "エージェントグループ",
     "agent": "エージェント",
@@ -56,7 +57,9 @@
     "submit": "割り当て",
     "done": "スキルパックを割り当てました",
     "directoryFailed": "対象を読み込めませんでした。パックを閉じて開き直し、再試行してください。",
-    "approve": "これらのスキルを確認し、読み込み時にツールが動作させることを承認します: {{skills}}"
+    "approve": "これらのスキルを確認し、読み込み時にツールが動作させることを承認します: {{skills}}",
+    "members": "メンバー",
+    "membersHint": "最大64個のメンバーを選択してください。スキル、エージェント、コマンド、ルールは個別に選択できます。"
   },
   "install": {
     "title": "スキルパックをインストール",

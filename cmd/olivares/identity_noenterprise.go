@@ -97,7 +97,8 @@ func unavailableIdentityCommand(name string, aliases ...string) *cobra.Command {
 		short = "Residency posture requires Business Identity & Scale"
 	}
 	return &cobra.Command{
-		Use: name, Aliases: aliases, Hidden: true, DisableFlagParsing: true,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         name, Aliases: aliases, Hidden: true, DisableFlagParsing: true,
 		Short:   short,
 		Long:    "This command is unavailable in this build. Directory rosters and agent federation require Business Identity & Scale.",
 		Example: "  " + path + " # Reports the Business requirement",

@@ -99,6 +99,18 @@ func validAuthType(t string) bool {
 // hasSink reports whether the request declares a SIEM sink (vs the generic webhook).
 func (in *subscriptionRequest) hasSink() bool { return strings.TrimSpace(in.SinkKind) != "" }
 
+// refuseSink answers 501 business_required to a request that carries a SIEM sink when no
+// SinkRenderer is wired. Community links none (siemforward.NewRenderer is nil there), so
+// the sink could only be parked. The generic webhook never reaches it; a sink stored
+// before can still be disabled or cleared by an update that omits it, or deleted.
+func (m *Module) refuseSink(w http.ResponseWriter, in *subscriptionRequest) bool {
+	if !in.hasSink() || m.renderer != nil {
+		return false
+	}
+	writeJSON(w, http.StatusNotImplemented, errorBodyCode("business_required", "SIEM push requires Olivares Business: https://olivares.ai/pricing"))
+	return true
+}
+
 // validateSink checks the sink profile and trims its scalar fields. The endpoint
 // (validated separately as https) is the tower's ingest URL. A cred-requiring kind
 // without a credential on CREATE is rejected; on update an empty cred means "keep
@@ -333,6 +345,9 @@ func (m *Module) handleCreateSubscription(w http.ResponseWriter, r *http.Request
 	if !decodeJSON(w, r, &in) {
 		return
 	}
+	if m.refuseSink(w, &in) {
+		return
+	}
 	if msg := m.validateSubscription(&in, mc.Principal, mc.Tenant, true); msg != "" {
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
@@ -452,6 +467,9 @@ func (m *Module) handleUpdateSubscription(w http.ResponseWriter, r *http.Request
 	}
 	var in subscriptionRequest
 	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if m.refuseSink(w, &in) {
 		return
 	}
 	if msg := m.validateSubscription(&in, mc.Principal, mc.Tenant, false); msg != "" {

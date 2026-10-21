@@ -96,7 +96,7 @@
     "searchResults": "Treffer in Ihren Daten",
     "searchTruncated": "Weitere Treffer vorhanden — Suche verfeinern.",
     "searchDegraded": "Einige Quellen konnten nicht durchsucht werden — diese Liste ist unvollständig.",
-    "deniedReason": "Erfordert {{permission}}.",
+    "deniedReason": "Erfordert dafür {{permission}}.",
     "deniedHelp": "Bitten Sie eine Verwaltungsperson, die das gewähren kann.",
     "noTargetReason": "Erfordert eine Organisation, in der es ausgeführt wird.",
     "noTargetHelp": "Wählen Sie eine Organisation und versuchen Sie es erneut.",
@@ -107,6 +107,12 @@
     "footerMove": "bewegen",
     "footerOpen": "öffnen",
     "footerCommands": "nur Befehle"
+  },
+  "permissionWords": {
+    "read": "Lesezugriff",
+    "write": "Schreibzugriff",
+    "admin": "Administratorzugriff",
+    "other": "mehr Zugriff"
   },
   "status": {
     "active": "Aktiv",
@@ -293,7 +299,13 @@
     },
     "command": {
       "palette": {
-        "open": "Befehlspalette öffnen"
+        "open": "Befehlspalette öffnen",
+        "recent1": "Letzte Sitzung 1 öffnen",
+        "recent2": "Letzte Sitzung 2 öffnen",
+        "recent3": "Letzte Sitzung 3 öffnen",
+        "recent4": "Letzte Sitzung 4 öffnen",
+        "recent5": "Letzte Sitzung 5 öffnen",
+        "recent6": "Letzte Sitzung 6 öffnen"
       },
       "help": {
         "toggle": "Diese Tastenkürzel anzeigen"
@@ -304,6 +316,9 @@
         "startBackground": "Starten und hier bleiben"
       },
       "surface": {
+        "openBeside": "Daneben öffnen",
+        "closeBeside": "Sitzung daneben schließen",
+        "focusBeside": "Fokus zwischen Sitzungen wechseln",
         "nextPane": "Nächster Bereich",
         "previousPane": "Vorheriger Bereich"
       },
@@ -328,7 +343,8 @@
         "pin": "Dieses Modul anheften oder lösen"
       },
       "session": {
-        "new": "Neue Sitzung"
+        "new": "Neue Sitzung",
+        "previous": "Zur vorherigen Sitzung zurückkehren"
       },
       "sourceDiff": {
         "nextFile": "Nächste Datei",
@@ -340,7 +356,9 @@
     "when": {
       "railFocused": "in der Sitzungsleiste",
       "launcherFocused": "im Starterfeld",
-      "workSurface": "auf dem Sitzungsbildschirm"
+      "workSurface": "auf dem Sitzungsbildschirm",
+      "sessionHistory": "wenn eine vorherige Sitzung verfügbar ist",
+      "paletteRecent": "in den Palettenergebnissen bei leerer Suche"
     },
     "precedence": "Teilen sich zwei Zeilen dieselben Tasten, gewinnt die letzte zutreffende.",
     "modNote": "⌘ ist Strg unter Windows und Linux.",

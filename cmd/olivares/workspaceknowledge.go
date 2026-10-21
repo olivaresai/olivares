@@ -194,6 +194,9 @@ func (s workspaceKnowledgeSources) Open(ctx context.Context, mc api.ModuleContex
 	// These live HTTP adapters read only their declared settings. S3 has ambient
 	// AWS fallback; PostgreSQL DSNs may select host files/environment. Those and
 	// filesystem/export modes need separate admitted authority before consumption.
+	if businessKindUnavailable(connector.kind) {
+		return nil, errBusinessSourceKind(connector.kind).Error(), http.StatusNotImplemented
+	}
 	switch connector.kind {
 	case "confluence", "gdrive", "notion", "sharepoint", "sap_odata", "salesforce", "snowflake", "azure_ai_search":
 	default:

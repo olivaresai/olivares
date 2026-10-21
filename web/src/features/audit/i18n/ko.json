@@ -1,0 +1,148 @@
+{
+  "title": "감사 원장",
+  "subtitle": "변조 증거가 남는 증거 체인입니다. 검증하고 WORM/SIEM으로 내보내십시오.",
+  "subtitleSystem": "교차 테넌트 관리 작업의 시스템 테넌트 체인입니다(읽기 전용).",
+  "searchLoaded": "불러온 행만 필터(클라이언트 측)…",
+  "filters": {
+    "open": "필터",
+    "title": "서버 측 원장 필터",
+    "q": "원장 검색",
+    "qPlaceholder": "작업, 행위자, 대상 종류 또는 ID",
+    "actor": "행위자",
+    "actorPlaceholder": "정확한 행위자",
+    "action": "작업 접두사",
+    "actionPlaceholder": "예: agent.",
+    "targetKind": "대상 종류",
+    "targetKindPlaceholder": "정확한 대상 종류",
+    "targetId": "대상 ID",
+    "targetIdPlaceholder": "정확한 대상 ID",
+    "since": "이후",
+    "until": "이전",
+    "clearOne": "{{filter}} 필터 지우기",
+    "clearAll": "모든 필터 지우기"
+  },
+  "scan": {
+    "incomplete": "seq {{seq}}까지 스캔했습니다 — 전체 원장이 아니며 더 불러오면 스캔을 계속합니다."
+  },
+  "scope": {
+    "label": "원장 범위",
+    "tenant": "테넌트 원장",
+    "system": "시스템 원장",
+    "systemHint": "시스템 테넌트 체인은 교차 테넌트 관리 작업을 기록하며 여기서는 읽기 전용입니다. 검증 및 내보내기는 테넌트 원장에서 작동합니다."
+  },
+  "cols": {
+    "seq": "Seq",
+    "occurred": "시각",
+    "action": "작업",
+    "actor": "행위자",
+    "target": "대상",
+    "hash": "해시"
+  },
+  "actorKind": {
+    "user": "사용자",
+    "agent": "에이전트",
+    "connector": "커넥터",
+    "system": "시스템"
+  },
+  "verify": {
+    "action": "체인 검증",
+    "failed": "검증을 완료하지 못했습니다.",
+    "chain": "체인 · 링크 {{checked}}개",
+    "checkpoints": "체크포인트 · 서명 {{count}}개",
+    "noCheckpoints": "아직 서명된 체크포인트 없음",
+    "attested": "seq {{seq}}까지 증명됨",
+    "chainBreak": "seq {{seq}}에서 체인 끊김",
+    "checkpointBreak": "seq {{seq}}에서 체크포인트 서명 실패"
+  },
+  "pubkey": {
+    "action": "검증 키",
+    "label": "원장 서명 키",
+    "key": "키",
+    "hint": "이 Ed25519 공개 키를 공유하면 외부 당사자가 내보낸 이벤트와 체크포인트를 오프라인에서 검증할 수 있습니다 — 같은 키가 둘 다 서명합니다.",
+    "failed": "검증 키를 사용할 수 없습니다."
+  },
+  "export": {
+    "action": "내보내기",
+    "options": "내보내기 옵션",
+    "formatLabel": "내보내기 형식",
+    "fromSeq": "시작 seq",
+    "toSeq": "종료 seq",
+    "optional": "선택 사항",
+    "useCurrent": "현재 필터 및 범위 사용",
+    "format": {
+      "cef": "CEF",
+      "leef": "LEEF",
+      "syslog": "Syslog",
+      "otlp": "OTLP 요청",
+      "otlp_envelope": "OTLP 요청(별칭)",
+      "otlp_log_record": "OTLP LogRecord 줄",
+      "ocsf": "OCSF"
+    },
+    "done": "내보내기를 다운로드했습니다.",
+    "failed": "내보내기 실패.",
+    "forbidden": "원장을 내보낼 권한이 없습니다."
+  },
+  "detail": {
+    "title": "증거 이벤트",
+    "seqTitle": "이벤트 #{{seq}}",
+    "signed": "서명된 이벤트 — 이 행은 체인 해시에 대한 자체 서명을 가집니다",
+    "seq": "시퀀스",
+    "occurred": "발생 시각",
+    "action": "작업",
+    "actor": "행위자",
+    "actorSystem": "시스템",
+    "target": "대상",
+    "id": "이벤트 ID",
+    "chainTitle": "체인 무결성",
+    "prevHash": "이전 해시",
+    "prev": "이전",
+    "hash": "이벤트 해시",
+    "this": "현재",
+    "sig": "이벤트 서명",
+    "checkpoint": "서명",
+    "chainHint": "각 이벤트의 해시는 이전 이벤트에 연결됩니다. 지문 뒤에 페이로드는 없습니다 — 해시가 증거입니다(설계상 최소 데이터).",
+    "details": "세부 정보",
+    "actorMember": "구성원"
+  },
+  "empty": {
+    "title": "아직 증거 없음",
+    "description": "이 범위의 원장이 비어 있습니다. 거버넌스된 작업이 발생하는 대로 변조 증거 이벤트를 추가합니다."
+  },
+  "actions": {
+    "governance_approval_create": "승인 요청됨",
+    "governance_approval_decision": "승인 결정 기록됨",
+    "governance_approval_cancel": "승인 취소됨",
+    "sessions_run_launched": "세션 시작됨",
+    "sessions_run_stopping": "세션 중지 요청됨",
+    "sessions_work_item_create": "작업 항목 생성됨",
+    "sessions_work_item_ready": "작업 항목 준비됨으로 표시됨",
+    "sessions_work_item_complete": "작업 항목 완료됨",
+    "authorization_decision_record": "권한 부여 결정 기록됨",
+    "policy_artifact_record": "정책 증거 기록됨",
+    "governance_policy_create": "정책 생성됨",
+    "governance_policy_update": "정책 업데이트됨",
+    "governance_policy_delete": "정책 삭제됨",
+    "auth_login": "로그인됨",
+    "auth_logout": "로그아웃됨",
+    "auth_login_failed": "로그인 실패",
+    "auth_webauthn_register": "패스키 추가됨",
+    "auth_webauthn_unregister": "패스키 제거됨",
+    "user_set_password": "비밀번호 변경됨",
+    "user_create": "사용자 추가됨",
+    "membership_grant": "역할 부여됨",
+    "membership_update": "역할 변경됨",
+    "membership_offboard": "사용자 제거됨",
+    "token_issue": "API 토큰 생성됨",
+    "token_revoke": "API 토큰 취소됨",
+    "secret_delete": "비밀 삭제됨"
+  },
+  "targets": {
+    "core_policy": "정책"
+  },
+  "internal": {
+    "hidden": "내부 레코드 숨김: {{count}}",
+    "show": "내부 레코드 표시",
+    "hide": "내부 레코드 숨기기",
+    "allHidden": "지금까지 불러온 모든 항목이 내부 레코드입니다."
+  }
+}

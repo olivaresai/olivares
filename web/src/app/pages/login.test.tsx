@@ -123,10 +123,10 @@ describe('sign-in opens the stored start page', () => {
 
   it('uses the same choice when the operator is already signed in', () => {
     auth.status = 'authenticated'
-    useClientSettings.setState({ startPage: 'deploy' })
-    auth.can = (permission) => permission === 'deploy:deployment:read'
+    useClientSettings.setState({ startPage: 'providers' })
+    auth.can = (permission) => permission === 'sessions:provider:read'
     renderLogin()
-    expect(screen.getByTestId('redirect')).toHaveTextContent('/deploy')
+    expect(screen.getByTestId('redirect')).toHaveTextContent('/providers')
   })
 
   it('uses the principal sign-in stored when the hook still denies', async () => {

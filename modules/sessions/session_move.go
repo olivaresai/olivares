@@ -89,10 +89,10 @@ func (m *Module) moveRun(ctx context.Context, tenant model.TenantID, runRef, tar
 		return runDTO{}, &runErr{http.StatusUnprocessableEntity,
 			"only Claude Code sessions can be moved; this session's tool keeps its conversation another way"}
 	}
-	// What a session printed may hold what its vault secrets and repository
-	// credential were. The target profile may reach another provider endpoint, and
+	// What a session printed may hold what its vault secrets, repository
+	// credential and package registry tokens were. The target profile may reach another provider endpoint, and
 	// the next resume sends it the whole history: it is refused like a handoff.
-	if err := refuseSecretBearing(rec, "moved"); err != nil {
+	if err := m.refuseSecretBearing(ctx, tenant, rec, "moved"); err != nil {
 		return runDTO{}, err
 	}
 	if err := m.provenSourceHome(ctx, tenant, src); err != nil {
@@ -137,7 +137,8 @@ func (m *Module) moveRun(ctx context.Context, tenant model.TenantID, runRef, tar
 			}
 			return nil
 		},
-		mutate: func(cur model.Record) { setProfileSnapshot(cur, &dst) },
+		// The limit was the old account's; the next turn finds out about the new one.
+		mutate: func(cur model.Record) { setProfileSnapshot(cur, &dst); cur[colRunUsageLimit] = nil },
 		within: func(ctx context.Context, sc store.Scope, _ model.Record) error {
 			return retargetManagedLive(ctx, sc, runRef, dst.ProfileID)
 		},
@@ -148,12 +149,33 @@ func (m *Module) moveRun(ctx context.Context, tenant model.TenantID, runRef, tar
 	return m.getRun(ctx, tenant, runRef)
 }
 
-// refuseSecretBearing refuses a session that was given vault secrets or a repository
-// credential, for an act that carries its stored conversation somewhere new. The
-// stored value is read fail-closed: one that cannot be decoded refuses too.
-func refuseSecretBearing(rec model.Record, did string) error {
+// refuseSecretBearing refuses a session that was given vault secrets, a repository
+// credential or a package registry token, for an act that carries its stored
+// conversation somewhere new. The stored values are read fail-closed: one that
+// cannot be decoded refuses too.
+func (m *Module) refuseSecretBearing(ctx context.Context, tenant model.TenantID, rec model.Record, did string) error {
+	if err := refuseGivenSecrets(rec, did); err != nil {
+		return err
+	}
+	if m.usedRegistryTokens(ctx, tenant, rec) {
+		return conflictErr("this session used a package registry token; " +
+			"what it printed cannot be proven free of it, so it is not " + did + " to another account or tool")
+	}
+	return nil
+}
+
+// givenSecrets reports whether the run was given vault secrets or a repository
+// credential. A value that cannot be decoded counts as given.
+func givenSecrets(rec model.Record) bool {
 	secrets, err := decodeSecretEnv(rec.String(colRunSecretEnv))
-	if err != nil || len(secrets) != 0 || rec.String(colRunGitRead) != "" {
+	return err != nil || len(secrets) != 0 || rec.String(colRunGitRead) != ""
+}
+
+// refuseGivenSecrets refuses a session that was given vault secrets or a repository
+// credential. Current vault values cannot redact what an earlier generation of the
+// session printed, and a read token expires, so these are refused live or not.
+func refuseGivenSecrets(rec model.Record, did string) error {
+	if givenSecrets(rec) {
 		return conflictErr("this session was given vault secrets or a repository credential; " +
 			"what it printed cannot be proven free of them, so it is not " + did + " to another account or tool")
 	}

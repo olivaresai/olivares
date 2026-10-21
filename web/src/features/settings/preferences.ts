@@ -25,15 +25,19 @@ export const CLIENT_SETTING_DEFAULTS = {
   clock: '24' as ClockFormat,
   startPage: 'home' as StartPageId,
   confirmStop: true,
+  sessionNotificationsFor: null as string | null,
 }
 
 interface ClientSettings {
   clock: ClockFormat
   startPage: StartPageId
   confirmStop: boolean
+  /** Browser permission is local; the opt-in belongs to this person and tenant. */
+  sessionNotificationsFor: string | null
   setClock: (clock: ClockFormat) => void
   setStartPage: (startPage: StartPageId) => void
   setConfirmStop: (confirmStop: boolean) => void
+  setSessionNotificationsFor: (owner: string | null) => void
   restore: () => void
 }
 
@@ -45,11 +49,20 @@ export const useClientSettings = create<ClientSettings>()(
       setClock: (clock) => set({ clock }),
       setStartPage: (startPage) => set({ startPage }),
       setConfirmStop: (confirmStop) => set({ confirmStop }),
+      setSessionNotificationsFor: (sessionNotificationsFor) =>
+        set({ sessionNotificationsFor }),
       restore: () => set({ ...CLIENT_SETTING_DEFAULTS }),
     }),
     { name: 'olivares.settings' },
   ),
 )
+
+export function notificationOwner(
+  user: string | null | undefined,
+  tenant: string | null | undefined,
+): string | null {
+  return user && tenant ? JSON.stringify([user, tenant]) : null
+}
 
 /** The IANA zone the operator's browser is in. */
 export function localTimeZone(): string {

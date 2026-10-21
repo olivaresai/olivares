@@ -1,0 +1,88 @@
+{
+  "title": "Tresor",
+  "subtitle": "Ihre Passwörter, Notizen und Authenticator-Codes. Sie werden auf diesem Server versiegelt, und nur Sie können sie öffnen.",
+  "add": "Eintrag hinzufügen",
+  "search": "Eintrag suchen",
+  "noMatch": "Kein Eintrag passt zu „{{query}}“",
+  "sealerUnavailable": "Dieser Server kann noch keine Geheimnisse versiegeln, daher lassen sich keine Einträge speichern.",
+  "created": "Eintrag hinzugefügt",
+  "saved": "Eintrag gespeichert",
+  "deleted": "Eintrag gelöscht",
+  "copyBlocked": "Der Browser hat das Kopieren nicht erlaubt",
+  "nothingToCopy": "Dieser Eintrag hat nichts zu kopieren",
+  "needPerson": "Der Tresor gehört einer Person. Melden Sie sich mit Ihrem Konto an, um Ihren zu nutzen.",
+  "needOrganization": "Wählen Sie eine Organisation, um dort Ihren Tresor zu öffnen.",
+  "copied": "{{field}} kopiert. Die Zwischenablage wird in {{seconds}} s geleert.",
+  "rowCopied": "{{what}} kopiert. Die Zwischenablage wird in {{seconds}} s geleert.",
+  "what": {
+    "password": "Passwort",
+    "code": "Code",
+    "note": "Notiz"
+  },
+  "kind": {
+    "login": "Zugang",
+    "note": "Notiz",
+    "totp": "Authenticator",
+    "code": "Code"
+  },
+  "empty": {
+    "title": "Ihr Tresor ist leer",
+    "description": "Fügen Sie einen Zugang, eine Notiz oder einen Authenticator-Schlüssel hinzu. Das Öffnen oder Kopieren eines Eintrags wird im Audit-Protokoll festgehalten."
+  },
+  "row": {
+    "open": "{{label}} öffnen",
+    "openItem": "Öffnen",
+    "delete": "Löschen",
+    "menu": "Aktionen für {{label}}",
+    "copyPassword": "Passwort von {{label}} kopieren",
+    "copyNote": "Notiz von {{label}} kopieren",
+    "copyCode": "Code von {{label}} kopieren"
+  },
+  "delete": {
+    "title": "{{label}} löschen?",
+    "body": "Der Eintrag wird endgültig entfernt. Das lässt sich nicht rückgängig machen.",
+    "confirm": "Löschen"
+  },
+  "detail": {
+    "locked": "Gesperrt. Das Aufdecken eines Eintrags wird im Audit-Protokoll festgehalten, und er verbirgt sich nach einer Minute wieder.",
+    "hidden": "Verborgen",
+    "reveal": "Aufdecken",
+    "edit": "Bearbeiten",
+    "totpKey": "Authenticator-Schlüssel",
+    "code": "Code",
+    "codeHidden": "Nicht angezeigt",
+    "codeLeft": "noch {{n}} s",
+    "showCode": "Code anzeigen",
+    "copyField": "{{field}} kopieren",
+    "showField": "{{field}} anzeigen",
+    "hideField": "{{field}} verbergen"
+  },
+  "form": {
+    "addTitle": "Eintrag hinzufügen",
+    "editTitle": "{{label}} bearbeiten",
+    "name": "Name",
+    "nameHint": "Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche. Über diesen Namen finden Sie den Eintrag, auch in der CLI.",
+    "nameTaken": "Ein Eintrag mit diesem Namen existiert bereits",
+    "nameInvalid": "Verwenden Sie Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche",
+    "type": "Typ",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "show": "Passwort anzeigen",
+    "hide": "Passwort verbergen",
+    "generate": "Erzeugen",
+    "generateOptions": "Generator-Optionen",
+    "generateFailed": "Es konnte kein Passwort erzeugt werden",
+    "length": "Länge",
+    "lower": "Kleinbuchstaben",
+    "upper": "Großbuchstaben",
+    "digits": "Ziffern",
+    "symbols": "Sonderzeichen",
+    "url": "Website",
+    "totp": "Authenticator-Schlüssel",
+    "totpHint": "Ein Base32-Schlüssel oder der otpauth://-Link hinter dem QR-Code des Dienstes",
+    "note": "Notiz",
+    "description": "Beschreibung",
+    "descriptionHint": "Wird in der Liste angezeigt. Nicht geheim.",
+    "save": "Speichern"
+  }
+}

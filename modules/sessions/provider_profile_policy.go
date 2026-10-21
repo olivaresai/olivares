@@ -62,11 +62,13 @@ type sessionPolicy struct {
 	PermissionMode string
 	// Re-resolved for each launch; it is not part of the dispatch digest.
 	workGrant string
-	// programs and registries are the declared programs and package registries
-	// (provider_profile_packages.go), re-resolved for each launch like workGrant.
-	programs   []string
-	registries []SessionRegistry
-	unreadable bool
+	// programs, registries and egressHosts are the declared programs, package
+	// registries and egress hosts (provider_profile_packages.go), re-resolved for
+	// each launch like workGrant.
+	programs    []string
+	registries  []SessionRegistry
+	egressHosts []string
+	unreadable  bool
 }
 
 // effectiveTools is what the launch form must emit for this policy: the declared

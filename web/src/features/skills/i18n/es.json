@@ -15,13 +15,14 @@
     "truncatedHint": "Usa olivares skills ls --cursor para listar el resto."
   },
   "detail": {
-    "skills": "Skills de este paquete",
+    "skills": "Habilidades, agentes, comandos y reglas",
     "revisions": "Revisiones",
     "revision": "revisión {{n}}",
     "revisionLine": "Revisión {{n}} desde {{source}}",
     "activeContent": "actúa al cargarse: {{items}}"
   },
   "kind": {
+    "profile": "Perfil",
     "workspace": "Departamento",
     "agent_group": "Grupo de agentes",
     "agent": "Agente",
@@ -56,7 +57,9 @@
     "submit": "Asignar",
     "done": "Paquete de skills asignado",
     "directoryFailed": "No se pudieron cargar los destinos. Cierra y vuelve a abrir el paquete para reintentarlo.",
-    "approve": "He revisado estas skills y apruebo que su herramienta actúe sobre ellas al cargarse: {{skills}}"
+    "approve": "He revisado estas skills y apruebo que su herramienta actúe sobre ellas al cargarse: {{skills}}",
+    "members": "Miembros",
+    "membersHint": "Elige hasta 64 miembros. Las habilidades, los agentes, los comandos y las reglas se pueden seleccionar por separado."
   },
   "install": {
     "title": "Instalar un paquete de skills",

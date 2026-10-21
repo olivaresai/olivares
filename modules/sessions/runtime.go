@@ -7,6 +7,7 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -46,6 +48,9 @@ type runtimeState struct {
 	// (runtime_workspace_dir.go): the alternative is the engine's own working
 	// directory, which is the defect that root exists to remove.
 	sessionWorkspaceRoot string
+	// attachmentRoot is where images attached to a message are kept (run_attachment.go).
+	// Empty refuses attaching with a 503.
+	attachmentRoot string
 	// sessionWorkspaceRootRefusal is why a root the composition root OFFERED was
 	// not taken (runtime_workspace_dir.go, validateSessionWorkspaceRoot). It is
 	// kept so a refused wiring answers with the reason and its remedy instead of
@@ -111,6 +116,9 @@ type runtimeState struct {
 	ringBytes                   int
 	credentialHeartbeatInterval time.Duration
 	stopSweepInterval           time.Duration
+	idleAutoStopPolicy          func(context.Context) (time.Duration, error)
+	idleSettingWarned           string        // cause of the last unreadable-setting warning; cleared when the read succeeds
+	idleSweepInterval           time.Duration // zero: idlePolicySweepInterval
 	sweepCancel                 func()
 
 	// confineProtect are the paths no session child may reach (the engine data
@@ -328,6 +336,15 @@ type liveRun struct {
 	context   context.Context
 	companion LaunchSpec // paths and runner posture only; no agent credentials
 
+	// redactsEveryEarlierValue: the redactor holds every vault secret, repository read
+	// token and package registry token the session's transcript can hold. It holds the
+	// values this launch was given, so it is true for the run's first launch; after a
+	// resume, a launch before it may have printed one the redactor does not hold (a
+	// secret rotated or removed since, the read token minted for that launch). Set
+	// once, before the handle is published, and false unless a launch sets it. The
+	// activity reads and the bridge's replay rule (withholdsReplay) both ask it.
+	redactsEveryEarlierValue bool
+
 	// recordIO is the LaunchGate's verdict: record this run's bridged I/O as
 	// governed ledger evidence. agentRef is the kill-switch agent dimension the active
 	// stop sweep scopes on (empty ⇒ only the estate graduation can stop this run).
@@ -351,6 +368,9 @@ type liveRun struct {
 	// acpEcho holds the person's accepted ACP prompts until the bridge writes them
 	// into the output stream (acp_prompt_echo.go).
 	acpEcho acpPromptEcho
+	// imageEcho holds the messages with images until the tool's echo of each is
+	// replaced by a compact frame (image_echo.go).
+	imageEcho imageEcho
 	// commands is the tool's command catalog for this process (tool_commands.go).
 	commands toolCommandCache
 	// credentialRefused is set while the engine interrupts a Claude turn whose
@@ -383,15 +403,28 @@ type liveRun struct {
 	reservaAbierta bool
 	diferidos      []func()
 
-	mu                 sync.Mutex
-	stopRequested      bool
-	pendingApprovals   []*runApprovalWait
+	mu            sync.Mutex
+	stopRequested bool
+	// lastIOAt and activityVersion are the idle policy's window and its change
+	// witness (runtime_idle_policy.go).
+	lastIOAt         time.Time
+	activityVersion  uint64
+	idleRecheckAt    time.Time // idle policy: no costly look before this
+	idleWarned       string    // idle policy: the cause last logged for this run
+	pendingApprovals []*runApprovalWait
+	// denials is this run's policy-denial budget (runtime_denial_budget.go); viewers counts the
+	// open attach streams, the only "someone is watching" fact the runtime has. The idle policy
+	// reads the same count: a run somebody holds open is not idle.
+	denials            denialCount
+	viewers            atomic.Int32
+	previewRequests    atomic.Int32 // preview requests in flight: holds the idle policy off, is no viewer for the denial budget
 	sessionCalls       []*runtimeSessionCall
 	sessionCallsEnded  bool
 	claudeTurnDone     chan struct{}
 	claudePendingTurns int
 	driverTurnEnded    bool // a driver's last turn ended and no input has started the next (waitingForInput)
 	claudeOutputOpen   bool // Claude produced turn output since its last result (waitingForInput)
+	turnInterrupted    bool // confirmed interrupt; late output cannot reopen work before accepted input
 	stopReason         string
 	ioEvidenceFailure  string                 // safe, terminal reason; protected by mu, survives an operator stop
 	accessStopCause    runtimeAccessStopCause // exact-generation lifecycle cause, never parsed from text
@@ -431,6 +464,11 @@ type liveRun struct {
 	// (runtime_usage.go). It lives on the live run because the provider's counters
 	// restart with every incarnation: the durable sum is on the row.
 	usage usageAccount
+	// limitClear says the stored limit column is known to be empty, so a successful
+	// turn costs no read; windowResetsAt is the latest reset among the account
+	// windows the tool called used up in this turn (runtime_limit.go).
+	limitClear     bool
+	windowResetsAt time.Time
 	// costSinkUnwiredReported dedups the "this session's cost reaches no ledger"
 	// warning to once per run instead of once per turn.
 	costSinkUnwiredReported bool
@@ -577,7 +615,10 @@ type CreateRunParams struct {
 	PermissionMode       string
 	Effort               string
 	Model                string
-	WorkspaceRef         string
+	// Optional speed choices are omitted from old dispatch digests.
+	FastMode     *bool  `json:"fast_mode,omitempty"`
+	ServiceTier  string `json:"service_tier,omitempty"`
+	WorkspaceRef string
 	// WorkspaceDir is the HOST directory this launch's work lands in: the
 	// canonical root of the registered workspace named above, or — when none is
 	// named — the directory of its OWN this plane created for the run
@@ -602,6 +643,8 @@ type CreateRunParams struct {
 	// the governed workspace directory itself, applies when it is false, and
 	// omitempty keeps every existing launch's dispatch digest unchanged.
 	Worktree bool `json:"worktree,omitempty"`
+	// NoSetup skips the folder's setup command for this start only.
+	NoSetup bool `json:"no_setup,omitempty"`
 	// WorktreeFrom is where that worktree starts: a commit id or a local branch of the
 	// workspace's repository (runtime_worktree.go, resolveWorktreeStart). Empty starts it
 	// at the workspace's HEAD, as before, and omitempty keeps every existing launch's
@@ -712,14 +755,17 @@ type CreateRunParams struct {
 	GitRead       string `json:"git_read,omitempty"`
 	gitReadToken  string
 	gitReadDetail string
-	// profilePrograms and profileRegistries are the profile's declared programs
-	// and package registries (provider_profile_packages.go), re-read on every
-	// launch and resume. registryTokens are the opened registry tokens, held for
-	// the output redactor and never persisted; registryDetail is the ledger's line.
-	profilePrograms   []string
-	profileRegistries []SessionRegistry
-	registryTokens    []EnvVar
-	registryDetail    string
+	// profilePrograms, profileRegistries and profileEgressHosts are the profile's
+	// declared programs, package registries and egress hosts
+	// (provider_profile_packages.go), re-read on every launch and resume.
+	// registryTokens are the opened registry tokens, held for the output redactor
+	// and never persisted; registryDetail and egressDetail are the ledger's lines.
+	profilePrograms    []string
+	profileRegistries  []SessionRegistry
+	profileEgressHosts []string
+	registryTokens     []EnvVar
+	registryDetail     string
+	egressDetail       string
 
 	// --- The provider-profile plane (provider_profile.go). ---
 	//
@@ -756,8 +802,9 @@ func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p 
 		TemplateRef: p.TemplateID, TemplateVersion: p.TemplateVersion, TemplateBuiltin: p.TemplateBuiltin,
 		AllowedTools: append([]string(nil), p.AllowedTools...),
 		ToolSurface:  append([]string(nil), p.ToolSurface...), ToolSurfaceDeclared: p.ToolSurfaceDeclared,
-		SecretEnv: append([]SecretEnvRef(nil), p.SecretEnv...),
-		GitRead:   p.GitRead,
+		SecretEnv:       append([]SecretEnvRef(nil), p.SecretEnv...),
+		RegistrySecrets: registryTokenRefs(p.profileRegistries),
+		GitRead:         p.GitRead,
 	}
 	intent.LauncherPrincipal, _ = api.RequestPrincipal(ctx)
 	// The authenticated identity wins; the actor-derived form stays for
@@ -774,7 +821,7 @@ func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p 
 	}
 	if ws != nil {
 		intent.WorkspaceClassified = ws.dlpMode != dlpOff
-		intent.WorkspaceReadWrite = ws.mountMode == mountRW
+		intent.WorkspaceReadWrite = ws.mountMode != mountRO // write_no_delete still writes
 	}
 	intent.FolderPath, _ = launchWorkspaceTarget(p, ws)
 	return intent
@@ -1083,6 +1130,9 @@ func (m *Module) createRunInternal(
 	// that wrote something keeps its bytes.
 	rowCommitted := false
 	if p.Worktree {
+		if err := workspaceSetupStartError(ws, p.NoSetup); err != nil {
+			return runDTO{}, err
+		}
 		// The opt-in: a worktree and branch of the workspace's repository. Made at
 		// the same point as the directory above, for the same reason, and removed
 		// again (fresh, so nothing is lost) when the launch is refused before its row.
@@ -1119,6 +1169,14 @@ func (m *Module) createRunInternal(
 	if work != nil {
 		identityWorkspace = work.reservation.workspaceID
 		claimHolder = work.reservation.claimHolder
+	}
+	// Repo-resident agent configuration is untrusted input. It is read before the
+	// claim, the budget and any approval are spent, in the directory the tool runs
+	// in; only a Claude launch that may still carry the engine's hooks waits for
+	// the gate's environment to be decided.
+	projectConfig := m.checkProjectConfig(ctx, tenant, p, ws)
+	if projectConfig.refusal != nil && !m.claudeHooksMayApply(p) {
+		return runDTO{}, projectConfig.refusal
 	}
 	lease, err := m.admitInWorkspace(ctx, tenant, runRef, claimHolder, identityWorkspace)
 	if err != nil {
@@ -1158,6 +1216,12 @@ func (m *Module) createRunInternal(
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
 	}
+	// A Claude launch the check let through until the gate granted its environment
+	// is decided here (projectConfigStartError); nothing is minted before it.
+	if err := m.projectConfigStartError(ctx, tenant, p, ws, projectConfig, pr.injectEnv); err != nil {
+		m.releaseLaunchClaim(ctx, tenant, lease)
+		return runDTO{}, err
+	}
 	// Resolve the AUTHORIZED authentication source into the short-lived material
 	// this launch runs under: the Claude inference credential on the historical
 	// path (stream-json only; remote-control uses the operator's subscription
@@ -1175,6 +1239,7 @@ func (m *Module) createRunInternal(
 		return runDTO{}, err
 	}
 	runtimeCreds.launchID = model.NewID()
+	p.queuedCredential = m.bindResumeCredential(ctx, runRef, p.queuedCredential)
 
 	// Persist the PENDING row + the 'created' ledger event (one transaction), with the
 	// admission stamp written under the claim's own authority: the claim row is re-read
@@ -1256,7 +1321,7 @@ func (m *Module) createRunInternal(
 			lr := &liveRun{
 				tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
 				proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
-				redact: p.outputRedactor(),
+				redact: p.outputRedactor(), redactsEveryEarlierValue: true,
 				cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 				workspaceRef:                    p.WorkspaceRef,
@@ -1312,7 +1377,7 @@ func (m *Module) createRunInternal(
 	lr := &liveRun{
 		tenant: tenant, runRef: runRef, runID: runID, transport: p.Transport,
 		proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: newOutputRing(m.rt.ringFrames, m.rt.ringBytes),
-		redact: p.outputRedactor(),
+		redact: p.outputRedactor(), redactsEveryEarlierValue: true,
 		cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 		workspaceRef:                    p.WorkspaceRef,
@@ -1362,7 +1427,7 @@ func (m *Module) createRunInternal(
 	rec, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "launched", toState: stateRunning,
 		detail: joinDetail(pr.contextPolicySummary, templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, codexSandboxDetail(p, spec)),
+			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
 		actor: p.Actor, actorKind: p.ActorKind, guard: guardRuntimeLaunch(runtimeCreds.launchID),
 		confinement: reportedConfinement(proc),
 		mutate: func(rec model.Record) {
@@ -1437,6 +1502,16 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		return runDTO{}, err
 	}
 	var queuedLauncher auth.Principal
+	// The engine's own resume asks what its restored launcher may do now, as a queued launch does.
+	engineLauncher, engineResume := engineResumeFrom(ctx)
+	if engineResume {
+		// The pass lists the engine's runs before it resumes them one by one: a run a person
+		// resumed or stopped since is theirs now, whatever the listing said.
+		if rec.String(colState) != stateStopped || !endedByTheEngine(rec.String(colReason)) {
+			return runDTO{}, conflictErr("run no longer waits for the engine's resume")
+		}
+		asks = m.principalAsks(ctx, tenant, engineLauncher)
+	}
 	switch rec.String(colState) {
 	case stateWaitingApproval:
 		if !queued {
@@ -1463,11 +1538,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 			// The approval says the launch may run; it never says the launcher may
 			// still give vault secrets. That is asked of the launcher as restored
 			// now, before any vault read or spawn below.
-			queuedCtx := ctx
-			asks = callerAsks{
-				runUnrestricted: func() bool { return m.principalMayRunUnrestricted(queuedCtx, tenant, principal) },
-				secretEnv:       func() bool { return m.principalMayUseSecretEnv(queuedCtx, tenant, principal) },
-			}
+			asks = m.principalAsks(ctx, tenant, principal)
 		} else if m.rt.CommunicationCredentialsEnabled {
 			return runDTO{}, errors.New("queued launch authorization is unavailable")
 		}
@@ -1539,6 +1610,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		WorktreeBranch: rec.String(colRunWorktreeBranch),
 		Transport:      transport, PermissionMode: rec.String(colPermissionMode),
 		Effort: rec.String(colEffort), Model: rec.String(colRunModelRef),
+		FastMode: runFastMode(rec), ServiceTier: rec.String(colRunServiceTier),
 		WorkspaceRef: rec.String(colWorkspaceRef), Isolation: Isolation(rec.String(colIsolation)),
 		// Both are needed: AgentRef is the AUTHENTICATED agent identity
 		// sessionStopGate.Check decides on, and TemplateID re-resolves the template on
@@ -1630,6 +1702,13 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if err := refuseUnrestrictedFor(p.PermissionMode, p.MayRunUnrestricted); err != nil {
 		return runDTO{}, err
 	}
+	// Repo-resident agent configuration is untrusted input, read again in the
+	// directory this launch runs in before the reservation, a budget or an approval
+	// is spent (see createRunInternal).
+	projectConfig := m.checkProjectConfig(ctx, tenant, p, ws)
+	if projectConfig.refusal != nil && !m.claudeHooksMayApply(p) {
+		return runDTO{}, projectConfig.refusal
+	}
 	// The kill-switch first and alone: a stopped estate must not even reach the
 	// admission plane, which writes.
 	agentRef := agentIdentity
@@ -1653,6 +1732,12 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		return runDTO{}, err
 	}
 	previousState := rec.String(colState)
+	// What the row says before this launch adds its own tokens. Until a launch has
+	// reported the tool's conversation id there is no transcript an earlier launch
+	// wrote that a read can reach (a queued launch, or a first launch that failed
+	// before the tool started), and this one starts a conversation of its own.
+	earlierValuesUnheld := claudeID != "" && m.earlierLaunchValuesMayBeUnheld(ctx, tenant, rec)
+	previousReason := rec.String(colReason)
 	launchID := model.NewID()
 	// Cross-node reservation BEFORE Claim rotation and every mint. The in-process
 	// opLock is intentionally insufficient in HA: only this row transition is
@@ -1662,7 +1747,20 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	reservation, err := m.transition(ctx, tenant, runRef, transitionInput{
 		event: "resuming", toState: statePending,
 		actor: actor, actorKind: actorKind,
-		mutate: func(record model.Record) { record[colRuntimeLaunchID] = launchID.String() },
+		mutate: func(record model.Record) {
+			record[colRuntimeLaunchID] = launchID.String()
+			// The current declaration reaches this launch, so the row records its tokens
+			// before the process can print one (the same order as arming the redactor).
+			// A row that records nothing stays unknown unless this launch opens a token.
+			if used := withRegistryTokens(record.String(colRunRegistrySecrets), p.profileRegistries); used != "" {
+				record[colRunRegistrySecrets] = used
+			}
+			// The policy's note describes the stop it ended; a later stop by a
+			// person must not read as one made to free memory.
+			if previousReason == idlePolicyReason {
+				record[colReason] = ""
+			}
+		},
 	})
 	if err != nil {
 		return runDTO{}, err
@@ -1677,8 +1775,19 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		_, transitionErr := m.transition(context.WithoutCancel(ctx), tenant, runRef, transitionInput{
 			event: "resume_aborted", toState: previousState,
 			detail: "resume refused before process launch", actor: actor, actorKind: actorKind,
-			guard:  guardRuntimeLaunch(launchID),
-			mutate: func(record model.Record) { record[colRuntimeLaunchID] = nil },
+			// The engine's own stop reason is what the next start looks for to try this run again.
+			keepReason: endedByTheEngine(previousReason),
+			guard:      guardRuntimeLaunch(launchID),
+			mutate: func(record model.Record) {
+				record[colRuntimeLaunchID] = nil
+				// No process ran with this launch's registry tokens, so the row says again
+				// what it said before the reservation.
+				if before := rec.String(colRunRegistrySecrets); before != "" {
+					record[colRunRegistrySecrets] = before
+				} else {
+					record[colRunRegistrySecrets] = nil
+				}
+			},
 		})
 		return runDTO{}, errors.Join(cause, transitionErr)
 	}
@@ -1713,6 +1822,8 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if queued {
 		intent.LauncherPrincipal = queuedLauncher
 		intent.ApprovalRef = rec.String(colApprovalRef)
+	} else if engineResume {
+		intent.LauncherPrincipal = engineLauncher
 	}
 	pr, err := m.preflight(ctx, tenant, intent, StopDims{RunRef: runRef, AgentRef: intent.AgentRef}, launchDriverKey(p))
 	if err != nil {
@@ -1723,6 +1834,9 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 			err = &codedRunErr{conflictErr("This session needs a human approval to resume. Approve " +
 				approvalURL(waiting.ref) + ", then resume it again."), "approval_required"}
 		}
+		return abortReservation(err, lease)
+	}
+	if err := m.projectConfigStartError(ctx, tenant, p, ws, projectConfig, pr.injectEnv); err != nil {
 		return abortReservation(err, lease)
 	}
 	cred, providerEnv, err := m.mintLaunchAuthority(ctx, tenant, runRef, p)
@@ -1761,7 +1875,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 			lr := &liveRun{
 				tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
 				proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: ring,
-				redact: p.outputRedactor(),
+				redact: p.outputRedactor(), redactsEveryEarlierValue: !earlierValuesUnheld,
 				cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 				recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 				workspaceRef:                    p.WorkspaceRef,
@@ -1802,7 +1916,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	lr := &liveRun{
 		tenant: tenant, runRef: runRef, runID: model.ID(rec.String(model.ColID)), transport: transport,
 		proc: proc, program: spec.Program, programIdentity: p.resolvedIdentity, ring: ring,
-		redact: p.outputRedactor(),
+		redact: p.outputRedactor(), redactsEveryEarlierValue: !earlierValuesUnheld,
 		cancel: cancel, context: runCtx, companion: companionSpec(spec), finalizedCh: make(chan struct{}),
 		recordIO: pr.recordIO, agentRef: intent.AgentRef, claim: lease, profile: p.ProviderHome,
 		workspaceRef:                    p.WorkspaceRef,
@@ -1845,8 +1959,8 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	gf := govFactsFor(intent, pr)
 	updated, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "resumed", toState: stateRunning,
-		detail: joinDetail(templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, codexSandboxDetail(p, spec)),
+		detail: joinDetail(engineResumeNote(ctx), templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
+			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
 		actor: actor, actorKind: actorKind, lease: lease, guard: guardRuntimeLaunch(launchID),
 		confinement: reportedConfinement(proc),
 		mutate: func(rec model.Record) {
@@ -1863,6 +1977,10 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 			// the NEXT resume a stale baseline.
 			rec[colPermissionMode] = p.PermissionMode
 			setOrNull(rec, colEffort, p.Effort)
+			if p.FastMode != nil {
+				rec[colRunFastMode] = *p.FastMode
+			}
+			setOrNull(rec, colRunServiceTier, p.ServiceTier)
 			setOrNull(rec, colRunModelRef, p.Model)
 			// The directory the child was just spawned in. A run that predates the
 			// column adopts the one it is now running in; a run that already carried
@@ -1967,7 +2085,7 @@ func (m *Module) stopRunLoaded(ctx context.Context, tenant model.TenantID, runRe
 		}
 		// No live handle: the row is non-terminal but orphaned (process not tracked —
 		// e.g. after a runtime restart). Reconcile honestly.
-		dto, err := m.reconcileTerminal(ctx, tenant, runRef, rec, actor, actorKind)
+		dto, err := m.reconcileTerminal(ctx, tenant, runRef, rec, actor, actorKind, orphanedDetail)
 		return dto, true, err
 	}
 	// The operator's authority is re-proved before the process is touched. A stop is
@@ -2191,8 +2309,36 @@ func (m *Module) sendTextInput(ctx context.Context, tenant model.TenantID, runRe
 	if err := m.refuseUnfencedActiveWork(ctx, tenant, rec); err != nil {
 		return err
 	}
-	_, err = m.sendTextInputLoaded(ctx, tenant, runRef, text, rec)
-	return err
+	if _, err = m.sendTextInputLoaded(ctx, tenant, runRef, text, nil, rec); err != nil {
+		return err
+	}
+	m.answerDenialBreach(tenant, runRef)
+	return nil
+}
+
+// sendImageInput is sendTextInput for a message that carries images: the same lock,
+// the same checks, and the images delivered natively by the run's tool.
+func (m *Module) sendImageInput(ctx context.Context, tenant model.TenantID, runRef, text string, images []turnImage) error {
+	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
+	if err != nil {
+		return err
+	}
+	defer release()
+	rec, err := m.loadRun(ctx, tenant, runRef)
+	if err != nil {
+		return err
+	}
+	if why := imageRefusal(rec); why != "" {
+		return &runErr{http.StatusUnprocessableEntity, why}
+	}
+	if err := m.refuseUnfencedActiveWork(ctx, tenant, rec); err != nil {
+		return err
+	}
+	if _, err = m.sendTextInputLoaded(ctx, tenant, runRef, text, images, rec); err != nil {
+		return err
+	}
+	m.answerDenialBreach(tenant, runRef)
+	return nil
 }
 
 // sendTextInputLoaded is the shared body of the operator and work-fenced text
@@ -2205,32 +2351,57 @@ func (m *Module) sendTextInputLoaded(
 	ctx context.Context,
 	tenant model.TenantID,
 	runRef, text string,
+	images []turnImage,
 	rec model.Record,
 ) (bool, error) {
-	if line, ok := claudeTextTurn(rec, text); ok {
+	if line, ok := claudeTextTurn(rec, text, images); ok {
 		if lr, live := m.rt.getLive(tenant, runRef); live && lr.session == nil {
-			return m.sendInputLoaded(ctx, tenant, runRef, line, rec)
+			var echo *imageTurn
+			if len(images) > 0 {
+				echo = lr.imageEcho.queue(text, images)
+			}
+			attempted, err := m.sendInputLoaded(ctx, tenant, runRef, line, rec)
+			if echo != nil && (!attempted || err != nil) {
+				lr.imageEcho.drop(echo)
+			}
+			return attempted, err
 		}
 	}
 	lr, err := m.textInputLive(tenant, runRef, rec)
 	if err != nil {
 		return false, err
 	}
-	return m.driverInput(ctx, lr, text)
+	return m.driverInputImages(ctx, lr, text, images)
 }
 
 // claudeTextTurn is text as the one user-message line a Claude Code stream-json
 // child reads. Claude Code has no protocol driver, so the frame is encoded here,
 // never taken from the caller: JSON escapes every newline, so the text stays one
 // turn. A run with no profile driver recorded is a Claude run (launchDriverKey).
-func claudeTextTurn(rec model.Record, text string) ([]byte, bool) {
+//
+// Images go in as image content blocks ahead of the text, the shape Claude Code
+// passes on to the API unchanged (measured on 2.1.299 against a stub API).
+func claudeTextTurn(rec model.Record, text string, images []turnImage) ([]byte, bool) {
 	driver := rec.String(colRunProfileDriver)
 	if Transport(rec.String(colTransport)) != TransportStreamJSON || (driver != "" && driver != providerDriverClaude) {
 		return nil, false
 	}
+	var content any = text
+	if len(images) > 0 {
+		blocks := make([]map[string]any, 0, len(images)+1)
+		for _, img := range images {
+			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{
+				"type": "base64", "media_type": img.MediaType, "data": base64.StdEncoding.EncodeToString(img.Data),
+			}})
+		}
+		if strings.TrimSpace(text) != "" {
+			blocks = append(blocks, map[string]any{"type": "text", "text": text})
+		}
+		content = blocks
+	}
 	line, err := json.Marshal(map[string]any{
 		"type":    "user",
-		"message": map[string]any{"role": "user", "content": text},
+		"message": map[string]any{"role": "user", "content": content},
 	})
 	return line, err == nil
 }
@@ -2346,6 +2517,17 @@ func (m *Module) cleanupRunWith(ctx context.Context, tenant model.TenantID, runR
 	if err != nil {
 		return runDTO{}, err
 	}
+	// A released session leaves every pinned group (#2130). The release has
+	// committed, so a failure here must not be reported as a failed release: the
+	// read path refuses to mark a cleaned run pinned anyway (run_pin.go
+	// decorateRunPin), which makes a row left behind invisible, not wrong.
+	// Detached from the caller's cancellation: the release is done either way.
+	dropCtx := context.WithoutCancel(ctx)
+	if err := m.Data.Mutate(dropCtx, tenant, func(sc store.Scope) error {
+		return dropRunPins(dropCtx, sc, runRef)
+	}); err != nil {
+		m.warnf("sessions: the pins of a released session were not removed", "run_ref", runRef, "error", err)
+	}
 	return m.toRunDTO(updated), nil
 }
 
@@ -2358,7 +2540,8 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef st
 		return err
 	}
 	defer release()
-	return m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	var claimSID string
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -2382,8 +2565,32 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef st
 		if perr != nil {
 			return badRequest("malformed run id")
 		}
-		return repo.Delete(ctx, id)
+		if err := repo.Delete(ctx, id); err != nil {
+			return err
+		}
+		claimSID = rec.String(colRunClaimSID)
+		// A deleted session leaves no pin rows behind — same transaction as the
+		// delete itself (#2130).
+		return dropRunPins(ctx, sc, runRef)
 	})
+	if err != nil {
+		return err
+	}
+	// The images attached to its messages go with the session.
+	m.removeRunAttachments(tenant, runRef)
+	// So do the live rows the plane kept for it (#2328). They carry no workspace
+	// lineage, which a workspace-confined caller's scope refuses, so the engine removes
+	// them in a transaction of its own; the confined lookup above already proved the
+	// caller may delete this run. The request's confinement and cancellation end here:
+	// the run is gone either way.
+	engine := api.DetachRequestContext(context.WithoutCancel(ctx))
+	if err := m.Data.Mutate(engine, tenant, func(sc store.Scope) error {
+		return dropRunLive(engine, sc, runRef, claimSID)
+	}); err != nil {
+		m.warnf("sessions: a deleted session's live rows were not removed", "run_ref", runRef, "error", err)
+		return &runErr{http.StatusInternalServerError, "the session was removed, but its live rows could not be; they remain in the live list"}
+	}
+	return nil
 }
 
 // sendInput writes one NDJSON line to a live session's stdin.
@@ -2412,8 +2619,11 @@ func (m *Module) sendInput(ctx context.Context, tenant model.TenantID, runRef st
 	if err := m.refuseUnfencedActiveWork(ctx, tenant, rec); err != nil {
 		return err
 	}
-	_, err = m.sendInputLoaded(ctx, tenant, runRef, line, rec)
-	return err
+	if _, err = m.sendInputLoaded(ctx, tenant, runRef, line, rec); err != nil {
+		return err
+	}
+	m.answerDenialBreach(tenant, runRef)
+	return nil
 }
 
 // sendInputLoaded reports whether Process.Send was invoked after the caller
@@ -2482,7 +2692,17 @@ func (m *Module) sendInputAdmitted(ctx context.Context, lr *liveRun, line []byte
 		}
 	}
 	attempted = true
+	wasInterrupted := false
+	if frame, ok := parseStreamJSON(line); ok && frame.Type == "user" {
+		wasInterrupted = lr.setTurnInterrupted(false)
+	}
+	lr.noteIdleActivity(m.now())
 	if err := lr.proc.Send(ctx, line); err != nil {
+		// A refused input is not accepted input: the confirmed interruption stands,
+		// as for a driver run (driverInputAdmitted).
+		if wasInterrupted {
+			lr.setTurnInterrupted(true)
+		}
 		// The process may echo launch credentials; only fixed diagnostics escape.
 		m.warnf("session input rejected", "run_ref", lr.runRef)
 		return true, badRequest("input rejected (the session is not accepting input)")
@@ -2814,6 +3034,11 @@ func (m *Module) persistWaitingRun(ctx context.Context, tenant model.TenantID, r
 }
 
 func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRef string, p CreateRunParams, credID, credScheme string, gf runGovFacts, lease Lease, work *workLaunchReservation, phase string, runtimeCredentialSet ...runtimeCredentials) (model.ID, error) {
+	releasePeers, err := m.rt.lockRunContext(ctx, idlePeerAdmissionKey(tenant))
+	if err != nil {
+		return "", err
+	}
+	defer releasePeers()
 	if len(runtimeCredentialSet) > 1 ||
 		(phase != stateWaitingApproval && m.rt.CommunicationCredentialsEnabled && len(runtimeCredentialSet) != 1) {
 		return "", &runErr{
@@ -2829,7 +3054,7 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 		}
 	}
 	var runID model.ID
-	err := m.authorizedMutate(ctx, tenant, lease, func(sc store.Scope) error {
+	err = m.authorizedMutate(ctx, tenant, lease, func(sc store.Scope) error {
 		var credentials runtimeCredentials
 		if len(runtimeCredentialSet) > 0 {
 			credentials = runtimeCredentialSet[0]
@@ -2852,6 +3077,15 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 			colLastEventSeq:   int64(0),
 		}
 		setIf(row, colRunName, p.Name)
+		if launcher := p.queuedCredential.UserID; !launcher.IsZero() {
+			row[colRunLauncherUserID] = launcher.String()
+		}
+		if c := p.queuedCredential; c.Seal != "" && !c.ID.IsZero() {
+			row[colRunResumeCredentialID] = c.ID.String()
+			row[colRunResumeCredentialKind] = string(c.Kind)
+			row[colRunResumeCredentialVersion] = c.Version
+			row[colRunResumeCredentialSeal] = c.Seal
+		}
 		if phase == stateWaitingApproval {
 			questionIntent := *p.queuedIntent
 			questionIntent.Actor, questionIntent.ActorKind, questionIntent.Holder, questionIntent.AgentRef = "", "", "", ""
@@ -2870,6 +3104,10 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 			row[colRunEnvAllow] = string(names)
 		}
 		setIf(row, colEffort, p.Effort)
+		if p.FastMode != nil {
+			row[colRunFastMode] = *p.FastMode
+		}
+		setIf(row, colRunServiceTier, p.ServiceTier)
 		setIf(row, colRunModelRef, p.Model)
 		setIf(row, colWorkspaceRef, p.WorkspaceRef)
 		setIf(row, colRunWorkspacePath, p.WorkspaceDir)
@@ -2886,6 +3124,9 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 		}
 		setIf(row, colRunSecretEnv, encodeSecretEnv(p.SecretEnv))
 		setIf(row, colRunGitRead, p.GitRead)
+		// Recorded for every launch, "[]" when it opens none: a row without it
+		// predates the column and is not known to be free of a registry token.
+		row[colRunRegistrySecrets] = cmpOr(withRegistryTokens("", p.profileRegistries), "[]")
 		if p.MaxDuration > 0 {
 			row[colTemplateCeiling] = int64(p.MaxDuration / time.Second)
 		}
@@ -3082,6 +3323,7 @@ func lapseNotRecordedErr(err error) error {
 
 // transitionInput parameterizes a state transition on an existing run row.
 type transitionInput struct {
+	policyStop  bool           // the runtime idle policy, recorded distinctly in audit metadata
 	confinement *confine.State // reported launch capability; no paths or credentials
 	event       string
 	toState     string // "" keeps the current state (e.g. an intermediate 'stopping')
@@ -3168,6 +3410,13 @@ var errIllegalTransition = errors.New("sessions: illegal state transition")
 // racing writer (the bridge vs a handler). An illegal transition is rejected with
 // a conflict (the racing/late writer loses instead of corrupting state).
 func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef string, in transitionInput) (model.Record, error) {
+	if in.event == "resuming" {
+		release, err := m.rt.lockRunContext(ctx, idlePeerAdmissionKey(tenant))
+		if err != nil {
+			return nil, err
+		}
+		defer release()
+	}
 	var out model.Record
 	var illegalFrom string
 	var obs lapseObservation
@@ -3267,6 +3516,7 @@ func (m *Module) transition(ctx context.Context, tenant model.TenantID, runRef s
 			actor: in.actor, actorKind: in.actorKind, at: m.now(),
 			terminalEvidence: evidence,
 			accessStopCause:  in.accessStopCause,
+			policyStop:       in.policyStop,
 			confinement:      in.confinement,
 		})
 		if err != nil {
@@ -3507,10 +3757,17 @@ func (m *Module) expireRun(lr *liveRun, d time.Duration) {
 	if cur, ok := m.rt.getLive(lr.tenant, lr.runRef); !ok || cur != lr {
 		return // a successor owns this run now; its own ceiling governs it
 	}
+	m.stopOwnedRun(lr, "max session duration reached ("+d.String()+", template policy)")
+}
+
+// stopOwnedRun is the runtime ending a session it owns for a policy reason: the duration
+// ceiling, the denial budget. detail is the ledger's note of why. It reports whether this
+// call ended the run, false when somebody else already had.
+func (m *Module) stopOwnedRun(lr *liveRun, detail string) bool {
 	lr.mu.Lock()
 	if lr.finalized || lr.stopRequested {
 		lr.mu.Unlock()
-		return
+		return false
 	}
 	lr.stopRequested = true
 	lr.mu.Unlock()
@@ -3524,24 +3781,25 @@ func (m *Module) expireRun(lr *liveRun, d time.Duration) {
 	// ceiling its own template imposed.
 	if _, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
 		event:  "stopping",
-		detail: "max session duration reached (" + d.String() + ", template policy)",
+		detail: detail,
 		actor:  model.ActorSystem, actorKind: model.ActorSystem,
 		guard: guardRuntimeLaunch(lr.launchID),
 	}); err != nil {
-		m.warnf("sessions: could not record the duration-ceiling stop", "run_ref", lr.runRef, "err", redactErr(err))
+		m.warnf("sessions: could not record the policy stop", "run_ref", lr.runRef, "err", redactErr(err))
 	}
 	if err := secretSafeCredentialError("session process duration stop", lr.proc.Stop(ctx)); err != nil {
-		m.warnf("sessions: the duration ceiling could not stop the process gracefully; canceling its context",
+		m.warnf("sessions: a policy stop could not end the process gracefully; canceling its context",
 			"run_ref", lr.runRef)
-		lr.cancel() // SIGKILL the process group — the ceiling is not advisory
+		lr.cancel() // SIGKILL the process group — a policy stop is not advisory
 	}
 	// Stop is only an attempt: a custom runner may return an error without closing
 	// Output, so finalize might never observe exit. Withdraw both API authorities
 	// synchronously after the attempt instead of relying on that callback.
 	if err := m.revokeLiveRuntimeCredentials(ctx, lr); err != nil {
-		m.warnf("sessions: duration-ceiling runtime credential revocation incomplete",
+		m.warnf("sessions: policy-stop runtime credential revocation incomplete",
 			"run_ref", lr.runRef)
 	}
+	return true
 }
 
 // templateDetail is the non-sensitive, ledger-bound note a templated launch leaves: the
@@ -3596,11 +3854,21 @@ func (m *Module) reapClosed(lr *liveRun) {
 	m.rt.dropLiveIf(lr)
 }
 
+// What a row stopped without its process says about why. Both keep saying the
+// process is not confirmed terminated: a restarted engine cannot prove an old one
+// exited.
+const (
+	orphanedDetail   = "orphaned: runtime handle lost; process not confirmed terminated"
+	engineDiedDetail = engineDiedReason + " (runtime handle lost; process not confirmed terminated)"
+)
+
 // reconcileTerminal handles a stop request for a row with no live handle: if the
 // row is still in a non-terminal state it is an orphan (the process is gone, e.g.
 // after a runtime restart) and is honestly moved to stopped; otherwise it is
-// already terminal and returned as-is.
-func (m *Module) reconcileTerminal(ctx context.Context, tenant model.TenantID, runRef string, rec model.Record, actor, actorKind string) (runDTO, error) {
+// already terminal and returned as-is. detail is what the stopped row says about
+// why: orphanedDetail when only the handle is known to be gone, engineDiedDetail
+// when the engine that held the process is known to have died.
+func (m *Module) reconcileTerminal(ctx context.Context, tenant model.TenantID, runRef string, rec model.Record, actor, actorKind, detail string) (runDTO, error) {
 	switch rec.String(colState) {
 	case stateWaitingApproval:
 		updated, err := m.transition(ctx, tenant, runRef, transitionInput{event: "stopped", toState: stateStopped, actor: actor, actorKind: actorKind, detail: "waiting launch canceled", mutate: func(r model.Record) { r[colReason] = "waiting launch canceled" }})
@@ -3657,7 +3925,7 @@ func (m *Module) reconcileTerminal(ctx context.Context, tenant model.TenantID, r
 		// uncertainty rather than asserting a clean termination that we did not perform.
 		updated, err := m.transition(ctx, tenant, runRef, transitionInput{
 			event: "stopped", toState: stateStopped,
-			detail: "orphaned: runtime handle lost; process not confirmed terminated",
+			detail: detail,
 			actor:  actor, actorKind: actorKind,
 			// The detail has always said the process is not confirmed terminated. P1
 			// records that as a value a reader can match on instead of prose.
@@ -3740,6 +4008,17 @@ func (m *Module) RunningSessions() int {
 
 // engineStoppedReason is the run's reason when the engine itself stopped it.
 const engineStoppedReason = "the engine stopped; resume the session to continue"
+
+// engineDiedReason opens the reason of a run a crashed engine left behind (the detail
+// follows it); the crash recovery writes it. Like engineStoppedReason
+// it says the engine ended the run, not a person, so the next start resumes both.
+const engineDiedReason = "the engine died; resume the session to continue"
+
+// endedByTheEngine reports a stop reason the engine wrote: its clean stop, or the
+// crash it left the run behind in (a detail follows engineDiedReason).
+func endedByTheEngine(reason string) bool {
+	return reason == engineStoppedReason || strings.HasPrefix(reason, engineDiedReason)
+}
 
 // stopAllRuns terminates every supervised process on module shutdown. Resume
 // recovers the conversation.

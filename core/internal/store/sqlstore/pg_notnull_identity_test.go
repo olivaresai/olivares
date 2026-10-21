@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/store"
@@ -50,7 +49,7 @@ func renamePostgresNotNullConstraints(t *testing.T, db *sql.DB, table string) in
 func TestPostgresLoginCapabilityNotNullIdentityAndDrift(t *testing.T) {
 	for _, variant := range []string{"fresh_open", "schema_apply", "renamed_not_null", "missing_not_null", "renamed_primary_key"} {
 		t.Run(variant, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 			defer cancel()
 			pg := isolatedPGSplit(t)
 			cfg := store.Config{Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner, AdminDSN: pg.Admin, MaxConns: 4}

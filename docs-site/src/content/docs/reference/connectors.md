@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Business]
-Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL air-gap transfer also require Business.
 :::
 
 This page is the **catalog** of first-party connectors and, for each, the **honest
@@ -101,7 +101,7 @@ honestly rather than appearing healthy).
 |---|---|---|
 | `claude` | Claude Code OTLP tool telemetry + MCP introspection → edges / cost / findings | Out-of-process plugin; `attributed` when a per-agent identity is present, else `approximate` |
 | `claude-api` | Claude Admin-API cost samples + governance-posture findings | In-process; a no-op offline (no admin key) |
-| `claude-compliance` | Claude Compliance activity-feed evidence → findings | GET-only by construction; no-op offline |
+| `claude-compliance` | Claude Compliance activity-feed evidence → findings | GET-only by construction; no-op offline (Business) |
 | `claude-config` | Static Claude config tree (subagents / Skills / plugins) → **declared-capability** edges | Metadata only — a capability surface, not an observed access |
 | `claude-console` | Claude org IAM → SSO/SCIM posture findings (identity roster + source) | Business: Identity & Scale |
 | `claude-wif` | Anthropic non-human-identity / workload-identity roster + permitted-scope edges | Business: Identity & Scale; models operator-declared federation; flags static-key footguns |
@@ -262,7 +262,7 @@ hyphenated `pg-audit` / `s3-cloudtrail` aliases resolve too).
 | `bigquery-audit` | BigQuery data-access audit |
 | `redshift-audit` | Amazon Redshift audit |
 | `mssql-audit` | SQL Server audit |
-| `oracle-audit` | Oracle unified audit |
+| `oracle-audit` | Oracle unified audit (Business) |
 | `gcs-audit` | Google Cloud Storage data-access audit |
 | `azure-blob-audit` | Azure Blob Storage audit |
 
@@ -271,7 +271,7 @@ hyphenated `pg-audit` / `s3-cloudtrail` aliases resolve too).
 | Kind | Observes | Notes |
 |---|---|---|
 | `mysql-audit` | Reads the MariaDB audit log or the MySQL general log. | Opt-in. Query text is not stored. Not yet tested on ordinary MySQL deployments. |
-| `servicenow-cmdb` | Reads configuration items from a ServiceNow CMDB. | Opt-in. Not yet tested against a production ServiceNow instance. |
+| `servicenow-cmdb` | Reads configuration items from a ServiceNow CMDB. | Opt-in. Not yet tested against a production ServiceNow instance. (Business) |
 
 ## Cloud management plane — org/tenant inventory + control-plane activity
 
@@ -365,7 +365,7 @@ role / process / shared credential rather than a resolved agent.
 | `iceberg-catalog` | Iceberg REST catalog → permitted grants + vended-credential identities | permitted |
 | `inference-gateway` | K8s Gateway API Inference-Extension routing → permitted inference routes | permitted |
 | `aws-kms` / `gcp-kms` / `azure-key-vault` | Cloud KMS audit → key-access edges (never key material) | approximate |
-| `external-secrets` / `sops` / `kmip` | Secret-management manifests / KMIP locate → provisioning/custody edges | approximate (existence, not use) |
+| `external-secrets` / `sops` / `kmip` | Secret-management manifests / KMIP locate → provisioning/custody edges | approximate (existence, not use); `kmip`: Business |
 | `istio-telemetry` | Istio Telemetry CRDs → L7 mesh edges | approximate (parsed CRDs, not live flows) |
 | `egress-proxy` | Egress-proxy verdict log → L7 egress edges | approximate |
 | `kong-audit` | Kong audit logs → config-change findings | approximate |
@@ -502,10 +502,10 @@ email; the module redacts the body before persisting).
 | `gdrive` | Google Drive documents (Docs/Sheets/Slides/files) |
 | `confluence` | Atlassian Confluence spaces & pages |
 | `notion` | Notion workspaces, databases & pages |
-| `sharepoint` | Microsoft SharePoint / OneDrive sites & documents |
+| `sharepoint` | Microsoft SharePoint / OneDrive sites & documents (Business) |
 | `s3content` | Object-storage content (S3 / R2 / GCS objects) |
-| `sap_odata` | SAP OData service entities as governed documents |
-| `salesforce` | Salesforce objects/records as governed documents |
+| `sap_odata` | SAP OData service entities as governed documents (Business) |
+| `salesforce` | Salesforce objects/records as governed documents (Business) |
 | `snowflake` | Snowflake tables/rows as governed documents (distinct from the `snowflake-audit` R/RW observer) |
 | `azure_ai_search` | Azure AI Search index documents |
 | `postgres` | PostgreSQL rows as governed documents — read-only by construction, declared per-row ACL, per-column classification (distinct from the `pgaudit` R/RW observer; not NL-to-SQL). See [Postgres as a governed context source](/how-to/govern-postgres-content/). |

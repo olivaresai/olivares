@@ -28,7 +28,8 @@ import (
 //     DecisionRequest it requested or owns and a Handoff that names it, while
 //     each is not terminal, a protocol interrupt still awaiting its response and
 //     an MCP task it owns while its binding is open block the retirement until
-//     the tenant resolves them;
+//     the tenant resolves them, as does a run the engine's own stop ended, which the
+//     next start resumes with the account's launch credential;
 //   - a delivery or an audience arc naming the account and a WorkItem it owns are
 //     kept and reported by nothing: a delivery is bound to the tenant's
 //     membership, which the offboard already removed, and a WorkItem owner is a
@@ -49,6 +50,7 @@ var retirementCovers = []string{
 	string(runKind) + "." + colRunQueuedActor,
 	string(runKind) + "." + colRunQueuedUserID,
 	string(runKind) + "." + colRunQueuedCredentialID,
+	string(runKind) + "." + colRunResumeCredentialID,
 	string(channelGrantKind) + "." + colCommSubjectRef,
 	string(channelSubscriptionKind) + "." + colCommSubscriberRef,
 	string(communicationEndpointKind) + "." + colCommOwnerRef,
@@ -290,6 +292,9 @@ func retirementBlockers(ctx context.Context, sc store.Scope, req auth.Retirement
 		{runKind, colRunQueuedUserID, nil, func(r model.Record) bool { return r.String(colRunQueuedUserID) != "" }},
 		{runKind, colRunQueuedActor, nil, func(r model.Record) bool { return r.String(colRunQueuedActor) != "" }},
 		{runKind, colRunQueuedCredentialID, nil, func(r model.Record) bool { return r.String(colRunQueuedCredentialID) != "" }},
+		// The credential the engine's next start would resume the run with: only a run that
+		// stop left waiting for that resume holds the account to it.
+		{runKind, colRunResumeCredentialID, nil, awaitsEngineResume},
 		{channelSubscriptionKind, colCommSubscriberRef,
 			userRefFilters(colCommSubscriberKind, colCommSubscriberRef, user),
 			stateOutside(colCommState, string(SubscriptionRevoked))},
@@ -361,6 +366,13 @@ func retirementBlockers(ctx context.Context, sc store.Scope, req auth.Retirement
 		}
 	}
 	return blocking, unknown, nil
+}
+
+// awaitsEngineResume reports a run its engine's own stop ended and the next start can resume:
+// the pass (resumeTenantEngineStoppedRuns) skips an agent's run and one with no kept credential.
+func awaitsEngineResume(rec model.Record) bool {
+	return rec.String(colState) == stateStopped && endedByTheEngine(rec.String(colReason)) &&
+		rec.String(colRunAgentRef) == "" && rec.String(colRunResumeCredentialSeal) != ""
 }
 
 // stateOutside reports a row live while its state column holds none of the

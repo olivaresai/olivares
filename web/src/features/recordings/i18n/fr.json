@@ -63,14 +63,14 @@
   },
   "policy": {
     "title": "Politique d’enregistrement",
-    "subtitle": "Ce qui est enregistré sur ce plan de contrôle et comment les preuves sont classées. La modification requiert la permission recording:config:admin ; chaque changement ici est lui-même une action privilégiée enregistrée.",
+    "subtitle": "Ce qui est enregistré sur ce plan de contrôle et comment les preuves sont classées. La modification requiert un rôle qui administre la politique d’enregistrement ; chaque changement ici est lui-même une action privilégiée enregistrée.",
     "loading": "Chargement de la politique d’enregistrement…",
     "saved": "Politique d’enregistrement enregistrée",
     "save": "Enregistrer la politique",
     "saveFailed": "La politique n’a pas été enregistrée.",
     "forbidden": {
-      "title": "Modifier la politique d’enregistrement requiert recording:config:admin",
-      "description": "Votre rôle peut administrer les sessions d’enregistrement, mais modifier la politique d’enregistrement nécessite la permission distincte recording:config:admin. Demandez à un administrateur de vous l’accorder."
+      "title": "Votre rôle ne peut pas modifier la politique d’enregistrement",
+      "description": "Votre rôle peut administrer les sessions d’enregistrement, mais modifier la politique d’enregistrement nécessite une permission distincte. Demandez à un administrateur de vous l’accorder."
     },
     "error": {
       "title": "Impossible de charger la politique d’enregistrement",
@@ -108,7 +108,7 @@
       "hint": "Une étiquette de classification appliquée aux enregistrements scellés — elle indique combien de temps ils devraient être conservés. Entre 1 et 3650 jours.",
       "tag": "Étiquette seule",
       "enforced": "Appliquée",
-      "notEnforced": "La rétention n’est qu’une étiquette de classification — les enregistrements sont étiquetés, jamais purgés. Aucune politique ne supprime encore un enregistrement (aucune purge n’est câblée).",
+      "notEnforced": "La rétention n’est qu’une étiquette de classification — les enregistrements sont étiquetés, jamais purgés. Aucune politique ne supprime encore un enregistrement (aucune purge n’est disponible).",
       "error": "Saisissez un nombre entier de jours entre 1 et 3650."
     },
     "ai": {

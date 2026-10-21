@@ -96,6 +96,101 @@ The default profile must answer each tool status request within five seconds.
 This does not qualify a provider login, a model response, or native deb/rpm
 installation; package install/upgrade qualification remains in the release gate.
 
+## Size it for many sessions
+
+The defaults hold the engine and a few light sessions. With more sessions at once, three
+limits decide whether the stack stays up: memory, processes and `/tmp`. Each one below is an
+override. The shipped defaults do not change.
+
+| Limit | Shipped default | For N concurrent sessions |
+| --- | --- | --- |
+| Memory | `2G` | 0.25 GiB + 0.4 GiB × N, plus the largest build or test run a session starts, plus what `/tmp` holds while it is in RAM |
+| Processes | none set here, so the Docker daemon's default | 256 + 128 × N |
+| `/tmp` | RAM tmpfs, `2g`, `noexec` | keep session scratch out of RAM once N is more than a few (below) |
+
+Where the figures come from. The engine itself is small: a fresh idle container measured about
+90 MiB and 12 processes (`docker exec olivares cat /sys/fs/cgroup/memory.current
+/sys/fs/cgroup/pids.current`), an engine that has been in use sits near 250 MiB (the 0.25 GiB
+above), and each live session adds about 0.3 MiB, one thread and four file descriptors
+([measured](../../docs/SIZING-AND-CAPACITY.md)). The agent tool is the cost:
+on one development host a Claude Code session used about 350 MiB of resident memory, 16
+sessions held 529 processes at rest (about 33 each), and 65 turns started at once ran past
+a limit of 4096 (at least 63 each). The rules above carry headroom over those figures.
+They are one host's numbers and one tool's: measure yours with `docker stats` and the two
+cgroup files above, then adjust.
+
+For eight Claude Code sessions that may each run a 4 GiB build, with the shipped 2 GiB `/tmp`
+that could fill, that is memory 0.25 + 0.4 × 8 + 4 + 2 = 9.45 GiB, so `10G`, and
+256 + 128 × 8 = 1280 processes. Put them in a Compose override and add it as a second `-f`
+file. Set the process limit as `pids` in the same `limits` block as `memory`. In testing,
+Compose refused the service-level `pids_limit` key on this file ("can't set distinct values
+on 'pids_limit' and 'deploy.resources.limits.pids'").
+
+```yaml
+# docker-compose.sessions.yml
+services:
+  olivares:
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+          pids: 1280
+```
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml -f docker-compose.sessions.yml up --wait --wait-timeout 120
+```
+
+### Where `/tmp` lives
+
+Every session gets a private `TMPDIR` in `/tmp`, which the engine removes when the session's
+tool exits. Tools also leave task output, compile caches and link temp files there. The
+shipped file mounts `/tmp` as a tmpfs of `size=${OLIVARES_TMP_SIZE:-2g}` with `noexec,nosuid,nodev`. A tmpfs
+is RAM, so what is written there counts against the memory limit: measured on the
+default stack, writing 300 MiB to `/tmp` raised the container's memory by 300 MiB, and writing
+2000 MiB killed the container, which restarted and ended every session in it. With many
+sessions, do one of these:
+
+1. **Keep the tmpfs and size it.** Set `OLIVARES_TMP_SIZE` in `deploy/compose/.env` (for example
+   `OLIVARES_TMP_SIZE=1g`) and add the same amount to the memory limit. Give it a plain size
+   such as `512m` or `4g`: `0` removes the cap, and a percentage is a share of the host's RAM.
+   A value Docker cannot read, such as `bogus`, stops `up` with an invalid-argument mount error.
+2. **Put `/tmp` on disk.** An override drops the tmpfs and mounts a volume. It needs
+   Compose >= 2.24.4 for `!reset`:
+
+   ```yaml
+   # docker-compose.tmp-on-disk.yml
+   services:
+     olivares:
+       tmpfs: !reset []
+       volumes:
+         - olivares-tmp:/tmp
+   volumes:
+     olivares-tmp:
+   ```
+
+   ```sh
+   docker compose -f deploy/compose/docker-compose.yml -f docker-compose.tmp-on-disk.yml up --wait --wait-timeout 120
+   ```
+
+   Measured with the memory limit still at 2 GiB, writing 3000 MiB to a disk `/tmp` finished
+   and the engine stayed healthy: those pages are cache the kernel can write out and drop.
+   What you give up:
+
+   - A volume is not `noexec`. On the tmpfs, `noexec` is one layer between a session and a
+     file it wrote, next to the session's own Landlock and seccomp filters. On disk that layer
+     is gone for every session, and what a session builds in `/tmp` can run.
+   - It survives a restart. The engine removes a session's directory when its tool exits, but
+     not after a crash or a kill, so stale `olivares-session-*` directories (build caches,
+     task output) stay on disk until you remove them. Treat the volume as session data: keep it
+     out of backups and clear old directories.
+   - `OLIVARES_TMP_SIZE` no longer caps it. It uses the Docker data disk, and a runaway
+     session can fill that disk.
+
+   For a host directory instead of a volume, create it for the container user and mount it the
+   same way: `sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-tmp`, then
+   `- /srv/olivares-tmp:/tmp`. Give it to this container alone.
+
 ## Session confinement on AppArmor hosts
 
 On Linux hosts that mediate `userns_create`, Docker's `docker-default` AppArmor profile
@@ -121,7 +216,9 @@ If you use a remote Docker context, install/load it on that daemon's host and se
 variable on the client; the client's feature mask describes only its own kernel.
 
 The profile retains [Docker's default AppArmor rules](https://github.com/moby/moby/blob/v26.1.5/profiles/apparmor/template.go)
-and adds `userns`, with the profile and daemon signal peer names fixed for this deployment.
+and adds `userns` and `mount` (the session helper's read-only bind mounts of a folder's Git
+hooks and configuration, inside its own mount namespace), with the profile and daemon signal
+peer names fixed for this deployment.
 A daemon confined under a custom AppArmor profile needs that profile as an additional
 `signal (receive)` peer. This permission applies to every process in the engine container;
 it does not change the session's own Landlock or seccomp filters. Keep the non-root user,

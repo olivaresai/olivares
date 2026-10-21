@@ -38,6 +38,15 @@ export function systemText(t: TFunction, item: ConversationItem): string {
   if (item.systemKind === 'turnFailed')
     return t('sessions:conversation.turnFailed', { message: item.summary })
   if (refusedKey(item)) return t('sessions:conversation.keyRefused')
+  if (item.systemKind === 'init') {
+    const parts = [t('sessions:conversation.started')]
+    if (item.model) parts.push(item.model)
+    if (item.toolCount)
+      parts.push(
+        t('sessions:conversation.startedTools', { count: item.toolCount }),
+      )
+    return parts.join(' · ')
+  }
   if (item.systemKind === 'apiRetry')
     return t('sessions:conversation.retrying', {
       count: item.attempts ?? 1,

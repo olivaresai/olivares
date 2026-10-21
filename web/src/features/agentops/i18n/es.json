@@ -1,4 +1,35 @@
 {
+  "wiki": {
+    "title": "Wiki",
+    "create": "Crear wiki",
+    "created": "Wiki creada",
+    "noWiki": "Esta carpeta no tiene wiki.",
+    "loading": "Cargando wiki…",
+    "ingest": "Incorporar",
+    "ask": "Preguntar",
+    "lint": "Revisar",
+    "question": "Pregunta",
+    "source": "Fuente",
+    "chooseSource": "Elige una fuente en raw/",
+    "upload": "Subir fuente",
+    "raw": "Volver a raw/",
+    "tool": "Herramienta de IA",
+    "chooseTool": "Elige una herramienta de IA",
+    "needTool": "Inicia sesión en una herramienta de IA para usar la wiki.",
+    "tools": "Herramientas de IA",
+    "ingestSource": "Incorporar fuente",
+    "askWiki": "Preguntar a la wiki",
+    "started": "Sesión de wiki iniciada",
+    "openSession": "Abrir sesión",
+    "index": "Índice",
+    "page": "Página de wiki",
+    "recent": "Actividad reciente",
+    "noEntries": "Aún no hay entradas.",
+    "truncated": "Lectura del archivo truncada. Aumenta el límite de lectura de la carpeta para ver el archivo completo.",
+    "notText": "Este archivo no es Markdown UTF-8.",
+    "working": "Procesando…",
+    "tooLarge": "La fuente supera el límite de subida de la carpeta. Elige un archivo más pequeño."
+  },
   "listTruncation": {
     "label": "Cargadas {{n}} plantillas; hay más",
     "hint": "Para este lanzamiento sólo se pueden seleccionar las plantillas cargadas. Una plantilla ausente puede estar más allá de esta página."
@@ -90,6 +121,13 @@
     "hint": "Se elimina cuando la rama está fusionada y el worktree está limpio. Marca la casilla para descartar trabajo sin fusionar o sin confirmar."
   },
   "create": {
+    "fastMode": "Modo rápido",
+    "serviceTier": "Nivel de servicio",
+    "speedOn": "Activado",
+    "speedOff": "Desactivado",
+    "speedUnavailable": "Las opciones de velocidad cambiaron. Usa la opción predeterminada de la herramienta o selecciona otro modelo.",
+    "speedDefault": "Usar la opción predeterminada",
+    "speedLoadFailed": "No se pudieron cargar las opciones de velocidad.",
     "title": "Nueva sesión",
     "titleTool": "Nueva sesión de {{tool}}",
     "description": "Di qué hacer primero. Las demás opciones de lanzamiento están en Opciones avanzadas.",
@@ -109,7 +147,7 @@
     "worktreeHint": "Crea una rama nueva en un worktree propio, para que las sesiones del mismo repositorio no compartan archivos. La carpeta debe ser la carpeta raíz del repositorio.",
     "worktreeFrom": "Empieza en",
     "isolation": "Aislamiento",
-    "isolationNativeOnly": "Solo nativo está cableado en esta entrega; contenedor/sandbox se rechazan.",
+    "isolationContainerHint": "Contenedor ejecuta la sesión en podman o Docker en este servidor. Una sesión con un proveedor de Proveedores necesita native.",
     "envAllow": "Reenviar env del host (nombres)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Allowlist de NOMBRES de variables de entorno a reenviar (nunca se envían valores).",
@@ -136,7 +174,7 @@
       "required": "Un perfil de orquestación requiere una identidad de agente autenticada de forma independiente."
     },
     "blocked": {
-      "profilesForbidden": "Tu rol no puede leer los perfiles de proveedor (sessions:profile:read), así que aquí no puede iniciarse ninguna sesión.",
+      "profilesForbidden": "Tu rol no puede leer los perfiles de proveedor, así que aquí no puede iniciarse ninguna sesión.",
       "profilesFailed": "No se pudieron leer los perfiles de proveedor.",
       "profilesLoading": "Leyendo perfiles de proveedor…",
       "noProfile": "Todavía no hay ningún perfil de proveedor. Añade primero un proveedor.",
@@ -235,6 +273,7 @@
       "notLive": "Inicia o reanuda la sesión para enviar.",
       "approval": "El inicio espera una aprobación; podrás enviar cuando se apruebe.",
       "sending": "Enviando… Espera a que la sesión lo acepte.",
+      "uploading": "Guardando la imagen… Enviar funciona cuando esté adjunta.",
       "empty": "Escribe algo para enviar."
     }
   },
@@ -434,14 +473,14 @@
     "empty": {
       "title": "No hay perfiles de proveedor",
       "registerHint": "Registra un perfil para añadir una instalación de la herramienta que ya existe en este servidor. Después, las sesiones se ejecutan con su configuración e inicio de sesión.",
-      "noWrite": "Añadir un perfil requiere el permiso sessions:profile:write, que tu rol no incluye."
+      "noWrite": "Tu rol no puede añadir perfiles."
     },
     "filteredEmpty": {
       "title": "Ningún perfil coincide con este estado",
       "description": "Solo se listan los perfiles en el estado «{{state}}». Muestra todos los estados para quitar este filtro.",
       "clear": "Mostrar todos los estados"
     },
-    "noRead": "Los perfiles de proveedor no se muestran: tu rol no incluye sessions:profile:read.",
+    "noRead": "Los perfiles de proveedor no se muestran: tu rol no puede leerlos.",
     "listTruncation": {
       "label": "Cargados {{n}} perfiles; hay más",
       "hint": "Aquí solo pueden seleccionarse los perfiles cargados. Puede existir un perfil no mostrado más allá de esta página."
@@ -540,7 +579,7 @@
         "title": "No hay vínculos de fuentes",
         "description": "Vincula una fuente configurada a un perfil para atribuirle las sesiones que observa."
       },
-      "noRead": "Los vínculos de fuentes no se muestran: tu rol no incluye sessions:profile-binding:read.",
+      "noRead": "Los vínculos de fuentes no se muestran: tu rol no puede leerlos.",
       "notBindable": "Solo se puede vincular un perfil activo de este servidor.",
       "revoke": {
         "title": "Revocar vínculo",
@@ -573,7 +612,7 @@
         "title": "Detalles del vínculo",
         "description": "Detalles actuales del vínculo para el inquilino seleccionado. Actualiza para comprobar si hay cambios.",
         "loading": "Leyendo el vínculo del motor…",
-        "forbidden": "El motor acaba de rechazar este vínculo para tu cuenta (sessions:profile-binding:read en el inquilino activo); lo ha decidido el motor ahora mismo, no una respuesta guardada. No se muestra nada de él.",
+        "forbidden": "Tu rol no puede leer este vínculo en esta organización; el motor lo acaba de comprobar. No se muestra nada de él.",
         "missing": "El motor no tiene ahora mismo ningún vínculo con esta referencia para el inquilino activo. Puede haberse eliminado desde que se leyó la lista; actualiza la lista para ver las filas actuales.",
         "error": "No se pudo leer el vínculo: {{message}}",
         "ended": "La lectura terminó porque cambió tu permiso, inquilino o sesión. Vuelve a abrir Detalles para leerlo bajo la autoridad actual.",
@@ -677,7 +716,7 @@
     "empty": {
       "title": "No hay cuentas de proveedor",
       "adoptHint": "Crea una cuenta, o nombra como cuenta un perfil que ya tienes.",
-      "noWrite": "Nombrar un perfil como cuenta requiere el permiso sessions:account:write, que tu rol no incluye."
+      "noWrite": "Tu rol no puede nombrar un perfil como cuenta."
     },
     "more": "Mostradas hasta ahora: {{shown}}. Hay más cuentas; carga más para verlas.",
     "moreFailed": "No se pudo leer la siguiente página de cuentas. Las cuentas mostradas no son la lista completa.",
@@ -795,7 +834,7 @@
     "title": "Requisitos locales de lanzamiento",
     "loading": "Comprobando los requisitos locales del perfil seleccionado…",
     "unavailable": "No se pudieron leer los requisitos. Esto no es una decisión de lanzamiento.",
-    "forbidden": "Tu rol no puede leer los requisitos de este perfil (sessions:profile:read).",
+    "forbidden": "Tu rol no puede leer los requisitos de este perfil.",
     "notFound": "Este perfil no está disponible en el inquilino actual. Se descartó el resultado anterior.",
     "unauthenticated": "La sesión ya no está autenticada. Se descartó el resultado anterior.",
     "conflict": "El perfil cambió durante la inspección. Se descartó la observación.",
@@ -806,10 +845,10 @@
     "requestHintReady": "Solicitar un lanzamiento sigue recorriendo autorización, mint y arranque. Esto no demuestra que el proveedor esté autenticado.",
     "requestHintUnknown": "La comprobación está incompleta. Aun así puedes solicitar el lanzamiento; el servidor volverá a validar todo. Esto no es un veredicto de listo.",
     "requestBlocked": "Este perfil no puede iniciar una sesión aquí. Sus requisitos, en Opciones avanzadas, dicen por qué.",
-    "noWrite": "Iniciar una sesión requiere el permiso sessions:run:write.",
+    "noWrite": "Tu rol no puede iniciar sesiones.",
     "waitingPreview": "Leyendo la plantilla antes de comprobar el perfil…",
     "providerAuth": "El inicio de sesión del proveedor no se observa aquí. Un home o un binario válidos no son una cuenta autenticada.",
-    "launchAuth": "La autorización de lanzamiento se decide al enviar y necesita sessions:run:write.",
+    "launchAuth": "Si tu rol puede iniciar esta sesión se comprueba al enviar.",
     "remoteControl": "Solo ciclo de vida: la conversación permanece en el proveedor; no hay consola de turnos bridged.",
     "managedInjectionUnused": "Este transporte no aplica la inyección administrada seleccionada. No hace mint de credencial de inferencia ni acredita autenticación de cuenta.",
     "codexProtocol": "Protocolo app-server de Codex; la entrada es un turno de texto, no NDJSON de Claude.",
@@ -842,12 +881,12 @@
       "program": "Programa",
       "homes": "Homes",
       "auth_source": "Fuente de autenticación",
-      "credential_source": "Cableado de credencial",
+      "credential_source": "Origen de la credencial",
       "runtime_credentials": "Credenciales de runtime"
     },
     "code": {
       "profile_active": "El perfil está activo.",
-      "profile_disabled": "El perfil está deshabilitado. Habilitar exige sessions:profile:write; un perfil retirado no se reactiva.",
+      "profile_disabled": "El perfil está deshabilitado. Habilitarlo exige un rol que pueda cambiar perfiles; un perfil retirado no se reactiva.",
       "profile_retired": "El perfil está retirado y no sirve para un lanzamiento nuevo.",
       "environment_local": "Este perfil pertenece a este nodo.",
       "other_environment": "Este perfil pertenece a otro servidor. Elige un perfil de este servidor o usa el servidor que lo gestiona. Las sesiones nunca se inician automáticamente en otro servidor.",
@@ -857,8 +896,8 @@
       "transport_unsupported": "Este transporte no es un contrato del driver seleccionado.",
       "runner_ready": "El runner de sesión se puede inspeccionar.",
       "runner_not_configured": "El runner de sesión no está configurado en este runtime.",
-      "isolation_unsupported": "El runner nativo no puede ofrecer este aislamiento. Conserva native o usa un runner que demuestre esa contención.",
-      "runner_inspection_unavailable": "El runner cableado no se puede inspeccionar sin lanzar. Eso no es una instalación ausente.",
+      "isolation_unsupported": "Este servidor no puede ofrecer este aislamiento. Conserva native o instala podman o Docker en el servidor para usar contenedor.",
+      "runner_inspection_unavailable": "El runner configurado no se puede inspeccionar sin lanzar. Eso no es una instalación ausente.",
       "program_present": "El programa resuelto está presente y es ejecutable para esta identidad.",
       "program_missing": "El programa resuelto no está presente. Configura el CLI oficial con el procedimiento existente; para Claude puede nombrarse OLIVARES_SESSION_RUNTIME_CLAUDE_BIN. Esta lectura no instala nada.",
       "program_not_executable": "El programa resuelto no es ejecutable para esta identidad.",
@@ -870,15 +909,15 @@
       "auth_source_legacy_claude": "La fuente autorizada es el camino histórico de credencial de Claude.",
       "auth_source_required": "Este driver necesita una fuente de autenticación explícita: account-home o inyección administrada. Esa elección se hace en el perfil, no desde esta inspección.",
       "managed_injection_not_applied_for_transport": "Hay inyección administrada seleccionada, pero este transporte no la aplica.",
-      "claude_credential_source_configured": "La fuente de credencial de inferencia de Claude está cableada.",
+      "claude_credential_source_configured": "La fuente de credencial de inferencia de Claude está configurada.",
       "claude_credential_source_not_configured": "No hay credencial para Claude Code aquí: inicia su sesión propia en Herramientas de IA o usa una clave de API guardada en Proveedores. Un despliegue con su propia pasarela de inferencia configura OLIVARES_SESSION_RUNTIME_WIF u OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
-      "provider_credential_adapter_configured": "El adaptador de credencial de este driver está cableado.",
-      "provider_credential_adapter_not_configured": "El adaptador gobernado de este driver no está cableado. No reutilices el bearer de otro proveedor ni caigas al account-home.",
+      "provider_credential_adapter_configured": "El adaptador de credencial de este driver está configurado.",
+      "provider_credential_adapter_not_configured": "El adaptador gobernado de este driver no está configurado. No reutilices el bearer de otro proveedor ni caigas al account-home.",
       "credential_source_not_injected": "Esta combinación no inyecta una credencial de inferencia.",
       "provider_record_bound": "Este perfil usa una clave de API guardada en Proveedores; esa clave es su credencial.",
-      "runtime_credentials_wired": "Las credenciales de runtime work/K3 están cableadas.",
+      "runtime_credentials_wired": "Las credenciales de runtime work/K3 están configuradas.",
       "runtime_credentials_not_requested": "Esta composición no solicita credenciales de runtime work/K3.",
-      "runtime_credential_wiring_incomplete": "El cableado de credenciales de runtime work/K3 está incompleto. Un operador revisa esa composición; esta lectura no pide credenciales comerciales.",
+      "runtime_credential_wiring_incomplete": "La configuración de credenciales de runtime work/K3 está incompleta. Un operador revisa esa composición; esta lectura no pide credenciales comerciales.",
       "runtime_readiness_unavailable": "No se pudo observar la readiness de runtime work/K3.",
       "inspection_unavailable": "No se pudo inspeccionar este requisito. Reintenta la lectura o pide revisión del entorno. La incertidumbre no es «no instalado».",
       "not_checked_in_this_environment": "Este requisito no se comprobó en este nodo porque el perfil pertenece a otro entorno. Eso no es «homes inexistentes»."
@@ -891,9 +930,9 @@
       "configure_session_runner": "Configura el runner de sesión.",
       "configure_provider_program": "Configura el CLI oficial del proveedor en este runtime.",
       "review_profile_homes": "Revisa los homes almacenados con la lectura de configuración de administración.",
-      "authorize_auth_source": "Autoriza account-home o inyección administrada en el perfil (sessions:profile:write).",
+      "authorize_auth_source": "Autoriza account-home o inyección administrada en el perfil.",
       "configure_claude_credential_source": "Inicia la sesión de Claude Code en Herramientas de IA o usa una clave de API de Proveedores.",
-      "configure_provider_credential_adapter": "Cablea el adaptador gobernado de este driver.",
+      "configure_provider_credential_adapter": "Configura el adaptador de credenciales de esta herramienta.",
       "review_runtime_credential_composition": "Revisa la composición de credenciales de runtime work/K3.",
       "select_supported_selection": "Elige un transporte y un aislamiento que este runtime demuestre.",
       "retry_inspection": "Vuelve a leer los requisitos."
@@ -931,7 +970,7 @@
     "mismatch": "La respuesta pertenecía a otra versión del perfil, otro driver u otro entorno y se descartó.",
     "conflict": "El perfil cambió durante la observación. La observación se descartó.",
     "unavailable": "No se pudo leer la observación de herramientas del host. No es un hallazgo sobre la herramienta.",
-    "forbidden": "Tu rol no puede leer la observación de herramientas del host de este perfil (sessions:profile:read).",
+    "forbidden": "Tu rol no puede leer qué herramientas tiene el host de este perfil.",
     "notFound": "Este perfil no está disponible en el tenant actual. Se descartaron las observaciones anteriores.",
     "unauthenticated": "La sesión ya no está autenticada. Se descartaron las observaciones anteriores.",
     "state": {
@@ -964,5 +1003,23 @@
       "different": "No es el programa configurado",
       "unknown": "Se desconoce la comparación con el programa configurado"
     }
+  },
+  "attach": {
+    "add": "Adjuntar una imagen",
+    "tray": "Imágenes adjuntas",
+    "remove": "Quitar {{name}}",
+    "uploading": "Guardando…",
+    "pasted": "Imagen pegada",
+    "failed": "{{name}} no se adjuntó: {{reason}}",
+    "notImage": "no es una imagen PNG, JPEG, WebP o GIF",
+    "tooLarge": "pesa {{size}} MB y el límite es {{limit}} MB",
+    "tooMany": "un mensaje admite hasta {{count}} imágenes",
+    "notStored": "no se pudo guardar la imagen",
+    "sent": "Imágenes adjuntas",
+    "imageN": "Imagen {{n}}",
+    "open": "Abrir {{name}} a tamaño completo",
+    "fullSize": "La imagen adjunta a tamaño completo",
+    "unavailable": "Imagen no disponible",
+    "movedOn": "cambiaste de sesión antes de guardarla"
   }
 }

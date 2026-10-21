@@ -9,6 +9,8 @@ import starlightVersions from 'starlight-versions'
 import sitemap from '@astrojs/sitemap'
 import { localizeSidebar } from './src/sidebar-i18n.mjs'
 import { ARCHIVED_SLUGS, LOCALES, VERSIONS } from './src/site-locales.mjs'
+import { satteri } from '@astrojs/markdown-satteri'
+import { corePathsPlugin } from './src/core-paths-plugin.mjs'
 
 // The REST reference is generated at build time DIRECTLY from the product's own
 // OpenAPI 3.1 contract (web/openapi/openapi.json, authored by core/api).
@@ -35,6 +37,9 @@ export default defineConfig({
   // Deterministic, reproducible static output; no SSR, no backend, no phone-home.
   output: 'static',
   trailingSlash: 'ignore',
+  // The core REST path count is written as {{core-paths}} in every locale and filled in here
+  // from web/openapi/openapi.json, the file the REST reference is rendered from (#2494).
+  markdown: { processor: satteri({ mdastPlugins: [corePathsPlugin()] }) },
   // Astro 7 default is compressHTML:'jsx', which strips the space between
   // adjacent inline tags. Keep the v6 HTML-aware compressor so existing
   // markup does not need a site-wide rewrite.

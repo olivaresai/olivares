@@ -239,7 +239,7 @@
       "savedPurging": "Schedule saved, and the purge is in force",
       "savedRetaining": "Schedule saved. Nothing is deleted by it.",
       "saveUnconfirmed": "The engine accepted the request but did not return the schedule, so it cannot be confirmed",
-      "noGate": "No approval gate is wired, so arming a purge is denied. The purge was not armed.",
+      "noGate": "No approval gate is set up, so arming a purge is denied. The purge was not armed.",
       "approvalExpired": "The approval expired. Save again to request a new one.",
       "underFloor": "The window is shorter than the regulatory floor for this class",
       "refused": "Arming the purge was refused",
@@ -514,11 +514,11 @@
     "totalBytes": "Total size",
     "unwired": {
       "title": "Erasure seam not configured",
-      "body": "This is NOT \"no files\": the engine cannot enumerate or erase the store until an operator wires the connector. Nothing here has been checked."
+      "body": "This is NOT \"no files\": the engine cannot enumerate or erase the store until an operator sets up the connector. Nothing here has been checked."
     },
     "empty": {
       "title": "No files enumerated",
-      "body": "The seam is wired and the store reports no files for this tenant."
+      "body": "The seam is configured and the store reports no files for this tenant."
     },
     "confirm": {
       "title": "Erase this file?",
@@ -538,7 +538,7 @@
       "pending": "Pending approval",
       "denied": "Denied",
       "failed": "Failed",
-      "not_wired": "Seam not wired",
+      "not_wired": "Seam not configured",
       "error": "Engine error"
     }
   },

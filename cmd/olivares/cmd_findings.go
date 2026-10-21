@@ -27,8 +27,9 @@ const (
 func newFindingsCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "findings",
-		Short: "Export governed security findings",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "findings",
+		Short:       "Export governed security findings",
 		Long: "findings hands the governed security findings to the tools that consume them.\n" +
 			"export writes SARIF 2.1.0, the format code-scanning dashboards and pull-request\n" +
 			"annotations already read, so findings raised here surface where engineers\n" +
@@ -43,8 +44,9 @@ func newFindingsCmd() *cobra.Command {
 func newFindingsExportCmd(flags *authClientFlags) *cobra.Command {
 	var format, outPath string
 	cmd := &cobra.Command{
-		Use:   "export",
-		Short: "Export all matching findings as SARIF 2.1.0",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "export",
+		Short:       "Export all matching findings as SARIF 2.1.0",
 		Long: "export requests the tenant-scoped findings export from the running engine and\n" +
 			"writes the exact SARIF response to stdout or --out. The server caps one run at 25,000\n" +
 			"results and the CLI warns when that interoperability cap truncates the response.\n" +

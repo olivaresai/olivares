@@ -434,7 +434,7 @@ export interface WorkspaceConnectorDTO {
 // Shapes mirror modules/sourcescope/binding.go, posture.go and resources.go.
 
 export type SourceScopeSourceType =
-  'mcp' | 'model' | 'provider' | 'knowledge' | 'data'
+  'mcp' | 'model' | 'provider' | 'knowledge' | 'data' | 'profile' | 'tool'
 
 export type SourceScopeTree =
   | 'workspace'
@@ -837,6 +837,8 @@ export interface LicenseStatusDTO {
   plan?: string
   /** Attested support relationship (e.g. business | enterprise); display-only, never gates. */
   support_tier?: string
+  /** Signed v3 product profile; separate from the legacy support relationship. Display only. */
+  support_profile?: string
   features?: string[]
   /** @deprecated Attested seat figure (0 = unlimited). IGNORED since B10 — no build
    * caps users on it and the panel does not render it. Kept on the wire only so
@@ -1177,11 +1179,10 @@ export const consoleApi = {
       `/v1/users/${encodeURIComponent(userId)}/totp/reset`,
       {},
     ),
-  setMemberActive: (userId: string, active: boolean) =>
-    http.patch<unknown>(`/v1/scim/v2/Users/${encodeURIComponent(userId)}`, {
-      schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
-      Operations: [{ op: 'replace', path: 'active', value: active }],
-    }),
+  /** Remove a member from the organization (a scoped offboard; the account and
+   * its other organizations stay). Every edition serves it. */
+  removeMember: (userId: string) =>
+    http.delete<void>(`/v1/members/${encodeURIComponent(userId)}`),
 
   // Internal-superadmin lifecycle (global, superadmin-gated; writes need an
   // AAL3 step-up). List the superadmin accounts (with active/inactive status) and
@@ -1221,13 +1222,16 @@ export const consoleApi = {
     http.get<ListResponse<AgentGroupDTO>>('/v1/agent-groups', {
       query: { ...opts, limit: opts?.limit ?? EVIDENCE_PAGE },
     }),
-  createAgentGroup: (input: {
-    name: string
-    slug: string
-    workspace_id?: string
-    description?: string
-    status?: 'active' | 'inactive'
-  }) => http.post<AgentGroupDTO>('/v1/agent-groups', input),
+  createAgentGroup: (
+    input: {
+      name: string
+      slug: string
+      workspace_id?: string
+      description?: string
+      status?: 'active' | 'inactive'
+    },
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) => http.post<AgentGroupDTO>('/v1/agent-groups', input, opts),
   updateAgentGroup: (id: string, input: AgentGroupUpdateInput) =>
     http.patch<AgentGroupDTO>(
       `/v1/agent-groups/${encodeURIComponent(id)}`,
@@ -1474,8 +1478,11 @@ export const consoleApi = {
 
   // Roles & delegation (scoped administration).
   rbacCatalog: () => http.get<RBACCatalogDTO>(`${RBAC}/catalog`),
-  delegationAuthority: () =>
-    http.get<DelegationAuthorityDTO>(`${RBAC}/delegation-authority`),
+  delegationAuthority: (workspaceId?: string | null) =>
+    http.get<DelegationAuthorityDTO>(
+      `${RBAC}/delegation-authority`,
+      workspaceId ? { query: { workspace_id: workspaceId } } : undefined,
+    ),
 
   listRoles: () =>
     http.get<ListResponse<CustomRoleDTO>>(`${RBAC}/roles`, {
@@ -1502,12 +1509,17 @@ export const consoleApi = {
   deletePermGroup: (name: string) =>
     http.delete<void>(`${RBAC}/permission-groups/${encodeURIComponent(name)}`),
 
-  listGrants: () =>
+  listGrants: (workspaceId?: string | null) =>
     http.get<ListResponse<ScopedGrantDTO>>(`${RBAC}/grants`, {
-      query: { limit: EVIDENCE_PAGE },
+      query: {
+        limit: EVIDENCE_PAGE,
+        ...(workspaceId ? { workspace_id: workspaceId } : {}),
+      },
     }),
-  createGrant: (input: ScopedGrantDTO) =>
-    http.post<ScopedGrantDTO>(`${RBAC}/grants`, input),
+  createGrant: (
+    input: ScopedGrantDTO,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) => http.post<ScopedGrantDTO>(`${RBAC}/grants`, input, opts),
   revokeGrant: (id: string) =>
     http.delete<void>(`${RBAC}/grants/${encodeURIComponent(id)}`),
 
@@ -1574,7 +1586,10 @@ export const consoleApi = {
     }),
   getAgent: (id: string) =>
     http.get<AgentDTO>(`/v1/agents/${encodeURIComponent(id)}`),
-  createAgent: (input: AgentInput) => http.post<AgentDTO>('/v1/agents', input),
+  createAgent: (
+    input: AgentInput,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) => http.post<AgentDTO>('/v1/agents', input, opts),
   updateAgent: (id: string, input: AgentInput) =>
     http.patch<AgentDTO>(`/v1/agents/${encodeURIComponent(id)}`, input),
   deleteAgent: (id: string) =>

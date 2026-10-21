@@ -186,6 +186,59 @@ func TestListenPortsInTheSessionsNetwork(t *testing.T) {
 	}
 }
 
+// A session guard is the root of the session and the parent of whatever the
+// session orphaned. The dev server the agent left running in the background is
+// its child, and still the session's; the tool the guard started is not.
+func TestListenPortsSeesThroughTheSessionGuard(t *testing.T) {
+	procfs := t.TempDir()
+	file := func(name, body string) {
+		t.Helper()
+		path := filepath.Join(procfs, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := func(name, target string) {
+		t.Helper()
+		path := filepath.Join(procfs, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stat := func(pid, ppid, start int) string {
+		return fmt.Sprintf("%d (x) S %d 100 100 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 %d 0 0\n", pid, ppid, start)
+	}
+	// 100 is the guard (the engine's binary, the root and the group leader); 101
+	// the tool it started; 102 the dev server the tool started and left running.
+	file("100/cmdline", "/usr/bin/olivares\x00__olivares_confine\x00--session-guard-v1\x003\x00/usr/bin/tool\x00--\x00tool\x00")
+	file("100/stat", stat(100, 1, 10))
+	file("101/stat", stat(101, 100, 11))
+	file("102/stat", stat(102, 100, 20)) // its parent died: the guard adopted it
+	link("101/fd/3", "socket:[444]")
+	link("102/fd/3", "socket:[111]")
+	row := func(local, inode string) string {
+		return "   0: " + local + " 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 " + inode + " 1 0 100 0 0 10 0\n"
+	}
+	file("100/net/tcp", "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n"+
+		row("0100007F:0BB8", "111")+ // 3000, the dev server's
+		row("0100007F:1000", "444")) // 4096, the tool's own server
+	link("self/ns/net", "net:[1]")
+	link("100/ns/net", "net:[1]")
+	got, err := listenPorts(procfs, 100, func(pid int) bool { return pid == 100 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Port != 3000 {
+		t.Fatalf("session ports = %v, want only the dev server's 3000", got)
+	}
+}
+
 func TestDialablePortKeepsOnlyLoopback(t *testing.T) {
 	for local, want := range map[string]string{
 		"0100007F:0BB8":                         "127.0.0.1:3000",

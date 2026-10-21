@@ -86,6 +86,7 @@ shard root-e
 shard root-f
 shard root-g
 shard root-h
+shard root-i
 shard root-rest
 shard root-core
 shard store-a
@@ -132,15 +133,23 @@ group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N Q
 group root-d github.com/olivaresai/olivares/cmd/olivares d Catalog Classify Community Compliance Connect Core Cross SR Seat Security Semantic SessionClaude SessionIO SessionStop Static Step Store Template Tenant Transport Un Verify Warn What Wildcard Write
 group root-e github.com/olivaresai/olivares/cmd/olivares e CLI CRL CSP Calendar Campaign Canonical Claude Command CommunicationCursor CommunicationGlobal CommunicationGuard CommunicationReady Complete Completion Composition Confirm Container Coverage Credential Custody SDK Sandbox Sealed Seam Self SessionRemove SessionState SessionTool SessionTurn SessionUnknown SessionView SessionWIF Sessions Setup Signing Slack Sorted Source Split Stale Standing Subject Sweepable TOTP Used Vector Version F H P CommunicationChannel
 group root-f github.com/olivaresai/olivares/cmd/olivares f Clean Console Copy SLA Schedule SessionGroup SessionIs SessionLaunch SessionList SessionProvider SessionRuntime SessionShow Stamped Status TLS Target Test Token Tool Two Valid Wrap I O R CommunicationIncoming
-group root-g github.com/olivaresai/olivares/cmd/olivares g Cada Capability Check CommunicationCommit CommunicationContent CommunicationResume Counted Schema Secrets Seed Send SessionHook SessionName SessionStart Shadow Shared Teams Third Users Verbs Voice Web
-group root-h github.com/olivaresai/olivares/cmd/olivares h Chat Codex Collector Commit CommunicationLineage CommunicationStore Config Creates SQ Same Save SessionAccess SessionCredential SessionInterrupt SessionWorkspace Strict Success Support Text The Upgrade Whoami Wire E G
+group root-g github.com/olivaresai/olivares/cmd/olivares g Cada Capability Check CommunicationCommit CommunicationContent CommunicationResume Counted Schema Secrets Seed Send SessionHook SessionName SessionStart Shadow Shared Teams Third Users Verbs Voice Web G
+group root-h github.com/olivaresai/olivares/cmd/olivares h Chat Codex Collector Commit CommunicationLineage CommunicationStore Config Creates SQ Same Save SessionAccess SessionCredential SessionInterrupt SessionWorkspace Strict Success Support Text The Upgrade Whoami Wire
+# October 13: hosted run 38461801265 passed every functional shard, but root-h
+# still took 1999s of job wall (33m19s), over half its 45m Go timeout.
+# Move G to root-g (956s job wall) and E to a new root-i; leave b/c/e/f alone.
+# These placements need hosted measurement after export; counts are not timings.
+group root-i github.com/olivaresai/olivares/cmd/olivares i E
 group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 
-# The eight sibling packages of cmd/olivares and the 178 connector packages ride with the
-# first group: 25.4 s of test time between the connectors, chosen for costing nothing to
-# BUILD as well as nothing to run.
-pkg root-a github.com/olivaresai/olivares/cmd/...
-pkg root-a github.com/olivaresai/olivares/connectors/...
+# The eight sibling packages of cmd/olivares and the 178 connector packages: 186 whole
+# packages, 11.0 to 18.1 minutes of wall clock (the slowest, cmd/olivares/internal/agenttoolsapi,
+# 175 to 371 s). They rode with group a, which then began under a fresh 45 minute clock after
+# them: 18 + 45 outlived the 55 minute step and the cut named no test (dev#2503). They ride with
+# root-h now, the shortest shard measured (11.1 and 10.7 minutes), and group a runs alone.
+# Measured on the scheduled batteries of 2026-10-17, see THE BATTERIES' CLOCKS below.
+pkg root-h github.com/olivaresai/olivares/cmd/...  # the eight cmd siblings ride here; cmd/olivares itself is split by the groups above
+pkg root-h github.com/olivaresai/olivares/connectors/...
 
 # The rest of core, the operator and the control plane now have their own shard. The historical sweep measured 674.6 s of test time (337 s at two lanes);
 # the September 28 public run spent about 549 s in the whole-package/build phase.
@@ -215,18 +224,48 @@ leg root-core test:commerce-core:norace
 # Go's 45m timeout remains PER TEST BINARY and yields a goroutine dump and package name.
 # Both workflows use these clocks; the clocks stay the same while the remainder is split into smaller turns.
 #
-# THE MATRIX IS NOT DERIVED FROM THIS FILE, IT IS COMPARED WITH IT. The reader has a `matrix`
-# subcommand and no workflow calls it: deriving the list would need a setup job, and a job
-# costs a runner on every pull request. What makes the two agree is
-# scripts/check-pr-suite-shards.sh, which compares them INCLUDING ORDER and refuses on any
-# difference — so adding a shard means editing this file and the workflow, and forgetting
-# either one is a red and not a drift.
+# THE PULL-REQUEST MATRIX IS NOT DERIVED FROM THIS FILE, IT IS COMPARED WITH IT. The reader has a
+# `matrix` subcommand and the pull-request and mainline workflows declare their lists: deriving
+# them would need a setup job, and a job costs a runner on every pull request. What makes the two
+# agree is scripts/check-pr-suite-shards.sh, which compares them INCLUDING ORDER and refuses on any
+# difference — so adding a shard means editing this file and both workflows, and forgetting either
+# one is a red and not a drift. The scheduled main-suite is the exception: it derives the matrix of
+# its cmd/olivares root-package job from these name groups with `partition` (dev#2591), so a group
+# change here reaches that job without editing a list, and the gate still pins the other two.
 #
 # RECALIBRATION. Read per-group Go seconds and whole-step durations from the next two
 # completed official runs. Record the candidate and runner for each observation. If a
 # group exceeds the 20-minute sizing target, or its measured duration varies by more
 # than 30 %, inspect the costly families and redistribute within this partition.
 # Preserve exact coverage and measure again; counts alone do not establish a budget.
+#
+# THE BATTERIES' CLOCKS (dev#2503, decided 2026-10-18). The numbers below are the BLOCKING
+# path's: pr-ci.yml and mainline-ci.yml, pinned to them by scripts/check-pr-suite-shards.sh.
+# The scheduled batteries (merge-gate-check.yml) run the same shards off the merge path, where
+# a clock detects a hang and does not gate speed, so they run under these clocks TIMES ONE
+# FACTOR, OLIVARES_SHARD_CLOCK_FACTOR=2: 90 minutes of Go, 110 of step, 205 of job. Not a second
+# set of numbers: scripts/test-merge-gate-check.py pins the step ceiling to this file's times
+# the factor. WHY A FACTOR AND NOT A REBALANCE: the same tests swung 2x or more with host load
+# and no partition removes that. Three scheduled runs, oldest to newest (39002849343,
+# 39026256760, 39045913341); "cut" is the 55 minute step ceiling, "panic" Go's 45 minute clock:
+#
+#   modules/finops                 panic (the one running test had run 0 s)  856 s    1769 s
+#   cmd/olivares group b           2133 s     panic         1160 s
+#   modules/sessions (one package) panic      2646 s        panic
+#   root-a package leg, wall       14.4 min   18.1 min      11.0 min
+#   cmd/olivares group a           cut >40    cut >36       1126 s
+#
+# A single package is a floor that no partition goes under (modules/sessions at 44 minutes
+# when it is quiet); only a clock that is not at 100 % of it keeps it green. A rebalance by
+# test COUNT did not hold twice (2026-10-11, 2026-10-13): root-e has 564 tests and runs about
+# 27 minutes, root-b has 347 and ran 26 to 55. Package and group seconds are in the step logs,
+# the `ok  <package>  <seconds>s` lines (`gh run view <run> --job <job> --log`), for as long as
+# GitHub keeps them; the root-a move above was made from them.
+#
+# ponytail: placement is by package and group seconds; per-test seconds are not retained.
+# Upgrade trigger: a single group takes more than half the batteries' Go clock (45 minutes)
+# in a quiet run. Then keep `go test -json` of that shard as an artifact for one run and split
+# the group by prefix from it.
 go-timeout-minutes 45
 step-ceiling-minutes 55
 job-ceiling-minutes 65

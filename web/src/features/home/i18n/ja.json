@@ -1,7 +1,6 @@
 {
   "title": "概要",
   "description": "AI エージェントが過去 30 日間に行ったことを、あなたが開ける範囲で表示します。",
-  "openReport": "エグゼクティブレポート",
   "aside": "環境の概要",
   "range": "過去30日間",
   "next": {
@@ -30,7 +29,15 @@
     "open": "セッションを開く: {{what}}",
     "untitled": "無題のセッション"
   },
+  "live": {
+    "title": "稼働中"
+  },
   "tiles": {
+    "today": {
+      "label": "今日",
+      "caption_other": "今日稼働した {{count}} 件のセッションのコスト",
+      "unpriced_other": "{{count}} 件はコスト未報告"
+    },
     "inventory": {
       "label": "インベントリ",
       "caption": "{{agents}}エージェント · {{active}}有効"

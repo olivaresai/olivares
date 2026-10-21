@@ -228,7 +228,7 @@
   },
   "forbiddenResolve": {
     "title": "解決が許可されていません",
-    "description": "インシデントの解決にはcheck-admin権限（health:check:admin）が必要です。"
+    "description": "あなたのロールではインシデントを解決できません。"
   },
   "connectors": {
     "autoRefresh": "15秒ごとに自動更新されます。",

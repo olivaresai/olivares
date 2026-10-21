@@ -9,6 +9,26 @@ entry rather than publish an incomplete count after a wiring refactor.
 import re
 
 
+def business_source_dirs(seam: str | None) -> set[str]:
+    """Connector directories the Business edition activates, from businessSourceKinds.
+
+    A Business kind is built by the private distribution, which a public tree cannot
+    see, so cmd/olivares/sources_business.go maps each kind to its connector directory.
+    No file (an older tree) means no Business kinds.
+    """
+    if seam is None:
+        return set()
+    seam = re.sub(r"//[^\n]*|/\*.*?\*/", "", seam, flags=re.S)
+    match = re.search(r"\bvar\s+businessSourceKinds\s*=\s*map[^\n{]+\{(.*?)^\}",
+                      seam, re.M | re.S)
+    if match is None:
+        raise ValueError("missing source table: businessSourceKinds")
+    entries = re.findall(r'"[^"\n]+"\s*:\s*"([^"\n]+)"\s*,', match[1])
+    if not entries or len(entries) != len(re.findall(r'"[^"\n]+"\s*:', match[1])):
+        raise ValueError("unresolved source entry in businessSourceKinds")
+    return set(entries)
+
+
 def source_census(
     source: str, roster_seam: str | None = None,
 ) -> tuple[set[str], set[str], set[str]]:

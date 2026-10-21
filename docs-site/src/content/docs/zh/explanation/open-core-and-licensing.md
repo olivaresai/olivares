@@ -48,7 +48,7 @@ AGPL 构建包含整个治理平台，用户数量不限，支持一个活动身
 | 版本 | 价格 | 范围 |
 | --- | --- | --- |
 | Community | 免费，AGPL-3.0-only | 用户数量不限；一个活动身份提供方（IdP）。 |
-| Business | 每月 USD 129 或每年 USD 1,290 | 用户数量不限；一个法律实体；同一时间一个活跃实例。 |
+| Business | 每月 USD 99 或每年 USD 990 | 用户数量不限；一个法律实体；同一时间一个活跃实例。 |
 | Enterprise | 联系我们 | 合同约定的条款及依赖这些条款的能力：多实体、更多部署或 IdP、隔离环境镜像、自定义 LTS，以及通过 OAuth 2.0 令牌交换（RFC 8693）签发的限定范围上游凭据。 |
 
 Business 包含 **Regulated Operations**、**AI Runtime Security**、
@@ -72,9 +72,9 @@ Business 包含 **Regulated Operations**、**AI Runtime Security**、
 开放二进制文件就是整个治理平台；商业版 `enterprise/` 产品线是**增量式**的。有两条
 边界值得专门点明，因为开放构建会就它们诚实地作答，而非假装它们不存在：
 
-- **SSO** —— 单 IdP 登录（OIDC + SAML 2.0）与入站 SCIM 在默认二进制文件中是**开放**的：
-  真实登录，无需 `-tags enterprise`。多个活动 IdP（按租户/按域名）、登录时的组映射
-  与强制 SSO 属于 Business（Identity & Scale）；启用第二个活动 IdP 会返回
+- **SSO** —— 单 IdP 登录（OIDC + SAML 2.0）在默认二进制文件中是**开放**的：
+  真实登录，无需 `-tags enterprise`。多个活动 IdP（按租户/按域名）、登录时的组映射、
+  强制 SSO 与入站 SCIM 服务器属于 Business（Identity & Scale）；启用第二个活动 IdP 会返回
   `multi_idp_requires_enterprise`。
 - **用户账户** —— **在所有版本中都不受数量限制**。社区构建没有用户上限，商业版构建
   同样没有：任何授权状态（有效、过期、缺失）都无法限制一个部署可运行的账户数量。

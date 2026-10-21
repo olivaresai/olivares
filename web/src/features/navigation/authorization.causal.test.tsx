@@ -340,16 +340,8 @@ describe('the route gate', () => {
 
 /** Both projections of one render: what the navigation lists, and what a page may still
  *  link to or read (the session rail, the composer's approval link, an entity's next room). */
-function projections(): {
-  listed: ViewGate
-  navigable: ViewGate
-  isOff: ViewGate
-} {
-  let captured: {
-    listed: ViewGate
-    navigable: ViewGate
-    isOff: ViewGate
-  } | null = null
+function projections(): { listed: ViewGate; navigable: ViewGate } {
+  let captured: { listed: ViewGate; navigable: ViewGate } | null = null
   function Probe() {
     captured = useViewAccess()
     return null
@@ -359,7 +351,7 @@ function projections(): {
   return captured
 }
 
-describe('navigation lists every view the person may open', () => {
+describe('navigation lists every view the person may open and that runs here', () => {
   beforeEach(() => {
     auth.perms = new Set([
       ...FEATURE_VIEWS.flatMap((v) => (v.permission ? [v.permission] : [])),
@@ -371,7 +363,7 @@ describe('navigation lists every view the person may open', () => {
 
   it('lists audit and the administration pages from the first sign-in', () => {
     const { listed } = projections()
-    for (const id of ['audit', 'console', 'deploy', 'killswitch'])
+    for (const id of ['audit', 'console', 'gitPublication', 'killswitch'])
       expect(listed(view(id)), id).toBe(true)
     const index = buildNavSearchIndex(i18n.getFixedT(null, 'nav') as never)
     const palette = authorizedEntries(index, listed).map((e) => e.id)
@@ -381,22 +373,26 @@ describe('navigation lists every view the person may open', () => {
     expect(listed(view('permissions'))).toBe(true)
   })
 
-  it('lists a view whose module is off, flagged as off, and keeps it out of what pages read', () => {
-    useModulesStore.setState({ off: new Set(['deploy']) })
-    const { listed, navigable, isOff } = projections()
-    expect(listed(view('deploy'))).toBe(true)
-    expect(isOff(view('deploy'))).toBe(true)
-    expect(isOff(view('audit'))).toBe(false)
-    // A page that would read the module's routes still treats it as not offered.
-    expect(navigable(view('deploy'))).toBe(false)
+  // #2240: a module that is off folds out of navigation (GNOME, not KDE); Settings > Modules
+  // is where it reads as Off and is turned on, and its address keeps working.
+  it('hides a view whose module is off, everywhere navigation lists, and keeps the rest', () => {
+    useModulesStore.setState({ off: new Set(['gitpublish']) })
+    const { listed, navigable } = projections()
+    expect(listed(view('gitPublication'))).toBe(false)
+    expect(navigable(view('gitPublication'))).toBe(false)
+    expect(listed(view('audit'))).toBe(true)
+    const index = buildNavSearchIndex(i18n.getFixedT(null, 'nav') as never)
+    const palette = authorizedEntries(index, listed).map((e) => e.id)
+    expect(palette).not.toContain('gitPublication')
+    expect(palette).toContain('audit')
   })
 
   it('keeps a permission refusal hidden', () => {
     auth.perms = new Set()
-    useModulesStore.setState({ off: new Set(['deploy']) })
+    useModulesStore.setState({ off: new Set(['gitpublish']) })
     const { listed } = projections()
     expect(listed(view('audit'))).toBe(false)
-    expect(listed(view('deploy'))).toBe(false)
+    expect(listed(view('gitPublication'))).toBe(false)
   })
 })
 
@@ -418,8 +414,8 @@ describe('the door into Sessions', () => {
       FEATURE_VIEWS.flatMap((v) => (v.permission ? [v.permission] : [])),
     )
     caps.surface = 'reachable'
-    useModulesStore.setState({ off: new Set(['deploy']) })
-    expect(routeAccess(view('deploy')).kind).toBe('permitted')
+    useModulesStore.setState({ off: new Set(['gitpublish']) })
+    expect(routeAccess(view('gitPublication')).kind).toBe('permitted')
     useModulesStore.setState({ off: new Set() })
   })
 })

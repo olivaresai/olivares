@@ -109,7 +109,7 @@
   },
   "enforcement": {
     "title": "Posture d’application",
-    "description": "La seule action qui touche la production. Chaque classe de garde-fou est détective par défaut ; activer l’application en ligne est une action d’administration, gouvernée là où la barrière est câblée.",
+    "description": "La seule action qui touche la production. Chaque classe de garde-fou est détective par défaut ; activer l’application en ligne est une action d’administration, gouvernée là où une barrière est configurée.",
     "defaultDetectiveNote": "Le plan par défaut est détectif : les classes ne bloquent que lorsqu’elles sont explicitement activées ici et gouvernées.",
     "fullyDetective": "Aucune application n’est activée — le plan est entièrement détectif, le réglage sûr par défaut. Rien ne bloque de lui-même.",
     "detective": "Détectif",
@@ -128,14 +128,14 @@
     },
     "dialog": {
       "title": "Modifier l’application",
-      "description": "La désactivation (retour au détectif) est toujours autorisée. Activer l’application en ligne est gouverné là où la barrière est câblée — un refus de gouvernance est affiché comme motif.",
+      "description": "La désactivation (retour au détectif) est toujours autorisée. Activer l’application en ligne est gouverné là où une barrière est configurée — un refus de gouvernance est affiché comme motif.",
       "enabledLabel": "Activer l’application en ligne",
       "minSeverity": "Gravité minimale",
       "reason": "Motif",
       "reasonHint": "Enregistré avec la modification pour le registre d’audit.",
       "submit": "Appliquer",
       "applied": "Posture d’application mise à jour",
-      "ungovernedWarning": "Activer cette classe sans barrière de gouvernance câblée la laisse non gouvernée — la modification est autorisée mais signalée.",
+      "ungovernedWarning": "Activer cette classe sans barrière de gouvernance configurée la laisse non gouvernée — la modification est autorisée mais signalée.",
       "deniedTitle": "La gouvernance a refusé cette modification"
     }
   },
@@ -197,9 +197,9 @@
     "checkpointsCount_one": "{{count}} point de contrôle vérifié",
     "checkpointsCount_many": "{{count}} point de contrôle vérifié",
     "checkpointsCount_other": "{{count}} points de contrôle vérifiés",
-    "signingUnavailable": "Aucune clé de signature n’est câblée — l’attestation signée n’est pas simulée.",
+    "signingUnavailable": "Aucune clé de signature n’est configurée — l’attestation signée n’est pas simulée.",
     "checkpointsPendingNote": "Aucun point de contrôle écrit pour l’instant — c’est le verdict de la chaîne qui prouve ce registre.",
-    "signingSeam": "Signature des points de contrôle non câblée",
+    "signingSeam": "Signature des points de contrôle non configurée",
     "attestedSeq": "Seq attesté",
     "headSeq": "seq de tête du registre {{seq}}",
     "reverifyNote": "Chaque événement porte seq · hash · prev_hash afin qu’un lecteur puisse revérifier le lien hors ligne par rapport à un magasin WORM externe.",

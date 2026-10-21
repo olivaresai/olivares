@@ -28,8 +28,9 @@ import (
 // least-privilege role model idempotently from the binary — no psql, no SQL by hand.
 func newDBCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "db",
-		Short: "Prepare and verify the database before serving (Postgres roles, RLS posture)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "db",
+		Short:       "Prepare and verify the database before serving (Postgres roles, RLS posture)",
 		Example: "  olivares db check --dsn env:DATABASE_URL --strict\n" +
 			"  olivares db init --print-sql --app-password-file /run/secrets/app-pw",
 		Long: "Onboard Postgres without editing SQL by hand: `db check` probes a DSN's role posture\n" +
@@ -46,8 +47,9 @@ func dbCheckCmd() *cobra.Command {
 	var engine, dsn, ownerDSN, adminDSN string
 	var strict bool
 	cmd := &cobra.Command{
-		Use:   "check",
-		Short: "Probe a DSN's role posture and report whether the engine will accept it (read-only)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "check",
+		Short:       "Probe a DSN's role posture and report whether the engine will accept it (read-only)",
 		Long: "Connects with each DSN you pass and reports its privilege posture WITHOUT running any\n" +
 			"migration or schema change. It predicts the boot guard exactly: the --dsn and --owner-dsn\n" +
 			"roles must be NOSUPERUSER NOBYPASSRLS (else FORCE row-level security is inert and the\n" +
@@ -374,8 +376,9 @@ func dbInitCmd() *cobra.Command {
 		installDirectoryInventory             bool
 	)
 	cmd := &cobra.Command{
-		Use:   "init",
-		Short: "Provision the least-privilege Postgres roles + database idempotently (no psql by hand)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "init",
+		Short:       "Provision the least-privilege Postgres roles + database idempotently (no psql by hand)",
 		Long: "Connects with --superuser-dsn (a superuser / maintenance DSN) and provisions, idempotently:\n" +
 			"  • the application role (--app-role, NOSUPERUSER NOBYPASSRLS) for runtime traffic;\n" +
 			"  • optionally a SEPARATE owner role (--owner-role) that owns the schema and runs DDL, so\n" +

@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Registers the `adoption` i18n namespace (gap #12). Imported by the view (so the strings
-// are present when the lazy chunk loads) and by the tests. Languages: en/es/zh/ja/de/ru/fr
+// are present when the lazy chunk loads) and by the tests. Languages: en/es/zh/ja/de/ru/fr/it/ko
 // (the full console set — lint:i18n enforces parity across all of them).
 import { registerTranslations } from '@/lib/i18n'
 import en from './en.json'
@@ -13,7 +13,9 @@ import ja from './ja.json'
 import de from './de.json'
 import ru from './ru.json'
 import fr from './fr.json'
+import it from './it.json'
+import ko from './ko.json'
 
-registerTranslations('adoption', { en, es, zh, ja, de, ru, fr })
+registerTranslations('adoption', { en, es, zh, ja, de, ru, fr, it, ko })
 
-export { en, es, zh, ja, de, ru, fr }
+export { en, es, zh, ja, de, ru, fr, it, ko }

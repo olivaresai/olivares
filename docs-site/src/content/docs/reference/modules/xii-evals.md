@@ -39,11 +39,15 @@ core **`EvalResult`** — the canonical artifact (`Suite`, `SubjectKind`, `Subje
 `Score`, `Passed`, `OccurredAt`, `Metrics`) that compliance (XIII) and the UI read
 **without knowing XII's own tables**. Runs execute synchronously; the SSE stream on a
 run *replays the persisted run* (per-case frames, then a summary), it does not actuate.
-A regression is a point-score comparison with one baseline run. When the score
-drop exceeds the suite's `regression_threshold`, the run sets `regressed` and
-writes a core **`Finding`** (`Kind = eval_regression`). That comparison has no
-interval. The automatic baseline is the latest completed run for the same suite
-and subject, and for the same variant when one is set. That run may use another
+A regression is a comparison with one baseline run. When the score drop exceeds
+the suite's `regression_threshold` and the 95% interval of the pass-rate
+difference (Newcombe's difference of Wilson intervals) excludes zero, the run
+sets `regressed` and writes a core **`Finding`** (`Kind = eval_regression`). A
+drop over the threshold whose interval includes zero is marked
+`inconclusive_noise`, not a regression; the comparison shows the interval and
+both denominators, so small suites raise fewer findings. The automatic baseline is the latest completed run for the same suite
+and subject, and for the same variant when one is set, skipping runs marked
+`inconclusive_noise`. That run may use another
 suite version, model or scorer, and the comparison does not report which
 changed. After a suite version change, pass an explicit baseline or pin one
 (`POST /baselines`). The finding is best-effort emitted on the bus as
@@ -94,7 +98,7 @@ spend and fails with `budget_blocked`. A budget that blocks or throttles stops
 the spend. The only escape from a failed gate is the
 **governed override** — admin-tier, written reason, audited — which changes the
 *effective* verdict CI re-checks, never the recorded one. Every reported rate
-ships with its denominator and 95% interval; the regression comparison does not.
+ships with its denominator and 95% interval, and so does the regression comparison.
 See `docs/EVAL-METHODOLOGY.md` in the repository for the full methodology and sources.
 
 :::caution[Honest limits]

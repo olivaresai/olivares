@@ -48,7 +48,11 @@ func TestOllamaPullsHuggingFaceGGUFWithAudit(t *testing.T) {
 	if len(models) != 1 || models[0] != huggingFaceFixtureModel {
 		t.Fatalf("Ollama did not retain the HF reference: %v", status)
 	}
-	code, ledger := call("GET", "/v1/audit/system", nil)
+	// Filtered scan, not the default page: the plain listing walks the chain
+	// oldest-first and caps at 50 events, so on a slow runner the pull event can
+	// sit past the first page. The 202 already proved audit() ran; this must
+	// still find the exact event wherever it lies.
+	code, ledger := call("GET", "/v1/audit/system?action=agenttools.ollama.pull&target_id="+id, nil)
 	if code != 200 {
 		t.Fatalf("audit = %d %v", code, ledger)
 	}

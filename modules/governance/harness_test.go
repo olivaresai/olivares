@@ -58,11 +58,16 @@ func (c *fakeClock) advance(d time.Duration) {
 type fakeHost struct {
 	mu     sync.Mutex
 	events []event.Event
+	// publishErr, when set, makes Publish fail the way a full or stopped bus does.
+	publishErr error
 }
 
 func (h *fakeHost) Publish(_ context.Context, e event.Event) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.publishErr != nil {
+		return h.publishErr
+	}
 	h.events = append(h.events, e)
 	return nil
 }
@@ -200,6 +205,13 @@ type harnessOpts struct {
 	// Admin-posture provider (external-keys/residency) or deliberately leave it
 	// unwired to exercise the honest available=false answer.
 	identityOpts []governance.IdentityConsoleOption
+	// storeSharesClock gives the store the harness's fake clock, so a row's created_at
+	// and the module's own timestamps (decided_at, expires_at) agree. A report that
+	// subtracts one from the other needs it; every other test keeps the store on real time.
+	storeSharesClock bool
+	// departments wires the Business department surface (group nesting is one of its
+	// writes). Nil is the Community build: those routes answer 501 departments_unavailable.
+	departments func(*auth.Authenticator) api.DepartmentService
 }
 
 func newHarness(t *testing.T) *harness { return newHarnessWith(t, harnessOpts{}) }
@@ -225,7 +237,11 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 	if engKind == "" {
 		engKind, dsn = store.EngineSQLite, ":memory:"
 	}
-	st, err := engine.Open(ctx, store.Config{Engine: engKind, DSN: dsn, AdminDSN: hopts.adminDSN, Debug: true}, gov.RegisterSchema)
+	storeCfg := store.Config{Engine: engKind, DSN: dsn, AdminDSN: hopts.adminDSN, Debug: true}
+	if hopts.storeSharesClock {
+		storeCfg.Clock = clk
+	}
+	st, err := engine.Open(ctx, storeCfg, gov.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,8 +293,12 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 	// wire the production-equivalent authorizer — the deny-overlay (RequestEvaluator)
 	// PLUS the per-tenant scoped-grant engine — so the e2e tests exercise positive grants
 	// and scoped forbids on the real request path, not only the deny-overlay.
+	var departments api.DepartmentService
+	if hopts.departments != nil {
+		departments = hopts.departments(authr)
+	}
 	srv, err := api.New(api.Options{
-		Store: st, Authenticator: authr,
+		Store: st, Authenticator: authr, Departments: departments,
 		Authorizer: auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
 		Signer:     signer, SetupToken: tok, Version: "test",
 		Ingest:                hopts.ingest,
@@ -319,9 +339,10 @@ func (h *harness) stepUp(token string) {
 }
 
 type resp struct {
-	code int
-	body map[string]any
-	raw  string
+	header http.Header
+	code   int
+	body   map[string]any
+	raw    string
 }
 
 func (h *harness) do(method, path, token string, body any, hdr map[string]string) resp {
@@ -343,7 +364,7 @@ func (h *harness) do(method, path, token string, body any, hdr map[string]string
 	}
 	rec := httptest.NewRecorder()
 	h.srv.Handler().ServeHTTP(rec, req)
-	out := resp{code: rec.Code, raw: rec.Body.String()}
+	out := resp{header: rec.Header().Clone(), code: rec.Code, raw: rec.Body.String()}
 	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
 	return out
 }

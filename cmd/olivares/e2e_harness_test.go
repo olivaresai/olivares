@@ -24,9 +24,10 @@ package main
 // cannot drift in WHICH modules run. TestCompositionRootBootsAndWiresModules
 // guards boot()'s own wiring.
 //
-// Bus delivery is asynchronous with no flush primitive (inproc.go), so every
-// assertion polls a read surface until it converges (eventually) — exactly how a
-// real operator watches data appear.
+// Bus delivery is asynchronous. The harness owns the bus, so once the seed
+// source returns it waits on the bus's Enqueued/Handled completion barrier
+// before asserting derived read models; individual assertions still poll until
+// they converge, exactly how a real operator watches data appear.
 
 import (
 	"bytes"
@@ -46,11 +47,15 @@ import (
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
 	coreengine "github.com/olivaresai/olivares/core/engine"
+	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk"
 )
+
+// seedSourceA is the registration name of tenant A's seeded source.
+const seedSourceA = "olivares.seed-demo.A"
 
 // harness is a running in-process engine plus the credentials the E2E suite
 // drives it with.
@@ -58,6 +63,7 @@ type harness struct {
 	t     *testing.T
 	h     http.Handler
 	rt    *runtime.Runtime
+	stats eventbus.StatsProvider
 	st    store.Store
 	authr *auth.Authenticator
 	now   time.Time
@@ -83,6 +89,15 @@ func newHarness(t *testing.T) *harness {
 // HTTP/store/runtime wiring remain real.
 func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.SessionRecorder, capturedLog ...*slog.Logger) *harness {
 	t.Helper()
+	return newHarnessWithBus(t, nil, wrap, capturedLog...)
+}
+
+// newHarnessWithBus is newHarnessWithRecorder with an injectable event bus; nil
+// builds the same in-process bus the runtime would build itself. The harness
+// keeps the bus's StatsProvider so it can wait on the Enqueued/Handled
+// completion barrier; a bus without it cannot offer that guarantee.
+func newHarnessWithBus(t *testing.T, bus eventbus.Bus, wrap func(api.SessionRecorder) api.SessionRecorder, capturedLog ...*slog.Logger) *harness {
+	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
 	log := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -90,6 +105,13 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 		log = capturedLog[0]
 	}
 	now := time.Now()
+	if bus == nil {
+		bus = eventbus.NewInProc(eventbus.Options{Logger: log})
+	}
+	busStats, ok := bus.(eventbus.StatsProvider)
+	if !ok {
+		t.Fatalf("harness bus %T does not implement eventbus.StatsProvider", bus)
+	}
 
 	// --- assemble (mirrors boot.go:54-153, reusing the production module set) ---
 	priv, _, err := secure.LoadOrCreateSigningKey(filepath.Join(dir, "audit-signing.key"))
@@ -101,7 +123,7 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 		t.Fatalf("signer: %v", err)
 	}
 
-	rt := runtime.New(runtime.Options{Logger: log})
+	rt := runtime.New(runtime.Options{Logger: log, Bus: bus})
 	editionCfg := EditionConfig{DataDir: dir}
 	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, editionCfg, dir, log)
 	if err != nil {
@@ -176,6 +198,11 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = rt.Stop(stopCtx)
+		// The runtime does not own an injected bus; close it here so its
+		// subscriber goroutines cannot outlive the store they write through.
+		if err := bus.Close(); err != nil {
+			t.Errorf("close event bus: %v", err)
+		}
 		if err := closeEditionResources(editionResources, st.Leader(), log); err != nil {
 			t.Errorf("close edition resources: %v", err)
 		}
@@ -243,7 +270,7 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 
 	set.catalogDeploy.handler = apiSrv.Handler()
 
-	h := &harness{t: t, h: apiSrv.Handler(), rt: rt, st: st, authr: authr, now: now, set: set}
+	h := &harness{t: t, h: apiSrv.Handler(), rt: rt, stats: busStats, st: st, authr: authr, now: now, set: set}
 
 	// --- API bootstrap over the real handler (setup token → admin → login) ---
 	tok, _, err := setupTok.Ensure()
@@ -285,7 +312,7 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	}
 
 	// --- register the seed source (real bus channel) for tenant A, then Start ---
-	if err := rt.AddSource(seed.NewSource("olivares.seed-demo.A", now), sdk.Config{}, h.tenantA); err != nil {
+	if err := rt.AddSource(seed.NewSource(seedSourceA, now), sdk.Config{}, h.tenantA); err != nil {
 		t.Fatalf("add seed source: %v", err)
 	}
 	if err := rt.Start(ctx); err != nil {
@@ -406,7 +433,8 @@ func items(m map[string]any) []map[string]any {
 }
 
 // eventually polls fn every 25ms until it returns nil or the deadline passes,
-// failing with the last error. It is the deterministic barrier for the async bus.
+// failing with the last error. It is a liveness poll, not a completion barrier:
+// waitForBusDrain owns the async-bus barrier.
 func (h *harness) eventually(what string, timeout time.Duration, fn func() error) {
 	h.t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -422,11 +450,61 @@ func (h *harness) eventually(what string, timeout time.Duration, fn func() error
 	}
 }
 
+// busDrainTimeout bounds the liveness wait for the seed batch, not the batch
+// itself: the bus completion barrier decides when delivery is done. It is
+// generous because a loaded host can take tens of seconds to run the handlers;
+// it turns a wedged handler into a clear failure instead of a package timeout.
+const busDrainTimeout = 2 * time.Minute
+
+// waitForBusDrain waits until the one-shot seed source has returned from Gather
+// and the bus has no event queued or in flight. Stats.Enqueued/Handled are the
+// bus's completion barrier (core/eventbus/stats.go): the source status proves
+// every seed event has been placed, then a single snapshot with Handled >=
+// Enqueued proves none of the events placed so far is still outstanding.
+// BusStats loads Handled before Enqueued, so handler completions for events
+// published after the Handled read cannot satisfy the snapshot: derived events
+// published by handlers are covered too. A fixed sleep or a fixed deadline on a
+// derived read model is not that proof.
+func (h *harness) waitForBusDrain() {
+	h.t.Helper()
+	h.eventually("seed source finished gathering", busDrainTimeout, func() error {
+		for _, cs := range h.rt.Status() {
+			if cs.Type != sdk.TypeSource || cs.Name != seedSourceA {
+				continue
+			}
+			switch cs.Status {
+			case runtime.StatusFailed:
+				return fmt.Errorf("seed source failed: %s", cs.Err)
+			case runtime.StatusStopped:
+				return nil
+			default:
+				return fmt.Errorf("seed source is %s", cs.Status)
+			}
+		}
+		return fmt.Errorf("seed source %q is not registered", seedSourceA)
+	})
+	h.eventually("seed events handled to completion", busDrainTimeout, func() error {
+		s := h.stats.BusStats()
+		if s.Handled < s.Enqueued {
+			return fmt.Errorf("handled %d of %d events placed on the bus (handler errors %d)", s.Handled, s.Enqueued, s.HandlerErrors)
+		}
+		return nil
+	})
+	if errs := h.stats.BusStats().HandlerErrors; errs > 0 {
+		h.t.Fatalf("seed drain: %d handler invocation(s) returned an error or panicked", errs)
+	}
+}
+
 // waitForGraph blocks until the seed source's derived read-models needed by the E2E
 // suite are materialized. It avoids exact counts, but does require the access graph,
 // inventory model/provider rows, and both seeded live-session rows to have drained.
 func (h *harness) waitForGraph(tenant string) {
 	h.t.Helper()
+	// Wait for delivery to finish instead of guessing how long it takes: the
+	// read-model polls below assert the end state the handlers produce, not the
+	// timing of the async pipeline (dev#2592: a fixed 10s grace period expired on
+	// a loaded CI host while every event was still in flight or queued).
+	h.waitForBusDrain()
 	h.eventually("estate settled (access graph + inventory catalog)", 10*time.Second, func() error {
 		if err := h.editionGraphReady(tenant); err != nil {
 			return err

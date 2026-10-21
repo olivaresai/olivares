@@ -62,6 +62,8 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(true, sessionsMoveRunSchema()), true
 	case http.MethodPost + " /runs/{ref}/handoff":
 		return sessionsClosureBodyDeclaration(true, sessionsHandoffRunSchema()), true
+	case http.MethodPost + " /runs/{ref}/attachments":
+		return sessionsClosureBodyDeclaration(true, sessionsAttachmentUploadSchema()), true
 	case http.MethodPost + " /runs/{ref}/preview":
 		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(
 			oas.Obj("port", oas.Obj("type", "integer", "minimum", 1, "maximum", 65535,
@@ -74,10 +76,16 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 		return sessionsClosureBodyDeclaration(true, sessionsDuplicateTemplateSchema()), true
 	case http.MethodPost + " /templates/{id}/apply":
 		return sessionsClosureBodyDeclaration(false, sessionsApplyTemplateSchema()), true
+	case http.MethodPut + " /workspaces/{ref}/setup-command":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("command", oas.Obj("type", "string", "maxLength", maxSetupCommandBytes, "description", "Exact setup command text, at most 8192 UTF-8 bytes without NUL; empty clears it. Stored only, never executed by this operation.")), "command")), true
+	case http.MethodPost + " /workspaces/{ref}/setup-command/approve":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj("sha256", oas.Obj("type", "string", "pattern", "^[0-9a-f]{64}$", "description", "SHA-256 of the exact command text reviewed. Refused with 409 if the stored text has changed.")), "sha256")), true
 	case http.MethodPost + " /workspaces":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateWorkspaceSchema()), true
 	case http.MethodPatch + " /workspaces/{ref}":
 		return sessionsClosureBodyDeclaration(true, sessionsPatchWorkspaceSchema()), true
+	case http.MethodPost + " /workspaces/{ref}/project-config/approve":
+		return sessionsClosureBodyDeclaration(true, sessionsProjectConfigApproveSchema()), true
 	case http.MethodPost + " /workspaces/{ref}/files/move":
 		return sessionsClosureBodyDeclaration(true, sessionsMoveFileSchema()), true
 	case http.MethodPost + " /provider-profiles":
@@ -114,12 +122,30 @@ func sessionsClosureRequestBodyDeclarationFor(method, pattern string) (sessionsC
 	// declaration and the sibling switch would still have published the schema — so
 	// the census would have kept asserting "bodyless" about a route with a body,
 	// which is the kind of true-looking contradiction this file exists to prevent.
+	case http.MethodPut + " /tool-rings/{driver}":
+		return sessionsClosureBodyDeclaration(true, sessionsClosureClosedObject(oas.Obj(
+			"group_ref", oas.Obj("type", "string", "format", "uuid",
+				"description", "The agent group whose members run the candidate version."),
+			"version", oas.Obj("type", "string", "minLength", 1, "maxLength", 128,
+				"description", "An installed version of the tool to try on that group."),
+			"accept_promotion", oas.Obj("type", "boolean",
+				"description", "Start over a promoted ring, giving up the pins its rollback would have restored."),
+		), "group_ref", "version")), true
+	case http.MethodPost + " /tool-rings/{driver}/promote",
+		http.MethodPost + " /tool-rings/{driver}/rollback":
+		// The tool names the ring and the ring holds the rest: a body would be a second
+		// place to say which version and which group.
+		return sessionsClosureRequestBodyDeclaration{kind: sessionsClosureBodyless}, true
 	case http.MethodPost + " /runs/{ref}/cleanup":
 		// An OPTIONAL body since the worktree option: the confirmation to discard the
 		// session's worktree and branch. It was bodyless, and a call with no body is
 		// still the call it always was.
 		return sessionsClosureBodyDeclaration(false, sessionsCleanupRunSchema()), true
 	case http.MethodDelete + " /runs/{ref}",
+		// The pin toggle is bodyless for the reason the revoke is: the run
+		// reference IS the request, and there is nothing else to say (run_pin.go).
+		http.MethodPost + " /runs/{ref}/pin",
+		http.MethodDelete + " /runs/{ref}/pin",
 		http.MethodPost + " /runs/{ref}/resume",
 		http.MethodDelete + " /templates/{id}",
 		http.MethodDelete + " /workspaces/{ref}",
@@ -174,13 +200,16 @@ func sessionsCreateRunSchema() map[string]any {
 		"name", sessionsClosureOptionalString("Trimmed before persistence."),
 		"transport", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "stream-json", "remote-control"), "description", "Empty/null defaults to stream-json.")),
 		"permission_mode", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"), "description", "Empty/null defaults to default.")),
-		"effort", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "low", "medium", "high", "xhigh", "max"))),
+		"effort", sessionsClosureNullable(oas.Obj("type", "string", "maxLength", 64, "description", "Claude Code accepts low, medium, high, xhigh and max; other non-empty values return 400 even when its catalog lists them. This is the final Claude launch contract. Other drivers pass a bounded printable term to the tool. Empty/null keeps the tool default.")),
 		"model", sessionsClosureOptionalString("Trimmed before launch."),
+		"fast_mode", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Claude Code only. Explicit false turns Fast mode off; omitted/null keeps the tool default. True requires a catalog model that supports it and an own-account profile; provider-bound launches refuse it to preserve endpoint isolation.")),
+		"service_tier", sessionsClosureNullable(oas.Obj("type", "string", "maxLength", 200, "description", "Codex only. A non-empty, whitespace-free service tier is passed unchanged to thread/start and thread/resume; empty/null keeps the tool default. Other drivers refuse a non-empty choice.")),
 		"workspace_ref", sessionsClosureOptionalString("Trimmed and, when non-empty, resolved to a registered workspace."),
 		"template_id", sessionsClosureOptionalString("When non-empty, identifies the stored template whose terms govern the launch."),
 		"isolation", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "native", "container", "sandbox"), "description", "Empty/null defaults to native; unavailable runners refuse rather than downgrade.")),
 		"env_allow", sessionsClosureNullable(oas.Obj("type", "array", "maxItems", 64, "uniqueItems", true, "items", envName)),
 		"worktree", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Opt in to a git worktree and a new branch of the session's own, made from the named workspace's repository (which must be the repository's top folder, native isolation, with no read-only folders). Absent, null or false keeps the session in the workspace folder itself.")),
+		"no_setup", sessionsClosureNullable(oas.Obj("type", "boolean", "description", "Skip the folder's setup command for this start only; leaves its stored command and approval unchanged.")),
 		"worktree_from", sessionsClosureOptionalString("With worktree: start the new worktree at this commit id or local branch of the workspace's repository instead of its current commit (for example the branch and sha a handoff names). Absent keeps the current start. Refused without worktree, and when the commit or branch is not in the repository."),
 		"secret_env", sessionsSecretEnvSchema(),
 		"git_read", sessionsClosureOptionalString("When non-empty, one approved Git-host repository binding (<binding id>:<owner>/<name>) the session gets a short-lived GitHub read credential for: an installation token with contents:read for that repository, served to git by a credential helper (never in the environment) and revoked when the session ends. Needs tenant administration. A GitLab binding is refused (422)."),
@@ -319,7 +348,7 @@ func sessionsCreateWorkspaceSchema() map[string]any {
 	return sessionsClosureClosedObject(oas.Obj(
 		"name", sessionsClosureOptionalString("Trimmed workspace display name."),
 		"root_path", oas.Obj("type", "string", "description", "After trimming, must be an absolute, existing directory; the server stores its canonical real path."),
-		"mount_mode", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "rw", "ro"), "description", "Empty/null defaults to rw.")),
+		"mount_mode", sessionsClosureNullable(oas.Obj("type", "string", "enum", oas.Enum("", "rw", "ro", "write_no_delete"), "description", "Empty/null defaults to rw. write_no_delete is read-write without the right to remove a name: a native session creates and changes files in the folder (existing files can still be overwritten or emptied) and cannot unlink, rmdir, rename or move one out, and the file API refuses delete and move. The kernel enforces it (Linux Landlock), so a session in such a folder does not start on a host that cannot confine. In a folder that is a Git repository, .git stays fully writable so the agent's own git works (it renames a lock file over its index), which also lets the session empty .git and destroy the repository's history; the working files stay protected. A tool that replaces a file by removing or renaming it (sed -i, an atomic-save formatter) is refused and can leave its temporary file. The session's Git panel acts for the person and is not restricted.")),
 		"container_target", sessionsClosureOptionalString("Must be absolute after trimming; empty/null selects the default container target."),
 		"allow_subpaths", sessionsClosureNullable(oas.Obj(
 			"type", "array", "description", "Relative, NUL-free paths that cannot escape the workspace root.",
@@ -376,6 +405,7 @@ func sessionsCreateProviderProfileSchema() map[string]any {
 		"provider_record_ref", sessionsClosureOptionalString("Optional: the registered provider whose credential this profile's managed launches use. Empty binds no registered provider; auth_source still governs how launches authenticate. The engine refuses a credential whose kind this driver cannot read."),
 		"session_programs", sessionsProfileProgramsSchema(),
 		"session_registries", sessionsProfileRegistriesSchema(),
+		"session_egress_hosts", sessionsProfileEgressHostsSchema(),
 	), "driver", "config_home", "user_home")
 }
 
@@ -391,15 +421,23 @@ func sessionsPatchProviderProfileSchema() map[string]any {
 		"provider_record_ref", sessionsClosureOptionalString("Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved."),
 		"session_programs", sessionsProfileProgramsSchema(),
 		"session_registries", sessionsProfileRegistriesSchema(),
+		"session_egress_hosts", sessionsProfileEgressHostsSchema(),
 	))
 }
 
-// sessionsProfileProgramsSchema and sessionsProfileRegistriesSchema mirror
-// provider_profile_packages.go: what every session under the profile gets.
+// sessionsProfileProgramsSchema, sessionsProfileRegistriesSchema and
+// sessionsProfileEgressHostsSchema mirror provider_profile_packages.go: what every
+// session under the profile gets.
 func sessionsProfileProgramsSchema() map[string]any {
 	return sessionsClosureNullable(oas.Obj("type", "array", "maxItems", maxSessionPrograms,
 		"items", oas.Obj("type", "string", "pattern", "^[a-z0-9][a-z0-9_-]{0,63}$"),
 		"description", "Installed third-party programs (the tool installer's program names) put first on each session's PATH. A launch whose program is not installed is refused 409. Declaring programs needs tenant administration. On PATCH, [] withdraws the declaration and null or omission keeps it."))
+}
+
+func sessionsProfileEgressHostsSchema() map[string]any {
+	return sessionsClosureNullable(oas.Obj("type", "array", "maxItems", maxSessionEgressHosts,
+		"items", oas.Obj("type", "string", "minLength", 1, "maxLength", 253, "description", "A DNS host name such as github.com: no scheme, port, path, wildcard or address."),
+		"description", "HTTPS hosts a confined session may reach beside its bound provider (a Git host, a module mirror); none by default. Each is admitted only at public addresses, whatever its name resolves to. Declaring hosts needs tenant administration and is recorded in the audit ledger. On PATCH, [] withdraws the declaration and null or omission keeps it."))
 }
 
 func sessionsProfileRegistriesSchema() map[string]any {

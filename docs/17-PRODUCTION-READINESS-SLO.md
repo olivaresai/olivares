@@ -125,7 +125,9 @@ The budget is **< 5 ms p99 for the in-memory decision**, and the exact ns/op fig
 reference-hardware-dependent and must be owner-confirmed there. The HTTP-handler wrapper overhead above
 the measured store-write floor, and end-to-end p99 of the hook, proxy, retrieval, and API paths under load,
 remain SLO targets pending an owner-run load test on reference hardware; they are not independently
-micro-measured.
+micro-measured. Concurrent agent sessions are the exception: one engine held 600 live sessions, with the API
+answering at p99 under 30 ms; the figures, their limits and what the run did not measure are in
+`docs/SIZING-AND-CAPACITY.md` §2-ter.4a.
 
 **Error budget = 100% − SLO** (SRE). At 99.5%, ~0.5% of 28 days ≈ **3h 22m** of allowed unavailability per window; at 99.9%, ~**40m**. The published number is the SLO; the budget is the operating room the error-budget policy (§3) spends.
 

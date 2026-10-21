@@ -33,23 +33,6 @@ interface IdentityItem {
   name?: string
 }
 
-interface RecordingItem {
-  id: string
-  subject: string
-  status: string
-  opened_at: string
-}
-
-interface RecordingConfigBody {
-  namespaces: string[]
-  consent: 'notice' | 'required'
-  idle_seconds: number
-  retention_days: number
-  ai_summaries: boolean
-  breakglass_always: boolean
-  retention_enforced: boolean
-}
-
 interface AuditItem {
   id: string
   seq: number
@@ -446,445 +429,16 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await page.screenshot({ path: 'playwright-report/l4-settings-es-dark.png' })
   })
 
-  test('recording filters, viewer navigation and policy save use live state', async ({
+  test('recording is a Business feature: Community refuses every route with business_required', async ({
     page,
   }) => {
     const session = await loginDemo(page)
-
-    // Touch a recorded namespace first, so the disposable engine has a live session.
-    const ssoRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return url.pathname === '/v1/m/identity/sso'
-    })
-    await page.goto('/identity?tab=federation')
-    expect((await ssoRead).status()).toBe(200)
-    const noticeResponse = await page.request.get('/v1/m/recording/notice', {
+    const refused = await page.request.get('/v1/m/recording/notice', {
       headers: authHeaders(session),
     })
-    expect(noticeResponse.status()).toBe(200)
-    const notice = (await noticeResponse.json()) as { session_id?: string }
-    expect(notice.session_id).toBeTruthy()
-
-    const sessionsRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/v1/m/recording/sessions' &&
-        !url.searchParams.has('status') &&
-        !url.searchParams.has('opened_after') &&
-        !url.searchParams.has('opened_before')
-      )
-    })
-    const configRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/v1/m/recording/config'
-      )
-    })
-    await page.goto('/recordings')
-    const sessionsResponse = await sessionsRead
-    const configResponse = await configRead
-    expect(sessionsResponse.status()).toBe(200)
-    expect(configResponse.status()).toBe(200)
-    const sessions = (await sessionsResponse.json()) as ListBody<RecordingItem>
-    const original = (await configResponse.json()) as RecordingConfigBody
-    expect(sessions.items.length).toBeGreaterThan(0)
-    // /notice resolves the active recording by the exact authenticated credential;
-    // selecting by that ID avoids confusing it with earlier logins by the same user.
-    const currentSession = sessions.items.find(
-      (item) => item.id === notice.session_id,
-    )
-    expect(currentSession).toBeDefined()
-    const witness = currentSession!
-    expect(witness.status).toBe('active')
-    const recordingsGrid = page.getByRole('grid', { name: 'Recordings' })
-
-    const sealedRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('status') === 'sealed'
-      )
-    })
-    await page.getByRole('combobox', { name: 'Filter by status' }).click()
-    await page.getByRole('option', { name: 'Sealed', exact: true }).click()
-    await expect(
-      page.getByRole('combobox', { name: 'Filter by status' }),
-    ).toContainText('Sealed')
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('status'))
-      .toBe('sealed')
-    const sealedResponse = await sealedRead
-    expect(sealedResponse.status()).toBe(200)
-    const sealed = (await sealedResponse.json()) as ListBody<RecordingItem>
-    expect(
-      sealed.items,
-      'the fresh estate has active sessions, so ignoring status=sealed must fail',
-    ).toHaveLength(0)
-    await expectGridCardinality(recordingsGrid, 0, 'No recording sessions yet')
-
-    const activeRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('status') === 'active'
-      )
-    })
-    await page.getByRole('combobox', { name: 'Filter by status' }).click()
-    await page.getByRole('option', { name: 'Active', exact: true }).click()
-    await expect(
-      page.getByRole('combobox', { name: 'Filter by status' }),
-    ).toContainText('Active')
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get('status'))
-      .toBe('active')
-    const activeResponse = await activeRead
-    expect(activeResponse.status()).toBe(200)
-    const active = (await activeResponse.json()) as ListBody<RecordingItem>
-    expect(active.items.length).toBeGreaterThan(0)
-    expect(active.items.every((item) => item.status === 'active')).toBe(true)
-    await expectGridCardinality(
-      recordingsGrid,
-      active.items.length,
-      'No recording sessions yet',
-    )
-
-    const afterDay = witness!.opened_at.slice(0, 10)
-    const tomorrow = new Date(`${afterDay}T00:00:00.000Z`)
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
-    const beforeDay = tomorrow.toISOString().slice(0, 10)
-    const afterIso = `${afterDay}T00:00:00.000Z`
-    const beforeIso = `${beforeDay}T00:00:00.000Z`
-
-    const futureRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('opened_after') === beforeIso
-      )
-    })
-    await page.getByLabel('Opened after').fill(beforeDay)
-    const futureResponse = await futureRead
-    expect(futureResponse.status()).toBe(200)
-    const future = (await futureResponse.json()) as ListBody<RecordingItem>
-    expect(
-      future.items,
-      'ignoring a future opened_after bound must expose the active witness and fail',
-    ).toHaveLength(0)
-    await expectGridCardinality(recordingsGrid, 0, 'No recording sessions yet')
-
-    const afterRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('opened_after') === afterIso
-      )
-    })
-    await page.getByLabel('Opened after').fill(afterDay)
-    const afterResponse = await afterRead
-    expect(afterResponse.status()).toBe(200)
-    const afterItems = (await afterResponse.json()) as ListBody<RecordingItem>
-    expect(
-      afterItems.items.every(
-        (item) => Date.parse(item.opened_at) >= Date.parse(afterIso),
-      ),
-    ).toBe(true)
-    await expectGridCardinality(
-      recordingsGrid,
-      afterItems.items.length,
-      'No recording sessions yet',
-    )
-
-    const pastRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('opened_after') === afterIso &&
-        url.searchParams.get('opened_before') === afterIso
-      )
-    })
-    await page.getByLabel('Opened before').fill(afterDay)
-    const pastResponse = await pastRead
-    expect(pastResponse.status()).toBe(200)
-    const past = (await pastResponse.json()) as ListBody<RecordingItem>
-    expect(
-      past.items,
-      'ignoring the midnight opened_before bound must expose the witness and fail',
-    ).toHaveLength(0)
-    await expectGridCardinality(recordingsGrid, 0, 'No recording sessions yet')
-
-    const beforeRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('opened_after') === afterIso &&
-        url.searchParams.get('opened_before') === beforeIso
-      )
-    })
-    await page.getByLabel('Opened before').fill(beforeDay)
-    const beforeResponse = await beforeRead
-    expect(beforeResponse.status()).toBe(200)
-    const bounded = (await beforeResponse.json()) as ListBody<RecordingItem>
-    expect(bounded.items.some((item) => item.id === witness!.id)).toBe(true)
-    expect(
-      bounded.items.every(
-        (item) => Date.parse(item.opened_at) <= Date.parse(beforeIso),
-      ),
-    ).toBe(true)
-    await expectGridCardinality(
-      recordingsGrid,
-      bounded.items.length,
-      'No recording sessions yet',
-    )
-
-    // Recording search submits an explicit server predicate. Draft typing must
-    // not read the list; this view does not offer opt-in local table filtering.
-    let listGets = 0
-    const countLists = (request: { method(): string; url(): string }) => {
-      if (
-        request.method() === 'GET' &&
-        new URL(request.url()).pathname === '/v1/m/recording/sessions'
-      )
-        listGets += 1
-    }
-    page.on('request', countLists)
-    const subjectSearch = page.getByRole('textbox', {
-      name: 'Recording search',
-      exact: true,
-    })
-    const searchForm = page.locator('form').filter({ has: subjectSearch })
-    await expect(
-      page.getByRole('combobox', { name: 'Search field', exact: true }),
-    ).toContainText('Subject contains')
-    const absentSubject = 'w972-nonexistent-recording-subject'
-    expect(
-      bounded.items.every((item) => !item.subject.includes(absentSubject)),
-    ).toBe(true)
-    await subjectSearch.fill(absentSubject)
-    await page.waitForTimeout(500)
-    expect(listGets).toBe(0)
-    await expectGridCardinality(
-      recordingsGrid,
-      bounded.items.length,
-      'No recording sessions yet',
-    )
-    const absentRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('subject_contains') === absentSubject
-      )
-    })
-    await searchForm
-      .getByRole('button', { name: 'Search', exact: true })
-      .click()
-    const absentResponse = await absentRead
-    expect(absentResponse.status()).toBe(200)
-    expect(
-      ((await absentResponse.json()) as ListBody<RecordingItem>).items,
-    ).toEqual([])
-    await expectGridCardinality(recordingsGrid, 0, 'No recording sessions yet')
-    const readsBeforeWitnessDraft = listGets
-    await subjectSearch.fill(witness.subject)
-    await page.waitForTimeout(500)
-    expect(listGets).toBe(readsBeforeWitnessDraft)
-    const searchedRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        response.request().method() === 'GET' &&
-        url.pathname === '/v1/m/recording/sessions' &&
-        url.searchParams.get('subject_contains') === witness.subject
-      )
-    })
-    await searchForm
-      .getByRole('button', { name: 'Search', exact: true })
-      .click()
-    const searchedResponse = await searchedRead
-    expect(searchedResponse.status()).toBe(200)
-    const searched = (await searchedResponse.json()) as ListBody<RecordingItem>
-    expect(searched.items.some((item) => item.id === witness.id)).toBe(true)
-    expect(
-      searched.items.every((item) => item.subject.includes(witness.subject)),
-    ).toBe(true)
-    await expectGridCardinality(
-      recordingsGrid,
-      searched.items.length,
-      'No recording sessions yet',
-    )
-    await expect(
-      recordingsGrid.getByRole('row').filter({
-        has: page.getByTitle(witness.subject, { exact: true }),
-      }),
-    ).toHaveCount(searched.items.length)
-    await searchForm.getByRole('button', { name: 'Clear', exact: true }).click()
-    await expect
-      .poll(() => new URL(page.url()).searchParams.has('subject_contains'))
-      .toBe(false)
-    await expect(subjectSearch).toHaveValue('')
-    await expectGridCardinality(
-      recordingsGrid,
-      bounded.items.length,
-      'No recording sessions yet',
-    )
-    page.off('request', countLists)
-
-    const witnessIndex = bounded.items.findIndex(
-      (item) => item.id === witness.id,
-    )
-    expect(witnessIndex).toBeGreaterThanOrEqual(0)
-    const unifiedRead = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return url.pathname === `/v1/m/recording/sessions/${witness.id}/unified`
-    })
-    await page
-      .getByRole('grid', { name: 'Recordings' })
-      .getByRole('row')
-      .nth(witnessIndex + 1)
-      .click()
-    expect((await unifiedRead).status()).toBe(200)
-    await page.waitForURL(`**/session-viewer/${witness.id}`)
-    await expect(
-      page.getByRole('heading', { name: 'Session Recording Viewer' }),
-    ).toBeVisible()
-    await page.getByRole('link', { name: 'Back to recordings' }).click()
-    await page.waitForURL('**/recordings')
-
-    // Draft-only controls must not write before Save.
-    let configPuts = 0
-    const countConfigPuts = (request: { method(): string; url(): string }) => {
-      if (
-        request.method() === 'PUT' &&
-        new URL(request.url()).pathname === '/v1/m/recording/config'
-      ) {
-        configPuts += 1
-      }
-    }
-    page.on('request', countConfigPuts)
-
-    const namespaceWitness = original.namespaces.at(-1)
-    expect(namespaceWitness).toBeTruthy()
-    const removeNamespace = page.getByRole('button', {
-      name: `Remove ${namespaceWitness}`,
-    })
-    await removeNamespace.click()
-    const namespace = page.getByLabel('Add a recorded namespace')
-    await namespace.fill(namespaceWitness!)
-    await namespace.press('Enter')
-    await expect(removeNamespace).toBeVisible()
-    await removeNamespace.click()
-    await namespace.fill(namespaceWitness!)
-    await page.getByRole('button', { name: 'Add', exact: true }).click()
-    await expect(removeNamespace).toBeVisible()
-
-    const consent = page.getByRole('switch', {
-      name: 'Require acknowledgement before privileged actions',
-    })
-    const consentWasRequired = original.consent === 'required'
-    if (consentWasRequired) await expect(consent).toBeChecked()
-    else await expect(consent).not.toBeChecked()
-    await consent.click()
-    if (consentWasRequired) await expect(consent).not.toBeChecked()
-    else await expect(consent).toBeChecked()
-    await consent.click()
-    if (consentWasRequired) await expect(consent).toBeChecked()
-    else await expect(consent).not.toBeChecked()
-
-    const idle = page.getByLabel('Idle-seal timeout (seconds)')
-    const retention = page.getByLabel('Retention class (days)')
-    const ai = page.getByRole('switch', { name: 'AI-derived summaries' })
-    await retention.fill(String(original.retention_days + 1))
-    await expect(retention).toHaveValue(String(original.retention_days + 1))
-    await retention.fill(String(original.retention_days))
-    if (original.ai_summaries) await expect(ai).toBeChecked()
-    else await expect(ai).not.toBeChecked()
-    await ai.click()
-    if (original.ai_summaries) await expect(ai).not.toBeChecked()
-    else await expect(ai).toBeChecked()
-    await ai.click()
-    if (original.ai_summaries) await expect(ai).toBeChecked()
-    else await expect(ai).not.toBeChecked()
-    expect(configPuts).toBe(0)
-
-    const changedIdle =
-      original.idle_seconds < 86_400
-        ? original.idle_seconds + 1
-        : original.idle_seconds - 1
-    await idle.fill(String(changedIdle))
-    const saved = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return (
-        response.request().method() === 'PUT' &&
-        url.pathname === '/v1/m/recording/config'
-      )
-    })
-    try {
-      await page.getByRole('button', { name: 'Save policy' }).click()
-      const savedResponse = await saved
-      expect(savedResponse.status()).toBe(200)
-      expect(savedResponse.request().postDataJSON()).toEqual({
-        namespaces: original.namespaces,
-        consent: original.consent,
-        idle_seconds: changedIdle,
-        retention_days: original.retention_days,
-        ai_summaries: original.ai_summaries,
-      })
-      await expect(page.getByText('Recording policy saved')).toBeVisible()
-      const persisted = await page.request.get('/v1/m/recording/config', {
-        headers: authHeaders(session),
-      })
-      expect(persisted.status()).toBe(200)
-      const persistedBody = (await persisted.json()) as RecordingConfigBody
-      expect({
-        namespaces: persistedBody.namespaces,
-        consent: persistedBody.consent,
-        idle_seconds: persistedBody.idle_seconds,
-        retention_days: persistedBody.retention_days,
-        ai_summaries: persistedBody.ai_summaries,
-      }).toEqual({
-        namespaces: original.namespaces,
-        consent: original.consent,
-        idle_seconds: changedIdle,
-        retention_days: original.retention_days,
-        ai_summaries: original.ai_summaries,
-      })
-      await page.waitForTimeout(500)
-      expect(configPuts).toBe(1)
-      await page.screenshot({ path: 'playwright-report/l4-recordings.png' })
-    } finally {
-      const restored = await page.request.put('/v1/m/recording/config', {
-        headers: authHeaders(session),
-        data: {
-          namespaces: original.namespaces,
-          consent: original.consent,
-          idle_seconds: original.idle_seconds,
-          retention_days: original.retention_days,
-          ai_summaries: original.ai_summaries,
-        },
-      })
-      expect(restored.status()).toBe(200)
-      const reread = await page.request.get('/v1/m/recording/config', {
-        headers: authHeaders(session),
-      })
-      expect(reread.status()).toBe(200)
-      const restoredBody = (await reread.json()) as RecordingConfigBody
-      expect({
-        namespaces: restoredBody.namespaces,
-        consent: restoredBody.consent,
-        idle_seconds: restoredBody.idle_seconds,
-        retention_days: restoredBody.retention_days,
-        ai_summaries: restoredBody.ai_summaries,
-      }).toEqual({
-        namespaces: original.namespaces,
-        consent: original.consent,
-        idle_seconds: original.idle_seconds,
-        retention_days: original.retention_days,
-        ai_summaries: original.ai_summaries,
-      })
-    }
-    page.off('request', countConfigPuts)
-    expect(configPuts).toBe(1)
+    expect(refused.status()).toBe(501)
+    const body = (await refused.json()) as { error?: { code?: string } }
+    expect(body.error?.code).toBe('business_required')
   })
 
   test('audit filters, evidence controls and export reflect the live ledger', async ({
@@ -1136,9 +690,10 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
     await expect(ledgerSearch).toHaveValue('')
     await expect(actionInput).toHaveValue('')
     await expect(witnessRow).toHaveCount(1)
+    // Escape closes the filters popover and unmounts its inputs.
     await page.keyboard.press('Escape')
+    await expect(actionInput).toHaveCount(0)
 
-    await actionInput.press('Escape')
     const verifyRead = page.waitForResponse((response) => {
       return new URL(response.url()).pathname === '/v1/audit/verify'
     })
@@ -1243,9 +798,35 @@ test.describe('CONSOLE-FUNC-01 lot 4 over a disposable live engine', () => {
         url.searchParams.get('action') === witness.action
       )
     })
-    const downloadReady = page.waitForEvent('download')
+    const info = await page.request.get('/v1/server-info', {
+      headers: authHeaders(session),
+    })
+    expect(info.status()).toBe(200)
+    const { edition } = (await info.json()) as { edition: string }
+    const downloadReady =
+      edition === 'community' ? null : page.waitForEvent('download')
     await page.getByRole('button', { name: 'Export', exact: true }).click()
     const exportResponse = await exportRead
+    if (downloadReady === null) {
+      // Audit export is Business (core/audit/business_community.go): a Community build
+      // refuses it with 501 before it writes the evidence row or sends a byte.
+      expect(exportResponse.status()).toBe(501)
+      expect(await exportResponse.text()).toContain('audit_export_unavailable')
+      const written = await page.request.get(
+        `/v1/audit?from=${exportAuditFloor}&action=audit.export&limit=100`,
+        { headers: authHeaders(session) },
+      )
+      assertSessionAccepted(written)
+      expect(written.ok()).toBe(true)
+      expect(((await written.json()) as ListBody<AuditItem>).items).toEqual([])
+      test.info().annotations.push({
+        type: 'not-exercised',
+        description:
+          'export download and evidence row: a Community build refuses audit export',
+      })
+      await page.screenshot({ path: 'playwright-report/l4-audit-export.png' })
+      return
+    }
     // The read is judged before the download is awaited: a refused export draws a toast and
     // saves nothing, and would otherwise surface only as a download that never comes.
     expect(exportResponse.status()).toBe(200)

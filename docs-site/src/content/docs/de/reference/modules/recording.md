@@ -8,6 +8,8 @@ description: >-
   Audit-Ledger verankert. PAM-konform, LIVE.
 ---
 
+Die Aufzeichnung privilegierter Sitzungen gehört zu **[Business](https://olivares.ai/pricing)**. Community antwortet auf jede Route unter `/v1/m/recording/` mit 501 `business_required`, zeichnet nichts auf und zeigt die Befehlsgruppe nicht an. Bereits gespeicherte Sitzungen bleiben im Speicher erhalten.
+
 Recording (`modules/recording`) ist die Ebene für die **Aufzeichnung
 privilegierter Sessions** — die PAM-konforme Kontrolle, die Käufer mit hohen
 Sicherheitsanforderungen für Konsolen und Notfallzugriff erwarten. Sie erfasst

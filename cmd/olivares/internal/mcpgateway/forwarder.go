@@ -31,8 +31,9 @@ type UpstreamForwarder struct {
 	CredProv CredentialProvider // resolves the SEPARATE upstream credential; NEVER the inbound token
 	Client   *http.Client
 	managed  bool
-	mu       sync.Mutex
+	mu       sync.Mutex // guards sessions and tick, never held across an upstream call
 	sessions map[string]*managedMCPSession
+	tick     uint64 // orders the sessions' use for the eviction at managedSessionLimit
 	// A session-owned forwarder uses this authenticated identity for both
 	// catalog inspection and tool calls. Shared gateway forwarders leave it nil.
 	SessionIdentity *mcpc.SessionToolIdentity
@@ -61,18 +62,20 @@ func (f *UpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamReques
 			req.ClientID = f.SessionIdentity.ClientID
 			req.Scopes = f.SessionIdentity.Scopes
 		}
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		key := managedMCPSessionKey(req)
-		session := f.sessions[key]
+		session, err := f.managedSession(req)
+		if err != nil {
+			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, err
+		}
+		// f.mu guards the map only. The principal's own lock keeps its calls in order and
+		// is held across the upstream round trip; other principals do not wait on it.
+		session.mu.Lock()
+		defer session.mu.Unlock()
 		if req.Method == "initialize" {
-			if session == nil && len(f.sessions) >= 128 {
-				return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errors.New("mcp gateway: session capacity reached")
-			}
-			session = &managedMCPSession{}
-			f.sessions[key] = session
-		} else if session == nil || session.version == "" {
-			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errors.New("mcp gateway: initialize required for this client")
+			// The principal's one session object is reset, not replaced, so this initialize
+			// waits for the principal's calls in flight and the calls after it wait for this one.
+			session.id, session.version = "", ""
+		} else if session.version == "" {
+			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errManagedInitializeRequired
 		}
 		return f.forward(ctx, req, session)
 	}

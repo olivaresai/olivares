@@ -233,7 +233,7 @@ HELPER="$(dirname "$SUBJ")/assemble-runtime-context.sh"
 RUNTIME='
 mkdir -p scripts LICENSES packaging/container/data-dir
 cp "$HELPER" scripts/
-touch LICENSE NOTICE LICENSING.md DISCLAIMER.md packaging/container/uv-LICENSE-MIT.txt
+touch LICENSE NOTICE LICENSING.md DISCLAIMER.md packaging/container/uv-LICENSE-MIT.txt packaging/container/bashrc.sh
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares

@@ -4,8 +4,11 @@
 
 // Edition boundary: Business Compliance Packs owns catalogs, assessments, the
 // regulatory calendar, DORA/HIPAA views, evidence sealing and OSCAL rendering.
-// Community preserves risk, residency, records management and JSON/CSV exports
-// of stored evidence. Paid routes refuse with 501; the schema remains shared.
+// Community preserves risk, residency, retention and JSON/CSV exports of stored
+// evidence. Legal holds and the right to erasure with key shred are Business
+// (records_edition.go): their routes refuse with 501 business_required, and a hold a
+// Business engine stored still vetoes every purge. Paid routes refuse with 501; the
+// schema remains shared.
 //
 // Package compliance is module XIII — compliance and regulatory: it OPENS
 // enterprise doors by MAPPING what the control plane already observes and audits

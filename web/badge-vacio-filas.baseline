@@ -10,7 +10,6 @@ web/src/features/deploy/deploy-view.tsx	1
 web/src/features/deploy/operations-table.tsx	1
 web/src/features/deploy/wirings-table.tsx	1
 web/src/features/evals/evals-view.tsx	6
-web/src/features/finops/finops-view.tsx	7
 web/src/features/health/dependency-map.tsx	1
 web/src/features/health/reliability-timeline.tsx	1
 web/src/features/inference-proxy/inference-proxy-view.tsx	1
@@ -29,10 +28,7 @@ web/src/features/model-ops/finetune.tsx	1
 web/src/features/model-ops/owned-models.tsx	2
 web/src/features/models/gpai.tsx	1
 web/src/features/models/models-view.tsx	6
-web/src/features/redteam/redteam-view.tsx	2
-web/src/features/residency/residency-view.tsx	1
 web/src/features/sandbox/sandbox-view.tsx	3
 web/src/features/security/security-view.tsx	2
-web/src/features/tenants/tenants-view.tsx	1
 web/src/features/work/work-view.tsx	1
 web/src/features/workspace-dashboard/workspace-dashboard-view.tsx	2

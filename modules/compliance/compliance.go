@@ -310,6 +310,7 @@ type Module struct {
 	aimsPackager     AIMSPackager            // ISO/IEC 42001 AIMS cert-readiness seam; nil ⇒ AIMS endpoints 501
 	depthPackager    ComplianceDepthPackager // Compliance-depth seam (US laws + sector + CCM + FedRAMP); nil ⇒ depth endpoints 501
 	nis2Packager     NIS2IncidentPackager    // NIS 2 incident seam; nil ⇒ NIS2 incident endpoints 501
+	businessRecords  bool                    // legal holds + erasure are Business (records_edition.go); false ⇒ their routes answer 501 business_required
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the API route/permission
@@ -563,14 +564,12 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/risk/classify", permRiskWrite, m.handleClassifyRisk)
 	reg.Handle("POST", "/risk/{id}/review", permRiskAdmin, m.handleReviewRisk)
 
+	// Legal holds, erasure and the governed Claude Files plane are Business: recordsRoutes
+	// mounts them, or their refusal in Community.
+	m.recordsRoutes(reg)
+
 	// Data residency (self-hosted = data does not leave the perimeter). Attesting and
 	// scanning are write-tier and audited; listing is read-tier.
-	// the governed Claude Files plane: an observe inventory (read-tier) over the
-	// persistent, non-ZDR Files store, and a CRITICAL dual-control, hold-gated point DELETE
-	// (admin-tier). Erasure permissions reused — a file delete IS an erasure action.
-	reg.Handle("GET", "/claude-files", permErasureRead, m.handleFilesInventory)
-	reg.Handle("POST", "/claude-files/{id}/erase", permErasureAdmin, m.handleEraseFile)
-
 	reg.Handle("GET", "/residency", permResidencyRead, m.handleListResidency)
 	reg.Handle("POST", "/residency", permResidencyWrite, m.handleAttestResidency)
 	reg.Handle("POST", "/residency/scan", permResidencyWrite, m.handleScanResidency)
@@ -584,6 +583,23 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("DELETE", "/retention/policies/{class}", permRetentionAdmin, m.handleDeleteRetentionPolicy)
 	reg.Handle("POST", "/retention/sweep", permRetentionAdmin, m.handleRetentionSweep)
 	reg.Handle("GET", "/retention/runs", permRetentionRead, m.handleListRetentionRuns)
+}
+
+// recordsRoutes registers legal holds, right-to-erasure and the Claude Files erase, which are
+// Business (records_edition.go). Without WithBusinessRecords the same routes keep their
+// permissions and answer 501 business_required. It takes the registrar by parameter and
+// registers on it: that is the shape scripts/openapi-op-descriptions reads, so an alias such
+// as `records := reg` would hide these routes from the published-operation gate.
+func (m *Module) recordsRoutes(reg api.RouteRegistrar) {
+	if !m.businessRecords {
+		reg = businessOnly{reg}
+	}
+
+	// the governed Claude Files plane: an observe inventory (read-tier) over the
+	// persistent, non-ZDR Files store, and a CRITICAL dual-control, hold-gated point DELETE
+	// (admin-tier). Erasure permissions reused — a file delete IS an erasure action.
+	reg.Handle("GET", "/claude-files", permErasureRead, m.handleFilesInventory)
+	reg.Handle("POST", "/claude-files/{id}/erase", permErasureAdmin, m.handleEraseFile)
 
 	// Legal holds. SETTING a hold is admin-tier but ungated (preservation is the
 	// safe direction and must be immediate — duty to preserve); RELEASING one is the

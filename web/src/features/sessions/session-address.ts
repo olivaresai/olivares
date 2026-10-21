@@ -37,6 +37,8 @@ import type { SessionTarget } from './session-target'
 
 /** The search param naming which session the work surface is showing. */
 export const SESSION_PARAM = 'session'
+/** A second session shown beside the current narrative. */
+export const BESIDE_PARAM = 'beside'
 /** Which of the three panes is in front (below `xl`, where only one fits). */
 export const PANE_PARAM = 'pane'
 /** Which evidence block in the narrative is expanded. */
@@ -49,6 +51,7 @@ export const TAB_PARAM = 'tab'
 /** The keys this surface OWNS. Anything else on the route is left untouched. */
 export const SESSION_ADDRESS_KEYS = [
   SESSION_PARAM,
+  BESIDE_PARAM,
   PANE_PARAM,
   EVIDENCE_PARAM,
   PANEL_PARAM,
@@ -61,7 +64,7 @@ export const SESSION_ADDRESS_KEYS = [
  *  - `context`   what it applies to, and the trace of what it touched.
  */
 export const WORK_PANES = ['rail', 'narrative', 'context'] as const
-export type WorkPane = (typeof WORK_PANES)[number]
+export type WorkPane = (typeof WORK_PANES)[number] | 'beside'
 /** The pane in front when the address names no session (a named one opens on `narrative`). */
 export const DEFAULT_PANE: WorkPane = 'rail'
 
@@ -74,7 +77,6 @@ export const DEFAULT_PANE: WorkPane = 'rail'
  */
 export const EVIDENCE_BLOCKS = ['checks', 'activity', 'resources'] as const
 export type EvidenceBlock = (typeof EVIDENCE_BLOCKS)[number]
-export const DEFAULT_EVIDENCE: EvidenceBlock = 'checks'
 
 /**
  * A ceiling on the address, because an unbounded value from the URL reaches a cache
@@ -144,8 +146,10 @@ export function isSessionAddress(address: string | undefined): boolean {
 export interface SessionAddress {
   /** The session on screen, or null when the URL names none. */
   address: string | null
+  beside?: string
   pane: WorkPane
-  evidence: EvidenceBlock
+  /** The block the address names. Absent: the evidence opens on the session's turns. */
+  evidence?: EvidenceBlock
   /** The side pane's tab, when the address names one. Absent means Context. */
   panel?: string
 }
@@ -172,6 +176,14 @@ export function decodeSessionAddress(raw: {
     else issues.push(SESSION_PARAM)
   }
 
+  const rawBeside = raw[BESIDE_PARAM]
+  let beside: string | undefined
+  if (rawBeside !== undefined) {
+    if (address && isSessionAddress(rawBeside) && rawBeside !== address)
+      beside = rawBeside
+    else issues.push(BESIDE_PARAM)
+  }
+
   // A named session opens on its conversation. Below `xl` only one pane is in front, and
   // an address with no pane used to put the list there: a desktop link narrowed or
   // reloaded on a phone hid the conversation, the composer and Stop (F1 09b sweep).
@@ -179,13 +191,16 @@ export function decodeSessionAddress(raw: {
   const rawPane = raw[PANE_PARAM]
   let pane: WorkPane = address ? 'narrative' : DEFAULT_PANE
   if (rawPane !== undefined) {
-    if ((WORK_PANES as readonly string[]).includes(rawPane))
+    if (
+      (WORK_PANES as readonly string[]).includes(rawPane) ||
+      (rawPane === 'beside' && beside)
+    )
       pane = rawPane as WorkPane
     else issues.push(PANE_PARAM)
   }
 
   const rawEvidence = raw[EVIDENCE_PARAM]
-  let evidence: EvidenceBlock = DEFAULT_EVIDENCE
+  let evidence: EvidenceBlock | undefined
   if (rawEvidence !== undefined) {
     if ((EVIDENCE_BLOCKS as readonly string[]).includes(rawEvidence))
       evidence = rawEvidence as EvidenceBlock
@@ -203,7 +218,13 @@ export function decodeSessionAddress(raw: {
   }
 
   return {
-    value: { address, pane, evidence, ...(panel ? { panel } : {}) },
+    value: {
+      address,
+      pane,
+      ...(evidence ? { evidence } : {}),
+      ...(beside ? { beside } : {}),
+      ...(panel ? { panel } : {}),
+    },
     issues,
   }
 }

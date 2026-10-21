@@ -72,7 +72,13 @@ export interface ServerInfo {
   /** The build edition ("community" for the default build); absent on an embedder that
    * does not name it. A build fact, never a license or entitlement. */
   edition?: string
-  license: { status: string; licensee: string }
+  license: {
+    status: string
+    licensee: string
+    plan?: string
+    support_tier?: string
+    support_profile?: string
+  }
   /** The sign-in providers the login page offers (OIDC/SAML; native LDAP keeps its
    * own form). ABSENT when there is none: then the page shows no SSO button. */
   sso_providers?: SsoProvider[]

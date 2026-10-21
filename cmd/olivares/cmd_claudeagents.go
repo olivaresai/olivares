@@ -39,8 +39,9 @@ const claudeAgentsModule = "claude-agents"
 func newClaudeAgentsCmd() *cobra.Command {
 	var flags authClientFlags
 	root := &cobra.Command{
-		Use:   "claude-agents",
-		Short: "Read a managed agent session's thread events and answer its tool confirmations",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "claude-agents",
+		Short:       "Read a managed agent session's thread events and answer its tool confirmations",
 		Long: "claude-agents is the terminal side of the managed-agents console: what a\n" +
 			"managed session did, and the human answer to a tool it asked permission for.\n\n" +
 			"The read is honest about not knowing: an unwired source returns an empty list,\n" +
@@ -56,10 +57,11 @@ func newClaudeAgentsCmd() *cobra.Command {
 
 func newClaudeAgentsSessionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "sessions",
-		Short:   "Inspect and answer one managed agent session",
-		Long:    "A managed agent session is one Claude Code thread the engine governs: its events are readable, and its pending tool uses are answerable.",
-		Example: "  olivares claude-agents sessions events sess-1",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "sessions",
+		Short:       "Inspect and answer one managed agent session",
+		Long:        "A managed agent session is one Claude Code thread the engine governs: its events are readable, and its pending tool uses are answerable.",
+		Example:     "  olivares claude-agents sessions events sess-1",
 	}
 	cmd.AddCommand(
 		newClaudeAgentsEventsCmd(flags),
@@ -70,8 +72,9 @@ func newClaudeAgentsSessionsCmd(flags *authClientFlags) *cobra.Command {
 
 func newClaudeAgentsEventsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "events <session-id>",
-		Short: "List one managed session's thread events",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "events <session-id>",
+		Short:       "List one managed session's thread events",
 		Long: "events returns the thread events the wired source reports for one session.\n\n" +
 			"EMPTY AND UNKNOWN ARE DIFFERENT ANSWERS. With no source wired the engine\n" +
 			"answers an honest empty list and this command exits 0 saying so. A wired source\n" +
@@ -104,8 +107,9 @@ func newClaudeAgentsToolConfirmationCmd(flags *authClientFlags) *cobra.Command {
 		denyMessage string
 	)
 	cmd := &cobra.Command{
-		Use:   "tool-confirmation <session-id>",
-		Short: "Answer a managed agent's pending tool use (allow or deny)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "tool-confirmation <session-id>",
+		Short:       "Answer a managed agent's pending tool use (allow or deny)",
 		Long: "tool-confirmation records the human decision on one tool a managed agent asked\n" +
 			"permission to use.\n\n" +
 			"A STABLE HUMAN IDENTITY IS REQUIRED. A system token cannot confirm a tool — the\n" +

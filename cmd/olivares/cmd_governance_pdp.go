@@ -40,8 +40,9 @@ import (
 // policy you published, and half of what it says is not in force.
 func governancePdpCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pdp",
-		Short: "The policy decision point: which revision is actually deciding, and is it in force",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "pdp",
+		Short:       "The policy decision point: which revision is actually deciding, and is it in force",
 		Long: "pdp reads the authoring and activation state of the policy engines. `active` is the\n" +
 			"one to reach for: it says whether the revision you published is the revision this\n" +
 			"process is deciding with, and separately whether its positive grants have expired.",
@@ -88,8 +89,9 @@ type cliPdpRevisionList struct {
 // SURFACE column is how you tell the two apart, and it is why the column is first.
 func pdpVersionsCmd(flags *authClientFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:   "versions",
-		Short: "Every stored policy revision, both surfaces, metadata only",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "versions",
+		Short:       "Every stored policy revision, both surfaces, metadata only",
 		Example: "  olivares governance pdp versions\n" +
 			"  olivares governance pdp versions -o json",
 		Long: "List the stored revisions of both policy surfaces. The route returns cedar AND opa in\n" +
@@ -143,8 +145,9 @@ func pdpVersionsCmd(flags *authClientFlags) *cobra.Command {
 func pdpGetVersionCmd(flags *authClientFlags) *cobra.Command {
 	var engine string
 	cmd := &cobra.Command{
-		Use:   "get-version <revision>",
-		Short: "One stored revision, with the policy document itself",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "get-version <revision>",
+		Short:       "One stored revision, with the policy document itself",
 		Long: "Fetch a stored revision and its content. Revision numbers are per-surface, so --engine\n" +
 			"is required: cedar r1 and opa r1 are different documents.\n\n" +
 			"This is what lets you diff against what is STORED rather than against whatever text a\n" +
@@ -235,8 +238,9 @@ const pdpActivationApplied = "applied"
 func pdpActiveCmd(flags *authClientFlags) *cobra.Command {
 	var engine string
 	cmd := &cobra.Command{
-		Use:   "active",
-		Short: "Which policy this process is deciding with, and whether it is fully in force",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "active",
+		Short:       "Which policy this process is deciding with, and whether it is fully in force",
 		Long: "Read the active policy for a surface. Two facts are reported on SEPARATE lines because\n" +
 			"they are separate axes and either one alone is misleading:\n\n" +
 			"  activation  whether the selected revision is the one this process decides with\n" +
@@ -355,8 +359,9 @@ func pdpTestsCmd(flags *authClientFlags) *cobra.Command {
 	var engine string
 	var revision int64
 	cmd := &cobra.Command{
-		Use:   "tests",
-		Short: "The stored test results for a policy revision",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tests",
+		Short:       "The stored test results for a policy revision",
 		Long: "Read the test artifact stored with a policy revision. Without --revision the engine\n" +
 			"picks the newest revision that has one.\n\n" +
 			"«no artifact available» is not a failure: it means nobody stored tests for that\n" +

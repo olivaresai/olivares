@@ -464,7 +464,7 @@ func (m *Module) mintFromProviderRecord(
 		if name == "" {
 			name = rec.Kind
 		}
-		return Credential{}, nil, &runErr{http.StatusConflict, "The API key " + name + " was refused. Replace it under API keys."}
+		return Credential{}, nil, &runErr{http.StatusConflict, "The API key " + name + " was refused. Replace it under Providers."}
 	}
 	if driver == providerDriverClaude && m.rt.baseURL != "" {
 		// Two endpoints were configured for one launch: the deployment's inference
@@ -528,6 +528,20 @@ func (m *Module) mintFromProviderRecord(
 		return Credential{localModelEndpoint: endpoint, localModels: models, bound: bound}, nil, nil
 	}
 
+	// OpenCode on a local OpenAI-compatible server is pointed at that server only, like a
+	// local Ollama: the models its last test listed are the only ones it is offered.
+	var localModels []string
+	if driver == providerDriverOpenCode && rec.Kind == ProviderKindOpenAICompatible {
+		if localModels = localModelNames(rec.Models); len(localModels) == 0 {
+			return Credential{}, nil, &runErr{http.StatusConflict, "the local model server " + strconv.Quote(rec.DisplayName) +
+				" lists no model; start it with a model, then test the provider in Providers so its models are read"}
+		}
+		if localEndpointDown(ctx, rec.BaseURL) {
+			return Credential{}, nil, &runErr{http.StatusConflict, "the local model server " + strconv.Quote(rec.DisplayName) +
+				" does not answer at " + strings.TrimRight(rec.BaseURL, "/") + ": start it, then start the session again"}
+		}
+	}
+
 	if m.rt.ProviderVault == nil {
 		return Credential{}, nil, &runErr{http.StatusServiceUnavailable,
 			"this provider profile names a registered provider, and no sealed credential vault is wired on this node to open it (the launch is denied; it does not fall back to a host credential)"}
@@ -535,6 +549,18 @@ func (m *Module) mintFromProviderRecord(
 	key, err := m.rt.ProviderVault.Open(ctx, tenant, rec.SecretRef)
 	if err != nil {
 		return Credential{}, nil, openFailure(err)
+	}
+	// A local server that was started again has a new key, and its old address can be taken by
+	// another process: the server must still accept the key this launch is about to hand over.
+	// Only a clear refusal stops the launch; a slow answer launches as before.
+	if localModels != nil && m.rt.ProviderProbe != nil {
+		pctx, cancel := context.WithTimeout(ctx, localModelProbeTimeout)
+		_, perr := m.rt.ProviderProbe.Probe(pctx, ProviderProbeRequest{Kind: rec.Kind, BaseURL: rec.BaseURL, APIKey: string(key)})
+		cancel()
+		if errors.Is(perr, ErrProviderRefused) {
+			return Credential{}, nil, &runErr{http.StatusConflict, "the local model server " + strconv.Quote(rec.DisplayName) + " refused its key at " +
+				strings.TrimRight(rec.BaseURL, "/") + ": it was started again since, or something else holds that address; start it again, then start the session again"}
+		}
 	}
 
 	baseURL := rec.BaseURL
@@ -560,7 +586,7 @@ func (m *Module) mintFromProviderRecord(
 	// the launch snapshot and the K4 digest, so "which credential authorized this
 	// session" is answerable without a credential stamp of its own. The non-secret
 	// launch authority (kind and endpoint) goes beside the key to the driver.
-	return Credential{bound: bound}, env, nil
+	return Credential{bound: bound, localModels: localModels}, env, nil
 }
 
 // ProviderApprovalDisposition is the live policy verdict before human review.

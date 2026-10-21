@@ -103,7 +103,7 @@
     "empty": "Aucune activité par développeur dans cette plage.",
     "emptyHint": "L’activité par développeur apparaît ici dès que des sessions sont exécutées dans cette plage. Élargissez la plage pour couvrir plus de jours.",
     "locked": "Vue par développeur restreinte",
-    "lockedHint": "La consultation de la productivité d'un développeur individuel requiert l'autorisation adoption:developer:read (refus par défaut).",
+    "lockedHint": "Votre rôle ne peut pas voir la productivité de chaque développeur.",
     "columns": {
       "developer": "Développeur"
     }

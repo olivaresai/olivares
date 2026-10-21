@@ -60,7 +60,7 @@ func ImportFolder(ctx context.Context, selected string) (*ValidatedPack, error) 
 	}
 	t := newTree()
 	observed := map[string]unix.Stat_t{}
-	if err := readFolder(ctx, root, prefix, t, observed); err != nil {
+	if err := readFolder(ctx, root, prefix, t, observed, ""); err != nil {
 		return nil, err
 	}
 	// Verify every earlier inode after the whole traversal. A file may have
@@ -89,7 +89,7 @@ func ImportFolder(ctx context.Context, selected string) (*ValidatedPack, error) 
 	p.SourceDigest = p.ManifestDigest
 	return p, nil
 }
-func readFolder(ctx context.Context, dir *os.File, prefix string, t *tree, observed map[string]unix.Stat_t) error {
+func readFolder(ctx context.Context, dir *os.File, prefix string, t *tree, observed map[string]unix.Stat_t, layout string) error {
 	var before unix.Stat_t
 	if unix.Fstat(int(dir.Fd()), &before) != nil {
 		return refuse("source_changed", "folder")
@@ -116,6 +116,34 @@ func readFolder(ctx context.Context, dir *os.File, prefix string, t *tree, obser
 				_ = unix.Close(handle)
 				return refuse("unsafe_pack", p)
 			}
+			childLayout := layout
+			directory := pinned.Mode&unix.S_IFMT == unix.S_IFDIR
+			allowed := true
+			switch {
+			case layout == "skills":
+				allowed = directory && folderHasSkill(handle)
+				childLayout = ""
+			case layout != "":
+				// Native namespaces contain instructions, not incidental account
+				// files. Decide from the pinned entry before reading any bytes.
+				allowed = directory && layout == "rules" || !directory && componentKind(p) != ""
+			case prefix == "":
+				if directory {
+					allowed = folderHasSkill(handle)
+					if !allowed {
+						switch name {
+						case "agents", "commands", "rules", "skills":
+							allowed, childLayout = true, name
+						}
+					}
+				} else {
+					allowed = packMaterial(name)
+				}
+			}
+			if !allowed {
+				_ = unix.Close(handle)
+				return refuse("unsafe_pack", p)
+			}
 			// Reopen the proven regular/directory inode, never its source name.
 			// A swapped device or link cannot be opened during this read.
 			file, openErr := os.Open(fmt.Sprintf("/proc/self/fd/%d", handle))
@@ -124,21 +152,7 @@ func readFolder(ctx context.Context, dir *os.File, prefix string, t *tree, obser
 				return refuse("source_changed", p)
 			}
 
-			// At the pack root, descend only into actual skill directories.
-			// Selecting a parent of skill/config/auth trees is not a host-home import.
-			if prefix == "" {
-				if pinned.Mode&unix.S_IFMT == unix.S_IFDIR {
-					var skill unix.Stat_t
-					if unix.Fstatat(int(file.Fd()), "SKILL.md", &skill, unix.AT_SYMLINK_NOFOLLOW) != nil || skill.Mode&unix.S_IFMT != unix.S_IFREG {
-						_ = file.Close()
-						return refuse("unsafe_pack", p)
-					}
-				} else if !packMaterial(name) {
-					_ = file.Close()
-					return refuse("unsafe_pack", p)
-				}
-			}
-			readErr := readFolderEntry(ctx, file, p, t, observed)
+			readErr := readFolderEntry(ctx, file, p, t, observed, childLayout)
 			closeErr := file.Close()
 			if readErr != nil {
 				return readErr
@@ -158,7 +172,12 @@ func readFolder(ctx context.Context, dir *os.File, prefix string, t *tree, obser
 	observed[prefix] = before
 	return nil
 }
-func readFolderEntry(ctx context.Context, file *os.File, p string, t *tree, observed map[string]unix.Stat_t) error {
+func folderHasSkill(fd int) bool {
+	var skill unix.Stat_t
+	return unix.Fstatat(fd, "SKILL.md", &skill, unix.AT_SYMLINK_NOFOLLOW) == nil && skill.Mode&unix.S_IFMT == unix.S_IFREG
+}
+
+func readFolderEntry(ctx context.Context, file *os.File, p string, t *tree, observed map[string]unix.Stat_t, layout string) error {
 	var before unix.Stat_t
 	if unix.Fstat(int(file.Fd()), &before) != nil {
 		return refuse("source_changed", p)
@@ -171,7 +190,7 @@ func readFolderEntry(ctx context.Context, file *os.File, p string, t *tree, obse
 		return err
 	}
 	if dir {
-		return readFolder(ctx, file, p, t, observed)
+		return readFolder(ctx, file, p, t, observed, layout)
 	}
 	if before.Size > int64(t.fileLimit(p)) {
 		return refuse("import_limit", p)

@@ -186,7 +186,7 @@ describe('public console build: no Business SSO UI', () => {
   it('the public console words carry no Business SSO string, in any language', () => {
     const dir = join(__dirname, 'i18n')
     const locales = readdirSync(dir).filter((f) => f.endsWith('.json'))
-    expect(locales).toHaveLength(7)
+    expect(locales).toHaveLength(9)
     const found = locales.flatMap((file) => {
       const words = JSON.parse(readFileSync(join(dir, file), 'utf8')) as {
         sso: Record<string, unknown>

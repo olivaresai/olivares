@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { withInlineCommands } from '@/components/ui/inline-commands'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Dialog,
@@ -549,7 +550,7 @@ function Inner() {
       <ListTruncationBadge
         query={listQ}
         label={t('truncation.label', { n: rows.length })}
-        hint={t('truncation.hint')}
+        hint={withInlineCommands(t('truncation.hint'))}
         filas={rows.length}
         className="px-0 pt-0"
       />

@@ -27,7 +27,7 @@ func TestALaunchOnAKeyTheProviderRefusedIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := m.mintFromProviderRecord(ctx, tenant, providerDriverCodex, rec.Ref)
-	if statusOf(err) != http.StatusConflict || err.Error() != "The API key Team OpenAI was refused. Replace it under API keys." {
+	if statusOf(err) != http.StatusConflict || err.Error() != "The API key Team OpenAI was refused. Replace it under Providers." {
 		t.Fatalf("a refused key = %v, want 409 with the readiness words", err)
 	}
 	probe.result, probe.err = ProviderProbeResult{}, errors.New("dial tcp: no route to host")

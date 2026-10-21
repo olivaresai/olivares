@@ -91,7 +91,7 @@ no de un puerto OTLP público.
 ## Qué verás en la consola
 
 Las sesiones instrumentadas aparecen en **Sessions** como actividad en vivo,
-atribuidas al agente emisor; sus llamadas al modelo alimentan **Cost & FinOps**;
+atribuidas al agente emisor; sus llamadas al modelo alimentan **Budgets**;
 los spans de MCP y de herramientas aportan aristas al **Mapa de accesos** como
 cualquier fuente cooperativa:
 

@@ -591,9 +591,7 @@ describe('protected controller state', () => {
     await dispatchResponse(user)
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(
-      screen.getByText('A handoff operation is on the wire.'),
-    ).toBeVisible()
+    expect(screen.getByText('A handoff operation is being sent.')).toBeVisible()
     await user.click(screen.getByRole('button', { name: 'Show the operation' }))
     expect(await screen.findByRole('dialog')).toBeVisible()
     gate.reject(new NetworkError('lost'))

@@ -9,6 +9,9 @@ import type { ViewEntry } from '@/features/registry'
 // Profiles, bindings and accounts share one view with independent read tiers.
 // Each route opens its own tab so an operator can reach the permissions they hold
 // without requiring access to runs, live sessions or another provider tab.
+// All three fold into AI tools (#2240): each tool's menu there opens this room on a door
+// the person may read, and the tabs reach the rest, so navigation lists a door only to a
+// principal who cannot open AI tools.
 const ProviderAdminView = lazy(() =>
   import('./provider-admin-view').then((m) => ({
     default: m.ProviderAdminView,
@@ -35,6 +38,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: IdCard,
     permission: 'sessions:profile:read',
+    doorTo: 'agent-tools',
     element: lazyView(ProviderAdminView, { entrance: 'profiles' as const }),
   },
   {
@@ -53,6 +57,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: Link2,
     permission: 'sessions:profile-binding:read',
+    doorTo: 'agent-tools',
     element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
   },
   {
@@ -69,6 +74,7 @@ export const VIEWS = [
     helpHref: '/reference/modules/ii-sessions',
     icon: ContactRound,
     permission: 'sessions:account:read',
+    doorTo: 'agent-tools',
     element: lazyView(ProviderAdminView, { entrance: 'accounts' as const }),
   },
 ] satisfies ViewEntry[]

@@ -12,6 +12,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -116,8 +117,9 @@ type upgradeOptions struct {
 func newUpgradeCmd() *cobra.Command {
 	o := &upgradeOptions{}
 	cmd := &cobra.Command{
-		Use:   "upgrade",
-		Short: "Upgrade this binary in place to a newer signed release (verified, atomic, reversible)",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "upgrade",
+		Short:       "Upgrade this binary in place to a newer signed release (verified, atomic, reversible)",
 		Long: "upgrade replaces THIS installed binary with a newer signed release of the SAME edition,\n" +
 			"verified OFFLINE and swapped atomically with a kept backup for rollback. It follows a\n" +
 			"release CHANNEL (stable | security): it downloads that channel's signed manifest,\n" +
@@ -255,6 +257,13 @@ type upgradeResult struct {
 	Security        bool     `json:"security"`
 	Advisories      []string `json:"advisories"`
 	MinVersion      string   `json:"min_version"`
+	// EditionCurrent and EditionAvailable are the edition installed at the target
+	// ("community", "enterprise", or "unknown" when the target did not say) and the edition
+	// the licensed route delivers ("enterprise"). Business X.Y is cut from the same version
+	// as Community X.Y, so current == available does not mean nothing to do when these
+	// differ. Both are "" when the route is not the licensed one.
+	EditionCurrent   string `json:"edition_current"`
+	EditionAvailable string `json:"edition_available"`
 	// Eligible is the staged-rollout cohort answer. The text pane prints a line
 	// only when it is FALSE; the document always carries it, because "absent"
 	// reading as "eligible" is the kind of default a rollout must not have.
@@ -385,11 +394,25 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	if err != nil {
 		return err
 	}
+	// In a container the image is immutable and the data volume is not. With no --target the
+	// upgrade installs into the volume, where the next start of the image binary finds it
+	// (appliedbinary.go), and its ordering guards are decided about the newer of the two files.
+	image, applied := target, ""
+	if targetIsSelf && inContainer() {
+		applied = appliedBinaryPath(o.dataDir)
+		target = appliedProbeTarget(o.dataDir, pub, image)
+		targetIsSelf = target == image
+	}
 	current := currentInstalledVersion(ctx, target, o.currentVersion, targetIsSelf)
 	// Fingerprint the bytes the guards are about to be decided against, HERE and not at
 	// lock time, so the window the fingerprint covers is exactly the window the verdict
 	// covers. Re-checked immediately before the swap (C03-23).
 	before := fingerprintTarget(target)
+	// The edition is read after the fingerprint: it is part of the verdict, so a target
+	// replaced while it is asked is refused by the same re-check.
+	if deliversLicensedBuild(o) && current.Known {
+		current.Edition = installedEdition(ctx, target, targetIsSelf)
+	}
 
 	// 3) Build the update source (air-gap bundle | licensed worker | public channel). The
 	//    gated source receives the verification key because a bounded fresh resolution after a
@@ -469,6 +492,13 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	// the lock is taken BEFORE the download precisely because the download is the long
 	// part, and it is taken AFTER --check returns so a read-only plan never blocks an
 	// install (C03-23). --install-timer returned at the top and never reaches here.
+	seedSlot := applied != "" && target != applied
+	if applied != "" {
+		if err := ensureAppliedDir(filepath.Dir(applied)); err != nil {
+			return err
+		}
+		target, res.Target = applied, applied
+	}
 	if err := checkWritable(target); err != nil {
 		return err
 	}
@@ -482,7 +512,11 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 		if plan.IsRollback() {
 			verb = "DOWNGRADE"
 		}
-		if !confirm(cmd, fmt.Sprintf("%s %s (%s -> %s)?", verb, target, current.Version.Raw, m.Version)) {
+		from, to := current.Version.Raw, m.Version
+		if plan.EditionMove() {
+			from, to = from+" "+plan.FromEdition, to+" "+plan.ToEdition
+		}
+		if !confirm(cmd, fmt.Sprintf("%s %s (%s -> %s)?", verb, target, from, to)) {
 			return fmt.Errorf("aborted by operator")
 		}
 	}
@@ -529,12 +563,39 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	// inside that window, but it cannot stop a package manager, an image rollout or an
 	// operator with `cp`, and none of those take our lock. If the target changed, the
 	// verdict "this is a forward step" was computed about a file that is no longer there.
+	if seedSlot {
+		// A copy of the image the guards were decided about, taken only now that the download
+		// is in hand, so a download that fails leaves no stray copy in the volume. A failure from
+		// here on (the candidate's self-check, a move of the target) leaves the copy: a start
+		// ignores it and the next upgrade overwrites it.
+		if err := seedAppliedSlot(image, applied); err != nil {
+			return err
+		}
+	}
 	if err := refuseIfTargetMoved(target, before); err != nil {
 		return err
 	}
 	backup, newVer, err := atomicSwap(target, bin)
 	if err != nil {
 		return err
+	}
+	var evidenceErr error
+	if applied != "" {
+		if evidenceErr = recordAppliedRelease(o.dataDir, mb, sig, data, bin); evidenceErr == nil {
+			// What the next start reads must verify now: "kept" below promises it.
+			_, _, evidenceErr = verifyAppliedRelease(o.dataDir, pub)
+		}
+		if evidenceErr == nil {
+			// The proof just made, kept for the commands that follow; only their speed depends on it.
+			// The binary is proved as the file it is: the slot may have been swapped since the upgrade.
+			if id, ok := slotProof(applied, sha256hex(bin)); ok {
+				_ = rememberApplied(o.dataDir, mb, sha256hex(bin), id)
+			}
+		}
+		// A backup in the volume is no rollback: the next start rebuilds the slot from the evidence,
+		// and on a first apply it would only be a second copy of the image.
+		pruneAppliedBackups(applied)
+		backup = ""
 	}
 	// Record a forced downgrade in the audit log ONLY after the swap actually
 	// happened — an audit line for a rollback that was aborted or failed would be a lie.
@@ -557,12 +618,25 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 			fmt.Fprintf(cmd.ErrOrStderr(), "AUDIT: forced rollback %s -> %s recorded.\n", from, m.Version)
 		}
 	}
+	if evidenceErr != nil {
+		return fmt.Errorf("%s is installed but its release evidence could not be stored, so the next start runs the release applied before it, or the image if there was none: %w", target, evidenceErr)
+	}
 	res.Action = upgradeActionInstalled
 	res.Installed = newVer
 	res.Backup = backup
 	return renderOut(cmd, func(w io.Writer) error {
 		fmt.Fprintf(w, "\ninstalled: %s is now %s\n", target, newVer)
-		fmt.Fprintf(w, "rollback: the previous binary is backed up at %s (restore it to revert)\n", backup)
+		if applied != "" {
+			// The process may itself be the applied binary, which cannot tell the image's version.
+			imageVer := version
+			if insideDir(image, filepath.Dir(applied)) {
+				imageVer = ""
+			}
+			fmt.Fprintf(w, "rollback: remove %s to return to the image's binary\n", filepath.Dir(applied))
+			fmt.Fprint(w, appliedNote(pub, release.EmbeddedKey(), imageVer, m.Version, target, keySrc))
+		} else {
+			fmt.Fprintf(w, "rollback: the previous binary is backed up at %s (restore it to revert)\n", backup)
+		}
 		// These two lines are a pinned contract, not a presentation choice: VER-06
 		// lot L4 compares this pane whole because two mutants deleted the pair and
 		// walked through a `Contains` witness. The conversion onto the renderer
@@ -702,6 +776,9 @@ type installedVersion struct {
 	// --current-version rather than measured, so the audit trail can say which it was.
 	// A record that cannot tell a measurement from a claim is not evidence.
 	Declared bool
+	// Edition is the edition installed at the target, measured the way the version is
+	// ("" when the route does not need it; release.EditionUnknown when the target could not say).
+	Edition string
 }
 
 // currentInstalledVersion resolves the version installed AT TARGET.
@@ -789,6 +866,48 @@ func currentInstalledVersion(ctx context.Context, target, declared string, targe
 	return installedVersion{Reason: probeErr}
 }
 
+// licensedEdition is the edition name of a build the licensed route delivers: what
+// thisEdition.name reports in a Business build.
+const licensedEdition = "enterprise"
+
+// deliversLicensedBuild reports whether this run installs the Business build: the licensed
+// route, not an air-gap bundle (whose manifest says its own edition).
+func deliversLicensedBuild(o *upgradeOptions) bool { return o.enterprise && o.bundle == "" }
+
+// installedEdition is the edition installed at target: "community", the licensed build's
+// name, or release.EditionUnknown when it did not say (a build from before the field, one that
+// cannot run, or any other name, which is never copied into the plan or the result document).
+// The running executable IS this build, so thisEdition answers for it; any other target is
+// asked `version -o json` like its version.
+func installedEdition(ctx context.Context, target string, targetIsSelf bool) string {
+	ed := thisEdition.name
+	if !targetIsSelf {
+		ed = probedEdition(ctx, target)
+	}
+	switch ed = strings.TrimSpace(ed); ed {
+	case release.EditionCommunity, licensedEdition:
+		return ed
+	}
+	return release.EditionUnknown
+}
+
+// probedEdition is what target's `version -o json` reports as its edition ("" = nothing usable).
+func probedEdition(ctx context.Context, target string) string {
+	pctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	out, err := probeCommand(pctx, target, "version", "-o", "json").Output()
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		Edition string `json:"edition"`
+	}
+	if json.Unmarshal(out, &v) != nil {
+		return ""
+	}
+	return v.Edition
+}
+
 // versionToken pulls the semver token out of a `version` line
 // ("olivares 26.7.0 (commit …)" -> "26.7.0").
 func versionToken(line string) string {
@@ -874,11 +993,18 @@ func bindVerifiedRelease(out io.Writer, o *upgradeOptions, src updateSource, m r
 	if err != nil {
 		return release.UpgradePlan{}, err
 	}
+	// The licensed route delivers the Business build, whose version equals Community's, so the
+	// installed edition is part of "up to date". The ordering guards (rollback, min_version)
+	// read versions and are unaffected.
+	if deliversLicensedBuild(o) && current.Edition != "" {
+		plan.FromEdition, plan.ToEdition = current.Edition, licensedEdition
+	}
 	printPlan(out, o, m, plan, current)
 
 	res.Status = upgradeStatusToken(plan)
 	res.Channel = m.Channel
 	res.Available = m.Version
+	res.EditionCurrent, res.EditionAvailable = plan.FromEdition, plan.ToEdition
 	res.ReleasedAt = m.ReleasedAt.UTC().Format(time.RFC3339)
 	res.Security = m.Security
 	res.Advisories = []string{}
@@ -980,6 +1106,14 @@ func printPlan(out io.Writer, o *upgradeOptions, m release.Manifest, plan releas
 		fmt.Fprintf(out, "current:   %s\n", plan.Current.Raw)
 	}
 	fmt.Fprintf(out, "available: %s (released %s)\n", m.Version, m.ReleasedAt.Format("2006-01-02"))
+	if plan.EditionMove() {
+		fmt.Fprintf(out, "edition:   %s -> %s\n", plan.FromEdition, plan.ToEdition)
+		// At the same version the edition is the only thing that tells Community from Business,
+		// so a target that did not report one is said out loud and is not read as up to date.
+		if plan.FromEdition == release.EditionUnknown {
+			fmt.Fprintln(out, "           the installed binary did not report its edition, so it is treated as Community")
+		}
+	}
 	switch {
 	// An unknown current version yields NO ordering claim. IsUpToDate and IsRollback are
 	// both false when CurrentKnown is false, so without this arm every unknown fell into
@@ -1543,6 +1677,12 @@ func resolveTargetBinary(explicit string) (string, error) {
 	if explicit != "" {
 		return filepath.Abs(explicit)
 	}
+	return runningBinary()
+}
+
+// runningBinary is the file this process runs from, symlinks resolved. A variable so a
+// test can stand a stub in for the image binary.
+var runningBinary = func() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve the running executable (pass --target): %w", err)
@@ -1646,12 +1786,21 @@ func atomicSwap(target string, newBytes []byte) (string, string, error) {
 	return backup, newVer, nil
 }
 
+// probeCommand is `<bin> <args>` as every question to a target binary is asked (its version, its
+// edition): under the probe name, so the binary answers for itself and does not hand over to an
+// applied release in the data volume.
+func probeCommand(ctx context.Context, bin string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, bin, args...) // #nosec G204 -- bin is the binary `upgrade` was asked to replace (the running executable or the operator's --target); args are the fixed `version` / `version -o json`
+	cmd.Args[0] = probeArg0
+	return cmd
+}
+
 // execProbe runs `<bin> version` with a short timeout and returns its trimmed first
 // line, requiring a zero exit and recognizable output.
 func execProbe(ctx context.Context, bin string) (string, error) {
 	pctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(pctx, bin, "version")
+	cmd := probeCommand(pctx, bin, "version")
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf

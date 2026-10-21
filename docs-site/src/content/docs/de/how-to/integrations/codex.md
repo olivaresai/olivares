@@ -296,7 +296,7 @@ als vertrauenswürdig markiert ist.
 | **Control console > Connectors** (`/console`) | Quelle, Modus, Häufigkeit, nicht geheime Konfiguration sowie Test/Save/Reload-Aktionen. | Die persistierte Quelle erscheint sofort, ihre Daten nicht. |
 | **Health > Connectors** (`/health`) | Connector-Status, Meldung, Trend und letzte Aktivität. | Nachdem das Roster neu geladen wurde. |
 | **Observability > Ingestion** (`/observability`) | Zähler für `olivares.codex`, Beobachtungstypen und erster/letzter Empfang. | Nachdem `Gather` Daten ausgegeben hat. Diese prozessweiten Zähler beginnen beim Start und werden bei einem Neustart zurückgesetzt. |
-| **Cost & FinOps** (`/finops`) | Geschätzte Analytics-Nutzung und, wenn aktiviert, täglich abgerechnete Kosten. | Gültige Zugangsdaten, `workspace_id` und autorisierte APIs; `costs` erfordert explizites Opt-in. |
+| **Budgets** (`/stored-budgets`) | Verbrauch gegenüber jedem gespeicherten Budgetlimit, berechnet aus der geschätzten Analytics-Nutzung und, wenn aktiviert, den täglich abgerechneten Kosten. | Gültige Zugangsdaten, `workspace_id` und autorisierte APIs; `costs` erfordert explizites Opt-in. |
 | **Security** (`/security`) | Adoptions-Findings, nicht verfügbare Enterprise-Oberflächen und opt-in strukturierte Analyse von Compliance-Daten. | Nach der Erfassung; 403/404-Antworten von Enterprise-Oberflächen werden zu Haltungsevidenz und nicht zu Erfolg. |
 | **Sessions** (`/sessions`) | Sessions und Timeline mit Aktion, Modell, Identität, Kosten und Haltung. | Stammt aus dem verwalteten Hook. Die Batch-Quelle allein erzeugt keine Live-Session. |
 | **Audit** (`/audit`) | Importierte Aktivitätsevidenz und im Ledger verankerte PEP-Entscheidungen. | Nachdem zuordenbare Logs oder Entscheidungen empfangen wurden. |
@@ -307,8 +307,6 @@ Modul-Consumer in diesem Baum veröffentlicht ihn auf dieser Ansicht.
 
 <img class="light:sl-hidden" src="/console/health-dark.png" alt="Lebendigkeit, Zuverlässigkeit und Abhängigkeiten in Ihrem gesamten Bestand — abgeleitet aus beobachteter Aktivität und dem Veralterungs-Sweep, niemals durch Abfragen der Infrastruktur.">
 <img class="dark:sl-hidden" src="/console/health-light.png" alt="Lebendigkeit, Zuverlässigkeit und Abhängigkeiten in Ihrem gesamten Bestand — abgeleitet aus beobachteter Aktivität und dem Veralterungs-Sweep, niemals durch Abfragen der Infrastruktur.">
-<img class="light:sl-hidden" src="/console/finops-dark.png" alt="Token-Kosten über den gesamten Bestand — Trends, Chargeback, Abgleich, Budgets und Prognose. Die Zahlen entsprechen exakt den Angaben des FinOps-Hauptbuchs.">
-<img class="dark:sl-hidden" src="/console/finops-light.png" alt="Token-Kosten über den gesamten Bestand — Trends, Chargeback, Abgleich, Budgets und Prognose. Die Zahlen entsprechen exakt den Angaben des FinOps-Hauptbuchs.">
 <img class="light:sl-hidden" src="/console/security-dark.png" alt="Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Die Ebene ist standardmäßig detektivisch — sie zeichnet auf, sie blockiert nicht von sich aus, sofern die Durchsetzung nicht aktiviert und gesteuert ist.">
 <img class="dark:sl-hidden" src="/console/security-light.png" alt="Befunde der Schutzleitplanken, die Durchsetzungslage, die Anomalie-Warteschlange und manipulationssichere Vorfallforensik. Die Ebene ist standardmäßig detektivisch — sie zeichnet auf, sie blockiert nicht von sich aus, sofern die Durchsetzung nicht aktiviert und gesteuert ist.">
 

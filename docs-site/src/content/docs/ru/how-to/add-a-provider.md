@@ -125,10 +125,10 @@ OpenAI на профиле Claude — это отказ, называющий и
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-Для `anthropic`, `openai` и `xai` OpenCode принимает только конечную точку самого поставщика: оставьте `base_url` пустой. Для провайдера `openai_compatible` используйте `codex`; для `ollama` — `codex` или `opencode`.
+Для `anthropic`, `openai` и `xai` OpenCode принимает только конечную точку самого поставщика: оставьте `base_url` пустой. Для шлюза `openai_compatible` используйте `codex`; для `ollama` и для локального сервера `openai_compatible`, чей `base_url` — обычный `http` по loopback- или частному адресу, например `http://127.0.0.1:8080/v1` (vLLM, llama.cpp), — `codex` или `opencode`. `base_url` включает `/v1`.
 
 ## 4. Запустите первую сессию
 

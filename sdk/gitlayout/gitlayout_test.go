@@ -104,6 +104,11 @@ func TestReadAdmitsGitsOwnLayout(t *testing.T) {
 			return f.wt
 		}, linked: true},
 		"a repository": {plant: func(t *testing.T, f fixture) string { return f.repo }},
+		// What session confinement writes so that the session cannot create one.
+		"a repository whose commondir names itself": {plant: func(t *testing.T, f fixture) string {
+			write(t, filepath.Join(f.common, "commondir"), ".\n")
+			return f.repo
+		}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -162,6 +167,22 @@ func TestReadRefusesWhatIsNotGitsOwn(t *testing.T) {
 		},
 		"a .git directory naming another common directory": func(t *testing.T, f fixture) string {
 			write(t, filepath.Join(f.common, "commondir"), f.otherRepository(t)+"\n")
+			return f.repo
+		},
+		"a commondir that reaches another repository through a symbolic link": func(t *testing.T, f fixture) string {
+			// Git follows the link before it applies "..": this names the other
+			// repository, though a path join cleans it to this one.
+			other := f.otherRepository(t)
+			if err := os.Symlink(filepath.Join(other, "objects"), filepath.Join(f.common, "link")); err != nil {
+				t.Fatal(err)
+			}
+			write(t, filepath.Join(f.common, "commondir"), "link/..\n")
+			return f.repo
+		},
+		"a commondir that is a symbolic link": func(t *testing.T, f fixture) string {
+			if err := os.Symlink(".", filepath.Join(f.common, "commondir")); err != nil {
+				t.Fatal(err)
+			}
 			return f.repo
 		},
 		"a pointer into another repository": func(t *testing.T, f fixture) string {

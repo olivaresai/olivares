@@ -23,7 +23,7 @@ gesamten Contract.
 
 | Bereich | Was er dokumentiert | Source of Truth |
 |---|---|---|
-| **[REST-API](/reference/api/)** | Die Control-Plane-HTTP-API: Auth, Setup, Tenancy, Agents, die R/RW-Access-Map, Tokens und das Audit-Ledger. | Der **OpenAPI 3.1**-Contract des Produkts (128 Core-Paths), zur Build-Zeit aus der realen Datei gerendert — keine Kopie. |
+| **[REST-API](/reference/api/)** | Die Control-Plane-HTTP-API: Auth, Setup, Tenancy, Agents, die R/RW-Access-Map, Tokens und das Audit-Ledger. | Der **OpenAPI 3.1**-Contract des Produkts ({{core-paths}} Core-Paths), zur Build-Zeit aus der realen Datei gerendert — keine Kopie. |
 | **[Modulrouten (Beta)](/reference/api-beta/)** | Die Modulrouten des Produkts (`/v1/m/<ns>/…`) — FinOps, Compliance, Governance, Sessions, Models, Knowledge, … — als separates **Beta**-OpenAPI-Dokument. | Derselbe OpenAPI-3.1-Vertrag, zur Build-Zeit aus den von den Modulen registrierten Routen reflektiert. |
 | **[Stabilitätspolicy](/de/reference/api-stability/)** | Versionierung, Stabilitätsstufen, Deprecation-/Sunset-Signalisierung und die Mindest-Support-Fenster für die API, den Provider und die Client-SDKs. | Die In-Code-Deprecation-Tabelle und ihre build-failing-Fenster-Tests. |
 | **[gRPC](/de/reference/grpc/)** | Der gRPC-Mirror der Engine und der versionierte Plugin-Wire-Vertrag, den jeder Out-of-process-Connector spricht. | Die `grpc.ServiceDesc`-Registrierungstabellen, die die Server an gRPC übergeben. |
@@ -46,7 +46,7 @@ Identity und Tenancy, Agents, die Read/Write-Access-Map
 Access-Map-Modul statt von der Core-Oberfläche ausgeliefert), Token-Management und das Audit-
 Ledger.
 
-Der Contract beschreibt **128 Core-Paths**. Das ist bewusst: es ist die stabile,
+Der Contract beschreibt **{{core-paths}} Core-Paths**. Das ist bewusst: es ist die stabile,
 versionierte Oberfläche der Control Plane, nicht jede Route, die die Engine beantworten kann.
 Worauf sich „stabil“ verpflichtet — Versionierung, Deprecation-Signalisierung und Mindest-
 Support-Fenster — ist die [API-Stabilitätspolicy](/de/reference/api-stability/).
@@ -54,7 +54,7 @@ Support-Fenster — ist die [API-Stabilitätspolicy](/de/reference/api-stability
 :::note[Modulrouten sind ein separater Beta-Vertrag]
 Die Modulrouten — zum Beispiel die `/v1/m/accessmap/graph`,
 `/v1/m/accessmap/neighbors` und `/v1/m/accessmap/drift` des Access-Map-Moduls
-— sind **nicht** Teil des stabilen Core-Dokuments mit 128 Pfaden. Sie werden als
+— sind **nicht** Teil des stabilen Core-Dokuments mit {{core-paths}} Pfaden. Sie werden als
 separates **Beta**-OpenAPI-Dokument unter [`/reference/api-beta/`](/reference/api-beta/)
 veröffentlicht (ausgeliefert unter `/openapi.beta.json`, reflektiert aus den Routen,
 die die Module tatsächlich registrieren), sodass die stabile Oberfläche identifizierbar
@@ -126,7 +126,7 @@ Die [Konfigurations-Referenz](/de/reference/configuration/) listet die Umgebungs
 variablen und Runtime-Optionen, die ein Deployment formen. Die tragenden sind
 das Datenverzeichnis (`OLIVARES_DATA_DIR`), die reale (non-demo) Source-Verdrahtung, gelesen
 aus `OLIVARES_SOURCES_CONFIG`, bevor die Engine startet, und der Authorization-
-Engine-Selektor `OLIVARES_PDP_ENGINE` (`cedar`, `opa` oder `none`).
+Engine-Selektor `OLIVARES_PDP_ENGINE` (`cedar` und `opa` sind Business; `none` oder nicht gesetzt ist überall gültig).
 
 Zwei Design-Regeln ziehen sich durch die Konfigurations-Oberfläche. Eine **unkonfigurierte Source
 warnt ehrlich**, statt die Engine fehlschlagen zu lassen. Und der Authorization-Seam **schränkt

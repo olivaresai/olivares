@@ -281,6 +281,9 @@ func unitMainPID(ctx context.Context, unit string) (uint32, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	// #nosec G204 -- the program is the literal /usr/bin/systemctl, accepted above only when
+	// the file is root-owned and not group- or world-writable; unit is length-bounded, free
+	// of newlines, NUL and "/", and sits after "--", so systemctl cannot read it as an option.
 	command := exec.CommandContext(ctx, "/usr/bin/systemctl", "--system", "show", "--property=MainPID", "--value", "--", unit)
 	var output bytes.Buffer
 	command.Stdout = &output

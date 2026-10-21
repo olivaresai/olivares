@@ -90,7 +90,7 @@ data "olivares_access_edges" "estate" {
 :::caution[`olivares_deployment` 声明期望状态；实时 apply 受关卡控制]
 `olivares_deployment` 管理的是一份部署**定义**——声明式、带版本的期望状态。它映射到模块 VII（部署），
 其实时执行是一个**默认关闭（deny-closed）的接缝**：在执行器被预置之前，引擎会*规划并治理*一次部署，
-但 **`apply`/`retire` 会返回 `503`**，而不会对基础设施采取行动。因此 `olivares_deployment` 资源
+但 **`apply`/`retire` 会返回 `503`**（Business；Community 对每个部署路由返回 `501`），而不会对基础设施采取行动。因此 `olivares_deployment` 资源
 如今记录并治理意图；它本身并不协调真实的基础设施。参见 [模块 VII](/zh/reference/modules/vii-deploy/) 与
 [诚实与限制](/zh/start/honesty-and-limits/)。
 :::

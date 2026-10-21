@@ -45,6 +45,8 @@ import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
 import { inventoryApi, inventoryKeys } from '@/features/inventory/api'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { WORKING_SET_PAGE_LIMIT } from '@/features/sessions/session-groups'
 import {
   currentAnswer,
   deriveCompliance,
@@ -61,6 +63,9 @@ import {
 } from './components'
 import { ReportFooter, ReportHeader } from './report'
 import './i18n'
+
+// The card joins the same two pages the Sessions view lists, at the same size.
+const PAGE = { limit: WORKING_SET_PAGE_LIMIT }
 
 const RANGE_DAYS: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 }
 const RANGE_IDS = ['7d', '30d', '90d', 'mtd'] as const
@@ -163,6 +168,9 @@ export function ExecutiveView() {
   const canModels = may('models:catalog:read')
   const canInventory = may('inventory:catalog:read')
   const canSessions = can('sessions:live:read')
+  // Which launched sessions are working is the run plane's fact (a run that answered
+  // and waits for its person is not), so the Working set needs the run read as well.
+  const canRuns = can('sessions:run:read')
   const canSecurity = may('security:finding:read')
   const redteamPanel = useDashboardRedteam()
   const canRedteam = !!redteamPanel?.permitted
@@ -207,9 +215,14 @@ export function ExecutiveView() {
   //    `sessions:live:read`, and the note the tile carries describes SCOPE — not a grant, not
   //    completeness.
   const sessionsQ = useQuery({
-    queryKey: sessionsKeys.live(activeTenant),
-    queryFn: () => sessionsApi.live(),
+    queryKey: sessionsKeys.live(activeTenant, PAGE),
+    queryFn: () => sessionsApi.live(PAGE),
     enabled: canSessions,
+  })
+  const sessionRunsQ = useQuery({
+    queryKey: agentOpsKeys.runs(activeTenant, PAGE),
+    queryFn: () => agentOpsApi.listRuns(PAGE, { tenant: activeTenant }),
+    enabled: canSessions && canRuns,
   })
   const findingsQ = useQuery({
     queryKey: securityKeys.findings(activeTenant),
@@ -262,7 +275,7 @@ export function ExecutiveView() {
   useEffect(() => {
     if (canSessions) return
     void queryClient.cancelQueries({
-      queryKey: sessionsKeys.live(activeTenant),
+      queryKey: sessionsKeys.live(activeTenant, PAGE),
       exact: true,
     })
   }, [canSessions, activeTenant, queryClient])
@@ -273,6 +286,13 @@ export function ExecutiveView() {
       exact: true,
     })
   }, [canInventory, activeTenant, queryClient])
+  useEffect(() => {
+    if (canSessions && canRuns) return
+    void queryClient.cancelQueries({
+      queryKey: agentOpsKeys.runs(activeTenant, PAGE),
+      exact: true,
+    })
+  }, [canSessions, canRuns, activeTenant, queryClient])
 
   // --- rollups (aggregate only; modules own the math) ------------------------
   const costPanels = useDashboardCost(params, modelsQ.data)
@@ -284,9 +304,21 @@ export function ExecutiveView() {
     ? deriveUsage(
         currentAnswer(canInventory, inventoryQ),
         currentAnswer(canSessions, sessionsQ),
+        // `undefined`: the role has no run read, so the join holds the observed rows
+        // alone, as the Sessions view lists them. `null`: the run read is in scope and
+        // not established (pending, paused, refused, failed): who is working is then
+        // not known, and the card says so instead of counting launched sessions by
+        // their observed row.
+        canSessions && canRuns
+          ? (currentAnswer(true, sessionRunsQ) ?? null)
+          : undefined,
       )
     : null
   const liveGap = usageGap(canSessions, sessionsQ)
+  // The Working figure joins the run half to the live page; while that half is in
+  // scope and not current, the Sessions line says so (the run list is part of Sessions).
+  const runsGap = canSessions && canRuns ? usageGap(true, sessionRunsQ) : null
+  const sessionsGap = liveGap ?? runsGap
   const inventoryGap = usageGap(canInventory, inventoryQ)
   const gapText = (gap: Exclude<UsageGap, null>, source: string): string => {
     switch (gap) {
@@ -330,7 +362,11 @@ export function ExecutiveView() {
   const announcement = canUsage
     ? [
         availabilityText(
-          usageAvailability(liveGap, sessionsQ, usage?.livePartial ?? false),
+          usageAvailability(
+            sessionsGap,
+            sessionsQ,
+            usage?.livePartial ?? false,
+          ),
           t('nav:nouns.sessions'),
         ),
         availabilityText(
@@ -377,7 +413,10 @@ export function ExecutiveView() {
   // Headline loads as one block so tiles don't pop in one by one.
   const headlineLoading =
     costPanels?.loading ||
-    (canUsage && (inventoryQ.isLoading || sessionsQ.isLoading)) ||
+    (canUsage &&
+      (inventoryQ.isLoading ||
+        sessionsQ.isLoading ||
+        (canSessions && canRuns && sessionRunsQ.isLoading))) ||
     (canRisk && (findingsQ.isLoading || runsQ?.isLoading)) ||
     (canCompliance && complianceSummaryQ.isLoading)
 
@@ -463,14 +502,14 @@ export function ExecutiveView() {
             // reason — restricted, could not load, paused, not started — beside the
             // "—" it explains. Nothing when both are current.
             usageHints={
-              liveGap || inventoryGap ? (
+              sessionsGap || inventoryGap ? (
                 <>
-                  {liveGap ? (
+                  {sessionsGap ? (
                     <span
                       className="block"
                       data-testid="executive-usage-live-gap"
                     >
-                      {gapText(liveGap, t('nav:nouns.sessions'))}
+                      {gapText(sessionsGap, t('nav:nouns.sessions'))}
                     </span>
                   ) : null}
                   {inventoryGap ? (

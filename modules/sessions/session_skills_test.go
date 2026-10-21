@@ -414,3 +414,110 @@ func TestRuntimeSkillsDocumentedFoldersPreserveConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestRuntimeComponentsUseClaudePluginAndExplicitRulesDirectory(t *testing.T) {
+	runner := &fakeRunner{initSID: "native-components"}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: t.TempDir(), UserHome: t.TempDir(), DisplayName: "components", AuthSource: AuthSourceAccountHome})
+	selection := skills.Selection{Digest: "fixture", Members: []skills.SelectedMember{{Name: "agent:review", Kind: "agent"}, {Name: "command:review", Kind: "command"}, {Name: "rule:common/testing", Kind: "rule"}}}
+	files := []skills.DeliveryFile{{Kind: "agent", Path: "review.md", Bytes: []byte("agent"), Mode: 0444}, {Kind: "command", Path: "review.md", Bytes: []byte("command"), Mode: 0444}, {Kind: "rule", Path: "selection.md", Bytes: []byte("project rule"), Mode: 0444}}
+	if err := m.UseSessionSkills(sessionSkillsFixture{selection: selection, files: files}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	_, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "user:u1", ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := runner.lastSpec()
+	plugin := ""
+	for i, a := range spec.Args {
+		if a == "--plugin-dir" {
+			plugin = spec.Args[i+1]
+		}
+	}
+	for _, name := range []string{"agents/review.md", "commands/review.md", "rules/selection.md"} {
+		b, err := os.ReadFile(filepath.Join(plugin, name))
+		if err != nil || len(b) == 0 {
+			t.Fatalf("native %s: %s %v", name, b, err)
+		}
+	}
+	if !slices.Contains(spec.Args, "--add-dir") {
+		t.Fatal("rules directory not explicitly discovered")
+	}
+	if !slices.ContainsFunc(spec.Env, func(e EnvVar) bool { return e.Name == "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD" && e.Value == "1" }) {
+		t.Fatal("additional directory rules disabled")
+	}
+}
+
+func TestRuntimeComponentsRefuseUnsupportedToolsAndScopedRulesBeforeWriting(t *testing.T) {
+	for _, tc := range []struct {
+		driver, kind    string
+		scoped, imports bool
+		reason          string
+	}{
+		{"codex", "agent", false, false, "Codex"},
+		{"codex", "command", false, false, "Codex"},
+		{"codex", "rule", false, false, "Codex"},
+		{"claude", "rule", true, false, "path-scoped rules"},
+		{"claude", "rule", false, true, "rules with file imports"},
+		{"claude", "unknown", false, false, "invalid verified instruction kind"},
+	} {
+		t.Run(tc.driver+"-"+tc.kind, func(t *testing.T) {
+			runner := &fakeRunner{initSID: "refused-components"}
+			m, st, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
+			run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: model.ActorUser})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := st.Mutate(t.Context(), tenant, func(sc store.Scope) error {
+				repo, err := sc.Ext(runKind)
+				if err != nil {
+					return err
+				}
+				row, err := findRunRec(t.Context(), repo, run.RunRef)
+				if err != nil {
+					return err
+				}
+				row[colRunProfileDriver] = tc.driver
+				_, err = repo.Update(t.Context(), row)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			root := t.TempDir()
+			src := sessionSkillsFixture{selection: skills.Selection{Members: []skills.SelectedMember{{Kind: tc.kind, Name: tc.kind + ":review"}}}, files: []skills.DeliveryFile{{Kind: tc.kind, Scoped: tc.scoped, Imports: tc.imports, Path: "review.md", Bytes: []byte("instructions"), Mode: 0444}}}
+			if err := m.UseSessionSkills(src, root); err != nil {
+				t.Fatal(err)
+			}
+			spec := LaunchSpec{Dir: t.TempDir(), Isolation: IsolationNative, Confinement: &confine.Policy{}}
+			err = m.prepareSessionSkills(t.Context(), t.Context(), tenant, run.RunRef, CreateRunParams{}, &spec)
+			if err == nil || !strings.Contains(err.Error(), tc.reason) {
+				t.Fatalf("missing named refusal: %v", err)
+			}
+			entries, err := os.ReadDir(root)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("unsupported delivery wrote files: %v %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestRuntimeComponentsRefuseASkillAndCommandWithOneNativeAlias(t *testing.T) {
+	runner := &fakeRunner{initSID: "ambiguous-components"}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithConfinement([]string{t.TempDir()}, true))
+	ref := ensureRuntimeTestProfileRef(t, m, tenant)
+	root := t.TempDir()
+	src := sessionSkillsFixture{selection: skills.Selection{Members: []skills.SelectedMember{{Name: "review"}, {Kind: "command", Name: "command:review"}}}, files: []skills.DeliveryFile{{Path: "review/SKILL.md", Bytes: []byte("skill"), Mode: 0444}, {Kind: "command", Path: "review.md", Bytes: []byte("command"), Mode: 0444}}}
+	if err := m.UseSessionSkills(src, root); err != nil {
+		t.Fatal(err)
+	}
+	_, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: ref, Actor: "user:u1", ActorKind: model.ActorUser})
+	if err == nil || len(runner.specs) != 0 {
+		t.Fatalf("ambiguous alias spawned a child: %v", err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("ambiguous delivery wrote files: %v %v", entries, err)
+	}
+}

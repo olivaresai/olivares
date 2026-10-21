@@ -107,6 +107,9 @@ type GatedEffect struct {
 // satisfies it.
 type Bridge interface {
 	GateOnceForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error)
+	// GateUnspentForSession is GateOnceForSession that never hands back an approved
+	// grant some consumer already spent.
+	GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error)
 	StatusScoped(ctx context.Context, tenant model.TenantID, ref, planHash, wantAction, wantSubjectKind, wantSubjectRef string) (status, boundHash string, err error)
 	ConsumeApproval(ctx context.Context, tenant model.TenantID, ref, consumerID, policyVersion string) (granted, replay bool, err error)
 }
@@ -114,13 +117,20 @@ type Bridge interface {
 // gateEffect opens or finds the effect's approval (reusing an approved grant
 // inside its time box, or authorizing under an active break-glass grant), or
 // reads the one the caller names, and answers at once: pending is an answer.
+// A single-use spend under a fresh consumer can never match an earlier spend, so
+// it reuses only an approved grant no one has spent: a grant spent earlier opens
+// a new request for a human instead of refusing as replayed.
 func Gate(ctx context.Context, bridge Bridge, e GatedEffect) (Answer, error) {
 	a := Answer{Ref: e.Ref}
 	var err error
 	if e.Ref != "" {
 		a.Status, a.BoundHash, err = bridge.StatusScoped(ctx, e.Tenant, e.Ref, e.PlanHash, e.Action, e.SubjectKind, e.SubjectRef)
 	} else {
-		a.Ref, a.Status, a.BoundHash, err = bridge.GateOnceForSession(ctx, e.Tenant, e.Action, e.SubjectKind, e.SubjectRef, e.PlanHash, e.Reason, e.RequestedBy, e.SessionRef)
+		open := bridge.GateOnceForSession
+		if e.Spend == SpendOnce && e.Consumer == "" {
+			open = bridge.GateUnspentForSession
+		}
+		a.Ref, a.Status, a.BoundHash, err = open(ctx, e.Tenant, e.Action, e.SubjectKind, e.SubjectRef, e.PlanHash, e.Reason, e.RequestedBy, e.SessionRef)
 	}
 	if err != nil {
 		return Answer{Failed: Open}, err

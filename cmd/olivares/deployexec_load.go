@@ -228,6 +228,19 @@ func loadDeployExecutorConfig(_ *slog.Logger) (deployExecutorConfig, error) {
 	return cfg, nil
 }
 
+// editionDeployExecutorConfig keeps an operator's deploy executor file out of a
+// Community build. Deployment is a Business capability: the module answers 501, so an
+// executor, an identity binder or a drift loop built from the file would act on nothing
+// and the boot log would still say that module VII acts. The file is still read and
+// validated; the operator is told once, at Error level, why it has no effect.
+func editionDeployExecutorConfig(cfg deployExecutorConfig, log *slog.Logger) deployExecutorConfig {
+	if thisEdition.name != "community" || osGetenv("OLIVARES_DEPLOY_EXECUTOR_CONFIG") == "" {
+		return cfg
+	}
+	log.Error("deploy: OLIVARES_DEPLOY_EXECUTOR_CONFIG is set, but deployment is a Business capability; this build wires no deploy executor, identity binder or drift loop", "pricing", pricingURL)
+	return deployExecutorConfig{}
+}
+
 // newDeployExecutor builds the real deploy.Executor adapter from config, or nil when
 // no backend is configured (the module then keeps its deny-closed unwiredExecutor).
 func newDeployExecutor(cfg deployExecutorConfig, broker *wifCredentialBroker, log *slog.Logger) *deployExecutor {

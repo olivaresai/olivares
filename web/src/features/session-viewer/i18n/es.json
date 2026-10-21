@@ -28,7 +28,7 @@
     "loadMore": "Cargar más",
     "empty": "No hay eventos registrados",
     "emptyHint": "Aquí aparecen en orden todos los eventos que capturó la grabación. Esta grabación no capturó ninguno.",
-    "activityUnavailable": "La actividad del agente no está disponible porque el resolver de timeline no está cableado o no respondió. La evidencia de gobernanza sigue disponible.",
+    "activityUnavailable": "La actividad del agente no está disponible porque el resolver de timeline no está configurado o no respondió. La evidencia de gobernanza sigue disponible.",
     "tool": "Llamada a herramienta",
     "mcp": "Invocación MCP",
     "cost": "Muestra de coste",

@@ -6,17 +6,10 @@ package api_test
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"encoding/pem"
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/olivaresai/olivares/core/api/scim"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -28,41 +21,6 @@ import (
 // an address into a domain another organization's identity provider claims.
 
 const consentPassword = "longpassword1"
-
-// configureSCIMSet enables tenant's SCIM event receiver with a fresh publisher
-// key and returns the key that signs its events.
-func (h *harness) configureSCIMSet(super auth.Principal, tenant model.TenantID) *ecdsa.PrivateKey {
-	h.t.Helper()
-	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		h.t.Fatal(err)
-	}
-	der, err := x509.MarshalPKIXPublicKey(&priv.PublicKey)
-	if err != nil {
-		h.t.Fatal(err)
-	}
-	pubPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
-	if err := h.authr.ConfigureSCIMSet(context.Background(), super, tenant, auth.SCIMSetConfig{
-		SETPublisher: auth.SETPublisher{
-			Enabled: true, Issuer: "https://idp.consent.test", Audiences: []string{"https://cp.consent.test"},
-			Keys: []auth.SETVerificationKey{{Kid: "k1", Alg: "ES256", PEM: pubPEM}},
-		},
-	}); err != nil {
-		h.t.Fatal(err)
-	}
-	return priv
-}
-
-// scimEvent signs one SCIM lifecycle event for user.
-func scimEvent(t *testing.T, priv *ecdsa.PrivateKey, jti string, user model.ID, event string) string {
-	t.Helper()
-	return signSETForTest(t, priv, map[string]any{
-		"iss": "https://idp.consent.test", "aud": []string{"https://cp.consent.test"},
-		"iat": time.Now().Unix(), "jti": jti,
-		"sub_id": map[string]any{"format": "scim", "uri": "Users/" + user.String()},
-		"events": map[string]any{event: map[string]any{}},
-	})
-}
 
 // sharedAccount creates an account the deployment owns and makes it a member of
 // every tenant given, through the store. It returns the account and a password
@@ -136,52 +94,6 @@ func TestAnInvitationTokenIsNeverReturnedToTheInviter(t *testing.T) {
 		}
 		if _, found := h.userByEmail("nomail@walk-c.example"); found {
 			t.Errorf("a refused invitation created the account")
-		}
-	})
-}
-
-// TestSETActivateAfterALocalOffboardRestoresNothing: a tenant's SCIM
-// disable removes the person from that tenant only, and a later activate from
-// the same tenant finds no member and writes nothing.
-func TestSETActivateAfterALocalOffboardRestoresNothing(t *testing.T) {
-	onEachEngine(t, nil, func(t *testing.T, h *harness) {
-		admin := h.adminLogin()
-		super := h.principalOf(admin)
-		tT := h.createOrg(admin, "walk-g-t")
-		tB := h.createOrg(admin, "walk-g-b")
-		v, sess := h.sharedAccount(admin, "v@walk-g.example", tT, tB)
-		priv := h.configureSCIMSet(super, tT)
-		tok := h.scimToken(super, tT)
-
-		if r := h.scim("POST", "/v1/scim/v2/Events", tok, scimEvent(t, priv, "g-1", v, scim.EventProvDeactivate)); r.code != http.StatusAccepted {
-			t.Fatalf("SET disable = %d %s, want 202", r.code, r.raw)
-		}
-		if u := h.userByID(v); u.Status != model.StatusActive {
-			t.Errorf("a tenant's SET disable wrote the account's global status: %q", u.Status)
-		}
-		if h.memberOf(v, tT) {
-			t.Errorf("the SET disable left the membership in the disabling tenant")
-		}
-		if !h.memberOf(v, tB) {
-			t.Errorf("the SET disable removed the membership in another tenant")
-		}
-		if code := h.actsIn(sess, tB); code != http.StatusOK {
-			t.Errorf("the session in the other tenant after the disable = %d, want 200", code)
-		}
-		if code := h.actsIn(sess, tT); code != http.StatusForbidden {
-			t.Errorf("the session in the disabling tenant after the disable = %d, want 403", code)
-		}
-
-		before := h.userByID(v)
-		r := h.scim("POST", "/v1/scim/v2/Events", tok, scimEvent(t, priv, "g-2", v, scim.EventProvActivate))
-		if r.code != http.StatusBadRequest || r.body["err"] != "invalid_request" {
-			t.Errorf("SET activate after the offboard = %d %s, want 400 invalid_request", r.code, r.raw)
-		}
-		if after := h.userByID(v); after.Version != before.Version {
-			t.Errorf("SET activate wrote the account (version %d -> %d)", before.Version, after.Version)
-		}
-		if h.memberOf(v, tT) {
-			t.Errorf("SET activate restored the membership")
 		}
 	})
 }
@@ -341,214 +253,6 @@ func TestAcceptInviteWritesOnlyTheAccountItCreated(t *testing.T) {
 	})
 }
 
-// TestNoTenantActionWritesGlobalStatusOrCutsAnotherTenant walks the action
-// table: every tenant-authorized action on a member removes, revokes or
-// excludes only within that tenant and never writes the account's status.
-func TestNoTenantActionWritesGlobalStatusOrCutsAnotherTenant(t *testing.T) {
-	onEachEngine(t, nil, func(t *testing.T, h *harness) {
-		ctx := context.Background()
-		admin := h.adminLogin()
-		super := h.principalOf(admin)
-		tT := h.createOrg(admin, "table-t")
-		tB := h.createOrg(admin, "table-b")
-		scimTok := h.scimToken(super, tT)
-		const users = "/v1/scim/v2/Users/"
-		globalUnchanged := func(t *testing.T, v model.ID, sess string) {
-			t.Helper()
-			if u := h.userByID(v); u.Status != model.StatusActive {
-				t.Errorf("the tenant's action wrote the account's global status: %q", u.Status)
-			}
-			if code := h.actsIn(sess, tB); code != http.StatusOK {
-				t.Errorf("the account's session in the other tenant = %d, want 200", code)
-			}
-		}
-		offboarded := func(t *testing.T, v model.ID, sess string) {
-			t.Helper()
-			if h.memberOf(v, tT) {
-				t.Errorf("the account is still a member of the acting tenant")
-			}
-			if code := h.actsIn(sess, tT); code != http.StatusForbidden {
-				t.Errorf("the account's session in the acting tenant = %d, want 403", code)
-			}
-		}
-
-		t.Run("scim deactivate", func(t *testing.T) {
-			v, sess := h.sharedAccount(admin, "deactivate@table.example", tT, tB)
-			r := h.scim("PATCH", users+v.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"active","value":false}]}`)
-			if r.code != http.StatusOK || r.body["active"] != false {
-				t.Errorf("PATCH active=false = %d %s, want 200 active:false", r.code, r.raw)
-			}
-			globalUnchanged(t, v, sess)
-			offboarded(t, v, sess)
-			if g := h.scim("GET", users+v.String(), scimTok, ""); g.code != http.StatusNotFound {
-				t.Errorf("GET after the deactivate = %d, want 404", g.code)
-			}
-		})
-
-		t.Run("scim activate writes nothing", func(t *testing.T) {
-			v, _ := h.sharedAccount(admin, "activate@table.example", tT, tB)
-			before := h.userByID(v)
-			r := h.scim("PATCH", users+v.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"active","value":true}]}`)
-			if r.code != http.StatusOK {
-				t.Errorf("PATCH active=true = %d %s, want 200", r.code, r.raw)
-			}
-			if after := h.userByID(v); after.Version != before.Version {
-				t.Errorf("PATCH active=true wrote the account")
-			}
-		})
-
-		t.Run("scim attribute change on a shared account", func(t *testing.T) {
-			v, _ := h.sharedAccount(admin, "attrs@table.example", tT, tB)
-			before := h.userByID(v)
-			r := h.scim("PATCH", users+v.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"Renamed"}]}`)
-			if r.code != http.StatusForbidden {
-				t.Errorf("attribute change on an account another tenant shares = %d %s, want 403", r.code, r.raw)
-			}
-			if after := h.userByID(v); after.DisplayName != before.DisplayName || after.Version != before.Version {
-				t.Errorf("the refused attribute change was written")
-			}
-		})
-
-		t.Run("scim attribute change on a tenant's own account", func(t *testing.T) {
-			u, created, err := h.authr.SCIMProvisionUser(ctx, super, tT, auth.SCIMUserInput{UserName: "provisioned@table.example", Active: true})
-			if err != nil || !created {
-				t.Fatalf("provision = %v created=%v", err, created)
-			}
-			r := h.scim("PATCH", users+u.ID.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"Renamed"}]}`)
-			if r.code != http.StatusOK {
-				t.Errorf("attribute change on the tenant's own account = %d %s, want 200", r.code, r.raw)
-			}
-		})
-
-		t.Run("scim delete of a sole member", func(t *testing.T) {
-			w, sess := h.sharedAccount(admin, "sole@table.example", tT)
-			if r := h.scim("DELETE", users+w.String(), scimTok, ""); r.code != http.StatusNoContent {
-				t.Fatalf("DELETE = %d %s, want 204", r.code, r.raw)
-			}
-			if u := h.userByID(w); u.Status != model.StatusActive {
-				t.Errorf("deleting the tenant's only membership disabled the account globally: %q", u.Status)
-			}
-			if h.liveSessionCount(w) == 0 {
-				t.Errorf("deleting the tenant's only membership revoked the account's account-scope sessions")
-			}
-			offboarded(t, w, sess)
-		})
-
-		t.Run("scim delete of a shared member", func(t *testing.T) {
-			v, sess := h.sharedAccount(admin, "delete@table.example", tT, tB)
-			if r := h.scim("DELETE", users+v.String(), scimTok, ""); r.code != http.StatusNoContent {
-				t.Fatalf("DELETE = %d %s, want 204", r.code, r.raw)
-			}
-			globalUnchanged(t, v, sess)
-			offboarded(t, v, sess)
-		})
-
-		t.Run("set disable and activate of a non-member", func(t *testing.T) {
-			v, sess := h.sharedAccount(admin, "set@table.example", tT, tB)
-			priv := h.configureSCIMSet(super, tT)
-			if r := h.scim("POST", "/v1/scim/v2/Events", scimTok, scimEvent(t, priv, "t-1", v, scim.EventProvDeactivate)); r.code != http.StatusAccepted {
-				t.Fatalf("SET disable = %d %s", r.code, r.raw)
-			}
-			globalUnchanged(t, v, sess)
-			offboarded(t, v, sess)
-			r := h.scim("POST", "/v1/scim/v2/Events", scimTok, scimEvent(t, priv, "t-2", v, scim.EventProvActivate))
-			if r.code != http.StatusBadRequest {
-				t.Errorf("SET activate of a non-member = %d %s, want 400", r.code, r.raw)
-			}
-		})
-
-	})
-}
-
-// TestASuspendedMembersAttributesAreRefusedAndNeverOffboardedByDerivation walks
-// the action table's column for a member the deployment suspended: an attribute
-// change answers 403 and writes nothing, whether it comes as a PATCH or a PUT,
-// and never turns into a removal because the account is inactive globally; an
-// explicit active=true writes nothing; an explicit active=false removes the
-// member from the tenant only.
-func TestASuspendedMembersAttributesAreRefusedAndNeverOffboardedByDerivation(t *testing.T) {
-	onEachEngine(t, nil, func(t *testing.T, h *harness) {
-		ctx := context.Background()
-		admin := h.adminLogin()
-		super := h.principalOf(admin)
-		tT := h.createOrg(admin, "suspended-t")
-		scimTok := h.scimToken(super, tT)
-		const users = "/v1/scim/v2/Users/"
-		// suspended provisions a tenant's own account, which the tenant alone
-		// governs, and suspends it globally as the deployment would.
-		suspended := func(t *testing.T, email string) model.User {
-			t.Helper()
-			u, created, err := h.authr.SCIMProvisionUser(ctx, super, tT, auth.SCIMUserInput{UserName: email, Active: true})
-			if err != nil || !created {
-				t.Fatalf("provision = %v created=%v", err, created)
-			}
-			h.mutateUser(u.ID, func(u *model.User) { u.Status = model.StatusInactive })
-			return h.userByID(u.ID)
-		}
-		unchanged := func(t *testing.T, before model.User) {
-			t.Helper()
-			if after := h.userByID(before.ID); after.Version != before.Version || after.DisplayName != before.DisplayName {
-				t.Errorf("the suspended account was written: %+v, want %+v", after, before)
-			}
-			if !h.memberOf(before.ID, tT) {
-				t.Errorf("the suspended member was removed from the tenant")
-			}
-		}
-
-		t.Run("patch of an attribute", func(t *testing.T) {
-			before := suspended(t, "patch@suspended.example")
-			r := h.scim("PATCH", users+before.ID.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"displayName","value":"Renamed"}]}`)
-			if r.code != http.StatusForbidden {
-				t.Errorf("PATCH displayName of a suspended member = %d %s, want 403", r.code, r.raw)
-			}
-			unchanged(t, before)
-		})
-
-		t.Run("put of an attribute", func(t *testing.T) {
-			before := suspended(t, "put@suspended.example")
-			r := h.scim("PUT", users+before.ID.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"put@suspended.example","displayName":"Renamed","active":true}`)
-			if r.code != http.StatusForbidden {
-				t.Errorf("PUT of a suspended member's attributes = %d %s, want 403", r.code, r.raw)
-			}
-			unchanged(t, before)
-		})
-
-		t.Run("patch active=true", func(t *testing.T) {
-			before := suspended(t, "activate@suspended.example")
-			r := h.scim("PATCH", users+before.ID.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"active","value":true}]}`)
-			if r.code != http.StatusOK {
-				t.Errorf("PATCH active=true of a suspended member = %d %s, want 200", r.code, r.raw)
-			}
-			unchanged(t, before)
-			if u := h.userByID(before.ID); u.Status != model.StatusInactive {
-				t.Errorf("a tenant's active=true reactivated the suspended account: %q", u.Status)
-			}
-		})
-
-		t.Run("patch active=false", func(t *testing.T) {
-			before := suspended(t, "deactivate@suspended.example")
-			r := h.scim("PATCH", users+before.ID.String(), scimTok,
-				`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"active","value":false}]}`)
-			if r.code != http.StatusOK {
-				t.Errorf("PATCH active=false of a suspended member = %d %s, want 200", r.code, r.raw)
-			}
-			if h.memberOf(before.ID, tT) {
-				t.Errorf("active=false left the suspended member in the tenant")
-			}
-			if u := h.userByID(before.ID); u.DisplayName != before.DisplayName || u.Status != model.StatusInactive {
-				t.Errorf("the removal wrote the account's global record: %+v", u)
-			}
-		})
-	})
-}
-
 // TestTenantCreateOrRenameIntoAnotherTenantsClaimedDomainIsRefused: before any
 // write, a tenant's create, invitation or rename refuses an address in a domain
 // another organization's identity provider claims.
@@ -556,7 +260,6 @@ func TestTenantCreateOrRenameIntoAnotherTenantsClaimedDomainIsRefused(t *testing
 	onEachEngine(t, nil, func(t *testing.T, h *harness) {
 		ctx := context.Background()
 		admin := h.elevatedAdmin()
-		super := h.principalOf(admin)
 		tA := h.createOrg(admin, "domain-a")
 		tB := h.createOrg(admin, "domain-b")
 		if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
@@ -581,29 +284,6 @@ func TestTenantCreateOrRenameIntoAnotherTenantsClaimedDomainIsRefused(t *testing
 		}
 		if _, found := h.userByEmail("p@claimed.example"); found {
 			t.Errorf("the refused onboarding created the account")
-		}
-
-		scimTok := h.scimToken(super, tA)
-		c := h.scim("POST", "/v1/scim/v2/Users", scimTok,
-			`{"schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],"userName":"q@claimed.example","active":true}`)
-		if c.code != http.StatusForbidden {
-			t.Errorf("SCIM create into another tenant's claimed domain = %d %s, want 403", c.code, c.raw)
-		}
-		if _, found := h.userByEmail("q@claimed.example"); found {
-			t.Errorf("the refused SCIM create created the account")
-		}
-
-		own, created, err := h.authr.SCIMProvisionUser(ctx, super, tA, auth.SCIMUserInput{UserName: "own@domain-a.example", Active: true})
-		if err != nil || !created {
-			t.Fatalf("provision = %v created=%v", err, created)
-		}
-		rn := h.scim("PATCH", "/v1/scim/v2/Users/"+own.ID.String(), scimTok,
-			`{"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],"Operations":[{"op":"replace","path":"userName","value":"own@claimed.example"}]}`)
-		if rn.code != http.StatusForbidden {
-			t.Errorf("SCIM rename into another tenant's claimed domain = %d %s, want 403", rn.code, rn.raw)
-		}
-		if got := h.userByID(own.ID); got.Email != "own@domain-a.example" {
-			t.Errorf("the refused rename was written: %q", got.Email)
 		}
 
 		// The claiming tenant itself, and a domain only the deployment's provider

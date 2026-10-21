@@ -99,6 +99,37 @@ network: another profile can reach the registry host but has no token. An
 engine stopped before a session ends leaves that session's file in its data
 directory, as a repository read credential does.
 
+## Let an API-key session reach the hosts its work needs
+
+A session on an API-key provider reaches that provider's endpoint and nothing
+else, so it cannot `git push`, call `gh` or fetch modules. A tenant
+administrator can declare the hosts a provider profile's sessions may also
+reach:
+
+```sh
+olivares agent profile update <profile-ref> --egress-host github.com --egress-host api.github.com
+olivares agent profile update <profile-ref> --egress-host ""   # withdraw them
+```
+
+REST uses `session_egress_hosts` on `PATCH /v1/m/sessions/provider-profiles/{ref}`.
+`olivares agent profile get` and `olivares provider account get` list them, and
+`olivares audit` records each change (`sessions.provider_profile.egress_hosts`).
+A change applies from the next launch or resume. Declaring or withdrawing hosts
+needs tenant administration, and no host is added by default.
+
+A host is a DNS name such as `github.com`: no scheme, port, path, wildcard or
+address, and at most four per profile. The session reaches HTTPS on port 443 of
+exactly that name, and only at public addresses. A launch whose declared host
+does not resolve, or resolves to a loopback, private or other reserved address,
+does not start, and the error names the host. Any program the session runs can
+send data to a declared host, its provider key included: the proxy checks which
+key it forwards only on the provider's own endpoint. Declare only hosts you
+would let the agent write to.
+
+Limits: native sessions only, and a session whose network is not confined (its
+own sign-in) keeps the host network. A confined session still gets no
+`git_read` repository credential.
+
 ## Use an installed MCP server in sessions
 
 Add the installed release as a local MCP server, pinned to its version:

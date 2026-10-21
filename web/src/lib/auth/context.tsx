@@ -28,6 +28,7 @@ import type {
 } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
+import { clearSessionDrafts } from '@/lib/session-drafts'
 import { observeStepUpContext } from '@/stores/step-up'
 import { can as rbacCan, confinedWorkspaceIn, roleInTenant } from './rbac'
 
@@ -294,6 +295,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
     }
+    // Cookie recovery and expiry also clear credentials; only sign-out forgets drafts.
+    clearSessionDrafts()
     clearSession()
     clearTenant()
     queryClient.clear()

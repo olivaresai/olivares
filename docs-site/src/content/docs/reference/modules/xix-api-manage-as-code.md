@@ -70,7 +70,7 @@ and is a deny-closed seam.
 :::caution[Honest limits]
 - **`olivares_deployment` declares; it does not deploy.** The resource writes a
   deployment *definition* through module VII's routes. Live `apply`/`retire` against real
-  infrastructure is a **deny-closed seam that returns `503`** until an operator
+  infrastructure is a Business feature (Community answers `501`) and a **deny-closed seam that returns `503`** until an operator
   provisions an executor — declaring a deployment in HCL never mutates your estate.
 - **The stable OpenAPI is not the whole wire.** The stable core surface is in the
   published contract (`/openapi.json`); the module routes (for example the access-map
@@ -119,7 +119,7 @@ findings — as refs/hashes/relations only, with the export itself audited.
 - [Using the client SDKs](/how-to/use-the-client-sdks/) — the first-party Go/Python/TypeScript clients.
 - [CLI reference](/reference/cli/) — the same functionality from the `olivares` binary.
 - [Manage the control plane as code](/how-to/manage-as-code/) — the Terraform provider guide.
-- [Module VII — deployment](/reference/modules/vii-deploy/) — where `olivares_deployment` actuates (the `503` seam).
+- [Module VII — deployment](/reference/modules/vii-deploy/) — where `olivares_deployment` actuates (Business; the `503` seam).
 - [Modules catalog](/reference/modules/overview/) — the Govern/Observe vs Actuate split.
 - [Honesty & limits](/start/honesty-and-limits/) — what actuates today and what does not.
 - [Architecture overview](/explanation/architecture/overview/) — the engine layer this surface sits on.

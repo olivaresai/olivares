@@ -86,7 +86,7 @@
       "newrelic": "New Relic"
     },
     "sinkFormat": "Formato del sink",
-    "sinkFormatHint": "Dialecto de transmisión del sink. Por defecto = OCSF.",
+    "sinkFormatHint": "El formato que recibe el sink. Por defecto: OCSF.",
     "sinkFormatDefault": "Por defecto (OCSF)",
     "sinkCred": "Credencial del sink",
     "sinkCredHint": "Token/clave del colector para este sink — sellada en reposo, no vuelve a mostrarse.",

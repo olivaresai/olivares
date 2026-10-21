@@ -78,6 +78,18 @@ func TestCommunityExternalPluginIgnoresPaidKind(t *testing.T) {
 	}
 }
 
+// A directory roster on the Identity plane is Business Identity & Scale, and the
+// Community wireRoster is a stub that wires nothing: the config must be refused
+// at validation, never accepted and silently unwired. The wiring journey itself
+// runs in the Business build's own suite, where the roster wires.
+func TestCommunityIdentityRosterRequiresBusiness(t *testing.T) {
+	cfg := sourcesConfig{Identity: []identitySpec{{Name: "okta-corp", Kind: "idp", Tenant: "acme"}}}
+	err := validateIdentitySourcesConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "Business") {
+		t.Fatalf("Community identity roster refusal = %v", err)
+	}
+}
+
 func TestCommunityStoredDirectoryConfigAllowsOfflineBoot(t *testing.T) {
 	dir := t.TempDir()
 	sourcePath := filepath.Join(dir, "sources.json")

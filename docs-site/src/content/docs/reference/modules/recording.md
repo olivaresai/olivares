@@ -7,6 +7,8 @@ description: >-
   into the signed audit ledger by PayloadHash. PAM-aligned, LIVE.
 ---
 
+Privileged-session recording is a **[Business](https://olivares.ai/pricing)** feature. Community answers every `/v1/m/recording/` route with 501 `business_required`, records nothing and hides the command group. Sessions already stored stay in the store.
+
 Recording (`modules/recording`) is the **privileged-session recording**
 plane — the PAM-aligned control high-assurance buyers expect for consoles and
 emergency access. It captures, as structured evidence, what a privileged

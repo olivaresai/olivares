@@ -215,7 +215,7 @@ it('explicit keyboard save/remove/clear and reload leave the deep-link URL autho
   const first = await mount({ path: '/agentops?filter=fixture#kept' })
   await screen.findByText('Admitted fixture agentops')
   const star = screen.getByRole('button', {
-    name: 'Add Sessions to favorites',
+    name: 'Add Operate sessions to favorites',
   })
   star.focus()
   await user.keyboard(' ')
@@ -231,7 +231,7 @@ it('explicit keyboard save/remove/clear and reload leave the deep-link URL autho
   const dialog = screen.getByRole('dialog')
   await user.click(
     within(dialog).getByRole('button', {
-      name: 'Remove Sessions from favorites',
+      name: 'Remove Operate sessions from favorites',
     }),
   )
   expect(
@@ -588,7 +588,7 @@ it('records real permitted mounts once, preserves URL, removes/clears by keyboar
   await user.keyboard('{Enter}')
   await user.click(
     screen.getByRole('button', {
-      name: 'Remove Sessions from recent modules',
+      name: 'Remove Operate sessions from recent modules',
     }),
   )
   expect(recentIds()).toEqual(['home'])

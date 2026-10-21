@@ -1372,7 +1372,7 @@ func TestCommunicationChannelWriterReChecksTheDirectoryClosureHTTP(t *testing.T)
 	channel := estate.createChannel(t, workspace, "closure-recheck", []map[string]any{ownerAll})
 	seedChannelGrantHistory(t, eng, tenant, workspace, channel.Channel.ID, owner.id, 270)
 
-	group := scimGroupWithMember(t, eng, owner.token, tenant, "K3 writer closure stewards", steward.id)
+	group := directoryGroupWithMember(t, eng, owner.token, tenant, "K3 writer closure stewards", steward.id)
 	granted := estate.grant(t, owner.token, channel.Channel.ID, map[string]any{
 		"subject":  map[string]any{"kind": "user_group", "ref": group.String()},
 		"can_read": false, "can_write": false, "can_admin": true,
@@ -1395,14 +1395,7 @@ func TestCommunicationChannelWriterReChecksTheDirectoryClosureHTTP(t *testing.T)
 	held := communicationHTTPTestDecode[sessions.ChannelMutationResult](t, patched)
 
 	// The IdP removes the steward from the group. The GRANT is untouched.
-	removed := communicationHTTPTestRequest(t, eng, http.MethodPatch,
-		"/v1/scim/v2/Groups/"+group.String(), owner.token, tenant, map[string]any{
-			"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
-			"Operations": []map[string]any{{"op": "remove", "path": "members"}},
-		}, map[string]string{"Content-Type": "application/scim+json"})
-	if removed.status != http.StatusOK {
-		t.Fatalf("remove the group membership = %d: %s", removed.status, removed.raw)
-	}
+	emptyDirectoryGroup(t, eng, owner.token, tenant, group)
 
 	census := censusChannelGrantHistory(t, eng, tenant)
 	for name, response := range map[string]communicationHTTPTestResponse{

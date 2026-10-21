@@ -1,0 +1,117 @@
+{
+  "title": "추론 프록시",
+  "description": "모든 모델 호출 앞에서 정책을 강제하는 테넌트별 프록시입니다. 요청/응답 게이트, 이그레스 DLP 규칙, 장치 승인 승인.",
+  "config": {
+    "title": "게이트 및 상한",
+    "intro": "각 게이트는 모델 호출 전에 요청 경로에서 강제됩니다. 하나를 끄면 해당 검사 강제가 중단되며 변경은 감사 원장에 기록됩니다.",
+    "failOpen": "개방 실패 허용",
+    "failOpenHint": "프록시가 정책 결정에 도달하지 못하면 호출을 차단하는 대신 허용합니다. 끄면 폐쇄 실패입니다.",
+    "recordMandatory": "기록 필수",
+    "recordMandatoryHint": "세션 원장에 기록할 수 없는 호출은 거부합니다.",
+    "gates": {
+      "gate_model_access": "모델 액세스",
+      "gate_budget": "예산",
+      "gate_residency": "레지던시",
+      "gate_context_window": "컨텍스트 창",
+      "gate_dlp_request": "요청 DLP",
+      "gate_dlp_response": "응답 DLP"
+    },
+    "gatesHint": {
+      "gate_model_access": "각 주체가 호출할 수 있는 모델을 강제합니다.",
+      "gate_budget": "호출로 비용이 발생하기 전에 예산 상한을 강제합니다.",
+      "gate_residency": "테넌트의 데이터 레지던시 지역을 강제합니다.",
+      "gate_context_window": "서피스별 컨텍스트 창 상한을 강제합니다.",
+      "gate_dlp_request": "허용되지 않은 분류가 있는지 아웃바운드 요청을 검사합니다.",
+      "gate_dlp_response": "응답 DLP 모드에 따라 모델 응답을 검사합니다."
+    },
+    "responseDlpMode": "응답 DLP 모드",
+    "responseDlpModeHint": "응답 DLP가 일치 항목을 처리하는 방법: 끄기(검사 안 함), 플래그(주석 추가), 버퍼(반환 전 검사용 보류).",
+    "dlpModes": {
+      "off": "끄기",
+      "flag": "플래그",
+      "buffer": "버퍼"
+    },
+    "ceilingsEnforce": "상한 강제",
+    "ceilingsEnforceHint": "호출당 토큰, 도구 사용 및 작업 예산을 제한합니다. 끄면 호출당 상한이 없습니다.",
+    "ceilingMaxTokens": "최대 토큰",
+    "ceilingMaxToolUses": "최대 도구 사용",
+    "ceilingTaskBudget": "작업 예산(토큰)",
+    "ceilingTaskBudgetHint": "0 = 설정 안 함, 그 외에는 최소 {{min}}입니다.",
+    "ceilingTaskBudgetError": "0 또는 최소 {{min}}이어야 합니다.",
+    "reset": "재설정",
+    "save": "구성 저장",
+    "saved": "프록시 구성을 저장했습니다"
+  },
+  "dlp": {
+    "title": "이그레스 DLP 규칙",
+    "intro": "콘텐츠 분류를 이그레스 허용 또는 거부에 매핑합니다. 분류는 모델 호출 시 서버 측에서 실행되며 이 규칙은 일치 항목의 처리를 결정합니다.",
+    "truncated": "DLP 규칙 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 DLP 규칙이 더 많으며 이 페이지는 id로 행을 가져옵니다. 이 목록에 없는 규칙이 존재하지 않는다는 증거는 아니며, 보이지 않는 규칙이 이그레스를 통제할 수 있습니다.",
+    "add": "규칙 추가",
+    "noRead": "DLP 규칙을 볼 권한이 없습니다.",
+    "noReadHint": "DLP 규칙은 외부로 나가면 안 되는 데이터가 있는지 프롬프트와 응답을 검사합니다. 관리자에게 DLP 읽기 권한을 요청하십시오.",
+    "empty": "DLP 규칙 없음",
+    "emptyHint": "요청 DLP가 켜져 있는 동안 프롬프트의 비밀은 기본적으로 거부됩니다. 이그레스에서 분류를 허용하거나 거부하는 규칙을 추가하십시오.",
+    "colClass": "분류",
+    "colAction": "작업",
+    "colNote": "메모",
+    "colActions": "작업",
+    "actions": {
+      "allow": "허용",
+      "deny": "거부"
+    },
+    "editAction": "{{class}} 규칙 편집",
+    "deleteAction": "{{class}} 규칙 삭제",
+    "created": "DLP 규칙 생성됨",
+    "updated": "DLP 규칙 업데이트됨",
+    "deleted": "DLP 규칙 삭제됨",
+    "deleteDialog": {
+      "title": "DLP 규칙을 삭제하시겠습니까?",
+      "description": "“{{class}}”의 이그레스 규칙을 제거합니다. 일치하는 콘텐츠는 기본 처리로 돌아갑니다.",
+      "confirm": "규칙 삭제"
+    },
+    "dialog": {
+      "title": "DLP 규칙 추가",
+      "editTitle": "DLP 규칙 편집",
+      "subtitle": "분류는 이그레스에서 허용 또는 거부됩니다. 규칙은 분류를 키로 합니다.",
+      "class": "분류",
+      "classHint": "이 규칙이 적용되는 콘텐츠 분류(예: pii, secret)입니다.",
+      "action": "작업",
+      "note": "메모",
+      "create": "규칙 추가",
+      "save": "규칙 저장"
+    }
+  },
+  "device": {
+    "title": "장치 승인",
+    "intro": "사용자 코드(장치 페어링 화면에 표시된 코드)로 장치 승인 요청을 승인하거나 거부합니다.",
+    "userCode": "사용자 코드",
+    "userCodePlaceholder": "예: WDJB-MJHT",
+    "approve": "승인",
+    "deny": "거부",
+    "approved": "장치 코드 {{code}} 승인됨",
+    "denied": "장치 코드 {{code}} 거부됨",
+    "notFound": "해당 사용자 코드에 대한 대기 중 요청이 없습니다.",
+    "expired": "해당 요청은 만료되었거나 이미 사용되었습니다."
+  },
+  "firewall": {
+    "title": "메시지 검사기",
+    "intro": "이 제어 플레인 프로세스가 Messages 프록시에 연결된 콘텐츠 검사기와 함께 시작되었는지 여부입니다.",
+    "refresh": "다시 확인",
+    "limit": "응답한 프로세스가 시작 시 기록한 내용입니다. 프록시에 지금 연결할 수 있는지, 어떤 정책이 로드되었는지, 개별 요청이 검사되었는지는 보고하지 않습니다.",
+    "states": {
+      "unobserved": "보고되지 않음",
+      "pep_not_composed": "프록시 시작 안 됨",
+      "inspector_absent": "검사기 연결 안 됨",
+      "inspector_attached": "검사기 연결됨",
+      "unreadable": "읽을 수 없음"
+    },
+    "statesHint": {
+      "unobserved": "이 프로세스는 연결 상태를 기록하지 않았습니다. 어느 쪽도 주장하지 않습니다.",
+      "pep_not_composed": "이 프로세스에서 Messages 프록시가 시작되지 않아 검사기가 연결될 수 없었습니다.",
+      "inspector_absent": "프록시가 콘텐츠 검사기 없이 시작되었습니다.",
+      "inspector_attached": "시작 시 검사기가 연결되었습니다. 구성 읽기에 실패할 때 설치되는 제한적 폴백일 수 있으므로 콘텐츠가 구성대로 검사되고 있다는 뜻이 아닙니다.",
+      "unreadable": "응답이 이 콘솔이 인식하는 상태와 일치하지 않았습니다. 검사기에 대해 아무것도 주장하지 않습니다."
+    }
+  }
+}

@@ -74,6 +74,7 @@ func (s *licenseService) LicenseDisplay() api.LicenseDisplayInfo {
 	if d.verified {
 		info.Plan = d.lic.Plan()
 		info.SupportTier = d.lic.SupportTier()
+		info.SupportProfile = d.lic.SupportProfile()
 	}
 	return info
 }
@@ -107,6 +108,7 @@ func (s *licenseService) statusFor(ctx context.Context, d licenseDisplay) (api.L
 		out.Licensee = d.lic.Licensee()
 		out.Plan = d.lic.Plan()
 		out.SupportTier = d.lic.SupportTier()
+		out.SupportProfile = d.lic.SupportProfile()
 		out.Features = d.lic.Features()
 		if t := d.lic.IssuedAt(); !t.IsZero() {
 			out.IssuedAt = &t

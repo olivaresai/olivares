@@ -4,6 +4,11 @@
     "description": "Cette page n’existe pas ou a été déplacée.",
     "back": "Retour à la vue d’ensemble"
   },
+  "businessOnly": {
+    "title": "Fait partie de Business",
+    "description": "Cette page fait partie d’Olivares AI Business. Cette édition ne l’inclut pas.",
+    "link": "À propos de Business"
+  },
   "forbidden": {
     "title": "Non autorisé",
     "description": "Vous n’avez pas la permission de consulter ceci. Demandez l’accès à un administrateur.",

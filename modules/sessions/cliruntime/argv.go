@@ -113,6 +113,9 @@ func claudeGovernedTail(req LaunchRequest) []string {
 	if id := strings.TrimSpace(req.ResumeID); id != "" {
 		args = append(args, "--resume", id)
 	}
+	if req.Settings != "" {
+		args = append(args, "--settings", req.Settings)
+	}
 	return args
 }
 

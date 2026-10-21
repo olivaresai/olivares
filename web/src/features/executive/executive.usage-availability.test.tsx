@@ -105,6 +105,10 @@ const PENDING_PAUSED_FLAGS = {
   isPaused: true,
 }
 
+/** The observed page the dashboard reads: the Sessions view's page size, so the card
+ *  joins the rows that view lists (#2268). */
+const LIVE_KEY = sessionsKeys.live('demo', { limit: 200 })
+
 const BOTH = (p: string) =>
   p === 'sessions:live:read' || p === 'inventory:catalog:read'
 const INVENTORY_ONLY = (p: string) => p === 'inventory:catalog:read'
@@ -213,13 +217,15 @@ async function settledTile() {
 }
 
 describe('ExecutiveView usage pillar — Inventory valid, Sessions not established', () => {
-  it('Sessions 500: agents and tracked keep their numbers, live is "—" with a could-not-load line, never 0', async () => {
+  it('Sessions 500: tracked keeps its number, the headline and live are "—" with a could-not-load line, never 0', async () => {
     live.mockRejectedValue(SERVER_ERROR())
 
     renderIntel(<ExecutiveView />)
     const tile = await settledTile()
 
-    expect(within(tile).getByText('3')).toBeInTheDocument()
+    // The headline is the Working set, which is the live half's fact (#2268).
+    expect(within(tile).getByText('—')).toBeInTheDocument()
+    expect(within(tile).queryByText('3')).toBeNull()
     expect(within(tile).getByText('— live · 25 tracked')).toBeInTheDocument()
     expect(within(tile).queryByText(/\b0 live/)).toBeNull()
     expect(screen.getByTestId('executive-usage-live-gap')).toHaveTextContent(
@@ -252,7 +258,8 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
     const tile = await settledTile()
 
     expect(live).not.toHaveBeenCalled()
-    expect(within(tile).getByText('3')).toBeInTheDocument()
+    expect(within(tile).getByText('—')).toBeInTheDocument()
+    expect(within(tile).queryByText('3')).toBeNull()
     expect(within(tile).getByText('— live · 25 tracked')).toBeInTheDocument()
     expect(within(tile).queryByText(/\b0 live/)).toBeNull()
     expect(screen.getByTestId('executive-usage-live-gap')).toHaveTextContent(
@@ -283,14 +290,14 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
 })
 
 describe('ExecutiveView usage pillar — Sessions valid, Inventory not established', () => {
-  it('Inventory 500: live keeps its number, agents and tracked are "—" with a could-not-load line', async () => {
+  it('Inventory 500: live and the headline keep their numbers, tracked is "—" with a could-not-load line', async () => {
     summary.mockRejectedValue(SERVER_ERROR())
 
     renderIntel(<ExecutiveView />)
     const tile = await settledTile()
 
-    // The headline figure is the inventory's: an em-dash, not "0".
-    expect(within(tile).getByText('—')).toBeInTheDocument()
+    // The headline is the Working set: the live half answered, so it has a figure.
+    expect(within(tile).getByText('3')).toBeInTheDocument()
     expect(within(tile).getByText('3 live · — tracked')).toBeInTheDocument()
     expect(within(tile).queryByText(/\b0\b/)).toBeNull()
     expect(
@@ -299,14 +306,14 @@ describe('ExecutiveView usage pillar — Sessions valid, Inventory not establish
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
   })
 
-  it('Inventory not permitted: no read, agents and tracked are "—" with the restricted line', async () => {
+  it('Inventory not permitted: no read, tracked is "—" with the restricted line, the headline keeps the Working set', async () => {
     authState.can = SESSIONS_ONLY
 
     renderIntel(<ExecutiveView />)
     const tile = await settledTile()
 
     expect(summary).not.toHaveBeenCalled()
-    expect(within(tile).getByText('—')).toBeInTheDocument()
+    expect(within(tile).getByText('3')).toBeInTheDocument()
     expect(within(tile).getByText('3 live · — tracked')).toBeInTheDocument()
     expect(
       screen.getByTestId('executive-usage-inventory-gap'),
@@ -444,7 +451,7 @@ describe('ExecutiveView usage pillar — leaving a successful state', () => {
         within(usageTile()).getByText('3 live · — tracked'),
       ).toBeInTheDocument(),
     )
-    expect(within(usageTile()).getByText('—')).toBeInTheDocument()
+    expect(within(usageTile()).getByText('3')).toBeInTheDocument()
     expect(within(usageTile()).queryByText(/25 tracked/)).toBeNull()
     expect(summary).toHaveBeenCalledTimes(1)
   })
@@ -940,7 +947,8 @@ describe('ExecutiveView usage pillar — pending reasons (pure flag fixture)', (
     renderIntel(<ExecutiveView />)
     const tile = await settledTile()
 
-    expect(within(tile).getByText('3')).toBeInTheDocument()
+    expect(within(tile).getByText('—')).toBeInTheDocument()
+    expect(within(tile).queryByText('3')).toBeNull()
     expect(within(tile).getByText('— live · 25 tracked')).toBeInTheDocument()
     expect(within(tile).queryByText(/\b0 live/)).toBeNull()
     expect(screen.getByTestId('executive-usage-live-gap')).toHaveTextContent(
@@ -959,13 +967,13 @@ describe('ExecutiveView usage pillar — pending reasons (pure flag fixture)', (
     )
   })
 
-  it('flags alone say paused: the headline is "—", "3 live · — tracked", a "paused" line, not offline, not denied, not failed', async () => {
+  it('flags alone say paused: the headline is the Working set, "3 live · — tracked", a "paused" line, not offline, not denied, not failed', async () => {
     flagFixture.overrides.set('inventory', PENDING_PAUSED_FLAGS)
 
     renderIntel(<ExecutiveView />)
     const tile = await settledTile()
 
-    expect(within(tile).getByText('—')).toBeInTheDocument()
+    expect(within(tile).getByText('3')).toBeInTheDocument()
     expect(within(tile).getByText('3 live · — tracked')).toBeInTheDocument()
     expect(within(tile).queryByText(/\b0\b/)).toBeNull()
     expect(
@@ -995,11 +1003,12 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
     const tile = await settledTile()
 
     // Real query-core state, not a fixture: dispatched and paused, the queryFn unrun.
-    const liveState = queryClient.getQueryState(sessionsKeys.live('demo'))
+    const liveState = queryClient.getQueryState(LIVE_KEY)
     expect(liveState?.status).toBe('pending')
     expect(liveState?.fetchStatus).toBe('paused')
     expect(live).not.toHaveBeenCalled()
-    expect(within(tile).getByText('3')).toBeInTheDocument()
+    expect(within(tile).getByText('—')).toBeInTheDocument()
+    expect(within(tile).queryByText('3')).toBeNull()
     expect(within(tile).getByText('— live · 25 tracked')).toBeInTheDocument()
     expect(within(tile).queryByText(/\b0 live/)).toBeNull()
     expect(screen.getByTestId('executive-usage-live-gap')).toHaveTextContent(
@@ -1117,15 +1126,11 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
 
     onlineManager.setOnline(false)
     // Not awaited on purpose: a paused refetch resolves only when it resumes.
-    void queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    void queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
-      expect(
-        queryClient.getQueryState(sessionsKeys.live('demo'))?.fetchStatus,
-      ).toBe('paused'),
+      expect(queryClient.getQueryState(LIVE_KEY)?.fetchStatus).toBe('paused'),
     )
-    expect(queryClient.getQueryState(sessionsKeys.live('demo'))?.status).toBe(
-      'success',
-    )
+    expect(queryClient.getQueryState(LIVE_KEY)?.status).toBe('success')
 
     const tile = usageTile()
     expect(within(tile).getByText('3 live · 25 tracked')).toBeInTheDocument()
@@ -1139,9 +1144,7 @@ describe('ExecutiveView usage pillar — a real pause and resume (QueryClient on
     act(() => onlineManager.setOnline(true))
     await waitFor(() => expect(live).toHaveBeenCalledTimes(2))
     await waitFor(() =>
-      expect(
-        queryClient.getQueryState(sessionsKeys.live('demo'))?.fetchStatus,
-      ).toBe('idle'),
+      expect(queryClient.getQueryState(LIVE_KEY)?.fetchStatus).toBe('idle'),
     )
     expect(
       within(usageTile()).getByText('3 live · 25 tracked'),
@@ -1166,9 +1169,9 @@ describe('ExecutiveView usage pillar — a real idle (QueryClient cancel)', () =
       'Sessions: loading. Inventory: figures available.',
     )
 
-    await queryClient.cancelQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.cancelQueries({ queryKey: LIVE_KEY })
     const tile = await settledTile()
-    const state = queryClient.getQueryState(sessionsKeys.live('demo'))
+    const state = queryClient.getQueryState(LIVE_KEY)
     expect(state?.status).toBe('pending')
     expect(state?.fetchStatus).toBe('idle')
     expect(within(tile).getByText('— live · 25 tracked')).toBeInTheDocument()
@@ -1182,7 +1185,7 @@ describe('ExecutiveView usage pillar — a real idle (QueryClient cancel)', () =
     )
 
     live.mockResolvedValue(LIVE_PAGE)
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
       expect(
         within(usageTile()).getByText('3 live · 25 tracked'),
@@ -1211,7 +1214,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
 
     // Two polls with the same state: one returns the same page, the other a page
     // with a DIFFERENT count. The tile follows the number; the region does not.
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     const fourActive: ListResponse<LiveDTO> = {
       ...LIVE_PAGE,
       items: [
@@ -1220,7 +1223,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
       ],
     }
     live.mockResolvedValue(fourActive)
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
       expect(
         within(usageTile()).getByText('4 live · 25 tracked'),
@@ -1232,7 +1235,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
 
     // The engine refuses: the visible line is the calm boundary; so is the sentence.
     live.mockRejectedValue(FORBIDDEN())
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
       expect(
         within(usageTile()).getByText('— live · 25 tracked'),
@@ -1249,12 +1252,12 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
     expect(afterRefusal).toBeGreaterThan(0)
 
     // An identical refused poll: same text, no mutation.
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     expect(watched.mutations()).toBe(afterRefusal)
 
     // Then an outage: another state, another sentence.
     live.mockRejectedValue(SERVER_ERROR())
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
       expect(screen.getByTestId('executive-usage-live-gap')).toHaveTextContent(
         "Sessions — couldn't load",
@@ -1267,7 +1270,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
     // Recovery into a page with more rows: the figure returns WITH its marker, and the
     // region says "partial" — a coverage change is a state change.
     live.mockResolvedValue(MORE_PAGE)
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
       expect(
         within(usageTile()).getByText('3 live · 25 tracked'),
@@ -1283,7 +1286,7 @@ describe('ExecutiveView availability region — restriction, recovery, coverage,
 
     // Coverage back to a complete page: the marker leaves and the region says so.
     live.mockResolvedValue(LIVE_PAGE)
-    await queryClient.refetchQueries({ queryKey: sessionsKeys.live('demo') })
+    await queryClient.refetchQueries({ queryKey: LIVE_KEY })
     await waitFor(() =>
       expect(
         screen.queryByTestId('executive-usage-sessions-partial'),
@@ -1343,9 +1346,7 @@ describe('ExecutiveView usage pillar — tenant and permission transitions while
     )
     // The paused dispatch was cancelled and reverted, not left waiting for the network.
     await waitFor(() =>
-      expect(
-        queryClient.getQueryState(sessionsKeys.live('demo'))?.fetchStatus,
-      ).toBe('idle'),
+      expect(queryClient.getQueryState(LIVE_KEY)?.fetchStatus).toBe('idle'),
     )
 
     act(() => onlineManager.setOnline(true))

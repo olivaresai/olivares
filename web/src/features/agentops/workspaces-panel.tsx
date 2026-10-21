@@ -35,11 +35,13 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { cn } from '@/lib/utils'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { WorkspaceBrowser } from './workspace-browser'
+import { WorkspaceWiki } from './workspace-wiki'
 import {
   DEFAULT_DLP_MODE,
   type CreateWorkspaceRequest,
@@ -244,7 +246,18 @@ export function WorkspacesPanel() {
                 </SheetDescription>
               </SheetHeader>
               <ReadOnlyFolders workspace={browse} canAdmin={canAdmin} />
-              <WorkspaceBrowser workspace={browse} />
+              <Tabs key={browse.workspace_ref} defaultValue="files">
+                <TabsList aria-label={browse.name || browse.workspace_ref}>
+                  <TabsTrigger value="files">{t('browser.title')}</TabsTrigger>
+                  <TabsTrigger value="wiki">{t('wiki.title')}</TabsTrigger>
+                </TabsList>
+                <TabsContent value="files">
+                  <WorkspaceBrowser workspace={browse} />
+                </TabsContent>
+                <TabsContent value="wiki">
+                  <WorkspaceWiki workspace={browse} />
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </SheetContent>

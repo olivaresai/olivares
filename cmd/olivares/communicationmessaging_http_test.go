@@ -2086,16 +2086,9 @@ func exerciseCommunicationHTTPAgent(
 ) {
 	t.Helper()
 	sponsorRef := "human:k3-http-owner:" + owner.id.String()
-	scimUpdate := communicationHTTPTestRequest(t, eng, http.MethodPut,
-		"/v1/scim/v2/Users/"+owner.id.String(), owner.token, tenant,
-		map[string]any{
-			"schemas":  []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
-			"userName": "owner@k3-http.test", "displayName": "K3 owner",
-			"externalId": sponsorRef, "active": true,
-		}, map[string]string{"Content-Type": "application/scim+json"})
-	if scimUpdate.status != http.StatusOK {
-		t.Fatalf("set agent sponsor external identity = %d: %s", scimUpdate.status, scimUpdate.raw)
-	}
+	setDirectoryUser(t, eng, owner.token, tenant, owner.id, auth.SCIMUserInput{
+		UserName: "owner@k3-http.test", DisplayName: "K3 owner", ExternalID: sponsorRef, Active: true,
+	})
 	// This is directory-source materialization, not a communication fixture: the
 	// identity and lifecycle rows are written through the typed Store API; every
 	// core agent, credential, channel and message action below uses authenticated
@@ -2104,7 +2097,7 @@ func exerciseCommunicationHTTPAgent(
 		_, err := sc.Identities().Create(context.Background(), model.Identity{
 			Name: "K3 HTTP owner", Kind: "user", ExternalID: sponsorRef,
 			Provider: "test-roster",
-			Metadata: map[string]any{"principal_type": "human"},
+			Metadata: map[string]any{"principal_type": "human", "disabled": false},
 		})
 		return err
 	}); err != nil {

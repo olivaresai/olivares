@@ -86,7 +86,27 @@ func edgeFromTool(sessionID, toolName string, input map[string]any, at time.Time
 		Confidence:   confidence,
 		ToolRef:      toolName,
 		ObservedAt:   at,
+		Labels:       engineLabels(nil),
 	}, true
+}
+
+// engineLabels is what this connector says about the edges it builds for a Claude Code
+// session: the ENGINE is Claude Code, as the hook path declares it
+// (modules/sessions/hookpep/claudehookobs.go). Without it the live row has no engine and
+// a list can only call the session by its last tool call. Posture stays undeclared:
+// telemetry observes, only the policy point enforces, and an absent posture reads as
+// unknown, never as enforced.
+//
+// The operator's allowlisted attribution labels ride along, and the engine is set LAST so
+// no operator value can assert it (`engine` is also not a collectable key, builtinAttrKeys).
+// The map is a copy: callers share one label set across several edges.
+func engineLabels(operator map[string]string) map[string]string {
+	out := make(map[string]string, len(operator)+1)
+	for k, v := range operator {
+		out[k] = v
+	}
+	out[model.LabelEngine] = model.EngineClaude
+	return out
 }
 
 // costFromEvent builds a CostSample from a claude_code.api_request event. It

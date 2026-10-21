@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 | 2 | Risk management system | Per-agent risk classification (EU tier × NIST), governed dual-control review; continuous findings | `GET /v1/m/compliance/risk`; findings API |
 | 3 | Data and data governance | Dataset registry + sealed AIBOM lineage; PII discovery/DLP labels; residency attestation + egress scan | AIBOM/SPDX exports; discovery/DLP labels; `GET /v1/m/compliance/residency` |
 | 4 | Technical documentation & instructions for use | Annex-IV-shaped doc pack generated from live evidence | [eu-ai-act-annex-iv.md](./eu-ai-act-annex-iv.md) |
-| 5 | Record-keeping | Append-only, hash-chained, signed audit ledger; session recording; 7-year retention + WORM archival | Ledger verify; session recording; `docs/RECORDS-MANAGEMENT.md` |
+| 5 | Record-keeping | Append-only, hash-chained, signed audit ledger; session recording (Business); 7-year retention + WORM archival | Ledger verify; session recording; `docs/RECORDS-MANAGEMENT.md` |
 | 6 | Transparency of the AI system | Inventory/transparency record; model cards; honest gap: Art-50-style content marking is not provided by the platform | Inventory; model cards |
 | 7 | Human oversight | Deny-by-default HITL approvals, quorum/SoD, AAL3 step-up, audited break-glass, graduated kill switch | Approvals; step-up; break-glass; kill switch |
 | 8 | Accuracy, robustness and cybersecurity | Evals + regression gates; adversarial red-team; guardrails (ASI01–10); hardened supply chain; published SLOs | Evals; red-team; `scripts/verify-release.sh`; [`docs/17-PRODUCTION-READINESS-SLO.md`](../17-PRODUCTION-READINESS-SLO.md) |

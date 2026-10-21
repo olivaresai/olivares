@@ -8,6 +8,9 @@
 # next-release value is the sentence start the selftest plants in that locale's README. The checker
 # refuses the file whole (exit 2) when it cannot be read, a line is not name<TAB>value, a name
 # repeats, a value does not compile or matches the empty string, or a name it reads is missing.
+release-context	olivares|release|version|versión|tag|stable|veröffentlichung|lanzamiento|publica(?:ci[oó]n|tion)|релиз|верси|выпуск|тег|リリース|バージョン|タグ|版|发布|發布|标签
+release-claim-samples	Das ist Version 1.5.|La versión 1.5 es la actual.|Olivares バージョン 1.5 が最新です。|Olivares 版本 1.5 是当前版本。|Текущая версия 1.5.|Текущий релиз 1.5.|1.5 リリース
+release-word-samples	versión 1.5|Veröffentlichung 1.5|lanzamiento 1.5|publicación 1.5|publicacion 1.5|релиз 1.5|версия 1.5|выпуск 1.5|тег 1.5|リリース 1.5|バージョン 1.5|タグ 1.5|版 1.5|发布 1.5|發布 1.5|标签 1.5
 otel-convention-before	semconv|gen_ai|mcp|[Mm]essages|invoke_|OpenLLMetry|[Cc]onventions?|Konvention|convenci|соглашени|约定|規約|GenAI|client/internal|Spezifikation|especificaci|спецификац|规范|仕様|upstream|amont|aguas|вверх|[Ff]ramework|оркестр|orchestr|[Ww]orkflow|CrewAI|crew|antérieures|anteriores|und früher|ранее|以前|及更早|and prior|normaliz|profile|Profil|perfil|профил|配置|プロファイル|default|Standard|predeterminad|défaut|умолчани|默认|デフォルト|events|Events|eventos|событи|事件|イベント|mensajes|[Сс]ообщения|不符合
 otel-convention-after	is the last|ist das letzte|es la última|est la dernière|— последний|\+ generation
 revision	Revisión|revisión

@@ -29,7 +29,7 @@
   "hostForbidden": "Git 主机拒绝了读取。",
   "hostForbiddenBody": "缺少的不是 system:admin。",
   "unknownRef": "unknown ref",
-  "upstream": "git host read failed",
+  "upstream": "读取 Git 主机失败",
   "tryAgain": "重试",
   "returnToSources": "返回来源",
   "openSource": "打开来源",

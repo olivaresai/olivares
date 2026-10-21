@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +70,9 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// its agents, background tasks, changed files, task list and context. Read-only.
 	reg.HandleEntity("GET", "/runs/{ref}/activity", permRunRead, runEntity, m.handleRunActivity)
 	reg.HandleEntity("GET", "/runs/{ref}/activity/agents/{agent}", permRunRead, runEntity, m.handleRunAgentTranscript)
+	// The messages of the session, from the same transcript (session_messages.go): its
+	// index, its search and a time anchor, in pages. Read-only.
+	reg.HandleEntity("GET", "/runs/{ref}/messages", permRunRead, runEntity, m.handleRunMessages)
 	// Readers may learn a denied action as 403. Foreign, unreadable and absent
 	// runs retain the same concealed 404.
 	runEntity.DeniedReadPermission = permRunRead
@@ -80,12 +84,23 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// that asks the tool through the session's stdin, as an interrupt does: write.
 	reg.HandleEntity("GET", "/runs/{ref}/commands", permRunWrite, runEntity, m.handleRunCommands)
 	reg.HandleEntity("POST", "/runs/{ref}/input", permRunWrite, runEntity, m.handleRunInput)
+	// Images attached to a message (run_attachment.go): stored with the session under
+	// the tenant, delivered to the tool by /input, shown again by the GET.
+	reg.HandleEntity("POST", "/runs/{ref}/attachments", permRunWrite, runEntity, m.handleRunAttachmentUpload)
+	reg.HandleEntity("GET", "/runs/{ref}/attachments/{id}", permRunRead, runEntity, m.handleRunAttachmentGet)
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
 	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
 	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
 	// Rebinds a stopped session to another profile of its tool, carrying the tool's
 	// own conversation state (session_move.go). It starts nothing.
 	reg.HandleEntity("POST", "/runs/{ref}/move", permRunWrite, runEntity, m.handleMoveRun)
+	// The caller's own pins (run_pin.go): a pinned session stays first in THIS
+	// person's list, on the server, following them across browsers and devices.
+	// READ permission on purpose — a pin is interface state, not a session
+	// mutation (the favorites rule, modules/consoleviews/favorites.go) — and it
+	// is not ledgered. Unreadable runs keep the concealed 404 of the entity.
+	reg.HandleEntity("POST", "/runs/{ref}/pin", permRunRead, runEntity, m.handlePinRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}/pin", permRunRead, runEntity, m.handleUnpinRun)
 	// Starts a NEW session in another profile, linked to this one, from a reviewed
 	// summary and the attached transcript (session_handoff.go).
 	reg.HandleEntity("POST", "/runs/{ref}/handoff", permRunWrite, runEntity, m.handleHandoffRun)
@@ -117,7 +132,7 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	// may create that profile, so it needs the caller's profile write; without it the
 	// refusal below stands.
 	if body.ProviderProfileRef == "" && m.mayWriteProfiles(r.Context(), mc) {
-		got, err := m.ResolveProfile(r.Context(), mc.Tenant, providerDriverClaude)
+		got, err := m.resolveProfileForCaller(r.Context(), mc, providerDriverClaude)
 		if err != nil {
 			writeRunErr(w, err)
 			return
@@ -132,8 +147,11 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		PermissionMode:   body.PermissionMode,
 		Effort:           body.Effort,
 		Model:            body.Model,
+		FastMode:         body.FastMode,
+		ServiceTier:      body.ServiceTier,
 		WorkspaceRef:     body.WorkspaceRef,
 		Worktree:         body.Worktree,
+		NoSetup:          body.NoSetup,
 		WorktreeFrom:     body.WorktreeFrom,
 		TemplateID:       body.TemplateID,
 		Isolation:        Isolation(body.Isolation),
@@ -181,6 +199,7 @@ func (m *Module) callerQuestions(ctx context.Context, mc api.ModuleContext) call
 	return callerAsks{
 		runUnrestricted: sync.OnceValue(func() bool { return m.mayRunUnrestricted(ctx, mc) }),
 		secretEnv:       sync.OnceValue(func() bool { return m.mayUseSecretEnv(ctx, mc) }),
+		profileAccess:   m.askProfileAccess(ctx, mc.Tenant, mc.Principal),
 	}
 }
 
@@ -205,6 +224,16 @@ func (m *Module) principalMayRunUnrestricted(ctx context.Context, tenant model.T
 		Principal: p, Tenant: tenant,
 		Permission: permRunAdmin, Resource: auth.ResourceFor(permRunAdmin),
 	}).Allow
+}
+
+// principalAsks is the questions a resume or launch asks about a principal that is
+// not the request's caller: a queued launch's restored launcher, or the engine's own resume.
+func (m *Module) principalAsks(ctx context.Context, tenant model.TenantID, p auth.Principal) callerAsks {
+	return callerAsks{
+		runUnrestricted: func() bool { return m.principalMayRunUnrestricted(ctx, tenant, p) },
+		secretEnv:       func() bool { return m.principalMayUseSecretEnv(ctx, tenant, p) },
+		profileAccess:   m.askProfileAccess(ctx, tenant, p),
+	}
 }
 
 // mayUseSecretEnv reports whether the authenticated caller may give vault secrets
@@ -232,19 +261,82 @@ func (m *Module) principalMayUseSecretEnv(ctx context.Context, tenant model.Tena
 	}).Allow
 }
 
+// A derived-state run list on the recency page reads the stored-running set a store
+// page at a time and cuts to the page size a plain list would have: the default,
+// or the limit clamped to the store's largest page.
+const (
+	runListScanPage     = 1000
+	runListDefaultLimit = 100
+)
+
+// runsDisplayedAs returns every run matching q whose displayed state is state
+// (running or idle), newest first. The recency page has no cursor, so the stored
+// running set is read in id order a store page at a time until it is exhausted:
+// no ceiling, so no run is left unlooked-at. q must already narrow to stored running.
+func (m *Module) runsDisplayedAs(ctx context.Context, repo store.GenericRepo, q model.Query, state string) ([]model.Record, error) {
+	q.Sort, q.Cursor, q.Limit = nil, "", runListScanPage
+	var kept []model.Record
+	for {
+		recs, page, err := repo.List(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for _, rec := range recs {
+			if m.deriveRunState(rec) == state {
+				kept = append(kept, rec)
+			}
+		}
+		if !page.HasMore {
+			break
+		}
+		if page.Cursor == "" {
+			// An id-ordered page always carries one. Stopping here would answer
+			// "there are no more" for rows that were never read.
+			return nil, errors.New("sessions: run list page has more rows and no cursor")
+		}
+		q.Cursor = page.Cursor
+	}
+	// The id walk keeps ties in id order; the stable sort keeps them there, which is
+	// the store's own order for the recency page (created_at DESC, id ASC).
+	sort.SliceStable(kept, func(i, j int) bool {
+		return kept[i].String(model.ColCreatedAt) > kept[j].String(model.ColCreatedAt)
+	})
+	return kept, nil
+}
+
 func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	q := listQuery(r)
 	if r.URL.Query().Get("pagination") != "cursor" {
 		q.Cursor = ""
 		q.Sort = []model.Sort{{Column: model.ColCreatedAt, Desc: true}}
 	}
-	stateFilter := r.URL.Query().Get("state")
+	// state and provider_profile_ref narrow IN THE STORE, for the reason given at
+	// claude_session_id below: this endpoint pages by recency, so a filter applied
+	// after the read answers "among the N most recent runs". A dispatcher counting
+	// the running sessions of one account asks about the OLDEST runs, the ones a
+	// post-filter loses first. A ref nobody holds is an empty list, not an error.
+	//
+	// Every state is a stored value except two: running and idle are both stored
+	// as running, and deriveRunState tells them apart from the last activity and from
+	// the live handle's wait for input, which is memory no predicate can see. The
+	// store narrows to stored running and deriveRunState, the one rule, decides.
+	if ref := r.URL.Query().Get("provider_profile_ref"); ref != "" {
+		q.Filters = append(q.Filters, eq(colRunProfileID, ref))
+	}
+	displayed := "" // the derived state to keep, when the request asks for running or idle
+	if state := r.URL.Query().Get("state"); state != "" {
+		stored := state
+		if state == stateRunning || state == stateIdle {
+			stored, displayed = stateRunning, state
+		}
+		q.Filters = append(q.Filters, eq(colState, stored))
+	}
 	// which runs DRIVE a given observed session — the answer to "did we launch
 	// this, or did we only find it?". The join key is the provider's session id: a
 	// run's claude_session_id IS the session_ref of the live/timeline tables (the
 	// same identity export.go:253 resolves a recording credential through).
 	//
-	// It is a STORE filter, not a post-filter over the page like `state` above, and
+	// It is a STORE filter, not a post-filter over the page, and
 	// that difference is the whole point. This endpoint pages by RECENCY and ignores
 	// the cursor, so a filter applied after the read answers "…among the N most
 	// recent runs" while looking like it answered "…among all runs". For a facet over
@@ -306,20 +398,62 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 		if err != nil {
 			return err
 		}
-		recs, page, err := repo.List(r.Context(), q)
+		// Cursor mode keeps the store's page: a page whose rows derive to the other
+		// state is short, even empty, and the cursor still reaches every row.
+		var recs []model.Record
+		if byRecency := displayed != "" && len(q.Sort) > 0; byRecency {
+			if recs, err = m.runsDisplayedAs(r.Context(), repo, q, displayed); err != nil {
+				return err
+			}
+			limit := min(q.Limit, runListScanPage) // the store's own clamp
+			if limit <= 0 {
+				limit = runListDefaultLimit
+			}
+			if len(recs) > limit {
+				recs, out.HasMore = recs[:limit], true
+			}
+		} else {
+			var page model.Page
+			if recs, page, err = repo.List(r.Context(), q); err != nil {
+				return err
+			}
+			out.HasMore, out.Cursor = page.HasMore, page.Cursor
+		}
+		// The caller's own pins (run_pin.go) mark their rows. The page's order is
+		// the published one; each client puts its pinned rows first (#2130).
+		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
 		if err != nil {
 			return err
 		}
+		// A list narrowed to one session (live_ref, claude_session_id) answers for
+		// that session alone, a cursor traversal already reaches every run once,
+		// in ID order, `limit` per page, and a list narrowed by state or
+		// provider_profile_ref answers the narrowed query alone: the pin append
+		// reads rows the store filter never saw, so it must not ride along on a
+		// narrowed answer. Any other list also carries the caller's pinned runs
+		// the page was too short to reach.
+		query := r.URL.Query()
+		if query.Get("live_ref") == "" && query.Get("claude_session_id") == "" && query.Get("pagination") != "cursor" &&
+			query.Get("state") == "" && query.Get("provider_profile_ref") == "" {
+			inPage := make(map[string]bool, len(recs))
+			for _, rec := range recs {
+				inPage[rec.String(colRunRef)] = true
+			}
+			extra, err := pinnedRunsOutside(r.Context(), sc, pins, inPage)
+			if err != nil {
+				return err
+			}
+			recs = append(recs, extra...)
+		}
 		for _, rec := range recs {
 			dto := m.toRunDTO(rec)
-			if stateFilter != "" && dto.State != stateFilter {
+			if displayed != "" && dto.State != displayed {
 				continue
 			}
+			decorateRunPin(&dto, rec, pins)
 			dto.WorkLeaseState = runWorkLeaseState(r.Context(), sc, rec)
 			out.Items = append(out.Items, dto)
 		}
-		out.HasMore = page.HasMore
-		out.Cursor = page.Cursor
 		return nil
 	})
 	if err != nil {
@@ -348,6 +482,11 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 			return err
 		}
 		dto = m.toRunDTO(rec)
+		pins, err := ownRunPinAts(r.Context(), sc, mc.Principal.Actor())
+		if err != nil {
+			return err
+		}
+		decorateRunPin(&dto, rec, pins)
 		dto.WorkLeaseState = runWorkLeaseState(r.Context(), sc, rec)
 		return nil
 	})
@@ -391,6 +530,9 @@ func (m *Module) handleRunEvents(w http.ResponseWriter, r *http.Request, mc api.
 }
 
 func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if m.refuseForeignSteering(w, r, mc) {
+		return
+	}
 	ref := chi.URLParam(r, "ref")
 	var body inputRequest
 	if !decodeJSONBody(w, r, &body) {
@@ -398,6 +540,10 @@ func (m *Module) handleRunInput(w http.ResponseWriter, r *http.Request, mc api.M
 	}
 	if body.WorkLeaseFence != nil && *body.WorkLeaseFence <= 0 {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+		return
+	}
+	if len(body.Attachments) > 0 {
+		m.handleRunInputWithImages(w, r, mc, ref, body)
 		return
 	}
 	// `text` is the input of a session driven by an OWNED provider protocol: the
@@ -525,6 +671,9 @@ func (m *Module) handleStopRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 }
 
 func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if m.refuseForeignSteering(w, r, mc) {
+		return
+	}
 	ref := chi.URLParam(r, "ref")
 	asks := m.callerQuestions(r.Context(), mc)
 	// A "full" session is resumed only by a run administrator, as it is started: refused
@@ -548,6 +697,12 @@ func (m *Module) handleMoveRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 	var body moveRunRequest
 	if !decodeJSONBody(w, r, &body) {
 		return
+	}
+	if target := strings.TrimSpace(body.ProviderProfileRef); validProfileRef(target) {
+		if err := m.refuseUnassignedTarget(r.Context(), mc, target); err != nil {
+			writeRunErr(w, err)
+			return
+		}
 	}
 	dto, err := m.moveRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), body.ProviderProfileRef,
 		mc.Principal.Actor(), mc.Principal.ActorKind())
@@ -636,6 +791,8 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 		writeRunErr(w, err)
 		return
 	}
+	lr, releaseView := m.holdRunOpen(mc.Tenant, ref)
+	defer func() { releaseView() }() // the run may be re-pinned after the replay
 	m.auditAttach(r, mc, ref)
 
 	rc := http.NewResponseController(w)
@@ -658,8 +815,8 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 			return
 		}
 	}
-	lr, live := m.rt.getLive(mc.Tenant, ref)
-	if !live {
+	lr, releaseView = m.repinLive(mc.Tenant, ref, lr, releaseView)
+	if lr == nil {
 		_ = writeSSE(rc, w, "notice", attachNotice{
 			Type:          "notice",
 			State:         m.deriveRunState(rec),
@@ -763,6 +920,34 @@ func (m *Module) auditRunRead(r *http.Request, mc api.ModuleContext, ref, action
 	if err := m.appendRunReadAudit(r, mc, ref, action); err != nil {
 		m.debugf("sessions: run read audit failed", "action", action, "err", err)
 	}
+}
+
+// handleRunInputWithImages is /input for a message with attachments: the sentence as
+// `text`, the images by the id the upload returned. It speaks to every run the same
+// way; the engine encodes it for the run's tool (a Claude user message with image
+// blocks, a Codex turn with image inputs) and refuses a tool that takes neither.
+func (m *Module) handleRunInputWithImages(w http.ResponseWriter, r *http.Request, mc api.ModuleContext, ref string, body inputRequest) {
+	switch {
+	case body.Line != "" || len(body.Message) > 0:
+		writeJSON(w, http.StatusBadRequest, errorBody("send attachments with text, not with a raw line or message"))
+		return
+	case body.WorkLeaseFence != nil:
+		writeJSON(w, http.StatusBadRequest, errorBody("attachments are not available on a session started by a work item"))
+		return
+	case !boundedText(body.Text, 0, maxWorkTextInputBytes):
+		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+		return
+	}
+	images, err := m.loadTurnImages(mc.Tenant, ref, body.Attachments)
+	if err != nil {
+		writeRunErr(w, err)
+		return
+	}
+	if err := m.sendImageInput(r.Context(), mc.Tenant, ref, body.Text, images); err != nil {
+		writeRuntimeControlErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
 }
 
 func (m *Module) appendRunReadAudit(r *http.Request, mc api.ModuleContext, ref, action string) error {

@@ -241,7 +241,7 @@ WHERE l.locktype = 'advisory'
 func TestOpenBootsOnASingleConnection(t *testing.T) {
 	dsns := isolatedPG(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 
 	st, err := Open(ctx, store.Config{

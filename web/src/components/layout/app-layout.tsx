@@ -39,6 +39,7 @@ import {
 import { AreasSheet } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
+import { SessionNotifications } from './session-notifications'
 
 function Splash() {
   return (
@@ -61,7 +62,7 @@ function Splash() {
  *
  * THE SHELL CONTRACT (redesign §3.2):
  *
- *   sidebar 240 px full | 56 px rail │ top bar 52 px: breadcrumb · page state · page actions · panels
+ *   sidebar 256 px full | 56 px rail│ top bar 52 px: breadcrumb · page state · page actions · panels
  *                  ├──────────────────────────────────────────────────────────────
  *                  │ work — the whole remaining sheet [+ the side panel a page declares]
  *
@@ -181,6 +182,7 @@ export function AppLayout() {
 
   return (
     <PersonalNavigationProvider engineFavorites={engineFavorites}>
+      <SessionNotifications />
       <SidebarSync />
       <SidePanelProvider>
         <AppFrame

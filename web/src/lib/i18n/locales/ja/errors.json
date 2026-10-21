@@ -4,6 +4,11 @@
     "description": "このページは存在しないか、移動されました。",
     "back": "概要に戻る"
   },
+  "businessOnly": {
+    "title": "Business の機能です",
+    "description": "このページは Olivares AI Business の機能です。このエディションには含まれていません。",
+    "link": "Business について"
+  },
   "forbidden": {
     "title": "権限がありません",
     "description": "これを表示する権限がありません。管理者にアクセスを依頼してください。",

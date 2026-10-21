@@ -18,6 +18,7 @@ import (
 func postgresServiceFileCmd() *cobra.Command {
 	var dsn string
 	cmd := &cobra.Command{
+		Annotations:  map[string]string{"changes_data": "write"},
 		Use:          "pg-service-file <file>",
 		Short:        "Write a private PostgreSQL service file for the internal client bridge",
 		Long:         "Olivares uses this internal PostgreSQL client bridge itself; people do not need to run it.",

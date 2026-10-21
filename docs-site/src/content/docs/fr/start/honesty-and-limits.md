@@ -7,7 +7,7 @@ description: >-
 ---
 
 :::note[Business]
-L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et le transfert DDIL entre sites isolés nécessitent aussi Business.
 :::
 
 Un control plane (plan de contrôle) pour l'IA est un produit de sécurité. S'il
@@ -50,7 +50,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables.** La signature, la provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés](/fr/how-to/verify-a-release/). La vérification n'est pas encore entièrement hors ligne : les vérifications sans clé
   ont besoin du matériel de racine de confiance Sigstore et l'étape SLSA n'a pas de mode hors ligne. Le produit livre un
-  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.2<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
+  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.3<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
 
 ## Open core — ce qui est ouvert vs commercial
 
@@ -63,9 +63,9 @@ feindre :
 
 - **Le SSO est ouvert pour un IdP unique.** Le login mono-IdP — **OIDC**
   (Authorization Code + PKCE) et **SAML 2.0** (réponses signées, anti-rejeu) —
-  tourne dans le binaire par défaut **sans** `-tags enterprise`, tout comme le
-  **SCIM** entrant. Faire tourner **plus d'un IdP actif** (par tenant / par domaine)
-  et l'**application du SSO** (exiger le SSO / bloquer le login par mot de passe)
+  tourne dans le binaire par défaut **sans** `-tags enterprise`. Faire tourner
+  **plus d'un IdP actif** (par tenant / par domaine), l'**application du SSO**
+  (exiger le SSO / bloquer le login par mot de passe) et le serveur **SCIM** entrant
   relèvent de Business (Identity & Scale) ; activer un second IdP actif renvoie
   `multi_idp_requires_enterprise` — une limite produit explicite, jamais un faux
   501.
@@ -79,8 +79,8 @@ feindre :
   droit à durée déterminée sur les modules, jamais une facturation par siège.
 - **Le reste de la plateforme est ouvert.** La boucle de gouvernance complète —
   inventaire, carte d'accès R/RW, politique RBAC/ABAC/Cedar, l'audit ledger
-  scellé, FinOps, conformité, egress SIEM, MCP, HA/distribué — tourne dans le
-  binaire ouvert sans aucune vérification de licence. Les modules `enterprise/`
+  scellé, FinOps, conformité, egress SIEM, MCP — tourne dans le
+  binaire ouvert sans aucune vérification de licence. Le routage vers le leader de la HA actif-passif et le collector de périphérie sont Business. Les modules `enterprise/`
   additifs sont du nouveau code qui n'a jamais été dans le produit ouvert, pas des
   fonctionnalités retirées de celui-ci ; quelle capacité relève de quelle édition
   n'est écrit qu'une fois, dans `docs/editions.md` du dépôt. La validation de licence dans le binaire ouvert est en
@@ -111,12 +111,12 @@ sur une page.
   racine de composition enregistre les observateurs de niveau hôte —
   `pgaudit`, `s3cloudtrail`, `ebpf`, `runtime` et la source d'introspection
   `mcp` — aux côtés des observateurs warehouse/lake
-  (snowflake/databricks/bigquery/mssql/oracle/mongo/redshift/gcs/
+  (snowflake/databricks/bigquery/mssql/mongo/redshift/gcs/
   azure-blob/iceberg/openlineage/delta-sharing), tous configurables via
   `OLIVARES_SOURCES_CONFIG` (le
   [quickstart](/fr/start/quickstart/) câble une vraie source `pgaudit` contre le
   binaire standard et le smoke test l'affirme). Les **sources de documents** de
-  connaissance (gdrive/confluence/notion/sharepoint/s3content) ne sont
+  connaissance (gdrive/confluence/notion/s3content) ne sont
   délibérément *pas* des sources runtime — elles sont chargées à la demande par
   les requêtes d'ingestion de connaissance. La
   [référence des connecteurs](/fr/reference/connectors/) marque chaque type.
@@ -126,7 +126,7 @@ sur une page.
   distant → core est construit et livré** : des collecteurs edge exécutent les
   connecteurs de source localement et poussent les observations vers un core
   central sur du TLS mutuel à certificat client vérifié, sans listener entrant
-  (le mode `collector`). Le **bus d'événements distribué** a été livré avec le
+  (le mode `collector`, une fonctionnalité Business). Le **bus d'événements distribué** a été livré avec le
   travail de scale-out : un hybride qui conserve le fan-out en
   processus pour la livraison locale (backpressure bloquante, pas de perte
   locale) et fait passer les événements entre nœuds via **NATS**, activé par
@@ -146,7 +146,7 @@ sur une page.
   (isolé par construction). Plusieurs autres sont **câblées à la demande** — le
   backend est construit et câblé, mais reste **deny-closed ou dégradé jusqu'à ce
   qu'un opérateur le provisionne** via la config d'environnement : le module VII
-  (deploy) `apply`/`retire` (un `503` jusqu'à ce qu'un exécuteur soit
+  (deploy) `apply`/`retire` (Business uniquement : `501` dans Community, puis un `503` jusqu'à ce qu'un exécuteur soit
   provisionné), l'orchestration module IV *fire* et la distribution voix module
   XVI (toutes deux deny-closed jusqu'à ce qu'un dispatcher soit configuré), le
   runtime de sandbox/red-team isolé par l'OS (synthétique / DÉGRADÉ jusqu'au
@@ -175,7 +175,7 @@ sur une page.
   frontier brokés ne le peuvent pas.
 - **Les routes de module sont un contrat séparé, en bêta.** Les endpoints de
   module (par exemple le graphe d'access map et la dérive) ne font pas partie du
-  contrat de cœur stable (128 chemins de cœur) ; ils sont publiés comme un document
+  contrat de cœur stable ({{core-paths}} chemins de cœur) ; ils sont publiés comme un document
   **bêta** séparé — la
   [référence des routes de module](/reference/api-beta/) (servie sur
   `/openapi.beta.json`). Bêta signifie que les formes peuvent changer avec

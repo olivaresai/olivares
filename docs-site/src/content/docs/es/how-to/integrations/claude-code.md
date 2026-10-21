@@ -119,6 +119,15 @@ Ese permiso es temporal; una fecha ausente, inválida o vencida resuelve a `enfo
 invariantes de plataforma —identidad, tenant, kill switch, firewall y errores fail-closed— siguen
 imponiéndose incluso durante la observación de reglas de negocio.
 
+Una sesión a la que se sigue denegando se entrega a una persona. Cuando una ejecución acumula 3
+denegaciones seguidas, o 20 en total, por política, firewall o reglas de plataforma, Olivares
+interrumpe su turno si alguien la está observando y la detiene si no hay nadie. La ejecución pasa
+entonces a `needs_person` con los últimos motivos, y se escribe en el ledger una entrada
+`sessions.run.denial_budget`. Que una persona rechace una revisión no cuenta, y una llamada a
+herramienta permitida reinicia el recuento de denegaciones seguidas. La entrada de una persona
+inicia un presupuesto nuevo. Cambie los límites por tenant con `"denial_budget": {"consecutive": 3,
+"total": 20}`; un campo omitido conserva su valor por defecto.
+
 <img class="light:sl-hidden" src="/console/guias-config-step-up-dark.png" alt="Se requiere reautenticación reforzada — AAL3 (hardware, resistente al phishing)">
 <img class="dark:sl-hidden" src="/console/guias-config-step-up-light.png" alt="Se requiere reautenticación reforzada — AAL3 (hardware, resistente al phishing)">
 
@@ -215,9 +224,9 @@ evento, el operador encuentra:
 | **Observability > Ingestion** (`/observability`) | Registros por fuente, tipos `edge`, `cost` y `finding`, señal, primer y último evento. | Son contadores globales del proceso desde el arranque; se reinician al reiniciar y no son una vista por tenant. |
 | **Sessions** (`/sessions`) | Sesión, estado, acción, modelo, tokens, coste, última actividad y postura `enforced` u `observed`. | La postura resume la evidencia de eventos; no se deduce del mero alta del conector. |
 | **Access map** (`/access-map`) | Aristas R/RW atribuidas desde herramientas, MCP y recursos observados. | Una arista observada describe actividad; no equivale a una autorización previa. |
-| **Cost & FinOps** (`/finops`) | Muestras de coste y tokens derivadas de la telemetría recibida. | Solo cubre lo exportado por la flota; no reconstruye llamadas que nunca emitieron OTLP. |
+| **Budgets** (`/stored-budgets`) | Consumo frente a cada límite de presupuesto guardado, calculado a partir de muestras de coste y tokens derivadas de la telemetría recibida. | Solo cubre lo exportado por la flota; no reconstruye llamadas que nunca emitieron OTLP. |
 | **Security** (`/security`) | Brechas de telemetría, postura de sandbox/MCP y otros hallazgos emitidos. | Un hallazgo ausente no convierte una superficie no observada en conforme. |
-| **Claude Policy** (`/claude-policy`) | Autoría, distribución, versiones y check-in de las superficies administradas de Claude Code. | La distribución y la verificación de drift son hechos distintos y se muestran por separado. |
+| **Claude Policy** (`/claude-policy`) | Validación y vista previa de las superficies administradas de Claude Code; Business añade publicación, distribución, versiones y check-in. | La distribución y la verificación de drift son hechos distintos y se muestran por separado. |
 
 <img class="light:sl-hidden" src="/console/sessions-dark.png" alt="Operación de agentes en vivo: qué hace cada sesión ahora mismo, sus tokens, coste y cadencia, actualizado por un flujo en directo.">
 <img class="dark:sl-hidden" src="/console/sessions-light.png" alt="Operación de agentes en vivo: qué hace cada sesión ahora mismo, sus tokens, coste y cadencia, actualizado por un flujo en directo.">

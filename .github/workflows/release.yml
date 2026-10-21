@@ -126,14 +126,13 @@ jobs:
         run: bash scripts/release-preflight.sh
 
   release-environment-policy:
-    runs-on: ubuntu-latest
+    # Read-only (contents, actions): our pool where vars.CI_RUNNER is set, hosted fallback otherwise.
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     permissions:
       contents: read
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: environment admission policy — offline controls
-        run: bash scripts/test-release-environment-tag-policy.sh
       - name: verify MAJOR.MINOR tag admission before protected signing
         if: github.repository == 'olivaresai/olivares'
         env:
@@ -217,8 +216,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      # Check generated OpenAPI types against tagged sources before the build.
-      # This does not run proto:check; protobuf consistency needs its own gate.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           # Standalone pnpm does not need Node at runtime; installing it still needs
@@ -272,93 +269,19 @@ jobs:
           dirname "$nfpm_bin" >> "$GITHUB_PATH"
           echo "OLIVARES_REAL_DOCKER=$(command -v docker)" >> "$GITHUB_ENV"
           echo "$GITHUB_WORKSPACE/scripts/artifact-scan-bin" >> "$GITHUB_PATH"
-      - name: built-artifact scanner canaries (no credentials)
-        run: |
-          python3 scripts/test-artifact-secrets.py
-          python3 scripts/test-native-package-publication.py
-      - name: preflight — OpenAPI snapshot + web client codegen freshness
-        timeout-minutes: 15
-        run: |
-          pnpm --dir web install --frozen-lockfile
-          task openapi:check
-      # 0.1 only (2026-10-10: 0.1 ships when it compiles and the README Compose starts the
-      # engine). A failure of this gate or of the race-full gate below is logged and does not stop
-      # 0.1; every later tag keeps both gates blocking.
+      # CI proves behavior on the SHA; release checks release-specific facts.
+      # Offline batteries run in pr-ci; these gates consume qualification evidence.
       - name: preflight — the release container first hour passed on this commit or an identical tree
-        continue-on-error: ${{ github.ref_name == '0.1' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/check-first-hour-evidence.sh
-
-      # Require a successful race-full run whose head equals the tagged commit.
-      # An ancestor's result cannot qualify this release.
+        run: bash scripts/require-green-run.sh release-first-hour.yml "$GITHUB_SHA" --tree-equal-ok
       - name: preflight — a green race-full ran on the EXACT tagged SHA
-        continue-on-error: ${{ github.ref_name == '0.1' }}
         timeout-minutes: 10
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          match="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" \
-                  --jq "[.workflow_runs[] | select(.head_sha == \"${GITHUB_SHA}\")] | length")"
-          # A count, or a refusal. `[ "" -eq 0 ]` is an error that an `if` reads as FALSE, so a
-          # non-numeric answer skipped both branches below and printed the success line.
-          if ! [[ "${match}" =~ ^[0-9]+$ ]]; then
-            echo "::error::race-full run history answered '${match}', not a count; could not look is not evidence."
-            exit 1
-          fi
-          equal="${match}"
-          # The ONE admitted non-equality: a green race-full on a commit whose diff to the tagged
-          # SHA touches only .github/workflows/ (the race sweep tests Go code; a workflow-only
-          # change cannot alter its result). Named loudly, with the SHA and the file list, so it
-          # is evidence and not a silent pass. Anything outside .github/workflows/ keeps the
-          # equality rule. (2026-09-17: v26.9.0 re-tagged after this file's runs-on change;
-          # ported from olivaresai/olivares 7263d082e8 + 37da5b582a.)
-          #
-          # Two defects of that first form, both measured on the real commits (2026-09-17, a
-          # local clone of 1d84bd1788 with the v26.8.0 green f443e0844d as the only candidate):
-          # · `printf | grep -qvE` under pipefail ADMITTED a 2,986-file diff as "workflow-only".
-          #   grep -q exits at the first non-workflow name; above the pipe buffer printf then
-          #   dies of SIGPIPE, the pipeline answers 141, and `!` reads 141 as "no other file".
-          #   git filters the paths here instead: no pipe, no early reader.
-          # · `git fetch --depth=1` into this fetch-depth: 0 checkout made it SHALLOW (10 commits
-          #   visible before, 5 after). Run 35237680006 shows the effect: goreleaser logged
-          #   "running against a shallow clone", found no tag before v26.9.0 although v26.8.0 is
-          #   an ancestor, and wrote previous_tag "" into dist/metadata.json. The full checkout
-          #   already holds every branch and tag; only a missing object is fetched, never shallow.
-          if [ "${match}" -eq 0 ]; then
-            for green in $(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=100" --jq '.workflow_runs[].head_sha'); do
-              [[ "${green}" =~ ^[0-9a-f]{40}$ ]] || continue
-              if ! git cat-file -e "${green}^{commit}" 2>/dev/null; then
-                git fetch -q origin "${green}" 2>/dev/null || continue
-              fi
-              changed="$(git diff --name-only "${green}" HEAD)"
-              [ -n "${changed}" ] || { echo "race-full evidence: green run on ${green}; tree identical to ${GITHUB_SHA}"; match=1; break; }
-              # ROOT-ANCHORED (':/' + exclude,top), not `.`: a pathspec relative to the working
-              # directory would answer "nothing outside the workflows" for any diff whose files
-              # all sit outside that directory, which is an admission, not a filter.
-              outside="$(git diff --name-only "${green}" HEAD -- ':/' ':(exclude,top).github/workflows/')"
-              if [ -z "${outside}" ]; then
-                echo "race-full evidence: green run on ${green}; diff to ${GITHUB_SHA} is workflow-only:"; printf '%s\n' "${changed}" | sed 's/^/  /'
-                match=1; break
-              fi
-            done
-          fi
-          if [ "${match}" -eq 0 ]; then
-            newest="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/race-full.yml/runs?status=success&per_page=1" \
-                    --jq '.workflow_runs[0].head_sha // "none"')"
-            echo "::error::no successful race-full run exists on the tagged SHA ${GITHUB_SHA} (newest green: ${newest}). An ancestor green does not cover the diff after it — dispatch race-full on this exact commit, wait for green, and re-tag."
-            exit 1
-          fi
-          # GoReleaser reads the previous tag from this history (checkout
-          # fetch-depth: 0). A shallow clone does not fail the build; it publishes wrong metadata.
-          if [ "$(git rev-parse --is-shallow-repository)" != "false" ]; then
-            echo "::error::the release checkout is shallow; GoReleaser would compute the previous tag from a truncated history."
-            exit 1
-          fi
-          if [ "${equal}" -gt 0 ]; then
-            echo "race-full evidence exists for the exact tagged SHA ${GITHUB_SHA}"
-          fi
+        run: bash scripts/require-green-run.sh race-full.yml "$GITHUB_SHA"
+      - name: full release history for GoReleaser metadata
+        run: test "$(git rev-parse --is-shallow-repository)" = false
       # syft on PATH for goreleaser's `sboms`; cosign for `signs`/`docker_signs`.
       - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -522,7 +445,7 @@ jobs:
 
       - name: goreleaser release (build + SBOM + cosign-sign, into a DRAFT)
         id: goreleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           # Pin the exact GoReleaser version for reproducible release behavior.
           version: "v2.17.0"

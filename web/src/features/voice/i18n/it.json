@@ -1,0 +1,152 @@
+{
+  "title": "Voce e realtime",
+  "description": "Sessioni vocali e realtime governate in tutto il parco. La console mostra solo riferimenti e aggregati, mai audio, testo di trascrizione, prompt o dati personali.",
+  "tabs": {
+    "sessions": "Sessioni",
+    "policies": "Policy",
+    "ledger": "Decisioni"
+  },
+  "refresh": "Aggiorna",
+  "stats": {
+    "live": "Sessioni live",
+    "liveCaption": "su {{total}} in vista",
+    "avgLatency": "Latenza media",
+    "avgLatencyCaption": "media delle medie per sessione",
+    "governed": "Quota governata",
+    "governedCaption": "{{governed}} su {{total}} erano soggette a policy"
+  },
+  "sessions": {
+    "title": "Sessioni",
+    "description": "Ogni sessione così come la riporta il motore: lo stato è derivato al momento della lettura. La trascrizione è mostrata solo come impronta; dietro non c'è né audio né testo.",
+    "empty": "Nessuna sessione vocale",
+    "emptyHint": "Le sessioni compaiono quando un'apertura governata viene inviata a fronte di una policy vocale.",
+    "governed": "Governata",
+    "ungoverned": "Non governata",
+    "transcriptLabel": "trascrizione",
+    "turnsBreakdown": "{{user}}u / {{agent}}a",
+    "latencyAvg": "media {{value}}",
+    "latencyMax": "max {{value}}",
+    "columns": {
+      "state": "Stato",
+      "agent": "Agente",
+      "model": "Modello / provider",
+      "turns": "Turni",
+      "duration": "Durata",
+      "latency": "Latenza",
+      "governed": "Governata",
+      "transcript": "Trascrizione",
+      "lastEvent": "Ultimo evento"
+    }
+  },
+  "latency": {
+    "title": "Latenza per sessione",
+    "description": "Latenza media di risposta per sessione, in ordine di classifica. La tabella riporta anche il massimo; senza campioni per turno non viene mostrato alcun p50/p95.",
+    "summary": "Latenza media di risposta per {{count}} sessioni, in classifica. La più lenta è {{session}} con {{latency}}.",
+    "summaryEmpty": "Nessuna sessione da classificare per latenza.",
+    "colSession": "Sessione",
+    "colLatency": "Latenza media"
+  },
+  "honesty": {
+    "noContent": "Solo riferimenti e aggregati: qui non vengono esposti audio, testo di trascrizione, prompt o dati personali.",
+    "findingsNote": "Violazioni delle policy, peggioramento della latenza e aperture non governate emergono dal piano dei rilevamenti di sicurezza, non da queste route."
+  },
+  "policies": {
+    "title": "Policy vocali",
+    "description": "Default-DENY: una policy è ciò che CONSENTE di aprire una sessione. Senza una policy corrispondente, l'apertura viene negata.",
+    "empty": "Nessuna policy vocale",
+    "emptyHint": "Definisci una policy per consentire l'apertura di sessioni vocali per un agente: con il default-deny non si apre nulla finché una policy non corrisponde.",
+    "all": "Tutti",
+    "minutes": "{{value}} min",
+    "new": "Nuova policy",
+    "edit": "Modifica",
+    "columns": {
+      "agent": "Agente",
+      "model": "Modello consentito",
+      "provider": "Provider consentito",
+      "maxMinutes": "Sessione max",
+      "maxLatency": "Latenza max",
+      "setBy": "Impostata da",
+      "updated": "Aggiornata"
+    },
+    "dialog": {
+      "title": "Policy vocale",
+      "description": "Questa policy CONSENTE l'apertura di sessioni per l'agente corrispondente (default-deny). Usa '*' per abbinare tutti gli agenti, modelli o provider.",
+      "agent": "Agente",
+      "agentHint": "Un riferimento di agente, oppure '*' per ogni agente.",
+      "model": "Modello consentito",
+      "modelHint": "Un riferimento di modello, oppure '*' per qualsiasi modello.",
+      "provider": "Provider consentito",
+      "providerHint": "Un riferimento di provider, oppure '*' per qualsiasi provider.",
+      "maxMinutes": "Minuti massimi di sessione",
+      "maxLatency": "Latenza massima (ms)",
+      "save": "Salva policy",
+      "saved": "Policy vocale salvata"
+    }
+  },
+  "empty": {
+    "latencyByCategoryChart": {
+      "title": "Nessuna latenza di sessione da classificare",
+      "description": "La latenza media di risposta si può classificare quando un'apertura governata o la telemetria realtime crea un record di sessione vocale."
+    },
+    "policies": {
+      "title": "Nessuna policy vocale definita",
+      "description": "Una policy consente le aperture per agente, modello e provider corrispondenti; senza, ogni apertura di sessione vocale viene negata. Impostarla richiede il livello admin."
+    },
+    "sessions": {
+      "title": "Nessuna sessione vocale osservata",
+      "description": "Le sessioni compaiono dopo che un'apertura governata viene registrata o che l'observer realtime configurato pubblica la telemetria di sessione."
+    }
+  },
+  "surface": {
+    "chooseSession": "Scegli una sessione per vedere la sua superficie live.",
+    "loading": "Caricamento…",
+    "decisionsError": "Impossibile leggere le decisioni.",
+    "noDecisions": "Nessuna decisione registrata per questa sessione.",
+    "noReason": "nessun motivo registrato",
+    "frames": "{{count}} aggiornamento/i live",
+    "open": "Apri sessione (governata)",
+    "stream": {
+      "connecting": "connessione in corso",
+      "open": "live",
+      "closed": "non connesso",
+      "error": "flusso non riuscito"
+    },
+    "outcome": {
+      "opened": "Aperta.",
+      "approval": "Approvazione richiesta: invia di nuovo con questo riferimento di approvazione:",
+      "denied": "Negata dalla policy: nessuna policy vocale lo consente (agente, modello, provider). È una decisione di default-deny, non un errore.",
+      "noGate": "In questo deployment non è configurato alcun gate di approvazione, quindi l'apertura resta negata. È una lacuna del parco, non un rifiuto della policy.",
+      "unavailable": "Il gate di approvazione non ha risposto, quindi non è stato deciso nulla."
+    }
+  },
+  "ledger": {
+    "title": "Registro delle decisioni di apertura",
+    "description": "Ogni decisione di aprire una sessione vocale in tutto il parco, in sola aggiunta e dalla più recente, comprese quelle NEGATE che quindi non sono mai diventate una sessione.",
+    "caveat": "Un'apertura negata non crea una riga di sessione propria, quindi questa è la prima vista dedicata che la mostra per intero con il solo permesso di leggere le sessioni vocali. Altri percorsi la mostrano in parte o richiedono un altro permesso: l'API playground (admin del tenant), l'esplora audit (l'azione, senza il motivo) e i rilevamenti di sicurezza (solo alcuni percorsi).",
+    "empty": "Nessuna decisione di apertura",
+    "emptyHint": "Qui sono registrate le decisioni che il motore è riuscito a rendere persistenti. La scrittura dell'evidenza è best-effort per progetto: un rifiuto vale anche se la sua riga di registro va persa, quindi un registro vuoto non prova che nulla sia stato rifiutato.",
+    "truncated": "Sono mostrate le {{count}} decisioni più recenti e il motore ne segnala altre: questo elenco è TRONCATO. Leggilo come un campione, non come l'intero registro.",
+    "columns": {
+      "when": "Quando",
+      "outcome": "Esito",
+      "session": "Sessione",
+      "agent": "Agente",
+      "actor": "Attore",
+      "reason": "Motivo del motore"
+    },
+    "opStatus": {
+      "requested": "Approvazione richiesta",
+      "blocked": "Bloccata",
+      "dispatched": "Inviata",
+      "declared_not_opened": "Dichiarata, non aperta",
+      "failed": "Non riuscita",
+      "budget_blocked": "Bloccata: budget",
+      "budget_throttled": "Apertura negata: limitazione del budget"
+    },
+    "op": {
+      "open_request": "Richiesta di apertura",
+      "open": "Apri",
+      "close": "Chiudi"
+    }
+  }
+}

@@ -204,20 +204,6 @@ func (e *consentEstate) doWith(method, path, token string, tenant model.TenantID
 	return out
 }
 
-// scim issues one SCIM request with the SCIM media type.
-func (e *consentEstate) scim(method, path, token, body string) consentResp {
-	e.t.Helper()
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/scim+json")
-	req.RemoteAddr = "10.0.0.2:4321"
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	e.h.ServeHTTP(rec, req)
-	out := consentResp{code: rec.Code, raw: rec.Body.String()}
-	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
-	return out
-}
-
 func (e *consentEstate) login(email, password string) string {
 	e.t.Helper()
 	r := e.do("POST", "/v1/auth/login", "", "", map[string]any{"email": email, "password": password})
@@ -262,24 +248,23 @@ func (e *consentEstate) createUser(email string) model.ID {
 // consentMemberPassword is every consent-test member's password.
 const consentMemberPassword = "consent-member-pass"
 
-// scimToken issues a SCIM connection token bound to tenant.
-func (e *consentEstate) scimToken(tenant model.TenantID) string {
+// directoryActor is the principal of a fresh administrator token bound to tenant: the
+// actor of the directory writes below.
+func (e *consentEstate) directoryActor(tenant model.TenantID) auth.Principal {
 	e.t.Helper()
 	tok, _, err := e.eng.authr.IssueToken(context.Background(), e.super, auth.TokenSpec{
-		Name: "scim", BoundTenant: tenant, Role: auth.RoleAdmin,
+		Name: "directory", BoundTenant: tenant, Role: auth.RoleAdmin,
 	})
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	return tok
+	return principalOfToken(e.t, e.eng.authr, tok)
 }
 
-// scimDelete removes a member through the tenant's SCIM connection.
-func (e *consentEstate) scimDelete(tenant model.TenantID, user model.ID) {
+// deprovision removes a member from tenant through the account engine: the leaver path.
+func (e *consentEstate) deprovision(tenant model.TenantID, user model.ID) {
 	e.t.Helper()
-	if r := e.scim("DELETE", "/v1/scim/v2/Users/"+user.String(), e.scimToken(tenant), ""); r.code != http.StatusNoContent {
-		e.t.Fatalf("SCIM DELETE = %d %s", r.code, r.raw)
-	}
+	deprovisionMember(e.t, e.eng.authr, e.directoryActor(tenant), tenant, user)
 }
 
 // seedMembership writes a membership through the store; it models one that

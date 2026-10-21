@@ -48,8 +48,9 @@ var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
 
 func newAgentToolCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "tool",
-		Short: "Install and inventory official provider CLIs (Claude Code, Codex, Grok Build)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tool",
+		Short:       "Install and inventory official provider CLIs (Claude Code, Codex, Grok Build)",
 		Long: "tool installs an official provider command-line tool into a versioned directory that\n" +
 			"Olivares owns and records a typed receipt. It runs entirely on this host: no control\n" +
 			"plane, no server, no account. This release installs Claude Code (plan/v1, publisher-signed\n" +
@@ -218,8 +219,9 @@ func newAgentToolPlanCmd() *cobra.Command {
 	var target agentToolTarget
 	var out string
 	cmd := &cobra.Command{
-		Use:   "plan",
-		Short: "Resolve and verify what install would fetch and where it would place it, without changing anything",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "plan",
+		Short:       "Resolve and verify what install would fetch and where it would place it, without changing anything",
 		Long: "plan fetches the vendor's signed release manifest, verifies its signature under the pinned\n" +
 			"key, and prints the concrete selection: version, platform, artifact URL, exact size and\n" +
 			"SHA-256, signing key, destination and the action install would take (install, noop for a\n" +
@@ -282,8 +284,9 @@ func newAgentToolInstallCmd() *cobra.Command {
 	var planFile string
 	var yes bool
 	cmd := &cobra.Command{
-		Use:   "install",
-		Short: "Verify, download, probe and place one signed release of a provider CLI",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "install",
+		Short:       "Verify, download, probe and place one signed release of a provider CLI",
 		Long: "install resolves the selection (as plan does), shows it, and after your confirmation or\n" +
 			"--yes performs it: manifest signature verified under the pinned key BEFORE the artifact is\n" +
 			"requested; artifact downloaded into a private (0700) staging directory with its exact\n" +
@@ -402,9 +405,10 @@ func confirmToolInstall(cmd *cobra.Command, assumeYes bool, plan *toolinstall.Pl
 func newAgentToolListCmd() *cobra.Command {
 	var root string
 	cmd := &cobra.Command{
-		Use:     "list",
-		Aliases: []string{"ls"},
-		Short:   "List installed provider CLI releases under the tools root and re-check their bytes",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "list",
+		Aliases:     []string{"ls"},
+		Short:       "List installed provider CLI releases under the tools root and re-check their bytes",
 		Long: "list reads every release directory under the tools root, loads its receipt strictly,\n" +
 			"re-hashes the executable against it and re-verifies the retained signed manifest under the\n" +
 			"pinned key, exactly as install's no-op path does. installed means all three agree now;\n" +
@@ -436,8 +440,9 @@ func newAgentToolDetectCmd() *cobra.Command {
 	var probe bool
 	var probePaths []string
 	cmd := &cobra.Command{
-		Use:   "detect",
-		Short: "Report provider CLI executables on this host: managed releases, vendor default paths and PATH",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "detect",
+		Short:       "Report provider CLI executables on this host: managed releases, vendor default paths and PATH",
 		Long: "detect looks for the driver's executable in the tools root (releases with receipts), the\n" +
 			"vendor's default locations under your own home (for Claude: ~/.local/bin/claude and\n" +
 			"~/.local/share/claude/versions/*), /usr/bin and /usr/local/bin, and the directories on\n" +

@@ -2,23 +2,23 @@
   "doors": {
     "catalog": {
       "title": "Comunicaciones",
-      "description": "Canales del workspace seleccionado que este principal puede leer ahora, los avisos directos enviados por ellos y la bandeja personal. Cada lectura y cada acto los decide el motor bajo su propio permiso."
+      "description": "Los canales del workspace seleccionado que puedes leer ahora, los avisos directos enviados por ellos y tu bandeja. El motor decide cada lectura y cada acción."
     },
     "inbox": {
       "title": "Bandeja de comunicaciones",
-      "description": "La bandeja personal exacta de este principal en el workspace seleccionado: entregas dirigidas a él, abiertas en fresco y acusadas solo mediante un acto explícito."
+      "description": "Mensajes dirigidos a ti en el workspace seleccionado: ábrelos y acusa recibo de cada uno."
     },
     "new": {
       "title": "Nuevo canal",
-      "description": "Crea un canal con concesiones iniciales explícitas. Nada se concede por implicación, y el recibo del acto no es una lista durable de quién podrá leerlo después."
+      "description": "Crea un canal y elige desde el principio quién puede usarlo. Nadie obtiene acceso de forma implícita, y el recibo no es una lista duradera de quién podrá leerlo después."
     },
     "administration": {
       "title": "Administración de canales",
-      "description": "Los canales que este principal puede administrar en el workspace seleccionado: configuración e historial de concesiones, con cada acto confirmado bajo el ETag actual del canal. Administrar exige el permiso channel:admin y un bit local de admin vigente; no requiere, ni concede, el derecho a leer el contenido del canal."
+      "description": "Los canales que puedes administrar en el workspace seleccionado: configuración e historial de concesiones. Cada cambio se aplica solo a la versión que leíste. Administrar un canal no exige ni concede el derecho a leer su contenido."
     },
     "handoffs": {
       "title": "Traspasos",
-      "description": "Ofertas de responsabilidad de trabajo dirigidas a este principal en el workspace seleccionado. La lista no lleva el contenido de la oferta; abrir una lee su contexto protegido en fresco, y aceptar o rechazar es un acto explícito que decide el motor."
+      "description": "Ofertas de trabajo dirigidas a ti en el workspace seleccionado. La lista no muestra el contenido de la oferta; al abrir una se lee su contexto, y el motor decide cada aceptación o rechazo."
     }
   },
   "tabs": {
@@ -104,7 +104,7 @@
       "updated": "Actualizado"
     },
     "openById": "Abrir un canal por ID",
-    "openByIdHint": "Un canal abierto por ID se lee en fresco con su ETag; esa lectura no informa de tus bits locales."
+    "openByIdHint": "Un canal abierto por ID se lee en fresco; esa lectura no muestra tu propio acceso."
   },
   "access": {
     "label": "Tu acceso local",
@@ -143,7 +143,7 @@
   },
   "channel": {
     "title": "Canal",
-    "description": "Leído en fresco del motor con su ETag. Esta lectura no trae concesiones ni bits locales.",
+    "description": "Leído en fresco del motor. Esta lectura no trae concesiones ni tu propio acceso.",
     "fields": {
       "id": "ID del canal",
       "slug": "Slug",
@@ -164,7 +164,7 @@
       "routeRevision": "Revisión de rutas",
       "subscriptionRevision": "Revisión de suscripciones",
       "version": "Versión",
-      "etag": "ETag",
+      "etag": "Versión",
       "created": "Creado",
       "updated": "Actualizado",
       "workspace": "Workspace",
@@ -222,7 +222,7 @@
       "grants": "Concesiones registradas",
       "noGrants": "No se devolvió ninguna fila de concesión.",
       "auditSeq": "Secuencia de auditoría",
-      "etag": "ETag"
+      "etag": "Versión"
     },
     "unknown": {
       "title": "Resultado desconocido",
@@ -360,9 +360,9 @@
     },
     "ack": {
       "title": "Acusar recepción de esta entrega",
-      "body": "El acto envía If-Match {{etag}} —la versión que leíste— y una clave propia. Si la entrega cambió mientras tanto, el motor responde 412 y releerás antes de confirmar de nuevo; la consola nunca sustituye la versión.",
+      "body": "Esto envía la versión que leíste ({{etag}}) y una clave propia. Si la entrega cambió mientras tanto, el motor lo rechaza y vuelves a leerla antes de confirmar; la consola nunca sustituye la versión.",
       "key": "Clave de idempotencia",
-      "ifMatch": "If-Match",
+      "ifMatch": "Versión leída",
       "appliedTitle": "Acusada",
       "appliedBody": "El motor registró el acuse.",
       "replayedTitle": "Ya acusada",
@@ -371,7 +371,7 @@
       "conflictTitle": "La entrega cambió desde que la leíste",
       "conflictBody": "El motor rechazó el acuse: la versión que leíste ya no es la actual, o la entrega ya está acusada. Vuelve a leer la entrega y confirma otra vez solo si sigue aplicando. No se reenvió nada.",
       "ambiguousTitle": "Resultado desconocido",
-      "ambiguousBody": "El transporte falló antes de que llegara una respuesta. Reintentar reenvía la misma clave y el mismo If-Match; el motor lo aplica una sola vez, lo repite o lo rechaza con la versión actual.",
+      "ambiguousBody": "La conexión falló antes de que llegara una respuesta. Reintentar reenvía la misma clave y la misma versión; el motor lo aplica una sola vez, lo repite o lo rechaza con la versión actual.",
       "refusedTitle": "Acuse rechazado",
       "noPermission": "No tienes el permiso de escritura de entregas, así que no se ofrece acusar."
     },
@@ -427,7 +427,7 @@
     "eventId": "ID del evento",
     "auditSeq": "Secuencia de auditoría",
     "version": "Versión",
-    "etag": "ETag",
+    "etag": "Versión",
     "state": "Estado",
     "verdict": "Veredicto",
     "code": "Código",
@@ -484,7 +484,7 @@
       "state": "Estado",
       "sensitivity": "Sensibilidad",
       "protection": "Protección",
-      "etag": "ETag",
+      "etag": "Versión",
       "updated": "Actualizado"
     },
     "openById": "Administrar un canal por ID",
@@ -505,7 +505,7 @@
   },
   "admin": {
     "title": "Administración del canal",
-    "description": "Leído en fresco por el historial de concesiones con el ETag de precondición del canal; no se abre contenido.",
+    "description": "Leído en fresco por el historial de concesiones con la versión actual del canal; no se abre contenido.",
     "observedAt": "Observado en",
     "tabs": {
       "config": "Configuración",
@@ -552,12 +552,12 @@
     },
     "confirm": {
       "title": "Confirmar el cambio de configuración",
-      "body": "Solo se envían los campos de abajo, con If-Match {{etag}}, el ETag de la lectura en pantalla. Si el canal cambió entretanto, el motor lo rechaza y usted relee antes de confirmar de nuevo; la consola nunca sustituye el ETag.",
+      "body": "Solo se envían los campos de abajo, con la versión en pantalla ({{etag}}). Si el canal cambió entretanto, el motor lo rechaza y vuelves a leerlo antes de confirmar; la consola nunca sustituye la versión.",
       "archiving": "Esto archiva el canal. Archivar es irreversible: no volverá a activo.",
-      "ifMatch": "If-Match"
+      "ifMatch": "Versión leída"
     },
     "appliedTitle": "Configuración aplicada",
-    "appliedBody": "El motor confirmó el cambio. La hoja relee el canal; el siguiente acto usa el ETag de esa lectura.",
+    "appliedBody": "El motor guardó el cambio. La hoja vuelve a leer el canal; el siguiente cambio usa esa versión.",
     "conflictTitle": "El canal cambió desde que lo leyó",
     "conflictBody": "El motor rechazó el cambio: su precondición ya no coincide con el canal actual. No se reenvió nada. Relea, compare sus ediciones con los valores actuales y confirme de nuevo solo si siguen aplicando.",
     "unknownTitle": "Resultado pendiente de comprobar",
@@ -614,7 +614,7 @@
     },
     "confirm": {
       "title": "Confirmar la concesión",
-      "body": "Esto envía exactamente la generación de abajo con el If-Match de la lectura en pantalla. El motor la rechaza si el sujeto ya tiene una generación activa o si el canal cambió entretanto; entonces relea y confirme de nuevo. Nada se reintenta por sí solo.",
+      "body": "Esto envía exactamente la generación de abajo con la versión en pantalla. El motor la rechaza si el sujeto ya tiene una generación activa o si el canal cambió entretanto; entonces vuelves a leer y confirmas de nuevo. Nada se reintenta por sí solo.",
       "successorOf": "Sucesora de la generación revocada {{id}}. Es un acto aparte: la revocación de arriba ya se confirmó."
     },
     "appliedTitle": "Concesión registrada",
@@ -629,7 +629,7 @@
     "refusedTitle": "Concesión rechazada",
     "revoke": {
       "title": "Revocar exactamente esta generación",
-      "body": "Esto revoca la generación mostrada, por su ID, con el If-Match de la lectura en pantalla. Su historial se conserva. Una sucesora para el sujeto es un acto aparte tras releer.",
+      "body": "Esto revoca la generación mostrada, por su ID, con la versión en pantalla. Su historial se conserva. Una sucesora para el sujeto es un acto aparte tras releer.",
       "bodyThenGrant": "Primer acto de dos: revocar la generación mostrada. Tras leer la respuesta del motor se le ofrecerá una confirmación aparte para una generación sucesora; nada se encadena automáticamente.",
       "ownAdminWarning": "Esta generación es una concesión de admin para su propia cuenta. Puede ser lo que sostiene su acceso administrativo a este canal; la consola no calcula toda su autoridad, y el motor decide su siguiente petición.",
       "appliedTitle": "Generación revocada",
@@ -680,12 +680,12 @@
     "prepareFailedBody": "No se avanzó nada. Refresque la bandeja y prepare de nuevo desde una página actual.",
     "confirm": {
       "title": "Confirmar el avance",
-      "body": "Esto envía el objetivo preparado y la entrega de arriba con el If-Match de la versión de cursor leída, y una clave propia. Solo confirmar avanza algo. Un reintento tras un resultado ambiguo reenvía exactamente esto."
+      "body": "Esto envía el objetivo preparado y la entrega de arriba con la versión de cursor leída, y una clave propia. Solo confirmar avanza algo. Un reintento tras un resultado ambiguo reenvía exactamente esto."
     },
     "conflictTitle": "El cursor cambió desde que se preparó",
     "conflictBody": "El motor rechazó el avance: la versión del cursor o el objetivo ya no son actuales. No se reenvió nada. Refresque la bandeja y prepare de nuevo desde una página actual.",
     "ambiguousTitle": "Resultado desconocido",
-    "ambiguousBody": "El transporte falló antes de que llegara respuesta. Reintentar reenvía el mismo objetivo, el mismo If-Match y la misma clave; el motor lo aplica una vez, lo reproduce o lo rechaza con su versión actual. Dejarlo indeterminado mantiene desconocido el resultado anterior.",
+    "ambiguousBody": "La conexión falló antes de que llegara respuesta. Reintentar reenvía el mismo objetivo, la misma versión y la misma clave; el motor lo aplica una vez, lo reproduce o lo rechaza con su versión actual. Dejarlo indeterminado mantiene desconocido el resultado anterior.",
     "refusedTitle": "Avance rechazado",
     "refusedBody": "El motor no avanzó el cursor. Refresque la bandeja antes de preparar de nuevo.",
     "result": {
@@ -771,13 +771,13 @@
       "currentOwner": "Titular actual",
       "ownerEpoch": "Época del titular",
       "itemWorkspace": "Workspace del ítem",
-      "precondition": "Precondición (If-Match)",
+      "precondition": "Versión leída",
       "itemMismatch": "La lectura devolvió un ítem de trabajo distinto del solicitado. No se puede ofrecer nada bajo esta lectura.",
       "workspaceMismatchTitle": "Selecciona el workspace del ítem",
       "workspaceMismatchBody": "Este ítem pertenece al workspace {{itemWorkspace}} y el seleccionado es {{selected}}. Selecciona el workspace del ítem en el conmutador para ofrecerlo; la consola nunca elige uno por ti.",
       "workspaceNone": "No hay ningún workspace explícito seleccionado. Una oferta está acotada a un workspace, así que selecciona el del ítem en el conmutador; la consola nunca elige uno por ti.",
-      "noPrecondition": "La lectura del ítem no traía ETag, así que no hay precondición que enviar. Vuelve a leer el ítem: aquí una versión no se convierte en un validador.",
-      "noPermission": "Ofrecer un traspaso exige sessions:message-send:write. El motor comprueba además la titularidad del ítem y la autoridad sobre el canal.",
+      "noPrecondition": "El ítem se leyó sin versión, así que no hay nada contra lo que comprobar la oferta. Vuelve a leer el ítem.",
+      "noPermission": "Tu rol no puede ofrecer un traspaso. El motor comprueba además quién es titular del ítem y quién puede usar el canal.",
       "channel": "Canal",
       "channelHint": "El ID canónico del canal por el que se publica el portador. Siempre se puede escribir a mano.",
       "channelPick": "Elegir un canal",
@@ -876,8 +876,8 @@
       "deadline": "Plazo de respuesta",
       "created": "Creado",
       "observed": "Observado",
-      "precondition": "ETag del traspaso (If-Match)",
-      "preconditionHint": "Una respuesta se ata al ETag del traspaso de arriba, nunca a la versión de la entrega portadora que aparece al lado.",
+      "precondition": "Versión del traspaso",
+      "preconditionHint": "Una respuesta se aplica a la versión del traspaso de arriba, nunca a la versión de la entrega que aparece al lado.",
       "carrierDelivery": "Entrega portadora",
       "carrierVersion": "Versión de la entrega portadora",
       "channel": "Canal",
@@ -888,7 +888,7 @@
         "terminal": "Esta oferta ya está resuelta"
       },
       "notCurrentBody": "El motor informa de que no se puede responder ahora, así que no se ofrece ningún control de respuesta. Vuelve a leer para ver su estado actual.",
-      "noRespondPermission": "Responder exige sessions:handoff-response:write."
+      "noRespondPermission": "Tu rol no puede responder a traspasos."
     },
     "respond": {
       "acceptTitle": "Aceptar la responsabilidad",

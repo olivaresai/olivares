@@ -31,7 +31,7 @@ export const PANEL_EXTENSIONS: PanelExtensions = Object.freeze({
 })
 
 /** Independent route and heading witnesses consumed by console qualification. */
-export { EXTENSION_ROUTES } from './extension-routes'
+export { EXTENSION_ROUTES } from './extension-routes.ts'
 
 /** A build-time public page. Its requests still enforce their own server policy. */
 export interface AnonymousFeatureView {

@@ -142,6 +142,12 @@ function offeredFromFirstScreen(): Set<string> {
     offered.add(start)
     for (const href of shownAt(start).strip) offered.add(href)
   }
+  // A door folds into its room (`doorTo`): the room opens it (#2240: AI tools' tool menu
+  // opens the provider profile, binding and account pages).
+  for (const v of FEATURE_VIEWS) {
+    const room = v.doorTo && FEATURE_VIEWS.find((r) => r.id === v.doorTo)
+    if (room && offered.has(room.path)) offered.add(v.path)
+  }
   return offered
 }
 

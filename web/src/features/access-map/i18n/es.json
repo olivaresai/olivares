@@ -28,7 +28,7 @@
     "clear": "Limpiar",
     "drift": "Permitido vs observado",
     "driftHint": "Superpone el diff de mínimo privilegio: resalta accesos inesperados (observados sin permitir) y permisos sin usar.",
-    "driftForbidden": "Requiere el permiso de drift (accessmap:drift:read)."
+    "driftForbidden": "Tu rol no puede ver el drift."
   },
   "legend": {
     "read": "Lectura",
@@ -51,7 +51,7 @@
     "unusedTitle": "Permisos sin usar",
     "unusedHint": "Permitido pero nunca observado — sobreaprovisionamiento que conviene ajustar.",
     "forbiddenTitle": "Drift no autorizado",
-    "forbiddenHint": "Tu rol puede ver el grafo pero no el diff permitido-vs-observado (accessmap:drift:read).",
+    "forbiddenHint": "Tu rol puede ver el grafo, pero no la diferencia entre lo permitido y lo observado.",
     "partial": "Resultado parcial: el motor reconcilió esta diferencia sobre una ventana de deriva truncada, así que estos recuentos no son todo el entorno y una arista que falte aquí puede estar simplemente más allá del límite.",
     "emptyWindowTitle": "Sin hallazgos en la ventana analizada",
     "emptyWindowHint": "El análisis se detuvo en su límite de página, así que esto no dice nada sobre todo el entorno.",
@@ -104,9 +104,9 @@
     },
     "target": {
       "sourceBindings": "Abrir vínculos de origen",
-      "nhiRoster": "Abrir el inventario de NHI"
+      "nhiRoster": "Abrir identidades"
     },
-    "needsPermission": "{{action}} requiere el permiso {{permission}}, que este rol no tiene.",
+    "needsPermission": "{{action}} requiere para esto {{permission}}; este rol no lo tiene.",
     "recheck": "Volver a comprobar la deriva",
     "verdict": {
       "clear": "Comprobado de nuevo: esta arista ya no está en el conjunto de deriva. La explicación de arriba describe el estado anterior a esa comprobación.",
@@ -137,12 +137,12 @@
     "mixed": "Fidelidad mixta entre señales."
   },
   "attributionTier": {
-    "firm": "Firme",
+    "firm": "Exacta",
     "approximate": "Aproximada",
     "unknown": "Desconocida"
   },
   "attributionTierHint": {
-    "firm": "Ligada a un agente/NHI concreto vía SVID, WIF o credencial dedicada.",
+    "firm": "Ligada a un único agente mediante su propia identidad o una credencial dedicada.",
     "approximate": "Una cuenta compartida — se conoce la identidad, pero no un único agente.",
     "unknown": "Sin audit por-identidad (p. ej. Redis/SQLite/D1) — atribución imposible."
   },
@@ -180,7 +180,7 @@
       "exfil": "Rutas de exfiltración"
     },
     "attribution": {
-      "firm": "firme",
+      "firm": "exacta",
       "approximate": "aproximada",
       "unknown": "sin atribuir"
     },

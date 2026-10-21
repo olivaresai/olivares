@@ -25,7 +25,7 @@ Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が�
 までは deny-closed あるいは縮退状態にとどまる）、サーフェスがゲート／オプトインのところ
 では **PARTIAL**、残りについては宣言された **deny-closed seam**。特に **deploy** は
 デプロイメントを計画・ガバナンスするが、エグゼキュータがプロビジョニングされるまでは
-ライブインフラに **適用しない**。すなわち `apply`／`retire` は明確な `503` を返す。
+ライブインフラに **適用しない**。すなわち `apply`／`retire` は明確な `503` を返す。deploy は Business の機能で、Community はすべての deploy ルートに `501` を返す。
 深さはモジュールによって異なり、製品の多くは注記のとおり pre-1.0／設計段階にある
 （[誠実さと限界](/ja/start/honesty-and-limits/) を参照）。
 
@@ -61,7 +61,7 @@ Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が�
 | [アイデンティティ、権限、ガバナンス](/ja/reference/modules/vi-governance/) | — | 誰が・何が・何をできるかを粒度高く。Cedar RBAC + deny-overlay + scoped grants、ロスター調整、scoped admin／カスタムロール、break-glass、kill-switch。 |
 | [アイデンティティ（`identity`）](/reference/modules/identity/) | — | 読み取り専用のワークロードアイデンティティフェデレーション、SSO、外部キー、レジデンシーのポスチャ。 |
 | [ソースと資格情報のスコーピング](/ja/reference/modules/sourcescope/) | — | ソースをワークスペース／エージェントグループにバインドする。解決時の deny-closed scoped resolver + scoped 資格情報。 |
-| [デプロイメントと統合](/ja/reference/modules/vii-deploy/) | on-demand (503) | 実際のインフラへのデプロイメントを計画・ガバナンスする。エグゼキュータは on-demand —— ライブの `apply`／`retire` はプロビジョニングされるまで `503` を返す。 |
+| [デプロイメントと統合](/ja/reference/modules/vii-deploy/) | Business、on-demand (503) | Business の機能。Community は `501` を返す。実際のインフラへのデプロイメントを計画・ガバナンスする。エグゼキュータは on-demand —— ライブの `apply`／`retire` はプロビジョニングされるまで `503` を返す。 |
 | [管理された Git 公開](/ja/reference/modules/gitpublish/) | on-demand | 承認済みの Git ホスト設定と現在の権限に基づき、コミットの push、プルリクエストの作成とマージを行い、結果を記録します。 |
 
 > **Identity** は、読み取り専用のアイデンティティポスチャコンソールのための、独立して選択可能なモジュールである。governance パッケージを共有し、認可モデルとアイデンティティのライフサイクルを所有する [governance](/ja/reference/modules/vi-governance/) を必要とする。同じパッケージでもモジュールスイッチは別である。
@@ -70,7 +70,7 @@ Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が�
 
 | モジュール | Actuate | 目的 |
 |---|---|---|
-| [Claude Code 管理ポリシー（`claude-policy`）](/reference/modules/claude-policy/) | — | バージョン付き管理ポリシーを検証・プレビュー・公開し、配布と観測されたドリフトを確認する。 |
+| [Claude Code 管理ポリシー（`claude-policy`）](/reference/modules/claude-policy/) | — | 管理ポリシーを検証・プレビューする。Business ではフリート全体に公開し、配布と観測されたドリフトを確認する。 |
 | [Claude エージェントの確認（`claude-agents`）](/reference/modules/claude-agents/) | — | 管理エージェントのスレッドイベントを読み、保留中のツール確認を承認または拒否する。 |
 | [スキルカタログと割り当て](/ja/reference/modules/skills/) | — | 不変のスキルカタログと固定された割り当て：ダイジェスト検証済みパックを `/v1/m/skills/packs` 配下にインストールし、ターゲットごとにピン留めし、その場で編集されることはない。 |
 | [モデルとプロバイダの管理](/ja/reference/modules/x-models/) | on-demand (503) | モデル／プロバイダのスタック全体にわたってガバナンスする。model-access、サーフェスごとの context-window、model-group ゲート。モデルの *実行* は on-demand —— 推論資格情報がプロビジョニングされるまで `503`。 |
@@ -121,7 +121,7 @@ Olivares AI は、ひとつのグラウンドトゥルース（Claude Code が�
 プロビジョニング不要（例：FinOps の予算強制は上限で deny し、通知ルーターは dispatch する）。
 `on-demand`／`on-demand (503)` = バックエンドは構築・配線済みで注入ポイントに接続されている
 が、オペレータが env 設定でプロビジョニングするまでは **deny-closed あるいは縮退状態に
-とどまる**（deploy はエグゼキュータが存在するまで `503` を返す。orchestration／voice の
+とどまる**（deploy は Business の機能で、Community では `501`、エグゼキュータが存在するまでは `503` を返す。orchestration／voice の
 dispatch は設定されるまで deny-closed。red-team はサンドボックス・ランタイムがプロビジョ
 ニングされるまで DEGRADED で動作する。モデル実行と意味的エンベディングは資格情報が
 プロビジョニングされるまで `503` を返す）。`PARTIAL` = サーフェスは実在するがゲート／

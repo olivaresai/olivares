@@ -4,7 +4,7 @@
 //
 // Registers the `accessMap` i18n namespace. Imported by the view (so the
 // strings are present when the lazy chunk loads) and by the tests. Languages:
-// en/es since zh/ja/de/ru/fr added in (console multilingual).
+// en/es since zh/ja/de/ru/fr added in (console multilingual), then it and ko.
 import { registerTranslations } from '@/lib/i18n'
 import en from './en.json'
 import es from './es.json'
@@ -13,7 +13,9 @@ import ja from './ja.json'
 import de from './de.json'
 import ru from './ru.json'
 import fr from './fr.json'
+import it from './it.json'
+import ko from './ko.json'
 
-registerTranslations('accessMap', { en, es, zh, ja, de, ru, fr })
+registerTranslations('accessMap', { en, es, zh, ja, de, ru, fr, it, ko })
 
-export { en, es, zh, ja, de, ru, fr }
+export { en, es, zh, ja, de, ru, fr, it, ko }

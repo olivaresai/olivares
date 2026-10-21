@@ -22,7 +22,7 @@ import (
 // instead return no rows, no authoritative witness, and the typed refusal a global
 // readiness consumer propagates as UNKNOWN/OFF.
 func TestListOrgsVisiblePostgresRejectsRevokedAdminWithTenantPreset(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), postgresBootBudget)
 	defer cancel()
 	pg := isolatedPG(t)
 	raw, err := Open(ctx, store.Config{
@@ -120,7 +120,7 @@ func TestListOrgsVisiblePostgresRejectsRevokedAdminWithTenantPreset(t *testing.T
 // pinned by this Open and passes the live posture check; only the app↔admin
 // database challenge can refuse it before foreign rows are certified as complete.
 func TestListOrgsVisiblePostgresRejectsExactPinnedAdminFromForeignDatabase(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	primary := isolatedPG(t)
 	foreign := isolatedPG(t)

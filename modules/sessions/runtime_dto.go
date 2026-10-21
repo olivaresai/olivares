@@ -30,6 +30,8 @@ type runDTO struct {
 	PermissionMode string                  `json:"permission_mode"`
 	Effort         string                  `json:"effort,omitempty"`
 	ModelRef       string                  `json:"model_ref,omitempty"`
+	FastMode       *bool                   `json:"fast_mode,omitempty"`
+	ServiceTier    string                  `json:"service_tier,omitempty"`
 	WorkspaceRef   string                  `json:"workspace_ref,omitempty"`
 	// AuthzWorkspaceID is the stored core authorization scope, separate from the folder.
 	AuthzWorkspaceID string `json:"authz_workspace_id,omitempty"`
@@ -60,7 +62,7 @@ type runDTO struct {
 	ProcessState    string           `json:"process_state"`
 	WorkScope       *runWorkScopeDTO `json:"work_scope,omitempty"`
 	ClaudeSessionID string           `json:"claude_session_id,omitempty"`
-	PID             *int64           `json:"pid,omitempty"`
+	PID             *int64           `json:"pid,omitempty"` // the session's root process; on Linux the session guard, which holds TERM, INT, HUP and QUIT
 	CredentialID    string           `json:"credential_id,omitempty"`
 	ExitCode        *int64           `json:"exit_code,omitempty"`
 	Reason          string           `json:"reason,omitempty"`
@@ -69,6 +71,14 @@ type runDTO struct {
 	StartedAt       string           `json:"started_at,omitempty"`
 	LastActivityAt  string           `json:"last_activity_at,omitempty"`
 	StoppedAt       string           `json:"stopped_at,omitempty"`
+
+	// Pinned is THE CALLER'S OWN pin on this run (run_pin.go): present only on
+	// reads that looked the caller's pins up (list, get one, the pin routes);
+	// absent on control answers that never asked, so a stop or resume response
+	// cannot claim a pin state it does not know. PinnedAt is when this person
+	// pinned it — the order pinned rows hold at the top of their list.
+	Pinned   *bool  `json:"pinned,omitempty"`
+	PinnedAt string `json:"pinned_at,omitempty"`
 
 	// Governance posture, the non-sensitive launch-decision facts the portal
 	// renders per session. AgentRef lets the client query the kill-switch/budget scoped on
@@ -85,6 +95,11 @@ type runDTO struct {
 
 	// PendingApprovalRef is the existing human request this supervised run currently awaits.
 	PendingApprovalRef string `json:"pending_approval_ref,omitempty"`
+
+	// NeedsPerson is set while a person must answer: the session spent its budget of
+	// policy denials, its turn was interrupted, and no operator has answered yet
+	// (runtime_denial_budget.go).
+	NeedsPerson *needsPersonDTO `json:"needs_person,omitempty"`
 
 	// Work binding is references-only dispatch provenance. All fields are empty
 	// for historical/ordinary runs; a work-launched run exposes the complete
@@ -141,6 +156,11 @@ type runDTO struct {
 	// permission_mode the launch asked for. Absent until the tool says.
 	ToolMode string `json:"tool_mode,omitempty"`
 
+	// Limit is the usage or rate limit the tool ended its last turn with, from the
+	// tool's own result (runtime_limit.go). Absent until a turn ends on one, and again
+	// after a later turn succeeds.
+	Limit *runLimit `json:"limit,omitempty"`
+
 	// LiveRef (B2) is the opaque id of the plane's managed live row for this run,
 	// present only once the bridge proved the run owns its provider id. A console
 	// navigates from a profiled run to its session by THIS, never by the bare
@@ -166,6 +186,8 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		PermissionMode:         rec.String(colPermissionMode),
 		Effort:                 rec.String(colEffort),
 		ModelRef:               rec.String(colRunModelRef),
+		FastMode:               runFastMode(rec),
+		ServiceTier:            rec.String(colRunServiceTier),
 		WorkspaceRef:           rec.String(colWorkspaceRef),
 		AuthzWorkspaceID:       rec.String(colRunAuthzWorkspaceID),
 		WorkspacePath:          rec.String(colRunWorkspacePath),
@@ -196,6 +218,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		ApprovalURL:            approvalURL(rec.String(colApprovalRef)),
 		ApprovalRef:            rec.String(colApprovalRef),
 		PendingApprovalRef:     m.pendingRunApproval(rec),
+		NeedsPerson:            m.runNeedsPerson(rec),
 		Critical:               rec.Bool(colCritical),
 		WorkItemID:             model.ID(rec.String(colRunWorkItemID)),
 		WorkLeaseFence:         intPtr(rec, colRunWorkLeaseFence),
@@ -213,6 +236,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		CostMicroUSD:           intPtr(rec, colRunCostMicroUSD),
 		UsageModelRef:          rec.String(colRunUsageModelRef),
 		ToolMode:               rec.String(colRunToolMode),
+		Limit:                  storedRunLimit(rec),
 	}
 	if sid := rec.String(colRunClaimSID); validCanonicalSID(sid) {
 		out.CanonicalSID = sid
@@ -224,10 +248,26 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 	if runHasWorkBinding(rec) {
 		out.WorkLeaseState = "unknown"
 	}
-	if out.ProviderDriver == providerDriverGrok || out.ProviderDriver == providerDriverOpenCode || out.ProviderDriver == providerDriverGemini {
-		out.MCPGovernanceWarning = "MCP servers configured in this tool's own settings are not governed by Olivares."
-	}
+	out.MCPGovernanceWarning = mcpGovernanceWarning(out.ProviderDriver)
 	return out
+}
+
+// mcpGovernanceWarning is what a run of driver says about MCP servers it does not
+// govern; "" for a driver whose MCP configuration Olivares owns. Gemini CLI also
+// starts no MCP server at all, the session's own included, in a folder it does not
+// trust, and reports nothing; trusting one is the person's choice because it also
+// applies that folder's settings.
+func mcpGovernanceWarning(driver string) string {
+	const base = "MCP servers configured in this tool's own settings are not governed by Olivares."
+	switch driver {
+	case providerDriverGrok, providerDriverOpenCode:
+		return base
+	case providerDriverGemini:
+		return base + " Gemini CLI starts no MCP server in a folder it does not trust, so the Olivares session tools are missing there." +
+			" Trusting a folder in the profile's .gemini/trustedFolders.json also applies that folder's own Gemini settings." +
+			" If the profile's or the folder's .gemini defines an MCP server, an extension or an agent, the session tools are refused too."
+	}
+	return ""
 }
 
 // deriveRunState derives the displayed state: a stored `running` session that has
@@ -311,6 +351,8 @@ type createRunRequest struct {
 	PermissionMode string   `json:"permission_mode"`
 	Effort         string   `json:"effort"`
 	Model          string   `json:"model"`
+	FastMode       *bool    `json:"fast_mode"`
+	ServiceTier    string   `json:"service_tier"`
 	WorkspaceRef   string   `json:"workspace_ref"`
 	TemplateID     string   `json:"template_id"`
 	Isolation      string   `json:"isolation"`
@@ -319,6 +361,7 @@ type createRunRequest struct {
 	// the workspace's repository. Absent or false keeps today's default: the session
 	// runs in the workspace folder itself (runtime_worktree.go).
 	Worktree bool `json:"worktree"`
+	NoSetup  bool `json:"no_setup"`
 	// WorktreeFrom starts that worktree at a commit id or a local branch of the
 	// workspace's repository instead of the workspace's HEAD (the work a handoff names).
 	// Absent keeps today's start; it needs Worktree.
@@ -361,8 +404,11 @@ type inputRequest struct {
 	// an RPC peer's stdin would be a method call, not an input. It may be sent WITH
 	// work_lease_fence: a work-bound driver run is spoken to through the same fence
 	// as its other controls, not through a second, unfenced door.
-	Text           string `json:"text"`
-	WorkLeaseFence *int64 `json:"work_lease_fence,omitempty"`
+	Text string `json:"text"`
+	// Attachments are the ids of images uploaded to this session
+	// (POST /runs/{ref}/attachments), sent with Text as one message.
+	Attachments    []string `json:"attachments,omitempty"`
+	WorkLeaseFence *int64   `json:"work_lease_fence,omitempty"`
 }
 
 // stopRunRequest is optional for backward compatibility: the original stop

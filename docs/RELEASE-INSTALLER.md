@@ -55,7 +55,9 @@ adds the service adapter carried inside that same verified archive.
 
 **Installer qualification.** The dedicated workflow runs in Debian stable,
 Ubuntu 24.04 LTS, Fedora, openSUSE Leap and
-Alpine containers and on a hosted macOS 14 runner. It checks path, mode, owner and
+Alpine containers and on a hosted macOS 14 runner. The macOS leg is billed at the
+macOS rate, so it runs on a maintainer dispatch only, which includes the dispatch the
+release workflow makes after each publication. It checks path, mode, owner and
 reported version by content. Pull requests qualify an archive built from that
 PR head, including its service helper and templates, without downloading a tag
 that may not be published yet. These are unsigned development payloads; they do
@@ -110,8 +112,9 @@ packager renders it with `scripts/render-package-systemd.sh`; regenerate the che
 package copy with `sh scripts/render-package-systemd.sh > packaging/systemd/olivares.service`.
 Packages retain `StateDirectory=olivares`, while the archive installer manages its selected
 data directory itself. The service-install test checks that both units otherwise agree.
-`systemd-26.10.service` is a frozen upgrade-recognition template, not a source for new units;
-unedited installs can upgrade and operator-edited units remain protected.
+`systemd-0.2.service` and `systemd-26.10.service` are frozen upgrade-recognition templates, not
+sources for new units; unedited installs of those releases can upgrade and operator-edited units
+remain protected.
 
 `--system` requires an already privileged process; neither stage invokes `sudo`.
 System mode creates a no-login service identity, a 0750 data directory, a create-only

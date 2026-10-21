@@ -623,6 +623,7 @@ func TestErasureExecuteEndToEndChainIntact(t *testing.T) {
 			t.Fatalf("missing self-audit %s in %s", want, actions)
 		}
 	}
+	h.waitFindings()
 	foundFinding := false
 	for _, f := range h.deliveredFindings() {
 		if f.Kind == findingErasureCompleted {

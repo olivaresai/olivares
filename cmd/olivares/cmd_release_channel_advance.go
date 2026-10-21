@@ -81,8 +81,9 @@ type channelAdvanceOptions struct {
 func newReleaseVerifyChannelAdvanceCmd() *cobra.Command {
 	o := &channelAdvanceOptions{}
 	cmd := &cobra.Command{
-		Use:   "verify-channel-advance",
-		Short: "Refuse a channel publication that would not move the LIVE channel forward",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify-channel-advance",
+		Short:       "Refuse a channel publication that would not move the LIVE channel forward",
 		Long: "Reads the manifest the update channel serves RIGHT NOW and compares its version to\n" +
 			"the one you are about to publish (--candidate). The publication is accepted only if\n" +
 			"it moves the channel strictly forward.\n\n" +

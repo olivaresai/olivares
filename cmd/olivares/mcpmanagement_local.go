@@ -157,6 +157,8 @@ func (m *mcpManagement) confineLocalServer(spec *sessions.LaunchSpec, egressHost
 	if spec.Confinement == nil {
 		return errMCPEgressUnconfined(spec)
 	}
+	// The server writes the folder too: it gets the same read-only Git hooks and configuration.
+	spec.ConfinementMounts, spec.ConfinementMountsNote = m.eng.sessionsMod.GitMounts(spec.Dir)
 	// The runner also reads the executable's install directory. Refuse a
 	// command placed directly in a broad/protected directory before spawning.
 	if !m.allowedMCPCodePath(spec, resolved, false) || !m.allowedMCPCodePath(spec, filepath.Dir(resolved), true) {

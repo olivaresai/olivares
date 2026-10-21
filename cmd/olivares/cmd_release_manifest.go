@@ -43,8 +43,9 @@ var knownGOOS = map[string]bool{"linux": true, "darwin": true, "windows": true, 
 
 func newReleaseCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "release",
-		Short: "Release/OTA tooling (manifest generation) — ops use",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "release",
+		Short:       "Release/OTA tooling (manifest generation) — ops use",
 		Long: "release builds the per-channel OTA manifest that `olivares upgrade` verifies\n" +
 			"before it swaps a binary, signs that manifest during the off-box release\n" +
 			"ceremony, and cross-checks a finished manifest against the cosign-verified\n" +
@@ -97,8 +98,9 @@ const defaultExpiresIn = "2160h"
 func newReleaseManifestCmd() *cobra.Command {
 	o := &manifestGenOptions{rollout: -1}
 	cmd := &cobra.Command{
-		Use:   "manifest",
-		Short: "Build (and optionally sign) a per-channel OTA update manifest from a release directory",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "manifest",
+		Short:       "Build (and optionally sign) a per-channel OTA update manifest from a release directory",
 		Long: "Scans --dir for `olivares_<version>_<os>_<arch>.tar.gz` archives, records each digest\n" +
 			"and size, and writes a signed TUF-lite manifest for `olivares upgrade`. With --sign-key\n" +
 			"it also writes <out>.sig (Ed25519 over the exact manifest bytes); without it the manifest\n" +
@@ -334,8 +336,9 @@ type manifestSignOptions struct {
 func newReleaseSignManifestCmd() *cobra.Command {
 	o := &manifestSignOptions{}
 	cmd := &cobra.Command{
-		Use:   "sign-manifest",
-		Short: "Sign an existing OTA manifest during the off-box release ceremony",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "sign-manifest",
+		Short:       "Sign an existing OTA manifest during the off-box release ceremony",
 		Long: "Signs the exact bytes of an existing, validated OTA manifest with the dedicated\n" +
 			"Ed25519 OTA private key. Run this only on the off-box/HSM ceremony host; CI\n" +
 			"receives the resulting public detached signature, never the private key.",
@@ -540,8 +543,9 @@ type manifestVerifyOptions struct {
 func newReleaseVerifyManifestCmd() *cobra.Command {
 	o := &manifestVerifyOptions{}
 	cmd := &cobra.Command{
-		Use:   "verify-manifest",
-		Short: "Cross-check an OTA manifest against the cosign-verified checksums.txt (and, with --dir, the published bytes)",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "verify-manifest",
+		Short:       "Cross-check an OTA manifest against the cosign-verified checksums.txt (and, with --dir, the published bytes)",
 		Long: "Binds an OTA update manifest to the release it claims to describe. Every digest in\n" +
 			"the manifest must match the same filename's entry in --checksums (the checksums.txt\n" +
 			"the caller has ALREADY verified with `cosign verify-blob`), and with --dir every\n" +

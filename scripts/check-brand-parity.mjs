@@ -6,7 +6,7 @@
 // check-brand-parity.mjs — one brand, two surfaces.
 //
 // THE DEFECT THIS CLOSES. The operations console generates its palette from DTCG
-// sources (web/tokens/*.tokens.json → tokens/build.mjs → src/styles/tokens.css,
+// sources (web/tokens/console/*.tokens.json → tokens/build.mjs → src/styles/tokens.css,
 // guarded by `pnpm tokens:check`). The public website (a sibling checkout of the
 // website repo) hand-maintains the same brand in the Tailwind 4 `@theme`
 // block + `light-dark()` re-declarations of src/styles/global.css. On 2026-08-01
@@ -14,11 +14,20 @@
 // verified they stay agreed, and a drift is exactly the kind users see: the
 // console and the marketing site wearing two different brands.
 //
+// AND THE SECOND TIME (dev#2543, 2026-10-19). This gate used to read the brand JSON
+// directly under web/tokens/, which the console build had stopped reading: the console
+// rendered #111113 in Geist while the gate stayed green against the website's #28282b.
+// It now reads the file the build EMITS, web/src/styles/tokens.css — the :root block
+// is the light theme and the .dark block the dark one — so a value the console really
+// renders is the value pinned, and a changed one turns this gate red. It reads the
+// COMMITTED output; `pnpm tokens:check` (a separate required job) pins that output to
+// the DTCG sources, so the two gates together cover source -> stylesheet -> website.
+//
 // DESIGN (deny-closed with two repos that cannot see each other in CI):
 //   1. This script GENERATES a canonical brand manifest (brand.manifest.json at
 //      the repo root — anywhere under web/ perturbs the embedded-console build
-//      hashes and turns web:check red) from the DTCG sources with --write, and in
-//      check mode FAILS if the committed manifest no longer matches the sources.
+//      hashes and turns web:check red) from the emitted console stylesheet with --write,
+//      and in check mode FAILS if the committed manifest no longer matches it.
 //      Runs in this repo's gate unconditionally — no other tree needed.
 //   2. The website vendors a byte-identical copy of the manifest at
 //      src/data/hub/brand-tokens.json (refreshed by its `npm run sync:hub`, the
@@ -62,12 +71,14 @@ import { fileURLToPath } from 'node:url'
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_ROOT = resolve(SCRIPT_DIR, '..')
 const MANIFEST_REL = 'brand.manifest.json'
+// The stylesheet the console build EMITS and imports (web/src/index.css), not its sources.
+const CONSOLE_CSS_REL = 'web/src/styles/tokens.css'
 const WEB_CSS_REL = 'src/styles/global.css'
 const WEB_VENDORED_REL = 'src/data/hub/brand-tokens.json'
 
 // --- THE MAPPING (the contract lives here, in the job) -----------------------
-// Console side: DTCG token path inside web/tokens/<file> (values verbatim, so no
-// Style Dictionary run is needed to read them). Website side: CSS custom property
+// Console side: the custom property in the emitted web/src/styles/tokens.css, read
+// from the block of its theme (`:root` = light, `.dark` = dark). Website side: CSS custom property
 // in src/styles/global.css, and WHICH arm carries the value:
 //   dark  → the `@theme` literal (the site is dark-first; @theme must keep plain
 //           dark literals as the pre-light-dark() browser fallback) AND, when the
@@ -93,16 +104,18 @@ const WEB_VENDORED_REL = 'src/data/hub/brand-tokens.json'
 //
 // WHAT IS IN: the brand anchors both surfaces must share (the single orange in
 // its two AA-tuned values, the two brand neutrals in both roles, ink-on-orange)
-// plus the LIGHT theme set that global.css itself documents as mirroring the
-// shipping console tokens ("the light values are NOT invented here", §LIGHT
-// THEME) — surfaces, borders, muted text, semantic status, accent hover.
+// plus the surfaces, borders, muted text and semantic status of BOTH themes. Until
+// dev#2543 the dark set was out, because the console wore its own dark tuning
+// (#111113, #52c98f, …); the console now takes the website's B2 values, so the
+// dark surface, borders and status are pinned like the light ones.
 //
 // WHAT IS OUT, deliberately:
-//   * the site's DARK surfaces/semantics (--color-surface #343434, --color-ok
-//     #9cc79c, …): global.css documents them as intentionally re-tuned for the
-//     warm public dark palette; the console dark set (#2f2f33, #86c58a, …) is a
-//     different, also-intentional tuning. Pinning them equal would be inventing
-//     a rule neither repo claims.
+//   * the dark orange as TEXT, muted text and danger: the site writes #f08000, #a8a29e
+//     and #e08e8e; the console keeps #ff9b3d, #b4aeaa and #eb9999, because on its
+//     B2 surface a hovered, selected row is #424245 and the site's values measure
+//     3.72, 3.97 and 4.02:1 there (tokens.test.ts holds 4.5:1).
+//   * the dark soft fills: opaque canvas tints in the console, which the site
+//     does not declare.
 //   * fonts: same families, but the console self-hosts the Variable builds via
 //     @fontsource-variable and the site ships static-weight woff2 — the strings
 //     legitimately differ.
@@ -110,10 +123,10 @@ const WEB_VENDORED_REL = 'src/data/hub/brand-tokens.json'
 //     numeric accidents, not declared contracts.
 const BRAND_MAP = [
   // Brand anchors — DARK (the site's default @theme literals).
-  entry('orange-dark', 'theme.dark.tokens.json', 'color.accent', '--color-primary', 'dark'),
-  entry('on-orange-dark', 'theme.dark.tokens.json', 'color.accent-foreground', '--color-on-primary', 'dark'),
-  entry('canvas-dark', 'theme.dark.tokens.json', 'color.background', '--color-bg', 'dark'),
-  entry('text-on-dark', 'theme.dark.tokens.json', 'color.foreground', '--color-text', 'dark'),
+  entry('orange-dark', '.dark', 'accent', '--color-primary', 'dark'),
+  entry('on-orange-dark', '.dark', 'accent-foreground', '--color-on-primary', 'dark'),
+  entry('canvas-dark', '.dark', 'background', '--color-bg', 'dark'),
+  entry('text-on-dark', '.dark', 'foreground', '--color-text', 'dark'),
   // Brand anchors — LIGHT. The orange is split BY ROLE on both surfaces since 
   // so the anchors follow the role and not the name: the FILL is the brand orange
   // itself in light too (console color.accent == site --color-primary-fill == #f08000,
@@ -121,10 +134,10 @@ const BRAND_MAP = [
   // #f08000 on #fafaf9 is 2.58:1 and fails AA for real (see orange-text-light below).
   // Pointing this entry at --color-primary would now compare the console's FILL to the
   // site's TEXT tone and demand one of the two be wrong.
-  entry('orange-light', 'theme.light.tokens.json', 'color.accent', '--color-primary-fill', 'light'),
-  entry('on-orange-light', 'theme.light.tokens.json', 'color.accent-foreground', '--color-on-primary', 'light'),
-  entry('canvas-light', 'theme.light.tokens.json', 'color.background', '--color-bg', 'light'),
-  entry('text-on-light', 'theme.light.tokens.json', 'color.foreground', '--color-text', 'light'),
+  entry('orange-light', ':root', 'accent', '--color-primary-fill', 'light'),
+  entry('on-orange-light', ':root', 'accent-foreground', '--color-on-primary', 'light'),
+  entry('canvas-light', ':root', 'background', '--color-bg', 'light'),
+  entry('text-on-light', ':root', 'foreground', '--color-text', 'light'),
   // The mirrored LIGHT set (site light theme == console light tokens, by the
   // site's own declaration).
   //
@@ -139,55 +152,76 @@ const BRAND_MAP = [
   // Pinning two roles together because they once shared a hex is how a gate starts
   // dictating a defect, so that entry is gone and a stronger one takes its place:
   // the orange as TEXT, which is the value order is actually about keeping
-  // deepened. The count stays at 17, which the site's own plausibility assert floors.
-  entry('orange-text-light', 'theme.light.tokens.json', 'color.accent-text', '--color-primary', 'light'),
-  entry('surface-light', 'theme.light.tokens.json', 'color.surface', '--color-surface', 'light'),
-  entry('border-light', 'theme.light.tokens.json', 'color.border', '--color-border', 'light'),
-  entry('border-strong-light', 'theme.light.tokens.json', 'color.border-strong', '--color-border-strong', 'light'),
-  entry('text-muted-light', 'theme.light.tokens.json', 'color.muted-foreground', '--color-text-muted', 'light'),
-  entry('ok-light', 'theme.light.tokens.json', 'color.success', '--color-ok', 'light'),
-  entry('warn-light', 'theme.light.tokens.json', 'color.warning', '--color-warn', 'light'),
-  entry('danger-light', 'theme.light.tokens.json', 'color.danger', '--color-danger', 'light'),
-  entry('info-light', 'theme.light.tokens.json', 'color.info', '--color-info', 'light'),
+  // deepened. The site's own plausibility assert floors the count at 17.
+  entry('orange-text-light', ':root', 'accent-text', '--color-primary', 'light'),
+  entry('surface-light', ':root', 'surface', '--color-surface', 'light'),
+  entry('border-light', ':root', 'border', '--color-border', 'light'),
+  entry('border-strong-light', ':root', 'border-strong', '--color-border-strong', 'light'),
+  entry('text-muted-light', ':root', 'muted-foreground', '--color-text-muted', 'light'),
+  entry('ok-light', ':root', 'success', '--color-ok', 'light'),
+  entry('warn-light', ':root', 'warning', '--color-warn', 'light'),
+  entry('danger-light', ':root', 'danger', '--color-danger', 'light'),
+  entry('info-light', ':root', 'info', '--color-info', 'light'),
+  // The DARK set, pinned since the console took the B2 values (dev#2543).
+  entry('surface-dark', '.dark', 'surface', '--color-surface', 'dark'),
+  entry('border-dark', '.dark', 'border', '--color-border', 'dark'),
+  entry('border-strong-dark', '.dark', 'border-strong', '--color-border-strong', 'dark'),
+  entry('ok-dark', '.dark', 'success', '--color-ok', 'dark'),
+  entry('warn-dark', '.dark', 'warning', '--color-warn', 'dark'),
+  entry('info-dark', '.dark', 'info', '--color-info', 'dark'),
 ]
 
-function entry(id, hubFile, hubPath, webVar, webTheme) {
-  return { id, hubFile, hubPath, webVar, webTheme }
+/** `block` is the selector of the theme in tokens.css; `name` the custom property, no `--`. */
+function entry(id, block, name, webVar, webTheme) {
+  return { id, hubFile: CONSOLE_CSS_REL, hubPath: `${block} --${name}`, webVar, webTheme }
 }
 
 // --- manifest ---------------------------------------------------------------
 
 function buildManifest(root) {
-  const cache = new Map()
-  const dtcg = (file) => {
-    if (!cache.has(file)) {
-      cache.set(file, JSON.parse(readFileSync(join(root, 'web/tokens', file), 'utf8')))
-    }
-    return cache.get(file)
-  }
+  const blocks = consoleBlocks(readFileSync(join(root, CONSOLE_CSS_REL), 'utf8'))
   const entries = BRAND_MAP.map((e) => {
-    let node = dtcg(e.hubFile)
-    for (const seg of e.hubPath.split('.')) {
-      node = node?.[seg]
-      if (node === undefined) {
-        throw new Error(`brand-parity: token ${e.hubPath} not found in web/tokens/${e.hubFile}`)
-      }
+    const [block, prop] = e.hubPath.split(' ')
+    const value = blocks.get(block)?.get(prop)
+    if (value === undefined || value.trim() === '') {
+      throw new Error(`brand-parity: ${prop} not declared in the ${block} block of ${CONSOLE_CSS_REL}`)
     }
-    const value = node.$value
-    if (typeof value !== 'string' || value.trim() === '') {
-      throw new Error(`brand-parity: token ${e.hubPath} in ${e.hubFile} has no string $value`)
+    // A literal colour only: a `var(...)` would pin a NAME, and the colour behind it could
+    // change while the manifest and the stylesheet still agree.
+    if (!/^(#[0-9a-f]{6}|rgba?\([\d.,\s]+\))$/.test(value)) {
+      throw new Error(`brand-parity: ${prop} in the ${block} block of ${CONSOLE_CSS_REL} is ${value}, not a literal colour`)
     }
     return { ...e, value }
   })
   return {
     $description:
-      'GENERATED — DO NOT EDIT (node scripts/check-brand-parity.mjs --write). Canonical Olivares brand-token manifest: the shared subset of the brand declared by the console DTCG sources (web/tokens/*.tokens.json — the single source of truth) and mirrored by the stylesheet of the olivares.ai website. `task lint:brand-parity` pins this file to the DTCG sources on every push; the website vendors a byte-identical copy and pins its live palette to it in its own CI — the two surfaces cannot drift apart without one of the two gates going red.',
+      'GENERATED — DO NOT EDIT (node scripts/check-brand-parity.mjs --write). Canonical Olivares brand-token manifest: the shared subset of the brand the console renders (web/src/styles/tokens.css, emitted from web/tokens/console/*.tokens.json — the single source of truth) and mirrored by the stylesheet of the olivares.ai website. `task lint:brand-parity` pins this file to the emitted console stylesheet on every push; the website vendors a byte-identical copy and pins its live palette to it in its own CI — the two surfaces cannot drift apart without one of the two gates going red.',
     brand: 'brandv4 (2026-06-10)',
     entries,
   }
 }
 
 const stringifyManifest = (manifest) => `${JSON.stringify(manifest, null, 2)}\n`
+
+/**
+ * The theme blocks of the emitted console stylesheet: `:root` (the FIRST one, the light
+ * theme; the later :root blocks hold density and motion) and `.dark`, each as a
+ * `--name -> value` map. A missing block is an error, not an empty map: a gate that reads
+ * nothing must not report agreement.
+ */
+function consoleBlocks(rawCss) {
+  const css = stripComments(rawCss)
+  const blocks = new Map()
+  for (const sel of [':root', '.dark']) {
+    const head = sel.replace('.', '\\.')
+    const m = new RegExp(`(?:^|\\n)${head}\\s*\\{([^}]*)\\}`).exec(css)
+    if (!m) throw new Error(`brand-parity: no ${sel} block in ${CONSOLE_CSS_REL}`)
+    const vars = new Map()
+    for (const d of m[1].matchAll(/(--[A-Za-z0-9-]+)\s*:\s*([^;]+);/g)) vars.set(d[1], norm(d[2]))
+    blocks.set(sel, vars)
+  }
+  return blocks
+}
 
 // --- website CSS parsing ----------------------------------------------------
 
@@ -372,7 +406,7 @@ function splitLightDark(value) {
 
 // --- checks -----------------------------------------------------------------
 
-/** Committed manifest must match what the DTCG sources generate. */
+/** Committed manifest must match what the emitted console stylesheet declares. */
 function checkHub(root) {
   const errors = []
   const want = stringifyManifest(buildManifest(root))
@@ -381,7 +415,7 @@ function checkHub(root) {
     errors.push(`${MANIFEST_REL} is missing — run \`node scripts/check-brand-parity.mjs --write\` and commit it`)
   } else if (readFileSync(path, 'utf8') !== want) {
     errors.push(
-      `${MANIFEST_REL} is stale (or hand-edited): it no longer matches the DTCG sources under web/tokens/. ` +
+      `${MANIFEST_REL} is stale (or hand-edited): it no longer matches ${CONSOLE_CSS_REL}. ` +
         'Run `node scripts/check-brand-parity.mjs --write`, commit, and refresh the website copy (`npm run sync:hub` there).',
     )
   }
@@ -782,25 +816,48 @@ function selftest(root) {
     writeFileSync(join(vendoredDrift, WEB_VENDORED_REL), stringifyManifest(stale))
     expect('a stale vendored site manifest is detected', checkWebTree(manifest, vendoredDrift).errors, true)
 
-    // Hub fixtures: tokens + committed manifest copied, then one DTCG hex flipped.
-    const hubOk = join(base, 'hub-ok')
-    mkdirSync(join(hubOk, 'web', 'tokens'), { recursive: true })
-    for (const f of ['theme.dark.tokens.json', 'theme.light.tokens.json']) {
-      writeFileSync(join(hubOk, 'web', 'tokens', f), readFileSync(join(root, 'web/tokens', f)))
+    // Hub fixtures: the emitted console stylesheet + committed manifest copied, then one
+    // value the console RENDERS flipped. This is the case dev#2543 was about: before it,
+    // the gate read JSON the build no longer used, so this exact edit stayed green.
+    const hubCopy = (name) => {
+      const d = join(base, name)
+      mkdirSync(dirname(join(d, CONSOLE_CSS_REL)), { recursive: true })
+      writeFileSync(join(d, CONSOLE_CSS_REL), readFileSync(join(root, CONSOLE_CSS_REL)))
+      writeFileSync(join(d, MANIFEST_REL), stringifyManifest(manifest))
+      return d
     }
-    writeFileSync(join(hubOk, MANIFEST_REL), stringifyManifest(manifest))
-    expect('faithful hub copy is green', checkHub(hubOk), false)
+    expect('faithful hub copy is green', checkHub(hubCopy('hub-ok')), false)
 
-    const hubDrift = join(base, 'hub-drift')
-    mkdirSync(join(hubDrift, 'web', 'tokens'), { recursive: true })
-    for (const f of ['theme.dark.tokens.json', 'theme.light.tokens.json']) {
-      writeFileSync(join(hubDrift, 'web', 'tokens', f), readFileSync(join(root, 'web/tokens', f)))
+    for (const [block, prop] of [['.dark', '--accent'], [':root', '--warning']]) {
+      const d = hubCopy(`hub-drift-${prop.slice(2)}`)
+      const path = join(d, CONSOLE_CSS_REL)
+      const css = readFileSync(path, 'utf8')
+      const at = css.indexOf(`\n${block} {`)
+      const decl = new RegExp(`(${prop}:\\s*)(#[0-9a-f]{6})`, 'i').exec(css.slice(at))
+      if (at === -1 || !decl) throw new Error(`brand-parity selftest: ${prop} not found in ${block}`)
+      const pos = at + decl.index + decl[1].length
+      writeFileSync(path, css.slice(0, pos) + flipHex(decl[2]) + css.slice(pos + decl[2].length))
+      expect(`a changed ${prop} in the emitted ${block} block makes the committed manifest stale`, checkHub(d), true)
     }
-    const dark = JSON.parse(readFileSync(join(hubDrift, 'web/tokens/theme.dark.tokens.json'), 'utf8'))
-    dark.color.accent.$value = flipHex(dark.color.accent.$value)
-    writeFileSync(join(hubDrift, 'web/tokens/theme.dark.tokens.json'), `${JSON.stringify(dark, null, 2)}\n`)
-    writeFileSync(join(hubDrift, MANIFEST_REL), stringifyManifest(manifest))
-    expect('a flipped DTCG source hex makes the committed manifest stale', checkHub(hubDrift), true)
+
+    // An emitted file the gate cannot read must stop it, never compare as "nothing changed":
+    // a missing theme block, a missing brand var and a non-literal value each refuse.
+    const refuses = (name, edit, wantText) => {
+      const d = hubCopy(`hub-refuse-${name}`)
+      const path = join(d, CONSOLE_CSS_REL)
+      writeFileSync(path, edit(readFileSync(path, 'utf8')))
+      let errors = []
+      try {
+        errors = checkHub(d)
+        buildManifest(d)
+      } catch (e) {
+        errors = [String(e.message)]
+      }
+      expect(`an emitted file with ${name} is refused`, errors, true, wantText)
+    }
+    refuses('no .dark block', (css) => css.replace('\n.dark {', '\n.night {'), 'no .dark block')
+    refuses('no --surface in :root', (css) => css.replace(/\n {2}--surface: [^;]+;/, ''), '--surface not declared')
+    refuses('a var() brand value', (css) => css.replace(/(\n {2}--accent: )#f08000;/, '$1var(--orange);'), 'not a literal colour')
 
     // Usability of the website checkout AS EVIDENCE (2026-08-02). These decide whether the
     // cross-repo comparison runs at all — the fixtures are real git repos, because the property
@@ -976,7 +1033,7 @@ function main() {
   if (write) {
     const manifest = buildManifest(root)
     writeFileSync(join(root, MANIFEST_REL), stringifyManifest(manifest))
-    console.log(`brand-parity: wrote ${MANIFEST_REL} (${manifest.entries.length} entries) from the DTCG sources`)
+    console.log(`brand-parity: wrote ${MANIFEST_REL} (${manifest.entries.length} entries) from ${CONSOLE_CSS_REL}`)
     return
   }
   if (self) {
@@ -1001,12 +1058,12 @@ function main() {
     console.log('brand-parity: so the live cross-repo check is NOT PERFORMED here — and it is not reported')
     console.log('brand-parity: green either. Name the tree you mean with OLIVARES_WEB_DIR=<dir> and it comes')
     console.log(`brand-parity: back. Meanwhile the site CI pins its ${WEB_CSS_REL} to its vendored copy of`)
-    console.log('brand-parity: this manifest, and this run pinned the manifest to the DTCG sources.')
+    console.log('brand-parity: this manifest, and this run pinned the manifest to the emitted console stylesheet.')
   } else if (webDir === null) {
     console.log('brand-parity: NOTICE — no public-website tree found (set OLIVARES_WEB_DIR, or check out the website repo as a sibling).')
     console.log('brand-parity: the live cross-repo check is skipped HERE, but this is not a hole: the site CI pins')
     console.log(`brand-parity: its ${WEB_CSS_REL} to its vendored copy of this manifest (tests/brand-parity.test.ts),`)
-    console.log(`brand-parity: and this run pinned ${MANIFEST_REL} to the DTCG sources — the surfaces cannot drift`)
+    console.log(`brand-parity: and this run pinned ${MANIFEST_REL} to the emitted console stylesheet — the surfaces cannot drift`)
     console.log('brand-parity: apart without one of the two gates going red.')
   } else {
     const explicit = process.env.OLIVARES_WEB_DIR !== undefined && process.env.OLIVARES_WEB_DIR !== ''
@@ -1018,7 +1075,7 @@ function main() {
       console.log('brand-parity: green either. Refresh that checkout (git -C <dir> pull --ff-only) or point')
       console.log('brand-parity: OLIVARES_WEB_DIR at the tree you mean, and this check comes back.')
       console.log(`brand-parity: meanwhile the site CI pins its ${WEB_CSS_REL} to its vendored copy of`)
-      console.log('brand-parity: this manifest, and this run pinned the manifest to the DTCG sources.')
+      console.log('brand-parity: this manifest, and this run pinned the manifest to the emitted console stylesheet.')
     } else {
       const { errors: webErrors, notes } = checkWebTree(manifest, webDir)
       errors.push(...webErrors)
@@ -1035,7 +1092,7 @@ function main() {
   console.log(
     `brand-parity: OK — ${manifest.entries.length} shared brand tokens agree` +
       (compared
-        ? ` (console DTCG == ${webDir}/${WEB_CSS_REL})`
+        ? ` (console ${CONSOLE_CSS_REL} == ${webDir}/${WEB_CSS_REL})`
         : ' with the committed manifest — the live site comparison was NOT performed (see NOTICE above)'),
   )
 }

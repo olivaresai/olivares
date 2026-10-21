@@ -71,7 +71,8 @@ func (m *Module) CheckAgentForExchange(ctx context.Context, tenant model.TenantI
 // governance records or their private column vocabulary.
 //
 // A negative answer is authoritative (missing lifecycle row, non-agent row,
-// orphaned/blocked/offboarded agent, or an absent/non-human/disabled sponsor).
+// orphaned/blocked/offboarded agent, or an absent/non-human/disabled sponsor
+// or unknown sponsor account state).
 // An error means the lifecycle or roster could not be read, so callers can fail
 // closed without misreporting an outage as an ineligible participant.
 func (m *Module) AgentEligibleForWork(ctx context.Context, tenant model.TenantID, identityRef string) (eligible bool, err error) {
@@ -151,8 +152,8 @@ func agentWorkAuthorityFactsInScope(
 		return false, nil, nil
 	}
 	principalType, _ := sponsor.Metadata["principal_type"].(string)
-	disabled, _ := sponsor.Metadata["disabled"].(bool)
-	if principalType != "human" || disabled {
+	disabled, reported := sponsor.Metadata["disabled"].(bool)
+	if principalType != "human" || !reported || disabled {
 		return false, nil, nil
 	}
 	return true, []store.AuthorizationFactRef{

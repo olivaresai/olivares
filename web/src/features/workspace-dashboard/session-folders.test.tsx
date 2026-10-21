@@ -128,12 +128,12 @@ describe('session folders on the Workspace page', () => {
     ).toBeVisible()
     expect(
       await screen.findByRole('row', {
-        name: 'payments-api /srv/work/payments-api',
+        name: /^payments-api \/srv\/work\/payments-api/,
       }),
     ).toBeVisible()
     // A folder registered without a name shows the last segment of its path.
     expect(
-      screen.getByRole('row', { name: 'web-app /srv/work/web-app' }),
+      screen.getByRole('row', { name: /^web-app \/srv\/work\/web-app/ }),
     ).toBeVisible()
     expect(read).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'active' }),
@@ -153,7 +153,7 @@ describe('session folders on the Workspace page', () => {
     expect(await screen.findByText('No workspace selected')).toBeVisible()
     expect(
       await screen.findByRole('row', {
-        name: 'payments-api /srv/work/payments-api',
+        name: /^payments-api \/srv\/work\/payments-api/,
       }),
     ).toBeVisible()
   })
@@ -238,7 +238,9 @@ describe('session folders on the Workspace page', () => {
       deny()
       folders([folder('ws_1', 'a', '/srv/a')])
       show()
-      expect(await screen.findByRole('row', { name: 'a /srv/a' })).toBeVisible()
+      expect(
+        await screen.findByRole('row', { name: /^a \/srv\/a/ }),
+      ).toBeVisible()
       expect(screen.queryByRole('link', { name: 'Manage folders' })).toBeNull()
     },
   )

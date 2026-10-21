@@ -132,8 +132,8 @@ func TestBuiltinPacksInstallAsPinnedRevisionsWithTheirLicense(t *testing.T) {
 				source.Origin != pin.Sources[entry.Source].Repository || source.SourceDigest != entry.SHA256 {
 				t.Fatalf("revision does not record the pinned source: %+v", source)
 			}
-			if len(result.Revision.Members) != entry.Skills || result.Revision.Validator != skills.ValidatorVersion {
-				t.Fatalf("members = %d, pinned %d", len(result.Revision.Members), entry.Skills)
+			if len(result.Revision.Members) != entry.Members || result.Revision.Validator != skills.ValidatorVersion {
+				t.Fatalf("members = %d, pinned %d", len(result.Revision.Members), entry.Members)
 			}
 			license := false
 			for _, file := range result.Revision.Manifest {
@@ -173,7 +173,6 @@ func TestBuiltinInstallRefusesWhatIsNotAPinnedPack(t *testing.T) {
 	}{
 		{"unknown id", "unsupported_source", builtinSource("not-a-pack")},
 		{"no id", "invalid_request", map[string]string{"kind": "builtin"}},
-		{"agents are data", "unsupported_source", builtinSource("ecc-agents")},
 		{"a url", "invalid_request", map[string]string{"kind": "builtin", "ref": "ecc-security", "url": "https://example.com/x.git"}},
 		{"a directory", "invalid_request", map[string]string{"kind": "builtin", "ref": "ecc-security", "directory": "x"}},
 		{"a subdirectory", "invalid_request", map[string]string{"kind": "builtin", "ref": "ecc-security", "subdir": "x"}},

@@ -63,14 +63,14 @@
   },
   "policy": {
     "title": "Aufzeichnungsrichtlinie",
-    "subtitle": "Was auf dieser Steuerungsebene aufgezeichnet wird und wie die Nachweise klassifiziert werden. Bearbeiten erfordert die Berechtigung recording:config:admin; jede Änderung hier ist selbst eine aufgezeichnete privilegierte Aktion.",
+    "subtitle": "Was auf dieser Steuerungsebene aufgezeichnet wird und wie die Nachweise klassifiziert werden. Bearbeiten braucht eine Rolle, die die Aufzeichnungsrichtlinie verwaltet; jede Änderung hier ist selbst eine aufgezeichnete privilegierte Aktion.",
     "loading": "Aufzeichnungsrichtlinie wird geladen …",
     "saved": "Aufzeichnungsrichtlinie gespeichert",
     "save": "Richtlinie speichern",
     "saveFailed": "Die Richtlinie wurde nicht gespeichert.",
     "forbidden": {
-      "title": "Das Bearbeiten der Aufzeichnungsrichtlinie erfordert recording:config:admin",
-      "description": "Ihre Rolle kann Aufzeichnungssitzungen verwalten, aber das Ändern der Aufzeichnungsrichtlinie benötigt die eigene Berechtigung recording:config:admin. Bitten Sie eine Administratorin oder einen Administrator, sie zu erteilen."
+      "title": "Ihre Rolle kann die Aufzeichnungsrichtlinie nicht bearbeiten",
+      "description": "Ihre Rolle kann Aufzeichnungssitzungen verwalten, aber das Ändern der Aufzeichnungsrichtlinie braucht eine eigene Berechtigung. Bitten Sie eine Administratorin oder einen Administrator, sie zu erteilen."
     },
     "error": {
       "title": "Aufzeichnungsrichtlinie konnte nicht geladen werden",
@@ -108,7 +108,7 @@
       "hint": "Ein Klassifizierungs-Tag für versiegelte Aufzeichnungen — es kennzeichnet, wie lange sie aufbewahrt werden sollten. Zwischen 1 und 3650 Tagen.",
       "tag": "Nur Tag",
       "enforced": "Erzwungen",
-      "notEnforced": "Aufbewahrung ist nur ein Klassifizierungs-Tag — Aufzeichnungen werden gekennzeichnet, nie bereinigt. Keine Richtlinie entfernt bislang eine Aufzeichnung (keine Bereinigung verdrahtet).",
+      "notEnforced": "Aufbewahrung ist nur ein Klassifizierungs-Tag — Aufzeichnungen werden gekennzeichnet, nie bereinigt. Keine Richtlinie entfernt bislang eine Aufzeichnung (keine Bereinigung verfügbar).",
       "error": "Geben Sie eine ganze Zahl von Tagen zwischen 1 und 3650 ein."
     },
     "ai": {

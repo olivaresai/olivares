@@ -39,12 +39,11 @@ import { runFolder } from '@/features/sessions/folder'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
 import { sessionModelRef } from '@/features/sessions/session-usage'
-import { WorkClause } from '@/features/sessions/work-clause'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
 import type { TileState } from './components'
-import { RECENT_WORK_ROWS } from './work-line'
+import { RECENT_WORK_ROWS, workLine } from './work-line'
 import './i18n'
 
 function WorkRow({
@@ -80,7 +79,17 @@ function WorkRow({
         sessionModelRef(run, live),
       )
     : []
-  const fullTitle = [name, shortId, naming.reference, folder, ...facts]
+  // The action the engine reported is not the sentence (the name is the list's, the
+  // same as the Sessions list says it, #2266) and it is not dropped: it is on the hover.
+  const doing = live ? workLine(live) : null
+  const fullTitle = [
+    name,
+    shortId,
+    naming.reference,
+    folder,
+    doing?.from === 'action' ? doing.text : null,
+    ...facts,
+  ]
     .filter((part, i, all) => part && all.indexOf(part) === i)
     .join(' · ')
   const at =
@@ -140,13 +149,11 @@ function WorkRow({
           data-slot="recent-row-sentence"
           className="min-w-0 flex-1 text-body text-foreground [overflow-wrap:anywhere] max-sm:order-last max-sm:basis-full"
         >
-          <span>
-            <WorkClause text={name} live={live} />
-          </span>
+          <span>{name}</span>
           {shortId ? (
             <span className="text-muted-foreground"> {shortId}</span>
           ) : null}
-          {folder ? (
+          {folder && !name.includes(folder) ? (
             <span className="font-mono text-caption text-muted-foreground">
               {' · '}
               {folder}

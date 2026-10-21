@@ -97,7 +97,7 @@ func TestDirectoryActivationPostgresSingleAndSplit(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 			defer cancel()
 			pg := tc.isolate(t)
 			cfg := store.Config{
@@ -429,7 +429,7 @@ func TestDirectoryActivationPostgresRejectsOwnerDSNDifferentDatabaseSameRole(t *
 }
 
 func TestDirectoryActivationPostgresDrainsOldWriterBeforeAdminSnapshot(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*postgresBootBudget)
 	defer cancel()
 	pg := isolatedPGSplit(t)
 	cfg := store.Config{

@@ -33,6 +33,10 @@ export const KEY_CONTEXTS = [
   'outsideField',
   /** The source diff view is on screen and the event is outside a field. */
   'sourceDiff',
+  /** A previous opened session is available, outside a modal. */
+  'sessionHistory',
+  /** Palette results have focus and its query is empty. */
+  'paletteRecent',
 ] as const
 
 export type KeyContextName = (typeof KEY_CONTEXTS)[number]
@@ -41,10 +45,22 @@ export type KeyContextName = (typeof KEY_CONTEXTS)[number]
 export const KEY_GROUPS = ['general', 'launcher', 'surface'] as const
 export type KeyGroup = (typeof KEY_GROUPS)[number]
 
+export const PALETTE_RECENT_COMMANDS: readonly string[] = [
+  1, 2, 3, 4, 5, 6,
+].map((digit) => `palette.recent${digit}`)
+
+// Named, not inline after `keys:`: the secret scanner's generic-api-key rule joins the
+// field name `keys` to a long chord and reads it as a credential.
+const PREVIOUS_SESSION_CHORD = 'Mod+Shift+Enter'
+
 /** A command's group, for the one page that documents the table. */
 export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'palette.open': 'general',
   'session.new': 'general',
+  'session.previous': 'general',
+  ...Object.fromEntries(
+    PALETTE_RECENT_COMMANDS.map((command) => [command, 'general' as const]),
+  ),
   'help.toggle': 'general',
   'nav.toggleRail': 'general',
   'launcher.focus': 'launcher',
@@ -52,6 +68,9 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'launcher.startBackground': 'launcher',
   'surface.nextPane': 'surface',
   'surface.previousPane': 'surface',
+  'surface.openBeside': 'surface',
+  'surface.closeBeside': 'surface',
+  'surface.focusBeside': 'surface',
   'rail.next': 'surface',
   'rail.previous': 'surface',
   'rail.first': 'surface',
@@ -77,6 +96,18 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   // (with another account) waits for the composer's account picker.
   { command: 'session.new', keys: 'n', when: 'outsideField' },
 
+  // Avoid browser tab/history chords and the launcher's Mod+Enter.
+  {
+    command: 'session.previous',
+    keys: PREVIOUS_SESSION_CHORD,
+    when: 'sessionHistory',
+  },
+  ...PALETTE_RECENT_COMMANDS.map((command, index) => ({
+    command,
+    keys: String(index + 1),
+    when: 'paletteRecent',
+  })),
+
   // ── the launcher, only while its field has focus ──────────────────────────
   { command: 'launcher.start', keys: 'Enter', when: 'launcherFocused' },
   {
@@ -88,6 +119,13 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   // ── the work surface ──────────────────────────────────────────────────────
   { command: 'surface.nextPane', keys: ']', when: 'workSurface' },
   { command: 'surface.previousPane', keys: '[', when: 'workSurface' },
+  { command: 'surface.openBeside', keys: 'Alt+Shift+o', when: 'workSurface' },
+  { command: 'surface.closeBeside', keys: 'Alt+Shift+w', when: 'workSurface' },
+  {
+    command: 'surface.focusBeside',
+    keys: 'Alt+Shift+ArrowRight',
+    when: 'workSurface',
+  },
 
   // ── the rail, only while it has focus ─────────────────────────────────────
   { command: 'rail.next', keys: 'ArrowDown', when: 'railFocused' },

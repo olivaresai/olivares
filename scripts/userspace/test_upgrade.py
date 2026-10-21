@@ -154,6 +154,19 @@ class ModuleReads(unittest.TestCase):
         self.assertEqual(snapshots, 3)
         self.assertEqual(result['preserved_rows'], 1)
 
+    def test_recording_edition_refusal_preserves_upgrade_and_rollback(self) -> None:
+        enabled = {path: (200, []) for path in self.paths}
+        refusal = (501, {'error': {'code': 'business_required', 'message': 'Privileged-session recording requires Olivares Business.'}})
+        rc, result, _, starts, snapshots = self.run_upgrade(published=enabled, candidate={**enabled, self.paths[0]: refusal})
+        self.assertEqual((rc, result['complete'], result['failures']), (0, True, []))
+        self.assertIn('rollback', starts)
+        self.assertEqual(snapshots, 3)
+        # Only the approved refusal is accepted: any other 501 on the route still aborts.
+        other = (501, {'error': {'code': 'module_error', 'message': 'no summarizer configured'}})
+        rc, result, _, _, _ = self.run_upgrade(published=enabled, candidate={**enabled, self.paths[0]: other})
+        self.assertEqual(rc, 1)
+        self.assertFalse(result['complete'])
+
     def test_edition_refusal_does_not_hide_unrelated_or_disabled_module_changes(self) -> None:
         refusal = (501, {'error': 'Red team is a Business feature'})
         for path in self.paths:

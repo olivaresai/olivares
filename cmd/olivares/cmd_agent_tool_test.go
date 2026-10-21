@@ -619,6 +619,10 @@ func TestAgentToolDetectCorroboratesWithSignedManifestOnly(t *testing.T) {
 			if c.Match != "manifest-corroborated" || c.Version != "2.1.261" || c.Probe != nil {
 				t.Fatalf("candidate %+v", c)
 			}
+			// dev#2614: only the host observer skips the digest; the CLI's JSON keeps it.
+			if len(c.SHA256) != 64 {
+				t.Fatalf("detect -o json dropped the sha256 of %s: %+v", c.Path, c)
+			}
 		}
 	}
 	if !found {

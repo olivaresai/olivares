@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 // session/request_permission, shared by the ACP drivers. Observed OpenCode v1.18.30 options:
@@ -55,6 +56,10 @@ func acpSelectGrant(options []acpPermissionOption, dec ProviderApprovalDecision)
 }
 
 func (s *acpSession) onServerRequest(id json.RawMessage, method string, params json.RawMessage) {
+	if method == acpReqWriteTextFile && s.cfg.files != nil {
+		go s.writeTextFile(id, params)
+		return
+	}
 	if method != acpReqRequestPermission {
 		go func() {
 			_ = s.conn.respondError(context.Background(), id, acpErrMethodNotSupported,
@@ -110,9 +115,10 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 		s.refuse(req, params.Options)
 		return
 	}
-	if acpRefusesWithoutFacts(s.driver, params.ToolCall) {
+	if acpRefusesWithoutFacts(s.driver, params.ToolCall, s.cfg.ownMCPOnly) {
 		s.warn("sessions: a provider permission carried no command or path for the policy to review and was refused",
-			"run_ref", s.cfg.RunRef, "method", req.method, "tool_kind", params.ToolCall.Kind)
+			"run_ref", s.cfg.RunRef, "method", req.method, "tool_kind", params.ToolCall.Kind,
+			"tool", clipCause(strings.SplitN(params.ToolCall.ToolCallID, "__", 2)[0]), "session_mcp_configured", len(s.cfg.sessionMCP) > 0, "own_mcp_only", s.cfg.ownMCPOnly)
 		s.refuse(req, params.Options)
 		return
 	}
@@ -193,7 +199,16 @@ func (s *acpSession) resolveServerRequest(req *acpServerRequest, key string, raw
 // that is not a plain read, search or thought, and gave the live policy nothing
 // to review, would be allowed blind by a preset that allows, and shown to a person
 // as option ids only.
-func acpRefusesWithoutFacts(driver string, call acpToolCall) bool {
+//
+// One request is the exception, and only when the launch proved the session MCP
+// server is the only MCP server the CLI can start (DriverSessionConfig.ownMCPOnly):
+// a call to a tool of that server. It carries no command or path either, but the
+// CLI registers the tool as mcp_<server>_<tool> and builds the call id from that
+// name, so with one server the id's prefix names it. The request's title is not
+// read: for an MCP tool the CLI builds it from the call's own arguments, which the
+// model controls. Such a call goes to the authority like any other tool request,
+// and the call itself reaches the session MCP edge under the session's policy.
+func acpRefusesWithoutFacts(driver string, call acpToolCall, ownMCPOnly bool) bool {
 	if driver != providerDriverGemini || call.facts.Complete {
 		return false
 	}
@@ -201,5 +216,15 @@ func acpRefusesWithoutFacts(driver string, call acpToolCall) bool {
 	case "read", "search", "think":
 		return false
 	}
-	return true
+	return !(ownMCPOnly && geminiSessionMCPCall(call))
+}
+
+// geminiSessionMCPCall reports whether call is a call to a tool of the server named
+// olivares. Gemini builds every MCP tool as kind "other". Its name is qualified
+// with the server's, and a built-in tool's never starts so. The prefix proves the
+// server only when no other server exists (see launchOwnMCPOnly): the CLI turns
+// every character outside [a-zA-Z0-9_.:-] in a server name into "_", so a server
+// named olivares/x registers as olivares_x and a text test cannot tell it from ours.
+func geminiSessionMCPCall(call acpToolCall) bool {
+	return call.Kind == "other" && strings.HasPrefix(call.ToolCallID, "mcp_"+sessionMCPServerName+"_")
 }

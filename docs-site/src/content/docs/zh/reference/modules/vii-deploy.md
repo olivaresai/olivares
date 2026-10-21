@@ -3,9 +3,11 @@ title: "模块 VII — 部署与集成"
 description: >-
   这是唯一会对你的基础设施实施操作的模块：它规划并治理智能体与 MCP 服务器及其与
   estate 之间连接的声明式生命周期。变更经过 human-in-the-loop 门控、先 dry-run
-  后 apply、且可回滚——而在 executor 被预置之前，实时 apply 始终保持
+  后 apply、且可回滚——而在 Business 中，executor 被预置之前，实时 apply 始终保持
   deny-closed（503）。
 ---
+
+部署定义、计划、apply、回滚、退役、executor 设置和接线台账是 **[Business](https://olivares.ai/pricing)** 功能。Community 对这些 API 路由返回 501，并隐藏该命令组。已保存的定义、修订、接线和操作会保留在数据库和灾难恢复备份中。以下各节描述 Business 的行为。
 
 模块 VII 是**唯一**会变更客户基础设施的模块——产品的其余每个部分都是 read-first（先读取）的。
 它以**声明式、版本化、可回滚**的操作来预置、更新和退役智能体与 MCP 服务器，并声明智能体到达

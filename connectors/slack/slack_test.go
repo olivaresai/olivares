@@ -563,3 +563,20 @@ func TestEscapeMrkdwn(t *testing.T) {
 		t.Fatalf("escapeMrkdwn = %q", got)
 	}
 }
+
+// WithHTTPClient is the transport a delivery uses: the console passes a client that does
+// not follow redirects, and a connector that ignored it would follow them.
+func TestWithHTTPClientIsTheDeliveryTransport(t *testing.T) {
+	doer := &recordingDoer{}
+	o := New().WithHTTPClient(doer)
+	cfg := sdk.Config{Settings: map[string]string{"mode": "webhook", "webhook_url": testWebhookURL}}
+	if err := o.Open(context.Background(), cfg); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := o.Notify(context.Background(), sampleNotification()); err != nil {
+		t.Fatalf("Notify: %v", err)
+	}
+	if doer.doCalls != 1 || doer.reqs[0].url != testWebhookURL {
+		t.Fatalf("doer saw %d calls %+v, want one POST to the webhook URL", doer.doCalls, doer.reqs)
+	}
+}

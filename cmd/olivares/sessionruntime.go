@@ -105,7 +105,7 @@ const (
 // their additive defaults here — Late-binds the real PEP/budget/kill-switch/
 // recording adapters.
 func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentialBroker, dataDir string, log *slog.Logger) []sessions.Option {
-	opts := sessionRunnerOption(log)
+	opts := sessionRunnerOption(getenv, exec.LookPath, log)
 	// HC1: the host-tools read's adapter. It captures its locations here and
 	// detects nothing until a request asks (hosttools.go). It is given the ENGINE's
 	// own data directory, never the environment default: an official CLI installed
@@ -140,6 +140,9 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	if self, err := os.Executable(); err == nil && filepath.IsAbs(dataDir) {
 		opts = append(opts, sessions.WithClaudeHookPEP(dataDir, self))
 	}
+	// Images attached to a message are kept under the data directory, per tenant and
+	// session, never in the folder a session works in.
+	opts = append(opts, sessions.WithAttachmentRoot(filepath.Join(dataDir, sessionAttachmentDirName)))
 	// The version Olivares presents to an official CLI's handshake is the BUILD's,
 	// never a constant the module invented.
 	opts = append(opts, sessions.WithProductVersion(version))
@@ -268,6 +271,10 @@ func useSessionWorkspaceRoot(m *sessions.Module, dataDir string, log *slog.Logge
 	return err
 }
 
+// sessionAttachmentDirName is the subdirectory of the data directory that holds the
+// images attached to session messages.
+const sessionAttachmentDirName = "session-attachments"
+
 const (
 	// sessionWorktreeDirName is the subdirectory of the data directory that holds
 	// the git worktree of every session launched with the "new worktree" option.
@@ -390,12 +397,23 @@ func firstHourCodexDriver() sessions.ProviderDriver {
 // installedSessionProgram is the executable a driver with no pinned binary runs:
 // the newest verified managed install under the engine's data directory, then
 // the official program name on the engine's PATH, else "".
+//
+// Claude Code goes through the verified check first. The observer cannot call a
+// Claude release installed (its verifier is unavailable on purpose), so its verdict is
+// never kept and asking it first hashed the whole executable on every lookup: 251 MB per
+// AI tools status, resolve and launch, which stalled the first hour on a busy disk
+// (dev#2584). The verified check keeps its result while the release is unchanged. The verified
+// check's "" is final for Claude: the observer would only hash the executable again and still
+// not call it installed, so the lookup goes to the PATH. This "claude" and the one in
+// verifiedManagedProgram change together.
 func installedSessionProgram(obs *hostToolObserver, driver string, lookPath func(string) (string, error)) string {
-	if managed := obs.latestProgram(driver); managed != "" {
-		return managed
-	}
 	if managed := verifiedManagedProgram(obs, driver); managed != "" {
 		return managed
+	}
+	if driver != "claude" {
+		if managed := obs.latestProgram(driver); managed != "" {
+			return managed
+		}
 	}
 	facts, ok := driverfacts.Lookup(driver)
 	if !ok || !facts.Session {
@@ -409,8 +427,9 @@ func installedSessionProgram(obs *hostToolObserver, driver string, lookPath func
 
 // verifiedManagedProgram re-checks a managed Claude install's retained signature
 // with the pinned release key (local gpg, no network), the check the host-tool
-// observer deliberately never runs because it executes nothing. It runs only
-// here, when a launch asks for its program. A variable so tests stay hermetic.
+// observer deliberately never runs because it executes nothing. It runs whenever a
+// program lookup asks for Claude's (a launch, the AI tools status, the resolve rule)
+// and keeps its result while the release is unchanged. A variable so tests stay hermetic.
 var verifiedManagedProgram = func(obs *hostToolObserver, driver string) string {
 	if driver != "claude" || obs == nil || obs.rootErr != nil || obs.root == "" {
 		return ""
@@ -440,7 +459,7 @@ var verifiedManagedProgram = func(obs *hostToolObserver, driver string) string {
 // some of them on a transport their own CLI refuses would be worse than
 // launching none, because the refusal is visible and the wrong transport is a
 // child that exits 1 before its first protocol frame.
-func sessionRunnerOption(log *slog.Logger) []sessions.Option {
+func sessionRunnerOption(getenv func(string) string, lookPath func(string) (string, error), log *slog.Logger) []sessions.Option {
 	runner, err := sessions.NewOfficialRunner(cliruntime.Kinds()...)
 	if err != nil {
 		if log != nil {
@@ -466,7 +485,45 @@ func sessionRunnerOption(log *slog.Logger) []sessions.Option {
 			"why", "the owned operate forms are stdio protocols; Claude Code's --print form refuses a terminal on stdin",
 			"limit", "the OpenCode driver registered below is outside that declaration: its ACP child speaks the same standard streams, but nothing declares that here")
 	}
-	return []sessions.Option{sessions.WithRunner(runner)}
+	return []sessions.Option{sessions.WithRunner(withContainerIsolation(runner, getenv, lookPath, log))}
+}
+
+// withContainerIsolation lets isolation=container run on this node when it has a
+// container runtime, and changes nothing when it has none: the native runner then
+// keeps refusing a container launch, as before. Native launches never reach the
+// container runner.
+func withContainerIsolation(native sessions.Runner, getenv func(string) string, lookPath func(string) (string, error), log *slog.Logger) sessions.Runner {
+	rt, err := sessions.DetectContainerRuntime(getenv, lookPath)
+	switch {
+	case errors.Is(err, sessions.ErrNoContainerRuntime), errors.Is(err, sessions.ErrContainerRuntimeOff):
+		return native
+	case err != nil:
+		if log != nil {
+			log.Error("session runtime: container isolation is not available because a setting is wrong", "error", err.Error())
+		}
+		return native
+	}
+	// The container runner bridges stdio pipes; a runner that declares another
+	// transport would need its own container form.
+	if reporter, ok := native.(sessions.RunnerTransportReporter); !ok || reporter.ProvidesTransport() != cliruntime.TransportStdio {
+		if log != nil {
+			log.Warn("session runtime: container isolation is not wired: the session runner does not use the stdio transport the container runner bridges", "runtime", rt.Path)
+		}
+		return native
+	}
+	if log != nil {
+		log.Info("session runtime: isolation=container is available",
+			"runtime", rt.Path, "image", rt.Image, "selinux_labels", rt.SELinux,
+			"limit", "a launch bound to a provider's endpoint is refused as a container session: the container runner does not hold the provider network boundary")
+	}
+	// A container the runner cannot remove after its session ended has no caller to tell:
+	// the log is where an operator finds it.
+	rt.Warn = func(msg string, kv ...any) {
+		if log != nil {
+			log.Warn(msg, kv...)
+		}
+	}
+	return sessions.NewRunnerWithContainers(native, rt)
 }
 
 // logSessionLaunchInspection records, once at boot, whether the wired Runner can

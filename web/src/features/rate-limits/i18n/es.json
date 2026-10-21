@@ -26,7 +26,7 @@
     "title": "Inventario por limitador",
     "description": "Cada limitador que informa el proveedor, agrupado por ámbito: primero los grupos de toda la organización y después los grupos de anulación por espacio de trabajo.",
     "unavailable": "Inventario no disponible",
-    "unavailableHint": "El conector de administración de solo lectura no está cableado, por lo que el inventario por limitador no se puede leer aquí. Es una indisponibilidad honesta, no un inventario vacío.",
+    "unavailableHint": "El conector de administración de solo lectura no está configurado, por lo que el inventario por limitador no se puede leer aquí. Es una indisponibilidad honesta, no un inventario vacío.",
     "tableLabel": "Inventario de límites de tasa",
     "empty": "No se informó de ningún límite de tasa",
     "emptyHint": "El proveedor no devolvió entradas por limitador para esta organización.",

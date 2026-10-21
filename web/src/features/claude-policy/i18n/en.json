@@ -12,7 +12,7 @@
   },
   "seam": {
     "badge": "Backend pending",
-    "body": "{{what}} is wired to the declared contract; the backend endpoint is not live yet. You can compose and validate locally — this activates the moment the backend lands. Nothing is faked."
+    "body": "{{what}} follows the declared contract; the backend endpoint is not live yet. You can compose and validate locally — this activates the moment the backend lands. Nothing is faked."
   },
   "validation": {
     "ok": "Schema valid.",
@@ -89,7 +89,7 @@
     "postV1": "Differentiator · post-v1 candidate",
     "postV1Hint": "Managed-Agents HITL is a differentiator; the v1-vs-post-v1 cut is decided at the gate.",
     "vaultsRisk": "Lateral risk: vaults/credentials are workspace-scoped — anyone with a workspace API key can reference them. Secrets are write-only; archive purges secrets but retains records for audit, delete is a hard delete.",
-    "endpointNote": "Thread events and the allow/deny emission are wired to the declared contract. The live docs expose events at /v1/sessions/{id}/events; the connector reads the per-thread path — neither is re-exposed by an engine route yet.",
+    "endpointNote": "Thread events and the allow/deny emission follow the declared contract. The live docs expose events at /v1/sessions/{id}/events; the connector reads the per-thread path — neither is re-exposed by an engine route yet.",
     "listLabel": "Pending managed-agent confirmations",
     "pending": "Awaiting confirmation",
     "session": "Session",

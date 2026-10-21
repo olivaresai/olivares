@@ -45,7 +45,7 @@ name: olivares
 services:
   olivares:
     # release
-    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.2}
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.3}
     # /release
     # A FIXED NAME, so the documented next step is one argv an operator can type:
     #   docker exec olivares olivares first-boot
@@ -108,8 +108,17 @@ services:
     # Agent dependencies are in the image; installations and caches stay in the volume.
     user: "65532:65532"
     read_only: true
+    # /tmp is the one writable scratch directory, and every session's private TMPDIR
+    # is made in it. It is a RAM tmpfs, so what is written there counts against the
+    # memory limit below, and a full one takes the container down with it. It is named
+    # here with a size because Docker sizes a bare tmpfs at half the host's RAM, which
+    # on most hosts is more than that limit; 2g is the limit itself. OLIVARES_TMP_SIZE
+    # (in .env, a plain size) changes it. noexec,nosuid,nodev are Docker's tmpfs defaults,
+    # spelled out after the size so the posture does not rest on a default. For many
+    # concurrent sessions, size memory, processes and /tmp, or move /tmp to a volume:
+    # deploy/compose/README.md, "Size it for many sessions".
     tmpfs:
-      - /tmp
+      - /tmp:size=${OLIVARES_TMP_SIZE:-2g},noexec,nosuid,nodev
     cap_drop:
       - ALL
     security_opt:
@@ -117,9 +126,12 @@ services:
       # AppArmor 4 hosts: load the shipped profile as the README shows before up.
       - apparmor=${OLIVARES_APPARMOR_PROFILE:-docker-default}
       # Docker's default profile plus the user and network namespaces that confine
-      # a record-bound Claude Code or Codex session to its provider; nothing else is added.
+      # a record-bound Claude Code or Codex session to its provider, and the mount
+      # namespace and `mount` call of the session helper that keeps a folder's Git hooks
+      # and configuration read-only; nothing else is added.
       - seccomp=../seccomp/olivares-sessions.json
-    # Memory ceiling for the engine plus the first agent session. There is no CPU limit:
+    # Memory ceiling for the engine plus the first agent session (the rule for more sessions,
+    # and for a process limit, is in deploy/compose/README.md). There is no CPU limit:
     # a Docker daemon refuses a CPU limit above its CPU count, so any limit above 1 would
     # stop `up` on a 1-CPU host. The host's CPUs bound the engine; to cap it lower, add
     # deploy.resources.limits.cpus (at most the host's CPU count) in a Compose override.

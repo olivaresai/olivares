@@ -8,8 +8,8 @@
 # claude's stdin/stdout (the stream-json governed transport) WITHOUT a Docker socket
 # and WITHOUT any privilege escalation. Decision (2026-06-16): combined
 # image + procRunner, no socket — the secure, minimal-surface path for self-hosted
-# co-deployment (the per-session fresh-container Runner via the Docker API is a
-# documented follow-up, not built here).
+# co-deployment (per-session containers are run through the host's podman or Docker
+# CLI by a native engine, not from this image: see the Topology 4 how-to).
 #
 # OPT-IN. This is a SEPARATE artifact — it does NOT replace the distroless
 # ./Dockerfile / Dockerfile.release. The default engine image stays claude-free and

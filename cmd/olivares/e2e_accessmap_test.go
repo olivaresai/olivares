@@ -10,7 +10,10 @@ package main
 // the self-audit trail every privileged graph read must leave (docs/SECURITY-HARDENING.md).
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/cmd/olivares/seed"
@@ -191,4 +194,49 @@ func TestE2E_AccessReads_SelfAudit(t *testing.T) {
 	// The chain still verifies after the reads.
 	v := h.getJSON(h.adminToken, h.tenantA, "/v1/audit/verify")
 	assertEq(t, "audit.ok", v["ok"], true)
+}
+
+// Real use: the CLI against the real engine and its seeded estate (no stubbed server).
+// --mode rw reaches the engine as readwrite and finds the granted-and-exercised edge;
+// a --limit that cuts the graph prints the continuation; the summary and drift answer.
+func TestE2E_AccessMapCLI_ModeLimitAndSummary(t *testing.T) {
+	h := newHarness(t)
+	srv := httptest.NewServer(h.h)
+	t.Cleanup(srv.Close)
+	run := func(args ...string) string {
+		t.Helper()
+		out, _, err := execRoot(t, append(args, "--server", srv.URL, "--token", h.adminToken, "--tenant", h.tenantA)...)
+		if err != nil {
+			t.Fatalf("olivares %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return out
+	}
+
+	var g struct {
+		Edges []map[string]any `json:"edges"`
+	}
+	if err := json.Unmarshal([]byte(run("accessmap", "graph", "--mode", "rw", "-o", "json")), &g); err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Edges) == 0 {
+		t.Fatal("`accessmap graph --mode rw` found no edge in the seeded estate (the documented command)")
+	}
+	for _, e := range g.Edges {
+		assertEq(t, "mode rw edge", e["mode"], "readwrite")
+	}
+
+	if out := run("accessmap", "graph", "--limit", "1"); !strings.Contains(out, "more rows exist") {
+		t.Errorf("a graph cut by --limit must print the continuation, got:\n%s", out)
+	}
+
+	sum := run("accessmap", "attack-paths", "summary")
+	for _, row := range []string{"agents", "escalation paths", "exfil routes"} {
+		if !strings.Contains(sum, row) {
+			t.Errorf("summary lacks %q:\n%s", row, sum)
+		}
+	}
+	if strings.Contains(sum, "TRUNCATED") {
+		t.Errorf("a small estate must not be marked truncated:\n%s", sum)
+	}
+	run("accessmap", "drift", "--mode", "r")
 }

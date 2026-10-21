@@ -1,0 +1,275 @@
+{
+  "title": "모델 및 프로바이더",
+  "description": "거버넌스된 모델 에스테이트 — 선언된 기능과 가격, 라우팅 정책 및 프로바이더 키 참조입니다. 비밀은 절대 표시되지 않으며 마스킹된 참조만 표시됩니다.",
+  "tabs": {
+    "catalog": "카탈로그",
+    "estate": "에스테이트",
+    "routing": "라우팅",
+    "keys": "프로바이더 키",
+    "gpai": "GPAI 태세",
+    "access": "접근"
+  },
+  "catalog": {
+    "title": "기능 매트릭스",
+    "description": "모델 패밀리별로 선언된 API 기능입니다.",
+    "pricingTitle": "선언된 가격",
+    "pricingDescription": "목록가 기본값 — 불변의 진실이 아니라 참조입니다. 각 프로바이더와 대조하여 확인하고 모델별로 재정의하십시오.",
+    "family": "패밀리",
+    "provider": "프로바이더",
+    "context": "컨텍스트",
+    "maxOutput": "최대 출력",
+    "modality": "모달리티",
+    "inputPrice": "입력 / MTok",
+    "outputPrice": "출력 / MTok",
+    "cacheRead": "캐시 읽기 / MTok",
+    "cacheWrite1h": "캐시 쓰기 1h / MTok",
+    "residency": "데이터 상주",
+    "tiers": "서비스 계층",
+    "residencyNotApplicable": "해당 없음",
+    "tiersNotDeclared": "선언되지 않음",
+    "usBurndown": "{{mult}}×",
+    "capsToConfirm": "확인할 기능",
+    "capsToConfirmHint": "이 패밀리의 기능 집합은 아직 모델 카드와 대조 검증되지 않았습니다. 모델은 나열되지만 그 기능은 지어내는 대신 미확인으로 플래그됩니다.",
+    "tier": {
+      "standard": "표준",
+      "batch": "배치",
+      "priority": "우선순위",
+      "priority_on_demand": "우선순위 온디맨드",
+      "flex": "Flex",
+      "flex_discount": "Flex 할인"
+    },
+    "asOf": "{{date}} 기준",
+    "noPricing": "선언된 가격 없음",
+    "present": "지원됨",
+    "absent": "지원되지 않음"
+  },
+  "estate": {
+    "title": "거버넌스된 모델",
+    "description": "카탈로그에서 보강된 이 테넌트 에스테이트의 모델입니다.",
+    "empty": "에스테이트에 모델 없음",
+    "emptyHint": "이 테넌트가 호출할 수 있는 모든 모델이 프로바이더 및 한도와 함께 여기에 나열됩니다. 프로바이더를 추가하여 에스테이트를 채우십시오.",
+    "addProvider": "프로바이더 추가",
+    "columns": {
+      "name": "모델",
+      "provider": "프로바이더",
+      "family": "패밀리",
+      "context": "컨텍스트",
+      "inputCost": "입력 µ$/토큰",
+      "outputCost": "출력 µ$/토큰",
+      "modality": "모달리티",
+      "capabilities": "기능",
+      "status": "상태"
+    },
+    "notEnriched": "아직 선언된 패밀리 없음 — 가격 없음",
+    "costNote": "토큰당 µUSD는 대략적인 편의 수치이며 실제 사용의 권위 있는 비용은 FinOps 원장입니다.",
+    "truncated": "모델 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 거버넌스된 모델이 있으며 이 페이지는 id로 행을 가져옵니다. 표 검색과 정렬은 불러온 것에만 적용됩니다."
+  },
+  "routing": {
+    "title": "라우팅 정책",
+    "description": "정책은 여기서 정의되고 게이트웨이 커넥터가 실행합니다 — UI는 이를 구성하고 표시합니다.",
+    "new": "새 정책",
+    "empty": "라우팅 정책 없음",
+    "emptyHint": "라우팅 정책은 전략에 대한 기본 모델과 폴백 체인을 선택합니다.",
+    "strategy": "전략",
+    "requiredCapabilities": "필요한 기능",
+    "preferredProviders": "선호 프로바이더",
+    "minContext": "최소 컨텍스트 창",
+    "pinnedModel": "고정 모델",
+    "allowDeprecated": "사용 중단 허용",
+    "gateway": "게이트웨이 엔드포인트",
+    "viaGateway": "게이트웨이 경유",
+    "resolve": "확인",
+    "resolving": "확인 중…",
+    "enabled": "활성화됨",
+    "disabled": "비활성화됨",
+    "strategies": {
+      "cost": "비용",
+      "latency": "지연",
+      "capability": "기능",
+      "pinned": "고정"
+    },
+    "decision": {
+      "title": "확인된 결정",
+      "primary": "기본",
+      "fallbacks": "폴백 체인",
+      "unresolved": "이 정책을 충족하는 거버넌스된 모델이 없습니다",
+      "reason": "사유"
+    },
+    "dialog": {
+      "title": "라우팅 정책",
+      "name": "이름",
+      "listHint": "쉼표로 구분합니다.",
+      "create": "정책 저장",
+      "created": "라우팅 정책이 저장되었습니다"
+    },
+    "execute": "실행",
+    "executeConfirm": "실행하고 비용 지출",
+    "input": "입력",
+    "executeHint": "확인은 무료입니다. 실행은 프로바이더를 호출하고 예산에서 지출합니다.",
+    "executeWarning": "확인된 모델 체인을 실제 프로바이더에 실행하고 비용 샘플을 기록합니다. 시뮬레이션이 아니므로 지출 없이 결정을 미리 보려면 확인을 사용하십시오.",
+    "noExecutor": "실행기가 프로비저닝되지 않았습니다. 장애가 아닙니다: 제어 플레인은 라우팅 결정을 확인하지만 운영자가 실행기를 설정할 때까지 프로바이더에 지출하지 않습니다.",
+    "budgetDenied": "FinOps 예산이 프로바이더 호출 전에 지출을 거부했습니다. 거버넌스 게이트가 작동했습니다 — 다시 시도하지 말고 예산을 올리거나 검토하십시오.",
+    "fallbackUsed": "폴백 사용됨",
+    "refusal": "프로바이더 거부",
+    "tokens": "입력 {{in}} · 출력 {{out}}",
+    "outputNotStored": "출력은 귀하에게 반환되고 어디에도 저장되지 않습니다: 마스킹된 비용 샘플만 원장에 도달합니다.",
+    "truncated": "정책 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 라우팅 정책이 있으며 이 페이지는 id로 행을 가져옵니다. 여기에 없는 정책은 특정 요청을 라우팅하는 정책이 없다는 증거가 아닙니다."
+  },
+  "keys": {
+    "title": "프로바이더 키 참조",
+    "description": "프로바이더 API 키 및 워크스페이스에 대한 거버넌스된 참조입니다. 마스킹된 힌트만 저장되며 비밀 값은 절대 저장되지 않습니다.",
+    "new": "키 참조 추가",
+    "empty": "키 참조 없음",
+    "emptyHint": "키 참조는 엔진이 보유한 자격 증명을 가리키며 비밀 자체를 가리키지 않습니다. 모델을 호출하려면 하나를 추가하십시오.",
+    "maskedOnly": "참조만 — 비밀 값은 절대 저장되거나 표시되지 않습니다.",
+    "columns": {
+      "name": "이름",
+      "provider": "프로바이더",
+      "kind": "종류",
+      "extId": "외부 id",
+      "hint": "마스킹된 힌트",
+      "owner": "소유자",
+      "status": "상태",
+      "created": "생성됨"
+    },
+    "kind": {
+      "api_key": "API 키",
+      "workspace": "워크스페이스"
+    },
+    "dialog": {
+      "title": "키 참조 추가",
+      "name": "이름",
+      "provider": "프로바이더",
+      "kind": "참조 종류",
+      "extId": "외부 id",
+      "extIdHint": "프로바이더의 키/워크스페이스 id입니다(예: apikey_01). 비밀이 아닙니다.",
+      "owner": "소유자",
+      "noSecretNote": "이 양식은 비밀을 절대 받지 않습니다. Olivares는 참조와 마스킹된 힌트만 저장합니다.",
+      "create": "참조 추가",
+      "created": "키 참조가 추가되었습니다"
+    },
+    "truncated": "키 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 프로바이더 키 참조가 있으며 이 페이지는 id로 행을 가져옵니다. 여기에 없는 키는 해당 프로바이더에 자격 증명이 없다는 증거가 아닙니다. 표 정렬은 불러온 것에만 적용됩니다."
+  },
+  "gpai": {
+    "title": "GPAI 프로바이더 태세",
+    "description": "운영자가 증명한 공급자 태세이며 프로바이더당 한 번 기록됩니다.",
+    "notice": "이것은 운영자가 증명한 공급자 GPAI 태세이며 ISO/IEC 42001 A.10.3 및 NIST AI RMF GOVERN-6.1 / MAP-4.1의 공급자 증거 요구에 사용됩니다. Olivares의 규정 준수 판정이 아닙니다.",
+    "empty": "기록된 GPAI 프로바이더 태세 없음",
+    "emptyHint": "공개된 공급자 자료를 검토했거나 주장을 기록해야 할 때 프로바이더 태세를 증명하십시오.",
+    "verifiedMeaning": "운영자가 공개된 프로바이더 자료와 대조 검토함 — Olivares가 수행한 검증도 규정 준수 판정도 아닌 운영자 자신의 증명입니다.",
+    "actions": {
+      "attest": "태세 증명",
+      "edit": "태세 편집",
+      "editProvider": "{{provider}}의 태세 편집"
+    },
+    "columns": {
+      "provider": "프로바이더",
+      "review": "검토 상태",
+      "attestedAt": "증명됨",
+      "actions": "작업"
+    },
+    "claims": {
+      "cop_signatory": "Code of Practice 서명자",
+      "technical_docs": "기술 문서 공개됨",
+      "training_data_summary": "학습 데이터 요약 공개됨",
+      "copyright_policy": "저작권 정책 기록됨",
+      "downstream_info": "다운스트림 정보 제공됨",
+      "systemic_risk": "시스템 위험이 있는 GPAI",
+      "safety_report": "안전 및 보안 모델 보고서"
+    },
+    "states": {
+      "recorded": "기록됨",
+      "notRecorded": "주장이 기록되지 않음",
+      "reviewed": "운영자 검토 증명",
+      "unreviewed": "운영자 주장 — 미검토"
+    },
+    "detail": {
+      "title": "GPAI 태세: {{provider}}",
+      "description": "이 프로바이더에 대해 운영자가 기록한 주장과 증명 메타데이터입니다.",
+      "claims": "프로바이더 주장",
+      "reviewState": "검토 상태",
+      "verificationMethod": "검증 방법",
+      "attestedBy": "증명자",
+      "attestedAt": "증명 시각",
+      "note": "메모",
+      "notProvided": "제공되지 않음"
+    },
+    "form": {
+      "createTitle": "GPAI 프로바이더 태세 증명",
+      "editTitle": "GPAI 프로바이더 태세 편집",
+      "description": "프로바이더의 주장과 운영자 자신의 검토 증명을 기록합니다.",
+      "providerRef": "프로바이더 참조",
+      "providerLocked": "편집 중에는 프로바이더 참조가 잠깁니다. 변경하면 두 번째 태세가 생성되기 때문입니다.",
+      "providerRequired": "프로바이더 참조를 입력하십시오.",
+      "claimsTitle": "프로바이더 주장",
+      "claimsDescription": "운영자가 이 프로바이더에 대해 기록한 경우에만 주장을 켜십시오.",
+      "systemicRiskHint": "분류: 모델이 시스템 위험이 있는 GPAI로 분류됩니다.",
+      "safetyReportHint": "이 보고서는 시스템 위험이 있는 GPAI로 분류된 모델에 적용됩니다.",
+      "verified": "공개된 프로바이더 자료와 대조 검토됨",
+      "verificationMethod": "검증 방법",
+      "verificationMethodHint": "운영자가 이 태세를 검토됨으로 표시할 때 필요합니다.",
+      "verificationMethodRequired": "공개된 프로바이더 자료를 어떻게 검토했는지 설명하십시오.",
+      "note": "메모",
+      "requestRejected": "태세가 저장되지 않았습니다. 아래 서버 응답을 검토하십시오.",
+      "created": "GPAI 프로바이더 태세가 증명되었습니다",
+      "updated": "GPAI 프로바이더 태세가 업데이트되었습니다",
+      "save": "증명 저장",
+      "saving": "저장 중…"
+    },
+    "truncated": "태세 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 GPAI 태세가 있으며 이 페이지는 id로 행을 가져옵니다. 여기에 없는 프로바이더는 그에 대해 아무것도 선언되지 않았다는 증거가 아닙니다. 표 정렬은 불러온 것에만 적용됩니다."
+  },
+  "empty": {
+    "keyRefs": {
+      "title": "아직 추가된 프로바이더 키 참조 없음",
+      "description": "프로바이더 식별자로 API 키 또는 워크스페이스 참조를 추가하십시오. 콘솔은 자격 증명 값을 절대 받거나 저장하지 않습니다."
+    },
+    "models": {
+      "title": "아직 관측된 거버넌스된 모델 없음",
+      "description": "커넥터가 사용 중인 프로바이더와 모델을 지정하는 비용 샘플을 내보내면 모델이 에스테이트에 들어옵니다."
+    }
+  },
+  "residency": {
+    "title": "워크스페이스 상주",
+    "description": "프로바이더가 보고하는 대로 각 워크스페이스가 추론을 처리하는 곳과 데이터가 저장되는 곳입니다.",
+    "empty": "상주 설정을 보고하는 워크스페이스 없음",
+    "emptyHint": "상주 설정은 워크스페이스가 모델을 호출할 수 있는 지역을 나타냅니다. 어떤 워크스페이스도 선언하지 않았습니다.",
+    "unrestricted": "프로바이더가 제한을 보고하지 않음",
+    "allowed": "허용됨: {{geos}}",
+    "unreported": "보고되지 않음",
+    "defaultGeo": "기본값: {{geo}}",
+    "atRest": "저장 시: {{geo}}",
+    "truncated": "워크스페이스 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 워크스페이스 상주 기록이 있으며 이 페이지는 생성 시 할당된 id로 행을 가져오므로 이후 행이 누락됩니다. 여기에 없는 워크스페이스는 그 처리가 제한되지 않았다는 증거가 아닙니다: 단순히 이 페이지 밖에 있을 수 있습니다."
+  },
+  "access": {
+    "title": "모델 접근 규칙",
+    "description": "누가 어떤 모델을 어디서 사용할 수 있는지입니다.",
+    "empty": "접근 규칙 없음 — 모든 주체가 제한되지 않음",
+    "emptyHint": "접근 규칙은 어떤 주체가 어떤 모델을 호출할 수 있는지 나타냅니다. 규칙이 없으면 모든 주체가 에스테이트의 모든 모델을 호출할 수 있습니다.",
+    "groupsTitle": "모델 그룹",
+    "groupsDescription": "규칙이 단일 모델 대신 대상으로 삼을 수 있는 명명된 집합입니다.",
+    "groupsEmpty": "모델 그룹 없음",
+    "groupsEmptyHint": "모델 그룹은 모델 집합을 명명하여 하나의 규칙이 모두를 거버넌스할 수 있게 합니다. 생성하여 시작하십시오.",
+    "members": "구성원 {{n}}개",
+    "confinementNotice": "⛔ 허용은 가산적이기만 하지 않습니다. 어떤 허용에 의해 명명된 주체는 그 허용으로 제한되며 — 다른 모든 것은 그들에게 거부됩니다. 어떤 규칙에도 명명되지 않은 주체는 제한되지 않습니다. 따라서 누군가에 대한 첫 허용을 만들면 그들에게서 카탈로그의 나머지를 빼앗습니다.",
+    "effect": {
+      "allow": "허용",
+      "forbid": "금지"
+    },
+    "tenantWide": "테넌트 전체",
+    "inWorkspace": "{{ws}}에서",
+    "allSurfaces": "모든 서피스",
+    "onSurfaces": "{{list}}에서",
+    "forbidSubtracts": "이 금지는 차감합니다: 같은 주체를 명명한 허용을 재정의합니다.",
+    "confinedSubject": "{{subject}}은(는) 자신의 허용으로 제한됩니다 — 나열되지 않은 것은 그들에게 거부됩니다.",
+    "readOnlyNote": "읽기 전용: 누가 모델을 사용할 수 있는지 변경하려면 라우팅 정책 편집보다 높은 계층인 모델 접근 관리 권한이 필요합니다.",
+    "truncated": "규칙 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 많은 접근 규칙이 있으며 이 페이지는 id로 행을 가져옵니다. 이 행의 표시는 불러온 규칙만 반영합니다: 제한을 도입하거나 허용 대상을 추가할 허용이 누락될 수 있고 접근을 차감하는 금지도 누락될 수 있습니다 — 따라서 이 페이지는 현실보다 넓게 또는 좁게 읽힐 수 있으며, 불러온 규칙이 없는 주체는 전혀 나타나지 않습니다. 여기서 유효 접근을 추론하지 마십시오: 엔진은 결정 전에 모든 페이지를 소진하며 사용자, 역할 및 그룹 전반에서 주체를 해석하는데 행은 이를 표시할 수 없습니다.",
+    "groupsTruncated": "그룹 {{n}}개를 불러왔으며 더 있습니다",
+    "groupsTruncatedHint": "표시된 것보다 많은 모델 그룹이 있으며 이 페이지는 id로 행을 가져옵니다. 여기에 없는 그룹은 존재하지 않는다는 증거가 아닙니다 — 규칙이 여전히 이를 대상으로 삼을 수 있습니다."
+  }
+}

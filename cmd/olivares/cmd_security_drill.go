@@ -44,8 +44,9 @@ func securityDrillCmd() *cobra.Command {
 	var draftPath string
 	var keepArtifacts bool
 	cmd := &cobra.Command{
-		Use:   "drill",
-		Short: "Timed end-to-end PSIRT advisory-pipeline drill",
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "drill",
+		Short:       "Timed end-to-end PSIRT advisory-pipeline drill",
 		Long: strings.TrimSpace(`
 Prove the PSIRT advisory pipeline end to end in a disposable scratch directory: build
 and sign the fixture feed, verify affected/patched/range-boundary versions offline, then

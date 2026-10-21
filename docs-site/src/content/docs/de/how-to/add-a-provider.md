@@ -129,10 +129,10 @@ scheitert.
 | `openai` | `codex`, `opencode` | `codex` |
 | `xai` | `grok`, `opencode` | `grok` |
 | `gemini` | `gemini-cli` |  |
-| `openai_compatible` | `codex` | `codex` |
+| `openai_compatible` | `codex`, `opencode` | `codex` |
 | `ollama` | `codex`, `opencode` | `codex`, `opencode` |
 
-Für `anthropic`, `openai` und `xai` akzeptiert OpenCode nur den eigenen Endpunkt des Anbieters: Lassen Sie `base_url` leer. Verwenden Sie `codex` für einen `openai_compatible`-Anbieter und `codex` oder `opencode` für `ollama`.
+Für `anthropic`, `openai` und `xai` akzeptiert OpenCode nur den eigenen Endpunkt des Anbieters: Lassen Sie `base_url` leer. Verwenden Sie `codex` für ein `openai_compatible`-Gateway und `codex` oder `opencode` für `ollama` sowie für einen lokalen `openai_compatible`-Server, dessen `base_url` einfaches `http` an einer Loopback- oder privaten Adresse ist, etwa `http://127.0.0.1:8080/v1` (vLLM, llama.cpp). Die `base_url` enthält `/v1`.
 
 ## 4. Die erste Sitzung starten
 

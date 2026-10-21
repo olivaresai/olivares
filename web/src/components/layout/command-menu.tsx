@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { EditionBadge } from '@/features/console/edition-badge'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   LogOut,
   Moon,
@@ -11,6 +12,7 @@ import {
   Play,
   Search,
   Sun,
+  Columns2,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -31,9 +33,8 @@ import { agentToolsApi, agentToolsKeys } from '@/features/agent-tools/api'
 import { toolFacts, toolLabel } from '@/features/agent-tools/inventory'
 import { useProviderBoundary } from '@/features/providers/auth-boundary'
 import { settingsSearchEntries } from '@/features/settings/sections'
-import { OffTag } from '@/features/navigation/off-tag'
-import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth/context'
+import { usePermissionWords } from '@/lib/auth/permission-words'
 import {
   SEARCH_KIND_FEATURE,
   SEARCH_KIND_ROUTES,
@@ -49,14 +50,28 @@ import {
   viewById,
   type NavSearchEntry,
 } from '@/features/navigation/model'
-import { KEYBINDINGS, NAV_LEADER, NAV_SEQUENCES } from '@/lib/keybindings/table'
+import { isTypingTarget, resolveBinding } from '@/lib/keybindings/model'
+import {
+  KEYBINDINGS,
+  NAV_LEADER,
+  NAV_SEQUENCES,
+  PALETTE_RECENT_COMMANDS,
+} from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
 import { useThemeStore } from '@/stores/theme'
 import { usePreferencesStore } from '@/stores/preferences'
 import { foldOrOverlay } from './sidebar-mode'
 import { frameFor } from './page-frames'
 import { useWorkspaceStore } from '@/stores/workspace'
+import type { RailRow } from './session-rail-model'
 import { useSessionRail } from './use-session-rail'
+import {
+  BESIDE_PARAM,
+  SESSION_PARAM,
+  PANE_PARAM,
+  decodeSessionAddress,
+  isSessionAddress,
+} from '@/features/sessions/session-address'
 
 /** The characters the operator typed, without a leading ">" command limit. */
 function matchQueryOf(query: string): { commandOnly: boolean; text: string } {
@@ -162,21 +177,81 @@ export function CommandMenu() {
   )
 }
 
+/**
+ * The router JSON-parses search values (`?session=123` arrives as a number), and the
+ * address decoder reads strings. Keep the scalars as strings and leave out what has no
+ * string form, so a hand-edited link cannot throw here or write `[object Object]` back.
+ */
+function searchStrings(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string') out[key] = value
+    else if (typeof value === 'number' || typeof value === 'boolean')
+      out[key] = String(value)
+  }
+  return out
+}
+
 function PaletteBody() {
   const { t } = useTranslation(['nav', 'common', 'auth'])
+  const permissionWords = usePermissionWords()
   const setOpen = useCommandStore((s) => s.setOpen)
   const navigate = useNavigate()
+  const location = useRouterState({ select: (state) => state.location })
+  const routeSearch = searchStrings(location?.search)
+  const sessionAddress = decodeSessionAddress(routeSearch).value
+  // A default narrative has not written a URL yet. Read the rail's existing
+  // selection rather than choosing a different default for the palette.
+  const currentSession =
+    sessionAddress.address ??
+    document
+      .querySelector(
+        '[data-testid="work-rail"] [aria-selected="true"][data-address]',
+      )
+      ?.getAttribute('data-address')
   const { activeTenant, can, logout, isSuperadmin } = useAuth()
-  const { navigable, listed, isOff } = useViewAccess()
+  const { navigable, listed } = useViewAccess()
   // The verbs' own authority, which is NOT the view's (see features/navigation/command-actions).
   const { authorized: mayRun, capture } = useCommandActionAuthority()
   const setTheme = useThemeStore((s) => s.setTheme)
+  const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   const workspaceName = useWorkspaceStore((s) => s.activeWorkspaceName)
   const rail = useSessionRail()
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const { commandOnly, text: matchQuery } = matchQueryOf(query)
   const boundary = useProviderBoundary()
+  // Freeze on opening, or on the first read if the palette opened before it arrived.
+  // The whole list, not the visible window: a query must still find a session that
+  // sits below the first eight rows.
+  const scope = `${boundary.epoch}:${workspace ?? ''}`
+  const railSessions = rail.groups
+    .flatMap((group) => group.rows)
+    .filter((row) => row.kind === 'session')
+  // The rail answers from several reads. Freeze once they have all answered, so a
+  // read still pending cannot leave holes in the list for the whole open. A read in
+  // error contributes no rows, exactly like one still loading: with nothing to show
+  // it is "not frozen yet", never "no sessions", and the next refetch can still freeze.
+  const railReady =
+    !rail.status?.loading && !(rail.status?.error && railSessions.length === 0)
+  const [recentSnapshot, setRecentSnapshot] = useState(() => ({
+    scope,
+    rows: railReady ? railSessions : null,
+  }))
+  if (recentSnapshot.scope !== scope)
+    setRecentSnapshot({ scope, rows: railReady ? railSessions : null })
+  else if (recentSnapshot.rows === null && railReady)
+    setRecentSnapshot({ scope, rows: railSessions })
+  const canOpenRecent = (row: RailRow) => {
+    const view = FEATURE_VIEWS.find((v) => v.path === row.to)
+    return !!view && navigable(view)
+  }
+  const openRecent = (row: RailRow) => {
+    if (!canOpenRecent(row)) return
+    setOpen(false)
+    void navigate({ to: row.to as never, search: row.search as never })
+  }
   const toolsView = viewById('agent-tools')
   const ToolIcon = toolsView?.icon ?? Search
   // Installed objects use the Tools page's authority and its existing scoped reads.
@@ -256,7 +331,6 @@ function PaletteBody() {
   const rooms = FEATURE_VIEWS.filter(
     (v: FeatureView) => !v.hideInNav && navigable(v),
   )
-  const views = rooms.filter((v) => listed(v))
 
   // The shared index, narrowed to what THIS principal may open (the same projection the
   // sidebar filter uses), ranked by the query.
@@ -298,11 +372,25 @@ function PaletteBody() {
         )
   const recentSessions = commandOnly
     ? []
-    : rail.groups
-        .flatMap((group) => group.rows)
-        .filter((row) => row.kind === 'session')
+    : (recentSnapshot.rows ?? [])
+        .filter(canOpenRecent)
         .filter((row) => shows(row.title ?? row.reference))
         .slice(0, 8)
+  const openBesideLabel = t('common:keys.command.surface.openBeside')
+  const besideSessions =
+    location?.pathname === '/sessions' &&
+    isSessionAddress(currentSession ?? undefined)
+      ? rail.groups
+          .flatMap((group) => group.rows)
+          .filter(
+            (row) =>
+              row.kind === 'session' &&
+              isSessionAddress(row.search[SESSION_PARAM]) &&
+              row.search[SESSION_PARAM] !== currentSession &&
+              shows(`${openBesideLabel} ${row.title ?? row.reference}`),
+          )
+          .slice(0, 8)
+      : []
 
   const searchHits = searchQ.data?.results ?? []
 
@@ -335,8 +423,6 @@ function PaletteBody() {
   const renderNav = (e: NavSearchEntry) => {
     const Icon = e.icon
     const context = e.kind === 'area' ? t('nav:directory.area') : e.context
-    const view = e.kind === 'view' ? viewById(e.id) : undefined
-    const off = !!view && isOff(view)
     return (
       <CommandItem
         key={`${e.kind}:${e.id}`}
@@ -345,10 +431,7 @@ function PaletteBody() {
       >
         <Icon />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span
-            className={cn('truncate', off && 'text-text-3')}
-            data-slot="palette-name"
-          >
+          <span className="truncate" data-slot="palette-name">
             {markMatch(e.label, matchQuery)}
           </span>
           {context || e.description ? (
@@ -363,7 +446,6 @@ function PaletteBody() {
             </span>
           ) : null}
         </span>
-        {off ? <OffTag /> : null}
         <KeyHint keys={goKeys(e)} />
       </CommandItem>
     )
@@ -381,13 +463,15 @@ function PaletteBody() {
     }
     if (!can(permission)) {
       return {
-        reason: t('common:commandPalette.deniedReason', { permission }),
+        reason: t('common:commandPalette.deniedReason', {
+          permission: permissionWords(permission),
+        }),
         help: t('common:commandPalette.deniedHelp'),
       }
     }
     return null
   }
-  const actionItems = views
+  const actionItems = rooms
     .filter((v) => v.commandActions?.length)
     .flatMap((v) =>
       (v.commandActions ?? []).map((action) => {
@@ -478,6 +562,7 @@ function PaletteBody() {
   )
   const showFold = shows(foldLabel)
   const anyAction =
+    besideSessions.length > 0 ||
     actionItems.length > 0 ||
     showStartSession ||
     showLight ||
@@ -508,6 +593,7 @@ function PaletteBody() {
           value={query}
           onValueChange={setQuery}
           className={workspaceName ? 'pr-40' : 'pr-14'}
+          leading={<EditionBadge compact />}
         />
         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center gap-2">
           {workspaceName ? (
@@ -518,7 +604,26 @@ function PaletteBody() {
           <Kbd>Esc</Kbd>
         </span>
       </div>
-      <CommandList label={t('common:commandPalette.results')}>
+      <CommandList
+        label={t('common:commandPalette.results')}
+        // cmdk fixes its list to -1 after spreading props; make the results a Tab stop.
+        ref={(node) => {
+          if (node) node.tabIndex = 0
+        }}
+        onKeyDown={(e) => {
+          if (e.defaultPrevented || e.nativeEvent.isComposing) return
+          const command = resolveBinding(KEYBINDINGS, e, {
+            paletteRecent: query === '' && !isTypingTarget(e.target),
+          })
+          const index = PALETTE_RECENT_COMMANDS.findIndex(
+            (id) => id === command,
+          )
+          const row = index >= 0 ? recentSessions[index] : undefined
+          if (!row) return
+          e.preventDefault()
+          openRecent(row)
+        }}
+      >
         {anyListed ? null : (
           <CommandItem disabled value="empty:none">
             {t('common:commandPalette.empty')}
@@ -555,6 +660,29 @@ function PaletteBody() {
               </CommandItem>
             ) : null}
             {actionItems}
+            {besideSessions.map((row) => (
+              <CommandItem
+                key={`beside:${row.key}`}
+                value={`beside:${row.key}`}
+                onSelect={() => {
+                  const search = new URLSearchParams({
+                    ...routeSearch,
+                    [SESSION_PARAM]: currentSession!,
+                    [BESIDE_PARAM]: row.search[SESSION_PARAM],
+                    [PANE_PARAM]: 'narrative',
+                  })
+                  search.delete('tab')
+                  go(
+                    `/sessions?${search.toString()}${location.hash ? `#${location.hash}` : ''}`,
+                  )
+                }}
+              >
+                <Columns2 aria-hidden="true" />
+                <span className="truncate">
+                  {openBesideLabel} · {row.title ?? row.reference}
+                </span>
+              </CommandItem>
+            ))}
             {showLight ? (
               <CommandItem
                 value={`theme:light ${themeLabel} ${lightLabel}`}
@@ -625,20 +753,14 @@ function PaletteBody() {
 
         {recentSessions.length > 0 ? (
           <CommandGroup heading={t('common:commandPalette.recentSessions')}>
-            {recentSessions.map((row) => {
+            {recentSessions.map((row, index) => {
               const title = row.title ?? row.reference
               const state = t(`nav:shell.rail.state.${row.state}`)
               return (
                 <CommandItem
                   key={row.key}
                   value={`recent-session:${row.key} ${title}`}
-                  onSelect={() => {
-                    setOpen(false)
-                    void navigate({
-                      to: row.to as never,
-                      search: row.search as never,
-                    })
-                  }}
+                  onSelect={() => openRecent(row)}
                 >
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate" data-slot="palette-name">
@@ -651,6 +773,9 @@ function PaletteBody() {
                       {[row.meta, state].filter(Boolean).join(' · ')}
                     </span>
                   </span>
+                  {query === '' && index < PALETTE_RECENT_COMMANDS.length ? (
+                    <KeyHint keys={[String(index + 1)]} />
+                  ) : null}
                 </CommandItem>
               )
             })}

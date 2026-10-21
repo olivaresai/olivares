@@ -1,17 +1,17 @@
 {
-  "$description": "Console LIGHT theme, emitted to the :root block of src/styles/tokens.css by tokens/build.mjs. The same palette as the dark theme, tuned for a white sheet: the orange stays #f08000 as a fill, is deepened to #9c4a00 as text and to #c26000 as a boundary, because the fill alone is 2.69:1 on white. `roles` holds the names the components use.",
+  "$description": "Console LIGHT theme, emitted to the :root block of src/styles/tokens.css by tokens/build.mjs. `palette` holds the website's B2 values, so the console and olivares.ai wear one brand (scripts/check-brand-parity.mjs pins the shared subset against the emitted file): four neutrals (frame, canvas, surface, raised), three text tones, the single brand orange #f08000 in its roles, and the status colours with their soft fills. Every text token holds at least 4.5:1 and every control boundary, focus ring and selection border at least 3:1 on every surface, including under the selection and hover fills and on the soft fills (500 pairs over both themes, pinned by src/styles/tokens.test.ts). `tools` holds the four tool data colours, `depth` the two neutral shadows, `roles` the names the components use.",
   "palette": {
     "$type": "color",
     "frame": {
-      "$value": "#efeee9",
+      "$value": "#f2f2f1",
       "$description": "Window frame: the sidebar and the gutters around the sheet."
     },
     "canvas": {
-      "$value": "#ffffff",
+      "$value": "#fafaf9",
       "$description": "The sheet: the rounded work area."
     },
     "surface": {
-      "$value": "#f8f7f4",
+      "$value": "#ffffff",
       "$description": "Cards, the composer and list groups."
     },
     "raised": {
@@ -19,39 +19,39 @@
       "$description": "Menus, popovers and dialogs."
     },
     "hover": {
-      "$value": "rgba(20, 18, 14, 0.04)",
-      "$description": "Pointer hover fill."
+      "$value": "rgba(40, 40, 43, 0.04)",
+      "$description": "Pointer hover fill. 4% so the orange as text (#a84f00) holds 4.5:1 on a hovered, selected row."
     },
     "active": {
-      "$value": "rgba(20, 18, 14, 0.075)",
-      "$description": "Selection and pressed fill."
+      "$value": "#f1f1ef",
+      "$description": "Selection and pressed fill: the second surface step, solid."
     },
     "line": {
-      "$value": "rgba(20, 18, 14, 0.09)",
+      "$value": "#e6e6e4",
       "$description": "Hairline separator. Decorative only: it never carries information."
     },
     "line-strong": {
-      "$value": "rgba(20, 18, 14, 0.16)",
+      "$value": "#d6d6d3",
       "$description": "Stronger hairline. Decorative only."
     },
     "ctl-border": {
-      "$value": "#8a8883",
+      "$value": "#8f8a83",
       "$description": "Boundary of inputs, selects and switches: at least 3:1 on every surface."
     },
     "scrim": {
-      "$value": "rgba(26, 25, 23, 0.32)",
+      "$value": "rgba(28, 28, 31, 0.28)",
       "$description": "Backdrop behind a modal dialog or sheet."
     },
     "text": {
-      "$value": "#1a1917",
+      "$value": "#28282b",
       "$description": "Primary text."
     },
     "text-2": {
-      "$value": "#4a4742",
+      "$value": "#5c564e",
       "$description": "Secondary text."
     },
     "text-3": {
-      "$value": "#5f5c55",
+      "$value": "#635d54",
       "$description": "Tertiary text: at least 4.5:1 on every surface, under the selection fill and on every soft fill."
     },
     "accent": {
@@ -63,7 +63,7 @@
       "$description": "Ink on the orange fill."
     },
     "accent-text": {
-      "$value": "#9c4a00",
+      "$value": "#a84f00",
       "$description": "The orange as text."
     },
     "accent-soft": {
@@ -79,61 +79,82 @@
       "$description": "Orange boundary and selection bar: at least 3:1 on canvas and surface."
     },
     "focus": {
-      "$value": "#b45500",
+      "$value": "#a84f00",
       "$description": "Focus ring (2 px, 2 px offset)."
     },
     "ok": {
-      "$value": "#18693f",
+      "$value": "#2f6b2c",
       "$description": "Success text and glyph."
     },
     "ok-soft": {
-      "$value": "rgba(24, 105, 63, 0.09)"
+      "$value": "rgba(47, 107, 44, 0.09)"
     },
     "warn": {
-      "$value": "#7d5400",
-      "$description": "Warning text and glyph. Yellow, so that orange never means warning."
+      "$value": "#665c00",
+      "$description": "Warning text and glyph. Olive in light (hue 54, 6.49:1 on the canvas), gold in dark: never the orange."
     },
     "warn-soft": {
-      "$value": "rgba(125, 84, 0, 0.09)"
+      "$value": "rgba(102, 92, 0, 0.09)"
     },
     "bad": {
-      "$value": "#a8231c",
+      "$value": "#b0201b",
       "$description": "Error text and glyph."
     },
     "bad-soft": {
-      "$value": "rgba(168, 35, 28, 0.08)"
+      "$value": "rgba(176, 32, 27, 0.08)"
     },
     "info": {
-      "$value": "#1c58a3",
+      "$value": "#1e5a86",
       "$description": "Information text and glyph."
     },
     "info-soft": {
-      "$value": "rgba(28, 88, 163, 0.08)"
+      "$value": "rgba(30, 90, 134, 0.08)"
     },
     "diff-add": {
-      "$value": "rgba(29, 122, 75, 0.1)",
+      "$value": "rgba(47, 107, 44, 0.1)",
       "$description": "Added line in a diff."
     },
     "diff-del": {
-      "$value": "rgba(179, 38, 30, 0.09)",
+      "$value": "rgba(176, 32, 27, 0.09)",
       "$description": "Removed line in a diff."
     }
   },
+  "tools": {
+    "$type": "color",
+    "$description": "The four tool data colours, in a fixed order that is the tool, never its rank (dataviz validator, 2026-10-17, both themes). Orange is not a series colour: it marks the one thing that needs you. Light aqua is 2.74:1, so every series carries a direct label: identity is never colour alone.",
+    "tool-claude": {
+      "$value": "#2a78d6",
+      "$description": "Claude Code, as a data series."
+    },
+    "tool-codex": {
+      "$value": "#1baf7a",
+      "$description": "Codex, as a data series."
+    },
+    "tool-opencode": {
+      "$value": "#6250d6",
+      "$description": "OpenCode, as a data series."
+    },
+    "tool-gemini": {
+      "$value": "#d55181",
+      "$description": "Gemini CLI, as a data series."
+    }
+  },
   "depth": {
-    "$description": "Depth. Dark: the four neutrals and the hairlines carry depth, and popovers add one shadow. Light: a 1 px card shadow and the same popover shadow at a lower alpha. No other shadows.",
+    "$description": "Depth: two neutral shadows, for what floats. No glow, blur or halo: depth is tone steps, one hairline and these two shadows.",
     "shadow-pop": {
       "$type": "shadow",
-      "$value": "0 18px 48px -14px rgba(30, 24, 16, 0.28), 0 2px 6px rgba(30, 24, 16, 0.08)",
-      "$description": "Menus, popovers and dialogs."
+      "$value": "0 2px 6px -2px rgba(28, 28, 31, 0.1), 0 24px 48px -24px rgba(28, 28, 31, 0.3)",
+      "$description": "Floating layers: dialogs, sheets and the command palette."
+    },
+    "shadow-raised": {
+      "$type": "shadow",
+      "$value": "0 1px 2px rgba(28, 28, 31, 0.08), 0 16px 40px -16px rgba(28, 28, 31, 0.22)",
+      "$description": "Menus, popovers, toasts and tooltips."
     },
     "shadow-card": {
       "$type": "shadow",
-      "$value": "0 1px 2px rgba(30, 24, 16, 0.05)",
-      "$description": "Cards."
-    },
-    "ember": {
-      "$value": "radial-gradient(720px 260px at 50% -110px, rgba(240, 128, 0, 0.09), transparent 70%)",
-      "$description": "The one soft orange glow at the top of the sheet on Home and on the first run."
+      "$value": "none",
+      "$description": "Cards and panels: none. A panel that does not float carries no shadow."
     }
   },
   "roles": {
@@ -191,11 +212,11 @@
       "$value": "{palette.bad-soft}"
     },
     "muted": {
-      "$value": "#ededed",
+      "$value": "#f1f1ef",
       "$description": "Solid well: the selection fill (`active`) painted on the canvas, as one opaque color, so text on it is measured like text under the selection fill."
     },
     "accent-hover": {
-      "$value": "#fe8800",
+      "$value": "#df6d00",
       "$description": "The primary action on hover: the orange at brightness 1.06, as the design renders it. Ink stays above 4.5:1."
     },
     "accent-active": {
@@ -232,7 +253,7 @@
       "$value": "{depth.shadow-card}"
     },
     "elev-lg": {
-      "$value": "{depth.shadow-pop}"
+      "$value": "{depth.shadow-raised}"
     },
     "elev-xl": {
       "$value": "{depth.shadow-pop}"

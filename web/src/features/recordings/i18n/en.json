@@ -63,14 +63,14 @@
   },
   "policy": {
     "title": "Recording policy",
-    "subtitle": "What is recorded on this control plane, and how the evidence is classified. Editing requires the recording:config:admin permission; every change here is itself a recorded privileged action.",
+    "subtitle": "What is recorded on this control plane, and how the evidence is classified. Editing needs a role that administers the recording policy; every change here is itself a recorded privileged action.",
     "loading": "Loading recording policy…",
     "saved": "Recording policy saved",
     "save": "Save policy",
     "saveFailed": "The policy was not saved.",
     "forbidden": {
-      "title": "Editing the recording policy requires recording:config:admin",
-      "description": "Your role can administer recording sessions, but changing the recording policy needs the distinct recording:config:admin permission. Ask an administrator to grant it."
+      "title": "Your role cannot edit the recording policy",
+      "description": "Your role can administer recording sessions, but changing the recording policy needs a separate permission. Ask an administrator to grant it."
     },
     "error": {
       "title": "Could not load the recording policy",
@@ -108,7 +108,7 @@
       "hint": "A classification tag applied to sealed recordings — it labels how long they should be kept. Between 1 and 3650 days.",
       "tag": "Tag only",
       "enforced": "Enforced",
-      "notEnforced": "Retention is a classification tag only — recordings are labelled, never purged. No policy removes a recording yet (no purge is wired).",
+      "notEnforced": "Retention is a classification tag only — recordings are labelled, never purged. No policy removes a recording yet (no purge is available).",
       "error": "Enter a whole number of days between 1 and 3650."
     },
     "ai": {

@@ -73,6 +73,9 @@ export interface LiveDTO {
   /** The agent engine driving the session ("claude", "codex"). ABSENT when no
    * connector declared one — render nothing, never a default. */
   engine?: string
+  /** The project the session works in, by the folder name its hooks reported (never
+   * the path). ABSENT until a producer reports one. */
+  project?: string
   /** How firmly the session is governed, as declared by the producing connector:
    * `enforced` (its tool calls are policed in line) or `observed` (they are not). The
    * engine folds the WEAKEST value seen. ABSENT when unknown — and a blank badge tells

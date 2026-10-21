@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest'
 import { mergeSessions } from './provenance'
 import type { LiveDTO } from './types'
 import {
-  DEFAULT_EVIDENCE,
   DEFAULT_PANE,
   MAX_ADDRESS_LENGTH,
   addressOf,
@@ -124,6 +123,38 @@ describe('the address IS the row key, and the round trip proves it', () => {
 })
 
 describe('decodeSessionAddress — a bad value falls back AND says which', () => {
+  it('round trips a second session and its narrow-screen pane', () => {
+    const params = new URLSearchParams({
+      session: 'run:first',
+      beside: 'live:second',
+      pane: 'beside',
+    })
+    const decoded = decodeSessionAddress(
+      Object.fromEntries(new URLSearchParams(params.toString())),
+    )
+    expect(decoded.issues).toEqual([])
+    expect(decoded.value).toMatchObject({
+      address: 'run:first',
+      beside: 'live:second',
+      pane: 'beside',
+    })
+  })
+
+  it.each(['run:first', 'invalid', '', 'live:' + 'x'.repeat(201)])(
+    'refuses a duplicate or invalid second address: %s',
+    (beside) => {
+      const decoded = decodeSessionAddress({ session: 'run:first', beside })
+      expect(decoded.value.beside).toBeUndefined()
+      expect(decoded.issues).toContain('beside')
+    },
+  )
+
+  it('refuses a second session without a primary address', () => {
+    expect(decodeSessionAddress({ beside: 'run:second' }).issues).toEqual([
+      'beside',
+    ])
+  })
+
   it('reads all three owned keys', () => {
     expect(
       decodeSessionAddress({
@@ -156,9 +187,18 @@ describe('decodeSessionAddress — a bad value falls back AND says which', () =>
 
   it('an absent key is not an issue — it is the default', () => {
     expect(decodeSessionAddress({})).toEqual({
-      value: { address: null, pane: DEFAULT_PANE, evidence: DEFAULT_EVIDENCE },
+      value: { address: null, pane: DEFAULT_PANE },
       issues: [],
     })
+  })
+
+  // #2267: an absent key means "the block the data points at" (the turns when there
+  // are any), which only the evidence read can say, so the address must not pre-answer.
+  it('an absent evidence key stays absent; a named block is kept', () => {
+    expect(decodeSessionAddress({}).value.evidence).toBeUndefined()
+    expect(decodeSessionAddress({ evidence: 'resources' }).value.evidence).toBe(
+      'resources',
+    )
   })
 
   it('reports every refused key, and falls back on each', () => {
@@ -167,11 +207,7 @@ describe('decodeSessionAddress — a bad value falls back AND says which', () =>
       pane: 'diff',
       evidence: 'files',
     })
-    expect(value).toEqual({
-      address: null,
-      pane: DEFAULT_PANE,
-      evidence: DEFAULT_EVIDENCE,
-    })
+    expect(value).toEqual({ address: null, pane: DEFAULT_PANE })
     expect(issues).toEqual(['session', 'pane', 'evidence'])
   })
 

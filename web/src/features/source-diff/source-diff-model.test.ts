@@ -111,7 +111,7 @@ describe('unified rows', () => {
 })
 
 describe('source-diff locales', () => {
-  const languages = ['en', 'es', 'de', 'fr', 'ja', 'ru', 'zh']
+  const languages = ['en', 'es', 'de', 'fr', 'it', 'ja', 'ru', 'zh', 'ko']
 
   function keys(value: unknown, prefix = ''): string[] {
     if (!value || typeof value !== 'object' || Array.isArray(value))

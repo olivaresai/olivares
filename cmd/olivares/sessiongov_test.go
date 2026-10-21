@@ -82,6 +82,10 @@ func (f *fakeOpener) GateOnceForSession(_ context.Context, _ model.TenantID, _, 
 	return "appr-1", f.status, "ph", f.err
 }
 
+func (f *fakeOpener) GateUnspentForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (string, string, string, error) {
+	return f.GateOnceForSession(ctx, tenant, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef)
+}
+
 func (f *fakeOpener) StatusScoped(_ context.Context, _ model.TenantID, _, _, _, _, _ string) (string, string, error) {
 	f.calls++
 	return f.status, "ph", f.err

@@ -56,6 +56,15 @@ vi.mock('./extensions', async () => {
     ],
     EXTENSION_ROUTES: [
       ...historicalExtensions,
+      // A Business build serves the pages whose source is shared (business-views.tsx).
+      { id: 'compliance', path: '/compliance', heading: 'Compliance' },
+      { id: 'deploy', path: '/deploy', heading: 'Deployment' },
+      { id: 'recordings', path: '/recordings', heading: 'Recordings' },
+      {
+        id: 'session-viewer',
+        path: '/session-viewer/$id',
+        heading: 'Session viewer',
+      },
       {
         id: 'extension-fixture',
         path: '/extension-fixture',
@@ -81,7 +90,9 @@ vi.mock('./extensions', async () => {
 })
 
 import { routeTree } from '@/app/routes'
+import { BUSINESS_BUILD } from './business-build'
 import {
+  BUSINESS_ONLY_VIEW_IDS,
   FEATURE_VIEWS,
   PRODUCT_NOUNS,
   ROUTE_ALIASES,
@@ -98,6 +109,21 @@ import './registry.nav-labels.test'
 import './anonymous-registry.test'
 
 describe('composed console extensions', () => {
+  it('registers the Business pages of shared source exactly once, in registry order', () => {
+    expect(BUSINESS_BUILD).toBe(true)
+    for (const id of ['deploy', 'recordings', 'compliance', 'session-viewer']) {
+      expect(
+        FEATURE_VIEWS.filter((view) => view.id === id),
+        id,
+      ).toHaveLength(1)
+    }
+    const orders = FEATURE_VIEWS.filter((view) =>
+      BUSINESS_ONLY_VIEW_IDS.includes(view.id),
+    ).map((view) => view.path)
+    expect(orders.sort()).toEqual(
+      ['/compliance', '/deploy', '/recordings', '/session-viewer/$id'].sort(),
+    )
+  })
   it('mounts historical extension destinations once instead of their Community aliases', () => {
     const router = createRouter({ routeTree })
     for (const path of ['/finops', '/red-team', '/team-costs']) {

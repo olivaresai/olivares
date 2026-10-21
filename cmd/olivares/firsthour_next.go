@@ -59,7 +59,7 @@ var firstHourNextCommands = map[string]string{
 // this table started with and it is stronger for a measured reason. Resolving is
 // not enough: on 2026-09-18 all 66 were run offline and four of them resolved
 // and still refused — `claude-agents sessions events` and
-// `claude-policy distribution` want one argument, `ddil verify` wants two flags,
+// `claude-policy validate` wants a surface and a document, `ddil verify` wants two flags,
 // and `work list` wants one of items|decisions|leases. A resolution test cannot
 // see that, because the path resolves. So a line that needs an argument prints a
 // <placeholder> for it, the way the first-hour table already did, and
@@ -92,10 +92,10 @@ var topLevelNextCommands = map[string]string{
 	"capabilities":  "olivares capabilities servers ls",
 	"catalog":       "olivares catalog entries ls",
 	"claude-agents": "olivares claude-agents sessions events <session-id>",
-	"claude-policy": "olivares claude-policy distribution <surface>",
+	"claude-policy": "olivares claude-policy validate <surface> --content-file <file>",
 	"codex":         "olivares codex managed-config",
 	"collector":     "olivares status",
-	"compliance":    "olivares compliance holds ls",
+	"compliance":    "olivares compliance risk ls",
 	"config":        "olivares config validate",
 	"connector":     "olivares doctor",
 	"consoleviews":  "olivares consoleviews ls",
@@ -151,6 +151,7 @@ var topLevelNextCommands = map[string]string{
 	"tokens":          "olivares tokens ls",
 	"upgrade":         "olivares version",
 	"users":           "olivares users ls",
+	"vault":           "olivares vault get <item>",
 	"version":         "olivares status",
 	"voice":           "olivares voice sessions ls",
 	"work":            "olivares work list items",

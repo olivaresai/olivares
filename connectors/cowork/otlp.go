@@ -15,6 +15,8 @@ import (
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/olivaresai/olivares/connectors/internal/otlptime"
 )
 
 // maxOTLPBody caps an OTLP/HTTP request body. Cowork batches are small; this guards
@@ -45,9 +47,7 @@ func (r *receiver) ingestLogs(req *collogspb.ExportLogsServiceRequest) {
 				if !ok {
 					continue
 				}
-				if ev.at.IsZero() {
-					ev.at = r.now()
-				}
+				ev.at = otlptime.Stamp(ev.at, r.now())
 				r.onEvent(ev)
 			}
 		}

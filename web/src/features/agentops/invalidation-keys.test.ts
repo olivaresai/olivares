@@ -190,4 +190,22 @@ describe('claves de invalidación de agentops', () => {
     ).toBe(true)
     expect(esPrefijo(agentOpsKeys.all(t), agentOpsKeys.runs(t, {}))).toBe(true)
   })
+
+  it('wiki reads sit under the authority boundary and one workspace', () => {
+    const scope = agentOpsKeys.boundaryScope(t, 7)
+    const read = agentOpsKeys.wiki(t, 7, 'ws-1', 'raw', 'raw/in')
+    expect(read).toEqual([...scope, 'wiki', 'ws-1', 'raw', 'raw/in'])
+    // The boundary cleanup in auth-boundary.ts removes by this prefix.
+    expect(esPrefijo(scope, read)).toBe(true)
+    // Ingest invalidates `raw`; it must reach every directory listing and only this workspace.
+    expect(esPrefijo(agentOpsKeys.wiki(t, 7, 'ws-1', 'raw'), read)).toBe(true)
+    expect(esPrefijo(agentOpsKeys.wiki(t, 7, 'ws-1'), read)).toBe(true)
+    for (const other of [
+      agentOpsKeys.wiki(t, 7, 'ws-2', 'raw', 'raw/in'),
+      agentOpsKeys.wiki('tenant-2', 7, 'ws-1', 'raw', 'raw/in'),
+      agentOpsKeys.wiki(t, 8, 'ws-1', 'raw', 'raw/in'),
+    ]) {
+      expect(esPrefijo(agentOpsKeys.wiki(t, 7, 'ws-1'), other)).toBe(false)
+    }
+  })
 })

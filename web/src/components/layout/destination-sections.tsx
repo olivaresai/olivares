@@ -65,7 +65,14 @@ export function DestinationSections() {
   if (location.kind === 'view' && !inSettingsArea(location)) {
     const place = location.view.navigation
     if (place.kind === 'root') return null
-    currentId = place.kind === 'detail' ? place.parentViewId : location.view.id
+    // A door folded into a member (#2240: /provider-profiles into AI tools) reads as it.
+    const door = location.view.doorTo
+    currentId =
+      place.kind === 'detail'
+        ? place.parentViewId
+        : door && members.some((m) => m.id === door)
+          ? door
+          : location.view.id
     label = sectionLabel(t, place.areaId, place.sectionId)
   } else if (location.kind === 'view') {
     currentId = location.view.id

@@ -30,6 +30,7 @@ import { Segmented } from '@/components/ui/segmented'
 import { Compass } from 'lucide-react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import { readsNativeRecord } from '@/features/agentops/provider-contract'
 import {
   profileName,
   type RunDTO,
@@ -57,6 +58,7 @@ import { SessionChanges } from './session-changes'
 import { SessionGit } from './session-git'
 import { SessionActivity } from './session-activity'
 import { SessionPreview } from './session-preview'
+import { sessionDisplayState } from './session-display-state'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
 import '@/features/agentops/i18n'
@@ -162,9 +164,8 @@ export function SessionContextPane({
     ),
   )
   const [localTab, setLocalTab] = useState('context')
-  // What the tool is doing is read from Claude Code's own transcript; another tool's
-  // session has no Activity tab until its own record is read the same way.
-  const hasActivity = run?.provider_driver === 'claude'
+  // Activity is read from the tool's native record in its account home.
+  const hasActivity = !!run && readsNativeRecord(run)
   const options = [
     { value: 'context', label: t('surface.pane.context') },
     ...(hasActivity
@@ -183,11 +184,12 @@ export function SessionContextPane({
   const asked = onPanel ? (panel ?? 'context') : (panel ?? localTab)
   const tab = options.some((o) => o.value === asked) ? asked : 'context'
   const extension = registered.find((p) => p.id === tab)
+  const display = sessionDisplayState({ runs: run ? [run] : [], live })
   const panelSession: SessionPanelSession = {
     ref: run?.run_ref ?? live?.live_ref ?? session.sessionRef ?? '',
     workspaceRef: run?.workspace_ref,
     tool: run?.provider_driver || live?.provider,
-    state: run?.state ?? live?.cc_state,
+    state: display.runState ?? display.observedState,
   }
 
   if (!target)
@@ -207,7 +209,7 @@ export function SessionContextPane({
       {/* What the thread's header no longer says: who manages the session, its mode, the
           folder, what it did and its evidence. A session with no conversation of its own
           paints this block as the thread's body instead (`session-narrative.tsx`). */}
-      {hasThread(resolution) && evidence && onExpandEvidence ? (
+      {hasThread(resolution) && onExpandEvidence ? (
         <SessionOverview
           resolution={resolution}
           evidence={evidence}

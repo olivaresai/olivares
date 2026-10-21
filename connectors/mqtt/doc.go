@@ -70,4 +70,11 @@
 // client certificate+key) — mutual TLS is the expected posture for an OT/IoT broker.
 // The connector imports only the SDK and the shared messaging helpers — never the
 // engine (LICENSING.md).
+//
+// READING ONE VALUE. The observer above never reads a payload. A caller that needs one
+// value from one device uses PublishReader instead: a new clean session per call, one exact
+// topic, a payload size limit, a whole-call deadline, and the first publication returned
+// with its RETAIN flag. Whether that publication is fresh is the caller's judgment, from a
+// producer timestamp. TemperatureReader is such a caller. PublishReader has no MCP entry
+// point and no tool of its own: a caller that exposes it to a session owns that gate.
 package mqtt

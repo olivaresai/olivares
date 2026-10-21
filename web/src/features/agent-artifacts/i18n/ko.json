@@ -1,0 +1,147 @@
+{
+  "title": "에이전트 아티팩트",
+  "subtitle": "에이전트가 실행하는 아티팩트의 테넌트 전체 레지스트리, 기록된 상태 및 공급망 BOM을 거버넌스합니다.",
+  "intro": "이 레지스트리는 신원, 출처 및 기록된 상태만 저장하며 스킬 본문, 매니페스트 또는 지침 텍스트는 저장하지 않습니다.",
+  "tabs": {
+    "registry": "아티팩트 레지스트리",
+    "aibom": "에이전트 공급망 AIBOM"
+  },
+  "classes": {
+    "skill": "스킬",
+    "mcpb_extension": "MCPB 확장",
+    "mcp_app_template": "MCP App 템플릿",
+    "agents_md": "AGENTS.md"
+  },
+  "values": {
+    "none": "—",
+    "yes": "예",
+    "no": "아니요"
+  },
+  "registry": {
+    "title": "등록된 아티팩트",
+    "description": "테넌트 에스테이트 신원, 출처 주장 및 기록된 스캐너 결과입니다.",
+    "new": "아티팩트 등록",
+    "created": "아티팩트가 등록되었습니다.",
+    "deleted": "아티팩트가 삭제되었습니다.",
+    "search": "등록된 아티팩트 검색…",
+    "empty": "등록된 아티팩트 없음",
+    "emptyHint": "등록된 적 없는 아티팩트는 에이전트 공급망 BOM에 표시되지 않습니다.",
+    "filter": {
+      "label": "아티팩트 클래스",
+      "all": "모든 아티팩트 클래스"
+    },
+    "columns": {
+      "class": "클래스",
+      "name": "이름",
+      "version": "버전",
+      "provenance": "출처",
+      "posture": "기록된 스캔 결과",
+      "issues": "문제",
+      "attestedAt": "기록됨"
+    },
+    "provenance": {
+      "claim": "운영자 주장",
+      "verified": "출처 검토됨",
+      "claimHint": "출처는 운영자 주장이며 검토됨으로 표시되지 않았습니다.",
+      "verifiedHint": "운영자가 출처 주장을 검토했습니다. Olivares 인증은 아닙니다."
+    },
+    "posture": {
+      "notScanned": "스캔 안 됨",
+      "grade": "등급 {{grade}}",
+      "recorded": "기록된 스캔 결과",
+      "hint": "등급은 커넥터 스캐너가 평가했거나 운영자가 기록한 내용을 기록합니다. 콘솔은 스캔을 실행하지 않았습니다."
+    },
+    "drawer": {
+      "description": "저장된 레지스트리 메타데이터와 주장 대비 검토 상태입니다.",
+      "identityNotice": "메타데이터만 저장됩니다. 이 레코드 뒤에 아티팩트 콘텐츠는 없습니다.",
+      "postureNotice": "상태 등급은 기록된 스캔 결과이며 이 콘솔이 수행한 스캔이 아닙니다. 스캔 안 됨은 실패가 아니라 중립입니다.",
+      "id": "레지스트리 ID",
+      "class": "아티팩트 클래스",
+      "name": "이름",
+      "version": "버전",
+      "provenance": "출처",
+      "sourceRef": "소스 참조",
+      "contentHash": "콘텐츠 지문",
+      "posture": "기록된 스캔 결과",
+      "issues": "기록된 문제",
+      "verified": "출처 상태",
+      "attestedBy": "기록자",
+      "attestedAt": "기록 시각",
+      "note": "메모"
+    },
+    "create": {
+      "title": "에이전트 아티팩트 등록",
+      "description": "신원, 출처 및 상태 메타데이터를 기록합니다. 아티팩트 콘텐츠는 절대 업로드되지 않습니다.",
+      "uniqueHint": "클래스와 이름이 고유하고 변경 불가능한 레지스트리 신원을 이룹니다. 업데이트 경로는 없습니다.",
+      "class": "아티팩트 클래스",
+      "name": "이름",
+      "version": "버전",
+      "provenance": "출처 주장",
+      "sourceRef": "소스 참조",
+      "contentHash": "콘텐츠 해시",
+      "contentAlg": "해시 알고리즘",
+      "posture": "기록된 스캔 결과",
+      "issues": "기록된 문제",
+      "issuesHint": "기록된 결과의 문제 수입니다. 스캔하지 않은 경우 비활성화되고 0입니다.",
+      "verified": "운영자가 출처를 검토함",
+      "verifiedHint": "운영자가 출처 주장을 검토했음을 증명합니다. Olivares 인증은 아닙니다.",
+      "note": "메모",
+      "errorTitle": "아티팩트가 등록되지 않았습니다",
+      "duplicateTitle": "아티팩트가 이미 등록됨",
+      "duplicate": "이 클래스와 이름의 아티팩트가 이미 있습니다. 업데이트 경로가 없으므로 다른 신원을 선택하거나 기존 레코드를 먼저 삭제하십시오."
+    },
+    "delete": {
+      "title": "등록된 아티팩트 삭제",
+      "description": "레지스트리에서 “{{name}}”을(를) 삭제하시겠습니까? 이후 라이브 BOM에는 포함되지 않습니다."
+    },
+    "truncated": "아티팩트 {{n}}개를 불러왔으며 더 있습니다",
+    "truncatedHint": "표시된 것보다 등록된 아티팩트가 더 많으며 이 페이지는 생성 시 할당된 id로 행을 가져오므로 그 너머의 행, 보통 가장 최근에 등록된 행이 누락됩니다. 클래스 필터는 엔진이 적용하므로 다시 쿼리합니다. 표 검색과 정렬은 불러온 항목에만 적용됩니다. 여기에 없는 아티팩트가 등록되지 않았다는 증거는 아닙니다."
+  },
+  "aibom": {
+    "difference": "이 에스테이트 전체 BOM은 등록된 에이전트 아티팩트를 다루며, 모델별 AIBOM은 소유한 모델 하나의 계보를 다룹니다.",
+    "coverage": "범위는 등록된 내용을 반영합니다. 등록된 적 없는 아티팩트는 표시되지 않습니다.",
+    "live": {
+      "title": "라이브 에이전트 공급망 BOM",
+      "description": "지금 생성됨 — 라이브이며 봉인 및 감사되지 않음.",
+      "notice": "미리 보기는 현재 레지스트리에서 새 CycloneDX 1.6 문서를 생성합니다. 읽기 전용이며 증거를 만들지 않습니다.",
+      "preview": "라이브 BOM 미리 보기",
+      "loading": "라이브 BOM 생성 중…",
+      "dialogTitle": "라이브 에이전트 공급망 BOM",
+      "dialogDescription": "지금 레지스트리에서 생성되었습니다. 이 문서는 봉인되거나 감사되지 않았습니다.",
+      "jsonLabel": "라이브 CycloneDX JSON",
+      "download": "라이브 BOM 다운로드"
+    },
+    "seal": {
+      "action": "현재 BOM 봉인",
+      "confirmTitle": "에이전트 공급망 BOM 봉인",
+      "confirmDescription": "BOM을 다시 생성하고 정규 콘텐츠 해시를 감사 원장에 커밋합니다. 원장은 문서를 보관하지 않습니다.",
+      "confirmBody": "반환된 영수증을 보관하십시오. AIBOM이 봉인된 문서의 유일한 사본입니다.",
+      "confirm": "봉인하고 BOM 받기",
+      "success": "에이전트 공급망 BOM이 봉인되었습니다. 지금 영수증의 BOM을 다운로드하십시오.",
+      "receiptTitle": "봉인된 BOM 영수증",
+      "receiptDescription": "해시 커밋은 영구적이며 이 영수증이 봉인된 문서의 유일한 사본을 담고 있습니다.",
+      "download": "봉인된 BOM 다운로드"
+    },
+    "history": {
+      "title": "봉인 이력",
+      "description": "등록된 에이전트 아티팩트 에스테이트에 대한 추가 전용 models.agent_aibom 커밋입니다.",
+      "empty": "봉인된 에이전트 공급망 BOM 없음",
+      "emptyHint": "봉인하면 해시 커밋을 만들고 영수증에 유일한 문서 사본을 반환합니다.",
+      "loadError": "봉인 이력을 불러오지 못했습니다.",
+      "id": "봉인 ID",
+      "subject": "주체",
+      "serial": "일련 번호",
+      "contentHash": "콘텐츠 해시",
+      "specVersion": "CycloneDX 버전",
+      "components": "등록된 구성 요소",
+      "ledgerSeq": "이전 감사 seq",
+      "ledgerHash": "이전 감사 헤드",
+      "scope": "범위 참고",
+      "generatedBy": "생성자",
+      "generatedAt": "생성 시각",
+      "noPriorHead": "{{seq}}(이전 감사 헤드 없음)",
+      "truncated": "봉인 {{n}}개를 불러왔으며 더 있습니다",
+      "truncatedHint": "표시된 것보다 봉인된 AI-BOM이 더 많으며 이 페이지는 id로 행을 가져옵니다. 봉인은 행을 추가하므로 누락되는 것은 보통 가장 최근 증거입니다."
+    }
+  }
+}

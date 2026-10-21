@@ -22,11 +22,12 @@ actualización y su frase de paso privada o KEK para volver a la versión anteri
 
 ## Qué vía de actualización te corresponde
 
-Hay dos formas de avanzar el binario y ambas llegan al mismo punto.
+Hay tres formas de avanzar el binario y todas llegan al mismo punto.
 
 | Tu instalación | Vía |
 |---|---|
-| Un binario en un host, systemd o Docker Compose | `olivares upgrade`: esta página |
+| Un binario en un host o systemd | `olivares upgrade`: esta página |
+| Un contenedor Docker o Podman | `docker compose exec olivares olivares upgrade` y después recrea el contenedor. La imagen no puede cambiar, así que la versión se guarda en el volumen de datos (`ota/` bajo el directorio de datos) y cada arranque del binario de la imagen la inicia mientras sea más reciente que la imagen o la misma versión construida de otro modo. Si eliminas `ota/`, el contenedor vuelve al binario de su imagen. [Docker y Compose](/es/how-to/install-a-license/#docker-y-compose) tiene los comandos. |
 | Kubernetes / Helm | Define la imagen y deja que el operador haga el rolling update. No ejecutes `olivares upgrade` dentro de un pod: el despliegue es declarativo y la siguiente reconciliación lo desharía. |
 
 ## Antes de nada: lee el plan
@@ -51,7 +52,7 @@ protecciones seguirán activas:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.2
+olivares upgrade --check --current-version 0.3
 ```
 <!-- /release -->
 

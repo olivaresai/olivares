@@ -26,7 +26,7 @@ wired to an injection point but stays deny-closed or degraded until an operator
 provisions it via env config), **PARTIAL** where the surface is gated/opt-in,
 and a declared **deny-closed seam** for the rest. In particular **deploy** plans
 and governs deployments but does **not** apply them to live infrastructure until
-an executor is provisioned: `apply`/`retire` return a clear `503`. Depth varies
+an executor is provisioned: `apply`/`retire` return a clear `503`. Deploy is a Business feature; Community answers `501` on every deploy route. Depth varies
 by module, and much of the product is pre-1.0 / design-stage where noted (see
 [Honesty & limits](/start/honesty-and-limits/)).
 
@@ -62,7 +62,7 @@ governs/observes by nature and has no actuation surface.
 | [Identity, permissions & governance](/reference/modules/vi-governance/) | — | Who and what can do what, granular: Cedar RBAC + deny-overlay + scoped grants, roster reconciliation, scoped admin/custom roles, break-glass, kill-switch. |
 | [Identity (`identity`)](/reference/modules/identity/) | — | Read-only workload identity federation, SSO, external-key and residency posture. |
 | [Source & credential scoping](/reference/modules/sourcescope/) | — | Bind sources to a workspace/agent-group; deny-closed scoped resolver + scoped credentials at resolution time. |
-| [Deployment & integration](/reference/modules/vii-deploy/) | on-demand (503) | Plan and govern deployments to real infrastructure; the executor is on-demand — live `apply`/`retire` return `503` until provisioned. |
+| [Deployment & integration](/reference/modules/vii-deploy/) | Business, on-demand (503) | Business feature: Community answers `501`. Plan and govern deployments to real infrastructure; the executor is on-demand — live `apply`/`retire` return `503` until provisioned. |
 | [Governed Git publication](/reference/modules/gitpublish/) | on-demand | Push commits, open pull requests and merge through approved Git-host bindings, with current caller authority and retained intent outcomes. |
 
 > **Identity** is a separately selectable module for the read-only identity
@@ -74,7 +74,7 @@ governs/observes by nature and has no actuation surface.
 
 | Module | Actuate | Purpose |
 |---|---|---|
-| [Claude Code managed policy (`claude-policy`)](/reference/modules/claude-policy/) | — | Validate, preview and publish versioned managed policy; inspect distribution and observed drift. |
+| [Claude Code managed policy (`claude-policy`)](/reference/modules/claude-policy/) | — | Validate and preview managed policy; Business publishes it fleet-wide and inspects distribution and observed drift. |
 | [Claude agent confirmations (`claude-agents`)](/reference/modules/claude-agents/) | — | Read managed-agent thread events and approve or reject a pending tool confirmation. |
 | [Skills catalog & assignments](/reference/modules/skills/) | — | Immutable skills catalog and pinned assignments: digest-validated skill packs installed under `/v1/m/skills/packs`, pinned per target, never edited in place. |
 | [Model & provider management](/reference/modules/x-models/) | on-demand (503) | Govern across the whole model/provider stack: model-access, per-surface context-window, model-group gate; model *execution* is on-demand — `503` until an inference credential is provisioned. |
@@ -125,7 +125,7 @@ governs/observes by nature and has no actuation surface.
 no provisioning required (e.g. FinOps budget enforcement denies at the cap, the
 notification router dispatches); `on-demand` / `on-demand (503)` = the backend is
 built and wired to an injection point but stays **deny-closed or degraded until
-an operator provisions it** via env config (deploy answers `503` until an
+an operator provisions it** via env config (deploy, a Business feature, answers `501` in Community and `503` until an
 executor exists; orchestration/voice dispatch is deny-closed until configured;
 red-team runs DEGRADED until a sandbox runtime is provisioned; model execution
 and semantic embeddings return `503` until a credential is provisioned);

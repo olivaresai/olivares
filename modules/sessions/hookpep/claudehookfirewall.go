@@ -62,6 +62,9 @@ func (d *Decider) runHookFirewall(ctx context.Context, tenant model.TenantID, ac
 	// circuiting empty content here would silently exempt them from the fail-closed posture. A
 	// healthy inspector returns its own no-op (Forward, zero meter) for empty content, so this
 	// costs nothing in the normal case (no spurious finding or billable meter is emitted).
+	// The run is named only when the credential proved it: a payload's own session id is
+	// the caller's word (Decide replaces it with the proven run for a session bearer).
+	scope, _ := ctx.Value(sessionHookScopeKey{}).(auth.SessionScope)
 	dec := d.Inspector.Inspect(ctx, claudeapi.ContentInspectionInput{
 		Tenant:          tenant.String(),
 		ActorRef:        agent.proven,
@@ -69,6 +72,7 @@ func (d *Decider) runHookFirewall(ctx context.Context, tenant model.TenantID, ac
 		Direction:       claudeapi.InspectDirectionRequest,
 		Channels:        collected.Channels,
 		Unscanned:       collected.Unscanned,
+		SessionRef:      scope.RunRef,
 	})
 	d.publishHookInspectionFindings(ctx, tenant, in.Tool, dec.Findings)
 	d.emitHookInspectionMeter(ctx, tenant, in.Tool, dec.Meter)

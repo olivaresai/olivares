@@ -103,7 +103,7 @@
     "empty": "此范围内无按开发者的活动记录。",
     "emptyHint": "当开发者在此时间范围内运行会话后，按开发者统计的活动会显示在这里。放宽时间范围可覆盖更多天。",
     "locked": "按开发者视图受限",
-    "lockedHint": "查看单个开发者的生产力需要 adoption:developer:read 权限（默认拒绝）。",
+    "lockedHint": "你的角色无法查看单个开发者的生产力。",
     "columns": {
       "developer": "开发者"
     }

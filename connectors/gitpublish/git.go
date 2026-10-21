@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -470,6 +471,82 @@ func (x *Executor) PathsChanged(ctx context.Context, repo, from, to string, path
 		}
 	}
 	return false, nil
+}
+
+// maxChangedPaths bounds the paths ChangedPaths reads. A change past it is
+// refused, never truncated: a cut list could hide the path that matters.
+const maxChangedPaths = 20000
+
+// ChangedPaths lists, sorted and without duplicates, every path the commit to
+// changes. With sinceMergeBase it is what to adds since it left the history of
+// from: the diff against the merge base of from and to, or against from when
+// the two share no history. Without it, it is everything that differs between
+// the trees of from and to, as when a branch is moved from one commit to
+// another and what only from had goes away. A rename names both its old and
+// its new path. Both commits must be in the server repository.
+func (x *Executor) ChangedPaths(ctx context.Context, repo, from, to string, sinceMergeBase bool) ([]string, error) {
+	for _, c := range []string{from, to} {
+		if _, err := x.CommitTree(ctx, repo, c); err != nil {
+			return nil, err
+		}
+	}
+	base := from
+	if sinceMergeBase {
+		out, code, err := x.run(ctx, repo, Secret{}, "", "merge-base", from, to)
+		if err != nil {
+			return nil, err
+		}
+		switch code {
+		case 0:
+			if base = strings.TrimSpace(out); !shaRe.MatchString(base) {
+				return nil, ErrContent
+			}
+		case 1: // no common history: everything differs
+		default:
+			return nil, ErrContent
+		}
+	}
+	out, code, err := x.run(ctx, repo, Secret{}, "", "diff-tree", "-r", "-z", "--name-status", "-M", base, to)
+	if err != nil {
+		return nil, err
+	}
+	if code != 0 {
+		return nil, ErrContent
+	}
+	// -z: a status, then NUL, then its path; a rename or copy (R, C) has two.
+	fields := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	seen := map[string]bool{}
+	paths := []string{}
+	add := func(p string) bool {
+		if p == "" {
+			return false
+		}
+		if !seen[p] {
+			if len(seen) == maxChangedPaths {
+				return false
+			}
+			seen[p] = true
+			paths = append(paths, p)
+		}
+		return true
+	}
+	for i := 0; out != "" && i < len(fields); {
+		n := 1
+		if strings.HasPrefix(fields[i], "R") || strings.HasPrefix(fields[i], "C") {
+			n = 2
+		}
+		if i+n >= len(fields) {
+			return nil, ErrContent
+		}
+		for _, p := range fields[i+1 : i+1+n] {
+			if !add(p) {
+				return nil, ErrContent
+			}
+		}
+		i += 1 + n
+	}
+	sort.Strings(paths)
+	return paths, nil
 }
 
 // object returns the object id of path in commit, or "" when it is absent.

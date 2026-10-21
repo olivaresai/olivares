@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-次のリリースは <!-- release -->`0.2`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.2-install-surfaces.json`<!-- /release --> に記録されています。
+次のリリースは <!-- release -->`0.3`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release --> に記録されています。
 
 :::note[公開されているパッケージ名]
-GitHub の Olivares <!-- release -->0.2<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
+GitHub の Olivares <!-- release -->0.3<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
 あわせて `checksums.txt`、`checksums.txt.sig`、`checksums.txt.pem` を置く。以下のコマンドは
 そのリリースのリテラルな `amd64` 名を使う。64 ビット ARM ホストでは `amd64` を `arm64` に
 置き換える。このガイドでは、それらの検証済みリリース成果物からインストールする。ソースツリー
@@ -76,13 +76,13 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.2_linux_amd64.deb
+sudo dpkg -i olivares_0.3_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.2_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.2_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -128,8 +128,8 @@ sudo -u olivares olivares serve --data-dir=/var/lib/olivares \
 `NoNewPrivileges=true` なので、起動したものが権限を得ることはない。その上に
 `ProtectSystem=full`（`/usr`、`/boot`、`/efi`、`/etc` は読み取り専用）、`PrivateDevices=true`、
 `ProtectClock=true`、`ProtectKernelTunables=true`、`ProtectKernelModules=true`、
-`ProtectKernelLogs=true`、`ProtectControlGroups=true`、`RestrictNamespaces=user net`
-（セッションは専用のユーザー名前空間とネットワーク名前空間を持ち、それ以外の種類は拒否される）、
+`ProtectKernelLogs=true`、`ProtectControlGroups=true`、`RestrictNamespaces=user net mnt`
+（セッションは専用のユーザー名前空間とネットワーク名前空間を持ち、フォルダーの Git フックと設定を読み取り専用に保つヘルパーは専用のマウント名前空間を持つ。その中では syscall フィルタが `mount` を許可する。それ以外の種類は拒否される）、
 `RestrictSUIDSGID=true`、`RestrictRealtime=true`、`LockPersonality=true`、
 `SystemCallArchitectures=native`、`@privileged` と `@resources` をさらに落とす
 `@system-service` syscall フィルタ、`UMask=0027` を載せる。

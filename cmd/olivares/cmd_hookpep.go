@@ -156,8 +156,9 @@ func (c *hookPEPClientConfig) do(req *http.Request) (int, []byte, error) {
 func newHookPEPCmd() *cobra.Command {
 	var cfg hookPEPClientConfig
 	cmd := &cobra.Command{
-		Use:   "hookpep",
-		Short: "Author and inspect PDP policy through the engine",
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "hookpep",
+		Short:       "Author and inspect PDP policy through the engine",
 		Long: "hookpep is the authoring loop for the policy the PDP enforces: validate a\n" +
 			"candidate, dry-run a concrete request against it, ask why that request would be\n" +
 			"decided the way it is, then publish it as a new immutable revision — and roll\n" +
@@ -190,11 +191,12 @@ func newHookPEPSourceCmd(action string, cfg *hookPEPClientConfig) *cobra.Command
 		"explain":  "Explain a request decision against a candidate policy without publishing it",
 	}[action]
 	cmd := &cobra.Command{
-		Use:     action,
-		Short:   short,
-		Long:    short + ". The command is a thin authenticated HTTP client; all policy semantics and decisions are produced by the engine.",
-		Example: hookPEPSourceExample(action),
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         action,
+		Short:       short,
+		Long:        short + ". The command is a thin authenticated HTTP client; all policy semantics and decisions are produced by the engine.",
+		Example:     hookPEPSourceExample(action),
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -260,11 +262,12 @@ func hookPEPSourceExample(action string) string {
 func newHookPEPPublishForEngines(cfg *hookPEPClientConfig, engines []string) *cobra.Command {
 	var engine, source, sourceFile, note string
 	cmd := &cobra.Command{
-		Use:     "publish",
-		Short:   "Compile, publish, and activate an authored policy revision",
-		Long:    "Publish an authored policy through the engine. The server owns validation and version selection; OPA enforcement remains with the external sidecar. The client holds no policy logic.",
-		Example: "  olivares hookpep publish --engine opa --file policy.rego --note \"approved change\" -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "publish",
+		Short:       "Compile, publish, and activate an authored policy revision",
+		Long:        "Publish an authored policy through the engine. The server owns validation and version selection; OPA enforcement remains with the external sidecar. The client holds no policy logic.",
+		Example:     "  olivares hookpep publish --engine opa --file policy.rego --note \"approved change\" -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			engine = strings.ToLower(strings.TrimSpace(engine))
 			valid := false
@@ -311,11 +314,12 @@ func newHookPEPPublishForEngines(cfg *hookPEPClientConfig, engines []string) *co
 
 func newHookPEPVersionsCmd(cfg *hookPEPClientConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:     "versions",
-		Short:   "List immutable authored policy revisions",
-		Long:    "List immutable Cedar and OPA policy revisions stored by the engine. The client only renders server-owned revision metadata and contains no policy logic.",
-		Example: "  olivares hookpep versions -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "versions",
+		Short:       "List immutable authored policy revisions",
+		Long:        "List immutable Cedar and OPA policy revisions stored by the engine. The client only renders server-owned revision metadata and contains no policy logic.",
+		Example:     "  olivares hookpep versions -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -336,11 +340,12 @@ func newHookPEPTestsCmd(cfg *hookPEPClientConfig) *cobra.Command {
 	var engine string
 	var revision int64
 	cmd := &cobra.Command{
-		Use:     "tests",
-		Short:   "Show the stored compile-validation artifact for a policy revision",
-		Long:    "Show the compile-validation artifact stored by the engine for an immutable policy revision. The server selects the newest revision when --revision is omitted; the client performs no policy tests.",
-		Example: "  olivares hookpep tests --engine cedar --revision 7 -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "read"},
+		Use:         "tests",
+		Short:       "Show the stored compile-validation artifact for a policy revision",
+		Long:        "Show the compile-validation artifact stored by the engine for an immutable policy revision. The server selects the newest revision when --revision is omitted; the client performs no policy tests.",
+		Example:     "  olivares hookpep tests --engine cedar --revision 7 -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
 				return err
@@ -377,11 +382,12 @@ func newHookPEPRollbackForEngines(cfg *hookPEPClientConfig, engines []string) *c
 	var engine string
 	var revision int64
 	cmd := &cobra.Command{
-		Use:     "rollback",
-		Short:   "Re-activate a prior immutable policy revision",
-		Long:    "Re-activate a prior immutable policy revision through the engine. The server re-runs the compile/validation gate and atomically audits the activation; the client contains no policy logic.",
-		Example: "  olivares hookpep rollback --engine opa --revision 7 -o json",
-		Args:    cobra.NoArgs,
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rollback",
+		Short:       "Re-activate a prior immutable policy revision",
+		Long:        "Re-activate a prior immutable policy revision through the engine. The server re-runs the compile/validation gate and atomically audits the activation; the client contains no policy logic.",
+		Example:     "  olivares hookpep rollback --engine opa --revision 7 -o json",
+		Args:        cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			engine = strings.ToLower(strings.TrimSpace(engine))
 			valid := false

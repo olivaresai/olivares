@@ -80,7 +80,7 @@ func TestFlagCompletions(t *testing.T) {
 		{"agent-create-effort", newAgentSessionCreateCmd, "effort", []string{"low", "medium", "high", "xhigh", "max"}},
 		{"agent-create-isolation", newAgentSessionCreateCmd, "isolation", []string{"native", "container", "sandbox"}},
 		{"agent-ls-state", newAgentSessionListCmd, "state", []string{"pending", "running", "idle", "stopped", "failed", "cleaned"}},
-		{"workspace-add-mode", newWorkspaceAddCmd, "mode", []string{"rw", "ro"}},
+		{"workspace-add-mode", newWorkspaceAddCmd, "mode", []string{"rw", "ro", "write_no_delete"}},
 		{"workspace-add-dlp", newWorkspaceAddCmd, "dlp", []string{"label", "deny", "off"}},
 		{"audit-verify-pubkey-alg", auditVerifyCmd, "pubkey-alg", []string{"ed25519", "ecdsa-p256-sha256", "ecdsa-p384-sha384", "rsa-pkcs1-sha256", "rsa-pss-sha256"}},
 		{"config-generate-profile", configGenerateCmd, "profile", []string{"eval", "single-node-prod", "postgres-prod", "k8s"}},

@@ -13,9 +13,11 @@
 #   bundle     no generated console output in the push (scripts/check-web-bundle-freshness.sh)
 #   boundary   when Go code or modules changed         (task lint:boundary)
 #   migrations when Go code or a migration changed     (scripts/check-migrations.sh against main's merge base)
-#   release    when the release export, its scrubber or its exporter changed
+#   release    when the release export, its scrubber, its exporter or its closure scan changed
 #              (task lint:export-release, hub-only: NOT APPLICABLE in the public tree)
 #   go vet     the touched packages, tests included    (scripts/changed-go-packages.sh)
+#   sast       the same packages, blocking gosec rules (scripts/sast.sh --packages; NOT CHECKED
+#              is printed when the tree or the host lacks the gate or gosec)
 #   identity   the pushed commits' ident and trailers  (task lint:commit-identity, hub-only:
 #              the leg answers NOT APPLICABLE in the public tree)
 # A pushed commit other than a clean checked-out HEAD (no edits, no untracked files) is checked
@@ -136,13 +138,35 @@ check() {
 			echo "pre-push: migration hashes NOT CHECKED: this tree has no scripts/check-migrations.sh" >&2
 		fi
 	fi
-	if grep -Eq '^scripts/(release/|export-scrub/|export-public\.sh$)' <<<"$changed"; then
+	if grep -Eq '^scripts/(release/|export-scrub/|export-public\.sh$|check-export-closure\.sh$)' <<<"$changed"; then
 		task lint:export-release
 	fi
 	touched="$(bash "$TOP/scripts/changed-go-packages.sh" "$base" "$head")"
 	[ -n "$touched" ] || return 0
 	mapfile -t pkgs <<<"$touched"
 	go vet "${pkgs[@]}"
+	# SAST on the same packages, with the blocking gate's own rules (#2313: four unannotated
+	# G204 sites first met `task lint:sast` in a full CI dispatch). The pushed tree's own gate,
+	# like the migrations leg, and only a gate that knows --packages: an older script would
+	# ignore the flag and scan whole modules. A host without gosec says so, never a silent pass.
+	# gosec skips test files and (with -exclude-generated) generated ones, so a package made only
+	# of those has nothing to scan and would be refused as "zero scanned files": leave it out.
+	scannable=()
+	for p in "${pkgs[@]}"; do
+		# grep -L exits 1 when it lists files (no line matched), so it cannot sit in a pipeline here.
+		unmarked="$(grep -L -E '^// Code generated .* DO NOT EDIT\.$' "$p"/*.go || :)"
+		if [ -n "$unmarked" ] && grep -qv '_test\.go$' <<<"$unmarked"; then
+			scannable+=("$p")
+		fi
+	done
+	[ "${#scannable[@]}" -gt 0 ] || return 0
+	if [ ! -f scripts/sast.sh ] || ! grep -q -e '--packages)' scripts/sast.sh; then
+		echo "pre-push: SAST NOT CHECKED: this tree has no scripts/sast.sh with --packages" >&2
+	elif ! command -v "${GOSEC:-gosec}" >/dev/null 2>&1 && [ ! -x "$(go env GOPATH)/bin/gosec" ]; then
+		echo "pre-push: SAST NOT CHECKED: gosec is not installed (task tools)" >&2
+	else
+		bash scripts/sast.sh --packages "${scannable[@]}"
+	fi
 }
 
 # Parsed whole before it runs, so a checkout during the push cannot change what executes.

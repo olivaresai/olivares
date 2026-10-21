@@ -4,7 +4,7 @@ description: "Câblez une véritable source d'observation dans le control plane,
 ---
 
 :::note[Édition]
-Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges) et le cycle de vie des identités gérées nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, SCIM entrant utilisateurs/groupes, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
+Les sources d’annuaire (LDAP, Okta/Entra et IdP d’agents/charges), le cycle de vie des identités gérées et le serveur SCIM entrant nécessitent les extensions Business/Enterprise. Community conserve l’ingestion générique, le catalogue de ressources, les constats de sécurité, l’Access Map, l’inventaire des identités, SSO avec un IdP, les rôles et associations locaux, les politiques et approbations. Les panneaux et commandes CLI payants sont masqués ; leurs routes API publiées renvoient HTTP `501`. Activer un module n’ajoute pas son implémentation Business.
 :::
 
 Cette page explique le modèle de connecteur général et comment câbler une véritable source dans le moteur. Si vous voulez seulement connecter un agent de codage, commencez par [Connecter Claude Code](/fr/how-to/connect-claude-code/) — c'est une source spécifique sur le chemin coopératif, et cette page est le modèle qui la sous-tend.

@@ -506,3 +506,35 @@ describe('the sentence that closes a confirmation says only what was established
     expect(said.join(' ')).toMatch(DIAGNOSIS)
   })
 })
+
+it('retires a saved permit after a confined membership round trip without selector movement', async () => {
+  useWorkspaceStore.setState({ activeWorkspace: null })
+  const { client } = mounted()
+  const bound = (workspace: string) => ({
+    ...principal,
+    grants: [
+      {
+        tenant: TENANT,
+        role: 'viewer',
+        permissions: [],
+        confined_workspace: workspace,
+      },
+    ],
+  })
+  client.setQueryData(queryKeys.whoami, bound(A))
+  const live = () => liveCapabilityContext(client)
+  const permit = createCapabilityPermit(
+    live() as NonNullable<ReturnType<typeof live>>,
+    patch(),
+    performance.now() + 10_000,
+    live,
+  )
+  expect(permit.isCurrent()).toBe(true)
+  await act(async () => {
+    client.setQueryData(queryKeys.whoami, bound(B))
+    client.setQueryData(queryKeys.whoami, bound(A))
+  })
+  expect(permit.isCurrent()).toBe(false)
+  expect(permit.isCurrent()).toBe(false)
+  expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
+})

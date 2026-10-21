@@ -27,6 +27,7 @@ type readyzOptions struct {
 func newReadyzCmd() *cobra.Command {
 	o := readyzOptions{server: "https://127.0.0.1:8443", timeout: 3 * time.Second}
 	cmd := &cobra.Command{
+		Annotations:   map[string]string{"changes_data": "read"},
 		Use:           "readyz",
 		Short:         "Probe this host's local engine readiness without curl",
 		SilenceErrors: true,

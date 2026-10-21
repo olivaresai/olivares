@@ -291,7 +291,7 @@
   },
   "forbiddenResolve": {
     "title": "Resolve not authorized",
-    "description": "Resolving an incident requires the check-admin permission (health:check:admin)."
+    "description": "Your role cannot resolve incidents."
   },
   "connectors": {
     "autoRefresh": "Auto-refreshes every 15 seconds.",
@@ -318,7 +318,7 @@
       "failed": "Failed",
       "stopped": "Stopped",
       "disabled": "Disabled",
-      "not_wired": "Not wired"
+      "not_wired": "Not set up"
     },
     "trend": {
       "up": "Improving",

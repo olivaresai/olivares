@@ -13,6 +13,8 @@ at-most-once and drops on shutdown, this module is the **durability boundary**:
 once an event is captured in the capture transaction, delivery is durable and
 auditable. Its routes mount under `/v1/m/eventing/`.
 
+**Edition:** Signed webhook subscriptions are Community. SIEM sinks (`sink_kind` set) require Business: a Community server answers `501 business_required` to a create or update that carries one. A sink stored before delivers nothing; an update that omits it disables or clears the subscription's sink, and `DELETE` removes the subscription.
+
 ## What you subscribe to
 
 A **subscription** records the event types it wants, an optional source filter,

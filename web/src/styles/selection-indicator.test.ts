@@ -28,7 +28,6 @@ const SELECTION_SITES = [
     aria: 'aria-pressed={isActive}',
     occurrences: 1,
   },
-
 ]
 
 describe('the selected state never rests on colour alone', () => {
@@ -56,6 +55,4 @@ describe('the selected state never rests on colour alone', () => {
       expect(src).not.toContain('border-accent-line')
     })
   }
-
-
 })

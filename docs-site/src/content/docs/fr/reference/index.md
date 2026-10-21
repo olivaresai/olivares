@@ -23,7 +23,7 @@ limites](/fr/start/honesty-and-limits/) pour le contrat global.
 
 | Domaine | Ce qu'il documente | Source de vérité |
 |---|---|---|
-| **[API REST](/reference/api/)** | L'API HTTP du control plane : auth, setup, tenancy, agents, l'access map R/RW, tokens et l'audit ledger. | Le contrat **OpenAPI 3.1** du produit (128 chemins de cœur), rendu au build à partir du fichier réel — pas une copie. |
+| **[API REST](/reference/api/)** | L'API HTTP du control plane : auth, setup, tenancy, agents, l'access map R/RW, tokens et l'audit ledger. | Le contrat **OpenAPI 3.1** du produit ({{core-paths}} chemins de cœur), rendu au build à partir du fichier réel — pas une copie. |
 | **[Routes de module (bêta)](/reference/api-beta/)** | Les routes de module du produit (`/v1/m/<ns>/…`) — FinOps, conformité, gouvernance, sessions, modèles, knowledge, … — dans un document OpenAPI **bêta** distinct. | Le même contrat OpenAPI 3.1, reflété au build à partir des routes enregistrées par les modules. |
 | **[Politique de stabilité](/fr/reference/api-stability/)** | Versioning, niveaux de stabilité, signalement dépréciation/sunset et fenêtres de support minimales pour l'API, le provider et les SDK clients. | La table de dépréciation in-code et ses tests de fenêtre qui font échouer le build. |
 | **[gRPC](/fr/reference/grpc/)** | Le miroir gRPC du moteur et le contrat wire versioné des plugins utilisé par chaque connecteur hors processus. | Les tables d'enregistrement `grpc.ServiceDesc` que les serveurs transmettent à gRPC. |
@@ -45,7 +45,7 @@ agents, l'access map lecture/écriture (`GET /v1/access-edges` ; son *drift* lea
 réconcilié est servi par le module access-map plutôt que par la surface de cœur), la
 gestion des tokens et l'audit ledger.
 
-Le contrat décrit **128 chemins de cœur**. C'est délibéré : c'est la surface stable et
+Le contrat décrit **{{core-paths}} chemins de cœur**. C'est délibéré : c'est la surface stable et
 versionnée du control plane, pas chaque route à laquelle le moteur peut répondre. Ce à quoi
 « stable » s'engage — versioning, signalement de dépréciation et fenêtres de support
 minimales — est la [politique de stabilité de l'API](/fr/reference/api-stability/).
@@ -53,7 +53,7 @@ minimales — est la [politique de stabilité de l'API](/fr/reference/api-stabil
 :::note[Les routes de module forment un contrat bêta distinct]
 Les routes de module — par exemple les `/v1/m/accessmap/graph`,
 `/v1/m/accessmap/neighbors` et `/v1/m/accessmap/drift` du module access-map — ne font
-**pas** partie du document stable de 128 chemins du cœur. Elles sont publiées dans un
+**pas** partie du document stable de {{core-paths}} chemins du cœur. Elles sont publiées dans un
 document OpenAPI **bêta** distinct à [`/reference/api-beta/`](/reference/api-beta/)
 (servi à `/openapi.beta.json` et reflété à partir des routes que les modules enregistrent
 réellement), de sorte que la surface stable reste identifiable tandis que la surface
@@ -124,7 +124,7 @@ La [référence de configuration](/fr/reference/configuration/) liste les variab
 d'environnement et options runtime qui façonnent un déploiement. Les plus déterminantes sont
 le répertoire de données (`OLIVARES_DATA_DIR`), le câblage des sources réelles (non-démo) lu
 depuis `OLIVARES_SOURCES_CONFIG` avant le démarrage du moteur, et le sélecteur de moteur
-d'autorisation `OLIVARES_PDP_ENGINE` (`cedar`, `opa` ou `none`).
+d'autorisation `OLIVARES_PDP_ENGINE` (`cedar` et `opa` sont Business ; `none` ou non défini est valide partout).
 
 Deux règles de conception traversent la surface de configuration. Une **source non
 configurée avertit honnêtement** plutôt que de faire échouer le moteur. Et le seam

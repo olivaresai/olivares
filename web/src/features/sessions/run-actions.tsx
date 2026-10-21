@@ -28,7 +28,7 @@ import { useClientSettings } from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
-import { canMoveSession, startsAgain, type Capability } from './provenance'
+import { canHandoffSession, startsAgain, type Capability } from './provenance'
 import { DisabledTip, IconTip } from './icon-tip'
 import { MoveSessionDialog } from './session-move'
 import './i18n'
@@ -219,29 +219,31 @@ export function RunActions({
               : t('card.actions.resume')}
           </Button>
         )}
-        {allow('resume') && !startsAgain(run) && canMoveSession(run) && (
-          <>
-            <IconTip label={t('move.open')}>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={t('move.open')}
-                onClick={() => setMoveOpen(true)}
-              >
-                <ArrowRightLeft />
-              </Button>
-            </IconTip>
-            {/* Mounted only while open: it reads profiles and the handoff preview, and a
+        {(allow('resume') || allow('stop')) &&
+          !startsAgain(run) &&
+          canHandoffSession(run) && (
+            <>
+              <IconTip label={t('move.open')}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('move.open')}
+                  onClick={() => setMoveOpen(true)}
+                >
+                  <ArrowRightLeft />
+                </Button>
+              </IconTip>
+              {/* Mounted only while open: it reads profiles and the handoff preview, and a
                 card that never opens it must not pay for either. */}
-            {moveOpen && (
-              <MoveSessionDialog
-                key={run.run_ref}
-                run={run}
-                onClose={() => setMoveOpen(false)}
-              />
-            )}
-          </>
-        )}
+              {moveOpen && (
+                <MoveSessionDialog
+                  key={run.run_ref}
+                  run={run}
+                  onClose={() => setMoveOpen(false)}
+                />
+              )}
+            </>
+          )}
         <ConfirmDialog
           open={confirm === 'stop'}
           onOpenChange={(o) => !o && setConfirm(null)}
@@ -296,25 +298,27 @@ export function RunActions({
             : t('card.actions.resume')}
         </Button>
       )}
-      {allow('resume') && !startsAgain(run) && canMoveSession(run) && (
-        <>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setMoveOpen(true)}
-          >
-            <ArrowRightLeft className="size-3.5" />
-            {t('move.open')}
-          </Button>
-          {moveOpen && (
-            <MoveSessionDialog
-              key={run.run_ref}
-              run={run}
-              onClose={() => setMoveOpen(false)}
-            />
-          )}
-        </>
-      )}
+      {(allow('resume') || allow('stop')) &&
+        !startsAgain(run) &&
+        canHandoffSession(run) && (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setMoveOpen(true)}
+            >
+              <ArrowRightLeft className="size-3.5" />
+              {t('move.open')}
+            </Button>
+            {moveOpen && (
+              <MoveSessionDialog
+                key={run.run_ref}
+                run={run}
+                onClose={() => setMoveOpen(false)}
+              />
+            )}
+          </>
+        )}
       {allow('cleanup') && (
         <Button
           variant="secondary"

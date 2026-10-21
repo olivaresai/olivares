@@ -581,7 +581,7 @@ func TestDroppingASinkProfileIsGoverned(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := newHarness(t)
+	h := newHarness(t, WithSinkRenderer(&fakeRenderer{}))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	editor := h.roleToken(admin, tenant, "e@acme.test", "editor")
@@ -716,7 +716,7 @@ func TestAProofNeverCarriesTheDestination(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := newHarness(t)
+	h := newHarness(t, WithSinkRenderer(&fakeRenderer{}))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	editor := h.roleToken(admin, tenant, "e@acme.test", "editor")
@@ -843,7 +843,7 @@ func TestTheSinkUpsertStampsOnlyWhenTheRenderedDestinationMoves(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	h := newHarness(t)
+	h := newHarness(t, WithSinkRenderer(&fakeRenderer{}))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	editor := h.roleToken(admin, tenant, "e@acme.test", "editor")

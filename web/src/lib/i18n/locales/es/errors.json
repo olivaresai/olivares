@@ -4,6 +4,11 @@
     "description": "Esta página no existe o se ha movido.",
     "back": "Volver al resumen"
   },
+  "businessOnly": {
+    "title": "Forma parte de Business",
+    "description": "Esta página forma parte de Olivares AI Business. Esta edición no la incluye.",
+    "link": "Acerca de Business"
+  },
   "forbidden": {
     "title": "Sin autorización",
     "description": "No tienes permiso para ver esto. Solicita acceso a un administrador.",

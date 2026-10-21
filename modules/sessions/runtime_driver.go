@@ -147,6 +147,7 @@ type DriverSessionConfig struct {
 	WorkDir              string
 	Model                string
 	Effort               string
+	ServiceTier          string
 	Preset               string
 	CodexSandboxFallback bool
 	BoundProvider        BoundProvider
@@ -169,16 +170,25 @@ type DriverSessionConfig struct {
 
 	// Runtime-only MCP configuration, never serialized or recorded.
 	sessionMCP []json.RawMessage
+	// ownMCPOnly says the launch proved the session MCP server is the only MCP server
+	// the CLI can start (launchOwnMCPOnly); false when it could not be proved.
+	ownMCPOnly bool
 
 	// CallTimeout bounds one client→server request. ApprovalDeadline bounds one
 	// server→client approval before its method-specific timeout refusal is sent.
 	CallTimeout      time.Duration
 	ApprovalDeadline time.Duration
 
+	// files is where fs/write_text_file may write; nil refuses it (acp_fs.go).
+	files *fileScope
+
 	// Approve is the governed approval authority for provider requests. It is
 	// DENY-CLOSED by default: without a wired gate the driver refuses every
 	// approval with the method's own refusal codec rather than granting one.
 	Approve func(context.Context, ProviderApprovalRequest) (ProviderApprovalDecision, error)
+
+	// OnCommandsChanged invalidates the live session catalog after a native notice.
+	OnCommandsChanged func()
 
 	// OnAuthState is called when the provider's own readiness CHANGES after the
 	// handshake, so a later authentication failure invalidates what the row says
@@ -190,6 +200,12 @@ type DriverSessionConfig struct {
 	// any other total (a resumed thread's earlier one) is a baseline, not usage of
 	// this launch.
 	OnUsage func(usage resultUsage, ownTurn bool)
+
+	// OnLimit is called when the provider ended a turn on a usage or rate limit, with
+	// the reset time it reported (zero when it reported none); OnTurnOK when a turn
+	// completed. Together they keep the run's limit fact true (runtime_limit.go).
+	OnLimit  func(kind string, resetsAt time.Time)
+	OnTurnOK func()
 
 	// AuthorityCheck re-proves the launch's exact durable authority immediately
 	// before an answer crosses to the child. It is the driver's only way to ask
@@ -246,6 +262,12 @@ type DriverSession interface {
 	ConversationID() string
 	// Close fails every in-flight waiter after the child is gone.
 	Close(err error)
+}
+
+// imageInputSession is a DriverSession whose tool takes images in a turn. A session
+// without it refuses a message with images, naming the tool (run_attachment.go).
+type imageInputSession interface {
+	InputImages(ctx context.Context, text string, images []turnImage) (attempted bool, err error)
 }
 
 // ProviderDriver is the extensible internal driver interface. Registering one is
@@ -906,15 +928,24 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 		authSource = lr.profile.AuthSource
 	}
 	lr.driver = d
+	sessionMCP := openCodeSessionMCP(spec)
+	ownMCPOnly := len(sessionMCP) > 0 && launchOwnMCPOnly(launchDriverKey(p), p.ProviderHome, spec.Dir)
+	if len(sessionMCP) > 0 && !ownMCPOnly && launchDriverKey(p) == providerDriverGemini {
+		m.warnf("sessions: a Gemini launch has an MCP server source besides the session's own, so its session tools will be refused",
+			"run_ref", lr.runRef)
+	}
 	lr.session = d.OpenSession(DriverSessionConfig{
 		Send:                 func(ctx context.Context, line []byte) error { return lr.proc.Send(ctx, line) },
 		Warn:                 m.warnf,
 		ClientName:           driverClientName,
 		ClientVersion:        m.productVersion(),
 		WorkDir:              spec.Dir,
-		sessionMCP:           openCodeSessionMCP(spec),
+		files:                spec.files,
+		sessionMCP:           sessionMCP,
+		ownMCPOnly:           ownMCPOnly,
 		Model:                p.Model,
 		Effort:               p.Effort,
+		ServiceTier:          p.ServiceTier,
 		Preset:               launchPreset(p),
 		CodexSandboxFallback: p.codexSandboxFallback,
 		BoundProvider:        lr.companion.BoundProvider,
@@ -932,7 +963,8 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 			}
 			return decision, err
 		},
-		AuthorityCheck: func(ctx context.Context) error { return m.assertRunAuthority(ctx, lr) },
+		AuthorityCheck:    func(ctx context.Context) error { return m.assertRunAuthority(ctx, lr) },
+		OnCommandsChanged: func() { lr.commands.dirty.Store(true) },
 		OnAuthState: func(state string) {
 			// Through the reservation window like every other row effect, and with a
 			// context of its own: this can arrive from the pump at any moment,
@@ -946,6 +978,14 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 			m.deferDurable(lr, func() {
 				m.recordDriverUsage(context.Background(), lr, usage, ownTurn, at)
 			})
+		},
+		OnLimit: func(kind string, resetsAt time.Time) {
+			m.deferDurable(lr, func() {
+				m.recordLimit(context.Background(), lr, limitReport{Kind: kind, ResetsAt: resetsAt})
+			})
+		},
+		OnTurnOK: func() {
+			m.deferDurable(lr, func() { m.clearLimit(context.Background(), lr) })
 		},
 	})
 }
@@ -1098,6 +1138,11 @@ func (m *Module) recordProviderAuthState(ctx context.Context, lr *liveRun, state
 // refusal ABOVE the driver returns false, because none of them has written
 // anything; the driver decides the rest.
 func (m *Module) driverInput(ctx context.Context, lr *liveRun, text string) (bool, error) {
+	return m.driverInputImages(ctx, lr, text, nil)
+}
+
+// driverInputImages is driverInput for a message that carries images.
+func (m *Module) driverInputImages(ctx context.Context, lr *liveRun, text string, images []turnImage) (bool, error) {
 	if lr.session == nil {
 		return false, conflictErr("this session has no provider protocol driver")
 	}
@@ -1110,15 +1155,28 @@ func (m *Module) driverInput(ctx context.Context, lr *liveRun, text string) (boo
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return false, err
 	}
-	return m.driverInputAdmitted(ctx, lr, text, lr.launchID, lr.claim.SID)
+	return m.driverInputAdmittedImages(ctx, lr, text, images, lr.launchID, lr.claim.SID)
 }
 
 // driverInputAdmitted is the I/O half after known authority commit under the run
 // lock. Existing callers enter through driverInput; checked delivery establishes
 // the same authority in its final transaction and must not open another one here.
 func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text string, launch model.ID, sid string) (bool, error) {
+	return m.driverInputAdmittedImages(ctx, lr, text, nil, launch, sid)
+}
+
+func (m *Module) driverInputAdmittedImages(ctx context.Context, lr *liveRun, text string, images []turnImage, launch model.ID, sid string) (bool, error) {
 	if lr == nil || lr.session == nil {
 		return false, conflictErr("this session has no provider protocol driver")
+	}
+	var imageSession imageInputSession
+	if len(images) > 0 {
+		// Before anything is queued or started: a tool that cannot take the image
+		// refuses the whole message and says which tool.
+		var ok bool
+		if imageSession, ok = lr.session.(imageInputSession); !ok {
+			return false, &runErr{http.StatusUnprocessableEntity, toolDisplayName(lr.driver.Key()) + " does not take images"}
+		}
 	}
 	if state := lr.session.AuthState(); state == AuthStateRequired {
 		return false, &runErr{http.StatusConflict, "the provider reports that this profile is not authenticated (auth_required); a turn cannot be started"}
@@ -1139,9 +1197,24 @@ func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text stri
 	// The input starts the next turn before the provider names it, so the run is not
 	// waiting any more; an input refused before any byte moved leaves it waiting.
 	waiting := lr.setDriverTurnEnded(false)
-	attempted, err := lr.session.Input(ctx, text)
+	interrupted := lr.setTurnInterrupted(false)
+	lr.noteIdleActivity(m.now())
+	var (
+		attempted bool
+		err       error
+	)
+	if imageSession != nil {
+		echo := lr.imageEcho.queue(text, images)
+		attempted, err = imageSession.InputImages(ctx, text, images)
+		if !attempted || err != nil {
+			lr.imageEcho.drop(echo)
+		}
+	} else {
+		attempted, err = lr.session.Input(ctx, text)
+	}
 	if !attempted {
 		lr.setDriverTurnEnded(waiting)
+		lr.setTurnInterrupted(interrupted)
 	}
 	if prompt != nil {
 		// Published only when the driver accepted it (acp_prompt_echo.go).
@@ -1166,7 +1239,11 @@ func (m *Module) interruptDriverTurn(ctx context.Context, lr *liveRun) (bool, er
 	}
 	callErr := m.endSessionCalls(lr, "")
 	attempted, err := lr.session.Interrupt(ctx)
-	return attempted, errors.Join(callErr, err)
+	err = errors.Join(callErr, err)
+	if err == nil {
+		lr.setTurnInterrupted(true)
+	}
+	return attempted, err
 }
 
 // closeDriverSession releases every in-flight protocol waiter once the owned

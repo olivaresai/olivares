@@ -204,6 +204,7 @@
     "readFailed": "Konnte nicht gelesen werden: {{message}}",
     "tools": "KI-Tools",
     "packages": "Programme und Registries",
+    "egressHosts": "Netzwerk-Hosts",
     "skills": "Skills",
     "mcp": "MCP-Server",
     "none": "Keine",

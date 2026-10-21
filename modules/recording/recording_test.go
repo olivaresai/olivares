@@ -290,7 +290,7 @@ func TestRecordingUnavailableDenies(t *testing.T) {
 	_, op := h.roleUser(admin, tenant, "op@x.io", "admin")
 
 	// A second server whose recorder has NO data handle (mis-wired on purpose).
-	broken := recording.New()
+	broken := recording.New(recording.WithBusinessEdition())
 	srv2, err := api.New(api.Options{
 		Store: h.st, Authenticator: auth.NewAuthenticator(h.st, nil), Authorizer: auth.NewAuthorizer(nil),
 		Signer: mustSigner(t), SetupToken: mustSetupToken(t), Version: "test", Clock: h.clk,

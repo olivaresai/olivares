@@ -136,6 +136,7 @@
       "revoked": "取り消し済み",
       "notAttributed": "このビューは状態を帰属させません"
     },
+    "scopeOf": "「{{item}}」の範囲",
     "meta": "{{subject}} · 決定者 {{actor}} · {{at}}",
     "revoke": "取り消す",
     "revokeTitle": "決定を取り消す",
@@ -261,8 +262,8 @@
     "item.fail": "失敗にする",
     "item.cancel": "キャンセルする",
     "item.archive": "アーカイブする",
-    "noWrite": "この役割ではこのアイテムを変更できません。その操作には sessions:work:write が必要です。",
-    "noAdmin": "失敗とアーカイブには sessions:work:admin が必要です。"
+    "noWrite": "この役割ではこのアイテムを変更できません。",
+    "noAdmin": "この役割ではアイテムを失敗にしたりアーカイブしたりできません。"
   },
   "truncation": {
     "label": "{{n}} 件を読み込みました。さらに存在します",
@@ -291,7 +292,7 @@
   "handoff": {
     "offer": "ハンドオフを提案",
     "offerHint": "このアイテムの責任をチャネル経由で受信者に提案します。相手が承諾するまで所有権は移りません。",
-    "noPermission": "この役割ではハンドオフを提案できません。その操作には sessions:message-send:write が必要です。"
+    "noPermission": "この役割ではハンドオフを提案できません。"
   },
   "url": {
     "invalidItem": "アドレスがこの画面では使えないアイテム ID を示しているため、無視しました。",

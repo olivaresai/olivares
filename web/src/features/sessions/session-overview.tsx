@@ -47,7 +47,7 @@ export function SessionOverview({
   frameCwd,
 }: {
   resolution: SessionResolution
-  evidence: EvidenceBlock
+  evidence?: EvidenceBlock
   onExpandEvidence: (block: EvidenceBlock) => void
   /** The sessions on the surface, from which "Can message" offers this one's peers. */
   peerSessions?: readonly UnifiedSession[]
@@ -59,7 +59,7 @@ export function SessionOverview({
   const { session, live, observeUnknown, observeError, grants } = resolution
   const run = primaryRun(session.runs)
   const line = live ? workLine(live) : null
-  const usage = sessionUsage(run, live)
+  const usage = sessionUsage(session.runs, live)
   // With the meter shown, the cost is its to say (or to say it is unknown): the facts
   // line does not repeat it, nor print a second figure beside "cost not reported".
   const facts = live

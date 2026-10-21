@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
 import {
-  desajustesPorFichero,
+  mismatchesByFile,
   leer,
   nombresDeLista,
   rutasSinTecho,
@@ -72,7 +72,7 @@ describe('compliance · complete lists stay explicitly outside the truncation co
     const listas = nombresDeLista(leer('features/compliance/api.ts')).filter(
       (n) => !(n in NO_PAGINAN),
     )
-    const { total, desajustes } = desajustesPorFichero(
+    const { total, desajustes } = mismatchesByFile(
       VISTAS.map((nombre) => ({ nombre, src: leer(nombre) })),
       listas,
       'complianceApi',

@@ -53,6 +53,45 @@ describe("the engine's rule for which records a tool runs on", () => {
   it('reads a typed driver name trimmed and lower-cased', () => {
     expect(recordServesDriver('anthropic', undefined, ' Claude ')).toBe(true)
   })
+
+  // driverfacts.LocalHTTPEndpoint: OpenCode is held to an OpenAI-compatible server
+  // only at a local http address (vLLM, llama.cpp), never to a gateway.
+  it.each([
+    ['http://127.0.0.1:8080/v1', true],
+    ['http://localhost:8000/v1', true],
+    ['http://10.0.0.5:8000/v1', true],
+    ['http://172.16.0.2:8000/v1', true],
+    ['http://192.168.1.9:8000/v1', true],
+    ['http://[::1]:8080/v1', true],
+    ['http://[fd12:3456:789a::1]:8080/v1', true],
+    ['http://172.32.0.2:8000/v1', false],
+    ['http://8.8.8.8:8000/v1', false],
+    ['http://llm.example.com/v1', false],
+    ['https://127.0.0.1:8080/v1', false],
+    ['http://user:key@127.0.0.1:8080/v1', false],
+    ['http://127.0.0.1:8080/v1?x=1', false],
+    ['http://127.0.0.1:8080/v1?', false],
+    ['http://127.0.0.1:8080/v1#x', false],
+    ['http://LOCALHOST:8080/v1', false],
+    ['http://010.0.0.1:8080/v1', false],
+    ['http://127.0.0.1:99999999/v1', false],
+    ['HTTP://127.0.0.1:8080/v1', true],
+    ['', false],
+  ])('OpenCode on openai_compatible at %s: %s', (baseURL, expected) => {
+    expect(recordServesDriver('openai_compatible', baseURL, 'opencode')).toBe(
+      expected,
+    )
+  })
+
+  it('never holds Gemini CLI to a local OpenAI-compatible server', () => {
+    expect(
+      recordServesDriver(
+        'openai_compatible',
+        'http://127.0.0.1:8080/v1',
+        'gemini-cli',
+      ),
+    ).toBe(false)
+  })
 })
 
 // The endpoint hint promises plain http at a local address for exactly the kinds the

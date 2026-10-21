@@ -51,12 +51,18 @@ const HANDOFF = {
 } as unknown as HandoffInboxItem
 
 describe('railGroups', () => {
-  it('uses the shared naming ladder and the observed action when no title exists', () => {
+  it('uses the shared naming ladder, then the tool; the observed action is never the title', () => {
     const rows = railGroups(
       {
         live: [
           live({
             session_ref: 'action',
+            provider: 'claude',
+            current_action: 'create_issue',
+            current_resource: 'github/create_issue',
+          }),
+          live({
+            session_ref: 'action-no-tool',
             current_action: 'create_issue',
             current_resource: 'github/create_issue',
           }),
@@ -72,11 +78,12 @@ describe('railGroups', () => {
       NOW,
     )[1].rows
     expect(rows.map((row) => row.title)).toEqual([
-      'create_issue · github/create_issue',
+      'Claude Code',
+      null,
       'Review ready',
       null,
     ])
-    expect(rows[2].reference).toBe('empty')
+    expect(rows[3].reference).toBe('empty')
   })
 
   it('puts a handoff offered to the operator in Needs you, above the sessions that ask', () => {

@@ -119,6 +119,11 @@ func (m *Module) AttachRuntimeOutput(ctx context.Context, target RuntimeLaunchId
 		err = ErrRuntimeOutputUnavailable
 	}
 	if err == nil {
+		// A person follows this run until the stream ends. The pin is taken while
+		// the run lock is held, the way the idle policy's final check reads it.
+		defer live.pinViewer()()
+	}
+	if err == nil {
 		err = m.runtimeData(ctx).Mutate(ctx, target.Tenant, func(sc store.Scope) error {
 			_, err := sc.Audit().Append(ctx, model.AuditDraft{Actor: actor, ActorKind: actorKind, Action: "sessions.run.attach", TargetKind: runKind, Meta: map[string]any{"run_ref": target.RunRef, "runtime_launch_id": target.RuntimeLaunchID.String(), "reason": reason}})
 			return err

@@ -517,7 +517,7 @@ func (m *Module) handleEngageKillSwitch(w http.ResponseWriter, r *http.Request, 
 // handleListKillSwitch lists stop rows, optionally filtered by stored status —
 // the persisted, visible stop state (who, when, scope, reason).
 func (m *Module) handleListKillSwitch(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	q := listQuery(r)
+	q := listQuery(w, r)
 	if v := r.URL.Query().Get("status"); v != "" {
 		q.Filters = append(q.Filters, eq(colKSStatus, v))
 	}

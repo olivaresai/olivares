@@ -212,6 +212,10 @@ func makeGroupStub(cmd *cobra.Command) {
 // a leftover positional means the topic named a command that does not exist, at
 // whatever depth. Leftover flags are ignored, as cobra's help always did.
 func adoptHelpCommand(cmd *cobra.Command) {
+	if cmd.Annotations == nil {
+		cmd.Annotations = map[string]string{}
+	}
+	cmd.Annotations["changes_data"] = "read"
 	cmd.Run = nil
 	cmd.Args = usageCodedArgs(nil)
 	if strings.TrimSpace(cmd.Example) == "" {

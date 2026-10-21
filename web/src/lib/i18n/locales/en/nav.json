@@ -42,6 +42,7 @@
     "sourceDiff": "Source diff",
     "permissions": "Permissions",
     "identity": "Identity & access",
+    "vault": "Vault",
     "claudePolicy": "Claude Code governance",
     "routinePolicies": "Routine policies",
     "deploy": "Deployment",
@@ -50,7 +51,7 @@
     "catalog": "Catalog",
     "killswitch": "Kill switch",
     "work": "Work",
-    "agentops": "Sessions",
+    "agentops": "Operate sessions",
     "agentArtifacts": "Agent Artifacts",
     "models": "Models",
     "modelOps": "Model Operations",
@@ -68,6 +69,7 @@
     "attestation": "Supply chain",
     "apiPlayground": "API Playground",
     "audit": "Audit ledger",
+    "retention": "Retention",
     "workspaceDashboard": "Workspace",
     "settings": "Settings",
     "workspace-templates": "Workspace templates",
@@ -78,7 +80,7 @@
     "inferenceProxy": "Inference proxy",
     "alerting": "Alerting",
     "agentcoreExport": "AgentCore export",
-    "providers": "API keys",
+    "providers": "Providers",
     "providerProfiles": "Provider profiles",
     "providerBindings": "Source bindings",
     "providerAccounts": "Provider accounts",
@@ -108,15 +110,16 @@
     "skills": "Browse skill packs and assign them to departments, agent groups and agents",
     "protocolBindings": "Compose and reconcile governed A2A and MCP bindings",
     "communications": "Channels, direct notices and the personal inbox of the selected workspace",
-    "communicationsInbox": "Your exact mailbox: deliveries addressed to you, opened fresh and acknowledged explicitly",
+    "communicationsInbox": "Messages addressed to you: open and acknowledge each one",
     "communicationsNew": "Create a channel with explicit initial grants",
-    "communicationsAdministration": "Administer channels: configuration and grant history, each act under the channel's current ETag",
+    "communicationsAdministration": "Administer channels: configuration and grant history",
     "communicationsHandoffs": "Offers of work responsibility addressed to you: read the context and accept or reject",
     "console": "Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's license",
     "permissions": "Identity, roles and approvals",
-    "identity": "SSO, SCIM, the NHI roster and the WIF graph",
+    "identity": "SSO, SCIM and the identities your agents use",
+    "vault": "Your passwords, notes and authenticator codes",
     "claudePolicy": "Managed policy, hooks, MCP, sandbox and policy-as-code",
-    "deploy": "Provision and wire agents to infrastructure",
+    "deploy": "Provision agents and connect them to infrastructure",
     "gitPublication": "Push commits, open pull requests and merge through approved Git targets",
     "knowledge": "Knowledge bases, RAG and data lineage",
     "catalog": "Curated, approved agents and capabilities",
@@ -144,6 +147,7 @@
     "attestation": "Release attestation — SLSA, SBOM, VEX and Scorecard",
     "apiPlayground": "Interactively explore and test the control-plane API",
     "audit": "Tamper-evident evidence ledger",
+    "retention": "How long each class of record is kept, the sweep that applies it and its sealed certificates",
     "workspaceDashboard": "Agents, sessions, resources and activity scoped to one workspace",
     "settings": "Workspace and account settings",
     "inferenceProxy": "Proxy gates, egress DLP rules and device approvals",
@@ -152,7 +156,7 @@
     "postureExport": "Export ground-truth posture for a control tower",
     "providers": "Register the API keys and endpoints sessions launch with; test, rotate and revoke them",
     "providerProfiles": "Register and administer the provider homes sessions launch under, and read their configuration on demand",
-    "providerBindings": "Dedicate configured sources, at the revision this node applied, to provider profiles",
+    "providerBindings": "Link configured sources to provider profiles",
     "providerAccounts": "List named provider accounts and adopt an existing provider profile as an account",
     "routinePolicies": "Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines",
     "agentcoreExport": "Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing",
@@ -175,7 +179,7 @@
       "createSchedule": "New schedule"
     },
     "killswitch": {
-      "engage": "Engage kill switch"
+      "engage": "Stop all agents"
     },
     "identity": {
       "invite": "Invite people"
@@ -274,8 +278,7 @@
     "empty": "No entries in this area are available to you",
     "emptyHint": "Entries appear here when your role in the current organization grants access to a module of this area.",
     "backHome": "Go to Now",
-    "area": "Area",
-    "off": "Off"
+    "area": "Area"
   },
   "personal": {
     "favorites": "Favorites",
@@ -332,6 +335,7 @@
     "wirePlaceholder": "Send an NDJSON line to stdin…",
     "wireAria": "Session input line",
     "turnFailed": "The session could not accept this turn.",
+    "draftSaveFailed": "Draft could not be saved in this tab. Keep this page open or copy your message before leaving.",
     "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence.",
     "messagePlaceholder": "Message {{title}}…",
     "slashLabel": "Commands and skills",
@@ -351,7 +355,7 @@
       }
     },
     "modelAria": "Model and effort of this session: {{value}}",
-    "sessionKeeps": "This session keeps {{value}}. A different model or effort starts a new session.",
+    "sessionKeeps": "This session keeps {{value}}. A different choice starts a new session.",
     "startWithChoice": "Start a new session with this choice"
   },
   "shell": {
