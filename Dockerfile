@@ -12,7 +12,7 @@
 
 # ---- web stage: build the React/Vite UI into the Go embed dir -----------------
 # Pinned by digest; Dependabot's docker entry keeps the digest current.
-FROM node:26-bookworm-slim@sha256:86f07bc9c5dce4578cf37e5a418b7bfc7f817cda25cde66e2b66e95ed86c4567 AS web
+FROM node:26-bookworm-slim@sha256:298992629d69bbd5b2b03ad57094d8e4fcb3a8eeb7c4e25d29de656519568913 AS web
 WORKDIR /src
 # Node.js stopped bundling corepack in version 25, so this stage installs a pinned
 # corepack and enables its pnpm shims only; corepack then runs the pnpm that
@@ -61,7 +61,7 @@ RUN VERSION_LDFLAGS="$(sh scripts/build-ldflags.sh "${VERSION}" "${COMMIT}")" &&
 # ---- final stage: non-root agent runtime ----------------------------------
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
+FROM node:24-trixie-slim@sha256:7f486cabe892bff8fef04c0f7da8dba84a560be3e4e2740b7a86afc57ebec315
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get upgrade -y \
