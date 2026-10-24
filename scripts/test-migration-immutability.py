@@ -2,12 +2,17 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 """Exercise the real migration gate against a Git baseline."""
+import contextlib
+import importlib.util
+import io
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -601,6 +606,65 @@ var guardedDescriptor = model.EntityDescriptor{Fields: []model.FieldSpec{
         result = self.gate()
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn('UNVERIFIED', result.stdout + result.stderr)
+
+
+PLAN = 'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1'
+CORE = 'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1'
+# The digests the gate computed for these two bindings on the 0.3 tree and on the 0.4 tree.
+PAIRS = {
+    PLAN: ('8243800ce7033c9938779e9cfd765a8c0b0debfb48fd828ca4c861cdc1b7cb30',
+           'f348a0c80cd65335f5f8c422a46b7ef1a615dc38ea8500aed9e646382de6d14c'),
+    CORE: ('6d2daa839373bd36eaddc5827f156be844e394b7d7af72c019de051dfa78aca0',
+           'f7264bf98632902afa007091ba78aa1dbca1aa57edea3964a5fec73aa882273f'),
+}
+OTHER = 'a' * 64
+
+
+class ReviewedBindings(unittest.TestCase):
+    """The gate's own decision on production binding keys, with the Go hash step returning the given digests."""
+
+    def decide(self, baseline, head):
+        spec = importlib.util.spec_from_file_location('migration_hashes', ROOT / 'scripts/check-migration-hashes.py')
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        go = subprocess.CompletedProcess([], 0, stdout=json.dumps([baseline, head]), stderr='')
+        errors = io.StringIO()
+        with mock.patch.object(gate, 'baseline_files', return_value={}), \
+                mock.patch.object(gate, 'sql_hashes', side_effect=lambda files: {}), \
+                mock.patch.object(gate, 'git', side_effect=lambda *a: b'0' * 40 + b'\n' if a[0] == 'rev-parse' else b''), \
+                mock.patch.object(gate.subprocess, 'run', return_value=go), \
+                mock.patch.dict(os.environ, {'OLIVARES_MIGRATION_BASE': 'HEAD'}), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
+            code = gate.main()
+        return code, errors.getvalue(), gate
+
+    def test_the_reviewed_binding_pair_passes(self):
+        code, errors, _ = self.decide({k: old for k, (old, new) in PAIRS.items()},
+                                      {k: new for k, (old, new) in PAIRS.items()})
+        self.assertEqual((code, errors), (0, ''))
+
+    def test_a_reviewed_binding_with_any_other_digest_is_refused(self):
+        for key, (old, new) in PAIRS.items():
+            for baseline, head in ((old, OTHER), (OTHER, new), (new, old)):
+                with self.subTest(key=key, baseline=baseline[:8], head=head[:8]):
+                    code, errors, _ = self.decide({key: baseline}, {key: head})
+                    self.assertEqual(code, 1)
+                    self.assertIn('migration immutable: ' + key, errors)
+            with self.subTest(key=key, head='disappeared'):
+                code, errors, _ = self.decide({key: old}, {})
+                self.assertEqual(code, 1)
+
+    def test_the_exemption_covers_no_sql_file_and_no_other_key(self):
+        old, new = PAIRS[PLAN]
+        for key in ('modules/example/migrations/sqlite/0001_create.sql',
+                    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/2',
+                    'core/binding/modules/sessions/runtime.go/open/buildCoreMigrationPlan/1'):
+            with self.subTest(key=key):
+                code, errors, gate = self.decide({key: old}, {key: new})
+                self.assertEqual(code, 1)
+                self.assertIn('migration immutable: ' + key, errors)
+        for key in getattr(gate, 'REVIEWED_BINDINGS', {}):
+            self.assertTrue(key.startswith('core/binding/') and not key.endswith('.sql'), key)
 
 
 if __name__ == '__main__':

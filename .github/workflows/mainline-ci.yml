@@ -2202,9 +2202,8 @@ jobs:
             echo "DATABASE_IDEMPOTENCY_URL=postgres://cloud_cp_webhook_idempotency_ro:${PW_webhook_idempotency}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
           } >> "$GITHUB_ENV"
       - name: the runner allows the session boundary's user and network namespaces
-        # The sessions shard runs the boundary reproducers, which fail closed where the host
-        # refuses the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
-        if: contains(matrix.shard, 'sessions')
+        # Every shard can start a bound session, which fails closed where the host refuses
+        # the namespaces (SECURITY.md, Requirements). Same step as pr-ci.yml.
         run: bash scripts/ci-session-boundary.sh
       # ONE SHARD, through the one reader of ci/pr-suite-shards.txt: its whole packages, then its
       # name groups, then its legs, each `go test` under the spec's 45-minute binary timeout. The

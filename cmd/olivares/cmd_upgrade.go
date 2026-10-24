@@ -150,7 +150,7 @@ func newUpgradeCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.BoolVar(&o.enterprise, "enterprise", false, "upgrade the licensed Business edition (gated download; needs a live license)")
-	f.StringVar(&o.edition, "edition", "", "install or update the licensed build of this edition: business (enterprise is the same build); the same route as --enterprise, and the one a Community build with a Business license takes")
+	f.StringVar(&o.edition, "edition", "", "install or update the licensed build of this edition: business (or its alias enterprise); the same route as --enterprise, and the one a Community build with a Business license takes")
 	f.StringVar(&o.token, "token", "", "Business download token from your license/fulfillment email")
 	f.StringVar(&o.endpoint, "endpoint", "", "update channel source: a GitHub repository (https://github.com/<owner>/<repo>), one of its releases (…/releases/tag/<tag>), or a static mirror base (<base>/<channel>/manifest.json). Default: the public repository's releases; the license worker with --enterprise")
 	// `lts` is still a value release.ValidChannel accepts, so hiding it would document a

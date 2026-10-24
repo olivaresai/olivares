@@ -162,6 +162,45 @@ func TestRunningModuleIsPublished(t *testing.T) {
 	}
 }
 
+// eventModule has no routes of its own, like a module that only consumes events.
+type eventModule struct{}
+
+func (eventModule) APINamespace() string           { return "eventdemo" }
+func (eventModule) Permissions() []auth.Permission { return nil }
+func (eventModule) APIRoutes(api.RouteRegistrar)   {}
+
+// A module without routes of its own answers its namespace with module_not_enabled while
+// it is off, as every other module does; running, it has no route to answer.
+func TestRoutelessModuleAnswersNotEnabled(t *testing.T) {
+	answer := func(h *harness, path string) (int, any, any) {
+		r := h.do("GET", path, "", nil, nil)
+		errBody, _ := r.body["error"].(map[string]any)
+		return r.code, errBody["code"], errBody["module"]
+	}
+	for _, tc := range []struct {
+		name      string
+		configure func(*api.Options)
+	}{
+		{"live answer", func(o *api.Options) { o.ModuleEnabled = func(ns string) bool { return ns != "eventdemo" } }},
+		{"fixed list", func(o *api.Options) { o.NotEnabledModules = []string{"eventdemo"} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarnessOpts(t, tc.configure, eventModule{})
+			h.adminLogin() // past setup, which answers every route until it is done
+			for _, path := range []string{"/v1/m/eventdemo", "/v1/m/eventdemo/anything"} {
+				if code, errCode, module := answer(h, path); code != http.StatusNotFound || errCode != "module_not_enabled" || module != "eventdemo" {
+					t.Errorf("GET %s = %d %v %v, want 404 module_not_enabled eventdemo", path, code, errCode, module)
+				}
+			}
+		})
+	}
+	h := newHarnessOpts(t, func(o *api.Options) { o.ModuleEnabled = func(string) bool { return true } }, eventModule{})
+	h.adminLogin()
+	if code, errCode, _ := answer(h, "/v1/m/eventdemo"); code != http.StatusNotFound || errCode != "not_found" {
+		t.Errorf("GET /v1/m/eventdemo while it runs = %d %v, want 404 not_found", code, errCode)
+	}
+}
+
 // badModule claims a reserved API segment; building a server with it must fail.
 type badModule struct{}
 

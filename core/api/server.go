@@ -692,12 +692,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		body.Error.Message = "That method is not allowed on this path. Check the OpenAPI document for the methods this route registers."
 		writeJSON(w, http.StatusMethodNotAllowed, body)
 	})
-	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
-		var body errorBody
-		body.Error.Code = "not_found"
-		body.Error.Message = "No route is registered at that path."
-		writeJSON(w, http.StatusNotFound, body)
-	})
+	r.NotFound(routeNotFound)
 	// The middleware chain. The OBS-03 trace extractor sits AFTER requestIDMW (so the
 	// request id is already assigned) and BEFORE the rest, so the access log, auth and
 	// every handler — and the audit events they write — run inside the continued
@@ -1277,6 +1272,12 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 		}
 		projector, _ := m.(ModuleCapabilityProjector)
 		m.APIRoutes(chiRegistrar{s: s, r: sub, ns: ns, projector: projector})
+		if s.liveModule != nil && len(sub.Routes()) == 0 {
+			// chi runs a router's middleware only once it has a route; an empty router answers
+			// with its NotFound handler alone. For a module without routes of its own (an event
+			// consumer) that handler is the gate, so the router gains no route.
+			sub.NotFound(s.moduleGate(ns)(http.HandlerFunc(routeNotFound)).ServeHTTP)
+		}
 		r.Mount("/m/"+ns, sub)
 		if sr, ok := m.(Searcher); ok {
 			for _, k := range sr.SearchKinds() {
@@ -2410,6 +2411,14 @@ func (s *Server) gatedSearch(ns string, search func(context.Context, ModuleConte
 		}
 		return search(ctx, mc, q, limit)
 	}
+}
+
+// routeNotFound answers a path no route is registered at.
+func routeNotFound(w http.ResponseWriter, _ *http.Request) {
+	var body errorBody
+	body.Error.Code = "not_found"
+	body.Error.Message = "No route is registered at that path."
+	writeJSON(w, http.StatusNotFound, body)
 }
 
 // moduleNotEnabledHandler answers every route of a module this node does not run.
