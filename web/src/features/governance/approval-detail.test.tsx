@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApprovalDTO } from './types'
 
@@ -90,6 +91,20 @@ describe('ApprovalDetailPanel — the reason a reviewer approves', () => {
     expect(api.decide).not.toHaveBeenCalled()
     // A launch runs nothing by itself: no command is expected, so no note (#2269).
     expect(screen.queryByText(NOTE)).toBeNull()
+  })
+
+  // dev#3268: a disabled primary says why, or shows it is working. While the decision
+  // is sent, Approve once is that action in progress.
+  it('shows Approve once working while the decision is sent', async () => {
+    api.decide.mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    openPanel(toolApproval)
+    await user.click(
+      await screen.findByRole('button', { name: /^approve once$/i }),
+    )
+    const working = await screen.findByRole('button', { name: 'Approving…' })
+    expect(working).toBeDisabled()
+    expect(working.querySelector('.animate-spin')).not.toBeNull()
   })
 
   it('explains why a requester cannot decide their own pending request', async () => {

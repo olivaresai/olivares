@@ -143,6 +143,7 @@
     "actorHint": "Identificador de actor de auditoría — nunca una dirección de correo. La identidad se resuelve desde el directorio, no se muestra aquí.",
     "expiredAt": "Caducada {{time}}",
     "approveOnce": "Aprobar una vez",
+    "approving": "Aprobando…",
     "deny": "Rechazar",
     "noMatch": "Ninguna solicitud coincide con la búsqueda",
     "noMatchHint": "Borra la búsqueda para ver todas las solicitudes de esta lista."

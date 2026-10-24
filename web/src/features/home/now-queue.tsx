@@ -22,7 +22,13 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRightLeft, Check, CircleAlert, ShieldCheck } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  Check,
+  CircleAlert,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { Button } from '@/components/ui/button'
@@ -276,8 +282,15 @@ function FlaggedCard({
               disabled={approve.isPending}
               onClick={onApprove}
             >
-              <Check aria-hidden />
-              {t('governance:approvals.approveOnce')}
+              {/* Disabled only while its decision is sent, and it says so (dev#3268). */}
+              {approve.isPending ? (
+                <Loader2 aria-hidden className="animate-spin" />
+              ) : (
+                <Check aria-hidden />
+              )}
+              {approve.isPending
+                ? t('governance:approvals.approving')
+                : t('governance:approvals.approveOnce')}
             </Button>
             <Button variant="ghost" onClick={() => setDenyOpen(true)}>
               {t('governance:approvals.deny')}

@@ -1749,6 +1749,27 @@ describe('WorkComposer — three pickers and a field that teaches (dev#3162)', (
     expect(screen.queryByTestId('composer-context')).toBeNull()
   })
 
+  // dev#3267: the engine reads activity only from Claude Code and Codex records. For
+  // another tool, and for a legacy session with no provider, it answers 422 or 409,
+  // and the browser logs that answer as an error.
+  it.each([['opencode'], [undefined]])(
+    'asks no activity of a session whose record the engine does not read (%s)',
+    async (driver) => {
+      renderIntel(
+        <WorkComposer
+          attached={{
+            ...attached,
+            run: { ...attached.run, provider_driver: driver },
+          }}
+        />,
+      )
+      await screen.findByTestId('composer-access')
+      await act(async () => {})
+      expect(api.activity).not.toHaveBeenCalled()
+      expect(screen.queryByTestId('composer-context')).toBeNull()
+    },
+  )
+
   it('teaches what can be typed', async () => {
     renderIntel(<WorkComposer attached={attached} />)
     expect(await screen.findByTestId('launcher-input')).toHaveAttribute(

@@ -143,6 +143,7 @@
     "actorHint": "Identifiant d’acteur d’audit — jamais une adresse e-mail. L’identité est résolue depuis l’annuaire, et non affichée ici.",
     "expiredAt": "Expirée {{time}}",
     "approveOnce": "Approuver une fois",
+    "approving": "Approbation…",
     "deny": "Rejeter",
     "noMatch": "Aucune demande ne correspond à la recherche",
     "noMatchHint": "Effacez la recherche pour voir toutes les demandes de cette liste."

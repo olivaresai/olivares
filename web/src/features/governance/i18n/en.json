@@ -142,6 +142,7 @@
     "actorHint": "Audit actor handle — never an email address. Identity is resolved from the directory, not shown here.",
     "expiredAt": "Expired {{time}}",
     "approveOnce": "Approve once",
+    "approving": "Approving…",
     "deny": "Deny",
     "noMatch": "No request matches the search",
     "noMatchHint": "Clear the search to see every request in this list."
