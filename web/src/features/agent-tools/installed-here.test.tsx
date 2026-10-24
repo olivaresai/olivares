@@ -7,12 +7,12 @@
 // registries of the provider profile each tool's session runs under, the workspace's
 // skills selection, and the MCP servers a stored gateway has enabled.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import './i18n'
 const { auth, skills, mcp, consoleApiMock, agentOps } = vi.hoisted(() => ({
   auth: { activeTenant: 't1', can: (_p: string): boolean => true },
-  agentOps: { previewProfile: vi.fn() },
+  agentOps: { previewProfile: vi.fn(), toolsReadiness: vi.fn() },
   skills: { selection: vi.fn() },
   mcp: { get: vi.fn() },
   consoleApiMock: { listWorkspaces: vi.fn() },
@@ -118,6 +118,10 @@ beforeEach(() => {
   })
   mcp.get.mockResolvedValue(gateway('store'))
   agentOps.previewProfile.mockResolvedValue({ reason: 'own_login' })
+  // Unread unless a test answers it: every tool is then previewed, as before readiness.
+  agentOps.toolsReadiness.mockRejectedValue(
+    new ApiError(503, 'unavailable', 'The tools readiness could not be read.'),
+  )
   consoleApiMock.listWorkspaces.mockResolvedValue({
     items: [
       { id: 'ws-other', name: 'Other', is_default: false },
@@ -126,6 +130,9 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
+  // Unmount before the mocks are cleared: a panel still waiting on the tools readiness would
+  // otherwise send its previews into the next test's calls.
+  cleanup()
   auth.can = () => true
   useWorkspaceStore.getState().clear()
   useModulesStore.getState().setOff([])
@@ -377,6 +384,31 @@ it('says no profile exists yet when a launch would create one that declares noth
   const packages = within(await row('Programs and registries'))
   expect(await packages.findByText('None')).toBeInTheDocument()
   expect(packages.getByText(/None exists yet/)).toBeInTheDocument()
+})
+
+it('asks no preview of a tool the tools readiness already refuses', async () => {
+  // The preview refuses such a tool with a 409, which the browser reports as an error on
+  // every fresh installation; the readiness Now and New session read says the same.
+  agentOps.toolsReadiness.mockResolvedValue({
+    tools: [
+      {
+        driver: 'claude',
+        ready: false,
+        code: 'nothing_to_run_on',
+        message: 'Claude Code has nothing to run on yet.',
+      },
+      { driver: 'grok', ready: true, reason: 'own_login' },
+    ],
+  })
+  mount()
+  const packages = within(await row('Programs and registries'))
+  expect(
+    await packages.findByText(
+      /Not listed because no session can start yet: Claude Code\.$/,
+    ),
+  ).toBeInTheDocument()
+  expect(agentOps.previewProfile).toHaveBeenCalledTimes(1)
+  expect(agentOps.previewProfile.mock.calls[0][0]).toBe('grok')
 })
 
 it('names the tools no session can start on, and shows any other failure as unread', async () => {

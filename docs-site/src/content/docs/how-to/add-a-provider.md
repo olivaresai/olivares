@@ -43,7 +43,7 @@ advanced setups. Existing tool logins and profile-selection rules keep applying.
 ### From the console
 
 1. Open **Tools** in the top bar and find **API keys**.
-2. Select **Add an API key**.
+2. Select **Add an API key**. While no key is registered yet, the button reads **Add your first provider**.
 3. Choose the provider, give it a name you will recognise in a picker, and paste the
    key. Leave the endpoint empty unless you are pointing at your own gateway; an
    `openai_compatible` provider requires one, because there is no official endpoint

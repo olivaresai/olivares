@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { agentOpsApi } from '@/features/agentops/api'
 import { profileName } from '@/features/agentops/types'
 import { consoleApi, consoleKeys } from '@/features/console/api'
+import { useToolsReadiness } from '@/features/first-hour/first-hour'
 import {
   mcpGatewayApi,
   type MCPGatewaySnapshot,
@@ -100,6 +101,17 @@ export function InstalledHere({
   const programs = inventory.launch_programs ?? {}
   const drivers = Object.keys(programs).sort()
   const profilesReadable = can('sessions:profile:read')
+  // The readiness Now and New session read already refuses a tool no session can start on,
+  // without the preview's 409 that the browser reports as an error on a fresh installation:
+  // such a tool is listed as refused and not previewed. Unread readiness previews every tool.
+  const readiness = useToolsReadiness(!!activeTenant && profilesReadable)
+  // Only the first answer is waited for, as useReadyTools does: a refetch keeps the shown
+  // answer instead of switching every preview off and fetching it again.
+  const readinessWaiting = readiness.isPending && !readiness.isFetched
+  const answered = (driver: string) => {
+    const tool = readiness.data?.tools.find((t) => t.driver === driver)
+    return !!tool && !tool.ready && REFUSED.has(tool.code ?? '')
+  }
   const previews = useQueries({
     queries: drivers.map((driver) => ({
       queryKey: [...scope, 'installed-profile', activeTenant, driver],
@@ -108,9 +120,16 @@ export function InstalledHere({
           signal,
           tenant: activeTenant ?? undefined,
         }),
-      enabled: !!activeTenant && profilesReadable,
+      enabled:
+        !!activeTenant &&
+        profilesReadable &&
+        !readinessWaiting &&
+        !answered(driver),
     })),
   })
+  const previewPending = previews.some(
+    (q, i) => q.isPending && !answered(drivers[i]),
+  )
   // Resolve the workspace and profile together on the server, so a profile's
   // skill of the same name replaces the workspace's skill exactly as at launch.
   const profileSkills = useQueries({
@@ -171,7 +190,7 @@ export function InstalledHere({
     err instanceof ApiError && REFUSED.has(err.code)
   const previewFailed = previews.find((q) => q.isError && !refused(q.error))
   const refusedTools = drivers
-    .filter((_, i) => refused(previews[i]?.error))
+    .filter((driver, i) => answered(driver) || refused(previews[i]?.error))
     .map(toolLabel)
   const profiles = drivers.flatMap((driver, i) => {
     const profile = previews[i]?.data?.profile
@@ -211,7 +230,7 @@ export function InstalledHere({
   const selections =
     drivers.length > 0
       ? drivers.flatMap((driver, i) =>
-          refused(previews[i]?.error)
+          answered(driver) || refused(previews[i]?.error)
             ? []
             : [
                 {
@@ -289,7 +308,7 @@ export function InstalledHere({
                 ? t('installed.readFailed', {
                     message: message(previewFailed.error),
                   })
-                : previews.some((q) => q.isPending)
+                : previewPending
                   ? t('installed.reading')
                   : undefined
           }
@@ -337,7 +356,7 @@ export function InstalledHere({
                         })
                       : skills.isPending ||
                           profileSkillsPending ||
-                          previews.some((q) => q.isPending)
+                          previewPending
                         ? t('installed.reading')
                         : undefined))
           }
