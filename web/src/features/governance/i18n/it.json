@@ -143,6 +143,7 @@
     "actorHint": "Handle dell'attore di audit — mai un indirizzo email. L'identità viene risolta dalla directory e qui non è mostrata.",
     "expiredAt": "Scaduta {{time}}",
     "approveOnce": "Approva una volta",
+    "approving": "Approvazione…",
     "deny": "Rifiuta",
     "noMatch": "Nessuna richiesta corrisponde alla ricerca",
     "noMatchHint": "Cancella la ricerca per vedere tutte le richieste di questo elenco."

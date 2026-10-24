@@ -142,6 +142,7 @@
     "actorHint": "Audit-Akteurkennung — niemals eine E-Mail-Adresse. Die Identität wird aus dem Verzeichnis aufgelöst und hier nicht angezeigt.",
     "expiredAt": "Abgelaufen {{time}}",
     "approveOnce": "Einmal genehmigen",
+    "approving": "Wird genehmigt…",
     "deny": "Ablehnen",
     "noMatch": "Keine Anfrage passt zur Suche",
     "noMatchHint": "Leeren Sie die Suche, um alle Anfragen dieser Liste zu sehen."

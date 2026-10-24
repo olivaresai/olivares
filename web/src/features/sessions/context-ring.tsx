@@ -8,6 +8,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { readsNativeRecord } from '@/features/agentops/provider-contract'
 import type { RunDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatPercent } from '@/lib/format'
@@ -28,6 +29,9 @@ export function ContextRing({ run }: { run: RunDTO }) {
       run.state,
     ],
     queryFn: ({ signal }) => agentOpsApi.activity(run.run_ref, { signal }),
+    // Asked only where the Activity tab is shown: the engine refuses the read of any
+    // other record, so that session draws no ring (dev#3267).
+    enabled: readsNativeRecord(run),
     placeholderData: keepPreviousData,
   })
   if (!data?.context_window || data.context_percent == null) return null

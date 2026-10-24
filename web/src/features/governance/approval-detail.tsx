@@ -3,7 +3,7 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
@@ -263,8 +263,15 @@ export function ApprovalDetailPanel({
                   aria-keyshortcuts="A"
                   onClick={approveOnce}
                 >
-                  <Check />
-                  {t('approvals.approveOnce')}
+                  {/* Disabled only while its decision is sent, and it says so (dev#3268). */}
+                  {deciding ? (
+                    <Loader2 aria-hidden className="animate-spin" />
+                  ) : (
+                    <Check />
+                  )}
+                  {deciding
+                    ? t('approvals.approving')
+                    : t('approvals.approveOnce')}
                 </Button>
               )}
               {mayDecide && (

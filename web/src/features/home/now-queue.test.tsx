@@ -423,6 +423,27 @@ describe('NowQueue — what needs a person', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  // dev#3268: while the decision is sent, Approve once shows it is working.
+  it('shows Approve once working while the decision is sent', async () => {
+    vi.spyOn(governanceApi, 'getPolicy').mockResolvedValue({
+      id: 'pol-migrations',
+      name: 'Database migrations need a second person',
+    } as never)
+    vi.spyOn(governanceApi, 'decide').mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    const flagged = screen.getByTestId('now-flagged-request')
+    await armed()
+    await user.click(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    )
+    const working = await within(flagged).findByRole('button', {
+      name: 'Approving…',
+    })
+    expect(working).toBeDisabled()
+    expect(working.querySelector('.animate-spin')).not.toBeNull()
+  })
+
   it('Deny asks for a reason first, in the deny dialog of the queue', async () => {
     const decide = vi.spyOn(governanceApi, 'decide')
     const user = userEvent.setup()

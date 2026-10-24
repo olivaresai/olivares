@@ -641,6 +641,10 @@ jobs:
           # CREATE EXTENSION IF NOT EXISTS then no-ops harmlessly.
           psql "postgres://postgres@${PGHOSTPORT:?PGHOSTPORT unset - the resolver step must run first}/olivares" -v ON_ERROR_STOP=1 -c \
             "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: the runner allows the session boundary's user and network namespaces
+        # A root shard starts bound sessions too (cmd/olivares), which fail closed where the
+        # host refuses the namespaces (SECURITY.md, Requirements). Same step as race-workspace.
+        run: bash scripts/ci-session-boundary.sh
       - name: race this root shard
         # ⛔ EL TECHO Y EL `-timeout` SALEN DE LA SPEC (80 / 70, re-medidos el 2026-09-16), no se teclean aqui, y la
         # formula es la MISMA que la de los grupos: el reloj de `-timeout` de Go arranca

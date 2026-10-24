@@ -29,7 +29,7 @@ benennen sie getrennt.
 ### Über die Konsole
 
 1. Öffnen Sie **Werkzeuge** in der oberen Leiste und suchen Sie **API-Schlüssel**.
-2. Wählen Sie **API-Schlüssel hinzufügen**.
+2. Wählen Sie **API-Schlüssel hinzufügen**. Solange noch kein Schlüssel registriert ist, heißt die Schaltfläche **Ersten Anbieter hinzufügen**.
 3. Wählen Sie den Anbieter, geben Sie ihm einen Namen, den Sie in einer Auswahl
    wiedererkennen, und fügen Sie den Schlüssel ein. Lassen Sie den Endpunkt leer,
    sofern Sie nicht auf Ihr eigenes Gateway zeigen; ein `openai_compatible`-Anbieter

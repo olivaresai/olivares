@@ -141,6 +141,7 @@
     "actorHint": "审计操作者标识 —— 绝不会是电子邮件地址。身份从目录中解析得出，此处不予显示。",
     "expiredAt": "已过期 {{time}}",
     "approveOnce": "仅批准这一次",
+    "approving": "正在批准…",
     "deny": "拒绝",
     "noMatch": "没有与搜索匹配的请求",
     "noMatchHint": "清除搜索即可查看此列表中的所有请求。"

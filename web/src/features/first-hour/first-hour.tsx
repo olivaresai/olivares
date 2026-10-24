@@ -128,7 +128,7 @@ export function useToolStatus(driver: SignInTool, enabled = true) {
  * on (its own login, or a key or local model from Providers), or the one sentence that
  * says why not (not installed, nothing to run on, a refused key). One read, and one rule
  * in the engine for the console and the CLI (ARCH.C3); a refusal is data, not an error. */
-function useToolsReadiness(enabled = true) {
+export function useToolsReadiness(enabled = true) {
   const tenant = useTenantStore((s) => s.activeTenant)
   return useQuery({
     queryKey: firstHourKeys.readiness(tenant),

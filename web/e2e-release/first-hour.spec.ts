@@ -207,7 +207,13 @@ test('release container: a fresh administrator reaches a first answer and the co
       await stage(`02-provider-${tool.key}`, async () => {
         const name = `First-hour ${tool.name} stub`
         await page.goto(stepHref(PROVIDERS))
-        await page.getByRole('button', { name: /^Add provider$/ }).click()
+        // API keys live on Tools: the first key is added from the empty list, every later
+        // one from the section's own button (docs: add-a-provider).
+        await page
+          .getByRole('button', {
+            name: /^(Add your first provider|Add an API key)$/,
+          })
+          .click()
         const dialog = page.getByRole('dialog', {
           name: 'Add a provider',
           exact: true,
@@ -240,10 +246,10 @@ test('release container: a fresh administrator reaches a first answer and the co
           .click()
         await expect(row.getByText('Accepted', { exact: true })).toBeVisible()
         // A new key's first passing test prepares its tool (docs: add-a-provider), and
-        // leaving the page cancels that. Wait as a person does: Add provider comes back
+        // leaving the page cancels that. Wait as a person does: Add an API key comes back
         // when the preparation is done, and says so (#1088).
         await expect(
-          page.getByRole('button', { name: /^Add provider$/ }),
+          page.getByRole('button', { name: 'Add an API key', exact: true }),
         ).toBeEnabled({ timeout: 180_000 })
         await expect(
           page.getByText(/^Provider saved\. Session setup failed/),
