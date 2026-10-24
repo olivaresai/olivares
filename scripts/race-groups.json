@@ -245,7 +245,10 @@
             "Verify",
             "Web",
             "Whoami",
-            "Workspace"
+            "Workspace",
+            "PostureOnAnUnreadRowIsRefused",
+            "RunningModuleIsPublished",
+            "WriteError_StoreUnavailableIsNotInternal"
           ]
         },
         {
@@ -361,7 +364,9 @@
             "User",
             "ValidRestored",
             "SessionIdle",
-            "Owns"
+            "Owns",
+            "PostureOnAnUnreadRowIsStoredByTheOpenBuild",
+            "WriteError_CommitOutcomeUnknownForbidsAutomaticRetry"
           ]
         }
       ]
@@ -447,7 +452,8 @@
             "Opposing",
             "ReadWorkspace",
             "Record",
-            "Versioned"
+            "Versioned",
+            "CommunityOpensBusinessWrittenDirectory"
           ]
         },
         {
@@ -529,7 +535,8 @@
             "User",
             "Validate",
             "Write",
-            "System"
+            "System",
+            "CommunityRefusesBusinessDirectoryWithUnknownRelation"
           ]
         },
         {
@@ -588,7 +595,8 @@
             "Transaction",
             "Trigger",
             "Unset",
-            "Upsert"
+            "Upsert",
+            "CommunityReopensDirectoryBusinessSealed"
           ]
         }
       ]
@@ -700,7 +708,8 @@
             "Department",
             "Module",
             "Operation",
-            "Stored"
+            "Stored",
+            "SessionBudgetsReportTheMostRestrictiveScopedLimitOnly"
           ]
         },
         {
@@ -738,7 +747,8 @@
             "Sweep",
             "Unaudited",
             "Uncertain",
-            "Upgrade"
+            "Upgrade",
+            "UserGroupBudgetStatusShowsTheSpendItIsEnforcedOn"
           ]
         },
         {
@@ -893,7 +903,11 @@
             "Shown",
             "Tree",
             "Workstation",
-            "Hold"
+            "Hold",
+            "CodexKeysTheTypedModelDoesNotHoldAreStillCompared",
+            "CodexReportsOneFindingPerDriftingFact",
+            "OtherToolManagedSurfacesAreAuthored",
+            "SurfaceDriftUsesEachToolsConnector"
           ]
         },
         {
@@ -957,7 +971,9 @@
             "Claude",
             "Community",
             "Inheritance",
-            "Raised"
+            "Raised",
+            "EngineApprovedBySessionCountsOnlyApprovedRequestsOfTheSession",
+            "SurfaceDriftRefusesAMalformedPublishedDocument"
           ]
         }
       ]
@@ -1066,7 +1082,26 @@
             "PatchWorkspaceDLPMode",
             "FileScope",
             "Relative",
-            "Unguarded"
+            "Unguarded",
+            "ACPUsageReadsCachedTokensFromTheTotal",
+            "EpochAttemptLeaseSpentNeedsEveryCondition",
+            "RunArchiveIsIdempotentAndAudited",
+            "RunArchivedAtUpgradesASQLiteDatabase",
+            "RunFactsCarryTheBudgetLimitBesideTheCost",
+            "RunFactsKeepPublishedFields",
+            "RunFactsReaches",
+            "RunFactsRunsAsSaysWhyWithoutAnAccount",
+            "RunFactsWhoRunsAsReachesAndCost",
+            "RunLedgerTailCatchesARewrittenAnchor",
+            "RunLedgerTailFailingBeforeItsAnchorIsNoBreak",
+            "RunLedgerTailOnAnEmptyLedgerSaysWhy",
+            "RunLedgerTailVerifiesAndCountsOnlyNewEntries",
+            "RunMarksWorkForAWorkspaceConfinedMember",
+            "RunRenameSetsAndClearsTheName",
+            "RunSnoozeEndsAtItsMoment",
+            "RuntimeOpenCodeComponentsRefuseUngovernedContentBeforeWriting",
+            "RuntimeOpenCodeRefusesASkillAndCommandWithOneSlashName",
+            "WorkLaunchDefaultProfileReusesTheRunsProfileOnlyWhileItsLeaseIsLive"
           ]
         },
         {
@@ -1110,7 +1145,25 @@
             "Oversized",
             "Detect",
             "MoveClears",
-            "Retained"
+            "Retained",
+            "EachModuleWakesOnlyItsOwnOutboxPump",
+            "EpochAttemptVerdictPinsBeforeForgiving",
+            "RunArchivedAtUpgradesAPostgresDatabase",
+            "RunFactsActsForSaysWhyWithoutAName",
+            "RunFactsCostSaysWhyWhenTheBudgetCannotBeRead",
+            "RunFactsListGivesEachRunItsOwnFacts",
+            "RunFactsReadTheOutsideSourcesOutsideTheReadTransaction",
+            "RunFactsWaitingApprovalAndLedgerCount",
+            "RunFactsWithoutASourceSayWhy",
+            "RunLedgerTailCatchesAShorterLedger",
+            "RunLedgerTailKeepsItsStateOnAReadFailure",
+            "RunLedgerTailReportsABreakTheWalkCannotReadPast",
+            "RunMarksLeaveWhenTheSessionIsReleasedOrDeleted",
+            "RunRenameAndArchiveNeedWriteAndDeleteNeedsAdmin",
+            "RunSnoozeAndDoneAreTheCallersOwn",
+            "RunSnoozeRefusesABadMomentAndAReleasedSession",
+            "RuntimeOpenCodeComponentsUseHomeOpenCodeAndInstructions",
+            "RuntimeOpenCodeRefusesSkillsWhoseCommandFormRunsOutsideApprovals"
           ]
         },
         {
@@ -2436,7 +2489,37 @@
         "Admin",
         "BootWith",
         "BootApproval",
-        "Kill"
+        "Kill",
+        "AHeldCommunicationRowPublishesWhenTheLaneAllowsAgain",
+        "AWiredAddonInTheModuleListRunsItsModules",
+        "CommercialEditionReadsTheLiveLicense",
+        "DescendantArgvSeesAKeyInAChildsArguments",
+        "DRLegacyBundleStillRestoresAndWarns",
+        "DRUnsignedLegacyBundleKeepsItsSnapshotDigestCheck",
+        "EndingASignInIsOneRequestEveryCallerWaitsFor",
+        "EnterpriseLicenseNamesTheSameBuild",
+        "FileHoldingSecretFindsAKeyUnderHome",
+        "GetStartedCountsTheStepsAndPutsTheCursorOnTheNextOne",
+        "GetStartedNamesARefusedKey",
+        "OneRowDropsWhatAReaderCannotSee",
+        "PendingNotesAreSaidOnlyWhileTheWorkHasNotAnswered",
+        "ProviderChoiceMapsToItsKind",
+        "RestartOntoAnEditionAnotherRunInstalledIsAudited",
+        "SafeLinkIsAPlainHTTPSAddress",
+        "SessionArchiveAndUndoMakeOneCallEach",
+        "SessionDeleteRefusesARunningSession",
+        "SessionFactsUserNamesAnswerOnlyForTenantMembers",
+        "SessionRenameRefusesANameAnotherSessionHolds",
+        "SessionRenameSetsAndClearsTheName",
+        "SessionSnoozeAndDoneMakeOneCallEachAndSaySo",
+        "SessionSnoozeRefusesAMomentItCannotRead",
+        "SignInLinesSaysWhatEachToolNeeds",
+        "SignInLinkIsOnlyJudgedWhereItIsShown",
+        "SignInTextBesideTheLinkNamesNoOtherAddress",
+        "SwitchNamesTheMirrorThatBlocksIt",
+        "SwitchStepNamesAnUnusableConnectState",
+        "SwitchWithoutADownloadTokenOffersNoButton",
+        "ThreatIntelFollowsTheSourceBeingTurnedOnLater"
       ]
     }
   ],

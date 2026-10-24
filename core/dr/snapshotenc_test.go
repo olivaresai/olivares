@@ -64,7 +64,9 @@ func TestSnapshotStreamRoundTripAtChunkBoundaries(t *testing.T) {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			plain := randomBytes(t, size)
 			sealed := sealBytes(t, c, plain)
-			if size > 0 && bytes.Contains(sealed, plain) {
+			// A one-byte plaintext occurs in the sealed bytes whenever its value appears anywhere in
+			// the stream; from 8 bytes a chance match is negligible (about 2^-64 per position).
+			if size >= 8 && bytes.Contains(sealed, plain) {
 				t.Fatal("plaintext leaked into the sealed stream")
 			}
 			got, err := openBytes(c, sealed)
