@@ -41,13 +41,15 @@
   "search": "Buscar sesiones…",
   "tabs": {
     "sessions": "Sesiones",
-    "workspaces": "Workspaces"
+    "workspaces": "Espacios de trabajo"
   },
   "state": {
     "pending": "Pendiente",
     "running": "En marcha",
     "idle": "Inactiva",
     "stopped": "Parada",
+    "done": "Completada",
+    "ended": "Terminada",
     "failed": "Fallida",
     "cleaned": "Limpiada"
   },
@@ -87,13 +89,13 @@
   "cols": {
     "name": "Sesión",
     "state": "Estado",
-    "workspace": "Workspace",
+    "workspace": "Espacio de trabajo",
     "model": "Modelo",
     "effort": "Effort",
     "mode": "Modo",
     "transport": "Transporte",
     "identity": "Identidad",
-    "governance": "Gobierno",
+    "governance": "Gobernanza",
     "lastActivity": "Última actividad"
   },
   "badge": {
@@ -154,7 +156,7 @@
     "submit": "Iniciar",
     "submitting": "Iniciando…",
     "criticalWarning": "Es un arranque privilegiado (quita el prompt por herramienta). Requiere aprobación de dos personas y se graba — puede quedar pendiente hasta su aprobación.",
-    "classifiedWarning": "Un montaje read-write de un workspace clasificado es un arranque privilegiado (aprobación + grabación).",
+    "classifiedWarning": "Un montaje read-write de un espacio de trabajo clasificado es un arranque privilegiado (aprobación + grabación).",
     "success": "Sesión lanzada",
     "template": "Plantilla",
     "templateNone": "Sin plantilla",
@@ -209,7 +211,7 @@
   },
   "detail": {
     "live": "En vivo",
-    "governance": "Gobierno",
+    "governance": "Gobernanza",
     "events": "Ciclo de vida",
     "info": "Detalles",
     "minimalData": "Dato mínimo: no se guardan secretos, tokens, valores de env, prompts ni transcripciones — solo referencias y flags."
@@ -227,7 +229,7 @@
     "permissionMode": "Modo de permisos",
     "effort": "Effort",
     "model": "Modelo",
-    "workspace": "Workspace",
+    "workspace": "Espacio de trabajo",
     "workspaceDirectory": "Directorio de trabajo",
     "workspaceDirectoryOwn": "su propio directorio para esta sesión",
     "worktreeBranch": "Rama del worktree",
@@ -252,7 +254,9 @@
     "noOutput": "Aún no hay salida.",
     "waiting": "Esperando salida…",
     "ended": "El stream de E/S de la sesión ha terminado.",
-    "lag": "{{count}} frame(s) descartados (desbordamiento de búfer) — la salida continúa tras el hueco.",
+    "lag_one": "{{count}} frame descartado (desbordamiento de búfer) — la salida continúa tras el hueco.",
+    "lag_many": "{{count}} frames descartados (desbordamiento de búfer) — la salida continúa tras el hueco.",
+    "lag_other": "{{count}} frames descartados (desbordamiento de búfer) — la salida continúa tras el hueco.",
     "remoteControl": "Es una sesión remote-control: su E/S se relaya a la nube de Anthropic y no se puentea aquí. Olivares gestiona solo el ciclo de vida.",
     "notLive": "Esta sesión no está viva (está {{state}}). Reanúdala para adjuntar a su E/S.",
     "ioUnavailableNotLiveOnNode": "No hay E/S puenteada en este nodo.",
@@ -270,7 +274,7 @@
     "interruptUnknown": "Se desconoce el resultado de la interrupción. Comprueba la sesión antes de volver a intentarlo.",
     "interruptWorkConflict": "El estado de trabajo actual de la sesión no permite esta interrupción. Actualiza la ejecución para comprobar su estado.",
     "blocked": {
-      "notLive": "Inicia o reanuda la sesión para enviar.",
+      "notLive": "Reanuda la sesión para enviar un mensaje.",
       "approval": "El inicio espera una aprobación; podrás enviar cuando se apruebe.",
       "sending": "Enviando… Espera a que la sesión lo acepte.",
       "uploading": "Guardando la imagen… Enviar funciona cuando esté adjunta.",
@@ -278,7 +282,7 @@
     }
   },
   "gov": {
-    "title": "Postura de gobierno",
+    "title": "Postura de gobernanza",
     "subtitle": "Qué gobierna esta sesión ahora mismo.",
     "pep": "PEP en línea (tool-calls)",
     "pepProvisioned": "Gobernada — toda tool-call se controla en línea",
@@ -291,7 +295,7 @@
     "killClear": "Despejado — sin parada activa",
     "killUnreadable": "Ilegible — se trata como no-despejado (deny-closed)",
     "killEngaged": "ACTIVO — esta sesión está congelada",
-    "killScopeEstate": "a nivel de estate",
+    "killScopeEstate": "a nivel de parque",
     "killScopeAgent": "agente {{ref}}",
     "hitl": "Aprobación humana",
     "hitlNone": "No requerida (arranque no privilegiado)",
@@ -323,11 +327,11 @@
     "empty": "Aún no hay eventos de ciclo de vida."
   },
   "workspaces": {
-    "title": "Workspaces",
+    "title": "Espacios de trabajo",
     "subtitle": "Directorios del host donde trabaja una sesión — montados, enjaulados y clasificados por DLP.",
-    "register": "Registrar workspace",
+    "register": "Registrar espacio de trabajo",
     "cols": {
-      "name": "Workspace",
+      "name": "Espacio de trabajo",
       "rootPath": "Ruta raíz",
       "mount": "Montaje",
       "dlp": "DLP",
@@ -347,11 +351,11 @@
       "disabled": "Deshabilitado"
     },
     "empty": {
-      "title": "No hay workspaces registrados",
+      "title": "No hay espacios de trabajo registrados",
       "description": "Registra un directorio del host para dar a las sesiones un árbol de trabajo gobernado y un explorador de ficheros."
     },
     "create": {
-      "title": "Registrar un workspace",
+      "title": "Registrar un espacio de trabajo",
       "description": "Registra una raíz de directorio del host. La API de ficheros enjaula cada acceso a esta raíz — los escapes por symlink y \"..\" se rechazan, nunca se recortan.",
       "name": "Nombre",
       "namePlaceholder": "Una etiqueta de display (opcional)",
@@ -368,12 +372,12 @@
       "dlpMode": "Modo DLP",
       "submit": "Registrar",
       "submitting": "Registrando…",
-      "success": "Workspace registrado"
+      "success": "Espacio de trabajo registrado"
     },
-    "deleteTitle": "Desregistrar workspace",
+    "deleteTitle": "Desregistrar espacio de trabajo",
     "deleteBody": "Esto elimina solo el registro — nunca toca ficheros del host. Las sesiones que lo apunten no podrán arrancar.",
     "deleteConfirm": "Desregistrar",
-    "deleted": "Workspace desregistrado",
+    "deleted": "Espacio de trabajo desregistrado",
     "open": "Explorar ficheros",
     "readOnly": {
       "title": "Carpetas de solo lectura",
@@ -405,7 +409,7 @@
     "delete": "Borrar",
     "loadMore": "Cargar más",
     "empty": "Esta carpeta está vacía.",
-    "readOnlyWorkspace": "Este workspace es de solo lectura — la edición está deshabilitada.",
+    "readOnlyWorkspace": "Este espacio de trabajo es de solo lectura — la edición está deshabilitada.",
     "binary": "Fichero binario — no se muestra vista previa. Descárgalo para inspeccionarlo.",
     "truncated": "Lectura truncada en el límite de tamaño — descarga para el fichero completo.",
     "sensitivity": "DLP",
@@ -420,7 +424,7 @@
     "moveFromLabel": "Desde",
     "moveToLabel": "A (ruta relativa)",
     "deleteTitle": "Borrar {{name}}",
-    "deleteBody": "Esto borra la entrada del workspace del host. No se puede deshacer.",
+    "deleteBody": "Esto borra la entrada del espacio de trabajo del host. No se puede deshacer.",
     "deleteRecursive": "Borrar la carpeta y todo su contenido (recursivo)",
     "created": "Creado",
     "saved": "Guardado",
@@ -442,7 +446,6 @@
     "title": "Perfiles de proveedor",
     "subtitle": "Cómo se ejecuta una herramienta en una sesión: qué herramienta y desde qué carpeta de configuración inicia sesión. Un perfil apunta a una instalación de la herramienta que ya existe en este servidor; no instala nada ni inicia ninguna sesión.",
     "register": "Registrar perfil",
-    "nextAction": "Registrar un perfil",
     "rowMenu": "Acciones de fila para {{name}}",
     "search": "Buscar perfiles…",
     "allStates": "Todos los estados",
@@ -549,7 +552,8 @@
       "created": "Creado",
       "updated": "Actualizado",
       "retiredAt": "Retirado",
-      "loadFailed": "No se pudo leer este perfil."
+      "loadFailed": "No se pudo leer este perfil.",
+      "loading": "Leyendo el perfil…"
     },
     "configuration": {
       "title": "Configuración",
@@ -636,13 +640,8 @@
     "view": {
       "profilesTitle": "Perfiles de proveedor",
       "bindingsTitle": "Vínculos de fuentes",
-      "accountsTitle": "Cuentas de proveedor",
-      "tabProfiles": "Perfiles",
-      "tabBindings": "Vínculos",
-      "tabAccounts": "Cuentas",
-      "openProfiles": "Abrir la página de perfiles de proveedor",
-      "openBindings": "Abrir la página de vínculos de fuentes",
-      "crossHint": "Perfiles y vínculos tienen además su propia página, cada una con su propio permiso de lectura."
+      "openProfiles": "Abrir Herramientas",
+      "crossHint": "Cada cuenta, con su perfil y sus vínculos de origen, también está en Herramientas."
     },
     "authority": {
       "lost": "Esta acción ya no está permitida con tus permisos actuales; no se envió nada.",
@@ -659,10 +658,10 @@
     },
     "workGrant": {
       "title": "Autoridad de orquestación",
-      "hint": "Concede acciones en un workspace. Las sesiones orquestadoras deben lanzarse como un agente autenticado.",
+      "hint": "Concede acciones en un espacio de trabajo. Las sesiones orquestadoras deben lanzarse como un agente autenticado.",
       "readPending": "La autoridad espera una lectura verificada del perfil.",
       "none": "Sin concesión de orquestación",
-      "workspace": "ID del workspace",
+      "workspace": "ID del espacio de trabajo",
       "actions": "Acciones permitidas",
       "edit": "Editar concesión de orquestación",
       "revoke": "Revocar concesión de orquestación",
@@ -671,7 +670,7 @@
       "save": "Guardar concesión",
       "saved": "Concesión de orquestación guardada",
       "revoked": "Concesión de orquestación revocada",
-      "invalidWorkspace": "Introduce un ID de workspace UUIDv7 canónico.",
+      "invalidWorkspace": "Introduce un ID de espacio de trabajo UUIDv7 canónico.",
       "capabilities": {
         "work_read": "Leer trabajo",
         "work_create": "Crear trabajo",
@@ -938,7 +937,7 @@
       "retry_inspection": "Vuelve a leer los requisitos."
     },
     "remainingCheck": {
-      "workspace_and_template_validation": "Validación de workspace y plantilla",
+      "workspace_and_template_validation": "Validación de espacio de trabajo y plantilla",
       "current_launch_authorization": "Autorización de lanzamiento actual",
       "claim_admission": "Admisión del claim",
       "credential_mint_when_required": "Mint de credencial cuando haga falta",

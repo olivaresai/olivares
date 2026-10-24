@@ -17,7 +17,7 @@ import (
 )
 
 func TestCommunityPushConnectorsUnavailable(t *testing.T) {
-	for _, kind := range []string{"siem", "syslog", "splunkhec", "otlplog", "chronicle", "datadog", "elastic", "snmp", "filelog", "servicenow", "jira", "pagerduty", "opsgenie"} {
+	for _, kind := range []string{"siem", "syslog", "splunkhec", "otlplog", "chronicle", "datadog", "elastic", "snmp", "filelog", "servicenow", "jira", "pagerduty", "opsgenie", "teamsbot"} {
 		t.Run(kind, func(t *testing.T) {
 			if c, err := buildOutputConnector(kind); c != nil || err == nil {
 				t.Fatalf("Community offers %q: connector=%T err=%v", kind, c, err)

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 
@@ -32,10 +33,19 @@ type moduleHost struct {
 	class eventbus.DeliveryClass // QoS lane for this module's subscriptions
 
 	mu   sync.Mutex
-	subs map[eventbus.Subscription]struct{}
+	subs map[*hostSub]struct{}
 	// dormant hosts deliver no event: the module is initialized for direct
-	// calls but does no event-driven work.
-	dormant bool
+	// calls but does no event-driven work. setActive turns it on or off while the
+	// runtime runs; the module's subscription requests are kept either way.
+	dormant atomic.Bool
+}
+
+// hostSub is one subscription a module asked for. sub is nil while the module is
+// dormant: the request is kept and attached when the module is turned on.
+type hostSub struct {
+	types   []event.Type
+	handler event.Handler
+	sub     eventbus.Subscription
 }
 
 var _ sdk.Host = (*moduleHost)(nil)
@@ -73,7 +83,7 @@ func snapshotFinding(payload any) (model.FindingReport, bool, error) {
 var ErrReservedSessionProjection = errors.New("runtime: reserved session projection refused")
 
 func (h *moduleHost) Publish(ctx context.Context, e event.Event) error {
-	if h.dormant {
+	if h.dormant.Load() {
 		return nil
 	}
 	if e.SessionProjection {
@@ -120,32 +130,18 @@ func (h *moduleHost) Publish(ctx context.Context, e event.Event) error {
 }
 
 func (h *moduleHost) Subscribe(types []event.Type, handler event.Handler) (func(), error) {
-	if h.dormant {
-		return func() {}, nil
-	}
-	// Attach the module's name to the subscription when the bus supports it, so
-	// the per-subscriber queue-depth gauge (docs/17 §5) labels series by
-	// module instead of anonymously. Pure observability; semantics unchanged.
-	var sub eventbus.Subscription
-	var err error
-	if cs, ok := h.bus.(eventbus.ClassSubscriber); ok {
-		// Declare the module's QoS delivery class AND name: an optional-output
-		// module (telemetry/notify) is a drop lane so it can never stall the durable
-		// enforcement/state lanes, and the queue-depth gauge labels series by module.
-		sub, err = cs.SubscribeClass(h.class, h.name, types, handler)
-	} else if named, ok := h.bus.(eventbus.NamedSubscriber); ok {
-		sub, err = named.SubscribeNamed(h.name, types, handler)
-	} else {
-		sub, err = h.bus.Subscribe(types, handler)
-	}
-	if err != nil {
-		return nil, err
-	}
+	req := &hostSub{types: slices.Clone(types), handler: handler}
 	h.mu.Lock()
-	if h.subs == nil {
-		h.subs = make(map[eventbus.Subscription]struct{})
+	if !h.dormant.Load() {
+		if err := h.attach(req); err != nil {
+			h.mu.Unlock()
+			return nil, err
+		}
 	}
-	h.subs[sub] = struct{}{}
+	if h.subs == nil {
+		h.subs = make(map[*hostSub]struct{})
+	}
+	h.subs[req] = struct{}{}
 	h.mu.Unlock()
 	// The returned cancel both unsubscribes and forgets the subscription, so a
 	// module that churns subscriptions (e.g. re-subscribing on config reload)
@@ -153,11 +149,78 @@ func (h *moduleHost) Subscribe(types []event.Type, handler event.Handler) (func(
 	// bulk unsubscribeAll (a second Unsubscribe is a no-op; delete of an absent
 	// key is a no-op).
 	return func() {
-		sub.Unsubscribe()
 		h.mu.Lock()
-		delete(h.subs, sub)
+		sub := req.sub
+		req.sub = nil
+		delete(h.subs, req)
 		h.mu.Unlock()
+		if sub != nil {
+			sub.Unsubscribe()
+		}
 	}, nil
+}
+
+// attach subscribes req on the bus; h.mu is held.
+//
+// It attaches the module's name to the subscription when the bus supports it, so
+// the per-subscriber queue-depth gauge (docs/17 §5) labels series by
+// module instead of anonymously. Pure observability; semantics unchanged.
+func (h *moduleHost) attach(req *hostSub) error {
+	var sub eventbus.Subscription
+	var err error
+	if cs, ok := h.bus.(eventbus.ClassSubscriber); ok {
+		// Declare the module's QoS delivery class AND name: an optional-output
+		// module (telemetry/notify) is a drop lane so it can never stall the durable
+		// enforcement/state lanes, and the queue-depth gauge labels series by module.
+		sub, err = cs.SubscribeClass(h.class, h.name, req.types, req.handler)
+	} else if named, ok := h.bus.(eventbus.NamedSubscriber); ok {
+		sub, err = named.SubscribeNamed(h.name, req.types, req.handler)
+	} else {
+		sub, err = h.bus.Subscribe(req.types, req.handler)
+	}
+	if err == nil {
+		req.sub = sub
+	}
+	return err
+}
+
+// setActive turns event delivery on or off. Turning it on attaches every
+// subscription the module asked for; turning it off detaches them but keeps the
+// requests, so the module needs no re-Init to come back. Unsubscribe waits for the
+// deliveries in flight, so none is left running when it returns.
+func (h *moduleHost) setActive(active bool) error {
+	h.mu.Lock()
+	h.dormant.Store(!active)
+	var detached []eventbus.Subscription
+	var attached []*hostSub
+	for req := range h.subs {
+		switch {
+		case active && req.sub == nil:
+			if err := h.attach(req); err != nil {
+				// A module that cannot be turned on is left with no subscription at all,
+				// not with the ones that happened to attach first.
+				h.dormant.Store(true)
+				for _, done := range attached {
+					detached = append(detached, done.sub)
+					done.sub = nil
+				}
+				h.mu.Unlock()
+				for _, sub := range detached {
+					sub.Unsubscribe()
+				}
+				return err
+			}
+			attached = append(attached, req)
+		case !active && req.sub != nil:
+			detached = append(detached, req.sub)
+			req.sub = nil
+		}
+	}
+	h.mu.Unlock()
+	for _, sub := range detached {
+		sub.Unsubscribe()
+	}
+	return nil
 }
 
 func (h *moduleHost) Logger() *slog.Logger { return h.log }
@@ -168,10 +231,17 @@ func (h *moduleHost) Config() sdk.Config { return h.cfg }
 // runtime stops the module (sdk.Host documents this automatic cleanup).
 func (h *moduleHost) unsubscribeAll() {
 	h.mu.Lock()
-	subs := h.subs
+	reqs := h.subs
 	h.subs = nil
+	var attached []eventbus.Subscription
+	for req := range reqs {
+		if req.sub != nil {
+			attached = append(attached, req.sub)
+			req.sub = nil
+		}
+	}
 	h.mu.Unlock()
-	for s := range subs {
+	for _, s := range attached {
 		s.Unsubscribe()
 	}
 }

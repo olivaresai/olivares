@@ -17,18 +17,19 @@ principal para entrar y el lugar donde puede leer más.
 
 La consola tiene **una sola estructura de navegación: nueve áreas con secciones**. Cada
 pantalla está en un área y en una sección de ella, y todo lo que muestra dónde está una
-pantalla nombra el mismo lugar: Todas las áreas (en la barra lateral, y Más en un teléfono), las
-páginas de directorio de área, la ruta de navegación, la paleta de comandos y la fila de
-enlaces sobre una pantalla, que enumera las demás pantallas de su sección. La barra lateral
-fija una lista corta de pantallas, el primer trabajo primero (Inicio, Sesiones, Herramientas de IA, Aprobaciones), después Trabajo, y una pantalla fijada
-sigue marcada en las demás pantallas de su sección. Un filtro de navegación sustituye el
+pantalla nombra el mismo lugar: Todas las áreas (en el menú de la cuenta y en la paleta de
+comandos, y Más en un teléfono), las páginas de directorio de área, la paleta de comandos y la
+fila de enlaces sobre una pantalla, que enumera las demás pantallas de su sección. La barra
+superior nombra cinco lugares, el primer trabajo primero (Inicio, Sesiones,
+Herramientas, Reglas, Registro; Business añade Organización), y un lugar sigue marcado en las
+demás pantallas de su sección. Todas las áreas enumera cada área y sus pantallas, en dos niveles, sin los lugares que la barra ya muestra. Un filtro de navegación sustituye el
 árbol agrupado por una lista ordenada de coincidencias autorizadas; la paleta de comandos
 usa el mismo índice, el mismo orden y la misma proyección de permisos. Un directorio de área
 es una página de enlaces —las entradas que permiten tus permisos—, no una lectura en vivo de
 capacidad, disponibilidad o preparación.
 
-Una instalación nueva muestra solo el primer trabajo: Inicio, Sesiones, Herramientas de IA
-con Proveedores, Aprobaciones, el asistente de configuración y Ajustes. Cualquier otra
+Una instalación nueva muestra solo el primer trabajo: Inicio, Sesiones, Herramientas de IA,
+Aprobaciones, el asistente de configuración y Ajustes. Cualquier otra
 pantalla es allí una vista previa: su dirección, su API y su CLI siguen funcionando, y la
 navegación, la paleta de comandos y los atajos no la muestran. Una instalación que ya
 existía antes de la actualización muestra todas las pantallas que mostraba, igual que una
@@ -39,7 +40,7 @@ Es una página **generada**. El inventario procede de `web/src/features/route-ce
 el censo append-only que `registry.route-conservation.test.ts` coteja con el router compilado,
 por lo que ninguna pantalla puede añadirse, moverse ni perderse sin que esta página cambie con
 ella. El nombre y la descripción de una línea de cada pantalla son **las propias cadenas de la
-consola**, tomadas del mismo catálogo de traducción que renderiza la barra lateral: lo que lees
+consola**, tomadas del mismo catálogo de traducción que renderiza la consola: lo que lees
 aquí es lo que ves en el producto. Las tablas siguientes agrupan esas filas por área, después de Inicio (la vista general) y
 antes de inicio de sesión, configuración y cuenta. Las nueve páginas de directorio de área
 aparecen junto a las rutas montadas fuera del registro de funciones.
@@ -54,7 +55,7 @@ funcionar. Consulta [Roles y permisos](/es/reference/modules/vi-governance/).
 
 ## Cómo leer esta página
 
-- **Pantalla**: el nombre que usan la barra lateral, los directorios de área y la paleta
+- **Pantalla**: el nombre que usan Todas las áreas, los directorios de área y la paleta
   de comandos.
 - **Ruta**: la URL bajo el origen de la consola de tu despliegue. Es un contrato publicado:
   un marcador, un enlace profundo de un runbook y una referencia cruzada de la documentación
@@ -66,11 +67,11 @@ funcionar. Consulta [Roles y permisos](/es/reference/modules/vi-governance/).
 
 Los encabezados siguientes son las áreas, en el orden en que las lista Todas las áreas:
 Infraestructura, IA, Datos y contexto, Trabajo y comunicaciones, Automatización,
-Seguridad e identidad, Despliegue, Observabilidad y evidencias, y Sistema y ajustes.
+Seguridad e identidad, Entrega, Supervisión, y Sistema y ajustes.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **73 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **74 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
 ### Inicio
@@ -91,7 +92,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Herramientas de agentes | `/agent-tools` | Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue | `system:admin` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
+| Herramientas de agentes | `/agent-tools` | Consulta las cuentas y claves de API con las que se ejecutan las sesiones; instalar las herramientas e iniciar su sesión es cosa de los administradores del despliegue | `sessions:account:read` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
 | Operar sesiones | `/agentops` | Inicia sesiones y sigue lo que hace cada una, también las que encuentra Olivares | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
 | Servidores MCP | `/mcp-servers` | Conecta servidores MCP remotos a esta organización, pruébalos y elige qué herramientas pueden usar las sesiones | `tenant:admin` | [how-to/connectors/mcp-governance](/es/how-to/connectors/mcp-governance/) |
 | Operaciones de modelos | `/model-operations` | Modelos propios, admisión y despliegues | `models:registry:read` | [reference/modules/xxiii-model-operations](/es/reference/modules/xxiii-model-operations/) |
@@ -102,6 +103,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Perfiles de proveedor | `/provider-profiles` | Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda | `sessions:profile:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Proveedores | `/providers` | Registra las claves de API y los endpoints con los que arrancan las sesiones; pruébalos, rótalos y revócalos | `sessions:provider:read` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
 | Límites de uso | `/rate-limits` | Inventario de límites de Anthropic (solo lectura) | `models:ratelimits:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
+| Alcance | `/reach` | Mira a qué destinos puede llegar cada herramienta y cuáles esperan aprobación. | `accessmap:graph:read` | [reference/modules/iii-access-map](/es/reference/modules/iii-access-map/) |
 | Sandbox | `/sandbox` | Pruebas aisladas de agentes y replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/es/reference/modules/xvii-sandbox/) |
 | Sesiones | `/sessions` | Inicia sesiones y sigue lo que hace cada una, también las que encuentra Olivares | `sessions:live:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Voz | `/voice` | Sesiones de voz y tiempo real | `voice:session:read` | [reference/modules/xvi-voice](/es/reference/modules/xvi-voice/) |
@@ -141,8 +143,8 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Mapa de acceso | `/access-map` | Qué lee y escribe cada agente (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/es/reference/modules/iii-access-map/) |
-| Exportación a AgentCore | `/agentcore-export` | Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
-| Gobierno de Claude Code | `/claude-policy` | Policy gestionada, hooks, MCP, sandbox y policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/es/how-to/connectors/claude-code-hooks-pep/) |
+| Exportación de políticas | `/agentcore-export` | Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
+| Política gestionada | `/claude-policy` | Policy gestionada, hooks, MCP, sandbox y policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/es/how-to/connectors/claude-code-hooks-pep/) |
 | Identidad y acceso | `/identity` | SSO, SCIM y las identidades que usan tus agentes | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Proxy de inferencia | `/inference-proxy` | Compuertas del proxy, reglas DLP de egreso y aprobaciones de dispositivos | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/es/reference/modules/inferenceproxy/) |
 | Kill switch | `/killswitch` | Parada de emergencia, recuperación con doble control y contención guardiana | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/es/how-to/cookbook/kill-switch-drill/) |
@@ -151,17 +153,17 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Seguridad | `/security` | Guardrails, forense y anomalías | `security:finding:read` | [reference/modules/ix-security](/es/reference/modules/ix-security/) |
 | Caja fuerte | `/vault` | Tus contraseñas, notas y códigos de autenticación | `tenant:read` | [reference/console](/es/reference/console/) |
 
-### Despliegue
+### Entrega
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Publicación Git | `/git-publication` | Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados | `gitpublish:target:read` | [reference/modules/gitpublish](/es/reference/modules/gitpublish/) |
 
-### Observabilidad y evidencias
+### Supervisión
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Adopción de Claude Code | `/adoption` | Productividad, aceptación y mix de modelos | `adoption:metrics:read` | [reference/modules/claudeadoption](/es/reference/modules/claudeadoption/) |
+| Adopción | `/adoption` | Productividad, aceptación y mix de modelos | `adoption:metrics:read` | [reference/modules/claudeadoption](/es/reference/modules/claudeadoption/) |
 | Cadena de suministro | `/attestation` | Atestación de releases: SLSA, SBOM, VEX y Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/es/how-to/verify-a-release/) |
 | Registro de auditoría | `/audit` | Ledger de evidencia con alteraciones detectables | `audit:read` | [reference/modules/ix-security](/es/reference/modules/ix-security/) |
 | Paneles | `/dashboards` | KPIs ejecutivos e informes | cualquier usuario autenticado | [reference/modules/xxi-executive-dashboards](/es/reference/modules/xxi-executive-dashboards/) |
@@ -193,9 +195,9 @@ sesión** se sirven antes de que exista una sesión; son las únicas rutas de co
 | IA | `/areas/ai` | Directorio del área IA: observación y gestión de sesiones, perfiles y entornos de proveedor, modelos, ejecución especializada y referencia del proveedor. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Automatización | `/areas/automation` | Directorio del área Automatización: flujos y orquestación, eventos y notificaciones. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Datos y contexto | `/areas/data-context` | Directorio del área Datos y contexto: capacidades, conocimiento y artefactos. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
-| Despliegue | `/areas/deployment` | Directorio del área Despliegue: preparación y control de despliegues. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Entrega | `/areas/deployment` | Directorio del área Entrega: preparación y control de despliegues. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Infraestructura | `/areas/infrastructure` | Directorio del área Infraestructura: inventario y espacios de trabajo del entorno. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
-| Observabilidad y evidencias | `/areas/observation` | Directorio del área Observabilidad y evidencias: estado y actividad, costes y adopción, auditoría, evaluación y evidencias. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
+| Supervisión | `/areas/observation` | Directorio del área Supervisión: estado y actividad, costes y adopción, auditoría, evaluación y evidencias. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Seguridad e identidad | `/areas/security-identity` | Directorio del área Seguridad e identidad: identidad y acceso, políticas y fronteras de gobierno, protección y respuesta. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Sistema y ajustes | `/areas/system` | Directorio del área Sistema y ajustes: administración, instalación y mantenimiento, herramientas de desarrollo y preferencias personales. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |
 | Trabajo y comunicaciones | `/areas/work-communications` | Directorio del área Trabajo y comunicaciones: trabajo duradero entre sesiones y comunicaciones gobernadas. Enumera las entradas que permiten tus permisos. | cualquier usuario autenticado | — |

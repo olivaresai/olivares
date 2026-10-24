@@ -254,11 +254,20 @@ describe('VaultView', () => {
     api.list.mockResolvedValue({ secrets: [], sealer_available: false })
     renderView()
     expect(await screen.findByText('Your vault is empty')).toBeInTheDocument()
-    expect(
-      screen.getAllByRole('button', { name: 'Add item' }),
-    ).not.toHaveLength(0)
+    // the verb is offered once: in the empty state, not again in the header
+    expect(screen.getAllByRole('button', { name: 'Add item' })).toHaveLength(1)
     expect(screen.getByText(/cannot seal secrets yet/)).toBeInTheDocument()
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+  })
+
+  it('keeps the header Add item while the list could not be read: only a loaded empty list moves it into the empty state', async () => {
+    api.list.mockRejectedValue(new Error('down'))
+    renderView()
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: 'Add item' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Your vault is empty')).not.toBeInTheDocument()
   })
 
   it('edits an item in place: the kind is fixed and the other fields are kept', async () => {

@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-次のリリースは <!-- release -->`0.3`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release --> に記録されています。
+次のリリースは <!-- release -->`0.4`<!-- /release --> で、GitHub ではまだ公開されていません。以下のコマンドは予定されている成果物を示します。公開まではソースからビルドし、公開後も使用前に各成果物を検証してください。観測した公開状況は <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release --> に記録されています。
 
 :::note[公開されているパッケージ名]
-GitHub の Olivares <!-- release -->0.3<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
+GitHub の Olivares <!-- release -->0.4<!-- /release --> リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
 あわせて `checksums.txt`、`checksums.txt.sig`、`checksums.txt.pem` を置く。以下のコマンドは
 そのリリースのリテラルな `amd64` 名を使う。64 ビット ARM ホストでは `amd64` を `arm64` に
 置き換える。このガイドでは、それらの検証済みリリース成果物からインストールする。ソースツリー
@@ -76,13 +76,13 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -290,16 +290,29 @@ systemd ユニットでは `sudo systemctl reload olivares` である。フォ�
 
 ## 6. アップグレード
 
-`olivares upgrade` はバイナリをその場で置き換える。手でパッケージを入れ直すよりこれを選ぶ
-理由は安全特性にある。**ダウンロードした候補の exec 探査が成功するまでバイナリを置き換えず**、
-タイムスタンプ付きバックアップを残し、**入れ替え後の探査が失敗すればそのバックアップへ戻す**。
+更新手段はホストごとに 1 つにする。パッケージまたはリポジトリからインストールしたホストは、
+そのパッケージマネージャ（`apt`、`dnf`、`apk`、または新しいパッケージ）で更新する。
+`olivares upgrade` はパッケージが所有するバイナリの置き換えを拒否する。
+
+どのパッケージインストールでも `/usr/bin/olivares` はパッケージマネージャが所有する
+（deb、rpm、apk、AUR）。そのファイルをその場で置き換えると、パッケージデータベースは
+もう存在しない状態のファイルを記述したままになるため、`olivares upgrade` は拒否する。
+何かをダウンロードする前に終了コード 2 で終わり、パッケージ経由の手順を示す。更新は
+パッケージマネージャで行う。`olivares upgrade --check` は引き続き使え、計画を表示するだけで
+何も変更しない。
 
 ```bash
 sudo olivares upgrade --check    # what would change, without changing anything
-sudo olivares upgrade --yes      # do it
 ```
 
-パッケージインストールで特に効くフラグが 3 つある。
+パッケージマネージャがバイナリを所有していない場合（`install.sh` や手作業で置いたもの）、
+`olivares upgrade` はそれをその場で置き換える。そこで使う理由は安全特性にある。
+**ダウンロードした候補の exec 探査が成功するまでバイナリを置き換えず**、
+タイムスタンプ付きバックアップを残し、**入れ替え後の探査が失敗すればそのバックアップへ戻す**。
+`--target <パス>` は運用者による上書きで、指定したファイル（`/usr/bin/olivares` も含む）を
+置き換える。以後、パッケージデータベースはそのファイルと一致しなくなる。
+
+`--check` と `--target` 付きの実行で効くフラグが 3 つある。
 
 - **`--endpoint`** — 既定ではなく、自分が制御する GitHub リポジトリから更新を取る。
   ミラーやフォークの逃げ道である。
@@ -307,6 +320,9 @@ sudo olivares upgrade --yes      # do it
 - **`--install-timer`** — 予定に従って更新を確認する **任意の systemd** タイマーとサービスを
   出力する。何も代わりに入れてくれない。
   [パッケージがしないこと](#8-パッケージがしないこと) を参照。systemd の生成器である。
+  パッケージインストールでは拒否される。`/usr/bin/olivares` はパッケージマネージャーの管理下に
+  あるため、`--install-timer` は終了コード 2 で終わり、unit を書き込まない。パッケージ
+  マネージャーで更新する（Olivares アプライアンスでは `systemctl start olivares-appliance-update.service`）。
 
 ステージングと exec 探査は **インストールディレクトリ内、対象の隣 — `/tmp` ではない**
 で行われるので、[上で](#実行可能なスクラッチマウント) 述べた `noexec` マウントは
@@ -348,8 +364,8 @@ KEK 下の各ペイロードを認証する。より新しいエンジンから�
 
 - **リポジトリを追加しない。** `/etc/apt/sources.list.d`、`/etc/yum.repos.d`、
   `/etc/apk/repositories` には何も書かない。インストールしたのは 1 ファイルであり、
-  入ったのもそのファイルだけである。アップグレードはあなたが起動する — 新しいパッケージか
-  `olivares upgrade` で。
+  入ったのもそのファイルだけである。アップグレードはあなたが起動する — 新しいパッケージで。
+  `olivares upgrade` はパッケージが所有するバイナリの置き換えを拒否する。
 - **サービスを起動も有効化もしない。** systemd パッケージは `systemctl` があるとき systemd を
   再読み込みし、`systemctl enable --now` を印字する。OpenRC パッケージは
   `rc-service olivares start` を印字し、`rc-update add` はしない。起動はあなたの判断のままで

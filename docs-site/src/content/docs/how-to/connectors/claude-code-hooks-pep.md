@@ -101,13 +101,13 @@ read-only, both off until pointed at a file.
 
 ## What you'll see in the console
 
-**Claude Code governance** is the authoring and truth-loop surface: the
+**Managed policy** is the authoring and truth-loop surface: the
 policy you intend, the configuration hosts actually carry, and the drift
 between them. Gates and telemetry-gap findings land in **Security**; the
 session itself stays visible in **Sessions**:
 
-<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="The Claude Code governance view — policy authoring and fleet posture in one place." />
-<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="The Claude Code governance view — policy authoring and fleet posture in one place." />
+<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="The Managed policy view — policy authoring and fleet posture in one place." />
+<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="The Managed policy view — policy authoring and fleet posture in one place." />
 
 ## Honest limits
 

@@ -630,7 +630,7 @@ describe('LiveConsole — a disabled Send says why', () => {
     const send = screen.getAllByRole('button', { name: 'Send' })[0]
     expect(send).toBeDisabled()
     expect(send).toHaveAccessibleDescription(
-      'Start or resume the session to send.',
+      'Resume the session to send a message.',
     )
   })
 
@@ -673,7 +673,7 @@ describe('LiveConsole — the advanced line Send says why', () => {
     wrap({ ...codexRun, state: 'stopped' })
     expect(wireSend()).toBeDisabled()
     expect(wireSend()).toHaveAccessibleDescription(
-      'Start or resume the session to send.',
+      'Resume the session to send a message.',
     )
   })
 

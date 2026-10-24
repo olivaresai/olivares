@@ -56,6 +56,15 @@ vi.mock('./use-session-rail', () => ({
         total: 4,
         sessionTotal: 4,
       },
+      // What the person snoozed (#2480): out of the lists, never out of the menu.
+      {
+        id: 'snoozed',
+        rows: [
+          { ...row('idle'), key: 'session:snoozed', title: 'Snoozed one' },
+        ],
+        total: 1,
+        sessionTotal: 1,
+      },
     ],
     sessionCounts: { live: 1, needsYou: 1 },
     status: 'ready',
@@ -131,6 +140,15 @@ describe('command palette session rows', () => {
     expect(
       screen.queryByRole('option', { name: 'Open beside · idle session' }),
     ).toBeNull()
+  })
+
+  it('finds a session the person snoozed by its name (#2480)', () => {
+    useCommandStore.getState().setOpen(true)
+    renderIntel(<CommandMenu />)
+    fireEvent.change(screen.getByRole('combobox'), {
+      target: { value: 'Snoozed' },
+    })
+    expect(screen.getByRole('option', { name: /^Snoozed one/ })).toBeTruthy()
   })
 
   it.each([

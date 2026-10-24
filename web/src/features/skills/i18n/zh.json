@@ -79,7 +79,7 @@
     "inCatalog": "已在目录中",
     "submit": "安装",
     "git": "从 Git 安装",
-    "gitURL": "Git URL",
+    "gitURL": "Git 地址",
     "ref": "Git 引用",
     "subdir": "子目录",
     "gitSubmit": "从 Git 安装",

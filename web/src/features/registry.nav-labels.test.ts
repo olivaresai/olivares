@@ -9,8 +9,8 @@
 // per view — `nav:items.<id>`. Nothing passes a defaultValue at those call
 // sites, so i18next's contract on a miss is to return the key itself, and the
 // key is then painted verbatim on screen:
-//   - components/layout/sidebar.tsx:154   `t(\`items.${v.id}\`)`  (sidebar entry)
-//   - components/layout/topbar.tsx:59     `t(\`items.${id}\`)`    (breadcrumb, every page)
+//   - components/layout/sidebar.tsx:294   `viewLabel(t, v.id)`  (All areas entry)
+//   - components/layout/shell-destinations.ts:64 `viewLabel(t, viewId)` (top bar places)
 //   - components/layout/command-menu.tsx:159,165 (⌘K label AND its search value)
 //   - components/layout/shortcuts.tsx:150 (the g-<key> jump list)
 // A view registered without its label therefore shows the operator the literal
@@ -44,17 +44,16 @@ const LOCALES_ROOT = resolve(__dirname, '../lib/i18n/locales')
  * them here — an undeclared one is reported as drift, and a missing one paints
  * the raw key exactly like a registry id would.
  *
- * `settings` is the static footer entry: sidebar.tsx:171, command-menu.tsx:176
- * and :180, user-menu.tsx:71, plus topbar.tsx:40 which maps /settings to it for
- * the breadcrumb.
+ * `settings` is the static footer entry: sidebar.tsx:608 (the foot of All areas),
+ * the palette's settings rows and user-menu.tsx:151.
  */
 const NON_REGISTRY_ITEM_KEYS = ['settings'] as const
 
 /**
  * Every id needing a label — INCLUDING `hideInNav` views. Hidden means absent
- * from the sidebar and the palette, not unreachable: currentViewId()
- * (topbar.tsx:39-51) matches a deep-linked /session-viewer/<id> by base path
- * and labels the breadcrumb with it like any other view.
+ * from All areas and the palette, not unreachable: resolveLocation() matches a
+ * deep-linked /session-viewer/<id> by base path, and the page names the view
+ * with its label like any other.
  */
 const REQUIRED_ITEM_KEYS: readonly string[] = [
   ...new Set([
@@ -112,7 +111,7 @@ describe('nav labels for every registered view', () => {
           `Add each one to web/src/lib/i18n/locales/${lng}/nav.json under "items" ` +
           `(translated into ${lng} — an English copy is a shipped untranslated string).\n` +
           `Until then the console paints the raw key, e.g. "items.${missing[0] ?? '<id>'}", ` +
-          `in the sidebar, the breadcrumb of every page and the ⌘K palette.`,
+          `in All areas, on the page and in the ⌘K palette.`,
       ).toEqual([])
     },
   )

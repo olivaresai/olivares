@@ -81,7 +81,8 @@ if [ -n "${E2E_MESSAGES_FIXTURE:-}" ]; then
 fi
 
 # Specs to run (default: the conversation and the slash menu); the message navigator's
-# journey is `E2E_MESSAGES_FIXTURE=1 E2E_SPECS=e2e/session-messages.spec.ts`.
+# journey is `E2E_MESSAGES_FIXTURE=1 E2E_SPECS=e2e/session-messages.spec.ts`, and the
+# sent-message journey `E2E_SENT_FIXTURE=1 E2E_SPECS=e2e/session-sent-message.spec.ts`.
 SPECS="${E2E_SPECS:-e2e/session-conversation.spec.ts e2e/session-slash-menu.spec.ts}"
 echo "==> Playwright $SPECS"
 cd "$ROOT/web"

@@ -39,10 +39,8 @@ func (r *nudgeStubRepo) UpdateAtTransactionTime(_ context.Context, rec model.Rec
 
 func TestCreateNudgesOnlyOnWorkOutboxInsert(t *testing.T) {
 	called := 0
-	SetWorkOutboxNudge(func() { called++ })
-	t.Cleanup(func() { SetWorkOutboxNudge(nil) })
-
 	tx := &communicationTx{
+		nudge: func() { called++ },
 		resolveRepository: func(model.Kind) (communicationRepository, error) {
 			return &nudgeStubRepo{}, nil
 		},
@@ -62,6 +60,7 @@ func TestCreateNudgesOnlyOnWorkOutboxInsert(t *testing.T) {
 
 	// A failed insert never nudges.
 	txErr := &communicationTx{
+		nudge: func() { called++ },
 		resolveRepository: func(model.Kind) (communicationRepository, error) {
 			return nil, errors.New("no repo")
 		},
@@ -75,7 +74,6 @@ func TestCreateNudgesOnlyOnWorkOutboxInsert(t *testing.T) {
 }
 
 func TestWorkOutboxNudgeNilIsSilent(t *testing.T) {
-	SetWorkOutboxNudge(nil)
 	tx := &communicationTx{
 		resolveRepository: func(model.Kind) (communicationRepository, error) {
 			return &nudgeStubRepo{}, nil
@@ -83,5 +81,35 @@ func TestWorkOutboxNudgeNilIsSilent(t *testing.T) {
 	}
 	if _, err := tx.create(context.Background(), workOutboxKind, model.Record{}); err != nil {
 		t.Fatalf("create with no nudge registered must just work: %v", err)
+	}
+}
+
+// The nudge belongs to the module. Two modules in one process (two engines, as the
+// cmd/olivares tests run them) each wake only their own pump, and one withdrawing its nudge leaves the other's.
+func TestEachModuleWakesOnlyItsOwnOutboxPump(t *testing.T) {
+	a, b := &Module{}, &Module{}
+	woke := map[string]int{}
+	a.SetWorkOutboxNudge(func() { woke["a"]++ })
+	b.SetWorkOutboxNudge(func() { woke["b"]++ })
+	insert := func(m *Module) {
+		t.Helper()
+		tx := &communicationTx{nudge: m.nudgeWorkOutbox, resolveRepository: func(model.Kind) (communicationRepository, error) {
+			return &nudgeStubRepo{}, nil
+		}}
+		if _, err := tx.create(context.Background(), workOutboxKind, model.Record{}); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+	}
+	insert(a)
+	if woke["a"] != 1 || woke["b"] != 0 {
+		t.Fatalf("an insert on module a woke %v, want a once and b never", woke)
+	}
+	b.SetWorkOutboxNudge(nil)
+	if !a.WorkOutboxNudgeRegistered() || b.WorkOutboxNudgeRegistered() {
+		t.Fatalf("withdrawing b's nudge changed a's: a=%t b=%t", a.WorkOutboxNudgeRegistered(), b.WorkOutboxNudgeRegistered())
+	}
+	insert(a)
+	if woke["a"] != 2 || woke["b"] != 0 {
+		t.Fatalf("after b withdrew its nudge, an insert on a woke %v, want a twice and b never", woke)
 	}
 }

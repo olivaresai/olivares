@@ -30,6 +30,10 @@
     "title": "Control plane inaccesible",
     "description": "No hemos podido contactar con el control plane. Comprueba tu conexión y que el motor esté en ejecución."
   },
+  "networkSecure": {
+    "title": "Falló la conexión segura",
+    "description": "Tu navegador no ha podido abrir una conexión segura con {{origin}}. Si no confía en el certificado del motor, abre esa dirección en una pestaña nueva y confía en él, o instala la CA del motor (tls.crt.ca en su directorio de datos). Si no es eso, comprueba tu conexión y que el motor esté en ejecución."
+  },
   "boundary": {
     "title": "Esta vista ha fallado",
     "description": "Se ha producido un error inesperado al renderizar. Recargar suele solucionarlo.",
@@ -54,7 +58,7 @@
   },
   "tenantAdmission": {
     "title": "Se requiere admisión en la organización",
-    "description": "Inicia sesión con una identidad del directorio admitida en la organización. La autoridad global de bootstrap no permite operar comunicaciones del workspace."
+    "description": "Inicia sesión con una identidad del directorio admitida en la organización. La autoridad global de bootstrap no permite operar comunicaciones del espacio de trabajo."
   },
   "moduleNotEnabled": {
     "description": "Esta parte de Olivares está apagada aquí, así que no hay nada que mostrar.",

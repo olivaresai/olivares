@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -77,6 +78,126 @@ func TestModuleSeam(t *testing.T) {
 	// Unauthenticated access is rejected by the wrapping middleware.
 	if r := h.do("GET", "/v1/m/demo/things", "", nil, tenantHdr(tenantA)); r.code != http.StatusUnauthorized {
 		t.Fatalf("module route no-auth = %d, want 401", r.code)
+	}
+}
+
+// A module the node can turn on without a restart: the routes stay mounted and
+// every request asks the live answer, so enabling it needs no rebuild of the server.
+func TestModuleAvailabilityFollowsTheLiveAnswer(t *testing.T) {
+	var enabled atomic.Bool
+	h := newHarnessOpts(t, func(opts *api.Options) {
+		opts.ModuleEnabled = func(namespace string) bool { return namespace != "demo" || enabled.Load() }
+	}, demoModule{})
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "live-module")
+	status := func() int { return h.do("GET", "/v1/m/demo/things", admin, nil, tenantHdr(tenant)).code }
+	notEnabled := func() []any {
+		list, _ := h.do("GET", "/v1/server-info", "", nil, nil).body["modules_not_enabled"].([]any)
+		return list
+	}
+
+	if got := status(); got != http.StatusNotFound {
+		t.Fatalf("disabled module = %d, want 404 module_not_enabled", got)
+	}
+	if got := notEnabled(); len(got) != 1 || got[0] != "demo" {
+		t.Fatalf("server-info modules_not_enabled = %v, want [demo]", got)
+	}
+	enabled.Store(true)
+	if got := status(); got != http.StatusOK {
+		t.Fatalf("enabled module = %d, want 200", got)
+	}
+	if got := notEnabled(); len(got) != 0 {
+		t.Fatalf("server-info modules_not_enabled = %v, want none", got)
+	}
+	if got := h.do("GET", "/v1/m/demo/things", "", nil, tenantHdr(tenant)).code; got != http.StatusUnauthorized {
+		t.Fatalf("enabled module without authentication = %d, want 401", got)
+	}
+	enabled.Store(false)
+	if got := status(); got != http.StatusNotFound {
+		t.Fatalf("disabled again = %d, want 404", got)
+	}
+}
+
+// A module this node does not run is not reachable, listed or published, whoever asks and
+// however the module was named: through the live answer or through the fixed list.
+func TestDisabledModuleIsHiddenFromEveryone(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		configure func(*api.Options)
+	}{
+		{"live answer", func(o *api.Options) { o.ModuleEnabled = func(ns string) bool { return ns != "demo" } }},
+		{"fixed list", func(o *api.Options) { o.NotEnabledModules = []string{"demo"} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarnessOpts(t, tc.configure, demoModule{})
+			admin := h.adminLogin()
+			tenant := h.createOrg(admin, "hidden-module")
+			// Before authentication: the gate runs first, so a caller learns nothing more
+			// than the module is off.
+			if r := h.do("GET", "/v1/m/demo/things", "", nil, tenantHdr(tenant)); r.code != http.StatusNotFound {
+				t.Fatalf("unauthenticated request to a disabled module = %d, want 404", r.code)
+			}
+			if r := h.do("GET", "/v1/m/demo/things", admin, nil, tenantHdr(tenant)); r.code != http.StatusNotFound {
+				t.Fatalf("authenticated request to a disabled module = %d, want 404", r.code)
+			}
+			doc := h.do("GET", "/openapi.beta.json", "", nil, nil)
+			if paths, _ := doc.body["paths"].(map[string]any); len(paths) != 0 {
+				t.Fatalf("the beta document publishes the routes of a module this node does not run: %v", paths)
+			}
+			info := h.do("GET", "/v1/server-info", "", nil, nil)
+			if list, _ := info.body["modules_not_enabled"].([]any); len(list) != 1 || list[0] != "demo" {
+				t.Fatalf("server-info modules_not_enabled = %v, want [demo]", list)
+			}
+		})
+	}
+}
+
+// With every module running the document publishes the module's routes.
+func TestRunningModuleIsPublished(t *testing.T) {
+	h := newHarnessOpts(t, func(o *api.Options) { o.ModuleEnabled = func(string) bool { return true } }, demoModule{})
+	doc := h.do("GET", "/openapi.beta.json", "", nil, nil)
+	paths, _ := doc.body["paths"].(map[string]any)
+	if _, ok := paths["/v1/m/demo/things"]; !ok {
+		t.Fatalf("the document does not publish /v1/m/demo/things: %v", paths)
+	}
+}
+
+// eventModule has no routes of its own, like a module that only consumes events.
+type eventModule struct{}
+
+func (eventModule) APINamespace() string           { return "eventdemo" }
+func (eventModule) Permissions() []auth.Permission { return nil }
+func (eventModule) APIRoutes(api.RouteRegistrar)   {}
+
+// A module without routes of its own answers its namespace with module_not_enabled while
+// it is off, as every other module does; running, it has no route to answer.
+func TestRoutelessModuleAnswersNotEnabled(t *testing.T) {
+	answer := func(h *harness, path string) (int, any, any) {
+		r := h.do("GET", path, "", nil, nil)
+		errBody, _ := r.body["error"].(map[string]any)
+		return r.code, errBody["code"], errBody["module"]
+	}
+	for _, tc := range []struct {
+		name      string
+		configure func(*api.Options)
+	}{
+		{"live answer", func(o *api.Options) { o.ModuleEnabled = func(ns string) bool { return ns != "eventdemo" } }},
+		{"fixed list", func(o *api.Options) { o.NotEnabledModules = []string{"eventdemo"} }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarnessOpts(t, tc.configure, eventModule{})
+			h.adminLogin() // past setup, which answers every route until it is done
+			for _, path := range []string{"/v1/m/eventdemo", "/v1/m/eventdemo/anything"} {
+				if code, errCode, module := answer(h, path); code != http.StatusNotFound || errCode != "module_not_enabled" || module != "eventdemo" {
+					t.Errorf("GET %s = %d %v %v, want 404 module_not_enabled eventdemo", path, code, errCode, module)
+				}
+			}
+		})
+	}
+	h := newHarnessOpts(t, func(o *api.Options) { o.ModuleEnabled = func(string) bool { return true } }, eventModule{})
+	h.adminLogin()
+	if code, errCode, _ := answer(h, "/v1/m/eventdemo"); code != http.StatusNotFound || errCode != "not_found" {
+		t.Errorf("GET /v1/m/eventdemo while it runs = %d %v, want 404 not_found", code, errCode)
 	}
 }
 

@@ -54,13 +54,32 @@ func openAccountRoot(configured, canonical string) (*os.Root, error) {
 	if err != nil || planned != canonical {
 		return nil, errAccountHomeOccupied
 	}
-	volume := filepath.VolumeName(canonical) + string(filepath.Separator)
-	r, err := os.OpenRoot(volume)
+	// Start at the nearest directory that exists (on a default install, the
+	// data directory): the engine may pass through the ones above it without
+	// reading them, as the appliance policy grants search on /var, not read.
+	// The root handle still creates every missing component without following
+	// a link.
+	base := canonical
+	for {
+		st, err := os.Lstat(base)
+		if err == nil {
+			if !st.IsDir() {
+				return nil, errAccountHomeOccupied
+			}
+			break
+		}
+		parent := filepath.Dir(base)
+		if !errors.Is(err, fs.ErrNotExist) || parent == base {
+			return nil, ErrAccountsRootUnavailable
+		}
+		base = parent
+	}
+	r, err := os.OpenRoot(base)
 	if err != nil {
 		return nil, ErrAccountsRootUnavailable
 	}
 	defer r.Close()
-	rel, err := filepath.Rel(volume, canonical)
+	rel, err := filepath.Rel(base, canonical)
 	if err != nil {
 		return nil, errAccountHomeOccupied
 	}

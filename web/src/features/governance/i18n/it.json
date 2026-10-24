@@ -117,9 +117,6 @@
     "title": "Coda di approvazione",
     "caption": "Richieste in attesa di una decisione. Ogni approvazione, rifiuto e annullamento viene registrato.",
     "search": "Cerca richieste…",
-    "requestedBy": "Richiesta da",
-    "status": "Stato",
-    "progress": "Approvazioni",
     "age": "Età",
     "expires": "Scade",
     "escalates": "Escalation",
@@ -141,12 +138,14 @@
     "emptyPending": "Nessuna approvazione in sospeso",
     "emptyPendingHint": "La coda è vuota — nessuna decisione in attesa.",
     "approve": "Approva",
-    "reject": "Rifiuta",
     "cancel": "Annulla",
     "viewDetail": "Vedi dettaglio",
     "actorHint": "Handle dell'attore di audit — mai un indirizzo email. L'identità viene risolta dalla directory e qui non è mostrata.",
     "expiredAt": "Scaduta {{time}}",
-    "request": "Richiesta"
+    "approveOnce": "Approva una volta",
+    "deny": "Rifiuta",
+    "noMatch": "Nessuna richiesta corrisponde alla ricerca",
+    "noMatchHint": "Cancella la ricerca per vedere tutte le richieste di questo elenco."
   },
   "status": {
     "pending": "In sospeso",
@@ -156,11 +155,8 @@
     "expired": "Scaduta"
   },
   "decide": {
-    "approveTitle": "Approvare questa richiesta?",
-    "approveBody": "La tua approvazione conta per le approvazioni che questa richiesta richiede.",
     "rejectTitle": "Rifiutare questa richiesta?",
     "rejectBody": "Un solo rifiuto chiude la richiesta.",
-    "approveConfirm": "Approva",
     "rejectConfirm": "Rifiuta",
     "note": "Nota",
     "noteHint": "Facoltativa.",
@@ -226,7 +222,10 @@
     "decisionReject": "Rifiutata",
     "reenableNeedsAdmins": "Due altri account amministratore devono approvare questa richiesta. Creali in Identità e accesso, oppure con `olivares users create`.",
     "openIdentity": "Apri Identità e accesso",
-    "cannotDecideOwn": "Non puoi approvare una tua richiesta. Deve decidere un altro amministratore."
+    "cannotDecideOwn": "Non puoi approvare una tua richiesta. Deve decidere un altro amministratore.",
+    "requesterCannotApprove": "Chi ha fatto la richiesta non può approvarla.",
+    "launchedBy": "Avviata da",
+    "decidedByYou": "Hai approvato questa richiesta. Aspetta un'altra approvazione."
   },
   "policies": {
     "title": "Policy",
@@ -683,9 +682,23 @@
     "you": "Tu",
     "member": "Un membro",
     "apiToken": "Un token API",
-    "requestSummary": "Richiesta"
+    "requestSummary": "Richiesta",
+    "matched": "Regola applicata: {{rule}}",
+    "matchedDefault": "Regola applicata: nessuna, quindi vale quella predefinita",
+    "matchedUnreadable": "Regola applicata: una regola che non puoi leggere",
+    "reaches": "Raggiunge: {{list}}",
+    "reachFolder": {
+      "write": "{{path}} (scrittura)",
+      "read": "{{path}} (sola lettura)",
+      "unknown": "{{path}} (accesso sconosciuto)"
+    },
+    "matchedUnknown": "Regola applicata: una regola che non è stato possibile leggere",
+    "reachIncomplete": "altro che non è stato possibile leggere"
   },
   "list": {
     "loadedOnly": "La ricerca copre solo le righe caricate finora; carica altre righe per leggere oltre."
+  },
+  "queue": {
+    "needsYou": "Aspetta te"
   }
 }

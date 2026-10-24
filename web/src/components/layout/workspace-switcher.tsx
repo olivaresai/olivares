@@ -54,10 +54,8 @@ function WorkspaceCardFace({ name, detail }: { name: string; detail: string }) {
 const CARD_CLASS =
   'flex w-full min-w-0 items-center gap-2.5 rounded-card border border-line bg-surface p-2 outline-none'
 
-export function WorkspaceSwitcher({
-  className,
-  variant = 'row',
-}: { className?: string; variant?: 'row' | 'card' } = {}) {
+/** The workspaces of the active organization, and the one in force. */
+export function useWorkspaceChoices() {
   const { t } = useTranslation(['nav', 'common'])
   const { activeTenant } = useAuth()
   const { activeWorkspace, setActiveWorkspace } = useWorkspaceStore()
@@ -78,19 +76,6 @@ export function WorkspaceSwitcher({
   })
 
   const workspaces = data?.items ?? []
-  if (workspaces.length === 0) {
-    if (variant !== 'card') return null
-    const only = workspaces[0]
-    return (
-      <div data-slot="workspace-card" className={cn(CARD_CLASS, className)}>
-        <WorkspaceCardFace
-          name={only?.name ?? t('nav:workspace.all')}
-          detail={only?.slug ?? t('nav:workspace.allHint')}
-        />
-      </div>
-    )
-  }
-
   const incompleta = data?.has_more === true
   const active = workspaces.find((w) => w.id === activeWorkspace)
   // ⛔ «TODOS» ES UNA AFIRMACIÓN, Y CON LA LISTA RECORTADA PUEDE SER FALSA. Si hay un workspace
@@ -109,14 +94,112 @@ export function WorkspaceSwitcher({
     ? active.slug
     : t('nav:shell.workspaceCount', { count: workspaces.length })
 
+  return {
+    workspaces,
+    incompleta,
+    active,
+    activeWorkspace,
+    setActiveWorkspace,
+    label,
+    detail,
+  }
+}
+
+type WorkspaceChoices = ReturnType<typeof useWorkspaceChoices>
+
+/** The workspaces as menu items: All, then each active one. */
+export function WorkspaceMenuItems({ choices }: { choices: WorkspaceChoices }) {
+  const { t } = useTranslation(['nav', 'common'])
+  const { workspaces, incompleta, activeWorkspace, setActiveWorkspace } =
+    choices
+  return (
+    <>
+      <DropdownMenuLabel>{t('nav:workspace.switch')}</DropdownMenuLabel>
+      {/* The engine says there are more than were loaded: one not loaded cannot be chosen here. */}
+      {incompleta ? (
+        <DropdownMenuLabel className="font-normal text-warning">
+          {t('nav:workspace.truncated')}
+        </DropdownMenuLabel>
+      ) : null}
+      <DropdownMenuItem onSelect={() => setActiveWorkspace(null)}>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate" title={t('nav:workspace.all')}>
+            {t('nav:workspace.all')}
+          </span>
+          <span
+            className="truncate font-mono text-caption text-muted-foreground"
+            title={t('nav:workspace.allHint')}
+          >
+            {t('nav:workspace.allHint')}
+          </span>
+        </span>
+        {activeWorkspace === null && (
+          <Check className="ml-auto text-accent-text" />
+        )}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {workspaces
+        .filter((w) => w.status === 'active')
+        .map((w) => (
+          <DropdownMenuItem
+            key={w.id}
+            onSelect={() => setActiveWorkspace(w.id, w.name)}
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate" title={w.name}>
+                {w.name}
+              </span>
+              <span
+                className="truncate font-mono text-caption text-muted-foreground"
+                title={
+                  w.is_default
+                    ? `${w.slug} · ${t('nav:workspace.default')}`
+                    : w.slug
+                }
+              >
+                {w.slug}
+                {w.is_default ? ` · ${t('nav:workspace.default')}` : ''}
+              </span>
+            </span>
+            {w.id === activeWorkspace && (
+              <Check className="ml-auto text-accent-text" />
+            )}
+          </DropdownMenuItem>
+        ))}
+    </>
+  )
+}
+
+export function WorkspaceSwitcher({
+  className,
+  variant = 'row',
+}: { className?: string; variant?: 'row' | 'card' } = {}) {
+  const { t } = useTranslation(['nav', 'common'])
+  const choices = useWorkspaceChoices()
+  const { workspaces, label, detail } = choices
+
+  if (workspaces.length === 0) {
+    if (variant !== 'card') return null
+    const only = workspaces[0]
+    return (
+      <div data-slot="workspace-card" className={cn(CARD_CLASS, className)}>
+        <WorkspaceCardFace
+          name={only?.name ?? t('nav:workspace.all')}
+          detail={only?.slug ?? t('nav:workspace.allHint')}
+        />
+      </div>
+    )
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {variant === 'card' ? (
+          // No aria-label: the name is the card's own text, workspace and detail, as
+          // in the row below (WCAG 2.5.3); the menu button role says it switches.
           <button
             type="button"
             data-slot="workspace-card"
-            aria-label={t('nav:shell.workspaceSwitch', { name: label })}
             className={cn(
               CARD_CLASS,
               'cursor-pointer hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
@@ -148,58 +231,7 @@ export function WorkspaceSwitcher({
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-56">
-        <DropdownMenuLabel>{t('nav:workspace.switch')}</DropdownMenuLabel>
-        {/* El motor dice que hay más de los cargados: el que falte no se puede elegir aquí. */}
-        {incompleta ? (
-          <DropdownMenuLabel className="font-normal text-warning">
-            {t('nav:workspace.truncated')}
-          </DropdownMenuLabel>
-        ) : null}
-        <DropdownMenuItem onSelect={() => setActiveWorkspace(null)}>
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate" title={t('nav:workspace.all')}>
-              {t('nav:workspace.all')}
-            </span>
-            <span
-              className="truncate font-mono text-caption text-muted-foreground"
-              title={t('nav:workspace.allHint')}
-            >
-              {t('nav:workspace.allHint')}
-            </span>
-          </span>
-          {activeWorkspace === null && (
-            <Check className="ml-auto text-accent-text" />
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {workspaces
-          .filter((w) => w.status === 'active')
-          .map((w) => (
-            <DropdownMenuItem
-              key={w.id}
-              onSelect={() => setActiveWorkspace(w.id, w.name)}
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate" title={w.name}>
-                  {w.name}
-                </span>
-                <span
-                  className="truncate font-mono text-caption text-muted-foreground"
-                  title={
-                    w.is_default
-                      ? `${w.slug} · ${t('nav:workspace.default')}`
-                      : w.slug
-                  }
-                >
-                  {w.slug}
-                  {w.is_default ? ` · ${t('nav:workspace.default')}` : ''}
-                </span>
-              </span>
-              {w.id === activeWorkspace && (
-                <Check className="ml-auto text-accent-text" />
-              )}
-            </DropdownMenuItem>
-          ))}
+        <WorkspaceMenuItems choices={choices} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

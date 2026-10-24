@@ -25,6 +25,7 @@ type RuntimeCompanion struct {
 func companionSpec(spec LaunchSpec) LaunchSpec {
 	out := spec // preserve runner extensions such as confinement policy
 	out.Program, out.Args, out.Env, out.EnvAllow = "", nil, nil, nil
+	out.OnStart = nil // a companion is not the run's first process: it must not become what a broker's helpers serve
 	for _, entry := range spec.Env {
 		switch entry.Name {
 		case "HOME", "TMPDIR", "TMP", "TEMP":

@@ -77,7 +77,7 @@ func (m *Module) mutateMessageLifecycle(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(
+		tx, err := m.communicationTxWithAuthority(
 			ctx, confined, request, CommunicationClaimAuthoritySnapshot{},
 		)
 		if err != nil {

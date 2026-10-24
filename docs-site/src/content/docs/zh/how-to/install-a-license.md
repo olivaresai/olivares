@@ -8,7 +8,7 @@ description: >-
 
 你购买了一个套餐并收到了许可证。本页说明如何处理它：文件应放在哪里、如何将其应用到
 正在运行的引擎、如何查看实际安装内容，以及购买 Business 套餐后，如何在不重新安装任何内容
-的情况下将 Community 二进制文件切换为商业版二进制文件。
+的情况下将 Community 二进制文件切换为 Business 二进制文件。
 
 :::note[许可证是存证，不是运行时开关]
 **它不会门控你正在运行的软件中的任何功能。** 许可证过期或缺失不会关闭功能，任何许可证也都不会限制
@@ -23,7 +23,7 @@ description: >-
 | 你购买的套餐 | 收到的内容 | 如何处理 |
 |---|---|---|
 | Community | 无需安装任何内容 | 已在运行——本页内容均不适用 |
-| Business / Enterprise，自托管 | 一个**许可证文件**和一个**下载令牌** | 安装许可证，然后切换到商业版二进制文件 |
+| Business / Enterprise，自托管 | 一个**许可证文件**和一个**下载令牌** | 安装许可证，然后切换到 Business 二进制文件 |
 | Cloud | 托管 tenant 的凭据 | 无需在自己的主机上安装任何内容 |
 
 许可证是一个签名 blob。请将其保存为文件——`customer.license` 或任意其他名称——并保留
@@ -109,19 +109,28 @@ AI Runtime Security、Compliance Packs 和 Identity & Scale。
 各系列均可启用或停用；它们不单独销售。
 :::
 
-安装许可证后，下载商业版二进制文件即可。无需重新安装任何内容，也不会移动任何数据：
+安装许可证后，下载 Business 二进制文件即可。无需重新安装任何内容，也不会移动任何数据：
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
 
-该命令会获取适用于你所在平台的已签名商业版构建，并**离线验证签名**——遭篡改的制品会
+`olivares license install` 和 `olivares license status` 会按这套安装的安装方式打印确切的命令，控制台的 **Edition & license** 视图也以一个按钮 **切换到 Business** 显示同一步骤：引擎下载构建、验证、原地替换并在其上重启。下载令牌在许可下载门户的 **Downloads** 页面（[https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)）中，与这些命令并列，也在您的许可邮件里；如上按名称传递，以免它出现在进程列表中。已连接的安装（`olivares license connect start`）不需要令牌。`--enterprise` 是同一路由的旧写法。控制台按钮需要二者之一：引擎自身环境中的令牌，或这次连接；两者都没有时，视图会改为显示命令。
+
+:::caution[软件包安装]
+在 deb、rpm、apk 或 AUR 安装上，`/usr/bin/olivares` 由包管理器拥有，因此该命令会被拒绝：它在下载任何内容
+之前以退出码 2 结束。待有授权的软件包渠道提供 Business 软件包后，请使用该软件包。在此之前，添加
+`--target /usr/bin/olivares --data-dir /var/lib/olivares` 自行替换该文件；此后软件包数据库将与它不再一致。`--check` 仍会显示计划。
+:::
+
+该命令会获取适用于你所在平台的已签名 Business 构建，并**离线验证签名**——遭篡改的制品会
 中止升级，正在运行的二进制文件保持原样——然后以原子方式完成替换，并保留上一个文件的
 备份。Business 与 Community 的版本号相同，因此即使你已在运行该版本，此命令同样有效。如果希望先查看
 计划而不执行，请先使用 `--check`，它会将此变更显示为 `edition: community -> enterprise`：
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 重启服务，然后启用模块：
@@ -130,10 +139,10 @@ olivares upgrade --enterprise --token <TOKEN> --check
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
-该命令和预设名称是商业版二进制文件所接受的写法。预设不是版本，也不与 Business 的四个能力系列一一对应。
+该命令和预设名称是 Business 二进制文件所接受的写法。预设不是版本，也不与 Business 的四个能力系列一一对应。
 启用过程受到治理并会被审计：它会先显示 diff；任何需要机密或审查的模块都会进入
 暂存状态，而不是只启用一部分。`olivares enterprise status` 会报告哪些内容处于活动状态。
-这些命令**仅存在于商业版二进制文件中**——如果 `olivares enterprise` 不是一个命令，
+这些命令**仅存在于 Business 二进制文件中**——如果 `olivares enterprise` 不是一个命令，
 说明你仍在运行 Community 构建，上述切换尚未发生。
 
 :::caution[切换前先备份]
@@ -151,8 +160,8 @@ olivares enterprise enable <preset>     # starter | regulated | full
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 该版本保存在数据目录下的 `ota/`（随附镜像中为 `/var/lib/olivares/ota`），与用于验证它的
@@ -204,7 +213,7 @@ olivares license uninstall --data-dir /var/lib/olivares --yes
 `DELETE /v1/console/license` 的离线一侧。
 
 移除许可证**不会禁用**你正在运行的任何内容。它只是撤回存证；在切换回原版本之前，
-商业版二进制文件仍会按商业版二进制文件的方式运行。
+Business 二进制文件仍会按 Business 二进制文件的方式运行。
 
 ## 本页*不*包含的内容
 

@@ -2,11 +2,11 @@
   "doors": {
     "catalog": {
       "title": "Comunicaciones",
-      "description": "Los canales del workspace seleccionado que puedes leer ahora, los avisos directos enviados por ellos y tu bandeja. El motor decide cada lectura y cada acción."
+      "description": "Los canales del espacio de trabajo seleccionado que puedes leer ahora, los avisos directos enviados por ellos y tu bandeja. El motor decide cada lectura y cada acción."
     },
     "inbox": {
       "title": "Bandeja de comunicaciones",
-      "description": "Mensajes dirigidos a ti en el workspace seleccionado: ábrelos y acusa recibo de cada uno."
+      "description": "Mensajes dirigidos a ti en el espacio de trabajo seleccionado: ábrelos y acusa recibo de cada uno."
     },
     "new": {
       "title": "Nuevo canal",
@@ -14,11 +14,11 @@
     },
     "administration": {
       "title": "Administración de canales",
-      "description": "Los canales que puedes administrar en el workspace seleccionado: configuración e historial de concesiones. Cada cambio se aplica solo a la versión que leíste. Administrar un canal no exige ni concede el derecho a leer su contenido."
+      "description": "Los canales que puedes administrar en el espacio de trabajo seleccionado: configuración e historial de concesiones. Cada cambio se aplica solo a la versión que leíste. Administrar un canal no exige ni concede el derecho a leer su contenido."
     },
     "handoffs": {
       "title": "Traspasos",
-      "description": "Ofertas de trabajo dirigidas a ti en el workspace seleccionado. La lista no muestra el contenido de la oferta; al abrir una se lee su contexto, y el motor decide cada aceptación o rechazo."
+      "description": "Ofertas de trabajo dirigidas a ti en el espacio de trabajo seleccionado. La lista no muestra el contenido de la oferta; al abrir una se lee su contexto, y el motor decide cada aceptación o rechazo."
     }
   },
   "tabs": {
@@ -29,9 +29,9 @@
     "handoffs": "Traspasos"
   },
   "workspace": {
-    "requiredTitle": "Selecciona un workspace",
-    "requiredBody": "Las comunicaciones exigen un workspace explícito. Elige uno en el conmutador de workspaces: la consola nunca elige uno por ti y no hace ninguna petición hasta que haya uno seleccionado.",
-    "scope": "Ámbito del workspace"
+    "requiredTitle": "Selecciona un espacio de trabajo",
+    "requiredBody": "Las comunicaciones exigen un espacio de trabajo explícito. Elige uno en el conmutador de espacios de trabajo: la consola nunca elige uno por ti y no hace ninguna petición hasta que haya uno seleccionado.",
+    "scope": "Ámbito del espacio de trabajo"
   },
   "actions": {
     "refresh": "Actualizar",
@@ -91,7 +91,7 @@
     "title": "Canales visibles",
     "description": "Solo los canales activos que este principal puede leer ahora, con sus propios bits locales actuales. Una página no es una búsqueda sobre todo el catálogo: carga más para continuar desde la continuación del servidor.",
     "emptyTitle": "Sin canales visibles",
-    "emptyBody": "Este principal no tiene ningún canal que pueda leer en este workspace, o todavía no existe ninguno. Una concesión de lectura y el permiso channel:read hacen que aparezca aquí.",
+    "emptyBody": "Este principal no tiene ningún canal que pueda leer en este espacio de trabajo, o todavía no existe ninguno. Una concesión de lectura y el permiso channel:read hacen que aparezca aquí.",
     "truncated": "Hay más canales más allá de esta página",
     "truncatedHint": "El servidor informó de más canales visibles. Carga más para continuar desde su continuación.",
     "columns": {
@@ -167,7 +167,7 @@
       "etag": "Versión",
       "created": "Creado",
       "updated": "Actualizado",
-      "workspace": "Workspace",
+      "workspace": "Espacio de trabajo",
       "tenant": "Inquilino"
     },
     "sendHint": {
@@ -182,7 +182,7 @@
     "description": "Están disponibles todos los campos del contrato. Las concesiones iniciales son explícitas: añade cada sujeto y marca cada bit que pretendas. No se añade nada en tu nombre.",
     "fields": {
       "slug": "Slug",
-      "slugHint": "Minúsculas, dígitos y guiones; único en el workspace.",
+      "slugHint": "Minúsculas, dígitos y guiones; único en el espacio de trabajo.",
       "name": "Nombre",
       "descriptionField": "Descripción",
       "kind": "Tipo",
@@ -325,9 +325,9 @@
   },
   "inbox": {
     "title": "Bandeja personal",
-    "description": "Entregas dirigidas a este principal en este workspace, tal como el motor las autoriza ahora. Leer una página no acusa nada ni avanza ningún cursor.",
+    "description": "Entregas dirigidas a este principal en este espacio de trabajo, tal como el motor las autoriza ahora. Leer una página no acusa nada ni avanza ningún cursor.",
     "emptyTitle": "Sin entregas",
-    "emptyBody": "Ahora mismo no hay nada visible dirigido a este principal en este workspace.",
+    "emptyBody": "Ahora mismo no hay nada visible dirigido a este principal en este espacio de trabajo.",
     "truncated": "Hay más entregas más allá de esta página",
     "truncatedHint": "El servidor informó de más entregas visibles. Carga más para continuar desde su continuación.",
     "columns": {
@@ -490,7 +490,7 @@
     "openById": "Administrar un canal por ID",
     "openByIdHint": "La hoja se lee por el historial de concesiones bajo channel:admin; nunca usa la lectura de canal del nivel de lectura.",
     "emptyTitle": "Sin canales administrables",
-    "emptyBody": "Ningún canal de este workspace concede a este principal un bit de admin vigente, o ninguno coincide con el estado persistido seleccionado. Una concesión local de admin y el permiso channel:admin hacen aparecer uno aquí.",
+    "emptyBody": "Ningún canal de este espacio de trabajo concede a este principal un bit de admin vigente, o ninguno coincide con el estado persistido seleccionado. Una concesión local de admin y el permiso channel:admin hacen aparecer uno aquí.",
     "truncated": "Hay más canales administrables más allá de esta página",
     "truncatedHint": "El servidor informó de más canales administrables. Cargue más para continuar desde su continuación."
   },
@@ -515,7 +515,7 @@
     "readFailedBody": "No se conserva nada de lo mostrado antes para este canal: lo que hay en pantalla debe ser lo que el motor autoriza ahora. Relea cuando se resuelva la causa."
   },
   "config": {
-    "immutable": "Slug, tipo, tenant, workspace y los contadores de generación son informativos e inmutables aquí; el motor rechaza un cambio que los cruce.",
+    "immutable": "Slug, tipo, tenant, espacio de trabajo y los contadores de generación son informativos e inmutables aquí; el motor rechaza un cambio que los cruce.",
     "advanced": "Opciones avanzadas",
     "archivedNote": "Este canal está archivado. Su estado no puede volver a activo; su configuración aún puede editarse.",
     "stateHint": "Archivar es irreversible: un canal archivado nunca vuelve a activo.",
@@ -593,7 +593,6 @@
     "emptyTitle": "Sin generaciones",
     "emptyBody": "Ninguna generación almacenada coincide con el estado y el sujeto seleccionados. Una nueva concesión añade una.",
     "temporalHint": "«Estado almacenado» es lo que el motor persistió; «en la observación» es si la fila estaba vigente en el instante observado. Una caducidad pasada se informa, no se materializa: no revoca la fila, y una sucesora para ese sujeto sigue exigiendo antes una revocación explícita.",
-    "snapshotChanged": "El canal cambió entre dos páginas de este historial, así que se descartaron todas las páginas leídas y el listado se reinició desde el principio (reiniciado {{count}} vez/veces).",
     "detail": {
       "title": "Detalle de la generación",
       "id": "ID de la concesión",
@@ -641,7 +640,10 @@
       "revoked": "Revocadas (almacenado)",
       "expired": "Caducadas (almacenado)",
       "all": "Todas (almacenado)"
-    }
+    },
+    "snapshotChanged_one": "El canal cambió entre dos páginas de este historial, así que se descartaron todas las páginas leídas y el listado se reinició desde el principio (reiniciado {{count}} vez).",
+    "snapshotChanged_other": "El canal cambió entre dos páginas de este historial, así que se descartaron todas las páginas leídas y el listado se reinició desde el principio (reiniciado {{count}} veces).",
+    "snapshotChanged_many": "El canal cambió entre dos páginas de este historial, así que se descartaron todas las páginas leídas y el listado se reinició desde el principio (reiniciado {{count}} veces)."
   },
   "cursor": {
     "title": "Marcar visto hasta aquí",
@@ -662,7 +664,7 @@
     "fields": {
       "scope": "Alcance",
       "scopeValue": "página {{page}} de la cadena cargada ({{count}} entregas)",
-      "workspace": "Workspace",
+      "workspace": "Espacio de trabajo",
       "recipient": "Destinatario",
       "lastSubject": "Último asunto",
       "lastDelivery": "Última entrega",
@@ -770,12 +772,12 @@
       "itemStatus": "Estado",
       "currentOwner": "Titular actual",
       "ownerEpoch": "Época del titular",
-      "itemWorkspace": "Workspace del ítem",
+      "itemWorkspace": "Espacio de trabajo del ítem",
       "precondition": "Versión leída",
       "itemMismatch": "La lectura devolvió un ítem de trabajo distinto del solicitado. No se puede ofrecer nada bajo esta lectura.",
-      "workspaceMismatchTitle": "Selecciona el workspace del ítem",
-      "workspaceMismatchBody": "Este ítem pertenece al workspace {{itemWorkspace}} y el seleccionado es {{selected}}. Selecciona el workspace del ítem en el conmutador para ofrecerlo; la consola nunca elige uno por ti.",
-      "workspaceNone": "No hay ningún workspace explícito seleccionado. Una oferta está acotada a un workspace, así que selecciona el del ítem en el conmutador; la consola nunca elige uno por ti.",
+      "workspaceMismatchTitle": "Selecciona el espacio de trabajo del ítem",
+      "workspaceMismatchBody": "Este ítem pertenece al espacio de trabajo {{itemWorkspace}} y el seleccionado es {{selected}}. Selecciona el espacio de trabajo del ítem en el conmutador para ofrecerlo; la consola nunca elige uno por ti.",
+      "workspaceNone": "No hay ningún espacio de trabajo explícito seleccionado. Una oferta está acotada a un espacio de trabajo, así que selecciona el del ítem en el conmutador; la consola nunca elige uno por ti.",
       "noPrecondition": "El ítem se leyó sin versión, así que no hay nada contra lo que comprobar la oferta. Vuelve a leer el ítem.",
       "noPermission": "Tu rol no puede ofrecer un traspaso. El motor comprueba además quién es titular del ítem y quién puede usar el canal.",
       "channel": "Canal",
@@ -835,7 +837,7 @@
       "filter": "Estado",
       "truncated": "Hay más ofertas más allá de esta página",
       "truncatedHint": "El motor informa de que autorizó una oferta más en la misma transacción. No es un total, y no es un recuento de filas ocultas.",
-      "emptyTitle": "No hay traspasos en estado «{{state}}» en este workspace",
+      "emptyTitle": "No hay traspasos en estado «{{state}}» en este espacio de trabajo",
       "emptyBody": "Es un resultado autorizado vacío, no una negativa ni un fallo al mirar.",
       "unavailableTitle": "No se puede verificar la información de traspaso",
       "unavailableBody": "La información de traspaso no se puede cargar ahora. Reintente, o contacte a un administrador si persiste.",

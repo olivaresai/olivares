@@ -1,200 +1,113 @@
 ---
-title: 运行提供商会话
+title: 运营提供商会话
 description: >-
-  为该节点上已有的 Claude、Codex 或 Grok 主目录注册提供商配置文件，固定官方
-  驱动程序二进制文件，从控制台或 CLI 启动受治理会话，然后中断或停止回合，
-  而不虚构运行器。
+  选择 AI 工具及其账户或提供商，在项目文件夹中工作，批准操作，中断一个回合，并从
+  控制台或 CLI 停止与恢复。
 ---
 
-本页是官方提供商 CLI 的 **运行** 路径。控制平面在 **提供商配置文件** 下启动
-它所拥有的子进程。它不安装提供商、不创建其主目录，也不启动交互式浏览器登录。
+请先完成[Olivares AI 的第一个小时](/how-to/first-hour/)，再开始本页。
+工具运行在引擎所在的主机上；对于 Compose 安装，则运行在容器内部。你客户端终端中的
+登录信息和文件夹不会自动在那里可用。
 
-这不是连接器 / hook 路径。要清点或治理 Grok Build 或 Codex 的配置文件，请使用
-[集成 Grok Build](/how-to/integrations/grok/) 或
-[集成 Codex](/how-to/integrations/codex/)。要在同一主机上与 Claude Code
-共存，请使用
-[在 Olivares 中运行 Claude Code](/how-to/run-claude-code-with-olivares/)。
+## 选择工具如何连接
 
-该行为的来源：`CHANGELOG.md` 的 `[26.9.0]`（提供商配置文件、Codex
-驱动程序、Grok 驱动程序）、生成的
-[控制台](/reference/console/) 与
-[配置](/reference/configuration/) 参考、`cmd/olivares/sessionruntime.go` 以及
-`web/src/features/agentops/types.ts`。
+**AI 工具**（`/agent-tools`）用于安装工具并运行其自身的登录流程。在原生引擎上，
+默认工具实例使用引擎用户自己的登录；通过 Olivares 登录的账户保持为独立实例。选择你
+想使用的账户。账户快照会显示工具报告的邮箱、套餐、用量窗口和模型。缺失的值保持
+不可用，刷新失败的会标记为过期。
 
-## 前置条件
+**工具**（`/agent-tools`）中的 **API 密钥** 保存 API 密钥和本地模型端点。请在那里添加
+并测试提供商，然后从 **新建会话** 中使用它。提供商密钥与工具订阅是两种不同的连接方式。
+Ollama 需要一个可访问的端点和一个模型，无需 API 密钥。参见
+[添加提供商](/how-to/add-a-provider/)。
 
-启动前完成这些项。缺一项就是拒绝，而不是回退。
+对于指定了 **未** 绑定提供商的 `managed_injection` Claude 配置文件，
+`OLIVARES_SESSION_RUNTIME_WIF` 或 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` 提供主机范围的
+推理凭据。绑定到提供商记录的配置文件则使用该记录；若其凭据无法打开，则拒绝启动，
+而不会回退到主机凭据。`provider_account_home` 配置文件使用其已授权的工具登录，两个
+变量都不需要。参见
+[环境变量及其适用范围](/how-to/add-a-provider/#the-environment-variables-and-where-they-still-apply)。
 
-1. 已安装 Olivares AI，并且已有首位管理员。
-   安装令牌见 [第一个小时](/how-to/first-hour/)。
-   管理操作的追加认证（`admin_step_up`）默认为 `none`。
-   如果管理员启用 `totp` 或 `passkey`，请在特权操作前满足该策略的要求
-   （`core/api/middleware.go` `requireStepUp`）。
-2. 官方提供商 CLI 已安装在 **本节点**。配置文件登记的是已经存在的主目录。
-   服务器解析路径（绝对路径、解析符号链接、已存在的目录），不创建、不安装、
-   不登录（`web/src/features/agentops/types.ts` `CreateProfileRequest`）。
-3. 打开 **Provider profiles**（`/provider-profiles`）需要
-   `sessions:profile:read`，登记需要 `sessions:profile:write`。
-   绑定源需要 `sessions:profile-binding:write` 以及源管理。启动运行需要
-   `sessions:run:write`。权限见 [控制台参考](/reference/console/)。
-4. 对应驱动程序的可执行文件必须位于 **此节点**。显式固定的二进制文件
-   优先；未固定时，引擎在启动时查找。各驱动程序仍须通过就绪状态和
-   策略检查。
+## 开始并对话
 
-| 驱动程序 | 固定此环境变量 | 未设置时 |
-|---|---|---|
-| Claude Code | `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN` | 最新的已验证托管安装，然后是引擎 `PATH` 中的 `claude`。 |
-| Codex | `OLIVARES_SESSION_RUNTIME_CODEX_BIN` | 最新的已验证托管安装，然后是引擎 `PATH` 中的 `codex`。 |
-| Grok | `OLIVARES_SESSION_RUNTIME_GROK_BIN` | 最新的已验证托管安装，然后是引擎 `PATH` 中的 `grok`。 |
+打开 **会话 → 新建会话**，并选择一个就绪的工具。引擎会填好配置文件和文件夹。对于
+README 的 Compose 安装，请选择 **更改文件夹** 并输入 `/project`，以便在挂载的宿主机
+项目中工作。保留默认文件夹则无需输入路径。将 **第一条消息** 留空即可开始，然后在
+对话中输入消息，或在按下 **启动** 之前输入。
 
-该值固定此节点可运行的官方可执行文件。未固定时，安装工具后无需重启
-引擎即可使用。如果既没有托管安装，也没有 `PATH` 中的可执行文件，
-则拒绝启动。`OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` 使用相同的查找顺序。
+使用提供商密钥的工具会使用其已保存的模型，或让你选择连接测试返回的模型。如果必须有
+模型但测试尚未返回任何模型，请先在 **工具** 的 **API 密钥** 下测试连接。Claude Code
+可以使用其原生默认模型。
 
-对于未指定提供方的 `managed_injection` Claude 配置档案，
-`OLIVARES_SESSION_RUNTIME_WIF` 或 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
-提供主机的推理凭据。绑定提供方的配置档案使用该提供方的凭据；若无法读取，
-则拒绝启动，不回退到主机凭据。`provider_account_home` 配置档案使用获授权的
-工具登录，不需要这两个变量。参见
-[添加提供方](/zh/how-to/add-a-provider/)。
-Codex 和 Grok 只使用配置文件的 AUTHORIZED `auth_source`：
-`provider_account_home` 或 `managed_injection`，二者之间没有回退，也没有默认值
-（`CHANGELOG.md` `[26.9.0]`；`ProviderProfileDTO.auth_source`）。
+对于 README 的 Compose 安装，请在引擎容器内运行 CLI。它会在那里找到本地引擎及其证书。
+请使用你在设置期间创建的 Olivares 管理员账户登录，而不是你的工具订阅。
 
-:::caution[本页不断言的内容]
-`CHANGELOG.md` `[26.9.0]` 写明，Grok 驱动程序行为是在自有的假 ACP 子进程上，
-通过真实的 HTTP、运行时、存储和进程组证明的。
-**与已认证官方 Grok 账户的兼容性是后续工作，此处不断言。**
-:::
+当使用提供商密钥且工具需要模型（例如 Codex）时，请在运行下面的 `session start` 之前，
+先在 **工具** 的 **API 密钥** 下保存默认模型。如果提供商和工具配置文件都没有配置模型，
+请在 `session start` 命令后追加 `--model <tested-model-id>`，并将占位符替换为连接测试
+返回的模型 ID。在 **新建会话** 中选择的模型仅适用于该次控制台启动；它不会为 CLI 启动
+设置模型。
 
-## 1. 登记提供商配置文件
-
-提供商配置文件是 **一个** 执行环境上 **一个** 已配置提供商实例的持久身份：
-驱动程序、所属环境，以及子进程使用的规范 `config_home` / `user_home`。
-这是配置与存储身份，不是已认证的提供商账户（`CHANGELOG.md` `[26.9.0]` B1；
-控制台文案 `agentops.profiles.subtitle`）。
-
-### 控制台
-
-1. 打开 **Provider profiles**（`/provider-profiles`）。
-2. 选择 **Register profile**。
-3. 设置驱动程序（`claude`、`codex` 或 `grok`）、已有的 `config_home` 和已有的
-   `user_home`。`environment_ref` 可以省略（本节点）。
-4. 保存。列表显示 `profile_ref`、驱动程序、状态，以及该配置文件是否在本环境
-   启用。路径 **不** 出现在普通列表中。
-5. 要查看已存储的主目录，使用 **Reveal configuration**
-   （`sessions:profile:admin`）。该读取按需进行，隐藏时丢弃。仍然不携带凭证值。
-
-重命名、禁用和启用保持同一 id 和同一主目录。**Retire** 不可逆，需键入确认，
-并释放主目录给 **新的** id。
-
-### 引擎拒绝的情况
-
-- 本节点未注册其驱动程序的配置文件仍可见，但不能启动（`operable` 不是启动
-  保证；`GET …/launch-readiness` 才是要求面板）。
-- 属于另一执行环境的配置文件显示为外部，绝不会从本节点启动。
-- 转发 `HOME`、`CLAUDE_CONFIG_DIR`、`CODEX_HOME` 或 `GROK_HOME` 的启动被拒绝。
-  这些名称属于配置文件（`agentops.create.profileEnvConflict`）。
-
-已发布的截图集中没有此屏幕。不要把 Connectors 选项卡的图片当作此表单。
-
-## 2. 绑定源（可选，用于观察到的归属）
-
-可以将源在本节点已应用的精确名册修订上专用于某个配置文件。键是该行的持久
-id，绝不是可编辑名称（`CHANGELOG.md` `[26.9.0]` B1；**Source bindings**
-`/provider-bindings`）。
-
-1. 打开 **Source bindings**（`/provider-bindings`）。
-2. 绑定源的持久 `id` 以及本节点协调器接好的 `applied_revision`。
-   `GET /v1/console/sources` 报告二者。
-3. 撤销绑定以停止 **新的** 配置文件归属。较早的信封在回放时保留其历史绑定。
-
-没有绑定的已知登记仍显示为 `source` 观察行。它不会合并进受管运行。见
-[实时运行与会话](/reference/modules/ii-sessions/)。
-
-## 3. 启动
-
-生产创建端点要求 `provider_profile_ref`。省略它会保留旧请求体，本 API 会拒绝
-（`CHANGELOG.md` `[26.9.0]` B2；CLI 标志 `--provider-profile`）。
-
-启动对话框提供 **active** 配置文件。只有一个 active 配置文件时会预选它；有多个时
-不预选，**Start** 会提示选择一个。workspace 与 template 选择可以清除；配置文件
-不可以（`CHANGELOG.md` `[26.9.0]` Fixed）。
-
-### 控制台
-
-1. 打开 **会话**（`/sessions`）。`/agentops` 打开同一屏幕
-   （[控制台参考](/reference/console/)）。
-2. 打开 **New session**，再打开 **Advanced launch options**（有工具就绪时位于
-   **More options** 内）。
-3. 确认 **Provider profile**（`agentops.create.profile`），需要时填写
-   **First message**。
-4. 可在 **Advanced options** 中设置 workspace、template、model 和 effort。
-   对 Grok 而言，model 和 effort 在官方代理标志上仍是提供商拥有的开放字符串
-   （`CHANGELOG.md` `[26.9.0]`）。
-5. 点击 **Start**。无法启动时，按钮下方的一行会说明缺少什么。只发布配置文件的
-   **引用**。服务器解析主目录。
-
-使用提供商密钥的工具会使用其已保存的模型，或让你选择连接测试返回的模型。
-如果必须有模型但测试没有返回任何模型，请先在 **Providers** 中测试连接。
-Claude Code 可以使用其原生默认模型。
-
-### 打开交接所指明的工作
-
-工作树隔离文件，但仓库的 git 元数据仍共享。交接内容可选地携带 `branch` 和 `sha`（完整提交 ID），指明工作在 git 中的位置。通过 API，或使用 JSON 可包含这两个字段的 `olivares message handoff offer --context-file` 提供交接。两者都未指定的交接保持原有行为。
-
-阅读指定了这些字段的交接时，面板以文本显示分支和提交。**在新会话工作树中打开**会打开启动界面，选中工作树并显示起点。选择包含该提交的仓库所在的工作区之前，启动会等待。清除文件夹选择仍会保留该请求；如需普通会话，请明确取消工作树选项。命令行用法：
+在宿主机终端中设置一次 Compose 文件：
 
 ```sh
-olivares session start . --worktree-from <commit or branch> --name review
+export COMPOSE_FILE="$HOME/olivares/deploy/compose/docker-compose.yml"
+docker compose exec olivares olivares login
+docker compose exec olivares olivares tool ls
+docker compose exec olivares olivares tool providers
+docker compose exec olivares olivares session start /project --name first-hour
+docker compose exec olivares olivares session send first-hour "Explain this project."
 ```
 
-`--worktree-from` 隐含 `--worktree`。会话在该提交处建立自己的新分支，因此发送方的分支和你的检出不会移动。如果工作区仓库中没有该提交，启动会在创建任何内容之前拒绝（422）；请先在该仓库 fetch。未被任何分支、标签或远程分支持有的提交也会被拒绝。会话的**分支变更**窗格列出其分支包含、而工作区当前提交不包含的工作，并将路径在合并基点与分支顶端的文本并排打开。只显示已提交工作，且遵守工作区允许的子路径和 DLP 策略；未提交编辑位于**变更**中。
-
-文件夹可以为新工作树存储一条设置命令。在工作树启动被接受之前，必须由人按 SHA-256
-批准其确切文本；更改一个字符就需要重新批准。目前还没有任何东西会运行该命令。参见
-[批准文件夹的设置命令](/zh/reference/session-runtime-api/#批准文件夹的设置命令)。
-
-### CLI
+对于原生安装，请直接在引擎主机上运行相同的 Olivares 命令，并将 `/project` 替换为你的
+项目路径。客户端会打印它所选择的工具和连接。若有多个工具，请使用 `--tool` 选择其一；
+`--profile` 用于选择已有的配置文件。关闭客户端终端不会停止引擎上的会话。要重新连接
+其输出，请运行：
 
 ```sh
-olivares agent session create --provider-profile <profile_ref>
+docker compose exec olivares olivares session follow first-hour
 ```
 
-按 [CLI 参考](/reference/cli/) 添加 `--server`、`--tenant` 和 `--token-file`
-（或活动客户端上下文）。本发行版的 isolation 为 `native`；
-`container` 和 `sandbox` 在创建运行记录之前返回 HTTP 422。
-使用内置运行器时请选择 `native`。
+## 批准、中断、停止与恢复
 
-对于使用提供商密钥且需要模型的工具（例如 Codex），请在运行 `session start` 之前，
-在 **Providers** 中保存默认模型。如果提供商和该工具的配置文件都没有配置模型，
-请在 `session start` 命令后追加 `--model <tested-model-id>`，并把占位符替换为连接测试
-返回的模型 ID。在 **New session** 中选择的模型只适用于那一次控制台启动；
-它不会为 CLI 启动设置模型。
+在 **更多选项** 下，**每次操作前询问** 会让工具在行动前先询问。在 **规则** 中，等待你
+处理的请求会在队列旁边打开，并显示其命令、将访问的范围以及触发它的规则。选择
+**仅批准一次**（`A`），或选择 **拒绝**（`D`）并添加备注。需要组织批准的启动也会在此
+等待；请待启动获得批准后再发送消息。
 
-结果：运行资源。受管实时行按观察范围和外部 id 唯一。指明某一行的读取使用
-`live_ref`，而不是两个主目录可能共享的裸提供商会话 id。
+使用 **中断** 结束当前回合，同时保持对话打开。使用 **停止** 结束进程，如有提示请确认。
+**恢复** 会在同一配置文件、账户和文件夹上重新启动该会话；它会重新检查凭据和策略。
+恢复后请发送新消息。
 
-## 4. 中断或停止
+```sh
+docker compose exec olivares olivares session interrupt first-hour
+docker compose exec olivares olivares session stop first-hour
+docker compose exec olivares olivares session resume first-hour
+docker compose exec olivares olivares session send first-hour "Continue explaining this project."
+```
 
-| 意图 | 控制台 | CLI | 结果 |
-|---|---|---|---|
-| 结束活动回合，保留进程和对话 | 实时会话上的 interrupt 控件 | `olivares agent session interrupt <run-ref>` | 回合结束；进程仍可用于下一回合（`CHANGELOG.md` `[26.9.0]`） |
-| 结束运行 | stop 控件 | `olivares agent session stop <run-ref>` | 运行资源；运行时仍回收子进程 |
+账户变更或不可用会导致启动被拒绝，而不是许可切换到另一个登录。被中断的 Grok 回合使用
+ACP 取消，且没有确认；在将其视为已结束之前，请等待相关的回合结果返回。
 
-受工作约束的运行发送其确切租约围栏。过时或不确定的结果保持显式。恢复只在
-同一已证明的主目录上继续。
+## 可选的配置文件与 git 设置
 
-Grok 中断使用 ACP `session/cancel`，这是没有确认的通知。中断会解决待处理
-批准、取消，并让回合保持打开，直到该 prompt 自己的相关结果返回
-（`CHANGELOG.md` `[26.9.0]`）。不要把静默取消当作已确认的提供商回执。
+对于已配置的现有工具主目录，**会话**（`/sessions?tab=profiles`）的 **提供商配置文件**
+标签页允许管理员登记配置文件，并检查启动就绪状态。已命名账户的配置文件和来源绑定也
+位于 **工具** 中该账户的详情里。主目录必须存在于执行主机上。在新建会话中使用
+**更多选项 → 高级启动选项** 来选择该配置文件。二进制覆盖项用于选择一个可执行文件；
+否则，引擎会先尝试最新的已验证托管安装，然后尝试 `PATH` 中的工具。参见
+[配置](/reference/configuration/)。
 
-## 相关
+对于至少有一个提交的 git 仓库顶层文件夹，**在新的 git 工作树中工作** 会为会话创建一个
+分支和工作目录。恢复会复用这些内容。带有分支和提交的交接会提供 **在新的会话工作树中
+打开**；请选择一个仓库包含该提交的已登记文件夹。引擎会在创建工作树之前，拒绝不支持
+或不安全的仓库设置。
 
-- [第一个小时](/how-to/first-hour/) — 安装令牌、管理操作的追加认证、Claude 凭证来源。
-- [在 Olivares 中运行 Claude Code](/how-to/run-claude-code-with-olivares/) — 共存拓扑。
-- [集成 Codex](/how-to/integrations/codex/) / [集成 Grok Build](/how-to/integrations/grok/) — 连接器与 PEP hook。
-- [会话运行时 API](/reference/session-runtime-api/) — 列表、attach、input、stop；Community PTY 与版本边界。
-- [实时运行与会话](/reference/modules/ii-sessions/) — `live_ref` 与归属。
-- [配置](/reference/configuration/) — 驱动程序固定变量。
-- [CLI 参考](/reference/cli/) — `olivares agent session *`（从二进制生成）。
+文件夹可以为新工作树存储一条设置命令。在接受工作树启动之前，必须由人按 SHA-256 批准
+其精确文本；更改一个字符就需要重新批准。目前尚未运行该命令。参见
+[批准文件夹的设置命令](/reference/session-runtime-api/#approving-a-folders-setup-command)。
+
+清理操作会拒绝丢弃未提交或未合并的工作。**同时删除工作树和分支** 会明确授权这种丢失；
+被忽略的文件会随工作树一并删除。工作树共享该仓库的 git 元数据。工作树选项参见
+[会话 CLI 参考](/reference/cli/#command-olivares-session-start)，配置文件权限、生命周期
+调用和隔离限制参见[会话运行时 API](/reference/session-runtime-api/)。

@@ -2,11 +2,11 @@
   "doors": {
     "catalog": {
       "title": "Kommunikation",
-      "description": "Kanäle des ausgewählten Workspace, die Sie jetzt lesen dürfen, die darüber gesendeten Direktnachrichten und Ihr Posteingang. Die Engine entscheidet über jedes Lesen und jede Aktion."
+      "description": "Kanäle des ausgewählten Arbeitsbereich, die Sie jetzt lesen dürfen, die darüber gesendeten Direktnachrichten und Ihr Posteingang. Die Engine entscheidet über jedes Lesen und jede Aktion."
     },
     "inbox": {
       "title": "Kommunikations-Posteingang",
-      "description": "An Sie adressierte Nachrichten im ausgewählten Workspace: jede öffnen und bestätigen."
+      "description": "An Sie adressierte Nachrichten im ausgewählten Arbeitsbereich: jede öffnen und bestätigen."
     },
     "new": {
       "title": "Neuer Kanal",
@@ -14,11 +14,11 @@
     },
     "administration": {
       "title": "Kanalverwaltung",
-      "description": "Die Kanäle, die Sie im ausgewählten Workspace verwalten dürfen: Konfiguration und Berechtigungsverlauf. Jede Änderung gilt nur für die gelesene Version. Einen Kanal zu verwalten erfordert und gewährt kein Recht, seinen Inhalt zu lesen."
+      "description": "Die Kanäle, die Sie im ausgewählten Arbeitsbereich verwalten dürfen: Konfiguration und Berechtigungsverlauf. Jede Änderung gilt nur für die gelesene Version. Einen Kanal zu verwalten erfordert und gewährt kein Recht, seinen Inhalt zu lesen."
     },
     "handoffs": {
       "title": "Übergaben",
-      "description": "An Sie adressierte Arbeitsangebote im ausgewählten Workspace. Die Liste zeigt keinen Angebotsinhalt; beim Öffnen wird der Kontext gelesen, und die Engine entscheidet über jedes Annehmen oder Ablehnen."
+      "description": "An Sie adressierte Arbeitsangebote im ausgewählten Arbeitsbereich. Die Liste zeigt keinen Angebotsinhalt; beim Öffnen wird der Kontext gelesen, und die Engine entscheidet über jedes Annehmen oder Ablehnen."
     }
   },
   "tabs": {
@@ -29,9 +29,9 @@
     "handoffs": "Übergaben"
   },
   "workspace": {
-    "requiredTitle": "Workspace auswählen",
-    "requiredBody": "Kommunikation erfordert einen ausdrücklichen Workspace. Wählen Sie einen im Workspace-Umschalter: Die Konsole wählt nie einen für Sie und stellt keine Anfrage, bis einer ausgewählt ist.",
-    "scope": "Workspace-Bereich"
+    "requiredTitle": "Arbeitsbereich auswählen",
+    "requiredBody": "Kommunikation erfordert einen ausdrücklichen Arbeitsbereich. Wählen Sie einen im Arbeitsbereich-Umschalter: Die Konsole wählt nie einen für Sie und stellt keine Anfrage, bis einer ausgewählt ist.",
+    "scope": "Arbeitsbereich"
   },
   "actions": {
     "refresh": "Aktualisieren",
@@ -91,7 +91,7 @@
     "title": "Sichtbare Kanäle",
     "description": "Nur die aktiven Kanäle, die dieser Principal jetzt lesen darf, mit seinen eigenen aktuellen lokalen Bits. Eine Seite ist keine Suche über den ganzen Katalog: Laden Sie mehr, um an der Fortsetzung des Servers weiterzumachen.",
     "emptyTitle": "Keine sichtbaren Kanäle",
-    "emptyBody": "Dieser Principal hat in diesem Workspace keinen Kanal, den er lesen darf, oder es existiert noch keiner. Eine Leseberechtigung und die Berechtigung channel:read lassen einen hier erscheinen.",
+    "emptyBody": "Dieser Principal hat in diesem Arbeitsbereich keinen Kanal, den er lesen darf, oder es existiert noch keiner. Eine Leseberechtigung und die Berechtigung channel:read lassen einen hier erscheinen.",
     "truncated": "Über diese Seite hinaus existieren weitere Kanäle",
     "truncatedHint": "Der Server hat weitere sichtbare Kanäle gemeldet. Laden Sie mehr, um an seiner Fortsetzung weiterzumachen.",
     "columns": {
@@ -167,7 +167,7 @@
       "etag": "Version",
       "created": "Erstellt",
       "updated": "Aktualisiert",
-      "workspace": "Workspace",
+      "workspace": "Arbeitsbereich",
       "tenant": "Mandant"
     },
     "sendHint": {
@@ -182,7 +182,7 @@
     "description": "Jedes Feld des Vertrags ist verfügbar. Anfangsberechtigungen sind ausdrücklich: Fügen Sie jedes Subjekt hinzu und setzen Sie jedes beabsichtigte Bit. Nichts wird in Ihrem Namen hinzugefügt.",
     "fields": {
       "slug": "Slug",
-      "slugHint": "Kleinbuchstaben, Ziffern und Bindestriche; eindeutig im Workspace.",
+      "slugHint": "Kleinbuchstaben, Ziffern und Bindestriche; eindeutig im Arbeitsbereich.",
       "name": "Name",
       "descriptionField": "Beschreibung",
       "kind": "Art",
@@ -325,9 +325,9 @@
   },
   "inbox": {
     "title": "Persönlicher Posteingang",
-    "description": "Zustellungen an diesen Principal in diesem Workspace, wie die Engine sie jetzt autorisiert. Das Lesen einer Seite bestätigt nichts und bewegt keinen Cursor.",
+    "description": "Zustellungen an diesen Principal in diesem Arbeitsbereich, wie die Engine sie jetzt autorisiert. Das Lesen einer Seite bestätigt nichts und bewegt keinen Cursor.",
     "emptyTitle": "Keine Zustellungen",
-    "emptyBody": "Derzeit ist in diesem Workspace nichts an diesen Principal Adressiertes sichtbar.",
+    "emptyBody": "Derzeit ist in diesem Arbeitsbereich nichts an diesen Principal Adressiertes sichtbar.",
     "truncated": "Über diese Seite hinaus existieren weitere Zustellungen",
     "truncatedHint": "Der Server hat weitere sichtbare Zustellungen gemeldet. Laden Sie mehr, um an seiner Fortsetzung weiterzumachen.",
     "columns": {
@@ -490,7 +490,7 @@
     "openById": "Kanal per ID verwalten",
     "openByIdHint": "Das Blatt wird über den Berechtigungsverlauf unter channel:admin gelesen; es nutzt nie die Kanallese der Lesestufe.",
     "emptyTitle": "Keine verwaltbaren Kanäle",
-    "emptyBody": "Kein Kanal dieses Workspace gewährt diesem Principal ein gültiges Admin-Bit, oder keiner entspricht dem gewählten gespeicherten Zustand. Eine lokale Admin-Berechtigung und die Berechtigung channel:admin lassen einen hier erscheinen.",
+    "emptyBody": "Kein Kanal dieses Arbeitsbereich gewährt diesem Principal ein gültiges Admin-Bit, oder keiner entspricht dem gewählten gespeicherten Zustand. Eine lokale Admin-Berechtigung und die Berechtigung channel:admin lassen einen hier erscheinen.",
     "truncated": "Jenseits dieser Seite existieren weitere verwaltbare Kanäle",
     "truncatedHint": "Der Server hat weitere verwaltbare Kanäle gemeldet. Laden Sie mehr, um von seiner Fortsetzung aus weiterzugehen."
   },
@@ -515,7 +515,7 @@
     "readFailedBody": "Nichts zuvor für diesen Kanal Gezeigtes wird behalten: Auf dem Bildschirm muss stehen, was die Engine jetzt autorisiert. Lesen Sie neu, wenn die Ursache behoben ist."
   },
   "config": {
-    "immutable": "Slug, Art, Tenant, Workspace und die Generationszähler sind hier informativ und unveränderlich; die Engine lehnt eine Änderung ab, die sie überschreitet.",
+    "immutable": "Slug, Art, Tenant, Arbeitsbereich und die Generationszähler sind hier informativ und unveränderlich; die Engine lehnt eine Änderung ab, die sie überschreitet.",
     "advanced": "Erweiterte Optionen",
     "archivedNote": "Dieser Kanal ist archiviert. Sein Zustand kann nicht zu aktiv zurückkehren; seine Konfiguration kann weiterhin bearbeitet werden.",
     "stateHint": "Archivieren ist unumkehrbar: Ein archivierter Kanal wird nie wieder aktiv.",
@@ -593,7 +593,6 @@
     "emptyTitle": "Keine Generationen",
     "emptyBody": "Keine gespeicherte Berechtigungsgeneration entspricht dem gewählten Zustand und Subjekt. Eine neue Berechtigung fügt eine hinzu.",
     "temporalHint": "„Gespeicherter Zustand“ ist, was die Engine persistiert hat; „bei Beobachtung“ ist, ob die Zeile im beobachteten Zeitpunkt in Kraft war. Ein verstrichener Ablauf wird gemeldet, nicht materialisiert: Er widerruft die Zeile nicht, und ein Nachfolger für dieses Subjekt erfordert weiterhin zuerst einen ausdrücklichen Widerruf.",
-    "snapshotChanged": "Der Kanal hat sich zwischen zwei Seiten dieses Verlaufs geändert, daher wurden alle bisher gelesenen Seiten verworfen und die Auflistung von vorn neu gestartet ({{count}} Mal neu gestartet).",
     "detail": {
       "title": "Detail der Generation",
       "id": "Berechtigungs-ID",
@@ -641,7 +640,9 @@
       "revoked": "Widerrufen (gespeichert)",
       "expired": "Abgelaufen (gespeichert)",
       "all": "Alle (gespeichert)"
-    }
+    },
+    "snapshotChanged_one": "Der Kanal hat sich zwischen zwei Seiten dieses Verlaufs geändert, daher wurden alle bisher gelesenen Seiten verworfen und die Auflistung von vorn neu gestartet ({{count}} Mal neu gestartet).",
+    "snapshotChanged_other": "Der Kanal hat sich zwischen zwei Seiten dieses Verlaufs geändert, daher wurden alle bisher gelesenen Seiten verworfen und die Auflistung von vorn neu gestartet ({{count}} Mal neu gestartet)."
   },
   "cursor": {
     "title": "Bis hier als gesehen markieren",
@@ -662,7 +663,7 @@
     "fields": {
       "scope": "Umfang",
       "scopeValue": "Seite {{page}} der geladenen Kette ({{count}} Zustellungen)",
-      "workspace": "Workspace",
+      "workspace": "Arbeitsbereich",
       "recipient": "Empfänger",
       "lastSubject": "Letzter Betreff",
       "lastDelivery": "Letzte Zustellung",
@@ -703,7 +704,7 @@
     "actInterrupted": "Eine Bestätigung wurde geschlossen, während ihre Handlung bereits gesendet wurde: Diese Konsole hat keine aktuelle Antwort für diese Handlung. Es wurde nichts entschieden und nichts verweigert; ob die Handlung die Engine erreicht hat, wird hier nicht festgestellt.",
     "checking": "Zugriff wird geprüft…",
     "confirmationClosed": "Eine ausstehende Bestätigung wurde geschlossen: Diese Konsole hat keine aktuelle Antwort für diese Handlung. Es wurde nichts entschieden, nichts verweigert und nichts gesendet.",
-    "globalAccountBody": "Verwende ein Mitgliedskonto dieser Organisation, um diese Ansicht zu öffnen. Globale Konten können den Zugriff auf diese Ansicht nicht prüfen.",
+    "globalAccountBody": "Verwenden Sie ein Mitgliedskonto dieser Organisation, um diese Ansicht zu öffnen. Globale Konten können den Zugriff auf diese Ansicht nicht prüfen.",
     "globalAccountTitle": "Mit einem Mitgliedskonto anmelden",
     "notConfirmed": "Es wurde nichts gesendet: Die Autorisierung für diese Handlung konnte gerade nicht bestätigt werden.",
     "retrying": "Wird alle paar Sekunden erneut geprüft.",
@@ -770,12 +771,12 @@
       "itemStatus": "Status",
       "currentOwner": "Aktuelle Inhaberschaft",
       "ownerEpoch": "Inhaber-Epoche",
-      "itemWorkspace": "Workspace des Elements",
+      "itemWorkspace": "Arbeitsbereich des Elements",
       "precondition": "Gelesene Version",
       "itemMismatch": "Der Lesevorgang lieferte ein anderes Arbeitselement als das angeforderte. Unter diesem Lesevorgang kann nichts angeboten werden.",
-      "workspaceMismatchTitle": "Wählen Sie den Workspace des Elements",
-      "workspaceMismatchBody": "Dieses Element gehört zum Workspace {{itemWorkspace}}, ausgewählt ist {{selected}}. Wählen Sie im Umschalter den Workspace des Elements, um es anzubieten; die Konsole wählt niemals einen für Sie aus.",
-      "workspaceNone": "Es ist kein ausdrücklicher Workspace ausgewählt. Ein Angebot ist auf einen Workspace beschränkt, wählen Sie also im Umschalter den des Elements; die Konsole wählt niemals einen für Sie aus.",
+      "workspaceMismatchTitle": "Wählen Sie den Arbeitsbereich des Elements",
+      "workspaceMismatchBody": "Dieses Element gehört zum Arbeitsbereich {{itemWorkspace}}, ausgewählt ist {{selected}}. Wählen Sie im Umschalter den Arbeitsbereich des Elements, um es anzubieten; die Konsole wählt niemals einen für Sie aus.",
+      "workspaceNone": "Es ist kein ausdrücklicher Arbeitsbereich ausgewählt. Ein Angebot ist auf einen Arbeitsbereich beschränkt, wählen Sie also im Umschalter den des Elements; die Konsole wählt niemals einen für Sie aus.",
       "noPrecondition": "Das Arbeitselement wurde ohne Version gelesen, daher gibt es nichts, woran das Angebot geprüft werden kann. Lesen Sie das Element erneut.",
       "noPermission": "Ihre Rolle kann keine Übergabe anbieten. Die Engine prüft zusätzlich, wem das Element gehört und wer den Kanal nutzen darf.",
       "channel": "Kanal",
@@ -835,7 +836,7 @@
       "filter": "Zustand",
       "truncated": "Über diese Seite hinaus gibt es weitere Angebote",
       "truncatedHint": "Die Engine meldet, dass sie in derselben Transaktion ein weiteres Angebot autorisiert hat. Das ist keine Gesamtzahl und keine Zählung verborgener Zeilen.",
-      "emptyTitle": "Keine Übergaben im Zustand „{{state}}“ in diesem Workspace",
+      "emptyTitle": "Keine Übergaben im Zustand „{{state}}“ in diesem Arbeitsbereich",
       "emptyBody": "Das ist ein leeres autorisiertes Ergebnis, keine Ablehnung und kein gescheiterter Blick.",
       "unavailableTitle": "Übergabeinformationen können nicht überprüft werden",
       "unavailableBody": "Übergabeinformationen können derzeit nicht geladen werden. Wiederholen Sie den Vorgang, oder wenden Sie sich an einen Administrator, wenn das Problem bestehen bleibt.",

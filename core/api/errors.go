@@ -318,6 +318,12 @@ func statusFor(err error) (int, string) {
 		// like multi_idp/user_cap): the body tells the human to sign in with SSO, never
 		// to upgrade. 403 + distinct code so the login UI routes to the SSO button.
 		return http.StatusForbidden, "sso_required"
+	case errors.Is(err, auth.ErrSSOGroupsIndeterminate):
+		// Group overage: the IdP did not send the user's full group list, so a sign-in
+		// that relies on group membership is refused rather than admitted with none.
+		// 403 with a distinct code; the 4xx body is the error's own text, which names the
+		// fix in Entra and carries nothing from the assertion.
+		return http.StatusForbidden, "sso_groups_indeterminate"
 	case errors.Is(err, auth.ErrNetworkNotAllowed):
 		// login refused because the peer IP is outside the deployment's network
 		// allow-list (a deny-closed perimeter control over the login surface). 403 +
@@ -551,6 +557,31 @@ func statusFor(err error) (int, string) {
 		errors.Is(err, store.ErrAppendOnly), errors.Is(err, store.ErrTenantViolation):
 		// These are internal invariant violations, never a client's fault.
 		return http.StatusInternalServerError, "internal"
+	case errors.Is(err, store.ErrCommitOutcomeUnknown):
+		// BEFORE ErrStoreUnavailable, and the order is the decision: sqlstore wraps
+		// an unknown COMMIT as ErrCommitOutcomeUnknown OVER wrapUnavailableErr
+		// (commitoutcome.go:105), so the chain carries both sentinels and errors.Is
+		// finds both. The write MAY be durable, so the store_unavailable sentence
+		// ("the request can be retried") is precisely the blind re-send this
+		// sentinel exists to forbid (core/store errors.go). 503 with the
+		// commit_outcome_unknown wire code modules/sessions already answers
+		// (communication_http.go): same status, honest sentence, no safe-retry
+		// promise. moduleErrorMessage deliberately has no entry for this code: the
+		// work seam words an undetermined commit itself (HP-9/E9) — see
+		// moduleerrors.go.
+		return http.StatusServiceUnavailable, "commit_outcome_unknown"
+	case errors.Is(err, store.ErrStoreUnavailable):
+		// #2774: the SQL backend could not be reached — a lost/refused
+		// connection or a Postgres SQLSTATE class-08 "Connection Exception"
+		// (sqlstore generic.go wrapUnavailableErr). Nothing was decided or written,
+		// and the condition is transient, so it is 503 like not_leader (retryable)
+		// and NOT 500, which blamed the server, counted against the 5xx SLI and
+		// suppressed the client's retry the 503 asks for. The wire code matches the
+		// one the finops module family already answers for this sentinel. These two
+		// arms sit after every older arm on purpose: a chain an older arm already
+		// answers (a canceled commit is 408, not 503) keeps its status, so only the
+		// errors that fell through to the 500 default below change.
+		return http.StatusServiceUnavailable, "store_unavailable"
 	default:
 		return http.StatusInternalServerError, "internal"
 	}
@@ -602,7 +633,12 @@ var honestSeamMessage = map[string]string{
 	// document.
 	"webauthn_relying_party_unusable": "Passkeys cannot be used at the address this console was reached on. A passkey relying party has to be a domain name that the verifier this build ships accepts: an IP address is not one, and neither is a single-label name. Reach the console by a dotted host name, or by localhost, and start the engine with that address declared in --public-url (or OLIVARES_PUBLIC_URL).",
 	"not_leader":                      "This node is not the leader; retry against the leader.",
-	"audit_spool_full":                "The audit spool is full; the ledger is refusing writes deny-closed rather than dropping evidence.",
+	"store_unavailable":               "The database is unreachable right now; the request can be retried.",
+	// No promise that a retry is safe — that is the whole difference from
+	// store_unavailable. The sentence says what is known (nothing was learned),
+	// what may be true (the change may be durable) and what not to do.
+	"commit_outcome_unknown": "Whether this change was applied is unknown: the outcome of the commit was not confirmed. It may be durable, so do not re-send automatically; repeat the operation under the same authority.",
+	"audit_spool_full":       "The audit spool is full; the ledger is refusing writes deny-closed rather than dropping evidence.",
 	// #530: the person at the setup screen needs the remedy, the operator needs the file
 	// and the errno. The sentence carries no path (it is served before anyone signs in);
 	// the log line writeError writes for it carries both.

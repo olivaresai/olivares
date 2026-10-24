@@ -156,21 +156,36 @@ jobs:
           docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" config --format json >"$config"
           bash scripts/check-compose-ready.sh effective-config "$config" "$READY_NEGATIVE_PROJECT" "$OLIVARES_IMAGE" \
             olivares olivares-standby postgres
+          # Name the assertion that fails and show what the standby was doing: the probe's
+          # own output (HTTP 503 only if the engine answered) and the engine's last lines.
+          # This log can be public. A fresh engine prints its one-time setup token, and a line that
+          # starts with :: would be read by the runner as a workflow command, so each line is indented.
+          redact() { sed -E -e 's/olst_[A-Za-z0-9_-]+/olst_REDACTED/g' -e 's/^/| /'; }
+          fail() {
+            echo "::error::standby negative step: $*" >&2
+            docker ps --all --filter "label=com.docker.compose.project=$READY_NEGATIVE_PROJECT" >&2 || true
+            if [ -n "${cid:-}" ]; then
+              docker inspect --format 'state={{.State.Status}} exit={{.State.ExitCode}} restarts={{.RestartCount}}{{with .State.Health}} health={{.Status}}{{range .Log}} probe exit={{.ExitCode}}: {{.Output}}{{end}}{{end}}' "$cid" >&2 || true
+              docker logs --tail 40 "$cid" 2>&1 | redact >&2 || true
+            fi
+            # up --wait also exits 1 for a leader that never became healthy.
+            docker logs --tail 40 "$(docker ps --all -q --filter "label=com.docker.compose.project=$READY_NEGATIVE_PROJECT" --filter "label=com.docker.compose.service=olivares")" 2>&1 | redact >&2 || true
+            exit 1
+          }
           set +e
           docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" \
             up --wait --wait-timeout 90
           rc=$?
           set -e
-          if [ "$rc" -ne 1 ]; then
-            echo "expected compose up --wait rc=1 for a running /readyz=503 standby; got rc=$rc" >&2
-            exit 1
-          fi
-          cid="$(docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" ps -q olivares-standby)"
-          test -n "$cid"
-          test "$(docker inspect --format '{{.State.Running}}' "$cid")" = true
-          test "$(docker inspect --format '{{.State.Health.Status}}' "$cid")" = unhealthy
-          docker inspect --format '{{range .State.Health.Log}}{{.Output}}{{end}}' "$cid" \
-            | grep -F 'HTTP 503'
+          cid="$(docker compose -p "$READY_NEGATIVE_PROJECT" "${files[@]}" ps --all -q olivares-standby)" || cid=
+          [ "$rc" -eq 1 ] || fail "expected compose up --wait rc=1 for a running /readyz=503 standby; got rc=$rc"
+          [ -n "$cid" ] || fail "compose has no olivares-standby container"
+          running="$(docker inspect --format '{{.State.Running}}' "$cid")" || fail "cannot inspect olivares-standby"
+          [ "$running" = true ] || fail "olivares-standby is not running (State.Running=$running)"
+          health="$(docker inspect --format '{{with .State.Health}}{{.Status}}{{else}}none{{end}}' "$cid")" || fail "cannot inspect olivares-standby health"
+          probes="$(docker inspect --format '{{with .State.Health}}{{range .Log}}{{.Output}}{{end}}{{end}}' "$cid")" || fail "cannot read olivares-standby health log"
+          [ "$health" = unhealthy ] || fail "olivares-standby health is '$health', want unhealthy"
+          grep -qF 'HTTP 503' <<<"$probes" || fail "no health probe of olivares-standby reported HTTP 503, so /readyz was not answered by a running standby"
 
       - name: remove negative fixture
         if: ${{ always() }}

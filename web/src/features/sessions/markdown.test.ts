@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import { parseInline, parseMarkdown, safeHref, type Block } from './markdown'
+import {
+  parseInline,
+  parseMarkdown,
+  plainText,
+  safeHref,
+  type Block,
+} from './markdown'
 
 it('lets a governed wiki resolve relative links throughout Markdown without widening reply links', () => {
   const resolve = (href: string) =>
@@ -447,4 +453,84 @@ describe('parseMarkdown — a hostile or runaway reply stays bounded (#1784)', (
       { kind: 'code', text: 'x' },
     ])
   })
+})
+
+// dev#2788: a reply is copied as the person reads it, without the markers it was written
+// in; a code block keeps its content exactly.
+describe('plainText', () => {
+  it('reads a reply as shown: no markers, lists and code kept', () => {
+    const reply =
+      'Two things matter:\n\n- **Identify clients:** list who calls the API\n- Check `README.md` for the [title](https://example.com/t)\n\n```sh\nmake test\n  --verbose\n```'
+    expect(plainText(parseMarkdown(reply))).toBe(
+      'Two things matter:\n\n- Identify clients: list who calls the API\n- Check README.md for the title (https://example.com/t)\n\nmake test\n  --verbose',
+    )
+  })
+})
+
+describe('plainText — review of the copy', () => {
+  it('keeps the tabs of a code block exactly', () => {
+    const reply = 'Run:\n\n```make\nbuild:\n\tgo build ./...\n```'
+    const blocks = parseMarkdown(reply)
+    expect(blocks.at(-1)).toEqual({
+      kind: 'code',
+      text: 'build:\n\tgo build ./...',
+    })
+    expect(plainText(blocks)).toBe('Run:\n\nbuild:\n\tgo build ./...')
+  })
+
+  it('copies a nested list without blank lines the reader never saw', () => {
+    expect(plainText(parseMarkdown('- a\n  - b\n- c'))).toBe('- a\n  - b\n- c')
+  })
+})
+
+// Review of #2856: a fence inside a list item keeps a tab-led line inside the item;
+// the list stays whole and the code keeps its tab.
+it('keeps a list whole when a fence in an item has a tab-led line', () => {
+  const blocks = parseMarkdown(
+    '- step:\n  ```make\n  build:\n\tgo build\n  ```\n- next',
+  )
+  expect(blocks).toHaveLength(1)
+  const list = blocks[0] as Extract<Block, { kind: 'list' }>
+  expect(list.kind).toBe('list')
+  expect(list.items).toHaveLength(2)
+  expect(list.items[0]![1]).toEqual({
+    kind: 'code',
+    text: 'build:\n\tgo build',
+  })
+  expect(list.items[1]).toEqual([{ kind: 'paragraph', inline: ['next'] }])
+})
+
+// Review of #2856, round 2: indentation reads a leading tab as four spaces where it is
+// measured, and a fence body keeps its lines as written, wherever the fence sits.
+describe('parseMarkdown — tabs in and around a fence', () => {
+  it('ends a fence left open in an item with the item: a later tab-indented list nests', () => {
+    const [list] = parseMarkdown('- a\n  ```\n  x\n- b\n\t- nested')
+    if (list?.kind !== 'list') throw new Error('not a list')
+    expect(list.items[1]!.map((b) => b.kind)).toEqual(['paragraph', 'list'])
+  })
+
+  it('keeps the tab of a line in a fence indented one to three spaces', () => {
+    expect(parseMarkdown(' ```\n\tall:\n ```')).toEqual([
+      { kind: 'code', text: '\tall:' },
+    ])
+  })
+
+  it('keeps the tab of a line in a fence nested four spaces deep', () => {
+    const [list] = parseMarkdown(
+      '- a\n  - b\n    ```make\n    all:\n\tgo build\n    ```',
+    )
+    if (list?.kind !== 'list') throw new Error('not a list')
+    const [, inner] = list.items[0]!
+    if (inner?.kind !== 'list') throw new Error('not a nested list')
+    expect(inner.items[0]![1]).toEqual({
+      kind: 'code',
+      text: 'all:\n\tgo build',
+    })
+  })
+})
+
+it('copies a link whose label names another host with its address once', () => {
+  expect(plainText(parseMarkdown('[https://a.com](https://b.com/x)'))).toBe(
+    'https://a.com (https://b.com/x)',
+  )
 })

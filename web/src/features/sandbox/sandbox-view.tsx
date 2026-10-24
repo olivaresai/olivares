@@ -429,7 +429,7 @@ export function SandboxView() {
                       canCreate ? (
                         <Button
                           type="button"
-                          variant="primary"
+                          variant="secondary"
                           size="sm"
                           onClick={() => setCreateOpen(true)}
                         >

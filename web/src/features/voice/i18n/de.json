@@ -103,7 +103,8 @@
     "decisionsError": "Die Entscheidungen konnten nicht gelesen werden.",
     "noDecisions": "Keine Entscheidungen für diese Sitzung erfasst.",
     "noReason": "kein Grund erfasst",
-    "frames": "{{count}} Live-Aktualisierung(en)",
+    "frames_one": "{{count}} Live-Aktualisierung",
+    "frames_other": "{{count}} Live-Aktualisierungen",
     "open": "Sitzung öffnen (geregelt)",
     "stream": {
       "connecting": "verbindet",
@@ -113,10 +114,10 @@
     },
     "outcome": {
       "opened": "Geöffnet.",
-      "approval": "Freigabe angefordert — mit dieser Referenz erneut senden:",
+      "approval": "Genehmigung angefordert — mit dieser Referenz erneut senden:",
       "denied": "Durch Richtlinie abgelehnt: keine erlaubt diese Kombination (Agent, Modell, Anbieter). Das ist eine Default-Deny-Entscheidung, kein Fehler.",
-      "noGate": "In dieser Installation ist kein Freigabe-Gate eingerichtet, daher bleibt das Öffnen abgelehnt. Das ist eine Lücke im Bestand, keine Richtlinien-Ablehnung.",
-      "unavailable": "Das Freigabe-Gate hat nicht geantwortet, es wurde also nichts entschieden."
+      "noGate": "In dieser Installation ist kein Genehmigung-Gate eingerichtet, daher bleibt das Öffnen abgelehnt. Das ist eine Lücke im Bestand, keine Richtlinien-Ablehnung.",
+      "unavailable": "Das Genehmigung-Gate hat nicht geantwortet, es wurde also nichts entschieden."
     }
   },
   "ledger": {
@@ -125,7 +126,7 @@
     "caveat": "Ein verweigertes Öffnen erzeugt selbst keine Sitzungszeile, daher ist dies die erste eigene Ansicht, die es vollständig und allein mit dem Recht zum Lesen von Sprachsitzungen zeigt. Andere Wege zeigen es nur teilweise oder verlangen eine andere Berechtigung: das API-Playground (Tenant-Admin), der Audit-Explorer (die Aktion, ohne ihren Grund) und die Security-Findings (nur einzelne Pfade).",
     "empty": "Noch keine Öffnungsentscheidungen",
     "emptyHint": "Hier stehen die Entscheidungen, die die Engine persistieren konnte. Der Evidenz-Schreibvorgang ist absichtlich best-effort — eine Verweigerung gilt auch dann, wenn ihre Zeile verloren geht —, ein leeres Protokoll ist also kein Beweis dafür, dass nichts verweigert wurde.",
-    "truncated": "Angezeigt werden die {{count}} neuesten Entscheidungen, und die Engine meldet mehr: diese Liste ist GEKÜRZT. Lies sie als Stichprobe, nicht als das vollständige Protokoll.",
+    "truncated": "Angezeigt werden die {{count}} neuesten Entscheidungen, und die Engine meldet mehr: diese Liste ist GEKÜRZT. Lesen Sie sie als Stichprobe, nicht als das vollständige Protokoll.",
     "columns": {
       "when": "Wann",
       "outcome": "Ergebnis",
@@ -135,7 +136,7 @@
       "reason": "Begründung der Engine"
     },
     "opStatus": {
-      "requested": "Freigabe angefordert",
+      "requested": "Genehmigung angefordert",
       "blocked": "Blockiert",
       "dispatched": "Zugestellt",
       "declared_not_opened": "Deklariert, nicht geöffnet",

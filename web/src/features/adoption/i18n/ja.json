@@ -26,11 +26,11 @@
   "lenses": {
     "analytics": {
       "title": "開発者単位（管理用 Analytics）",
-      "description": "管理用 Analytics フィードから取得した、{{developers}} 人の開発者にわたる開発者・日単位の信頼できる合計値。"
+      "description_other": "管理用 Analytics フィードから取得した、{{count}} 人の開発者にわたる開発者・日単位の信頼できる合計値。"
     },
     "telemetry": {
       "title": "セッション単位（リアルタイムテレメトリ）",
-      "description": "OTLP プレーンから取得した、{{teams}} チームにわたるセッション単位のリアルタイム活動。アクティブ時間を含みます。"
+      "description_other": "OTLP プレーンから取得した、{{count}} チームにわたるセッション単位のリアルタイム活動。アクティブ時間を含みます。"
     }
   },
   "comparison": {

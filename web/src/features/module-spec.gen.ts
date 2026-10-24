@@ -7,7 +7,7 @@
 /** The console views each built-in module's state governs (module spec
  * `console_entries`), in registration order. One row at most names a view. */
 export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
-  accessmap: ['accessMap'],
+  accessmap: ['accessMap', 'reach'],
   capabilities: ['capabilities'],
   adoption: ['adoption'],
   sourcescope: [],
@@ -61,6 +61,7 @@ export const CONSOLE_ENTRIES: Readonly<Record<string, readonly string[]>> = {
     'providerProfiles',
     'providerBindings',
     'providerAccounts',
+    'agent-tools',
     'workspace-templates',
   ],
   voice: ['voice'],

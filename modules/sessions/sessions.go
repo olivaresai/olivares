@@ -8,6 +8,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -45,6 +46,10 @@ type Module struct {
 
 	activeWindow time.Duration
 	idleWindow   time.Duration
+
+	// workOutboxNudge is this module's outbox pump wake-up (communication_tx.go): each engine's
+	// pump registers on its own module, so two engines in one process never wake each other.
+	workOutboxNudge atomic.Value // func()
 
 	// rt is the OPERATE runtime (governed Claude Code session lifecycle):
 	// the deny-closed launch seams and the in-memory registry of live processes.

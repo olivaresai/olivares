@@ -117,9 +117,6 @@
     "title": "승인 대기열",
     "caption": "결정을 기다리는 요청입니다. 모든 승인, 거부 및 취소가 기록됩니다.",
     "search": "요청 검색…",
-    "requestedBy": "요청자",
-    "status": "상태",
-    "progress": "승인",
     "age": "경과",
     "expires": "만료",
     "escalates": "에스컬레이션",
@@ -139,12 +136,14 @@
     "emptyPending": "대기 중인 승인 없음",
     "emptyPendingHint": "대기열이 비어 있습니다 — 결정을 기다리는 것이 없습니다.",
     "approve": "승인",
-    "reject": "거부",
     "cancel": "취소",
     "viewDetail": "세부 정보 보기",
     "actorHint": "감사 행위자 핸들 — 이메일 주소는 절대 아닙니다. ID는 디렉터리에서 해석되며 여기에 표시되지 않습니다.",
     "expiredAt": "{{time}}에 만료됨",
-    "request": "요청"
+    "approveOnce": "이번만 승인",
+    "deny": "거부",
+    "noMatch": "검색과 일치하는 요청이 없습니다",
+    "noMatchHint": "검색어를 지우면 이 목록의 모든 요청을 볼 수 있습니다."
   },
   "status": {
     "pending": "대기 중",
@@ -154,11 +153,8 @@
     "expired": "만료됨"
   },
   "decide": {
-    "approveTitle": "이 요청을 승인하시겠습니까?",
-    "approveBody": "귀하의 승인은 이 요청에 필요한 승인 수에 포함됩니다.",
     "rejectTitle": "이 요청을 거부하시겠습니까?",
     "rejectBody": "거부 한 번으로 요청이 종료됩니다.",
-    "approveConfirm": "승인",
     "rejectConfirm": "거부",
     "note": "메모",
     "noteHint": "선택 사항.",
@@ -224,7 +220,10 @@
     "decisionReject": "거부됨",
     "reenableNeedsAdmins": "다른 관리자 계정 두 개가 이를 승인해야 합니다. ID 및 접근에서 만들거나 `olivares users create`로 만드십시오.",
     "openIdentity": "ID 및 접근 열기",
-    "cannotDecideOwn": "자신의 요청은 승인할 수 없습니다. 다른 관리자가 결정해야 합니다."
+    "cannotDecideOwn": "자신의 요청은 승인할 수 없습니다. 다른 관리자가 결정해야 합니다.",
+    "requesterCannotApprove": "요청한 사람은 자신의 요청을 승인할 수 없습니다.",
+    "launchedBy": "시작한 사람",
+    "decidedByYou": "이 요청을 승인했습니다. 다른 승인자를 기다리고 있습니다."
   },
   "policies": {
     "title": "정책",
@@ -677,9 +676,23 @@
     "you": "귀하",
     "member": "구성원",
     "apiToken": "API 토큰",
-    "requestSummary": "요청"
+    "requestSummary": "요청",
+    "matched": "적용된 규칙: {{rule}}",
+    "matchedDefault": "적용된 규칙: 없음(기본값 적용)",
+    "matchedUnreadable": "적용된 규칙: 읽을 권한이 없는 규칙",
+    "reaches": "접근 대상: {{list}}",
+    "reachFolder": {
+      "write": "{{path}} (쓰기)",
+      "read": "{{path}} (읽기 전용)",
+      "unknown": "{{path}} (접근 수준 알 수 없음)"
+    },
+    "matchedUnknown": "적용된 규칙: 읽을 수 없었던 규칙",
+    "reachIncomplete": "읽을 수 없었던 항목 있음"
   },
   "list": {
     "loadedOnly": "검색은 지금까지 로드된 행만 대상으로 합니다; 더 읽으려면 더 불러오십시오."
+  },
+  "queue": {
+    "needsYou": "내 결정을 기다리는 요청"
   }
 }

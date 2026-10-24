@@ -123,9 +123,10 @@ func newSessionHandoffCmd() *cobra.Command {
 			"Without --account it prints the summary and starts nothing, so you can review it. The summary\n" +
 			"is generated from the stored conversation, with no model. Save it, edit it, and start with\n" +
 			"--summary-file <file> (or - for standard input); without the file the generated one is used.\n" +
-			"A session that was given vault secrets, a repository credential or a package registry token\n" +
-			"cannot be handed off. A running session is stopped first (Claude Code, Codex, Gemini CLI and\n" +
-			"OpenCode sessions can be handed off); one that cannot be handed off is not stopped.",
+			"A session that was given vault secrets, a repository credential, a managed credential or a\n" +
+			"package registry token cannot be handed off. A running session is stopped first (Claude Code,\n" +
+			"Codex, Gemini CLI and OpenCode sessions can be handed off); one that cannot be handed off is\n" +
+			"not stopped.",
 		Example: "  olivares session handoff my-app\n" +
 			"  olivares session handoff my-app --account codex-main\n" +
 			"  olivares session handoff my-app --account codex-main --summary-file summary.txt --name my-app-codex",

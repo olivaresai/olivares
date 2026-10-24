@@ -1,8 +1,8 @@
 {
   "title": "Strumenti AI",
   "description": "Installa gli strumenti AI su cui girano le sessioni di questo server e fai accedere gli strumenti.",
+  "descriptionMember": "Le sessioni girano con questi account e chiavi API. Un amministratore di sistema installa gli strumenti e ne esegue l'accesso.",
   "refresh": "Aggiorna",
-  "adminOnly": "Per gestire gli strumenti dell'host serve una sessione di amministratore di sistema.",
   "readOnly": "Questo server è in sola lettura. L'installazione è disattivata.",
   "notInstalled": "Nessuna installazione gestita",
   "installedOutside": "Installato su questo server, non da Olivares",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "Opzioni per {{name}}",
     "update": "Aggiorna",
-    "details": "Dettagli dell'installazione",
-    "profilesPage": "Pagina dettagliata dei profili"
+    "details": "Dettagli dell'installazione"
   },
   "details": {
     "title": "{{name}}: dettagli dell'installazione",
@@ -220,5 +219,11 @@
     "packagesHint": "Dichiarati dal profilo del provider che la nuova sessione di ogni strumento usa ({{profiles}}). Uno strumento senza profilo ne riceve uno nuovo che non dichiara nulla.",
     "packagesNoProfile": "Provengono dal profilo del provider con cui girano le sessioni di ogni strumento. Non ne esiste ancora uno, e uno nuovo non dichiara nulla.",
     "packagesRefused": "Non elencati perché nessuna sessione può ancora avviarsi: {{tools}}."
+  },
+  "place": {
+    "title": "Account e chiavi API",
+    "accounts": "Account",
+    "allAccounts": "Tutti gli account: dettagli, etichette e associazioni",
+    "noAccess": "Il tuo ruolo non può leggere gli account né le chiavi API di questa organizzazione."
   }
 }

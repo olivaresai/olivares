@@ -38,6 +38,10 @@ cannot change, so `olivares upgrade` stores the release in the data volume (`ota
 data directory) and every start of the image binary runs it while it is newer than the image or the same version built differently;
 there is no swap and no `.bak-*` backup there, and removing `ota/` returns to the image's
 binary ([Docker and Compose](https://docs.olivares.ai/how-to/install-a-license/#docker-and-compose)).
+On a package install (deb, rpm, apk, AUR) the package manager owns `/usr/bin/olivares`, so
+there `olivares upgrade` refuses to replace it in place (exit 2, before any download) and names
+the package route (the package manager, as in §4; on the Olivares appliance its update
+service); `--check` still shows the plan, and `--target` still replaces a path you name.
 
 > **No hot-patching — ever.** A Go binary is **not** live-patched in place. An upgrade
 > always installs a new binary and restarts the process. "Zero downtime" is a graceful
@@ -49,7 +53,7 @@ binary ([Docker and Compose](https://docs.olivares.ai/how-to/install-a-license/#
 
 ## 1. Versioning and the image coordinate
 
-Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.3`<!-- /release -->, image tags <!-- release -->`:0.3`<!-- /release --> and `:latest`;
+Release and container tags use bare `MAJOR.MINOR`: release <!-- release -->`0.4`<!-- /release -->, image tags <!-- release -->`:0.4`<!-- /release --> and `:latest`;
 FIPS/STIG variants are Business artifacts. See [versioning](../INSTALL.md#versioning).
 
 The official registry is **Docker Hub**:
@@ -67,11 +71,11 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 <!-- release -->
 ```sh
-cosign verify docker.io/olivaresai/olivares:0.3 \
+cosign verify docker.io/olivaresai/olivares:0.4 \
   --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
-crane digest docker.io/olivaresai/olivares:0.3   # -> sha256:<…>
+crane digest docker.io/olivaresai/olivares:0.4   # -> sha256:<…>
 ```
 <!-- /release -->
 
@@ -413,6 +417,37 @@ After restarting, sign in and check the recovered data.
 > A `contract` migration can remove data an older release needs, and an additive migration
 > can still advance the core schema beyond that release's supported version.
 
+A binary swap alone is accepted only while the old release supports the store's core
+schema version, which a release pair may or may not advance. Do not plan on it: the
+restore above is the route that is always available.
+
+### Checking an upgrade and its rollback
+
+`scripts/upgrade-journey.py` runs §3 to §5 on a real old and a real new engine over one
+data directory: it seeds two accounts, one provider key (kept sealed, then proved by a
+test against a provider that accepts only that key) and three sessions on the old engine,
+takes the old engine's DR bundle, runs the new engine over the same data, and checks that
+`olivares version` is the new release, every row is present (accounts and their roles,
+the folder, the Claude Code account, the sessions by name and folder), both accounts sign
+in, the key still opens its provider, the audit chain verifies, and one session resumes and
+answers a turn. It then writes one account after the bundle, restarts the new engine to
+read that write back from disk, and rolls back: the swap alone is only reported, and the
+restore of §5 must bring the old engine back on the seeded data without that account.
+Exit 0 means all of it held, 1 names the step that did not, 2 means the check could not
+look (no docker, no engine).
+
+```sh
+# two engine binaries over a data directory (any host with python3 and Landlock for the sessions)
+python3 -I scripts/upgrade-journey.py process --old ./olivares-previous --new ./olivares --new-version <X.Y>
+# two images through deploy/compose/docker-compose.yml and one named volume (needs docker)
+python3 -I scripts/upgrade-journey.py compose \
+  --old docker.io/olivaresai/olivares@sha256:<previous-digest> \
+  --new docker.io/olivaresai/olivares@sha256:<new-digest> --new-version <X.Y>
+```
+
+On a host that cannot confine sessions the engine refuses to start one; add `--skip-turns`
+to check the rows without the turn, and the output says the turn was not run.
+
 ### 5.1 Rolling back past the egress writer fence
 
 The writer fence refuses any mutation that introduces or moves an event destination unless the
@@ -560,6 +595,10 @@ from this change on does; a Business build cut before it does not, and is moved 
 that names it with `--target` until a newer build replaces it). `edition_current` and `edition_available` are empty
 off the licensed route (public channel, `--bundle`). Installing from `--bundle` requires the Enterprise binary (§10); Community refuses before reading a license or bundle.
 `--bundle --check` is never gated because it installs nothing.
+On a package install (deb, rpm, apk, AUR) every run in this section except `--check` exits 2 before any
+download, because the package manager owns `/usr/bin/olivares`, `--enterprise` (the Community → Business
+switch) included. `--target /usr/bin/olivares` is the operator override; the package database then no
+longer matches that file.
 
 ```bash
 olivares upgrade --check                      # community: show the plan (current -> available, CVEs), no swap
@@ -593,7 +632,7 @@ olivares upgrade --enterprise --connect --data-dir /var/lib/olivares  # connecte
 
   <!-- release -->
   ```bash
-  olivares upgrade --target /opt/olivares/olivares --current-version 0.3
+  olivares upgrade --target /opt/olivares/olivares --current-version 0.4
   ```
   <!-- /release -->
 
@@ -658,6 +697,13 @@ upgrade --install-timer` emits an opt-in `systemd` service + timer that runs a r
 olivares upgrade --install-timer --channel security --timer-dir /etc/systemd/system
 sudo systemctl daemon-reload && sudo systemctl enable --now olivares-upgrade.timer
 ```
+
+On a package install (deb, rpm, apk, AUR) `--install-timer` refuses: `/usr/bin/olivares` belongs to the
+package manager, so the command exits 2, writes no unit and names the route (the host's package manager,
+and on the Olivares appliance `systemctl start olivares-appliance-update.service`). With
+`--enterprise --connect` it also says that no timer refreshes the connected credential here: run
+`olivares license connect refresh` yourself, on your own schedule. The check is by path: a binary that `install.sh --bindir /usr/bin` placed at
+`/usr/bin/olivares` is refused too. Any other path keeps getting its units.
 
 The enterprise token, if any, is read from an `EnvironmentFile` — never inlined into the
 unit. A connected unit (`--enterprise --connect`) needs neither a token nor an
@@ -756,13 +802,14 @@ can check it yourself the same way CI does — diff `olivares migrate manifest` 
 builds and expect no difference — so a binary swap in **either** direction can never land in a
 partial-upgrade state.
 
-### Rollback commercial build → community: export, not serve
+### Rollback commercial build → community
 
-Roll back the **binary, not the schema** (§5), within one edition. A community **server** may refuse to start
-on a data directory that a commercial build has initialized: its store admission compares the stored history
-with the one it was built with, refuses before login and changes nothing. The data is not lost:
-`olivares dr backup` and `olivares dr verify` of the community build open the directory offline and export it,
-and the commercial binary opens it again unchanged. User accounts are unaffected.
+Roll back the **binary, not the schema** (§5), within one edition. A community **server** starts on a data
+directory that a commercial build has written and keeps every stored row; what community does not offer
+answers 501, and the commercial binary opens the directory again unchanged. Its store admission compares the
+stored history with the histories it was built with, a commercial build's among them. A directory with any other
+history is refused before login and changed in nothing; `olivares dr backup` and `olivares dr verify` of the
+community build open and export it. User accounts are unaffected.
 
 ---
 
@@ -950,6 +997,14 @@ and `olivares upgrade --check` shows the same facts. It reads the same channel s
 indicator above (`OLIVARES_UPDATE_CHANNEL`, `OLIVARES_UPDATE_ENDPOINT`); with neither set it reads
 the public releases channel that `olivares upgrade` uses by default. A Business build runs
 `olivares upgrade --enterprise --connect`.
+
+A Community build with a live Business license moves to the Business build (`olivares upgrade
+--edition business`) only where the console can run that switch: a download token in the engine's
+environment or a connected installation, no unconnected `OLIVARES_UPDATE_ENDPOINT`, and an install
+the engine can swap in place. The page then offers **Switch to Business** in place of **Update to
+X**. Everywhere else it keeps checking and installing from the public channel exactly as a build
+without a license does, so a security release is never held back, and it shows the switch step
+(the exact command, and what is missing) next to **Update to X**.
 
 - The page checks the channel only while an administrator has it open or presses **Check again**;
   the engine still makes no background calls (above). When the channel cannot be reached or

@@ -313,8 +313,13 @@ func syncDir(dir string) error {
 }
 
 // loadState returns the state, or (nil, nil) when none exists.
-func (s *connectStore) loadState() (*connectState, error) {
-	data, present, err := readOwnerOnly(s.path(connectStateFileName), connectStateMaxBytes)
+func (s *connectStore) loadState() (*connectState, error) { return readConnectState(s.dir) }
+
+// readConnectState is loadState for a connect directory that is only read, so a caller that
+// must not take the store's lock (the update status page) reads it the same way.
+func readConnectState(dir string) (*connectState, error) {
+	path := filepath.Join(dir, connectStateFileName)
+	data, present, err := readOwnerOnly(path, connectStateMaxBytes)
 	if err != nil || !present {
 		return nil, err
 	}
@@ -322,10 +327,10 @@ func (s *connectStore) loadState() (*connectState, error) {
 	dec.DisallowUnknownFields()
 	var st connectState
 	if err := dec.Decode(&st); err != nil {
-		return nil, fmt.Errorf("%w: %s does not decode: %v", errConnectStateUnsafe, s.path(connectStateFileName), err)
+		return nil, fmt.Errorf("%w: %s does not decode: %v", errConnectStateUnsafe, path, err)
 	}
 	if st.Schema != connectStateSchema {
-		return nil, fmt.Errorf("%w: %s has schema %q", errConnectStateUnsafe, s.path(connectStateFileName), st.Schema)
+		return nil, fmt.Errorf("%w: %s has schema %q", errConnectStateUnsafe, path, st.Schema)
 	}
 	return &st, nil
 }

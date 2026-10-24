@@ -129,7 +129,7 @@
     "noDocs": "Aucun document en ligne",
     "confirm": "Ingérer",
     "done": "Contenu ingéré",
-    "doneSummary": "{{documents}} document(s), {{chunks}} segment(s) · {{redactions}} secret(s) expurgé(s) avant l’indexation"
+    "doneSummary": "Documents : {{documents}} · segments : {{chunks}} · secrets expurgés avant indexation : {{redactions}}"
   },
   "reindex": {
     "title": "Réindexer les segments en attente ?",
@@ -156,11 +156,11 @@
     "modeAll": "Tous",
     "modeFilter": "Mode",
     "noModeResults": "Aucun fragment ne correspond à ce mode de source.",
-    "contextTruncated": "⛔ The context did not fit: {{n}} chunks were dropped. This answer was built on less evidence than the list below suggests.",
-    "excludedChunks": "{{n}} chunks excluded by the source floor ({{sources}})",
-    "sourceFloorNoEffect": "source floor applied, excluded nothing",
+    "contextTruncated": "⛔ Le contexte ne tenait pas : {{n}} segments ont été écartés. Cette réponse repose sur moins de preuves que la liste ci-dessous ne le suggère.",
+    "excludedChunks": "{{n}} segments exclus par le plancher de sources ({{sources}})",
+    "sourceFloorNoEffect": "plancher de sources appliqué, rien d’exclu",
     "redactedItems": "{{n}} items redacted",
-    "redactionNoEffect": "redaction required, nothing matched"
+    "redactionNoEffect": "expurgation exigée, aucune correspondance"
   },
   "lineage": {
     "search": "Rechercher dans la traçabilité…",
@@ -256,7 +256,7 @@
     "caption": "Mémoire d’agent gouvernée. Le contenu est expurgé avant le stockage ; les entrées expirées sont filtrées à la lecture.",
     "empty": "Aucune entrée de mémoire",
     "emptyHint": "Écrivez une entrée de mémoire pour un agent, ou filtrez par référence d’agent.",
-    "withheld": "⛔ {{n}} entries are NOT in this list: the read path withheld them because they failed the integrity check. The list is not the whole picture, and what is missing is what most needs looking at — run the memory verification to see them."
+    "withheld": "⛔ {{n}} entrées ne figurent PAS dans cette liste : le chemin de lecture les a retenues parce qu’elles ont échoué au contrôle d’intégrité. La liste n’est pas le tableau complet, et ce qui manque est ce qui mérite le plus d’être vu — lancez la vérification de mémoire pour les voir."
   },
   "memoryEditor": {
     "title": "Écrire en mémoire",
@@ -464,11 +464,11 @@
     "emptyHint": "Sans règles, la barrière n'applique rien. Écrire une règle active la DLP pour ce locataire.",
     "anyScope": "correspond à toute classe ÉTIQUETÉE — elle NE couvre PAS le contenu non analysé",
     "newRule": "New DLP rule",
-    "newRuleHint": "A rule binds one content class to allow or deny on egress.",
+    "newRuleHint": "Une règle rattache une classe de contenu à autoriser ou refuser en sortie.",
     "class": "Class",
     "action": "Action",
-    "deleteRule": "Delete the rule for {{class}}",
-    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — this is an upsert by class, not an addition. Replacing a deny with an allow opens egress for that class immediately.",
+    "deleteRule": "Supprimer la règle pour {{class}}",
+    "willReplace": "⛔ Une règle pour « {{class}} » existe déjà. Enregistrer la REMPLACE — c’est un upsert par classe, pas un ajout. Remplacer un refus par une autorisation ouvre immédiatement la sortie pour cette classe.",
     "mayReplace": "La liste des règles est tronquée : il se peut qu’une règle pour «{{class}}» existe déjà au-delà de cette page. Si elle existe, elle sera REMPLACÉE lors de l’enregistrement, car celui-ci utilise un upsert par classe.",
     "truncated": "{{n}} règles DLP chargées ; il y en a davantage",
     "truncatedHint": "Cette liste affiche la première page chargée ; d’autres règles DLP existent."
@@ -492,17 +492,17 @@
     "emptyHint": "Une analyse parcourt une source et consigne ce qu’elle trouve. Lancez une analyse pour en voir les résultats ici.",
     "sourceName": "Source name",
     "scanSource": "Scan source",
-    "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",
-    "basisNotice": "A scan records what it looked AT. \"stored\" is the post-scrub form kept after ingestion; \"raw\" is the body before redaction. The two are not comparable.",
+    "scanSourceHint": "Lit la source SANS l’ingérer. Les corps sont classés en mémoire et jamais stockés, journalisés ni intégrés.",
+    "basisNotice": "Un scan enregistre ce qu’il a regardé. « stocké » est la forme post-expurgation conservée après ingestion ; « brut » est le corps avant expurgation. Les deux ne sont pas comparables.",
     "basis": {
       "raw": "raw bodies",
       "stored": "stored (post-scrub)"
     },
-    "counts": "{{docs}} docs · {{hits}} with hits · {{markers}} redaction markers",
+    "counts": "{{docs}} documents · {{hits}} avec correspondances · {{markers}} marqueurs d’expurgation",
     "truncated": "{{n}} scans chargés ; il y en a davantage",
     "truncatedHint": "Cette liste affiche la première page chargée ; d’autres enregistrements de scan existent.",
-    "zeroOnStored": "⛔ Zero hits here means the redaction worked, NOT that the corpus holds no sensitive data — anything scrubbed at ingestion is already gone. Scan the SOURCE to ask that question.",
-    "zeroOnRaw": "Zero hits on the raw bodies: the source itself carried nothing the detectors recognise."
+    "zeroOnStored": "⛔ Zéro correspondance ici signifie que l’expurgation a fonctionné, PAS que le corpus ne contient aucune donnée sensible — tout ce qui a été expurgé à l’ingestion est déjà parti. Scannez la SOURCE pour répondre à cette question.",
+    "zeroOnRaw": "Zéro correspondance sur les corps bruts : la source elle-même ne portait rien que les détecteurs reconnaissent."
   },
   "portability": {
     "title": "Portability",
@@ -510,12 +510,12 @@
     "bundle": "Bundle to import",
     "bundlePlaceholder": "Paste a signed bundle",
     "import": "Import bundle",
-    "exported": "{{n}} entries in the bundle",
-    "excluded": "⛔ {{n}} entries were LEFT OUT because they failed the integrity check. This bundle is not a complete copy — say so if you hand it to a data subject.",
-    "nothingExcluded": "Nothing was excluded for integrity.",
-    "noManifest": "The bundle carries no readable manifest, so its completeness cannot be stated.",
+    "exported": "{{n}} entrées dans le paquet",
+    "excluded": "⛔ {{n}} entrées ont été LAISSÉES DE CÔTÉ parce qu’elles ont échoué au contrôle d’intégrité. Ce paquet n’est pas une copie complète — dites-le si vous le remettez à une personne concernée.",
+    "nothingExcluded": "Rien n’a été exclu pour intégrité.",
+    "noManifest": "Le paquet ne transporte aucun manifeste lisible : son exhaustivité ne peut pas être affirmée.",
     "imported": "{{n}} entries imported",
-    "rejectedCount": "{{n}} rows were REJECTED individually. The import partly succeeded — these rows are not in."
+    "rejectedCount": "{{n}} lignes ont été REJETÉES individuellement. L’import a partiellement réussi — ces lignes ne sont pas incluses."
   },
   "contextPolicies": {
     "truncated": "{{n}} politiques de contexte chargees ; il y en a plus",

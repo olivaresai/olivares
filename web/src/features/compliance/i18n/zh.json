@@ -351,7 +351,7 @@
       "subjectRef": "对象引用",
       "reason": "原因",
       "reasonHint": "将逐字记录到保管链中。",
-      "alreadyHeld": "已被 {{count}} 项生效中的保留覆盖：{{matters}}",
+      "alreadyHeld_other": "已被 {{count}} 项生效中的保留覆盖：{{matters}}",
       "notHeld": "当前没有任何保留对此进行保全。您即将设置的保留将是第一项。",
       "confirmCreate": "设置保留",
       "created": "已设置法律保留——保全措施已生效。",
@@ -465,7 +465,7 @@
     "providerLeg": "提供商删除阶段",
     "custody": "Custody",
     "noCustody": "此请求没有记录任何保管事件。",
-    "approvedBy": "approved by {{list}}",
+    "approvedBy": "已由 {{list}} 批准",
     "anchored": "ledger #{{seq}} · {{hash}}",
     "unanchored": "未锚定到账本——已记录，但无法证明"
   },

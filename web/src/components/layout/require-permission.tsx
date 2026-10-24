@@ -85,7 +85,7 @@ export function RequirePermission({
       <NeutralNotice undisclosed={access.kind === 'undisclosed'} />
     )
   // A notice stands in for the whole view, so it keeps the page's one heading: the view's own
-  // label, as the sidebar and the breadcrumb name it. Without it the page had no h1 at all.
+  // label, as All areas and the palette name it. Without it the page had no h1 at all.
   // A view whose module is off has a calm page of its own, with its own heading, once the
   // person is established as allowed. A refusal, or an answer not established yet, outranks
   // it: a person who may not open the view is told nothing about its module.

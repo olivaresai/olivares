@@ -31,10 +31,10 @@ function startLine(lng: string, tools: string[]): string {
 describe('session-start line', () => {
   it('keeps the English wording, with the count agreeing with its noun', () => {
     expect(startLine('en', ['Bash', 'Read', 'Write', 'Task'])).toBe(
-      'Session started · claude-opus-5 · 4 tools',
+      'Session started · Claude Opus 5 · 4 tools',
     )
     expect(startLine('en', ['Bash'])).toBe(
-      'Session started · claude-opus-5 · 1 tool',
+      'Session started · Claude Opus 5 · 1 tool',
     )
   })
 
@@ -43,7 +43,7 @@ describe('session-start line', () => {
     (lng) => {
       const line = startLine(lng, ['Bash', 'Read', 'Write', 'Task'])
       expect(line).not.toMatch(/Session started|\btools\b/)
-      expect(line).toContain('claude-opus-5')
+      expect(line).toContain('Claude Opus 5')
       expect(line).toContain('4')
     },
   )
@@ -53,4 +53,71 @@ describe('session-start line', () => {
     expect(withTools.split(' · ')).toHaveLength(3)
     expect(startLine('de', []).split(' · ')).toHaveLength(2)
   })
+})
+
+// dev#3119: a limit that stopped the turn is one sentence in the person's words, with the
+// reset time; the window names come from the catalog in every language.
+describe('the limit that stopped the turn', () => {
+  const stop = (info: Record<string, unknown>) =>
+    mapConversationFrames([
+      JSON.stringify({
+        type: 'rate_limit_event',
+        rate_limit_info: { status: 'rejected', ...info },
+      }),
+    ])[0]!
+  const now = new Date('2026-10-23T12:00:00Z')
+
+  it('names the window, how much was used and the weekday it resets', () => {
+    const resetsAt = Date.parse('2026-10-26T03:00:00Z') / 1000
+    const item = stop({
+      rateLimitType: 'seven_day',
+      utilization: 0.93,
+      resetsAt,
+    })
+    const time = new Date(resetsAt * 1000).toLocaleString(undefined, {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    expect(systemText(i18n.getFixedT('en'), item, now)).toBe(
+      `Claude Code reached its weekly limit (93% used); it resets ${time}`,
+    )
+  })
+
+  it('says only the time when it resets today, and nothing it does not know', () => {
+    const resetsAt = Date.parse('2026-10-23T15:45:00Z') / 1000
+    const today = new Date(resetsAt * 1000)
+    const sameDay = today.toDateString() === now.toDateString()
+    const line = systemText(
+      i18n.getFixedT('en'),
+      stop({ rateLimitType: 'five_hour', resetsAt }),
+      now,
+    )
+    expect(line).toMatch(/^Claude Code reached its 5-hour limit; it resets /)
+    // Today, wherever the test runs, is the time alone; another day adds the weekday.
+    expect(line).toContain(
+      today.toLocaleString(
+        undefined,
+        sameDay
+          ? { hour: '2-digit', minute: '2-digit' }
+          : { weekday: 'short', hour: '2-digit', minute: '2-digit' },
+      ),
+    )
+    expect(systemText(i18n.getFixedT('en'), stop({}), now)).toBe(
+      'Claude Code reached its usage limit',
+    )
+  })
+
+  it.each(LANGUAGE_CODES.filter((l) => l !== 'en'))(
+    'is not English in %s',
+    (lng) => {
+      const line = systemText(
+        i18n.getFixedT(lng),
+        stop({ rateLimitType: 'seven_day', utilization: 0.5 }),
+        now,
+      )
+      expect(line).not.toMatch(/reached|weekly|used/)
+      expect(line).toContain('50')
+    },
+  )
 })

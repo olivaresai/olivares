@@ -144,6 +144,9 @@ const DECLARED_PRODUCT_NOUNS: readonly ProductNoun[] = [
       // Git publication binds an approved credential and repository to a Git host: the
       // connection to GitHub or GitLab is the object it manages.
       'gitPublication',
+      // Reach draws the estate's connection census: tools on the left, the folders,
+      // MCP servers and provider endpoints they reach on the right.
+      'reach',
     ],
   },
   {
@@ -371,8 +374,8 @@ export type FeatureNavigation =
       readonly areaId: AreaId
       readonly sectionId: string
     }
-  /** A deep-link-only detail reached from `parentViewId` (the recording viewer): breadcrumbs
-   * resolve through the parent, and no directory, sidebar or palette lists it. */
+  /** A deep-link-only detail reached from `parentViewId` (the recording viewer): its location
+   * resolves through the parent, and no directory, sidebar or palette lists it. */
   | {
       readonly kind: 'detail'
       readonly areaId: AreaId

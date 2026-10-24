@@ -6,13 +6,17 @@
 set -eu
 
 root="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
+# The package owns /var/lib/olivares through StateDirectory=. systemd applies StateDirectoryMode= at every start, and
+# 0755 when none is set, so the mode is the service account's 0750 (dev#2993). The installer and AUR paths drop the
+# marker and give the directory 0750 themselves.
 unit="$(sed \
   -e 's|@USER_LINE@|User=olivares|g' \
   -e 's|@GROUP_LINE@|Group=olivares|g' \
   -e 's|@BINARY@|/usr/bin/olivares|g' \
   -e 's|@DATA_DIR@|/var/lib/olivares|g' \
   -e 's|@CONFIG@|/etc/olivares/olivares.env|g' \
-  -e 's|@STATE_DIRECTORY_LINE@|StateDirectory=olivares|g' \
+  -e 's|@STATE_DIRECTORY_LINE@|StateDirectory=olivares\
+StateDirectoryMode=0750|g' \
   -e 's|@WANTED_BY@|multi-user.target|g' \
   "$root/packaging/service/systemd.service")"
 if printf '%s\n' "$unit" | grep -Eq '@[A-Z_]+@'; then

@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "Allgemein",
-    "notifications": "Benachrichtigungen",
     "keyboard": "Tastatur",
-    "sessionDefaults": "Sitzungsstandards",
     "aiTools": "KI-Werkzeuge",
     "workspaces": "Arbeitsbereiche",
     "deploy": "Bereitstellung und Updates",
@@ -31,7 +29,7 @@
     "title": "Allgemein",
     "scope": "Ihre eigenen Einstellungen. Sie gelten in jedem Arbeitsbereich dieser Installation.",
     "theme": "Thema",
-    "themeHint": "Folgt dem System, außer Sie wählen Hell oder Dunkel.",
+    "themeHint": "Folgt dem System, außer Sie wählen Hell, Dunkel oder Schwarz.",
     "density": "Dichte",
     "densityHint": "Kompakt zeigt mehr Zeilen; bequem lässt sich leichter lesen.",
     "language": "Sprache",
@@ -47,17 +45,13 @@
     "reduceMotion": "Bewegung reduzieren",
     "reduceMotionHint": "Ersetzt Bewegung durch Überblendungen. An, wenn das System es verlangt."
   },
-  "unavailable": {
-    "notifications": "Benachrichtigungen werden in dieser Installation noch nicht gespeichert.",
-    "sessionDefaults": "Sitzungsstandards werden in dieser Installation noch nicht gespeichert."
-  },
   "sessionNotifications": {
     "title": "Sitzungsbenachrichtigungen",
     "hint": "Benachrichtigen, wenn eine Sitzung mich braucht oder fertig ist, während dieser Tab im Hintergrund ist. Gilt für diesen Browser.",
     "notifyMe": "Benachrichtigen",
     "denied": "Benachrichtigungen sind in diesem Browser blockiert.",
     "unavailable": "Browserbenachrichtigungen sind hier nicht verfügbar.",
-    "needsYou": "Diese Sitzung braucht dich.",
+    "needsYou": "Diese Sitzung braucht Ihre Entscheidung.",
     "finished": "Der Durchgang ist abgeschlossen."
   },
   "keyboard": {
@@ -81,7 +75,7 @@
       "groupMapping": "Verzeichnisgruppen, die bei der Anmeldung Rollen zugeordnet werden",
       "regulatory": "Regulatorischer Betrieb: DORA-Register, NIS-2-Vorfallklassifizierung, OSCAL-Profile, US- und Branchenpakete sowie kontinuierliche Kontrollüberwachung",
       "reports": "Business-Berichte und geplante Berichte",
-      "toolPins": "Tool-Pins"
+      "toolPins": "Werkzeug-Pins"
     },
     "badge": {
       "business": "Business",
@@ -91,7 +85,7 @@
       "accessibleName": "Edition {{edition}}",
       "show": "Editionskennzeichnung anzeigen",
       "loadError": "Die Einstellung für die Editionskennzeichnung konnte nicht geladen werden.",
-      "saveError": "Die Einstellung für die Editionskennzeichnung konnte nicht gespeichert werden. Versuche es erneut."
+      "saveError": "Die Einstellung für die Editionskennzeichnung konnte nicht gespeichert werden. Versuchen Sie es erneut."
     }
   },
   "about": {
@@ -185,7 +179,7 @@
       "adoption": "Wie Teams KI-Werkzeuge nutzen.",
       "capabilities": "Gefundene MCP-Server, Werkzeuge und Skills.",
       "catalog": "Freigegebene Agenten und Fähigkeiten.",
-      "claude-agents": "Verwaltete Claude-Agenten und ihre Freigaben.",
+      "claude-agents": "Verwaltete Claude-Agenten und ihre Genehmigungen.",
       "claude-policy": "Verwaltete Claude-Code-Einstellungen und Abweichungen.",
       "compliance": "Rahmenwerke, Kontrollen und Nachweise.",
       "consoleviews": "Favoriten und gespeicherte Ansichten.",
@@ -194,7 +188,7 @@
       "eventing": "Ereignisrouten und dauerhafte Zustellung.",
       "finops": "Ausgaben, Budgets und Prognosen.",
       "gitpublish": "Veröffentlicht Agentenarbeit in Git.",
-      "governance": "Richtlinien, Freigaben und Identitäten.",
+      "governance": "Richtlinien, Genehmigungen und Identitäten.",
       "health": "Zustandsprüfungen und Vorfälle.",
       "identity": "Identitätsanbieter und Vertrauenslage.",
       "inferenceproxy": "Leitet Modellaufrufe über ein gesteuertes Gateway.",
@@ -216,7 +210,7 @@
       "sourcescope": "Welche Quellen Agenten lesen dürfen.",
       "voice": "Sprachagenten und Anrufe."
     },
-    "noChanges": "Keine Änderungen anzuwenden. Schalte zuerst ein Modul ein oder aus.",
+    "noChanges": "Keine Änderungen anzuwenden. Schalten Sie zuerst ein Modul ein oder aus.",
     "saving": "Modulauswahl wird gespeichert…",
     "applyNone": "Anwenden",
     "whenOffDefault": "Seine Daten bleiben erhalten, werden aber nicht genutzt, solange das Modul aus ist.",
@@ -339,9 +333,17 @@
       "stop_one": "{{count}} laufende Sitzung wird beendet. Sie kann nach dem Neustart fortgesetzt werden.",
       "stop_other": "{{count}} laufende Sitzungen werden beendet. Jede kann nach dem Neustart fortgesetzt werden.",
       "none": "Die Engine startet einmal auf der neuen Version neu.",
-      "confirm": "Installieren und neu starten"
+      "switchNone": "Die Engine startet einmal mit der lizenzierten Edition neu. Ihre Daten bleiben, wo sie sind.",
+      "confirm": "Installieren und neu starten",
+      "switchTitle": "Zu {{edition}} wechseln?",
+      "switchConfirm": "Wechseln und neu starten"
     },
     "alreadyCurrent": "Bereits auf dem neuesten Release. Es wurde nichts installiert.",
-    "restartRequired": "Eine neuere Version ist installiert. Starten Sie die Engine mit ihrem Service-Manager neu, um sie auszuführen."
+    "restartRequired": "Eine neuere Version ist installiert. Starten Sie die Engine mit ihrem Service-Manager neu, um sie auszuführen.",
+    "switch": "Zu {{edition}} wechseln",
+    "switchTitle": "Zu {{edition}} wechseln",
+    "switched": "Wechsel installiert.",
+    "terminal": "Dasselbe im Terminal auf dem Server",
+    "orTerminal": "Oder im Terminal auf dem Server"
   }
 }

@@ -77,14 +77,14 @@ func runProbe(ctx context.Context, spec probeSpec) (ProbeReport, error) {
 		if ctx.Err() != nil {
 			return rep, refuse(KindProbeFailed, "probe of %s cancelled: %v", spec.Exe, ctx.Err())
 		}
-		return rep, refuse(KindProbeFailed, "%s did not exit within its %s budget and was terminated (output: %q)", spec.Exe, spec.Budget, firstLine(out.String()))
+		return rep, refuse(KindProbeFailed, "%s did not exit within its %s budget and was terminated (output: %q)", spec.Exe, spec.Budget, probeOutputExcerpt(out.String()))
 	}
 	if waitErr != nil {
 		var exitErr *exec.ExitError
 		if errors.As(waitErr, &exitErr) {
-			return rep, refuse(KindProbeFailed, "%s exited with %v (output: %q)", spec.Exe, waitErr, firstLine(out.String()))
+			return rep, refuse(KindProbeFailed, "%s exited with %v (output: %q)", spec.Exe, waitErr, probeOutputExcerpt(out.String()))
 		}
-		return rep, refuse(KindProbeFailed, "%s: %v (output: %q)", spec.Exe, waitErr, firstLine(out.String()))
+		return rep, refuse(KindProbeFailed, "%s: %v (output: %q)", spec.Exe, waitErr, probeOutputExcerpt(out.String()))
 	}
 	return rep, nil
 }

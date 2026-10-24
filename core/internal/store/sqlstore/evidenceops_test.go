@@ -1290,6 +1290,10 @@ func TestEvidenceFaultForStoreError(t *testing.T) {
 		// taxonomy (sdk/evidence.go:120), never write_error.
 		{store.ErrStoreUnavailable, sdk.EvidenceFaultLedgerUnavailable},
 		{fmt.Errorf("wrap: %w", store.ErrStoreUnavailable), sdk.EvidenceFaultLedgerUnavailable},
+		// A COMMIT whose outcome is unknown may have been applied by the server
+		// before the connection died. It is never a definite "backend unreachable,
+		// retry" claim, so it is a write_error even though its cause is unavailable.
+		{mutateCommitOutcomeErr(&pgconn.PgError{Code: "08006", Message: "connection failure"}), sdk.EvidenceFaultWriteError},
 		{errors.New("boom"), sdk.EvidenceFaultWriteError},
 	}
 	for _, c := range cases {

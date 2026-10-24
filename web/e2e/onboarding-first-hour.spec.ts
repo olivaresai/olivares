@@ -156,7 +156,7 @@ test('first hour: the setup wizard asks only for what the first session needs', 
   const nav = page.getByRole('navigation')
 
   // APPROVALS: a session started to ask before each action asks for the shell command
-  // the model wants, and waits in the queue the sidebar opens until a person approves.
+  // the model wants, and waits in the queue the Rules place opens until a person approves.
   visited.splice(0)
   await start.getByRole('button', { name: 'More options' }).click()
   await start.getByRole('radio', { name: 'Ask before each action' }).check()
@@ -165,14 +165,11 @@ test('first hour: the setup wizard asks only for what the first session needs', 
     .fill(`Please run: ${ollama.toolCommand}`)
   await start.getByRole('button', { name: 'Start', exact: true }).click()
   await page.waitForURL(`**${stepHref(SESSIONS)}?**`)
-  await nav.getByRole('link', { name: /^Approvals\b/ }).click()
-  await page.getByRole('button', { name: 'Approve', exact: true }).click({
+  await nav.getByRole('link', { name: /^Rules\b/ }).click()
+  // The waiting request is flagged and open beside the queue: approving it is one action.
+  await page.getByRole('button', { name: 'Approve once', exact: true }).click({
     timeout: 60_000,
   })
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Approve', exact: true })
-    .click()
   await expect(page.getByText('Decision recorded — approved')).toBeVisible()
   expect(unwalked(JOURNEYS.approvals, visited)).toEqual([])
 
@@ -206,28 +203,21 @@ test('first hour: the setup wizard asks only for what the first session needs', 
   expect(unwalked(JOURNEYS.sessions, visited)).toEqual([])
 
   // PROVIDER KEYS: the key the wizard added, the profile sessions launch with, and the
-  // accounts a tool can sign in with instead. Profiles and accounts fold into AI tools
-  // (#2240): the sidebar offers AI tools and the keys, not the two folded pages, and each
-  // page still opens at its own address.
+  // accounts a tool signs in with instead. The API key, profile and account pages are
+  // doors into Tools (#2552): the Tools place shows the key, the row of its section offers
+  // none of the doors, and each door still opens Tools at its own address.
   visited.splice(0)
-  await nav.getByRole('link', { name: 'AI tools', exact: true }).click()
-  await page.getByRole('link', { name: 'Providers', exact: true }).click()
+  await nav.getByRole('link', { name: 'Tools', exact: true }).click()
   await expect(page.getByRole('main')).toContainText(ollama.endpoint)
-  const [, PROFILES, ACCOUNTS] = JOURNEYS.providerKeys
-  const areas = page.locator('[data-slot="sidebar-areas"]')
-  await expect(
-    areas.getByRole('link', { name: 'Providers', exact: true }),
-  ).toBeVisible()
-  for (const name of ['Provider profiles', 'Provider accounts'])
+  const areas = page.locator('[data-slot="destination-sections"]')
+  for (const name of ['Providers', 'Provider profiles', 'Provider accounts'])
     await expect(areas.getByRole('link', { name, exact: true })).toHaveCount(0)
-  await page.goto(stepHref(PROFILES))
-  await expect(
-    page.getByRole('heading', { name: 'Provider profiles' }),
-  ).toBeVisible()
-  await page.goto(stepHref(ACCOUNTS))
-  await expect(
-    page.getByRole('heading', { name: 'Provider accounts' }),
-  ).toBeVisible()
+  for (const step of JOURNEYS.providerKeys) {
+    await page.goto(stepHref(step))
+    await expect(
+      page.getByRole('heading', { name: 'Accounts and API keys' }),
+    ).toBeVisible()
+  }
   expect(unwalked(JOURNEYS.providerKeys, visited)).toEqual([])
   expect(refused).toEqual([])
 })

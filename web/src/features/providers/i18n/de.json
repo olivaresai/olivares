@@ -2,7 +2,6 @@
   "title": "Anbieter",
   "subtitle": "Ein Cloud-Zugangsschlüssel oder ein lokaler Modell-Endpunkt, mit dem Ihre Agentenwerkzeuge arbeiten.",
   "nav": "Anbieter",
-  "add": "Anbieter hinzufügen",
   "rowMenu": "Zeilenaktionen für {{name}}",
   "empty": {
     "title": "Noch kein Anbieter registriert",
@@ -161,6 +160,10 @@
     "start": "Neue Sitzung",
     "failed": "Anbieter gespeichert. Sitzungsvorbereitung fehlgeschlagen: {{error}}",
     "retry": "Vorbereitung wiederholen",
-    "incomplete": "Die Tool-Installation hat den Status {{state}}. Prüfen Sie die KI-Tools und versuchen Sie es erneut."
+    "incomplete": "Die Werkzeug-Installation hat den Status {{state}}. Prüfen Sie die KI-Werkzeuge und versuchen Sie es erneut."
+  },
+  "section": {
+    "title": "API-Schlüssel",
+    "add": "API-Schlüssel hinzufügen"
   }
 }

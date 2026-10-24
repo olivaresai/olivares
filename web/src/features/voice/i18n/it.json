@@ -103,7 +103,9 @@
     "decisionsError": "Impossibile leggere le decisioni.",
     "noDecisions": "Nessuna decisione registrata per questa sessione.",
     "noReason": "nessun motivo registrato",
-    "frames": "{{count}} aggiornamento/i live",
+    "frames_one": "{{count}} aggiornamento live",
+    "frames_many": "{{count}} aggiornamenti live",
+    "frames_other": "{{count}} aggiornamenti live",
     "open": "Apri sessione (governata)",
     "stream": {
       "connecting": "connessione in corso",

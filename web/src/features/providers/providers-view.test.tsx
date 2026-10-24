@@ -79,7 +79,7 @@ vi.mock('@/features/agentops/api', async (orig) => {
 })
 
 import { firstHourKeys } from '@/features/first-hour/api'
-import { ProvidersView } from './providers-view'
+import { ApiKeys } from './providers-view'
 
 const KEY = 'sk-ant-api03-LEAKCANARY-0123456789-ABCD'
 
@@ -109,10 +109,10 @@ beforeEach(() => {
   })
 })
 
-describe('ProvidersView', () => {
+describe('ApiKeys', () => {
   it('renders the truncated-list command as a copyable chip without backticks', async () => {
     providersApi.list.mockResolvedValue({ items: [registered], has_more: true })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const command = await screen.findByText('olivares provider ls')
     expect(command.tagName).toBe('CODE')
     const hint = command.closest('p')!
@@ -120,6 +120,28 @@ describe('ProvidersView', () => {
     expect(
       within(hint).getByRole('button', { name: 'Copy command' }),
     ).toBeInTheDocument()
+  })
+
+  it("an empty list offers the verb in the empty state only, never as the list's Add an API key button", async () => {
+    wrap(<ApiKeys />)
+    expect(
+      await screen.findByRole('button', { name: 'Add your first provider' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add an API key' })).toBeNull()
+  })
+
+  it("keeps the list's Add an API key while the list could not be read", async () => {
+    providersApi.list.mockRejectedValue(new Error('down'))
+    wrap(<ApiKeys />)
+    // Wait for the failed answer: the verb is shown while pending too, so only
+    // the error state proves it survives the failure rather than the wait.
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: 'Add an API key' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Add your first provider' }),
+    ).toBeNull()
   })
 
   it('reads, changes and clears the saved default through the provider patch', async () => {
@@ -136,7 +158,7 @@ describe('ProvidersView', () => {
         return record
       },
     )
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await user.click(
       within(
         await screen.findByRole('row', { name: /Anthropic \(prod\)/ }),
@@ -188,12 +210,85 @@ describe('ProvidersView', () => {
     expect(providersApi.test).not.toHaveBeenCalled()
     expect(providersApi.create).not.toHaveBeenCalled()
   })
+
+  // The toast is hidden from assistive technology while a dialog is open (#2561).
+  it('announces a refused default model on its field', async () => {
+    const user = userEvent.setup()
+    providersApi.list.mockResolvedValue({
+      items: [{ ...registered, models: ['coding-a'] }],
+    })
+    providersApi.patch.mockRejectedValue(new Error('the engine refused it'))
+    wrap(<ApiKeys />)
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Row actions for Anthropic (prod)',
+      }),
+    )
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Default model' }),
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Default model' })
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'the engine refused it',
+    )
+    expect(
+      within(dialog).getByRole('combobox', { name: 'Model' }),
+    ).toHaveAccessibleDescription(/the engine refused it/)
+  })
+
+  it('announces a refused revocation inside its dialog', async () => {
+    const user = userEvent.setup()
+    providersApi.list.mockResolvedValue({ items: [registered] })
+    providersApi.revoke.mockRejectedValue(new Error('the engine refused it'))
+    wrap(<ApiKeys />)
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Row actions for Anthropic (prod)',
+      }),
+    )
+    await user.click(await screen.findByRole('menuitem', { name: 'Revoke' }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Revoke' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'the engine refused it',
+    )
+  })
+
+  // Both dialogs share one refusal slot: a revoke refusal is not said again in the
+  // default-model dialog opened after it.
+  it('opens the default-model dialog without an earlier revoke refusal', async () => {
+    const user = userEvent.setup()
+    providersApi.list.mockResolvedValue({
+      items: [{ ...registered, models: ['coding-a'] }],
+    })
+    providersApi.revoke.mockRejectedValue(new Error('the engine refused it'))
+    wrap(<ApiKeys />)
+    const actions = () =>
+      screen.findByRole('button', { name: 'Row actions for Anthropic (prod)' })
+    await user.click(await actions())
+    await user.click(await screen.findByRole('menuitem', { name: 'Revoke' }))
+    const revoking = screen.getByRole('dialog')
+    await user.click(within(revoking).getByRole('button', { name: 'Revoke' }))
+    expect(await within(revoking).findByRole('alert')).toBeInTheDocument()
+    await user.click(within(revoking).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    await user.click(await actions())
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Default model' }),
+    )
+    const editing = screen.getByRole('dialog', { name: 'Default model' })
+    expect(within(editing).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('shows state, verdict, reference and every action together on phone', async () => {
     authState.phone = true
     providersApi.list.mockResolvedValue({
       items: [{ ...registered, probe_state: 'refused' }],
     })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const card = await screen.findByRole('article', {
       name: registered.display_name,
     })
@@ -214,7 +309,7 @@ describe('ProvidersView', () => {
     authState.phone = true
     providersApi.list.mockResolvedValue({ items: [registered] })
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const card = await screen.findByRole('article', {
       name: registered.display_name,
     })
@@ -230,7 +325,7 @@ describe('ProvidersView', () => {
     authState.phone = true
     authState.can = (p) => p === 'sessions:provider:read'
     providersApi.list.mockResolvedValue({ items: [registered] })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const card = await screen.findByRole('article', {
       name: registered.display_name,
     })
@@ -245,7 +340,7 @@ describe('ProvidersView', () => {
     providersApi.list.mockResolvedValue({
       items: [{ ...registered, state: 'revoked', probe_state: 'refused' }],
     })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const card = await screen.findByRole('article', {
       name: registered.display_name,
     })
@@ -259,7 +354,7 @@ describe('ProvidersView', () => {
   })
 
   it('names the next action when nothing is registered', async () => {
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     expect(
       await screen.findByText(/no provider registered yet/i),
     ).toBeInTheDocument()
@@ -270,7 +365,7 @@ describe('ProvidersView', () => {
 
   it('does NOT show a registered-but-untested provider as working', async () => {
     providersApi.list.mockResolvedValue({ items: [registered] })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     expect(await screen.findByText('Anthropic (prod)')).toBeInTheDocument()
     expect(screen.getByText(/^Not tested$/i)).toBeInTheDocument()
     expect(screen.queryByText(/^Accepted$/i)).not.toBeInTheDocument()
@@ -284,7 +379,7 @@ describe('ProvidersView', () => {
     providersApi.list.mockResolvedValue({
       items: [{ ...registered, probe_state: 'ok' }],
     })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     expect(await screen.findByText('Anthropic (prod)')).toBeInTheDocument()
     expect(screen.queryByText(/next: deploy an agent/i)).not.toBeInTheDocument()
     expect(
@@ -300,7 +395,7 @@ describe('ProvidersView', () => {
       probe_detail: 'the provider answered 401 for this credential',
     })
     const user = userEvent.setup()
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await user.click(
       await screen.findByRole('button', { name: /test connection/i }),
     )
@@ -323,7 +418,7 @@ describe('ProvidersView', () => {
     const user = userEvent.setup()
     render(
       <QueryClientProvider client={qc}>
-        <ProvidersView />
+        <ApiKeys />
       </QueryClientProvider>,
     )
     await user.click(
@@ -338,7 +433,7 @@ describe('ProvidersView', () => {
     providersApi.list.mockResolvedValue({
       items: [{ ...registered, probe_state: 'ok' }],
     })
-    const { container } = wrap(<ProvidersView />)
+    const { container } = wrap(<ApiKeys />)
     await screen.findByText('Anthropic (prod)')
     expect(container.textContent ?? '').not.toContain(KEY)
     expect(screen.getByText('…ABCD')).toBeInTheDocument()
@@ -352,7 +447,7 @@ describe('ProvidersView', () => {
       display_name: 'Local',
       state: 'active',
     })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await user.click(
       await screen.findByRole('button', { name: /add your first provider/i }),
     )
@@ -390,7 +485,7 @@ describe('ProvidersView', () => {
       kind: 'ollama',
       state: 'active',
     })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await user.click(
       await screen.findByRole('button', { name: /add your first provider/i }),
     )
@@ -424,7 +519,7 @@ describe('ProvidersView', () => {
         },
       ],
     })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     expect(
       await screen.findByTitle(
         'The local endpoint answered and listed its models.',
@@ -445,7 +540,7 @@ describe('ProvidersView', () => {
   it('offers no write control to a read-only principal', async () => {
     authState.can = (p: string) => p === 'sessions:provider:read'
     providersApi.list.mockResolvedValue({ items: [registered] })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await screen.findByText('Anthropic (prod)')
     expect(
       screen.queryByRole('button', { name: /add provider/i }),
@@ -460,7 +555,7 @@ describe('ProvidersView', () => {
 
   it('renders the calm permission boundary when the read tier is absent', () => {
     authState.can = () => false
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     expect(
       screen.getByText(/you cannot read the providers of this tenant/i),
     ).toBeInTheDocument()
@@ -469,7 +564,7 @@ describe('ProvidersView', () => {
   // Root 19:15Z / HU2-18: the form opened with no provider chosen.
   it('opens the form with a provider chosen', async () => {
     const user = userEvent.setup()
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await user.click(
       await screen.findByRole('button', { name: /add your first provider/i }),
     )
@@ -482,7 +577,7 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -511,7 +606,7 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(record)
     providersApi.test.mockResolvedValue({ ...record, probe_state: 'ok' })
     window.history.pushState({}, '', `/providers?add=${kind}`)
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     // The wizard's "Add a local model" lands here: its address is already filled in (#476).
     if (kind === 'ollama')
@@ -539,7 +634,7 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -569,7 +664,7 @@ describe('ProvidersView', () => {
       providersApi.create.mockResolvedValue(registered)
       providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
       window.history.pushState({}, '', '/providers?add=anthropic')
-      wrap(<ProvidersView />)
+      wrap(<ApiKeys />)
       const dialog = await screen.findByRole('dialog')
       await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
       await user.click(
@@ -592,7 +687,7 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -602,9 +697,11 @@ describe('ProvidersView', () => {
       expect(useStepUpStore.getState().request).not.toBeNull(),
     )
     expect(preparation.resolve).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Add provider' })).toBeDisabled()
     expect(
-      screen.getByRole('button', { name: 'Add provider' }),
+      screen.getByRole('button', { name: 'Add your first provider' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Add your first provider' }),
     ).toHaveAccessibleDescription('This action needs an elevated session')
     expect(screen.getByRole('button', { name: 'Retry setup' })).toBeDisabled()
     await act(async () => {
@@ -637,7 +734,7 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -647,7 +744,7 @@ describe('ProvidersView', () => {
       'Installing Claude Code for your first session: downloaded 4.0 MiB of 4.0 MiB (100%)'
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Add provider' }),
+        screen.getByRole('button', { name: 'Add your first provider' }),
       ).toHaveAccessibleDescription(installing),
     )
     const status = screen
@@ -680,7 +777,7 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -688,7 +785,7 @@ describe('ProvidersView', () => {
     )
     await user.click(await screen.findByRole('button', { name: 'Retry setup' }))
     expect(
-      screen.getByRole('button', { name: 'Add provider' }),
+      screen.getByRole('button', { name: 'Add your first provider' }),
     ).toHaveAccessibleDescription(
       'Preparing Claude Code for your first session…',
     )
@@ -707,22 +804,16 @@ describe('ProvidersView', () => {
     providersApi.create.mockResolvedValue(registered)
     providersApi.test.mockResolvedValue({ ...registered, probe_state: 'ok' })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    const view = wrap(<ProvidersView />)
+    const view = wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
       within(dialog).getByRole('button', { name: /^Add provider$/ }),
     )
     await waitFor(() => expect(preparation.status).toHaveBeenCalled())
-    expect(screen.getByRole('button', { name: 'Add provider' })).toBeDisabled()
     expect(
       screen.getByRole('button', { name: 'Add your first provider' }),
     ).toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: 'Add provider' }),
-    ).toHaveAccessibleDescription(
-      'Preparing Claude Code for your first session…',
-    )
     expect(
       screen.getByRole('button', { name: 'Add your first provider' }),
     ).toHaveAccessibleDescription(
@@ -746,7 +837,7 @@ describe('ProvidersView', () => {
       probe_state: 'refused',
     })
     window.history.pushState({}, '', '/providers?add=anthropic')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -778,7 +869,7 @@ describe('ProvidersView', () => {
       '',
       '/providers?add=anthropic&returnTo=%2Fonboarding',
     )
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -806,7 +897,7 @@ describe('ProvidersView', () => {
       '',
       '/providers?add=anthropic&returnTo=%2Fonboarding',
     )
-    const first = wrap(<ProvidersView />)
+    const first = wrap(<ApiKeys />)
     let dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -820,7 +911,7 @@ describe('ProvidersView', () => {
       '',
       '/providers?add=anthropic&returnTo=%2F%2Fevil.example',
     )
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByPlaceholderText('Paste the key'), KEY)
     await user.click(
@@ -834,7 +925,7 @@ describe('ProvidersView', () => {
   it('keeps a table row to Test connection and its menu, where the other actions are', async () => {
     const user = userEvent.setup()
     providersApi.list.mockResolvedValue({ items: [registered] })
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     const row = await screen.findByRole('row', { name: /Anthropic \(prod\)/ })
     expect(
       within(row)
@@ -869,7 +960,7 @@ describe('ProvidersView', () => {
       const user = userEvent.setup()
       providersApi.list.mockResolvedValue({ items: [registered] })
       providersApi.test.mockResolvedValue({ ...registered, probe_state })
-      wrap(<ProvidersView />)
+      wrap(<ApiKeys />)
       await user.click(
         await screen.findByRole('button', { name: 'Test connection' }),
       )
@@ -883,26 +974,26 @@ describe('ProvidersView', () => {
 
   it("opens the form on the provider ?add= names, and on nothing it doesn't know", async () => {
     window.history.pushState({}, '', '/providers?add=openai')
-    const first = wrap(<ProvidersView />)
+    const first = wrap(<ApiKeys />)
     expect(await screen.findByRole('combobox')).toHaveTextContent('OpenAI')
     first.unmount()
     window.history.pushState({}, '', '/providers?add=nope')
-    wrap(<ProvidersView />)
+    wrap(<ApiKeys />)
     await screen.findByRole('button', { name: /add your first provider/i })
     expect(screen.queryByRole('combobox')).toBeNull()
     window.history.pushState({}, '', '/')
   })
 })
 
-it('explains Add provider while another provider connection is being tested', async () => {
+it('explains Add an API key while another provider connection is being tested', async () => {
   window.history.pushState({}, '', '/providers')
   providersApi.list.mockResolvedValue({ items: [registered] })
   providersApi.test.mockImplementationOnce(() => new Promise(() => {}))
-  wrap(<ProvidersView />)
+  wrap(<ApiKeys />)
   await userEvent.click(
     await screen.findByRole('button', { name: 'Test connection' }),
   )
-  const add = screen.getByRole('button', { name: 'Add provider' })
+  const add = screen.getByRole('button', { name: 'Add an API key' })
   await waitFor(() => expect(add).toBeDisabled())
   expect(add).toHaveAccessibleDescription('Testing…')
 })

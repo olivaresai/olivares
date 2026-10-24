@@ -66,7 +66,7 @@ Olivares AI 以单一可信事实源构建（Claude Code 处于最深层次，Co
 | [Claude Code 受管策略（`claude-policy`）](/reference/modules/claude-policy/) | — | 验证和预览受管策略；Business 版可向整个机群发布，并查看分发与已观测漂移。 |
 | [Claude agent 确认（`claude-agents`）](/reference/modules/claude-agents/) | — | 读取受管 agent 线程事件，并批准或拒绝待处理工具确认。 |
 | [技能目录与分配](/zh/reference/modules/skills/) | — | 不可变的技能目录与固定分配：经摘要验证的技能包安装在 `/v1/m/skills/packs` 下，按目标固定，绝不在原地修改。 |
-| [模型与提供方管理](/zh/reference/modules/x-models/) | 按需（503） | 跨整个模型/提供方栈进行治理：模型访问、逐表面上下文窗口、模型组门控；模型*执行*为按需 —— 在推理凭据被预置之前返回 `503`。 |
+| [模型与提供商管理](/zh/reference/modules/x-models/) | 按需（503） | 跨整个模型/提供商栈进行治理：模型访问、逐表面上下文窗口、模型组门控；模型*执行*为按需 —— 在推理凭据被预置之前返回 `503`。 |
 | [内联推理代理](/zh/reference/modules/inferenceproxy/) | PARTIAL | 为内联 `/v1/messages` PEP 代理提供逐租户的推理出口配置 + DLP；模块配置已实时生效，监听器为可选启用、回环默认、失败时关闭（fail-CLOSED）。 |
 | [内部目录与市场](/zh/reference/modules/xiv-catalog/) | — | 经核准/签名的 agent、MCP 服务器与技能的精选市场。 |
 | [语音与实时 agent](/zh/reference/modules/xvi-voice/) | 按需 | 对会话式/实时 agent 进行观察与治理（默认拒止、两阶段 human-in-the-loop）；永不打开媒体流；调度为按需。 |

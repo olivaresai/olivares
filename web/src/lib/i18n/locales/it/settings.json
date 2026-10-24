@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "Generali",
-    "notifications": "Notifiche",
     "keyboard": "Tastiera",
-    "sessionDefaults": "Predefiniti delle sessioni",
     "aiTools": "Strumenti AI",
     "workspaces": "Workspace",
     "deploy": "Deploy e aggiornamenti",
@@ -31,7 +29,7 @@
     "title": "Generali",
     "scope": "Le tue preferenze personali. Ti seguono in ogni workspace di questa installazione.",
     "theme": "Tema",
-    "themeHint": "Segue il sistema, a meno che tu non scelga chiaro o scuro.",
+    "themeHint": "Segue il sistema, a meno che tu non scelga chiaro, scuro o nero.",
     "density": "Densità",
     "densityHint": "Compatta mostra più righe; comoda è più facile da leggere.",
     "language": "Lingua",
@@ -46,10 +44,6 @@
     "confirmStopHint": "Chiede una volta prima che Ferma interrompa una sessione ancora in corso.",
     "reduceMotion": "Riduci il movimento",
     "reduceMotionHint": "Sostituisce il movimento con dissolvenze. Attivo quando lo chiede il tuo sistema."
-  },
-  "unavailable": {
-    "notifications": "Le preferenze di notifica non sono ancora memorizzate su questa installazione.",
-    "sessionDefaults": "I predefiniti delle sessioni non sono ancora memorizzati su questa installazione."
   },
   "sessionNotifications": {
     "title": "Notifiche delle sessioni",
@@ -344,9 +338,17 @@
       "stop_many": "{{count}} sessioni in corso si fermano. Potrai riprendere ognuna dopo il riavvio.",
       "stop_other": "{{count}} sessioni in corso si fermano. Potrai riprendere ognuna dopo il riavvio.",
       "none": "Il motore si riavvia una volta con la nuova versione.",
-      "confirm": "Installa e riavvia"
+      "switchNone": "Il motore si riavvia una volta con l'edizione con licenza. I tuoi dati restano dove sono.",
+      "confirm": "Installa e riavvia",
+      "switchTitle": "Passare a {{edition}}?",
+      "switchConfirm": "Passa e riavvia"
     },
     "alreadyCurrent": "Sei già sulla release più recente. Non è stato installato nulla.",
-    "restartRequired": "È installata una versione più recente. Riavvia il motore con il suo service manager per eseguirla."
+    "restartRequired": "È installata una versione più recente. Riavvia il motore con il suo service manager per eseguirla.",
+    "switch": "Passa a {{edition}}",
+    "switchTitle": "Passa a {{edition}}",
+    "switched": "Passaggio installato.",
+    "terminal": "La stessa cosa in un terminale sul server",
+    "orTerminal": "Oppure in un terminale sul server"
   }
 }

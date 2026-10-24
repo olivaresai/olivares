@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -133,8 +134,21 @@ type acpSession struct {
 
 	commands acpCommandCatalog
 	updates  acpUpdateCounts
-	pending  map[string]*acpServerRequest
-	closed   bool
+	// toolFacts are the native facts of this conversation's live tool calls, by
+	// toolCallId (observeToolCall), for a permission request that names none.
+	toolFacts map[string]acpToolCall
+	pending   map[string]*acpServerRequest
+	closed    bool
+	// usage is what this launch's turns used, summed from each prompt result.
+	// usageCost is what this launch cost: the agent's lifetime total (usage_update, US
+	// dollars) over costBase, never lower, present once known. costBase is the total
+	// when this launch began counting: 0 for a new conversation, the first total seen
+	// for a resumed one, which already holds what earlier launches spent.
+	usage       modelUsage
+	usageCost   *int64
+	costBase    *int64
+	costFresh   bool // a cost arrived since the last report
+	costPending bool // a cost reported during the turn in flight, credited when it ends
 }
 
 // newACPSession is the shared state for a driver session; the driver wires the
@@ -196,7 +210,30 @@ type acpContentBlock struct {
 }
 
 type acpPromptResponse struct {
-	StopReason string `json:"stopReason"`
+	StopReason string    `json:"stopReason"`
+	Usage      *acpUsage `json:"usage"`
+}
+
+// acpUsage is one turn's token use as an agent reports it on its prompt result
+// (OpenCode 1.19.3: inputTokens, outputTokens, totalTokens, thoughtTokens). The
+// thought tokens are billed as output.
+type acpUsage struct {
+	TotalTokens       int64 `json:"totalTokens"`
+	InputTokens       int64 `json:"inputTokens"`
+	OutputTokens      int64 `json:"outputTokens"`
+	ThoughtTokens     int64 `json:"thoughtTokens"`
+	CachedReadTokens  int64 `json:"cachedReadTokens"`
+	CachedWriteTokens int64 `json:"cachedWriteTokens"`
+}
+
+// acpUsageUpdate is the session's cumulative cost an agent reports on a
+// usage_update (OpenCode 1.19.3: {"amount":0,"currency":"USD"} on a free model).
+type acpUsageUpdate struct {
+	SessionUpdate string `json:"sessionUpdate"`
+	Cost          *struct {
+		Amount   *float64 `json:"amount"`
+		Currency string   `json:"currency"`
+	} `json:"cost"`
 }
 
 type acpSessionParams struct {
@@ -306,11 +343,32 @@ func (s *acpSession) Interrupt(ctx context.Context) (bool, error) {
 	if prompt == "" {
 		return false, conflictErr("there is no active provider turn to interrupt")
 	}
+	return true, s.sendCancel(ctx, session)
+}
+
+// interruptTurn cancels the turn with this id only. The check and the mark share
+// the lock that ends turns, so a successor started meanwhile is never cancelled for
+// its predecessor. A turn that already ended is left alone.
+func (s *acpSession) interruptTurn(ctx context.Context, turn string) error {
+	s.mu.Lock()
+	session := s.sessionID
+	current := turn != "" && session != "" && s.promptID == turn
+	if current {
+		s.cancelledTurn = turn
+	}
+	s.mu.Unlock()
+	if !current {
+		return nil
+	}
+	return s.sendCancel(ctx, session)
+}
+
+func (s *acpSession) sendCancel(ctx context.Context, session string) error {
 	s.cancelPendingApprovals(ctx)
 	if err := s.conn.notify(ctx, acpMethodSessionCancel, acpSessionParams{SessionID: session}); err != nil {
-		return true, acpTurnErr("interrupt", err)
+		return acpTurnErr("interrupt", err)
 	}
-	return true, nil
+	return nil
 }
 
 func (s *acpSession) AuthState() string {
@@ -355,6 +413,7 @@ func (s *acpSession) beginTurn(id string) {
 		return
 	}
 	s.promptID = id
+	s.toolFacts = nil // a call's facts belong to the turn that made it
 }
 
 // clearTurn ends the turn with THIS id and never any other. The guard is what
@@ -415,16 +474,126 @@ func (s *acpSession) completeTurn(id string, result json.RawMessage, err error) 
 			// is proof of an account" mistake with a timestamp on it.
 			s.setAuthState(AuthStateRequired)
 		}
+		s.creditTurn(nil)
 		return
 	}
 	var resp acpPromptResponse
 	if json.Unmarshal(result, &resp) != nil {
+		s.creditTurn(nil)
 		return
 	}
 	// The stop reason is the provider's, and it is not reinterpreted here: end_turn,
 	// max_tokens, max_turn_requests, refusal and cancelled all END THE TURN and none
 	// of them ends the run, the conversation or the process.
 	s.warnStopReason(resp.StopReason)
+	s.creditTurn(resp.Usage)
+}
+
+// creditTurn reports what the turn that ended used: the tokens on its result and
+// the cost the agent reported during it. A failed or unreadable result still
+// credits that cost; a turn that reported neither reports nothing.
+func (s *acpSession) creditTurn(u *acpUsage) {
+	s.mu.Lock()
+	if u != nil {
+		t := u.tokens()
+		s.usage.InputTokens += t.InputTokens
+		s.usage.OutputTokens += t.OutputTokens
+		s.usage.CacheReadTokens += t.CacheReadTokens
+		s.usage.CacheCreationTokens += t.CacheCreationTokens
+	}
+	report := u != nil || s.costPending
+	s.costPending = false
+	var r resultUsage
+	if report {
+		r = s.usageReportLocked()
+	}
+	s.mu.Unlock()
+	if report {
+		s.reportUsage(r)
+	}
+}
+
+// tokens is one turn's usage as the runtime counts it: input without the cached
+// part, which the cache columns carry. Whether the agent's input includes the
+// cached tokens is read from its own total, not assumed.
+func (u acpUsage) tokens() modelUsage {
+	clamp := func(n int64) int64 { return min(max(0, n), acpMaxTurnTokens) }
+	input, out := clamp(u.InputTokens), clamp(u.OutputTokens)+clamp(u.ThoughtTokens)
+	read, write := clamp(u.CachedReadTokens), clamp(u.CachedWriteTokens)
+	if cached := read + write; cached > 0 && u.TotalTokens == input+out && input >= cached {
+		input -= cached
+	}
+	return modelUsage{InputTokens: input, OutputTokens: out, CacheReadTokens: read, CacheCreationTokens: write}
+}
+
+// observeUsage keeps the cost a live usage_update reports. The agent's figure is the
+// conversation's lifetime total (OpenCode 1.19.3: usage.ts sums every assistant
+// message, and resume replays no usage_update), so this launch's cost is the rise over
+// its baseline, and a total that goes down credits nothing. Only US dollars are a cost
+// this product records; any other report leaves it unknown.
+func (s *acpSession) observeUsage(update json.RawMessage) (resultUsage, bool) {
+	var u acpUsageUpdate
+	if json.Unmarshal(update, &u) != nil || u.SessionUpdate != "usage_update" || u.Cost == nil ||
+		u.Cost.Amount == nil || !(*u.Cost.Amount >= 0 && *u.Cost.Amount <= acpMaxReportedCostUSD) || u.Cost.Currency != "USD" {
+		return resultUsage{}, false
+	}
+	total := int64(math.Round(*u.Cost.Amount * microUSDPerUSD))
+	if s.costBase == nil {
+		base := int64(0)
+		if strings.TrimSpace(s.cfg.ResumeConversationID) != "" {
+			// The first total of a resumed conversation holds earlier launches' cost and
+			// this turn's: it is the baseline, and this first turn's own cost is unknown.
+			s.costBase = &total
+			return resultUsage{}, false
+		}
+		s.costBase = &base
+	}
+	cost := max(total-*s.costBase, 0)
+	if s.usageCost != nil {
+		cost = max(cost, *s.usageCost)
+	}
+	s.usageCost, s.costFresh = &cost, true
+	// During a turn its end credits the cost with the turn's tokens, as one credit;
+	// outside one it is credited now.
+	if s.promptID != "" {
+		s.costPending = true
+		return resultUsage{}, false
+	}
+	return s.usageReportLocked(), true
+}
+
+// acpMaxReportedCostUSD bounds a session cost an agent reports, and acpMaxTurnTokens
+// one turn's token count of each kind; a larger figure is no report or is clipped,
+// never an overflow.
+const (
+	acpMaxReportedCostUSD = 1_000_000
+	acpMaxTurnTokens      = 1 << 40
+)
+
+// usageReportLocked is this launch's usage as the runtime credits it, from 0 at the
+// launch: under the session's model when one was asked for, with the cost when it is
+// known. The cost is the tool's own statement only when one arrived since the last
+// report.
+func (s *acpSession) usageReportLocked() resultUsage {
+	u := s.usage
+	r := resultUsage{Reported: true, CostReported: s.costFresh}
+	s.costFresh = false
+	if s.usageCost != nil {
+		u.CostMicroUSD = *s.usageCost
+	}
+	if ref := modelRefValue(s.cfg.Model); ref != "" {
+		r.Models = map[string]modelUsage{ref: u}
+	} else {
+		r.Fallback = u
+	}
+	return r
+}
+
+// reportUsage credits a report: every figure counts from this launch's start.
+func (s *acpSession) reportUsage(r resultUsage) {
+	if s.cfg.OnUsage != nil {
+		s.cfg.OnUsage(r, true)
+	}
 }
 
 func (s *acpSession) warnStopReason(reason string) {
@@ -448,6 +617,13 @@ func (s *acpSession) onNotification(method string, params json.RawMessage) {
 	if json.Unmarshal(params, &n) != nil {
 		return
 	}
+	if r, ok := s.classifyUpdate(n); ok {
+		s.reportUsage(r)
+	}
+}
+
+// classifyUpdate counts one session/update and returns the usage a live one reports.
+func (s *acpSession) classifyUpdate(n acpSessionNotification) (resultUsage, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.observeCommands(n)
@@ -458,13 +634,49 @@ func (s *acpSession) onNotification(method string, params json.RawMessage) {
 		// requested id rather than the bound one because the binding is exactly what
 		// has not happened yet.
 		s.updates.history++
+		return s.observeUsage(n.Update)
 	case s.sessionID == "" || n.SessionID != s.sessionID:
 		// Another conversation's update. It binds nothing, ends nothing and is not
 		// this session's output.
 		s.updates.foreign++
 	default:
 		s.updates.live++
+		s.observeToolCall(n.Update)
+		return s.observeUsage(n.Update)
 	}
+	return resultUsage{}, false
+}
+
+// maxACPToolFacts bounds toolFacts; a full map starts over, losing only the facts
+// of calls whose permission was already asked.
+const maxACPToolFacts = 256
+
+// observeToolCall keeps the native facts of a live tool_call or tool_call_update by
+// toolCallId. OpenCode's read asks for permission with locations [] and rawInput {}:
+// its path is only in native patterns ACP does not carry. The tool_call_update it
+// sends just before, for the same call, names the file (measured over ACP on 1.19.3
+// and 1.19.4; #2979). Notifications are handled in order on the pump, before the
+// request that follows them. Called with s.mu held.
+func (s *acpSession) observeToolCall(raw json.RawMessage) {
+	var update struct {
+		Kind string `json:"sessionUpdate"`
+	}
+	if json.Unmarshal(raw, &update) != nil || (update.Kind != "tool_call" && update.Kind != "tool_call_update") {
+		return
+	}
+	var call acpToolCall
+	if json.Unmarshal(raw, &call) != nil || call.ToolCallID == "" {
+		return
+	}
+	if !call.facts.Complete {
+		// A later update the facts reader cannot vouch for withdraws the earlier facts.
+		delete(s.toolFacts, call.ToolCallID)
+		return
+	}
+	if s.toolFacts == nil || len(s.toolFacts) >= maxACPToolFacts {
+		s.toolFacts = map[string]acpToolCall{}
+	}
+	s.toolFacts[call.ToolCallID] = call
 }
 
 // updateCounts is the package-internal split of what session/update frames were.

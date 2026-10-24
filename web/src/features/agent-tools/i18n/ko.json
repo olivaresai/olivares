@@ -1,8 +1,8 @@
 {
   "title": "AI 도구",
   "description": "이 서버의 세션이 실행하는 AI 도구를 설치하고 로그인합니다.",
+  "descriptionMember": "세션은 이 계정과 API 키로 실행됩니다. 도구 설치와 로그인은 시스템 관리자가 합니다.",
   "refresh": "새로 고침",
-  "adminOnly": "호스트 도구를 관리하려면 시스템 관리자 세션이 필요합니다.",
   "readOnly": "이 서버는 읽기 전용입니다. 설치가 비활성화되었습니다.",
   "notInstalled": "관리되는 설치 없음",
   "installedOutside": "Olivares가 아니라 이 서버에 설치됨",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "{{name}} 옵션",
     "update": "업데이트",
-    "details": "설치 세부 정보",
-    "profilesPage": "자세한 프로필 페이지"
+    "details": "설치 세부 정보"
   },
   "details": {
     "title": "{{name}}: 설치 세부 정보",
@@ -220,5 +219,11 @@
     "packagesHint": "각 도구의 새 세션이 사용하는 프로바이더 프로필({{profiles}})이 선언합니다. 프로필이 없는 도구는 아무것도 선언하지 않는 새 프로필을 받습니다.",
     "packagesNoProfile": "이것들은 각 도구의 세션이 실행되는 프로바이더 프로필에서 나옵니다. 아직 존재하지 않으며 새 프로필은 아무것도 선언하지 않습니다.",
     "packagesRefused": "아직 세션을 시작할 수 없으므로 나열되지 않음: {{tools}}."
+  },
+  "place": {
+    "title": "계정 및 API 키",
+    "accounts": "계정",
+    "allAccounts": "모든 계정: 세부 정보, 레이블, 바인딩",
+    "noAccess": "현재 역할로는 이 조직의 계정과 API 키를 읽을 수 없습니다."
   }
 }

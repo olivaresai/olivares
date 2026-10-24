@@ -273,7 +273,9 @@ tamper-evidence anchor ages.
 
 A destination with an unknown kind is **skipped and logged**
 (`notify: destination has unknown connector kind; skipped` — check the
-`kind` spelling). For eventing sinks, `POST …/subscriptions/{id}/test`
+`kind` spelling). A destination of a Business kind (`siem`, `pagerduty`, `servicenow`, `teamsbot` and the other
+Business connectors) in a Community binary is skipped with
+`notify: destination connector kind is a Business capability; skipped`. For eventing sinks, `POST …/subscriptions/{id}/test`
 sends a delivery you can watch, and endpoints must be HTTPS
 ([push to SIEM](/how-to/cookbook/push-to-siem/)).
 

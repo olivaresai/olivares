@@ -45,6 +45,11 @@ const (
 	cliCleartextOptInEnv = "OLIVARES_ALLOW_CLEARTEXT"
 )
 
+// transportWarnings is where the --insecure warning goes when the caller names
+// no writer; nil means os.Stderr. A full-screen command, whose standard error is
+// the screen it draws on, sets it once before it starts any goroutine.
+var transportWarnings io.Writer
+
 type cliTransportOptions struct {
 	Resolved cliResolvedConfig
 	Insecure bool
@@ -211,6 +216,9 @@ func cliTransport(opts cliTransportOptions) (*http.Client, http.Header, error) {
 
 	if opts.Insecure {
 		stderr := opts.Stderr
+		if stderr == nil {
+			stderr = transportWarnings
+		}
 		if stderr == nil {
 			stderr = os.Stderr
 		}

@@ -123,8 +123,10 @@ func TestEveryCatalogModuleTurnsOffAndOnAcrossARestart(t *testing.T) {
 					if got := moduleStatus(e.eng, moduleSpec(t, ns).Name); got != runtime.StatusDormant {
 						t.Errorf("%s runtime = %q, want dormant", ns, got)
 					}
-					if len(mounted[ns]) != 0 {
-						t.Errorf("%s still mounts %v", ns, mounted[ns])
+					// Its routes stay mounted, so it can be turned on without a rebuild of the
+					// server; the live gate answers each of them below.
+					if !slices.Equal(mounted[ns], baseline[ns]) {
+						t.Errorf("%s mounts %v, want its routes %v", ns, mounted[ns], baseline[ns])
 					}
 					// A module without routes of its own (an event consumer) still
 					// answers its namespace.

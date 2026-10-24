@@ -94,6 +94,9 @@ type DriverLaunch struct {
 	// validates them. No common enum is invented across providers.
 	Model  string
 	Effort string
+	// OwnNetwork is set when the session runs in its own network namespace behind
+	// the egress proxy (a NetworkPolicy), where a fixed loopback port is free.
+	OwnNetwork bool
 }
 
 // cliRuntimeRequest is the same launch context in the vocabulary of the ONE
@@ -200,6 +203,11 @@ type DriverSessionConfig struct {
 	// any other total (a resumed thread's earlier one) is a baseline, not usage of
 	// this launch.
 	OnUsage func(usage resultUsage, ownTurn bool)
+
+	// OnTurnFailed is called when the provider's model call for the turn in flight
+	// failed and the driver cancelled the turn, with the tool's own reason (clipped and
+	// redacted by clipCause) and whether the cancel went out: the session says why.
+	OnTurnFailed func(reason string, cancelled bool)
 
 	// OnLimit is called when the provider ended a turn on a usage or rate limit, with
 	// the reset time it reported (zero when it reported none); OnTurnOK when a turn
@@ -984,6 +992,7 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 				m.recordLimit(context.Background(), lr, limitReport{Kind: kind, ResetsAt: resetsAt})
 			})
 		},
+		OnTurnFailed: func(reason string, cancelled bool) { m.publishTurnFailed(lr, reason, cancelled) },
 		OnTurnOK: func() {
 			m.deferDurable(lr, func() { m.clearLimit(context.Background(), lr) })
 		},

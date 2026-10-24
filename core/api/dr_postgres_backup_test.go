@@ -187,6 +187,15 @@ func TestDRPostgresBackupUsesConfiguredSnapshot(t *testing.T) {
 					t.Fatalf("fresh estate must verify with pending checkpoints: %+v", tip)
 				}
 			}
+			// The dump travels sealed: only the .enc member exists before the KEK opens it,
+			// and it does not carry the dump's bytes.
+			sealedDump, err := os.ReadFile(filepath.Join(extracted, manifest.Store.File+".enc"))
+			if err != nil || manifest.Store.Encryption == "" || strings.Contains(string(sealedDump), "snapshot bytes") {
+				t.Fatalf("the PostgreSQL dump is not sealed in the bundle: encryption=%q err=%v", manifest.Store.Encryption, err)
+			}
+			if _, err := os.Stat(filepath.Join(extracted, manifest.Store.File)); err == nil {
+				t.Fatal("a plaintext PostgreSQL dump is in the bundle")
+			}
 			cipher, err := dr.OpenCipher([]byte(passphrase), params)
 			if err != nil {
 				t.Fatal(err)

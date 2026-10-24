@@ -16,6 +16,7 @@ const DEFAULT = '__default__'
 export function LaunchSpeedFields({
   driver,
   model,
+  supportUnknown = false,
   fastMode,
   serviceTier,
   onFastMode,
@@ -23,6 +24,9 @@ export function LaunchSpeedFields({
 }: {
   driver: string
   model?: { supports_fast_mode?: boolean; service_tiers?: string[] }
+  /** The catalog does not list the model, so whether it takes Fast mode is unknown.
+   * Off is a valid Claude launch on any model: the field is offered with On disabled. */
+  supportUnknown?: boolean
   fastMode?: boolean
   serviceTier?: string
   onFastMode: (value: boolean | undefined) => void
@@ -32,7 +36,9 @@ export function LaunchSpeedFields({
   return (
     <div className="flex flex-wrap gap-3">
       {driver === 'claude' &&
-      (model?.supports_fast_mode === true || fastMode !== undefined) ? (
+      (model?.supports_fast_mode === true ||
+        fastMode !== undefined ||
+        supportUnknown) ? (
         <Field label={t('create.fastMode')}>
           <Select
             value={fastMode === undefined ? DEFAULT : fastMode ? 'on' : 'off'}

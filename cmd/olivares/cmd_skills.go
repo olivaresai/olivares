@@ -29,7 +29,7 @@ import (
 
 func newSkillsCmd() *cobra.Command {
 	flags := &authClientFlags{}
-	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "skills", Short: "Install and manage immutable skills in the catalog", Long: "Install reviewed instruction packs in the organization catalog. Assign a revision to deliver its members on launch. Portable skills use the selected tool's native discovery; agents, commands and rules use Claude Code.", Args: cobra.NoArgs}
+	cmd := &cobra.Command{Annotations: map[string]string{"changes_data": "read"}, Use: "skills", Short: "Install and manage immutable skills in the catalog", Long: "Install reviewed instruction packs in the organization catalog. Assign a revision to deliver its members on launch. Portable skills use the selected tool's native discovery; agents, commands and rules use Claude Code and OpenCode.", Args: cobra.NoArgs}
 	cmd.Example = "  olivares skills ls"
 	flags.addPersistent(cmd)
 	client := datalaneClient{flags: flags, base: "/v1/m/skills", what: "skills"}

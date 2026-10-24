@@ -54,7 +54,11 @@ import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
 import { ProviderAccountCreate } from './provider-account-create'
 import { ProviderAccountMetadata } from './provider-account-metadata'
 import { ProviderAccountSignIn } from './provider-account-signin'
-import { ProfileListError, StateBadge } from './profiles-panel'
+import {
+  ProfileListError,
+  ProfileSheetBody,
+  StateBadge,
+} from './profiles-panel'
 import { profileName, type ProviderAccountDTO } from './types'
 import './i18n'
 
@@ -353,7 +357,8 @@ function AccountsPanelInner() {
           onRetry={() => void query.refetch()}
         />
       ) : rows.length === 0 ? (
-        <TableRegion fill>
+        // On Tools beside the API keys (#2552): the list takes its rows' height.
+        <TableRegion fill={false}>
           <EmptyState
             className="flex-1"
             icon={<ContactRound />}
@@ -396,7 +401,7 @@ function AccountsPanelInner() {
         open={selected !== null}
         onOpenChange={(o) => !o && setSelected(null)}
       >
-        <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-xl">
+        <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-3xl">
           {selected && (
             <AccountSheetBody key={selected.account_ref} initial={selected} />
           )}
@@ -533,7 +538,7 @@ function AccountsTable({
   const { t, i18n } = useTranslation(['agentops', 'common'])
   return (
     <FillingTable
-      fill
+      fill={false}
       oneLine
       colSpan={6}
       after={
@@ -695,6 +700,14 @@ function AccountSheetBody({ initial }: { initial: ProviderAccountDTO }) {
     ...ACCOUNT_READ_LIFETIME,
   })
   const account = detail.data
+  // The profile this account IS (the same reference): its settings and the sources bound
+  // to it, read under the profile tier, never under the account tier.
+  const canReadProfile = can('sessions:profile:read')
+  const profile = useQuery({
+    queryKey: agentOpsKeys.profile(activeTenant, boundary.epoch, ref),
+    queryFn: ({ signal }) => agentOpsApi.getProfile(ref, { signal }),
+    enabled: canReadProfile && !!account && !detail.isError,
+  })
 
   return (
     <>
@@ -810,6 +823,23 @@ function AccountSheetBody({ initial }: { initial: ProviderAccountDTO }) {
             {formatDateTime(account.updated_at, i18n.language)}
           </KvRow>
         </KvList>
+      ) : null}
+
+      {/* The answer first: a failed refetch keeps the profile it had, and the detail keeps
+          its open dialogs and drafts. */}
+      {canReadProfile && account && !detail.isError ? (
+        profile.data ? (
+          <ProfileSheetBody initial={profile.data} embedded />
+        ) : profile.isError ? (
+          <ProfileListError
+            error={profile.error}
+            onRetry={() => void profile.refetch()}
+          />
+        ) : (
+          <p role="status" className="text-caption text-muted-foreground">
+            {t('profiles.details.loading')}
+          </p>
+        )
       ) : null}
     </>
   )

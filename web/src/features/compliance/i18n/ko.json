@@ -351,7 +351,7 @@
       "subjectRef": "주체 참조",
       "reason": "사유",
       "reasonHint": "보관 연속성에 그대로 기록됩니다.",
-      "alreadyHeld": "이미 활성 보존 {{count}}건에 포함됨: {{matters}}",
+      "alreadyHeld_other": "이미 활성 보존 {{count}}건에 포함됨: {{matters}}",
       "notHeld": "현재 이를 보존하는 것이 없습니다. 배치하려는 보존이 첫 번째가 됩니다.",
       "confirmCreate": "보존 배치",
       "created": "법적 보존이 배치되었습니다 — 보존이 활성입니다.",

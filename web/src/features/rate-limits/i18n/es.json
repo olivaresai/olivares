@@ -11,7 +11,7 @@
   },
   "summary": {
     "title": "Estado de sincronización",
-    "description": "Cuántos límites de tasa debe mantener sincronizados una pasarela o proxy, según informa la ingesta de gobierno de solo lectura."
+    "description": "Cuántos límites de tasa debe mantener sincronizados una pasarela o proxy, según informa la ingesta de gobernanza de solo lectura."
   },
   "count": {
     "label": "Límites por sincronizar",
@@ -19,7 +19,7 @@
     "unknown": "Recuento no disponible"
   },
   "degraded": {
-    "title": "Ingesta de gobierno de la API de administración no disponible",
+    "title": "Ingesta de gobernanza de la API de administración no disponible",
     "hint": "Esta superficie de despliegue (por ejemplo una pasarela de Bedrock, Vertex o Foundry) no expone la API de administración de Anthropic, por lo que el inventario de límites de tasa no puede leerse aquí. Esto es una falta de disponibilidad honesta, no un inventario vacío."
   },
   "inventory": {

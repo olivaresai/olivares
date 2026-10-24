@@ -12,9 +12,9 @@
     "signedIn": "サインイン済み",
     "signedInAs": "{{account}} としてサインイン済み",
     "notSignedIn": "未サインイン",
-    "usesKey": "API キーを使用: {{name}}",
+    "usesKey": "APIキーを使用: {{name}}",
     "usesLocal": "ローカルのモデルサーバーを使用: {{name}}",
-    "keyRefused": "API キー {{name}} が拒否されました。プロバイダーで置き換えてください。",
+    "keyRefused": "APIキー {{name}} が拒否されました。プロバイダーで置き換えてください。",
     "noSignIn": "このツールにはここで実行できる公式のサインインがありません。「その他の方法」のターミナルコマンドを使ってください。"
   },
   "actions": {
@@ -24,15 +24,18 @@
     "cancel": "キャンセル",
     "signInClaude": "Claude でサインイン",
     "signInChatGPT": "ChatGPT でサインイン",
-    "useApiKey": "代わりに API キーを使う",
+    "useApiKey": "代わりに APIキーを使う",
     "signInGrok": "xAI アカウントでサインイン",
     "signInGoogle": "Google でログイン",
     "signIn": "サインイン"
   },
   "signIn": {
     "openLink": "サインインページを開く",
+    "openKeyPage": "キーのページを開く",
     "codeLabel": "サインインページのコード",
     "codeHint": "アクセスを承認すると、ページにコードが表示されます。ここに貼り付けてください。",
+    "keyLabel": "APIキー",
+    "keyHint": "上のページでキーを作成し、ここに貼り付けてください。{{name}} がこのサーバーに保存し、Olivares は保持しません。",
     "continue": "続行",
     "enterCode": "サインインページで次のコードを入力してください:",
     "waiting": "サインインページでの操作が終わるのを待っています…",
@@ -40,7 +43,13 @@
     "copy": "コピー",
     "copied": "コピーしました",
     "starting": "サインインを開始しています…",
-    "lostTouch": "サーバーとの接続が途切れました。サインインはまだ実行中の可能性があります。"
+    "lostTouch": "サーバーとの接続が途切れました。サインインはまだ実行中の可能性があります。",
+    "method": "サインイン方法",
+    "methods": {
+      "opencode": "OpenCode Zen と無料モデル (APIキー)",
+      "opencode-go": "OpenCode Go (APIキー)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (ブラウザーなし)"
+    }
   },
   "errors": {
     "status": "ツールの状態を読み取れませんでした。",
@@ -53,8 +62,8 @@
     "install": {
       "title": "エージェントツールをインストール",
       "body": "Olivares はこのサーバーで公式の Claude Code または Codex を実行します。どちらか 1 つで十分です。",
-      "orUse": "または、代わりに API キーかローカルモデルを使います:",
-      "addKey": "API キーを追加",
+      "orUse": "または、代わりに APIキーかローカルモデルを使います:",
+      "addKey": "APIキーを追加",
       "addLocal": "ローカルモデルを追加"
     },
     "signIn": {

@@ -51,7 +51,7 @@ func TestProfileEgressHosts_TheLaunchGrantsTheDeclaredHostsOnly(t *testing.T) {
 	// The policy a launch on a GLM key gets from the launch's own constructor.
 	const key = "glm-key-for-the-pin"
 	bound := BoundProvider{Kind: ProviderKindAnthropic, Endpoint: "https://api.z.ai/api/anthropic"}
-	spec := LaunchSpec{NetworkPolicy: sessionNetworkPolicy(providerDriverClaude, bound, nil,
+	spec := LaunchSpec{NetworkPolicy: sessionNetworkPolicy(providerDriverClaude, bound, "", nil,
 		[]EnvVar{{Name: providerRecordKeyEnv(ProviderKindAnthropic), Value: key}})}
 	if spec.NetworkPolicy == nil {
 		t.Fatal("a Claude Code session on an API-key provider has no network boundary")
@@ -74,7 +74,7 @@ func TestProfileEgressHosts_TheLaunchGrantsTheDeclaredHostsOnly(t *testing.T) {
 
 	// No declaration: the policy is the provider's alone, as before.
 	none := CreateRunParams{Isolation: IsolationNative}
-	plain := LaunchSpec{NetworkPolicy: sessionNetworkPolicy(providerDriverClaude, bound, nil, nil)}
+	plain := LaunchSpec{NetworkPolicy: sessionNetworkPolicy(providerDriverClaude, bound, "", nil, nil)}
 	if err := m.configureProfilePackages(ctx, ctx, tenant, "run_2", &none, &plain); err != nil {
 		t.Fatal(err)
 	}

@@ -196,7 +196,7 @@
     "rulesTruncated": "Cargadas {{n}} reglas; hay más",
     "rulesTruncatedHint": "Hay más reglas de asignación para este centro de coste de las que se ven; esta página toma filas por id. Para el coste que se ingiere a partir de ahora, el motor resuelve las reglas que casan con independencia de esta página, así que un recurso que aquí parece sin asignar puede estar asignado por una regla más allá; y el coste ya registrado no se reatribuye al añadir una regla."
   },
-  "description": "Coste de tokens en todo el estate — tendencias, imputación, conciliación, presupuestos y previsión. Las cifras son tal cual las reporta el ledger de FinOps.",
+  "description": "Coste de tokens en todo el parque — tendencias, imputación, conciliación, presupuestos y previsión. Las cifras son tal cual las reporta el ledger de FinOps.",
   "dimensions": {
     "global": "Global",
     "model": "Modelo",
@@ -205,8 +205,8 @@
     "session": "Sesión",
     "team": "Equipo",
     "project": "Proyecto",
-    "workspace": "Workspace",
-    "api_key": "API key",
+    "workspace": "Espacio de trabajo",
+    "api_key": "Clave de API",
     "actor": "Actor",
     "service_tier": "Service tier",
     "context_window": "Ventana de contexto",
@@ -310,7 +310,7 @@
       },
       "service_account_id": {
         "label": "Cuenta de servicio",
-        "detail": "Un principal de cuenta de servicio (svac_) — distinto de la API key conflada que sirve hoy la vista de gasto."
+        "detail": "Un principal de cuenta de servicio (svac_) — distinto de la clave de API conflada que sirve hoy la vista de gasto."
       },
       "account_id": {
         "label": "Cuenta",
@@ -334,7 +334,7 @@
   },
   "optimization": {
     "title": "Recomendaciones de optimización",
-    "description": "Ahorros candidatos del estate gobernado. Las estimaciones no son una promesa — verifica idoneidad de capacidad y calidad.",
+    "description": "Ahorros candidatos del parque gobernado. Las estimaciones no son una promesa — verifica idoneidad de capacidad y calidad.",
     "empty": "Sin recomendaciones",
     "emptyHint": "Aquí aparecen recomendaciones cuando el gasto, el enrutado o los límites se pueden mejorar. Ahora mismo no hay nada que cambiar.",
     "estimatedSavings": "Ahorro est.",

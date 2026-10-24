@@ -231,6 +231,13 @@ func TestOpenCodeApprovalOversizedFactsStayIncomplete(t *testing.T) {
 
 func openCodeApprovalForFacts(t *testing.T, toolCall map[string]any) ProviderApprovalRequest {
 	t.Helper()
+	return openCodeApprovalAfterUpdates(t, nil, toolCall)
+}
+
+// openCodeApprovalAfterUpdates sends the session/update frames first, in order, then
+// the permission request, as OpenCode does on the wire.
+func openCodeApprovalAfterUpdates(t *testing.T, updates []map[string]any, toolCall map[string]any) ProviderApprovalRequest {
+	t.Helper()
 	if _, exists := toolCall["toolCallId"]; !exists {
 		toolCall["toolCallId"] = "call-facts"
 	}
@@ -249,6 +256,9 @@ func openCodeApprovalForFacts(t *testing.T, toolCall map[string]any) ProviderApp
 		t.Fatalf("input: %v", err)
 	}
 	_, _, _ = peer.nextRequest()
+	for _, update := range updates {
+		peer.notify(acpNotifySessionUpdate, map[string]any{"sessionId": "ses_facts", "update": update})
+	}
 	peer.requestFromServer("permission-facts", acpReqRequestPermission, map[string]any{
 		"sessionId": "ses_facts",
 		"toolCall":  toolCall,
@@ -277,4 +287,82 @@ func openCodeApprovalForFacts(t *testing.T, toolCall map[string]any) ProviderApp
 		t.Fatalf("authority refusal changed: %v", reply)
 	}
 	return req
+}
+
+// #2890: the authority is told what kind of tool asked (ACP toolCall.kind), so a read
+// or a search is reviewed as a read.
+func TestOpenCodeApprovalNamesTheToolKind(t *testing.T) {
+	for _, kind := range []string{"read", "search", "edit", "execute"} {
+		req := openCodeApprovalForFacts(t, map[string]any{"kind": kind, "rawInput": map[string]any{"filePath": "/workspace/fixture/read.go"}})
+		if req.ToolKind != kind {
+			t.Fatalf("tool kind = %q, want %q", req.ToolKind, kind)
+		}
+	}
+}
+
+// The real OpenCode read (measured over ACP on 1.19.3 and 1.19.4): the permission
+// request names no file (locations [] and rawInput {}: the path is only in the
+// native patterns ACP does not carry); the tool_call_update OpenCode sends just
+// before it, for the same toolCallId, names it. The authority is told that file.
+func TestOpenCodeReadApprovalNamesTheFileFromItsToolCallUpdate(t *testing.T) {
+	const path = "/workspace/fixture/notes.txt"
+	updates := []map[string]any{
+		{"sessionUpdate": "tool_call", "toolCallId": "call_read_1", "title": "read", "kind": "read", "status": "pending", "locations": []any{}, "rawInput": map[string]any{}},
+		{"sessionUpdate": "tool_call_update", "toolCallId": "call_read_1", "title": "read", "kind": "read", "status": "in_progress",
+			"locations": []any{map[string]any{"path": path}}, "rawInput": map[string]any{"filePath": path}},
+	}
+	request := map[string]any{"toolCallId": "call_read_1", "title": "read", "kind": "read", "status": "pending", "locations": []any{}, "rawInput": map[string]any{}}
+	req := openCodeApprovalAfterUpdates(t, updates, request)
+	if req.ToolKind != "read" || !req.FactsComplete || !reflect.DeepEqual(req.FilePaths, []string{path}) {
+		t.Fatalf("read request = kind %q complete %v paths %v, want the file its tool_call_update names", req.ToolKind, req.FactsComplete, req.FilePaths)
+	}
+	// Another tool call's update names nothing for this one.
+	other := []map[string]any{{"sessionUpdate": "tool_call_update", "toolCallId": "call_other", "kind": "read", "status": "in_progress",
+		"locations": []any{map[string]any{"path": "/etc/passwd"}}, "rawInput": map[string]any{"filePath": "/etc/passwd"}}}
+	req = openCodeApprovalAfterUpdates(t, other, request)
+	if req.FactsComplete || len(req.FilePaths) != 0 {
+		t.Fatalf("a request took another tool call's file: %v", req.FilePaths)
+	}
+	// An update of another kind for the same call names nothing for this request,
+	// and a later update the facts reader cannot vouch for withdraws the earlier one.
+	edit := []map[string]any{{"sessionUpdate": "tool_call_update", "toolCallId": "call_read_1", "kind": "edit", "status": "in_progress",
+		"locations": []any{map[string]any{"path": path}}, "rawInput": map[string]any{"filePath": path}}}
+	if req = openCodeApprovalAfterUpdates(t, edit, request); req.FactsComplete || len(req.FilePaths) != 0 {
+		t.Fatalf("a read took an edit update's file: %v", req.FilePaths)
+	}
+	withdrawn := append(append([]map[string]any{}, updates...), map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": "call_read_1",
+		"kind": "read", "status": "in_progress", "locations": []any{map[string]any{"path": " "}}, "rawInput": map[string]any{"filePath": " "}})
+	if req = openCodeApprovalAfterUpdates(t, withdrawn, request); req.FactsComplete || len(req.FilePaths) != 0 {
+		t.Fatalf("a withdrawn update's file was kept: %v", req.FilePaths)
+	}
+}
+
+// #3058: OpenCode's glob and grep ask with kind "search" (measured over ACP on 1.19.4).
+// One given a path names it in the request's locations and rawInput; one given none
+// names nothing and searches the session folder. Either way the authority is told
+// the folder searched, so live policy decides and audits it as a read.
+func TestOpenCodeSearchApprovalNamesTheFolderSearched(t *testing.T) {
+	const folder = "/workspace/fixture/sub"
+	withPath := map[string]any{"toolCallId": "call_s_1", "title": "*.go", "kind": "search", "status": "pending",
+		"locations": []any{map[string]any{"path": folder}}, "rawInput": map[string]any{"pattern": "*.go", "path": folder}}
+	if req := openCodeApprovalAfterUpdates(t, nil, withPath); req.ToolKind != "search" || !req.FactsComplete || !reflect.DeepEqual(req.FilePaths, []string{folder}) {
+		t.Fatalf("search with a path = kind %q complete %v paths %v, want %s", req.ToolKind, req.FactsComplete, req.FilePaths, folder)
+	}
+	updates := []map[string]any{
+		{"sessionUpdate": "tool_call", "toolCallId": "call_s_2", "title": "grep", "kind": "search", "status": "pending", "locations": []any{}, "rawInput": map[string]any{}},
+		{"sessionUpdate": "tool_call_update", "toolCallId": "call_s_2", "title": "grep", "kind": "search", "status": "in_progress", "locations": []any{}, "rawInput": map[string]any{"pattern": "hello"}},
+	}
+	noPath := map[string]any{"toolCallId": "call_s_2", "title": "hello", "kind": "search", "status": "pending", "locations": []any{}, "rawInput": map[string]any{"pattern": "hello"}}
+	if req := openCodeApprovalAfterUpdates(t, updates, noPath); !req.FactsComplete || !reflect.DeepEqual(req.FilePaths, []string{"/workspace/fixture"}) {
+		t.Fatalf("search with no path = complete %v paths %v, want the session folder", req.FactsComplete, req.FilePaths)
+	}
+	// OpenCode also gives kind search to MCP tools named context or context7_*, which ask
+	// with empty metadata (1.19.4: metadata {}): such a call is no read of the folder.
+	for i, input := range []map[string]any{{}, {"libraryName": "x"}, {"pattern": "hello", "query": "x"}} {
+		mcp := map[string]any{"toolCallId": fmt.Sprintf("call_m_%d", i), "title": "context7_resolve_library_id", "kind": "search",
+			"status": "pending", "locations": []any{}, "rawInput": input}
+		if req := openCodeApprovalAfterUpdates(t, nil, mcp); len(req.FilePaths) != 0 {
+			t.Fatalf("MCP search %v = paths %v, want none: it is not a search of the session folder", input, req.FilePaths)
+		}
+	}
 }

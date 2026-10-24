@@ -37,6 +37,8 @@ export const KEY_CONTEXTS = [
   'sessionHistory',
   /** Palette results have focus and its query is empty. */
   'paletteRecent',
+  /** The approvals queue is on screen, outside a field and outside a modal. */
+  'approvalQueue',
 ] as const
 
 export type KeyContextName = (typeof KEY_CONTEXTS)[number]
@@ -62,7 +64,6 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
     PALETTE_RECENT_COMMANDS.map((command) => [command, 'general' as const]),
   ),
   'help.toggle': 'general',
-  'nav.toggleRail': 'general',
   'launcher.focus': 'launcher',
   'launcher.start': 'launcher',
   'launcher.startBackground': 'launcher',
@@ -77,10 +78,13 @@ export const COMMAND_GROUP: Readonly<Record<string, KeyGroup>> = {
   'rail.last': 'surface',
   'rail.open': 'surface',
   'rail.pin': 'surface',
+  'rail.menu': 'surface',
   'sourceDiff.nextFile': 'surface',
   'sourceDiff.previousFile': 'surface',
   'sourceDiff.nextHunk': 'surface',
   'sourceDiff.previousHunk': 'surface',
+  'approvals.approve': 'surface',
+  'approvals.deny': 'surface',
 }
 
 export const KEYBINDINGS: readonly KeyRule[] = [
@@ -88,10 +92,6 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   { command: 'palette.open', keys: 'Mod+k' },
   { command: 'help.toggle', keys: '?' },
   { command: 'launcher.focus', keys: '/' },
-  // The rail folds to an icon rail and back. `Mod+b` rather than a bare letter
-  // because this one has to work while the operator is typing — it is how you get the
-  // width back mid-task — and the guard above only lets a MODIFIED chord through a field.
-  { command: 'nav.toggleRail', keys: 'Mod+b' },
   // New session (redesign §3.7.13): a bare letter, so only outside a field. `Shift+N`
   // (with another account) waits for the composer's account picker.
   { command: 'session.new', keys: 'n', when: 'outsideField' },
@@ -135,6 +135,9 @@ export const KEYBINDINGS: readonly KeyRule[] = [
   { command: 'rail.open', keys: 'Enter', when: 'railFocused' },
   { command: 'rail.open', keys: 'Space', when: 'railFocused' },
   { command: 'rail.pin', keys: 'p', when: 'railFocused' },
+  // The row's actions menu, by the two keys a platform's own lists open one with.
+  { command: 'rail.menu', keys: 'Shift+F10', when: 'railFocused' },
+  { command: 'rail.menu', keys: 'ContextMenu', when: 'railFocused' },
 
   // ── source diff, only while that view is listening and the target is not a field
   { command: 'sourceDiff.nextFile', keys: 'Alt+ArrowDown', when: 'sourceDiff' },
@@ -153,6 +156,10 @@ export const KEYBINDINGS: readonly KeyRule[] = [
     keys: 'Alt+ArrowLeft',
     when: 'sourceDiff',
   },
+
+  // ── the approvals queue: the open request, outside a field and a modal (#2548)
+  { command: 'approvals.approve', keys: 'a', when: 'approvalQueue' },
+  { command: 'approvals.deny', keys: 'd', when: 'approvalQueue' },
 ]
 
 /** The key that arms a navigation sequence, and how long it stays armed. */

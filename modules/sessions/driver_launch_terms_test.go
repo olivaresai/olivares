@@ -662,7 +662,10 @@ func nativeLaunchPermission(t *testing.T, driver string, spec LaunchSpec, frames
 			if err := json.Unmarshal([]byte(item.Value), &cfg); err != nil {
 				t.Fatal(err)
 			}
-			rules, _ := cfg["permission"].(map[string]any)
+			// The preset's rules belong to the build agent; every other agent is denied (#3083).
+			agents, _ := cfg["agent"].(map[string]any)
+			build, _ := agents["build"].(map[string]any)
+			rules, _ := build["permission"].(map[string]any)
 			return fmt.Sprint(rules["bash"], "/", rules["edit"])
 		}
 	}

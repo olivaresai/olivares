@@ -14,7 +14,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -140,8 +142,13 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	if err != nil {
 		return nil, err
 	}
-	args, err := cr.runArgs(spec, name, envArgs)
+	passwdBinds, forgetPasswd, err := cr.engineUserBinds()
 	if err != nil {
+		return nil, err
+	}
+	args, err := cr.runArgs(spec, name, envArgs, passwdBinds)
+	if err != nil {
+		forgetPasswd()
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, cr.rt.Path, args...) // #nosec G204 -- the runtime path is operator-detected and the arguments are built here without a shell
@@ -153,12 +160,52 @@ func (cr *containerRunner) Launch(ctx context.Context, spec LaunchSpec) (Process
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
-	return cr.native.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, func() { cr.remove(name) })
+	p, err := cr.native.launchPipes(cmd, spec.WaitDelay, spec.StripImageData, func() {
+		cr.remove(name)
+		forgetPasswd()
+	})
+	if err != nil {
+		forgetPasswd()
+	}
+	return p, err
+}
+
+// engineUserBinds gives a Docker session an /etc/passwd entry for the engine's id. Docker
+// runs the process as --user uid:gid and writes no entry for that id, and OpenSSH refuses
+// to run without one ("No user exists for uid"). Podman writes the entry itself, and root
+// has one in every image. The file holds root and the engine user only; it is removed
+// when the session ends.
+func (cr *containerRunner) engineUserBinds() ([]ContainerBind, func(), error) {
+	uid, gid := os.Geteuid(), os.Getegid()
+	if cr.rt.isPodman() || uid == 0 {
+		return nil, func() {}, nil
+	}
+	dir, err := os.MkdirTemp("", "olivares-container-")
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("sessions: the session's passwd directory: %w", err)
+	}
+	forget := func() { _ = os.RemoveAll(dir) }
+	path := filepath.Join(dir, "passwd")
+	if err := os.WriteFile(path, passwdEntries(uid, gid), 0o644); err != nil {
+		forget()
+		return nil, func() {}, fmt.Errorf("sessions: the session's passwd file: %w", err)
+	}
+	return []ContainerBind{{HostPath: path, Target: "/etc/passwd", ReadOnly: true}}, forget, nil
+}
+
+// passwdEntries is the session's /etc/passwd: root, and the engine's id under the name the
+// host gives it ("olivares" when the host has none).
+func passwdEntries(uid, gid int) []byte {
+	name := "olivares"
+	if u, err := user.LookupId(strconv.Itoa(uid)); err == nil && u.Username != "" && !strings.ContainsAny(u.Username, ":\n\r\x00") {
+		name = u.Username
+	}
+	return []byte(fmt.Sprintf("root:x:0:0:root:/:/bin/sh\n%s:x:%d:%d:%s:/tmp:/bin/sh\n", name, uid, gid, name))
 }
 
 // runArgs is everything after the CLI's name. Order matters in one place only: the
 // image ends the options and the program and its arguments follow it untouched.
-func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []string) ([]string, error) {
+func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []string, passwdBinds []ContainerBind) ([]string, error) {
 	args := []string{
 		"run", "--rm", "-i", "--name", name, "--label", SessionContainerLabel + "=1",
 		"--read-only", "--tmpfs", "/tmp:rw,exec,nosuid,nodev",
@@ -196,6 +243,9 @@ func (cr *containerRunner) runArgs(spec LaunchSpec, name string, envArgs []strin
 	binds, err := containerBinds(spec)
 	if err != nil {
 		return nil, err
+	}
+	if !bindCovers(binds, "/etc/passwd") {
+		binds = append(binds, passwdBinds...)
 	}
 	for _, b := range binds {
 		if err := b.valid(); err != nil {

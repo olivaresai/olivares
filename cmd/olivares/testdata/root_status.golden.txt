@@ -1,0 +1,16 @@
+Olivares AI dev
+
+ENGINE     none found on this machine
+SIGNED IN  no
+NEXT       olivares quickstart
+
+Start here:
+  doctor     Check this host's installation and say what to fix
+  login      Sign in to an engine and keep the sign-in for the next commands
+  quickstart Start the engine for the first time and open the console
+  session    Start, follow, send to, stop and resume agent sessions
+  status     Show whether the engine is up and which parts are configured
+  tool       Install and sign in the agent tools sessions run (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI)
+  wiki       Initialize a folder wiki and run its ingest, query or lint skill
+
+All commands: olivares --help

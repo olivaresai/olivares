@@ -6,15 +6,16 @@ import { Wrench } from 'lucide-react'
 import { lazyView } from '@/features/lazy-view'
 import type { ViewEntry } from '@/features/registry'
 
-// The CREDENTIAL plane, beside the profile plane above it and deliberately not
-// inside it. A profile says which home an official CLI runs under; a provider says
-// which credential it runs with. They have independent permission tiers, and before
-// this route `sessions:provider:read` was a permission with no screen.
-const AgentToolsView = lazy(() =>
+// ONE TOOLS PLACE (#2552): each tool, who signs in with what, and the accounts and API
+// keys sessions run as. The API key, account, profile and binding pages are doors into
+// this room (their own views.tsx), each under its own read tier, so the room is exported
+// once and every door mounts the same element.
+const ToolsRoom = lazy(() =>
   import('./agent-tools-view').then((m) => ({
     default: m.AgentToolsView,
   })),
 )
+export const toolsRoom = lazyView(ToolsRoom)
 
 export const VIEWS = [
   {
@@ -28,7 +29,10 @@ export const VIEWS = [
       sectionId: 'environments',
     },
     icon: Wrench,
-    permission: 'system:admin',
-    element: lazyView(AgentToolsView),
+    // Every member sees the accounts and API keys sessions run as. The install side
+    // (inventory, versions, login probes, sign-in) stays the deployment administrator's,
+    // inside the room.
+    permission: 'sessions:account:read',
+    element: toolsRoom,
   },
 ] satisfies ViewEntry[]

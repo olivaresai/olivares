@@ -822,6 +822,9 @@ NOT_RELEASES = (
      r"\(\x0014\.4\x01 \* 0\.001\)|\|[ \t]*\*\*\x0014\.4\x01\*\*[ \t]*\|"),
     ("npm dependency versions in a changelog entry", ("CHANGELOG.md",),
      r"DOMPurify is updated to \x00|`colord` \x00|undici \(\x00|miniflare, \x00"),
+    ("the container images' Node, npm and npm's bundled packages in a changelog entry", ("CHANGELOG.md",),
+     r"\brun Node \x00|\bshipped Node \x00|\bship npm \x00|\bbundled undici \x00|\bbrace-expansion \x00|\bip-address \x00"
+     r"|\bhttp-cache-semantics \x00"),
     ("the pinned gitleaks release", ("docs/SECURITY-HARDENING.md",), r"gitleaks \(pinned \x00"),
     ("the PostgreSQL minor releases a measurement names",
      (*localized("how-to/backup-and-restore.md"), "docs/DR-RUNBOOK.md", "docs/DIRECTORY-USER-AUTHORITY.md",

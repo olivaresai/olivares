@@ -50,8 +50,8 @@ func TestLaunchSpeedHTTPClaudeFastMode(t *testing.T) {
 			if r.code != http.StatusCreated || r.body["fast_mode"] != enabled {
 				t.Fatalf("launch = %d %s; want saved fast_mode=%t", r.code, r.raw, enabled)
 			}
-			if enabled && r.body["model_ref"] != "default" {
-				t.Fatalf("the catalog default checked for Fast mode was not pinned: %s", r.raw)
+			if enabled && r.body["model_ref"] != "claude-opus-5-5" {
+				t.Fatalf("the catalog default checked for Fast mode was not pinned to its exact id: %s", r.raw)
 			}
 			ref := r.body["run_ref"].(string)
 			got := h.do("GET", "/v1/m/sessions/runs/"+ref, admin, tenantHdr(tenant))

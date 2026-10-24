@@ -1,16 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { lazy } from 'react'
 import { KeySquare } from 'lucide-react'
-import { lazyView } from '@/features/lazy-view'
+import { toolsRoom } from '@/features/agent-tools/views'
 import type { ViewEntry } from '@/features/registry'
-
-const ProvidersView = lazy(() =>
-  import('./providers-view').then((m) => ({
-    default: m.ProvidersView,
-  })),
-)
 
 export const VIEWS = [
   {
@@ -33,6 +26,9 @@ export const VIEWS = [
     // is how a sidebar stops being scannable.
     icon: KeySquare,
     permission: 'sessions:provider:read',
-    element: lazyView(ProvidersView),
+    // A door into Tools (#2552), where the API keys are listed beside the accounts.
+    // `?add=<kind>&returnTo=` (the setup wizard's "Add an API key") still opens the form.
+    doorTo: 'agent-tools',
+    element: toolsRoom,
   },
 ] satisfies ViewEntry[]

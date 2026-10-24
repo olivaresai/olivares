@@ -163,6 +163,11 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	if raw == nil {
 		raw = map[string]any{} // defensive: a degenerate token must never nil-panic the merge/read below
 	}
+	// The group-overage marker is read from each source on its own: the UserInfo merge
+	// below keeps only the keys the token lacks, so one source's `_claim_names` would
+	// hide the other's.
+	idTokenNames := raw["_claim_names"]
+	var userInfoNames any
 	// Fetch UserInfo when it can supply a claim the ID token lacks: the email (often
 	// absent in the code flow) OR the configured groups claim. Many IdPs keep the ID
 	// token minimal and expose groups only at UserInfo (e.g. Azure AD's groups
@@ -192,6 +197,7 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 				_ = ui.Claims(&claims)
 				var uraw map[string]any
 				if ui.Claims(&uraw) == nil {
+					userInfoNames = uraw["_claim_names"]
 					for k, v := range uraw {
 						if _, ok := raw[k]; !ok {
 							raw[k] = v
@@ -221,8 +227,30 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	id.AAL, id.AuthenticatedAt = aal, authenticatedAt
 	if o.groupsClaim != "" {
 		id.Groups = claimStrings(raw[o.groupsClaim])
+		// Entra above 200 groups drops the claim and lists it in _claim_names instead
+		// (OIDC Core 5.6.2). The list is then incomplete whatever else we hold for it,
+		// UserInfo included, so the login is flagged and CompleteSSO decides. A marker
+		// from either source counts.
+		// ponytail: Entra's `hasgroups` (implicit/hybrid flows only) is not read; this
+		// provider runs only the code flow. Upgrade when an implicit flow is added.
+		id.GroupsIndeterminate = claimListed(idTokenNames, o.groupsClaim) || claimListed(userInfoNames, o.groupsClaim)
 	}
 	return id, nil
+}
+
+// claimListed reports whether a `_claim_names` value says the IdP supplies claim
+// elsewhere (OIDC Core 5.6.2). A value that is present but not an object cannot be
+// read, so it counts as listing the claim: unknown must not become "no groups". go-oidc
+// already rejects such a value in the ID token; UserInfo is not checked by it.
+func claimListed(names any, claim string) bool {
+	switch t := names.(type) {
+	case nil:
+		return false
+	case map[string]any:
+		_, ok := t[claim]
+		return ok
+	}
+	return true
 }
 
 // claimStrings coerces a JSON claim value to a list of non-empty strings. It

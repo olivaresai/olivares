@@ -26,11 +26,15 @@
   "lenses": {
     "analytics": {
       "title": "Por desarrollador (administración de Analytics)",
-      "description": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{developers}} desarrollador(es)."
+      "description_one": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{count}} desarrollador.",
+      "description_many": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{count}} desarrolladores.",
+      "description_other": "Totales fidedignos por desarrollador y día del feed de administración de Analytics en {{count}} desarrolladores."
     },
     "telemetry": {
       "title": "Por sesión (telemetría en vivo)",
-      "description": "Actividad por sesión en tiempo real del plano OTLP en {{teams}} equipo(s); incluye el tiempo activo."
+      "description_one": "Actividad por sesión en tiempo real del plano OTLP en {{count}} equipo; incluye el tiempo activo.",
+      "description_many": "Actividad por sesión en tiempo real del plano OTLP en {{count}} equipos; incluye el tiempo activo.",
+      "description_other": "Actividad por sesión en tiempo real del plano OTLP en {{count}} equipos; incluye el tiempo activo."
     }
   },
   "comparison": {

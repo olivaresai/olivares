@@ -1383,7 +1383,7 @@ func (m *Module) mutateDecisionDeadline(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(
+		tx, err := m.communicationTxWithAuthority(
 			ctx, confined, request, CommunicationClaimAuthoritySnapshot{},
 		)
 		if err != nil {
@@ -1439,7 +1439,7 @@ func (m *Module) mutateDecisionWithNarrowedAuthority(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(
+		tx, err := m.communicationTxWithAuthority(
 			ctx, confined, request, CommunicationClaimAuthoritySnapshot{},
 		)
 		if err != nil {

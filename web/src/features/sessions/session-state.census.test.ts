@@ -11,6 +11,7 @@ const readers = [
   ['components/layout/session-rail-model.ts', 'sessionRow'],
   ['features/sessions/session-groups.ts', 'groupOf'],
   ['features/sessions/session-state-dot.tsx', 'StateDot'],
+  ['features/sessions/session-state-word.tsx', 'StateWord'],
   ['features/sessions/session-state-badge.tsx', 'SessionStateBadge'],
 ]
 
@@ -82,7 +83,8 @@ describe('session display state has one classifier', () => {
   // The list also sorts and filters by state: its sort accessor must call the shared
   // projection too, so it is the one view with a call of its own.
   it.each([
-    ['features/sessions/work-rail.tsx', 'StateDot', 0],
+    // The list says its state as a word with its time (dev#3162).
+    ['features/sessions/work-rail.tsx', 'StateWord', 0],
     ['features/sessions/thread-header.tsx', 'StateDot', 0],
     ['features/sessions/sessions-workspace-view.tsx', 'SessionStateBadge', 1],
   ])('%s renders its state through %s', (path, component, projections) => {

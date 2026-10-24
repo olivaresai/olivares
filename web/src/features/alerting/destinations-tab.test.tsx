@@ -354,3 +354,30 @@ describe('DestinationsTab', () => {
     )
   })
 })
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): with no
+ * destination the intro row already carries "Add destination" in orange, so the
+ * empty state offers the same verb in the secondary style.
+ */
+describe('DestinationsTab — one orange control on an empty list', () => {
+  it('offers the empty-state verb in the secondary style; the header keeps the orange', async () => {
+    api.listConsoleDestinations.mockResolvedValue({
+      destinations: [],
+      kinds,
+      sealer_available: true,
+    })
+    wrap(<DestinationsTab />)
+    const emptyState = (await screen.findByText('No destinations yet')).closest(
+      '[data-slot="empty-state"]',
+    ) as HTMLElement
+    const inEmpty = within(emptyState).getByRole('button', {
+      name: 'Add destination',
+    })
+    expect(inEmpty.className).not.toContain('bg-accent')
+    const inHeader = screen
+      .getAllByRole('button', { name: 'Add destination' })
+      .find((button) => button !== inEmpty)
+    expect(inHeader?.className).toContain('bg-accent')
+  })
+})

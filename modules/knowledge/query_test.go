@@ -29,8 +29,8 @@ func TestQueryProgrammatic(t *testing.T) {
 	kbID := kb.body["id"].(string)
 
 	src := newFakeSource([]contentsource.Document{
-		{DocID: "d1", Title: "Alpha", Body: "The quick brown fox jumps over the lazy dog"},
-		{DocID: "d2", Title: "Beta", Body: "Enterprise governance for AI agent systems"},
+		{DocID: "d1", Title: "Alpha", Body: "The quick brown fox jumps over the lazy dog", ACL: []string{"anyone"}},
+		{DocID: "d2", Title: "Beta", Body: "Enterprise governance for AI agent systems", ACL: []string{"anyone"}},
 	})
 	h.addSource("test-src", src)
 
@@ -193,7 +193,7 @@ func TestFetchDocumentProgrammatic(t *testing.T) {
 	kbID := kb.body["id"].(string)
 
 	src := newFakeSource([]contentsource.Document{
-		{DocID: "d1", Title: "Document One", Body: "Content for testing document fetch"},
+		{DocID: "d1", Title: "Document One", Body: "Content for testing document fetch", ACL: []string{"anyone"}},
 	})
 	h.addSource("fetchdoc-src", src)
 
@@ -362,7 +362,7 @@ func TestHandleQueryDelegatesToProgrammaticAPI(t *testing.T) {
 	kbID := kb.body["id"].(string)
 
 	src := newFakeSource([]contentsource.Document{
-		{DocID: "d1", Title: "Delegate", Body: "Testing delegation from HTTP handler to Query method"},
+		{DocID: "d1", Title: "Delegate", Body: "Testing delegation from HTTP handler to Query method", ACL: []string{"anyone"}},
 	})
 	h.addSource("delegate-src", src)
 

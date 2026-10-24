@@ -33,8 +33,13 @@ func TestProviderSessionPresetsPersistThroughNativeLaunch(t *testing.T) {
 						m, _, tenant, profile = openCodeHarness(t, AuthSourceAccountHome)
 						setOpenCodeFixture(t, profile, openCodeFixture{SessionID: "preset-opencode"})
 					}
-					if confined {
+					// An own-login OpenCode session is held to its login's hosts, which
+					// needs the confinement helper (#3082).
+					if confined || driver == providerDriverOpenCode && mode != "plan" {
 						WithConfinement([]string{t.TempDir()}, false)(m)
+					} else {
+						// The OpenCode harness confines its child by default (#2888).
+						WithConfinement(nil, false)(m)
 					}
 					return m, tenant, profile
 				}

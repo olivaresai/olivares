@@ -117,7 +117,7 @@
     "confirmPhrase": "RESTORE",
     "confirmLabel": "지금 복원",
     "confirmSummaryPrefix": "복원 원본",
-    "confirmSummarySuffix": "테넌트 {{count}}개 포함.",
+    "confirmSummarySuffix_other": "테넌트 {{count}}개 포함.",
     "awaitingTitle": "두 번째 승인자 대기 중",
     "awaitingDescription": "이중 통제가 활성화되어 있습니다. 다른 관리자가 승인하고 백업 탭에서 암호를 제공할 때까지 이 복원은 실행되지 않습니다.",
     "requestId": "요청 ID",

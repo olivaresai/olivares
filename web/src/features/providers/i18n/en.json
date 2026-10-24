@@ -2,7 +2,6 @@
   "title": "Providers",
   "subtitle": "A cloud provider credential or a local model endpoint that your agent tools run on.",
   "nav": "Providers",
-  "add": "Add provider",
   "rowMenu": "Row actions for {{name}}",
   "empty": {
     "title": "No provider registered yet",
@@ -162,5 +161,9 @@
     "failed": "Provider saved. Session setup failed: {{error}}",
     "retry": "Retry setup",
     "incomplete": "Tool installation is {{state}}. Check AI tools and retry."
+  },
+  "section": {
+    "title": "API keys",
+    "add": "Add an API key"
   }
 }

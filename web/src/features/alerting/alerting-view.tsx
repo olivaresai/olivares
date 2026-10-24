@@ -377,7 +377,7 @@ function RoutesTab({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-body text-muted-foreground">{t('routes.intro')}</p>
-      {canWrite ? (
+      {canWrite && !(routesQ.isSuccess && routes.length === 0) ? (
         <PagePrimaryAction>
           <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
             <Plus />

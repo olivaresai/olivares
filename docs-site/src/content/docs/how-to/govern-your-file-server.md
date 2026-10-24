@@ -72,7 +72,8 @@ The connector maps **only what the filesystem expresses**, and declares what it 
 Principal names resolve through the host's name service (which may include **LDAP**,
 so `uid`→username matches your directory). A uid/gid that does not resolve falls back to
 its **numeric** id. A file with **no derivable ACL** inherits the knowledge base's default
-ACL, which retrieval still enforces. The connector **never invents** an ACL a file does
+ACL, which retrieval still enforces; with no default ACL either, the file is **denied**
+unless the source is declared public with `"public": "true"` in its config. The setting applies to documents stored after it is set; re-ingest to change rows already stored. The connector **never invents** an ACL a file does
 not carry.
 
 ### Classification

@@ -248,11 +248,11 @@ func TestOpenCodeLaunchArgsAreOwnedACPOnLoopback(t *testing.T) {
 	if d.Key() != providerDriverOpenCode || d.ConfigHomeEnv() != envOpenCodeConfigDir || d.DefaultProgram() != "opencode" {
 		t.Fatalf("driver identity = %q %q %q", d.Key(), d.ConfigHomeEnv(), d.DefaultProgram())
 	}
-	if got := d.LaunchArgs(DriverLaunch{}); !reflect.DeepEqual(got, []string{"acp", "--hostname", "127.0.0.1"}) {
+	if got := d.LaunchArgs(DriverLaunch{}); !reflect.DeepEqual(got, []string{"acp", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "ERROR"}) {
 		t.Fatalf("empty workdir argv = %v", got)
 	}
 	got := d.LaunchArgs(DriverLaunch{WorkDir: "/workspace/fixture", Model: "ignored", Effort: "ignored"})
-	want := []string{"acp", "--hostname", "127.0.0.1", "--cwd", "/workspace/fixture"}
+	want := []string{"acp", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "ERROR", "--cwd", "/workspace/fixture"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("argv = %v, want %v", got, want)
 	}
@@ -263,10 +263,13 @@ func TestOpenCodeLaunchArgsAreOwnedACPOnLoopback(t *testing.T) {
 		}
 	}
 	env := d.(ProviderDriverLaunchEnv).LaunchEnv(DriverLaunch{})
-	if len(env) != 1 || env[0].Name != envOpenCodeDisableAutoUpdate || env[0].Value != "1" {
+	wantEnv := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}, {Name: envOpenCodeDisableExternalSkills, Value: "1"},
+		{Name: envOpenCodeDisableLSPDownload, Value: "1"}, {Name: envOpenCodeDisableShare, Value: "1"},
+		{Name: envOpenCodeConfigContent, Value: `{"share":"disabled","skills":{"paths":[".claude/skills",".agents/skills"]}}`}}
+	if !reflect.DeepEqual(env, wantEnv) {
 		t.Fatalf("launch env = %v", env)
 	}
-	if providerHomeEnvName(env[0].Name) || openCodeReservedEnvName(env[0].Name) {
+	if providerHomeEnvName(env[0].Name) || openCodeReservedEnvName(env[0].Name) || openCodeReservedEnvName(env[1].Name) {
 		t.Fatal("LaunchEnv must not name a profile-owned or reserved XDG variable")
 	}
 	tp := d.(ProviderDriverTransport).TransportProfile()
@@ -1079,9 +1082,9 @@ func TestOpenCodeLocalModelEndpointInjectsTheProvider(t *testing.T) {
 		t.Fatal("a local no-key provider must not carry an apiKey")
 	}
 
-	// No endpoint: no inline config (the ordinary account-home launch is untouched).
+	// No endpoint: no inline provider (the ordinary account-home launch keeps its own).
 	for _, e := range (openCodeDriver{}).LaunchEnv(DriverLaunch{}) {
-		if e.Name == "OPENCODE_CONFIG_CONTENT" {
+		if e.Name == "OPENCODE_CONFIG_CONTENT" && strings.Contains(e.Value, `"provider"`) {
 			t.Fatal("a launch with no local model must not carry the inline provider config")
 		}
 	}

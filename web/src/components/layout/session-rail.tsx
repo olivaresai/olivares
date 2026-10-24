@@ -32,7 +32,7 @@ export function RailGlyph({ state }: { state: RailState }) {
       <span
         role="img"
         aria-label={word}
-        className="inline-block size-3.5 shrink-0 rounded-full border-2 border-accent-soft border-t-accent border-r-accent motion-safe:animate-spin motion-safe:[animation-duration:1.2s]"
+        className="m-0.5 inline-block size-2.5 shrink-0 rounded-full bg-accent"
       />
     )
   const Icon = state === 'ended' ? CircleCheck : Pause

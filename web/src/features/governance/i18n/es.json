@@ -117,9 +117,6 @@
     "title": "Cola de aprobaciones",
     "caption": "Solicitudes que esperan una decisión. Cada aprobación, rechazo y cancelación queda registrada.",
     "search": "Buscar solicitudes…",
-    "requestedBy": "Solicitada por",
-    "status": "Estado",
-    "progress": "Aprobaciones",
     "age": "Antigüedad",
     "expires": "Caduca",
     "escalates": "Escala",
@@ -141,12 +138,14 @@
     "emptyPending": "No hay aprobaciones pendientes",
     "emptyPendingHint": "La cola está despejada — nada espera una decisión.",
     "approve": "Aprobar",
-    "reject": "Rechazar",
     "cancel": "Cancelar",
     "viewDetail": "Ver detalle",
     "actorHint": "Identificador de actor de auditoría — nunca una dirección de correo. La identidad se resuelve desde el directorio, no se muestra aquí.",
     "expiredAt": "Caducada {{time}}",
-    "request": "Solicitud"
+    "approveOnce": "Aprobar una vez",
+    "deny": "Rechazar",
+    "noMatch": "Ninguna solicitud coincide con la búsqueda",
+    "noMatchHint": "Borra la búsqueda para ver todas las solicitudes de esta lista."
   },
   "status": {
     "pending": "Pendiente",
@@ -156,11 +155,8 @@
     "expired": "Caducada"
   },
   "decide": {
-    "approveTitle": "¿Aprobar esta solicitud?",
-    "approveBody": "Tu aprobación cuenta para las aprobaciones que necesita esta solicitud.",
     "rejectTitle": "¿Rechazar esta solicitud?",
     "rejectBody": "Un solo rechazo termina la solicitud.",
-    "approveConfirm": "Aprobar",
     "rejectConfirm": "Rechazar",
     "note": "Nota",
     "noteHint": "Opcional.",
@@ -226,7 +222,10 @@
     "decisionReject": "Rechazada",
     "reenableNeedsAdmins": "Dos cuentas de administrador distintas deben aprobarlo. Créalas en Identidad y acceso, o con `olivares users create`.",
     "openIdentity": "Abrir Identidad y acceso",
-    "cannotDecideOwn": "No puedes aprobar tu propia solicitud. Otro administrador debe decidir."
+    "cannotDecideOwn": "No puedes aprobar tu propia solicitud. Otro administrador debe decidir.",
+    "requesterCannotApprove": "Quien hizo la solicitud no puede aprobarla.",
+    "launchedBy": "Iniciada por",
+    "decidedByYou": "Aprobaste esta solicitud. Espera a otra persona que la apruebe."
   },
   "policies": {
     "title": "Políticas",
@@ -608,7 +607,7 @@
     }
   },
   "agentcoreExport": {
-    "caption": "Proyecta las reglas de gobierno de este inquilino sobre un motor de políticas de AWS AgentCore como políticas Cedar. Planificar es una simulación que no escribe nada; aplicar escribe el plan que has revisado y está sujeto a la aprobación de gobierno.",
+    "caption": "Proyecta las reglas de gobernanza de este inquilino sobre un motor de políticas de AWS AgentCore como políticas Cedar. Planificar es una simulación que no escribe nada; aplicar escribe el plan que has revisado y está sujeto a la aprobación de gobernanza.",
     "planTitle": "Planificar la exportación",
     "modeLabel": "Modo de aplicación",
     "modeDefault": "Predeterminado del inquilino (según se configuró en el host)",
@@ -647,7 +646,7 @@
     "confirmHash": "Hash del plan: {{hash}}",
     "confirmApply": "Aplicar exportación",
     "pendingTitle": "Esperando aprobación: no se ha escrito nada",
-    "pendingBody": "Gobierno no ha aprobado esta exportación, así que no se ha escrito ninguna política en AgentCore. Esto no es ni un éxito ni un error.",
+    "pendingBody": "Gobernanza no ha aprobado esta exportación, así que no se ha escrito ninguna política en AgentCore. Esto no es ni un éxito ni un error.",
     "approvalRef": "Referencia de aprobación: {{ref}}",
     "pendingRetry": "El plan revisado no ha cambiado y permanece en pantalla: vuelve a aplicarlo cuando se conceda la aprobación.",
     "appliedTitle": "Exportación aplicada",
@@ -683,9 +682,23 @@
     "you": "Tú",
     "member": "Un miembro",
     "apiToken": "Un token de API",
-    "requestSummary": "Solicitud"
+    "requestSummary": "Solicitud",
+    "matched": "Regla aplicada: {{rule}}",
+    "matchedDefault": "Regla aplicada: ninguna, así que se aplica la predeterminada",
+    "matchedUnreadable": "Regla aplicada: una regla que no puedes leer",
+    "reaches": "Alcanza: {{list}}",
+    "reachFolder": {
+      "write": "{{path}} (escritura)",
+      "read": "{{path}} (solo lectura)",
+      "unknown": "{{path}} (acceso desconocido)"
+    },
+    "matchedUnknown": "Regla aplicada: una regla que no se pudo leer",
+    "reachIncomplete": "más, que no se pudo leer"
   },
   "list": {
     "loadedOnly": "La búsqueda solo abarca las filas cargadas hasta ahora; carga más para seguir."
+  },
+  "queue": {
+    "needsYou": "Te espera a ti"
   }
 }

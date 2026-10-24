@@ -30,6 +30,10 @@
     "title": "Plan de contrôle injoignable",
     "description": "Nous n’avons pas pu joindre le plan de contrôle. Vérifiez votre connexion et que le moteur est en cours d’exécution."
   },
+  "networkSecure": {
+    "title": "Échec de la connexion sécurisée",
+    "description": "Votre navigateur n’a pas pu ouvrir de connexion sécurisée vers {{origin}}. S’il ne fait pas confiance au certificat du moteur, ouvrez cette adresse dans un nouvel onglet et faites-lui confiance, ou installez l’AC du moteur (tls.crt.ca dans son répertoire de données). Sinon, vérifiez votre connexion et que le moteur est en cours d’exécution."
+  },
   "boundary": {
     "title": "Cette vue a planté",
     "description": "Une erreur inattendue s’est produite lors du rendu. Recharger la page résout généralement le problème.",
@@ -54,7 +58,7 @@
   },
   "tenantAdmission": {
     "title": "Admission dans l’organisation requise",
-    "description": "Connectez-vous avec une identité d’annuaire admise dans l’organisation. L’autorité globale de bootstrap ne permet pas de gérer les communications du workspace."
+    "description": "Connectez-vous avec une identité d’annuaire admise dans l’organisation. L’autorité globale de bootstrap ne permet pas de gérer les communications de l’espace de travail."
   },
   "moduleNotEnabled": {
     "description": "Cette partie d'Olivares est désactivée ici ; il n'y a rien à afficher.",

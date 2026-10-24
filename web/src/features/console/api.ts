@@ -868,8 +868,8 @@ export interface LicenseStatusDTO {
 // The deployment-wide activation surface: read per-add-on state and enable/disable
 // a preset (or promote a staged add-on). ENTERPRISE-ONLY — the community build 501s
 // these routes, so the console shows an "available in the business edition" note.
-// Changes stage the governed activation manifest and take effect at the next engine
-// RESTART (add-ons are wired at boot), which `restart_required` communicates.
+// Changes stage the governed activation manifest. The running engine follows a change
+// on its own; `restart_required` says when one still needs an engine restart.
 
 /** One add-on's activation row. `state`: active | pending | available | console. */
 export interface ActivationAddonDTO {
@@ -878,6 +878,8 @@ export interface ActivationAddonDTO {
   summary: string
   env: string
   preset: string // the tier that introduces it: starter | regulated | full
+  /** The family that sells it (`ActivationFamilyDTO.key`). */
+  family?: string
   state: string
   reason?: string
   needs_secret?: boolean
@@ -889,6 +891,15 @@ export interface ActivationPresetDTO {
   addons: string[]
 }
 
+/** A group of add-ons the edition sells together; turned on or off as a whole. */
+export interface ActivationFamilyDTO {
+  key: string
+  title: string
+  addons: string[]
+  /** The add-ons of the family that are on now. */
+  active: string[]
+}
+
 /** The rendered activation status for the console table. */
 export interface ActivationStatusDTO {
   edition: string
@@ -898,7 +909,11 @@ export interface ActivationStatusDTO {
   restarting?: boolean
   addons: ActivationAddonDTO[]
   presets: ActivationPresetDTO[]
+  families?: ActivationFamilyDTO[]
 }
+
+/** What to enable, disable or preview: a preset, or one family on its own. */
+export type ActivationSelection = { preset: string } | { family: string }
 
 /** One line in a preview diff. `action`: activate | stage | unchanged | console. */
 export interface ActivationPlanEntryDTO {
@@ -919,6 +934,7 @@ export interface ActivationPlanDTO {
 export interface ActivationApplyInput {
   action: 'enable' | 'disable' | 'promote'
   preset?: string
+  family?: string
   addon?: string
 }
 
@@ -1547,8 +1563,8 @@ export const consoleApi = {
   // enable diff (no writes); applyActivation enables/disables a preset or promotes
   // a staged add-on. Enterprise-only — 501 in the community build.
   getActivation: () => http.get<ActivationStatusDTO>('/v1/console/activation'),
-  previewActivation: (preset: string) =>
-    http.post<ActivationPlanDTO>('/v1/console/activation/preview', { preset }),
+  previewActivation: (selection: ActivationSelection) =>
+    http.post<ActivationPlanDTO>('/v1/console/activation/preview', selection),
   applyActivation: (input: ActivationApplyInput) =>
     http.post<ActivationStatusDTO>('/v1/console/activation/apply', input),
 

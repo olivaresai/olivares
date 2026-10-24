@@ -5,9 +5,9 @@
 // core/internal/webui/embed.go). The single static `olivares` binary is
 // built from ./core.
 //
-go 1.26.9
+go 1.26.10
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 use (
 	./clients/generator

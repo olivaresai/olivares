@@ -42,8 +42,8 @@ toda dimensión de predicado dejada vacía significa *cualquiera*, y la coincide
 fuera de cualquier transacción de almacén**, y el resultado se escribe entonces en el ledger append-only.
 Crear, cambiar o borrar una ruta, y enviar una notificación de prueba, son
 acciones **privilegiadas y autoauditadas** atribuidas al principal real. Las rutas route y
-delivery son alcanzables pero deliberadamente no forman parte del contrato OpenAPI
-servido; sus formas a nivel de campo viven en las interfaces tipadas del producto.
+delivery se publican en la **referencia de rutas de módulo beta** ([referencia de rutas de módulo](/reference/api-beta/)),
+no en el contrato estable del núcleo; sus formas a nivel de campo viven en las interfaces tipadas del producto.
 
 ## Qué consume y produce
 
@@ -52,12 +52,17 @@ servido; sus formas a nivel de campo viven en las interfaces tipadas del product
   y nunca mide.
 - **Produce** notificaciones salientes a través de un seam de despacho, respaldado por los conectores
   de salida (Slack/Teams, PagerDuty/Opsgenie, webhook firmado y un destino SIEM
-  que cubre Splunk/Elastic vía CEF/LEEF/syslog/OTLP). Una notificación lleva solo
+  que cubre Splunk/Elastic vía CEF/LEEF/syslog/OTLP). Community incluye destinos Slack, Teams,
+  correo, SMS y webhook firmado; los destinos SIEM, ITSM y PagerDuty/Opsgenie requieren Business, y un
+  servidor Community se niega a abrir uno e indica Business. Una notificación lleva solo
   los campos de presentación ya seguros del finding — título, kind, severidad, referencia de sujeto y
   un hash de correlación — **nunca** un payload, prompt, secreto o PII. **Los datos mínimos son una
   propiedad del cable**, no un filtro a posteriori. El secreto del destino vive
-  solo en la configuración del conector que aprovisiona el operador, referenciado aquí por un
-  nombre no secreto.
+  solo en la configuración del conector, referenciado aquí por un
+  nombre no secreto. Un administrador añade destinos Slack y Microsoft Teams en la consola
+  (**Alertas → Destinos**): la URL del webhook se sella en el almacén de secretos, se muestra
+  solo como su host y se prueba con un mensaje real antes de guardarse. Cada otro tipo lo aprovisiona
+  el operador en el archivo indicado por `OLIVARES_NOTIFY_CONFIG`.
 
 :::caution[Límites honestos]
 - **El binario por defecto incluye un dispatcher deny-closed.** Hasta que un operador aprovisiona

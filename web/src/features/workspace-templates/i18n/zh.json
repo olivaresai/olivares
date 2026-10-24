@@ -78,7 +78,7 @@
   },
   "apply": {
     "success": "模板已应用。",
-    "conflicts": "已应用，存在 {{count}} 个冲突。",
+    "conflicts_other": "已应用，存在 {{count}} 个冲突。",
     "conflictField": "字段",
     "conflictOld": "原值",
     "conflictNew": "新值",

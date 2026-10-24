@@ -44,6 +44,9 @@ func sessionPolicy(p Policy, program string) coreconfine.Policy {
 	if tree := packageTree(realPath(program)); tree != "" {
 		q.ReadOnly = append(q.ReadOnly, tree)
 	}
+	if lib := programLibrary(realPath(program)); lib != "" {
+		q.ReadOnly = append(q.ReadOnly, lib)
+	}
 	if self, err := os.Executable(); err == nil {
 		q.ReadOnly = append(q.ReadOnly, self)
 	}
@@ -52,6 +55,25 @@ func sessionPolicy(p Policy, program string) coreconfine.Policy {
 	}
 	q.ReadWrite = append(q.ReadWrite, deviceDirs...)
 	return q
+}
+
+// programLibrary is the lib/<program> directory beside the bin that holds path,
+// or "". A managed release (<tools>/<driver>/<version>/bin/<program>) loads its
+// runtime from there: Gemini's bundle, Ollama's libraries. Only a real directory
+// reached without a link is granted: the helper resolves a link when it grants,
+// so a lib or lib/<program> link would grant its target.
+func programLibrary(path string) string {
+	if !filepath.IsAbs(path) || filepath.Base(filepath.Dir(path)) != "bin" {
+		return ""
+	}
+	lib := filepath.Join(filepath.Dir(filepath.Dir(path)), "lib", filepath.Base(path))
+	if resolved, err := filepath.EvalSymlinks(lib); err != nil || resolved != lib {
+		return ""
+	}
+	if fi, err := os.Stat(lib); err != nil || !fi.IsDir() {
+		return ""
+	}
+	return lib
 }
 
 // packageTree is the outermost node_modules directory that holds path, or "".

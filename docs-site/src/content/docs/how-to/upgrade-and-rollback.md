@@ -22,11 +22,12 @@ executable; it does not take a database backup.
 
 ## Which upgrade path is yours
 
-There are three ways to move the binary forward, and they land in the same place.
+There are four ways to move the binary forward, and they land in the same place.
 
 | Your install | Path |
 |---|---|
-| A binary on a host, systemd | `olivares upgrade` — this page |
+| A deb, rpm, apk or AUR package | The package manager. [Install from a package](/how-to/install-from-packages/) |
+| A binary on a host, systemd (not from a package) | `olivares upgrade` — this page |
 | A Docker or Podman container | `docker compose exec olivares olivares upgrade`, then recreate the container. The image cannot change, so the release is stored in the data volume (`ota/` under the data directory) and every start of the image binary starts it while it is newer than the image or the same version built differently. Removing `ota/` returns the container to its image's binary. [Docker and Compose](/how-to/install-a-license/#docker-and-compose) has the commands. |
 | Kubernetes / Helm | Set the image and let the operator roll it. Do not run `olivares upgrade` inside a pod: the deployment is declarative and the next reconcile would undo it. |
 
@@ -51,7 +52,7 @@ version you know is there and the guards stay armed:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.3
+olivares upgrade --check --current-version 0.4
 ```
 <!-- /release -->
 
@@ -99,6 +100,9 @@ fixes. If you run the security channel you receive those out of band from the GA
 ```sh
 olivares upgrade
 ```
+
+On a package install (deb, rpm, apk, AUR) this is refused with exit 2 before anything downloads: use
+the package manager, as the table above says. `--check` still shows the plan.
 
 What the command does, in order, and why each step is there:
 
@@ -160,6 +164,12 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 
 It prints the units by default; `--timer-dir` writes them where you tell it. This is
 opt-in — nothing schedules itself.
+
+On a package install the command refuses: `/usr/bin/olivares` belongs to the package manager, so it
+exits 2, writes no unit and names the route: the host's package manager, and on the Olivares
+appliance `systemctl start olivares-appliance-update.service`. With `--enterprise --connect` it also names
+`olivares license connect refresh`. The check is by path, so a binary that `install.sh --bindir /usr/bin`
+placed there is refused too.
 
 The console has the read-only half of the same information: **Settings → update status**
 calls `POST /v1/console/update-check`, which runs a check against the configured channel on

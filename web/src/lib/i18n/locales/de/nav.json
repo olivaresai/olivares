@@ -23,12 +23,13 @@
     "empty": "Keine Ansicht passt zu „{{query}}“"
   },
   "items": {
-    "estate": "Umgebung",
+    "estate": "Bestand",
     "home": "Start",
     "onboarding": "Einrichtungsassistent",
     "inventory": "Inventar",
     "sessions": "Sitzungen",
     "accessMap": "Zugriffskarte",
+    "reach": "Reichweite",
     "health": "Zustand & SLA",
     "capabilities": "MCP & Skills",
     "skills": "Skill-Katalog",
@@ -43,7 +44,7 @@
     "permissions": "Berechtigungen",
     "identity": "Identität & Zugriff",
     "vault": "Tresor",
-    "claudePolicy": "Claude Code-Governance",
+    "claudePolicy": "Verwaltete Richtlinie",
     "routinePolicies": "Routine-Richtlinien",
     "deploy": "Bereitstellung",
     "gitPublication": "Git-Veröffentlichung",
@@ -55,7 +56,7 @@
     "agentArtifacts": "Agent Artifacts",
     "models": "Modelle",
     "modelOps": "Modellbetrieb",
-    "adoption": "Claude-Code-Adoption",
+    "adoption": "Adoption",
     "evals": "Bewertungen",
     "security": "Sicherheit",
     "recordings": "Aufzeichnungen",
@@ -72,14 +73,14 @@
     "retention": "Aufbewahrung",
     "workspaceDashboard": "Arbeitsbereich",
     "settings": "Einstellungen",
-    "workspace-templates": "Workspace-Vorlagen",
+    "workspace-templates": "Arbeitsbereich-Vorlagen",
     "eventing": "Webhooks & Ereignisse",
     "session-viewer": "Sitzungsviewer",
     "backups": "Backups",
     "logs": "Protokolle",
     "inferenceProxy": "Inferenz-Proxy",
     "alerting": "Benachrichtigungen",
-    "agentcoreExport": "AgentCore-Export",
+    "agentcoreExport": "Richtlinienexport",
     "providers": "Anbieter",
     "providerProfiles": "Anbieterprofile",
     "providerBindings": "Quellenbindungen",
@@ -95,8 +96,8 @@
     "allHint": "Kein Arbeitsbereich-Filter",
     "default": "Standard",
     "tenantWide": "Alle Arbeitsbereiche",
-    "unresolved": "Workspace nicht in der Liste",
-    "truncated": "Die Liste ist unvollständig — es gibt mehr Workspaces als geladen"
+    "unresolved": "Arbeitsbereich nicht in der Liste",
+    "truncated": "Die Liste ist unvollständig — es gibt mehr Arbeitsbereiche als geladen"
   },
   "descriptions": {
     "estate": "Prüfen Sie konfigurierte Ressourcen und ihre Beziehungen, einschließlich der Abhängigkeiten von Arbeitseinheiten.",
@@ -105,11 +106,12 @@
     "inventory": "Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, erkennen und katalogisieren.",
     "sessions": "Sitzungen starten und verfolgen, was jede tut, auch die, die Olivares findet",
     "accessMap": "Was jeder Agent liest und schreibt (R/RW)",
+    "reach": "Sehen Sie, welche Ziele jedes Werkzeug erreichen kann und welche auf Genehmigung warten.",
     "health": "Verfügbarkeit und SLAs von Agenten und MCP",
     "capabilities": "MCP-Server, Skills und Werkzeuge steuern",
     "skills": "Skill-Pakete durchsuchen und Abteilungen, Agentengruppen und Agenten zuweisen",
     "protocolBindings": "Verwaltete A2A- und MCP-Bindungen erstellen und abgleichen",
-    "communications": "Kanäle, direkte Mitteilungen und der persönliche Posteingang des gewählten Workspace",
+    "communications": "Kanäle, direkte Mitteilungen und der persönliche Posteingang des gewählten Arbeitsbereich",
     "communicationsInbox": "An Sie adressierte Nachrichten: jede öffnen und bestätigen",
     "communicationsNew": "Einen Kanal mit ausdrücklichen Anfangsberechtigungen anlegen",
     "communicationsAdministration": "Kanäle verwalten: Konfiguration und Berechtigungsverlauf",
@@ -120,7 +122,7 @@
     "vault": "Ihre Passwörter, Notizen und Authenticator-Codes",
     "claudePolicy": "Verwaltete Richtlinie, Hooks, MCP, Sandbox und Policy-as-Code",
     "deploy": "Agenten bereitstellen und mit der Infrastruktur verbinden",
-    "gitPublication": "Commits pushen, Pull Requests öffnen und über freigegebene Git-Ziele mergen",
+    "gitPublication": "Commits pushen, Pull Requests öffnen und über genehmigte Git-Ziele mergen",
     "knowledge": "Wissensdatenbanken, RAG und Datenherkunft",
     "catalog": "Kuratierte, genehmigte Agenten und Fähigkeiten",
     "killswitch": "Notabschaltung, Wiederherstellung im Vier-Augen-Prinzip und Guardian-Eindämmung",
@@ -156,7 +158,7 @@
     "providerProfiles": "Anbieterverzeichnisse registrieren und verwalten, unter denen Sitzungen starten, und ihre Konfiguration auf Anfrage lesen",
     "providerBindings": "Konfigurierte Quellen mit Anbieterprofilen verknüpfen",
     "providerAccounts": "Benannte Anbieterkonten auflisten und ein vorhandenes Anbieterprofil als Konto übernehmen",
-    "routinePolicies": "Kadenzuntergrenzen, Parallelitätsobergrenzen, Genehmigungspflichten, Cron-Freigabelisten und gesperrte Umgebungen für Claude-Code-Routinen",
+    "routinePolicies": "Kadenzuntergrenzen, Parallelitätsobergrenzen, Genehmigungspflichten, Cron-Zulassungslisten und gesperrte Umgebungen für Claude-Code-Routinen",
     "agentcoreExport": "Die Projektion der Governance-Regeln dieses Mandanten auf AWS AgentCore als Cedar-Richtlinien planen, prüfen und anwenden; das Planen schreibt nichts",
     "workspace-templates": "Wiederverwendbare Schnappschüsse von Hooks, Einstellungen, Konnektoren und Richtlinien für Arbeitsbereichssitzungen",
     "eventing": "Ausgehende Webhook-Abonnements, das Protokoll erfasster Ereignisse, Zustellungen und die Dead-Letter-Warteschlange",
@@ -164,8 +166,8 @@
     "backups": "Verschlüsselte Disaster-Recovery-Schnappschüsse der Steuerungsebene: erstellen, planen, herunterladen und wiederherstellen",
     "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause",
     "sourceDiff": "Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei",
-    "agent-tools": "Erkennen, installieren und aktualisieren Sie die Agentenwerkzeuge auf diesem Host und verfolgen Sie jede Installation; nur für Deployment-Administratoren",
-    "mcpServers": "Entfernte MCP-Server mit dieser Organisation verbinden, testen und festlegen, welche Tools Sitzungen nutzen dürfen",
+    "agent-tools": "Die Konten und API-Schlüssel sehen, mit denen Sitzungen laufen; Werkzeuge installieren und anmelden nur Bereitstellungsadministratoren",
+    "mcpServers": "Entfernte MCP-Server mit dieser Organisation verbinden, testen und festlegen, welche Werkzeuge Sitzungen nutzen dürfen",
     "storedBudgets": "Verbrauch gegenüber jedem gespeicherten Limit. Reservierte Kapazität wird auf das Limit angerechnet."
   },
   "commandActions": {
@@ -186,6 +188,9 @@
     }
   },
   "aliases": {
+    "claudePolicy": "Claude Code-Governance · Claude Code",
+    "adoption": "Claude-Code-Adoption · Claude Code",
+    "agentcoreExport": "AgentCore-Export · AgentCore",
     "sessions": "Sitzungen · Sitzungen beobachten · Sitzungen betreiben · Claude Code · agentops",
     "agentops": "Sitzungen betreiben · Claude Code · agentops",
     "console": "Steuerungskonsole · Mandantenverwaltung"
@@ -242,14 +247,14 @@
       }
     },
     "deployment": {
-      "label": "Bereitstellung",
+      "label": "Auslieferung",
       "question": "Wie bereite ich eine Bereitstellung vor und steuere sie?",
       "sections": {
         "deployments": "Bereitstellungen"
       }
     },
     "observation": {
-      "label": "Beobachtbarkeit & Nachweise",
+      "label": "Aufsicht",
       "question": "Was passiert, was kostet es, und was kann ich belegen?",
       "sections": {
         "operations": "Status und Aktivität",
@@ -272,8 +277,6 @@
     "areas": "Bereiche",
     "expand": "Module von {{area}} anzeigen",
     "collapse": "Module von {{area}} ausblenden",
-    "expandAll": "Alle Bereiche ausklappen",
-    "collapseAll": "Alle Bereiche einklappen",
     "modulesOf": "Module von {{area}}",
     "empty": "In diesem Bereich sind für Sie keine Einträge verfügbar",
     "emptyHint": "Einträge erscheinen hier, sobald Ihre Rolle in der aktuellen Organisation Zugriff auf ein Modul dieses Bereichs gewährt.",
@@ -286,15 +289,15 @@
     "remove": "{{name}} aus Favoriten entfernen",
     "viewAll": "Alle anzeigen ({{count}})",
     "manage": "Favoriten verwalten",
-    "empty": "Markiere ein Modul mit dem Stern, um es hier zu speichern.",
-    "scope": "In deinem Konto gespeichert, in jedem Browser.",
-    "saveFailed": "Die Favoriten konnten nicht in deinem Konto gespeichert werden. Sie bleiben in diesem Browser und werden bei der nächsten Änderung oder Anmeldung erneut gespeichert.",
+    "empty": "Markieren Sie ein Modul mit dem Stern, um es hier zu speichern.",
+    "scope": "In Ihrem Konto gespeichert, in jedem Browser.",
+    "saveFailed": "Die Favoriten konnten nicht in Ihrem Konto gespeichert werden. Sie bleiben in diesem Browser und werden bei der nächsten Änderung oder Anmeldung erneut gespeichert.",
     "temporary": "Favoriten bleiben vorerst im Arbeitsspeicher.",
     "clear": "Favoriten löschen",
     "recents": "Zuletzt geöffnet",
     "recentManage": "Zuletzt geöffnete Module verwalten",
     "recentViewAll": "Alle anzeigen ({{count}})",
-    "recentEmpty": "Hier erscheinen die Module, die du öffnest.",
+    "recentEmpty": "Hier erscheinen die Module, die Sie öffnen.",
     "recentScope": "In diesem Tab geöffnet. Wird beim Neuladen, Abmelden oder Wechsel von Konto oder Organisation gelöscht.",
     "recentRemove": "{{name}} aus zuletzt geöffneten Modulen entfernen",
     "recentClear": "Zuletzt geöffnete Module löschen",
@@ -327,7 +330,9 @@
     "noProfileRead": "Eine Sitzung läuft als Anbieterprofil, und Ihre Rolle enthält keine Berechtigung, diese zu lesen.",
     "readFailed": "Die Anbieterprofile konnten nicht gelesen werden, daher kann von hier keine Sitzung gestartet werden.",
     "send": "Senden",
-    "turnPlaceholder": "Einen Satz senden…",
+    "ended": "Diese Sitzung ist beendet.",
+    "starting": "Die Sitzung startet…",
+    "startAgain": "Starten Sie die Sitzung neu, um eine Nachricht zu senden.",
     "turnAria": "Sitzungszug",
     "attachedWaiting": "Braucht Sie",
     "rawLine": "Rohzeile",
@@ -335,17 +340,16 @@
     "wirePlaceholder": "Eine NDJSON-Zeile an stdin senden…",
     "wireAria": "Sitzungseingabezeile",
     "turnFailed": "Die Sitzung konnte diesen Zug nicht annehmen.",
-    "draftSaveFailed": "Der Entwurf konnte in diesem Tab nicht gespeichert werden. Lass diese Seite geöffnet oder kopiere deine Nachricht, bevor du sie verlässt.",
+    "draftSaveFailed": "Der Entwurf konnte in diesem Tab nicht gespeichert werden. Lassen Sie diese Seite geöffnet oder kopieren Sie Ihre Nachricht, bevor Sie sie verlassen.",
     "sendBackgroundHint": "Strg+Eingabe sendet und lässt den Entwurf für den nächsten Satz bereit.",
-    "messagePlaceholder": "Nachricht an {{title}}…",
     "slashLabel": "Befehle und Skills",
     "slashOption": "{{name}}, {{i}} von {{n}}",
     "slashNoMatch": "Kein Befehl passt zu „{{query}}“.",
     "slash": {
-      "loading": "Befehle des Tools werden gelesen…",
-      "failed": "Die Befehle des Tools konnten nicht gelesen werden.",
-      "unreported": "Dieses Tool hat für die Sitzung keine Befehle gemeldet.",
-      "stale": "Die Befehle des Tools konnten nicht aktualisiert werden; diese Liste ist möglicherweise veraltet.",
+      "loading": "Befehle des Werkzeugs werden gelesen…",
+      "failed": "Die Befehle des Werkzeugs konnten nicht gelesen werden.",
+      "unreported": "Dieses Werkzeug hat für die Sitzung keine Befehle gemeldet.",
+      "stale": "Die Befehle des Werkzeugs konnten nicht aktualisiert werden; diese Liste ist möglicherweise veraltet.",
       "agent": "Agent",
       "source": {
         "built-in": "Eingebaut",
@@ -354,27 +358,33 @@
         "plugin": "Plugin"
       }
     },
-    "modelAria": "Modell und Effort dieser Sitzung: {{value}}",
     "sessionKeeps": "Diese Sitzung bleibt bei {{value}}. Eine andere Auswahl startet eine neue Sitzung.",
-    "startWithChoice": "Neue Sitzung mit dieser Auswahl starten"
+    "startWithChoice": "Neue Sitzung mit dieser Auswahl starten",
+    "askPlaceholder": "Frag etwas, / für Befehle und Skills",
+    "modelPicker": "Modell: {{value}}",
+    "effortPicker": "Aufwand: {{value}}",
+    "accessPicker": "Zugriff: {{value}}",
+    "accessKeeps": "Diese Sitzung behält ihren Zugriff. Ein anderer Zugriff startet eine neue Sitzung."
   },
   "shell": {
     "journeysLabel": "Arbeitswege",
     "journeys": {
       "home": "Start",
       "sessions": "Sitzungen",
-      "approvals": "Genehmigungen",
-      "storedBudgets": "Budgets",
-      "agent-tools": "KI-Werkzeuge"
+      "agent-tools": "Werkzeuge",
+      "rules": "Regeln",
+      "audit": "Hauptbuch",
+      "organization": "Organisation",
+      "storedBudgets": "Budgets"
     },
     "phoneBarLabel": "Haupt",
     "newSession": "Neue Sitzung",
     "searchCommands": "Suche und Befehle",
-    "brandHome": "Olivares AI, Start",
+    "search": "Suche",
+    "stopAll": "Alle stoppen",
     "allAreas": "Alle Bereiche",
     "more": "Mehr",
     "moreLabel": "Mehr: alle Bereiche",
-    "workspaceSwitch": "Arbeitsbereich wechseln. Aktuell: {{name}}",
     "workspaceCount": "Arbeitsbereiche: {{count}}",
     "rail": {
       "title": "Sitzungen",
@@ -412,7 +422,8 @@
     "panel": {
       "show": "{{title}} anzeigen",
       "hide": "{{title}} ausblenden",
-      "close": "Bereich schließen"
+      "close": "Bereich schließen",
+      "resize": "Breite von {{title}} ändern"
     },
     "keys": {
       "command": {
@@ -431,6 +442,18 @@
       "agentStops_one": "{{count}} Agent-Stopp aktiv",
       "agentStops_other": "{{count}} Agent-Stopps aktiv",
       "none": "Nichts ist gestoppt. Sitzungen und Agenten laufen normal."
+    },
+    "status": {
+      "label": "Status",
+      "running_one": "{{count}} Sitzung offen",
+      "running_other": "{{count}} Sitzungen offen",
+      "usage": "Nutzung von {{tool}}",
+      "fiveHour": "5 Std.",
+      "week": "Wo.",
+      "version": "Version"
+    },
+    "account": {
+      "version": "Version {{version}}"
     }
   }
 }

@@ -4,9 +4,10 @@
 //
 // THE ONE SENTENCE THAT SAYS WHAT A SESSION WAS DOING.
 //
-// Pure, and in its own module so the component file exports only a component (see
-// next-step-catalog.ts for why that matters here) and so the degradation ladder can be
-// driven directly by a test, rung by rung, without rendering anything.
+// Pure, and in its own module so the component file exports only a component (a .tsx
+// file that also exports constants trips `react-refresh/only-export-components`) and so
+// the degradation ladder can be driven directly by a test, rung by rung, without
+// rendering anything.
 import type { LiveDTO } from '@/features/sessions/types'
 
 /** How many rows the front door tells. Five is a screenful; the room holds the rest. */

@@ -6,6 +6,10 @@
 // to read provider profiles and said "No provider profile is registered" after Claude Code
 // was installed and signed in (HU-19). A ready tool offers New session, the one dialog
 // every entry point opens; otherwise the next setup step, in the setup wizard.
+//
+// It holds its place from the first paint (#3121): until the tools answer it offers New
+// session, which the dialog then completes or explains, so the line never arrives late and
+// pushes the page down. The verb comes first and the sentence after it.
 import { useNavigate } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -31,7 +35,9 @@ export function useReadyTool(): SessionTool | null | undefined {
   return ready[0] ?? null
 }
 
-export function NowStart() {
+/** `quiet` while a request waiting for this person carries Estate's one orange control:
+ * the start line then steps back to a secondary button. */
+export function NowStart({ quiet = false }: { quiet?: boolean } = {}) {
   const { t } = useTranslation('home')
   const { can, isSuperadmin } = useAuth()
   const navigate = useNavigate()
@@ -40,7 +46,7 @@ export function NowStart() {
   const codex = useToolStatus('codex')
   const readyTools = useReadyTools()
   if (!can('sessions:run:write')) return null
-  if (claude.isLoading || codex.isLoading || readyTools.isLoading) return null
+  const loading = claude.isLoading || codex.isLoading || readyTools.isLoading
   const tools: [ToolKey, typeof claude.data][] = [
     ['claude', claude.data],
     ['codex', codex.data],
@@ -62,38 +68,46 @@ export function NowStart() {
   const setup = () =>
     void navigate({ to: refusal ? '/providers' : '/onboarding' } as never)
 
-  const [text, action] = ready
-    ? [t('start.ready', { tool: TOOL_NAMES[ready] }), null]
-    : unknown
-      ? [null, null]
-      : refusal
-        ? [refusal, t('firstHour:start.openProviders')]
-        : installed
-          ? [
-              t('start.signIn', { tool: TOOL_NAMES[installed[0]] }),
-              t('start.signInAction'),
-            ]
-          : [t('start.install'), t('start.installAction')]
+  const [text, action] = loading
+    ? [null, null]
+    : ready
+      ? [t('start.ready', { tool: TOOL_NAMES[ready] }), null]
+      : unknown
+        ? [null, null]
+        : refusal
+          ? [refusal, t('firstHour:start.openProviders')]
+          : installed
+            ? [
+                t('start.signIn', { tool: TOOL_NAMES[installed[0]] }),
+                t('start.signInAction'),
+              ]
+            : [t('start.install'), t('start.installAction')]
 
   return (
     <div
-      className="flex min-w-0 flex-wrap items-center gap-2"
+      className="flex min-h-9 min-w-0 items-center gap-3"
       data-testid="now-start"
     >
-      {text ? (
-        <p className="min-w-0 flex-1 text-body text-text-2">{text}</p>
-      ) : null}
       {action ? (
-        <Button variant="primary" size="sm" onClick={setup}>
+        <Button
+          variant={quiet ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={setup}
+        >
           {action}
         </Button>
       ) : (
-        <Button variant="primary" size="sm" onClick={newSession}>
+        <Button
+          variant={quiet ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={newSession}
+        >
           <Plus className="size-3.5" />
           {t('start.newSession')}
           <Kbd className="ml-1">N</Kbd>
         </Button>
       )}
+      {text ? <p className="min-w-0 text-body text-text-2">{text}</p> : null}
     </div>
   )
 }

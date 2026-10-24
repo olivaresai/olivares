@@ -364,19 +364,30 @@ func TestActivity_EndpointRefusals(t *testing.T) {
 	}
 	setRunColumn(t, f, colRunProfileDriver, "claude")
 
-	// A session that held a repository credential is refused, running or stopped: the
-	// transcript on disk is unredacted, and a value an earlier generation printed
-	// cannot be withheld by the current one's redactor.
-	setRunColumn(t, f, colRunGitRead, "binding:owner/name")
+	// A session that held a repository credential or a managed credential is refused, running
+	// or stopped: the transcript on disk is unredacted, and a value an earlier generation
+	// printed cannot be withheld by the current one's redactor (the broker's withholding is
+	// of what the plane stores, not of the tool's own transcript).
+	givens := []struct{ column, value, said string }{
+		{colRunGitRead, "binding:owner/name", "repository credential"},
+		{colRunCredentials, `["prod-db"]`, "managed credential"},
+	}
 	for _, phase := range []string{"running", "stopped"} {
 		if phase == "stopped" {
 			f.stop(t)
 		}
-		if _, r := f.activity(t); r.code != http.StatusConflict || !strings.Contains(r.raw, "repository credential") {
-			t.Fatalf("secret-bearing %s session = %d %s", phase, r.code, r.raw)
-		}
-		if r := f.h.doJSON("GET", "/v1/m/sessions/runs/"+f.runRef+"/activity/agents/a1", f.admin, nil, f.hdr); r.code != http.StatusConflict {
-			t.Fatalf("secret-bearing %s agent transcript = %d %s", phase, r.code, r.raw)
+		for _, given := range givens {
+			setRunColumn(t, f, given.column, given.value)
+			if _, r := f.activity(t); r.code != http.StatusConflict || !strings.Contains(r.raw, given.said) {
+				t.Fatalf("%s: secret-bearing %s session = %d %s", given.said, phase, r.code, r.raw)
+			}
+			if r := f.h.doJSON("GET", "/v1/m/sessions/runs/"+f.runRef+"/messages", f.admin, nil, f.hdr); r.code != http.StatusConflict || !strings.Contains(r.raw, given.said) {
+				t.Fatalf("%s: secret-bearing %s messages = %d %s", given.said, phase, r.code, r.raw)
+			}
+			if r := f.h.doJSON("GET", "/v1/m/sessions/runs/"+f.runRef+"/activity/agents/a1", f.admin, nil, f.hdr); r.code != http.StatusConflict {
+				t.Fatalf("%s: secret-bearing %s agent transcript = %d %s", given.said, phase, r.code, r.raw)
+			}
+			setRunColumn(t, f, given.column, "")
 		}
 	}
 }

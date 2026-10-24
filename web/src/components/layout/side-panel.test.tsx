@@ -8,7 +8,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { usePaneWidthsStore } from '@/stores/pane-widths'
 import {
   SidePanelContent,
   SidePanelHost,
@@ -79,5 +80,81 @@ describe('the side panel', () => {
     screen.getByRole('button', { name: 'Close the panel' }).focus()
     await user.keyboard('{Escape}')
     expect(document.querySelector('[data-slot="side-panel"]')).toBeNull()
+  })
+
+  describe('its width', () => {
+    beforeEach(() => {
+      usePaneWidthsStore.setState({ widths: {}, touched: new Set() })
+      // jsdom has no layout: the panel is as wide as its default.
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+        () => ({ width: 380 }) as DOMRect,
+      )
+    })
+    afterEach(() => vi.restoreAllMocks())
+
+    it('is the default until a person sets one', async () => {
+      render(<Shell declare />)
+      const panel = await screen.findByRole('complementary', {
+        name: 'Changes',
+      })
+      expect(panel.style.getPropertyValue('--panel-w')).toBe('')
+      expect(panel.className).toContain('[--panel-w:380px]')
+    })
+
+    it('keeps the overlay sheet at its own width below 1100 px, whatever is stored', async () => {
+      usePaneWidthsStore.setState({ widths: { 'side-panel': 520 } })
+      render(<Shell declare />)
+      const panel = await screen.findByRole('complementary', {
+        name: 'Changes',
+      })
+      // jsdom evaluates no CSS: the class is what makes the sheet 340 px wide, not 50%.
+      expect(panel.className).toContain('max-[1099px]:w-[340px]')
+    })
+
+    it('applies the width a person stored, from any device', async () => {
+      usePaneWidthsStore.setState({ widths: { 'side-panel': 520 } })
+      render(<Shell declare />)
+      const panel = await screen.findByRole('complementary', {
+        name: 'Changes',
+      })
+      expect(panel.style.getPropertyValue('--panel-w')).toBe('520px')
+    })
+
+    it('widens from the keyboard on its left edge, and Enter puts it back', async () => {
+      const user = userEvent.setup()
+      render(<Shell declare />)
+      const handle = await screen.findByRole('separator', {
+        name: 'Resize Changes',
+      })
+      handle.focus()
+      // The handle is the panel's left edge: moving it left widens the panel.
+      await user.keyboard('{ArrowLeft}')
+      expect(usePaneWidthsStore.getState().widths['side-panel']).toBe(396)
+      expect(
+        screen
+          .getByRole('complementary', { name: 'Changes' })
+          .style.getPropertyValue('--panel-w'),
+      ).toBe('396px')
+      await user.keyboard('{Enter}')
+      expect(usePaneWidthsStore.getState().widths['side-panel']).toBeUndefined()
+    })
+
+    it('keeps the width when the panel is hidden and shown again', async () => {
+      const user = userEvent.setup()
+      usePaneWidthsStore.setState({ widths: { 'side-panel': 500 } })
+      render(<Shell declare />)
+      await user.click(
+        await screen.findByRole('button', { name: 'Hide Changes' }),
+      )
+      expect(screen.queryByRole('separator')).toBeNull()
+      await user.click(screen.getByRole('button', { name: 'Show Changes' }))
+      const panel = await screen.findByRole('complementary', {
+        name: 'Changes',
+      })
+      expect(panel.style.getPropertyValue('--panel-w')).toBe('500px')
+      expect(
+        screen.getByRole('separator', { name: 'Resize Changes' }),
+      ).toBeInTheDocument()
+    })
   })
 })

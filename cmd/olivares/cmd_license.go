@@ -176,10 +176,17 @@ func licenseInstallCmd() *cobra.Command {
 			if trust := licenseTrustReport(lic); trust != nil {
 				report["trust"] = trust
 			}
+			sw := licensedEditionSwitch(lic, lic.Status(now), dir)
+			if sw != nil {
+				report["edition_switch"] = sw
+			}
 			if rerr := renderReportOut(cmd, report); rerr != nil {
 				return rerr
 			}
 			// Honest stderr guidance (keeps a piped JSON clean).
+			if sw != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), editionSwitchNote(sw))
+			}
 			if replaced != "" {
 				fmt.Fprintf(cmd.ErrOrStderr(), "this REPLACED an installed license: %s\n", replaced)
 			}
@@ -406,6 +413,11 @@ func licenseStatusCmd() *cobra.Command {
 					}
 					reportKey, reportBody := licenseReport(lic, now)
 					result[reportKey] = reportBody
+					// The lifecycle status above counts the revocation list, so a revoked license offers no switch.
+					status, _ := result["status"].(string)
+					if sw := licensedEditionSwitch(lic, license.Status(status), dir); sw != nil {
+						result["edition_switch"] = sw
+					}
 				}
 			}
 			// E2: honor -o instead of always printing JSON.

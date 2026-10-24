@@ -244,10 +244,62 @@ func TestMessages_ARepeatedMessageSaysHowManyLaterOnesRepeatIt(t *testing.T) {
 	}
 }
 
+// text=1 is a page whose items carry their whole text, bounded as one message read by
+// id is, for a reader that copies the conversation; the index stays without it.
+func TestMessages_APageCarriesWholeTextsOnRequest(t *testing.T) {
+	long := strings.Repeat("x", messageTextMax+10)
+	f := messagesFixture(t, messagesTranscript+
+		`{"type":"assistant","timestamp":"2026-10-15T09:00:05.000Z","message":{"content":[{"type":"text","text":"`+long+`"}]}}`+"\n")
+
+	got, r := f.messages(t, "role=all&order=asc&text=1&limit=2")
+	if r.code != http.StatusOK || !sameInts(messageIDs(got.Items), []int{1, 2}) || got.Next != "2" || got.Total != 6 {
+		t.Fatalf("first page with text = %s", r.raw)
+	}
+	if got.Items[0].Text != "Plan the migration\nthen list the risks" || got.Items[1].Text != "Here is the plan." {
+		t.Fatalf("texts = %+v", got.Items)
+	}
+	got, r = f.messages(t, "role=all&order=asc&text=1&limit=50&cursor="+got.Next)
+	if r.code != http.StatusOK || !sameInts(messageIDs(got.Items), []int{3, 4, 5, 6}) || got.Next != "" {
+		t.Fatalf("rest with text = %s", r.raw)
+	}
+	if got.Items[1].Text != "PostgreSQL needs a separate down migration." || got.Items[3].Text != clipBytes(long, messageTextMax) {
+		t.Fatalf("texts = %d bytes last, items %+v", len(got.Items[3].Text), got.Items[:3])
+	}
+	// A text cut at the bound says so, so a copy of it cannot pass for the whole message;
+	// a whole one does not.
+	if !got.Items[3].Clipped || got.Items[1].Clipped {
+		t.Fatalf("clipped = %v (cut), %v (whole)", got.Items[3].Clipped, got.Items[1].Clipped)
+	}
+	// Newest first, the page keeps the newest `limit` and carries their whole texts.
+	got, r = f.messages(t, "role=all&order=desc&text=1&limit=2")
+	if r.code != http.StatusOK || !sameInts(messageIDs(got.Items), []int{5, 6}) || got.Next != "5" {
+		t.Fatalf("newest page with text = %s", r.raw[:min(len(r.raw), 300)])
+	}
+	if got.Items[0].Text == "" || got.Items[0].Clipped || got.Items[1].Text != clipBytes(long, messageTextMax) || !got.Items[1].Clipped {
+		t.Fatalf("newest texts = %+v", got.Items[0])
+	}
+	if one, r := f.messages(t, "id=6"); r.code != http.StatusOK || len(one.Items) != 1 || !one.Items[0].Clipped {
+		t.Fatalf("one long message read by id = %s", r.raw[:min(len(r.raw), 300)])
+	}
+	if strings.Contains(r.raw, "later_same") {
+		t.Fatalf("a page with text carries later_same: %s", r.raw)
+	}
+	// A page of whole texts is a smaller page: past its own ceiling the read clamps, as the
+	// index does at its own, and the cursor carries the rest.
+	if parsed, err := parseMessageQuery(url.Values{"text": {"1"}, "limit": {"200"}}); err != nil || parsed.limit != messagesTextPageMax {
+		t.Fatalf("text page limit = %d (%v), want %d", parsed.limit, err, messagesTextPageMax)
+	}
+	// Without it the index is what it was.
+	if got, _ = f.messages(t, "role=all"); got.Items[0].Text != "" {
+		t.Fatalf("the index carries text: %+v", got.Items[0])
+	}
+}
+
 func TestMessages_RefuseWhatTheyCannotAnswer(t *testing.T) {
 	f := messagesFixture(t, messagesTranscript)
 	for _, q := range []string{
 		"at=yesterday", "role=tool", "limit=0", "limit=x", "order=sideways", "cursor=-1", "cursor=x", "id=0",
+		"text=0", "text=true", "text=yes",
 		"q=" + strings.Repeat("a", messageQueryMax+1),
 	} {
 		if _, r := f.messages(t, q); r.code != http.StatusBadRequest {
@@ -285,6 +337,12 @@ func TestMessages_FollowTheActivityRules(t *testing.T) {
 	f.messages(t, "")
 	if n := countAudit(t, f, "sessions.run.messages"); n != 1 {
 		t.Fatalf("message reads recorded %d times, want 1", n)
+	}
+	// A read of whole texts is an export of the conversation: it leaves its own record,
+	// which the index read before it in the same window does not stand in for.
+	f.messages(t, "role=all&text=1")
+	if n := countAudit(t, f, "sessions.run.messages.text"); n != 1 {
+		t.Fatalf("whole-text reads recorded %d times, want 1", n)
 	}
 	// The activity's own record is not what dedupes this one.
 	f.activity(t)

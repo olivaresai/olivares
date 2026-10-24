@@ -26,7 +26,7 @@ const { api, auth, toast } = vi.hoisted(() => ({
   auth: {
     isSuperadmin: true,
     // These cases are about the install forms: the role reads no accounts or keys.
-    can: () => false,
+    can: (() => false) as (permission: string) => boolean,
     activeTenant: null,
     principal: { user_id: 'root' },
   },
@@ -52,6 +52,7 @@ vi.mock('@/features/first-hour/api', async (orig) => ({
   signInApi: signIn,
 }))
 import { agentOpsApi } from '@/features/agentops/api'
+import { providersApi } from '@/features/providers/api'
 import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
@@ -204,6 +205,7 @@ it('keeps tool actions available while provider details refresh and fetches the 
 beforeEach(() => {
   vi.clearAllMocks()
   auth.isSuperadmin = true
+  auth.can = () => false
   api.pins.mockResolvedValue({ pins: [] })
   vi.spyOn(agentOpsApi, 'listWorkspaces').mockResolvedValue({
     items: [],
@@ -254,12 +256,42 @@ it('is headed AI tools, as the navigation names it', async () => {
     await screen.findByRole('heading', { name: 'AI tools' }),
   ).toBeInTheDocument()
 })
-it('requires a system administrator without reading host inventory', async () => {
+it('opens for a member who reads the accounts and keys, and reads no host inventory', async () => {
+  // Tools is a team member's place too: the accounts and API keys sessions run as. The
+  // install side (inventory, versions, login probes, sign-in) stays the deployment
+  // administrator's, and the page says so instead of refusing the member.
   auth.isSuperadmin = false
+  auth.can = (p: string) =>
+    p === 'sessions:account:read' || p === 'sessions:provider:read'
+  vi.spyOn(agentOpsApi, 'listAccounts').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
+  vi.spyOn(providersApi, 'list').mockResolvedValue({
+    items: [],
+    has_more: false,
+  })
   mount()
-  expect(await screen.findByText(/system administrator/i)).toBeInTheDocument()
+  const section = await screen.findByRole('region', {
+    name: 'Accounts and API keys',
+  })
+  expect(
+    await within(section).findByRole('heading', { name: 'Accounts' }),
+  ).toBeInTheDocument()
+  expect(
+    within(section).getByRole('heading', { name: 'API keys' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText(
+      'Sessions run as these accounts and API keys. A system administrator installs the tools and signs them in.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Refresh' })).toBeNull()
+  expect(screen.queryByRole('textbox', { name: /source/i })).toBeNull()
   expect(api.inventory).not.toHaveBeenCalled()
   expect(api.providers).not.toHaveBeenCalled()
+  expect(api.pins).not.toHaveBeenCalled()
+  expect(agentOpsApi.toolsReadiness).not.toHaveBeenCalled()
 })
 it('previews the verified version before submitting the exact approval and reports the outcome', async () => {
   mount()

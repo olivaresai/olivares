@@ -20,9 +20,8 @@ type probeSpec struct {
 	// Env is the complete environment; nothing is inherited.
 	Env []string
 	Dir string
-	// Write are the paths a confined probe may write (its scratch home); Read
-	// are the paths beside its program it may read (a release's libraries).
-	Write, Read []string
+	// Write are the paths a confined probe may write (its scratch home).
+	Write []string
 	// Budget is the time the tool has to exit on its own; after it the process
 	// group receives SIGTERM, and Grace later SIGKILL.
 	Budget time.Duration
@@ -70,6 +69,26 @@ func envNames(env []string) []string {
 	return names
 }
 
+// probeRefusalBytes bounds the tool output a refusal carries. Node prints the
+// error, its stack and its code on separate lines, so the first line alone
+// ("node:internal/modules/run_main:76") names no cause; an output over the bound
+// keeps its head and its tail, where the code and the runtime version are.
+const (
+	probeRefusalBytes = 2048
+	probeRefusalHead  = 1280
+)
+
+// probeOutputExcerpt returns s trimmed, and for a longer output its head and tail.
+func probeOutputExcerpt(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= probeRefusalBytes {
+		return s
+	}
+	head := strings.ToValidUTF8(s[:probeRefusalHead], "")
+	tail := strings.ToValidUTF8(s[len(s)-(probeRefusalBytes-probeRefusalHead):], "")
+	return head + "\n…\n" + tail
+}
+
 // firstLine returns the first non-empty line of s, trimmed.
 func firstLine(s string) string {
 	for _, line := range strings.Split(s, "\n") {
@@ -101,7 +120,8 @@ func firstVersionToken(line string) string {
 
 // ChildCommand builds a child with the paths it may write (rw) and read (ro);
 // the composition confines it there like a session child, which also clears a
-// root engine's capabilities. The program itself is readable.
+// root engine's capabilities. The program itself is readable, and so is the
+// lib/<program> beside its bin/ (the shared policy grants it).
 type ChildCommand func(ctx context.Context, rw, ro []string, program string, args ...string) (*exec.Cmd, error)
 
 type childCommandKey struct{}
@@ -125,7 +145,7 @@ func newProbeCmd(ctx context.Context, spec probeSpec, out *cappedBuffer) (*exec.
 			return exec.CommandContext(ctx, program, args...), nil // #nosec G204 -- spec.Exe is the absolute path of the staged file whose size and SHA-256 were just verified, or a detected path the operator named explicitly with --probe; args are fixed literals per provider
 		}
 	}
-	cmd, err := build(ctx, spec.Write, spec.Read, spec.Exe, spec.Args...)
+	cmd, err := build(ctx, spec.Write, nil, spec.Exe, spec.Args...)
 	if err != nil {
 		return nil, err
 	}

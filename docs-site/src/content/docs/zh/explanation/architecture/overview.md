@@ -9,8 +9,8 @@ description: "Olivares AI 的构建方式：一个引擎、模块与连接器—
 下文所述大部分内容描述的是一个**处于 beta 阶段**、部分仍处于设计阶段的系统。平台模型、数据模型、协作式采集路径以及访问图谱差异化能力均已规格化并在逐步构建中；部分模块级能力是计划中的，而非已交付的。凡尚未构建的能力，本页都会明确指出。请将其视为预期架构，而非声称当今每一层都已达到生产完备。
 :::
 
-<img class="light:sl-hidden" src="/diagrams/02-architecture-dark.svg" alt="架构：代理界面、审计源、MCP 与 A2A 对端以及内容源通过三种方式汇入单一自托管 Go 二进制文件，该文件内嵌控制台，承载产品模块、策略与执行层，以及位于按租户限定范围的存储之上的已签名证据账本；它提供控制台、REST API、聚焦的 gRPC 子集、CLI 和 Terraform provider，云控制平面（已构建，尚未部署）与许可门户（已部署，交付功能关闭）被画为独立平面。" />
-<img class="dark:sl-hidden" src="/diagrams/02-architecture-light.svg" alt="架构：代理界面、审计源、MCP 与 A2A 对端以及内容源通过三种方式汇入单一自托管 Go 二进制文件，该文件内嵌控制台，承载产品模块、策略与执行层，以及位于按租户限定范围的存储之上的已签名证据账本；它提供控制台、REST API、聚焦的 gRPC 子集、CLI 和 Terraform provider，云控制平面（已构建，尚未部署）与许可门户（已部署，交付功能关闭）被画为独立平面。" />
+<img class="light:sl-hidden" src="/diagrams/02-architecture-dark.svg" alt="架构：智能体界面、审计源、MCP 与 A2A 对端以及内容源通过三种方式汇入单一自托管 Go 二进制文件，该文件内嵌控制台，承载产品模块、策略与执行层，以及位于按租户限定范围的存储之上的已签名证据账本；它提供控制台、REST API、聚焦的 gRPC 子集、CLI 和 Terraform provider，云控制平面（已构建，尚未部署）与许可门户（已部署，交付功能关闭）被画为独立平面。" />
+<img class="dark:sl-hidden" src="/diagrams/02-architecture-light.svg" alt="架构：智能体界面、审计源、MCP 与 A2A 对端以及内容源通过三种方式汇入单一自托管 Go 二进制文件，该文件内嵌控制台，承载产品模块、策略与执行层，以及位于按租户限定范围的存储之上的已签名证据账本；它提供控制台、REST API、聚焦的 gRPC 子集、CLI 和 Terraform provider，云控制平面（已构建，尚未部署）与许可门户（已部署，交付功能关闭）被画为独立平面。" />
 
 ## 平台模型：一个引擎、模块、连接器
 

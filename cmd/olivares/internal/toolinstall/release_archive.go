@@ -357,15 +357,9 @@ func (p *ReleaseArchive) Probe(ctx context.Context, exe, scratch, want string) (
 			return ProbeReport{}, err
 		}
 	}
-	// Every layout's entry point is bin/<driver>; Ollama and Gemini load their
-	// runtime from lib/<driver> beside bin. Only a real directory is granted: a
-	// detected tool's lib/<driver> could be a link to anywhere.
-	var read []string
-	libs := filepath.Join(filepath.Dir(filepath.Dir(exe)), "lib", declaredProgram(p.driver))
-	if fi, err := os.Lstat(libs); err == nil && fi.IsDir() {
-		read = []string{libs}
-	}
-	report, err := runProbe(ctx, probeSpec{Exe: exe, Args: []string{"--version"}, Dir: home, Write: []string{scratch}, Read: read, Budget: 20 * time.Second, Grace: 3 * time.Second, Env: []string{"HOME=" + home, "TMPDIR=" + tmp, "PATH=/usr/bin:/bin", "TERM=dumb", "LANG=C.UTF-8"}})
+	// The release's lib/<program> (Ollama's libraries, Gemini's bundle) is read
+	// through the shared confinement policy, as in a session.
+	report, err := runProbe(ctx, probeSpec{Exe: exe, Args: []string{"--version"}, Dir: home, Write: []string{scratch}, Budget: 20 * time.Second, Grace: 3 * time.Second, Env: []string{"HOME=" + home, "TMPDIR=" + tmp, "PATH=/usr/bin:/bin", "TERM=dumb", "LANG=C.UTF-8"}})
 	if err != nil {
 		return report, err
 	}

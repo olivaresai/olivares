@@ -105,3 +105,134 @@ func TestUIStateEditionBadge(t *testing.T) {
 		t.Fatalf("bad boolean: %d", r.code)
 	}
 }
+
+// TestUIStatePaneWidths: a person's panel widths are their own interface state on the server,
+// so they follow them to another browser. A PUT merges the panes it names, a width of 0 puts a
+// pane back to its default, and a client that does not know widths never erases them.
+func TestUIStatePaneWidths(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	ten := h.createOrg(root, "panes")
+	alice := h.roleToken(root, ten, "alice@panes.io", "viewer")
+	bob := h.roleToken(root, ten, "bob@panes.io", "viewer")
+	path := "/v1/m/consoleviews/ui-state"
+	widths := func(r resp) map[string]any {
+		m, _ := r.body["pane_widths"].(map[string]any)
+		return m
+	}
+
+	if r := h.do("GET", path, alice, nil, ten); widths(r) != nil {
+		t.Fatalf("a new user has widths: %s", r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": map[string]any{"sessions-list": 420}}, ten); r.code != http.StatusOK || widths(r)["sessions-list"] != float64(420) {
+		t.Fatalf("save one pane: %d %s", r.code, r.raw)
+	}
+	// A second pane joins the first; the first is untouched.
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": map[string]any{"sessions-context": 360}}, ten); r.code != http.StatusOK {
+		t.Fatalf("save second pane: %d %s", r.code, r.raw)
+	}
+	r := h.do("GET", path, alice, nil, ten)
+	if w := widths(r); w["sessions-list"] != float64(420) || w["sessions-context"] != float64(360) || r.body["stored"] != true {
+		t.Fatalf("read back: %s", r.raw)
+	}
+	// Another user has their own.
+	if r := h.do("GET", path, bob, nil, ten); widths(r) != nil {
+		t.Fatalf("bob sees alice's widths: %s", r.raw)
+	}
+	// A client that sends only the sidebar or the badge keeps the widths.
+	if r := h.do("PUT", path, alice, map[string]any{"sidebar": "rail"}, ten); widths(r)["sessions-list"] != float64(420) {
+		t.Fatalf("sidebar-only client erased widths: %s", r.raw)
+	}
+	// A width of 0 is "back to the default": that pane is dropped, the other stays.
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": map[string]any{"sessions-list": 0}}, ten); r.code != http.StatusOK {
+		t.Fatalf("reset: %d %s", r.code, r.raw)
+	}
+	r = h.do("GET", path, alice, nil, ten)
+	if w := widths(r); w["sessions-list"] != nil || w["sessions-context"] != float64(360) || r.body["sidebar"] != "rail" {
+		t.Fatalf("after reset: %s", r.raw)
+	}
+}
+
+func TestUIStatePaneWidthsValidation(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	ten := h.createOrg(root, "panebad")
+	alice := h.roleToken(root, ten, "alice@panebad.io", "viewer")
+	path := "/v1/m/consoleviews/ui-state"
+	many := map[string]any{}
+	for i := 0; i < 17; i++ {
+		many["pane-"+string(rune('a'+i))] = 300
+	}
+	for name, body := range map[string]map[string]any{
+		"no pane named":        {"pane_widths": map[string]any{}},
+		"uppercase pane id":    {"pane_widths": map[string]any{"Sessions": 300}},
+		"path-like pane id":    {"pane_widths": map[string]any{"../x": 300}},
+		"overlong pane id":     {"pane_widths": map[string]any{"a123456789012345678901234567890123": 300}},
+		"negative width":       {"pane_widths": map[string]any{"sessions-list": -1}},
+		"absurd width":         {"pane_widths": map[string]any{"sessions-list": 100000}},
+		"fractional width":     {"pane_widths": map[string]any{"sessions-list": 300.5}},
+		"text width":           {"pane_widths": map[string]any{"sessions-list": "wide"}},
+		"too many panes":       {"pane_widths": many},
+		"widths not an object": {"pane_widths": []any{300}},
+	} {
+		if r := h.do("PUT", path, alice, body, ten); r.code != http.StatusBadRequest {
+			t.Errorf("%s: %d %s, want 400", name, r.code, r.raw)
+		}
+	}
+	// Nothing bad was stored.
+	if r := h.do("GET", path, alice, nil, ten); r.body["stored"] != false {
+		t.Fatalf("a refused save stored something: %s", r.raw)
+	}
+}
+
+// The cap of 16 panes holds for what is stored, not only for one request: a 17th pane is
+// refused and nothing changes, while a request that drops one and adds one stays at 16.
+func TestUIStatePaneWidthsCapOnMerge(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	ten := h.createOrg(root, "panecap")
+	alice := h.roleToken(root, ten, "alice@panecap.io", "viewer")
+	path := "/v1/m/consoleviews/ui-state"
+	full := map[string]any{}
+	for i := 0; i < 16; i++ {
+		full["pane-"+string(rune('a'+i))] = 300
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": full}, ten); r.code != http.StatusOK {
+		t.Fatalf("16 panes: %d %s", r.code, r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": map[string]any{"one-more": 300}}, ten); r.code != http.StatusBadRequest {
+		t.Fatalf("17th pane: %d %s, want 400", r.code, r.raw)
+	}
+	if r := h.do("GET", path, alice, nil, ten); len(r.body["pane_widths"].(map[string]any)) != 16 || r.body["pane_widths"].(map[string]any)["one-more"] != nil {
+		t.Fatalf("a refused save changed the widths: %s", r.raw)
+	}
+	swap := map[string]any{"pane-a": 0, "one-more": 300}
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": swap}, ten); r.code != http.StatusOK {
+		t.Fatalf("drop one, add one: %d %s", r.code, r.raw)
+	}
+}
+
+// Resetting the last pane leaves a valid row that still reads as stored, with the other
+// settings at their values, and a width saved with the sidebar keeps both.
+func TestUIStatePaneWidthsLastResetAndMixedSave(t *testing.T) {
+	h := newHarness(t)
+	root := h.rootLogin()
+	ten := h.createOrg(root, "panelast")
+	alice := h.roleToken(root, ten, "alice@panelast.io", "viewer")
+	path := "/v1/m/consoleviews/ui-state"
+	h.do("PUT", path, alice, map[string]any{"pane_widths": map[string]any{"sessions-list": 420}}, ten)
+	if r := h.do("PUT", path, alice, map[string]any{"pane_widths": map[string]any{"sessions-list": 0}}, ten); r.code != http.StatusOK {
+		t.Fatalf("reset last: %d %s", r.code, r.raw)
+	}
+	r := h.do("GET", path, alice, nil, ten)
+	if r.body["stored"] != true || r.body["pane_widths"] != nil || r.body["sidebar"] != "full" || r.body["show_edition_badge"] != true {
+		t.Fatalf("after the last reset: %s", r.raw)
+	}
+	if r := h.do("PUT", path, alice, map[string]any{"sidebar": "rail", "pane_widths": map[string]any{"side-panel": 500}}, ten); r.code != http.StatusOK {
+		t.Fatalf("mixed save: %d %s", r.code, r.raw)
+	}
+	r = h.do("GET", path, alice, nil, ten)
+	if w, _ := r.body["pane_widths"].(map[string]any); r.body["sidebar"] != "rail" || w["side-panel"] != float64(500) {
+		t.Fatalf("mixed save read back: %s", r.raw)
+	}
+}

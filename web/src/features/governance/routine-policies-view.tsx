@@ -390,7 +390,7 @@ export function RoutinePoliciesView() {
         description={t('routines.subtitle')}
         icon={CalendarCog}
         primaryAction={
-          canAdmin ? (
+          canAdmin && !(listQ.isSuccess && policies.length === 0) ? (
             <Button
               variant="primary"
               size="sm"
@@ -754,6 +754,7 @@ export function RoutinePoliciesView() {
                 <Button
                   variant="primary"
                   size="sm"
+                  data-testid="routine-policy-new"
                   onClick={() => {
                     setEditing(null)
                     setEditorOpen(true)

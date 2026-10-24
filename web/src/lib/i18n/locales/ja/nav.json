@@ -23,12 +23,13 @@
     "empty": "「{{query}}」に一致するビューはありません"
   },
   "items": {
-    "estate": "環境",
+    "estate": "エステート",
     "home": "ホーム",
     "onboarding": "セットアップウィザード",
     "inventory": "インベントリ",
     "sessions": "セッション",
     "accessMap": "アクセスマップ",
+    "reach": "リーチ",
     "health": "正常性とSLA",
     "capabilities": "MCPとスキル",
     "skills": "スキルカタログ",
@@ -43,7 +44,7 @@
     "permissions": "権限",
     "identity": "アイデンティティとアクセス",
     "vault": "ボールト",
-    "claudePolicy": "Claude Codeガバナンス",
+    "claudePolicy": "管理ポリシー",
     "routinePolicies": "ルーチンポリシー",
     "deploy": "デプロイ",
     "gitPublication": "Git 公開",
@@ -55,7 +56,7 @@
     "agentArtifacts": "エージェントアーティファクト",
     "models": "モデル",
     "modelOps": "モデル運用",
-    "adoption": "Claude Code の導入状況",
+    "adoption": "導入状況",
     "evals": "評価",
     "security": "セキュリティ",
     "recordings": "記録",
@@ -79,7 +80,7 @@
     "logs": "ログ",
     "inferenceProxy": "推論プロキシ",
     "alerting": "アラート",
-    "agentcoreExport": "AgentCore エクスポート",
+    "agentcoreExport": "ポリシーのエクスポート",
     "providers": "プロバイダー",
     "providerProfiles": "プロバイダープロファイル",
     "providerBindings": "ソースバインディング",
@@ -105,6 +106,7 @@
     "inventory": "コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化",
     "sessions": "セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います",
     "accessMap": "各エージェントが読み書きする対象（R/RW）",
+    "reach": "各ツールが到達できる接続先と、承認待ちの接続先を確認できます。",
     "health": "エージェントとMCPの稼働状況とSLA",
     "capabilities": "MCPサーバー、スキル、ツールを統制",
     "skills": "スキルパックを閲覧し、部門、エージェントグループ、エージェントに割り当てる",
@@ -114,7 +116,7 @@
     "communicationsNew": "明示的な初期付与でチャネルを作成します",
     "communicationsAdministration": "チャネルを管理：設定と付与履歴",
     "communicationsHandoffs": "あなた宛ての作業責任のオファー: コンテキストを読んで承諾または拒否します",
-    "console": "ユーザー、SSO/IdP、ワークスペース、エージェントグループ、ロール、シークレット、コネクター、API キー、このインストールのライセンス",
+    "console": "ユーザー、SSO/IdP、ワークスペース、エージェントグループ、ロール、シークレット、コネクター、APIキー、このインストールのライセンス",
     "permissions": "アイデンティティ、ロール、承認",
     "identity": "SSO、SCIM、エージェントが使うアイデンティティ",
     "vault": "パスワード、メモ、認証コード",
@@ -152,7 +154,7 @@
     "alerting": "検出結果を宛先にルーティングし配信を確認",
     "reporting": "ガバナンスレポートを生成・ダウンロード",
     "postureExport": "コントロールタワー向けにグラウンドトゥルースのポスチャをエクスポート",
-    "providers": "セッションが起動するときに使う API キーとエンドポイントを登録し、テスト・交換・失効を行います",
+    "providers": "セッションが起動するときに使う APIキーとエンドポイントを登録し、テスト・交換・失効を行います",
     "providerProfiles": "セッションの起動元となるプロバイダーのホームを登録・管理し、必要に応じてその設定を読み取る",
     "providerBindings": "構成済みソースをプロバイダープロファイルにリンクする",
     "providerAccounts": "名前付きのプロバイダーアカウントを一覧し、既存のプロバイダープロファイルをアカウントとして採用する",
@@ -164,7 +166,7 @@
     "backups": "コントロールプレーンの暗号化された災害復旧スナップショット: 作成、スケジュール、ダウンロード、復元",
     "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止",
     "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します",
-    "agent-tools": "このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ）",
+    "agent-tools": "セッションが使うアカウントと APIキーを確認します。ツールのインストールとサインインはデプロイ管理者のみです",
     "mcpServers": "リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます",
     "storedBudgets": "保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。"
   },
@@ -186,6 +188,9 @@
     }
   },
   "aliases": {
+    "claudePolicy": "Claude Codeガバナンス · Claude Code",
+    "adoption": "Claude Code の導入状況 · Claude Code",
+    "agentcoreExport": "AgentCore エクスポート · AgentCore",
     "sessions": "セッション · セッションを観測 · セッションを運用 · Claude Code · agentops",
     "agentops": "セッションを運用 · Claude Code · agentops",
     "console": "統制コンソール · テナント管理"
@@ -242,14 +247,14 @@
       }
     },
     "deployment": {
-      "label": "デプロイ",
+      "label": "デリバリー",
       "question": "デプロイをどのように準備し、管理しますか？",
       "sections": {
         "deployments": "デプロイ"
       }
     },
     "observation": {
-      "label": "可観測性とエビデンス",
+      "label": "監督",
       "question": "何が起きていて、いくらかかり、何を証明できますか？",
       "sections": {
         "operations": "状態とアクティビティ",
@@ -272,8 +277,6 @@
     "areas": "エリア",
     "expand": "{{area}}のモジュールを表示",
     "collapse": "{{area}}のモジュールを隠す",
-    "expandAll": "すべてのエリアを展開",
-    "collapseAll": "すべてのエリアを折りたたむ",
     "modulesOf": "{{area}}のモジュール",
     "empty": "このエリアで利用できる項目はありません",
     "emptyHint": "現在の組織でのロールがこのエリアのモジュールへのアクセスを許可すると、ここに項目が表示されます。",
@@ -327,7 +330,9 @@
     "noProfileRead": "セッションはプロバイダープロファイルとして実行されますが、あなたのロールにはそれらを読む権限がありません。",
     "readFailed": "プロバイダープロファイルを読み取れなかったため、ここからセッションを開始できません。",
     "send": "送信",
-    "turnPlaceholder": "文を送信…",
+    "ended": "このセッションは終了しました。",
+    "starting": "セッションを開始しています…",
+    "startAgain": "メッセージを送るにはセッションをもう一度開始してください。",
     "turnAria": "セッションのターン",
     "attachedWaiting": "対応が必要",
     "rawLine": "生の行",
@@ -337,7 +342,6 @@
     "turnFailed": "セッションはこのターンを受け付けられませんでした。",
     "draftSaveFailed": "このタブに下書きを保存できませんでした。このページを開いたままにするか、離れる前にメッセージをコピーしてください。",
     "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。",
-    "messagePlaceholder": "{{title}} にメッセージ…",
     "slashLabel": "コマンドとスキル",
     "slashOption": "{{name}}、{{n}}件中{{i}}件目",
     "slashNoMatch": "「{{query}}」に一致するコマンドはありません。",
@@ -354,27 +358,33 @@
         "plugin": "プラグイン"
       }
     },
-    "modelAria": "このセッションのモデルと Effort: {{value}}",
     "sessionKeeps": "このセッションは {{value}} のままです。別の設定を使うには新しいセッションを開始します。",
-    "startWithChoice": "この選択で新しいセッションを開始"
+    "startWithChoice": "この選択で新しいセッションを開始",
+    "askPlaceholder": "何でも質問できます。/ でコマンドとスキル",
+    "modelPicker": "モデル: {{value}}",
+    "effortPicker": "推論レベル: {{value}}",
+    "accessPicker": "アクセス: {{value}}",
+    "accessKeeps": "このセッションはアクセスを変更しません。別のアクセスでは新しいセッションを開始します。"
   },
   "shell": {
     "journeysLabel": "作業の流れ",
     "journeys": {
       "home": "ホーム",
       "sessions": "セッション",
-      "approvals": "承認",
-      "storedBudgets": "予算",
-      "agent-tools": "AI ツール"
+      "agent-tools": "ツール",
+      "rules": "ルール",
+      "audit": "台帳",
+      "organization": "組織",
+      "storedBudgets": "予算"
     },
     "phoneBarLabel": "メイン",
     "newSession": "新しいセッション",
     "searchCommands": "検索とコマンド",
-    "brandHome": "Olivares AI ホーム",
+    "search": "検索",
+    "stopAll": "すべて停止",
     "allAreas": "すべての領域",
     "more": "その他",
     "moreLabel": "その他: すべての領域",
-    "workspaceSwitch": "ワークスペースを切り替える。現在: {{name}}",
     "workspaceCount": "ワークスペース: {{count}}",
     "rail": {
       "title": "セッション",
@@ -412,7 +422,8 @@
     "panel": {
       "show": "{{title}} を表示",
       "hide": "{{title}} を隠す",
-      "close": "パネルを閉じる"
+      "close": "パネルを閉じる",
+      "resize": "{{title}}の幅を変更"
     },
     "keys": {
       "command": {
@@ -430,6 +441,17 @@
       "agentStops": "{{count}} 件のエージェント停止がアクティブ",
       "agentStops_other": "{{count}} 件のエージェント停止がアクティブ",
       "none": "停止しているものはありません。セッションとエージェントは通常どおり動作しています。"
+    },
+    "status": {
+      "label": "ステータス",
+      "running_other": "開いているセッション {{count}} 件",
+      "usage": "{{tool}} の使用量",
+      "fiveHour": "5時間",
+      "week": "週",
+      "version": "バージョン"
+    },
+    "account": {
+      "version": "バージョン {{version}}"
     }
   }
 }

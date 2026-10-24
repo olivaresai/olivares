@@ -31,8 +31,11 @@
   },
   "signIn": {
     "openLink": "Abrir la página de inicio de sesión",
+    "openKeyPage": "Abrir la página de la clave",
     "codeLabel": "Código de la página de inicio de sesión",
     "codeHint": "Cuando apruebes el acceso, la página mostrará un código. Pégalo aquí.",
+    "keyLabel": "Clave de API",
+    "keyHint": "Crea una clave en la página de arriba y pégala aquí. {{name}} la guarda en este servidor; Olivares no la conserva.",
     "continue": "Continuar",
     "enterCode": "En la página de inicio de sesión, introduce este código:",
     "waiting": "Esperando a que termines en la página de inicio de sesión…",
@@ -40,7 +43,13 @@
     "copy": "Copiar",
     "copied": "Copiado",
     "starting": "Iniciando el inicio de sesión…",
-    "lostTouch": "Se perdió el contacto con el servidor. El inicio de sesión puede seguir en curso."
+    "lostTouch": "Se perdió el contacto con el servidor. El inicio de sesión puede seguir en curso.",
+    "method": "Método de acceso",
+    "methods": {
+      "opencode": "OpenCode Zen y modelos gratuitos (clave de API)",
+      "opencode-go": "OpenCode Go (clave de API)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (sin navegador)"
+    }
   },
   "errors": {
     "status": "No se pudo leer el estado de la herramienta.",

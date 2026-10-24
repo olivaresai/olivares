@@ -355,7 +355,7 @@ func (m *Module) mutateDirectNoticeAckWithCarrier(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(
+		tx, err := m.communicationTxWithAuthority(
 			ctx, confined, request, claims,
 		)
 		if err != nil {

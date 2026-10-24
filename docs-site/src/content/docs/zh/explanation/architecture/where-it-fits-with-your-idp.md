@@ -1,7 +1,7 @@
 ---
 title: Olivares AI 在你的 IdP 体系中处于何处
 description: >-
-  Olivares AI 不是身份提供方（IdP）。它以只读方式联邦化（federate）来自你已在运行的注册表的
+  Olivares AI 不是身份提供商（IdP）。它以只读方式联邦化（federate）来自你已在运行的注册表的
   agent 身份——Entra Agent ID、AWS AgentCore Identity、Google Agent
   Identity——并用它来为访问图谱归因。它如何与你的 IdP、SSO/SCIM、SPIFFE/WIF
   以及 ID-JAG / XAA 标准协同。
@@ -9,7 +9,7 @@ sidebar:
   order: 3
 ---
 
-安全架构师常问的第一个问题是：*“这是不是又一个我必须运行的身份系统？”*  不是。**Olivares AI 不是身份提供方，也不拥有身份。** 它**消费**你已经签发的身份——对人类，来自你经由 SSO/SCIM 的 IdP；对 agent，来自超大规模云厂商已正式发布（GA）的 agent 身份注册表——并用它们来为[访问图谱](/zh/explanation/)中的每一条边归因*谁或什么*位于其后。本说明确切阐明这道接缝（seam）所处之处。
+安全架构师常问的第一个问题是：*“这是不是又一个我必须运行的身份系统？”*  不是。**Olivares AI 不是身份提供商，也不拥有身份。** 它**消费**你已经签发的身份——对人类，来自你经由 SSO/SCIM 的 IdP；对 agent，来自超大规模云厂商已正式发布（GA）的 agent 身份注册表——并用它们来为[访问图谱](/zh/explanation/)中的每一条边归因*谁或什么*位于其后。本说明确切阐明这道接缝（seam）所处之处。
 
 ## 分层
 

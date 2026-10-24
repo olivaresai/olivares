@@ -39,6 +39,7 @@ type runtimeState struct {
 	*Dependencies
 
 	launchObserver        runtimeLaunchObserverState
+	factsCache            runFactsCache
 	sessionSkills         SessionSkillsSource
 	sessionSkillHomesRoot string
 
@@ -89,6 +90,11 @@ type runtimeState struct {
 	// driverPrograms are the operator's explicit executable overrides per driver.
 	// Absent ⇒ programResolver, then the driver's own official program name.
 	driverPrograms map[string]string
+	// openCodeSearchDir holds the ripgrep OpenCode's glob and grep run, and
+	// openCodeRipgrepSHA256 is its pin (WithOpenCodeSearchDir); "" when the node
+	// installs none.
+	openCodeSearchDir     string
+	openCodeRipgrepSHA256 string
 	// programPinned records that WithProgram set the Claude executable explicitly.
 	programPinned bool
 	// hookDataDir and hookBinary place a Claude session's PEP hook settings
@@ -755,6 +761,13 @@ type CreateRunParams struct {
 	GitRead       string `json:"git_read,omitempty"`
 	gitReadToken  string
 	gitReadDetail string
+	// Credentials names the managed credentials the Business broker gives the child a
+	// way to use (session_credentials.go). Names only; omitempty keeps every existing
+	// launch's dispatch digest unchanged. credentialWithhold holds the brokered values
+	// for the output redactor for this launch only; credentialDetail is the ledger's line.
+	Credentials        []string `json:"credentials,omitempty"`
+	credentialWithhold []string
+	credentialDetail   string
 	// profilePrograms, profileRegistries and profileEgressHosts are the profile's
 	// declared programs, package registries and egress hosts
 	// (provider_profile_packages.go), re-read on every launch and resume.
@@ -805,6 +818,7 @@ func launchIntentFor(ctx context.Context, action LaunchAction, runRef string, p 
 		SecretEnv:       append([]SecretEnvRef(nil), p.SecretEnv...),
 		RegistrySecrets: registryTokenRefs(p.profileRegistries),
 		GitRead:         p.GitRead,
+		Credentials:     slices.Clone(p.Credentials),
 	}
 	intent.LauncherPrincipal, _ = api.RequestPrincipal(ctx)
 	// The authenticated identity wins; the actor-derived form stays for
@@ -1050,6 +1064,9 @@ func (m *Module) createRunInternal(
 		return runDTO{}, err
 	}
 	if err := m.refuseGitReadFor(p); err != nil {
+		return runDTO{}, err
+	}
+	if err := m.refuseCredentialsFor(p); err != nil {
 		return runDTO{}, err
 	}
 	var orchestrationGrant *SessionWorkGrant
@@ -1427,7 +1444,7 @@ func (m *Module) createRunInternal(
 	rec, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "launched", toState: stateRunning,
 		detail: joinDetail(pr.contextPolicySummary, templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
+			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.credentialDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
 		actor: p.Actor, actorKind: p.ActorKind, guard: guardRuntimeLaunch(runtimeCreds.launchID),
 		confinement: reportedConfinement(proc),
 		mutate: func(rec model.Record) {
@@ -1667,6 +1684,9 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	// The repository the run row names, asked again like its secrets; a fresh
 	// token is minted for this launch.
 	p.GitRead = rec.String(colRunGitRead)
+	if p.Credentials, err = decodeCredentialNames(rec.String(colRunCredentials)); err != nil {
+		return runDTO{}, err
+	}
 	p.askCallerQuestions()
 	if err := refuseSecretEnvFor(p.SecretEnv, p.MayUseSecretEnv); err != nil {
 		return runDTO{}, err
@@ -1676,6 +1696,9 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 		return runDTO{}, err
 	}
 	if err := m.refuseGitReadFor(p); err != nil {
+		return runDTO{}, err
+	}
+	if err := m.refuseCredentialsFor(p); err != nil {
 		return runDTO{}, err
 	}
 	if err := refuseNativeCustomPreset(p, launchDriverKey(p)); err != nil {
@@ -1960,7 +1983,7 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	updated, err := m.transition(wctx, tenant, runRef, transitionInput{
 		event: "resumed", toState: stateRunning,
 		detail: joinDetail(engineResumeNote(ctx), templateDetail(tpl, tplConflicts), m.confinementDetail(proc, runRef),
-			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
+			secretEnvDetail(p.SecretEnv), p.gitReadDetail, p.credentialDetail, p.registryDetail, p.egressDetail, codexSandboxDetail(p, spec)),
 		actor: actor, actorKind: actorKind, lease: lease, guard: guardRuntimeLaunch(launchID),
 		confinement: reportedConfinement(proc),
 		mutate: func(rec model.Record) {
@@ -2517,23 +2540,24 @@ func (m *Module) cleanupRunWith(ctx context.Context, tenant model.TenantID, runR
 	if err != nil {
 		return runDTO{}, err
 	}
-	// A released session leaves every pinned group (#2130). The release has
-	// committed, so a failure here must not be reported as a failed release: the
-	// read path refuses to mark a cleaned run pinned anyway (run_pin.go
-	// decorateRunPin), which makes a row left behind invisible, not wrong.
+	// A released session leaves every pinned group (#2130) and drops every snooze
+	// and done mark (#2480). The release has committed, so a failure here must not
+	// be reported as a failed release: the read paths refuse to mark a cleaned run
+	// anyway (decorateRunPin, decorateRunMark), which makes a row left behind
+	// invisible, not wrong.
 	// Detached from the caller's cancellation: the release is done either way.
 	dropCtx := context.WithoutCancel(ctx)
 	if err := m.Data.Mutate(dropCtx, tenant, func(sc store.Scope) error {
-		return dropRunPins(dropCtx, sc, runRef)
+		return dropPersonalRunState(dropCtx, sc, runRef)
 	}); err != nil {
-		m.warnf("sessions: the pins of a released session were not removed", "run_ref", runRef, "error", err)
+		m.warnf("sessions: the pins and marks of a released session were not removed", "run_ref", runRef, "error", err)
 	}
 	return m.toRunDTO(updated), nil
 }
 
 // deleteRun removes a cleaned session's row. The append-only run_event ledger is
 // immutable and is intentionally NOT deleted — it remains as permanent evidence.
-func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef string) error {
+func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef, actor, actorKind string) error {
 	// serialize with resume/stop/cleanup on this run; a caller that is gone does not wait for it
 	release, err := m.rt.lockRunContext(ctx, liveKey(tenant, runRef))
 	if err != nil {
@@ -2569,9 +2593,18 @@ func (m *Module) deleteRun(ctx context.Context, tenant model.TenantID, runRef st
 			return err
 		}
 		claimSID = rec.String(colRunClaimSID)
-		// A deleted session leaves no pin rows behind — same transaction as the
-		// delete itself (#2130).
-		return dropRunPins(ctx, sc, runRef)
+		// The delete is in the ledger, in the same transaction (#2795): the record
+		// goes, the act of removing it stays.
+		if _, err := sc.Audit().Append(ctx, model.AuditDraft{
+			Actor: actor, ActorKind: actorKind,
+			Action: "sessions.run.deleted", TargetKind: runKind, TargetID: id,
+			Meta: map[string]any{"run_ref": runRef},
+		}); err != nil {
+			return err
+		}
+		// A deleted session leaves no pin or mark rows behind — same transaction as
+		// the delete itself (#2130, #2480).
+		return dropPersonalRunState(ctx, sc, runRef)
 	})
 	if err != nil {
 		return err
@@ -3124,6 +3157,7 @@ func (m *Module) persistNewRun(ctx context.Context, tenant model.TenantID, runRe
 		}
 		setIf(row, colRunSecretEnv, encodeSecretEnv(p.SecretEnv))
 		setIf(row, colRunGitRead, p.GitRead)
+		setIf(row, colRunCredentials, encodeCredentialNames(p.Credentials))
 		// Recorded for every launch, "[]" when it opens none: a row without it
 		// predates the column and is not known to be free of a registry token.
 		row[colRunRegistrySecrets] = cmpOr(withRegistryTokens("", p.profileRegistries), "[]")
@@ -4120,6 +4154,9 @@ func validateCreate(p *CreateRunParams) error {
 		return err
 	}
 	p.Name = strings.TrimSpace(p.Name)
+	if err := checkRunName(p.Name); err != nil {
+		return err
+	}
 	p.Model = strings.TrimSpace(p.Model)
 	p.WorkspaceRef = strings.TrimSpace(p.WorkspaceRef)
 	return nil

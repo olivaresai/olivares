@@ -173,15 +173,22 @@ for unit in packaging/service/systemd.service packaging/systemd/olivares.service
   # syscall that guard degrades to "hooks and configuration stay writable".
   grep -Fqx 'RestrictNamespaces=user net mnt' "$root/$unit" ||
     fail "$unit denies the session mount namespace"
-  # systemd applies the lines in order: the deny line removes @privileged from the
-  # allow list, so mount must follow it and nothing may take it out again.
-  awk '
-    /^SystemCallFilter=~@privileged @resources$/ { deny = NR }
-    /^SystemCallFilter=mount$/ { allow = NR }
-    allow && (/^SystemCallFilter=~.*mount/ || /^SystemCallFilter=$/) { removed = 1 }
-    END { exit !(deny && allow > deny && !removed) }
-  ' "$root/$unit" ||
-    fail "$unit denies the mount syscall of the session helper's read-only bind mounts"
+  # systemd applies the lines in order: the deny line removes @privileged and
+  # @resources from the allow list, so each call the session helper needs from them
+  # must follow it, and no later deny or reset line may take it out again (a
+  # group such as ~@resources names no call). mount: the read-only bind
+  # mounts above. setpriority: the helper raises a tool's nice value (+10) before
+  # it executes the tool (core/runtime/confine/limits_linux.go); seccomp kills the
+  # helper with SIGSYS otherwise, so no installed tool starts.
+  for call in 'mount:read-only bind mounts' 'setpriority:lower scheduling priority'; do
+    awk -v call="${call%%:*}" '
+      /^SystemCallFilter=~@privileged @resources$/ { deny = NR }
+      $0 == "SystemCallFilter=" call { allow = NR }
+      allow && (/^SystemCallFilter=~/ || /^SystemCallFilter=$/) { removed = 1 }
+      END { exit !(deny && allow > deny && !removed) }
+    ' "$root/$unit" ||
+      fail "$unit denies the ${call%%:*} syscall of the session helper's ${call#*:}"
+  done
 done
 grep -Fq 'command_user="olivares:olivares"' "$root/packaging/service/openrc.sh" ||
   fail "OpenRC adapter lost its no-login service account"

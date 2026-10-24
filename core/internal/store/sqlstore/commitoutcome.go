@@ -15,13 +15,13 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// The outcome of sqlStore.Mutate's single COMMIT.
+// The outcome of the single COMMIT of sqlStore.Mutate and of mutateSelective.
 //
 // COMMIT is the only statement in the unit whose failure does not say whether it
 // failed: the server may have applied it and lost the answer on the way home.
-// Every other error Mutate can return — the callback's, the custodial poison's,
-// either epilogue's — returns BEFORE Commit is called, so its meaning is already
-// known and this file does not touch it.
+// Every other error either path can return — the callback's, the custodial
+// poison's, either epilogue's — returns BEFORE Commit is called, so its meaning
+// is already known and this file does not touch it.
 //
 // THE RULE IS POSITIVE PROOF OF THE NEGATIVE. A shape is called definite only
 // when something PROVES the database did not apply COMMIT; everything else is
@@ -40,8 +40,8 @@ import (
 // them together would make widening one silently widen the other.
 const commitOutcomeUniqueViolation = "23505"
 
-// mutateCommitNotApplied reports whether the error of Mutate's COMMIT PROVES the
-// database did not apply it.
+// mutateCommitNotApplied reports whether the error of a Mutate or
+// mutateSelective COMMIT PROVES the database did not apply it.
 //
 // It is deliberately NOT commitOutcomeIsAmbiguous (migrationunit.go:787-816),
 // and the difference is not an oversight. That predicate serves a runner whose
@@ -62,8 +62,9 @@ func mutateCommitNotApplied(err error) bool {
 		return false
 	}
 	// D2 — database/sql rolled the transaction back before it reached the driver,
-	// so COMMIT was never issued. This holds because Mutate calls Commit exactly
-	// once; a second call would answer ErrTxDone for the opposite reason.
+	// so COMMIT was never issued. This holds because Mutate and mutateSelective
+	// each call Commit exactly once; a second call would answer ErrTxDone for the
+	// opposite reason.
 	if errors.Is(err, sql.ErrTxDone) {
 		return true
 	}
@@ -91,7 +92,8 @@ func mutateCommitNotApplied(err error) bool {
 }
 
 // mutateCommitOutcomeErr classifies the error of the COMMIT at the end of
-// sqlStore.Mutate.
+// sqlStore.Mutate and of mutateSelective (the selective path real tenants'
+// evidence operations use).
 //
 // It is the ONE owner of that classification, and it is additive by
 // construction: both arms keep wrapUnavailableErr, so every errors.Is a caller

@@ -161,7 +161,7 @@ nativa no da.
 :::note[Dos caminos fuera de la caja: pull y un push real]
 El ledger verificable llega a un SIEM por dos vías. La exportación **pull**
 (`GET /v1/audit/export`) requiere Business y es el artefacto que un operador
-archiva. Un **push** es real cuando se configura: una suscripción de eventing
+archiva. Un **push** también requiere Business y es real cuando se configura: una suscripción de eventing
 `audit.recorded` arranca una bomba de ledger por tenant que entrega cada registro
 sellado **al menos una vez** por el transporte duradero, con guardia SSRF, reintentos y
 dead-letter (`modules/siemforward/forwarder.go`, cableado en `cmd/olivares/boot.go`).

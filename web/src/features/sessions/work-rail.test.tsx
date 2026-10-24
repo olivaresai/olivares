@@ -3,12 +3,19 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE RAIL FROM A KEYBOARD, which is the half a snapshot cannot show.
-import { render, screen, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { densityHeightToken, usePreferencesStore } from '@/stores/preferences'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { usePreferencesStore } from '@/stores/preferences'
 import { mergeSessions, type UnifiedSession } from './provenance'
 import { addressOf } from './session-address'
 import type { LiveDTO } from './types'
@@ -142,17 +149,14 @@ describe('WorkRail — what a row says', () => {
     expect(nameEl.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['truncate', 'min-w-0']),
     )
+    // Two short lines (dev#3162): the place and the state above, the name below.
     expect(rowEl.className.split(/\s+/)).toEqual(
-      expect.arrayContaining([
-        'h-11',
-        `min-[761px]:${densityHeightToken(usePreferencesStore.getState().density)}`,
-      ]),
+      expect.arrayContaining(['h-14', 'min-[761px]:h-12']),
     )
-    // The state is a dot with the state's word as its name; the time is whole.
-    expect(within(rowEl).getByRole('img', { name: 'Working' })).toBeTruthy()
-    const age = rowEl.querySelector('time')
-    expect(age).not.toBeNull()
-    expect(age!.className.split(/\s+/)).toEqual(
+    // The state is a word, whole: a working session says how long it has worked.
+    const state = within(rowEl).getByTestId('rail-row-state')
+    expect(state).toHaveTextContent(/^Working/)
+    expect(state.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['shrink-0', 'tabular-nums']),
     )
   })
@@ -235,7 +239,9 @@ describe('WorkRail — what a row says', () => {
     expect(cls).toContain('max-[760px]:pr-12')
     // The time yields to the button by fading on hover: it is never `visibility:hidden`
     // (that leaves the row's accessible name) and a focused row keeps it.
-    const time = first.querySelector('time') as HTMLElement
+    const time = first.querySelector('[data-testid="rail-row-state"]')!
+      .parentElement as HTMLElement
+    expect(time.querySelector('time')).not.toBeNull()
     const timeCls = time.className.split(/\s+/)
     expect(timeCls).toContain('min-[761px]:group-hover/row:opacity-0')
     expect(time.className).not.toMatch(/invisible|focus-within/)
@@ -304,10 +310,11 @@ describe('WorkRail — what a row says', () => {
       try {
         renderRail()
         for (const r of rows()) {
+          // Two short lines (dev#3162): a step taller than the shell's one-line row.
           expect(r.className.split(/\s+/)).toEqual(
             expect.arrayContaining([
-              'h-11',
-              `min-[761px]:${densityHeightToken(density)}`,
+              'h-14',
+              density === 'compact' ? 'min-[761px]:h-11' : 'min-[761px]:h-12',
             ]),
           )
         }
@@ -324,7 +331,9 @@ describe('WorkRail — what a row says', () => {
     // ⛔ ONE LINE. The row used to paint the name, then the state with an
     //    elapsed time, then the observed clause — three lines, 92 px measured in a real
     //    browser, in a 256 px rail. What an operator picks a row BY stays painted:
-    expect(within(first).getByRole('img', { name: 'Working' })).toBeTruthy()
+    expect(within(first).getByTestId('rail-row-state')).toHaveTextContent(
+      /^Working/,
+    )
     // …and the NAME is what the session is doing, never its reference. `sess-a` was
     // the second rung of the old label, so a rail of discovered sessions read as six
     // machine ids. The reference is on the name's own `title`.
@@ -435,7 +444,7 @@ describe('WorkRail — what a row says', () => {
 
   it('groups by what the session needs, as "label count", and draws no empty group', () => {
     renderRail({ sessions: [working] })
-    expect(screen.getByText('Working')).toBeInTheDocument()
+    // The group by its name: its one row says Working too, with no time it did not see.
     expect(screen.queryByText('Needs you')).toBeNull()
     expect(screen.queryByText('Earlier')).toBeNull()
     // No sentence stands in for a group that has no rows.
@@ -456,6 +465,63 @@ describe('WorkRail — what a row says', () => {
       'live:lr-a',
       'live:lr-c',
     ])
+  })
+
+  it('keeps snoozed sessions out of the list, folded behind one toggle under it', async () => {
+    // #2480: a snooze takes the session out of the person's list until its moment; the
+    // toggle keeps it one click away so a snooze is never a way to lose a session.
+    const user = userEvent.setup()
+    const snoozed = mergeSessions(
+      [],
+      [
+        {
+          ...launchedRow('run-z').runs[0],
+          snoozed_until: '2030-01-02T09:00:00Z',
+        },
+      ],
+    )[0]
+    renderRail({ sessions: [working, snoozed] })
+    expect(rows().map((r) => r.getAttribute('data-address'))).toEqual([
+      'live:lr-a',
+    ])
+    const toggle = screen.getByRole('button', { name: /^Snoozed\s*1$/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // Outside the listbox: a listbox owns options, never a button.
+    expect(screen.getByRole('listbox').contains(toggle)).toBe(false)
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const group = screen.getByRole('group', { name: /^Snoozed\s*1$/ })
+    expect(group.contains(rows()[rows().length - 1])).toBe(true)
+    expect(rows().map((r) => r.getAttribute('data-address'))).toEqual([
+      'live:lr-a',
+      addressOf(snoozed),
+    ])
+  })
+
+  it('draws no empty listbox when every session is snoozed, only the toggle', async () => {
+    // A listbox with no option is a broken ARIA tree; folded, there is nothing in it.
+    const user = userEvent.setup()
+    const snoozed = mergeSessions(
+      [],
+      [
+        {
+          ...launchedRow('run-z').runs[0],
+          snoozed_until: '2030-01-02T09:00:00Z',
+        },
+      ],
+    )[0]
+    renderRail({ sessions: [snoozed] })
+    expect(screen.queryByRole('listbox')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^Snoozed\s*1$/ }))
+    expect(rows().map((r) => r.getAttribute('data-address'))).toEqual([
+      addressOf(snoozed),
+    ])
+  })
+
+  it('draws no Snoozed toggle while nothing is snoozed', () => {
+    renderRail()
+    expect(screen.queryByRole('button', { name: /^Snoozed/ })).toBeNull()
   })
 
   it('marks the open row with the neutral fill, not the accent', () => {
@@ -617,5 +683,275 @@ describe('WorkRail — nothing at all', () => {
 
     renderRail({ sessions: [working], loading: false })
     expect(screen.getByRole('listbox')).not.toHaveAttribute('aria-busy')
+  })
+})
+
+describe('WorkRail — every row has one actions menu (#2795)', () => {
+  // The menu's items are the caller's (`session-menu.tsx`); the rail owns the three ways
+  // to open them on one row and where focus goes after.
+  function renderMenuRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
+    const rowMenu = vi.fn((s: UnifiedSession) => (
+      <DropdownMenuItem>{`Rename ${addressOf(s)}`}</DropdownMenuItem>
+    ))
+    const onOpen = vi.fn()
+    const onTogglePin = vi.fn()
+    const utils = render(
+      <TooltipProvider>
+        <WorkRail
+          sessions={[launchedRow('run-a'), launchedRow('run-b')]}
+          selected={null}
+          onOpen={onOpen}
+          pinned={new Set()}
+          onTogglePin={onTogglePin}
+          rowMenu={rowMenu}
+          {...over}
+        />
+      </TooltipProvider>,
+    )
+    return { ...utils, rowMenu, onOpen, onTogglePin }
+  }
+
+  it('opens on a right-click, instead of the browser’s own menu', () => {
+    renderMenuRail()
+    const second = rows()[1]
+    // fireEvent answers false when a handler prevented the default.
+    expect(fireEvent.contextMenu(second)).toBe(false)
+    const menu = screen.getByRole('menu')
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Rename run:run-b' }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens from the row’s ⋯ button, which is no control inside the option', async () => {
+    const user = userEvent.setup()
+    renderMenuRail()
+    const more = screen.getAllByTestId('rail-row-menu')[0]
+    // The pointer's shortcut, like Open beside: outside the option, out of the tab
+    // order and the accessibility tree; the keyboard has Shift+F10.
+    expect(rows()[0].contains(more)).toBe(false)
+    expect(more).toHaveAttribute('tabindex', '-1')
+    expect(more).toHaveAttribute('aria-hidden', 'true')
+    await user.click(more)
+    expect(
+      within(screen.getByRole('menu')).getByRole('menuitem', {
+        name: 'Rename run:run-a',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it.each([['{Shift>}{F10}{/Shift}'], ['{ContextMenu}']])(
+    'opens for the focused row from the keyboard (%s), and gives focus back to it',
+    async (keys) => {
+      const user = userEvent.setup()
+      renderMenuRail()
+      await user.tab()
+      await user.keyboard('{ArrowDown}')
+      await user.keyboard(keys)
+      const menu = screen.getByRole('menu')
+      expect(
+        within(menu).getByRole('menuitem', { name: 'Rename run:run-b' }),
+      ).toBeInTheDocument()
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('menu')).toBeNull()
+      expect(document.activeElement).toBe(rows()[1])
+    },
+  )
+
+  it('opens for the row that HAS focus, after a click moved it there', async () => {
+    // The keyboard's row is the one the DOM focused, whatever moved it: a right-click
+    // on one row and then a click on another must not leave Shift+F10 on the first.
+    const user = userEvent.setup()
+    renderMenuRail()
+    fireEvent.contextMenu(rows()[0])
+    await user.keyboard('{Escape}')
+    await user.click(rows()[1])
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+    expect(
+      within(screen.getByRole('menu')).getByRole('menuitem', {
+        name: 'Rename run:run-b',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the keys pressed in the open menu to the menu: none reaches the rail', async () => {
+    // The menu is portalled out of the rail's DOM but not out of its React tree, so its
+    // key events bubble to the rail's handler. Enter on an item must not also open the
+    // session, nor `p` (typeahead) pin it, nor an arrow move the rail.
+    const user = userEvent.setup()
+    const { onOpen, onTogglePin } = renderMenuRail()
+    await user.tab()
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+    const item = within(screen.getByRole('menu')).getByRole('menuitem', {
+      name: 'Rename run:run-a',
+    })
+    item.focus()
+    await user.keyboard('p')
+    await user.keyboard('{ArrowDown}')
+    await user.keyboard('{Enter}')
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(onTogglePin).not.toHaveBeenCalled()
+    expect(rows()[1]).toHaveAttribute('tabindex', '-1')
+  })
+
+  it('draws no ⋯ and keeps the browser menu when there is no menu to offer', () => {
+    renderMenuRail({ rowMenu: undefined })
+    expect(screen.queryByTestId('rail-row-menu')).toBeNull()
+    expect(fireEvent.contextMenu(rows()[0])).toBe(true)
+  })
+})
+
+// The list says what each session is doing in a word with its time, the place above
+// the title, and the tool by its own mark, not one glyph for every row (dev#3162).
+describe('WorkRail — a row says its state in words, its place and its tool (dev#3162)', () => {
+  const launched = (over: Partial<RunDTO>) =>
+    mergeSessions(
+      [],
+      [
+        {
+          run_ref: 'run-x',
+          name: 'Fix the checkout totals',
+          transport: 'stream-json',
+          permission_mode: 'default',
+          isolation: 'native',
+          state: 'running',
+          last_event_seq: 0,
+          pep_provisioned: true,
+          record_io: false,
+          critical: false,
+          provider_driver: 'claude',
+          workspace_path: '/home/dev/payments-api',
+          last_activity_at: new Date().toISOString(),
+          ...over,
+        },
+      ],
+    )[0]
+  const rail = (s: UnifiedSession) =>
+    render(
+      <WorkRail
+        sessions={[s]}
+        selected={null}
+        onOpen={vi.fn()}
+        pinned={new Set()}
+        onTogglePin={vi.fn()}
+      />,
+    )
+  const state = () => screen.getByTestId('rail-row-state')
+
+  it('says Working with how long it has worked, the folder above the name and the tool as its mark', () => {
+    rail(launched({ started_at: new Date(Date.now() - 12_000).toISOString() }))
+    const rowEl = screen.getByTestId('rail-row')
+    expect(state()).toHaveTextContent(/^Working 1[2-4]s$/)
+    expect(within(rowEl).getByTestId('rail-row-place')).toHaveTextContent(
+      'payments-api',
+    )
+    expect(within(rowEl).getByTestId('tool-mark')).toHaveTextContent('CC')
+    expect(within(rowEl).getByTestId('tool-mark')).toHaveAccessibleName(
+      'Claude Code',
+    )
+    expect(rowEl.querySelector('svg.lucide-square-terminal')).toBeNull()
+  })
+
+  it.each([
+    [{ state: 'failed' as const }, 'Failed'],
+    [{ state: 'idle' as const }, 'Done'],
+    [{ state: 'stopped' as const, reason: 'stopped by a person' }, 'Stopped'],
+    [{ state: 'running' as const, pending_approval_ref: 'apr_1' }, 'Needs you'],
+  ])('says %o as %s', (over, word) => {
+    rail(launched(over))
+    expect(state()).toHaveTextContent(new RegExp(`^${word}`))
+  })
+
+  it('says a session that is not working ended how long ago in one short unit', () => {
+    rail(
+      launched({
+        state: 'idle',
+        last_activity_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      }),
+    )
+    const time = screen.getByTestId('rail-row').querySelector('time')!
+    expect(time).toHaveTextContent(/^5m$/)
+    expect(time.getAttribute('title')).toBeTruthy()
+  })
+
+  it('says Pending, with no clock, for a run that has not started', () => {
+    rail(
+      launched({
+        run_ref: 'run-p',
+        state: 'pending',
+        created_at: new Date(Date.now() - 12 * 60_000).toISOString(),
+      }),
+    )
+    expect(state()).toHaveTextContent(/^Pending$/)
+  })
+
+  it('times no turn it did not see start: a session up for hours says Working', () => {
+    rail(
+      launched({
+        run_ref: 'run-3h',
+        started_at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+      }),
+    )
+    expect(state()).toHaveTextContent(/^Working$/)
+  })
+
+  it('times the turn it saw start, from that moment, in whole seconds', async () => {
+    const at = (s: RunDTO['state']) =>
+      launched({
+        run_ref: 'run-turn',
+        state: s,
+        started_at: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+      })
+    const props = {
+      selected: null,
+      onOpen: vi.fn(),
+      pinned: new Set<string>(),
+      onTogglePin: vi.fn(),
+    }
+    const view = render(<WorkRail sessions={[at('idle')]} {...props} />)
+    view.rerender(<WorkRail sessions={[at('running')]} {...props} />)
+    await waitFor(() => expect(state()).toHaveTextContent(/^Working [0-9]s$/))
+    // The person leaves the list; back later, the session may be in another turn: the
+    // list never times it from the turn it saw before.
+    view.unmount()
+    render(<WorkRail sessions={[at('running')]} {...props} />)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(state()).toHaveTextContent(/^Working$/)
+  })
+
+  it('gives a working row its clock and every other row its age', () => {
+    const working = rail(launched({}))
+    expect(screen.getByTestId('rail-row').querySelector('time')).toBeNull()
+    working.unmount()
+    rail(launched({ state: 'failed' }))
+    expect(screen.getByTestId('rail-row').querySelector('time')).not.toBeNull()
+  })
+
+  it('draws every mark in capitals, a one-word tool too', () => {
+    rail(launched({ provider_driver: 'codex' }))
+    expect(screen.getByTestId('tool-mark')).toHaveTextContent(/^CO$/)
+  })
+
+  it('says a seen session that ended Done, the word the list uses for a finished turn', () => {
+    const [ended] = mergeSessions(
+      [
+        {
+          session_ref: 'sess-e',
+          live_ref: 'lr-e',
+          attribution: 'observed',
+          cc_state: 'ended',
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_micro_usd: 0,
+          event_count: 3,
+          tool_call_count: 0,
+          first_event_at: new Date(Date.now() - 60_000).toISOString(),
+          last_event_at: new Date(Date.now() - 30_000).toISOString(),
+          duration_seconds: 30,
+        } as LiveDTO,
+      ],
+      [],
+    )
+    rail(ended!)
+    expect(state()).toHaveTextContent(/^Done$/)
   })
 })

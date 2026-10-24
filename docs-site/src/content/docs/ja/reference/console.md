@@ -16,17 +16,17 @@ description: >-
 
 コンソールのナビゲーション構造は**ひとつ、セクション付きの 9 エリア**です。各画面は
 1 つのエリアとその 1 つのセクションに属し、画面の場所を示すものはすべて同じ場所を
-示します。「すべての領域」（サイドバー、スマートフォンでは「その他」）、エリアのディレクトリ
-ページ、パンくずリスト、コマンドパレット、そして画面の上にあるリンクの列です。この列は
-同じセクションのほかの画面を並べます。サイドバーは画面の短い一覧を固定し、最初の作業を
-先頭に置き（ホーム、セッション、AI ツール、承認）、その後に作業を置きます。固定された画面は、同じセクションのほかの画面でも選択中として
-表示されます。ナビゲーションのフィルタは、グループ化されたツリーを、権限のある一致結果の
+示します。「すべての領域」（アカウントメニューとコマンドパレット、スマートフォンでは
+「その他」）、エリアのディレクトリページ、コマンドパレット、そして画面の上にあるリンクの
+列です。この列は同じセクションのほかの画面を並べます。上部バーが
+5 つの場所を、最初の作業を先頭に示し（ホーム、セッション、ツール、ルール、台帳。Business は
+組織を加えます）、場所は同じセクションのほかの画面でも選択中として表示されます。「すべての領域」は各エリアとその画面を 2 階層で並べ、バーにすでにある場所は繰り返しません。ナビゲーションのフィルタは、グループ化されたツリーを、権限のある一致結果の
 順位付き一覧に置き換えます。コマンドパレットも同じ索引、同じ順位、同じ権限の投影を
 使います。エリアのディレクトリはリンクのページであり、権限が許すエントリを列挙します。
 能力、可用性、準備状態のライブな読み取りではありません。
 
-新規インストールでは、最初の作業だけが一覧に表示されます（ホーム、セッション、AI ツールと
-プロバイダー、承認、セットアップウィザード、設定）。それ以外の画面はプレビューです。
+新規インストールでは、最初の作業だけが一覧に表示されます（ホーム、セッション、AI ツール、
+承認、セットアップウィザード、設定）。それ以外の画面はプレビューです。
 アドレス、API、CLI はそのまま動作し、ナビゲーション、コマンドパレット、ショートカットには
 表示されません。アップグレード前から存在するインストールでは、これまでどおりすべての画面が
 表示されます。管理者がモジュールを選択したインストール（次回の起動から）と、デモデータを
@@ -35,7 +35,7 @@ description: >-
 このページは**生成物**です。一覧は `web/src/features/route-census.json` から取得されます。
 これは `registry.route-conservation.test.ts` がビルド済みルーターに対して固定する
 append-only な一覧であり、画面が追加、移動、消失すれば、このページも必ず変わります。
-各画面の名前と 1 行説明は、サイドバーと同じ翻訳カタログから取得した**コンソール自身の
+各画面の名前と 1 行説明は、コンソールと同じ翻訳カタログから取得した**コンソール自身の
 文字列**です。ここで読む内容は製品で目にする内容と同じです。以下の表は、それらの行をエリアごとにまとめ、ホーム（概要）を先頭に、サインイン、
 セットアップ、アカウントを最後に置きます。9 つのエリアディレクトリページは、機能
 レジストリの外にマウントされたルートと同じ表にあります。
@@ -50,7 +50,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 ## このページの読み方
 
-- **画面** — サイドバー、エリアディレクトリ、コマンドパレットで使われる名前。
+- **画面** — 「すべての領域」、エリアディレクトリ、コマンドパレットで使われる名前。
 - **パス** — デプロイしたコンソールの origin 配下の URL。これは公開 contract です。
   ブックマーク、runbook のディープリンク、ドキュメントの相互参照はいずれもこの文字列を
   使います。
@@ -61,11 +61,11 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 以下の見出しはエリアで、「すべての領域」と同じ順です。インフラ、AI、データと
 コンテキスト、作業とコミュニケーション、自動化、セキュリティとアイデンティティ、
-デプロイ、可観測性とエビデンス、システムと設定。
+デリバリー、監督、システムと設定。
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-コンソールは **73 ルート**を公開します。以下の表に、必要な権限と、製品内
+コンソールは **74 ルート**を公開します。以下の表に、必要な権限と、製品内
 ヘルプリンクが開くリファレンスページとともに、すべて掲載されています。
 
 ### ホーム
@@ -86,7 +86,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
-| エージェントツール | `/agent-tools` | このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ） | `system:admin` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
+| エージェントツール | `/agent-tools` | セッションが使うアカウントと API キーを確認します。ツールのインストールとサインインはデプロイ管理者のみです | `sessions:account:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | セッションを運用 | `/agentops` | セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
 | MCP サーバー | `/mcp-servers` | リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます | `tenant:admin` | [how-to/connectors/mcp-governance](/ja/how-to/connectors/mcp-governance/) |
 | モデル運用 | `/model-operations` | 所有モデル、admission、デプロイメント | `models:registry:read` | [reference/modules/xxiii-model-operations](/ja/reference/modules/xxiii-model-operations/) |
@@ -97,6 +97,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | プロバイダープロファイル | `/provider-profiles` | セッションの起動元となるプロバイダーのホームを登録、管理し、その設定を必要に応じて読み取る | `sessions:profile:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | プロバイダー | `/providers` | セッションの起動に使う API キーとエンドポイントを登録し、テスト・交換・失効を行う | `sessions:provider:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | レート制限 | `/rate-limits` | Anthropic のレート制限インベントリ（読み取り専用） | `models:ratelimits:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
+| リーチ | `/reach` | 各ツールが到達できる接続先と、承認待ちの接続先を確認できます。 | `accessmap:graph:read` | [reference/modules/iii-access-map](/ja/reference/modules/iii-access-map/) |
 | サンドボックス | `/sandbox` | 隔離されたエージェントのテストとリプレイ | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ja/reference/modules/xvii-sandbox/) |
 | セッション | `/sessions` | セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います | `sessions:live:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | 音声 | `/voice` | 音声およびリアルタイムセッション | `voice:session:read` | [reference/modules/xvi-voice](/ja/reference/modules/xvi-voice/) |
@@ -136,8 +137,8 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | アクセスマップ | `/access-map` | 各エージェントが読み書きするもの（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/ja/reference/modules/iii-access-map/) |
-| AgentCore エクスポート | `/agentcore-export` | このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
-| Claude Code ガバナンス | `/claude-policy` | 管理ポリシー、フック、MCP、サンドボックス、policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ja/how-to/connectors/claude-code-hooks-pep/) |
+| ポリシーのエクスポート | `/agentcore-export` | このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
+| 管理ポリシー | `/claude-policy` | 管理ポリシー、フック、MCP、サンドボックス、policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ja/how-to/connectors/claude-code-hooks-pep/) |
 | アイデンティティとアクセス | `/identity` | SSO、SCIM、エージェントが使うアイデンティティ | `governance:identity:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | 推論プロキシ | `/inference-proxy` | プロキシゲート、エグレス DLP ルール、デバイス承認 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ja/reference/modules/inferenceproxy/) |
 | キルスイッチ | `/killswitch` | 緊急停止、二重統制による復旧、guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ja/how-to/cookbook/kill-switch-drill/) |
@@ -146,17 +147,17 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | セキュリティ | `/security` | ガードレール、フォレンジック、異常 | `security:finding:read` | [reference/modules/ix-security](/ja/reference/modules/ix-security/) |
 | ボールト | `/vault` | パスワード、メモ、認証コード | `tenant:read` | [reference/console](/ja/reference/console/) |
 
-### デプロイ
+### デリバリー
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | Git 公開 | `/git-publication` | 承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う | `gitpublish:target:read` | [reference/modules/gitpublish](/ja/reference/modules/gitpublish/) |
 
-### 可観測性とエビデンス
+### 監督
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
-| Claude Code の導入状況 | `/adoption` | 生産性、受け入れ、モデル構成 | `adoption:metrics:read` | [reference/modules/claudeadoption](/ja/reference/modules/claudeadoption/) |
+| 導入状況 | `/adoption` | 生産性、受け入れ、モデル構成 | `adoption:metrics:read` | [reference/modules/claudeadoption](/ja/reference/modules/claudeadoption/) |
 | サプライチェーン | `/attestation` | リリースアテステーション — SLSA、SBOM、VEX、Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/ja/how-to/verify-a-release/) |
 | 監査台帳 | `/audit` | 改ざん検知可能な証跡台帳 | `audit:read` | [reference/modules/ix-security](/ja/reference/modules/ix-security/) |
 | ダッシュボード | `/dashboards` | 経営指標とレポート | any signed-in user | [reference/modules/xxi-executive-dashboards](/ja/reference/modules/xxi-executive-dashboards/) |
@@ -188,9 +189,9 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | AI | `/areas/ai` | AI 領域のディレクトリです。セッションの監視と運用、プロバイダーのプロファイルと環境、モデル、専用実行、プロバイダーリファレンスを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | 自動化 | `/areas/automation` | 自動化 領域のディレクトリです。フローとオーケストレーション、イベントと通知を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | データとコンテキスト | `/areas/data-context` | データとコンテキスト 領域のディレクトリです。能力、ナレッジ、成果物を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| デプロイ | `/areas/deployment` | デプロイ 領域のディレクトリです。デプロイの準備と制御を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| デリバリー | `/areas/deployment` | デリバリー 領域のディレクトリです。デプロイの準備と制御を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | インフラ | `/areas/infrastructure` | インフラ 領域のディレクトリです。環境のインベントリとワークスペースを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
-| 可観測性とエビデンス | `/areas/observation` | 可観測性とエビデンス 領域のディレクトリです。状態とアクティビティ、コストと導入、監査、評価とエビデンスを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
+| 監督 | `/areas/observation` | 監督 領域のディレクトリです。状態とアクティビティ、コストと導入、監査、評価とエビデンスを扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | セキュリティとアイデンティティ | `/areas/security-identity` | セキュリティとアイデンティティ 領域のディレクトリです。アイデンティティとアクセス、ポリシーとガバナンスの境界、保護と対応を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | システムと設定 | `/areas/system` | システムと設定 領域のディレクトリです。管理、インストールと保守、開発者ツール、個人設定を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |
 | 作業とコミュニケーション | `/areas/work-communications` | 作業とコミュニケーション 領域のディレクトリです。セッション間で永続的に記録される作業とガバナンス下の通信を扱います。権限で許可された項目を一覧表示します。 | ログイン済みのすべてのユーザー | — |

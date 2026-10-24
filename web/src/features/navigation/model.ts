@@ -4,13 +4,13 @@
 //
 // THE NAVIGATION MODEL (N1) — every consumer of the nine-area structure resolves through here.
 //
-// Sidebar, mobile drawer, breadcrumbs, command palette, the nine directory pages and the
-// sidebar filter all need the same four answers: where does a path sit, which entries of an
-// area may THIS principal see, what is the trail above the current page, and which entries
-// match a query. Answering them in four places is how a re-grouping buries a screen: one
-// consumer keeps an older list and the operator finds the module in the palette but not in
-// the sidebar. So the answers are computed once, from the single FEATURE_VIEWS registry and
-// NAV_AREAS, and every consumer derives.
+// The top bar's places, All areas, the phone bar, the command palette, the nine directory
+// pages and the areas filter all need the same three answers: where does a path sit, which
+// entries of an area may THIS principal see, and which entries match a query. Answering them
+// in several places is how a re-grouping buries a screen: one consumer keeps an older list
+// and the operator finds the module in the palette but not in All areas. So the answers are
+// computed once, from the single FEATURE_VIEWS registry and NAV_AREAS, and every consumer
+// derives.
 //
 // What this module deliberately does NOT do:
 //   - decide access. `isAuthorized` APPLIES the gate its caller handed in — the effective
@@ -37,7 +37,7 @@ import { Settings } from 'lucide-react'
 /**
  * The pinned Settings utility (app/routes.tsx settingsRoute) is not a FEATURE_VIEWS entry
  * and has no permission: every signed-in principal reaches it. It belongs to System & settings
- * → Preferences in the directory and the breadcrumb, while the sidebar keeps it pinned at the
+ * → Preferences in the directory, while All areas keeps it pinned at the
  * foot and does NOT repeat it inside the area list (design decision: its presence in the
  * directory "does not require duplicating the link in the same sidebar list").
  */
@@ -69,7 +69,7 @@ export type PermissionCheck = (permission: string) => boolean
  * ⛔ THE `can(v.permission)` CALLS THAT USED TO SIT IN THE CONSUMERS DID NOT DISAPPEAR.
  *    They moved, all of them, into the ONE place that builds this predicate —
  *    `features/navigation/authorization.ts`. That is deliberate: it is what keeps the
- *    sidebar, the palette, the shortcuts and the directory from drifting apart, and it is
+ *    All areas, the palette, the shortcuts and the directory from drifting apart, and it is
  *    what keeps every registry permission literal resolvable by the console-permission
  *    census, which reads `can()` call sites and fails on an argument it cannot read.
  */
@@ -153,7 +153,7 @@ export function isAreaVisible(areaId: AreaId, gate: ViewGate): boolean {
   return authorizedSections(areaId, gate).length > 0
 }
 
-/** The areas the sidebar and the palette offer, in the ratified order. */
+/** The areas All areas and the palette offer, in the ratified order. */
 export function visibleAreas(gate: ViewGate): NavArea[] {
   return NAV_AREAS.filter((a) => isAreaVisible(a.id, gate))
 }
@@ -216,22 +216,7 @@ export function resolveLocation(pathname: string): NavLocation {
   return { kind: 'unknown' }
 }
 
-/** The registry id the breadcrumb names for a pathname (`settings` for the utility), or null. */
-export function currentViewId(pathname: string): string | null {
-  const loc = resolveLocation(pathname)
-  switch (loc.kind) {
-    case 'home':
-      return loc.view.id
-    case 'view':
-      return loc.view.id
-    case 'settings':
-      return SETTINGS_UTILITY.id
-    default:
-      return null
-  }
-}
-
-/** The area an active location belongs to — what the sidebar opens on arrival. */
+/** The area an active location belongs to — what All areas opens on arrival. */
 export function activeAreaId(loc: NavLocation): AreaId | null {
   switch (loc.kind) {
     case 'area':
@@ -247,8 +232,8 @@ export function activeAreaId(loc: NavLocation): AreaId | null {
 
 // --- labels ---------------------------------------------------------------------------
 
-/** The console's own label for a view (nav:items.<id>) — the sidebar, palette and breadcrumb
- * all use this one key, which registry.nav-labels.test.ts pins in every language. */
+/** The console's own label for a view (nav:items.<id>) — All areas and the palette both use
+ * this one key, which registry.nav-labels.test.ts pins in every language. */
 export function viewLabel(t: TFunction, viewId: string): string {
   return t(`nav:items.${viewId}`)
 }
@@ -273,57 +258,6 @@ export function sectionLabel(
 /** A missing description degrades to no subtitle, never to a raw key. */
 export function viewDescription(t: TFunction, viewId: string): string {
   return t(`nav:descriptions.${viewId}`, { defaultValue: '' })
-}
-
-// --- breadcrumbs ----------------------------------------------------------------------
-
-export interface Crumb {
-  label: string
-  /** Absent on the current page (the last crumb), present on every ancestor. */
-  to?: string
-}
-
-/**
- * The trail above a location, resolved from the model — never by splitting the url.
- *
- *   /               → Overview
- *   /areas/ai       → Overview › AI                        (the area IS the location)
- *   /agentops       → AI › Sessions (the top bar reads this door as Sessions itself)
- *   /session-viewer/x → Observability & evidence › Recordings › Session viewer
- *   /settings       → System & settings › Settings
- *
- * Sections are grouping labels, not pages, so they never appear as crumbs. Ancestors link,
- * the current page does not. "Overview › Overview" is never produced.
- */
-export function breadcrumbTrail(t: TFunction, loc: NavLocation): Crumb[] {
-  switch (loc.kind) {
-    case 'home':
-      return [{ label: viewLabel(t, loc.view.id) }]
-    case 'area':
-      return [
-        { label: viewLabel(t, 'home'), to: '/' },
-        { label: areaLabel(t, loc.area.id) },
-      ]
-    case 'view': {
-      const trail: Crumb[] = []
-      if (loc.area)
-        trail.push({ label: areaLabel(t, loc.area.id), to: loc.area.path })
-      if (loc.parent)
-        trail.push({ label: viewLabel(t, loc.parent.id), to: loc.parent.path })
-      trail.push({ label: viewLabel(t, loc.view.id) })
-      return trail
-    }
-    case 'settings':
-      return [
-        {
-          label: areaLabel(t, SETTINGS_UTILITY.areaId),
-          to: areaById(SETTINGS_UTILITY.areaId)?.path,
-        },
-        { label: viewLabel(t, SETTINGS_UTILITY.id) },
-      ]
-    default:
-      return []
-  }
 }
 
 // --- search ---------------------------------------------------------------------------
@@ -392,7 +326,7 @@ function aliasesFor(t: TFunction, id: string): string[] {
 }
 
 /**
- * The common projection the sidebar filter and the ⌘K palette search over: every area,
+ * The common projection the All areas filter and the ⌘K palette search over: every area,
  * every non-hidden view and the Settings utility, with the current label, the English
  * fallback label, explicit former names, path, area/section and the thirteen nouns.
  * Authorization is NOT applied here — callers filter with `can`
@@ -489,7 +423,7 @@ export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
 
 /**
  * The index narrowed to what THIS principal may open: a view by its own permission, an area
- * by the union of its leaves, the Settings utility always. The sidebar filter and the ⌘K
+ * by the union of its leaves, the Settings utility always. The All areas filter and the ⌘K
  * palette both project through here and then rank through `rankNavMatches`, so the two
  * surfaces can never disagree on membership or on order (independent review finding 1).
  */
@@ -516,7 +450,7 @@ function wordPrefix(hay: string, needle: string): boolean {
 /**
  * Score one entry against one folded needle. Exact label, label prefix and label words come
  * first; former names, English labels and paths next; the area/section/noun vocabulary after
- * that; a description hit last. A number, so the palette and the sidebar agree.
+ * that; a description hit last. A number, so the palette and All areas agree.
  */
 function scoreField(e: NavSearchEntry, needle: string): number {
   const h = e.haystack

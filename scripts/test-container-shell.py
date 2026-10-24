@@ -28,7 +28,7 @@ class ContainerShellTests(unittest.TestCase):
 
     def shell(self, term, interactive=True):
         self.assertTrue(RC.is_file(), "container shell defaults must be shipped")
-        command = 'printf "home=%s\\n" "$HOME"; alias ll l la lt; alias ls 2>/dev/null || test "${TERM:-dumb}" = dumb'
+        command = 'printf "home=%s\\n" "$HOME"; alias'
         argv = ["bash", "--noprofile", "--rcfile", str(RC), "-ic", command]
         if not interactive:
             argv = ["bash", "--noprofile", "--norc", "-c", '. "$1"; printf "home=%s\\n" "$HOME"; alias', "bash", str(RC)]
@@ -40,16 +40,26 @@ class ContainerShellTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         expected_home = "/root" if os.geteuid() == 0 else "/var/lib/olivares/home"
         for value in (f"home={expected_home}", "alias ll='ls -alF'", "alias l='ls -CF'",
-                      "alias la='ls -A'", "alias lt='ls -altrh'", "alias ls='ls --color=auto'"):
+                      "alias la='ls -A'", "alias lt='ls -altrh'", "alias ls='ls --color=auto'",
+                      # SLES's alias.bash and ls.bash, adopted for both images, plus vi -> vim.
+                      "alias o='less'", "alias ..='cd ..'", "alias ...='cd ../..'",
+                      "alias cd..='cd ..'", "alias md='mkdir -p'", "alias rd='rmdir'",
+                      "alias rehash='hash -r'", "alias dir='ls -l'", "alias ls-l='ls -l'",
+                      "alias grep='grep --color=auto'", "alias egrep='grep -E --color=auto'",
+                      "alias fgrep='grep -F --color=auto'", "alias vi='vim'"):
             self.assertIn(value, result.stdout)
 
-    def test_dumb_terminal_has_no_colour_alias(self):
+    def test_dumb_terminal_keeps_sles_aliases_but_not_ls_colour(self):
         for term in ("dumb", ""):
             with self.subTest(term=term):
                 result = self.shell(term)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertNotIn("alias ls=", result.stdout)
+                # alias.bash defines the grep aliases unconditionally, and AlmaLinux's
+                # /etc/profile.d/colorgrep.sh defines the same three on the appliance.
+                self.assertIn("alias grep='grep --color=auto'", result.stdout)
                 self.assertIn("alias lt='ls -altrh'", result.stdout)
+                self.assertIn("alias vi='vim'", result.stdout)
 
     def test_noninteractive_shell_is_unchanged(self):
         result = self.shell("xterm", interactive=False)

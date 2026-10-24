@@ -7,8 +7,11 @@ package main
 import (
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
@@ -170,5 +173,47 @@ func TestSessionStartFullWithATemplateIsRefusedBeforeAnyEffect(t *testing.T) {
 	// Without --permission the template supplies its own mode, as before.
 	if _, _, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(), "--template", "tpl-custom"}, sessionCreds(f.URL)...)...); err != nil {
 		t.Fatalf("template alone: %v", err)
+	}
+}
+
+// TestSessionStartPrintsTheEnginesNameRefusal: a --name the engine refuses (a zero-width
+// character, over 200 characters) is its 400, exactly as POST /runs answers it
+// (modules/sessions TestRuntimeAPILaunchRefusesARunNameTheRenameRefuses). The CLI prints
+// the engine's words and exits with the code it gives every 400, 1: the exit-code
+// contract has no code for a refused value.
+func TestSessionStartPrintsTheEnginesNameRefusal(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	f.launchRefusal = "name must be at most 200 characters and hold no control or invisible characters"
+	f.launchRefusalStatus = http.StatusBadRequest
+	f.launchRefusalCode = "module_error"
+	_, _, err := execSessionCLI(t, nil, append([]string{"session", "start", t.TempDir(),
+		"--name", "zero\u200bwidth"}, sessionCreds(f.URL)...)...)
+	var refusal *apiRefusal
+	if err == nil || !errors.As(err, &refusal) || refusal.status != http.StatusBadRequest ||
+		!strings.Contains(err.Error(), f.launchRefusal) {
+		t.Fatalf("err = %v, want the engine's 400 sentence", err)
+	}
+	if got := exitcode.From(err); got != exitcode.Err {
+		t.Fatalf("exit code = %d, want %d", got, exitcode.Err)
+	}
+	if runs := f.postsTo(sessionRunsPath); len(runs) != 1 || runs[0]["name"] != "zero\u200bwidth" {
+		t.Fatalf("the CLI sent %v, want the name as given", runs)
+	}
+}
+
+// A folder name is arbitrary and up to 255 bytes; the name derived from it stays within
+// the 200 characters the engine accepts, with room for the -2 of a taken name.
+func TestSessionStartCutsALongFolderNameToWhatTheEngineAccepts(t *testing.T) {
+	f := newFakeSessionEngine(t)
+	folder := filepath.Join(t.TempDir(), strings.Repeat("n", 250))
+	if err := os.Mkdir(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, errb, err := execSessionCLI(t, nil, append([]string{"session", "start", folder}, sessionCreds(f.URL)...)...); err != nil {
+		t.Fatalf("start: %v\n%s", err, errb)
+	}
+	runs := f.postsTo(sessionRunsPath)
+	if len(runs) != 1 || utf8.RuneCountInString(str(runs[0], "name")) != 190 {
+		t.Fatalf("name sent = %v, want 190 characters", runs)
 	}
 }

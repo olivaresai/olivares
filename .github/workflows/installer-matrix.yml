@@ -50,21 +50,20 @@ defaults:
 jobs:
   linux-installer:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
-    # Honor a configured runner pool for the MAINTAINER DISPATCH only, and keep the hosted
-    # default everywhere else. The plain project convention — `vars.CI_RUNNER ||
-    # 'ubuntu-latest'`, which 32 other jobs in this tree use — is safe for a job whose only
-    # trigger is `workflow_dispatch`. This one also carries a
+    # A private repository (such as the preprod profile) runs this on our runners on every event:
+    # no hosted minutes there. In the public repository, honor a configured runner pool for the
+    # MAINTAINER DISPATCH only, and keep the hosted default everywhere else. This job also carries a
     # `pull_request` trigger, and pr-ci.yml's standing contract is that a pull request from a
     # fork runs UNTRUSTED code that "must never reach the self-hosted runners, which share a
-    # host with this project's own builds". Scoping the selector to the event keeps both
+    # host with this project's own builds". Scoping the public selector to the event keeps both
     # properties: a dispatch a maintainer started may use the pool, a pull request may not.
-    # With CI_RUNNER unset the expression yields 'ubuntu-latest' on every event, so the
+    # With CI_RUNNER unset the public expression yields 'ubuntu-latest' on every event, so the
     # public repository's placement is byte-for-byte what it was.
     #
     # The five container userlands below are unchanged, and so is the macOS leg: a Linux
     # runner cannot qualify a macOS installer, and cross-compiling one would not be a native
     # test. Routing THIS job does not move that one — see docs/RELEASE-INSTALLER.md.
-    runs-on: ${{ github.event_name == 'workflow_dispatch' && vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || (github.event_name == 'workflow_dispatch' && vars.CI_RUNNER || 'ubuntu-latest') }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -130,13 +129,19 @@ jobs:
             --candidate-archive "$MATRIX_CANDIDATE_ARCHIVE")
           if [[ -n "$MATRIX_RELEASE_VERSION" ]]; then args+=(--release-version "$MATRIX_RELEASE_VERSION"); fi
           bash scripts/installer-matrix-ci.sh "${args[@]}"
+      - name: macOS leg skipped while the repository is private
+        if: github.event_name == 'workflow_dispatch' && github.event.repository.private && matrix.family == 'debian'
+        run: |
+          echo "macos-installer skipped (our runners cannot run macOS; a private repository spends no hosted minutes)." >> "$GITHUB_STEP_SUMMARY"
 
   macos-installer:
     # A hosted macOS runner is the only native macOS machine there is, and it is billed at the
     # macOS rate, so it runs on a maintainer dispatch only (release.yml dispatches this workflow
     # after each publication). No pull_request or release event starts it.
-    if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
-    runs-on: macos-14
+    # Never in a private repository: no hosted minutes there, and our runners cannot run macOS
+    # (the linux-installer job writes that reason to its job summary).
+    if: github.event_name == 'workflow_dispatch' && !github.event.repository.private && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'macos-14' }}
     timeout-minutes: 80
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

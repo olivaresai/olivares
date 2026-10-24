@@ -6,11 +6,13 @@ package main
 
 import (
 	"context"
+	"slices"
 
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -95,6 +97,12 @@ func chainInspectors(list ...contentInspector) contentInspector {
 }
 
 type inspectorChain []contentInspector
+
+// CapabilityEnabled: the chain is in use while any inspector of it is, so a firewall that
+// is turned off does not make the chain look absent to a consumer that asks.
+func (c inspectorChain) CapabilityEnabled() bool {
+	return slices.ContainsFunc(c, func(in contentInspector) bool { return sdk.CapabilityEnabled(in) })
+}
 
 func (c inspectorChain) Inspect(ctx context.Context, in claudeapi.ContentInspectionInput) claudeapi.ContentInspectionDecision {
 	out := claudeapi.ContentInspectionDecision{Forward: true}

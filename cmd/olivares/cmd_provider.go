@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -119,7 +120,6 @@ func newProviderAddCmd() *cobra.Command {
 		keyEnv                                     string
 		bindProfile                                string
 		noTest                                     bool
-		errNotAProviderRecord                      = "the engine did not return a provider record"
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "write"},
@@ -173,16 +173,9 @@ func newProviderAddCmd() *cobra.Command {
 			if service != "" {
 				body["service"] = service
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", providersPath, body, 201)
+			rec, err := cfg.addProvider(cmd.Context(), body)
 			if err != nil {
 				return err
-			}
-			if status != 201 {
-				return httpErr(status, b)
-			}
-			var rec map[string]any
-			if uerr := json.Unmarshal(b, &rec); uerr != nil {
-				return fmt.Errorf("%s: %w", errNotAProviderRecord, uerr)
 			}
 			ref := str(rec, "provider_ref")
 			if bindProfile != "" && ref != "" {
@@ -194,12 +187,7 @@ func newProviderAddCmd() *cobra.Command {
 			// whatever the test says: the result and the next step are shown, and a test
 			// that could not run leaves the record as added, untested.
 			if !noTest && ref != "" {
-				if tstatus, tb, terr := cfg.do(cmd.Context(), "POST", providersPath+"/"+ref+"/test", nil, 200); terr == nil && tstatus == 200 {
-					var tested map[string]any
-					if json.Unmarshal(tb, &tested) == nil && str(tested, "provider_ref") == ref {
-						rec = tested
-					}
-				}
+				rec = cfg.testAddedProvider(cmd.Context(), ref, rec)
 			}
 			return renderOut(cmd, func(w io.Writer) error {
 				return printProviderRecord(w, rec, bindProfile)
@@ -219,6 +207,57 @@ func newProviderAddCmd() *cobra.Command {
 		return providerKindChoices, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
+}
+
+// addProvider seals one credential in the engine and returns the record it
+// answered with. `olivares provider add` and the AI tools screen both call it.
+func (c *agentClientConfig) addProvider(ctx context.Context, body map[string]any) (map[string]any, error) {
+	status, b, err := c.do(ctx, "POST", providersPath, body, 201)
+	if err != nil {
+		return nil, err
+	}
+	if status != 201 {
+		return nil, httpErr(status, b)
+	}
+	var rec map[string]any
+	if uerr := json.Unmarshal(b, &rec); uerr != nil {
+		return nil, fmt.Errorf("the engine did not return a provider record: %w", uerr)
+	}
+	return rec, nil
+}
+
+// testAddedProvider tests a provider just added, as the console does. The add
+// stands whatever the test says: a test that could not run leaves rec as it
+// was, untested.
+func (c *agentClientConfig) testAddedProvider(ctx context.Context, ref string, rec map[string]any) map[string]any {
+	status, b, err := c.do(ctx, "POST", providersPath+"/"+ref+"/test", nil, 200)
+	if err != nil || status != 200 {
+		return rec
+	}
+	var tested map[string]any
+	if json.Unmarshal(b, &tested) == nil && str(tested, "provider_ref") == ref {
+		return tested
+	}
+	return rec
+}
+
+// listItems reads one page of a list route: the items the engine answers with.
+// The provider and account lists, and the AI tools screen, all read through it.
+func (c *agentClientConfig) listItems(ctx context.Context, path string) ([]map[string]any, error) {
+	status, b, err := c.do(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != 200 {
+		return nil, httpErr(status, b)
+	}
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(b, &page); err != nil {
+		return nil, err
+	}
+	return page.Items, nil
 }
 
 // providerKindFromKey is the provider a key belongs to by its own prefix, or
@@ -278,22 +317,13 @@ func newProviderListCmd() *cobra.Command {
 			if q := providerListQuery(state, kind); q != "" {
 				path += "?" + q
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", path, nil)
+			items, err := cfg.listItems(cmd.Context(), path)
 			if err != nil {
 				return err
 			}
-			if status != 200 {
-				return httpErr(status, b)
-			}
-			var page struct {
-				Items []map[string]any `json:"items"`
-			}
-			if uerr := json.Unmarshal(b, &page); uerr != nil {
-				return uerr
-			}
 			return renderOut(cmd, func(w io.Writer) error {
-				return printProviderTable(w, page.Items)
-			}, page.Items)
+				return printProviderTable(w, items)
+			}, items)
 		},
 	}
 	cfg.addFlags(cmd)

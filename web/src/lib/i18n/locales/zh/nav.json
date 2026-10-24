@@ -29,6 +29,7 @@
     "inventory": "清单",
     "sessions": "会话",
     "accessMap": "访问映射",
+    "reach": "覆盖范围",
     "health": "健康与 SLA",
     "capabilities": "MCP 与技能",
     "skills": "技能目录",
@@ -43,7 +44,7 @@
     "permissions": "权限",
     "identity": "身份与访问",
     "vault": "保险库",
-    "claudePolicy": "Claude Code 治理",
+    "claudePolicy": "托管策略",
     "routinePolicies": "例行任务策略",
     "deploy": "部署",
     "gitPublication": "Git 发布",
@@ -55,7 +56,7 @@
     "agentArtifacts": "智能体工件",
     "models": "模型",
     "modelOps": "模型运营",
-    "adoption": "Claude Code 采用情况",
+    "adoption": "采用情况",
     "evals": "评估",
     "security": "安全",
     "recordings": "录制",
@@ -67,7 +68,7 @@
     "platforms": "平台",
     "rateLimits": "速率限制",
     "attestation": "供应链",
-    "apiPlayground": "API Playground",
+    "apiPlayground": "API 调试台",
     "audit": "审计账本",
     "retention": "保留策略",
     "workspaceDashboard": "工作区",
@@ -79,7 +80,7 @@
     "logs": "日志",
     "inferenceProxy": "推理代理",
     "alerting": "告警",
-    "agentcoreExport": "AgentCore 导出",
+    "agentcoreExport": "策略导出",
     "providers": "提供商",
     "providerProfiles": "提供商配置文件",
     "providerBindings": "来源绑定",
@@ -105,6 +106,7 @@
     "inventory": "发现并编目连接器观察到的智能体、MCP 服务器与模型。",
     "sessions": "启动会话并跟踪每个会话的工作，包括 Olivares 发现的会话",
     "accessMap": "每个智能体的读取与写入内容（R/RW）",
+    "reach": "查看每个工具可以访问哪些目标，以及哪些正在等待批准。",
     "health": "智能体与 MCP 的可用性与 SLA",
     "capabilities": "治理 MCP 服务器、技能与工具",
     "skills": "浏览技能包并将其分配给部门、智能体组和智能体",
@@ -164,7 +166,7 @@
     "backups": "控制平面的加密灾难恢复快照：创建、计划、下载和恢复",
     "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停",
     "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订",
-    "agent-tools": "检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员",
+    "agent-tools": "查看会话所用的账户和 API 密钥；安装工具并登录仅限部署管理员",
     "mcpServers": "将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具",
     "storedBudgets": "针对每个已保存限额的消耗情况。预留容量计入限额。"
   },
@@ -186,6 +188,9 @@
     }
   },
   "aliases": {
+    "claudePolicy": "Claude Code 治理 · Claude Code",
+    "adoption": "Claude Code 采用情况 · Claude Code",
+    "agentcoreExport": "AgentCore 导出 · AgentCore",
     "sessions": "会话 · 观测会话 · 运营会话 · Claude Code · agentops",
     "agentops": "运营会话 · Claude Code · agentops",
     "console": "控制台 · 租户管理"
@@ -242,14 +247,14 @@
       }
     },
     "deployment": {
-      "label": "部署",
+      "label": "交付",
       "question": "我如何准备和控制部署？",
       "sections": {
         "deployments": "部署"
       }
     },
     "observation": {
-      "label": "可观测性与证据",
+      "label": "监督",
       "question": "正在发生什么、花费多少、我能证明什么？",
       "sections": {
         "operations": "状态与活动",
@@ -272,8 +277,6 @@
     "areas": "区域",
     "expand": "显示{{area}}的模块",
     "collapse": "隐藏{{area}}的模块",
-    "expandAll": "展开所有区域",
-    "collapseAll": "折叠所有区域",
     "modulesOf": "{{area}}的模块",
     "empty": "此区域没有您可用的条目",
     "emptyHint": "当您在当前组织中的角色获得此区域某个模块的访问权限时，条目会显示在这里。",
@@ -327,7 +330,9 @@
     "noProfileRead": "会话以提供商配置身份运行，而您的角色不包含读取这些配置的权限。",
     "readFailed": "无法读取提供商配置，因此无法从这里启动会话。",
     "send": "发送",
-    "turnPlaceholder": "发送一句话…",
+    "ended": "此会话已结束。",
+    "starting": "会话正在启动…",
+    "startAgain": "请重新开始会话以发送消息。",
     "turnAria": "会话回合",
     "attachedWaiting": "需要你处理",
     "rawLine": "原始行",
@@ -337,7 +342,6 @@
     "turnFailed": "会话无法接受此回合。",
     "draftSaveFailed": "无法在此标签页中保存草稿。请保持此页面打开，或在离开前复制您的消息。",
     "sendBackgroundHint": "Ctrl+Enter 发送并保留草稿以写下一句。",
-    "messagePlaceholder": "给 {{title}} 发消息…",
     "slashLabel": "命令与技能",
     "slashOption": "{{name}}，第 {{i}} 项，共 {{n}} 项",
     "slashNoMatch": "没有与“{{query}}”匹配的命令。",
@@ -354,27 +358,33 @@
         "plugin": "插件"
       }
     },
-    "modelAria": "此会话的模型与推理强度：{{value}}",
     "sessionKeeps": "此会话保持 {{value}}。更改选择将启动新会话。",
-    "startWithChoice": "用此选择启动新会话"
+    "startWithChoice": "用此选择启动新会话",
+    "askPlaceholder": "随便问，输入 / 使用命令和技能",
+    "modelPicker": "模型：{{value}}",
+    "effortPicker": "推理强度：{{value}}",
+    "accessPicker": "访问权限：{{value}}",
+    "accessKeeps": "此会话保持其访问权限。更改访问权限将启动新会话。"
   },
   "shell": {
     "journeysLabel": "工作流程",
     "journeys": {
       "home": "主页",
       "sessions": "会话",
-      "approvals": "审批",
-      "storedBudgets": "预算",
-      "agent-tools": "AI 工具"
+      "agent-tools": "工具",
+      "rules": "规则",
+      "audit": "账本",
+      "organization": "组织",
+      "storedBudgets": "预算"
     },
     "phoneBarLabel": "主导航",
     "newSession": "新建会话",
     "searchCommands": "搜索和命令",
-    "brandHome": "Olivares AI 主页",
+    "search": "搜索",
+    "stopAll": "全部停止",
     "allAreas": "所有区域",
     "more": "更多",
     "moreLabel": "更多：所有区域",
-    "workspaceSwitch": "切换工作区。当前：{{name}}",
     "workspaceCount": "工作区：{{count}}",
     "rail": {
       "title": "会话",
@@ -412,7 +422,8 @@
     "panel": {
       "show": "显示{{title}}",
       "hide": "隐藏{{title}}",
-      "close": "关闭面板"
+      "close": "关闭面板",
+      "resize": "调整{{title}}宽度"
     },
     "keys": {
       "command": {
@@ -430,6 +441,17 @@
       "agentStops": "{{count}} 项智能体停止生效中",
       "agentStops_other": "{{count}} 项智能体停止生效中",
       "none": "没有任何停止。会话和智能体正常运行。"
+    },
+    "status": {
+      "label": "状态",
+      "running_other": "{{count}} 个未结束的会话",
+      "usage": "{{tool}} 用量",
+      "fiveHour": "5 小时",
+      "week": "周",
+      "version": "版本"
+    },
+    "account": {
+      "version": "版本 {{version}}"
     }
   }
 }

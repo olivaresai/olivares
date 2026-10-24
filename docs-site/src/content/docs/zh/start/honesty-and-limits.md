@@ -39,9 +39,9 @@ description: >-
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
 - **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
-  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.3<!-- /release -->**，尚未发布。发布前请从源码构建。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。下一个版本是 **<!-- release -->0.4<!-- /release -->**，尚未发布。发布前请从源码构建。
 
-## 开放内核 —— 哪些开放、哪些属于商业版
+## 开放内核 —— 哪些开放、哪些属于 Business
 
 本产品采用**开放内核（open core）**：默认的（AGPL）二进制就是整个治理
 平台，而一条小而**增量式（additive）**的商业线（Business 与 Enterprise；`enterprise/`，仅以
@@ -54,7 +54,7 @@ description: >-
   **SSO 强制**（要求 SSO / 阻止密码登录）以及入站 **SCIM** 服务器属于 Business（Identity & Scale）；
   激活第二个活动 IdP 会返回 `multi_idp_requires_enterprise` —— 这是一条明确的
   产品边界，绝非伪造的 501。
-- **不存在用户数量上限 —— 所有版本的账户都不受限制。** 社区版、Business
+- **不存在用户数量上限 —— 所有版本的账户都不受限制。** Community、Business
   以及自托管企业版都允许无限数量的用户账户，无论授权处于何种状态：有效、过期或
   完全没有。2026-07-27 之前存在的三个活动账户上限已被彻底移除（席位接缝仍作为
   兼容性 no-op 保留在代码中，不会拒绝任何操作），授权过期也绝不会限制、停用或删除
@@ -64,7 +64,7 @@ description: >-
   —— 都在开放二进制中运行，没有任何授权检查。主备（active-passive）HA 的 leader 路由和边缘 collector 属于 Business 版。那条增量式的
   `enterprise/` 模块是从未存在于开放产品中的新代码，而非从中移除的功能；
   哪项能力属于哪个版本，只在仓库的 `docs/editions.md` 中写一次。开放二进制中的授权验证
-  **仅作为存证** —— 它从不启用、禁用或阻止任何东西，唯一的例外是安装未声明社区版的更新
+  **仅作为存证** —— 它从不启用、禁用或阻止任何东西，唯一的例外是安装未声明 Community 的更新
   发布包需要有效许可证（参见
   [开放内核与授权许可](/zh/explanation/open-core-and-licensing/)）。
 
@@ -79,7 +79,7 @@ Olivares AI 处于 **1.0 之前**阶段。产品设计文档明确指出，
   通过 CloudTrail 的对象存储、数据仓库/数据湖）；对于某些存储是**有损的**
   （文档型/向量型）；对于另一些存储则**无法被动重建**（例如
   Redis、SQLite、D1）—— 当无法判定读还是写时，该边被标记为
-  `unknown`。当源携带按代理（per-agent）的身份时，归因是**明确的（firm）**；
+  `unknown`。当源携带按智能体（per-agent）的身份时，归因是**明确的（firm）**；
   当共享服务账户掩盖了身份时，则降级为 **`approximate`（近似）**。产品如实展示
   这些情况；它不会虚构确定性。
 - **规范的 R/RW 源在标准 `serve` 中已接好线。** 组合根

@@ -106,7 +106,13 @@ describe('railGroups', () => {
       },
       NOW,
     )
-    expect(groups.map((g) => g.id)).toEqual(['needsYou', 'working', 'earlier'])
+    expect(groups.map((g) => g.id)).toEqual([
+      'needsYou',
+      'working',
+      'earlier',
+      'snoozed',
+      'archived',
+    ])
     const [needs, working, earlier] = groups
     expect(needs.rows.map((r) => r.kind)).toEqual(['handoff', 'session'])
     expect(needs.rows[0]).toMatchObject({
@@ -131,5 +137,15 @@ describe('RailGlyph', () => {
   ])('names the %s state by its word', (state, word) => {
     render(<RailGlyph state={state} />)
     expect(screen.getByRole('img', { name: word })).toBeInTheDocument()
+  })
+
+  it('draws a solid dot for the working state, never a spinner', () => {
+    // A status is a solid dot plus a word (C2-DESIGN §3); the working glyph
+    // must not reintroduce a spinning decoration under another name.
+    render(<RailGlyph state="live" />)
+    const glyph = screen.getByRole('img', { name: 'Working' })
+    // Any variant counts: the old glyph spun as `motion-safe:animate-spin`.
+    expect(glyph.className).not.toMatch(/animate-/)
+    expect(glyph).toHaveClass('rounded-full')
   })
 })

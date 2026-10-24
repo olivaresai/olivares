@@ -16,9 +16,10 @@
 //    and a permission boundary are three different screens, and the cheapest place to
 //    collapse them into one is a new pane.
 import { SlidersHorizontal } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
+import { modelName } from '@/features/agentops/model-name'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ConversationItem } from './conversation-frames'
@@ -32,6 +33,7 @@ import {
 } from './provenance'
 import { addressOf, type EvidenceBlock } from './session-address'
 import { hasThread } from './has-thread'
+import { modelMismatch } from './session-usage'
 import { SessionConversation } from './session-conversation'
 import { SessionOverview } from './session-overview'
 import { SessionFailure } from './session-failure'
@@ -54,12 +56,14 @@ export function SessionNarrative({
   onFolder,
   back,
   peerSessions,
+  stacked,
 }: {
   resolution: SessionResolution
   pinned: boolean
   onTogglePin: ((address: string) => void) | null
-  /** The full session controls — attach, drive, stop, governance — live in the card. */
-  onOpenDetail: () => void
+  /** The full session controls — attach, drive, stop, governance — live in the card;
+   * absent where no card is on hand (the Estate sheet). */
+  onOpenDetail?: () => void
   evidence?: EvidenceBlock
   onExpandEvidence: (block: EvidenceBlock) => void
   inspectedId?: string | null
@@ -75,9 +79,12 @@ export function SessionNarrative({
   back?: ReactNode
   /** The sessions on the surface, from which "Can message" offers this one's peers. */
   peerSessions?: readonly UnifiedSession[]
+  /** The header's sheet form: the facts on a line of their own (`ThreadHeader`). */
+  stacked?: boolean
 }) {
   const { t } = useTranslation('sessions')
   const { target, session, live, loading, grants } = resolution
+  const [inUseModel, setInUseModel] = useState<string | null>(null)
 
   // Recovery belongs to the pane, including before its session can be read.
   if (!target || loading || (!grants.liveRead && !grants.runRead))
@@ -111,6 +118,7 @@ export function SessionNarrative({
     )
 
   const run = primaryRun(session.runs)
+  const mismatch = modelMismatch(run, inUseModel)
   const caps = capabilities({ ...session, runs: run ? [run] : [] }, grants)
   // ⛔ THE HEADING ANSWERS *WHICH* SESSION. It must not be the sentence the overview tells
   //    (*what it did*), and it must not be the raw reference either, which is what
@@ -146,7 +154,21 @@ export function SessionNarrative({
         back={back}
         contextToggle={contextToggle}
         contextPaneButton={contextPaneButton}
+        stacked={stacked}
       />
+      {mismatch ? (
+        <p
+          role="status"
+          data-testid="thread-model-mismatch"
+          title={t('thread.modelTitle', mismatch)}
+          className="border-b border-line px-3 py-2 text-caption font-medium text-warning"
+        >
+          {t('thread.modelMismatch', {
+            requested: modelName(mismatch.requested),
+            inUse: modelName(mismatch.inUse),
+          })}
+        </p>
+      ) : null}
       {run?.state === 'stopped' && run.reason === 'idle_policy' ? (
         <p
           role="status"
@@ -180,6 +202,7 @@ export function SessionNarrative({
           selectedId={inspectedId}
           onInspect={onInspect}
           onFolder={onFolder}
+          onModel={setInUseModel}
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">

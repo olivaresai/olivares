@@ -53,7 +53,7 @@ func TestF05FetchDocumentEnforcesDocumentACL(t *testing.T) {
 	allowedKB = kbID
 
 	src := newFakeSource([]contentsource.Document{
-		{DocID: "d-open", Title: "Open Doc", Body: "public body"},
+		{DocID: "d-open", Title: "Open Doc", Body: "public body", ACL: []string{"anyone"}},
 		{DocID: "d-acl", Title: "ACL Doc", Body: "restricted body", ACL: []string{"security-team"}},
 	})
 	h.addSource("f05-src", src)
@@ -109,7 +109,7 @@ func TestF05FetchDocumentEnforcesExternalLabel(t *testing.T) {
 	allowedKB = kbID
 
 	src := newFakeSource([]contentsource.Document{
-		{DocID: "d-lbl", Title: "Labeled Doc", Body: "sensitive", ExternalLabels: []string{"purview:confidential"}},
+		{DocID: "d-lbl", Title: "Labeled Doc", Body: "sensitive", ACL: []string{"anyone"}, ExternalLabels: []string{"purview:confidential"}},
 	})
 	h.addSource("f05-lbl-src", src)
 	if r := h.do("POST", "/v1/m/knowledge/kbs/"+kbID+"/ingest", tok, map[string]any{"source": "f05-lbl-src"}, hdr); r.code != http.StatusOK {

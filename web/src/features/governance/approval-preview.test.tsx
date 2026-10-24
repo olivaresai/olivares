@@ -31,6 +31,7 @@ const api = vi.hoisted(() => ({
   cancelApproval: vi.fn(),
   sweepApprovals: vi.fn(),
   listPolicies: vi.fn(),
+  getPolicy: vi.fn(),
   listIdentities: vi.fn(),
   listGroups: vi.fn(),
   listBindings: vi.fn(),
@@ -47,12 +48,26 @@ import {
   approvalCommandUnknown,
   approvalExpectsCommand,
 } from './approval-preview'
-import { ApprovalPreview, AskedBy } from './approval-preview'
+import { ApprovalPreview, AskedByName } from './approval-preview'
 import { consoleApi } from '@/features/console/api'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+}
+
+/** The queue beside the open request, and the open request itself. */
+const queue = () => screen.getByRole('list', { name: 'Approval queue' })
+const panel = () => screen.getByRole('complementary', { name: 'Request' })
+const rowOf = (node: HTMLElement) =>
+  node.closest('[data-approval-row]') as HTMLElement
+
+/** The queue's read and the engine's read of each request it lists. */
+function serve(items: ApprovalDTO[]) {
+  api.listApprovals.mockResolvedValue({ items, has_more: false })
+  api.getApproval.mockImplementation((id: string) =>
+    Promise.resolve(items.find((a) => a.id === id)),
+  )
 }
 
 // The shape of the 09b hook request (SC 086), with PEP's review field.
@@ -126,12 +141,9 @@ beforeEach(() => {
 
 describe('Approvals: what will run, before Approve', () => {
   it('the queue leads with the tool, the session, what will run and the folder; references are not in the row', async () => {
-    api.listApprovals.mockResolvedValue({
-      items: [hookRequest],
-      has_more: false,
-    })
+    serve([hookRequest])
     wrap(<GovernanceView />)
-    const row = (await screen.findByText('Bash · Fix the build')).closest('tr')!
+    const row = rowOf(await screen.findByText('Bash · Fix the build'))
     expect(
       within(row).getByText(
         'rm -rf build && npm test -- --token [secret NPM_TOKEN]',
@@ -143,15 +155,23 @@ describe('Approvals: what will run, before Approve', () => {
     expect(within(row).queryByText(/#plan=/)).toBeNull()
   })
 
-  it('the Approve dialog shows what will run above the note, whole, and the references behind Details', async () => {
+  it('the open request shows what will run before Approve once, and the Deny dialog shows it above the note, whole, with the references behind Details', async () => {
     const user = userEvent.setup()
-    api.listApprovals.mockResolvedValue({
-      items: [hookRequest],
-      has_more: false,
-    })
+    serve([hookRequest])
     wrap(<GovernanceView />)
     await screen.findByText('Bash · Fix the build')
-    await user.click(screen.getByRole('button', { name: /^approve$/i }))
+    const open = within(panel()).getByRole('region', { name: 'What will run' })
+    expect(
+      within(open).getByText(
+        'rm -rf build && npm test -- --token [secret NPM_TOKEN]',
+      ).tagName,
+    ).toBe('PRE')
+    expect(
+      open.compareDocumentPosition(
+        within(panel()).getByRole('button', { name: 'Approve once' }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /^deny$/i }))
     const dialog = await screen.findByRole('dialog')
     const preview = within(dialog).getByRole('region', {
       name: 'What will run',
@@ -179,11 +199,12 @@ describe('Approvals: what will run, before Approve', () => {
   it('without the review field it says so in one line, and does not cut the reason up', async () => {
     const { review: _none, ...without } = hookRequest
     void _none
-    api.listApprovals.mockResolvedValue({ items: [without], has_more: false })
+    serve([without])
     wrap(<GovernanceView />)
-    const row = (
-      await screen.findByText('This request does not include what will run.')
-    ).closest('tr')!
+    await screen.findAllByText('This request does not include what will run.')
+    const row = rowOf(
+      within(queue()).getByText('This request does not include what will run.'),
+    )
     expect(within(row).queryByText(/rm -rf build/)).toBeNull()
     expect(await within(row).findByText('Fix the build')).toBeInTheDocument()
   })
@@ -203,21 +224,25 @@ describe('Approvals: what will run, before Approve', () => {
         'run=01a0fe5c-b4d7-745c-ad0d-0fcf7a7abe98 turn=4\n' +
         'permissions={"Permissions":["once","always","reject"],"CommandLine":"","FilePaths":null}',
     }
-    api.listApprovals.mockResolvedValue({ items: [blind], has_more: false })
+    serve([blind])
     wrap(<GovernanceView />)
-    const note = await screen.findByText('Command not shown for this tool yet')
-    const row = note.closest('tr')!
+    await screen.findAllByText('Command not shown for this tool yet')
+    const row = rowOf(
+      within(queue()).getByText('Command not shown for this tool yet'),
+    )
     expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
     // One line says it, not two (#2269).
     expect(
       within(row).queryByText('This request does not include what will run.'),
     ).toBeNull()
-    // Approve and Reject are unchanged.
+    // Approve once and Deny are unchanged.
     expect(
-      within(row).getByRole('button', { name: /^approve$/i }),
+      within(panel()).getByRole('button', { name: /^approve once$/i }),
     ).toBeEnabled()
-    expect(within(row).getByRole('button', { name: /^reject$/i })).toBeEnabled()
-    await user.click(within(row).getByRole('button', { name: /^approve$/i }))
+    expect(
+      within(panel()).getByRole('button', { name: /^deny$/i }),
+    ).toBeEnabled()
+    await user.click(within(panel()).getByRole('button', { name: /^deny$/i }))
     const dialog = await screen.findByRole('dialog')
     expect(
       within(dialog).getByText('Command not shown for this tool yet'),
@@ -241,10 +266,12 @@ describe('Approvals: what will run, before Approve', () => {
         'Provider permission: driver=opencode method=session/request_permission kind=tool_call_permission run=r1 turn=4 permissions={"Permissions":["once","always","reject"],"CommandLine":"","FilePaths":null}',
       review: { tool: 'Provider permission', text: 'once\nalways\nreject' },
     }
-    api.listApprovals.mockResolvedValue({ items: [rc10], has_more: false })
+    serve([rc10])
     wrap(<GovernanceView />)
-    const note = await screen.findByText('Command not shown for this tool yet')
-    const row = note.closest('tr')!
+    await screen.findAllByText('Command not shown for this tool yet')
+    const row = rowOf(
+      within(queue()).getByText('Command not shown for this tool yet'),
+    )
     expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
   })
 
@@ -292,14 +319,12 @@ describe('Approvals: what will run, before Approve', () => {
       items: [],
       has_more: false,
     })
-    api.listApprovals.mockResolvedValue({
-      items: [
-        { ...hookRequest, requested_by: 'user:u-7', session_ref: undefined },
-      ],
-      has_more: false,
-    })
+    serve([
+      { ...hookRequest, requested_by: 'user:u-7', session_ref: undefined },
+    ])
     wrap(<GovernanceView />)
-    expect(await screen.findByText('A member')).toBeInTheDocument()
+    await screen.findAllByText('A member')
+    expect(within(queue()).getByText('A member')).toBeInTheDocument()
     await waitFor(() => expect(sessionsApi.live).not.toHaveBeenCalled())
   })
 
@@ -310,13 +335,10 @@ describe('Approvals: what will run, before Approve', () => {
       items: [],
       has_more: false,
     })
-    api.listApprovals.mockResolvedValue({
-      items: [hookRequest],
-      has_more: false,
-    })
+    serve([hookRequest])
     wrap(<GovernanceView />)
     expect(await screen.findByText('Bash · Fix the build')).toBeInTheDocument()
-    expect(await screen.findByText('/srv/app')).toBeInTheDocument()
+    expect(await within(queue()).findByText('/srv/app')).toBeInTheDocument()
   })
 
   // #502: a launch held for its approval names it in approval_ref, not pending_approval_ref.
@@ -337,32 +359,28 @@ describe('Approvals: what will run, before Approve', () => {
       ],
       has_more: false,
     })
-    api.listApprovals.mockResolvedValue({
-      items: [hookRequest],
-      has_more: false,
-    })
+    serve([hookRequest])
     wrap(<GovernanceView />)
     expect(
       await screen.findByText('Bash · Writes a classified folder'),
     ).toBeInTheDocument()
-    expect(await screen.findByText('/srv/app')).toBeInTheDocument()
+    expect(await within(queue()).findByText('/srv/app')).toBeInTheDocument()
   })
 })
 
 // Root, 09b capture review: a long folder widened the Request column and pushed the
-// actions off the right edge at 1280; at 390 only the Request column was in view.
-describe('the queue row keeps its actions in view', () => {
+// actions off the right edge at 1280; at 390 only the Request column was in view. The
+// queue's row fills its column and cuts each line to one; the decision is in the panel.
+describe('the queue row keeps its lines to one', () => {
   it('cuts the folder to one line with the whole path as its title, and says a tap opens the decision', async () => {
-    api.listApprovals.mockResolvedValue({
-      items: [hookRequest],
-      has_more: false,
-    })
+    serve([hookRequest])
     wrap(<GovernanceView />)
-    const folder = await screen.findByText('/srv/app')
+    await screen.findByText('Bash · Fix the build')
+    const folder = await within(queue()).findByText('/srv/app')
     expect(folder).toHaveAttribute('title', '/srv/app')
     expect(folder.className).toMatch(/truncate/)
     const cell = folder.closest('[data-slot="approval-request"]') as HTMLElement
-    expect(cell.className).toMatch(/max-w-\[20rem\]/)
+    expect(cell.className).toMatch(/max-w-full/)
     expect(
       within(cell).getByText('Open to approve or reject').className,
     ).toMatch(/md:hidden/)
@@ -391,10 +409,7 @@ it('hides cached requester and policy names when their read permissions leave', 
     ],
     has_more: false,
   })
-  api.listPolicies.mockResolvedValue({
-    items: [{ id: 'policy-a', name: 'Release policy' }],
-    has_more: false,
-  })
+  api.getPolicy.mockResolvedValue({ id: 'policy-a', name: 'Release policy' })
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
@@ -405,7 +420,7 @@ it('hides cached requester and policy names when their read permissions leave', 
   )
   const mounted = render(content())
   expect(await screen.findByText('Ada')).toBeVisible()
-  expect(await screen.findByText('Release policy')).toBeVisible()
+  expect(await screen.findByText('Matched: Release policy')).toBeVisible()
   // A deployment a person raised runs nothing by itself: no command is expected.
   expect(
     screen.queryByText('This request does not include what will run.'),
@@ -414,7 +429,8 @@ it('hides cached requester and policy names when their read permissions leave', 
     !['user:read', 'governance:policy:read'].includes(permission)
   mounted.rerender(content())
   expect(screen.queryByText('Ada')).toBeNull()
-  expect(screen.queryByText('Release policy')).toBeNull()
+  expect(screen.queryByText('Matched: Release policy')).toBeNull()
+  expect(screen.getByText('Matched: a rule you cannot read')).toBeVisible()
   expect(screen.getByText('A member')).toBeVisible()
 })
 
@@ -447,7 +463,7 @@ it('names the launcher of a new session in both requester displays and withdraws
   })
   const content = () => (
     <QueryClientProvider client={client}>
-      <AskedBy approval={request} />
+      <AskedByName approval={request} />
       <ApprovalPreview approval={request} />
     </QueryClientProvider>
   )
@@ -457,10 +473,6 @@ it('names the launcher of a new session in both requester displays and withdraws
   expect(
     screen.queryByText('This request does not include what will run.'),
   ).toBeNull()
-  const details = screen.getByText('Details').closest('details')!
-  expect(details).not.toHaveAttribute('open')
-  expect(within(details).getByText(request.requested_by)).toBeInTheDocument()
-  expect(within(details).getByText(request.launched_by)).toBeInTheDocument()
   const reads = members.mock.calls.length
   auth.can = (permission) => permission !== 'user:read'
   mounted.rerender(content())
@@ -537,22 +549,20 @@ describe('the "does not include what will run" note', () => {
   })
 
   it('shows once, on the rows that expect a command, and not on the ones a person raised', async () => {
-    api.listApprovals.mockResolvedValue({
-      items: [toolCall, provider, deployment, exportRequest],
-      has_more: false,
-    })
+    serve([toolCall, provider, deployment, exportRequest])
     wrap(<GovernanceView />)
-    const notes = await screen.findAllByText(NOTE)
+    await screen.findAllByText(NOTE)
+    const notes = within(queue()).getAllByText(NOTE)
     expect(notes).toHaveLength(2)
     for (const note of notes) {
-      const row = note.closest('tr')!
+      const row = rowOf(note)
       expect(within(row).getAllByText(NOTE), 'one note per row').toHaveLength(1)
       expect(within(row).queryByText(deployment.reason!)).toBeNull()
       expect(within(row).queryByText(exportRequest.reason!)).toBeNull()
     }
     // The requests a person raised keep their own reason and carry no note.
     for (const request of [deployment, exportRequest]) {
-      const row = (await screen.findByText(request.reason!)).closest('tr')!
+      const row = rowOf(within(queue()).getByText(request.reason!))
       expect(within(row).queryByText(NOTE)).toBeNull()
     }
   })
@@ -566,14 +576,17 @@ describe('the "does not include what will run" note', () => {
       subject_kind: 'gitpublish.target',
       reason: 'Push the release branch',
     }
-    api.listApprovals.mockResolvedValue({
-      items: [deployment, toolCall, provider, publish],
-      has_more: false,
-    })
+    serve([deployment, toolCall, provider, publish])
     wrap(<GovernanceView />)
-    const person = (await screen.findByText(deployment.reason!)).closest('tr')!
-    await user.click(within(person).getByRole('button', { name: /^approve$/i }))
-    let dialog = await screen.findByRole('dialog')
+    await screen.findAllByText(deployment.reason!)
+    const deny = async (row: HTMLElement) => {
+      await user.click(row)
+      await user.click(within(panel()).getByRole('button', { name: /^deny$/i }))
+      return screen.findByRole('dialog')
+    }
+    let dialog = await deny(
+      rowOf(within(queue()).getByText(deployment.reason!)),
+    )
     // The reason leads the preview and repeats behind Details.
     expect(
       within(dialog).getAllByText(deployment.reason!).length,
@@ -582,11 +595,9 @@ describe('the "does not include what will run" note', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     // The tool call, the provider request and the publish each carry one.
-    expect(await screen.findAllByText(NOTE)).toHaveLength(3)
+    expect(within(queue()).getAllByText(NOTE)).toHaveLength(3)
     for (let i = 0; i < 3; i++) {
-      const row = (await screen.findAllByText(NOTE))[i].closest('tr')!
-      await user.click(within(row).getByRole('button', { name: /^approve$/i }))
-      dialog = await screen.findByRole('dialog')
+      dialog = await deny(rowOf(within(queue()).getAllByText(NOTE)[i]))
       expect(within(dialog).getAllByText(NOTE)).toHaveLength(1)
       await user.keyboard('{Escape}')
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

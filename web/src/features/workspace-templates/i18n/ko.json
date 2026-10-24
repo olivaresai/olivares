@@ -78,7 +78,7 @@
   },
   "apply": {
     "success": "템플릿을 적용했습니다.",
-    "conflicts": "충돌 {{count}}건과 함께 적용했습니다.",
+    "conflicts_other": "충돌 {{count}}건과 함께 적용했습니다.",
     "conflictField": "필드",
     "conflictOld": "이전 값",
     "conflictNew": "새 값",

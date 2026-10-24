@@ -58,6 +58,11 @@ import AxeBuilder from '@axe-core/playwright'
 import { browserSession, fixtureFor, memberWhoami } from './fixtures.ts'
 import { AUTH_ROUTES, PUBLIC_ROUTES } from './routes.ts'
 import { derivePairs, type DerivedPair } from './at-pairs.ts'
+import { orangeScan, type OrangeReport } from './console-qa/orange.ts'
+import { textfitScan, type TextFitHit } from './console-qa/textfit.ts'
+import { overlapScan, type OverlapHit } from './console-qa/overlap.ts'
+import { plantQA, PLANT_KINDS, type PlantKind } from './console-qa/plants.ts'
+import { qaBlocking } from './console-qa/verdicts.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = join(HERE, '__at__')
@@ -588,7 +593,6 @@ async function proveSessionRecovery(
       `the session fixture does not recover like the engine: authenticated ${JSON.stringify(seen)}, ` +
         `want GET 401, POST 200, then only GET 200; anonymous ${JSON.stringify(anonSeen)}, want only GET 401`,
     )
-  // eslint-disable-next-line no-console
   console.log(
     `  session recovery: ${seen.join(' → ')} · anonymous: ${anonSeen.join(' → ')}`,
   )
@@ -1008,6 +1012,9 @@ async function auditRoute(
   route: string,
   theme: Theme,
   authed: boolean,
+  width: number,
+  qa: boolean,
+  plant: PlantKind | null,
   expectTab?: string,
 ) {
   let rendered = true
@@ -1118,10 +1125,60 @@ async function auditRoute(
   const crashed = summary.headings.some((h) =>
     h.text.includes(CRASH_BOUNDARY_TITLE),
   )
+  // ---- capture QA checks ----
+  // The three console review checks — the glow/backdrop scan and the
+  // filled-orange count (orange.ts), the text-fit scan (textfit.ts) and the
+  // text overlap scan (overlap.ts), ported from the concept checks in
+  // concepts-c2/qa — run only in qa mode, only after the page settled, and
+  // only when the walk actually SAW the route (`medible`, the expected tab
+  // rendered, not the error boundary, and the animation settle wait did not
+  // expire). Fail-closed: a route the checks never ran on is NOT scored zero
+  // — it prints NOT MEASURED and blocks the gate (a route without a
+  // measurement is not a clean route, and measuring a mid-transition frame is
+  // not measuring the route). With QA_PLANT set, the plant is injected BEFORE
+  // the checks so the gate must fail — that run is the control case the
+  // capture job exists for.
+  let qaOrange: OrangeReport = {
+    hits: [],
+    buttons: { filled: [], mock: [] },
+    stops: [],
+    animations: [],
+    kfErrors: 0,
+    unparsed: 0,
+    n: 0,
+  }
+  let qaTextFit: TextFitHit[] = []
+  let qaOverlap: OverlapHit[] = []
+  let qaRan = false
+  let qaTextNodes = 0
+  let measuredWidth = 0
+  let rootFg = ''
+  let rootBg = ''
+  if (qa && medible && bodyShown && !crashed && animQuietas) {
+    if (plant) await page.evaluate(plantQA(plant))
+    qaOrange = await page.evaluate(orangeScan)
+    const fitRows = await page.evaluate(textfitScan)
+    const info = fitRows.find((h) => h.kind === 'info')
+    qaTextNodes = info && info.kind === 'info' ? info.textNodes : 0
+    qaTextFit = fitRows.filter((h) => h.kind !== 'info')
+    qaOverlap = await page.evaluate(overlapScan)
+    measuredWidth = await page.evaluate(() => window.innerWidth)
+    // qa mode has no contrast walk, so the console CSS is proven here: the
+    // theme tokens `:root` declares (qaBlocking blocks on a missing pair).
+    const tokens = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement)
+      return {
+        fg: root.getPropertyValue('--foreground').trim(),
+        bg: root.getPropertyValue('--background').trim(),
+      }
+    })
+    rootFg = tokens.fg
+    rootBg = tokens.bg
+    qaRan = true
+  }
   const blocking = axe.filter(
     (v) => v.impact === 'critical' || v.impact === 'serious',
   )
-  // eslint-disable-next-line no-console
   console.log(
     `  ${route.padEnd(15)} [${theme}] dark=${darkApplied} h1=${h1Count} skips=${headingSkips.length} ` +
       `live(s/a/l/live)=${summary.liveRegions.status}/${summary.liveRegions.alert}/${summary.liveRegions.log}/${summary.liveRegions.ariaLive} ` +
@@ -1130,12 +1187,45 @@ async function auditRoute(
         ? '  ** CRASHED — this route rendered the error boundary, not its content **'
         : ''),
   )
+  if (qa) {
+    console.log(
+      qaRan
+        ? `    qa@${width}: textfit=${qaTextFit.length} text=${qaTextNodes} glow=${qaOrange.hits.length} stops=${qaOrange.stops.length} anims=${qaOrange.animations.length} kf=${qaOrange.kfErrors} unparsed=${qaOrange.unparsed} n=${qaOrange.n} filled-orange=${qaOrange.buttons.filled.length} overlap=${qaOverlap.length}${plant ? ` PLANT=${plant}` : ''}`
+        : `    qa@${width}: NOT MEASURED — ${
+            animQuietas
+              ? 'the qa checks never ran on this route'
+              : 'animations never settled; the checks would have measured a frame'
+          }`,
+    )
+    // The summary prints the entries the gate blocks on, never its own reading of the scans.
+    if (qaRan)
+      for (const entry of qaBlocking(
+        [
+          {
+            route,
+            width,
+            medible,
+            rendered,
+            qaRan,
+            qaOrange,
+            qaTextFit,
+            qaOverlap,
+            qaTextNodes,
+            measuredWidth,
+            darkApplied,
+            rootFg,
+            rootBg,
+          },
+        ],
+        theme,
+      ))
+        console.log(`      ${entry}`)
+  }
   page.off('pageerror', onError)
   page.off('console', onConsole)
   // Sólo con veredicto que explicar: un `pageerror` en una ruta que SÍ renderizó es ruido de otra
   // clase —el warning de una biblioteca— y mezclarlo aquí enseñaría a ignorar la línea.
   if (crashed && lanzados.length) {
-    // eslint-disable-next-line no-console
     console.log(
       lanzados
         .slice(0, 3)
@@ -1162,6 +1252,15 @@ async function auditRoute(
     bodyShown,
     crashed,
     axe,
+    width,
+    qaOrange,
+    qaTextFit,
+    qaOverlap,
+    qaRan,
+    qaTextNodes,
+    measuredWidth,
+    rootFg,
+    rootBg,
   }
 }
 
@@ -1183,15 +1282,42 @@ async function main() {
     doContrast = true
   } else routes = routesArg.split(',')
 
+  // ---- capture QA mode ----
+  // `--qa` walks the capture set: BOTH console widths — 1440×900 (the desktop
+  // layout) and 1024×768 (the small one) — and swaps the contrast pass for the
+  // three console review checks. The contrast verdict stays with at:gate; qa
+  // mode is a different question and skips the measurement so the walk does
+  // not pay for it twice. QA_PLANT=<kind> injects one planted violation per
+  // walked route, so `pnpm capture:gate` with the env set MUST exit 2 — that
+  // run is the control case proving the job fails on a planted glow, a second
+  // orange button and a planted overlap.
+  const qa = process.argv.includes('--qa')
+  const qaPlantValue = process.env.QA_PLANT
+  if (qaPlantValue && !qa)
+    throw new Error(
+      'QA_PLANT is set but --qa is not — the plant would never be injected',
+    )
+  const plant: PlantKind | null = (() => {
+    if (!qaPlantValue) return null
+    if (!PLANT_KINDS.includes(qaPlantValue as PlantKind))
+      throw new Error(
+        `QA_PLANT must be one of ${PLANT_KINDS.join('/')}, got ${JSON.stringify(qaPlantValue.slice(0, 64))}`,
+      )
+    return qaPlantValue as PlantKind
+  })()
+  const widths = qa ? [1440, 1024] : [1440]
+  if (qa) doContrast = false
+
   const browser = await chromium.launch({
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
   async function makeContext(
     withSession: boolean,
     profile: 'admin' | 'member' = 'admin',
+    width = 1440,
   ) {
     const c = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
+      viewport: { width, height: width === 1024 ? 768 : 900 },
       baseURL: ORIGIN,
       // ⛔ MIDE LA SUPERFICIE EN REPOSO, NO UN FOTOGRAMA DEL FUNDIDO. Sin esto el barrido es una
       // CARRERA contra `.animate-enter` (240 ms) y el escalonado de la vista Executive (200 ms):
@@ -1259,30 +1385,52 @@ async function main() {
     '/communications/new': 'New channel',
     '/communications/administration': 'Administration',
   }
-  let memberPage: Page | null = null
-  const authedContext = await makeContext(true)
-  const page = await authedContext.newPage()
-  const anonContext = await makeContext(false)
-  await proveSessionRecovery(authedContext, page, anonContext)
+  // In qa mode the walk runs once PER WIDTH (1440 and 1024), each with its own
+  // contexts and its own page, so every width measures a fresh surface.
+  let measurePage: Page | null = null
+  const routeResults: Awaited<ReturnType<typeof auditRoute>>[] = []
+  for (const width of widths) {
+    let memberPage: Page | null = null
+    const authedContext = await makeContext(true, 'admin', width)
+    const page = await authedContext.newPage()
+    measurePage = page
+    const anonContext = await makeContext(false, 'admin', width)
+    await proveSessionRecovery(authedContext, page, anonContext)
 
-  // eslint-disable-next-line no-console
-  console.log(
-    `\n=== AT run: theme=${theme} routes=${routes.length} contrast=${doContrast} ===`,
-  )
-  const routeResults = []
-  let anonPage: Page | null = null
-  for (const route of routes) {
-    const authed = !PUBLIC_ROUTES.includes(route)
-    const tab = COMMUNICATION_TABS[route]
-    if (tab) {
-      if (!memberPage)
-        memberPage = await (await makeContext(true, 'member')).newPage()
-      routeResults.push(await auditRoute(memberPage, route, theme, authed, tab))
-    } else if (authed) {
-      routeResults.push(await auditRoute(page, route, theme, authed))
-    } else {
-      if (!anonPage) anonPage = await anonContext.newPage()
-      routeResults.push(await auditRoute(anonPage, route, theme, authed))
+    console.log(
+      `\n=== AT run: theme=${theme} width=${width} routes=${routes.length} contrast=${doContrast} qa=${qa}${plant ? ` PLANT=${plant}` : ''} ===`,
+    )
+    let anonPage: Page | null = null
+    for (const route of routes) {
+      const authed = !PUBLIC_ROUTES.includes(route)
+      const tab = COMMUNICATION_TABS[route]
+      if (tab) {
+        if (!memberPage)
+          memberPage = await (
+            await makeContext(true, 'member', width)
+          ).newPage()
+        routeResults.push(
+          await auditRoute(
+            memberPage,
+            route,
+            theme,
+            authed,
+            width,
+            qa,
+            plant,
+            tab,
+          ),
+        )
+      } else if (authed) {
+        routeResults.push(
+          await auditRoute(page, route, theme, authed, width, qa, plant),
+        )
+      } else {
+        if (!anonPage) anonPage = await anonContext.newPage()
+        routeResults.push(
+          await auditRoute(anonPage, route, theme, authed, width, qa, plant),
+        )
+      }
     }
   }
 
@@ -1300,9 +1448,10 @@ async function main() {
     // `dark:` utilities only paint in the dark one, and there they shadow their
     // own base, so each theme gets the set it actually renders.
     const src = derivePairs([join(HERE, '..', 'src')], theme)
-    await page.goto(ORIGIN + '/', { waitUntil: 'domcontentloaded' })
-    await page.waitForTimeout(600)
-    const measured = await measureContrast(page, src.pairs)
+    if (!measurePage) throw new Error('contrast walk produced no page')
+    await measurePage.goto(ORIGIN + '/', { waitUntil: 'domcontentloaded' })
+    await measurePage.waitForTimeout(600)
+    const measured = await measureContrast(measurePage, src.pairs)
     // ⛔ NO STYLESHEET APPLIED — la tercera respuesta, antes de cualquier veredicto.
     //
     // Sin esto, una hoja que no se aplica no da un gate rojo: da MIL DOSCIENTAS
@@ -1357,7 +1506,6 @@ async function main() {
     const sinMedida =
       measured.rows.length > 0 && iguales / measured.rows.length >= 0.9
     if (sinHoja || sinCascada || sinMedida) {
-      // eslint-disable-next-line no-console
       console.error(
         `NO STYLESHEET APPLIED [${theme}] — no emito veredicto de contraste.\n` +
           `  motivo: ${sinHoja ? 'los tokens no resuelven en :root' : sinCascada ? ':root declara los dos con el MISMO color, que ningún tema produce' : `${iguales} de ${measured.rows.length} parejas miden fg == bg: la sonda no está leyendo el tema`}\n` +
@@ -1377,7 +1525,6 @@ async function main() {
       nonTextForegrounds: src.nonTextForegrounds,
       unmeasured: unmeasured.length,
     }
-    // eslint-disable-next-line no-console
     console.log(
       `  contrast [${theme}]: ${contrast.length} pairings — ${TOKEN_PAIRS.length} token contract + ` +
         `${src.pairs.length} derived from ${src.filesScanned} source files (${src.elementsScanned} JSX elements); ` +
@@ -1387,7 +1534,6 @@ async function main() {
         '',
     )
     for (const f of fails)
-      // eslint-disable-next-line no-console
       console.log(
         `    FAIL [${f.source}] ${f.name}: ${f.ratio} < ${f.threshold} (${f.rgbFg} on ${f.rgbBg}) ${f.origin}`,
       )
@@ -1410,6 +1556,8 @@ async function main() {
     JSON.stringify(
       {
         theme,
+        qa,
+        widths,
         routes: routeResults,
         crashedRoutes: routeResults
           .filter((r) => r.crashed)
@@ -1596,6 +1744,16 @@ async function main() {
     ...debtStale.map((x) => `contrast-debt-stale ${x}`),
     ...headingSkips.map((x) => `heading-skip ${x}`),
     ...noH1.map((x) => `no-h1 ${x}`),
+    // ---- capture QA verdicts ----
+    // `qaBlocking` (console-qa/verdicts.ts) turns each route's scan results
+    // into the entries above: any glow hit, a second filled orange control in
+    // the first screen, any text-fit hit (the `info` counter is filtered out
+    // before it gets here), any overlap, a route the checks never ran on, a
+    // width or theme that did not really apply, and an orange scan that saw
+    // no elements. Empty in at mode — the checks only run under `--qa`. Pure
+    // and unit-proven by the selftest, so a planted hit provably reaches this
+    // list and the exit-2 path.
+    ...(qa ? qaBlocking(routeResults, theme) : []),
   ]
   if (doContrast && debtForTheme.length) {
     console.log(
@@ -1637,7 +1795,6 @@ async function main() {
   // una ruta limpia y el informe no debe poder leerse como si lo fuera.
   const sinMedir = routeResults.filter((r) => !r.medible).map((r) => r.route)
   if (sinMedir.length) {
-    // eslint-disable-next-line no-console
     console.log(
       `\n  ** NO PUDE MIRAR: ${sinMedir.length} of ${routeResults.length} route(s) had no rendered content ` +
         `inside <main> before the ${AT_CONTENIDO_MS} ms content wait expired — they are NOT counted as clean, ` +
@@ -1645,18 +1802,15 @@ async function main() {
     )
   }
   if (crashedRoutes.length) {
-    // eslint-disable-next-line no-console
     console.log(
       `\n  ** ${crashedRoutes.length} of ${routeResults.length} route(s) rendered the ERROR BOUNDARY, not their content — ` +
         `their h1/heading/axe results describe an error page **\n     ${crashedRoutes.join(' ')}`,
     )
   }
-  // eslint-disable-next-line no-console
   console.log(
     `\nwrote __at__/at-report-${suffix}.json — ${blocking.length} blocking issue(s)`,
   )
   if (process.argv.includes('--gate') && blocking.length) {
-    // eslint-disable-next-line no-console
     console.error('AT GATE FAILED:\n  ' + blocking.join('\n  '))
     process.exit(2)
   }
@@ -1665,7 +1819,6 @@ async function main() {
 main().then(
   () => process.exit(0),
   (e) => {
-    // eslint-disable-next-line no-console
     console.error('AT run failed:', e)
     process.exit(1)
   },

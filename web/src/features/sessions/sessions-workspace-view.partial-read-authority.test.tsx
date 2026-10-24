@@ -633,7 +633,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/observed half could not be read/i),
+        screen.getByText(/started outside Olivares could not be loaded/i),
         'spr-auth/live-403/setup-live-error-notice',
       ).toBeInTheDocument()
     })
@@ -714,7 +714,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     // global Forbidden either.
     expect
       .soft(
-        screen.queryByText(/Launched sessions are not shown/i),
+        screen.queryByText(/started in Olivares are not shown/i),
         'spr-auth/live-403/no-run-permission-claim',
       )
       .not.toBeInTheDocument()
@@ -746,7 +746,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/launched half could not be read/i),
+        screen.getByText(/started in Olivares could not be loaded/i),
         'spr-auth/run-stepup/setup-run-error-notice',
       ).toBeInTheDocument()
     })
@@ -796,7 +796,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     //    same moment as the absence, rather than left to the setup that waited for it.
     expect
       .soft(
-        screen.getByText(/launched half could not be read/i),
+        screen.getByText(/started in Olivares could not be loaded/i),
         'spr-auth/run-stepup/launched-count-explains-itself',
       )
       .toBeInTheDocument()
@@ -832,7 +832,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/observed half could not be read/i),
+        screen.getByText(/started outside Olivares could not be loaded/i),
         'spr-auth/live-5xx/setup-live-error-notice',
       ).toBeInTheDocument()
     })
@@ -847,7 +847,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .not.toBeNull()
     expect
       .soft(
-        screen.queryByText(/Observed sessions are not shown/i),
+        screen.queryByText(/started outside Olivares are not shown/i),
         'spr-auth/live-5xx/not-reported-as-a-permission-denial',
       )
       .not.toBeInTheDocument()
@@ -937,7 +937,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Observed sessions are not shown/i),
+        screen.getByText(/started outside Olivares are not shown/i),
         'spr-auth/live-bit/setup-no-live-read-notice',
       ).toBeInTheDocument()
     })
@@ -1055,7 +1055,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Launched sessions are not shown/i),
+        screen.getByText(/started in Olivares are not shown/i),
         'spr-auth/run-bit/setup-no-run-read-notice',
       ).toBeInTheDocument()
     })
@@ -1158,7 +1158,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/launched half could not be read/i),
+        screen.getByText(/started in Olivares could not be loaded/i),
         'spr-auth/joined-run-out/setup-run-error-notice',
       ).toBeInTheDocument()
     })
@@ -1239,7 +1239,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
     await refreshReads()
     await waitFor(() => {
       expect(
-        screen.getByText(/observed half could not be read/i),
+        screen.getByText(/started outside Olivares could not be loaded/i),
         'spr-auth/joined-live-out/setup-live-error-notice',
       ).toBeInTheDocument()
     })
@@ -2263,7 +2263,7 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     ).toMatch(/^\d+ sessions?( · \d+ working)?$/)
     expect
       .soft(
-        screen.queryByText(/most recent page, not the whole estate/i),
+        screen.queryByText(/Only the most recent sessions are loaded/i),
         'R3/6/page-disclosure-still-owns-truncation',
       )
       .toBeInTheDocument()
@@ -2937,7 +2937,7 @@ describe('SessionsWorkspaceView — with no driver on the row, the cell paints n
     expect(
       notice.textContent,
       'spr-auth/driverless/notice-blames-the-role',
-    ).toContain('your role cannot read profiles')
+    ).toContain('your role cannot read provider profiles')
     expect(
       screen.queryByTestId('sessions-profile-names-failed'),
       'spr-auth/driverless/one-cause-one-line',

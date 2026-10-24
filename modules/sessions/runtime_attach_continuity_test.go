@@ -355,3 +355,59 @@ type attachLagWire struct {
 	Dropped int64  `json:"dropped"`
 	NextSeq int64  `json:"next_seq"`
 }
+
+// dev#2786: the console tells a change of model with when it happened, and a frame
+// replayed after a reload must keep the time the engine read it, not the replay's.
+func TestAttachHTTP_OutputCarriesTheTimeTheEngineReadIt(t *testing.T) {
+	h, fr, admin, tenant := attachHTTPHarness(t, WithSessionWorkspaceRoot(t.TempDir()))
+	ref := launchHTTPRun(t, h, admin, tenant, map[string]any{"transport": "stream-json", "name": "at"})
+	lr, ok := h.m.rt.getLive(tenant, ref)
+	if !ok {
+		t.Fatal("expected a live handle")
+	}
+	fr.lastProc().out <- OutputFrame{Stream: streamStdout, Data: []byte(`{"type":"assistant"}`)}
+	waitFor(t, "the frame is in the ring", func() bool { return len(lr.ring.readFrom(0).frames) > 0 })
+	read := lr.ring.readFrom(0).frames[0].At
+
+	ts := httptest.NewServer(h.srv.Handler())
+	t.Cleanup(ts.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", ts.URL+"/v1/m/sessions/runs/"+ref+"/attach?from=0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+admin)
+	req.Header.Set("X-Olivares-Tenant", tenant.String())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	evts := collectSSETimeout(t, res.Body, 3*time.Second, func(evts []sseEvt) bool {
+		for _, e := range evts {
+			if e.Event == "output" {
+				return true
+			}
+		}
+		return false
+	})
+	cancel()
+	for _, e := range evts {
+		if e.Event != "output" {
+			continue
+		}
+		var f struct {
+			At string `json:"at"`
+		}
+		if err := json.Unmarshal([]byte(e.Data), &f); err != nil {
+			t.Fatalf("output json: %v", err)
+		}
+		at, err := time.Parse(time.RFC3339Nano, f.At)
+		if err != nil || !at.Equal(read) {
+			t.Fatalf("output at = %q (%v); want the ring's %s", f.At, err, read.Format(time.RFC3339Nano))
+		}
+		return
+	}
+	t.Fatalf("no output event: %+v", evts)
+}

@@ -351,12 +351,22 @@ func (p *productSettings) reconcileModules(ctx context.Context, mr moduleReconci
 type moduleSelectionService struct {
 	settings *productSettings
 	running  moduleProfile
-	restart  func(reason string) error
-	log      *slog.Logger
+	// live, when set, is the profile the node runs now and replaces running.
+	live    *liveModuleProfile
+	restart func(reason string) error
+	log     *slog.Logger
 	// used names the modules whose tables hold rows (usedModules); nil reads none.
 	used func(context.Context) ([]string, error)
 	// sessions counts the sessions running now, which a restart stops; nil counts none.
 	sessions func() int
+}
+
+// current is the profile the node runs now.
+func (s moduleSelectionService) current() moduleProfile {
+	if s.live != nil {
+		return s.live.Load()
+	}
+	return s.running
 }
 
 // runningSessions is how many sessions the restart that applies a change would stop.
@@ -380,7 +390,7 @@ func (s moduleSelectionService) holdingData(ctx context.Context) ([]string, erro
 }
 
 func (s moduleSelectionService) ModuleSelection(ctx context.Context) (api.ModuleSelectionDTO, error) {
-	selected := s.running.Selected()
+	selected := s.current().Selected()
 	doc, found, err := s.settings.load(ctx)
 	if err != nil {
 		return api.ModuleSelectionDTO{}, err
@@ -392,7 +402,7 @@ func (s moduleSelectionService) ModuleSelection(ctx context.Context) (api.Module
 	if err != nil {
 		return api.ModuleSelectionDTO{}, err
 	}
-	dto := moduleSelectionDTO(selected, s.running, used)
+	dto := moduleSelectionDTO(selected, s.current(), used)
 	dto.RunningSessions = s.runningSessions()
 	return dto, nil
 }
@@ -416,10 +426,10 @@ func (s moduleSelectionService) SelectModules(ctx context.Context, actor auth.Pr
 	if err != nil {
 		return api.ModuleSelectionDTO{}, err
 	}
-	dto := moduleSelectionDTO(want.Selected(), s.running, used)
+	dto := moduleSelectionDTO(want.Selected(), s.current(), used)
 	// Read before any restart is requested: the sessions it is about to stop.
 	dto.RunningSessions = s.runningSessions()
-	if want.sameActive(s.running) {
+	if want.sameActive(s.current()) {
 		return dto, nil
 	}
 	if s.restart == nil {

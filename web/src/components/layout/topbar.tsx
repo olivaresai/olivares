@@ -1,261 +1,105 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { FavoriteButton } from './personal-navigation'
-import { Link, useRouterState } from '@tanstack/react-router'
-import { ChevronLeft, CircleHelp, Search } from 'lucide-react'
-import { Fragment } from 'react'
+import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Kbd } from '@/components/ui/kbd'
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useServerInfo } from '@/lib/hooks/use-server-info'
-import { useMinWidth } from '@/lib/hooks/use-min-width'
-import {
-  currentViewId as resolveViewId,
-  resolveLocation,
-  type Crumb,
-} from '@/features/navigation/model'
+  pendingCount,
+  usePendingApprovals,
+} from '@/features/governance/use-pending-approvals'
+import { chordHint } from '@/lib/keybindings/model'
+import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { useCommandStore } from '@/stores/command'
-import { useWorkspaceStore } from '@/stores/workspace'
-import { BrandMark } from './brand'
-import { KillSwitchStatus } from './killswitch-status'
 import { NotificationBell } from './notification-bell'
-import { trailFor } from './shell-destinations'
+import { PlacesNav } from './places-nav'
+import { ScopeSwitcher } from './scope-switcher'
 import { SidePanelToggle } from './side-panel'
 import { UserMenu } from './user-menu'
+import { useSessionRail } from './use-session-rail'
+
+/** The palette's chord, as the table declares it (Mod+k): no rule, no hint. */
+const PALETTE_KEYS = KEYBINDINGS.find(
+  (rule) => rule.command === 'palette.open',
+)?.keys
+
+/** The place counts that always ask for a person. */
+const ATTENTION_ALWAYS: readonly string[] = ['rules']
 
 /**
- * Where the help icon sends the operator.
+ * THE TOP BAR (console Estate #2544, slimmed in #3161): one 56 px row and no sidebar.
+ * The scope (organization and workspace in one control), the places (PlacesNav), then
+ * search with its key (⌘K on a Mac, Ctrl+K elsewhere), notifications and the account.
+ * Nothing else: the version, the engine, the stops and Stop all live in the status bar
+ * (status-bar.tsx); the theme, favorites and settings in the account menu. "All areas"
+ * (every other page) opens from the account menu and ⌘K. Below 1101 px search folds to
+ * its icon; the places fold to theirs when the room the bar gives them runs out
+ * (PlacesNav measures the places box); below 1024 px the scope moves into All areas;
+ * below 761 px the places move to the phone bar.
  *
- * ⛔ HISTORY, kept because it is the reason the switch below exists at all. Until 2026-08-19 this
- * was `https://docs.olivares.ai` and that name had been WITHDRAWN from DNS (NXDOMAIN, while the
- * same `getent` run resolved the apex), so all 38 help destinations failed before they were even a
- * 404. Repointing the base to olivares.ai/docs was measured before choosing: the 38 `helpHref`
- * values are Diátaxis paths belonging to `docs-site/`, and the marketing site under
- * olivares.ai/docs has a different information architecture — **0 of the 38 existed there**. So
- * the icon went to the docs index, the per-view paths stayed in the registry because they ARE the
- * mapping, and the comment named the condition to flip on: *the day docs-site ships at this base*.
- *
- * ⇒ THAT DAY WAS 2026-08-23, and the condition is MET as of 2026-08-27. docs-site is deployed as
- * the `olivares-docs` Worker and `docs.olivares.ai` serves it. Measured this session, not assumed
- * and not taken from a second-hand report: the 37 non-root `helpHref` values of
- * `web/src/features/registry.tsx`, requested one by one against `https://docs.olivares.ai<path>/`,
- * answered **37/37 = 200, zero non-200**. The base moves back and the deep links go on.
- *
- * `registry-help.test.ts` is what keeps the 38 honest against the docs tree, and it is the thing
- * to read before touching either constant.
- */
-const DOCS_BASE = 'https://docs.olivares.ai'
-
-/**
- * Are the per-view docs pages published AT `DOCS_BASE`? Flipped to `true` on 2026-08-27 on the
- * measurement above (37/37 live). Flip it back the moment that stops being true — a precise link
- * that 404s is worse than a general one that works, which is the whole trade this pair encodes.
- */
-const DEEP_LINKS_PUBLISHED = true
-
-/**
- * The registry id the breadcrumb names for a pathname. Kept as this module's export for its
- * existing callers and tests; the resolution itself lives in features/navigation/model.ts
- * beside the area model, so the trail and the sidebar can never disagree about where a
- * path sits. A resolved `/session-viewer/<id>` still names its view (the fix) — the
- * model matches the static prefix up to the first param.
- */
-export function currentViewId(pathname: string): string | null {
-  return resolveViewId(pathname)
-}
-
-function useTrail(): Crumb[] {
-  const { t } = useTranslation(['nav', 'common'])
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const search = useRouterState({
-    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
-  })
-  const workspaceName = useWorkspaceStore((s) => s.activeWorkspaceName)
-  return trailFor(t, resolveLocation(pathname), search, workspaceName)
-}
-
-/**
- * THE TOP BAR (redesign §3.2): one 52 px row at every width — breadcrumb · page state ·
- * page actions · panel toggles. Search moved to the sidebar beside New session, and the
- * account, theme and settings to the sidebar footer; below 761 px, where the sidebar is
- * replaced by the phone bar, the bar carries the brand mark, search and the account.
- *
- * `page-state` and `page-actions` are the places a screen fills (the session's "Working ·
- * 6m 12s", its Pause and Stop); the frame reserves them and draws nothing of its own.
- *
- * The breadcrumb is one truncating line (`ui/breadcrumb.tsx`): the parent crumb gives way
- * first, the page crumb truncates last, and below `sm` the first parent that links
- * collapses to an icon link that keeps its accessible name.
+ * The side panel's toggle shows only on a page that declares a panel (side-panel.tsx).
  */
 export function Topbar() {
   const { t } = useTranslation(['nav', 'common'])
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
   const setCommandOpen = useCommandStore((s) => s.setOpen)
-  const info = useServerInfo()
-  const version = useMinWidth(761) ? undefined : info.data?.version
-
-  const location = resolveLocation(pathname)
-  const trail = useTrail()
-  const parents = trail.slice(0, -1)
-  const page = trail[trail.length - 1]
-  // Contextual help: the current view's documentation page; a directory page opens
-  // the console reference, which lists every screen.
-  const helpHref =
-    location.kind === 'view' || location.kind === 'home'
-      ? location.view.helpHref
-      : location.kind === 'area'
-        ? location.area.helpHref
-        : undefined
+  const rulesWaiting = pendingCount(usePendingApprovals().query.data)
+  // The status bar's count, from the same read: every session that has not ended, idle
+  // ones too, so the badge and "N sessions open" never say two numbers (#3161).
+  const { needsYou, running } = useSessionRail().sessionCounts
+  const counts: Record<string, number | string> = {}
+  if (running) counts.sessions = running
+  if (rulesWaiting) counts.rules = rulesWaiting
+  const attention = new Set(
+    needsYou ? [...ATTENTION_ALWAYS, 'sessions'] : ATTENTION_ALWAYS,
+  )
 
   return (
     <header
       data-slot="topbar"
-      className="flex h-13 min-h-13 shrink-0 flex-nowrap items-center gap-x-1 border-b border-line bg-canvas pr-3 pl-5 max-[760px]:pl-3 sm:gap-x-2 print:hidden"
+      className="flex h-14 min-h-14 shrink-0 flex-nowrap items-center gap-2 border-b border-line bg-canvas px-4 max-[760px]:px-3 print:hidden"
     >
+      {/* Below 1024 px the scope leaves the bar for All areas, which carries the same
+          choices there: the places and search keep their room. */}
       <div
-        data-testid={version ? 'deployment-identity' : undefined}
-        className="flex shrink-0 flex-col items-center min-[761px]:hidden"
+        data-slot="topbar-scope"
+        className="flex min-w-0 shrink items-center max-[1023px]:hidden"
       >
-        <Link
-          to={'/' as never}
-          aria-label={t('nav:shell.brandHome')}
-          className="grid size-8 shrink-0 place-items-center rounded-ctl text-text outline-none focus-visible:ring-2 focus-visible:ring-focus"
-        >
-          <BrandMark />
-        </Link>
-        {version ? (
-          <span className="block shrink-0 whitespace-nowrap font-mono text-mono-s text-text-2">
-            {version}
-          </span>
-        ) : null}
+        <ScopeSwitcher />
       </div>
 
-      <Breadcrumb className="flex h-full min-w-24 flex-1 items-center">
-        <BreadcrumbList className="text-body font-medium">
-          {parents.map((crumb, i) => (
-            <Fragment key={`${crumb.to ?? ''}:${i}`}>
-              {/* The parent crumb shrinks three times faster than the page crumb; below
-                  `sm` the FIRST linking ancestor is the icon link — same href, same
-                  accessible name, and a 24 px target (WCAG 2.5.8). */}
-              <BreadcrumbItem className="shrink-0 sm:shrink-[3]">
-                {i === 0 && crumb.to ? (
-                  <BreadcrumbLink
-                    asChild
-                    className="inline-flex size-6 items-center justify-center sm:hidden"
-                  >
-                    <Link
-                      to={crumb.to as never}
-                      aria-label={crumb.label}
-                      title={crumb.label}
-                    >
-                      <ChevronLeft className="size-4" aria-hidden="true" />
-                    </Link>
-                  </BreadcrumbLink>
-                ) : null}
-                {crumb.to ? (
-                  <BreadcrumbLink asChild className={cnParent(i === 0)}>
-                    <Link to={crumb.to as never}>{crumb.label}</Link>
-                  </BreadcrumbLink>
-                ) : (
-                  <span
-                    className={cn(
-                      'inline-block min-w-6 truncate leading-6 text-text-2',
-                      i === 0 && 'max-[639px]:hidden',
-                    )}
-                    title={crumb.label}
-                  >
-                    {crumb.label}
-                  </span>
-                )}
-              </BreadcrumbItem>
-              {/* The design's slash, quiet: the trail reads as a path. */}
-              <BreadcrumbSeparator
-                className={cn(
-                  'px-0.5 text-text-3',
-                  i === 0 && 'hidden sm:inline-flex',
-                )}
-              >
-                /
-              </BreadcrumbSeparator>
-            </Fragment>
-          ))}
-          <BreadcrumbItem>
-            <BreadcrumbPage className="text-text">
-              {page?.label ?? ''}
-            </BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      {/* PlacesNav measures this box: the places fold on the room it gets, whatever
+          else takes the room. Below the 16rem floor the scope control gives up its
+          own room first (down to its minimum, issue #2764's order), so the floor is
+          gated to the viewport band the scope exists in: below 1024 px there is no
+          switcher left to yield and a floor would push the actions out of the bar. */}
+      <div className="flex min-w-0 flex-1 items-center max-[760px]:hidden min-[1024px]:min-w-[16rem]">
+        <PlacesNav counts={counts} attention={attention} />
+      </div>
 
-      <div
-        data-slot="page-state"
-        className="flex min-w-0 items-center empty:hidden"
-      />
-      <div
-        data-slot="page-actions"
-        className="flex shrink-0 items-center gap-2 empty:hidden"
-      />
-
-      <KillSwitchStatus />
-
-      <button
-        type="button"
-        onClick={() => setCommandOpen(true)}
-        aria-label={t('nav:shell.searchCommands')}
-        className="grid size-8 shrink-0 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus min-[761px]:hidden"
-      >
-        <Search className="size-4" aria-hidden />
-      </button>
-
-      <FavoriteButton />
-      <NotificationBell />
-
-      {helpHref ? (
-        <Button
-          asChild
-          variant="ghost"
-          size="icon"
-          className="max-[760px]:hidden"
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setCommandOpen(true)}
+          aria-label={t('nav:shell.searchCommands')}
+          title={t('nav:shell.searchCommands')}
+          aria-keyshortcuts="Control+K Meta+K"
+          className="inline-flex h-9 w-50 shrink-0 items-center gap-2 rounded-full bg-hover pr-2 pl-3 text-body text-text-2 outline-none hover:bg-active hover:text-text focus-visible:ring-2 focus-visible:ring-focus max-[1100px]:w-9 max-[1100px]:justify-center max-[1100px]:p-0"
         >
-          <a
-            href={
-              DEEP_LINKS_PUBLISHED && helpHref !== '/'
-                ? `${DOCS_BASE}${helpHref}/`
-                : DOCS_BASE
-            }
-            target="_blank"
-            rel="noreferrer"
-            aria-label={t('common:actions.help')}
+          <Search aria-hidden className="size-4 shrink-0" />
+          <span
+            aria-hidden
+            className="min-w-0 flex-1 truncate text-left max-[1100px]:hidden"
           >
-            <CircleHelp />
-          </a>
-        </Button>
-      ) : null}
-
-      <SidePanelToggle />
-
-      <span className="min-[761px]:hidden">
+            {t('nav:shell.search')}
+          </span>
+          {PALETTE_KEYS ? (
+            <Kbd className="max-[1100px]:hidden">{chordHint(PALETTE_KEYS)}</Kbd>
+          ) : null}
+        </button>
+        <NotificationBell />
+        <SidePanelToggle />
         <UserMenu />
-      </span>
+      </div>
     </header>
   )
-}
-
-/** The text rendering of a parent crumb that links: the first one hides below `sm` (its
- * icon twin shows instead); later ancestors stay text at every width. `min-w-6` +
- * `inline-block`: an area name can be two letters ("AI"/"IA"), and a 14 px wide link is
- * below the 24 px pointer target (WCAG 2.5.8). */
-function cnParent(first: boolean): string {
-  return first
-    ? 'hidden min-w-6 leading-6 text-text-2 sm:inline-block'
-    : 'inline-block min-w-6 leading-6 text-text-2'
 }

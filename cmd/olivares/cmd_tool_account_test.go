@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -183,5 +184,110 @@ func TestToolLoginMethodReachesTheEngine(t *testing.T) {
 	_, _, _ = execSessionCLI(t, nil, append([]string{"tool", "login", "opencode"}, sessionCreds(server.URL)...)...)
 	if _, has := sent["method"]; has {
 		t.Fatalf("a login without --method sent a method: %v", sent)
+	}
+}
+
+// #2567: without --method the CLI starts the first method the engine lists, which
+// for OpenCode is its own provider; a status without methods sends none.
+func TestToolLoginStartsTheFirstListedMethod(t *testing.T) {
+	var sent map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "GET":
+			_ = json.NewEncoder(w).Encode(map[string]any{"driver": "opencode", "installed": true, "signed_in": false, "methods": []map[string]any{
+				{"id": "opencode", "label": "OpenCode Zen and free models (API key)", "key": true},
+				{"id": "chatgpt-headless", "label": "ChatGPT Pro/Plus (headless)", "default": true},
+			}})
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "POST":
+			sent = map[string]any{}
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			w.WriteHeader(202)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "login-f", "state": "signed_in"})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	if _, errb, err := execSessionCLI(t, nil, append([]string{"tool", "login", "opencode"}, sessionCreds(server.URL)...)...); err != nil || sent["method"] != "opencode" {
+		t.Fatalf("login without --method: %v %s sent=%v, want the first listed method", err, errb, sent)
+	}
+	if _, errb, err := execSessionCLI(t, nil, append([]string{"tool", "login", "opencode", "--method", "chatgpt-headless"}, sessionCreds(server.URL)...)...); err != nil || sent["method"] != "chatgpt-headless" {
+		t.Fatalf("login with --method: %v %s sent=%v", err, errb, sent)
+	}
+}
+
+// At a terminal the key is read with echo off, and echo is back on once it was
+// read; the key is sent to the engine as typed and never printed.
+func TestToolLoginReadsTheKeyWithEchoOffAtATerminal(t *testing.T) {
+	const key = "fixture-terminal-key-0123456789"
+	var sent map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "GET":
+			_ = json.NewEncoder(w).Encode(map[string]any{"driver": "opencode", "installed": true, "signed_in": false})
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "POST":
+			w.WriteHeader(202)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "login-k", "state": "needs_key", "url": "https://opencode.ai/auth"})
+		case r.URL.Path == agentToolsPath+"/sign-in/login-k/code" && r.Method == "POST":
+			sent = map[string]any{}
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			w.WriteHeader(202)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "login-k", "state": "signed_in"})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	prevTTY, prevHide := interactiveStdin, hideTerminalEcho
+	t.Cleanup(func() { interactiveStdin, hideTerminalEcho = prevTTY, prevHide })
+	var hidden, restored int
+	interactiveStdin = func(io.Reader) bool { return true }
+	hideTerminalEcho = func(io.Reader) (func(), error) {
+		hidden++
+		return func() { restored++ }, nil
+	}
+	out, errb, err := execSessionCLI(t, strings.NewReader(key+"\n"), append([]string{"tool", "login", "opencode"}, sessionCreds(server.URL)...)...)
+	if err != nil || sent["code"] != key {
+		t.Fatalf("key login: %v %s sent=%v", err, errb, sent)
+	}
+	if hidden != 1 || restored != 1 {
+		t.Fatalf("echo hidden %d and restored %d times, want once each", hidden, restored)
+	}
+	if !strings.Contains(out, "https://opencode.ai/auth") || !strings.Contains(out, "OpenCode is signed in.") || strings.Contains(out+errb, key) {
+		t.Fatalf("output = %q %q", out, errb)
+	}
+}
+
+// When the engine's status cannot be read, the login still starts, without a
+// method, and the CLI says that the tool's default login runs.
+func TestToolLoginSaysWhenItCannotChooseTheMethod(t *testing.T) {
+	var sent map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "GET":
+			w.WriteHeader(503)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "unavailable", "message": "The tool's status could not be read."})
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "POST":
+			sent = map[string]any{}
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			w.WriteHeader(202)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "login-d", "state": "signed_in"})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	_, errb, err := execSessionCLI(t, nil, append([]string{"tool", "login", "opencode"}, sessionCreds(server.URL)...)...)
+	if err != nil || sent == nil || sent["method"] != nil {
+		t.Fatalf("login: %v %s sent=%v, want a start without a method", err, errb, sent)
+	}
+	if !strings.Contains(errb, "default login") || !strings.Contains(errb, "--method") {
+		t.Fatalf("stderr = %q, want it to say the default login runs and how to choose one", errb)
 	}
 }

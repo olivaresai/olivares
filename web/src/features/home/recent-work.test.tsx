@@ -5,7 +5,7 @@
 // THE FRONT DOOR tells what happened, and never more than it was told.
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen } from '@/test/intel'
+import { fireEvent, renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import type { LiveDTO } from '@/features/sessions/types'
 import { RecentWork } from './recent-work'
@@ -155,7 +155,7 @@ describe('RecentWork', () => {
     const { container } = renderIntel(
       <RecentWork sessions={asSessions([row()])} state="ready" />,
     )
-    expect(screen.getByText(/worked for 15\.0s/)).toBeInTheDocument()
+    expect(screen.getByText(/worked for 15s/)).toBeInTheDocument()
     expect(screen.getByText(/2 tool calls/)).toBeInTheDocument()
     expect(screen.getByText(/3 events/)).toBeInTheDocument()
     expectNoRawI18nKeys(container)
@@ -177,13 +177,21 @@ describe('RecentWork', () => {
   it('uses the singular form for one tool call', () => {
     // i18next falls back to `_other` when the category is missing, which is how
     // "1 open incidents" shipped once already (features/shared/i18n-plurals.test.ts).
-    renderIntel(
+    // Equal counts say the tool calls only (dev#3120), so each singular has its own row.
+    const calls = renderIntel(
       <RecentWork
-        sessions={asSessions([row({ tool_call_count: 1, event_count: 1 })])}
+        sessions={asSessions([row({ tool_call_count: 1, event_count: 2 })])}
         state="ready"
       />,
     )
     expect(screen.getByText(/1 tool call\b/)).toBeInTheDocument()
+    calls.unmount()
+    renderIntel(
+      <RecentWork
+        sessions={asSessions([row({ tool_call_count: 0, event_count: 1 })])}
+        state="ready"
+      />,
+    )
     expect(screen.getByText(/1 event\b/)).toBeInTheDocument()
   })
 
@@ -354,5 +362,22 @@ describe('a row named by its tool and folder says the folder once (#2266)', () =
     const text = rowEl.textContent ?? ''
     expect(text).toContain('Claude Code \u00b7 billing-api')
     expect(text.split('billing-api')).toHaveLength(2)
+  })
+})
+
+// #2549: on Estate a row opens its session in the sheet over the page; a click that
+// asks for a new tab or window keeps the link's own way to the full page.
+describe('RecentWork — opening a session in place', () => {
+  it('opens the row’s session on a plain click, and leaves a modified one to the link', () => {
+    const sessions = asSessions([row()])
+    const onOpen = vi.fn()
+    renderIntel(
+      <RecentWork sessions={sessions} state="ready" onOpen={onOpen} />,
+    )
+    const link = screen.getByTestId('home-recent-row')
+    expect(fireEvent.click(link, { shiftKey: true })).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(fireEvent.click(link)).toBe(false)
+    expect(onOpen).toHaveBeenCalledWith(sessions[0]!.key)
   })
 })

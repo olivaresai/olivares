@@ -616,7 +616,7 @@ func TestDeleteRunRemovesItsAttachments(t *testing.T) {
 	if _, err := m.cleanupRun(ctx, tenant, dto.RunRef, "user:u1", "user"); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.deleteRun(ctx, tenant, dto.RunRef); err != nil {
+	if err := m.deleteRun(ctx, tenant, dto.RunRef, "test", model.ActorSystem); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {

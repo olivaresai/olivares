@@ -9,6 +9,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -129,8 +130,34 @@ var differentialCorpus = []struct {
 	{in: "https://.panel.example.com"}, {in: "https://.a.example"}, {in: "https://a..example"},
 	{in: "https://a.example."}, {in: "https://.."},
 	{in: "https://example.."}, {in: "https://panel.example.com.."},
-	{in: "https://xn--.example"}, {in: "https://xn--a.example"},
-	{in: "https://XN--.example"}, {in: "https://xn--\u3002example"},
+	// The empty ACE payload, and the parser generation that changed its mind.
+	// x/net/idna maps "xn--" to "" with a NIL error and refuses "xn--a" as an
+	// invalid label, so this package refuses both. Node 24.15 refused them too;
+	// the WHATWG implementation in Node 24.21 passes the literal label through.
+	// Both builds are in service here (CI reads .node-version, the builder runs
+	// the newer one), and the console comparison measures the installed parser
+	// live, so the reason has to be recorded rather than the verdict assumed.
+	{
+		in:         "https://xn--.example",
+		divergence: "library-difference",
+		why: "golang.org/x/net/idna maps the bare ACE prefix to the empty string with a nil error, so this package refuses it instead of erasing " +
+			"the label the operator wrote. The installed WHATWG implementation refused it in Node 24.15 and accepts it literally in Node 24.21; " +
+			"either verdict is legitimate for the live comparison. Refusing is the safe direction: the label decodes to nothing.",
+	},
+	{
+		in:         "https://xn--a.example",
+		divergence: "library-difference",
+		why: "the punycode payload of \"xn--a\" decodes to U+0080, which x/net/idna's label validation refuses. Node 24.15 refused the input as " +
+			"well; Node 24.21 passes the literal label through. This build refuses more than a browser does, which is the safe direction for an address " +
+			"that can become a relying-party ID.",
+	},
+	{
+		in:         "https://XN--.example",
+		divergence: "library-difference",
+		why: "as \"https://xn--.example\": UTS-46 maps the uppercase prefix to the same empty ACE payload, which this package refuses and " +
+			"Node 24.21 passes through (Node 24.15 refused it). Refusing never accepts an address a browser would reject.",
+	},
+	{in: "https://xn--\u3002example"},
 	// The compatibility spellings of the prefix, and the ignored-only labels they
 	// must NOT be confused with. Both directions are measured against the
 	// installed WHATWG implementation on every run of the console suite.
@@ -153,9 +180,10 @@ var differentialCorpus = []struct {
 	{
 		in:         "https://1א.example",
 		divergence: "library-difference",
-		why: "golang.org/x/net/idna's BidiRule refuses a bidi domain whose first character is a European number (RFC 5893 rule 1); " +
-			"the ICU implementation behind the installed Node URL accepts it. We refuse MORE than a browser here. Recorded rather than " +
-			"worked around: the alternative is dropping the Bidi rule, which the URL Standard requires, for an IDN class no deployment uses.",
+		why: "golang.org/x/net/idna's BidiRule refuses a bidi domain whose first character is a European number (RFC 5893 rule 1). " +
+			"The WHATWG implementation in Node 24.15 accepts it; Node 24.21 refuses it. This build refuses it on both, so it refuses more " +
+			"than the older browser and agrees with the newer one. Recorded rather than worked around: the alternative is dropping the Bidi " +
+			"rule, which the URL Standard requires, for an IDN class no deployment uses.",
 	},
 	// Percent escapes.
 	{in: "https://a%2Fb.example"}, {in: "https://a%00b.example"},
@@ -257,7 +285,7 @@ func TestGoldenTablesAreCurrent(t *testing.T) {
 
 	origins := make([]originRow, 0, len(differentialCorpus))
 	for _, c := range differentialCorpus {
-		if (c.divergence == "") != (c.why == "") {
+		if (c.divergence == "") != (strings.TrimSpace(c.why) == "") {
 			t.Fatalf("%q: a divergent row must say why, and an agreeing row must not claim a divergence", c.in)
 		}
 		row := originRow{Input: c.in, Divergence: c.divergence, Why: c.why}

@@ -306,6 +306,52 @@ func TestContainerRunner_UserMapping(t *testing.T) {
 			t.Errorf("--userns=keep-id is podman's: %q", argv)
 		}
 	})
+	t.Run("docker gives the engine user an entry in /etc/passwd", func(t *testing.T) {
+		if uid == 0 {
+			t.Skip("the engine user is root: the image has root's entry")
+		}
+		f := newFakeRuntime(t, "docker")
+		p := launchContainer(t, f, containerSpec(t))
+		_ = containerFrame(t, p)
+		host, ok := passwdMount(f.argv(t))
+		if !ok {
+			t.Fatalf("argv = %q, want a read-only /etc/passwd mount so OpenSSH finds uid %d", f.argv(t), uid)
+		}
+		data, err := os.ReadFile(host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), fmt.Sprintf(":x:%d:%d:", uid, gid)) {
+			t.Errorf("passwd = %q, want an entry for uid %d gid %d", data, uid, gid)
+		}
+	})
+	t.Run("the engine user's passwd file goes when the session ends", func(t *testing.T) {
+		if uid == 0 {
+			t.Skip("the engine user is root: no passwd file is written")
+		}
+		f := newFakeRuntime(t, "docker")
+		p := launchContainer(t, f, containerSpec(t))
+		_ = containerFrame(t, p)
+		host, ok := passwdMount(f.argv(t))
+		if !ok {
+			t.Fatalf("argv = %q, want a read-only /etc/passwd mount", f.argv(t))
+		}
+		stopCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stop()
+		if err := p.Stop(stopCtx); err != nil {
+			t.Fatalf("Stop: %v", err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if _, err := os.Stat(host); os.IsNotExist(err) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%s still exists after the session ended", host)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
 	t.Run("rootless podman keeps the engine user's id", func(t *testing.T) {
 		if uid == 0 {
 			t.Skip("the engine user is root: podman is rootful and has no id to keep")
@@ -315,8 +361,58 @@ func TestContainerRunner_UserMapping(t *testing.T) {
 		_ = containerFrame(t, p)
 		if argv := f.argv(t); indexOf(argv, "--userns=keep-id") < 0 || indexOf(argv, "--user") >= 0 {
 			t.Errorf("argv = %q, want --userns=keep-id and no --user", argv)
+		} else if _, ok := passwdMount(argv); ok {
+			t.Errorf("argv = %q: podman writes the engine user's passwd entry itself, so no /etc/passwd mount", argv)
 		}
 	})
+}
+
+func TestContainerRunner_ASessionThatMountsPasswdKeepsItsOwnAndGetsNoSecond(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("the engine user is root: no passwd file is written")
+	}
+	f := newFakeRuntime(t, "docker")
+	spec := containerSpec(t)
+	passwd := filepath.Join(t.TempDir(), "passwd")
+	if err := os.WriteFile(passwd, []byte("root:x:0:0:root:/:/bin/sh\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	spec.Binds = []ContainerBind{{HostPath: passwd, Target: "/etc/passwd", ReadOnly: true}}
+	p := launchContainer(t, f, spec)
+	_ = containerFrame(t, p)
+	argv := f.argv(t)
+	var passwdMounts []string
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == "-v" && strings.Contains(argv[i+1], ":/etc/passwd") {
+			passwdMounts = append(passwdMounts, argv[i+1])
+		}
+	}
+	if len(passwdMounts) != 1 || !strings.HasPrefix(passwdMounts[0], passwd+":/etc/passwd") {
+		t.Errorf("passwd mounts = %q, want only the session's own %s", passwdMounts, passwd)
+	}
+}
+
+func TestContainerRunner_ARefusedLaunchRemovesItsPasswdDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("the engine user is root: no passwd file is written")
+	}
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	f := newFakeRuntime(t, "docker")
+	spec := containerSpec(t)
+	spec.Binds = []ContainerBind{{HostPath: "/no/such/host/path", Target: "/workspace/x"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, err := NewContainerRunner(f.rt).Launch(ctx, spec); err == nil {
+		t.Fatal("Launch accepted a bind whose host path does not exist")
+	}
+	left, err := filepath.Glob(filepath.Join(tmp, "olivares-container-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
+		t.Errorf("a refused launch left %q behind", left)
+	}
 }
 
 func TestContainerRunner_SELinuxLabelsTheBinds(t *testing.T) {
@@ -559,4 +655,19 @@ func TestRunnerWithContainers_ReportsWhatItCanRun(t *testing.T) {
 	if _, ok := runner.(RunnerTransportReporter); !ok {
 		t.Errorf("the composed runner dropped the native runner's transport report")
 	}
+}
+
+// passwdMount is the host file the runtime mounts over the image's /etc/passwd, if the
+// argv mounts one.
+func passwdMount(argv []string) (string, bool) {
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] != "-v" {
+			continue
+		}
+		parts := strings.Split(argv[i+1], ":")
+		if len(parts) >= 3 && parts[1] == "/etc/passwd" && strings.Contains(parts[2], "ro") {
+			return parts[0], true
+		}
+	}
+	return "", false
 }

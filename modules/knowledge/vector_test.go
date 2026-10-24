@@ -87,8 +87,8 @@ func TestClassificationClearanceFailsClosed(t *testing.T) {
 }
 
 func TestACLFilter(t *testing.T) {
-	if !aclAllows(nil, nil) {
-		t.Error("empty ACL is unrestricted")
+	if aclAllows(nil, nil) || aclAllows([]string{}, []string{"group:eng"}) {
+		t.Error("an empty ACL denies, whatever the groups")
 	}
 	if !aclAllows([]string{"anyone"}, nil) {
 		t.Error("'anyone' is unrestricted")

@@ -637,7 +637,7 @@ func (m *Module) processContentChange(ctx context.Context, mc api.ModuleContext,
 	kbClassif := kb.String(colClassif)
 	region := kb.String(colResidency)
 
-	pd, err := m.prepareContent(doc, sourceModeForSource(src), defaultACL, kbClassif, dlpPol)
+	pd, err := m.prepareContent(doc, sourceModeForSource(src), sourcePublic(src), defaultACL, kbClassif, dlpPol)
 	if err != nil {
 		return fmt.Errorf("prepare: %w", err)
 	}
@@ -679,6 +679,11 @@ func (m *Module) processContentChange(ctx context.Context, mc api.ModuleContext,
 		}
 		if _, err := m.replaceChunks(ctx, chunkRepo, kbID, docID, region, pd); err != nil {
 			return err
+		}
+		// The grant and its ledger entry commit together, so a sync that fails
+		// later never leaves a public document unrecorded.
+		if pd.madePublic {
+			return auditPublicSource(ctx, sc, mc, kbID, 1)
 		}
 		return nil
 	})
@@ -728,7 +733,24 @@ func (m *Module) processACLChange(ctx context.Context, mc api.ModuleContext, src
 		if !found {
 			return nil // document not yet in DB; skip
 		}
-		return m.updateDocACL(ctx, sc, rec.String(model.ColID), acl, classif, extLabels)
+		// The same rule as ingest: a source that reports no ACL falls back to the KB
+		// default, then to "anyone" only for a public source; otherwise it is denied.
+		kb, kbFound, err := loadKB(ctx, sc, kbID)
+		if err != nil {
+			return err
+		}
+		var kbDefault []string
+		if kbFound {
+			kbDefault = unmarshalStrings(kb, colDefaultACL)
+		}
+		effective, madePublic := effectiveACL(acl, kbDefault, sourcePublic(src), false)
+		if err := m.updateDocACL(ctx, sc, rec.String(model.ColID), effective, classif, extLabels); err != nil {
+			return err
+		}
+		if madePublic {
+			return auditPublicSource(ctx, sc, mc, kbID, 1)
+		}
+		return nil
 	})
 }
 
@@ -809,44 +831,9 @@ func (m *Module) processDelete(ctx context.Context, mc api.ModuleContext, kbID m
 // propagates the change to all its chunks. It also upserts or deletes the external
 // label row according to extLabels. docID is the database row id.
 func (m *Module) updateDocACL(ctx context.Context, sc store.Scope, docID string, acl []string, classif string, extLabels []string) error {
-	docRepo, err := sc.Ext(documentKind)
-	if err != nil {
+	doc, found, err := m.setDocACL(ctx, sc, docID, acl, classif)
+	if err != nil || !found {
 		return err
-	}
-	doc, err := docRepo.Get(ctx, model.ID(docID))
-	if err != nil {
-		if isNotFound(err) {
-			return nil
-		}
-		return err
-	}
-
-	aclJSON := marshalStrings(acl)
-	doc[colACL] = aclJSON
-	if classif != "" {
-		doc[colClassif] = normClass(classif)
-	}
-	if _, err := docRepo.Update(ctx, doc); err != nil {
-		return err
-	}
-
-	// Propagate ACL to all chunks of this document.
-	chunkRepo, err := sc.Ext(chunkKind)
-	if err != nil {
-		return err
-	}
-	chunks, err := listAll(ctx, chunkRepo, eq(colDocRef, docID))
-	if err != nil {
-		return err
-	}
-	for _, chunk := range chunks {
-		chunk[colACL] = aclJSON
-		if classif != "" {
-			chunk[colClassif] = normClass(classif)
-		}
-		if _, err := chunkRepo.Update(ctx, chunk); err != nil {
-			return err
-		}
 	}
 
 	// Update external label row.
@@ -856,4 +843,50 @@ func (m *Module) updateDocACL(ctx context.Context, sc store.Scope, docID string,
 		return upsertExternalLabel(ctx, sc, docID, kbRef, srcKind, extLabels)
 	}
 	return deleteExternalLabel(ctx, sc, docID)
+}
+
+// setDocACL writes acl (and classif when not empty) on a document row and on all
+// its chunks, leaving the external labels alone. found is false for a document
+// deleted since the caller listed it.
+func (m *Module) setDocACL(ctx context.Context, sc store.Scope, docID string, acl []string, classif string) (doc model.Record, found bool, err error) {
+	docRepo, err := sc.Ext(documentKind)
+	if err != nil {
+		return nil, false, err
+	}
+	doc, err = docRepo.Get(ctx, model.ID(docID))
+	if err != nil {
+		if isNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	aclJSON := marshalStrings(acl)
+	doc[colACL] = aclJSON
+	if classif != "" {
+		doc[colClassif] = normClass(classif)
+	}
+	if _, err := docRepo.Update(ctx, doc); err != nil {
+		return nil, false, err
+	}
+
+	// Propagate ACL to all chunks of this document.
+	chunkRepo, err := sc.Ext(chunkKind)
+	if err != nil {
+		return nil, false, err
+	}
+	chunks, err := listAll(ctx, chunkRepo, eq(colDocRef, docID))
+	if err != nil {
+		return nil, false, err
+	}
+	for _, chunk := range chunks {
+		chunk[colACL] = aclJSON
+		if classif != "" {
+			chunk[colClassif] = normClass(classif)
+		}
+		if _, err := chunkRepo.Update(ctx, chunk); err != nil {
+			return nil, false, err
+		}
+	}
+	return doc, true, nil
 }

@@ -171,7 +171,7 @@ una traducción humana. La guía editorial que los rodea está localizada.
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 957 command nodes — the root command and 956 subcommands, of which 201 are groups that carry subcommands and 40 are hidden diagnostics — together with the 3733 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 964 command nodes — the root command and 963 subcommands, of which 202 are groups that carry subcommands and 40 are hidden diagnostics — together with the 3782 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -204,7 +204,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 957 commands, in alphabetical order.
+All 964 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -340,16 +340,17 @@ All 957 commands, in alphabetical order.
 | [`olivares claude-agents sessions events`](#command-olivares-claude-agents-sessions-events) | List one managed session's thread events |
 | [`olivares claude-agents sessions tool-confirmation`](#command-olivares-claude-agents-sessions-tool-confirmation) | Answer a managed agent's pending tool use (allow or deny) |
 | [`olivares claude-hook`](#command-olivares-claude-hook) | Governed PEP hook client: forward a Claude Code hook to the engine and relay the decision (deny-closed) _(hidden)_ |
-| [`olivares claude-policy`](#command-olivares-claude-policy) | Author, publish and track the Claude Code managed-* policy surfaces |
-| [`olivares claude-policy artifact`](#command-olivares-claude-policy-artifact) | Fetch the signed artifact a distribution agent would pull |
-| [`olivares claude-policy checkin`](#command-olivares-claude-policy-checkin) | Report an agent's applied artifact and observed config (exit 7 when unverified) |
-| [`olivares claude-policy distribution`](#command-olivares-claude-policy-distribution) | Show published vs signed vs observed, scope by scope |
+| [`olivares claude-policy`](#command-olivares-claude-policy) | Validate and dry-run the managed policy files of Claude Code, Codex, Grok Build, OpenCode and Gemini CLI (publishing and tracking require Business) |
+| [`olivares claude-policy artifact`](#command-olivares-claude-policy-artifact) | Fetch the signed artifact a distribution agent would pull (requires Business) |
+| [`olivares claude-policy checkin`](#command-olivares-claude-policy-checkin) | Report an agent's applied artifact and observed config (exit 7 when unverified) (requires Business) |
+| [`olivares claude-policy distribution`](#command-olivares-claude-policy-distribution) | Show published vs signed vs observed, scope by scope (requires Business) |
 | [`olivares claude-policy dry-run`](#command-olivares-claude-policy-dry-run) | Resolve a document against observed hosts without writing anything |
-| [`olivares claude-policy publish`](#command-olivares-claude-policy-publish) | Publish a new revision and, when a distributor is wired, sign it |
+| [`olivares claude-policy publish`](#command-olivares-claude-policy-publish) | Publish a new revision and, when a distributor is wired, sign it (requires Business) |
+| [`olivares claude-policy pull`](#command-olivares-claude-policy-pull) | Pull a surface's signed artifact, verify it, write the file and attest it (exit 7 when it does not verify) (requires Business) |
 | [`olivares claude-policy validate`](#command-olivares-claude-policy-validate) | Validate a policy document server-side (exit 7 when it has errors) |
-| [`olivares claude-policy versions`](#command-olivares-claude-policy-versions) | List and read published revisions of a surface |
-| [`olivares claude-policy versions get`](#command-olivares-claude-policy-versions-get) | Show one revision with its document content |
-| [`olivares claude-policy versions ls`](#command-olivares-claude-policy-versions-ls) | List a surface's published revisions |
+| [`olivares claude-policy versions`](#command-olivares-claude-policy-versions) | List and read published revisions of a surface (requires Business) |
+| [`olivares claude-policy versions get`](#command-olivares-claude-policy-versions-get) | Show one revision with its document content (requires Business) |
+| [`olivares claude-policy versions ls`](#command-olivares-claude-policy-versions-ls) | List a surface's published revisions (requires Business) |
 | [`olivares codex`](#command-olivares-codex) | Author OpenAI Codex governance artifacts (managed config) |
 | [`olivares codex managed-config`](#command-olivares-codex-managed-config) | Render the Codex requirements.toml + managed_config.toml from a governance Policy JSON |
 | [`olivares codex-hook`](#command-olivares-codex-hook) | Governed PEP hook client for Codex: forward a Codex hook to the engine and relay the decision (deny-closed) _(hidden)_ |
@@ -1004,6 +1005,8 @@ All 957 commands, in alphabetical order.
 | [`olivares security rulepack verify`](#command-olivares-security-rulepack-verify) | Verify a signed rule-pack against a trusted key and print its summary |
 | [`olivares serve`](#command-olivares-serve) | Run the engine (REST + gRPC + embedded console), TLS-on-by-default |
 | [`olivares session`](#command-olivares-session) | Start, follow, send to, stop and resume agent sessions |
+| [`olivares session archive`](#command-olivares-session-archive) | Archive a session, or unarchive it with --undo |
+| [`olivares session done`](#command-olivares-session-done) | Mark a session done in your list |
 | [`olivares session events`](#command-olivares-session-events) | Show a session's lifecycle record (start, stop, failures) |
 | [`olivares session follow`](#command-olivares-session-follow) | Show a session's output as it happens |
 | [`olivares session handoff`](#command-olivares-session-handoff) | Continue a session in another tool or account as a new, linked session |
@@ -1013,10 +1016,12 @@ All 957 commands, in alphabetical order.
 | [`olivares session move`](#command-olivares-session-move) | Move a stopped session to another account of the same tool |
 | [`olivares session peers`](#command-olivares-session-peers) | Choose which sessions a session may message |
 | [`olivares session pin`](#command-olivares-session-pin) | Pin a session to the top of your list |
+| [`olivares session rename`](#command-olivares-session-rename) | Rename a session |
 | [`olivares session resume`](#command-olivares-session-resume) | Resume a stopped session |
 | [`olivares session rm`](#command-olivares-session-rm) | Remove a stopped session |
 | [`olivares session send`](#command-olivares-session-send) | Send a message to a session and show the reply |
 | [`olivares session show`](#command-olivares-session-show) | Show one session |
+| [`olivares session snooze`](#command-olivares-session-snooze) | Hide a session from your list until a moment |
 | [`olivares session start`](#command-olivares-session-start) | Start an agent session in a folder, optionally with a first prompt |
 | [`olivares session stop`](#command-olivares-session-stop) | Stop a session |
 | [`olivares session unpin`](#command-olivares-session-unpin) | Unpin a session |
@@ -1096,7 +1101,7 @@ All 957 commands, in alphabetical order.
 | [`olivares tokens rotate`](#command-olivares-tokens-rotate) | Rotate an API token: issue a replacement with the same spec and revoke the old one |
 | [`olivares tool`](#command-olivares-tool) | Install and sign in the agent tools sessions run (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI) |
 | [`olivares tool install`](#command-olivares-tool-install) | Install an official or catalog-admitted tool on the engine's host |
-| [`olivares tool login`](#command-olivares-tool-login) | Sign an agent tool in with its own login (Claude, ChatGPT, xAI or Google account) |
+| [`olivares tool login`](#command-olivares-tool-login) | Sign an agent tool in with its own login (Claude, ChatGPT, xAI, Google or OpenCode account) |
 | [`olivares tool ls`](#command-olivares-tool-ls) | List the agent tools on the engine's host and whether each is signed in |
 | [`olivares tool pin`](#command-olivares-tool-pin) | Select a session tool version for a workspace or agent |
 | [`olivares tool providers`](#command-olivares-tool-providers) | Show each tool's own login: email, plan, usage windows and models |
@@ -1105,6 +1110,8 @@ All 957 commands, in alphabetical order.
 | [`olivares tool start`](#command-olivares-tool-start) | Start Ollama, llama.cpp or vLLM on the engine's host as the engine's own service |
 | [`olivares tool stop`](#command-olivares-tool-stop) | Stop Ollama, llama.cpp or vLLM, the engine's own service |
 | [`olivares tool update`](#command-olivares-tool-update) | Update an agent tool from its verified official release |
+| [`olivares ui`](#command-olivares-ui) | Open the interactive main menu on a terminal |
+| [`olivares ui session`](#command-olivares-ui-session) | Follow, message, interrupt and stop one session on a terminal |
 | [`olivares uninstall`](#command-olivares-uninstall) | Plan or remove a local installation without crossing its signed-release layout |
 | [`olivares upgrade`](#command-olivares-upgrade) | Upgrade this binary in place to a newer signed release (verified, atomic, reversible) |
 | [`olivares users`](#command-olivares-users) | User accounts: list, create, disable, enable |
@@ -3322,7 +3329,7 @@ olivares claude-hook
 
 #### Command: olivares claude-policy
 
-Author, publish and track the Claude Code managed-* policy surfaces
+Validate and dry-run the managed policy files of Claude Code, Codex, Grok Build, OpenCode and Gemini CLI (publishing and tracking require Business)
 
 ```
 olivares claude-policy
@@ -3342,7 +3349,7 @@ olivares claude-policy
 
 #### Command: olivares claude-policy artifact
 
-Fetch the signed artifact a distribution agent would pull
+Fetch the signed artifact a distribution agent would pull (requires Business)
 
 ```
 olivares claude-policy artifact <surface>
@@ -3354,7 +3361,7 @@ olivares claude-policy artifact <surface>
 
 #### Command: olivares claude-policy checkin
 
-Report an agent's applied artifact and observed config (exit 7 when unverified)
+Report an agent's applied artifact and observed config (exit 7 when unverified) (requires Business)
 
 ```
 olivares claude-policy checkin <surface>
@@ -3370,7 +3377,7 @@ olivares claude-policy checkin <surface>
 
 #### Command: olivares claude-policy distribution
 
-Show published vs signed vs observed, scope by scope
+Show published vs signed vs observed, scope by scope (requires Business)
 
 ```
 olivares claude-policy distribution <surface>
@@ -3392,7 +3399,7 @@ olivares claude-policy dry-run <surface>
 
 #### Command: olivares claude-policy publish
 
-Publish a new revision and, when a distributor is wired, sign it
+Publish a new revision and, when a distributor is wired, sign it (requires Business)
 
 ```
 olivares claude-policy publish <surface>
@@ -3402,6 +3409,21 @@ olivares claude-policy publish <surface>
 |---|---|---|---|
 | `--content-file` | `string` | — | **required**. the policy document, '-' for stdin (required) |
 | `--note` | `string` | — | why this revision exists (recorded on the revision) |
+
+#### Command: olivares claude-policy pull
+
+Pull a surface's signed artifact, verify it, write the file and attest it (exit 7 when it does not verify) (requires Business)
+
+```
+olivares claude-policy pull <surface>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--out` | `string` | — | **required**. the file to write (required) |
+| `--pin-key-fingerprint` | `string` | — | **required**. the signing key fingerprint 'publish' printed, pinned out of band (required) |
+| `--revision` | `int64` | `0` | a specific revision (0 uses the newest); one older than the plane's latest is written and then exits 7, because the host now drifts from the latest |
+| `--scope` | `string` | — | **required**. the host id / distribution name this workstation reports as (required) |
 
 #### Command: olivares claude-policy validate
 
@@ -3417,7 +3439,7 @@ olivares claude-policy validate <surface>
 
 #### Command: olivares claude-policy versions
 
-List and read published revisions of a surface
+List and read published revisions of a surface (requires Business)
 
 ```
 olivares claude-policy versions
@@ -3427,7 +3449,7 @@ Declares no flags of its own; it takes those of [`olivares claude-policy`](#comm
 
 #### Command: olivares claude-policy versions get
 
-Show one revision with its document content
+Show one revision with its document content (requires Business)
 
 ```
 olivares claude-policy versions get <surface> <revision>
@@ -3437,7 +3459,7 @@ Declares no flags of its own; it takes those of [`olivares claude-policy version
 
 #### Command: olivares claude-policy versions ls
 
-List a surface's published revisions
+List a surface's published revisions (requires Business)
 
 ```
 olivares claude-policy versions ls <surface>
@@ -12576,6 +12598,46 @@ Aliases: `sessions`
 
 Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
 
+#### Command: olivares session archive
+
+Archive a session, or unarchive it with --undo
+
+```
+olivares session archive <session>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+| `--undo` | `bool` | `false` | unarchive the session |
+
+#### Command: olivares session done
+
+Mark a session done in your list
+
+```
+olivares session done <session>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+| `--undo` | `bool` | `false` | Remove the done mark |
+
 #### Command: olivares session events
 
 Show a session's lifecycle record (start, stop, failures)
@@ -12669,7 +12731,8 @@ Aliases: `list`
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--account` | `string` | — | only sessions of this account (its name or profile reference; see olivares provider account ls) |
-| `--all` | `bool` | `false` | include released (cleaned) sessions |
+| `--all` | `bool` | `false` | include released (cleaned) and archived sessions |
+| `--archived` | `bool` | `false` | list only archived sessions |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
@@ -12769,6 +12832,25 @@ olivares session pin <session>
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
+#### Command: olivares session rename
+
+Rename a session
+
+```
+olivares session rename <session> <name>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+
 #### Command: olivares session resume
 
 Resume a stopped session
@@ -12853,6 +12935,26 @@ Aliases: `get`
 | `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
+#### Command: olivares session snooze
+
+Hide a session from your list until a moment
+
+```
+olivares session snooze <session> <for|until>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+| `--undo` | `bool` | `false` | End the snooze now |
+
 #### Command: olivares session start
 
 Start an agent session in a folder, optionally with a first prompt
@@ -12870,7 +12972,7 @@ olivares session start [folder] [prompt]
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
-| `--model` | `string` | — | model alias or id (default: the tool's own) |
+| `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
 | `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
@@ -14122,7 +14224,7 @@ olivares tool install [tool] [--from URL --version VERSION]
 
 #### Command: olivares tool login
 
-Sign an agent tool in with its own login (Claude, ChatGPT, xAI or Google account)
+Sign an agent tool in with its own login (Claude, ChatGPT, xAI, Google or OpenCode account)
 
 ```
 olivares tool login <claude|codex|grok|opencode|gemini>
@@ -14133,7 +14235,7 @@ olivares tool login <claude|codex|grok|opencode|gemini>
 | `--account` | `string` | — | sign in an existing provider account (name or profile reference) |
 | `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
-| `--method` | `string` | — | the tool's official login method, when it offers several (the default otherwise) |
+| `--method` | `string` | — | the tool's official login method, when it offers several (the first one the engine lists otherwise) |
 | `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
@@ -14306,6 +14408,35 @@ olivares tool update <claude|codex|grok|opencode|gemini|ollama>
 | `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `string` | `latest` | release version, or the vendor's channel (latest; stable for Grok Build) |
 
+#### Command: olivares ui
+
+Open the interactive main menu on a terminal
+
+```
+olivares ui
+```
+
+Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares ui session
+
+Follow, message, interrupt and stop one session on a terminal
+
+```
+olivares ui session <name|new>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+
 #### Command: olivares uninstall
 
 Plan or remove a local installation without crossing its signed-release layout
@@ -14342,11 +14473,12 @@ olivares upgrade
 | `--current-version` | `string` | — | declare the version installed at --target when it cannot be probed (cross-arch staging, a noexec mount, or a build from source); keeps anti-rollback and min_version armed instead of guessing |
 | `--data-dir` | `string` | — | data directory (license + install-id) (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--download-protocol` | `string` | `release-v1` | gated download protocol for --enterprise: release-v1 (default; resolves one consistent {version,set,manifest,signature} tuple) or legacy (the existing per-request /download route, for a custom or older gateway). A 404 from the new route is a compatibility diagnostic, not an automatic downgrade |
+| `--edition` | `string` | — | install or update the licensed build of this edition: business (or its alias enterprise); the same route as --enterprise, and the one a Community build with a Business license takes |
 | `--endpoint` | `string` | — | update channel source: a GitHub repository (https://github.com/&lt;owner&gt;/&lt;repo&gt;), one of its releases (…/releases/tag/&lt;tag&gt;), or a static mirror base (&lt;base&gt;/&lt;channel&gt;/manifest.json). Default: the public repository's releases; the license worker with --enterprise |
 | `--enterprise` | `bool` | `false` | upgrade the licensed Business edition (gated download; needs a live license) |
 | `--force-rollback` | `bool` | `false` | allow installing an OLDER version than the running one (records an audit entry) |
 | `--if-eligible` | `bool` | `false` | only proceed if this node is in the manifest's staged-rollout cohort (used by the timer) |
-| `--install-timer` | `bool` | `false` | emit an opt-in systemd timer+service that runs 'upgrade --if-eligible' in a maintenance window |
+| `--install-timer` | `bool` | `false` | emit an opt-in systemd timer+service that runs 'upgrade --if-eligible' in a maintenance window; refused for the package-owned /usr/bin/olivares, which the package manager upgrades |
 | `--license` | `string` | — | explicit license file path (Business; highest precedence) |
 | `--os` | `string` | `linux` | target OS to download for |
 | `--pubkey` | `string` | — | base64 or @file Ed25519 OTA key to verify against (default: the key embedded in this build) |
@@ -14792,7 +14924,7 @@ olivares wiki ingest <workspace> <path-under-raw>
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
-| `--model` | `string` | — | model alias or id (default: the tool's own) |
+| `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
 | `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
@@ -14844,7 +14976,7 @@ olivares wiki lint <workspace>
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
-| `--model` | `string` | — | model alias or id (default: the tool's own) |
+| `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
 | `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |
@@ -14877,7 +15009,7 @@ olivares wiki query <workspace> <question>
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
 | `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (a process beside the engine) or container (podman or Docker on this server; see olivares doctor) |
-| `--model` | `string` | — | model alias or id (default: the tool's own) |
+| `--model` | `string` | — | model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--no-setup` | `bool` | `false` | skip the folder's setup command for this start |
 | `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, ask, or full (every tool, no prompts; administrators only) |

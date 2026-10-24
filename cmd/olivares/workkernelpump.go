@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/olivaresai/olivares/core/store"
@@ -24,6 +25,9 @@ const (
 	// outbox nudge live, fresh rows drain on insert and this tick only proves
 	// the durable fallback (a stopped nudge, a crash between insert and nudge).
 	defaultWorkOutboxInterval = 5 * time.Minute
+	// workOutboxHeldRetryMin is the first retry after a drain that held K3 work back;
+	// each further held drain doubles it, up to the safety cadence.
+	workOutboxHeldRetryMin = time.Second
 )
 
 // workOutboxPump is the local durable pump for the sessions outbox. It is one
@@ -72,6 +76,9 @@ type workOutboxPump struct {
 
 	mu         sync.Mutex
 	lastReason string
+	// heldBack is whether the last drain held K3 work back. A held row gets no second insert
+	// to wake it, so the nudge goroutine drains again with a backoff.
+	heldBack atomic.Bool
 }
 
 func newWorkOutboxPump(getenv func(string) string, st store.Store, sm *sessions.Module, log *slog.Logger) *workOutboxPump {
@@ -143,21 +150,48 @@ func (p *workOutboxPump) register(rt periodicScheduler) error {
 			}
 		}
 	}
-	sessions.SetWorkOutboxNudge(nudge)
+	// The nudge is the module's own. A pump without a module (the goroutine's
+	// unit tests) has no inserts to wake it; stop guards the same way.
+	if p.sessions != nil {
+		p.sessions.SetWorkOutboxNudge(nudge)
+	}
 	go func() {
 		defer close(p.nudgeExited)
+		// After a drain that held K3 work back, drain again in backoff: 1 s, doubling up to
+		// the safety cadence, so a lane that stays refused (a standby, readiness off) falls
+		// back to the tick's rhythm. A drain that held nothing resets it. retry is nil, and
+		// so never ready, while nothing is held.
+		var retry <-chan time.Time
+		backoff := workOutboxHeldRetryMin
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-p.nudgeCh:
-				if err := p.run(ctx); err != nil {
-					p.log.Warn("sessions-work-outbox: nudged drain failed", "err", err)
-				}
+			case <-retry:
 			}
+			if err := p.run(ctx); err != nil {
+				p.log.Warn("sessions-work-outbox: nudged drain failed", "err", err)
+			}
+			retry = nil
+			if !p.heldBack.Load() {
+				backoff = workOutboxHeldRetryMin
+				continue
+			}
+			retry = time.After(backoff)
+			backoff = min(2*backoff, p.heldRetryCeiling())
 		}
 	}()
 	return nil
+}
+
+// heldRetryCeiling is the slowest held-work retry: the pump's own safety cadence, or the
+// default one when the periodic drain is disabled (interval 0).
+func (p *workOutboxPump) heldRetryCeiling() time.Duration {
+	if p.interval > 0 {
+		return p.interval
+	}
+	return defaultWorkOutboxInterval
 }
 
 // stop is called by engine.Close before the runtime stops. It removes pump
@@ -171,7 +205,9 @@ func (p *workOutboxPump) stop() {
 	if p.communication != nil {
 		p.communication.markStopped()
 	}
-	sessions.SetWorkOutboxNudge(nil)
+	if p.sessions != nil {
+		p.sessions.SetWorkOutboxNudge(nil)
+	}
 	// Owned cancellation + join (SR2C P2): cancel the drain's context and wait
 	// for the goroutine to exit, so a nudged drain never runs against a closing
 	// store. Idempotent — a double stop neither panics nor wedges.
@@ -243,6 +279,7 @@ func (p *workOutboxPump) reportLane(ctx context.Context) {
 		var report communicationAuthorityReport
 		report, reason = p.authority.snapshot()
 		held, fenced, unknown, unknownTypes = report.held, report.fenced, report.unknown, report.unknownTypes
+		p.heldBack.Store(held > 0)
 		if reason == "" {
 			reason = p.authority.current(ctx).reason
 		}

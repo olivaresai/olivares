@@ -91,6 +91,7 @@ const (
 
 type upgradeOptions struct {
 	enterprise       bool
+	edition          string
 	token            string
 	endpoint         string
 	channel          string
@@ -130,11 +131,12 @@ func newUpgradeCmd() *cobra.Command {
 			"  olivares upgrade --channel security  # take only security releases\n" +
 			"  olivares upgrade --check             # show the plan (current -> available, CVEs) — no swap\n" +
 			"  olivares upgrade --bundle f.tar.gz --check   # verify offline; installation requires Enterprise\n" +
-			"  olivares upgrade --enterprise        # licensed Business edition (needs a live license)\n" +
+			"  olivares upgrade --edition business # install or update the licensed Business build (needs a live license)\n" +
 			"  olivares upgrade --install-timer     # print an opt-in systemd auto-check timer\n\n" +
 			"A Business build reads `upgrade` as `upgrade --enterprise`: it never installs from the public\n" +
 			"channel, so it needs a live license and a download token (or --connect).\n" +
 			"A build with no embedded OTA key requires --pubkey (air-gapped / self-signed mirror).\n" +
+			"--install-timer refuses a package-owned /usr/bin/olivares (deb, rpm, apk, AUR): the package manager upgrades it.\n" +
 			"NOTE: a Go binary is not hot-patched; zero downtime is a drain + handover, see\n" +
 			"docs/UPGRADE-AND-ROLLBACK.md.",
 		Example: `  # Preview the latest stable upgrade without swapping
@@ -148,6 +150,7 @@ func newUpgradeCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.BoolVar(&o.enterprise, "enterprise", false, "upgrade the licensed Business edition (gated download; needs a live license)")
+	f.StringVar(&o.edition, "edition", "", "install or update the licensed build of this edition: business (or its alias enterprise); the same route as --enterprise, and the one a Community build with a Business license takes")
 	f.StringVar(&o.token, "token", "", "Business download token from your license/fulfillment email")
 	f.StringVar(&o.endpoint, "endpoint", "", "update channel source: a GitHub repository (https://github.com/<owner>/<repo>), one of its releases (…/releases/tag/<tag>), or a static mirror base (<base>/<channel>/manifest.json). Default: the public repository's releases; the license worker with --enterprise")
 	// `lts` is still a value release.ValidChannel accepts, so hiding it would document a
@@ -168,7 +171,7 @@ func newUpgradeCmd() *cobra.Command {
 	f.BoolVarP(&o.assumeYes, "yes", "y", false, "do not prompt for confirmation before swapping")
 	f.BoolVar(&o.forceRollback, "force-rollback", false, "allow installing an OLDER version than the running one (records an audit entry)")
 	f.BoolVar(&o.ifEligible, "if-eligible", false, "only proceed if this node is in the manifest's staged-rollout cohort (used by the timer)")
-	f.BoolVar(&o.installTimer, "install-timer", false, "emit an opt-in systemd timer+service that runs 'upgrade --if-eligible' in a maintenance window")
+	f.BoolVar(&o.installTimer, "install-timer", false, "emit an opt-in systemd timer+service that runs 'upgrade --if-eligible' in a maintenance window; refused for the package-owned /usr/bin/olivares, which the package manager upgrades")
 	f.BoolVar(&o.connect, "connect", false, "with --enterprise: refresh this data directory's connected credential and download token by proof of possession ('license connect') instead of a pasted token; works when the installed credential has expired. It refreshes only when upgrade runs: a timer runs it on --timer-schedule, not at the credential's refresh planning boundary")
 	f.StringVar(&o.timerDir, "timer-dir", "", "write the systemd units to this directory instead of printing them")
 	f.StringVar(&o.timerSchedule, "timer-schedule", "Sun *-*-* 03:00:00", "systemd OnCalendar expression for the auto-check timer; when omitted, an --enterprise --connect timer runs daily (*-*-* 03:00:00)")
@@ -319,6 +322,9 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	}
 	// The edition picks the route before anything reads o.enterprise, so --connect, the timer
 	// generator and the source selection all see the same answer.
+	if err := applyEditionFlag(cmd, o); err != nil {
+		return err
+	}
 	if err := defaultToLicensedChannel(o); err != nil {
 		return err
 	}
@@ -338,7 +344,7 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 		return err
 	}
 
-	// --install-timer is a local, network-free generator: emit the opt-in units and stop.
+	// --install-timer is a local, network-free generator: emit the opt-in units and stop (it refuses a package-owned binary).
 	// It runs BEFORE the progress stream is chosen because it shares none of the
 	// narration below — it prints unit files, which are an artifact, not commentary.
 	if o.installTimer {
@@ -367,6 +373,7 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 		}
 		o.dataDir = resolved
 	}
+	preferConnectedToken(o)
 
 	// 1) Offline verification key (explicit --pubkey else embedded). Fail-closed.
 	pub, keySrc, err := resolveReleaseKey(o.pubkey)
@@ -402,6 +409,25 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 		applied = appliedBinaryPath(o.dataDir)
 		target = appliedProbeTarget(o.dataDir, pub, image)
 		targetIsSelf = target == image
+	}
+	// THE PACKAGE MANAGER OWNS THIS FILE (dev#2426). On a package install (deb,
+	// rpm, apk, AUR) run as root /usr/bin/olivares is writable, so the swap below would succeed and
+	// leave the package database describing a file it no longer has (`rpm -V`
+	// fails; the next package upgrade silently overwrites the swapped binary).
+	// Refuse BEFORE any download, with the route that keeps the database true.
+	// installedPackageBinary is the same name installedPackageSnapshotRequest
+	// decides "this is the installed package's binary" from. Three runs stay out:
+	// --check swaps nothing and must still show the plan; a container swaps the
+	// data volume, never the image's file; an explicit --target (targetIsSelf is
+	// false exactly then) names a path and owns that choice.
+	if targetIsSelf && !inContainer() && target == installedPackageBinary && !o.check {
+		if o.enterprise {
+			return exitcode.New(exitcode.Usage, fmt.Errorf(
+				"refusing to replace the package-managed %s in place: the Business build is not in the package channel yet, so add --target %s --data-dir <the engine's data directory> "+
+					"to switch that file yourself (the package database then no longer describes it, and a package upgrade puts Community back) — `olivares upgrade --check` still shows the plan", target, target))
+		}
+		return exitcode.New(exitcode.Usage, fmt.Errorf(
+			"refusing to replace the package-managed %s in place: "+packageManagerRoute+" — `olivares upgrade --check` still shows the plan", target))
 	}
 	current := currentInstalledVersion(ctx, target, o.currentVersion, targetIsSelf)
 	// Fingerprint the bytes the guards are about to be decided against, HERE and not at
@@ -687,7 +713,8 @@ func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, 
 			o.token = strings.TrimSpace(osGetenv("OLIVARES_UPGRADE_TOKEN"))
 		}
 		if strings.TrimSpace(o.token) == "" {
-			return nil, nil, fmt.Errorf("--enterprise needs a download token: pass --token, or set OLIVARES_UPGRADE_TOKEN (it is in your license/fulfillment email). It travels in the Authorization header, never the command line")
+			return nil, nil, fmt.Errorf("the licensed download needs a token: set OLIVARES_UPGRADE_TOKEN or pass --token (get it at https://licenses.olivares.ai/portal/downloads or in your license email; it travels in the Authorization header, never the command line), " +
+				"or connect this installation once with `olivares license connect start` and this command needs nothing else")
 		}
 		if o.endpoint == "" {
 			o.endpoint = defaultEnterpriseEndpoint
@@ -726,6 +753,33 @@ func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, 
 		return nil, nil, err
 	}
 	return src, nil, nil
+}
+
+// applyEditionFlag reads --edition: the licensed route under the name the console, the portal
+// and the docs use. Business and Enterprise are one build (Enterprise is a negotiated scope), so
+// both select it; any other value is refused with the one it accepts, never guessed.
+func applyEditionFlag(cmd *cobra.Command, o *upgradeOptions) error {
+	if !cmd.Flags().Changed("edition") {
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(o.edition)) {
+	case "business", "enterprise":
+		o.enterprise = true
+		return nil
+	}
+	return exitcode.New(exitcode.Usage, fmt.Errorf("unknown --edition %q (want business): Community is the public build, and `olivares upgrade` with no --edition keeps the edition installed", o.edition))
+}
+
+// preferConnectedToken makes the licensed route need nothing typed on an installation that is
+// already connected: with no --token and no OLIVARES_UPGRADE_TOKEN, the data directory's own
+// identity fetches the download token, as the console's update does. A token given either way
+// wins, and the unit --install-timer writes is generated before this runs, so it is unchanged.
+func preferConnectedToken(o *upgradeOptions) {
+	if !o.enterprise || o.connect || o.bundle != "" || strings.TrimSpace(o.token) != "" ||
+		strings.TrimSpace(osGetenv("OLIVARES_UPGRADE_TOKEN")) != "" {
+		return
+	}
+	o.connect = isConnected(o.dataDir)
 }
 
 // defaultToLicensedChannel makes a Business build upgrade from the licensed channel.

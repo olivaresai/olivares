@@ -37,22 +37,26 @@ import {
 } from '@/features/sessions/provenance'
 import { runFolder } from '@/features/sessions/folder'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
+import { useRunLedger } from '@/features/agentops/run-state-word'
 import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
+import { opensInSheet } from '@/features/sessions/opens-in-sheet'
 import { sessionModelRef } from '@/features/sessions/session-usage'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
-import type { TileState } from './components'
+import type { TileState } from './view-state'
 import { RECENT_WORK_ROWS, workLine } from './work-line'
 import './i18n'
 
 function WorkRow({
   session,
   shared,
+  onOpen,
 }: {
   session: UnifiedSession
   /** Names another row of this list also carries: those rows show their tail. */
   shared: ReadonlySet<string>
+  onOpen?: (address: string) => void
 }) {
   const { t } = useTranslation(['home', 'sessions'])
   const { t: ts } = useTranslation('sessions')
@@ -60,6 +64,8 @@ function WorkRow({
   // (mergeSessions), named by what its operator typed, else by what it did.
   const live = session.live
   const run = primaryRun(session.runs)
+  // Finished or stopped: the run's own ledger says which (dev#3120).
+  const ledger = useRunLedger(run)
   const naming = sessionNaming(session, t('recent.untitled'), shared)
   const name = naming.name
   const shortId = naming.shortId
@@ -101,8 +107,8 @@ function WorkRow({
     <li className="border-b border-border last:border-b-0">
       {/* THE WHOLE ROW IS THE LINK, and it is one link and not three: a row holding a
           badge link, a text link and a time link is three tab stops saying the same
-          thing. The accessible name is the sentence — what the session was doing —
-          because that is what an operator is choosing between. */}
+          thing. The accessible name is the row's own text, state, sentence and age, so
+          a voice user can say what they see (WCAG 2.5.3). */}
       {/* ONE LINE, 40 px, AND NOTHING WRAPS (reference row 8). It was two
           stacked lines inside `flex-wrap` at `py-3` — about 72 px, and more when the
           sentence wrapped. The reference's list rows are one line with a clear
@@ -126,9 +132,13 @@ function WorkRow({
       <Link
         to={'/sessions' as never}
         search={{ [SESSION_PARAM]: addressOf(session) } as never}
+        onClick={(e) => {
+          if (!onOpen || !opensInSheet(e)) return
+          e.preventDefault()
+          onOpen(addressOf(session))
+        }}
         data-testid="home-recent-row"
         title={fullTitle}
-        aria-label={t('recent.open', { what: name })}
         /* Below `sm` the row wraps: the state and the time share the first line and the
            sentence takes the full width below them — at 320 px it was one word a line
            between the badge and "4 months ago". */
@@ -136,7 +146,8 @@ function WorkRow({
       >
         {run ? (
           <RunStateBadge
-            state={run.state}
+            run={run}
+            ledger={ledger}
             className="shrink-0 whitespace-nowrap"
           />
         ) : live ? (
@@ -181,6 +192,7 @@ export function RecentWork({
   sessions,
   state,
   titled = false,
+  onOpen,
 }: {
   /** Show the section title (Now, where the list follows "Needs you"); otherwise it is
    *  for assistive technology only. */
@@ -188,6 +200,8 @@ export function RecentWork({
   /** The sessions `home-view` holds (runs and live rows merged), most recent first. */
   sessions: UnifiedSession[] | undefined
   state: TileState
+  /** Opens a row's session in place (Estate's sheet); without it a row goes to Sessions. */
+  onOpen?: (address: string) => void
 }) {
   const { t } = useTranslation('home')
   const rows = (sessions ?? []).slice(0, RECENT_WORK_ROWS)
@@ -227,7 +241,12 @@ export function RecentWork({
         <>
           <ul data-testid="home-recent-rows">
             {rows.map((s) => (
-              <WorkRow key={s.key} session={s} shared={shared} />
+              <WorkRow
+                key={s.key}
+                session={s}
+                shared={shared}
+                onOpen={onOpen}
+              />
             ))}
           </ul>
           <div className="flex h-6 items-center justify-end">

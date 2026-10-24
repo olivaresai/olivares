@@ -19,7 +19,7 @@ import (
 //   - the outputConnector edition port — lets buildOutputConnector resolve the
 //     "teamsbot" destination kind (the registered-bot Action.Execute Teams
 //     connector) under -tags enterprise; the default build returns (nil,false) so
-//     "teamsbot" is simply an unknown kind (no rug-pull — the Apache connectors/teams
+//     "teamsbot" is refused naming Business (no rug-pull — the Apache connectors/teams
 //     Workflows destination is unchanged).
 //   - the incidentCloseLoop edition port — builds the governance→incident close-loop
 //     subscriber from OLIVARES_INCIDENTLOOP_CONFIG under -tags enterprise; the default

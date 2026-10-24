@@ -1,6 +1,6 @@
 {
   "title": "Inferenz-Proxy",
-  "description": "Der richtliniendurchsetzende Proxy pro Mandant vor jedem Modellaufruf: Anfrage-/Antwort-Gates, Egress-DLP-Regeln und Geräteautorisierungs-Freigaben.",
+  "description": "Der richtliniendurchsetzende Proxy pro Mandant vor jedem Modellaufruf: Anfrage-/Antwort-Gates, Egress-DLP-Regeln und Geräteautorisierungs-Genehmigungen.",
   "config": {
     "title": "Gates & Obergrenzen",
     "intro": "Jedes Gate wird auf dem Anfragepfad vor dem Modellaufruf durchgesetzt. Wird eines ausgeschaltet, entfällt diese Prüfung; die Änderung wird im Audit-Ledger erfasst.",
@@ -32,9 +32,9 @@
       "buffer": "Puffern"
     },
     "ceilingsEnforce": "Obergrenzen durchsetzen",
-    "ceilingsEnforceHint": "Tokens, Tool-Nutzungen und Task-Budget pro Aufruf begrenzen. Aus = keine Obergrenze pro Aufruf.",
+    "ceilingsEnforceHint": "Tokens, Werkzeug-Nutzungen und Task-Budget pro Aufruf begrenzen. Aus = keine Obergrenze pro Aufruf.",
     "ceilingMaxTokens": "Max. Tokens",
-    "ceilingMaxToolUses": "Max. Tool-Nutzungen",
+    "ceilingMaxToolUses": "Max. Werkzeug-Nutzungen",
     "ceilingTaskBudget": "Task-Budget (Tokens)",
     "ceilingTaskBudgetHint": "0 = nicht gesetzt, sonst mindestens {{min}}.",
     "ceilingTaskBudgetError": "Muss 0 oder mindestens {{min}} sein.",
@@ -44,7 +44,7 @@
   },
   "dlp": {
     "title": "Egress-DLP-Regeln",
-    "intro": "Ordne einer Inhaltsklassifizierung Zulassen oder Verweigern beim Egress zu. Die Klassifizierung läuft serverseitig beim Modellaufruf; diese Regeln bestimmen, was ein Treffer bewirkt.",
+    "intro": "Ordnen Sie einer Inhaltsklassifizierung Zulassen oder Verweigern beim Egress zu. Die Klassifizierung läuft serverseitig beim Modellaufruf; diese Regeln bestimmen, was ein Treffer bewirkt.",
     "truncated": "{{n}} DLP-Regeln geladen; es gibt weitere",
     "truncatedHint": "Es gibt mehr DLP-Regeln als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier eine Regel, beweist das nicht, dass es sie nicht gibt — der Ausgang kann Regeln unterliegen, die hier nicht sichtbar sind.",
     "add": "Regel hinzufügen",

@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// Every destination of the sidebar and of the phone bar comes from the registry: its id,
-// its path, its icon and its permission. A destination written by hand in the shell would
-// be a door that no census, no permission check and no route test sees. Where a page sits
-// is its own entry's area and section: the sidebar marks the pin of that section, the row
-// above the page lists that section, and the trail names that area.
+// Every place of the top bar and of the phone bar comes from the registry: its id, its
+// path, its icon and its permission. A place written by hand in the shell would be a door
+// that no census, no permission check and no route test sees. Where a page sits is its own
+// entry's area and section: the top bar marks the place of that section, and the row
+// above the page lists that section.
 //
 // And a permitted leaf opens by direct link with no parent permission: an area is the
 // union of the leaves the principal may open, never a gate of its own.
@@ -74,9 +74,9 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
-import i18next from 'i18next'
 import { FEATURE_VIEWS, NAV_AREAS } from './registry'
 import enNav from '@/lib/i18n/locales/en/nav.json'
+import { BUSINESS_BUILD } from '@/features/business-build'
 import {
   authorizedSections,
   permissionGate,
@@ -91,13 +91,11 @@ import {
   journeyDestinations,
   phoneBarDestinations,
   sectionAt,
-  trailFor,
 } from '@/components/layout/shell-destinations'
 import { DestinationSections } from '@/components/layout/destination-sections'
-import { JourneyNav } from '@/components/layout/journey-nav'
+import { PlacesNav } from '@/components/layout/places-nav'
 import { PhoneBar } from '@/components/layout/phone-bar'
-import { AreasTree, SidebarAreas } from '@/components/layout/sidebar'
-import { AreasEntry } from '@/components/layout/areas-entry'
+import { AreasTree } from '@/components/layout/sidebar'
 
 afterEach(() => {
   routerState.pathname = '/'
@@ -107,11 +105,16 @@ afterEach(() => {
 })
 
 const viewOf = (id: string) => FEATURE_VIEWS.find((v) => v.id === id)
-/** A sidebar entry names a view by its id, or a section of a view. */
+/** A place names a view by its id, or a section of a view. */
 const viewIdOf = (e: string | { view: string }) =>
   typeof e === 'string' ? e : e.view
-const DESTINATION_IDS = SHELL_DESTINATIONS.map(viewIdOf)
-/** The address a sidebar entry opens: its view's path, and a section's search. */
+/** The places whose view this build registers: Organization is a Business page, which a
+ * Community build does not hold (shellDestinations offers only registered views). */
+const DESTINATION_IDS = SHELL_DESTINATIONS.map(viewIdOf).filter((id) =>
+  viewOf(id),
+)
+const REGISTERED = SHELL_DESTINATIONS.filter((e) => viewOf(viewIdOf(e)))
+/** The address a place opens: its view's path, and a section's search. */
 const hrefOf = (
   e: string | { view: string; search?: Record<string, string> },
 ) =>
@@ -129,7 +132,12 @@ const allBut = (...denied: (string | undefined)[]) =>
   permissionGate((p) => !denied.includes(p))
 
 describe('the shell destinations come from the registry', () => {
-  it('names only registry views that navigation may list', () => {
+  it('names only registry views that navigation may list, and Business its own place', () => {
+    // Every place but Organization is a Community view; Organization ships with the
+    // Business build and is never invented by the shell.
+    expect(
+      SHELL_DESTINATIONS.map(viewIdOf).filter((id) => !viewOf(id)),
+    ).toEqual(viewOf('organization') ? [] : ['organization'])
     for (const id of DESTINATION_IDS) {
       const view = viewOf(id)
       expect(view, id).toBeDefined()
@@ -148,13 +156,13 @@ describe('the shell destinations come from the registry', () => {
     }
   })
 
-  it('renders the sidebar destinations as links to registry paths and nothing else', () => {
-    renderIntel(<JourneyNav />)
+  it('renders the places as links to registry paths and nothing else', () => {
+    renderIntel(<PlacesNav />)
     const nav = screen.getByRole('navigation', { name: 'Journeys' })
     const hrefs = within(nav)
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'))
-    expect(hrefs).toEqual(SHELL_DESTINATIONS.map(hrefOf))
+    expect(hrefs).toEqual(REGISTERED.map(hrefOf))
   })
 
   it('renders the first three destinations in the phone bar, beside New and More', () => {
@@ -172,8 +180,8 @@ describe('the shell destinations come from the registry', () => {
     ).toBeInTheDocument()
   })
 
-  it('gives the phone bar the first three destinations this principal may open', () => {
-    // Without system:admin there is no AI tools: the third link is the next destination.
+  it('gives the phone bar the first three places this principal may open', () => {
+    // Without system:admin there is no Tools: the third link is the next place.
     const denied = viewOf('agent-tools')!.permission
     canMock.mockImplementation((p) => p !== denied)
     renderIntel(<PhoneBar />)
@@ -187,7 +195,7 @@ describe('the shell destinations come from the registry', () => {
       journeyDestinations(allBut(denied))
         .slice(0, 3)
         .map((d) => d.key),
-    ).toEqual(['home', 'sessions', 'approvals'])
+    ).toEqual(['home', 'sessions', 'rules'])
   })
 
   it('marks the phone link of the destination current on the page', () => {
@@ -205,7 +213,7 @@ describe('the shell destinations come from the registry', () => {
     canMock.mockImplementation(
       (p) => p !== viewOf('gitPublication')?.permission,
     )
-    renderIntel(<JourneyNav />)
+    renderIntel(<PlacesNav />)
     const nav = screen.getByRole('navigation', { name: 'Journeys' })
     const hrefs = within(nav)
       .getAllByRole('link')
@@ -250,9 +258,13 @@ describe('a permitted leaf opens by direct link with no parent permission', () =
     const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
     expect(links).toContain(work.path)
     expect(links).toContain('/areas/work-communications')
-    // No other area is offered without a leaf of its own.
+    // No other area is offered without a leaf of its own. A leaf that asks the engine stays
+    // offered while the answer is unknown (G1-B): a Business console has one in System.
     for (const a of NAV_AREAS.filter(
-      (x) => x.id !== 'work-communications' && !open.has(x.id),
+      (x) =>
+        x.id !== 'work-communications' &&
+        !open.has(x.id) &&
+        !(BUSINESS_BUILD && x.id === 'system'),
     ))
       expect(links).not.toContain(a.path)
     // The direct link is the current page.
@@ -265,13 +277,12 @@ describe('a permitted leaf opens by direct link with no parent permission', () =
 
   it('keeps the destinations that need no permission, and the one the grant opens', () => {
     canMock.mockImplementation((p) => p === work.permission)
-    renderIntel(<JourneyNav />)
+    renderIntel(<PlacesNav />)
     const nav = screen.getByRole('navigation', { name: 'Journeys' })
     const hrefs = within(nav)
       .getAllByRole('link')
       .map((a) => a.getAttribute('href'))
-    // Work is itself a sidebar destination: the leaf's own grant opens it there too,
-    // and nothing else.
+    // The leaf's own grant opens no place but those that need no permission.
     expect(hrefs).toEqual(
       DESTINATION_IDS.map((id) => viewOf(id)!)
         .filter((v) => !v.permission || v.permission === work.permission)
@@ -280,80 +291,98 @@ describe('a permitted leaf opens by direct link with no parent permission', () =
   })
 })
 
-describe('the sidebar pins pages, the first job first, with no grouping of its own', () => {
-  it('opens with Now, Sessions, AI tools and Approvals', () => {
-    renderIntel(<JourneyNav />)
+describe('the top bar names the places, with no grouping of its own', () => {
+  it('reads Now, Sessions, Tools, Rules and Ledger', () => {
+    renderIntel(<PlacesNav />)
     const nav = screen.getByRole('navigation', { name: 'Journeys' })
     expect(
       within(nav)
         .getAllByRole('link')
-        .map((a) => a.textContent),
-    ).toEqual(['Now', 'Sessions', 'AI tools', 'Approvals'])
+        .map((a) => a.getAttribute('title')),
+    ).toEqual(['Now', 'Sessions', 'Tools', 'Rules', 'Ledger'])
     // One list: the place of each page is its area, named by All areas, not a heading here.
     expect(within(nav).queryAllByRole('group')).toEqual([])
   })
 
-  it('marks exactly one destination on each page, Now on the overview only', () => {
+  it('marks exactly one place on each page, Estate on the overview only', () => {
     for (const [path, key] of [
       ['/', 'home'],
       ['/sessions', 'sessions'],
       ['/providers', 'agent-tools'],
+      ['/audit', 'audit'],
+      ['/evals', 'audit'],
     ] as const) {
       routerState.pathname = path
-      const { unmount } = renderIntel(<JourneyNav />)
+      const { unmount } = renderIntel(<PlacesNav />)
       expect(
-        [
-          ...document.querySelectorAll('[data-journey][aria-current="page"]'),
-        ].map((a) => a.getAttribute('data-journey')),
+        [...document.querySelectorAll('[data-place][aria-current="page"]')].map(
+          (a) => a.getAttribute('data-place'),
+        ),
         path,
       ).toEqual([key])
       unmount()
     }
   })
-})
 
-describe('a page in an area without a pin', () => {
-  it('marks no pinned destination, and All areas names its area', () => {
-    routerState.pathname = '/audit'
-    renderIntel(
-      <>
-        <JourneyNav />
-        <AreasEntry open={false} onOpen={() => {}} />
-      </>,
-    )
-    expect(
-      document.querySelector('[data-journey][aria-current="page"]'),
-    ).toBeNull()
-    expect(screen.getByRole('button', { name: 'All areas' })).toHaveAttribute(
-      'data-branch',
-      'active',
+  it('draws the current place as the neutral tone step, never orange', () => {
+    routerState.pathname = '/sessions'
+    renderIntel(<PlacesNav />)
+    const here = document.querySelector('[data-place="sessions"]')!
+    expect(here).toHaveAttribute('aria-current', 'page')
+    expect(here.className).toContain('aria-[current=page]:bg-active')
+    expect(here.className).not.toMatch(/accent|orange|shadow|glow|ring-accent/)
+  })
+
+  it('folds the places to icons on the room the bar gives them, the current one last', () => {
+    routerState.pathname = '/sessions'
+    renderIntel(<PlacesNav />)
+    const label = (key: string) =>
+      document.querySelector(`[data-place="${key}"] > span`)!
+    // The places fold on their measured width (#2764), not on a fixed threshold: the fold
+    // states are pinned in components/layout/places-nav.fold.test.tsx. Unmeasured (no
+    // layout here), every label shows. A visible label never carries the sr-only token: the
+    // page's overlap scan must keep seeing it (the token would exempt it from the scan);
+    // only a folded, hidden label gets it.
+    for (const key of ['home', 'sessions', 'agent-tools', 'rules', 'audit'])
+      expect(label(key), key).not.toHaveClass('sr-only')
+    // Folded, a place keeps its name for a screen reader and in its tooltip.
+    expect(screen.getByRole('link', { name: 'Tools' })).toHaveAttribute(
+      'title',
+      'Tools',
     )
   })
 })
 
-describe('the Approvals entry (console remake slice 4)', () => {
+describe('a page in an area without a place', () => {
+  it('marks no place', () => {
+    routerState.pathname = '/models'
+    renderIntel(<PlacesNav />)
+    expect(
+      document.querySelector('[data-place][aria-current="page"]'),
+    ).toBeNull()
+  })
+})
+
+describe('the Rules place: the approval queue (console remake slice 4)', () => {
   it('is the approval queue section of Permissions, offered only with the queue permission', () => {
-    renderIntel(<JourneyNav />)
-    const entry = document.querySelector('[data-journey="approvals"]')
+    renderIntel(<PlacesNav />)
+    const entry = document.querySelector('[data-place="rules"]')
     expect(entry).not.toBeNull()
     expect(entry?.getAttribute('href')).toBe('/permissions?tab=approvals')
-    expect(entry).toHaveTextContent('Approvals')
+    expect(entry).toHaveTextContent('Rules')
   })
 
   it('is not offered without governance:approval:read, even with the view', () => {
     canMock.mockImplementation((p) => p !== APPROVALS_SECTION.requires)
-    renderIntel(<JourneyNav />)
-    expect(document.querySelector('[data-journey="approvals"]')).toBeNull()
+    renderIntel(<PlacesNav />)
+    expect(document.querySelector('[data-place="rules"]')).toBeNull()
   })
 
   it('draws a count that asks for a person in the warning role', () => {
     renderIntel(
-      <JourneyNav
-        counts={{ approvals: '3' }}
-        attention={new Set(['approvals'])}
-      />,
+      <PlacesNav counts={{ rules: '3' }} attention={new Set(['rules'])} />,
     )
-    const entry = document.querySelector('[data-journey="approvals"]')!
+    const entry = document.querySelector('[data-place="rules"]')!
     const badge = entry.querySelector('[data-slot="count-badge"]')
     expect(badge).not.toBeNull()
     expect(badge).toHaveClass('bg-warn-soft', 'text-warn')
@@ -361,13 +390,13 @@ describe('the Approvals entry (console remake slice 4)', () => {
   })
 })
 
-describe('the top bar names a destination by its own label', () => {
-  it('gives every view that is itself a destination a label, and leaves section views out', () => {
+describe('the top bar names a place by its own label', () => {
+  it('gives every view that is itself a place a label, and leaves section views out', () => {
     const journeys = enNav.shell.journeys as Record<string, string>
     for (const id of DESTINATION_VIEW_IDS)
       expect(journeys[id], `nav:shell.journeys.${id}`).toBeTruthy()
-    // Permissions is reached through its Approvals section: it keeps its registry trail
-    // instead of asking for a journey label it does not have.
+    // Permissions is reached through its approval queue section: Rules is that section's
+    // label, not the view's.
     expect(DESTINATION_VIEW_IDS).not.toContain(APPROVALS_SECTION.view)
     expect(journeys[APPROVALS_SECTION.key]).toBeTruthy()
   })
@@ -381,23 +410,23 @@ describe('a section destination covers its own address only', () => {
     expect(sectionAt('permissions', { tab: 'policies' })).toBeNull()
     expect(sectionAt('permissions', {})).toBeNull()
     expect(sectionAt('killswitch', { tab: 'approvals' })).toBeNull()
-    expect(currentAt('/permissions', { tab: 'approvals' })).toBe('approvals')
-    // Permissions on another tab is a page of Identity and access, which no pin holds.
+    expect(currentAt('/permissions', { tab: 'approvals' })).toBe('rules')
+    // Permissions on another tab is a page of Identity and access, which no place holds.
     expect(currentAt('/permissions', { tab: 'policies' })).toBeNull()
   })
 })
 
-describe('a destination stays current on the pages of its section', () => {
-  it('marks no pin on a page whose section has none, and lists its section above it', () => {
+describe('a place stays current on the pages of its section', () => {
+  it('marks no place on a page whose section has none, and lists its section above it', () => {
     routerState.pathname = '/routine-policies'
     renderIntel(
       <>
-        <JourneyNav />
+        <PlacesNav />
         <DestinationSections />
       </>,
     )
     expect(
-      document.querySelector('[data-journey][aria-current="page"]'),
+      document.querySelector('[data-place][aria-current="page"]'),
     ).toBeNull()
     expect(
       document.querySelector('[data-slot="destination-sections"]'),
@@ -439,18 +468,21 @@ describe('a destination stays current on the pages of its section', () => {
     expect(DESTINATION_IDS).not.toContain('catalog')
   })
 
-  it('places privileged session recordings with the evidence, which no pin holds', () => {
-    expect(currentAt('/recordings')).toBeNull()
-    expect(currentAt('/session-viewer/x')).toBeNull()
+  it('places privileged session recordings with the evidence, under the Ledger', () => {
+    // Recordings and its viewer are Business pages: Community resolves neither.
+    expect(currentAt('/recordings')).toBe(viewOf('recordings') ? 'audit' : null)
+    expect(currentAt('/session-viewer/x')).toBe(
+      viewOf('recordings') ? 'audit' : null,
+    )
   })
 
-  it('marks no destination on a page no pin shares a section with', () => {
+  it('marks no place on a page no place shares a section with', () => {
     expect(currentAt('/models')).toBeNull()
     expect(currentAt('/settings')).toBeNull()
   })
 
-  it('marks only a destination the principal is offered', () => {
-    // AI tools is the only pin of its section: without it the page marks nothing.
+  it('marks only a place the principal is offered', () => {
+    // Tools is the only place of its section: without it the page marks nothing.
     expect(
       currentAt('/providers', {}, allBut(viewOf('agent-tools')!.permission)),
     ).toBeNull()
@@ -464,15 +496,11 @@ describe('a destination stays current on the pages of its section', () => {
     ).toBeNull()
   })
 
-  it('marks All areas as the branch when no offered destination holds the page', () => {
-    routerState.pathname = '/evals'
-    const denied = viewOf('audit')!.permission
-    canMock.mockImplementation((p) => p !== denied)
-    renderIntel(<AreasEntry open={false} onOpen={() => {}} />)
-    expect(screen.getByRole('button', { name: 'All areas' })).toHaveAttribute(
-      'data-branch',
-      'active',
-    )
+  it('marks no place when the principal may not open the one holding the page', () => {
+    expect(currentAt('/evals')).toBe('audit')
+    expect(
+      currentAt('/evals', {}, allBut(viewOf('audit')!.permission)),
+    ).toBeNull()
   })
 
   it('resolves every door to a registered view', () => {
@@ -484,32 +512,27 @@ describe('a destination stays current on the pages of its section', () => {
 })
 
 describe('slice 8: a section wins over its view, and Settings holds its area', () => {
-  it('marks Approvals alone on the queue address, with no row of pages', () => {
+  it('marks Rules alone on the queue address, with no row of pages', () => {
     routerState.pathname = '/permissions'
     routerState.search = { tab: 'approvals' }
-    renderIntel(<JourneyNav />)
+    renderIntel(<PlacesNav />)
     expect(
-      [...document.querySelectorAll('[data-journey][aria-current="page"]')].map(
-        (a) => a.getAttribute('data-journey'),
+      [...document.querySelectorAll('[data-place][aria-current="page"]')].map(
+        (a) => a.getAttribute('data-place'),
       ),
-    ).toEqual(['approvals'])
-    expect(
-      document
-        .querySelector('[data-journey="approvals"]')!
-        .getAttribute('aria-current'),
-    ).toBe('page')
+    ).toEqual(['rules'])
     renderIntel(<DestinationSections />)
     expect(
       document.querySelector('[data-slot="destination-sections"]'),
     ).toBeNull()
   })
 
-  it('marks no pin on Permissions itself, and gives it the row of its section', () => {
+  it('marks no place on Permissions itself, and gives it the row of its section', () => {
     routerState.pathname = '/permissions'
     routerState.search = { tab: 'policies' }
-    renderIntel(<JourneyNav />)
+    renderIntel(<PlacesNav />)
     expect(
-      document.querySelector('[data-journey][aria-current="page"]'),
+      document.querySelector('[data-place][aria-current="page"]'),
     ).toBeNull()
     renderIntel(<DestinationSections />)
     const strip = screen.getByRole('navigation', {
@@ -520,7 +543,7 @@ describe('slice 8: a section wins over its view, and Settings holds its area', (
     ).toHaveAttribute('aria-current', 'page')
   })
 
-  it("leads the footer Settings' row with Settings itself, across its area", () => {
+  it("leads Settings' row with Settings itself, across its area", () => {
     routerState.pathname = '/backups'
     renderIntel(<DestinationSections />)
     const strip = screen.getByRole('navigation', { name: 'System & settings' })
@@ -543,100 +566,43 @@ describe('slice 8: a section wins over its view, and Settings holds its area', (
     expect(
       document.querySelector('[data-slot="destination-sections"]'),
     ).toBeNull()
-    renderIntel(<JourneyNav />)
+    renderIntel(<PlacesNav />)
     expect(
       document
-        .querySelector('[data-journey="sessions"]')!
+        .querySelector('[data-place="sessions"]')!
         .getAttribute('aria-current'),
     ).toBe('page')
   })
 })
 
-describe('the top bar trail names the same place', () => {
-  const t = i18next.getFixedT('en')
-  const trail = (path: string, search: Record<string, unknown> = {}) =>
-    trailFor(t, resolveLocation(path), search, 'telescopes').map((c) =>
-      c.to ? `${c.label} <${c.to}>` : c.label,
-    )
-
-  it('reads a destination, its door and a section address as the workspace and the destination', () => {
-    expect(trail('/')).toEqual(['telescopes', 'Now'])
-    expect(trail('/agentops')).toEqual(['telescopes', 'Sessions'])
-    expect(trail('/permissions', { tab: 'approvals' })).toEqual([
-      'telescopes',
-      'Approvals',
-    ])
-  })
-
-  it('reads any other page as its area, linking to the area directory', () => {
-    expect(trail('/claude-policy')[0]).toBe(
-      'Security & identity </areas/security-identity>',
-    )
-    expect(trail('/routine-policies')).toEqual([
-      'Security & identity </areas/security-identity>',
-      'Routine policies',
-    ])
-    expect(trail('/backups')).toEqual([
-      'System & settings </areas/system>',
-      'Backups',
-    ])
-    expect(trail('/settings')).toEqual([
-      'System & settings </areas/system>',
-      'Settings',
-    ])
-    // A deep-link detail reads through its parent.
-    const items = enNav.items as Record<string, string>
-    // (Recordings and its viewer are Business pages: Community has neither.)
-    expect(trail('/session-viewer/s-1')).toEqual(
-      viewOf('recordings')
-        ? [
-            'Observability & evidence </areas/observation>',
-            `${items.recordings} </recordings>`,
-            items['session-viewer'],
-          ]
-        : [],
+describe('the top bar names the places only; every other page is in an area', () => {
+  it('leaves the rest of the product to the areas, not to a second list of places', () => {
+    const placed = new Set(journeyDestinations(allowAll).map((d) => d.id))
+    expect([...placed].sort()).toEqual(
+      ['agent-tools', 'audit', 'home', 'permissions', 'sessions'].sort(),
     )
   })
 })
 
-describe('the sidebar pins the first job only; every other page is in an area', () => {
-  it('pins Now, Sessions, AI tools and Approvals for a person who may open everything', () => {
-    renderIntel(<JourneyNav />)
-    const nav = screen.getByRole('navigation', { name: 'Journeys' })
-    expect(
-      within(nav)
-        .getAllByRole('link')
-        .map((a) => a.textContent),
-    ).toEqual(['Now', 'Sessions', 'AI tools', 'Approvals'])
-  })
-
-  it('leaves the rest of the product to the areas, not to a second list of pins', () => {
-    const pinned = new Set(journeyDestinations(allowAll).map((d) => d.id))
-    expect([...pinned].sort()).toEqual(
-      ['agent-tools', 'home', 'permissions', 'sessions'].sort(),
-    )
-  })
-})
-
-describe('the row of pages beside this one is for the phone', () => {
-  it('is hidden from 761 px up, where the sidebar lists the same pages in its areas', () => {
+describe('the row of pages beside this one is drawn at every width', () => {
+  it('moves between the pages All areas lists for the section, with no sidebar to repeat them', () => {
     routerState.pathname = '/routine-policies'
     renderIntel(
       <>
         <DestinationSections />
-        <SidebarAreas />
+        <AreasTree />
       </>,
     )
     const row = document.querySelector('[data-slot="destination-sections"]')
     expect(row).not.toBeNull()
-    expect(row).toHaveClass('min-[761px]:hidden')
+    expect(row!.className).not.toMatch(/hidden/)
     const inRow = [...row!.querySelectorAll('a')].map((a) =>
       a.getAttribute('href'),
     )
-    const inSidebar = [
-      ...document.querySelectorAll('[data-slot="sidebar-areas"] a'),
+    const inAreas = [
+      ...document.querySelectorAll('[data-slot="areas-tree"] a'),
     ].map((a) => a.getAttribute('href'))
     expect(inRow.length).toBeGreaterThan(1)
-    for (const href of inRow) expect(inSidebar).toContain(href)
+    for (const href of inRow) expect(inAreas).toContain(href)
   })
 })

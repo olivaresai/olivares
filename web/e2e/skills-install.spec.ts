@@ -223,14 +223,10 @@ test('fresh skills catalog installs a builtin and assigns its immutable revision
   }
   for (const theme of ['light', 'dark']) {
     await page.setViewportSize({ width: 1280, height: 900 })
-    const expandSidebar = page.getByRole('button', {
-      name: 'Expand sidebar',
-      exact: true,
-    })
-    if (await expandSidebar.isVisible()) await expandSidebar.click()
-    await page.getByRole('button', { name: /toggle theme/i }).click()
+    // The theme is chosen in the account menu (#3161).
+    await page.getByRole('button', { name: /, Account$/ }).click()
     await page
-      .getByRole('menuitem', { name: new RegExp(`^${theme}$`, 'i') })
+      .getByRole('menuitemradio', { name: new RegExp(`^${theme}$`, 'i') })
       .click()
     await page.goto('/skills')
     await expect(

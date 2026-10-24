@@ -26,11 +26,15 @@
   "lenses": {
     "analytics": {
       "title": "Par développeur (Analytics d'administration)",
-      "description": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d'administration sur {{developers}} développeur(s)."
+      "description_one": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d’administration (développeur : {{count}}).",
+      "description_many": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d’administration (développeurs : {{count}}).",
+      "description_other": "Totaux faisant autorité par développeur et par jour issus du flux Analytics d’administration (développeurs : {{count}})."
     },
     "telemetry": {
       "title": "Par session (télémétrie en direct)",
-      "description": "Activité en temps réel par session depuis le plan OTLP sur {{teams}} équipe(s) ; inclut le temps actif."
+      "description_one": "Activité en temps réel par session depuis le plan OTLP (équipe : {{count}}) ; inclut le temps actif.",
+      "description_many": "Activité en temps réel par session depuis le plan OTLP (équipes : {{count}}) ; inclut le temps actif.",
+      "description_other": "Activité en temps réel par session depuis le plan OTLP (équipes : {{count}}) ; inclut le temps actif."
     }
   },
   "comparison": {

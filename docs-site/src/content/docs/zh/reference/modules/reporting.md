@@ -15,7 +15,7 @@ Business Compliance Packs 按需提供 5 种报告：
 
 - `compliance-evidence` —— 按框架展示合规态势、控制状态与证据。
 - `audit-summary` —— 审计事件汇总与 ledger 完整性验证。
-- `finops-report` —— 按模型和提供方拆分的 AI 支出。
+- `finops-report` —— 按模型和提供商拆分的 AI 支出。
 - `access-review` —— 用于定期审查的用户与访问数据。
 - `executive-summary` —— 治理态势、风险、成本与采用情况的简洁总览。
 

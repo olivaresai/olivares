@@ -17,7 +17,10 @@ import { RAIL_KEYS } from '@/features/navigation/rail-keys'
 import { FEATURE_VIEWS } from '@/features/registry'
 import {
   auditKeybindings,
+  chordKeys,
   isTypingTarget,
+  modalIsOpen,
+  navLeader,
   resolveBinding,
 } from '@/lib/keybindings/model'
 import {
@@ -35,7 +38,6 @@ import {
 } from '@/features/sessions/session-address'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useCommandStore } from '@/stores/command'
-import { foldOrOverlay } from './sidebar-mode'
 import { useNewSession } from './new-session'
 import { COMPOSER_INPUT_ID } from './work-composer-id'
 
@@ -50,24 +52,6 @@ export const NAV_SHORTCUTS = NAV_SEQUENCES.filter(({ featureId }) =>
 /** Commands whose names the shell's own strings carry (nav.json), not common.json. */
 const SHELL_COMMANDS: ReadonlySet<string> = new Set(['session.new'])
 const SHELL_CONTEXTS: ReadonlySet<string> = new Set(['outsideField'])
-
-/** True while any Radix dialog/sheet is open — g-navigation behind a modal
- * would move the page under the operator's feet. */
-function modalIsOpen(): boolean {
-  return !!document.querySelector(
-    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
-  )
-}
-
-/** One chord, as keys an operator can read. `Mod` prints as ⌘ and the page says what
- * that means away from a Mac; `Space` prints as its own name rather than a blank. */
-function chordTokens(keys: string): string[] {
-  return keys
-    .split('+')
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => (p.toLowerCase() === 'mod' ? '⌘' : p))
-}
 
 /** A session the person has open, as the router addresses it. */
 interface OpenedSession {
@@ -140,7 +124,6 @@ export function GlobalShortcuts() {
     } else if (opened.to !== next.current.to) next.current = opened
   }, [scope, path, sessionParam])
   const [helpOpen, setHelpOpen] = useState(false)
-  const armedUntil = useRef(0)
   const { valid, problems } = auditKeybindings(KEYBINDINGS)
   const newSession = useNewSession()
   const commandLabel = (command: string) =>
@@ -178,17 +161,8 @@ export function GlobalShortcuts() {
         useCommandStore.getState().toggle()
         return
       }
-      // Folding the rail is the other chord that works WHILE TYPING, and for the
-      // same reason as the palette — it is how an operator gets the width back without
-      // leaving the field they are in. Both are modified chords, so neither can be
-      // typed by accident into a session name.
-      if (chordCommand === 'nav.toggleRail') {
-        e.preventDefault()
-        foldOrOverlay(window.location.pathname)
-        return
-      }
-      // The previous-session jump is the third chord that works WHILE TYPING, for the
-      // same reason as the two above: it is three modified keys, so it cannot be typed
+      // The previous-session jump is the other chord that works WHILE TYPING, for the
+      // same reason as the palette: it is three modified keys, so it cannot be typed
       // into a session name by accident, and one chord is the whole point of the feature.
       if (chordCommand === 'session.previous') {
         if (e.repeat || e.isComposing || e.defaultPrevented) return
@@ -196,7 +170,7 @@ export function GlobalShortcuts() {
         const view = FEATURE_VIEWS.find((v) => v.path === previous?.to)
         if (!previous || !view || !navigable(view)) return
         e.preventDefault()
-        armedUntil.current = 0
+        navLeader.disarm()
         void navigate({
           to: previous.to as never,
           search: previous.search as never,
@@ -207,7 +181,7 @@ export function GlobalShortcuts() {
 
       if (chordCommand === 'help.toggle') {
         e.preventDefault()
-        armedUntil.current = 0
+        navLeader.disarm()
         setHelpOpen((v) => !v)
         return
       }
@@ -232,7 +206,7 @@ export function GlobalShortcuts() {
           ? focusedColumn.querySelector('textarea')
           : document.getElementById(COMPOSER_INPUT_ID)
         e.preventDefault()
-        armedUntil.current = 0
+        navLeader.disarm()
         if (field instanceof HTMLElement) {
           field.focus()
         } else {
@@ -251,18 +225,21 @@ export function GlobalShortcuts() {
 
       const now = Date.now()
       if (e.key === NAV_LEADER) {
-        armedUntil.current = now + NAV_SEQUENCE_TIMEOUT_MS
+        navLeader.arm(now + NAV_SEQUENCE_TIMEOUT_MS)
         return
       }
       // An armed sequence takes the letter first: `g n` goes to Alerting, while `n`
       // alone starts a new session.
-      if (armedUntil.current >= now) {
-        armedUntil.current = 0
+      // The letter is the sequence's even when it names no place this person is offered:
+      // marked handled, so a page's own bare key (`a` approves on the queue) never fires
+      // on the second half of `g a`.
+      if (navLeader.armed(now)) {
+        navLeader.disarm()
+        e.preventDefault()
         const binding = visible.find((b) => b.key === e.key)
         if (!binding) return
         const view = FEATURE_VIEWS.find((v) => v.id === binding.featureId)
         if (!view) return
-        e.preventDefault()
         void navigate({ to: view.path as never })
         return
       }
@@ -315,7 +292,7 @@ export function GlobalShortcuts() {
                         ) : null}
                       </dt>
                       <dd className="flex shrink-0 gap-1">
-                        {chordTokens(rule.keys).map((token) => (
+                        {chordKeys(rule.keys).map((token) => (
                           <Kbd key={token}>{token}</Kbd>
                         ))}
                       </dd>
@@ -329,7 +306,7 @@ export function GlobalShortcuts() {
           {/* PRECEDENCE, STATED. It is the whole rule, and an operator who reads two
               rows with the same keys needs to know which one wins. */}
           <p className="text-caption text-muted-foreground">
-            {t('common:keys.precedence')} {t('common:keys.modNote')}
+            {t('common:keys.precedence')}
           </p>
 
           {problems.length > 0 ? (

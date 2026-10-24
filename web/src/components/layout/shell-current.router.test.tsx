@@ -4,7 +4,7 @@
 //
 // ONE CURRENT LINK PER SURFACE, WITH THE REAL ROUTER. TanStack's Link marks itself
 // `aria-current="page"` wherever its path matches the address, after the props it is given,
-// so a sidebar row, a phone-bar link or a member of the row above a page must hold the
+// so a top bar place, a phone-bar link or a member of the row above a page must hold the
 // router to the exact address. Without that, /communications/inbox marks both Communications
 // and Inbox in its row. A mocked Link cannot show this; these routes are real.
 import {
@@ -33,7 +33,7 @@ vi.mock('@/lib/auth/context', () => ({
 import { FEATURE_VIEWS } from '@/features/registry'
 import { SETTINGS_UTILITY } from '@/features/navigation/model'
 import { DestinationSections } from './destination-sections'
-import { JourneyNav } from './journey-nav'
+import { PlacesNav } from './places-nav'
 import { PhoneBar } from './phone-bar'
 
 afterEach(cleanup)
@@ -42,7 +42,7 @@ async function currentAt(address: string) {
   const root = createRootRoute({
     component: () => (
       <>
-        <JourneyNav />
+        <PlacesNav />
         <PhoneBar />
         <DestinationSections />
         <Outlet />
@@ -72,7 +72,7 @@ async function currentAt(address: string) {
       (a) => a.getAttribute('href'),
     )
   return {
-    sidebar: marked('nav[aria-label="Journeys"]'),
+    places: marked('nav[aria-label="Journeys"]'),
     phone: marked('nav[aria-label="Main"]'),
     row: marked('[data-slot="destination-sections"]'),
   }
@@ -82,29 +82,32 @@ describe('the router marks no second current link', () => {
   it.each([
     ['/communications/inbox', [], ['/communications/inbox']],
     ['/console/sources/diff', [], ['/console/sources/diff']],
-    // A page folded into a pin (#2240) marks that pin, in the sidebar and in its row.
+    // A page folded into a place (#2240) marks that place, in the top bar and in its row.
     ['/provider-profiles', ['/agent-tools'], ['/agent-tools']],
     ['/provider-bindings', ['/agent-tools'], ['/agent-tools']],
     ['/provider-accounts', ['/agent-tools'], ['/agent-tools']],
-    // A page whose section holds no pin marks none; its row still moves between its section.
+    // A page whose section holds no place marks none; its row still moves between its section.
     ['/mcp-servers', ['/agent-tools'], ['/mcp-servers']],
     ['/inventory', [], ['/inventory']],
-    // A deep-link detail reads as its parent's page.
+    // A deep-link detail reads as its parent's page, under the Ledger with the evidence.
     // (Recordings is a Business page: Community has no parent row to mark.)
     [
       '/session-viewer/s-1',
-      [],
+      FEATURE_VIEWS.some((v) => v.id === 'recordings') ? ['/audit'] : [],
       FEATURE_VIEWS.some((v) => v.id === 'recordings') ? ['/recordings'] : [],
     ],
+    ['/audit', ['/audit'], ['/audit']],
+    ['/evals', ['/audit'], ['/evals']],
+    ['/permissions?tab=approvals', ['/permissions?tab=approvals'], []],
     ['/sessions?session=s-1', ['/sessions'], []],
     ['/', ['/'], []],
-  ])('at %s', async (address, sidebar, row) => {
+  ])('at %s', async (address, places, row) => {
     const current = await currentAt(address)
-    expect(current.sidebar).toEqual(sidebar)
+    expect(current.places).toEqual(places)
     expect(current.row).toEqual(row)
-    // The phone bar is the first three destinations, current by the same rule.
+    // The phone bar is the first three places, current by the same rule.
     expect(current.phone).toEqual(
-      sidebar.filter((href) =>
+      places.filter((href) =>
         ['/', '/sessions', '/agent-tools'].includes(href),
       ),
     )

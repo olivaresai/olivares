@@ -103,9 +103,11 @@ function wrap(ui: ReactNode) {
 async function openCreate() {
   wrap(<AgentArtifactsView />)
   const user = userEvent.setup()
-  await user.click(
-    await screen.findByRole('button', { name: 'Register artifact' }),
-  )
+  // The default fixture is an empty registry, so wait for the successful empty
+  // answer: until it arrives the page-level verb is the header's, and clicking
+  // that one as it hands over to the empty state drops the click.
+  await screen.findByText('No artifacts registered')
+  await user.click(screen.getByRole('button', { name: 'Register artifact' }))
   return user
 }
 
@@ -576,5 +578,36 @@ describe('AgentArtifactsView — el vacio ofrece registrar el primero', () => {
     wrap(<AgentArtifactsView />)
     await screen.findByText('No artifacts registered')
     expect(within(vacio()).queryByRole('button')).toBeNull()
+  })
+
+  // A list that could not be read is not an empty registry: the header keeps
+  // the verb until the engine answers with an empty list.
+  it('keeps the page-level register action while the list could not be read', async () => {
+    api.artifacts.mockRejectedValue(new Error('boom'))
+    wrap(<AgentArtifactsView />)
+    await screen.findByRole('alert')
+    expect(
+      await screen.findByRole('button', { name: /register artifact/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No artifacts registered')).toBeNull()
+  })
+})
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17). The
+ * merged mechanism (main e601803a8, dfff8c3ad): while a read list is empty the
+ * page header's verb steps aside, so the empty state's action is the one orange.
+ */
+describe('AgentArtifactsView — one orange control on an empty registry', () => {
+  it('offers the verb in the empty state only, never as a page-level Register artifact button', async () => {
+    wrap(<AgentArtifactsView />)
+    expect(
+      await screen.findByText('No artifacts registered'),
+    ).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', {
+      name: 'Register artifact',
+    })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].className).toContain('bg-accent')
   })
 })

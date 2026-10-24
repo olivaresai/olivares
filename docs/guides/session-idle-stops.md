@@ -34,7 +34,9 @@ currently permits automatic reclamation of verified Claude Code and Codex
 sessions. Codex sessions that spawned a child remain running because their root
 record cannot verify child background commands. A resumed session that used a
 package registry token also remains running, because its transcript cannot be
-proven free of one an earlier launch printed. A session that was resumed and
+proven free of one an earlier launch printed. A session given vault secrets, a
+repository credential or a managed credential also remains running, because its
+activity is not shown. A session that was resumed and
 never used has completed no turn, so it is not reclaimed. Other tools and
 remote-control sessions remain running. No credentials or transcript content are
 added to the policy audit record.

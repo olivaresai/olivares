@@ -232,9 +232,9 @@ GCP **Data Access** 的选择性启用与 Azure **读不入日志**的缺口是�
 在那些日志关闭处，缺少一条活动 edge 并不能证明没有访问。完整的每云层级表见随附源码树中的
 `docs/contracts/S165-connectors-cloud-management.md`。
 
-## 托管模型提供方——目录、态势与计量
+## 托管模型提供商——目录、态势与计量
 
-这些 source 治理托管模型提供方账户和目录。它们**不**代理 inference；当提供方没有可用
+这些 source 治理托管模型提供商账户和目录。它们**不**代理 inference；当提供商没有可用
 usage API 时，费用由 connector 在 inference path 周围的 Meter 估算，而不是从汇总 billing feed 拉取。
 
 | Kind | 观测内容 | 诚实覆盖 |
@@ -442,8 +442,10 @@ minimal-data：它携带 source 的 ACL 与来源（绝不含个人邮箱；模�
 
 进程内 destination kind：`slack`、`teams`、`pagerduty`、`opsgenie`、`webhook`、
 `siem`、`splunkhec`、`syslog`、`servicenow`、`jira`、`email`、`twilio`、
-`chronicle`、`datadog`、`elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP log）
-与 `s3archive` (Business: Regulated Operations)（S3 Object Lock WORM sink——每条通知生成一个 immutable、lock-verified object）。
+`chronicle`、`datadog`、`elastic`、`snmp`、`filelog`、`otlplog`（OTLP/HTTP log）、
+`s3archive` (Business: Regulated Operations)（S3 Object Lock WORM sink——每条通知生成一个 immutable、lock-verified object）
+与 `teamsbot` (Business: Regulated Operations)（事件闭环中以注册机器人接入的 Teams connector；Community 二进制会跳过
+此类目标，并记录一行注明 Business 的日志）。
 
 三种 broker egress kind 作为内嵌插件**在进程外**运行（其网络协议 dependency tree
 绝不链接进 engine，与 plugin source 完全相同）：`kafka`、`amqp` 和 `cloudqueue`——

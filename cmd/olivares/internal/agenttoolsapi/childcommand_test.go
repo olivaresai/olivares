@@ -72,7 +72,8 @@ func TestEveryToolChildGoesThroughTheChildCommand(t *testing.T) {
 			continue
 		}
 		tmp := envValue(c.cmd.Env, "TMPDIR")
-		if !strings.HasPrefix(filepath.Base(tmp), "olivares-tool-") || !slices.Contains(c.rw, tmp) {
+		// confine.ChildTempDir names the child's private directory s-*.
+		if !strings.HasPrefix(filepath.Base(tmp), "s-") || !slices.Contains(c.rw, tmp) {
 			t.Errorf("%s: TMPDIR %q is not its private writable directory (rw %q)", name, tmp, c.rw)
 		} else if _, err := os.Stat(tmp); !os.IsNotExist(err) {
 			t.Errorf("%s: its TMPDIR %s outlived it (%v)", name, tmp, err)

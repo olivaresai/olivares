@@ -4,22 +4,39 @@
 //
 // NEEDS YOU on Now: the rail's own classification over the page Now already holds, plus
 // the offered handoffs — and no sessions read of its own.
-import type { ReactNode } from 'react'
+import { act, type ComponentProps, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, DEFAULT_AUTH } from '@/test/intel'
+import {
+  renderIntel,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+  DEFAULT_AUTH,
+} from '@/test/intel'
+import { governanceApi } from '@/features/governance/api'
+import type { ApprovalDTO } from '@/features/governance/types'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import type { LiveDTO } from '@/features/sessions/types'
 import { sessionsApi } from '@/features/sessions/api'
 import * as communications from '@/features/communications/api'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { NowQueue } from './now-queue'
+import { FLAG_ARM_MS, NowQueue, useFlaggedRequest } from './now-queue'
 import './i18n'
 
-const auth = vi.hoisted(() => ({ superadmin: true, owner: false }))
+const auth = vi.hoisted(() => ({
+  superadmin: true,
+  owner: false,
+  actor: 'user:me' as string | undefined,
+  tenant: 'demo',
+  can: (_p: string): boolean => true,
+}))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     ...DEFAULT_AUTH,
     principal: {
+      actor: auth.actor,
+      kind: 'user',
       superadmin: auth.superadmin,
       grants: auth.owner
         ? [
@@ -32,12 +49,15 @@ vi.mock('@/lib/auth/context', () => ({
         : [],
     },
     isSuperadmin: auth.superadmin,
-    can: () => true,
+    activeTenant: auth.tenant,
+    can: (p: string) => auth.can(p),
   }),
 }))
 
+const navigate = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '',
+  useNavigate: () => navigate,
   Link: ({
     children,
     to,
@@ -56,6 +76,12 @@ vi.mock('@tanstack/react-router', () => ({
     )
   },
 }))
+
+/** Estate's own wiring: the page holds the flagged request and hands it to the queue. */
+function Queue(props: Omit<ComponentProps<typeof NowQueue>, 'flag'>) {
+  const flag = useFlaggedRequest(props.approvals)
+  return <NowQueue {...props} flag={flag} />
+}
 
 function live(over: Partial<LiveDTO> = {}): LiveDTO {
   return {
@@ -78,7 +104,11 @@ function live(over: Partial<LiveDTO> = {}): LiveDTO {
 afterEach(() => {
   auth.superadmin = true
   auth.owner = false
+  auth.actor = 'user:me'
+  auth.tenant = 'demo'
+  auth.can = () => true
   useWorkspaceStore.setState({ activeWorkspace: null } as never)
+  navigate.mockReset()
   vi.restoreAllMocks()
 })
 
@@ -86,7 +116,7 @@ describe('NowQueue — what needs a person', () => {
   it('lists the sessions that went silent or that nobody claimed, and nothing else', () => {
     const spy = vi.spyOn(sessionsApi, 'live')
     renderIntel(
-      <NowQueue
+      <Queue
         state="ready"
         sessions={[
           live({
@@ -134,14 +164,14 @@ describe('NowQueue — what needs a person', () => {
 
   it('says so when nothing waits, instead of drawing an empty list', () => {
     renderIntel(
-      <NowQueue state="ready" sessions={[live({ cc_state: 'active' })]} />,
+      <Queue state="ready" sessions={[live({ cc_state: 'active' })]} />,
     )
     expect(screen.queryByTestId('now-needs-row')).toBeNull()
     expect(screen.getByText('Nothing waits for you.')).toBeInTheDocument()
   })
 
   it('reports a failed sessions read as a failure, never as "nothing waits"', () => {
-    renderIntel(<NowQueue state="unavailable" sessions={undefined} />)
+    renderIntel(<Queue state="unavailable" sessions={undefined} />)
     expect(
       screen.getByText('The sessions could not be read.'),
     ).toBeInTheDocument()
@@ -166,7 +196,7 @@ describe('NowQueue — what needs a person', () => {
           },
         ],
       } as never)
-    renderIntel(<NowQueue state="ready" sessions={[]} />)
+    renderIntel(<Queue state="ready" sessions={[]} />)
     const row = await screen.findByTestId('now-needs-row')
     expect(row.getAttribute('href')).toBe(
       '/communications/handoffs?handoff=d-1',
@@ -185,7 +215,7 @@ describe('NowQueue — what needs a person', () => {
     const inbox = vi
       .spyOn(communications, 'listHandoffInbox')
       .mockResolvedValue({ items: [] } as never)
-    renderIntel(<NowQueue state="ready" sessions={[]} />)
+    renderIntel(<Queue state="ready" sessions={[]} />)
     await vi.waitFor(() =>
       expect(inbox).toHaveBeenCalledWith(
         expect.objectContaining({ workspace_id: 'w1', state: 'offered' }),
@@ -195,9 +225,9 @@ describe('NowQueue — what needs a person', () => {
     )
   })
 
-  it('puts pending approvals first, with their progress, each opening the queue', () => {
+  it('puts the pending request first, with its progress, and opens the queue from it', () => {
     renderIntel(
-      <NowQueue
+      <Queue
         state="ready"
         sessions={[]}
         approvals={[
@@ -216,8 +246,11 @@ describe('NowQueue — what needs a person', () => {
         ]}
       />,
     )
-    const row = screen.getByTestId('now-approval-row')
-    expect(row.getAttribute('href')).toBe('/permissions?tab=approvals')
+    const row = screen.getByTestId('now-flagged-request')
+    // The request itself opens beside the queue.
+    expect(
+      within(row).getByRole('link', { name: 'Details' }).getAttribute('href'),
+    ).toBe('/permissions?tab=approvals&approval=ap-1')
     // The Approvals list's own words, not the engine's action name in code type.
     expect(row).toHaveTextContent('Mcp tools/call')
     expect(row).not.toHaveTextContent('mcp_tool github/create_issue')
@@ -229,7 +262,7 @@ describe('NowQueue — what needs a person', () => {
 
   it('says who waits for what in the words the Approvals list uses (HU, binary 12)', () => {
     renderIntel(
-      <NowQueue
+      <Queue
         state="ready"
         sessions={[]}
         approvals={[
@@ -252,21 +285,17 @@ describe('NowQueue — what needs a person', () => {
         ]}
       />,
     )
-    const row = screen.getByTestId('now-approval-row')
+    const row = screen.getByTestId('now-flagged-request')
     expect(row).toHaveTextContent('Command')
     expect(row).toHaveTextContent("/bin/zsh -lc 'echo lane-b > b.txt'")
     expect(row).not.toHaveTextContent('sessions.provider.approval')
     expect(row).not.toHaveTextContent('session_run')
-    // The list's fixed 20rem column would overflow a narrow card: here it fills the row.
-    const cell = row.querySelector('[data-slot="approval-request"]')
-    expect(cell).toHaveClass('w-full', 'max-w-full')
-    expect(cell).not.toHaveClass('w-[20rem]')
     expectNoRawI18nKeys(document.body)
   })
 
   it('says what is not shown once, on a tool call stored without a review (#2269)', () => {
     renderIntel(
-      <NowQueue
+      <Queue
         state="ready"
         sessions={[]}
         approvals={[
@@ -285,7 +314,7 @@ describe('NowQueue — what needs a person', () => {
         ]}
       />,
     )
-    expect(screen.getByTestId('now-approval-row')).toBeInTheDocument()
+    expect(screen.getByTestId('now-flagged-request')).toBeInTheDocument()
     expect(
       screen.getAllByText('This request does not include what will run.'),
     ).toHaveLength(1)
@@ -294,7 +323,7 @@ describe('NowQueue — what needs a person', () => {
   it('serves a role that reads approvals but not live sessions', () => {
     const spy = vi.spyOn(sessionsApi, 'live')
     renderIntel(
-      <NowQueue
+      <Queue
         state="ready"
         sessions={undefined}
         sessionsReadable={false}
@@ -312,7 +341,7 @@ describe('NowQueue — what needs a person', () => {
         ]}
       />,
     )
-    expect(screen.getByTestId('now-approval-row')).toHaveTextContent(
+    expect(screen.getByTestId('now-flagged-request')).toHaveTextContent(
       'Deploy promote',
     )
     // A request a person raised expects no command: no "does not include" note (#2269).
@@ -326,11 +355,288 @@ describe('NowQueue — what needs a person', () => {
 
   it('says a failed approvals read, and never "nothing waits" over it', () => {
     renderIntel(
-      <NowQueue state="ready" sessions={[]} approvalsState="unavailable" />,
+      <Queue state="ready" sessions={[]} approvalsState="unavailable" />,
     )
     expect(
       screen.getByText('Approvals could not be loaded.'),
     ).toBeInTheDocument()
     expect(screen.queryByText('Nothing waits for you.')).toBeNull()
+  })
+
+  const request = (over: Partial<ApprovalDTO>): ApprovalDTO => ({
+    id: 'ap-x',
+    action: 'claude.hook.tool',
+    subject_kind: 'claude.tool',
+    requested_by: 'user:marc',
+    status: 'pending',
+    required_approvals: 1,
+    approve_count: 0,
+    reject_count: 0,
+    escalated: false,
+    ...over,
+  })
+  const MIGRATION = request({
+    id: 'ap-migrate',
+    review: { tool: 'Command', text: 'pnpm db:migrate --env payments-staging' },
+    policy_ref: 'pol-migrations',
+  })
+  /** The card ignores Approve until it has been on screen for FLAG_ARM_MS. */
+  const armed = () =>
+    act(() => new Promise((done) => setTimeout(done, FLAG_ARM_MS + 50)))
+  const NETWORK = request({
+    id: 'ap-network',
+    review: { tool: 'Network', text: 'registry.terraform.io' },
+  })
+
+  it('flags the first request: what will run, the rule that asked, and Approve in one click', async () => {
+    vi.spyOn(governanceApi, 'getPolicy').mockResolvedValue({
+      id: 'pol-migrations',
+      name: 'Database migrations need a second person',
+    } as never)
+    const decide = vi
+      .spyOn(governanceApi, 'decide')
+      .mockResolvedValue({ ...MIGRATION, status: 'approved' })
+    const user = userEvent.setup()
+    renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION, NETWORK]} />,
+    )
+    const flagged = screen.getByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
+    expect(
+      await within(flagged).findByText(
+        'Matched: Database migrations need a second person',
+      ),
+    ).toBeInTheDocument()
+    // The others are quiet rows, with no decision on them.
+    const rows = screen.getAllByTestId('now-approval-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent('registry.terraform.io')
+    expect(within(rows[0]!).queryByRole('button')).toBeNull()
+
+    await armed()
+    await user.click(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    )
+    expect(decide).toHaveBeenCalledTimes(1)
+    expect(decide).toHaveBeenCalledWith('ap-migrate', { decision: 'approve' })
+    // One click: no confirmation stands between the reviewed command and the decision.
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('Deny asks for a reason first, in the deny dialog of the queue', async () => {
+    const decide = vi.spyOn(governanceApi, 'decide')
+    const user = userEvent.setup()
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    await user.click(screen.getByRole('button', { name: 'Deny' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('a request this person may not decide is a quiet row, never the flag', () => {
+    auth.actor = 'user:marc'
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
+    expect(screen.getByTestId('now-approval-row')).toHaveAttribute(
+      'href',
+      '/permissions?tab=approvals&approval=ap-migrate',
+    )
+  })
+
+  it('flags the first request this person may decide, not the first in the queue', async () => {
+    const own = request({
+      id: 'ap-own',
+      requested_by: 'user:me',
+      review: { tool: 'Command', text: 'make release' },
+    })
+    const decide = vi
+      .spyOn(governanceApi, 'decide')
+      .mockResolvedValue({ ...NETWORK, status: 'approved' })
+    const user = userEvent.setup()
+    renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[own, NETWORK]} />,
+    )
+    const flagged = screen.getByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('registry.terraform.io')
+    expect(screen.getByTestId('now-approval-row')).toHaveTextContent(
+      'make release',
+    )
+    await armed()
+    await user.click(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    )
+    expect(decide).toHaveBeenCalledWith('ap-network', { decision: 'approve' })
+  })
+
+  it('a poll never swaps another request in under the hand: the one shown stays and says it left', async () => {
+    const decide = vi.spyOn(governanceApi, 'decide')
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION, NETWORK]} />,
+    )
+    await armed()
+    // A colleague decided the migration: the next poll no longer holds it.
+    rerender(<Queue state="ready" sessions={[]} approvals={[NETWORK]} />)
+    await armed()
+    const flagged = screen.getByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('pnpm db:migrate --env payments-staging')
+    expect(flagged).toHaveTextContent(
+      'This request is no longer waiting for a decision.',
+    )
+    expect(
+      within(flagged).queryByRole('button', { name: 'Approve once' }),
+    ).toBeNull()
+    expect(screen.getByTestId('now-approval-row')).toHaveTextContent(
+      'registry.terraform.io',
+    )
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+    // The request itself still opens beside the queue.
+    expect(
+      within(flagged).getByRole('link', { name: 'Details' }),
+    ).toHaveAttribute('href', '/permissions?tab=approvals&approval=ap-migrate')
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('a request that left the queue moves on only when the person closes it', async () => {
+    const user = userEvent.setup()
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION, NETWORK]} />,
+    )
+    rerender(<Queue state="ready" sessions={[]} approvals={[NETWORK]} />)
+    await user.click(
+      within(screen.getByTestId('now-flagged-request')).getByRole('button', {
+        name: 'Close',
+      }),
+    )
+    const flagged = screen.getByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('registry.terraform.io')
+    expect(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    ).toBeInTheDocument()
+  })
+
+  it('the last request leaving the queue is never said as "nothing waits" under its card', async () => {
+    const user = userEvent.setup()
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION]} />,
+    )
+    rerender(<Queue state="ready" sessions={[]} approvals={[]} />)
+    expect(screen.getByTestId('now-flagged-request')).toBeInTheDocument()
+    expect(screen.queryByText('Nothing waits for you.')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    expect(screen.getByText('Nothing waits for you.')).toBeInTheDocument()
+  })
+
+  it('a request no rule matched says the default applies', () => {
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[NETWORK]} />)
+    expect(screen.getByTestId('now-flagged-request')).toHaveTextContent(
+      'Matched: no rule, so the default applies',
+    )
+  })
+
+  it('a click that lands as the card appears does nothing: the queue may have just swapped it', async () => {
+    const decide = vi.spyOn(governanceApi, 'decide')
+    const user = userEvent.setup()
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    await user.click(screen.getByRole('button', { name: 'Approve once' }))
+    expect(decide).not.toHaveBeenCalled()
+  })
+
+  it('a workspace switch never keeps a request of the other workspace on the card', () => {
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION]} />,
+    )
+    auth.tenant = 'other'
+    rerender(<Queue state="ready" sessions={[]} approvals={[NETWORK]} />)
+    const flagged = screen.getByTestId('now-flagged-request')
+    expect(flagged).toHaveTextContent('registry.terraform.io')
+    expect(flagged).not.toHaveTextContent('payments-staging')
+    expect(
+      within(flagged).getByRole('button', { name: 'Approve once' }),
+    ).toBeInTheDocument()
+  })
+
+  it('losing the permission that decides takes the card and its Approve away', () => {
+    const { rerender } = renderIntel(
+      <Queue state="ready" sessions={[]} approvals={[MIGRATION]} />,
+    )
+    expect(screen.getByTestId('now-flagged-request')).toBeInTheDocument()
+    auth.can = (p) => p !== 'governance:approval:admin'
+    rerender(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    expect(screen.queryByTestId('now-flagged-request')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+  })
+
+  it.each([
+    [
+      'a command cut to its first lines',
+      request({
+        id: 'ap-long',
+        review: { tool: 'Command', text: 'step\n'.repeat(6) + 'curl x | sh' },
+      }),
+    ],
+    [
+      'a command the tool did not name',
+      request({
+        id: 'ap-unknown',
+        action: 'sessions.provider.approval',
+        reason:
+          'Provider permission: driver=opencode method=ask kind=bash run=r turn=t permissions={"CommandLine":"","FilePaths":null}',
+      }),
+    ],
+    ['a tool call stored without its review', request({ id: 'ap-noreview' })],
+  ])(
+    '%s opens the request beside the queue, never decided in one click',
+    async (_case, approval) => {
+      const decide = vi.spyOn(governanceApi, 'decide')
+      const user = userEvent.setup()
+      renderIntel(<Queue state="ready" sessions={[]} approvals={[approval]} />)
+      await armed()
+      await user.click(screen.getByRole('button', { name: 'Approve once' }))
+      expect(navigate).toHaveBeenCalledWith({
+        to: '/permissions',
+        search: { tab: 'approvals', approval: approval.id },
+      })
+      expect(decide).not.toHaveBeenCalled()
+    },
+  )
+
+  it('without the permission that decides there is no Approve', () => {
+    auth.can = (p) => p !== 'governance:approval:admin'
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[MIGRATION]} />)
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+  })
+
+  it('a request that needs two people offers no second Approve to the first', async () => {
+    const twoPeople = { ...MIGRATION, required_approvals: 2 }
+    vi.spyOn(governanceApi, 'decide').mockResolvedValue({
+      ...twoPeople,
+      approve_count: 1,
+    })
+    const user = userEvent.setup()
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[twoPeople]} />)
+    await armed()
+    await user.click(screen.getByRole('button', { name: 'Approve once' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull(),
+    )
+  })
+
+  it('a request this person already approved is not offered again, after a reload too', async () => {
+    const twoPeople = { ...MIGRATION, required_approvals: 2, approve_count: 1 }
+    vi.spyOn(governanceApi, 'listDecisions').mockResolvedValue({
+      items: [{ decision: 'approve', decider: 'user:me' }],
+      has_more: false,
+    })
+    renderIntel(<Queue state="ready" sessions={[]} approvals={[twoPeople]} />)
+    expect(screen.getByTestId('now-flagged-request')).toBeInTheDocument()
+    // Settled: the card moves on and the request waits for the others as a quiet row.
+    await waitFor(() =>
+      expect(screen.queryByTestId('now-flagged-request')).toBeNull(),
+    )
+    expect(screen.queryByRole('button', { name: 'Approve once' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
+    expect(screen.getByTestId('now-approval-row')).toHaveTextContent('1 of 2')
   })
 })

@@ -379,7 +379,7 @@ function SubscriptionsTab({
               // header asks for, so a reader who cannot write sees no 403 door.
               action={
                 canWrite ? (
-                  <Button variant="primary" size="sm" onClick={onNew}>
+                  <Button variant="secondary" size="sm" onClick={onNew}>
                     <Plus />
                     {t('subscriptions.new')}
                   </Button>

@@ -106,14 +106,14 @@
     "execute": "Execute",
     "executeConfirm": "Execute and spend",
     "input": "Input",
-    "executeHint": "Resolve is free. Execute calls the provider and spends against your budget.",
-    "executeWarning": "This runs the resolved model chain against the real provider and records a cost sample. It is not a simulation — use Resolve to preview the decision without spending.",
+    "executeHint": "Auflösen ist kostenlos. Ausführen ruft den Anbieter auf und belastet Ihr Budget.",
+    "executeWarning": "Dies führt die aufgelöste Modellkette gegen den echten Anbieter aus und erfasst eine Kostenprobe. Es ist keine Simulation — verwenden Sie Auflösen, um die Entscheidung ohne Ausgaben vorab anzusehen.",
     "noExecutor": "Es ist kein Executor bereitgestellt. Das ist kein Ausfall: Die Control Plane löst Routing-Entscheidungen auf, verursacht aber nie Kosten bei einem Anbieter, bis ein Operator einen Executor einrichtet.",
-    "budgetDenied": "A FinOps budget denied the spend BEFORE any provider call. The governance gate worked — raise or review the budget rather than retrying.",
+    "budgetDenied": "Ein FinOps-Budget hat die Ausgabe VOR jedem Anbieteraufruf abgelehnt. Das Governance-Tor hat funktioniert — erhöhen oder prüfen Sie das Budget, statt es erneut zu versuchen.",
     "fallbackUsed": "fallback used",
     "refusal": "provider refusal",
     "tokens": "{{in}} in · {{out}} out",
-    "outputNotStored": "The output is returned to you and stored nowhere: only a redacted cost sample reaches the ledger.",
+    "outputNotStored": "Die Ausgabe wird Ihnen zurückgegeben und nirgends gespeichert: Nur eine bereinigte Kostenprobe erreicht das Ledger.",
     "truncated": "{{n}} Richtlinien geladen; es gibt mehr",
     "truncatedHint": "Es gibt mehr Routing-Richtlinien als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Richtlinie belegt nicht, dass keine eine Anfrage routet."
   },
@@ -178,7 +178,7 @@
       "copyright_policy": "Urheberrechtsrichtlinie erfasst",
       "downstream_info": "Informationen für nachgelagerte Akteure bereitgestellt",
       "systemic_risk": "GPAI mit systemischem Risiko",
-      "safety_report": "Safety & Security Model Report"
+      "safety_report": "Bericht zu Sicherheit und Schutz des Modells"
     },
     "states": {
       "recorded": "Erfasst",
@@ -233,29 +233,29 @@
     }
   },
   "residency": {
-    "title": "Workspace-Residenz",
-    "description": "Wo jeder Workspace Inferenz verarbeitet und wo seine Daten ruhen, wie der Anbieter es meldet.",
-    "empty": "Kein Workspace meldet Residenz-Einstellungen",
-    "emptyHint": "Residency-Einstellungen legen fest, in welchen Regionen ein Workspace Modelle aufrufen darf. Kein Workspace hat welche deklariert.",
+    "title": "Arbeitsbereich-Residenz",
+    "description": "Wo jeder Arbeitsbereich Inferenz verarbeitet und wo seine Daten ruhen, wie der Anbieter es meldet.",
+    "empty": "Kein Arbeitsbereich meldet Residenz-Einstellungen",
+    "emptyHint": "Residency-Einstellungen legen fest, in welchen Regionen ein Arbeitsbereich Modelle aufrufen darf. Kein Arbeitsbereich hat welche deklariert.",
     "unrestricted": "Der Anbieter meldet keine Einschränkung",
     "allowed": "Erlaubt: {{geos}}",
     "unreported": "nicht gemeldet",
     "defaultGeo": "Standard: {{geo}}",
     "atRest": "ruhend: {{geo}}",
-    "truncated": "{{n}} Workspaces geladen; es gibt mehr",
-    "truncatedHint": "Es gibt mehr Residency-Einträge als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen. Ein hier nicht gelisteter Workspace belegt nicht, dass seine Verarbeitung unbeschränkt ist: er kann jenseits dieser Seite liegen."
+    "truncated": "{{n}} Arbeitsbereiche geladen; es gibt mehr",
+    "truncatedHint": "Es gibt mehr Residency-Einträge als angezeigt; diese Seite nimmt Zeilen nach ID — bei der Erstellung vergeben —, spätere fehlen. Ein hier nicht gelisteter Arbeitsbereich belegt nicht, dass seine Verarbeitung unbeschränkt ist: er kann jenseits dieser Seite liegen."
   },
   "access": {
     "title": "Model access rules",
-    "description": "Who may use which model, and where.",
-    "empty": "No access rules — every subject is unrestricted",
+    "description": "Wer welches Modell und wo nutzen darf.",
+    "empty": "Keine Zugriffsregeln — jedes Subjekt ist uneingeschränkt",
     "emptyHint": "Eine Zugriffsregel legt fest, welche Subjekte welche Modelle aufrufen dürfen. Ohne Regel darf jedes Subjekt jedes Modell des Bestands aufrufen.",
     "groupsTitle": "Model groups",
-    "groupsDescription": "Named sets a rule can target instead of a single model.",
+    "groupsDescription": "Benannte Mengen, auf die eine Regel statt eines einzelnen Modells zielen kann.",
     "groupsEmpty": "No model groups",
     "groupsEmptyHint": "Eine Modellgruppe benennt eine Menge von Modellen, damit eine Regel sie alle steuert. Legen Sie eine an, um zu beginnen.",
     "members": "{{n}} members",
-    "confinementNotice": "⛔ An allow is not only additive. A subject NAMED by any allow is CONFINED to its allows — everything else becomes denied for them. A subject named by no rule is unrestricted. So creating the FIRST allow for someone TAKES AWAY the rest of the catalogue from them.",
+    "confinementNotice": "⛔ Eine Erlaubnis wirkt nicht nur additiv. Ein Subjekt, das in einer Erlaubnis GENANNT ist, ist auf seine Erlaubnisse BESCHRÄNKT — alles andere ist für es verweigert. Ein Subjekt, das in keiner Regel genannt ist, ist uneingeschränkt. Das Anlegen der ERSTEN Erlaubnis für jemanden NIMMT ihm also den restlichen Katalog weg.",
     "effect": {
       "allow": "allow",
       "forbid": "forbid"
@@ -264,11 +264,11 @@
     "inWorkspace": "in {{ws}}",
     "allSurfaces": "all surfaces",
     "onSurfaces": "on {{list}}",
-    "forbidSubtracts": "This forbid SUBTRACTS: it overrides any allow naming the same subject.",
-    "confinedSubject": "{{subject}} is confined to its allows — anything not listed is denied for them.",
+    "forbidSubtracts": "Dieses Verbot SUBTRAHIERT: Es überschreibt jede Erlaubnis, die dasselbe Subjekt nennt.",
+    "confinedSubject": "{{subject}} ist auf seine Erlaubnisse beschränkt — alles, was nicht aufgeführt ist, ist für es verweigert.",
     "readOnlyNote": "Nur Lesen: Um zu ändern, wer ein Modell verwenden darf, braucht es die Verwaltung des Modellzugriffs – eine höhere Stufe als das Bearbeiten einer Routing-Richtlinie.",
     "truncated": "{{n}} Regeln geladen; es gibt mehr",
-    "truncatedHint": "Es gibt mehr Zugriffsregeln als angezeigt; diese Seite nimmt Zeilen nach ID. Die Markierungen dieser Zeilen spiegeln NUR die geladenen Regeln: Allows, die eine Einschränkung einführen oder erlaubte Ziele ergänzen, können fehlen, und Forbids, die Zugriff abziehen, ebenfalls — die Seite kann also weiter ODER enger wirken als die Wirklichkeit, und ein Subjekt ohne geladene Regel erscheint gar nicht. Leite hieraus keinen effektiven Zugriff ab: die Engine liest alle Seiten, bevor sie entscheidet, und löst ein Principal über Nutzer, Rolle und Gruppe zugleich auf, was eine Zeile nicht zeigen kann.",
+    "truncatedHint": "Es gibt mehr Zugriffsregeln als angezeigt; diese Seite nimmt Zeilen nach ID. Die Markierungen dieser Zeilen spiegeln NUR die geladenen Regeln: Allows, die eine Einschränkung einführen oder erlaubte Ziele ergänzen, können fehlen, und Forbids, die Zugriff abziehen, ebenfalls — die Seite kann also weiter ODER enger wirken als die Wirklichkeit, und ein Subjekt ohne geladene Regel erscheint gar nicht. Leiten Sie hieraus keinen effektiven Zugriff ab: die Engine liest alle Seiten, bevor sie entscheidet, und löst ein Principal über Nutzer, Rolle und Gruppe zugleich auf, was eine Zeile nicht zeigen kann.",
     "groupsTruncated": "{{n}} Gruppen geladen; es gibt mehr",
     "groupsTruncatedHint": "Es gibt mehr Modellgruppen als angezeigt; diese Seite nimmt Zeilen nach ID. Eine hier fehlende Gruppe belegt nicht, dass sie nicht existiert — eine Regel kann sie weiterhin adressieren."
   }

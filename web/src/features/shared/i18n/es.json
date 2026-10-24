@@ -42,7 +42,7 @@
   },
   "workspaceRequired": {
     "use": "Usar {{name}}",
-    "choose": "Elige un workspace"
+    "choose": "Elige un espacio de trabajo"
   },
   "names": {
     "untitledSession": "Sesión sin título",

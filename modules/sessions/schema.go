@@ -236,6 +236,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 	if err := m.registerRunPinSchema(reg); err != nil {
 		return err
 	}
+	// #2480: a person's own snooze and done marks on operated sessions.
+	if err := m.registerRunMarkSchema(reg); err != nil {
+		return err
+	}
 	// SG-00: the canonical session identity and its provider aliases.
 	if err := m.registerIdentitySchema(reg); err != nil {
 		return err

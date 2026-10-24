@@ -66,8 +66,14 @@ type Options struct {
 	// NotEnabledModules are the namespaces of Modules this node does not run (its
 	// module profile). Their permissions stay declared, so roles and grants keep
 	// their meaning, but every route under /v1/m/<ns>/ answers 404
-	// module_not_enabled, and server-info lists them for the console.
+	// module_not_enabled, and server-info lists them for the console. It is the fixed
+	// form of ModuleEnabled and is ignored when ModuleEnabled is set.
 	NotEnabledModules []string
+	// ModuleEnabled answers, per request, whether the module with this namespace runs
+	// now. Every module's routes stay mounted and the answer gates them, so a module
+	// can be turned on or off without rebuilding the server. nil with no
+	// NotEnabledModules runs every module.
+	ModuleEnabled func(namespace string) bool
 	// CommunicationReady reports whether the session communication plane is
 	// effective on this node; server-info carries it so the console shows or hides
 	// the communication screens without asking a route that answers 503. nil
@@ -525,8 +531,9 @@ type Server struct {
 
 	setupComplete atomic.Bool
 	handler       http.Handler
-	// notEnabled are the module namespaces this node does not run, sorted.
-	notEnabled []string
+	// liveModule says whether a module runs now (Options.ModuleEnabled, or the
+	// fixed Options.NotEnabledModules); nil runs every module.
+	liveModule func(string) bool
 	// communicationReady is Options.CommunicationReady.
 	communicationReady func(context.Context) bool
 }
@@ -555,7 +562,7 @@ func New(opts Options) (*Server, error) {
 		st: opts.Store, authr: opts.Authenticator, authz: opts.Authorizer, signer: opts.Signer,
 		authorizationRecorder: opts.AuthorizationRecorder,
 		osAccounts:            auth.NewOSAccountBindings(opts.Authenticator, opts.Authorizer, opts.OSAccounts),
-		setupTok:              opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version, edition: opts.Edition, notEnabled: sortedCopy(opts.NotEnabledModules), communicationReady: opts.CommunicationReady,
+		setupTok:              opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version, edition: opts.Edition, liveModule: moduleAnswer(opts), communicationReady: opts.CommunicationReady,
 		licensePub: opts.LicensePublicKey, licenseBlob: opts.LicenseBlob, ingest: opts.Ingest,
 		fed: opts.Federation, sso: newSSOFlowStore(), trace: opts.Tracing, residency: opts.Residency,
 		keyCustody:      KeyCustodyInfo{Keys: append([]KeyInfo(nil), opts.KeyCustody.Keys...)},
@@ -685,12 +692,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		body.Error.Message = "That method is not allowed on this path. Check the OpenAPI document for the methods this route registers."
 		writeJSON(w, http.StatusMethodNotAllowed, body)
 	})
-	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
-		var body errorBody
-		body.Error.Code = "not_found"
-		body.Error.Message = "No route is registered at that path."
-		writeJSON(w, http.StatusNotFound, body)
-	})
+	r.NotFound(routeNotFound)
 	// The middleware chain. The OBS-03 trace extractor sits AFTER requestIDMW (so the
 	// request id is already assigned) and BEFORE the rest, so the access log, auth and
 	// every handler — and the audit events they write — run inside the continued
@@ -1265,13 +1267,17 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 		// route it registers is filed with the adapter of the module that registered
 		// it. A module implementing none files nil, and its operations project as
 		// not_supported rather than as the outer boolean.
-		if slices.Contains(s.notEnabled, ns) {
-			registerPolicyRoute(r, "*", "/m/"+ns, "module-not-enabled", moduleNotEnabledHandler(ns))
-			registerPolicyRoute(r, "*", "/m/"+ns+"/*", "module-not-enabled", moduleNotEnabledHandler(ns))
-			continue
+		if s.liveModule != nil {
+			sub.Use(s.moduleGate(ns))
 		}
 		projector, _ := m.(ModuleCapabilityProjector)
 		m.APIRoutes(chiRegistrar{s: s, r: sub, ns: ns, projector: projector})
+		if s.liveModule != nil && len(sub.Routes()) == 0 {
+			// chi runs a router's middleware only once it has a route; an empty router answers
+			// with its NotFound handler alone. For a module without routes of its own (an event
+			// consumer) that handler is the gate, so the router gains no route.
+			sub.NotFound(s.moduleGate(ns)(http.HandlerFunc(routeNotFound)).ServeHTTP)
+		}
 		r.Mount("/m/"+ns, sub)
 		if sr, ok := m.(Searcher); ok {
 			for _, k := range sr.SearchKinds() {
@@ -1282,6 +1288,9 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 					return errors.New("api: duplicate search kind " + k.Kind)
 				}
 				seenKinds[k.Kind] = true
+				if s.liveModule != nil {
+					k.Search = s.gatedSearch(ns, k.Search)
+				}
 				s.searchKinds = append(s.searchKinds, k)
 			}
 		}
@@ -2343,6 +2352,73 @@ type moduleNotEnabledBody struct {
 		Message string `json:"message"`
 		Module  string `json:"module"`
 	} `json:"error"`
+}
+
+// moduleAnswer is the one question the server asks about a module: Options.ModuleEnabled,
+// or the fixed list Options.NotEnabledModules expressed as the same question.
+func moduleAnswer(opts Options) func(string) bool {
+	if opts.ModuleEnabled != nil {
+		return opts.ModuleEnabled
+	}
+	if len(opts.NotEnabledModules) == 0 {
+		return nil
+	}
+	off := sortedCopy(opts.NotEnabledModules)
+	return func(ns string) bool { return !slices.Contains(off, ns) }
+}
+
+// moduleEnabled reports whether the module with this namespace runs on this node now.
+func (s *Server) moduleEnabled(ns string) bool {
+	return s.liveModule == nil || s.liveModule(ns)
+}
+
+// modulesNotEnabled are the namespaces of the mounted modules this node does not run
+// now, sorted.
+func (s *Server) modulesNotEnabled() []string {
+	if s.liveModule == nil {
+		return nil
+	}
+	var out []string
+	for _, m := range s.modules {
+		if ns := m.APINamespace(); !s.liveModule(ns) {
+			out = append(out, ns)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// moduleGate answers module_not_enabled for a module that does not run now, before
+// any of the module's routes (and so before authentication) is reached.
+func (s *Server) moduleGate(ns string) func(http.Handler) http.Handler {
+	off := moduleNotEnabledHandler(ns)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !s.liveModule(ns) {
+				off.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// gatedSearch makes a module that does not run now contribute no search result.
+func (s *Server) gatedSearch(ns string, search func(context.Context, ModuleContext, string, int) ([]SearchResult, error)) func(context.Context, ModuleContext, string, int) ([]SearchResult, error) {
+	return func(ctx context.Context, mc ModuleContext, q string, limit int) ([]SearchResult, error) {
+		if !s.liveModule(ns) {
+			return nil, nil
+		}
+		return search(ctx, mc, q, limit)
+	}
+}
+
+// routeNotFound answers a path no route is registered at.
+func routeNotFound(w http.ResponseWriter, _ *http.Request) {
+	var body errorBody
+	body.Error.Code = "not_found"
+	body.Error.Message = "No route is registered at that path."
+	writeJSON(w, http.StatusNotFound, body)
 }
 
 // moduleNotEnabledHandler answers every route of a module this node does not run.

@@ -616,6 +616,9 @@ type engine struct {
 	// moduleProfile is the module profile this start built its modules with
 	// (moduleprofile.go); serve reconciles it with the deployment settings.
 	moduleProfile moduleProfile
+	// live makes this serving engine follow an activation without a restart; nil
+	// when the engine runs every module (a CLI boot).
+	live *liveActivation
 	// protocolBindingReconciler is the late-bound REST multiplexer. A2A is
 	// installed during module composition; the MCP adapter is added only after
 	// the configured durable store and real upstream have both been constructed.
@@ -748,10 +751,14 @@ type nhiEnforcer interface {
 // It does not start any listener.
 func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	if cfg.ServeMode {
-		if err := refuseExternalPDPInCommunity(osGetenv); err != nil {
+		getenv, manifestErr := environmentWithActivationManifest(cfg.DataDir)
+		if err := refuseUnreadableActivationManifestInCommunity(manifestErr); err != nil {
 			return nil, err
 		}
-		if err := refuseBusinessProtectionsInCommunity(environmentWithActivationManifest(cfg.DataDir)); err != nil {
+		if err := refuseExternalPDPInCommunity(getenv); err != nil {
+			return nil, err
+		}
+		if err := refuseBusinessProtectionsInCommunity(getenv); err != nil {
 			return nil, err
 		}
 	}
@@ -852,6 +859,8 @@ type bootState struct {
 	srcCfg                      sourcesConfig
 	set                         moduleSet
 	profile                     moduleProfile
+	liveProfile                 *liveModuleProfile
+	live                        *liveActivation
 	running                     moduleSet
 	localCommunication          bool
 	rt                          *runtime.Runtime
@@ -1072,7 +1081,8 @@ func (b *bootState) configure(ctx context.Context) (err error) {
 	}
 	// load the enterprise activation manifest into the osGetenv overlay
 	// BEFORE buildModules reads any add-on's OLIVARES_*_CONFIG. A corrupt manifest
-	// degrades to "nothing activated" (logged), never fails boot.
+	// degrades to "nothing activated" (logged) in a Business build; a Community serve
+	// has already refused it above (refuseUnreadableActivationManifestInCommunity).
 	if err := initActivationManifest(b.cfg.DataDir); err != nil {
 		b.log.Warn("enterprise-activation: could not read the activation manifest; no preset add-ons activated this boot", "err", err)
 	}
@@ -1538,6 +1548,7 @@ func (b *bootState) buildRuntime(ctx context.Context) (err error) {
 		b.profile = bootModuleProfile(b.cfg.DataDir, b.storeIsRemote || fileExistsAt(b.dsn), b.log)
 	}
 	b.running = b.set.running(b.profile)
+	b.liveProfile = newLiveModuleProfile(b.profile)
 	// Automatic local custody does not change an explicit activation, shared key
 	// configuration, encrypted operator custody, or a saved Eventing OFF choice.
 	b.localCommunication = b.eng == store.EngineSQLite && b.running.eventing != nil &&
@@ -2456,6 +2467,11 @@ func (b *bootState) bindSources(ctx context.Context) (err error) {
 	if b.executionEnvRef != "" {
 		b.sourceReconcilerSvc.useEnvironmentRef(b.executionEnvRef)
 	}
+	// Each confined child (a session, a tool's sign-in, a probe) gets its private TMPDIR under one root inside the
+	// data directory, never the host's /tmp: the Server image labels that root for the tools and keeps the engine's
+	// own scratch in /tmp (the egress proxy, gpg, DR) apart from them. Set whether or not the sessions module is on,
+	// since a tool's sign-in and install probe run without it. runEngine sweeps it at start.
+	confine.UseChildTempRoot(filepath.Join(absOrSame(b.cfg.DataDir), "tool-tmp"))
 	if b.set.sessions != nil {
 		// Where this node keeps the provider account homes it creates. The module
 		// holds no data directory and may import nothing from here, so the root is
@@ -2652,7 +2668,12 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	if thisEdition.activationService != nil {
 		activation = thisEdition.activationService(b.cfg.DataDir, b.st, thisEdition.name, b.log)
 	}
-	actSvc := recordingActivation(activation, b.settings, restartRequester(b.cfg.Restart), b.log)
+	var liveApply func(context.Context) error
+	if b.cfg.ApplyModuleProfile {
+		b.live = &liveActivation{settings: b.settings, profile: b.liveProfile, rt: b.rt, log: b.log}
+		liveApply = b.live.Apply
+	}
+	actSvc := recordingActivation(activation, b.settings, restartRequester(b.cfg.Restart), liveApply, b.log)
 
 	// Privileged login: the PIV/CAC route config is loaded once and shared
 	// between the API (verification) and the serve command (the HTTP listener
@@ -2878,7 +2899,7 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		// Es `authr` y NO `recoveryAuthr`: el de recuperación se construye sobre otro runtime
 		// de sesión y no es el que resuelve el alcance del principal de una petición normal.
 		PrincipalEvidenceProducer: b.authr,
-		NotEnabledModules:         notEnabledNamespaces(b.set.all, b.profile),
+		ModuleEnabled:             b.liveProfile.Active,
 		CommunicationReady:        communicationReadiness.Ready,
 		SetupToken:                b.setupTok, Logger: b.log, LogBroker: b.logBroker, Version: b.cfg.Version,
 		// The build edition for server-info: the console shows only what this build serves.
@@ -2904,11 +2925,12 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 		TracingSettings:     b.tracingSettings,
 		SessionIdleSettings: b.settings,
 		// Which optional modules the engine runs (/v1/console/modules).
-		ModuleSelection: moduleSelectionService{settings: b.settings, running: b.profile,
+		ModuleSelection: moduleSelectionService{settings: b.settings, running: b.profile, live: b.liveProfile,
 			restart: restartRequester(b.cfg.Restart), log: b.log, used: b.settings.used,
 			sessions: b.set.sessions.RunningSessions},
 		// The Updates page: `olivares upgrade` run from the console (/v1/console/updates).
 		Updates: newUpdateService(b.settings, thisEdition.name, b.cfg.Version, b.cfg.DataDir,
+			func() string { return commercialEdition(b.licSvc.LicenseDisplay()) },
 			restartRequester(b.cfg.Restart), b.set.sessions.RunningSessions, b.log),
 		// whoami reports authority a tenant-scoped grant confers, not just what the
 		// ROLE confers. Same module that DECIDES the request through the ScopedAuthorizer
@@ -3139,11 +3161,16 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 	// same constructor nil-check, coverage registration and warn the inline
 	// block did.
 	scheduleModuleJobs(b.profile, []moduleJob{
-		{"compliance", "retention-sweep", func() {
+		// Scheduled whatever the boot profile: compliance can be turned on later, and
+		// the tick asks the live profile.
+		{"", "retention-sweep", func() {
 			// the retention sweep (contract §6). nil = the operator disabled it
 			// (warned); leader-gated per tick so a promoted standby picks it up.
-			if sweep := newRetentionSweepLoop(osGetenv, b.st, b.running.compliance, b.log); sweep != nil {
-				b.notRunning.coverageJob(b.enumerable, api.JobRetention, b.log)
+			if sweep := newRetentionSweepLoop(osGetenv, b.st, b.set.compliance, b.log); sweep != nil {
+				sweep.active = func() bool { return b.liveProfile.Active("compliance") }
+				if b.profile.Active("compliance") {
+					b.notRunning.coverageJob(b.enumerable, api.JobRetention, b.log)
+				}
 				if err := sweep.register(b.rt); err != nil {
 					b.log.Warn("retention-sweep: could not register the sweep loop on the scheduler; periodic retention disposition disabled", "err", err)
 				}
@@ -3158,7 +3185,9 @@ func (b *bootState) bindJobs(ctx context.Context) (err error) {
 				}
 			}
 		}},
-		{"reporting", "reporting-schedule", func() {
+		// Scheduled whatever the boot profile, like the retention sweep: the edition's
+		// pump asks the live profile on each tick.
+		{"", "reporting-schedule", func() {
 			if thisEdition.reportScheduleJob != nil {
 				thisEdition.reportScheduleJob(b)
 			}
@@ -3311,6 +3340,7 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 	// Bind ordinary turn costs to the same current session principal as hooks
 	// and provider approvals. The owning port publishes the cost event itself.
 	b.set.sessionDependencies.CostSink = &sessionCostSink{credentials: b.sessionHooks.SessionCredentials, sessions: b.set.sessions}
+	b.set.sessionDependencies.SessionFacts = sessionFactsSource{st: b.st, approvals: b.set.gov.EngineApprovals(), finops: b.set.finops}
 	// Decoy credentials (Business, opt-in): one engine plants at launch and recognizes at
 	// the hook PEP and the proxy. A Community build, or an edition with no opt-in, has none.
 	if thisEdition.sessionDecoys != nil {
@@ -3318,6 +3348,19 @@ func (b *bootState) bindSessionGovernance(ctx context.Context) (err error) {
 			b.sessionDecoys = decoys
 			b.set.sessionDependencies.SessionDecoys = decoys
 		}
+	}
+	// Managed credentials for sessions (Business): the broker holds an SSH key, a database
+	// login or an API account in the engine and gives a session a helper to use it, never
+	// the secret. A Community build wires none and a launch naming one answers 501.
+	if thisEdition.sessionCredentialBroker != nil {
+		// A Business engine that cannot place the helpers' directory stops here: leaving the
+		// broker nil would answer a launch "requires Olivares Business", the wrong reason.
+		dir, absErr := filepath.Abs(b.cfg.DataDir)
+		if absErr != nil {
+			return fmt.Errorf("sessions: the data directory for managed credentials: %w", absErr)
+		}
+		b.set.sessionDependencies.CredentialBroker = thisEdition.sessionCredentialBroker(
+			newSessionCredentialDeps(dir, b.set.sessionDependencies.ProviderVault), b.log)
 	}
 	// Steering a session another person started (input, resume, peers) is Business; a
 	// Community build answers 501 business_required (docs/editions.md).
@@ -3710,6 +3753,7 @@ func (b *bootState) composeEngine() {
 		communicationComposition:  b.communicationComposition,
 		workSink:                  workEventSink{eventing: b.running.eventing, notRunning: b.running.eventing == nil},
 		moduleProfile:             b.profile,
+		live:                      b.live,
 		protocolBindingReconciler: b.set.protocolBindingReconciler,
 		sessionHooks:              b.sessionHooks,
 		engineApprovals:           b.set.gov.EngineApprovals(),

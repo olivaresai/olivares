@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { describe, expect, it } from 'vitest'
-import { railGroups } from './session-rail-model'
+import { aliveSessions, railGroups } from './session-rail-model'
 
 describe('observed sessions of one tool in the rail (#2266)', () => {
   const observed = (ref: string) =>
@@ -187,6 +187,69 @@ describe('operated runs in the rail', () => {
     })
   })
 
+  it('files a session the person snoozed under Snoozed only, and one they marked done under Earlier (#2480)', () => {
+    const [needs, working, earlier, snoozed] = railGroups(
+      {
+        live: [],
+        handoffs: [],
+        runs: [
+          {
+            run_ref: 'r8',
+            name: 'Snoozed',
+            state: 'running',
+            provider_driver: 'claude',
+            snoozed_until: '2030-01-02T09:00:00Z',
+          } as never,
+          {
+            run_ref: 'r9',
+            name: 'Done but asking',
+            state: 'running',
+            provider_driver: 'claude',
+            provider_auth_state: 'required',
+            done: true,
+          } as never,
+        ],
+      },
+      Date.parse('2026-10-01T11:00:00Z'),
+    )
+    expect(needs.total).toBe(0)
+    expect(working.total).toBe(0)
+    expect(earlier.rows.map((row) => row.title)).toEqual(['Done but asking'])
+    // Out of every list and count, and still where the command menu searches.
+    expect(snoozed.id).toBe('snoozed')
+    expect(snoozed.rows.map((row) => row.title)).toEqual(['Snoozed'])
+  })
+
+  it('files an archived session under Archived only, counted nowhere (#2795)', () => {
+    const groups = railGroups(
+      {
+        live: [],
+        handoffs: [],
+        runs: [
+          {
+            run_ref: 'r10',
+            name: 'Archived but asking',
+            state: 'running',
+            provider_driver: 'claude',
+            provider_auth_state: 'required',
+            archived_at: '2026-10-21T12:00:00Z',
+          } as never,
+        ],
+      },
+      Date.parse('2026-10-01T11:00:00Z'),
+    )
+    expect(groups.map((g) => [g.id, g.total])).toEqual([
+      ['needsYou', 0],
+      ['working', 0],
+      ['earlier', 0],
+      ['snoozed', 0],
+      ['archived', 1],
+    ])
+    expect(groups[4].rows.map((row) => row.title)).toEqual([
+      'Archived but asking',
+    ])
+  })
+
   it('a run whose provider needs a login needs you, as Sessions files it', () => {
     const [needs, working] = railGroups(
       {
@@ -262,5 +325,24 @@ describe('operated runs in the rail', () => {
     expect(new Set(titles).size).toBe(3)
     expect(titles).toContain('Something else')
     expect(titles.filter((t) => t?.startsWith(name))).toHaveLength(2)
+  })
+})
+
+describe('aliveSessions: what a stop of every agent would end (#3161)', () => {
+  it('counts idle and waiting sessions with the working ones, and no ended one', () => {
+    const run = (run_ref: string, state: string) =>
+      ({ run_ref, name: run_ref, state, provider_driver: '' }) as never
+    expect(
+      aliveSessions({
+        live: [],
+        handoffs: [],
+        runs: [
+          run('working', 'running'),
+          run('idle', 'idle'),
+          run('waiting', 'waiting_approval'),
+          run('ended', 'stopped'),
+        ],
+      }),
+    ).toBe(3)
   })
 })

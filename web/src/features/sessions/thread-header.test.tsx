@@ -45,6 +45,10 @@ const ops = vi.hoisted(() => ({
   interrupt: vi.fn(),
   stop: vi.fn(),
   resume: vi.fn(),
+  snooze: vi.fn(),
+  unsnooze: vi.fn(),
+  markDone: vi.fn(),
+  unmarkDone: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => {
   const real = await importOriginal<typeof import('@/features/agentops/api')>()
@@ -53,13 +57,22 @@ vi.mock('@/features/agentops/api', async (importOriginal) => {
     agentOpsApi: { ...(real.agentOpsApi as object), ...ops },
   }
 })
+const attach = vi.hoisted(() => ({
+  onFrame: null as
+    ((f: { seq: number; stream: string; line: string }) => void) | null,
+}))
 vi.mock('@/features/agentops/attach', () => ({
-  useRunAttach: () => ({
-    status: 'open',
-    ended: false,
-    ioUnavailable: null,
-    retry: () => {},
-  }),
+  useRunAttach: (opts: {
+    onFrame: (f: { seq: number; stream: string; line: string }) => void
+  }) => {
+    attach.onFrame = opts.onFrame
+    return {
+      status: 'open',
+      ended: false,
+      ioUnavailable: null,
+      retry: () => {},
+    }
+  },
 }))
 
 function live(over: Partial<LiveDTO> = {}): LiveDTO {
@@ -170,10 +183,12 @@ beforeEach(() => {
   ops.interrupt.mockResolvedValue({ accepted: true })
   ops.stop.mockResolvedValue({})
   ops.resume.mockResolvedValue({})
+  for (const mark of [ops.snooze, ops.unsnooze, ops.markDone, ops.unmarkDone])
+    mark.mockResolvedValue({ run_ref: 'run-1', done: false })
 })
 
 describe('thread header — one line', () => {
-  it('says the state, the name, the folder, the tool and model and the usage once', () => {
+  it('says the state, the name, the folder, the tool and the usage once', () => {
     renderThread()
     const h = header()
     expect(h.className).toContain('h-12')
@@ -189,9 +204,7 @@ describe('thread header — one line', () => {
       'title',
       '/home/olv/work/W320/job-5cfa2f96/projects/demo',
     )
-    expect(within(h).getByTestId('thread-tool-model')).toHaveTextContent(
-      'Codex · stub-model',
-    )
+    expect(within(h).getByTestId('thread-tool').textContent).toBe('Codex')
     expect(within(h).getByTestId('narrative-usage')).toHaveTextContent(
       '12 in / 18 out tokens',
     )
@@ -210,7 +223,7 @@ describe('thread header — one line', () => {
   it('moves those facts into the Context pane in plain words', () => {
     renderThread()
     const side = screen.getByTestId('context-side')
-    expect(within(side).getByText('Managed by Olivares')).toBeInTheDocument()
+    expect(within(side).queryByText('Managed by Olivares')).toBeNull()
     const mode = within(side).getByTestId('narrative-mode')
     expect(mode).toHaveTextContent('Ask before each action')
     expect(mode.textContent).not.toContain('dangerFullAccess')
@@ -409,6 +422,77 @@ describe('thread header — the ⋯ menu', () => {
     expect(String(writeText.mock.calls[0][0])).toContain('sess-a')
   })
 
+  it('snoozes the session for the person, until a moment they pick', async () => {
+    // #2480: the engine keeps the snooze; the menu only names the moment.
+    renderThread()
+    openMenu()
+    expect(
+      screen.getByRole('menuitem', { name: 'Snooze for 1 day' }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('menuitem', { name: 'Snooze for 1 week' }),
+    ).toBeTruthy()
+    const before = Date.now()
+    act(() => {
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Snooze for 1 hour' }),
+      )
+    })
+    await waitFor(() => expect(ops.snooze).toHaveBeenCalledTimes(1))
+    const [ref, until] = ops.snooze.mock.calls[0] as [string, string]
+    expect(ref).toBe('run-1')
+    const at = Date.parse(until)
+    expect(at - before).toBeGreaterThanOrEqual(3_600_000 - 1_000)
+    expect(at - Date.now()).toBeLessThanOrEqual(3_600_000)
+  })
+
+  it('snoozes for a week from Snooze for 1 week', async () => {
+    renderThread()
+    openMenu()
+    const before = Date.now()
+    act(() => {
+      fireEvent.click(
+        screen.getByRole('menuitem', { name: 'Snooze for 1 week' }),
+      )
+    })
+    await waitFor(() => expect(ops.snooze).toHaveBeenCalledTimes(1))
+    const at = Date.parse((ops.snooze.mock.calls[0] as [string, string])[1])
+    expect(at - before).toBeGreaterThanOrEqual(7 * 24 * 3_600_000 - 1_000)
+    expect(at - Date.now()).toBeLessThanOrEqual(7 * 24 * 3_600_000)
+  })
+
+  it('marks the session done for the person, and offers to undo each mark', async () => {
+    renderThread()
+    openMenu()
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Mark done' }))
+    })
+    await waitFor(() => expect(ops.markDone).toHaveBeenCalledWith('run-1'))
+  })
+
+  it('offers Unsnooze and Mark not done once the person set them', async () => {
+    renderThread(run({ snoozed_until: '2030-01-02T09:00:00Z', done: true }))
+    openMenu()
+    expect(screen.queryByRole('menuitem', { name: /^Snooze for/ })).toBeNull()
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Unsnooze' }))
+    })
+    await waitFor(() => expect(ops.unsnooze).toHaveBeenCalledWith('run-1'))
+    openMenu()
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Mark not done' }))
+    })
+    await waitFor(() => expect(ops.unmarkDone).toHaveBeenCalledWith('run-1'))
+  })
+
+  it('offers no mark for a released session: the engine keeps none for it', async () => {
+    renderThread(run({ state: 'cleaned' }))
+    openMenu()
+    await screen.findAllByRole('menuitem')
+    expect(screen.queryByRole('menuitem', { name: /^Snooze for/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Mark done' })).toBeNull()
+  })
+
   it('brings the Context pane forward from the menu, for a screen with one pane at a time', async () => {
     const { onOpenContext } = renderThread()
     openMenu()
@@ -419,19 +503,92 @@ describe('thread header — the ⋯ menu', () => {
   })
 })
 
-describe('thread header — model and effort', () => {
-  it('shows the session model and effort beside the tool', () => {
+// dev#3120: two panes beside each other read the same "workspace · Claude Code ·
+// claude-opus-5-5 · high" and nothing said which session each was. The header names the
+// session, then its tool; the model and the effort are said once, by the composer.
+describe('thread header — the session, then its tool', () => {
+  it('names the session first and its tool after it, with no model or effort', () => {
     renderThread(run({ effort: 'high' }))
-    expect(screen.getByTestId('thread-tool-model')).toHaveTextContent(
-      'Codex · stub-model · high',
+    const h = header()
+    const title = within(h).getByRole('heading', { level: 2 })
+    const tool = within(h).getByTestId('thread-tool')
+    expect(title).toHaveTextContent('calc-review')
+    expect(tool.textContent).toBe('Codex')
+    expect(
+      title.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(h).not.toHaveTextContent('stub-model')
+    expect(h).not.toHaveTextContent(/\bhigh\b/i)
+  })
+})
+
+// dev#3120, measured at 1280 px with two panes and Context open: each pane was 340 px
+// wide, the tool and the folder could not shrink, and the session's name was squeezed to
+// nothing while the controls were cut. The header measures its own pane, not the window.
+describe('thread header — in a narrow pane', () => {
+  it('keeps the name and gives way with the tool, the folder and the usage first', () => {
+    renderThread(run({ effort: 'high' }))
+    const h = header()
+    expect(h.className).toContain('@container/thread')
+    expect(within(h).getByTestId('thread-tool').className).toMatch(
+      /\bmin-w-0\b.*\btruncate\b|\btruncate\b.*\bmin-w-0\b/,
+    )
+    expect(within(h).getByTestId('thread-tool').className).toContain(
+      '@min-[26rem]/thread:inline',
+    )
+    expect(within(h).getByTestId('narrative-folder').className).toContain(
+      '@min-[40rem]/thread:inline-block',
+    )
+    expect(
+      within(h).getByTestId('narrative-usage').parentElement!.className,
+    ).toContain('@min-[48rem]/thread:flex')
+    // Nothing in the header follows the window's width any more.
+    expect(h.innerHTML).not.toMatch(/min-\[(761|1100)px\]/)
+  })
+})
+
+// dev#2786: the header said `opus` while every turn ran on claude-opus-4-8.
+describe('thread header — the model in use', () => {
+  const reply = (model: string, seq: number) =>
+    act(() =>
+      attach.onFrame?.({
+        seq,
+        stream: 'stdout',
+        line: JSON.stringify({
+          type: 'assistant',
+          parent_tool_use_id: null,
+          message: { model, content: [{ type: 'text', text: `on ${model}` }] },
+        }),
+      }),
+    )
+
+  it('warns with both models, in words, when the turns do not run on the one asked for', () => {
+    renderThread(
+      run({ provider_driver: 'claude', model_ref: 'claude-opus-5-5' }),
+    )
+    reply('claude-opus-5-5', 1)
+    expect(screen.queryByTestId('thread-model-mismatch')).toBeNull()
+
+    reply('claude-opus-4-8', 2)
+    expect(screen.getByTestId('thread-model-mismatch')).toHaveTextContent(
+      'Asked for Claude Opus 5.5, running Claude Opus 4.8',
+    )
+    expect(screen.getByTestId('thread-model-mismatch')).toHaveAttribute(
+      'title',
+      'Requested: claude-opus-5-5 · In use: claude-opus-4-8',
     )
   })
 
-  it('says nothing of an effort the session did not set', () => {
-    renderThread(run())
-    expect(screen.getByTestId('thread-tool-model').textContent).toBe(
-      'Codex · stub-model',
+  it('does not hold a provider-bound name against the model the provider reports', () => {
+    renderThread(
+      run({
+        provider_driver: 'claude',
+        provider_auth_source: 'managed_injection',
+        model_ref: 'opus',
+      }),
     )
+    reply('claude-opus-5-5', 1)
+    expect(screen.queryByTestId('thread-model-mismatch')).toBeNull()
   })
 })
 

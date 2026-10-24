@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -138,4 +139,17 @@ func TestLegacyModelsExecuteKeepsTheSelectedProvider(t *testing.T) {
 			}
 		})
 	}
+}
+
+// notEnabledNamespaces are the namespaces of mods the profile does not run, for the
+// API's static NotEnabledModules.
+func notEnabledNamespaces(mods []api.Module, p moduleProfile) []string {
+	var out []string
+	for _, m := range mods {
+		if !p.Active(m.APINamespace()) {
+			out = append(out, m.APINamespace())
+		}
+	}
+	sort.Strings(out)
+	return out
 }

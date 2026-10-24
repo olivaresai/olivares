@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // reportsource.go exposes minimal-data, read-only accessors over the compliance
@@ -186,7 +187,7 @@ func (m *Module) ReportRetention(ctx context.Context, tenant model.TenantID) (Re
 	if m.data == nil {
 		return ReportRetentionStatus{}, errors.New("compliance: no data handle; cannot read retention")
 	}
-	out := ReportRetentionStatus{ComplianceLocked: m.governor != nil}
+	out := ReportRetentionStatus{ComplianceLocked: sdk.CapabilityEnabled(m.governor)}
 	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		polRepo, err := sc.Ext(retentionPolicyKind)
 		if err != nil {

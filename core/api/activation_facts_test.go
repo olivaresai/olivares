@@ -31,3 +31,29 @@ func TestActivationAddonFactsPreserveUnknownAndKnownFalse(t *testing.T) {
 		}
 	}
 }
+
+// A request names a preset or one family, never both and never neither; a family
+// reaches the service as the selection "family:<key>", which a preset name can
+// never spell (the regulated preset and the regulated family are different sets).
+func TestActivationSelectionFromARequest(t *testing.T) {
+	for _, tc := range []struct {
+		name, preset, family, want string
+		wantErr                    bool
+	}{
+		{name: "preset", preset: "starter", want: "starter"},
+		{name: "family", family: "regulated", want: "family:regulated"},
+		{name: "family with surrounding space", family: " regulated ", want: "family:regulated"},
+		{name: "a list is not a family", family: "regulated,enterprise", wantErr: true},
+		{name: "a combination is not a family", family: "regulated+business", wantErr: true},
+		{name: "both", preset: "starter", family: "business", wantErr: true},
+		{name: "neither", wantErr: true},
+		{name: "blank", preset: " ", family: " ", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := activationSelection(tc.preset, tc.family)
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Fatalf("activationSelection(%q, %q) = %q, %v; want %q, error=%v", tc.preset, tc.family, got, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+}

@@ -69,7 +69,7 @@
     "code": {
       "title": "使用验证器代码登录",
       "body": "{{action}} 需要在此部署上使用验证器代码登录。请重新登录并输入你的验证器代码。",
-      "signInAgain": "Sign in again"
+      "signInAgain": "重新登录"
     }
   },
   "references": {
@@ -149,7 +149,7 @@
     "col": {
       "userName": "用户",
       "state": "状态",
-      "externalId": "External ID",
+      "externalId": "外部 ID",
       "lastModified": "最后修改时间"
     }
   },
@@ -160,7 +160,7 @@
     "openInAccessMap": "在访问映射中查看",
     "col": {
       "name": "名称",
-      "externalId": "External ID",
+      "externalId": "外部 ID",
       "kind": "类别",
       "principalType": "主体",
       "source": "来源",
@@ -195,7 +195,7 @@
     "prmDescription": "受 OAuth 保护的 MCP 服务器如何将令牌绑定到一个具体资源——使为某服务器签发的令牌无法在另一服务器重放。",
     "flow": {
       "prm": {
-        "title": "Protected Resource Metadata",
+        "title": "受保护资源元数据",
         "body": "服务器在 /.well-known/oauth-protected-resource 处公告其授权服务器（RFC 9728）。"
       },
       "asDiscovery": {

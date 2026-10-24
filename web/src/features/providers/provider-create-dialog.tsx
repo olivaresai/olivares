@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Field } from '@/components/ui/field'
+import { Field, FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -24,7 +24,10 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  failureText,
+  usePrivilegedMutation,
+} from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys, providersApi } from './api'
 import { useProviderBoundary } from './auth-boundary'
 import { LOCAL_HTTP_KINDS, PROVIDER_KINDS } from './kinds'
@@ -72,7 +75,7 @@ export function ProviderCreateDialog({
    * it — instead of leaving the operator on a list with nothing to do. */
   onCreated?: (record: ProviderRecordDTO) => void
 }) {
-  const { t } = useTranslation('providers')
+  const { t } = useTranslation(['providers', 'errors'])
   const { activeTenant } = useAuth()
   const boundary = useProviderBoundary()
 
@@ -82,6 +85,7 @@ export function ProviderCreateDialog({
   const [apiKey, setApiKey] = useState('')
   const [defaultModel, setDefaultModel] = useState('')
   const [advanced, setAdvanced] = useState(false)
+  const [error, setError] = useState<string>()
   const missingFieldsId = useId()
 
   const reset = () => {
@@ -91,6 +95,8 @@ export function ProviderCreateDialog({
     setApiKey('')
     setDefaultModel('')
     setAdvanced(false)
+    // The dialog stays mounted between openings: a refusal does not outlive it.
+    setError(undefined)
   }
 
   const create = usePrivilegedMutation<void, ProviderRecordDTO>({
@@ -117,6 +123,11 @@ export function ProviderCreateDialog({
       onOpenChange(false)
       if (record) onCreated?.(record)
     },
+    // The open dialog hides the toast from screen readers: say it here.
+    onError: (err) => {
+      setError(failureText(err) ?? t('errors:generic'))
+      return true
+    },
   })
 
   // openai_compatible has no official endpoint to assume, so the engine requires
@@ -131,13 +142,21 @@ export function ProviderCreateDialog({
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (ready && !create.isPending) create.mutate()
+    if (!ready || create.isPending) return
+    setError(undefined)
+    create.mutate()
   }
 
   return (
     <Dialog
       open={open}
-      onOpenChange={(o) => (create.isPending ? undefined : onOpenChange(o))}
+      onOpenChange={(o) => {
+        if (create.isPending) return
+        // A key typed before the dialog closes must not survive the next opening (#2551):
+        // every close — Cancel, X, Escape — resets the form.
+        if (!o) reset()
+        onOpenChange(o)
+      }}
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -264,11 +283,15 @@ export function ProviderCreateDialog({
               {t('create.missingFields', { fields: missingFields.join(', ') })}
             </p>
           )}
+          <FieldError>{error}</FieldError>
           <DialogFooter>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                reset()
+                onOpenChange(false)
+              }}
               disabled={create.isPending}
             >
               {t('create.cancel')}

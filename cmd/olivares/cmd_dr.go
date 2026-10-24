@@ -408,7 +408,7 @@ func drBackupCmd() *cobra.Command {
 				return fmt.Errorf("backup ABORTED: %d tenant chain(s) did not verify at backup time (%s); fix the ledger or pass --allow-unverified to capture anyway", len(bad), strings.Join(bad, ", "))
 			}
 
-			f, err := os.OpenFile(out, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+			f, commit, abort, err := openBundleOutput(out)
 			if err != nil {
 				return err
 			}
@@ -416,10 +416,10 @@ func drBackupCmd() *cobra.Command {
 				Manifest: m, KEK: cipher.Params(), SnapshotPath: snapshotPath, SealedKeys: sealed,
 			}
 			if err := dr.WriteAuthenticatedBundle(f, bundleInput, cipher); err != nil {
-				_ = f.Close()
+				abort()
 				return err
 			}
-			if err := f.Close(); err != nil {
+			if err := commit(); err != nil {
 				return err
 			}
 			fmt.Fprintf(human, "DR bundle written: %s\n  taken: %s (RPO basis)\n  engine: %s  tenants: %d  keys: %d\n",
@@ -796,6 +796,9 @@ func drRestoreCmd() *cobra.Command {
 			if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
 				return err
 			}
+			if w := m.UnsealedSnapshotWarning(); w != "" {
+				drNote(cmd, "warning: "+w)
+			}
 			// Authentication is necessary, but it does not make operational
 			// coordination restorable data. Even the legacy exception passes this
 			// classifier before preservation, custody installation or import.
@@ -1076,6 +1079,9 @@ func drVerifyCmd() *cobra.Command {
 			}
 			if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
 				return err
+			}
+			if w := m.UnsealedSnapshotWarning(); w != "" {
+				drNote(cmd, "warning: "+w)
 			}
 			if m.Store.Method == dr.MethodPITR {
 				// A PITR companion carries no store bytes; verifying its chain needs the
@@ -1517,8 +1523,54 @@ func rollbackPreserved(dataDir string, moved map[string]string) {
 	}
 }
 
-// openAndCheckBundle extracts a bundle and verifies the snapshot digest against
-// the manifest (the first gate of any restore: detect a corrupt/tampered bundle).
+// openBundleOutput opens the destination of dr backup. A new or regular file is
+// written beside --out and renamed over it by commit, so a failure while sealing or
+// writing (a full temp directory, say) leaves an earlier bundle of the same name
+// intact and never leaves a half-written one that a following `dr push` would upload.
+// Anything else (a device, a pipe) is written through, as before. Call exactly one of
+// commit and abort.
+func openBundleOutput(out string) (f *os.File, commit func() error, abort func(), err error) {
+	info, statErr := os.Lstat(out)
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return nil, nil, nil, statErr
+	}
+	if statErr == nil && !info.Mode().IsRegular() {
+		f, err = os.OpenFile(out, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return f, f.Close, func() { _ = f.Close() }, nil
+	}
+	f, err = os.CreateTemp(filepath.Dir(out), ".drbundle-*")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	abort = func() { _ = f.Close(); _ = os.Remove(f.Name()) }
+	if statErr == nil {
+		if err := f.Chmod(info.Mode().Perm()); err != nil {
+			abort()
+			return nil, nil, nil, err
+		}
+	}
+	commit = func() error {
+		if err := f.Close(); err != nil {
+			_ = os.Remove(f.Name())
+			return err
+		}
+		if err := os.Rename(f.Name(), out); err != nil {
+			_ = os.Remove(f.Name())
+			return err
+		}
+		return nil
+	}
+	return f, commit, abort, nil
+}
+
+// openAndCheckBundle extracts a bundle and, for a legacy unsigned bundle, verifies the
+// snapshot digest against the manifest. A signed manifest is not trusted yet (nothing
+// has checked its keyed authentication, so its Store.File and digest are attacker
+// input) and its snapshot may be sealed, so dr.VerifyBundleIntegrity, which every
+// caller runs next with the KEK, makes that check after authenticating the manifest.
 func openAndCheckBundle(in, work string) (*dr.Manifest, dr.KDFParams, error) {
 	f, err := os.Open(in)
 	if err != nil {
@@ -1529,7 +1581,7 @@ func openAndCheckBundle(in, work string) (*dr.Manifest, dr.KDFParams, error) {
 	if err != nil {
 		return nil, dr.KDFParams{}, err
 	}
-	if m.Store.SHA256 != "" {
+	if m.Store.SHA256 != "" && m.Authentication.Algorithm == "" {
 		sum, _, err := dr.FileSHA256(filepath.Join(work, m.Store.File))
 		if err != nil {
 			return nil, dr.KDFParams{}, err

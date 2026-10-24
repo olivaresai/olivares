@@ -65,8 +65,6 @@ export function SessionIdleSettings() {
         if (valid) save.mutate({ idle_stop_minutes: minutes })
       }}
     >
-      <h2 className="text-heading-sm font-semibold">{t('nav.sessionIdle')}</h2>
-      <p className="text-body-sm text-text-2">{t('sessionIdle.description')}</p>
       <label className="flex flex-col gap-1" htmlFor="idle-stop-minutes">
         {t('sessionIdle.minutes')}
         <Input

@@ -55,7 +55,9 @@ func TestWorkspaceKnowledgeIngestAndScopedRetrieval(t *testing.T) {
 				}
 				return out
 			}
-			kb := request("POST", "/v1/m/knowledge/kbs", map[string]any{"name": "engineering", "classification": "public", "embed_policy": "local_only"}, http.StatusCreated)
+			// The mocked Confluence page carries no permissions, so its documents have no ACL
+			// and are denied unless the KB says otherwise: default_acl anyone is that decision.
+			kb := request("POST", "/v1/m/knowledge/kbs", map[string]any{"name": "engineering", "classification": "public", "embed_policy": "local_only", "default_acl": []string{"anyone"}}, http.StatusCreated)
 			kbID := kb["id"].(string)
 			request("POST", "/v1/m/sourcescope/bindings", map[string]any{
 				"source_type": "knowledge", "source_ref": kbID, "scope_tree": "workspace", "scope_ref": "default", "enabled": true,

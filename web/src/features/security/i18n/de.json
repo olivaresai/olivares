@@ -61,7 +61,7 @@
     "title": "Anbieter-Sicherheitslage",
     "description": "Read-first-KI-Sicherheitslage aus den nativen Kontrollen der Anbieter — OpenAI Moderation, AWS Bedrock Guardrails und Azure Responsible AI. Die Plattform liest und protokolliert sie; die Durchsetzung bleibt beim Anbieter.",
     "empty": "Keine Befunde zur Sicherheitslage",
-    "emptyHint": "Verbinde die OpenAI-, AWS- oder Azure-Konnektoren mit aktivierten Sicherheitslesungen, um diese Ansicht zu füllen.",
+    "emptyHint": "Verbinden Sie die OpenAI-, AWS- oder Azure-Konnektoren mit aktivierten Sicherheitslesungen, um diese Ansicht zu füllen.",
     "countsPartial": "Teil-Übersicht — dieser Mandant hat mehr Sicherheitslage-Befunde, als der Übersichts-Scan abdeckt.",
     "columns": {
       "open": "Offen"
@@ -181,7 +181,7 @@
       "closed": "Geschlossen"
     },
     "truncated": "Die ersten {{n}} eröffneten werden angezeigt",
-    "truncatedHint": "Es gibt mehr Fälle als angezeigt, und diese Seite ist nach Eröffnungs-ID sortiert, es können also aktuelle Fälle fehlen. Eine Untersuchung, die du hier nicht siehst, ist keine, die es nicht gibt."
+    "truncatedHint": "Es gibt mehr Fälle als angezeigt, und diese Seite ist nach Eröffnungs-ID sortiert, es können also aktuelle Fälle fehlen. Eine Untersuchung, die Sie hier nicht sehen, ist keine, die es nicht gibt."
   },
   "integrity": {
     "title": "Hauptbuch-Integrität",
@@ -200,7 +200,7 @@
     "attestedSeq": "Attestierte seq",
     "headSeq": "Hauptbuch-Kopf seq {{seq}}",
     "reverifyNote": "Jedes Ereignis trägt seq · hash · prev_hash, sodass ein Leser die Verkettung offline gegen einen externen WORM-Speicher erneut prüfen kann.",
-    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+    "chainEmptyNote": "Noch nichts zu prüfen — das Ledger enthält keine Ereignisse."
   },
   "empty": {
     "enforcement": {

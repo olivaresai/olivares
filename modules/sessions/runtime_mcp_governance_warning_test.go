@@ -10,6 +10,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -47,8 +48,15 @@ func TestRuntimeRunReportsMCPGovernanceByDriver(t *testing.T) {
 			if launchDriver == "" {
 				launchDriver = providerDriverClaude
 			}
+			configHome := t.TempDir()
+			if driver == providerDriverOpenCode {
+				// An own-login OpenCode launch needs a model to know its hosts (#3094).
+				if err := os.WriteFile(filepath.Join(configHome, "opencode.json"), []byte(`{"model":"opencode/big-pickle"}`), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			prof := mustCreateProfile(t, m, tenant, CreateProfileInput{
-				Driver: launchDriver, ConfigHome: t.TempDir(), UserHome: t.TempDir(),
+				Driver: launchDriver, ConfigHome: configHome, UserHome: t.TempDir(),
 				DisplayName: launchDriver + "-warning", AuthSource: AuthSourceAccountHome,
 			})
 			switch driver {

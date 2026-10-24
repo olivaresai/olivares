@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
+[![Next release: 0.4](https://img.shields.io/badge/release-0.4-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -68,6 +68,8 @@ Es funktioniert mit Ihren vorhandenen Tools: Claude Code, Codex, Grok, Cursor, g
 
 Community behält lokale Observability, gespeicherte Einstellungen und den Backup-Export. SIEM/ITSM-Versand, externe Telemetrieübertragung und Posture-Export gehören zur Business-Basisedition.
 
+**Die Netzwerkisolation von Sitzungen umfasst Claude-Code-, Codex- und OpenCode-Sitzungen, die an einen Anbieterschlüssel gebunden sind, sowie OpenCode-Sitzungen mit der eigenen Anmeldung des Tools.** Eine solche Sitzung erreicht nur den Endpunkt ihres Anbieters oder die Hosts ihrer Anmeldung, über einen Proxy je Sitzung in ihrem eigenen Netzwerk-Namespace, oder sie startet nicht. Bei OpenCode mit Anbieterschlüssel beruhen die Hosts auf einem früheren Inventar, nicht auf einem hinter dem Proxy gezeigten Turn. Grok-Build-Sitzungen und Sitzungen anderer Tools mit Kontoanmeldung können weiterhin jeden Host erreichen, den das Netzwerk zulässt. Lesen Sie [Netzwerkisolation von Sitzungen](SECURITY.md#session-network-isolation), bevor Sie Workloads ausführen, die exklusiven Zugriff auf einen einzigen Anbieter erfordern.
+
 ## Installation
 
 Wählen Sie eine Methode und kopieren Sie den zugehörigen Block. Zum Schluss gibt `olivares quickstart` die Konsolenadresse und ein einmaliges Token zum Anlegen des ersten Administrators aus. Jede Version ist signiert, und jede Methode prüft den Download vor der Installation ([Download selbst prüfen](INSTALL.md#verifying-a-release)).
@@ -85,7 +87,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -103,8 +105,8 @@ Sitzungen arbeiten in einem Host-Ordner: Setzen Sie `OLIVARES_PROJECT_DIR` vor `
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
-sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -112,8 +114,8 @@ sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
-sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.rpm
+sudo rpm -i olivares_0.4_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -121,12 +123,12 @@ sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-Verwenden Sie auf ARM-Servern `arm64` statt `amd64`. Alle Dateien der Version finden Sie auf der <!-- release -->[Release-Seite](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
+Verwenden Sie auf ARM-Servern `arm64` statt `amd64`. Alle Dateien der Version finden Sie auf der <!-- release -->[Release-Seite](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->.
 
 **Homebrew.** macOS und Linux.
 

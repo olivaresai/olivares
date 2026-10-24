@@ -26,11 +26,11 @@
   "lenses": {
     "analytics": {
       "title": "按开发者（管理员 Analytics）",
-      "description": "来自管理员 Analytics 数据源、涵盖 {{developers}} 名开发者的权威每位开发者/每日总计。"
+      "description_other": "来自管理员 Analytics 数据源、涵盖 {{count}} 名开发者的权威每位开发者/每日总计。"
     },
     "telemetry": {
       "title": "按会话（实时遥测）",
-      "description": "来自 OTLP 平面、涵盖 {{teams}} 个团队的实时每会话活动；包含活跃时间。"
+      "description_other": "来自 OTLP 平面、涵盖 {{count}} 个团队的实时每会话活动；包含活跃时间。"
     }
   },
   "comparison": {

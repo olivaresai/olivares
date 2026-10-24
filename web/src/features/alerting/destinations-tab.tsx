@@ -190,8 +190,9 @@ export function DestinationsTab() {
     },
   ]
 
-  const addButton = (
-    <Button variant="primary" size="sm" onClick={() => setEditing('new')}>
+  // The intro row holds the orange; the empty state repeats the verb quietly.
+  const addButton = (variant: 'primary' | 'secondary') => (
+    <Button variant={variant} size="sm" onClick={() => setEditing('new')}>
       <Plus />
       {t('destinations.add')}
     </Button>
@@ -203,7 +204,7 @@ export function DestinationsTab() {
         <p className="text-body text-muted-foreground">
           {t('destinations.intro')}
         </p>
-        {addButton}
+        {addButton('primary')}
       </div>
       {listQ.data && !listQ.data.sealer_available ? (
         <p role="alert" className="text-body text-warning">
@@ -220,7 +221,7 @@ export function DestinationsTab() {
           <EmptyState
             title={t('destinations.empty')}
             description={t('destinations.emptyHint')}
-            action={addButton}
+            action={addButton('secondary')}
           />
         }
         getRowId={(d) => d.name}

@@ -2,7 +2,7 @@
 title: API d’exécution de session (CLI officielles)
 description: >-
   Surface HTTP Community qui liste, attache, alimente et arrête des processus
-  Claude Code, Codex et Grok CLI possédés. Permissions, PTY, reprise et reconnexion.
+  Claude Code, Codex et Grok CLI possédés. Permissions, E/S stdio, reprise et reconnexion.
 ---
 
 Le plan de contrôle **lance la CLI du fournisseur**. Il ne remplace pas Claude
@@ -11,15 +11,15 @@ produit, pas le produit.
 
 Cette page documente les routes Community d’operate sous `/v1/m/sessions/runs`.
 Elles existent déjà dans le [document OpenAPI bêta](/reference/api-beta/).
-La 26.10 ajoute le contrat de driver, un runner PTY local et les parcours J01–J08
-comme tests.
+La 26.10 ajoute le contrat de driver, le transport dont chaque forme de lancement
+a besoin, et les parcours J01–J08 comme tests.
 
 ## Frontière d’édition
 
 | Édition | Ce qu’elle fait | Ce qu’elle ne fait pas |
 |---|---|---|
 | **Community (cette page)** | Enfant local possédé : lancement, stdin/stdout/stderr, attach avec curseur, reprise de la conversation exacte, reconnexion d’un flux vivant, arrêt avec code de sortie observé. Les lignes de session et les preuves restent dans le module II. | Moteur Identity & Scale multi-panneaux, listener mTLS, entrée des panneaux du cockpit, chunk xterm |
-| **Overlay Identity & Scale** | Moteur commercial session-cockpit (listener, panneaux, ledger). Routes sous `/v1/m/session-cockpit/` lorsque l’module est présent. | Ne remplace pas `/v1/m/sessions/runs` |
+| **Overlay Identity & Scale** | Moteur commercial session-cockpit (listener, panneaux, ledger). Routes sous `/v1/m/session-cockpit/` lorsque le module est présent. | Ne remplace pas `/v1/m/sessions/runs` |
 
 Une build Community répond à l’espace de noms de l’overlay par **absence**
 (404). Elle ne monte pas un stub 501.
@@ -33,12 +33,13 @@ Application existante sur les routes du module :
 
 | Permission | Routes |
 |---|---|
-| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages` |
-| `sessions:run:write` | `POST /runs`, `POST /runs/{ref}/input`, `POST /runs/{ref}/interrupt`, `POST /runs/{ref}/stop`, `POST /runs/{ref}/resume`, `POST /runs/{ref}/move`, `POST /runs/{ref}/handoff` |
+| `sessions:run:read` | `GET /runs`, `GET /runs/{ref}`, `GET /runs/{ref}/events`, `GET /runs/{ref}/attach`, `GET /runs/{ref}/handoff`, `GET /runs/{ref}/activity`, `GET /runs/{ref}/activity/agents/{agent}`, `GET /runs/{ref}/messages`, `POST /runs/{ref}/pin`, `DELETE /runs/{ref}/pin` |
+| `sessions:run:write` | `POST /runs`, `POST /runs/{ref}/input`, `POST /runs/{ref}/interrupt`, `POST /runs/{ref}/stop`, `POST /runs/{ref}/resume`, `POST /runs/{ref}/move`, `POST /runs/{ref}/handoff`, `PUT /runs/{ref}/name`, `POST /runs/{ref}/archive`, `DELETE /runs/{ref}/archive` |
 | `sessions:run:admin` | `POST /runs/{ref}/cleanup`, `DELETE /runs/{ref}` |
 
-Un viewer peut lister. Create, input et stop exigent write. L’authorizer de la
-route est le point d’application ; une permission manquante est 403.
+Un viewer peut lister et épingler les sessions pour lui-même. Create, input et
+stop exigent write. L’authorizer de la route est le point d’application ; une
+permission manquante est 403.
 
 ## Routes lues par la console
 
@@ -46,22 +47,28 @@ Base : `/v1/m/sessions`. Authentifier. Envoyer `X-Olivares-Tenant`.
 
 | Méthode | Chemin | Résultat |
 |---|---|---|
-| `GET` | `/runs` | Page d’exécutions gérées |
-| `GET` | `/runs/{ref}` | Une exécution. `state` est dérivé. `exit_code` est observé. Pas de champ de succès fabriqué |
+| `GET` | `/runs` | Page d’exécutions gérées. `state`, `live_ref`, `claude_session_id` (hérité) facultatifs |
+| `GET` | `/runs/{ref}` | Une exécution. `state` est dérivé. `exit_code` est observé. Pas de champ de succès fabriqué. `archived_at` (RFC 3339, UTC) est présent tant que la session est archivée |
 | `GET` | `/runs/{ref}/events` | Lignes de preuve de cycle de vie |
-| `GET` | `/runs/{ref}/attach?from={seq}` | SSE : cadres `output`, `lag` si l’anneau a évincé sous le curseur, `end` ou un `notice` non vivant |
+| `GET` | `/runs/{ref}/attach?from={seq}` | SSE : cadres `output`, `lag` si l’anneau a évincé sous le curseur, `end` ou un `notice` non vivant. Une session Grok, OpenCode ou Gemini CLI reprise après un lancement d’un run auquel ont été donnés des secrets du vault, un identifiant de dépôt, un identifiant géré ou un jeton de registre de paquets ne diffuse pas la conversation que son outil rejoue à la reprise, et l’indique dans une seule trame `olivares_notice` (`history_withheld`) |
 | `POST` | `/runs/{ref}/input` | stdin. Stream-json utilise `line`/`message`. Codex/Grok utilisent `text`. 202 `{accepted:true}` |
-| `POST` | `/runs/{ref}/stop` | SIGTERM puis SIGKILL du groupe. Code de sortie observé sur la ligne |
-| `POST` | `/runs/{ref}/resume` | Nouvelle génération de processus. Conversation stockée exacte |
+| `POST` | `/runs/{ref}/stop` | SIGTERM puis SIGKILL du groupe de processus. Code de sortie observé sur la ligne |
+| `POST` | `/runs/{ref}/resume` | Nouvelle génération de processus. Conversation stockée exacte. Pas de repli silencieux vers une nouvelle conversation |
 | `POST` | `/runs/{ref}/interrupt` | Annule le tour actif. Le processus reste |
+| `POST`, `DELETE` | `/runs/{ref}/pin` | Épingle la session pour l’appelant, ou la désépingle. L’épingle est celle de l’appelant et le suit sur un autre navigateur ou une autre machine ; elle ne modifie jamais la liste d’une autre personne. Les deux appels sont idempotents et répondent 200 `{run_ref, pinned, pinned_at}`. Une personne garde au plus 20 épingles : la plus ancienne sort lorsqu’une 21e est épinglée. Libérer ou supprimer une session supprime toutes les épingles qui la concernent. `GET /runs` et `GET /runs/{ref}` portent les champs `pinned` et `pinned_at` de l’appelant, et `GET /runs` renvoie aussi les sessions épinglées de l’appelant qui tombent hors de sa page (au plus 20 lignes en plus de `limit` ; `pagination=cursor` n’en ajoute aucune, puisqu’il atteint chaque session une seule fois). Une épingle appartient à l’identifiant qui l’a créée : les sessions de la console d’une personne et celles de `olivares login` partagent leurs épingles, un jeton d’API garde les siennes. Une session libérée répond 409 |
+| `POST`, `DELETE` | `/runs/{ref}/snooze` | Reporte la session pour l’appelant jusqu’à un moment, ou met fin au report. `POST` prend `{until}`, un instant RFC 3339 dans le futur (400 sinon) ; un second `POST` le déplace. Le report appartient à l’appelant, comme l’épingle : la console retire la session de la liste de cette personne jusqu’à `until`, et la liste des autres personnes ne change pas. Les deux répondent 200 `{run_ref, snoozed_until?, done}`. `GET /runs` et `GET /runs/{ref}` portent `snoozed_until` de l’appelant seulement tant que le report dure. Libérer ou supprimer une session supprime tous les reports qui la concernent. Une session libérée répond 409 |
+| `POST`, `DELETE` | `/runs/{ref}/done` | Marque la session comme terminée pour l’appelant, ou retire la marque. La console classe une session terminée sous Plus tôt dans la liste de cette personne. Les deux sont idempotents et répondent 200 `{run_ref, snoozed_until?, done}`. `GET /runs` et `GET /runs/{ref}` portent `done` de l’appelant. Libérer ou supprimer une session supprime toutes les marques qui la concernent. Une session libérée répond 409 |
+| `PUT` | `/runs/{ref}/name` | Corps `{name}`. Renomme la session. Le nom est rogné ; un nom vide l’efface et les clients reviennent à leur propre façon de la nommer. Plus de 200 caractères, un caractère de contrôle ou invisible (format, séparateur de ligne ou de paragraphe : espaces sans chasse, forçages de direction) ou un `name` absent répondent 400. 200 run. Le nom appartient à la session, donc chaque lecteur le voit. Consigné dans le ledger d’audit comme `sessions.run.renamed` avec la référence de l’exécution, pas le nom ; un nom qui est déjà celui de la session ne change rien et ne consigne rien |
+| `POST`, `DELETE` | `/runs/{ref}/archive` | Archive la session, ou la désarchive. Sans corps. 200 run, avec `archived_at` tant qu’elle est archivée. Archiver n’arrête ni ne supprime la session. La marque appartient à la session, pas à l’appelant : elle est archivée pour tous. `GET /runs` n’en est pas restreint ; chaque client laisse les sessions archivées hors de sa liste. Les deux appels sont idempotents : archiver une session archivée conserve son `archived_at` et ne consigne rien. Consigné dans le ledger d’audit comme `sessions.run.archived` et `sessions.run.unarchived` |
 | `POST` | `/runs/{ref}/move` | Corps `{provider_profile_ref}`. Rattache une session Claude Code arrêtée ou en échec à un autre profil du même outil et emporte sa conversation. Ne démarre rien. 200 run |
 | `GET` | `/runs/{ref}/handoff` | Le résumé dont partirait un handoff : `summary`, `source_driver`, `turns`, `transcript_bytes`. Lecture seule, consignée dans le ledger d’audit. Une session en cours d’exécution est lue telle qu’elle est ; une session qui n’a pas démarré répond 409 |
 | `POST` | `/runs/{ref}/handoff` | Corps `{provider_profile_ref, summary?, name?}`. Démarre une nouvelle session dans ce profil, liée à celle-ci. 201 run plus `summary_state` (et `first_turn` lorsqu’il n’est pas `delivered`) ; 202 tant que le lancement attend une approbation |
-| `GET` | `/runs/{ref}/activity` | Ce que fait l’outil d’une session Claude Code ou Codex, lu à chaque requête dans son propre enregistrement natif : `agents`, `tasks` (commandes et travail en arrière-plan), `files` (path, `added`, `removed`, `created`), `todos`, `skills`, `mcp_servers`, `model`, `context_tokens`, `context_window` nullable lorsque l’outil le rapporte et `context_percent` (pourcentage pour Claude Code, null lorsqu’il est inconnu), `compactions`, et `transcript` (`read`, `pending` avant que l’outil l’ait écrit, `missing` lorsqu’il devrait y être). Les agents et les tâches sont `running`, `completed`, `failed`, `stopped` ou `scheduled`. Codex utilise son fichier rollout sans lancer d’autre app-server ; les tokens de contexte décrivent la dernière requête, non l’usage cumulé. Lecture seule ; consignée dans le ledger d’audit une fois par lecteur et par session toutes les 15 minutes. Un outil non pris en charge répond 422 ; une session à laquelle des secrets du vault ou un identifiant de dépôt ont été donnés répond 409, tout comme une session qui a utilisé un jeton de registre de paquets lorsqu’elle est arrêtée ou s’exécute après une reprise qui suit un lancement en ayant utilisé un |
+| `GET` | `/runs/{ref}/activity` | Ce que fait l’outil d’une session Claude Code ou Codex, lu à chaque requête dans son propre enregistrement natif : `agents`, `tasks` (commandes et travail en arrière-plan), `files` (path, `added`, `removed`, `created`), `todos`, `skills`, `mcp_servers`, `model`, `context_tokens`, `context_window` nullable lorsque l’outil le rapporte et `context_percent` (pourcentage pour Claude Code, null lorsqu’il est inconnu), `compactions`, et `transcript` (`read`, `pending` avant que l’outil l’ait écrit, `missing` lorsqu’il devrait y être). Les agents et les tâches sont `running`, `completed`, `failed`, `stopped` ou `scheduled`. Codex utilise son fichier rollout sans lancer d’autre app-server ; les tokens de contexte décrivent la dernière requête, non l’usage cumulé. Lecture seule ; consignée dans le ledger d’audit une fois par lecteur et par session toutes les 15 minutes. Un outil non pris en charge répond 422 ; une session à laquelle des secrets du vault, un identifiant de dépôt ou un identifiant géré ont été donnés répond 409, tout comme une session qui a utilisé un jeton de registre de paquets lorsqu’elle est arrêtée ou s’exécute après une reprise qui suit un lancement en ayant utilisé un |
 | `GET` | `/runs/{ref}/activity/agents/{agent}` | Le transcript d’un sous-agent Claude Code en tours simples (`role`, `text`). Lecture seule, consignée dans le ledger d’audit. 404 pour un agent inconnu. Codex rapporte l’état des enfants dans la réponse Activity racine ; les lectures de transcript d’enfant ne sont pas offertes |
-| `GET` | `/runs/{ref}/messages` | Les messages d’une session Claude Code ou Codex, lus à chaque requête dans le transcript propre à l’outil, par pages : `items` (`id`, `role` `user` ou `assistant`, `at`, `first_line`), `total`, `next`, `transcript` (`read`, `pending`, `missing`). Par défaut, seulement ce que la personne a envoyé ; `role=all` ajoute les réponses de l’outil. `q` garde les messages contenant cette expression n’importe où (insensible à la casse, 256 octets au plus) ; `at` (RFC 3339) garde les messages à cette heure ou après, de sorte que le premier élément est l’ancre ; `order` vaut `asc` (défaut) ou `desc`, `limit` au plus 200 et `cursor` l’id d’où une page continue (`next`) ; les éléments sont toujours du plus ancien au plus récent. `id` lit un message en entier (`text`, et `later_same`, le nombre de messages ultérieurs du même expéditeur qui répètent sa première ligne ; aucun filtre ne s’applique et `total` est le nombre de messages de la session). L’`id` d’un message est sa position parmi les messages de la session et ne change pas lorsque le transcript s’allonge. Lecture seule ; consignée dans le ledger d’audit une fois par lecteur, par session et par fenêtre de 15 minutes. Un outil non pris en charge répond 422 ; une session à laquelle des secrets du vault ou un identifiant de dépôt ont été donnés répond 409 ; un `id` inconnu 404 ; un paramètre invalide 400 |
-| `GET` | `/runs/{ref}/diff` | Branche du worktree comparée à son point de départ : `branch`, `base`, `head` et `files` modifiés (`path`, `status`). 404 sans worktree |
-| `GET` | `/runs/{ref}/diff/file?path=` | Texte d’un chemin à `base` et `head` (`original`, `modified`, chacun limité au minimum de `max_read_bytes` du workspace et 64 KiB) |
+| `GET` | `/runs/{ref}/messages` | Les messages d’une session Claude Code ou Codex, lus à chaque requête dans le transcript propre à l’outil, par pages : `items` (`id`, `role` `user` ou `assistant`, `at`, `first_line`), `total`, `next`, `transcript` (`read`, `pending`, `missing`). Par défaut, seulement ce que la personne a envoyé ; `role=all` ajoute les réponses de l’outil. `q` garde les messages contenant cette expression n’importe où (insensible à la casse, 256 octets au plus) ; `at` (RFC 3339) garde les messages à cette heure ou après, de sorte que le premier élément est l’ancre ; `order` vaut `asc` (défaut) ou `desc`, `limit` au plus 200 et `cursor` l’id à partir duquel une page continue (`next`) ; les éléments sont toujours du plus ancien au plus récent. `id` lit un message en entier (`text`, et `later_same`, le nombre de messages ultérieurs du même expéditeur qui répètent sa première ligne ; aucun filtre ne s’applique et `total` est le nombre de messages de la session). `text=1` ajoute `text` à chaque élément de la page, limité à 64 KiB par message comme une lecture par `id`, et pas de `later_same` ; un texte coupé à cette limite se termine par ` [...]` et son élément porte `clipped: true`, dans une lecture par `id` aussi ; une telle page contient au plus 50 messages ; suivez `next` pour copier une conversation entière. L’`id` d’un message est sa position parmi les messages de la session et ne change pas lorsque le transcript s’allonge. Lecture seule ; consignée dans le ledger d’audit une fois par lecteur, par session et par fenêtre de 15 minutes, sous `sessions.run.messages`, et une lecture avec `text=1` sous `sessions.run.messages.text`. Un outil non pris en charge répond 422 ; une session à laquelle des secrets du vault, un identifiant de dépôt ou un identifiant géré ont été donnés répond 409 ; un `id` inconnu 404 ; un paramètre invalide 400 |
+| `DELETE` | `/runs/{ref}` | Requiert `sessions:run:admin`. Supprime l’enregistrement d’une session libérée. Une session non libérée répond 409 `session must be cleaned before delete (state=…)`. Consigné dans le ledger d’audit comme `sessions.run.deleted`, dans la transaction de la suppression |
+| `GET` | `/runs/{ref}/diff` | Branche du worktree d’une session comparée à son point de départ : `branch`, `base`, `head` et `files` modifiés (`path`, `status`). 404 sans worktree |
+| `GET` | `/runs/{ref}/diff/file?path=` | Texte d’un chemin à `base` et à `head` (`original`, `modified`, chacun limité au plus petit de `max_read_bytes` du workspace et de 64 KiB) |
 
 Pour les appels Code Mode de Codex dont les arguments de plan ne sont pas conservés dans le rollout, Activity lit aussi la dernière notification `turn/plan/updated` déjà reçue par le pont actif. Un rechargement du navigateur utilise la même session côté serveur ; aucun app-server n’est lancé pour un rafraîchissement. Une fois le handle actif disparu, seules les données conservées par Codex lui-même peuvent être lues.
 
@@ -107,7 +114,7 @@ profils par référence et compte les fichiers transportés, et une session en �
 a créé :
 
 - 409 pour une session en cours d’exécution, une session à laquelle ont été donnés des secrets
-  du vault, un identifiant de dépôt ou un jeton de registre de paquets (on ne peut pas prouver
+  du vault, un identifiant de dépôt, un identifiant géré ou un jeton de registre de paquets (on ne peut pas prouver
   que ce qu’elle a affiché en est exempt), une ligne dont le home n’appartient pas à son
   profil, un identifiant de conversation déjà lié à une autre session sous la cible, une cible
   qui détient une version différente de la conversation, une cible d’un autre outil, ou un
@@ -122,23 +129,24 @@ s’y appliquent. Une session qui n’a pas encore de conversation se déplace s
 transporter et redémarre sur la cible.
 
 `GET /runs/{ref}/handoff` et `POST /runs/{ref}/handoff` continuent dans un autre outil, là où
-aucune reprise native n’existe. Ils lisent la conversation stockée d’une session Claude Code, Codex, Gemini CLI ou OpenCode (une session
-Grok répond 422). La session peut être `stopped`, `failed`, `running` ou `idle` ; une session qui n’a pas
-démarré répond 409. L’aperçu lit une session en cours d’exécution telle qu’elle est. Le POST arrête d’abord
-une session en cours d’exécution, comme le fait `POST /runs/{ref}/stop`, et lit sa conversation une fois son
-outil terminé ; tout refus qui n’a pas besoin de l’arrêt (le profil cible, les secrets du vault, un
-identifiant de dépôt) vient avant lui, et un refus après l’arrêt indique que la session a été arrêtée et peut
-être reprise. Codex est lu depuis son rollout, Gemini CLI depuis son journal de chat et OpenCode par son
-propre `opencode export`, lancé une fois et hors ligne sous le profil de la session. L’aperçu
-est généré à partir de la conversation stockée sans modèle, afin que la personne puisse le
-relire et le modifier, et chaque lecture en est consignée dans le ledger d’audit sous
-`sessions.run.handoff_preview`. Le POST démarre une nouvelle session dans le profil choisi,
-dans le même workspace et sous le même template, dont le premier tour est le `summary` relu
-(généré s’il est absent) et le chemin du transcript, écrit sous le home de configuration du
-profil cible sous un nom qui lui est propre. Le transcript porte les messages en entier
-jusqu’à 256 KiB chacun, les appels et résultats d’outils abrégés, et indique combien
-d’enregistrements il n’a pas pu lire. Le nouveau run indique `handoff_of`, et le ledger de
-l’original gagne un événement `handed_off`. La réponse porte `summary_state` :
+aucune reprise native n’existe. Ils lisent la conversation stockée d’une session Claude Code,
+Codex, Gemini CLI ou OpenCode (une session Grok répond 422). La session peut être `stopped`,
+`failed`, `running` ou `idle` ; une session qui n’a pas démarré répond 409. L’aperçu lit une
+session en cours d’exécution telle qu’elle est. Le POST arrête d’abord une session en cours
+d’exécution, comme le fait `POST /runs/{ref}/stop`, et lit sa conversation une fois son outil
+terminé ; tout refus qui n’a pas besoin de l’arrêt (le profil cible, les secrets du vault, un
+identifiant de dépôt) vient avant lui, et un refus après l’arrêt indique que la session a été
+arrêtée et peut être reprise. Codex est lu depuis son rollout, Gemini CLI depuis son journal de
+chat et OpenCode par son propre `opencode export`, lancé une fois et hors ligne sous le profil de
+la session. L’aperçu est généré à partir de la conversation stockée sans modèle, afin que la
+personne puisse le relire et le modifier, et chaque lecture en est consignée dans le ledger
+d’audit sous `sessions.run.handoff_preview`. Le POST démarre une nouvelle session dans le profil
+choisi, dans le même workspace et sous le même template, dont le premier tour est le `summary`
+relu (généré s’il est absent) et le chemin du transcript, écrit sous le home de configuration du
+profil cible sous un nom qui lui est propre. Le transcript porte les messages en entier jusqu’à
+256 KiB chacun, les appels et résultats d’outils abrégés, et indique combien d’enregistrements il
+n’a pas pu lire. Le nouveau run indique `handoff_of`, et le ledger de l’original gagne un
+événement `handed_off`. La réponse porte `summary_state` :
 
 | `summary_state` | Signification |
 |---|---|
@@ -149,8 +157,8 @@ l’original gagne un événement `handed_off`. La réponse porte `summary_state
 
 `first_turn` n’est présent que lorsque l’état n’est pas `delivered`, car il nomme le chemin de
 la pièce jointe. La conversation source est refusée avec 409 lorsque sa session a reçu des
-secrets du vault, un identifiant de dépôt ou un jeton de registre de paquets, parce qu’un
-handoff l’envoie à un autre fournisseur, et avec 422 au-delà de 256 MiB ou lorsqu’elle
+secrets du vault, un identifiant de dépôt, un identifiant géré ou un jeton de registre de paquets,
+parce qu’un handoff l’envoie à un autre fournisseur, et avec 422 au-delà de 256 MiB ou lorsqu’elle
 contient un seul enregistrement de plus de 32 MiB.
 
 ### Option worktree
@@ -160,21 +168,22 @@ contient un seul enregistrement de plus de 32 MiB.
 session travaille dans un nouveau worktree et une nouvelle branche de ce dépôt
 (`workspace_path` est le worktree ; le run indique `worktree_branch`). Absent, null
 ou false conserve le comportement existant. Le moteur répond 422 pour un workspace
-sans worktree Git, hors de la racine du dépôt, sans commit, en lecture seule ou
-avec des dossiers en lecture seule, dont la configuration Git nomme un filtre ou
-inclut un fichier, pour une isolation non native ou un lancement sans workspace ;
-503 si le nœud n’a pas de répertoire de worktrees. `POST /runs/{ref}/resume`
+qui n’est pas un worktree Git, qui n’est pas la racine du dépôt, qui n’a pas de commit,
+qui est en lecture seule ou qui a des dossiers en lecture seule, dont la configuration Git nomme
+un filtre ou inclut un fichier, pour une isolation non native, et pour un lancement sans
+workspace ; et 503 si le nœud n’a pas de répertoire de worktrees. `POST /runs/{ref}/resume`
 retourne dans le même worktree.
 
-`POST /runs/{ref}/cleanup` accepte un body facultatif `{"discard_worktree": true}`.
-Sans body, le comportement reste inchangé ; seul true explicite confirme.
-Une session avec worktree est libérée si sa branche est fusionnée dans la branche
-courante du workspace, que le worktree est sur cette branche et n’a aucun fichier
-non commité. Sinon l’appel est refusé avec 409 (travail non fusionné, HEAD détachée,
-worktree inaccessible) et le run reste arrêté. Réessayer avec `discard_worktree`
-supprime malgré tout worktree et branche ; si le worktree est inaccessible, cela
-libère la session en laissant le worktree en place. L’événement `cleaned` du ledger
-consigne le résultat avec le sommet de branche.
+`POST /runs/{ref}/cleanup` accepte un body facultatif `{"discard_worktree": true}` ;
+sans body, l’appel reste celui qu’il a toujours été, et le serveur accepte quand même
+n’importe quel body : seul un `true` explicite confirme. Une session avec worktree est libérée
+si sa branche est fusionnée dans la branche courante du workspace, que le worktree est sur
+cette branche et qu’il n’a aucun fichier non commité ; sinon l’appel est refusé avec 409
+(travail non fusionné, HEAD détachée, worktree inaccessible) et le run reste arrêté. Il peut
+alors être répété avec `discard_worktree` pour supprimer malgré tout le worktree et la branche
+ou, pour un worktree inaccessible au nœud, pour libérer la session en laissant le worktree en
+place. L’événement `cleaned` du ledger indique ce qui est arrivé au worktree, avec le sommet de
+branche.
 
 ### Approuver la commande de préparation d’un dossier
 
@@ -218,29 +227,30 @@ Avec `worktree`, `POST /runs` accepte aussi `worktree_from`, facultatif : un
 identifiant complet de commit (40 ou 64 chiffres hexadécimaux minuscules) ou une
 branche locale du dépôt du workspace. Le nouveau worktree et sa propre nouvelle
 branche démarrent là plutôt qu’au commit courant du workspace ; la branche nommée
-et le checkout ne bougent pas. Un destinataire ouvre ainsi le travail d’un handoff,
-dont le contenu peut porter `branch` et `sha`. Git résout la valeur en identifiant
-complet de commit, le seul utilisé. Avant toute création, le moteur répond 422
-pour un commit ou une branche absent, une expression de révision, une plage, une
-option ou `worktree_from` sans `worktree`. Sans valeur, le lancement part du commit
-courant du workspace comme auparavant.
+et le checkout du workspace ne bougent pas. C’est ainsi qu’un destinataire ouvre le travail
+qu’un handoff désigne, dont le contenu peut porter `branch` et `sha` facultatifs. Git résout la
+valeur en identifiant complet de commit, et seul cet identifiant est utilisé. Avant toute
+création, le moteur répond 422 pour un commit que le dépôt ne contient pas, une branche qu’il
+n’a pas, une expression de révision, une plage, une option, et pour un `worktree_from` sans
+`worktree`. Sans valeur, le lancement part du commit courant du workspace comme auparavant.
 
 `GET /runs/{ref}/diff` liste les chemins modifiés par la branche du worktree depuis
-sa divergence du commit courant du workspace (`base` est leur base de fusion,
+son départ du commit courant du workspace (`base` est leur base de fusion,
 `head` le sommet de branche, tous deux des identifiants complets ; 200 chemins au
 maximum, `truncated` indique s’il y en a davantage). `GET /runs/{ref}/diff/file?path=`
-retourne le texte d’un chemin à `base` et `head`, vide si le fichier n’y existe pas.
-Il lit les objets Git commitées avec des commandes plumbing : aucune modification
-non commitée n’y figure, et la permission est celle de lecture du run. Les règles
+retourne le texte d’un chemin à `base` et à `head`, vide si le fichier n’existe pas à cet endroit.
+Il lit les objets Git commités avec des commandes plumbing : aucune modification
+non commitée n’y figure, et la permission exigée est celle de lecture du run. Les règles
 de fichiers du workspace restent applicables : un chemin hors des sous-chemins
 autorisés n’est pas listé et répond 404 ; une posture DLP qui refuse répond 403
 (avec audit comme une lecture de fichier workspace) ; un fichier dépassant 16 MiB
-répond 413. Une session sans worktree ou d’un autre tenant répond 404 ; une branche
-disparue ou sans historique commun répond 409. `worktree_from` répond aussi 422
-pour un commit qu’aucune branche, étiquette ou branche distante du dépôt ne retient.
+répond 413. Une session sans worktree, ou un run d’un autre tenant, répond 404 ; une branche
+disparue ou sans historique commun avec le workspace répond 409.
+`worktree_from` répond aussi 422 pour un identifiant de commit qu’aucune branche, étiquette ou
+branche distante du dépôt ne retient.
 
 Reconnecter après un attach coupé est `GET …/attach?from={last+1}` sur le
-**même** processus vivant. Après perte de processus, attach dit que la session
+**même** processus vivant. Après perte de processus, attach indique que la session
 n’est pas vivante. Resume démarre une nouvelle génération. Reconnect n’invente
 pas un processus de remplacement (SDD R04).
 
@@ -312,16 +322,21 @@ restent des flux distincts.
 
 **Claude Code refuse un terminal sur stdin.** Sa forme `--print` avec
 stream-json répond `Error: Input must be provided either through stdin or as a
-prompt argument when using --print` et sort 1 sans un seul cadre de protocole.
-Un terminal est ce dont une forme interactive a besoin ;
-`sessions.NewPTYRunner()` reste disponible sous Linux pour cela. L’isolation
-container et sandbox reste refusée dans les deux cas.
+prompt argument when using --print` et sort avec le code 1 sans un seul cadre de protocole.
+Les serveurs app de Codex et l’agent stdio de Grok parlent JSON-RPC sur les mêmes flux. Un
+terminal est ce dont une forme interactive a besoin ; `sessions.NewPTYRunner()` reste disponible
+sous Linux pour cela, avec stdin/stdout sur un PTY local brut et stderr sur un tube. Aucun des deux
+n’exécute d’isolation container ou sandbox. Un hôte avec podman ou Docker ajoute un
+runner container pour `isolation=container` sur la forme stdio ; sandbox reste refusée
+(voir [Topologie 4](/fr/how-to/run-claude-code-with-olivares/#topologie-4--olivares-natif-claude-dans-un-conteneur-par-session)).
 
 Le contrat de driver vit dans `modules/sessions/cliruntime`. Types : `claude`,
 `codex`, `grok`. La conformité s’exécute toujours contre un faux en processus
-et contre un pair PTY local. Lorsque `claude` / `codex` / `grok` sont sur PATH,
-un test distinct possède le binaire réel, l’arrête et enregistre la sortie. Il
-n’envoie pas un tour de modèle.
+et contre un pair local sur les deux transports. Lorsque `claude` / `codex` / `grok` sont sur PATH,
+une batterie distincte pilote l’ensemble du contrat contre le binaire réel — lancement, attach,
+entrée, sortie, reconnexion, arrêt, reprise — et n’envoie aucun tour de modèle : chaque poignée
+de main est une poignée de main de protocole, et chaque lancement reçoit un HOME et un home de
+configuration neufs.
 
 ## Pages connexes
 

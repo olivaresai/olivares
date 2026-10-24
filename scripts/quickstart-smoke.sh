@@ -85,13 +85,40 @@ assert_eq() {
   echo "    ok: $1 = $2"
 }
 
-# wait_health: poll /healthz until the engine answers (or give up).
+# wait_health: poll /healthz until the engine answers. 0 healthy, 1 gave up, 2 the engine
+# ($PID) exited, which ends the wait at once instead of burning the budget on a dead child.
+# ⛔ THE BUDGET IS 120 s, NOT 20 (dev#2775). The nightly died twice with "never became healthy"
+#    because the CI runner stalled 8-10 s at a random phase of the boot (key generation one
+#    day, store migrations the next); the binary boots in about 7 s on one pinned CPU. A
+#    budget that a slow runner can exceed grades the runner, not the quickstart. Same bound
+#    as first-hour-smoke.sh.
+SMOKE_HEALTH_POLLS="${SMOKE_HEALTH_POLLS:-240}"
+# The waits for ingestion after the engine is healthy had the same 10 s (40 x 0.25 s), so a runner
+# stall there only moved the nightly failure to a different message. Same 120 s, in 0.25 s polls;
+# a healthy run leaves each loop at the first match.
+SMOKE_INGEST_POLLS="${SMOKE_INGEST_POLLS:-480}"
 wait_health() {
-  for _ in $(seq 1 80); do
-    curl -sf "$BASE/healthz" >/dev/null 2>&1 && return 0
-    sleep 0.25
+  for _ in $(seq 1 "$SMOKE_HEALTH_POLLS"); do
+    # Liveness before AND after the probe: an answer from a stranger on the port is not ours
+    # when our child is already gone (lib/engine-boot.sh, checks 2 and 3).
+    kill -0 "$PID" 2>/dev/null || return 2
+    if curl -sf "$BASE/healthz" >/dev/null 2>&1; then
+      kill -0 "$PID" 2>/dev/null && return 0
+      return 2
+    fi
+    sleep 0.5
   done
   return 1
+}
+# wait_health_or_fail LOG GAVE_UP_MSG: wait_health, and on failure print the engine log and
+# say which of the two ways it failed.
+wait_health_or_fail() {
+  local rc=0
+  wait_health || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  cat "$1" >&2
+  [ "$rc" -eq 2 ] && fail "the engine exited during boot (log above)"
+  fail "$2"
 }
 
 # graph_field FIELD: prints a python-computed scalar over /graph (TOKEN+TENANT in env).
@@ -125,7 +152,7 @@ TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
   --listen "127.0.0.1:$PORT" --grpc-listen "127.0.0.1:$GRPC_PORT" \
   --data-dir "$WORK/demo" >"$WORK/demo.log" 2>&1 &
 PID=$!
-wait_health || { cat "$WORK/demo.log" >&2; fail "demo engine never became healthy"; }
+wait_health_or_fail "$WORK/demo.log" "demo engine never became healthy"
 
 # The quickstart's exact login + tenant-resolve commands.
 TOKEN="$(printf '%s' '{"email":"demo@olivares.local","password":"olivares-demo-estate"}' | curl -sf -X POST "$BASE/v1/auth/login" \
@@ -256,7 +283,7 @@ TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
   --listen "127.0.0.1:$PORT" --grpc-listen "127.0.0.1:$GRPC_PORT" \
   --data-dir "$WORK/real" >"$WORK/real1.log" 2>&1 &
 PID=$!
-wait_health || { cat "$WORK/real1.log" >&2; fail "real engine never became healthy"; }
+wait_health_or_fail "$WORK/real1.log" "real engine never became healthy"
 
 SETUP_TOKEN="$(grep -oE 'olst_[A-Z0-9]+' "$WORK/real1.log" | head -1)"
 [ -n "$SETUP_TOKEN" ] || fail "no one-time setup token on stdout"
@@ -287,7 +314,7 @@ OLIVARES_SOURCES_CONFIG="$WORK/sources.json" \
   --listen "127.0.0.1:$PORT" --grpc-listen "127.0.0.1:$GRPC_PORT" \
   --data-dir "$WORK/real" >"$WORK/real2.log" 2>&1 &
 PID=$!
-wait_health || { cat "$WORK/real2.log" >&2; fail "real engine never came back after restart (regression: second-boot deadlock?)"; }
+wait_health_or_fail "$WORK/real2.log" "real engine never came back after restart (regression: second-boot deadlock?)"
 # Moved env-config sources through the durable-roster reconcile, whose boot
 # line is "ingest: sources wired from the durable roster added=N" (boot.go); the
 # legacy per-source "ingest: wired source" line is kept as an alternate so the
@@ -305,12 +332,13 @@ TOKEN="$(printf '%s' '{"email":"admin@local","password":"correct-horse-battery-s
 
 note "PATH B: assert pgAudit reaches the shared resource catalog and ingestion counters"
 RESOURCES=''
-for _ in $(seq 1 40); do
+for _ in $(seq 1 "$SMOKE_INGEST_POLLS"); do
   RESOURCES="$(api_get '/v1/m/inventory/entities?kind=resource&limit=200')" || fail 'shared resource catalog read failed'
   RESOURCE_COUNT="$(printf '%s' "$RESOURCES" | python3 -c 'import sys,json;print(len(json.load(sys.stdin)["items"]))')"
   [ "$RESOURCE_COUNT" -ge 3 ] && break
   sleep 0.25
 done
+[ "$RESOURCE_COUNT" -ge 3 ] || fail "only $RESOURCE_COUNT of 3 pgAudit resources reached the shared catalog (gave up after $SMOKE_INGEST_POLLS polls)"
 printf '%s' "$RESOURCES" | python3 -c '
 import json,sys
 rows=json.load(sys.stdin)["items"]
@@ -318,7 +346,7 @@ assert sorted(r["ref"] for r in rows)==["salesdb.public.customers","salesdb.publ
 assert all("pg_audit" in r["signal_sources"] and r["occurrence_count"]>=1 for r in rows), rows
 '
 INGEST_OK=''
-for _ in $(seq 1 40); do
+for _ in $(seq 1 "$SMOKE_INGEST_POLLS"); do
   INGEST="$(api_get '/v1/m/observability/ingestion-health')" || fail 'shared ingestion-health read failed'
   if printf '%s' "$INGEST" | python3 -c '
 import json,sys
@@ -337,13 +365,13 @@ assert_eq 'real-path identity capability unchanged' "$(capability_status '/v1/m/
 if [ "$GRAPH_STATUS" = 200 ]; then
 note "PATH B: assert the real pgAudit edges materialize in the R/RW graph"
 B_EDGES=0
-for _ in $(seq 1 40); do
+for _ in $(seq 1 "$SMOKE_INGEST_POLLS"); do
   B_EDGES="$(api_get '/v1/m/accessmap/graph?limit=200' \
     | python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("edges",[])))' 2>/dev/null || echo 0)"
   [ "$B_EDGES" -ge 3 ] 2>/dev/null && break
   sleep 0.25
 done
-GRAPH="$(api_get '/v1/m/accessmap/graph?limit=200')"
+GRAPH="$(api_get '/v1/m/accessmap/graph?limit=200')" || fail 'real-path graph read failed'
 read -r B_EDGES B_CLEAN B_PGAUDIT <<EOF
 $(printf '%s' "$GRAPH" | python3 -c '
 import sys,json

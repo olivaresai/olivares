@@ -197,7 +197,7 @@
     "attestedSeq": "証明済み seq",
     "headSeq": "台帳ヘッド seq {{seq}}",
     "reverifyNote": "各イベントは seq・hash・prev_hash を保持しているため、読み手は外部の WORM ストアに対してリンクをオフラインで再検証できます。",
-    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+    "chainEmptyNote": "検証するものはまだありません。台帳にイベントがありません。"
   },
   "empty": {
     "enforcement": {

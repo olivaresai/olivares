@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { Building2, Check, ChevronsUpDown } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { type RefObject, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
@@ -33,19 +33,12 @@ interface TenantOption {
   sub?: string
 }
 
-/**
- * Organization switcher. A superadmin can move across all provisioned orgs (by
- * name); a member switches among the tenants it belongs to. The active tenant is
- * propagated as X-Olivares-Tenant on every request. (The engine does not expose
- * org NAMES to non-superadmins — minimum data — so members see a short id + role.)
- */
-export function TenantSwitcher({ className }: { className?: string } = {}) {
-  const { t } = useTranslation(['auth', 'common', 'errors'])
+/** The organizations this principal may switch among, and the one in force. */
+export function useTenantChoices() {
+  const { t } = useTranslation(['auth'])
   const { grants, activeTenant, setActiveTenant, isSuperadmin } = useAuth()
 
   const orgs = useOrgs()
-  const [showRecovery, setShowRecovery] = useState(false)
-  const trigger = useRef<HTMLButtonElement>(null)
   // A PostgreSQL install without the tenant inventory (an upgrade, typically) answers the
   // organization list 501 cross_tenant_admin_pool_not_configured. The read is asked once
   // per session (useOrgs); the switcher says once, where the list would be, how to enable
@@ -68,23 +61,122 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
           sub: t(`auth:roles.${g.role}`, { defaultValue: String(g.role) }),
         }))
 
-  // Nothing to show: a non-superadmin with no memberships.
-  if (
-    options.length === 0 &&
-    (!isSuperadmin || !PANEL_EXTENSIONS.useOrganizationInventory)
-  )
-    return null
-
+  const inventory = isSuperadmin && !!PANEL_EXTENSIONS.useOrganizationInventory
   const active = options.find((o) => o.tenant === activeTenant)
-  const activeLabel =
-    active?.label ??
-    (activeTenant ? shortId(activeTenant) : t('auth:tenant.none'))
+  return {
+    options,
+    activeTenant,
+    setActiveTenant,
+    listUnavailable,
+    /** Nothing to show: a non-superadmin with no memberships. */
+    none: options.length === 0 && !inventory,
+    /** A single, fixed membership is a label, not a control. */
+    fixed: options.length <= 1 && !inventory,
+    activeLabel:
+      active?.label ??
+      (activeTenant ? shortId(activeTenant) : t('auth:tenant.none')),
+  }
+}
 
-  // A single, fixed membership is a label, not a control.
-  if (
-    options.length <= 1 &&
-    (!isSuperadmin || !PANEL_EXTENSIONS.useOrganizationInventory)
-  ) {
+type TenantChoices = ReturnType<typeof useTenantChoices>
+
+/** The organizations as menu items, and where the list cannot be read, how to enable it. */
+export function TenantMenuItems({
+  choices,
+  onRecovery,
+}: {
+  choices: TenantChoices
+  onRecovery: () => void
+}) {
+  const { t } = useTranslation(['auth', 'common'])
+  const { options, activeTenant, setActiveTenant, listUnavailable } = choices
+  return (
+    <>
+      <DropdownMenuLabel>{t('auth:tenant.switch')}</DropdownMenuLabel>
+      {options.map((o) => (
+        <DropdownMenuItem
+          key={o.tenant}
+          onSelect={() => setActiveTenant(o.tenant)}
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate" title={o.label}>
+              {o.label}
+            </span>
+            {o.sub && (
+              <span
+                className="truncate font-mono text-caption text-muted-foreground"
+                title={o.sub}
+              >
+                {o.sub}
+              </span>
+            )}
+          </span>
+          {o.tenant === activeTenant && (
+            <Check className="ml-auto text-accent-text" />
+          )}
+        </DropdownMenuItem>
+      ))}
+      {listUnavailable ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="h-auto max-w-80 flex-col items-start gap-0 py-1.5"
+            data-slot="org-list-unavailable"
+            onSelect={onRecovery}
+          >
+            <span>{t('auth:tenant.listUnavailable')}</span>
+            <span className="text-caption text-muted-foreground">
+              {t('common:actions.learnMore')}
+            </span>
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  )
+}
+
+/** How to enable the organization list, opened from its menu item; focus returns to
+ * the control that opened the menu. */
+export function OrgListUnavailableContent({
+  trigger,
+}: {
+  trigger: RefObject<HTMLButtonElement | null>
+}) {
+  const { t } = useTranslation(['auth', 'errors'])
+  return (
+    <DialogContent
+      onCloseAutoFocus={(event) => {
+        event.preventDefault()
+        trigger.current?.focus()
+      }}
+    >
+      <DialogHeader>
+        <DialogTitle>{t('auth:tenant.label')}</DialogTitle>
+        <DialogDescription>
+          {withInlineCommands(
+            t('errors:codes.cross_tenant_admin_pool_not_configured'),
+          )}
+        </DialogDescription>
+      </DialogHeader>
+    </DialogContent>
+  )
+}
+
+/**
+ * Organization switcher. A superadmin can move across all provisioned orgs (by
+ * name); a member switches among the tenants it belongs to. The active tenant is
+ * propagated as X-Olivares-Tenant on every request. (The engine does not expose
+ * org NAMES to non-superadmins — minimum data — so members see a short id + role.)
+ */
+export function TenantSwitcher({ className }: { className?: string } = {}) {
+  const choices = useTenantChoices()
+  const [showRecovery, setShowRecovery] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+
+  if (choices.none) return null
+  const { activeLabel } = choices
+
+  if (choices.fixed) {
     return (
       <span
         className={cn(
@@ -132,63 +224,14 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
             if (showRecovery) event.preventDefault()
           }}
         >
-          <DropdownMenuLabel>{t('auth:tenant.switch')}</DropdownMenuLabel>
-          {options.map((o) => (
-            <DropdownMenuItem
-              key={o.tenant}
-              onSelect={() => setActiveTenant(o.tenant)}
-            >
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate" title={o.label}>
-                  {o.label}
-                </span>
-                {o.sub && (
-                  <span
-                    className="truncate font-mono text-caption text-muted-foreground"
-                    title={o.sub}
-                  >
-                    {o.sub}
-                  </span>
-                )}
-              </span>
-              {o.tenant === activeTenant && (
-                <Check className="ml-auto text-accent-text" />
-              )}
-            </DropdownMenuItem>
-          ))}
-          {listUnavailable ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="h-auto max-w-80 flex-col items-start gap-0 py-1.5"
-                data-slot="org-list-unavailable"
-                onSelect={() => setShowRecovery(true)}
-              >
-                <span>{t('auth:tenant.listUnavailable')}</span>
-                <span className="text-caption text-muted-foreground">
-                  {t('common:actions.learnMore')}
-                </span>
-              </DropdownMenuItem>
-            </>
-          ) : null}
+          <TenantMenuItems
+            choices={choices}
+            onRecovery={() => setShowRecovery(true)}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
-      {listUnavailable && (
-        <DialogContent
-          onCloseAutoFocus={(event) => {
-            event.preventDefault()
-            trigger.current?.focus()
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{t('auth:tenant.label')}</DialogTitle>
-            <DialogDescription>
-              {withInlineCommands(
-                t('errors:codes.cross_tenant_admin_pool_not_configured'),
-              )}
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
+      {choices.listUnavailable && (
+        <OrgListUnavailableContent trigger={trigger} />
       )}
     </Dialog>
   )

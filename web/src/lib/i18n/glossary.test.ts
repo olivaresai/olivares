@@ -28,6 +28,8 @@ type Language = {
   pinned: [id: string, term: string][]
   /** English text that is right as it is: a JSON example, a list of language names, a product name. */
   englishAllowed: Set<string>
+  /** Words from which an untranslated English text counts as a sentence (default PROSE_MIN_WORDS). */
+  proseMinWords?: number
 }
 
 const zhRetiredProvider = '提供方|服务商' // language-data: zh retired provider words, rejected
@@ -43,9 +45,71 @@ const zhExecute = '执行' // language-data: zh word for execute
 const zhEstate = '资产' // language-data: zh word for the Estate module label
 const zhEstateDomain = '资产域' // language-data: zh word for the estate in running text
 
+const frEnvironment = 'environnement' // language-data: fr word for an environment, rejected for the Estate
+// \b is ASCII-only in JS, so it would cut «Hôtes» at the accent and read a "tes" inside:
+// the boundaries must be Unicode lookarounds.
+const frTu = /(?<![\p{L}\p{N}_])(?:tu|ta|tes|ton)(?![\p{L}\p{N}_])/u // language-data: fr informal register, rejected in a vous console
+const frLazyPlural = /\p{L}\(s\)/u // language-data: fr lazy plural "(s)", rejected; a label or a count reads better
+// The fr API key spelled without "d'", rejected for the form with it.
+const frApiKey = /cl[e\u00e9]s?\s+api\b/i
+// The fr settings word the Settings module must not use.
+const frReglages = /(?<![\p{L}\p{N}_])r\u00e9glages?(?![\p{L}\p{N}_])/iu
+const frWorkspaceAbsent = 'Workspace absent de la liste' // language-data: fr sentence that leaves "workspace" in English
+const frSettingsWord = 'Paramètres' // language-data: fr word for the Settings module
+const frSettingsRejected = 'Réglages' // language-data: fr settings word the Settings module must not use
+const frLazyPluralExample = '{{count}} élément(s)' // language-data: fr plural written with "(s)"
+const frApiKeyRight = "Clé d'API" // language-data: fr API key, the pinned form
+const frApiKeyWrong = 'Clé API' // language-data: fr API key without "d'", rejected
+const frWorkspaceUnresolved = 'Espace de travail absent de la liste' // language-data: fr pinned nav:workspace.unresolved
+const frComplianceColumn = 'Conformité' // language-data: fr pinned compliance column
+const frKey = 'Clé' // language-data: fr pinned cost centre key
+
 const PROVIDER = /\bproviders?\b/i
 const AGENT = /\bagents?\b/i
 const ESTATE = /\bestate\b/i
+/** The English words the fr rules reject inside a translated sentence. */
+const WORKSPACE = /\bworkspaces?\b/i
+const COMPLIANCE = /\bcompliance\b/i
+/** The workspace word for the de rules, not a path segment such as the literal "/workspace" hint. */
+const DE_WORKSPACE = /(?<!\/)\bworkspaces?\b(?!\/)/i
+/** The tool word, not a scope literal ("tools:call") or a path segment. */
+const TOOL = /(?<!\/)\btools?\b(?![:\/])/i
+const APPROVAL = /\bapprovals?\b/i
+/** A German informal form: du, dich, dir, dein..., euch, euer... (Sie is the console's form). */
+const DU_FORM = /\b(?:du|dich|dir|dein\w*|euch|euer\w*)\b/i
+/**
+ * A German du imperative: the verb that opens a sentence or a clause ("Versuche es erneut.",
+ * "... und komm hierher zurück", "...; grenze sie ein"), where the Sie form is "Versuchen Sie".
+ * A sentence opener needs more words after it, so the noun label "Versuche" or "Max. Versuche" is
+ * not one; "ich" after a clause verb marks the first person ("oder nutze ich wieder").
+ * ponytail: a list of the verbs the console uses, not every German verb; add the verb with the next du found.
+ */
+const DE_IMPERATIVE_VERBS = (
+  'Gib Lies Nimm Sieh Wähle Gehe Geh Komm Lass Halte Prüfe Überprüfe Wende Klicke Öffne ' +
+  'Schließe Speichere Lösche Füge Ergänze Erstelle Starte Stoppe Beende Setze Lege Warte ' +
+  'Beachte Melde Trage Verwende Nutze Aktiviere Deaktiviere Kehre Kopiere Entferne ' +
+  'Bestätige Genehmige Lehne Wiederhole Versuche Verbinde Führe Schreibe Erlaube Teste ' +
+  'Tippe Wechsle Ändere Passe Vergib Erhöhe Aktualisiere Ersetze Lade Schalte Ordne'
+).split(' ')
+/** Verbs that are also nouns when capitalised ("Grenze"), so only a clause can open with them. */
+const DE_IMPERATIVE_CLAUSE_ONLY = ['grenze']
+const deVerbs = (initial: (c: string) => string) =>
+  DE_IMPERATIVE_VERBS.map((v) => initial(v[0]) + v.slice(1)).join('|')
+const DE_IMPERATIVE_START = new RegExp(
+  `(?:^|[.!?:]\\s+)(?:${deVerbs((c) => c.toUpperCase())})(?![\\p{L}])(?! Sie)(?=\\s+\\S|…)`,
+  'u',
+)
+const DE_IMPERATIVE_CLAUSE = new RegExp(
+  `(?:[;,—–(]|(?<![\\p{L}])(?:und|dann|oder|bitte))\\s*(?:${deVerbs((c) => c.toLowerCase())}|${DE_IMPERATIVE_CLAUSE_ONLY.join('|')})(?![\\p{L}])(?! Sie\\b| ich\\b)`,
+  'u',
+)
+/** A statement in the first person ("Ich habe ... geprüft und genehmige ...") instructs nobody. */
+const DE_FIRST_PERSON = /^Ich(?![\p{L}])/u
+const isDeImperative = (text: string) =>
+  DE_IMPERATIVE_START.test(text) ||
+  (DE_IMPERATIVE_CLAUSE.test(text) && !DE_FIRST_PERSON.test(text))
+/** A plural attached to its noun as a bracketed suffix, such as "Frame(s)" or "Ergebnis(se)". A unit in its own brackets ("Fenster (s)", seconds) has a space before the bracket and is not a plural. */
+const LAZY_PLURAL = /\w\((?:s|e|en|n|se|er|r)\)/
 const PROXY = /prox(?:y|ies)|broker/i
 const HAN = /\p{Script=Han}/u
 /** Hangul: the script a Korean sentence is written in. */
@@ -65,6 +129,16 @@ const SUPPLIER_SENSE = new Set(['models:gpai.description'])
 const KO_SUPPLIER_SENSE = new Set([
   'models:gpai.description',
   'models:gpai.emptyHint',
+])
+/** A path a person types into the field, not a word a reader reads. */
+const FR_WORKSPACE_PATH = new Set([
+  'agentops:workspaces.create.containerTargetPlaceholder',
+])
+/** The Compliance API keeps its product name, and the permission token is typed as is. */
+const FR_COMPLIANCE_NAME = new Set([
+  'attestation:forbidden',
+  'compliance:posture.capabilityHint.external_activity',
+  'platforms:surfaces.apiSupportDescription',
 ])
 
 const LANGUAGES: Record<string, Language> = {
@@ -132,6 +206,105 @@ const LANGUAGES: Record<string, Language> = {
       'settings:general.languageHint',
       'adoption:boundary.providers.claude-platform-aws',
       'identity:references.labels.workloadIdentity',
+      'attestation:scorecard.title',
+      'attestation:airgap.gpgProv',
+      'agentops:title',
+      'agentops:create.envAllowPlaceholder',
+      'agentops:workspaces.create.allowSubpathsPlaceholder',
+      'agentops:readiness.protocol.claude_stream_json',
+      'agentops:readiness.protocol.claude_remote_control',
+      'agentops:readiness.protocol.codex_app_server',
+      'agentops:readiness.protocol.grok_acp',
+      'agentops:readiness.protocol.opencode_acp',
+      'agentops:readiness.protocol.gemini_acp',
+      'console:sso.acsUrl',
+      'console:sso.idpSsoUrl',
+      'console:sso.entityId',
+      'model-ops:documents.aibom.cyclonedx',
+      'model-ops:documents.aibom.spdx',
+      'model-ops:documents.card.markdown',
+      'first-hour:tools.claude',
+      'first-hour:tools.grok',
+      'first-hour:tools.gemini-cli',
+      'adoption:boundary.providers.microsoft-foundry',
+      'adoption:boundary.providers.amazon-bedrock',
+      'adoption:boundary.providers.vertex-ai',
+      'platforms:surfaces.columns.fedramp',
+      'eventing:dialog.sinkKinds.https',
+      'eventing:dialog.sinkKinds.splunk_hec',
+      'eventing:dialog.sinkKinds.sentinel_dcr',
+      'eventing:dialog.sinkKinds.newrelic',
+      'catalog:admission.bundlePlaceholder',
+      'common:app.name',
+      'auth:firstRun.namePlaceholder',
+    ]),
+    proseMinWords: 2,
+  },
+  de: {
+    rules: [
+      {
+        name: 'the console speaks to the reader as Sie, never du',
+        bad: (_en, own) => DU_FORM.test(withoutCode(own)),
+        example: ['Saved in your account', 'In deinem Konto gespeichert'],
+      },
+      {
+        name: 'an instruction to the reader is a Sie form, never a du imperative',
+        bad: (_en, own) => isDeImperative(withoutCode(own)),
+        example: ['Try again.', 'Es ging nicht. Versuche es erneut.'],
+      },
+      {
+        name: 'a workspace is an Arbeitsbereich, not the English word',
+        bad: (en, own) =>
+          DE_WORKSPACE.test(en) && DE_WORKSPACE.test(withoutCode(own)),
+        example: ['Workspace list', 'Workspace-Liste'],
+      },
+      {
+        name: 'a tool is a Werkzeug, not the English word',
+        bad: (en, own) => TOOL.test(en) && TOOL.test(withoutCode(own)),
+        example: ['A tool started', 'Ein Tool gestartet'],
+      },
+      {
+        name: 'an approval is a Genehmigung; Freigabe is for release or sharing',
+        bad: (en, own) => APPROVAL.test(en) && /Freigabe/.test(own),
+        example: ['Approval', 'Freigabe'],
+      },
+      {
+        name: 'the estate is Bestand, not Umgebung',
+        bad: (en, own) => ESTATE.test(en) && own.includes('Umgebung'),
+        example: ['Estate', 'Umgebung'],
+      },
+      {
+        name: 'a counted noun is a plural key, not a (s) suffix',
+        bad: (_en, own) => LAZY_PLURAL.test(own),
+        example: ['{{count}} frame(s)', '{{count}} Frame(s)'],
+      },
+    ],
+    pinned: [
+      ['nav:items.estate', 'Bestand'],
+      ['nav:items.killswitch', 'Not-Aus'],
+      ['nav:workspace.unresolved', 'Arbeitsbereich'],
+      ['nav:personal.scope', 'Ihrem Konto'],
+      ['nav:shell.rail.session', 'Sitzung'],
+      ['nav:launcher.draftSaveFailed', 'Lassen Sie'],
+      ['common:notifications.events.toolInstalled', 'Werkzeug'],
+      ['settings:modules.lines.governance', 'Genehmigungen'],
+      ['finops:costCentres.key', 'Schlüssel'],
+      ['sessions:limit.rate', 'Versuchen Sie es'],
+      ['governance:breakGlass.activationHardwareRequired', 'kehren Sie'],
+      ['console:granular.accessReview.resultCount_one', 'Ergebnis'],
+      ['console:granular.accessReview.resultCount_other', 'Ergebnisse'],
+    ],
+    englishAllowed: new Set([
+      'catalog:editor.specPlaceholder',
+      'settings:general.languageHint',
+      // Product and standard names: Claude Platform on AWS, Anthropic's
+      // workload identity and external keys, and the RFC titles.
+      'adoption:boundary.providers.claude-platform-aws',
+      'identity:references.labels.workloadIdentity',
+      'identity:references.labels.externalKeys',
+      'identity:references.labels.prm',
+      'identity:references.labels.asMetadata',
+      'identity:references.labels.oauthSecurityBcp',
     ]),
   },
   ko: {
@@ -182,6 +355,81 @@ const LANGUAGES: Record<string, Language> = {
       'settings:general.languageHint',
     ]),
   },
+  fr: {
+    rules: [
+      {
+        name: 'a workspace is not left in English inside a sentence',
+        bad: (en, own, id) =>
+          WORKSPACE.test(en) &&
+          /workspaces?/i.test(withoutCode(own)) &&
+          !FR_WORKSPACE_PATH.has(id),
+        example: ['Workspace not in list', frWorkspaceAbsent],
+      },
+      {
+        name: 'compliance is not left in English (the Compliance API keeps its name)',
+        bad: (en, own, id) =>
+          COMPLIANCE.test(en) &&
+          /compliance/i.test(withoutCode(own)) &&
+          !FR_COMPLIANCE_NAME.has(id),
+        example: ['Compliance', 'Compliance'],
+      },
+      {
+        name: 'the estate is not an environment',
+        bad: (en, own) =>
+          ESTATE.test(en) &&
+          !/environment/i.test(en) &&
+          own.toLowerCase().includes(frEnvironment),
+        example: ['Estate', 'Environnement'],
+      },
+      {
+        name: `the Settings module is ${frSettingsWord}, not ${frSettingsRejected}`,
+        bad: (en, own) => /\bsettings\b/i.test(en) && frReglages.test(own),
+        example: ['Settings', frSettingsRejected],
+      },
+      {
+        name: 'the reader is vous, not tu',
+        bad: (_en, own) => frTu.test(own),
+        example: ['The fence you act on', 'Le fence sur lequel tu agis'],
+      },
+      {
+        name: 'a plural is not written with "(s)"',
+        bad: (_en, own) => frLazyPlural.test(own),
+        example: ['{{count}} item(s)', frLazyPluralExample],
+      },
+      {
+        name: `an API key is a ${frApiKeyRight}, not a ${frApiKeyWrong}`,
+        bad: (en, own) => /\bapi keys?\b/i.test(en) && frApiKey.test(own),
+        example: ['API key', frApiKeyWrong],
+      },
+    ],
+    pinned: [
+      ['settings:title', 'Paramètres'],
+      ['common:commandPalette.settingsGroup', 'Paramètres'],
+      ['nav:items.settings', 'Paramètres'],
+      ['nav:items.estate', 'Parc'],
+      ['estate:title', 'Parc'],
+      ['models:tabs.estate', 'Parc'],
+      ['nav:workspace.unresolved', frWorkspaceUnresolved],
+      ['nav:items.workspace-templates', 'Modèles d’espace de travail'],
+      ['platforms:surfaces.columns.compliance', frComplianceColumn],
+      ['console:activation.title', 'Activation de Business'],
+      ['finops:costCentres.key', frKey],
+      ['models:keys.kind.api_key', frApiKeyRight],
+      ['providers:create.apiKey', frApiKeyRight],
+      ['communications:cursor.fields.workspace', 'Espace de travail'],
+    ],
+    englishAllowed: new Set([
+      'catalog:editor.specPlaceholder',
+      'catalog:admission.bundlePlaceholder',
+      'settings:general.languageHint',
+      'adoption:boundary.providers.claude-platform-aws',
+      'identity:references.labels.prm',
+      'identity:references.labels.asMetadata',
+      'identity:references.labels.oauthSecurityBcp',
+      'identity:references.labels.workloadIdentity',
+      'identity:references.labels.externalKeys',
+    ]),
+  },
 }
 
 /** A text of this many English words is a sentence, not a label or a name. */
@@ -228,6 +476,49 @@ for (const [file, json] of Object.entries(files)) {
 }
 const english = catalog.get('en') ?? new Map<string, string>()
 
+describe('de gate patterns', () => {
+  it.each([
+    'Versuche es erneut.',
+    'Der Lauf schlug fehl. Öffne das Profil, um es zu prüfen.',
+    'Teste…',
+    'Gehe zu',
+    'Sitzung beendet und komm dann hierher zurück.',
+    'Die Liste ist lang; grenze sie mit den Filtern ein.',
+    'Ordne einer Klasse eine Aktion zu.',
+  ])('flags the du imperative in %j', (text) => {
+    expect(isDeImperative(text)).toBe(true)
+  })
+
+  it.each([
+    'Versuchen Sie es erneut.',
+    'Öffnen Sie das Profil, um es zu prüfen.',
+    'Versuche',
+    'Max. Versuche',
+    'Grenze aktiver Routinen',
+    'Welche Artefakte verbinde oder nutze ich wieder?',
+    'Wie bereite ich eine Bereitstellung vor und steuere sie?',
+    'Kehren Sie dann hierher zurück.',
+    'Ich habe diese Skills geprüft und genehmige, dass sie laden.',
+  ])('leaves %j alone', (text) => {
+    expect(isDeImperative(text)).toBe(false)
+  })
+
+  it.each([
+    'Frame(s)',
+    'Ergebnis(se)',
+    'Hinweis(e)',
+    'Wert(er)',
+    'Zahl(en)',
+    'Ding(r)',
+  ])('flags the bracketed plural in %j', (text) => {
+    expect(LAZY_PLURAL.test(text)).toBe(true)
+  })
+
+  it('leaves a unit in its own brackets alone', () => {
+    expect(LAZY_PLURAL.test('Fenster (s)')).toBe(false)
+  })
+})
+
 describe.each(Object.entries(LANGUAGES))(
   'glossary (%s)',
   (locale, language) => {
@@ -268,7 +559,7 @@ describe.each(Object.entries(LANGUAGES))(
         .filter(
           ([id, text]) =>
             own.get(id) === text &&
-            englishWords(text) >= PROSE_MIN_WORDS &&
+            englishWords(text) >= (language.proseMinWords ?? PROSE_MIN_WORDS) &&
             !language.englishAllowed.has(id),
         )
         .map(([id, text]) => `${locale} ${id}: ${text.slice(0, 90)}`)

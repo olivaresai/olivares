@@ -5,7 +5,12 @@ import { describe, expect, it } from 'vitest'
 import type { RunDTO } from '@/features/agentops/types'
 import { mergeSessions } from '@/features/sessions/provenance'
 import type { LiveDTO } from '@/features/sessions/types'
-import { isLiveSession, todayIsFloor, todaysCost } from './now-sessions'
+import {
+  actsForPeople,
+  dayCost,
+  dayIsFloor,
+  isLiveSession,
+} from './now-sessions'
 
 const NOW = new Date(2026, 9, 16, 15, 0).getTime()
 const at = (h: number, day = 16) => new Date(2026, 9, day, h, 0).toISOString()
@@ -60,7 +65,7 @@ describe('isLiveSession: the tile rule, one session at a time', () => {
   })
 })
 
-describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
+describe("dayCost: what today's sessions cost, never a made-up zero", () => {
   it('sums the costs of the sessions that worked since midnight', () => {
     const sessions = mergeSessions(
       [
@@ -83,7 +88,7 @@ describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
       ],
       [],
     )
-    expect(todaysCost(sessions, NOW)).toEqual({
+    expect(dayCost(sessions, NOW)).toEqual({
       sessions: 2,
       costMicroUsd: 500_000,
       unpriced: 0,
@@ -95,7 +100,7 @@ describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
       [live({ session_ref: 'a', cost_micro_usd: 0, last_event_at: at(14) })],
       [],
     )
-    expect(todaysCost(sessions, NOW)).toEqual({
+    expect(dayCost(sessions, NOW)).toEqual({
       sessions: 1,
       costMicroUsd: null,
       unpriced: 1,
@@ -114,7 +119,7 @@ describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
         run({ run_ref: 'r2', last_activity_at: at(12) }),
       ],
     )
-    const today = todaysCost(sessions, NOW)
+    const today = dayCost(sessions, NOW)
     expect(today.sessions).toBe(2)
     expect(today.costMicroUsd).toBe(1_000_000)
     expect(today.unpriced).toBe(1)
@@ -139,7 +144,7 @@ describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
       ],
     )
     expect(sessions).toHaveLength(1)
-    expect(todaysCost(sessions, NOW)).toEqual({
+    expect(dayCost(sessions, NOW)).toEqual({
       sessions: 1,
       costMicroUsd: 300_000,
       unpriced: 1,
@@ -149,16 +154,14 @@ describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
   it('midnight itself is today; a millisecond before is not', () => {
     const midnight = new Date(2026, 9, 16).getTime()
     const s = mergeSessions([live({ cost_micro_usd: 1_000 })], [])[0]!
-    expect(todaysCost([{ ...s, lastActivityMs: midnight }], NOW).sessions).toBe(
-      1,
-    )
+    expect(dayCost([{ ...s, lastActivityMs: midnight }], NOW).sessions).toBe(1)
     expect(
-      todaysCost([{ ...s, lastActivityMs: midnight - 1 }], NOW).sessions,
+      dayCost([{ ...s, lastActivityMs: midnight - 1 }], NOW).sessions,
     ).toBe(0)
   })
 
   it('nothing worked today: no sessions and no figure', () => {
-    expect(todaysCost([], NOW)).toEqual({
+    expect(dayCost([], NOW)).toEqual({
       sessions: 0,
       costMicroUsd: null,
       unpriced: 0,
@@ -166,17 +169,88 @@ describe("todaysCost: what today's sessions cost, never a made-up zero", () => {
   })
 })
 
-describe('todayIsFloor: a cut page hides today only if all it holds is today', () => {
+describe('dayIsFloor: a cut page hides today only if all it holds is today', () => {
   const t = (h: number, day = 16) => new Date(2026, 9, day, h).getTime()
   it('a complete page is never a floor', () => {
-    expect(todayIsFloor(false, [t(9)], NOW)).toBe(false)
-    expect(todayIsFloor(undefined, [t(9)], NOW)).toBe(false)
+    expect(dayIsFloor(false, [t(9)], NOW)).toBe(false)
+    expect(dayIsFloor(undefined, [t(9)], NOW)).toBe(false)
   })
   it('a cut page of today only is a floor; one that reaches yesterday is not', () => {
-    expect(todayIsFloor(true, [t(14), t(9)], NOW)).toBe(true)
-    expect(todayIsFloor(true, [t(14), t(23, 15)], NOW)).toBe(false)
+    expect(dayIsFloor(true, [t(14), t(9)], NOW)).toBe(true)
+    expect(dayIsFloor(true, [t(14), t(23, 15)], NOW)).toBe(false)
   })
   it('a row of unknown time counts as today', () => {
-    expect(todayIsFloor(true, [t(14), Number.NaN], NOW)).toBe(true)
+    expect(dayIsFloor(true, [t(14), Number.NaN], NOW)).toBe(true)
+  })
+})
+
+describe('dayCost of yesterday: the sessions whose last work was yesterday', () => {
+  it('counts the sessions that last worked between the two midnights, and no other', () => {
+    const sessions = mergeSessions(
+      [
+        live({
+          session_ref: 'today',
+          cost_micro_usd: 420_000,
+          last_event_at: at(14),
+        }),
+        live({
+          session_ref: 'yesterday',
+          cost_micro_usd: 310_000,
+          first_event_at: at(9, 15),
+          last_event_at: at(23, 15),
+        }),
+        live({
+          session_ref: 'before',
+          cost_micro_usd: 9_000_000,
+          first_event_at: at(9, 14),
+          last_event_at: at(10, 14),
+        }),
+      ],
+      [],
+    )
+    expect(dayCost(sessions, NOW, 1)).toEqual({
+      sessions: 1,
+      costMicroUsd: 310_000,
+      unpriced: 0,
+    })
+  })
+
+  it('a cut page that reaches the day before yesterday is not a floor for yesterday', () => {
+    const t = (h: number, day: number) => new Date(2026, 9, day, h).getTime()
+    expect(dayIsFloor(true, [t(14, 16), t(9, 15)], NOW, 1)).toBe(true)
+    expect(dayIsFloor(true, [t(14, 16), t(9, 14)], NOW, 1)).toBe(false)
+  })
+})
+
+describe('actsForPeople: how many people the live sessions act for', () => {
+  const session = (acts_for: RunDTO['acts_for'], run_ref: string) =>
+    mergeSessions([], [run({ run_ref, acts_for })])[0]!
+
+  it('counts each person once and no automation', () => {
+    expect(
+      actsForPeople([
+        session({ kind: 'user', user_id: 'u1' }, 'r1'),
+        session({ kind: 'user', user_id: 'u1' }, 'r2'),
+        session({ kind: 'user', user_id: 'u2' }, 'r3'),
+        session({ kind: 'automation' }, 'r4'),
+      ]),
+    ).toBe(2)
+  })
+
+  it('is unknown, never a count, while one session does not say whom it acts for', () => {
+    expect(
+      actsForPeople([
+        session({ kind: 'user', user_id: 'u1' }, 'r1'),
+        session({ kind: 'unknown', reason: 'predates the record' }, 'r2'),
+      ]),
+    ).toBeNull()
+    expect(
+      actsForPeople([
+        session({ kind: 'user', user_id: 'u1' }, 'r1'),
+        session(undefined, 'r2'),
+      ]),
+    ).toBeNull()
+    // An observed session with no launch record says nothing about whom it acts for.
+    expect(actsForPeople(mergeSessions([live()], []))).toBeNull()
   })
 })

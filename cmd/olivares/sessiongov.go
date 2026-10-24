@@ -652,6 +652,12 @@ func sessionLaunchPlanHash(intent sessions.LaunchIntent) string {
 	if intent.GitRead != "" {
 		fields = append(fields, "git-read", intent.GitRead)
 	}
+	// The managed credentials (session_credentials.go): an approval opened for these names
+	// cannot be spent on a launch given more.
+	if len(intent.Credentials) > 0 {
+		fields = append(fields, "credentials")
+		fields = append(fields, intent.Credentials...)
+	}
 	for _, s := range fields {
 		_, _ = h.Write([]byte(s))
 		_, _ = h.Write([]byte{0})
@@ -702,6 +708,9 @@ func describeLaunch(intent sessions.LaunchIntent) string {
 	}
 	if intent.GitRead != "" {
 		parts = append(parts, "reads GitHub repository "+intent.GitRead)
+	}
+	if len(intent.Credentials) > 0 {
+		parts = append(parts, "uses managed credentials "+strings.Join(intent.Credentials, ", "))
 	}
 	return strings.Join(parts, "; ") + "."
 }

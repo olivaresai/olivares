@@ -35,3 +35,6 @@ setup #1844 the first-boot hint prints raw backticks around its commands
 templates-readonly #1897 the permission strip has no effect: the page shows an enabled New template
 sessions #1843 published image predates #1784/#1785; needs a real signed-in vendor session, not the demo runtime
 agentops #2265 retake after #2268: the seed names ten sessions of three engines and the adoption plane adds eight untitled ones, not 48, which read working until #2272; judged on the 1440px capture
+workspace #2668 the canonical estate has one core workspace, and creating the second one the view selects needs owner step-up with a passkey the capture session cannot satisfy
+evals #2668 the canonical estate runs the sessions, governance and skills modules only, so no eval suite or run exists to score on the default tab
+backups #2668 the canonical estate triggers no backup: the DR route needs a passphrase and a completed job before the list has a row

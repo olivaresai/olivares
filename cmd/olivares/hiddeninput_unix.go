@@ -15,20 +15,28 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// readHiddenLine reads one line from the terminal f with echo turned off, and
-// turns echo back on afterwards, including when Ctrl-C ends the read.
-func readHiddenLine(f *os.File, r *bufio.Reader) (string, error) {
+// hideEcho turns echo off on the terminal f and returns what turns it back on.
+func hideEcho(f *os.File) (restore func(), err error) {
 	fd := int(f.Fd())
 	saved, err := unix.IoctlGetTermios(fd, ioctlGetTermios)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	hidden := *saved
 	hidden.Lflag &^= unix.ECHO
 	if err := unix.IoctlSetTermios(fd, ioctlSetTermios, &hidden); err != nil {
+		return nil, err
+	}
+	return func() { _ = unix.IoctlSetTermios(fd, ioctlSetTermios, saved) }, nil
+}
+
+// readHiddenLine reads one line from the terminal f with echo turned off, and
+// turns echo back on afterwards, including when Ctrl-C ends the read.
+func readHiddenLine(f *os.File, r *bufio.Reader) (string, error) {
+	restore, err := hideEcho(f)
+	if err != nil {
 		return "", err
 	}
-	restore := func() { _ = unix.IoctlSetTermios(fd, ioctlSetTermios, saved) }
 	defer restore()
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)

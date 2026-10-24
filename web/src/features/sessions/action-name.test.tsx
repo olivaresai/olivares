@@ -27,6 +27,44 @@ function keyShapedCopy(root: HTMLElement): string[] {
   return out
 }
 
+// dev#3120: "Write · /srv/work/…/verdict.md" pushed the Context pane
+// sideways. A path is cut in its middle: the folders shrink, the file name stays, and
+// the whole path is the hover and what a copy takes.
+describe('a path is cut in the middle, never sideways', () => {
+  const path = '/srv/work/reports/2026-10/review-0142/verdict.md'
+
+  it('keeps the file name whole and lets only the folders shrink', () => {
+    const { container } = render(<ActionName value={path} />)
+    const code = container.querySelector('code')!
+    expect(code).toHaveAttribute('title', path)
+    // Selected and copied, it is the whole path, in order.
+    expect(code.textContent).toBe(path)
+    const [head, tail] = Array.from(code.children) as HTMLElement[]
+    expect(head).toHaveClass('truncate', 'min-w-0')
+    expect(tail.textContent).toBe('/verdict.md')
+    expect(tail).toHaveClass('shrink-0')
+    // The element can shrink to its column instead of widening it.
+    expect(code).toHaveClass('max-w-full', 'min-w-0')
+  })
+
+  it('cuts the folders, not the file name, in a table cell and after a trailing slash', () => {
+    const cell = render(
+      <ActionName value={path} className="block truncate" />,
+    ).container.querySelector('code')!
+    expect(cell).toHaveClass('inline-flex')
+    expect(cell.lastElementChild?.textContent).toBe('/verdict.md')
+    const folder = render(
+      <ActionName value="/srv/work/reports/tmp/" />,
+    ).container.querySelector('code')!
+    expect(folder.lastElementChild?.textContent).toBe('/tmp/')
+  })
+
+  it('leaves a value that is not a path in one piece', () => {
+    const { container } = render(<ActionName value="web.search" />)
+    expect(container.querySelector('code')!.children).toHaveLength(0)
+  })
+})
+
 describe('the current action renders as an identifier', () => {
   it('is a code element in the machine face, with its value as the title', () => {
     const { container } = render(<ActionName value="web.search" />)

@@ -433,6 +433,8 @@ func evidencePreCommitFence(ctx context.Context, f EpochFencer, claimEpoch uint6
 // local to their modules; new consumers use this one):
 //
 //	nil                      → EvidenceFaultNone
+//	ErrCommitOutcomeUnknown  → write_error (COMMIT may have been applied; the
+//	                           unavailable cause under it is not a definite refusal)
 //	ErrAuditSpoolFull        → spool_full   (block mode refused; nothing committed)
 //	ErrNotLeader             → ledger_unavailable (standby write gate)
 //	ErrStoreUnavailable      → ledger_unavailable (backend unreachable: lost/refused
@@ -447,6 +449,10 @@ func EvidenceFaultForStoreError(err error) sdk.EvidenceFault {
 	switch {
 	case err == nil:
 		return sdk.EvidenceFaultNone
+	case errors.Is(err, ErrCommitOutcomeUnknown):
+		// Ordered first: an unknown-outcome COMMIT wraps its unavailable cause, and
+		// that cause alone would read as a definite "backend unreachable" refusal.
+		return sdk.EvidenceFaultWriteError
 	case errors.Is(err, ErrAuditSpoolFull):
 		return sdk.EvidenceFaultSpoolFull
 	case errors.Is(err, ErrNotLeader), errors.Is(err, ErrStoreUnavailable):

@@ -13,11 +13,12 @@ import (
 // businessSourceKinds are the enterprise-system connectors that belong to Business
 // (docs/editions.md): the SharePoint, SAP OData and Salesforce document sources, and
 // the ServiceNow CMDB, Oracle audit, KMIP and Claude Compliance API observation
-// sources. Community does not construct them: the Business edition adds them through
-// inProcSourceFactories and thisEdition.contentSource. This set only lets a Community
-// build say "Business" for them instead of "unknown kind". The value is the connector's
-// directory under connectors/, which scripts/check-public-counts.sh reads to know the
-// connector has an activation path in the Business edition.
+// sources, and Conjur (the NHI actuator and identity roster). Community does not
+// construct them: the Business edition adds them through inProcSourceFactories and
+// thisEdition.contentSource. This set only lets a Community build say "Business" for them
+// instead of "unknown kind". The value is the connector's name: its directory under
+// connectors/, which scripts/check-public-counts.sh reads to know the connector has an
+// activation path in the Business edition (Conjur has no directory here; see its entry).
 var businessSourceKinds = map[string]string{
 	"claude-compliance": "claude-compliance",
 	"kmip":              "kmip",
@@ -26,6 +27,9 @@ var businessSourceKinds = map[string]string{
 	"salesforce":        "salesforce",
 	"sap_odata":         "sapodata",
 	"sharepoint":        "sharepoint",
+	// Conjur (NHI actuator and identity roster) is built only by the Business overlay; this tree
+	// has no connectors/conjur directory, so the value names the overlay's connector.
+	"conjur": "conjur",
 }
 
 // businessKindUnavailable reports a Business kind this build cannot construct.

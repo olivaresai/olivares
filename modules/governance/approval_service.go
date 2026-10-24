@@ -126,6 +126,53 @@ func (a *EngineApprovals) Read(ctx context.Context, tenant model.TenantID, ref s
 	return out, err
 }
 
+// ApprovedBySession counts, for each given session, the approvals of its actions that
+// stand approved now (an approved request whose quorum no longer holds counts as
+// expired, as every other read of it does). A session with none is absent. It is the
+// read behind the session facts a console shows: one query for the whole page.
+func (a *EngineApprovals) ApprovedBySession(ctx context.Context, tenant model.TenantID, sessionRefs []string) (map[string]int64, error) {
+	out := map[string]int64{}
+	if len(sessionRefs) == 0 {
+		return out, nil
+	}
+	ctx = api.DetachRequestContext(ctx)
+	d, _, err := a.scope(tenant)
+	if err != nil {
+		return nil, err
+	}
+	err = d.View(ctx, func(sc store.Scope) error {
+		repo, err := sc.Ext(approvalKind)
+		if err != nil {
+			return err
+		}
+		pols, err := loadApprovalPolicies(ctx, sc)
+		if err != nil {
+			return err
+		}
+		now := a.module.clock.Now()
+		q := model.Query{Limit: 1000, Filters: []model.Filter{
+			{Column: colApprovalSessionRef, Op: model.OpIn, Value: sessionRefs},
+			eq(colStatus, statusApproved),
+		}}
+		for {
+			rows, page, err := repo.List(ctx, q)
+			if err != nil {
+				return err
+			}
+			for _, rec := range rows {
+				if approvalGrantStatus(rec, now, liveRiskTier(pols, rec)) == statusApproved {
+					out[rec.String(colApprovalSessionRef)]++
+				}
+			}
+			if !page.HasMore || page.Cursor == "" {
+				return nil
+			}
+			q.Cursor = page.Cursor
+		}
+	})
+	return out, err
+}
+
 // Decisions returns the immutable decision trail of one approval, the same rows
 // GET /approvals/{id}/decisions answers, for a caller inside the engine that has
 // no API credential (the local approval bridge's dual-control evidence read).

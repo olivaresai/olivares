@@ -10,8 +10,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestQueryClient } from '@/test/intel'
-import { deriveUsage } from '@/features/executive/derive'
-import { liveForTiles } from '@/features/home/home-view'
+import { isLiveSession } from '@/features/home/now-sessions'
 import { mergeSessions } from './provenance'
 import {
   r08bCliKey,
@@ -80,54 +79,30 @@ describe('08b real rows: five sessions, fifteen live rows (HU-R24)', () => {
     }
   })
 
-  it('Now counts five live sessions, and four after one is stopped', () => {
-    const live = { items: r08bLive, has_more: false }
-    const now = deriveUsage(
-      undefined,
-      liveForTiles(live, mergeSessions(r08bLive, r08bRuns)),
-    )
-    expect(now.liveNow).toBe(5)
+  // Estate's sentence counts the sessions that have not ended, one per session.
+  const running = (live: typeof r08bLive, runs: typeof r08bRuns) =>
+    mergeSessions(live, runs).filter(isLiveSession).length
+
+  it('Estate counts five running sessions, and four after one is stopped', () => {
+    expect(running(r08bLive, r08bRuns)).toBe(5)
     const runs = r08bRuns.map((r) =>
       r.run_ref === r08bStoppedRun.run_ref ? r08bStoppedRun : r,
     )
-    const after = deriveUsage(
-      undefined,
-      liveForTiles(live, mergeSessions(r08bLive, runs)),
-    )
-    expect(after.liveNow).toBe(4)
+    expect(running(r08bLive, runs)).toBe(4)
   })
 
-  it('a session idle between turns is still a live session', () => {
+  it('a session idle between turns is still a running session', () => {
     const idle = r08bLive.map((l) =>
       l.attribution === 'managed' && l.run_ref !== cliRun.run_ref
         ? { ...l, cc_state: 'idle' }
         : l,
     )
-    const now = deriveUsage(
-      undefined,
-      liveForTiles(
-        { items: idle, has_more: false },
-        mergeSessions(idle, r08bRuns),
-      ),
-    )
-    expect(now.liveNow).toBe(5)
-    expect(now.liveIdle).toBe(4)
+    expect(running(idle, r08bRuns)).toBe(5)
   })
 
-  it('a launched session whose run waits for input is counted idle, not working (#1785)', () => {
-    // The observed half still says active (its last event is recent); the run decides,
-    // as it does for a stopped run, so the tile and the list name the same state.
+  it('a launched session whose run waits for input is still running (#1785)', () => {
     const runs = r08bRuns.map((r, i) => (i === 0 ? { ...r, state: 'idle' } : r))
-    const now = deriveUsage(
-      undefined,
-      liveForTiles(
-        { items: r08bLive, has_more: false },
-        mergeSessions(r08bLive, runs),
-      ),
-    )
-    expect(now.liveNow).toBe(5)
-    expect(now.liveIdle).toBe(1)
-    expect(now.liveActive).toBe(4)
+    expect(running(r08bLive, runs)).toBe(5)
   })
 })
 

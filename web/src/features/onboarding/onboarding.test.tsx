@@ -149,6 +149,32 @@ describe('the setup wizard', () => {
     expect(screen.queryByText(/step-up|AAL3|passkey/i)).not.toBeInTheDocument()
   })
 
+  /**
+   * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the
+   * tool rows install in the secondary style, and the wizard's one next step —
+   * Start — is the control that keeps the orange.
+   */
+  it('installs every offered tool in the secondary style', async () => {
+    wrap(<OnboardingView />)
+    const installs = await screen.findAllByRole('button', { name: 'Install' })
+    expect(installs.length).toBeGreaterThanOrEqual(2)
+    for (const button of installs) {
+      expect(button.className).not.toContain('bg-accent')
+    }
+  })
+
+  it('keeps the orange on the one next step, Start, once a tool is signed in', async () => {
+    status.claude = { driver: 'claude', installed: true, signed_in: true }
+    wrap(<OnboardingView />)
+    expect(
+      (await screen.findByRole('button', { name: 'Start' })).className,
+    ).toContain('bg-accent')
+    // The tool still to install offers its Install in the secondary style.
+    expect(
+      (await screen.findByRole('button', { name: 'Install' })).className,
+    ).not.toContain('bg-accent')
+  })
+
   // The 26.10.0 wizard showed seven steps, three of them behind a passkey, for a
   // workspace that already existed, a second administrator, a source and a
   // managed-settings policy. None of that is needed for the first session.
@@ -223,8 +249,8 @@ describe('the setup wizard', () => {
   })
 
   // A key or a local model needs no Claude Code or Codex install first. Each link opens
-  // the same Providers form as a tool's "Use an API key instead", which brings the
-  // person back here once the new provider passes its test.
+  // the Providers form on that provider, which brings the person back here once the new
+  // provider passes its test.
   it('offers an API key or a local model before any tool is installed', async () => {
     wrap(<OnboardingView />)
     const install = screen.getByRole('region', {
@@ -245,16 +271,19 @@ describe('the setup wizard', () => {
   })
 
   it('offers the tool its own sign-in once it is installed', async () => {
+    const user = userEvent.setup()
     status.claude = { driver: 'claude', installed: true, signed_in: false }
     wrap(<OnboardingView />)
     expect(
       await screen.findByRole('button', { name: 'Sign in with Claude' }),
     ).toBeInTheDocument()
-    // HU2-18: the key form opens on the provider this tool runs on.
-    expect(screen.getByText('Use an API key instead')).toHaveAttribute(
-      'href',
-      expect.stringMatching(/^\/providers\?add=anthropic&returnTo=/),
+    // HU2-18, #2551: the key form opens in the sheet, on the provider this tool runs
+    // on — no page link, no reload.
+    await user.click(
+      screen.getByRole('button', { name: 'Use an API key instead' }),
     )
+    expect(screen.getByText('Anthropic')).toBeInTheDocument()
+    expect(screen.getByLabelText(/^API key/)).toHaveFocus()
     // A local model stays offered until a tool can start a session.
     expect(
       await screen.findByRole('link', { name: 'Add a local model' }),

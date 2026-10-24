@@ -12,12 +12,12 @@
     "title": "Notfallzugriff",
     "caption": "Zeitlich begrenzte Ausnahmen vom Vier-Augen-Prinzip. Jede Aktivierung, Nutzung, Aufhebung und Nachprüfung bleibt dauerhaftes Auditbeweismaterial; diese Oberfläche dient der Rechenschaft, nicht der Bequemlichkeit.",
     "forbiddenTitle": "Nicht autorisiert",
-    "forbiddenBody": "Sie sind nicht berechtigt, Break-Glass-Freigaben oder deren unveränderliche Nutzungsspuren einzusehen.",
+    "forbiddenBody": "Sie sind nicht berechtigt, Break-Glass-Genehmigungen oder deren unveränderliche Nutzungsspuren einzusehen.",
     "activateButton": "Notfallzugriff aktivieren",
-    "activationStateUnknown": "Die Aktivierung ist nicht verfügbar, bis die Konsole den aktuellen Freigabe- und Prüfstatus verifizieren kann.",
-    "activationBlockedUnreviewed": "Eine frühere Freigabe ist noch ungeprüft. Schließen Sie sie, falls sie aktiv ist, und lassen Sie die Nachprüfung durch ein anderes Benutzerkonto abschließen, bevor Sie ein neues Notfallfenster öffnen.",
+    "activationStateUnknown": "Die Aktivierung ist nicht verfügbar, bis die Konsole den aktuellen Genehmigungs- und Prüfstatus verifizieren kann.",
+    "activationBlockedUnreviewed": "Eine frühere Genehmigung ist noch ungeprüft. Schließen Sie sie, falls sie aktiv ist, und lassen Sie die Nachprüfung durch ein anderes Benutzerkonto abschließen, bevor Sie ein neues Notfallfenster öffnen.",
     "activationHumanRequired": "Ein System-Token kann keinen Notfallzugriff aktivieren. Melden Sie sich als menschliche Administration mit stabiler Identität an.",
-    "activationHardwareRequired": "Die Break-Glass-Aktivierung erfordert eine hardwareverifizierte (AAL3) Sitzung. Führe das WebAuthn-Step-up unter Identität → Privilegierte Anmeldung durch und komm dann hierher zurück.",
+    "activationHardwareRequired": "Die Break-Glass-Aktivierung erfordert eine hardwareverifizierte (AAL3) Sitzung. Führen Sie das WebAuthn-Step-up unter Identität → Privilegierte Anmeldung durch und kehren Sie dann hierher zurück.",
     "currentTitle": "Aktueller Notfallzugriff",
     "currentCaption": "Wer das Vier-Augen-Prinzip jetzt umgehen kann, für welche Aktionen und bis wann.",
     "noActive": "Kein aktiver Notfallzugriff",
@@ -36,10 +36,10 @@
     "uses": "Nutzungen",
     "useCount": "{{count}} erfasste Nutzungen",
     "useReviewPending": "Genutzt und ungeprüft",
-    "useReviewPendingHint": "{{count}} Notfallnutzungen müssen geprüft werden. Untersuchen Sie vor der Freigabe jeden Eintrag der unveränderlichen Spur.",
+    "useReviewPendingHint": "{{count}} Notfallnutzungen müssen geprüft werden. Untersuchen Sie vor der Genehmigung jeden Eintrag der unveränderlichen Spur.",
     "review": "Nachprüfung",
     "reviewPending": "Nachprüfung erforderlich",
-    "reviewPendingHint": "Diese Freigabe muss geschlossen und von einem anderen Benutzerkonto geprüft werden, bevor eine neue aktiviert werden kann.",
+    "reviewPendingHint": "Diese Genehmigung muss geschlossen und von einem anderen Benutzerkonto geprüft werden, bevor eine neue aktiviert werden kann.",
     "reviewed": "Geprüft",
     "reviewedBy": "Geprüft von",
     "reviewedAt": "Geprüft",
@@ -47,12 +47,12 @@
     "reason": "Aktivierungsbegründung",
     "notAvailable": "Nicht erfasst",
     "inspect": "Nutzungsspur prüfen",
-    "inspectGrant": "Break-Glass-Freigabe {{id}} prüfen",
-    "historyTitle": "Freigabeverlauf",
+    "inspectGrant": "Break-Glass-Genehmigung {{id}} prüfen",
+    "historyTitle": "Genehmigungsverlauf",
     "historyCaption": "Effektiver Status, Umfang, Nutzungszahl, Schließung und unabhängige Nachprüfung jedes Notfallfensters.",
     "historyEmpty": "Kein Break-Glass-Verlauf",
-    "historyEmptyHint": "Notfallfreigaben erscheinen hier, sobald erstmals eine aktiviert wird.",
-    "tableLabel": "Verlauf der Break-Glass-Freigaben",
+    "historyEmptyHint": "Notfallgenehmigungen erscheinen hier, sobald erstmals eine aktiviert wird.",
+    "tableLabel": "Verlauf der Break-Glass-Genehmigungen",
     "status": "Effektiver Status",
     "statusValue": {
       "active": "Aktiv",
@@ -62,33 +62,33 @@
     },
     "loadMore": "Weiteren Verlauf laden",
     "loadingMore": "Verlauf wird geladen…",
-    "detailTitle": "Belege der Notfallfreigabe",
-    "detailCaption": "Lebenszyklus der Freigabe und unveränderliche Nutzungsspur.",
+    "detailTitle": "Belege der Notfallgenehmigung",
+    "detailCaption": "Lebenszyklus der Genehmigung und unveränderliche Nutzungsspur.",
     "trailTitle": "Unveränderliche Nutzungsspur",
     "trailCaption": "Jede Aktion, die ohne ihr Genehmigungsquorum fortgesetzt wurde. Diese Einträge sind nur anhängbar und können weder bearbeitet noch gelöscht werden.",
-    "trailEmpty": "Diese Freigabe wurde nicht genutzt",
-    "trailEmptyHint": "Alles, was unter einer Notfallfreigabe getan wird, wird hier zur Prüfung festgehalten. Diese Freigabe wurde nie genutzt.",
+    "trailEmpty": "Diese Genehmigung wurde nicht genutzt",
+    "trailEmptyHint": "Alles, was unter einer Notfallgenehmigung getan wird, wird hier zur Prüfung festgehalten. Diese Genehmigung wurde nie genutzt.",
     "trailLabel": "Unveränderliche Break-Glass-Nutzungsspur",
     "useAction": "Aktion",
     "useSubject": "Gegenstand",
     "usedBy": "Genutzt von",
     "usedAt": "Genutzt",
     "revokeButton": "Jetzt aufheben",
-    "revokeTitle": "Diese Notfallfreigabe aufheben?",
-    "revokeBody": "Das Notfallfenster wird sofort geschlossen. Die Freigabe und alle Nutzungsbelege bleiben dauerhaft erhalten; die Nachprüfung bleibt verpflichtend.",
+    "revokeTitle": "Diese Notfallgenehmigung aufheben?",
+    "revokeBody": "Das Notfallfenster wird sofort geschlossen. Die Genehmigung und alle Nutzungsbelege bleiben dauerhaft erhalten; die Nachprüfung bleibt verpflichtend.",
     "revokeConfirm": "Notfallzugriff aufheben",
     "revokeDone": "Notfallzugriff aufgehoben",
     "reviewButton": "Nachprüfung abschließen",
     "reviewTitle": "Diese Nachprüfung abzeichnen?",
-    "reviewBody": "Ihr Vermerk und Ihre Identität werden zu dauerhaftem Auditbeweismaterial. Bestätigen Sie, dass Sie die gesamte Nutzungsspur geprüft und diese Freigabe nicht selbst aktiviert haben.",
+    "reviewBody": "Ihr Vermerk und Ihre Identität werden zu dauerhaftem Auditbeweismaterial. Bestätigen Sie, dass Sie die gesamte Nutzungsspur geprüft und diese Genehmigung nicht selbst aktiviert haben.",
     "reviewNoteInput": "Prüfvermerk",
     "reviewNoteHint": "Erforderlich — dokumentieren Sie den Ablauf und ob jede Notfallnutzung gerechtfertigt war.",
     "reviewConfirm": "Nachprüfung erfassen",
     "reviewDone": "Nachprüfung erfasst",
-    "reviewActiveBlocked": "Die Prüfung kann nicht beginnen, solange die Freigabe aktiv ist. Heben Sie sie auf oder lassen Sie sie ablaufen und untersuchen Sie anschließend die vollständige Nutzungsspur.",
+    "reviewActiveBlocked": "Die Prüfung kann nicht beginnen, solange die Genehmigung aktiv ist. Heben Sie sie auf oder lassen Sie sie ablaufen und untersuchen Sie anschließend die vollständige Nutzungsspur.",
     "reviewHumanBlocked": "Nur eine menschliche Administration mit stabiler Identität kann die Nachprüfung abschließen. Ein System-Token kann keinen Nachweis der Funktionstrennung liefern.",
-    "reviewSelfBlocked": "Funktionstrennung: Sie können eine selbst aktivierte Freigabe nicht prüfen. Ein anderes Administrationskonto muss die Spur untersuchen und abzeichnen.",
-    "reviewSeparationDenied": "Diese Prüfung wurde abgelehnt, weil die aktivierende Person ihre eigene Freigabe nicht prüfen darf. Versuchen Sie es nicht erneut; bitten Sie ein anderes Administrationskonto, die Spur zu untersuchen und die Prüfung abzuschließen.",
+    "reviewSelfBlocked": "Funktionstrennung: Sie können eine selbst aktivierte Genehmigung nicht prüfen. Ein anderes Administrationskonto muss die Spur untersuchen und abzeichnen.",
+    "reviewSeparationDenied": "Diese Prüfung wurde abgelehnt, weil die aktivierende Person ihre eigene Genehmigung nicht prüfen darf. Versuchen Sie es nicht erneut; bitten Sie ein anderes Administrationskonto, die Spur zu untersuchen und die Prüfung abzuschließen.",
     "activate": {
       "title": "Break-Glass-Notfallzugriff aktivieren",
       "body": "Öffnen Sie ein kurzzeitiges, eng begrenztes Fenster nur, wenn der normale Zwei-Personen-Ablauf nicht rechtzeitig abgeschlossen werden kann.",
@@ -111,15 +111,12 @@
       "submit": "Notfallzugriff aktivieren",
       "done": "Notfallzugriff aktiviert"
     },
-    "activationRecordingRequired": "Deine Sitzung muss aktiv aufgezeichnet werden. Andernfalls verweigert der Server die Aktivierung (412) — starte zuerst eine aufgezeichnete Sitzung."
+    "activationRecordingRequired": "Ihre Sitzung muss aktiv aufgezeichnet werden. Andernfalls verweigert der Server die Aktivierung (412) — starten Sie zuerst eine aufgezeichnete Sitzung."
   },
   "approvals": {
     "title": "Genehmigungswarteschlange",
     "caption": "Anfragen, die auf eine Entscheidung warten. Jede Genehmigung, Ablehnung und Stornierung wird festgehalten.",
     "search": "Anfragen suchen…",
-    "requestedBy": "Angefragt von",
-    "status": "Status",
-    "progress": "Genehmigungen",
     "age": "Alter",
     "expires": "Läuft ab",
     "escalates": "Eskaliert",
@@ -140,12 +137,14 @@
     "emptyPending": "Keine ausstehenden Genehmigungen",
     "emptyPendingHint": "Die Warteschlange ist leer — nichts wartet auf eine Entscheidung.",
     "approve": "Genehmigen",
-    "reject": "Ablehnen",
     "cancel": "Abbrechen",
     "viewDetail": "Details anzeigen",
     "actorHint": "Audit-Akteurkennung — niemals eine E-Mail-Adresse. Die Identität wird aus dem Verzeichnis aufgelöst und hier nicht angezeigt.",
     "expiredAt": "Abgelaufen {{time}}",
-    "request": "Anfrage"
+    "approveOnce": "Einmal genehmigen",
+    "deny": "Ablehnen",
+    "noMatch": "Keine Anfrage passt zur Suche",
+    "noMatchHint": "Leeren Sie die Suche, um alle Anfragen dieser Liste zu sehen."
   },
   "status": {
     "pending": "Ausstehend",
@@ -155,11 +154,8 @@
     "expired": "Abgelaufen"
   },
   "decide": {
-    "approveTitle": "Diese Anfrage genehmigen?",
-    "approveBody": "Ihre Genehmigung zählt zu den Genehmigungen, die diese Anfrage braucht.",
     "rejectTitle": "Diese Anfrage ablehnen?",
     "rejectBody": "Eine einzige Ablehnung beendet die Anfrage.",
-    "approveConfirm": "Genehmigen",
     "rejectConfirm": "Ablehnen",
     "note": "Notiz",
     "noteHint": "Optional.",
@@ -220,12 +216,15 @@
     "trail": "Entscheidungspfad",
     "trailCaption": "Der unveränderliche, ausschließlich anfügende Datensatz, wer wann was entschieden hat. Schreibgeschützt — er kann niemals bearbeitet oder entfernt werden.",
     "trailEmpty": "Noch keine Entscheidungen festgehalten",
-    "trailEmptyHint": "Jede Entscheidung zu dieser Freigabe — wer, wann und warum — wird hier festgehalten. Es hat noch niemand entschieden.",
+    "trailEmptyHint": "Jede Entscheidung zu dieser Genehmigung — wer, wann und warum — wird hier festgehalten. Es hat noch niemand entschieden.",
     "decisionApprove": "Genehmigt",
     "decisionReject": "Abgelehnt",
     "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & Zugriff an oder mit `olivares users create`.",
     "openIdentity": "Identität & Zugriff öffnen",
-    "cannotDecideOwn": "Sie können Ihre eigene Anfrage nicht genehmigen. Ein anderer Administrator muss entscheiden."
+    "cannotDecideOwn": "Sie können Ihre eigene Anfrage nicht genehmigen. Ein anderer Administrator muss entscheiden.",
+    "requesterCannotApprove": "Wer die Anfrage gestellt hat, kann sie nicht selbst genehmigen.",
+    "launchedBy": "Gestartet von",
+    "decidedByYou": "Sie haben diese Anfrage genehmigt. Sie wartet auf eine weitere genehmigende Person."
   },
   "policies": {
     "title": "Richtlinien",
@@ -282,7 +281,7 @@
     "matchActionHint": "Leer = passt auf jede Aktion.",
     "matchSubjectKind": "Gegenstandsart abgleichen",
     "matchSubjectKindHint": "Leer = passt auf jede Gegenstandsart.",
-    "needsBusiness": "Eine Risikostufe oder eine Anzahl Freigaben, die vom Standard der Aktion abweicht, erfordert Business. Schalten Sie diese Richtlinie aus, um sie gespeichert zu lassen.",
+    "needsBusiness": "Eine Risikostufe oder eine Anzahl Genehmigungen, die vom Standard der Aktion abweicht, erfordert Business. Schalten Sie diese Richtlinie aus, um sie gespeichert zu lassen.",
     "create": "Richtlinie erstellen",
     "save": "Änderungen speichern",
     "confirmCreateBody": "Eine aktivierte ABAC-Richtlinie schränkt den Zugriff sofort weiter ein; eine aktivierte Genehmigungsrichtlinie beginnt, für passende Aktionen menschliche Genehmigungen zu verlangen. Wird sofort wirksam.",
@@ -379,12 +378,12 @@
   },
   "computerUse": {
     "title": "Computer-Use-Governance",
-    "description": "Governance der Computer-Use-Tool-Aufrufe von Claude. Das PEP prüft jede vorgeschlagene Aktion (Klick, Eingabe, Screenshot, Scrollen) und wendet Deny-Closed-Richtlinien an.",
+    "description": "Governance der Computer-Use-Werkzeug-Aufrufe von Claude. Das PEP prüft jede vorgeschlagene Aktion (Klick, Eingabe, Screenshot, Scrollen) und wendet Deny-Closed-Richtlinien an.",
     "actionAudit": "Computer-Use-Aktion vorgeschlagen: {{action}}",
     "denied": "Computer-Use durch Richtlinie verweigert",
     "sensitiveInput": "Computer-Use-Eingabetext enthält sensible Inhalte (DLP-Klassen erkannt)",
     "responseBlocked": "Antwort zurückgehalten: Computer-Use-Eingabetext enthält sensible Inhalte",
-    "honesty": "Durchsetzung ist nur am Proxy verified-deployed. Eine benutzerdefinierte ANTHROPIC_BASE_URL umgeht dies. Computer-Use-Tools sind clientseitig: das Modell schlägt vor, der Client führt aus."
+    "honesty": "Durchsetzung ist nur am Proxy verified-deployed. Eine benutzerdefinierte ANTHROPIC_BASE_URL umgeht dies. Computer-Use-Werkzeuge sind clientseitig: das Modell schlägt vor, der Client führt aus."
   },
   "projects": {
     "title": "Claude-Projekte-Governance",
@@ -438,7 +437,7 @@
       "resources": "Ressourcen: {{value}}",
       "autonomous": "Autonom",
       "scheduled": "Geplant",
-      "truncated": "scan truncated — counts are a floor"
+      "truncated": "Scan abgeschnitten — die Zählungen sind eine Untergrenze"
     },
     "classifyButton": "Agent klassifizieren",
     "classify": {
@@ -493,7 +492,7 @@
     },
     "scope": {
       "tenant": "Mandant",
-      "workspace": "Workspace",
+      "workspace": "Arbeitsbereich",
       "user": "Benutzer"
     },
     "list": {
@@ -512,7 +511,7 @@
     "posture": {
       "title": "Wirksame Lage",
       "counts": "{{enabled}} von {{total}} Richtlinien aktiviert",
-      "workspaceRef": "Workspace",
+      "workspaceRef": "Arbeitsbereich",
       "userRef": "Benutzer",
       "defaultWorkspace": "Mandanten-Standard",
       "noUser": "Kein besitzender Benutzer",
@@ -526,7 +525,7 @@
       "origin": "Zusammengesetzt aus:",
       "none": "Keine aktivierte Richtlinie regelt diesen Geltungsbereich.",
       "failed": "Die Lage konnte nicht gelesen werden",
-      "resolvedFor": "Aufgelöst für Workspace {{workspace}} · Benutzer {{user}}",
+      "resolvedFor": "Aufgelöst für Arbeitsbereich {{workspace}} · Benutzer {{user}}",
       "stale": "der Geltungsbereich oben hat sich geändert; erneut auflösen",
       "unknownUser": "nicht beantwortbare Benutzerachse",
       "unknownUserAxis": "Benutzerachse nicht beantwortbar",
@@ -550,7 +549,7 @@
       "scopeKind": "Geltungsbereich",
       "scopeImmutable": "Nach der Erstellung unveränderlich.",
       "scopeRef": "Referenz des Geltungsbereichs",
-      "scopeRefRequired": "Eine Workspace- oder benutzerbezogene Richtlinie braucht ihre Referenz.",
+      "scopeRefRequired": "Eine Arbeitsbereich- oder benutzerbezogene Richtlinie braucht ihre Referenz.",
       "tenantScopeRef": "Eine mandantenweite Richtlinie darf keine Referenz tragen.",
       "enabled": "Richtlinie aktiviert",
       "floorToggle": "Kadenz-Untergrenze durchsetzen",
@@ -573,9 +572,9 @@
       "created": "Routine-Richtlinie erstellt",
       "updated": "Routine-Richtlinie aktualisiert",
       "keepUnreadable": "Den unlesbaren Wert unangetastet lassen",
-      "unreadableWarning": "Der gespeicherte Wert konnte nicht gelesen werden, daher verweigert diese Richtlinie derzeit grundsätzlich. Eine Liste hier zu schreiben REPARIERT die Spalte und hebt diese Verweigerung auf — wähle eine andere Option nur, wenn du genau das willst.",
-      "cronEntriesRequired": "Gib mindestens ein Cron-Muster an oder wähle die leere Zulassungsliste, um bewusst jeden Cron zu verweigern.",
-      "envsEntriesRequired": "Gib mindestens eine Umgebung an oder wähle die leere Sperrliste — die nichts sperrt."
+      "unreadableWarning": "Der gespeicherte Wert konnte nicht gelesen werden, daher verweigert diese Richtlinie derzeit grundsätzlich. Eine Liste hier zu schreiben REPARIERT die Spalte und hebt diese Verweigerung auf — wählen Sie eine andere Option nur, wenn Sie genau das wollen.",
+      "cronEntriesRequired": "Geben Sie mindestens ein Cron-Muster an oder wählen Sie die leere Zulassungsliste, um bewusst jeden Cron zu verweigern.",
+      "envsEntriesRequired": "Geben Sie mindestens eine Umgebung an oder wählen Sie die leere Sperrliste — die nichts sperrt."
     }
   },
   "empty": {
@@ -605,7 +604,7 @@
     }
   },
   "agentcoreExport": {
-    "caption": "Projiziert die Governance-Regeln dieses Mandanten als Cedar-Richtlinien auf eine AWS-AgentCore-Richtlinien-Engine. Das Planen ist ein Trockenlauf, der nichts schreibt; das Anwenden schreibt den von Ihnen geprüften Plan und unterliegt der Governance-Freigabe.",
+    "caption": "Projiziert die Governance-Regeln dieses Mandanten als Cedar-Richtlinien auf eine AWS-AgentCore-Richtlinien-Engine. Das Planen ist ein Trockenlauf, der nichts schreibt; das Anwenden schreibt den von Ihnen geprüften Plan und unterliegt der Governance-Genehmigung.",
     "planTitle": "Export planen",
     "modeLabel": "Durchsetzungsmodus",
     "modeDefault": "Mandantenstandard (wie auf dem Host konfiguriert)",
@@ -643,15 +642,15 @@
     "confirmEngine": "Richtlinien-Engine: {{engine}}",
     "confirmHash": "Plan-Hash: {{hash}}",
     "confirmApply": "Export anwenden",
-    "pendingTitle": "Warten auf Freigabe — es wurde nichts geschrieben",
-    "pendingBody": "Die Governance hat diesen Export nicht freigegeben, daher wurde keine Richtlinie nach AgentCore geschrieben. Das ist weder ein Erfolg noch ein Fehler.",
-    "approvalRef": "Freigabereferenz: {{ref}}",
-    "pendingRetry": "Der geprüfte Plan ist unverändert und bleibt angezeigt: Wenden Sie ihn erneut an, sobald die Freigabe erteilt ist.",
+    "pendingTitle": "Warten auf Genehmigung — es wurde nichts geschrieben",
+    "pendingBody": "Die Governance hat diesen Export nicht genehmigt, daher wurde keine Richtlinie nach AgentCore geschrieben. Das ist weder ein Erfolg noch ein Fehler.",
+    "approvalRef": "Genehmigungsreferenz: {{ref}}",
+    "pendingRetry": "Der geprüfte Plan ist unverändert und bleibt angezeigt: Wenden Sie ihn erneut an, sobald die Genehmigung erteilt ist.",
     "appliedTitle": "Export angewendet",
     "appliedCount": "Richtlinien-Schreibvorgänge: {{n}}",
     "partialTitle": "Einige Richtlinien-Schreibvorgänge sind fehlgeschlagen",
     "partialCount": "Fehlgeschlagen: {{failed}} von {{total}}",
-    "partialBody": "Der Export wurde freigegeben und ausgeführt, aber einige Schreibvorgänge waren nicht erfolgreich. Die entfernte Engine hat sich verändert; berechnen Sie den Plan erneut, um zu sehen, was übrig ist.",
+    "partialBody": "Der Export wurde genehmigt und ausgeführt, aber einige Schreibvorgänge waren nicht erfolgreich. Die entfernte Engine hat sich verändert; berechnen Sie den Plan erneut, um zu sehen, was übrig ist.",
     "applyFailed": "Der Export konnte nicht angewendet werden.",
     "notWiredTitle": "Der AgentCore-Export ist in dieser Installation nicht eingerichtet",
     "notWiredBody": "Für diesen Mandanten ist kein AgentCore-Exporter konfiguriert, daher lehnt die Engine die Anfrage ab. Ein Betreiber aktiviert ihn auf dem Host, indem er diese Variable auf die Export-Konfigurationsdatei zeigen lässt:",
@@ -670,7 +669,7 @@
     "tool": "Werkzeug",
     "willRun": "Was ausgeführt wird",
     "noReview": "Diese Anfrage enthält nicht, was ausgeführt wird.",
-    "commandUnknown": "Befehl wird für dieses Tool noch nicht angezeigt",
+    "commandUnknown": "Befehl wird für dieses Werkzeug noch nicht angezeigt",
     "showAll": "Alles anzeigen",
     "showLess": "Weniger anzeigen",
     "details": "Details",
@@ -680,9 +679,23 @@
     "you": "Sie",
     "member": "Ein Mitglied",
     "apiToken": "Ein API-Token",
-    "requestSummary": "Anfrage"
+    "requestSummary": "Anfrage",
+    "matched": "Zutreffende Regel: {{rule}}",
+    "matchedDefault": "Zutreffende Regel: keine, daher gilt der Standard",
+    "matchedUnreadable": "Zutreffende Regel: eine Regel, die Sie nicht lesen dürfen",
+    "reaches": "Erreicht: {{list}}",
+    "reachFolder": {
+      "write": "{{path}} (Schreiben)",
+      "read": "{{path}} (nur Lesen)",
+      "unknown": "{{path}} (Zugriff unbekannt)"
+    },
+    "matchedUnknown": "Zutreffende Regel: eine Regel, die nicht gelesen werden konnte",
+    "reachIncomplete": "weiteres, das nicht gelesen werden konnte"
   },
   "list": {
     "loadedOnly": "Die Suche umfasst nur die bisher geladenen Zeilen; weitere Zeilen lassen sich nachladen."
+  },
+  "queue": {
+    "needsYou": "Wartet auf Sie"
   }
 }

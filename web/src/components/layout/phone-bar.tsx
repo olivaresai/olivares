@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE PHONE BAR (redesign §3.2), below 761 px: Home · Sessions · New · AI tools · More.
-// The three links are the sidebar's first three destinations, current by the same rule; New
-// is the same action as the sidebar's button and the `N` key; More opens the area
-// directory, where every other destination is. Targets are 44 × 44 px.
+// THE PHONE BAR (redesign §3.2), below 761 px: Now · Sessions · New · Tools · More.
+// The three links are the top bar's first three places, current by the same rule and drawn
+// the same way (full ink, never orange); New is the same action as the `N` key; More opens
+// the area directory, where every other page is. Targets are 44 × 44 px.
 import { Link, useRouterState } from '@tanstack/react-router'
 import { LayoutGrid, Plus } from 'lucide-react'
 import { Fragment } from 'react'
@@ -19,7 +19,7 @@ import { currentDestination, phoneBarDestinations } from './shell-destinations'
 const ITEM_CLASS = cn(
   'flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-ctl px-1 text-[11px] leading-[14px] font-medium text-text-2 outline-none',
   'focus-visible:ring-2 focus-visible:ring-focus',
-  'aria-[current=page]:text-text aria-[current=page]:[&_svg]:text-accent-text',
+  'aria-[current=page]:bg-active aria-[current=page]:font-semibold aria-[current=page]:text-text',
   '[&_svg]:size-5',
 )
 

@@ -87,8 +87,11 @@ func TestDRBackupInventory(t *testing.T) {
 	if m.Store.File == "" || m.Store.SHA256 == "" {
 		t.Fatalf("backup did not capture the store snapshot: %+v", m.Store)
 	}
-	if _, err := os.Stat(filepath.Join(tmp, filepath.FromSlash(m.Store.File))); err != nil {
-		t.Fatalf("store snapshot missing from the bundle: %v", err)
+	if m.Store.Encryption == "" {
+		t.Fatalf("the snapshot travels in the clear: %+v", m.Store)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, filepath.FromSlash(m.Store.File)+".enc")); err != nil {
+		t.Fatalf("sealed store snapshot missing from the bundle: %v", err)
 	}
 
 	// 3) Non-DR material is NEVER escrowed (minimal data).

@@ -87,7 +87,7 @@
       },
       "fence": {
         "label": "Fence",
-        "hint": "Der Fence, auf den du wirkst. Unter 1 lehnt die Engine ab; ein veralteter verliert gegen den aktuellen Inhaber.",
+        "hint": "Der Fence, auf den Sie wirken. Unter 1 lehnt die Engine ab; ein veralteter verliert gegen den aktuellen Inhaber.",
         "placeholder": "1"
       },
       "decision_id": {
@@ -112,10 +112,10 @@
   "create": {
     "action": "Neue Einheit",
     "title": "Neue Arbeitseinheit",
-    "description": "Erfasse eine Arbeitseinheit, für die du verantwortlich bist. Ihr Plan wird angezeigt, bevor etwas geschrieben wird; sobald sie existiert, kannst du sie als Übergabe anbieten.",
+    "description": "Erfassen Sie eine Arbeitseinheit, für die Sie verantwortlich sind. Ihr Plan wird angezeigt, bevor etwas geschrieben wird; sobald sie existiert, können Sie sie als Übergabe anbieten.",
     "workspace": "Arbeitsbereich",
-    "workspaceNone": "Hier steht dir kein Arbeitsbereich zur Verfügung. Wähle einen im Arbeitsbereich-Umschalter oder frage eine Administratorin oder einen Administrator.",
-    "workspaceError": "Die Liste der Arbeitsbereiche konnte nicht gelesen werden. Schließe dies und versuche es erneut.",
+    "workspaceNone": "Hier steht Ihnen kein Arbeitsbereich zur Verfügung. Wählen Sie einen im Arbeitsbereich-Umschalter oder fragen Sie eine Administratorin oder einen Administrator.",
+    "workspaceError": "Die Liste der Arbeitsbereiche konnte nicht gelesen werden. Schließen Sie dies und versuchen Sie es erneut.",
     "itemTitle": "Titel",
     "brief": "Beschreibung",
     "briefHint": "Was zu tun ist und warum.",
@@ -216,7 +216,7 @@
     "unknown": "Konnte nicht nachsehen",
     "reason": "Grund",
     "ttl": "TTL (Sekunden)",
-    "noWrite": "Deine Rolle kann dieses Lease nicht ändern.",
+    "noWrite": "Ihre Rolle kann dieses Lease nicht ändern.",
     "noAdmin": "Übernehmen, Widerrufen und Neusetzen erfordern Lease-Admin.",
     "actions": {
       "acquire": "Übernehmen",
@@ -226,7 +226,7 @@
       "revoke": "Widerrufen",
       "clockRebase": "Uhr neu setzen"
     },
-    "noRead": "Deine Rolle kann dieses Lease nicht lesen."
+    "noRead": "Ihre Rolle kann dieses Lease nicht lesen."
   },
   "status": {
     "draft": "Entwurf",
@@ -267,7 +267,7 @@
   },
   "truncation": {
     "label": "{{n}} Zeilen geladen; es gibt mehr",
-    "hint": "Diese Liste wird per Keyset paginiert und die Engine begrenzt eine Seite auf 200. Es werden nur die geladenen Zeilen angezeigt; grenze sie mit den Filtern ein."
+    "hint": "Diese Liste wird per Keyset paginiert und die Engine begrenzt eine Seite auf 200. Es werden nur die geladenen Zeilen angezeigt; grenzen Sie sie mit den Filtern ein."
   },
   "unavailable": {
     "title": "Konnte nicht nachsehen",

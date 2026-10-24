@@ -194,6 +194,11 @@ type LaunchSpec struct {
 	// none. An error refuses the launch. It is how a launch learns a home that does not
 	// exist until the runner makes it.
 	ScratchHome func(home string) error `json:"-"`
+	// OnStart, when set, is called once with the process id of the child as soon as the
+	// runner has started it, before the runner returns. A launch whose helpers must tell the
+	// child's processes from every other process (the Business credential broker) learns
+	// the child here, because the helpers exist before the child does.
+	OnStart func(pid int) `json:"-"`
 	// StripImageData drops the bytes of every inline image (a data URL) from the child's
 	// stdout, keeping its `data:<type>;base64,` head. Only the stored-conversation reader
 	// sets it: the tool lists every image a person attached in its history answers, and
@@ -544,6 +549,10 @@ type LaunchIntent struct {
 	// GitRead names the repository binding the child gets a read credential for
 	// (session_git_read.go): an approval opened without it cannot be spent with it.
 	GitRead string `json:"GitRead,omitempty"`
+	// Credentials names the managed credentials the child gets a way to use
+	// (session_credentials.go): names only, so an approval opened without one cannot be
+	// spent with it.
+	Credentials []string `json:"Credentials,omitempty"`
 
 	// --- The admission plane's three references. ---
 	//

@@ -117,9 +117,6 @@
     "title": "File d’approbation",
     "caption": "Les demandes qui attendent une décision. Chaque approbation, rejet et annulation est enregistré.",
     "search": "Rechercher des demandes…",
-    "requestedBy": "Demandé par",
-    "status": "Statut",
-    "progress": "Approbations",
     "age": "Ancienneté",
     "expires": "Expire",
     "escalates": "Escalade",
@@ -141,12 +138,14 @@
     "emptyPending": "Aucune approbation en attente",
     "emptyPendingHint": "La file est vide — rien n’attend de décision.",
     "approve": "Approuver",
-    "reject": "Rejeter",
     "cancel": "Annuler",
     "viewDetail": "Voir le détail",
     "actorHint": "Identifiant d’acteur d’audit — jamais une adresse e-mail. L’identité est résolue depuis l’annuaire, et non affichée ici.",
     "expiredAt": "Expirée {{time}}",
-    "request": "Demande"
+    "approveOnce": "Approuver une fois",
+    "deny": "Rejeter",
+    "noMatch": "Aucune demande ne correspond à la recherche",
+    "noMatchHint": "Effacez la recherche pour voir toutes les demandes de cette liste."
   },
   "status": {
     "pending": "En attente",
@@ -156,11 +155,8 @@
     "expired": "Expiré"
   },
   "decide": {
-    "approveTitle": "Approuver cette demande ?",
-    "approveBody": "Votre approbation compte parmi les approbations dont cette demande a besoin.",
     "rejectTitle": "Rejeter cette demande ?",
     "rejectBody": "Un seul rejet met fin à la demande.",
-    "approveConfirm": "Approuver",
     "rejectConfirm": "Rejeter",
     "note": "Note",
     "noteHint": "Facultatif.",
@@ -226,7 +222,10 @@
     "decisionReject": "Rejeté",
     "reenableNeedsAdmins": "Deux autres comptes administrateur doivent approuver. Créez-les dans Identité et accès, ou avec `olivares users create`.",
     "openIdentity": "Ouvrir Identité et accès",
-    "cannotDecideOwn": "Vous ne pouvez pas approuver votre propre demande. Un autre administrateur doit décider."
+    "cannotDecideOwn": "Vous ne pouvez pas approuver votre propre demande. Un autre administrateur doit décider.",
+    "requesterCannotApprove": "La personne qui a fait la demande ne peut pas l’approuver elle-même.",
+    "launchedBy": "Lancée par",
+    "decidedByYou": "Vous avez approuvé cette demande. Elle attend une autre approbation."
   },
   "policies": {
     "title": "Politiques",
@@ -391,12 +390,12 @@
   },
   "projects": {
     "title": "Gouvernance des projets Claude",
-    "description": "Inventaire des projets de l’organisation Anthropic, des membres et des clés API de projet via l’API Admin.",
+    "description": "Inventaire des projets de l’organisation Anthropic, des membres et des clés d’API de projet via l’API Admin.",
     "inventoried": "Projet inventorié : {{name}}",
     "archived": "Le projet est archivé : {{name}}",
     "forbiddenName": "Le nom du projet correspond à un modèle interdit : {{name}}",
     "staleProject": "Le projet dépasse la limite archive-after-days ({{days}} jours) : {{name}}",
-    "missingOrgId": "Le connecteur de projets a une clé API mais aucun organization_id configuré — l’inventaire des projets est désactivé",
+    "missingOrgId": "Le connecteur de projets a une clé d’API mais aucun organization_id configuré — l’inventaire des projets est désactivé",
     "coverageGaps": "Les fichiers de connaissances, les instructions personnalisées et les artefacts ne sont pas disponibles via l’API Admin.",
     "artifactCreated": "Événement de cycle de vie d’artefact : créé",
     "artifactShared": "Événement de cycle de vie d’artefact : partagé",
@@ -441,7 +440,7 @@
       "resources": "Ressources : {{value}}",
       "autonomous": "Autonome",
       "scheduled": "Planifié",
-      "truncated": "scan truncated — counts are a floor"
+      "truncated": "analyse tronquée — les décomptes sont un plancher"
     },
     "classifyButton": "Classer l’agent",
     "classify": {
@@ -683,9 +682,23 @@
     "you": "Vous",
     "member": "Un membre",
     "apiToken": "Un jeton API",
-    "requestSummary": "Demande"
+    "requestSummary": "Demande",
+    "matched": "Règle appliquée : {{rule}}",
+    "matchedDefault": "Règle appliquée : aucune, la valeur par défaut s’applique",
+    "matchedUnreadable": "Règle appliquée : une règle que vous ne pouvez pas lire",
+    "reaches": "Atteint : {{list}}",
+    "reachFolder": {
+      "write": "{{path}} (écriture)",
+      "read": "{{path}} (lecture seule)",
+      "unknown": "{{path}} (accès inconnu)"
+    },
+    "matchedUnknown": "Règle appliquée : une règle qui n’a pas pu être lue",
+    "reachIncomplete": "d’autres éléments illisibles"
   },
   "list": {
     "loadedOnly": "La recherche ne couvre que les lignes déjà chargées ; chargez-en davantage pour continuer."
+  },
+  "queue": {
+    "needsYou": "Vous attend"
   }
 }

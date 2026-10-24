@@ -62,8 +62,8 @@
     "empty": "Keine Läufe im Bereich.",
     "emptyHint": "Jeder Auswertungslauf im gewählten Zeitraum wird hier mit seinem Ergebnis aufgeführt. Erweitern Sie den Zeitraum oder starten Sie einen Lauf.",
     "overN": "von {{n}}",
-    "notScored": "not scored — no verdict",
-    "noBaseline": "no baseline — nothing compared"
+    "notScored": "nicht bewertet — kein Urteil",
+    "noBaseline": "keine Baseline — nichts verglichen"
   },
   "cases": {
     "title": "{{subject}} — Fallergebnisse",
@@ -161,8 +161,8 @@
     "confirmOverride": "Gate überschreiben",
     "overrideDone": "Gate überschrieben",
     "cancel": "Abbrechen",
-    "correctedRate": "Bias-corrected pass rate {{rate}} (judge sensitivity {{sens}}, specificity {{spec}}) — shown alongside the raw rate, never instead of it.",
-    "noCorrection": "No bias-corrected estimate: there is no trusted calibration to correct with, so the raw rate is unadjusted — that is not the same as the two agreeing."
+    "correctedRate": "Bias-korrigierte Trefferquote {{rate}} (Sensitivität des Richters {{sens}}, Spezifität {{spec}}) — wird neben der Rohquote angezeigt, nie an ihrer Stelle.",
+    "noCorrection": "Keine Bias-korrigierte Schätzung: Es gibt keine vertrauenswürdige Kalibrierung zum Korrigieren, daher ist die Rohquote unbereinigt. Das bedeutet nicht, dass beide übereinstimmen."
   },
   "calibration": {
     "title": "Judge-Kalibrierung",
@@ -182,12 +182,12 @@
   },
   "calibItems": {
     "title": "Reference set",
-    "description": "The human labels the judge is measured against — and the reason a report can or cannot certify.",
+    "description": "Die menschlichen Labels, an denen der Richter gemessen wird — und der Grund, warum ein Bericht zertifiziert werden kann oder nicht.",
     "run": "Run calibration",
-    "empty": "No labelled items yet",
+    "empty": "Noch keine gelabelten Einträge",
     "emptyHint": "Gelabelte Elemente sind die menschlichen Urteile, gegen die ein Kalibrierungsbericht bewertet wird. Labeln Sie einen Fall, um das erste hinzuzufügen.",
-    "distribution": "{{pass}} labelled pass · {{fail}} labelled fail",
-    "degenerate": "⛔ Every label is the same, so kappa CANNOT be computed and no report from this set can certify. Label cases of the other kind.",
+    "distribution": "{{pass}} als bestanden gelabelt · {{fail}} als nicht bestanden gelabelt",
+    "degenerate": "⛔ Alle Labels sind gleich, daher kann Kappa NICHT berechnet werden, und kein Bericht aus dieser Menge kann zertifizieren. Labeln Sie Fälle der anderen Art.",
     "humanPass": "human: pass",
     "humanFail": "human: fail",
     "unscored": "unscored",
@@ -197,8 +197,8 @@
     "pin": "Pin as baseline",
     "confirm": "Replace the baseline",
     "pinned": "Baseline pinned",
-    "replaceWarning": "⛔ There is ONE baseline per suite and subject, and it is mutable. Pinning does not add — it REPLACES whatever is currently the baseline for {{suite}} / {{subject}}. Every future regression is measured against it.",
-    "thisRunScores": "This run passed {{score}} over n={{n}}.",
-    "cannotShowCurrent": "The console cannot show what this replaces: POST /baselines is the only route the engine exposes, and the previous reference is recorded in the self-audit rather than in a readable endpoint. Pinning a WORSE run lowers the bar, which is how a quality gate stops firing without anyone disabling it."
+    "replaceWarning": "⛔ Es gibt EINE Baseline pro Suite und Subjekt, und sie ist veränderlich. Fixieren fügt nichts hinzu — es ERSETZT die aktuelle Baseline für {{suite}} / {{subject}}. Jede künftige Regression wird daran gemessen.",
+    "thisRunScores": "Dieser Lauf hat {{score}} bei n={{n}} bestanden.",
+    "cannotShowCurrent": "Die Konsole kann nicht zeigen, was dies ersetzt: POST /baselines ist die einzige Route, die die Engine bereitstellt, und die vorherige Referenz ist im Selbst-Audit statt in einem lesbaren Endpunkt festgehalten. Das Fixieren eines SCHLECHTEREN Laufs senkt die Latte — so hört ein Qualitätstor auf zu feuern, ohne dass es jemand deaktiviert."
   }
 }

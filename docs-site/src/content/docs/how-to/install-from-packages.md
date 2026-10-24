@@ -8,10 +8,10 @@ description: >-
 draft: false
 ---
 
-The next release is <!-- release -->`0.3`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release --> for the observed publication state.
+The next release is <!-- release -->`0.4`<!-- /release -->; its GitHub release is not published yet. The commands below describe the planned artifacts. Build from source until publication, then verify each artifact before use. See <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release --> for the observed publication state.
 
 :::note[Published package names]
-The Olivares <!-- release -->0.3<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
+The Olivares <!-- release -->0.4<!-- /release --> GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
 and `arm64`, with `checksums.txt`, `checksums.txt.sig` and `checksums.txt.pem`. The
 commands below use the literal `amd64` names from that release; replace `amd64` with
 `arm64` on a 64-bit ARM host. Install from those verified release assets. Repository
@@ -82,13 +82,13 @@ survive an upgrade), the data directory `/var/lib/olivares`, and the licence tex
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -350,22 +350,31 @@ drop-in:
 Unattended-Upgrade::Origins-Pattern { "origin=Olivares.AI,suite=stable,site=packages.olivares.ai"; };
 ```
 
-Use one updater per host. A host installed from the repository updates with `apt` or `dnf`;
-`olivares upgrade`, below, replaces the binary behind the package manager.
+Use one updater per host. A host installed from a package or from the repository updates with
+its package manager (`apt`, `dnf`, `apk`, or a newer package file); `olivares upgrade` refuses
+to replace the package-owned binary, as the next section says.
 
-### With `olivares upgrade`
+### `olivares upgrade` on a package install
 
-`olivares upgrade` replaces the binary in place, and the safety properties are the reason to
-prefer it over re-installing the package by hand: it **never replaces the binary until the
-downloaded candidate has been exec-probed successfully**, it keeps a timestamped backup, and
-it **reverts to that backup if the post-swap probe fails**.
+The package manager owns `/usr/bin/olivares` on every package install (deb, rpm, apk, AUR).
+Replacing that file in place would leave the package database describing a file it no longer
+has, so `olivares upgrade` refuses: it exits 2 before it downloads anything and names the
+package route. Upgrade with the package manager, as above. `olivares upgrade --check` still
+works; it shows the plan and changes nothing:
 
 ```bash
 sudo olivares upgrade --check    # what would change, without changing anything
-sudo olivares upgrade --yes      # do it
 ```
 
-Three flags matter to a packaged install specifically:
+Where no package manager owns the binary (one placed by `install.sh` or by hand),
+`olivares upgrade` replaces it in place, and the safety properties are the reason to use it:
+it **never replaces the binary until the downloaded candidate has been exec-probed
+successfully**, it keeps a timestamped backup, and it **reverts to that backup if the
+post-swap probe fails**. `--target <path>` is the operator override: it replaces the file you
+name, `/usr/bin/olivares` included, and from then on the package database no longer matches
+that file.
+
+Three flags matter to `--check` and to a `--target` run:
 
 - **`--endpoint`** — take updates from a GitHub repository you control rather than the
   default. This is the escape hatch for a mirror or a fork.
@@ -373,6 +382,9 @@ Three flags matter to a packaged install specifically:
 - **`--install-timer`** — emit an **opt-in systemd** timer and service that check for updates
   on a schedule. Nothing installs this for you; see
   [what the package does not do](#8-what-the-package-does-not-do). It is a systemd generator.
+  On a package install it refuses: `/usr/bin/olivares` belongs to the package manager, so
+  `--install-timer` exits 2 and writes no unit. Upgrade with the package manager (on the Olivares
+  appliance, `systemctl start olivares-appliance-update.service`).
 
 Note that the staging and the exec-probe happen **in the install directory, next to the
 target — not in `/tmp`**, so the `noexec` mount discussed [above](#executable-scratch-mount)
@@ -414,8 +426,9 @@ Stated plainly, because a security product that is vague here does not deserve t
 
 - **It does not add a repository.** Nothing is written to `/etc/apt/sources.list.d`,
   `/etc/yum.repos.d` or `/etc/apk/repositories`. You installed one file; only that file was
-  installed. Upgrades are yours to trigger — by a new package, by `olivares upgrade`, or by
-  adding the [package repository](#from-the-package-repository-apt-and-dnf) yourself.
+  installed. Upgrades are yours to trigger: by a new package, or by adding the
+  [package repository](#from-the-package-repository-apt-and-dnf) yourself;
+  `olivares upgrade` refuses to replace a package-owned binary.
 - **It does not start or enable the service.** systemd packages reload systemd when
   `systemctl` is present and print `systemctl enable --now`. OpenRC packages print
   `rc-service olivares start` and do not `rc-update add`. Starting remains your decision.

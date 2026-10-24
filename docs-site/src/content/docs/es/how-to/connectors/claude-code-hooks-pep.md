@@ -106,13 +106,13 @@ desactivados hasta que se apuntan a un fichero.
 
 ## Qué verás en la consola
 
-**Claude Code governance** es la superficie de redacción y truth-loop: la
+**Política gestionada** es la superficie de redacción y truth-loop: la
 política que pretendes, la configuración que los hosts realmente llevan y el
 drift entre ambas. Los controles y los findings de hueco de telemetría aterrizan
 en **Security**; la sesión en sí permanece visible en **Sessions**:
 
-<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="La vista de gobernanza de Claude Code — redacción de políticas y postura de la flota en un solo lugar." />
-<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="La vista de gobernanza de Claude Code — redacción de políticas y postura de la flota en un solo lugar." />
+<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="La vista Política gestionada — redacción de políticas y postura de la flota en un solo lugar." />
+<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="La vista Política gestionada — redacción de políticas y postura de la flota en un solo lugar." />
 
 ## Límites honestos
 

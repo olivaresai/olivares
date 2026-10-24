@@ -16,7 +16,9 @@
   },
   "validation": {
     "ok": "Schema valido.",
-    "summary": "{{count}} nota/e di validazione, di cui {{errors}} errore/i.",
+    "summary_one": "{{count}} nota di validazione · errori: {{errors}}",
+    "summary_many": "{{count}} note di validazione · errori: {{errors}}",
+    "summary_other": "{{count}} note di validazione · errori: {{errors}}",
     "listLabel": "Risultati della validazione dello schema"
   },
   "form": {
@@ -79,7 +81,7 @@
     "subject": "soggetto",
     "fingerprint": "impronta",
     "emptyTitle": "Nessun rilevamento di drift",
-    "emptyBody": "Al momento non risultano rilevamenti di drift delle policy per le superfici di Claude Code.",
+    "emptyBody": "Al momento non risultano rilevamenti di drift delle policy per i tuoi strumenti di IA gestiti.",
     "truncated": "Caricati {{n}} rilevamenti di drift; ce ne sono altri",
     "truncatedHint": "I rilevamenti di drift delle policy sono più di quelli mostrati; questa pagina prende le righe per id. L'assenza qui non dimostra che non ci sia drift: il rilevamento potrebbe essere semplicemente oltre questa pagina."
   },
@@ -291,6 +293,8 @@
     "verified": "verificato",
     "unverified": "NON VERIFICATO",
     "contentUnknown": "contenuto SCONOSCIUTO (solo attestazione)",
-    "openFindings": "{{count}} rilevamento/i aperto/i"
+    "openFindings_one": "{{count}} rilevamento aperto",
+    "openFindings_many": "{{count}} rilevamenti aperti",
+    "openFindings_other": "{{count}} rilevamenti aperti"
   }
 }

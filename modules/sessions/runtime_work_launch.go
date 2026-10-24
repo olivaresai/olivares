@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -43,6 +45,9 @@ type WorkLaunchSpec struct {
 	// durable agent owner.
 	AuditActorRef string
 	Runtime       CreateRunParams
+	// askedAgent is the owner agent createRunForWork asked the profile assignments for;
+	// the reservation refuses a launch whose owner changed since.
+	askedAgent string
 }
 
 // ManagedRunRef is the references-only result consumed by orchestration. It
@@ -147,9 +152,116 @@ func (m *Module) createRunForWork(
 	tenant model.TenantID,
 	spec WorkLaunchSpec,
 ) (runDTO, workLaunchReservation, bool, error) {
+	// The launch runs as the agent that owns the work item, so that agent's tool, key and
+	// profile assignments decide what it may run on, as a person's do for POST /runs: the
+	// profile-assignment question, asked for a profile the step names and for the default
+	// alike, deny-closed. The reservation refuses the launch if the owner changes before it.
+	// The agent's profile write is not asked: POST /runs asks it only because a resolve may
+	// make a profile, and here making the default is the approved workflow's act.
+	if _, err := validateWorkLaunch(tenant, spec, &spec.Runtime); err != nil {
+		return runDTO{}, workLaunchReservation{}, false, err
+	}
+	_, lease, agentRef, now, err := m.readWorkLaunchOwner(ctx, tenant, spec.WorkItemID)
+	if err != nil {
+		return runDTO{}, workLaunchReservation{}, false, classifyWorkStoreError(err)
+	}
+	agent := api.ModuleContext{Tenant: tenant, Principal: auth.Principal{AgentIdentity: agentRef}}
+	spec.Runtime.asks.profileAccess = m.askProfileAccess(ctx, tenant, agent.Principal)
+	spec.askedAgent = agentRef
+	if strings.TrimSpace(spec.Runtime.ProviderProfileRef) == "" {
+		ref, err := m.workLaunchDefaultProfile(ctx, agent, spec, lease, now)
+		if err != nil {
+			return runDTO{}, workLaunchReservation{}, false, err
+		}
+		spec.Runtime.ProviderProfileRef = ref
+	}
 	call := &workLaunchCall{spec: spec}
 	dto, err := m.createRunInternal(ctx, tenant, spec.Runtime, call)
 	return dto, call.reservation, call.replayed, err
+}
+
+// workLaunchDefaultProfile is the profile a work launch that names none runs under ("the
+// default works", NEXT-COMMON). A replay is looked up first: when the item's lease is live and
+// held by its run, at the fence this launch names (or any, when it names none), the replay
+// keeps the profile that run started on, so a default that changed since neither fails the
+// step while its session runs nor makes a profile; that profile is still asked for the agent at
+// the launch, its key is not asked again. Anything else (no holder, another item's run, a
+// holder row gone) resolves, and the reservation gives its own answer. The default is resolved
+// for the owner agent by the rule POST /runs applies to a person (resolveProfileForCaller): its
+// tool, the key the rule would run on and a profile it reuses are asked before anything is made.
+func (m *Module) workLaunchDefaultProfile(
+	ctx context.Context,
+	agent api.ModuleContext,
+	spec WorkLaunchSpec,
+	lease model.Record,
+	now model.Timestamp,
+) (string, error) {
+	state, err := workLeaseFenceState(lease)
+	if err != nil {
+		return "", err
+	}
+	holder := lease.String(colLeaseHolderRunRef)
+	if holder != "" && fenceIsLive(state, now.Time()) && (spec.WorkLeaseFence == 0 || spec.WorkLeaseFence == state.Fence) {
+		run, err := m.loadRun(ctx, agent.Tenant, holder)
+		var missing *runErr
+		switch {
+		case errors.As(err, &missing) && missing.status == http.StatusNotFound:
+		case err != nil:
+			return "", classifyWorkStoreError(err)
+		case run.String(colRunWorkItemID) == spec.WorkItemID.String() && run.String(colRunProfileID) != "":
+			return run.String(colRunProfileID), nil
+		}
+	}
+	got, err := m.resolveProfileForCaller(ctx, agent, providerDriverClaude)
+	if err != nil {
+		return "", err
+	}
+	return got.Profile.Ref, nil
+}
+
+// readWorkLaunchOwner reads, in one view, the work item, its lease, the agent that owns it
+// (its identity's external id: the launch runs as it) and the lease clock.
+func (m *Module) readWorkLaunchOwner(
+	ctx context.Context,
+	tenant model.TenantID,
+	itemID model.ID,
+) (item, lease model.Record, agentRef string, now model.Timestamp, err error) {
+	err = m.workData(tenant).View(ctx, func(sc store.Scope) error {
+		items, err := sc.Ext(workItemKind)
+		if err != nil {
+			return err
+		}
+		item, err = items.Get(ctx, itemID)
+		if err != nil {
+			return err
+		}
+		var found bool
+		lease, found, err = findWorkLease(ctx, sc, itemID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return unknown("evidence_unavailable", nil)
+		}
+		if item.String(colWorkOwnerKind) != "agent" {
+			return broken(http.StatusUnprocessableEntity, "owner_ineligible")
+		}
+		ownerID, err := model.ParseID(item.String(colWorkOwnerRef))
+		if err != nil || ownerID.IsZero() {
+			return unknown("evidence_unavailable", err)
+		}
+		identity, err := sc.Identities().Get(ctx, ownerID)
+		if err != nil {
+			return err
+		}
+		agentRef = identity.ExternalID
+		if !boundedText(agentRef, 1, 512) {
+			return unknown("evidence_unavailable", nil)
+		}
+		now, err = observeLeaseClock(ctx, sc, model.ID(item.String(colWorkWorkspaceID)))
+		return err
+	})
+	return item, lease, agentRef, now, err
 }
 
 func managedRunRef(rec model.Record, reservation workLaunchReservation) (ManagedRunRef, error) {
@@ -181,68 +293,18 @@ func (m *Module) prepareWorkLaunch(
 	spec WorkLaunchSpec,
 	params *CreateRunParams,
 ) (workLaunchReservation, model.Record, bool, error) {
-	if params == nil {
-		return workLaunchReservation{}, nil, false, broken(http.StatusBadRequest, "invalid_command")
+	attemptKind, err := validateWorkLaunch(tenant, spec, params)
+	if err != nil {
+		return workLaunchReservation{}, nil, false, err
 	}
-	if tenant.IsZero() || tenant.IsSystem() || spec.WorkItemID.IsZero() ||
-		spec.OwnerEpoch < 0 || spec.WorkLeaseFence < 0 || spec.LeaseTTLSeconds < 0 {
-		return workLaunchReservation{}, nil, false, broken(http.StatusBadRequest, "invalid_command")
-	}
-	if !boundedText(params.Actor, 1, 512) ||
-		!validWorkLaunchAuditActor(params.ActorKind, spec.AuditActorRef) {
-		return workLaunchReservation{}, nil, false, broken(http.StatusBadRequest, "invalid_command")
-	}
-	attemptKind := spec.AttemptKind
-	if attemptKind == "" {
-		attemptKind = WorkLaunchAttemptLeaseBind
-	}
-	// K2 validators can prove the existing lease-bind format. A later K4 tranche
-	// may add another persisted attempt vocabulary; accepting one before the row
-	// can prove it would make fenced input fail after launch.
-	if attemptKind != WorkLaunchAttemptLeaseBind {
-		return workLaunchReservation{}, nil, false, broken(http.StatusBadRequest, "invalid_command")
-	}
-
-	var item, lease model.Record
-	var executorAgentRef string
-	var now model.Timestamp
-	err := m.workData(tenant).View(ctx, func(sc store.Scope) error {
-		items, err := sc.Ext(workItemKind)
-		if err != nil {
-			return err
-		}
-		item, err = items.Get(ctx, spec.WorkItemID)
-		if err != nil {
-			return err
-		}
-		var found bool
-		lease, found, err = findWorkLease(ctx, sc, spec.WorkItemID)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return unknown("evidence_unavailable", nil)
-		}
-		if item.String(colWorkOwnerKind) != "agent" {
-			return broken(http.StatusUnprocessableEntity, "owner_ineligible")
-		}
-		ownerID, err := model.ParseID(item.String(colWorkOwnerRef))
-		if err != nil || ownerID.IsZero() {
-			return unknown("evidence_unavailable", err)
-		}
-		identity, err := sc.Identities().Get(ctx, ownerID)
-		if err != nil {
-			return err
-		}
-		executorAgentRef = identity.ExternalID
-		if !boundedText(executorAgentRef, 1, 512) {
-			return unknown("evidence_unavailable", nil)
-		}
-		now, err = observeLeaseClock(ctx, sc, model.ID(item.String(colWorkWorkspaceID)))
-		return err
-	})
+	item, lease, executorAgentRef, now, err := m.readWorkLaunchOwner(ctx, tenant, spec.WorkItemID)
 	if err != nil {
 		return workLaunchReservation{}, nil, false, classifyWorkStoreError(err)
+	}
+	// The profile and its assignments were decided for the owner createRunForWork read; an
+	// owner that changed since, or none asked, is another launch.
+	if spec.askedAgent != executorAgentRef {
+		return workLaunchReservation{}, nil, false, broken(http.StatusConflict, "dispatch_conflict")
 	}
 	workspaceID, err := model.ParseID(item.String(colWorkWorkspaceID))
 	if err != nil {
@@ -334,6 +396,33 @@ func (m *Module) prepareWorkLaunch(
 		return workLaunchReservation{}, nil, false, broken(http.StatusConflict, "stale_fence")
 	}
 	return reservation, nil, false, nil
+}
+
+// validateWorkLaunch refuses a malformed work launch before anything is read and returns its
+// attempt kind.
+func validateWorkLaunch(tenant model.TenantID, spec WorkLaunchSpec, params *CreateRunParams) (string, error) {
+	if params == nil {
+		return "", broken(http.StatusBadRequest, "invalid_command")
+	}
+	if tenant.IsZero() || tenant.IsSystem() || spec.WorkItemID.IsZero() ||
+		spec.OwnerEpoch < 0 || spec.WorkLeaseFence < 0 || spec.LeaseTTLSeconds < 0 {
+		return "", broken(http.StatusBadRequest, "invalid_command")
+	}
+	if !boundedText(params.Actor, 1, 512) ||
+		!validWorkLaunchAuditActor(params.ActorKind, spec.AuditActorRef) {
+		return "", broken(http.StatusBadRequest, "invalid_command")
+	}
+	attemptKind := spec.AttemptKind
+	if attemptKind == "" {
+		attemptKind = WorkLaunchAttemptLeaseBind
+	}
+	// K2 validators can prove the existing lease-bind format. A later K4 tranche
+	// may add another persisted attempt vocabulary; accepting one before the row
+	// can prove it would make fenced input fail after launch.
+	if attemptKind != WorkLaunchAttemptLeaseBind {
+		return "", broken(http.StatusBadRequest, "invalid_command")
+	}
+	return attemptKind, nil
 }
 
 func validWorkLaunchAuditActor(kind, ref string) bool {

@@ -255,7 +255,10 @@ is safe to run against this schema.
   not been certified.
 - Group accounting, the completeness of the budget catalogue, the older aggregates,
   `CheckSpendLimit` and the forecast remain open admission work. An unresolved group scope is
-  refused here rather than approximated with tenant-wide spend.
+  refused here rather than approximated with tenant-wide spend. The status read's
+  `spend_micro_usd` for a group is separate: it sums the members' spend (the figure
+  `CheckBudget` enforces on), is always `truncated` because spend no member is credited
+  with is missing, and is never part of `amount`, which stays unknown for a group.
 - The evidence describes **the evaluation that actually happened**. It does not
   reconstruct a policy that was in force at some earlier instant, an authorization
   decision, or a snapshot nobody kept. Read consistency is what the caller's `Scope`

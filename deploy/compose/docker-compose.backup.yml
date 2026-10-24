@@ -25,7 +25,7 @@
 services:
   backup:
     # release
-    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.3}
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.4}
     # /release
     profiles: ["backup"]
     # The release image is distroless (no shell / date / find): run the `olivares`

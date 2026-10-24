@@ -220,6 +220,10 @@ export interface DataTableProps<TData extends RowData> {
   className?: string
   /** Extra classes on the `<table>` (layout, not chrome). */
   tableClassName?: string
+  /** Per-row extra classes, e.g. `.feed-enter` for a feed row that just arrived
+   * (C2-DESIGN §3). Applied after the table's own row classes; return undefined
+   * for nothing. */
+  rowClassName?: (row: TData, index: number) => string | undefined
 }
 
 const PAGE_JUMP = 10
@@ -274,6 +278,7 @@ export function DataTable<TData extends RowData>({
   maxBodyHeight = 600,
   className,
   tableClassName,
+  rowClassName,
 }: DataTableProps<TData>) {
   const { t } = useTranslation('common')
   const density = usePreferencesStore((s) => s.density)
@@ -700,6 +705,7 @@ export function DataTable<TData extends RowData>({
         ((selectable && controlledSelectedIds.has(row.id)) ||
           (nav && active?.r === dataRowIndex)) &&
           'border-l-accent bg-surface',
+        rowClassName?.(row.original, dataRowIndex),
       )}
       onClick={
         onRowClick

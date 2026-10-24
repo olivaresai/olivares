@@ -181,22 +181,22 @@
     "verbosityCorr": "冗长度相关性"
   },
   "calibItems": {
-    "title": "Reference set",
+    "title": "参考集",
     "description": "评判器据以衡量的人工标注，也决定一份报告能否认证。",
-    "run": "Run calibration",
+    "run": "运行校准",
     "empty": "还没有已标注项",
     "emptyHint": "已标注项是校准报告据以评分的人工判断。标注一个用例即可添加第一条。",
     "distribution": "{{pass}} 条标注为通过 · {{fail}} 条标注为未通过",
     "degenerate": "⛔ 所有标注都相同，因此无法计算 kappa，这组数据生成的任何报告都无法认证。请标注另一类用例。",
-    "humanPass": "human: pass",
-    "humanFail": "human: fail",
+    "humanPass": "人工：通过",
+    "humanFail": "人工：未通过",
     "unscored": "unscored",
     "noJudge": "未配置评判器，因此没有可测量的内容。这不是故障，也不是版本限制：校准无法被模拟。"
   },
   "baseline": {
-    "pin": "Pin as baseline",
-    "confirm": "Replace the baseline",
-    "pinned": "Baseline pinned",
+    "pin": "设为基线",
+    "confirm": "替换基线",
+    "pinned": "基线已设定",
     "replaceWarning": "⛔ 每个套件和主体只有一条基线，且它可以被修改。固定并不是新增——它会替换 {{suite}} / {{subject}} 当前的基线。此后所有回归都以它为准衡量。",
     "thisRunScores": "本次运行在 n={{n}} 的样本上通过 {{score}}。",
     "cannotShowCurrent": "控制台无法显示被替换的内容：引擎只开放 POST /baselines 这一条路由，此前的参照记录在自审计中，而不在可读取的端点里。固定一次更差的运行会降低门槛，质量门禁就是这样在没有任何人停用它的情况下不再触发的。"

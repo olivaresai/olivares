@@ -125,11 +125,11 @@ function grant(...sets: string[][]) {
   auth.perms = new Set(sets.flat())
 }
 
-function wrap(pageSurface = false) {
+function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui = render(
     <QueryClientProvider client={qc}>
-      <ProfilesPanel pageSurface={pageSurface} />
+      <ProfilesPanel />
     </QueryClientProvider>,
   )
   return { ...ui, qc }
@@ -709,31 +709,11 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
   })
 })
 
-describe('ProfilesPanel — no dead half, and no stretched row either', () => {
-  // Three rows in a 1440×900 frame left 16 empty 200×200 cells (35% fill), so the table
-  // was given the remaining height — and a table hands its height to its ROWS: a single
-  // profile then measured 704 px against a 36 px budget. The REGION takes the height
-  // now and the foot absorbs it. Zero rows keep the existing empty state.
-  it('gives the region the height and leaves the table element without one', async () => {
-    wrap(true)
-    await screen.findByText('Home A')
-    const table = screen.getByRole('table')
-    expect(table.className).not.toMatch(/min-h-/)
-    expect(table.closest('[data-slot="table-region"]')!.className).toMatch(
-      /min-h-\[calc\(100svh-8rem\)\]/,
-    )
-    expect(table.querySelector('tfoot')!.className).toMatch(/\bh-full\b/)
-    for (const row of table.querySelectorAll('tbody tr')) {
-      expect(row.className).not.toMatch(/h-\[|min-h-/)
-    }
-    const next = screen.getByRole('button', { name: /register a profile/i })
-    expect(next.closest('tfoot')).toBeTruthy()
-  })
-
-  it('offers the quiet line only on the page surface, not inside a tab', async () => {
-    // Embedded, this panel's verb is already in the header through the action slot;
-    // a second offer of it under the table is the screen having two firsts.
-    wrap(false)
+describe('ProfilesPanel — one tab of the Sessions workspace', () => {
+  // Its own page is gone (#2552): the panel is a tab, its verb is the register button
+  // above the table, and a tab divides a region it does not own.
+  it('offers no second register line under the table', async () => {
+    wrap()
     await screen.findByText('Home A')
     expect(
       screen.queryByRole('button', { name: /register a profile/i }),
@@ -741,74 +721,9 @@ describe('ProfilesPanel — no dead half, and no stretched row either', () => {
     expect(screen.getByRole('table').querySelector('tfoot')).toBeNull()
   })
 
-  /**
-   * THE QUIET LINE PERFORMS THE ACTION ITS WORDS NAME.
-   *
-   * ⛔ IT USED TO BE `<a href="#register-profile">` WITH `preventDefault()`. The click
-   *    worked and the ADDRESS did not: no element in the document carries that id, so
-   *    the status bar, "copy link", a middle-click and a new tab all offered a
-   *    destination that resolves to nothing. A control that acts in place is a button —
-   *    which also answers Space, and is announced as a command rather than as a link to
-   *    somewhere.
-   */
-  it('opens the register flow from the keyboard, with no fragment that names nothing', async () => {
-    const user = userEvent.setup()
-    const { container } = wrap(true)
-    await screen.findByText('Home A')
-
-    // Every in-page link in this surface must name an element that exists. With the
-    // fragment restored this census is what reddens.
-    const dangling = [...container.querySelectorAll('a[href^="#"]')]
-      .map((a) => a.getAttribute('href')!.slice(1))
-      .filter((id) => id !== '' && !document.getElementById(id))
-    expect(dangling).toEqual([])
-
-    const next = screen.getByRole('button', { name: /register a profile/i })
-    next.focus()
-    expect(next).toHaveFocus()
-    await user.keyboard('{Enter}')
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
-  })
-
-  it('keeps the empty state and no next-action line when there are zero rows', async () => {
+  it('zero rows does NOT take the viewport', async () => {
     api.listProfiles.mockResolvedValue(page([]))
-    wrap(true)
-    expect(await screen.findByText(/no provider profiles/i)).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /register a profile/i }),
-    ).toBeNull()
-  })
-
-  /**
-   * ⛔ ZERO ROWS IS THE ONE COUNT WHERE A DEAD HALF IS CERTAIN, and it was the one count
-   *    the region never reached. One row, three, two hundred — all of them go through
-   *    `FillingTable`, whose region takes the viewport and whose foot absorbs the
-   *    surplus. An EMPTY page went round it: measured in Chromium at 1440×900, a centred
-   *    panel **220 px** tall at the top of the frame with no region around it at all,
-   *    against the **772 px** region the same screen gives its rows. The decision "no
-   *    dead half" was measured on every count except the one that cannot avoid it.
-   *
-   *    The region is the SAME piece, not a copy: a second height written here would
-   *    drift from `FillingTable`'s the first time one of them was corrected.
-   */
-  it('zero rows: the empty state fills the same region the table would have', async () => {
-    api.listProfiles.mockResolvedValue(page([]))
-    wrap(true)
-    const empty = await screen.findByText(/no provider profiles/i)
-    const region = empty.closest('[data-slot="table-region"]')
-    expect(region, 'the empty page is inside the region piece').not.toBeNull()
-    expect(region!.className).toMatch(/min-h-\[calc\(100svh-8rem\)\]/)
-    expect(
-      empty.closest('[data-slot="empty-state"]')!.className,
-      'and it takes the height rather than sitting at the top of it',
-    ).toMatch(/\bflex-1\b/)
-  })
-
-  it('embedded in a tab, zero rows does NOT take the viewport', async () => {
-    // The CONTROL: `fill` is the page surface's, and a panel that is one tab of a
-    // workspace divides a region it does not own — the same rule the table follows.
-    api.listProfiles.mockResolvedValue(page([]))
-    wrap(false)
+    wrap()
     const empty = await screen.findByText(/no provider profiles/i)
     const region = empty.closest('[data-slot="table-region"]')
     expect(region!.className).not.toMatch(/min-h-\[calc\(100svh-8rem\)\]/)

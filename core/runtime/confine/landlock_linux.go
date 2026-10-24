@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -113,16 +114,15 @@ func (r *ruleset) grant(path string, kind grantKind) error {
 }
 
 func (r *ruleset) grantPath(real string, kind grantKind, named bool) error {
-	fd, err := unix.Openat2(unix.AT_FDCWD, real, &unix.OpenHow{
-		Flags: unix.O_PATH | unix.O_CLOEXEC, Resolve: unix.RESOLVE_NO_SYMLINKS,
-	})
+	fd, err := openNoSymlinks(real, 0)
 	if err != nil {
 		if errors.Is(err, unix.ENOENT) {
 			return nil
 		}
 		if errors.Is(err, unix.ELOOP) {
-			// Check only for an absent target; never grant a reopened path.
-			if _, statErr := os.Stat(real); errors.Is(statErr, os.ErrNotExist) {
+			// Check only for an absent or unreachable target (a link into a folder only root may search, such as
+			// /etc/grub2-efi.cfg into /boot/efi); never grant a reopened path. A loop still refuses the launch.
+			if _, statErr := os.Stat(real); errors.Is(statErr, os.ErrNotExist) || errors.Is(statErr, os.ErrPermission) {
 				return nil
 			}
 		}
@@ -142,40 +142,94 @@ func (r *ruleset) grantPath(real string, kind grantKind, named bool) error {
 	if err != nil {
 		return err
 	}
-	if info.IsDir() {
+	if !info.IsDir() && !named && !info.Mode().IsRegular() {
+		return nil // sockets, FIFOs and devices found while carving are not granted
+	}
+	return r.grantHeld(file, real, info.IsDir(), kind)
+}
+
+// grantHeld grants the held object at real, or, for a directory that contains a
+// protected path, each of its entries.
+func (r *ruleset) grantHeld(file *os.File, real string, dir bool, kind grantKind) error {
+	if dir {
 		for _, p := range r.protect {
 			if contains(real, p) {
-				return r.grantEntries(real, kind)
+				return r.grantEntries(file, real, kind)
 			}
 		}
-	} else if !named && !info.Mode().IsRegular() {
-		return nil // sockets, FIFOs and devices found while carving are not granted
 	}
 	mask := r.access.dirRO
 	switch {
-	case info.IsDir() && kind == grantWrite:
+	case dir && kind == grantWrite:
 		mask = r.access.dirRW
-	case info.IsDir() && kind == grantNoDelete:
+	case dir && kind == grantNoDelete:
 		mask = r.access.dirNoDelete
-	case !info.IsDir() && kind != grantRead:
+	case !dir && kind != grantRead:
 		mask = r.access.fileRW
-	case !info.IsDir():
+	case !dir:
 		mask = r.access.fileRO
 	}
 	return r.addRuleHandle(int(file.Fd()), real, mask)
 }
 
-func (r *ruleset) grantEntries(dir string, kind grantKind) error {
-	entries, err := os.ReadDir(dir)
+// grantEntries grants the entries of the held directory dir, except the protected
+// ones. An entry's kind comes from the listing (d_type) and the entry is opened
+// relative to the held directory, so a carved directory or regular file is never
+// stat'ed: the engine needs no attribute access to types it does not otherwise use
+// (an SELinux appliance labels /etc's entries with a dozen of them). A symlink is
+// resolved and checked by grantPath, as a named path is; sockets, FIFOs and devices
+// are not granted.
+func (r *ruleset) grantEntries(held *os.File, dir string, kind grantKind) error {
+	fd, err := unix.Openat(int(held.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return fmt.Errorf("list confined folder %s: %w", dir, err)
+	}
+	list := os.NewFile(uintptr(fd), dir)
+	entries, err := list.ReadDir(-1)
+	_ = list.Close()
 	if err != nil {
 		return err
 	}
 	for _, e := range entries {
-		if err := r.grantPath(realPath(filepath.Join(dir, e.Name())), kind, false); err != nil {
+		path := filepath.Join(dir, e.Name())
+		switch typ := e.Type(); {
+		case typ&os.ModeSymlink != 0:
+			err = r.grantPath(realPath(path), kind, false)
+		case typ.IsDir() || typ.IsRegular():
+			err = r.grantEntry(held, e.Name(), path, typ.IsDir(), kind)
+		}
+		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// grantEntry opens the listed name relative to the held directory without
+// following a symlink. A directory is opened O_DIRECTORY, so a name swapped for a
+// link or a file since the listing is refused; a regular file swapped for a link
+// yields the link's own inode, whose rule grants nothing, because Landlock checks
+// the hierarchy of the file a path resolves to.
+func (r *ruleset) grantEntry(held *os.File, name, path string, dir bool, kind grantKind) error {
+	for _, p := range r.protect {
+		if path == p || contains(p, path) {
+			return nil
+		}
+	}
+	flags := unix.O_PATH | unix.O_NOFOLLOW | unix.O_CLOEXEC
+	if dir {
+		flags |= unix.O_DIRECTORY
+	}
+	fd, err := unix.Openat(int(held.Fd()), name, flags, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return nil // removed since the listing
+	}
+	if err != nil {
+		return fmt.Errorf("open confined path %s without symlinks: %w", path, err)
+	}
+	file := os.NewFile(uintptr(fd), path)
+	defer file.Close()
+	return r.grantHeld(file, path, dir, kind)
 }
 
 func (r *ruleset) addRule(path string, mask uint64) error {
@@ -319,7 +373,8 @@ func restrictAndExec(p Policy, program string, argv []string) error {
 			return fmt.Errorf("signal confined launch: %w", err)
 		}
 	}
-	return syscall.Exec(program, argv, os.Environ()) // #nosec G204 -- the caller resolved this original program path; no shell
+	err := syscall.Exec(program, argv, os.Environ()) // #nosec G204 -- the caller resolved this original program path; no shell
+	return fmt.Errorf("execute %s in the confined domain: %w", program, err)
 }
 
 // DropCapabilities clears the calling thread's permitted, effective, inheritable
@@ -361,13 +416,58 @@ func DropCapabilities(requireBoundingSet bool) error {
 }
 
 func openDirectory(path string) (*os.File, error) {
-	fd, err := unix.Openat2(unix.AT_FDCWD, path, &unix.OpenHow{
-		Flags: unix.O_PATH | unix.O_DIRECTORY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_NO_SYMLINKS,
-	})
+	fd, err := openNoSymlinks(path, unix.O_DIRECTORY)
 	if err != nil {
 		return nil, err
 	}
 	return os.NewFile(uintptr(fd), path), nil
+}
+
+// openNoSymlinks opens path O_PATH with flags and refuses a symlink in any of its names with ELOOP, as openat2's
+// RESOLVE_NO_SYMLINKS does. systemd's RestrictSUIDSGID= (the engine's unit sets it) answers openat2 with ENOSYS so
+// that programs use openat, whose flags it can filter (src/shared/seccomp-util.c, seccomp_restrict_sxid). Then the
+// path is walked one name at a time from held descriptors, each name opened O_NOFOLLOW and checked before the next.
+func openNoSymlinks(path string, flags int) (int, error) {
+	fd, err := unix.Openat2(unix.AT_FDCWD, path, &unix.OpenHow{
+		Flags: uint64(unix.O_PATH | unix.O_CLOEXEC | flags), Resolve: unix.RESOLVE_NO_SYMLINKS,
+	})
+	if !errors.Is(err, unix.ENOSYS) {
+		return fd, err
+	}
+	if path == "" {
+		return -1, unix.ENOENT
+	}
+	start := "."
+	if filepath.IsAbs(path) {
+		start = "/"
+	}
+	fd, err = unix.Open(start, unix.O_PATH|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return -1, err
+	}
+	names := strings.FieldsFunc(path, func(r rune) bool { return r == '/' })
+	for i, name := range names {
+		next, err := unix.Openat(fd, name, unix.O_PATH|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		_ = unix.Close(fd)
+		if err != nil {
+			return -1, err
+		}
+		var st unix.Stat_t
+		if err := unix.Fstat(next, &st); err != nil {
+			_ = unix.Close(next)
+			return -1, err
+		}
+		switch kind := st.Mode & unix.S_IFMT; {
+		case kind == unix.S_IFLNK:
+			_ = unix.Close(next)
+			return -1, unix.ELOOP
+		case kind != unix.S_IFDIR && (i < len(names)-1 || flags&unix.O_DIRECTORY != 0):
+			_ = unix.Close(next)
+			return -1, unix.ENOTDIR
+		}
+		fd = next
+	}
+	return fd, nil
 }
 
 // Read the kernel's label of this already-held object, never reopen the stored

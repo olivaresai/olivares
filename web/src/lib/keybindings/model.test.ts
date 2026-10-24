@@ -4,10 +4,13 @@
 //
 // THE KEYBINDING CONTRACT, driven rule by rule. The three properties the contract
 // carries are the three describes below: precedence, unknown contexts, invalid rules.
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   auditKeybindings,
+  chordHint,
+  chordKeys,
   chordMatches,
+  modKeyName,
   parseChord,
   resolveBinding,
   type KeyRule,
@@ -189,18 +192,9 @@ describe('the shipped table', () => {
     // A rule with no `when` fires wherever the shell handler runs. Every one of them
     // must therefore be a chord, or a key the shell only reads when the operator is NOT
     // typing (`/` and `?`), which `GlobalShortcuts` enforces with `isTypingTarget`.
-    //
-    // `Mod+b` joined them to fold the navigation rail. It is a MODIFIED chord, so
-    // it cannot be typed into a field by accident — which is also why it is one of the
-    // two that `GlobalShortcuts` honours BEFORE the typing guard: getting the width back
-    // must not require leaving the field you are in.
+    // (`Mod+b` folded the sidebar rail until the top bar replaced the sidebar, #2544.)
     const shellWide = KEYBINDINGS.filter((r) => r.when === undefined)
-    expect(shellWide.map((r) => r.keys).sort()).toEqual([
-      '/',
-      '?',
-      'Mod+b',
-      'Mod+k',
-    ])
+    expect(shellWide.map((r) => r.keys).sort()).toEqual(['/', '?', 'Mod+k'])
     // The bare keys among them stay exactly two, and both are guarded by isTypingTarget.
     expect(
       shellWide
@@ -274,4 +268,49 @@ describe('session switching rules', () => {
       )
     },
   )
+})
+
+describe('the Mod key, named as the platform names it (#3121)', () => {
+  const nav = window.navigator as Navigator & {
+    userAgentData?: { platform?: string }
+  }
+  const set = (platform: string, uaPlatform?: string) => {
+    Object.defineProperty(nav, 'platform', {
+      value: platform,
+      configurable: true,
+    })
+    Object.defineProperty(nav, 'userAgentData', {
+      value: uaPlatform === undefined ? undefined : { platform: uaPlatform },
+      configurable: true,
+    })
+  }
+  afterEach(() => {
+    delete (nav as { platform?: string }).platform
+    delete (nav as { userAgentData?: unknown }).userAgentData
+  })
+
+  it.each([
+    ['Linux x86_64', undefined, 'Ctrl'],
+    ['Win32', undefined, 'Ctrl'],
+    ['MacIntel', undefined, '⌘'],
+    ['', 'macOS', '⌘'],
+    ['', 'Linux', 'Ctrl'],
+    // An empty client hint falls back to the platform rather than to Ctrl.
+    ['MacIntel', '', '⌘'],
+  ])('platform %j, client hint %j: %s', (platform, hint, mod) => {
+    set(platform, hint)
+    expect(modKeyName()).toBe(mod)
+  })
+
+  it('prints a chord with the key this platform has', () => {
+    set('Linux x86_64')
+    expect(chordKeys('Mod+k')).toEqual(['Ctrl', 'k'])
+    expect(chordHint('Mod+k')).toBe('Ctrl+K')
+    expect(chordHint('Mod+Shift+p')).toBe('Ctrl+Shift+P')
+    set('MacIntel')
+    expect(chordKeys('Mod+k')).toEqual(['⌘', 'k'])
+    expect(chordHint('Mod+k')).toBe('⌘K')
+    // Glyphs join; a word keeps its +.
+    expect(chordHint('Mod+Shift+p')).toBe('⌘+Shift+P')
+  })
 })

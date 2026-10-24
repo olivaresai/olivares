@@ -94,7 +94,7 @@ jobs:
 
   publish:
     needs: preflight
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     timeout-minutes: 300
     environment:
       name: packages-publish

@@ -15,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // This file is the OPEN-CORE handler half of NIS 2 Directive significant-incident
@@ -138,7 +139,7 @@ func writeNIS2Error(w http.ResponseWriter, err error) {
 // --- handlers --------------------------------------------------------------------
 
 func (m *Module) handleClassifyNIS2Incident(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if m.nis2Packager == nil {
+	if !sdk.CapabilityEnabled(m.nis2Packager) {
 		writeJSON(w, http.StatusNotImplemented, errorBody(
 			"NIS 2 significant-incident classification requires the Olivares Business "+
 				"edition (nis2incident); not linked in this build"))

@@ -3816,7 +3816,7 @@
                       "type": "string"
                     },
                     "methods": {
-                      "description": "The official login methods the tool offers, when it offers more than one.",
+                      "description": "The official login methods the tool offers, when it offers more than one, in the order to offer them.",
                       "items": {
                         "additionalProperties": false,
                         "properties": {
@@ -3825,6 +3825,10 @@
                           },
                           "id": {
                             "type": "string"
+                          },
+                          "key": {
+                            "description": "The tool's own login waits for an API key its vendor issues: the sign-in reaches needs_key.",
+                            "type": "boolean"
                           },
                           "label": {
                             "type": "string"
@@ -3857,6 +3861,7 @@
                           "enum": [
                             "starting",
                             "needs_code",
+                            "needs_key",
                             "waiting",
                             "checking",
                             "signed_in",
@@ -4036,6 +4041,7 @@
                       "enum": [
                         "starting",
                         "needs_code",
+                        "needs_key",
                         "waiting",
                         "checking",
                         "signed_in",
@@ -4282,6 +4288,7 @@
                       "enum": [
                         "starting",
                         "needs_code",
+                        "needs_key",
                         "waiting",
                         "checking",
                         "signed_in",
@@ -4384,7 +4391,7 @@
     },
     "/v1/m/agenttools/sign-in/{id}/code": {
       "post": {
-        "description": "Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.",
+        "description": "Hands the code shown on Claude's sign-in page, or the API key a needs_key login waits for, to the waiting login and answers once the tool says whether it is signed in.",
         "parameters": [
           {
             "description": "Path parameter id.",
@@ -4403,6 +4410,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "code": {
+                    "description": "The code the sign-in page shows (needs_code), or the API key the tool's own login waits for (needs_key). It goes to the tool's stdin and is never stored, logged or returned.",
                     "maxLength": 2048,
                     "type": "string"
                   }
@@ -4439,6 +4447,7 @@
                       "enum": [
                         "starting",
                         "needs_code",
+                        "needs_key",
                         "waiting",
                         "checking",
                         "signed_in",
@@ -4462,7 +4471,7 @@
                 }
               }
             },
-            "description": "The pasted code was handed to the tool"
+            "description": "The pasted code or key was handed to the tool"
           },
           "400": {
             "content": {
@@ -4533,7 +4542,7 @@
             "browserSession": []
           }
         ],
-        "summary": "Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.",
+        "summary": "Hands the code shown on Claude's sign-in page, or the API key a needs_key login waits for, to the waiting login and answers once the tool says whether it is signed in.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-olivares-scope": "system",
         "x-required-permission": "system:admin",
@@ -20483,9 +20492,25 @@
                     "required": [
                       "show_edition_badge"
                     ]
+                  },
+                  {
+                    "required": [
+                      "pane_widths"
+                    ]
                   }
                 ],
                 "properties": {
+                  "pane_widths": {
+                    "additionalProperties": {
+                      "maximum": 4000,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "description": "Panel widths in pixels by pane id (lowercase letters, digits and dashes, up to 32 characters; at most 16 panes). Panes named here replace their saved width; a width of 0 puts a pane back to its default; panes not named keep theirs.",
+                    "maxProperties": 16,
+                    "minProperties": 1,
+                    "type": "object"
+                  },
                   "show_edition_badge": {
                     "description": "Show the active commercial edition badge. Defaults to true; omitted fields retain their saved value.",
                     "type": "boolean"
@@ -105028,11 +105053,266 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "cursor": {
+                      "description": "Present in cursor mode when more rows follow.",
+                      "type": "string"
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "items": {
+                        "additionalProperties": true,
+                        "properties": {
+                          "acts_for": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "kind": {
+                                "description": "A person launched it, a work item or agent dispatched it, or the session predates the launcher record.",
+                                "enum": [
+                                  "user",
+                                  "automation",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              },
+                              "name": {
+                                "description": "The account's display name.",
+                                "type": "string"
+                              },
+                              "reason": {
+                                "description": "Why a value is null or missing; present only then.",
+                                "type": "string"
+                              },
+                              "user_id": {
+                                "description": "The account that launched the session.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind"
+                            ],
+                            "type": "object"
+                          },
+                          "approvals": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "approved": {
+                                "anyOf": [
+                                  {
+                                    "description": "Actions of this session a person approved; null when no approval source could be read.",
+                                    "format": "int64",
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reason": {
+                                "description": "Why a value is null or missing; present only then.",
+                                "type": "string"
+                              },
+                              "waiting": {
+                                "description": "Actions of this session waiting for a person now.",
+                                "format": "int64",
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "approved",
+                              "waiting"
+                            ],
+                            "type": "object"
+                          },
+                          "cost": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "limit_micro_usd": {
+                                "description": "The limit, in micro-USD, of the most restrictive budget scoped to this session or to its agent identity; present only when one applies.",
+                                "format": "int64",
+                                "type": "integer"
+                              },
+                              "limit_period": {
+                                "description": "The period that budget counts over.",
+                                "enum": [
+                                  "daily",
+                                  "weekly",
+                                  "monthly",
+                                  "total"
+                                ],
+                                "type": "string"
+                              },
+                              "micro_usd": {
+                                "anyOf": [
+                                  {
+                                    "description": "Cost so far in micro-USD, from the tokens the tool reported at list price. Null, never 0, when the tool reported nothing to price.",
+                                    "format": "int64",
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reason": {
+                                "description": "Why a value is null or missing; present only then.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "micro_usd"
+                            ],
+                            "type": "object"
+                          },
+                          "proof": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "chain_verified": {
+                                "anyOf": [
+                                  {
+                                    "description": "Whether the tenant's audit hash chain verifies up to its newest entry; null when the ledger could not be read or holds no entry. Each entry is checked when the engine first reads it; olivares audit verify re-walks the whole chain.",
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "ledger_entries": {
+                                "anyOf": [
+                                  {
+                                    "description": "Audit ledger entries that record this session: they target it, name its run or session in their metadata, or its session identity wrote them.",
+                                    "format": "int64",
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "reason": {
+                                "description": "Why a value is null or missing; present only then.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "ledger_entries",
+                              "chain_verified"
+                            ],
+                            "type": "object"
+                          },
+                          "reaches": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "folders": {
+                                "description": "The session folder and the read-only folders of its workspace.",
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "access": {
+                                      "description": "unknown when the folder's workspace could not be read or no longer exists.",
+                                      "enum": [
+                                        "write",
+                                        "read",
+                                        "unknown"
+                                      ],
+                                      "type": "string"
+                                    },
+                                    "path": {
+                                      "description": "A folder on the engine host.",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "path",
+                                    "access"
+                                  ],
+                                  "type": "object"
+                                },
+                                "type": "array"
+                              },
+                              "hosts": {
+                                "description": "Hosts the session may connect to besides the engine: the bound provider's endpoint, then the profile's declared hosts.",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "reason": {
+                                "description": "Why a value is null or missing; present only then.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "folders",
+                              "hosts"
+                            ],
+                            "type": "object"
+                          },
+                          "run_ref": {
+                            "description": "The operated session's stable reference.",
+                            "type": "string"
+                          },
+                          "runs_as": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "account": {
+                                "description": "The provider account name of that profile.",
+                                "type": "string"
+                              },
+                              "label": {
+                                "description": "Tool and account, ready to show: Claude Code · team-a.",
+                                "type": "string"
+                              },
+                              "profile_ref": {
+                                "description": "The provider profile the session runs under.",
+                                "type": "string"
+                              },
+                              "reason": {
+                                "description": "Why no account is shown: the session runs without a provider profile, or its profile could not be read or no longer exists.",
+                                "type": "string"
+                              },
+                              "tool": {
+                                "description": "The session driver key, e.g. claude.",
+                                "type": "string"
+                              },
+                              "tool_name": {
+                                "description": "The tool's display name, e.g. Claude Code.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "tool",
+                              "label"
+                            ],
+                            "type": "object"
+                          },
+                          "state": {
+                            "description": "The run's derived lifecycle state.",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "run_ref",
+                          "state"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "has_more"
+                  ],
                   "type": "object"
                 }
               }
             },
-            "description": "OK"
+            "description": "a page of runs, each with the six facts a console shows about a session"
           },
           "400": {
             "content": {
@@ -105129,6 +105409,23 @@
                   {
                     "additionalProperties": false,
                     "properties": {
+                      "credentials": {
+                        "anyOf": [
+                          {
+                            "description": "Business. Names of managed credentials (an SSH key or certificate, a database login, an API account) the session gets a way to use: an SSH agent socket, a database proxy or a local reverse proxy that the engine holds, never the secret itself. Needs tenant administration. A Community engine answers 501 business_required.",
+                            "items": {
+                              "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+                              "type": "string"
+                            },
+                            "maxItems": 8,
+                            "type": "array",
+                            "uniqueItems": true
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "effort": {
                         "anyOf": [
                           {
@@ -105210,7 +105507,7 @@
                       "name": {
                         "anyOf": [
                           {
-                            "description": "Trimmed before persistence.",
+                            "description": "Trimmed before persistence. At most 200 characters, with no control, invisible or separator characters; otherwise 400.",
                             "type": "string"
                           },
                           {
@@ -105596,11 +105893,246 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "acts_for": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "description": "A person launched it, a work item or agent dispatched it, or the session predates the launcher record.",
+                          "enum": [
+                            "user",
+                            "automation",
+                            "unknown"
+                          ],
+                          "type": "string"
+                        },
+                        "name": {
+                          "description": "The account's display name.",
+                          "type": "string"
+                        },
+                        "reason": {
+                          "description": "Why a value is null or missing; present only then.",
+                          "type": "string"
+                        },
+                        "user_id": {
+                          "description": "The account that launched the session.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    "approvals": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "approved": {
+                          "anyOf": [
+                            {
+                              "description": "Actions of this session a person approved; null when no approval source could be read.",
+                              "format": "int64",
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reason": {
+                          "description": "Why a value is null or missing; present only then.",
+                          "type": "string"
+                        },
+                        "waiting": {
+                          "description": "Actions of this session waiting for a person now.",
+                          "format": "int64",
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "approved",
+                        "waiting"
+                      ],
+                      "type": "object"
+                    },
+                    "cost": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "limit_micro_usd": {
+                          "description": "The limit, in micro-USD, of the most restrictive budget scoped to this session or to its agent identity; present only when one applies.",
+                          "format": "int64",
+                          "type": "integer"
+                        },
+                        "limit_period": {
+                          "description": "The period that budget counts over.",
+                          "enum": [
+                            "daily",
+                            "weekly",
+                            "monthly",
+                            "total"
+                          ],
+                          "type": "string"
+                        },
+                        "micro_usd": {
+                          "anyOf": [
+                            {
+                              "description": "Cost so far in micro-USD, from the tokens the tool reported at list price. Null, never 0, when the tool reported nothing to price.",
+                              "format": "int64",
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reason": {
+                          "description": "Why a value is null or missing; present only then.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "micro_usd"
+                      ],
+                      "type": "object"
+                    },
+                    "proof": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "chain_verified": {
+                          "anyOf": [
+                            {
+                              "description": "Whether the tenant's audit hash chain verifies up to its newest entry; null when the ledger could not be read or holds no entry. Each entry is checked when the engine first reads it; olivares audit verify re-walks the whole chain.",
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "ledger_entries": {
+                          "anyOf": [
+                            {
+                              "description": "Audit ledger entries that record this session: they target it, name its run or session in their metadata, or its session identity wrote them.",
+                              "format": "int64",
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "reason": {
+                          "description": "Why a value is null or missing; present only then.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ledger_entries",
+                        "chain_verified"
+                      ],
+                      "type": "object"
+                    },
+                    "reaches": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "folders": {
+                          "description": "The session folder and the read-only folders of its workspace.",
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "access": {
+                                "description": "unknown when the folder's workspace could not be read or no longer exists.",
+                                "enum": [
+                                  "write",
+                                  "read",
+                                  "unknown"
+                                ],
+                                "type": "string"
+                              },
+                              "path": {
+                                "description": "A folder on the engine host.",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "access"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "hosts": {
+                          "description": "Hosts the session may connect to besides the engine: the bound provider's endpoint, then the profile's declared hosts.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "reason": {
+                          "description": "Why a value is null or missing; present only then.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "folders",
+                        "hosts"
+                      ],
+                      "type": "object"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "runs_as": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "account": {
+                          "description": "The provider account name of that profile.",
+                          "type": "string"
+                        },
+                        "label": {
+                          "description": "Tool and account, ready to show: Claude Code · team-a.",
+                          "type": "string"
+                        },
+                        "profile_ref": {
+                          "description": "The provider profile the session runs under.",
+                          "type": "string"
+                        },
+                        "reason": {
+                          "description": "Why no account is shown: the session runs without a provider profile, or its profile could not be read or no longer exists.",
+                          "type": "string"
+                        },
+                        "tool": {
+                          "description": "The session driver key, e.g. claude.",
+                          "type": "string"
+                        },
+                        "tool_name": {
+                          "description": "The tool's display name, e.g. Claude Code.",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "tool",
+                        "label"
+                      ],
+                      "type": "object"
+                    },
+                    "state": {
+                      "description": "The run's derived lifecycle state.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "state"
+                  ],
                   "type": "object"
                 }
               }
             },
-            "description": "OK"
+            "description": "the run, with the six facts a console shows about a session"
           },
           "400": {
             "content": {
@@ -105900,6 +106432,254 @@
         ],
         "summary": "sessions module route (requires sessions:run:read)",
         "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/archive": {
+      "delete": {
+        "description": "Unarchives the run, idempotently.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "The run's derived lifecycle state after the control.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "state"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the run resource after the change"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Unarchives the run, idempotently.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Archives the run for every reader, idempotently: an archived run keeps its first archived_at.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "The run's derived lifecycle state after the control.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "state"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the run resource after the change"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Archives the run for every reader, idempotently: an archived run keeps its first archived_at.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
       }
     },
@@ -107138,6 +107918,264 @@
           }
         ],
         "summary": "Returns one path of the run's worktree branch at the base and at the branch tip (?path=, relative to the repository's top folder; each side keeps the workspace's read limit and the 64 KiB Git output cap).",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/done": {
+      "delete": {
+        "description": "Removes the caller's done mark, idempotently.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "done": {
+                      "description": "Whether THIS caller has marked the session done; every direction is idempotent.",
+                      "type": "boolean"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "snoozed_until": {
+                      "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "done"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the caller's snooze and done marks on the run"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Removes the caller's done mark, idempotently.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Marks the run done for the caller, idempotently.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "done": {
+                      "description": "Whether THIS caller has marked the session done; every direction is idempotent.",
+                      "type": "boolean"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "snoozed_until": {
+                      "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "done"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the caller's snooze and done marks on the run"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Marks the run done for the caller, idempotently.",
+        "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "sessions:run:read",
         "x-stability": "beta"
       }
@@ -108868,6 +109906,94 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "user (default) lists what the person sent; all adds the tool's answers.",
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "enum": [
+                "user",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "asc (default) pages from the first message, desc from the newest. Items are always oldest first.",
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Keeps messages with this phrase anywhere in them, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "maxLength": 256,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Keeps messages at or after this time.",
+            "in": "query",
+            "name": "at",
+            "required": false,
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size; default 50, at most 200.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The id a page continues from: next of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Reads one message whole, with text and later_same; the filters do not apply.",
+            "in": "query",
+            "name": "id",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "1: every item of the page carries its whole text, bounded at 64 KiB per message as a read by id is, and the page holds at most 50 messages; later_same is not added.",
+            "in": "query",
+            "name": "text",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1"
+              ],
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -109080,6 +110206,152 @@
           }
         ],
         "summary": "sessions module route (requires sessions:run:write)",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/name": {
+      "put": {
+        "description": "Renames the run; an empty name clears it. The route supplies run-write authorization in the run's recorded workspace.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "The session's new name, trimmed; at most 200 characters, no control or invisible (format, line or paragraph separator) characters. An empty name clears it.",
+                    "maxLength": 200,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "state": {
+                      "description": "The run's derived lifecycle state after the control.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "state"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the run resource after the change"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Renames the run; an empty name clears it.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:run:write",
         "x-stability": "beta"
@@ -109892,6 +111164,285 @@
         "summary": "sessions module route (requires sessions:run:write)",
         "x-olivares-request-body-disposition": "bodyless",
         "x-required-permission": "sessions:run:write",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/sessions/runs/{ref}/snooze": {
+      "delete": {
+        "description": "Ends the caller's snooze, idempotently.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "done": {
+                      "description": "Whether THIS caller has marked the session done; every direction is idempotent.",
+                      "type": "boolean"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "snoozed_until": {
+                      "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "done"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the caller's snooze and done marks on the run"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Ends the caller's snooze, idempotently.",
+        "x-olivares-request-body-disposition": "bodyless",
+        "x-required-permission": "sessions:run:read",
+        "x-stability": "beta"
+      },
+      "post": {
+        "description": "Snoozes the run for the caller until a moment still to come, or moves the moment of a snooze already set.",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Path parameter ref.",
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "until": {
+                    "description": "When the session comes back to the caller's list, an RFC 3339 time in the future. A second snooze moves it.",
+                    "format": "date-time",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "until"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "done": {
+                      "description": "Whether THIS caller has marked the session done; every direction is idempotent.",
+                      "type": "boolean"
+                    },
+                    "run_ref": {
+                      "description": "The operated session's stable reference.",
+                      "type": "string"
+                    },
+                    "snoozed_until": {
+                      "description": "When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.",
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "run_ref",
+                    "done"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "the caller's snooze and done marks on the run"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Snoozes the run for the caller until a moment still to come, or moves the moment of a snooze already set.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-required-permission": "sessions:run:read",
         "x-stability": "beta"
       }
     },

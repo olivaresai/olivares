@@ -264,27 +264,42 @@ func (m *Module) handleBudgetStatus(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	now := m.clock.Now().Time()
-	var out budgetStatusDTO
-	notBudget := false
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		p, err := sc.Policies().Get(r.Context(), id)
-		if err != nil {
+	var (
+		p    model.Policy
+		out  budgetStatusDTO
+		done bool
+	)
+	err := mc.Data.View(r.Context(), func(sc store.Scope) (err error) {
+		if p, err = sc.Policies().Get(r.Context(), id); err != nil || p.Kind != policyKindBudget {
 			return err
 		}
-		if p.Kind != policyKindBudget {
-			notBudget = true
-			return nil
+		if parseBudgetSpec(p.Spec).Dimension == "user_group" {
+			return nil // its members come from the directory: read below, outside this scope
 		}
-		out, err = budgetStatus(r.Context(), sc, p, now)
+		out, err = budgetStatusIn(r.Context(), sc, p, now, nil, m.log)
+		done = err == nil
 		return err
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	if notBudget {
+	if p.Kind != policyKindBudget {
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
+	}
+	if !done {
+		// The directory read is a transaction of its own: read the members before opening the
+		// scope the spend is summed in, as CheckBudget does.
+		members := m.userGroupMembers(r.Context(), mc.Tenant, p)
+		err = mc.Data.View(r.Context(), func(sc store.Scope) (err error) {
+			out, err = budgetStatusIn(r.Context(), sc, p, now, members, m.log)
+			return err
+		})
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

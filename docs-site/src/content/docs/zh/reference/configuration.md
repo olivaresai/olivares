@@ -63,9 +63,9 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 
 | 变量 | 作用 |
 | --- | --- |
-| `OLIVARES_SOURCES_CONFIG` | 指向一个 JSON 文件的路径，该文件在引擎启动前配置真实的观测源与身份名册（roster）提供方。 |
+| `OLIVARES_SOURCES_CONFIG` | 指向一个 JSON 文件的路径，该文件在引擎启动前配置真实的观测源与身份名册（roster）提供商。 |
 
-`OLIVARES_SOURCES_CONFIG` 是非演示信号源与身份名册提供方据以解析的唯一输入。它是运营方持有密钥的配置，并被刻意保留在存储之外。引擎在启动期间读取它，并在运行时启动**之前**注册每一个源。
+`OLIVARES_SOURCES_CONFIG` 是非演示信号源与身份名册提供商据以解析的唯一输入。它是运营方持有密钥的配置，并被刻意保留在存储之外。引擎在启动期间读取它，并在运行时启动**之前**注册每一个源。
 
 启动时会区分未设置的变量和已指定的配置文件：
 
@@ -357,7 +357,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | 内联代理中提供商服务器工具（网页搜索、网页抓取、代码执行）的出站（egress）门控的 JSON 授权（grants）文件路径。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时这些工具保持仅观察模式；文件无法读取或解析时，会拒绝每个已识别的出站服务器工具，直到修复该文件并重启引擎为止。 |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
-| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | 代理连接的监听地址，格式为 `host:port`：基于此源码树构建的版本为其节点代理提供的双向 TLS 端点。在启动时读取；默认值为空，表示不启用监听器。Community 构建不会读取此变量。 |
+| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | 节点进程连接的监听地址，格式为 `host:port`：基于此源码树构建的版本为其节点进程提供的双向 TLS 端点。在启动时读取；默认值为空，表示不启用监听器。Community 构建不会读取此变量。 |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | 接纳受管理的 Stop 请求所允许的最长时间，使用带单位的正 Go duration 表示。启动时读取；无效值或非正值会阻止启动。不限制进程终止过程的耗时。 |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTEXT_AVAILABILITY` | No | — | Whether session context governance is required, and what happens when the context service cannot answer. |

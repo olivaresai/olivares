@@ -124,13 +124,13 @@
     "table": "Tabla"
   },
   "partial": {
-    "noLiveRead": "No se muestran las sesiones observadas: tu rol no puede leerlas. Las lanzadas de abajo son la parte que se ha podido leer, no el cuadro completo.",
-    "noRunRead": "No se muestran las sesiones lanzadas: tu rol no puede leerlas. Una sesión de abajo que figure como descubierta puede haberla lanzado Olivares: esta lista no ha podido comprobarlo.",
-    "truncated": "Esta es la página más reciente, no todo el parque. Aquí el origen se cruza sobre lo que está cargado, así que una sesión cuya ejecución ya no aparece puede figurar como descubierta; abre la sesión para que responda el motor.",
-    "runLookupFailed": "No se ha podido leer la mitad lanzada: falló la consulta de ejecuciones. Las filas de abajo son lo que devolvió la mitad observada; el origen figura como no leído en vez de adivinado.",
-    "liveLookupFailed": "No se ha podido leer la mitad observada: falló la consulta en vivo. Las filas de abajo son las lanzadas; las columnas de telemetría están vacías porque no se ha podido leer nada, no porque no haya.",
-    "noProfileRead": "No se muestran los nombres de los perfiles de proveedor: tu rol no puede leer perfiles. La columna Instancia lleva en su lugar la referencia del perfil de cada fila.",
-    "profileLookupFailed": "No se han podido leer los nombres de los perfiles de proveedor: falló la consulta de perfiles. La columna Instancia lleva en su lugar la referencia del perfil de cada fila."
+    "noLiveRead": "No se muestran las sesiones iniciadas fuera de Olivares: tu rol no puede verlas.",
+    "noRunRead": "No se muestran las sesiones iniciadas en Olivares: tu rol no puede verlas.",
+    "truncated": "Solo se han cargado las sesiones más recientes, así que una más antigua puede figurar aquí como Descubierta. Ábrela para ver de dónde viene.",
+    "runLookupFailed": "No se han podido cargar las sesiones iniciadas en Olivares.",
+    "liveLookupFailed": "No se han podido cargar las sesiones iniciadas fuera de Olivares.",
+    "noProfileRead": "No se muestran los nombres de proveedor: tu rol no puede leer los perfiles de proveedor.",
+    "profileLookupFailed": "No se han podido cargar los nombres de proveedor."
   },
   "move": {
     "open": "Mover a…",
@@ -277,7 +277,7 @@
     "cleaned": "Limpiada"
   },
   "address": {
-    "retired": "La sesión que tenías abierta se ha cerrado. Tu acceso a la mitad de la que venía ha cambiado. Selecciona una fila para abrir una sesión con tu acceso actual."
+    "retired": "La sesión que tenías abierta ya no está disponible para ti. Elige otra de la lista."
   },
   "work": {
     "worked": "ha trabajado {{duration}}",
@@ -295,7 +295,14 @@
     "pinnedMark": "Fijada",
     "rowMenu": "Acciones de {{name}}",
     "noObservation": "Todavía no ha llegado telemetría de esta sesión.",
-    "pinFailed": "No se ha podido cambiar la fijación."
+    "pinFailed": "No se ha podido cambiar la fijación.",
+    "snoozeHour": "Posponer 1 hora",
+    "snoozeDay": "Posponer 1 día",
+    "snoozeWeek": "Posponer 1 semana",
+    "unsnooze": "Dejar de posponer",
+    "markDone": "Marcar como hecha",
+    "markNotDone": "Marcar como no hecha",
+    "markFailed": "No se ha podido cambiar la marca."
   },
   "surface": {
     "openBeside": "Abrir al lado",
@@ -309,6 +316,11 @@
       "rail": "Sesiones",
       "narrative": "Trabajo",
       "context": "Contexto"
+    },
+    "resize": {
+      "rail": "Cambiar el ancho de la lista de sesiones",
+      "context": "Cambiar el ancho del panel de contexto",
+      "beside": "Cambiar el ancho de la sesión de al lado"
     }
   },
   "narrative": {
@@ -321,14 +333,15 @@
   },
   "meter": {
     "mode": "Modo: {{mode}}",
+    "unasked": "Se ejecuta sin preguntar: limitada por la <policy>política de Olivares</policy>",
+    "unaskedShort": "Se ejecuta sin preguntar",
+    "accessUnknown": "Acceso no informado",
     "modeTitle": "{{tool}} indica: {{mode}}",
     "theTool": "la herramienta",
     "toolWord": {
-      "bypassPermissions": "Nunca pide permiso",
       "untrusted": "Pregunta antes de comandos en los que no confía",
       "onFailure": "Pregunta cuando falla un comando",
       "onRequest": "Pregunta cuando lo necesita",
-      "never": "Nunca pide permiso",
       "granular": "Pregunta según sus propias reglas"
     },
     "usageLabel": "Uso de esta sesión",
@@ -383,7 +396,7 @@
     "canonicalSid": "Id canónico de sesión",
     "binding": "Vínculo de origen",
     "engine": "Motor del agente",
-    "posture": "Postura de gobierno",
+    "posture": "Postura de gobernanza",
     "governance": "Lo que registró el plano",
     "pepOn": "Las llamadas a herramientas se controlan en línea.",
     "pepOff": "Las llamadas a herramientas no se controlan en línea.",
@@ -415,7 +428,7 @@
     },
     "toolMode": "Modo según la herramienta",
     "workRole": "Rol concedido",
-    "workWorkspace": "Workspace de trabajo",
+    "workWorkspace": "Espacio de trabajo de trabajo",
     "workActions": "Acciones concedidas",
     "notRecorded": "No registrado",
     "workRoles": {
@@ -439,9 +452,11 @@
   "conversation": {
     "log": "Conversación",
     "waiting": "Esperando a la sesión…",
-    "empty": "Aún no hay turnos. Envía una frase abajo.",
-    "ended": "El flujo de E/S de la sesión ha terminado.",
-    "lag": "{{count}} marco(s) perdidos — la salida de abajo continúa después del hueco.",
+    "empty": "Todavía no hay mensajes.",
+    "ended": "La sesión ha terminado.",
+    "lag_one": "{{count}} marco perdido — la salida de abajo continúa después del hueco.",
+    "lag_many": "{{count}} marcos perdidos — la salida de abajo continúa después del hueco.",
+    "lag_other": "{{count}} marcos perdidos — la salida de abajo continúa después del hueco.",
     "tool": "Herramienta",
     "result": "Resultado",
     "unknown": "Marco no reconocido",
@@ -449,6 +464,7 @@
     "args": "Argumentos",
     "toolResult": "Resultado",
     "toolFailed": "Falló",
+    "toolStopped": "Detenido",
     "tokens": "{{input}} entrada · {{output}} salida",
     "protocol": "Tramas de protocolo: {{count}}",
     "stop": {
@@ -470,9 +486,70 @@
     "workingFolder": "Carpeta de trabajo: {{cwd}}",
     "temporaryFolder": "Carpeta de trabajo: carpeta temporal de esta sesión",
     "workedFor": "Trabajó {{duration}}",
-    "toolsFolded_one": "+{{count}} llamada a herramienta",
-    "toolsFolded_many": "+{{count}} llamadas a herramientas",
-    "toolsFolded_other": "+{{count}} llamadas a herramientas"
+    "modelChanged": "Cambio de modelo: {{from}} → {{to}}",
+    "modelChangedAt": "Cambio de modelo a las {{time}}: {{from}} → {{to}}",
+    "sentPending": "Enviado. Esperando a que la herramienta lo tome.",
+    "sentNotTaken": "La sesión terminó antes de que la herramienta lo tomara.",
+    "finishedIn": "Terminó en {{duration}}",
+    "escToInterrupt": "Esc para interrumpir",
+    "background": "En segundo plano",
+    "agentWorking": "Trabajando",
+    "work": {
+      "join": ", ",
+      "ran_one": "ejecutó {{count}} comando",
+      "ran_many": "ejecutó {{count}} comandos",
+      "ran_other": "ejecutó {{count}} comandos",
+      "edited_one": "editó {{count}} archivo",
+      "edited_many": "editó {{count}} archivos",
+      "edited_other": "editó {{count}} archivos",
+      "editedSome": "editó archivos",
+      "agents_one": "ejecutó {{count}} agente",
+      "agents_many": "ejecutó {{count}} agentes",
+      "agents_other": "ejecutó {{count}} agentes",
+      "read_one": "leyó {{count}} archivo",
+      "read_many": "leyó {{count}} archivos",
+      "read_other": "leyó {{count}} archivos",
+      "readSome": "leyó archivos",
+      "searched_one": "buscó {{count}} vez",
+      "searched_many": "buscó {{count}} veces",
+      "searched_other": "buscó {{count}} veces",
+      "used_one": "usó {{count}} herramienta",
+      "used_many": "usó {{count}} herramientas",
+      "used_other": "usó {{count}} herramientas",
+      "failed_one": "{{count}} falló",
+      "failed_many": "{{count}} fallaron",
+      "failed_other": "{{count}} fallaron",
+      "background_one": "{{count}} en segundo plano",
+      "background_many": "{{count}} en segundo plano",
+      "background_other": "{{count}} en segundo plano",
+      "stopped_one": "{{count}} detenido",
+      "stopped_many": "{{count}} detenidos",
+      "stopped_other": "{{count}} detenidos"
+    },
+    "running": {
+      "command_one": "Ejecutando {{count}} comando de shell",
+      "command_many": "Ejecutando {{count}} comandos de shell",
+      "command_other": "Ejecutando {{count}} comandos de shell",
+      "edit": "Editando {{target}}",
+      "read": "Leyendo {{target}}",
+      "search": "Buscando {{target}}",
+      "agent": "{{name}} está trabajando",
+      "tool": "Ejecutando {{tool}}"
+    },
+    "limit": {
+      "reached": "Claude Code alcanzó su {{window}}",
+      "reachedUntil": "Claude Code alcanzó su {{window}}; se restablece: {{time}}",
+      "reachedUsed": "Claude Code alcanzó su {{window}} ({{used}} % usado)",
+      "reachedUsedUntil": "Claude Code alcanzó su {{window}} ({{used}} % usado); se restablece: {{time}}",
+      "window": {
+        "fiveHour": "límite de 5 horas",
+        "weekly": "límite semanal",
+        "weeklyOpus": "límite semanal de Opus",
+        "weeklySonnet": "límite semanal de Sonnet",
+        "extra": "límite de uso adicional",
+        "usage": "límite de uso"
+      }
+    }
   },
   "changes": {
     "title": "Cambios en {{folder}}",
@@ -540,17 +617,24 @@
       "pinned": "Fijadas",
       "attention": "Te necesita",
       "active": "En marcha",
-      "settled": "Anteriores"
+      "today": "Terminadas hoy",
+      "settled": "Anteriores",
+      "snoozed": "Pospuestas",
+      "archived": "Archivadas"
     },
     "more": "Más",
     "back": "Volver a las sesiones",
     "showTable": "Ver como tabla",
     "filter": "Filtrar sesiones…",
+    "recent": "Se muestran las {{n}} más recientes",
+    "loadMore": "Cargar más",
     "noMatch": "Ninguna sesión coincide."
   },
   "thread": {
     "copyReference": "Copiar referencia",
-    "terminalHint": "La misma sesión desde una terminal."
+    "terminalHint": "La misma sesión desde una terminal.",
+    "modelMismatch": "Se pidió {{requested}}, se usa {{inUse}}",
+    "modelTitle": "Pedido: {{requested}} · En uso: {{inUse}}"
   },
   "activity": {
     "workflowPhases": "Fases",
@@ -643,5 +727,34 @@
     "usageUntil": "Sin cuota hasta las {{time}}",
     "usage": "Sin cuota",
     "rate": "El proveedor limita las peticiones. Inténtalo de nuevo en un momento."
+  },
+  "sheet": {
+    "title": "Sesión",
+    "open": "Abrir la sesión"
+  },
+  "rowActions": {
+    "rename": "Cambiar nombre…",
+    "renameTitle": "Cambiar el nombre de la sesión",
+    "renameDescription": "El nombre se guarda en el servidor y se muestra allí donde aparece esta sesión. Déjalo vacío para volver al nombre que le da Olivares.",
+    "renameLabel": "Nombre",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "archive": "Archivar",
+    "unarchive": "Desarchivar",
+    "archived": "Archivada. Está en Archivadas, al final de la lista.",
+    "unarchived": "De vuelta en la lista.",
+    "copyLink": "Copiar enlace",
+    "copyId": "Copiar id de sesión",
+    "copyTranscript": "Copiar transcripción",
+    "noTranscript": "La herramienta de esta sesión aún no ha escrito una transcripción que copiar.",
+    "copyFailed": "El navegador no permitió copiar.",
+    "you": "Tú",
+    "assistant": "Asistente",
+    "delete": "Eliminar…",
+    "stopFirst": "Detenla primero",
+    "copiedPartial": "Copiado. {{n}} registros de la transcripción no se pudieron leer y no están incluidos.",
+    "clipped": "Algunos mensajes superan los 64 KiB y se han recortado en la copia; cada uno termina en [...].",
+    "noWholeText": "El motor solo envió la primera línea de cada mensaje, así que la transcripción no se copió.",
+    "transcriptChanged": "La transcripción cambió mientras se copiaba. Inténtalo de nuevo."
   }
 }

@@ -21,15 +21,22 @@ import (
 // (tenant, surface, revision) key is unique at the DB level, so a published version
 // can never be silently rewritten and rollback/audit always read the exact bytes.
 
-// Authoring surfaces. The four managed-* surfaces are the Claude Code policy files;
-// cedar/opa are the policy-as-code engines. The revision store is shared across all.
+// Authoring surfaces. The managed-* surfaces are the policy files of Claude Code, Codex, Grok
+// Build, OpenCode and Gemini CLI; cedar/opa are the policy-as-code engines. The revision store is shared across all.
 const (
 	surfaceManagedSettings = "managed-settings"
 	surfaceHooks           = "hooks"
 	surfaceManagedMCP      = "managed-mcp"
 	surfaceSandbox         = "sandbox"
-	surfaceCedar           = "cedar"
-	surfaceOPA             = "opa"
+	// The other tools' managed files, one surface per native file (the file is
+	// the document, as the four Claude Code surfaces are).
+	surfaceCodexRequirements  = "codex-requirements"   // /etc/codex/requirements.toml
+	surfaceCodexManagedConfig = "codex-managed-config" // /etc/codex/managed_config.toml
+	surfaceGrokRequirements   = "grok-requirements"    // /etc/grok/requirements.toml
+	surfaceOpenCodeConfig     = "opencode-config"      // /etc/opencode/opencode.json
+	surfaceGeminiCLISettings  = "gemini-cli-settings"  // /etc/gemini-cli/settings.json
+	surfaceCedar              = "cedar"
+	surfaceOPA                = "opa"
 )
 
 // maxPolicyContentBytes bounds an authored document so a hostile/huge paste cannot
@@ -325,6 +332,7 @@ func latestActiveSelection(ctx context.Context, sc store.Scope, surface string) 
 type surfaceEntry struct {
 	name        string
 	family      string
+	format      string // counted content format; empty means the family's own
 	activatable bool
 	engine      bool
 	content     *model.ColumnDecl
@@ -356,6 +364,11 @@ var surfaces = surfaceRegistry{entries: []surfaceEntry{
 	{name: surfaceHooks, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceManagedMCP, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceSandbox, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceCodexRequirements, family: surfaceFamilyManaged, format: formatTOML, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceCodexManagedConfig, family: surfaceFamilyManaged, format: formatTOML, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceGrokRequirements, family: surfaceFamilyManaged, format: formatTOML, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceOpenCodeConfig, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
+	{name: surfaceGeminiCLISettings, family: surfaceFamilyManaged, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceCedar, family: surfaceFamilyCedar, activatable: true, engine: true, content: model.Scan(model.ClassAuthority)},
 	{name: surfaceOPA, family: surfaceFamilyOPA, activatable: true, engine: true, content: model.Scan(model.ClassRestrict)},
 	{name: surfaceCedarManaged, family: surfaceFamilyCedar, content: model.Scan(model.ClassAuthority)},

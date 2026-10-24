@@ -40,7 +40,7 @@
   },
   "workspaceRequired": {
     "use": "{{name}} verwenden",
-    "choose": "Workspace auswählen"
+    "choose": "Arbeitsbereich auswählen"
   },
   "names": {
     "untitledSession": "Sitzung ohne Titel",

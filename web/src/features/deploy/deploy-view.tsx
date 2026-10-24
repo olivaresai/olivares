@@ -172,9 +172,12 @@ export default function DeployView() {
             !executor.isLoading &&
             (noExecutor ? (
               <PageSecondaryActions>{declare}</PageSecondaryActions>
-            ) : (
+            ) : !(
+                definitions.isSuccess &&
+                (definitions.data?.items?.length ?? 0) === 0
+              ) ? (
               <PagePrimaryAction>{declare}</PagePrimaryAction>
-            ))}
+            ) : null)}
           {noExecutor && (definitions.data?.items?.length ?? 0) > 0 && (
             <NoExecutorNotice />
           )}

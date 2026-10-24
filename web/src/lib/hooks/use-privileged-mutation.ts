@@ -23,6 +23,11 @@ import {
 } from '@/stores/step-up'
 import { useResumeGuard } from './use-resume-guard'
 
+/** The message a failed request carries, or undefined when it carries none. */
+export function failureText(err: unknown): string | undefined {
+  return err instanceof Error && err.message ? err.message : undefined
+}
+
 /** One reporting policy: assurance demand, role refusal, or ordinary failure.
  * A published continuation belongs to its mounted owner and its original context.
  * Hand-rolled callers capture at reporting; usePrivilegedMutation captures at dispatch.
@@ -67,8 +72,7 @@ export function useFailedActionReporter(
         toast.warning(t('common:privileged.notAuthorizedToast'))
         return
       }
-      const description =
-        err instanceof Error && err.message ? err.message : undefined
+      const description = failureText(err)
       toast.error(
         t('errors:generic'),
         description ? { description } : undefined,

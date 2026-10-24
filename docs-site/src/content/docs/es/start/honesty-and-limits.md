@@ -44,7 +44,7 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
 - **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
   [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
   necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
-  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.3<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
+  [bundle air-gap](/es/how-to/air-gap-install/). La próxima release es **<!-- release -->0.4<!-- /release -->**, aún no publicada. Compila desde el código fuente hasta su publicación.
 
 ## Open core — qué es abierto vs comercial
 

@@ -30,7 +30,7 @@
       "disable": "Ausgewählte deaktivieren"
     },
     "test": "Testen",
-    "testing": "Teste…",
+    "testing": "Wird getestet…",
     "delete": "Löschen",
     "edit": "Bearbeiten",
     "rotateSecret": "Secret rotieren",

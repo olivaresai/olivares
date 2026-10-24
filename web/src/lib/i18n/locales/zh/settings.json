@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "常规",
-    "notifications": "通知",
     "keyboard": "键盘",
-    "sessionDefaults": "会话默认值",
     "aiTools": "AI 工具",
     "workspaces": "工作区",
     "deploy": "部署与更新",
@@ -31,7 +29,7 @@
     "title": "常规",
     "scope": "你自己的偏好。它们会跟随你到此安装上的每个工作区。",
     "theme": "主题",
-    "themeHint": "除非你选择浅色或深色，否则跟随系统。",
+    "themeHint": "除非你选择浅色、深色或纯黑，否则跟随系统。",
     "density": "密度",
     "densityHint": "紧凑显示更多行；舒适更易阅读。",
     "language": "语言",
@@ -46,10 +44,6 @@
     "confirmStopHint": "在停止结束仍在工作的会话之前，询问一次。",
     "reduceMotion": "减少动态效果",
     "reduceMotionHint": "用淡入淡出代替移动。系统要求时开启。"
-  },
-  "unavailable": {
-    "notifications": "此安装尚未保存通知偏好。",
-    "sessionDefaults": "此安装尚未保存会话默认值。"
   },
   "sessionNotifications": {
     "title": "会话通知",
@@ -334,9 +328,17 @@
       "title": "更新到 {{version}}？",
       "stop_other": "{{count}} 个正在运行的会话将停止。重启后可以逐个恢复。",
       "none": "引擎将在新版本上重启一次。",
-      "confirm": "安装并重启"
+      "switchNone": "引擎将在已授权的版本上重启一次。您的数据保持原样。",
+      "confirm": "安装并重启",
+      "switchTitle": "切换到 {{edition}}？",
+      "switchConfirm": "切换并重启"
     },
     "alreadyCurrent": "已是最新版本，未安装任何内容。",
-    "restartRequired": "已安装更新的版本。请通过服务管理器重启引擎以运行它。"
+    "restartRequired": "已安装更新的版本。请通过服务管理器重启引擎以运行它。",
+    "switch": "切换到 {{edition}}",
+    "switchTitle": "切换到 {{edition}}",
+    "switched": "切换已安装。",
+    "terminal": "在服务器终端中执行同样的操作",
+    "orTerminal": "或在服务器终端中执行"
   }
 }

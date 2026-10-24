@@ -2,7 +2,6 @@
   "title": "提供商",
   "subtitle": "智能体工具使用的云服务凭据或本地模型端点。",
   "nav": "提供商",
-  "add": "添加提供商",
   "rowMenu": "{{name}} 的行操作",
   "empty": {
     "title": "尚未注册任何提供商",
@@ -93,7 +92,7 @@
     "testNext": "立即测试连接",
     "registering": "正在注册…",
     "localNameHint": "此端点的显示名称，将显示在选择器中。",
-    "advanced": "Advanced: custom endpoint",
+    "advanced": "高级：自定义端点",
     "missingFields": "请填写缺少的字段：{{fields}}。",
     "requiredEndpointHint": "请输入服务端点：https，或环回或私有网络地址上的普通 http。"
   },
@@ -162,5 +161,9 @@
     "failed": "提供商已保存。会话准备失败：{{error}}",
     "retry": "重试准备",
     "incomplete": "工具安装状态为 {{state}}。请检查 AI 工具后重试。"
+  },
+  "section": {
+    "title": "API 密钥",
+    "add": "添加 API 密钥"
   }
 }

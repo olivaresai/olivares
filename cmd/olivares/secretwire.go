@@ -224,7 +224,7 @@ func (d *deferredSecretWiring) openAll(ctx context.Context, r *secret.Resolver, 
 				log.Warn("knowledge: failed to load external content-source plugin; source not wired", "name", p.name, "error", err)
 				continue
 			}
-			src := wrapContentSourceMode(wrapSDKContentSource(raw), p.cfg.Settings["mode"])
+			src := wrapContentSourceConfig(wrapSDKContentSource(raw), p.cfg.Settings)
 			if d.knowledge != nil {
 				d.knowledge.AddSource(p.name, src)
 			}

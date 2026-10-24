@@ -1,8 +1,8 @@
 {
   "title": "AI tools",
   "description": "Install the AI tools that sessions run on this server, and sign them in.",
+  "descriptionMember": "Sessions run as these accounts and API keys. A system administrator installs the tools and signs them in.",
   "refresh": "Refresh",
-  "adminOnly": "A system administrator session is required to manage host tools.",
   "readOnly": "This server is read-only. Installation is disabled.",
   "notInstalled": "No managed installation",
   "installedOutside": "Installed on this server, not by Olivares",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "Options for {{name}}",
     "update": "Update",
-    "details": "Install details",
-    "profilesPage": "Detailed profiles page"
+    "details": "Install details"
   },
   "details": {
     "title": "{{name}}: install details",
@@ -220,5 +219,11 @@
     "packagesHint": "Declared by the provider profile each tool's new session uses ({{profiles}}). A tool without one gets a new profile that declares none.",
     "packagesNoProfile": "These come from the provider profile each tool's sessions run under. None exists yet, and a new one declares none.",
     "packagesRefused": "Not listed because no session can start yet: {{tools}}."
+  },
+  "place": {
+    "title": "Accounts and API keys",
+    "accounts": "Accounts",
+    "allAccounts": "All accounts: details, labels and bindings",
+    "noAccess": "Your role cannot read the accounts or API keys of this organization."
   }
 }

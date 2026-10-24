@@ -23,12 +23,13 @@
     "empty": "Ninguna vista coincide con «{{query}}»"
   },
   "items": {
-    "estate": "Entorno",
+    "estate": "Parque",
     "home": "Inicio",
     "onboarding": "Asistente de configuración",
     "inventory": "Inventario",
     "sessions": "Sesiones",
     "accessMap": "Mapa de acceso",
+    "reach": "Alcance",
     "health": "Salud y SLA",
     "capabilities": "MCP y skills",
     "skills": "Catálogo de skills",
@@ -43,7 +44,7 @@
     "permissions": "Permisos",
     "identity": "Identidad y acceso",
     "vault": "Caja fuerte",
-    "claudePolicy": "Gobierno de Claude Code",
+    "claudePolicy": "Política gestionada",
     "routinePolicies": "Políticas de rutinas",
     "deploy": "Despliegue",
     "gitPublication": "Publicación Git",
@@ -55,7 +56,7 @@
     "agentArtifacts": "Artefactos de agente",
     "models": "Modelos",
     "modelOps": "Operaciones de modelos",
-    "adoption": "Adopción de Claude Code",
+    "adoption": "Adopción",
     "evals": "Evals",
     "security": "Seguridad",
     "recordings": "Grabaciones",
@@ -72,14 +73,14 @@
     "retention": "Retención",
     "workspaceDashboard": "Espacio de trabajo",
     "settings": "Ajustes",
-    "workspace-templates": "Plantillas de workspace",
+    "workspace-templates": "Plantillas de espacio de trabajo",
     "eventing": "Webhooks y eventos",
     "session-viewer": "Visor de sesiones",
     "backups": "Copias de seguridad",
     "logs": "Registros",
     "inferenceProxy": "Proxy de inferencia",
     "alerting": "Alertas",
-    "agentcoreExport": "Exportación a AgentCore",
+    "agentcoreExport": "Exportación de políticas",
     "providers": "Proveedores",
     "providerProfiles": "Perfiles de proveedor",
     "providerBindings": "Vínculos de fuentes",
@@ -95,26 +96,27 @@
     "allHint": "Sin filtro de espacio",
     "default": "predeterminado",
     "tenantWide": "Todos los espacios",
-    "unresolved": "Workspace fuera de la lista",
-    "truncated": "La lista está incompleta — hay más workspaces de los cargados"
+    "unresolved": "Espacio de trabajo fuera de la lista",
+    "truncated": "La lista está incompleta — hay más espacios de trabajo de los cargados"
   },
   "descriptions": {
     "estate": "Inspecciona los recursos configurados y sus relaciones, incluidas las dependencias de los elementos de trabajo.",
-    "home": "Visión general del estado y la salud del estate",
+    "home": "Visión general del estado y la salud del parque",
     "onboarding": "Configuración del despliegue paso a paso",
     "inventory": "Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron.",
     "sessions": "Inicia sesiones y sigue lo que hace cada una, también las que encuentra Olivares",
     "accessMap": "Qué lee y escribe cada agente (R/RW)",
+    "reach": "Mira a qué destinos puede llegar cada herramienta y cuáles esperan aprobación.",
     "health": "Disponibilidad y SLA de agentes y MCP",
     "capabilities": "Gobierna servidores MCP, skills y herramientas",
     "skills": "Explorar paquetes de skills y asignarlos a departamentos, grupos de agentes y agentes",
     "protocolBindings": "Compón y reconcilia enlaces gobernados A2A y MCP",
-    "communications": "Canales, avisos directos y bandeja personal del workspace seleccionado",
+    "communications": "Canales, avisos directos y bandeja personal del espacio de trabajo seleccionado",
     "communicationsInbox": "Mensajes dirigidos a ti: ábrelos y acusa recibo de cada uno",
     "communicationsNew": "Crea un canal con concesiones iniciales explícitas",
     "communicationsAdministration": "Administra canales: configuración e historial de concesiones",
     "communicationsHandoffs": "Ofertas de responsabilidad de trabajo dirigidas a ti: lee el contexto y acepta o rechaza",
-    "console": "Usuarios, SSO/IdP, workspaces, grupos de agentes, roles, secretos, conectores, claves API y la licencia de esta instalación",
+    "console": "Usuarios, SSO/IdP, espacios de trabajo, grupos de agentes, roles, secretos, conectores, claves API y la licencia de esta instalación",
     "permissions": "Identidad, roles y aprobaciones",
     "identity": "SSO, SCIM y las identidades que usan tus agentes",
     "vault": "Tus contraseñas, notas y códigos de autenticación",
@@ -140,7 +142,7 @@
     "redteam": "Pruebas adversariales de tus agentes",
     "dashboards": "KPIs ejecutivos e informes",
     "observability": "Salud de ingesta por estándar y trazas distribuidas",
-    "platforms": "Superficies de plataformas de proveedor, matriz de compliance y ciclo de vida de modelos por plataforma — referencia, no tus servidores",
+    "platforms": "Superficies de plataformas de proveedor, matriz de cumplimiento y ciclo de vida de modelos por plataforma — referencia, no tus servidores",
     "rateLimits": "Inventario de límites de uso de Anthropic y su disponibilidad (referencia de solo lectura)",
     "attestation": "Atestación de releases — SLSA, SBOM, VEX y Scorecard",
     "apiPlayground": "Explora y prueba la API del control plane",
@@ -157,14 +159,14 @@
     "providerBindings": "Vincula fuentes configuradas a perfiles de proveedor",
     "providerAccounts": "Lista las cuentas de proveedor con nombre y adopta un perfil de proveedor existente como cuenta",
     "routinePolicies": "Intervalos mínimos entre ejecuciones, topes de concurrencia, requisitos de aprobación, listas permitidas de cron y entornos bloqueados para las rutinas de Claude Code",
-    "agentcoreExport": "Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada",
-    "workspace-templates": "Instantáneas reutilizables de hooks, ajustes, conectores y políticas para sesiones de workspace",
+    "agentcoreExport": "Planifica, revisa y aplica la proyección de las reglas de gobernanza de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada",
+    "workspace-templates": "Instantáneas reutilizables de hooks, ajustes, conectores y políticas para sesiones de espacio de trabajo",
     "eventing": "Suscripciones webhook salientes, el registro de eventos capturados, las entregas y la cola de mensajes muertos",
     "team-costs": "Atribución de costes por equipo: sesiones, tokens y gasto, con tendencia diaria y desglose por proyecto y por modelo",
     "backups": "Instantáneas cifradas de recuperación ante desastres del control plane: crear, programar, descargar y restaurar",
     "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa",
     "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo",
-    "agent-tools": "Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue",
+    "agent-tools": "Consulta las cuentas y claves de API con las que se ejecutan las sesiones; instalar las herramientas e iniciar su sesión es cosa de los administradores del despliegue",
     "mcpServers": "Conecta servidores MCP remotos a esta organización, pruébalos y elige qué herramientas pueden usar las sesiones",
     "storedBudgets": "Consumo frente a cada límite guardado. La capacidad reservada cuenta para el límite."
   },
@@ -186,6 +188,9 @@
     }
   },
   "aliases": {
+    "claudePolicy": "Gobernanza de Claude Code · Claude Code",
+    "adoption": "Adopción de Claude Code · Claude Code",
+    "agentcoreExport": "Exportación a AgentCore · AgentCore",
     "sessions": "Sesiones · Observar sesiones · Operar sesiones · Claude Code · agentops",
     "agentops": "Operar sesiones · Claude Code · agentops",
     "console": "Consola de control · Administración del tenant"
@@ -237,19 +242,19 @@
       "question": "¿Quién accede, con qué reglas, y cómo protejo el entorno?",
       "sections": {
         "access": "Identidad y acceso",
-        "policy": "Políticas y fronteras de gobierno",
+        "policy": "Políticas y fronteras de gobernanza",
         "defense": "Protección y respuesta"
       }
     },
     "deployment": {
-      "label": "Despliegue",
+      "label": "Entrega",
       "question": "¿Cómo preparo y controlo un despliegue?",
       "sections": {
         "deployments": "Despliegues"
       }
     },
     "observation": {
-      "label": "Observabilidad y evidencias",
+      "label": "Supervisión",
       "question": "¿Qué ocurre, cuánto cuesta y qué puedo demostrar?",
       "sections": {
         "operations": "Estado y actividad",
@@ -272,8 +277,6 @@
     "areas": "Áreas",
     "expand": "Mostrar los módulos de {{area}}",
     "collapse": "Ocultar los módulos de {{area}}",
-    "expandAll": "Expandir todas las áreas",
-    "collapseAll": "Contraer todas las áreas",
     "modulesOf": "Módulos de {{area}}",
     "empty": "No hay entradas de esta área disponibles para ti",
     "emptyHint": "Las entradas aparecen aquí cuando tu rol en la organización actual da acceso a un módulo de esta área.",
@@ -327,7 +330,9 @@
     "noProfileRead": "Una sesión se ejecuta con un perfil de proveedor, y tu rol no incluye permiso para leerlos.",
     "readFailed": "No se han podido leer los perfiles de proveedor, así que no se puede iniciar una sesión desde aquí.",
     "send": "Enviar",
-    "turnPlaceholder": "Envía una frase…",
+    "ended": "Esta sesión ha terminado.",
+    "starting": "La sesión se está iniciando…",
+    "startAgain": "Empieza de nuevo la sesión para enviar un mensaje.",
     "turnAria": "Turno de la sesión",
     "attachedWaiting": "Te necesita",
     "rawLine": "Línea en bruto",
@@ -337,7 +342,6 @@
     "turnFailed": "La sesión no ha podido aceptar este turno.",
     "draftSaveFailed": "No se ha podido guardar el borrador en esta pestaña. Mantén esta página abierta o copia tu mensaje antes de salir.",
     "sendBackgroundHint": "Ctrl+Entrar envía y deja el borrador listo para la siguiente frase.",
-    "messagePlaceholder": "Mensaje para {{title}}…",
     "slashLabel": "Comandos y skills",
     "slashOption": "{{name}}, {{i}} de {{n}}",
     "slashNoMatch": "Ningún comando coincide con «{{query}}».",
@@ -354,27 +358,33 @@
         "plugin": "Plugin"
       }
     },
-    "modelAria": "Modelo y effort de esta sesión: {{value}}",
     "sessionKeeps": "Esta sesión sigue con {{value}}. Otra selección inicia una sesión nueva.",
-    "startWithChoice": "Iniciar una sesión nueva con esta elección"
+    "startWithChoice": "Iniciar una sesión nueva con esta elección",
+    "askPlaceholder": "Pregunta lo que quieras, / para comandos y skills",
+    "modelPicker": "Modelo: {{value}}",
+    "effortPicker": "Esfuerzo: {{value}}",
+    "accessPicker": "Acceso: {{value}}",
+    "accessKeeps": "Esta sesión conserva su acceso. Otro acceso inicia una sesión nueva."
   },
   "shell": {
     "journeysLabel": "Recorridos",
     "journeys": {
       "home": "Inicio",
       "sessions": "Sesiones",
-      "approvals": "Aprobaciones",
-      "storedBudgets": "Presupuestos",
-      "agent-tools": "Herramientas de IA"
+      "agent-tools": "Herramientas",
+      "rules": "Reglas",
+      "audit": "Registro",
+      "organization": "Organización",
+      "storedBudgets": "Presupuestos"
     },
     "phoneBarLabel": "Principal",
     "newSession": "Nueva sesión",
     "searchCommands": "Buscar y comandos",
-    "brandHome": "Olivares AI, inicio",
+    "search": "Buscar",
+    "stopAll": "Detener todo",
     "allAreas": "Todas las áreas",
     "more": "Más",
     "moreLabel": "Más: todas las áreas",
-    "workspaceSwitch": "Cambiar de espacio de trabajo. Actual: {{name}}",
     "workspaceCount": "Espacios de trabajo: {{count}}",
     "rail": {
       "title": "Sesiones",
@@ -412,7 +422,8 @@
     "panel": {
       "show": "Mostrar {{title}}",
       "hide": "Ocultar {{title}}",
-      "close": "Cerrar el panel"
+      "close": "Cerrar el panel",
+      "resize": "Cambiar el ancho de {{title}}"
     },
     "keys": {
       "command": {
@@ -432,6 +443,19 @@
       "agentStops_many": "{{count}} paradas de agente activas",
       "agentStops_other": "{{count}} paradas de agente activas",
       "none": "No hay nada parado. Las sesiones y los agentes funcionan con normalidad."
+    },
+    "status": {
+      "label": "Estado",
+      "running_one": "{{count}} sesión abierta",
+      "running_many": "{{count}} sesiones abiertas",
+      "running_other": "{{count}} sesiones abiertas",
+      "usage": "Uso de {{tool}}",
+      "fiveHour": "5 h",
+      "week": "sem.",
+      "version": "Versión"
+    },
+    "account": {
+      "version": "Versión {{version}}"
     }
   }
 }

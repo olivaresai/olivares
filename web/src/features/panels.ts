@@ -157,8 +157,12 @@ export interface DashboardCostPanels {
    * overlay sets it, and removing it there and here is one change. */
   readonly hasActivity: boolean
   readonly headline: ReactNode
+  /** Unread since Estate's home dropped its cost tile and the floor note under it
+   * (#2546): the day's cost is a clause of the summary sentence now. Kept because the
+   * edition overlay sets both, and removing them there and here is one change. */
   readonly homeTile: ReactNode
   readonly sections: ReactNode
+  /** Unread since #2546, with `homeTile` above. */
   readonly floor: ReactNode
 }
 
@@ -199,6 +203,8 @@ export interface PanelExtensions {
   readonly cedarPolicyAuthoring?: CedarPolicyAuthoring
   readonly identityLoginCards?: readonly PanelExtension[]
   readonly identityStepUpMethods?: readonly StepUpMethodExtension[]
+  /** Status bar: items after the agent stops, each shown only with its permission. */
+  readonly statusBarItems?: readonly PanelExtension[]
   /** Session thread: panels in the side pane, after Context, Changes, Files and Preview. */
   readonly sessionPanels?: readonly SessionPanelExtension[]
   /** Governance: edition-provided tabs after agent risk. */
@@ -228,6 +234,11 @@ export interface PanelExtensions {
   readonly ssoTab?: ComponentType
   /** AI tools › sign in a profile: further ways beside the terminal command. */
   readonly profileSignInWays?: readonly ProfileSignInExtension[]
+  /**
+   * Estate › Last hour past `FLEET_SESSIONS` live sessions: drawn instead of the swimlanes, with
+   * their props. The default console keeps the swimlanes at any count.
+   */
+  readonly estateFleet?: ComponentType<import('./home/swimlane').SwimlaneProps>
 }
 
 /** The panels of one place that the signed-in user is offered. */

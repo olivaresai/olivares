@@ -7,6 +7,7 @@ import hashlib
 import gzip
 import io
 import importlib.util
+import itertools
 import json
 import os
 from pathlib import Path
@@ -287,6 +288,41 @@ class ArtifactSecrets(unittest.TestCase):
                                      'an unavailable zstd reader must block publication')
                 else:
                     self.assertEqual(self.check(package).returncode, 1)
+
+    def test_compressed_wrapper_bytes_are_not_read_as_text(self):
+        # A gzip header's file name is raw wrapper bytes, not content: the wrapper is scanned through its
+        # decompressed member, so a key-shaped run in the compressed bytes alone is no finding.
+        path = self.scratch / 'clean-member.gz'
+        stream = io.BytesIO()
+        with gzip.GzipFile(filename='api_key=' + CANARY, mode='wb', fileobj=stream, mtime=0) as wrapper:
+            wrapper.write(b'clean payload\n')
+        path.write_bytes(stream.getvalue())
+        self.assertIn(CANARY.encode(), path.read_bytes())
+        self.assertEqual(self.check(path).returncode, 0)
+
+    def test_a_secret_inside_a_compressed_member_still_blocks(self):
+        cases = [('release.tar.gz', lambda data: gzip.compress(data, mtime=0))]
+        if sys.version_info >= (3, 14):
+            from compression import zstd
+            cases.append(('release.tar.zst', zstd.compress))
+        for name, compress in cases:
+            with self.subTest(wrapper=name):
+                path = self.scratch / name
+                path.write_bytes(compress(tar_bytes({'etc/app.env': 'token=' + CANARY})))
+                self.assertEqual(self.check(path).returncode, 1)
+
+    def test_an_undecompressable_wrapper_keeps_its_printable_pass_and_fails_closed(self):
+        path = self.scratch / 'broken.gz'
+        path.write_bytes(b'\x1f\x8b\x08\x00 not a gzip stream token=' + CANARY.encode() + b'\n')
+        spec = importlib.util.spec_from_file_location('artifact_gate', CHECK)
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        targets = self.scratch / 'targets'
+        targets.mkdir()
+        with self.assertRaises(Exception):
+            gate.prepare(path, targets, itertools.count(), {}, path.name)
+        self.assertIn(CANARY.encode(), (targets / '0' / 'printable.txt').read_bytes())
+        self.assertEqual(self.check(path).returncode, 2)
 
     def push(self, saved, image='example.invalid/canary:1'):
         transport = self.scratch / 'docker'

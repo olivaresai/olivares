@@ -3245,7 +3245,7 @@ func (rs *ResourceServer) planMRTRRelease(result json.RawMessage, parent sdk.Evi
 		plan.release = deriveResponseReleaseBinding(rs.tenant, parent, class, resultDigest(result))
 		return plan
 	}
-	if rs.elicitationMediator == nil || len(entries) == 0 {
+	if !sdk.CapabilityEnabled(rs.elicitationMediator) || len(entries) == 0 {
 		plan.entries = nil
 	} else {
 		for _, raw := range entries {
@@ -3274,7 +3274,7 @@ func (rs *ResourceServer) planMRTRRelease(result json.RawMessage, parent sdk.Evi
 // crash between the accepted deny bytes and the settlement left an observed,
 // retained payload with no durable disposition.
 func (rs *ResourceServer) mediateMRTRResultEntries(ctx context.Context, w http.ResponseWriter, req rsRequest, tok validatedToken, entries map[string]json.RawMessage, trace string, settleChild func()) bool {
-	if rs.elicitationMediator == nil {
+	if !sdk.CapabilityEnabled(rs.elicitationMediator) {
 		return false
 	}
 	verdict, reason := rs.evaluateMRTREntries(ctx, tok, ChannelMRTRInputRequest, entries, trace)
@@ -3296,7 +3296,7 @@ func (rs *ResourceServer) mediateMRTRResultEntries(ctx context.Context, w http.R
 // authorization surface and stays pre-claim (stage-4 placement); only the
 // hijack verdict matters to its callers.
 func (rs *ResourceServer) mediateMRTRInputResponses(ctx context.Context, w http.ResponseWriter, req rsRequest, tok validatedToken, entries map[string]json.RawMessage, trace string) bool {
-	if rs.elicitationMediator == nil {
+	if !sdk.CapabilityEnabled(rs.elicitationMediator) {
 		return false
 	}
 	return rs.mediateMRTREntries(ctx, w, req, tok, ChannelMRTRInputResponse, entries, trace)
@@ -3406,6 +3406,9 @@ func (rs *ResourceServer) auditTaskTraced(ctx context.Context, tok validatedToke
 // release claim. The historical post-hoc "authorized; upstream forward failed"
 // audit is gone: upstream failures are settlements.
 func (rs *ResourceServer) handleUIRead(ctx context.Context, w http.ResponseWriter, r *http.Request, req rsRequest, tok validatedToken) bool {
+	// One answer for the whole request: the policy digest below and the inspection
+	// that follows must agree even if the add-on is turned on or off in between.
+	renderOn := sdk.CapabilityEnabled(rs.renderInspector)
 	trace := requestTraceParent(r, req.Params)
 
 	// STRICT canonicalization is the first thing that touches the params (the
@@ -3465,7 +3468,7 @@ func (rs *ResourceServer) handleUIRead(ctx context.Context, w http.ResponseWrite
 		rs.writeEvidenceUnavailable(w, req.ID, "")
 		return true
 	}
-	pd := mediatedPolicyDigest(releaseClassUI, policy.RequireConsent, consentGranted, rs.renderInspector != nil, false)
+	pd := mediatedPolicyDigest(releaseClassUI, policy.RequireConsent, consentGranted, renderOn, false)
 	binding := sdk.EvidenceBinding{
 		OperationID: sdk.OperationID(opID),
 		EffectDigest: sdk.EffectDigest(deriveMediatedEffectDigest(rs.tenant, rs.resource, "resources/read", tok,
@@ -3562,7 +3565,7 @@ func (rs *ResourceServer) handleUIRead(ctx context.Context, w http.ResponseWrite
 	// inspect the HTML content of the rendered template before it can be
 	// released to the client. A nil inspector is a clean pass (the community
 	// build injects nil; the render-gate + consent keep working).
-	if rs.renderInspector != nil {
+	if renderOn {
 		htmlContent, ambiguous := extractHTMLFromResult(result)
 		if ambiguous {
 			// Review round 1 (S5-03, UI leg): the fetched render is one a strict
@@ -4282,6 +4285,9 @@ func rawOrNull(id json.RawMessage) json.RawMessage {
 // CHILD `withheld` — → write the response ONLY against an anchored release
 // claim.
 func (rs *ResourceServer) handleElicitation(ctx context.Context, w http.ResponseWriter, r *http.Request, req rsRequest, tok validatedToken) {
+	// One answer for the whole request: the policy digest below and the inspection
+	// that follows must agree even if the add-on is turned on or off in between.
+	mediatorOn := sdk.CapabilityEnabled(rs.elicitationMediator)
 	trace := requestTraceParent(r, req.Params)
 
 	// STRICT canonicalization first (the stage-3/4 P0 class): the members the
@@ -4299,7 +4305,7 @@ func (rs *ResourceServer) handleElicitation(ctx context.Context, w http.Response
 
 	// Inspect the server's elicitation REQUEST (the prompt + schema + URL-mode).
 	// Pre-claim: this mediation is part of the authorization surface.
-	if rs.elicitationMediator != nil {
+	if mediatorOn {
 		content := []byte(canon.stringMember("message"))
 		if len(content) > 0 {
 			dec := rs.elicitationMediator.Mediate(ctx, ElicitationInspectionInput{
@@ -4330,7 +4336,7 @@ func (rs *ResourceServer) handleElicitation(ctx context.Context, w http.Response
 		rs.writeEvidenceUnavailable(w, req.ID, "")
 		return
 	}
-	pd := mediatedPolicyDigest(releaseClassElicitation, false, false, false, rs.elicitationMediator != nil)
+	pd := mediatedPolicyDigest(releaseClassElicitation, false, false, false, mediatorOn)
 	binding := sdk.EvidenceBinding{
 		OperationID: sdk.OperationID(opID),
 		EffectDigest: sdk.EffectDigest(deriveMediatedEffectDigest(rs.tenant, rs.resource, "elicitation/create", tok,
@@ -4424,7 +4430,7 @@ func (rs *ResourceServer) handleElicitation(ctx context.Context, w http.Response
 	// settlement above states only the observed dispatch. The deny STANDS even
 	// when the child's journaling refuses (evidence is mandatory on allow, never
 	// on deny).
-	if rs.elicitationMediator != nil {
+	if mediatorOn {
 		respContent, ambiguous := extractElicitationResponseContent(result)
 		if ambiguous {
 			// The response cannot be read strictly (it does not decode, or it carries a
@@ -4480,6 +4486,9 @@ func (rs *ResourceServer) handleElicitation(ctx context.Context, w http.Response
 // channel (only ChannelSamplingRequest exists), so the release follows the
 // completed settlement directly.
 func (rs *ResourceServer) handleSampling(ctx context.Context, w http.ResponseWriter, r *http.Request, req rsRequest, tok validatedToken) {
+	// One answer for the whole request: the policy digest below and the inspection
+	// that follows must agree even if the add-on is turned on or off in between.
+	mediatorOn := sdk.CapabilityEnabled(rs.elicitationMediator)
 	trace := requestTraceParent(r, req.Params)
 
 	canon, cerr := canonicalizeMediatedParams(req.Params, samplingReservedKeys)
@@ -4491,7 +4500,7 @@ func (rs *ResourceServer) handleSampling(ctx context.Context, w http.ResponseWri
 		return
 	}
 
-	if rs.elicitationMediator != nil {
+	if mediatorOn {
 		// The inspected text is read from the STRICT canonical TREE of the governed
 		// "messages" member, with exact casing at every nesting level (review
 		// round 1, S5-03: a nested `Text` alias used to empty the inspected text
@@ -4533,7 +4542,7 @@ func (rs *ResourceServer) handleSampling(ctx context.Context, w http.ResponseWri
 		rs.writeEvidenceUnavailable(w, req.ID, "")
 		return
 	}
-	pd := mediatedPolicyDigest(releaseClassSampling, false, false, false, rs.elicitationMediator != nil)
+	pd := mediatedPolicyDigest(releaseClassSampling, false, false, false, mediatorOn)
 	binding := sdk.EvidenceBinding{
 		OperationID: sdk.OperationID(opID),
 		EffectDigest: sdk.EffectDigest(deriveMediatedEffectDigest(rs.tenant, rs.resource, "sampling/createMessage", tok,

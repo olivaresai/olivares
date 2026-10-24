@@ -11,6 +11,7 @@ import (
 
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
@@ -80,7 +81,7 @@ func (s ContentInspectionService) Inspect(
 	tenant model.TenantID, actor, actorRef string, unbindableAgent bool,
 	direction, modelRef string, content claudeapi.CollectedContent,
 ) claudeapi.ContentInspectionDecision {
-	if s.Inspector == nil || len(content.Channels) == 0 {
+	if !sdk.CapabilityEnabled(s.Inspector) || len(content.Channels) == 0 {
 		return claudeapi.ContentInspectionDecision{Forward: true}
 	}
 	dec := s.Inspector.Inspect(ctx, claudeapi.ContentInspectionInput{

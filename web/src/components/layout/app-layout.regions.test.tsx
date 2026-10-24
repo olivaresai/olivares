@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SHELL'S REGIONS: sidebar · one header row · the work, and NOTHING BELOW THE WORK.
-// Since the v26.10 frame the work sits in the sheet's body, a ROW that may also hold the
-// side panel a page declares — beside the work, never below it.
+// THE SHELL'S REGIONS: one header row · the work · one status row, and NOTHING ELSE BELOW
+// THE WORK. There is no sidebar (issue #2544): the top bar holds the places. The work sits
+// in the sheet's body, a ROW that may also hold the side panel a page declares — beside the
+// work, never below it. The status bar (#3161) is the sheet's last row: 24 px that say how
+// things stand, under the work and the panel alike, and the only row allowed there.
 //
 // ⛔ THIS FILE EXISTS BECAUSE ITS ABSENCE WAS MEASURED. An independent review of this
 //    lane ran the obvious mutation — a fixed 90 px bar reinstated after `</main>` in
@@ -18,12 +20,13 @@
 // are about WHAT IS UNDER `main` and HOW MANY HEADER ROWS there are, which is what an
 // action bar changes, and not about the classes the shell happens to carry today.
 //
-// The children are stood in for on purpose. The rail, the bar, the palette and the
-// tenant gate each own a suite that pins THEIR structure (sidebar.test.tsx,
-// topbar.layout.test.tsx, command-menu.test.tsx, tenant-gate.test.tsx); mounting the
+// The children are stood in for on purpose. The bar, All areas, the palette and the
+// tenant gate each own a suite that pins THEIR structure (topbar.layout.test.tsx,
+// sidebar.test.tsx, command-menu.test.tsx, tenant-gate.test.tsx); mounting the
 // real ones here would make this file fail for their reasons and say nothing new about
 // the regions.
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -47,7 +50,15 @@ const routerInstance = vi.hoisted(() => ({
   },
 }))
 const server = vi.hoisted(() => ({ setupRequired: false, pending: false }))
+// The app root provides one QueryClient and the shell reads it (NewSessionDialog's
+// useKeyBeingStored), so the layout renders under a fresh one per test.
+let client: QueryClient
+function Providers({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
+const renderLayout = () => render(<AppLayout />, { wrapper: Providers })
 beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   auth.status = 'authenticated'
   router.live = router.committed = '/audit?from=2026-09-30#entry-7'
   router.navigate.mockReset()
@@ -91,36 +102,23 @@ vi.mock('@/lib/hooks/use-server-info', () => ({
       : { isPending: false, data: { setup_required: server.setupRequired } },
 }))
 
-vi.mock('./app-sidebar', () => ({
-  AppSidebar: ({
-    mode,
-    onToggle,
-    onNavigate,
-  }: {
-    mode: string
-    onToggle: () => void
-    onNavigate?: () => void
-  }) => (
-    <div data-testid="rail" data-mode={mode}>
-      <button type="button" onClick={onToggle}>
-        toggle {mode}
-      </button>
-      {onNavigate ? (
-        <button type="button" onClick={onNavigate}>
-          go somewhere
-        </button>
-      ) : null}
-    </div>
-  ),
-}))
 vi.mock('./sidebar', () => ({
   AreasSheet: () => <div data-testid="areas-sheet" />,
 }))
 vi.mock('./phone-bar', () => ({
-  PhoneBar: () => <nav data-testid="phone-bar" />,
+  PhoneBar: ({ onMore }: { onMore: () => void }) => (
+    <nav data-testid="phone-bar">
+      <button type="button" onClick={onMore}>
+        More
+      </button>
+    </nav>
+  ),
 }))
 vi.mock('./topbar', () => ({
   Topbar: () => <header data-slot="topbar">bar</header>,
+}))
+vi.mock('./status-bar', () => ({
+  StatusBar: () => <footer data-slot="status-bar" />,
 }))
 vi.mock('./command-menu', () => ({
   CommandMenu: () => <div data-testid="palette" />,
@@ -143,15 +141,14 @@ vi.mock('@/features/navigation/personal-navigation', () => ({
   ),
 }))
 
-import { usePreferencesStore } from '@/stores/preferences'
 import { AppLayout } from './app-layout'
-import { useNavOverlay } from './sidebar-mode'
+import { useAreasSheet } from './areas-sheet-store'
 
 const work = () => document.querySelector('main#main-content') as HTMLElement
 
 describe('the shell has three regions and nothing else', () => {
   it('paints NOTHING under the work region', () => {
-    render(<AppLayout />)
+    renderLayout()
     const main = work()
     expect(main).not.toBeNull()
 
@@ -172,16 +169,18 @@ describe('the shell has three regions and nothing else', () => {
   })
 
   it('has ONE header row, and it is the only thing above the work', () => {
-    render(<AppLayout />)
+    renderLayout()
     const main = work()
     const body = main.parentElement as HTMLElement
     const sheet = body.parentElement as HTMLElement
     expect(document.querySelectorAll('[data-slot="topbar"]')).toHaveLength(1)
-    // The sheet is exactly: the bar, then the body. A second row — the context row an
-    // earlier pass removed, a notice strip, a tab bar hoisted out of a route — would add
-    // a third child here and is what this count refuses.
+    // The sheet is exactly: the bar, the body, the status bar. Another row — the context
+    // row an earlier pass removed, a notice strip, a tab bar hoisted out of a route, an
+    // action bar under the work — would add a fourth child here and is what this refuses.
     expect(sheet.getAttribute('data-slot')).toBe('sheet')
-    expect(sheet.children).toHaveLength(2)
+    expect(
+      [...sheet.children].map((el) => el.getAttribute('data-slot')),
+    ).toEqual(['topbar', 'sheet-body', 'status-bar'])
     expect(sheet.firstElementChild?.getAttribute('data-slot')).toBe('topbar')
     expect(body.previousElementSibling).toBe(sheet.firstElementChild)
     // And the body opens with the work: nothing is stacked above it inside the sheet.
@@ -189,7 +188,7 @@ describe('the shell has three regions and nothing else', () => {
   })
 
   it('mounts no composer of its own: starting work belongs to the routes and the palette', () => {
-    render(<AppLayout />)
+    renderLayout()
     // The requirement did not go away — the palette carries `Start a session` and the
     // two screens where starting work IS the work mount `WorkComposer` inside their own
     // work region. What the SHELL may not do is spend every route's pixels on it.
@@ -198,7 +197,7 @@ describe('the shell has three regions and nothing else', () => {
   })
 
   it('gives the work region the geometry that lets a route own the viewport', () => {
-    render(<AppLayout />)
+    renderLayout()
     const main = work()
     // `min-h-0` is the load-bearing one: without it a flex child refuses to shrink
     // below its content, so a route that scrolls inside itself grows the shell instead
@@ -219,7 +218,7 @@ describe('the shell has three regions and nothing else', () => {
 
 it('carries the requested page to sign-in before mounting private content', () => {
   auth.status = 'anonymous'
-  render(<AppLayout />)
+  renderLayout()
   expect(router.navigate).toHaveBeenCalledTimes(1)
   expect(router.navigate).toHaveBeenCalledWith({
     to: '/login',
@@ -234,7 +233,7 @@ it('carries the requested page to sign-in before mounting private content', () =
 // again with a longer returnTo. It now navigates once per signed-out state.
 it('redirects once, whatever the pending navigation does to the live location', () => {
   auth.status = 'anonymous'
-  const { rerender } = render(<AppLayout />)
+  const { rerender } = renderLayout()
   for (let i = 0; i < 5; i++) {
     router.live = `/login?returnTo=${encodeURIComponent(router.live)}`
     rerender(<AppLayout />)
@@ -249,7 +248,7 @@ it('returns a deep link to its page when the router has not committed a location
   auth.status = 'anonymous'
   router.committed = undefined
   router.live = '/settings?tab=appearance#appearance'
-  render(<AppLayout />)
+  renderLayout()
   expect(router.navigate).toHaveBeenCalledTimes(1)
   expect(router.navigate).toHaveBeenCalledWith({
     to: '/login',
@@ -262,7 +261,7 @@ it('still redirects once when the live location moves before the first commit', 
   auth.status = 'anonymous'
   router.committed = undefined
   router.live = '/settings?tab=appearance#appearance'
-  const { rerender } = render(<AppLayout />)
+  const { rerender } = renderLayout()
   for (let i = 0; i < 5; i++) {
     router.live = `/login?returnTo=${encodeURIComponent(router.live)}`
     rerender(<AppLayout />)
@@ -278,7 +277,7 @@ it('still redirects once when the live location moves before the first commit', 
 it('sends a first boot straight to the setup wizard, once', () => {
   auth.status = 'anonymous'
   server.setupRequired = true
-  const { rerender } = render(<AppLayout />)
+  const { rerender } = renderLayout()
   rerender(<AppLayout />)
   expect(router.navigate).toHaveBeenCalledTimes(1)
   expect(router.navigate).toHaveBeenCalledWith({ to: '/setup', replace: true })
@@ -288,14 +287,14 @@ it('sends a first boot straight to the setup wizard, once', () => {
 it('waits for the server to say whether setup is needed before deciding', () => {
   auth.status = 'anonymous'
   server.pending = true
-  render(<AppLayout />)
+  renderLayout()
   expect(router.navigate).not.toHaveBeenCalled()
 })
 
 it('never sends sign-in back to a sign-in page', () => {
   auth.status = 'anonymous'
   router.live = router.committed = '/login?returnTo=%2Faudit'
-  render(<AppLayout />)
+  renderLayout()
   expect(router.navigate).toHaveBeenCalledWith({
     to: '/login',
     search: {},
@@ -303,65 +302,29 @@ it('never sends sign-in back to a sign-in page', () => {
   })
 })
 
-// ONE SIDEBAR AT A TIME (console 1.0): a work page keeps the navigation on the rail because
-// its own list is the sidebar there; unfolding it there opens the navigation over the page
-// and never changes what the person stored.
-describe('the sidebar width follows the page and the person', () => {
-  beforeEach(() => {
-    usePreferencesStore.setState({ sidebarCollapsed: false })
-    useNavOverlay.setState({ openOn: null })
+describe('there is no sidebar', () => {
+  it('paints no sidebar and no navigation over the page, on a document page or a work page', () => {
+    for (const path of ['/audit', '/sessions']) {
+      router.live = router.committed = path
+      const { unmount } = renderLayout()
+      expect(document.querySelector('[data-slot="sidebar"]'), path).toBeNull()
+      expect(document.querySelector('aside'), path).toBeNull()
+      expect(
+        document.querySelector('[data-slot="nav-overlay"]'),
+        path,
+      ).toBeNull()
+      unmount()
+    }
   })
 
-  it('is full on a document page and the rail once the person folds it', () => {
-    router.live = router.committed = '/audit'
-    const { unmount } = render(<AppLayout />)
-    expect(screen.getByTestId('rail')).toHaveAttribute('data-mode', 'full')
-    fireEvent.click(screen.getByRole('button', { name: 'toggle full' }))
-    expect(usePreferencesStore.getState().sidebarCollapsed).toBe(true)
-    expect(screen.getByTestId('rail')).toHaveAttribute('data-mode', 'rail')
-    unmount()
+  it("opens All areas from the phone bar's More", () => {
+    useAreasSheet.setState({ open: false, opener: null })
+    renderLayout()
+    const more = screen.getByRole('button', { name: 'More' })
+    more.focus()
+    fireEvent.click(more)
+    expect(useAreasSheet.getState().open).toBe(true)
+    // By identity: a DOM node in a deep comparison walks React's own fields.
+    expect(useAreasSheet.getState().opener).toBe(more)
   })
-
-  it('is the rail on a work page, and unfolding it there opens the navigation over the page', () => {
-    router.live = router.committed = '/sessions'
-    render(<AppLayout />)
-    expect(screen.getByTestId('rail')).toHaveAttribute('data-mode', 'rail')
-    fireEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
-    expect(usePreferencesStore.getState().sidebarCollapsed).toBe(false)
-    const overlay = document.querySelector('[data-slot="nav-overlay"]')
-    expect(overlay).not.toBeNull()
-    expect(overlay?.querySelector('[data-mode="full"]')).not.toBeNull()
-    fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape' })
-    expect(document.querySelector('[data-slot="nav-overlay"]')).toBeNull()
-  })
-
-  it('closes the navigation over a work page when a destination in it is chosen', () => {
-    router.live = router.committed = '/sessions'
-    render(<AppLayout />)
-    fireEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
-    fireEvent.click(screen.getByRole('button', { name: 'go somewhere' }))
-    expect(document.querySelector('[data-slot="nav-overlay"]')).toBeNull()
-    expect(useNavOverlay.getState().openOn).toBeNull()
-  })
-})
-
-it('does not reopen after a committed navigation and back, including search-only navigation', () => {
-  router.live = router.committed = '/sessions'
-  const view = render(<AppLayout />)
-  fireEvent.click(screen.getByRole('button', { name: 'toggle rail' }))
-  router.live = router.committed = '/sessions?tab=workspaces'
-  view.rerender(<AppLayout />)
-  expect(useNavOverlay.getState().openOn).toBeNull()
-  router.live = router.committed = '/sessions'
-  view.rerender(<AppLayout />)
-  expect(document.querySelector('[data-slot="nav-overlay"]')).toBeNull()
-})
-it('returns keyboard focus to the actual opener on Escape', async () => {
-  router.live = router.committed = '/sessions'
-  render(<AppLayout />)
-  const opener = screen.getByRole('button', { name: 'toggle rail' })
-  opener.focus()
-  fireEvent.click(opener)
-  fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape' })
-  await waitFor(() => expect(opener).toHaveFocus())
 })

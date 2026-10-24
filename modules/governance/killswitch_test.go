@@ -186,6 +186,84 @@ func TestKillSwitchEngageRevokesPendingActuationApprovals(t *testing.T) {
 	}
 }
 
+// An estate stop ends every session, so a request a session filed (session_ref) can never be
+// carried out by the session that asked: the stop cancels it whatever its action, counts it in
+// revoked_approvals, and a decision on it afterwards is refused. A person's request filed outside a
+// session stays, and so does a session's request for governance work, one kind at a time (#3207).
+func TestKillSwitchEstateStopRevokesSessionRequests(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+
+	open := func(action, subjectKind, subjectRef, sessionRef string) string {
+		body := map[string]any{"action": action, "subject_kind": subjectKind, "subject_ref": subjectRef}
+		if sessionRef != "" {
+			body["session_ref"] = sessionRef
+		}
+		r := h.do("POST", "/v1/m/governance/approvals", admin, body, tenantHdr(tenant))
+		if r.code != http.StatusCreated {
+			t.Fatalf("open approval %s = %d %s", action, r.code, r.raw)
+		}
+		return r.body["id"].(string)
+	}
+	status := func(id string) string {
+		r := h.do("GET", "/v1/m/governance/approvals/"+id, admin, nil, tenantHdr(tenant))
+		return r.body["status"].(string)
+	}
+	// The three requests the demo estate keeps waiting, each filed for the session that asked.
+	migrate := open("db.migrate", "database", "payments-staging", "sess-migrate")
+	connect := open("network.connect", "network_destination", "registry.terraform.io", "sess-connect")
+	write := open("github.write", "repository", "storefront-web#482", "sess-write")
+	// A person's request filed outside any session.
+	export := open("evidence.export", "audit", "q3-access-review", "")
+	// A session's requests for governance work, one per kept family (ksKeptGovernanceActions).
+	kept := map[string]string{}
+	for _, action := range []string{"nhi.rotate", "security.posture.change", "compliance.attest"} {
+		kept[action] = open(action, "identity", "kept-"+action, "sess-governance")
+	}
+
+	// An agent stop keeps its own rule, even for a session's request about that very agent:
+	// only an estate stop ends every session.
+	about := open("github.write", "agent", "contained-agent", "sess-agent")
+	if r := engage(h, admin, tenant, "agent", "contained-agent", "contain one agent"); r.code != http.StatusCreated ||
+		r.body["revoked_approvals"] != float64(0) {
+		t.Fatalf("agent engage = %d %s, want 201 revoking no session request", r.code, r.raw)
+	}
+	if got := status(about); got != "pending" {
+		t.Fatalf("a session's request about the stopped agent = %s after an agent stop, want pending", got)
+	}
+
+	r := engage(h, admin, tenant, "estate", "", "estate stop")
+	if r.code != http.StatusCreated {
+		t.Fatalf("estate engage = %d %s", r.code, r.raw)
+	}
+	if got := int(r.body["revoked_approvals"].(float64)); got != 4 {
+		t.Fatalf("estate engage revoked = %d, want 4 (the four session requests)", got)
+	}
+	for name, id := range map[string]string{"db.migrate": migrate, "network.connect": connect, "github.write": write, "about the agent": about} {
+		if got := status(id); got != "canceled" {
+			t.Fatalf("%s of an ended session = %s, want canceled", name, got)
+		}
+	}
+	if got := status(export); got != "pending" {
+		t.Fatalf("a person's request outside a session = %s, want pending", got)
+	}
+	for action, id := range kept {
+		t.Run("keeps "+action, func(t *testing.T) {
+			if got := status(id); got != "pending" {
+				t.Fatalf("a session's %s request = %s, want pending: the stop never touches governance work", action, got)
+			}
+		})
+	}
+	// Approving a canceled request of an ended session is refused by the engine.
+	if r := decide(h, admin, tenant, migrate, "approve"); r.code != http.StatusConflict {
+		t.Fatalf("approve after the stop = %d %s, want 409", r.code, r.raw)
+	}
+	if got := status(migrate); got != "canceled" {
+		t.Fatalf("the refused decision changed the request: %s", got)
+	}
+}
+
 // reenable posts a re-enable request.
 func reenable(h *harness, token string, tenant model.TenantID, id string) resp {
 	h.t.Helper()

@@ -21,11 +21,14 @@ import (
 //	manifest.json          the non-secret control record (Manifest)
 //	keys/kek.json          the KDF parameters to re-derive the KEK (KDFParams)
 //	keys/<name>.enc        each signing key, AES-256-GCM sealed under the KEK
-//	store/<snapshot>       the consistent store snapshot (absent for PITR)
+//	store/<snapshot>.enc   the consistent store snapshot, sealed in chunks under
+//	                       the KEK (snapshotenc.go); absent for PITR. A bundle
+//	                       taken before manifest v2 carries store/<snapshot> in the clear.
 //
-// The snapshot's SHA-256 in manifest.Store.SHA256 is over the RAW snapshot bytes
-// (the tar entry payload), so a restore re-digests the extracted file and refuses
-// a mismatch. Compression is for transport only and never affects that digest.
+// The snapshot's SHA-256 in manifest.Store.SHA256 is over the PLAINTEXT snapshot,
+// so a restore opens the sealed member, re-digests the result and refuses a
+// mismatch. The sealed member has its own digest in manifest.Files. Compression is
+// for transport only and never affects either digest.
 
 const (
 	bundleManifestName = "manifest.json"
@@ -44,11 +47,31 @@ type BundleInput struct {
 	SnapshotPath string
 	// SealedKeys maps an in-bundle path ("keys/<name>.enc") to its AES-GCM blob.
 	SealedKeys map[string][]byte
+
+	// sealedSnapshot is the sealed twin of SnapshotPath that goes in the tar in its
+	// place. Only WriteAuthenticatedBundle sets it, so a caller cannot ship a
+	// plaintext snapshot under a manifest that says it is sealed.
+	sealedSnapshot string
 }
 
-// WriteAuthenticatedBundle authenticates the complete manifest and payload
-// inventory, then streams the bundle. Every current producer must use this API.
+// WriteAuthenticatedBundle seals the store snapshot under the KEK, authenticates
+// the complete manifest and payload inventory, then streams the bundle. Every
+// current producer must use this API. It marks the manifest as the current format
+// and, for a snapshot-carrying bundle, as sealed.
 func WriteAuthenticatedBundle(w io.Writer, in BundleInput, cipher *KeyCipher) error {
+	if in.Manifest == nil || cipher == nil || len(cipher.kek) != kekLen {
+		return fmt.Errorf("dr: write bundle requires a manifest and initialized KEK")
+	}
+	if in.Manifest.Store.Method != MethodPITR && in.SnapshotPath != "" {
+		sealed, err := sealSnapshotFile(cipher, in.SnapshotPath)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = os.Remove(sealed) }()
+		in.sealedSnapshot = sealed
+		in.Manifest.Store.Encryption = snapshotEncChunked
+	}
+	in.Manifest.Format = ManifestFormat
 	if err := AuthenticateBundle(in, cipher); err != nil {
 		return err
 	}
@@ -64,6 +87,9 @@ func WriteBundle(w io.Writer, in BundleInput) error {
 	}
 	if in.Manifest.Authentication.Algorithm == "" || in.Manifest.Authentication.Value == "" || len(in.Manifest.Files) == 0 {
 		return fmt.Errorf("dr: WriteBundle requires an authenticated manifest and per-file inventory")
+	}
+	if in.Manifest.Store.sealed() && in.sealedSnapshot == "" && in.SnapshotPath != "" {
+		return fmt.Errorf("dr: WriteBundle: the manifest says the snapshot is sealed but only the plaintext was given")
 	}
 	gz := gzip.NewWriter(w)
 	tw := tar.NewWriter(gz)
@@ -88,9 +114,13 @@ func WriteBundle(w io.Writer, in BundleInput) error {
 			return err
 		}
 	}
-	// Store snapshot (streamed), if any.
+	// Store snapshot (streamed), if any: the sealed twin when the manifest says sealed.
 	if in.SnapshotPath != "" {
-		if err := writeTarFile(tw, in.Manifest.Store.File, in.SnapshotPath); err != nil {
+		src := in.SnapshotPath
+		if in.sealedSnapshot != "" {
+			src = in.sealedSnapshot
+		}
+		if err := writeTarFile(tw, in.Manifest.Store.memberPath(), src); err != nil {
 			return err
 		}
 	}
@@ -101,8 +131,10 @@ func WriteBundle(w io.Writer, in BundleInput) error {
 }
 
 // ExtractBundle reads a DR bundle from r into destDir, returning the parsed
-// manifest and KDF parameters. The store snapshot lands at
-// destDir/<manifest.Store.File> and each sealed key at destDir/<KeyRef.File>.
+// manifest and KDF parameters. It needs no KEK, so it does not open the snapshot:
+// that member lands as it travels, at destDir/<manifest.Store.File> for a pre-v2
+// bundle and at that path plus ".enc" for a sealed one (VerifyBundleIntegrity opens
+// it). Each sealed key lands at destDir/<KeyRef.File>.
 // Entry names are validated to stay within destDir (no absolute paths, no "..").
 func ExtractBundle(r io.Reader, destDir string) (*Manifest, KDFParams, error) {
 	gz, err := gzip.NewReader(r)
@@ -147,8 +179,8 @@ func ExtractBundle(r io.Reader, destDir string) (*Manifest, KDFParams, error) {
 			if err := json.Unmarshal(b, &parsed); err != nil {
 				return nil, KDFParams{}, fmt.Errorf("dr: parse manifest: %w", err)
 			}
-			if parsed.Format != ManifestFormat {
-				return nil, KDFParams{}, fmt.Errorf("dr: unknown manifest format %q (want %q)", parsed.Format, ManifestFormat)
+			if parsed.Format != ManifestFormat && parsed.Format != ManifestFormatV1 {
+				return nil, KDFParams{}, fmt.Errorf("dr: unknown manifest format %q (want %q or %q)", parsed.Format, ManifestFormat, ManifestFormatV1)
 			}
 			m = &parsed
 		case bundleKEKName:

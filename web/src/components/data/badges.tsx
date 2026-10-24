@@ -59,11 +59,7 @@ export function StatusBadge({
   const key = (status ?? '').toLowerCase()
   const tone = STATUS_TONE[key] ?? 'neutral'
   return (
-    <StatusChip
-      tone={tone}
-      working={key === 'running' || key === 'working'}
-      className={className}
-    >
+    <StatusChip tone={tone} className={className}>
       {t(`status.${key}`, { defaultValue: humanize(status) })}
     </StatusChip>
   )

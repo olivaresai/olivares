@@ -503,6 +503,108 @@ describe('AuditView — ledger list', () => {
     )
   })
 
+  it('slides in only the events that arrive at the head, never the first page', async () => {
+    // The newest-first view (HU-15): the head read refetches when the tab becomes
+    // visible again, the window is read again, and the two events recorded since
+    // land above the rows already on screen.
+    const ev3 = {
+      ...ev1,
+      id: 'evt-0000000000000003',
+      seq: 14,
+      action: 'person.invite',
+    }
+    const ev4 = {
+      ...ev1,
+      id: 'evt-0000000000000004',
+      seq: 15,
+      action: 'policy.create',
+    }
+    api.recent
+      .mockResolvedValueOnce({ items: [], head_seq: 13 })
+      .mockResolvedValue({ items: [], head_seq: 15 })
+    api.list.mockImplementation(() =>
+      Promise.resolve({
+        items:
+          api.recent.mock.calls.length > 1 ? [ev1, ev2, ev3, ev4] : [ev1, ev2],
+        has_more: false,
+      }),
+    )
+    wrap(<AuditView />)
+
+    const firstRow = (await screen.findByText('Agent create')).closest('tr')
+    expect(firstRow).not.toHaveClass('feed-enter')
+
+    // The browser's own event, as a tab coming back to the front sends it.
+    fireEvent(document, new Event('visibilitychange', { bubbles: true }))
+
+    // The table renders readable action labels: "Person invite", "Policy create".
+    const arrived = (await screen.findByText('Person invite')).closest('tr')
+    expect(arrived).toHaveClass('feed-enter')
+    expect(screen.getByText('Policy create').closest('tr')).toHaveClass(
+      'feed-enter',
+    )
+    expect(screen.getByText('Agent create').closest('tr')).not.toHaveClass(
+      'feed-enter',
+    )
+
+    // Once the slide has had time to finish, the marks clear: a virtualized row
+    // that re-mounts later must not replay its entrance.
+    await waitFor(
+      () => {
+        expect(screen.getByText('Person invite').closest('tr')).not.toHaveClass(
+          'feed-enter',
+        )
+        expect(screen.getByText('Policy create').closest('tr')).not.toHaveClass(
+          'feed-enter',
+        )
+      },
+      { timeout: 3000 },
+    )
+  })
+
+  it('never slides the older rows Load more brings', async () => {
+    // An engine without head_seq pages FORWARD (the pre-HU-15 path): Load more
+    // appends the next page below the rows on screen.
+    api.recent.mockResolvedValue({ items: [], head_seq: null })
+    api.list.mockImplementation(({ from }: { from?: number }) =>
+      from && from > 1
+        ? Promise.resolve({
+            items: [
+              {
+                ...ev1,
+                id: 'evt-0000000000000003',
+                seq: 14,
+                action: 'person.invite',
+              },
+            ],
+            has_more: false,
+          })
+        : Promise.resolve({ items: [ev1, ev2], has_more: true }),
+    )
+    wrap(<AuditView />)
+    await screen.findByText('Agent create')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(
+      (await screen.findByText('Person invite')).closest('tr'),
+    ).not.toHaveClass('feed-enter')
+  })
+
+  it('never slides a row the fold reveals, even above the rows on screen', async () => {
+    // Newest first (HU-15): the internal "Audit read" (seq 13) is the newest row,
+    // so showing internal records puts it on top of the feed.
+    api.recent.mockResolvedValue({ items: [], head_seq: 13 })
+    api.list.mockResolvedValue({ items: [ev1, ev2], has_more: false })
+    wrap(<AuditView />)
+    await screen.findByText('Agent create')
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Show internal records' }),
+    )
+    expect(
+      (await screen.findByText('Audit read')).closest('tr'),
+    ).not.toHaveClass('feed-enter')
+  })
+
   it('applies a saved view to URL-backed filter state', async () => {
     wrap(<AuditView />)
     await userEvent.click(

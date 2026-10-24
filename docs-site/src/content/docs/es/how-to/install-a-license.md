@@ -128,8 +128,19 @@ Con una licencia instalada, el binario comercial está a una descarga de distanc
 reinstala nada ni se mueve ningún dato:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN>
+export OLIVARES_UPGRADE_TOKEN=<TOKEN>   # not needed once this installation is connected
+olivares upgrade --edition business
 ```
+
+`olivares license install` y `olivares license status` muestran el comando exacto para la forma en que se instaló esta instalación, y la vista **Edition & license** de la consola ofrece el mismo paso como un botón, **Cambiar a Business**: el motor descarga el build, lo verifica, lo sustituye en su sitio y se reinicia con él. El token de descarga está en la página **Downloads** del portal de descargas con licencia ([https://licenses.olivares.ai/portal/downloads](https://licenses.olivares.ai/portal/downloads)), junto a estos comandos, y en tu correo de licencia; pásalo por su nombre, como arriba, para que no aparezca en la lista de procesos. Una instalación conectada (`olivares license connect start`) no necesita token. `--enterprise` es la grafía antigua de la misma ruta. El botón de la consola necesita una de las dos cosas, el token en el entorno del propio motor o esta conexión; sin ninguna de las dos, la vista muestra el comando.
+
+:::caution[Instalaciones por paquete]
+En una instalación deb, rpm, apk o AUR el gestor de paquetes es el dueño de `/usr/bin/olivares`, así que
+este comando se rechaza: termina con código 2 antes de descargar nada. Usa el paquete Business cuando el
+canal de paquetes con derecho de acceso lo sirva. Hasta entonces, añade `--target /usr/bin/olivares --data-dir /var/lib/olivares`
+para sustituir ese archivo tú mismo; la base de datos de paquetes dejará de coincidir con él. `--check`
+sigue mostrando el plan.
+:::
 
 Descarga la compilación comercial firmada para tu plataforma y **verifica la firma
 offline**; un artefacto manipulado aborta la actualización y deja intacto el binario en
@@ -139,7 +150,7 @@ ejecutas esa versión. Usa primero `--check` si quieres ver el plan sin aplicarl
 `edition: community -> enterprise`:
 
 ```sh
-olivares upgrade --enterprise --token <TOKEN> --check
+olivares upgrade --edition business --check
 ```
 
 Reinicia el servicio y activa después los módulos:
@@ -173,8 +184,8 @@ en tu correo de entrega; pásalo por nombre para que no aparezca en la lista de 
 
 ```sh
 export OLIVARES_UPGRADE_TOKEN=<TOKEN>
-docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --enterprise --yes
-docker compose up -d --force-recreate olivares
+docker compose exec -e OLIVARES_UPGRADE_TOKEN olivares olivares upgrade --edition business --yes
+docker compose restart olivares
 ```
 
 La versión se guarda en `ota/` bajo el directorio de datos (`/var/lib/olivares/ota` en la

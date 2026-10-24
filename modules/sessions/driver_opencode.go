@@ -7,14 +7,20 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/olivaresai/olivares/core/driverfacts"
 )
@@ -26,7 +32,7 @@ import (
 // existing owned rpcConn is the transport; this file does not introduce a second
 // RPC framework, an HTTP client, or a new schema.
 //
-// OWNERSHIP. The spawn is always `acp --hostname 127.0.0.1 [--cwd <WorkDir>]` as
+// OWNERSHIP. The spawn is always `acp --hostname 127.0.0.1 --print-logs --log-level ERROR [--cwd <WorkDir>]` as
 // OUR child. serve, web, attach, mDNS and an external listener are not operate
 // forms. The counterpart itself opens loopback HTTP for its internal ACP service;
 // that is observed counterpart behavior, not an Olivares server-adoption interface.
@@ -65,12 +71,25 @@ func (openCodeDriver) DefaultProgram() string {
 }
 
 func (openCodeDriver) LaunchArgs(l DriverLaunch) []string {
-	args := []string{"acp", "--hostname", "127.0.0.1"}
+	// --print-logs --log-level ERROR is the tool's own switch that writes its errors to
+	// stderr: a failed model call is said nowhere else (1.19.3 sends no ACP update and
+	// never ends the prompt), and openCodeSession.Deliver reads it from there (#2937).
+	args := []string{"acp", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "ERROR"}
 	if dir := strings.TrimSpace(l.WorkDir); dir != "" {
 		args = append(args, "--cwd", dir)
 	}
+	if l.OwnNetwork {
+		args = append(args, "--port", strconv.Itoa(openCodeACPPort))
+	}
 	return args
 }
+
+// openCodeACPPort is where OpenCode's ACP mode serves the API it calls itself (its
+// own default, 1.19.4). Behind the session proxy it is pinned and is the one port
+// the proxy environment exempts (egress.Policy.LoopbackPorts): Bun sends every
+// other request, loopback included, to the proxy, and matches NO_PROXY by host and
+// port (measured, #3082).
+const openCodeACPPort = 4096
 
 func (openCodeDriver) TransportProfile() DriverTransportProfile {
 	return DriverTransportProfile{
@@ -95,7 +114,7 @@ func (openCodeDriver) LaunchTerms() DriverLaunchTerms {
 }
 
 func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
-	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}}
+	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}, {Name: envOpenCodeDisableExternalSkills, Value: "1"}}
 	cfg := map[string]any{}
 	bound := true
 	switch {
@@ -106,15 +125,27 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	case l.BoundProvider.Kind != "":
 		openCodeConfineToKey(cfg, l.BoundProvider, l.Model)
 	default:
+		// The tool's own login (#2888) has no record to pin. It stays on the provider
+		// its model names and shares nothing. It keeps OpenCode's model catalog,
+		// which is what its model picker lists.
 		bound = false
+		if provider := openCodeModelProvider(l.Model); provider != "" {
+			cfg["enabled_providers"] = []string{provider}
+		}
+		cfg["share"] = "disabled"
 	}
 	if bound {
-		env = append(env,
-			EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"},
-			EnvVar{Name: envOpenCodeDisableLSPDownload, Value: "1"},
-			EnvVar{Name: envNPMConfigOffline, Value: "true"},
-			EnvVar{Name: envOpenCodeDisableShare, Value: "1"})
+		// npm_config_offline reaches every command OpenCode's shell runs, the agent's
+		// npm install included; the own login keeps npm online (review of #3053).
+		env = append(env, EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"},
+			EnvVar{Name: envNPMConfigOffline, Value: "true"})
 	}
+	env = append(env,
+		EnvVar{Name: envOpenCodeDisableLSPDownload, Value: "1"},
+		EnvVar{Name: envOpenCodeDisableShare, Value: "1"})
+	// The external scans are off (envOpenCodeDisableExternalSkills); the session
+	// folder's own two skill folders are listed again, relative to that folder.
+	cfg["skills"] = map[string]any{"paths": []string{".claude/skills", ".agents/skills"}}
 	permission := ""
 	switch l.Preset {
 	case PresetReadOnly:
@@ -123,16 +154,31 @@ func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 		permission = "ask"
 	}
 	if permission != "" {
-		rules := map[string]any{"*": permission, "bash": permission, "edit": permission,
-			"read": map[string]string{"*": "allow", "*.env": "deny", "*.env.*": "deny", "*.env.example": "allow"},
-			"glob": "allow", "grep": "allow", "list": "allow"}
 		// Keep edits and commands asking so live policy can still deny or ask.
 		// ACP approval is answered at once when that policy permits it.
-		cfg["permission"] = rules
-		// Agent-specific configuration takes precedence over global permission
-		// rules. Pin the native built-in agent and its rules for this launch too.
+		rules := map[string]any{"*": permission, "bash": permission, "edit": permission,
+			"read": map[string]string{"*": "ask", "*.env": "deny", "*.env.*": "deny", "*.env.example": "ask",
+				"mcp:*": "allow", "mcp:*.env": "deny", "mcp:*.env.*": "deny"},
+			"glob": "ask", "grep": "ask", "list": "ask",
+			// It starts no subagent: see the global rules below.
+			"task": "deny"}
+		// Only the build agent, pinned below with its own rules (agent configuration
+		// takes precedence over the global rules), may ask. Its read asks (#2890): live
+		// policy reviews it as a read, which every preset allows, and audits it; the file
+		// comes from the tool_call_update OpenCode sends just before the request
+		// (acpSession.toolFacts). OpenCode's MCP resource reads ask "read" with
+		// mcp:<server>:<uri> patterns and name no file: they stay allowed. Glob and grep
+		// (and list, which 1.19.4 does not offer) ask too, decided and audited as reads of
+		// the folder they search (#3058).
+		// Every other agent, a subagent above all, has the global rules, which deny
+		// everything (#3083): OpenCode's ACP agent drops an ask from a session it did not
+		// create, so a subagent's ask is never answered and its turn waits forever, and
+		// what it allows goes unaudited (measured on 1.19.4). With every tool denied,
+		// OpenCode offers a subagent none and it ends at once.
+		cfg["permission"] = map[string]any{"*": "deny"}
+		build := rules
 		cfg["default_agent"] = "build"
-		cfg["agent"] = map[string]any{"build": map[string]any{"permission": rules}}
+		cfg["agent"] = map[string]any{"build": map[string]any{"permission": build}}
 	}
 	if len(cfg) > 0 {
 		body, _ := json.Marshal(cfg)
@@ -170,7 +216,9 @@ var (
 // Three more requests went to other hosts, each closed by OpenCode's own switch:
 //   - OPENCODE_DISABLE_MODELS_FETCH: the model catalogue from models.opencode.ai at start;
 //   - npm_config_offline: the background install of @opencode-ai/plugin from
-//     registry.npmjs.org into every configuration directory (it fails and is logged);
+//     registry.npmjs.org into every configuration directory (it fails and is logged).
+//     OpenCode's shell runs the agent's commands with the same environment, so their
+//     npm is offline too; the own login, which has no record, does not set it;
 //   - OPENCODE_DISABLE_LSP_DOWNLOAD: language servers downloaded when a file is edited.
 //
 // And two held against what a profile or a project may already hold:
@@ -184,6 +232,92 @@ const (
 	envNPMConfigOffline           = "npm_config_offline"
 	envOpenCodeDisableShare       = "OPENCODE_DISABLE_SHARE"
 )
+
+// envOpenCodeDisableExternalSkills stops the .claude/skills and .agents/skills scans
+// under HOME and up every ancestor of the session folder. Measured on 1.19.3: in a
+// folder that is not a git repository the walk reaches /, and every skill folder it
+// finds gets external_directory: allow (#2997). OpenCode's own .opencode folders are
+// still scanned.
+const envOpenCodeDisableExternalSkills = "OPENCODE_DISABLE_EXTERNAL_SKILLS"
+
+// openCodeOwnLoginHosts are the hosts a session on the tool's own login needs, by
+// the provider its model names; the first is the provider, the rest the hosts it
+// also calls. Measured on 1.19.4 behind a refusing proxy with the own-login
+// switches: Zen and Go reach opencode.ai; the ChatGPT login reaches chatgpt.com and
+// refreshes an expired token at auth.openai.com; each reads OpenCode's model catalog
+// at models.opencode.ai, which the own login keeps (LaunchEnv).
+var openCodeOwnLoginHosts = map[string][]string{
+	openCodeHostedProviderID: {"https://opencode.ai", "https://models.opencode.ai"},
+	"opencode-go":            {"https://opencode.ai", "https://models.opencode.ai"},
+	"openai":                 {"https://chatgpt.com", "https://auth.openai.com", "https://models.opencode.ai"},
+}
+
+// openCodeConfiguredModel is the model the account's OpenCode configuration sets in
+// OPENCODE_CONFIG_DIR, which OpenCode uses when a launch names none: opencode.jsonc
+// over opencode.json, as OpenCode loads them there (1.19.4). "" when none can be
+// read: a file that is not a small regular file (a symlink included), or a .jsonc
+// that is not plain JSON, reads as unknown, and the launch then names its model.
+func openCodeConfiguredModel(configHome string) string {
+	if !filepath.IsAbs(configHome) {
+		return ""
+	}
+	root, err := os.OpenRoot(configHome)
+	if err != nil {
+		return ""
+	}
+	defer root.Close()
+	for _, name := range []string{"opencode.jsonc", "opencode.json"} {
+		b, err := readSmallRegularFile(root, name)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		var cfg struct {
+			Model *string `json:"model"`
+		}
+		if err != nil || json.Unmarshal(b, &cfg) != nil {
+			return ""
+		}
+		if cfg.Model == nil {
+			continue
+		}
+		// A model id is short; a longer value is not one to echo in a refusal.
+		if model := strings.TrimSpace(*cfg.Model); len(model) <= 256 {
+			return model
+		}
+		return ""
+	}
+	return ""
+}
+
+// readSmallRegularFile reads a regular file of at most 1 MiB in root without
+// following a symlink or blocking on a FIFO (openStateFile): the account's
+// configuration folder is one a session may write.
+func readSmallRegularFile(root *os.Root, name string) ([]byte, error) {
+	f, err := openStateFile(root, name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	const limit = 1 << 20
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() || info.Size() > limit {
+		return nil, errors.New("not a small regular file")
+	}
+	b, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err == nil && len(b) > limit {
+		return nil, errors.New("not a small regular file")
+	}
+	return b, err
+}
+
+// openCodeModelProvider is the provider a "provider/model" id names; "" for an id
+// that names none.
+func openCodeModelProvider(model string) string {
+	provider, _, ok := strings.Cut(model, "/")
+	if !ok {
+		return ""
+	}
+	return provider
+}
 
 // openCodeHostedProviderID is OpenCode's own hosted provider.
 const openCodeHostedProviderID = "opencode"
@@ -351,6 +485,110 @@ func (openCodeDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
 type openCodeSession struct {
 	acpSession
 	caps acpAgentCapabilities
+	// failedCalls counts the failed model calls OpenCode logged: only the latest one's
+	// wait may stop its turn, so a retry that fails again is waited for afresh.
+	failedCalls uint64
+}
+
+// takeStderr takes OpenCode's own "stream error" log lines (--print-logs): a failed
+// model call for this conversation stops the turn and says why, and a small
+// background call's failure (the title) is the tool's own business. Every other line
+// is published as before, so a launch failure's reason still reaches the run.
+func (s *openCodeSession) takeStderr(line []byte) bool {
+	fields := openCodeLogFields(string(line))
+	if fields["level"] != "ERROR" || fields["message"] != "stream error" {
+		return false
+	}
+	if reason, ok := openCodeFailedCall(fields, s.ConversationID()); ok {
+		s.observeFailedCall(reason)
+	} else if fields["small"] != "true" {
+		s.warn("sessions: OpenCode logged a failed model call that is not this conversation's", "run_ref", s.cfg.RunRef)
+	}
+	return true
+}
+
+// openCodeLogLine is the shape of OpenCode's log lines (1.19.3: "timestamp=... level=...").
+var openCodeLogLine = regexp.MustCompile(`^timestamp=\S+ level=[A-Z]+ `)
+
+// openCodeFailedCallGrace is how long a turn whose model call failed may still
+// produce output (OpenCode retrying) before it is stopped.
+var openCodeFailedCallGrace = 15 * time.Second
+
+// observeFailedCall cancels the turn in flight when its model call failed and the tool
+// shows nothing more for it: OpenCode 1.19.3 never ends that prompt (measured with
+// "Free usage limit reached ..."). A turn that goes on (the tool retried) is left alone
+// until a later failure; a turn already being ended (an interrupt, a stop) is left to
+// that. The session is told why, and whether the cancel went out.
+func (s *openCodeSession) observeFailedCall(reason string) {
+	s.mu.Lock()
+	turn, live := s.promptID, s.updates.live
+	s.failedCalls++
+	call := s.failedCalls
+	s.mu.Unlock()
+	if turn == "" {
+		s.warn("sessions: OpenCode logged a failed model call outside a turn", "run_ref", s.cfg.RunRef)
+		return
+	}
+	time.AfterFunc(openCodeFailedCallGrace, func() {
+		s.mu.Lock()
+		stalled := call == s.failedCalls && s.promptID == turn && s.updates.live == live &&
+			s.cancelledTurn != turn && !s.closed
+		s.mu.Unlock()
+		if !stalled {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), s.callTimeout())
+		defer cancel()
+		err := s.interruptTurn(ctx, turn)
+		if err != nil {
+			s.warn("sessions: a turn whose model call failed could not be cancelled", "run_ref", s.cfg.RunRef, "err", err)
+		}
+		if s.cfg.OnTurnFailed != nil {
+			s.cfg.OnTurnFailed(reason, err == nil)
+		}
+	})
+}
+
+// openCodeLogField is one key=value pair of OpenCode's log line, the value quoted or bare.
+var openCodeLogField = regexp.MustCompile(`([A-Za-z0-9_.]+)=("(?:[^"\\]|\\.)*"|\S+)`)
+
+// openCodeErrorClass is the error class OpenCode puts before its message.
+var openCodeErrorClass = regexp.MustCompile(`^[A-Za-z_]*Error: `)
+
+// openCodeLogFields reads one OpenCode log line as its key=value pairs (values
+// unquoted); the first of a repeated key wins. A line of another shape has none.
+func openCodeLogFields(line string) map[string]string {
+	if !openCodeLogLine.MatchString(line) {
+		return nil
+	}
+	fields := map[string]string{}
+	for _, m := range openCodeLogField.FindAllStringSubmatch(line, -1) {
+		if _, seen := fields[m[1]]; seen {
+			continue
+		}
+		v := m[2]
+		if u, err := strconv.Unquote(v); err == nil {
+			v = u
+		}
+		fields[m[1]] = v
+	}
+	return fields
+}
+
+// openCodeFailedCall is the reason of OpenCode's own "stream error" for this
+// conversation's main call. A small background call (the title) failing is not the
+// turn failing.
+func openCodeFailedCall(fields map[string]string, conversation string) (string, bool) {
+	if conversation == "" || fields["level"] != "ERROR" || fields["message"] != "stream error" ||
+		fields["session.id"] != conversation || fields["small"] == "true" {
+		return "", false
+	}
+	// The JavaScript error class ("AI_APICallError: ") says nothing to a person.
+	reason := clipCause(openCodeErrorClass.ReplaceAllString(fields["error.error"], ""))
+	if reason == "" {
+		reason = "no reason given"
+	}
+	return reason, true
 }
 
 type openCodeSessionResult struct {
@@ -538,6 +776,32 @@ func (s *openCodeSession) setConfigOption(ctx context.Context, configID, value s
 	return resp.ConfigOptions, nil
 }
 
+// Input refuses a /command whose text has a backtick, $ or @. OpenCode expands
+// the arguments into the command's template and then runs each !`shell` and
+// reads each @file, before and despite the session's bash, read and
+// external_directory rules (measured over ACP on 1.19.3). A single character is
+// enough: a typed backtick closes an opener the template leaves open, arguments
+// are joined after the split, and OpenCode reads $ in them as replacement
+// patterns. It finds the command after trimming any leading Unicode space or BOM.
+// A placeholder next to !, ` or @ in a delivered template is refused at delivery
+// (openCodeComponent). A plain prompt is not expanded, so it is sent as typed.
+// openCodeSubtaskCommand is OpenCode's one built-in command that runs as a subagent.
+const openCodeSubtaskCommand = "/review"
+
+func (s *openCodeSession) Input(ctx context.Context, text string) (bool, error) {
+	command := strings.TrimLeftFunc(text, func(r rune) bool { return unicode.IsSpace(r) || r == '\uFEFF' })
+	if strings.HasPrefix(command, "/") && strings.ContainsAny(command, "`$@") {
+		return false, badRequest("OpenCode expands a command's arguments into shell interpolation (!`...`) and file references (@path) outside this session's approvals; remove backticks, $ and @ from them, or send the text without the leading /command")
+	}
+	// OpenCode's built-in /review is a subtask command (1.19.4): it runs as a subagent
+	// whatever the task rule says, and OpenCode never passes that subagent's approval
+	// requests to Olivares, so its turn would wait forever (#3083).
+	if name := strings.FieldsFunc(command, unicode.IsSpace); len(name) > 0 && name[0] == openCodeSubtaskCommand {
+		return false, badRequest("OpenCode runs /review as a subagent whose approval requests never reach Olivares; ask for the review in your own words, without the leading /review")
+	}
+	return s.acpSession.Input(ctx, text)
+}
+
 func (s *openCodeSession) Shutdown(ctx context.Context) {
 	s.mu.Lock()
 	caps := s.caps
@@ -608,4 +872,58 @@ func openCodeCurrentValue(raw json.RawMessage) string {
 		return s
 	}
 	return ""
+}
+
+// prepareOpenCodeSearch puts the installed ripgrep's folder first on an OpenCode
+// child's PATH and lets a confined child run it (#3173). Without it, glob and grep
+// fail in a confined session: OpenCode would download rg from github.com. A node
+// with no ripgrep installed launches as before. An rg that is no longer the pinned
+// program (something wrote over it) refuses the launch with the fix that works:
+// installing OpenCode again replaces it (#3202).
+func (m *Module) prepareOpenCodeSearch(p CreateRunParams, spec *LaunchSpec) error {
+	dir := m.rt.openCodeSearchDir
+	if launchDriverKey(p) != providerDriverOpenCode || dir == "" {
+		return nil
+	}
+	rg := filepath.Join(dir, "rg")
+	info, err := os.Lstat(rg)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	damaged := err != nil || !info.Mode().IsRegular()
+	if !damaged {
+		sum, herr := fileSHA256(rg)
+		damaged = herr != nil || sum != m.rt.openCodeRipgrepSHA256
+	}
+	if damaged {
+		// The reply names the fix, not the server's path; the log names the file.
+		m.warnf("sessions: the installed ripgrep is not the pinned program; OpenCode launches are refused until `olivares tool install opencode` replaces it", "path", rg)
+		return conflictErr("the ripgrep OpenCode's glob and grep run on this server is not the pinned program; run `olivares tool install opencode` to replace it")
+	}
+	path := os.Getenv("PATH")
+	for _, e := range spec.Env {
+		if e.Name == "PATH" {
+			path = e.Value
+		}
+	}
+	if path != "" {
+		path = string(os.PathListSeparator) + path
+	}
+	setLaunchEnv(spec, "PATH", dir+path)
+	spec.AllowRead(dir)
+	return nil
+}
+
+// fileSHA256 is the hex sha256 of a file's content.
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

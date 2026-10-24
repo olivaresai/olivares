@@ -16,6 +16,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -230,7 +232,20 @@ func ClientTLSConfig(caFile, certFile, keyFile, serverName string) (*tls.Config,
 // invalid pair is refused before any write. Omitted preserves the original
 // two-argument API and manages the engine's default local material.
 func EnsureTLSCert(certPath, keyPath string, operatorProvided ...bool) (created bool, fingerprint string, err error) {
-	if len(operatorProvided) > 0 && operatorProvided[0] {
+	return EnsureTLSCertForHost(certPath, keyPath, "", len(operatorProvided) > 0 && operatorProvided[0])
+}
+
+// EnsureTLSCertForHost is EnsureTLSCert for an engine whose operator declared the
+// host clients reach it at (--public-url / OLIVARES_PUBLIC_URL). Inside a container
+// that address is only a published port, so no interface names it and the managed
+// leaf takes it from the operator: an IP address or a DNS name, next to the
+// default names. The leaf is re-issued at the next start when the declared host
+// changes, from the same local CA and key, so clients' trust and pin stay valid.
+// An operator-provided pair is never changed. An empty host, a wildcard bind
+// address and a name the default names already carry ("localhost", 127.0.0.1, ::1)
+// add nothing.
+func EnsureTLSCertForHost(certPath, keyPath, publicHost string, operatorProvided bool) (created bool, fingerprint string, err error) {
+	if operatorProvided {
 		if _, err := readSecret(keyPath); err != nil {
 			return false, "", fmt.Errorf("secure: load operator TLS key: %w", err)
 		}
@@ -247,6 +262,15 @@ func EnsureTLSCert(certPath, keyPath string, operatorProvided ...bool) (created 
 	ips := []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}
 	for _, address := range LocalLANAddresses() {
 		ips = append(ips, net.IP(address.AsSlice()))
+	}
+	if host := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(publicHost)), "."); host != "" {
+		if ip := net.ParseIP(host); ip == nil {
+			if !slices.Contains(dns, host) {
+				dns = append(dns, host)
+			}
+		} else if !ip.IsUnspecified() && !slices.ContainsFunc(ips, ip.Equal) {
+			ips = append(ips, ip)
+		}
 	}
 	return ensureTLSCert(certPath, keyPath, dns, ips)
 }

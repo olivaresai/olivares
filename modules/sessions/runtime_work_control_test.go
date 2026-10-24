@@ -21,11 +21,12 @@ import (
 // Hooks are one-shot so a cleanup Stop cannot repeat the test's injected race.
 type workControlProc struct {
 	*fakeProc
-	mu         sync.Mutex
-	afterSend  func()
-	beforeStop func()
-	sendErr    error
-	stopCalls  int
+	mu          sync.Mutex
+	afterSend   func()
+	beforeStop  func()
+	sendErr     error
+	lastSendErr error
+	stopCalls   int
 }
 
 func newWorkControlProc() *workControlProc {
@@ -35,19 +36,30 @@ func newWorkControlProc() *workControlProc {
 }
 
 func (p *workControlProc) Send(ctx context.Context, line []byte) error {
-	if err := p.fakeProc.Send(ctx, line); err != nil {
-		return err
+	err := p.fakeProc.Send(ctx, line)
+	if err == nil {
+		p.mu.Lock()
+		hook := p.afterSend
+		p.afterSend = nil
+		err = p.sendErr
+		p.sendErr = nil
+		p.mu.Unlock()
+		if hook != nil {
+			hook()
+		}
 	}
 	p.mu.Lock()
-	hook := p.afterSend
-	p.afterSend = nil
-	err := p.sendErr
-	p.sendErr = nil
+	p.lastSendErr = err
 	p.mu.Unlock()
-	if hook != nil {
-		hook()
-	}
 	return err
+}
+
+// lastSendError reports what the most recent Send returned, so a caller can
+// tell a send that only answered late from one that failed after its write.
+func (p *workControlProc) lastSendError() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.lastSendErr
 }
 
 func (p *workControlProc) Stop(ctx context.Context) error {

@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
+[![Next release: 0.4](https://img.shields.io/badge/release-0.4-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -68,6 +68,8 @@ Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands、Ollama
 
 Community はローカルの可観測性、保存済み設定、バックアップのエクスポートを保持します。SIEM/ITSM 配信、外部テレメトリー配信、ポスチャーのエクスポートは Business の基本版に含まれます。
 
+**セッションのネットワーク分離は、プロバイダーキーに紐づく Claude Code、Codex、OpenCode のセッションと、ツール自身のサインインを使う OpenCode のセッションを対象とします。** そのようなセッションは、自身のネットワーク名前空間にあるセッションごとのプロキシを通じて、プロバイダーのエンドポイント、またはサインイン先のホストにのみ到達し、そうでなければ開始しません。プロバイダーキーを使う OpenCode では、ホストは以前のインベントリに基づいており、プロキシの背後で示されたターンに基づくものではありません。Grok Build のセッションと、他のツールのアカウントログインによるセッションは、ネットワークが許可する任意のホストに引き続き到達できます。1 つのプロバイダーへの排他的なアクセスが必要なワークロードを実行する前に、[セッションのネットワーク分離](SECURITY.md#session-network-isolation)を確認してください。
+
 ## インストール
 
 方法を一つ選び、そのコードブロックをコピーしてください。最後に `olivares quickstart` がコンソールのアドレスと、最初の管理者を作成するための一回限りのトークンを表示します。すべてのリリースに署名が付いており、どの方法でもダウンロードしたものを検証してからインストールします（[ダウンロードを自分で検証する](INSTALL.md#verifying-a-release)）。
@@ -85,7 +87,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -103,8 +105,8 @@ docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
-sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -112,8 +114,8 @@ sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
-sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.rpm
+sudo rpm -i olivares_0.4_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -121,12 +123,12 @@ sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-ARM サーバーでは `amd64` の代わりに `arm64` を使ってください。リリースの全ファイルは<!-- release -->[リリースページ](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->にあります。
+ARM サーバーでは `amd64` の代わりに `arm64` を使ってください。リリースの全ファイルは<!-- release -->[リリースページ](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->にあります。
 
 **Homebrew。** macOS と Linux。
 

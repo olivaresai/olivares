@@ -161,6 +161,25 @@ describe('the empty DLP rule list', () => {
       screen.getByText(/secrets in prompts are denied by default/i),
     ).toBeVisible()
   })
+
+  /**
+   * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17): the DLP
+   * card header already carries "Add rule" in orange, so the empty state offers
+   * the same verb in the secondary style.
+   */
+  it('offers that verb in the secondary style; the card header keeps the orange', async () => {
+    api.listDLPRules.mockResolvedValue({ items: [], has_more: false })
+    wrap(<InferenceProxyView />)
+    const emptyState = (await screen.findByText('No DLP rules')).closest(
+      '[data-slot="empty-state"]',
+    ) as HTMLElement
+    const inEmpty = within(emptyState).getByRole('button', { name: 'Add rule' })
+    expect(inEmpty.className).not.toContain('bg-accent')
+    const inHeader = screen
+      .getAllByRole('button', { name: 'Add rule' })
+      .find((button) => button !== inEmpty)
+    expect(inHeader?.className).toContain('bg-accent')
+  })
 })
 
 describe('InferenceProxyView', () => {

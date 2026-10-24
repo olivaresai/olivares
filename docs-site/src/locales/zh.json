@@ -168,7 +168,7 @@
     "zh-CN": "代码化管理（Terraform）"
   },
   "Model & provider management": {
-    "zh-CN": "模型与供应商管理"
+    "zh-CN": "模型与提供商管理"
   },
   "Model operations (own models)": {
     "zh-CN": "模型运维（自有模型）"
@@ -246,7 +246,7 @@
     "zh-CN": "在 Olivares 中运行 Claude Code"
   },
   "Add a provider and launch an agent": {
-    "zh-CN": "添加提供方并启动代理"
+    "zh-CN": "添加提供商并启动智能体"
   },
   "Operate a provider session": {
     "zh-CN": "运行提供商会话"

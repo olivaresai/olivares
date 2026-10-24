@@ -27,7 +27,7 @@ you name them apart.
 ## First session from the console
 
 On a fresh installation, an administrator can add an Anthropic or OpenAI key, or
-an Ollama endpoint, in **Providers**. After the connection test succeeds, Olivares
+an Ollama endpoint, under **API keys** on **Tools**. After the connection test succeeds, Olivares
 prepares Claude Code, Codex or OpenCode respectively: it installs the tool if
 needed and resolves its profile using homes inside the data volume. Choose
 **New session**, enter a prompt and start. No filesystem path is required.
@@ -42,8 +42,8 @@ advanced setups. Existing tool logins and profile-selection rules keep applying.
 
 ### From the console
 
-1. Open **Providers** (AI → Environments → Providers).
-2. Select **Add provider**.
+1. Open **Tools** in the top bar and find **API keys**.
+2. Select **Add an API key**.
 3. Choose the provider, give it a name you will recognise in a picker, and paste the
    key. Leave the endpoint empty unless you are pointing at your own gateway; an
    `openai_compatible` provider requires one, because there is no official endpoint

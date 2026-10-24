@@ -19,8 +19,8 @@
   },
   "workspace": {
     "requiredTitle": "ワークスペースを選択",
-    "requiredBody": "Protocol bindings require an explicit workspace scope. Choose one in the workspace switcher.",
-    "scope": "Workspace scope"
+    "requiredBody": "プロトコルバインディングには、ワークスペースのスコープを明示する必要があります。ワークスペーススイッチャーで 1 つ選んでください。",
+    "scope": "ワークスペーススコープ"
   },
   "tabs": {
     "specs": "仕様",
@@ -28,15 +28,15 @@
   },
   "specs": {
     "title": "Binding specifications",
-    "description": "Immutable desired generations and their server-observed activation witness.",
+    "description": "不変の目標世代と、サーバーが観測した有効化の証拠。",
     "emptyTitle": "No binding specifications",
-    "emptyBody": "No specification matches this workspace and filter."
+    "emptyBody": "このワークスペースとフィルターに一致する仕様はありません。"
   },
   "bindings": {
     "title": "Binding instances",
-    "description": "Runtime instances pinned to one exact specification generation.",
+    "description": "1 つの正確な仕様世代に固定されたランタイムインスタンス。",
     "emptyTitle": "No binding instances",
-    "emptyBody": "No runtime instance matches this workspace and filter."
+    "emptyBody": "このワークスペースとフィルターに一致するランタイムインスタンスはありません。"
   },
   "filters": {
     "protocol": "Protocol filter",
@@ -64,65 +64,65 @@
     "unknownTitle": "状態は確認されていません",
     "unknownBody": "観測を完了できませんでした。判断前に証拠を更新してください。",
     "brokenTitle": "The requested condition was not met",
-    "brokenBody": "Review the reported code and plan before continuing.",
+    "brokenBody": "続行する前に、報告されたコードと計画を確認してください。",
     "replayed": "確定済みの結果を返しました。2 回目の変更は適用されていません。"
   },
   "composer": {
     "title": "Compose protocol binding draft",
-    "description": "Define one pinned, declarative A2A or MCP generation. Validation and planning do not write state.",
+    "description": "固定された宣言的な A2A または MCP の世代を 1 つ定義します。検証と計画では状態を書き込みません。",
     "progress": "Composer progress",
     "steps": {
       "connection": "Connection",
       "resources": "Resources",
       "mapping": "Mapping",
-      "governance": "Governance",
+      "governance": "ガバナンス",
       "review": "Review"
     },
-    "pinnedVersionHelp": "Use an exact protocol version; latest, current, and * are rejected.",
+    "pinnedVersionHelp": "正確なプロトコルバージョンを使ってください。latest、current、* は拒否されます。",
     "pinnedVersionError": "Enter an exact pinned version.",
-    "peerHelp": "Use the onboarded peer authority. Do not paste credentials or secret-bearing URLs.",
-    "resourceHelp": "The local selector is stored as an exact id selector. The remote reference remains opaque and contains no credential.",
+    "peerHelp": "オンボード済みのピアのオーソリティ（ホスト）を使ってください。資格情報や秘密情報を含む URL を貼り付けないでください。",
+    "resourceHelp": "ローカルのセレクターは、正確な ID セレクターとして保存されます。リモート参照は不透明のままで、資格情報を含みません。",
     "ruleRefsHelp": "One durable rule reference per line.",
     "intentKey": "Idempotency key",
     "generationMode": {
       "label": "Generation workflow",
-      "help": "Create generation 1 or derive an immutable successor from one active specification.",
+      "help": "世代 1 を作成するか、有効な仕様 1 つから不変の後継を派生させます。",
       "initial": "Initial generation (generation 1)",
       "successor": "Successor of an active generation",
       "predecessor": "Active predecessor",
-      "predecessorHelp": "The successor copies the exact desired configuration, increments generation, and never copies validation evidence.",
-      "partialCatalog": "Only the loaded active-specification page is shown; refresh the list if the predecessor is absent.",
+      "predecessorHelp": "後継は正確な目標構成をコピーし、世代を 1 つ増やしますが、検証の証拠はコピーしません。",
+      "partialCatalog": "読み込み済みの有効な仕様のページだけを表示しています。元になる仕様が見つからない場合は一覧を更新してください。",
       "selectPredecessor": "Select an active specification"
     },
     "endpointCatalog": {
       "label": "Known active-spec peer",
-      "help": "Choices come from active specifications visible to you. They are references, not a live endpoint heartbeat.",
+      "help": "選択肢は、あなたに見える有効な仕様から取得します。参照であり、稼働中のエンドポイントのハートビートではありません。",
       "select": "Reuse a known peer and remote resource",
       "none": "No known peer is available"
     },
     "resourceCatalog": {
       "label": "Authorized local resource catalog",
-      "help": "The picker uses the existing permission-filtered product API.",
+      "help": "ピッカーは、権限でフィルタリング済みの既存のプロダクト API を使います。",
       "loading": "Loading authorized resources…",
-      "unavailable": "No list API or effective read permission is available for this resource kind.",
-      "truncated": "The server reported more resources than this page contains; an exact ID remains available below.",
+      "unavailable": "このリソース種別には、利用できる一覧 API も有効な読み取り権限もありません。",
+      "truncated": "サーバーはこのページに含まれる数より多くのリソースがあると報告しました。正確な ID は下で引き続き指定できます。",
       "select": "Select a local resource",
-      "exactFallback": "Exact IDs are still checked by server validation and do not grant access."
+      "exactFallback": "正確な ID は引き続きサーバー検証で確認され、アクセスを付与するものではありません。"
     },
     "mapping": {
       "title": "Typed mappings",
-      "help": "Only the allowlisted declarative transforms below can be sent; executable code is not accepted.",
+      "help": "許可リストにある下記の宣言的な変換だけを送信できます。実行可能なコードは受け付けません。",
       "add": "Add mapping"
     },
     "losses": {
       "title": "Known semantic losses",
-      "help": "Every accepted loss needs an explicit durable acceptance reference before activation.",
+      "help": "受け入れた損失ごとに、有効化の前に、永続的な受け入れ参照を明示する必要があります。",
       "add": "Add loss",
       "none": "No known semantic loss is declared."
     },
     "coverage": {
       "title": "Mapping versus accepted-loss matrix",
-      "help": "Every row comes from the executable mapping catalog. Required rows must be mapped or backed by an accepted loss reference.",
+      "help": "各行は実行可能なマッピングカタログから取得されます。必須の行は、マッピングするか、受け入れた損失の参照で裏付ける必要があります。",
       "route": "Route",
       "field": "Catalog field",
       "result": "Coverage",
@@ -141,16 +141,16 @@
     },
     "permissions": {
       "title": "Effective permission preview",
-      "help": "These memberships come from the engine-issued whoami permission set. Exact resource policy and capability are still decided by server validation.",
+      "help": "これらのメンバーシップは、エンジンが発行した whoami の権限セットから取得します。正確なリソースポリシーとケーパビリティは、引き続きサーバー検証が判断します。",
       "granted": "In effective set",
       "notGranted": "Not in effective set",
       "unknown": "Not observed",
       "knownProfiles": "Known permission profiles",
-      "knownProfilesHelp": "Profiles are reused only from visible active specifications; the exact reference remains editable.",
+      "knownProfilesHelp": "プロファイルは、表示可能な有効な仕様からのみ再利用されます。正確な参照は引き続き編集できます。",
       "selectProfile": "Select a known profile"
     },
     "review": {
-      "unverifiedTitle": "This browser cannot issue the activation witness",
+      "unverifiedTitle": "このブラウザーは有効化の証拠を発行できません",
       "unverifiedBody": "ブラウザーは読み取り専用の証拠を送信しません。検証と計画はサーバー由来の結果を表示し、有効化にはサーバーが永続化したタイムスタンプ付き CLEAN 証拠が必要です。",
       "resources": "Resources",
       "mappings": "Mappings",
@@ -158,17 +158,17 @@
       "validation": "Server-derived validation",
       "plan": "Planned write",
       "result": "Apply result",
-      "exportJSON": "Export desired spec and server evidence as JSON"
+      "exportJSON": "目標仕様とサーバーの証拠を JSON でエクスポート"
     },
     "diff": {
       "title": "Plan → apply comparison",
-      "plannedHelp": "The server plan pins this exact operation, lineage, and hash set before any write.",
-      "appliedHelp": "The returned write is compared field-for-field with the pinned plan.",
+      "plannedHelp": "サーバーの計画は、書き込みの前に、この正確な操作・系統・ハッシュ集合を固定します。",
+      "appliedHelp": "返された書き込みは、固定された計画とフィールドごとに比較されます。",
       "match": "Matches plan",
       "mismatch": "Returned value differs",
       "fields": {
         "operation": "Operation",
-        "workspace_id": "Workspace",
+        "workspace_id": "ワークスペース",
         "generation": "Generation",
         "prior_active_id": "Prior active specification",
         "plan_hash": "Plan hash",
@@ -179,12 +179,12 @@
     },
     "flow": {
       "validating": "Validating the draft without writing…",
-      "planning": "Computing the canonical plan and hashes…",
+      "planning": "正規の計画とハッシュを計算しています…",
       "applying": "Creating the exact planned draft…",
-      "failed": "The request failed. No draft state is claimed.",
+      "failed": "リクエストに失敗しました。ドラフトは作成されたものとして扱われません。",
       "created": "Draft created",
       "createdVerified": "サーバーはタイムスタンプ付きの CLEAN 証拠を返しました。別の有効化が成功するまでリソースはドラフトです。",
-      "createdUnverified": "The returned resource is a draft and remains unverified; it is not active.",
+      "createdUnverified": "返されたリソースはドラフトで、未検証のままです。有効ではありません。",
       "createDraft": "Create planned draft",
       "retrySameKey": "Retry apply with same key",
       "inspect": "Validate and plan"
@@ -231,7 +231,7 @@
   },
   "localKind": {
     "work_item": "Work item",
-    "agent": "Agent",
+    "agent": "エージェント",
     "model": "Model",
     "channel": "Channel"
   },
@@ -252,9 +252,9 @@
   },
   "detail": {
     "specTitle": "Binding specification",
-    "specDescription": "Desired generation, hashes, losses, and activation evidence.",
+    "specDescription": "目標世代、ハッシュ、損失、有効化の証拠。",
     "bindingTitle": "Binding instance",
-    "bindingDescription": "Pinned runtime identity, state, and observation evidence.",
+    "bindingDescription": "固定されたランタイムのアイデンティティ、状態、観測の証拠。",
     "localResource": "Local resource",
     "remoteResource": "Remote resource",
     "validation": "Activation witness",
@@ -269,21 +269,21 @@
   "activation": {
     "blocker": {
       "state": "Only a draft can be activated.",
-      "witness": "Activation requires a timestamped CLEAN witness issued by the server.",
+      "witness": "有効化には、サーバーが発行したタイムスタンプ付きの CLEAN 証拠が必要です。",
       "currency": "Activation requires pinned currency.",
-      "losses": "Every known loss must be accepted with a durable reference.",
-      "disable": "Only a draft or active specification can be disabled."
+      "losses": "既知の損失はすべて、永続的な参照とともに受け入れる必要があります。",
+      "disable": "無効化できるのは、ドラフトまたは有効な仕様だけです。"
     }
   },
   "transition": {
     "activate": {
       "title": "Activate specification",
-      "description": "Re-read, validate, and plan the exact draft before activating it.",
+      "description": "有効化する前に、正確なドラフトを再読み込みし、検証して、計画します。",
       "applied": "The returned specification is active."
     },
     "disable": {
       "title": "Disable specification",
-      "description": "Re-read, validate, and plan the exact specification before disabling it.",
+      "description": "無効化する前に、正確な仕様を再読み込みし、検証して、計画します。",
       "applied": "The returned specification is disabled."
     },
     "phase": {
@@ -293,9 +293,9 @@
       "applying": "Applying the approved plan…"
     },
     "plan": "Transition plan",
-    "broken": "The transition preconditions were not met.",
-    "failed": "The transition failed. The previous state remains the only state shown.",
-    "conflict": "The specification changed after it was read. Re-read and review a new plan."
+    "broken": "遷移の前提条件が満たされていません。",
+    "failed": "遷移に失敗しました。直前の状態だけが引き続き表示されます。",
+    "conflict": "仕様は読み込み後に変更されました。再読み込みして、新しい計画を確認してください。"
   },
   "binding": {
     "terminal": "Terminal",
@@ -310,12 +310,12 @@
   },
   "reconcile": {
     "title": "Reconcile binding instance",
-    "description": "Validate and plan locally, test the peer without writing, then record the exact observed result.",
+    "description": "ローカルで検証して計画し、書き込まずにピアをテストしてから、観測された正確な結果を記録します。",
     "phase": {
       "refreshing": "最新のインスタンスとバージョンを読み取っています…",
       "validating": "Validating reconciliation without writing…",
       "planning": "Computing the canonical reconciliation plan…",
-      "testing": "Reading remote state without changing local state…",
+      "testing": "ローカルの状態を変更せずに、リモートの状態を読み取っています…",
       "applying": "Recording the tested observation…"
     },
     "plan": "Reconciliation plan",
@@ -325,12 +325,12 @@
     "externalCalls": "Remote reads",
     "noExternalCalls": "No remote read is planned",
     "checks": "Evidence checks",
-    "unknown": "The remote observation could not be completed. Nothing is recorded as clean or broken.",
-    "broken": "Local validation or planning found a broken precondition.",
-    "failed": "Reconciliation failed. No new observation is claimed.",
-    "conflict": "The instance changed after it was read. Re-read and review a new plan."
+    "unknown": "リモートの観測を完了できませんでした。正常とも破損とも記録されていません。",
+    "broken": "ローカルの検証または計画で、満たされていない前提条件が見つかりました。",
+    "failed": "調整に失敗しました。新しい観測結果は記録されません。",
+    "conflict": "インスタンスは読み込み後に変更されました。再読み込みして、新しい計画を確認してください。"
   },
   "pagination": {
-    "truncated": "More results exist. Narrow the filters to inspect the complete relevant set."
+    "truncated": "結果はさらにあります。フィルターを絞り込んで、関連する全件を確認してください。"
   }
 }

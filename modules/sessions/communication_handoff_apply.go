@@ -455,7 +455,7 @@ func (m *Module) mutateHandoffWithAuthority(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(
+		tx, err := m.communicationTxWithAuthority(
 			ctx, confined, request, claims,
 		)
 		if err != nil {
@@ -509,7 +509,7 @@ func (m *Module) mutateHandoffDeadline(
 		if err != nil {
 			return err
 		}
-		tx, err := newCommunicationTxWithAuthority(
+		tx, err := m.communicationTxWithAuthority(
 			ctx, confined, request, CommunicationClaimAuthoritySnapshot{},
 		)
 		if err != nil {

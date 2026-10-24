@@ -22,11 +22,12 @@ actualización y su frase de paso privada o KEK para volver a la versión anteri
 
 ## Qué vía de actualización te corresponde
 
-Hay tres formas de avanzar el binario y todas llegan al mismo punto.
+Hay cuatro formas de avanzar el binario y todas llegan al mismo punto.
 
 | Tu instalación | Vía |
 |---|---|
-| Un binario en un host o systemd | `olivares upgrade`: esta página |
+| Un paquete deb, rpm, apk o AUR | El gestor de paquetes. [Instalar desde un paquete](/es/how-to/install-from-packages/) |
+| Un binario en un host o systemd (que no viene de un paquete) | `olivares upgrade`: esta página |
 | Un contenedor Docker o Podman | `docker compose exec olivares olivares upgrade` y después recrea el contenedor. La imagen no puede cambiar, así que la versión se guarda en el volumen de datos (`ota/` bajo el directorio de datos) y cada arranque del binario de la imagen la inicia mientras sea más reciente que la imagen o la misma versión construida de otro modo. Si eliminas `ota/`, el contenedor vuelve al binario de su imagen. [Docker y Compose](/es/how-to/install-a-license/#docker-y-compose) tiene los comandos. |
 | Kubernetes / Helm | Define la imagen y deja que el operador haga el rolling update. No ejecutes `olivares upgrade` dentro de un pod: el despliegue es declarativo y la siguiente reconciliación lo desharía. |
 
@@ -52,7 +53,7 @@ protecciones seguirán activas:
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.3
+olivares upgrade --check --current-version 0.4
 ```
 <!-- /release -->
 
@@ -102,6 +103,9 @@ a la línea de disponibilidad general.
 ```sh
 olivares upgrade
 ```
+
+En una instalación por paquete (deb, rpm, apk, AUR) esto se rechaza con código de salida 2 antes de
+descargar nada: usa el gestor de paquetes, como indica la tabla anterior. `--check` sigue mostrando el plan.
 
 Esto es lo que hace el comando, en orden, y el motivo de cada paso:
 
@@ -163,6 +167,12 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 
 De forma predeterminada imprime las unidades; `--timer-dir` las escribe donde indiques. Es
 opt-in: nada se programa por sí solo.
+
+En una instalación por paquete el comando se niega: `/usr/bin/olivares` pertenece al gestor de
+paquetes, así que termina con 2, no escribe ninguna unidad y nombra la vía: el gestor de paquetes
+del host y, en el appliance de Olivares, `systemctl start olivares-appliance-update.service`. Con `--enterprise --connect`
+nombra además `olivares license connect refresh`. La comprobación es por ruta, así que también
+se niega un binario que `install.sh --bindir /usr/bin` haya dejado ahí.
 
 La consola ofrece la mitad de solo lectura de la misma información: **Settings → update
 status** llama a `POST /v1/console/update-check`, que ejecuta bajo demanda una comprobación del

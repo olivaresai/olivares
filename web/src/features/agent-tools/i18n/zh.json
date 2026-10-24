@@ -1,8 +1,8 @@
 {
   "title": "AI 工具",
   "description": "在此服务器上安装会话运行的 AI 工具，并完成登录。",
+  "descriptionMember": "会话以这些账户和 API 密钥运行。工具由系统管理员安装并登录。",
   "refresh": "刷新",
-  "adminOnly": "管理主机工具需要系统管理员会话。",
   "readOnly": "此服务器为只读模式，无法安装。",
   "notInstalled": "没有托管安装",
   "installedOutside": "已安装在此服务器上，非由 Olivares 安装",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "{{name}} 的选项",
     "update": "更新",
-    "details": "安装详情",
-    "profilesPage": "配置文件详情页"
+    "details": "安装详情"
   },
   "details": {
     "title": "{{name}}：安装详情",
@@ -220,5 +219,11 @@
     "packagesHint": "由每个工具的新会话所用的提供商配置文件声明（{{profiles}}）。没有配置文件的工具会获得一个不声明任何内容的新配置文件。",
     "packagesNoProfile": "它们来自每个工具的会话所运行的提供商配置文件。目前还没有，新的配置文件不声明任何内容。",
     "packagesRefused": "因尚无法启动会话而未列出：{{tools}}。"
+  },
+  "place": {
+    "title": "账户和 API 密钥",
+    "accounts": "账户",
+    "allAccounts": "所有账户：详情、标签和绑定",
+    "noAccess": "你的角色无法读取此组织的账户和 API 密钥。"
   }
 }

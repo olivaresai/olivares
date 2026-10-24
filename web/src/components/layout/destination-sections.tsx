@@ -4,18 +4,17 @@
 //
 // THE PAGES BESIDE THIS ONE: one row above the page that moves between the pages of its
 // own section (Policies: Claude Code policy, routine policies, the inference proxy), the same
-// section All areas and the breadcrumb place it in. Under the footer's Settings the row is
-// the whole System & settings area, led by Settings. The members are registry views, named by
-// their own nav labels and gated by the same check as the sidebar, so the row never offers a
-// page the route guard would refuse. It is drawn as links, not tabs: each member is its own
-// page, with its own tabs below its title.
+// section All areas places it in. Under Settings the row is the whole System & settings
+// area, led by Settings. The members are registry views, named by their own nav labels and
+// gated by the same check as the top bar, so the row never offers a page the route guard
+// would refuse. It is drawn as links, not tabs: each member is its own page, with its own
+// tabs below its title.
 //
-// Not drawn on a section address (Approvals is the queue, not a page of Identity & access)
-// nor on a work-frame route (Sessions), whose surface owns the whole viewport.
+// Not drawn on a section address (Rules opens the approval queue, not a page of Identity &
+// access) nor on a work-frame route (Sessions), whose surface owns the whole viewport.
 //
-// Drawn on the phone only (below 761 px, where there is no sidebar). From 761 px the
-// sidebar lists the same pages in its areas, and a page with its own tab strip would show
-// two strips.
+// Drawn at every width: there is no sidebar (#2544), so this row is how a place reaches the
+// other pages of its section in one click (Tools: AI tools, MCP servers, Providers).
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -82,7 +81,7 @@ export function DestinationSections() {
       ref={row}
       aria-label={label}
       data-slot="destination-sections"
-      className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] min-[761px]:hidden"
+      className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
     >
       {members.map((m) => (
         <Link

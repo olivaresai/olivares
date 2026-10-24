@@ -74,7 +74,7 @@ export function StatusPage() {
           {overallStatus ? (
             t(`statusPage.overall.${overallStatus}`)
           ) : query.isLoading ? (
-            <span className="mx-auto block h-5 w-48 animate-pulse rounded bg-muted" />
+            <span className="mx-auto block h-5 w-48 rounded bg-muted" />
           ) : (
             t('statusPage.unavailable')
           )}
@@ -185,8 +185,8 @@ function StatusIcon({
 function ComponentSkeleton() {
   return (
     <div className="flex items-center justify-between px-4 py-3">
-      <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-      <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+      <div className="h-4 w-24 rounded bg-muted" />
+      <div className="h-4 w-20 rounded bg-muted" />
     </div>
   )
 }

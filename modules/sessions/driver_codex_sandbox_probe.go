@@ -33,6 +33,7 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	probe := *spec
 	probe.Args = []string{"-c", "check_for_update_on_startup=false", "-c", `sandbox_mode="read-only"`, "sandbox", "--", "/bin/true"}
 	probe.Env, probe.EnvAllow = nil, nil
+	probe.OnStart = nil // the probe is not the run's first process: it must not become what a broker's helpers serve
 	for _, item := range spec.Env {
 		if item.Name == envUserHome || item.Name == envCodexHome {
 			probe.Env = append(probe.Env, item)

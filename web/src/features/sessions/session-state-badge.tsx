@@ -23,8 +23,8 @@ export function SessionStateBadge({
   className?: string
 }) {
   const display = sessionDisplayState({ runs: run ? [run] : [], live })
-  if (display.runState)
-    return <RunStateBadge state={display.runState} className={className} />
+  if (display.runState && run)
+    return <RunStateBadge run={run} className={className} />
   if (display.observedState)
     return <CcStateBadge state={display.observedState} className={className} />
   return null

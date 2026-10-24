@@ -221,3 +221,38 @@ func TestPatternLiteralsRefuseAnUnknownPart(t *testing.T) {
 		})
 	}
 }
+
+// A managed surface whose native file is TOML is counted through the TOML decoder: every
+// table, key and string value is a decoded string, so an account named in a Codex or Grok
+// file is found the same way as one named in a Claude Code JSON file.
+func TestSurfaceDocumentCountsTOMLSurfaces(t *testing.T) {
+	t.Parallel()
+	lim := auth.CountedContentLimits()
+	content := "[mcp_servers.\"jdoe@x.test\"]\nurl = \"https://mcp.example\"\nargs = [\"ops@x.test\", \"-y\"]\n\n[[rules]]\nowner = \"asmith@x.test\"\n"
+	for _, surface := range []string{surfaceCodexRequirements, surfaceCodexManagedConfig, surfaceGrokRequirements} {
+		doc, err := surfaceDocument(surface, content, lim)
+		if err != nil {
+			t.Fatalf("%s: %v", surface, err)
+		}
+		if doc.Raw != content {
+			t.Fatalf("%s: raw content changed", surface)
+		}
+		got := strings.Join(doc.Decoded, "|")
+		for _, want := range []string{"jdoe@x.test", "https://mcp.example", "asmith@x.test", "ops@x.test", "owner", "mcp_servers"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: decoded strings %q lack %q", surface, got, want)
+			}
+		}
+		if _, err := surfaceDocument(surface, "a = = b", lim); err == nil {
+			t.Errorf("%s: invalid TOML must be refused", surface)
+		} else {
+			wantContentError(t, err, "toml", "syntax")
+		}
+	}
+	for _, surface := range []string{surfaceOpenCodeConfig, surfaceGeminiCLISettings} {
+		doc, err := surfaceDocument(surface, `{"owner":"jdoe@x.test"}`, lim)
+		if err != nil || !strings.Contains(strings.Join(doc.Decoded, "|"), "jdoe@x.test") {
+			t.Errorf("%s is a JSON surface: doc=%+v err=%v", surface, doc, err)
+		}
+	}
+}

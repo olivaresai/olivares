@@ -3,10 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // THE KILL SWITCH, ON EVERY PAGE (console remake 26.10, CONCEPT-IA row "Kill switch"): while
-// a stop is engaged, the top bar carries one status pill that opens the kill switch —
+// a stop is engaged, the status bar carries one status pill that opens the kill switch —
 // danger for an estate stop, warning for agent stops — and nothing when no stop is active.
-// It lives IN the top bar, not as a strip above the work: the shell keeps one header row
-// (app-layout.regions.test.tsx), and an emergency state must not move every page down.
+// It lives IN the status bar (#3161), not as a strip above the work: an emergency state
+// must not move every page down.
 //
 // The read is the kill switch's own live posture under its own cache key, so this pill and
 // the kill switch page share one answer; it is made only for a principal who may open that
@@ -35,10 +35,9 @@ export function KillSwitchStatus() {
             : t('shell.killswitch.agentStops', { count: agentStops })
         }
         className={cn(
-          'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-caption font-semibold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-focus',
-          // On a phone the bar holds the brand, search and the account: the pill keeps its
-          // colour and its dot, and its words go to the accessible name and the tooltip.
-          'max-[760px]:px-2',
+          'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-[11px] leading-4 font-semibold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-focus',
+          // On a phone the bar holds the engine and the version: the pill keeps its colour
+          // and its dot, and its words go to the accessible name and the tooltip.
           estate
             ? 'bg-danger-soft text-danger hover:bg-danger-soft/80'
             : 'bg-warning-soft text-warning hover:bg-warning-soft/80',

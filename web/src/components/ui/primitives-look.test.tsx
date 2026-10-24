@@ -7,12 +7,13 @@
 // one primary action; every other labelled action a tonal fill with no border (`outline` is the
 // same button); a control that cannot act keeps its text legible in the third tone with no
 // dashed border; links in the text colour; icon buttons with a 40 px hit area; a 2 px focus
-// outline (an outline, so forced-colors mode keeps it); controls on the canvas; the orange for
-// a checked switch; the selected tab as a raised segment; and the state panels in the state
-// set's words and tones.
+// outline (an outline, so forced-colors mode keeps it); controls on the canvas; the neutral ink
+// (not the action orange) for a checked switch and a checked checkbox; the selected tab as a
+// raised segment; and the state panels in the state set's words and tones.
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { Button } from './button'
+import { Checkbox } from './checkbox'
 import { EmptyState } from './empty-state'
 import { ErrorState, ForbiddenState } from './error-state'
 import { Input } from './input'
@@ -206,18 +207,67 @@ describe('the v26.10 look of the page primitives', () => {
     }
   })
 
-  it('Switch: the checked track is the orange fill with the on-accent thumb', () => {
+  it('Switch: the checked track is the neutral ink fill, never the action orange', () => {
     render(<Switch aria-label="Notify" defaultChecked />)
     const track = screen.getByRole('switch', { name: 'Notify' })
-    expect(classes(track)).toEqual(
+    const c = classes(track)
+    expect(c).toEqual(
       expect.arrayContaining([
         'bg-ctl-border',
-        'data-[state=checked]:bg-accent',
+        'data-[state=checked]:bg-foreground',
       ]),
     )
-    expect(classes(track.firstElementChild!)).toContain(
+    // Orange is the one primary action of a screen (2026-10-17, #2696): a state
+    // switch must not count as a filled orange control in any theme.
+    expect(c).not.toContain('data-[state=checked]:bg-accent')
+    expect(c).not.toContain('data-[state=checked]:border-accent-border')
+    expect(classes(track.firstElementChild!)).toContain('bg-surface')
+    expect(classes(track.firstElementChild!)).not.toContain(
       'data-[state=checked]:bg-on-accent',
     )
+  })
+
+  it('Checkbox: the checked box is the neutral ink fill, never the action orange', () => {
+    render(
+      <>
+        <Checkbox aria-label="Agree" defaultChecked />
+        <Checkbox aria-label="Mix" checked="indeterminate" />
+      </>,
+    )
+    // Both state variants render, so the pinned classes are the ones a real
+    // checked / indeterminate box paints, not just the static class list.
+    // (RTL's `checked` filter cannot express 'mixed' — the attribute is read
+    // directly instead.)
+    expect(
+      screen.getByRole('checkbox', { name: 'Agree', checked: true }),
+    ).toBeTruthy()
+    const mix = screen.getByRole('checkbox', { name: 'Mix' })
+    expect(mix.getAttribute('aria-checked')).toBe('mixed')
+    expect(mix.getAttribute('data-state')).toBe('indeterminate')
+    for (const name of ['Agree', 'Mix']) {
+      const c = classes(screen.getByRole('checkbox', { name }))
+      expect(c).toEqual(
+        expect.arrayContaining([
+          'bg-surface',
+          'border-ctl-border',
+          'data-[state=checked]:bg-foreground',
+          'data-[state=indeterminate]:bg-foreground',
+          'data-[state=checked]:text-surface',
+          'data-[state=indeterminate]:text-surface',
+        ]),
+      )
+      // Orange is the one primary action of a screen (2026-10-17, #2696): a
+      // state checkbox must not count as a filled orange control in any theme,
+      // in either state variant (#2701).
+      expect(c).not.toContain('data-[state=checked]:bg-accent')
+      expect(c).not.toContain('data-[state=indeterminate]:bg-accent')
+      expect(c).not.toContain('data-[state=checked]:border-accent-text')
+      expect(c).not.toContain('data-[state=indeterminate]:border-accent-text')
+      expect(c).not.toContain('data-[state=checked]:text-accent-foreground')
+      expect(c).not.toContain(
+        'data-[state=indeterminate]:text-accent-foreground',
+      )
+    }
   })
 
   it('Tabs: the selected tab is a raised segment, the others the second tone, no orange rule', () => {

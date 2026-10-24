@@ -5,17 +5,16 @@ import type { ComponentProps } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * Skeleton — a loading placeholder. A block on the selection fill with a subtle pulse; size
- * it with width/height utilities to mirror the real content (text lines, an avatar circle,
- * a row). The pulse stops under the reduced-motion preference and the Reduce motion setting.
+ * Skeleton — a loading placeholder. A static block on the selection fill (C2-DESIGN §3:
+ * nothing pulses); size it with width/height utilities to mirror the real content (text
+ * lines, an avatar circle, a row). aria-busy keeps it announced as loading and lets the
+ * release readiness guard (surface.ts) treat it as the in-progress marker it is.
  */
 export function Skeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn(
-        'animate-pulse rounded-[6px] bg-active motion-reduce:animate-none [[data-motion=reduce]_&]:animate-none',
-        className,
-      )}
+      aria-busy="true"
+      className={cn('rounded-[6px] bg-active', className)}
       {...props}
     />
   )

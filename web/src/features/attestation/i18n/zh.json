@@ -80,7 +80,7 @@
   "slsa": {
     "title": "SLSA 构建溯源",
     "description": "由 slsa-github-generator 生成、并经 slsa-verifier 验证的 In-toto / ITE-6 溯源。",
-    "buildLevel": "SLSA Build {{level}}",
+    "buildLevel": "SLSA 构建级别 {{level}}",
     "predicate": "谓词类型",
     "generator": "生成器",
     "pin": "可复用工作流固定项",
@@ -95,7 +95,7 @@
     "title": "软件物料清单（SBOM）",
     "description": "为每个归档文件及容器镜像生成的 SPDX 2.3 和 CycloneDX 1.6，作为已签名的 In-toto 证明附加。",
     "attestation": "证明谓词",
-    "linter": "CISA linter",
+    "linter": "CISA 检查器",
     "cisa": {
       "title": "CISA 最小要素核对清单",
       "draftTag": "草案",

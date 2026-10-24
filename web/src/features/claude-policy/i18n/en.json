@@ -16,7 +16,8 @@
   },
   "validation": {
     "ok": "Schema valid.",
-    "summary": "{{count}} validation note(s) — {{errors}} error(s).",
+    "summary_one": "{{count}} validation note · errors: {{errors}}",
+    "summary_other": "{{count}} validation notes · errors: {{errors}}",
     "listLabel": "Schema validation results"
   },
   "form": {
@@ -79,7 +80,7 @@
     "subject": "subject",
     "fingerprint": "fingerprint",
     "emptyTitle": "No drift findings",
-    "emptyBody": "No policy-drift findings are currently reported for the Claude Code surfaces.",
+    "emptyBody": "No policy-drift findings are currently reported for your managed AI tools.",
     "truncated": "Loaded {{n}} drift findings; there are more",
     "truncatedHint": "There are more policy-drift findings than shown; this page takes rows by id. An absence here does not demonstrate that there is no drift — the finding may simply be beyond this page."
   },
@@ -291,6 +292,7 @@
     "verified": "verified",
     "unverified": "UNVERIFIED",
     "contentUnknown": "content UNKNOWN (attestation only)",
-    "openFindings": "{{count}} open finding(s)"
+    "openFindings_one": "{{count}} open finding",
+    "openFindings_other": "{{count}} open findings"
   }
 }

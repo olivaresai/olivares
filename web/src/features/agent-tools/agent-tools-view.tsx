@@ -24,7 +24,6 @@ import { useTenantStore } from '@/stores/tenant'
 import { useReadyTools } from '@/features/first-hour/first-hour'
 import { OllamaService } from './ollama-service'
 import '@/features/first-hour/i18n'
-import { ForbiddenState } from '@/components/ui/error-state'
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
@@ -41,6 +40,7 @@ import {
   type ToolJob,
   type ToolPlan,
 } from './api'
+import { AccountsAndKeys } from './accounts-and-keys'
 import { AddProfileDialog } from './add-profile-dialog'
 import { defaultVersion, InstallDetails } from './install-details'
 import { InstalledHere } from './installed-here'
@@ -191,7 +191,6 @@ function Tools({ epoch }: { epoch: number }) {
     },
     [epoch, qc],
   )
-  if (!isSuperadmin) return <ForbiddenState description={t('adminOnly')} />
   const busy = install.isPending || job.data?.state === 'running'
   const installReason = install.isPending ? t('starting') : t('state.running')
   // Without the inventory nothing can be reviewed or installed: said, not hidden.
@@ -229,282 +228,301 @@ function Tools({ epoch }: { epoch: number }) {
     <div className="flex min-w-0 flex-col gap-4">
       <PageHeader
         title={t('title')}
-        description={t('description')}
+        description={t(isSuperadmin ? 'description' : 'descriptionMember')}
         actions={
-          <Button
-            variant="outline"
-            onClick={() => {
-              void inventory.refetch()
-              void providers.refetch()
-              // The profile rows read each login from the tool itself.
-              void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })
-            }}
-            disabled={inventory.isFetching}
-          >
-            {t('refresh')}
-          </Button>
+          isSuperadmin ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                void inventory.refetch()
+                void providers.refetch()
+                // The profile rows read each login from the tool itself.
+                void qc.invalidateQueries({
+                  queryKey: firstHourKeys.all(tenant),
+                })
+              }}
+              disabled={inventory.isFetching}
+            >
+              {t('refresh')}
+            </Button>
+          ) : undefined
         }
       />
-      {/* ONE LIST PER INSTALLED TOOL, ONE ROW PER PROFILE. A profile is a way a tool signs
+      {/* THE INSTALL SIDE is the deployment administrator's: the inventory, versions and
+          login probes are deployment-wide reads. Everyone else signs in through the
+          accounts and keys below. */}
+      {isSuperadmin ? (
+        <>
+          {/* ONE LIST PER INSTALLED TOOL, ONE ROW PER PROFILE. A profile is a way a tool signs
           in (its own account, or an API key); the install, its version form, Detect and
           its log are behind the tool's menu. A tool that is not installed is one line. */}
-      {inventory.isPending ? (
-        <Spinner />
-      ) : (
-        <>
-          {inventory.isError && (
-            <QueryErrorState
-              error={inventory.error}
-              subject={t('title')}
-              description={message(inventory.error)}
-              retry={() => void inventory.refetch()}
-            />
+          {inventory.isPending ? (
+            <Spinner />
+          ) : (
+            <>
+              {inventory.isError && (
+                <QueryErrorState
+                  error={inventory.error}
+                  subject={t('title')}
+                  description={message(inventory.error)}
+                  retry={() => void inventory.refetch()}
+                />
+              )}
+              {inventory.data?.read_only && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t('readOnly')}
+                </p>
+              )}
+              {providers.isError && (
+                <QueryErrorState
+                  error={providers.error}
+                  subject={t('title')}
+                  description={message(providers.error)}
+                  retry={() => void providers.refetch()}
+                />
+              )}
+              {inventory.data ? (
+                <InstalledHere
+                  scope={scope}
+                  inventory={inventory.data}
+                  facts={facts}
+                />
+              ) : null}
+              <ProfilesNotice profiles={profiles} />
+              {pins.isError && (
+                <QueryErrorState
+                  error={pins.error}
+                  subject={t('versions.title')}
+                  retry={() => void pins.refetch()}
+                />
+              )}
+              {facts
+                .filter((f) => f.installed || pinnedDrivers.has(f.driver))
+                .map((f) => (
+                  <InstalledTool
+                    key={f.driver}
+                    epoch={epoch}
+                    driver={f.driver}
+                    accounts={(profiles.data?.accounts ?? []).filter(
+                      (a) => a.driver === f.driver,
+                    )}
+                    taken={profiles.data?.taken}
+                    named={profiles.data?.named ?? false}
+                    version={f.version}
+                    installs={f.installs}
+                    snapshots={f.snapshots}
+                    verification={
+                      inventory.data?.verification_levels?.[f.driver]
+                    }
+                    disabledReason={reviewDisabledReason}
+                    onReview={review}
+                    job={job.data?.driver === f.driver ? job.data : undefined}
+                  />
+                ))}
+              {missing.length > 0 && (
+                <div
+                  data-testid="not-installed"
+                  className="flex flex-wrap items-center justify-between gap-3 px-1"
+                >
+                  <p className="text-caption text-text-2">
+                    {t('missing', {
+                      tools: missing.map((f) => nameOf(f.driver)).join(' · '),
+                    })}
+                  </p>
+                  {inventoryAvailable ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="secondary" size="sm">
+                          {t('installMenu')}
+                          <ChevronDown aria-hidden />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {missing.map((f) => (
+                          <DropdownMenuItem
+                            key={f.driver}
+                            disabled={!!reviewDisabledReason}
+                            onSelect={() =>
+                              review(f.driver, defaultVersion(f.driver))
+                            }
+                          >
+                            {t('installTool', { name: nameOf(f.driver) })}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                </div>
+              )}
+              {!!inventory.data?.inventory.leftovers.length && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {t('leftovers', {
+                    count: inventory.data?.inventory.leftovers.length ?? 0,
+                  })}
+                </p>
+              )}
+            </>
           )}
-          {inventory.data?.read_only && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {t('readOnly')}
-            </p>
-          )}
-          {providers.isError && (
-            <QueryErrorState
-              error={providers.error}
-              subject={t('title')}
-              description={message(providers.error)}
-              retry={() => void providers.refetch()}
-            />
-          )}
-          {inventory.data ? (
-            <InstalledHere
-              scope={scope}
-              inventory={inventory.data}
-              facts={facts}
-            />
-          ) : null}
-          <ProfilesNotice profiles={profiles} />
-          {pins.isError && (
-            <QueryErrorState
-              error={pins.error}
-              subject={t('versions.title')}
-              retry={() => void pins.refetch()}
-            />
-          )}
-          {facts
-            .filter((f) => f.installed || pinnedDrivers.has(f.driver))
-            .map((f) => (
-              <InstalledTool
-                key={f.driver}
-                epoch={epoch}
-                driver={f.driver}
-                accounts={(profiles.data?.accounts ?? []).filter(
-                  (a) => a.driver === f.driver,
-                )}
-                taken={profiles.data?.taken}
-                named={profiles.data?.named ?? false}
-                version={f.version}
-                installs={f.installs}
-                snapshots={f.snapshots}
-                verification={inventory.data?.verification_levels?.[f.driver]}
-                disabledReason={reviewDisabledReason}
-                onReview={review}
-                job={job.data?.driver === f.driver ? job.data : undefined}
-              />
-            ))}
-          {missing.length > 0 && (
-            <div
-              data-testid="not-installed"
-              className="flex flex-wrap items-center justify-between gap-3 px-1"
+          <details className="rounded-md border border-border p-4">
+            <summary className="cursor-pointer text-sm font-medium">
+              {t('from.title')}
+            </summary>
+            <form
+              className="mt-3 flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                setApproval(null)
+                install.reset()
+                preview.mutate({
+                  driver: '',
+                  version: fromVersion.trim(),
+                  from: fromURL.trim(),
+                })
+              }}
             >
-              <p className="text-caption text-text-2">
-                {t('missing', {
-                  tools: missing.map((f) => nameOf(f.driver)).join(' · '),
+              <p className="text-sm text-muted-foreground">{t('from.hint')}</p>
+              <div className="space-y-1">
+                <Label htmlFor="tool-source-url">{t('from.source')}</Label>
+                <Input
+                  id="tool-source-url"
+                  type="url"
+                  pattern="https://.*"
+                  required
+                  value={fromURL}
+                  onChange={(event) => setFromURL(event.target.value)}
+                  disabled={!!sourceDisabledReason}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="tool-source-version">{t('from.version')}</Label>
+                <Input
+                  id="tool-source-version"
+                  required
+                  value={fromVersion}
+                  onChange={(event) => setFromVersion(event.target.value)}
+                  disabled={!!sourceDisabledReason}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="self-start"
+                disabled={!!sourceDisabledReason}
+                aria-describedby={
+                  sourceDisabledReason ? 'tool-source-reason' : undefined
+                }
+              >
+                {t('from.review')}
+              </Button>
+              {sourceDisabledReason && (
+                <p
+                  id="tool-source-reason"
+                  className="text-sm text-muted-foreground"
+                >
+                  {sourceDisabledReason}
+                </p>
+              )}
+            </form>
+          </details>
+          {preview.isPending && <p role="status">{t('planning')}</p>}
+          {preview.isError && (
+            <QueryErrorState
+              error={preview.error}
+              description={message(preview.error)}
+              // HU2-28: a release lookup can fail for a while (GitHub's limit for this network);
+              // Retry plans the same tool and version again.
+              retry={() => {
+                if (preview.variables) preview.mutate(preview.variables)
+              }}
+            />
+          )}
+          {approval && (
+            <section
+              aria-labelledby="tool-approval"
+              className="flex min-w-0 flex-col gap-3 rounded-md border border-border p-4"
+            >
+              <h2 id="tool-approval" className="text-heading">
+                {t('approval')}
+              </h2>
+              <p>
+                {nameOf(approval.plan.driver)} ·{' '}
+                <strong>{approval.plan.version}</strong>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t(`verification.${approval.plan.verification}`, {
+                  defaultValue: approval.plan.verification,
                 })}
               </p>
-              {inventoryAvailable ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="secondary" size="sm">
-                      {t('installMenu')}
-                      <ChevronDown aria-hidden />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {missing.map((f) => (
-                      <DropdownMenuItem
-                        key={f.driver}
-                        disabled={!!reviewDisabledReason}
-                        onSelect={() =>
-                          review(f.driver, defaultVersion(f.driver))
-                        }
-                      >
-                        {t('installTool', { name: nameOf(f.driver) })}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </div>
+              <p className="break-all font-mono text-xs text-muted-foreground">
+                {approval.plan.executable}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t('installHint')}
+              </p>
+              {install.isError && (
+                <QueryErrorState
+                  error={install.error}
+                  description={message(install.error)}
+                />
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => install.mutate(approval.request)}
+                  disabled={!!busy}
+                >
+                  {install.isPending ? t('starting') : t('install')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={install.isPending}
+                  onClick={() => setApproval(null)}
+                >
+                  {t('cancel')}
+                </Button>
+              </div>
+            </section>
           )}
-          {!!inventory.data?.inventory.leftovers.length && (
-            <p role="status" className="text-sm text-muted-foreground">
-              {t('leftovers', {
-                count: inventory.data?.inventory.leftovers.length ?? 0,
-              })}
-            </p>
+          {job.isError && (
+            <QueryErrorState
+              error={job.error}
+              description={message(job.error)}
+              retry={() => void job.refetch()}
+            />
+          )}
+          {job.data && (
+            <section
+              aria-labelledby="tool-job"
+              className="flex min-w-0 flex-col gap-1"
+            >
+              <h2 id="tool-job" className="sr-only">
+                {t('job')}
+              </h2>
+              {/* One line: the log of the install is in the tool's details sheet. */}
+              <p
+                aria-live="polite"
+                role="status"
+                className="text-caption text-text-2"
+              >
+                {t(`state.${job.data.state}`)} · {nameOf(job.data.driver)}{' '}
+                {job.data.version}
+              </p>
+              {job.data.error && (
+                <p
+                  role="alert"
+                  className="break-words text-sm text-destructive"
+                >
+                  {job.data.error}
+                </p>
+              )}
+              {job.data.audit_error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {job.data.audit_error}
+                </p>
+              )}
+            </section>
           )}
         </>
-      )}
-      <details className="rounded-md border border-border p-4">
-        <summary className="cursor-pointer text-sm font-medium">
-          {t('from.title')}
-        </summary>
-        <form
-          className="mt-3 flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setApproval(null)
-            install.reset()
-            preview.mutate({
-              driver: '',
-              version: fromVersion.trim(),
-              from: fromURL.trim(),
-            })
-          }}
-        >
-          <p className="text-sm text-muted-foreground">{t('from.hint')}</p>
-          <div className="space-y-1">
-            <Label htmlFor="tool-source-url">{t('from.source')}</Label>
-            <Input
-              id="tool-source-url"
-              type="url"
-              pattern="https://.*"
-              required
-              value={fromURL}
-              onChange={(event) => setFromURL(event.target.value)}
-              disabled={!!sourceDisabledReason}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="tool-source-version">{t('from.version')}</Label>
-            <Input
-              id="tool-source-version"
-              required
-              value={fromVersion}
-              onChange={(event) => setFromVersion(event.target.value)}
-              disabled={!!sourceDisabledReason}
-            />
-          </div>
-          <Button
-            type="submit"
-            className="self-start"
-            disabled={!!sourceDisabledReason}
-            aria-describedby={
-              sourceDisabledReason ? 'tool-source-reason' : undefined
-            }
-          >
-            {t('from.review')}
-          </Button>
-          {sourceDisabledReason && (
-            <p
-              id="tool-source-reason"
-              className="text-sm text-muted-foreground"
-            >
-              {sourceDisabledReason}
-            </p>
-          )}
-        </form>
-      </details>
-      {preview.isPending && <p role="status">{t('planning')}</p>}
-      {preview.isError && (
-        <QueryErrorState
-          error={preview.error}
-          description={message(preview.error)}
-          // HU2-28: a release lookup can fail for a while (GitHub's limit for this network);
-          // Retry plans the same tool and version again.
-          retry={() => {
-            if (preview.variables) preview.mutate(preview.variables)
-          }}
-        />
-      )}
-      {approval && (
-        <section
-          aria-labelledby="tool-approval"
-          className="flex min-w-0 flex-col gap-3 rounded-md border border-border p-4"
-        >
-          <h2 id="tool-approval" className="text-heading">
-            {t('approval')}
-          </h2>
-          <p>
-            {nameOf(approval.plan.driver)} ·{' '}
-            <strong>{approval.plan.version}</strong>
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {t(`verification.${approval.plan.verification}`, {
-              defaultValue: approval.plan.verification,
-            })}
-          </p>
-          <p className="break-all font-mono text-xs text-muted-foreground">
-            {approval.plan.executable}
-          </p>
-          <p className="text-sm text-muted-foreground">{t('installHint')}</p>
-          {install.isError && (
-            <QueryErrorState
-              error={install.error}
-              description={message(install.error)}
-            />
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              onClick={() => install.mutate(approval.request)}
-              disabled={!!busy}
-            >
-              {install.isPending ? t('starting') : t('install')}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={install.isPending}
-              onClick={() => setApproval(null)}
-            >
-              {t('cancel')}
-            </Button>
-          </div>
-        </section>
-      )}
-      {job.isError && (
-        <QueryErrorState
-          error={job.error}
-          description={message(job.error)}
-          retry={() => void job.refetch()}
-        />
-      )}
-      {job.data && (
-        <section
-          aria-labelledby="tool-job"
-          className="flex min-w-0 flex-col gap-1"
-        >
-          <h2 id="tool-job" className="sr-only">
-            {t('job')}
-          </h2>
-          {/* One line: the log of the install is in the tool's details sheet. */}
-          <p
-            aria-live="polite"
-            role="status"
-            className="text-caption text-text-2"
-          >
-            {t(`state.${job.data.state}`)} · {nameOf(job.data.driver)}{' '}
-            {job.data.version}
-          </p>
-          {job.data.error && (
-            <p role="alert" className="break-words text-sm text-destructive">
-              {job.data.error}
-            </p>
-          )}
-          {job.data.audit_error && (
-            <p role="alert" className="text-sm text-destructive">
-              {job.data.audit_error}
-            </p>
-          )}
-        </section>
-      )}
+      ) : null}
+      <AccountsAndKeys folded={isSuperadmin} />
     </div>
   )
 }
@@ -567,15 +585,6 @@ function InstalledTool({
   const [adding, setAdding] = useState(false)
   const { can } = useAuth()
   const service = SERVICE_DRIVERS.includes(driver)
-  // The provider pages fold into AI tools (#2240): the menu opens their room on the first
-  // door this person may read, and the room's tabs reach the others.
-  const providerRoomHref = can('sessions:account:read')
-    ? '/provider-accounts'
-    : can('sessions:profile:read')
-      ? '/provider-profiles'
-      : can('sessions:profile-binding:read')
-        ? '/provider-bindings'
-        : undefined
   return (
     <>
       <ToolBox
@@ -585,7 +594,6 @@ function InstalledTool({
         onUpdate={() => onReview(driver, defaultVersion(driver))}
         updateDisabled={!!disabledReason}
         onDetails={() => setDetails(true)}
-        profilesHref={service ? undefined : providerRoomHref}
         onAdd={
           service || !can('sessions:account:write')
             ? undefined

@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusGlyph, type Status } from '@/components/ui/status-glyph'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { modelName } from '@/features/agentops/model-name'
 import type {
   ActivityAgentDTO,
   ActivityState,
@@ -368,8 +369,8 @@ function ActivityBody({
       <Section testId="activity-context" title={t('activity.context')}>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-caption">
           <dt className="text-muted-foreground">{t('activity.model')}</dt>
-          <dd className="min-w-0 truncate font-mono text-foreground">
-            {a.model || t('context.notDeclared')}
+          <dd className="min-w-0 truncate text-foreground" title={a.model}>
+            {a.model ? modelName(a.model) : t('context.notDeclared')}
             {a.effort ? ` · ${a.effort}` : ''}
           </dd>
           <dt className="text-muted-foreground">{t('activity.tokens')}</dt>
@@ -566,7 +567,7 @@ function AgentTranscript({
       agentOpsApi.activityAgent(run.run_ref, agentId, { signal }),
   })
   const facts = [
-    agent.model,
+    agent.model ? modelName(agent.model) : null,
     agent.tool_uses
       ? t('activity.toolUses', {
           count: agent.tool_uses,

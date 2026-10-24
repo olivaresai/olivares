@@ -2,11 +2,10 @@
   "title": "Fournisseurs",
   "subtitle": "Une clé de fournisseur cloud ou un point de terminaison de modèles locaux utilisé par les outils de vos agents.",
   "nav": "Fournisseurs",
-  "add": "Ajouter un fournisseur",
   "rowMenu": "Actions de ligne pour {{name}}",
   "empty": {
     "title": "Aucun fournisseur enregistré pour l'instant",
-    "description": "Connectez Anthropic, OpenAI ou xAI avec une clé API, ou ajoutez Ollama local sans clé, puis testez la connexion.",
+    "description": "Connectez Anthropic, OpenAI ou xAI avec une clé d’API, ou ajoutez Ollama local sans clé, puis testez la connexion.",
     "action": "Ajoutez votre premier fournisseur"
   },
   "emptyFiltered": {
@@ -37,9 +36,9 @@
     "anthropic": "Claude Code. Injecte ANTHROPIC_API_KEY.",
     "openai": "Codex. Injecte OPENAI_API_KEY.",
     "xai": "Grok. Injecte XAI_API_KEY.",
-    "gemini": "Gemini CLI avec l’API officielle de Google. Utilise une clé API Gemini.",
+    "gemini": "Gemini CLI avec l’API officielle de Google. Utilise une clé d’API Gemini.",
     "openai_compatible": "Tout point de terminaison de forme OpenAI. Injecte OPENAI_API_KEY et OPENAI_BASE_URL ; le point de terminaison est obligatoire.",
-    "ollama": "Modèles locaux pour OpenCode. Sans clé API. Utilisez le point de terminaison natif Ollama ; le test lit les métadonnées des modèles."
+    "ollama": "Modèles locaux pour OpenCode. Sans clé d’API. Utilisez le point de terminaison natif Ollama ; le test lit les métadonnées des modèles."
   },
   "states": {
     "active": "Actif",
@@ -162,5 +161,9 @@
     "failed": "Fournisseur enregistré. La préparation de la session a échoué : {{error}}",
     "retry": "Réessayer la préparation",
     "incomplete": "État de l’installation : {{state}}. Vérifiez les outils IA et réessayez."
+  },
+  "section": {
+    "title": "Clés d’API",
+    "add": "Ajouter une clé d’API"
   }
 }

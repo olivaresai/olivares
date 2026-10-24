@@ -228,10 +228,11 @@ def postear(url, cuerpo):
         req.add_header("Content-Type", "application/json")
         # The shared opener rejects redirects.
         with abre(req, timeout=60) as r:
-            return r.status, redacta(r.read().decode()[:200])
+            return r.status, redacta(r.read().decode())[:200]
     except urllib.error.HTTPError as e:
-        # Redact response bodies before returning them to a caller.
-        return e.code, redacta(e.read().decode()[:200])
+        # Redact response bodies before returning them to a caller, and before cutting them: a
+        # token the cut splits no longer equals the remembered secret.
+        return e.code, redacta(e.read().decode())[:200]
     except Exception as e:
         # Capture the error text here; raise the replacement exception outside the
         # handler.

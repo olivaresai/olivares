@@ -28,8 +28,8 @@ las nombran por separado.
 
 ### Desde la consola
 
-1. Abre **Proveedores** (IA → Entornos → Proveedores).
-2. Elige **Añadir proveedor**.
+1. Abre **Herramientas** en la barra superior y busca **Claves de API**.
+2. Elige **Añadir una clave de API**.
 3. Elige el proveedor, ponle un nombre que reconozcas en un selector y pega la clave.
    Deja el endpoint vacío salvo que apuntes a tu propio gateway; un proveedor
    `openai_compatible` exige uno, porque no hay ningún endpoint oficial que suponer.

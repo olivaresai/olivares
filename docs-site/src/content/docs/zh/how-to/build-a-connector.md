@@ -46,7 +46,7 @@ go run ./cmd/olivares connector init acme.widget-audit \
 | `access-edge-source` | `observation.edge` | 访问图、身份、SaaS 与基础设施关系事实。 |
 | `output-sink` | `notify.sink` | 通知或工单接收端。 |
 | `agent-surface` | `observation.edge`, `observation.finding` | 上报访问边和发现的智能体 runtime 适配器。 |
-| `model-provider` | `observation.cost`, `observation.edge` | 提供方清单、使用量与成本观测；模型治理留在引擎侧。 |
+| `model-provider` | `observation.cost`, `observation.edge` | 提供商清单、使用量与成本观测；模型治理留在引擎侧。 |
 
 较早的独立脚手架仍然有效，并生成相同的稳定作者契约：
 

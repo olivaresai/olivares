@@ -7,10 +7,10 @@ description: >-
 draft: false
 ---
 
-下一个版本是 <!-- release -->`0.3`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->。
+下一个版本是 <!-- release -->`0.4`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->。
 
 :::note[已发布的软件包名称]
-GitHub 的 Olivares <!-- release -->0.3<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
+GitHub 的 Olivares <!-- release -->0.4<!-- /release --> 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
 `checksums.txt`、`checksums.txt.sig` 和 `checksums.txt.pem`。下面的命令使用该发行的字面
 `amd64` 名称；在 64 位 ARM 主机上将 `amd64` 换成 `arm64`。请从这些已验证的发行产物安装。
 源码树中的仓库元数据生成器不是本指南的安装说明。
@@ -65,13 +65,13 @@ Sigstore 信任根材料，尚未缓存时由 cosign 获取。`--offline` 只去
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -124,9 +124,9 @@ ambient 也没有 bounding capability — 并设置 `NoNewPrivileges=true`，因
 该单元**不**隐藏主目录和临时目录，并允许可执行内存：它设置 `ProtectHome=false`、
 `PrivateTmp=false` 和 `MemoryDenyWriteExecute=false`。引擎能访问普通文件权限允许
 `olivares` 账户访问的一切，包括 `/home`、`/tmp` 和 `/var/tmp`，这样你为会话选择的文件夹
-仍可访问。隔离改为按会话进行：每个代理工具或 stdio MCP 服务器运行之前，引擎都会施加一条
+仍可访问。隔离改为按会话进行：每个智能体工具或 stdio MCP 服务器运行之前，引擎都会施加一条
 Landlock 策略，允许它写入自己的会话文件夹、工具主目录和临时目录，并且永远无法触及引擎的
-数据目录、`/etc/olivares` 以及引擎账户自己的凭据。Node/V8 代理和 MCP 运行时需要可执行的
+数据目录、`/etc/olivares` 以及引擎账户自己的凭据。Node/V8 智能体和 MCP 运行时需要可执行的
 JIT 内存，因此 `MemoryDenyWriteExecute=false`。在没有 Landlock 的内核上，引擎拒绝启动会话；
 `olivares doctor` 会给出原因。
 
@@ -263,21 +263,31 @@ sudo -u olivares olivares sources set --name pg-prod --kind pgaudit \
 
 ## 6. 升级
 
-`olivares upgrade` 原地替换二进制，其安全属性是优先于手工重装软件包的原因：它 **在已下载候选
-成功通过 exec 探测之前绝不替换二进制**，保留带时间戳的备份，并且 **若交换后探测失败则回退到
-该备份**。
+每台主机只用一个更新器。从软件包或仓库安装的主机用其包管理器（`apt`、`dnf`、`apk` 或更新的
+软件包）更新；`olivares upgrade` 拒绝替换由软件包拥有的二进制。
+
+在任何软件包安装中，`/usr/bin/olivares` 都归包管理器所有（deb、rpm、apk、AUR）。就地替换该文件
+会使软件包数据库描述一个已不再如此的文件，因此 `olivares upgrade` 会拒绝：它在下载任何内容之前
+以退出码 2 结束，并指出软件包路径。请用包管理器升级。`olivares upgrade --check` 仍可使用；它只显示
+计划，不改变任何东西：
 
 ```bash
 sudo olivares upgrade --check    # what would change, without changing anything
-sudo olivares upgrade --yes      # do it
 ```
 
-对软件包安装特别重要的三个标志：
+没有包管理器拥有该二进制时（由 `install.sh` 或手工放置），`olivares upgrade` 会就地替换它，使用它
+的理由是其安全属性：它 **在已下载候选成功通过 exec 探测之前绝不替换二进制**，保留带时间戳的备份，
+并且 **若交换后探测失败则回退到该备份**。`--target <路径>` 是运维人员的覆盖：它会替换你指定的文件，
+包括 `/usr/bin/olivares`，此后软件包数据库与该文件不再一致。
+
+对 `--check` 和带 `--target` 的运行特别重要的三个标志：
 
 - **`--endpoint`** — 从你控制的 GitHub 仓库而不是默认位置获取更新。这是镜像或分叉的出路。
 - **`--bundle`** — 离线安装需要 Enterprise。Community 使用 `--bundle --check` 验证包，不读取许可证，也不进行安装。
 - **`--install-timer`** — 发出按计划检查更新的 **可选 systemd** 定时器与服务。没有任何东西
   替你安装它；见 [软件包不会做的事](#8-软件包不会做的事)。它是 systemd 生成器。
+  在软件包安装上它会拒绝：`/usr/bin/olivares` 归软件包管理器所有，因此 `--install-timer`
+  以退出码 2 结束且不写入任何 unit。请用软件包管理器升级（在 Olivares 设备上：`systemctl start olivares-appliance-update.service`）。
 
 注意：暂存与 exec 探测发生在 **安装目录中、目标旁边 — 而不是 `/tmp`**，因此
 [上文](#可执行的临时目录挂载) 讨论的 `noexec` 挂载不会破坏升级。**安装** 目录上的 `noexec`
@@ -313,8 +323,8 @@ Preserve 是软件包移除策略：它保留配置、数据、日志、密钥�
 说清楚，因为安全产品在这里含糊其辞就不配安装：
 
 - **它不添加仓库。** 不会写入 `/etc/apt/sources.list.d`、`/etc/yum.repos.d` 或
-  `/etc/apk/repositories`。你安装的是一个文件；只有该文件被安装。升级由你触发 — 用新软件包，
-  或用 `olivares upgrade`。
+  `/etc/apk/repositories`。你安装的是一个文件；只有该文件被安装。升级由你触发 — 用新软件包；
+  `olivares upgrade` 拒绝替换由软件包拥有的二进制。
 - **它不启动或启用服务。** systemd 软件包在存在 `systemctl` 时重载 systemd，并打印
   `systemctl enable --now`。OpenRC 软件包打印 `rc-service olivares start`，且不执行
   `rc-update add`。是否启动仍由你决定。升级一个正在运行的 OpenRC 服务会停止它、替换文件并再次
@@ -322,7 +332,7 @@ Preserve 是软件包移除策略：它保留配置、数据、日志、密钥�
 - **验证许可证从不打电话。下载你付过款的内容会。** 开放构建中的许可证验证是离线 Ed25519，没有
   远程终止开关，也没有许可证密钥限制或降级该构建 — AGPL 构建就是整个平台。
   **默认没有强制遥测，也没有控制平面出站：越过边界的是你配置为越过的内容** — 对你的模型 API
-  的调用、你接线的 SIEM/webhook 输出、若你配置了外部嵌入提供方，以及连接器轮询的任何源
+  的调用、你接线的 SIEM/webhook 输出、若你配置了外部嵌入提供商，以及连接器轮询的任何源
   （其 `addr`、`base_url` 或 `endpoint`），按你设置的间隔。
 - **但 `olivares upgrade` 在你运行它时会故意发起网络调用** — 这正是更新检查的意义，`--check`
   在任何东西移动之前向你展示计划。该承诺的诚实表述是：*验证许可证从不打电话；下载你付过款的

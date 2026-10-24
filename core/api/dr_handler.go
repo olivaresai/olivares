@@ -1016,18 +1016,9 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 		return
 	}
 
-	if manifest.Store.SHA256 != "" {
-		snapshotPath := filepath.Join(tmpDir, filepath.FromSlash(manifest.Store.File))
-		hash, _, err := dr.FileSHA256(snapshotPath)
-		if err != nil {
-			fail(fmt.Errorf("verify snapshot digest: %w", err))
-			return
-		}
-		if hash != manifest.Store.SHA256 {
-			fail(fmt.Errorf("snapshot digest mismatch: bundle=%s, computed=%s", manifest.Store.SHA256, hash))
-			return
-		}
-	}
+	// No digest is taken of the snapshot here: the manifest is untrusted until
+	// VerifyBundleIntegrity authenticates it below, and that call also digests the
+	// snapshot member and opens it when sealed.
 
 	update("decrypting_keys", 30)
 
@@ -1114,10 +1105,15 @@ func (s *Server) runRestore(ctx context.Context, jobID, bundlePath, passphrase, 
 	s.log.Warn("dr: restore verified in scratch and promoted — restart the engine to load the restored keys and module state",
 		"job", jobID, "actor", actor, "engine", manifest.EngineKind)
 
+	notes := custody + ". " + preservation
+	if w := manifest.UnsealedSnapshotWarning(); w != "" {
+		s.log.Warn("dr: restored from a bundle whose store snapshot is not encrypted", "job", jobID)
+		notes += ". Warning: " + w
+	}
 	svc.jobs.update(jobID, func(j *drJob) {
 		j.Status = drJobCompleted
 		j.Phase = "restart_required"
-		j.Notes = custody + ". " + preservation
+		j.Notes = notes
 		j.Progress = 100
 		j.DoneAt = time.Now().UTC().Format(time.RFC3339)
 	})

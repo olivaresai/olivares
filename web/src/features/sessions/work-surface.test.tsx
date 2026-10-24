@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel } from '@/test/intel'
@@ -15,6 +21,10 @@ import '@/features/agentops/i18n'
 
 const auth = vi.hoisted(() => ({
   activeTenant: 'tnt-demo' as string | null,
+  principal: { kind: 'user', user_id: 'u-lena' } as {
+    kind: string
+    user_id: string
+  } | null,
   can: (_: string): boolean => true,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
@@ -355,8 +365,35 @@ describe('WorkSurface', () => {
     })
     await screen.findByTestId('session-context')
     expect(pane('context')?.className).not.toContain('hidden')
-    expect(pane('rail')?.className).toContain('hidden xl:flex')
-    expect(pane('narrative')?.className).toContain('hidden xl:flex')
+    // The pane sits beside the work only where the work keeps 760 px (dev#3162).
+    expect(pane('narrative')?.className).toContain('hidden min-[1441px]:flex')
+  })
+
+  it("keeps the list beside the open side pane from 761 px: the pane takes only the thread's place", async () => {
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
+    })
+    await screen.findByTestId('session-context')
+    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
+    const context = pane('context')!.className.split(/\s+/)
+    expect(context).toContain('max-[760px]:col-span-full')
+    expect(context).not.toContain('max-[1440px]:col-span-full')
+  })
+
+  it('keeps the list beside the open side pane with two threads too', async () => {
+    renderSplit({
+      address: {
+        address: pairedA.key,
+        beside: pairedB.key,
+        pane: 'context',
+        evidence: 'checks',
+      },
+    })
+    await screen.findByTestId('session-context')
+    expect(pane('rail')?.className).toContain('hidden min-[761px]:flex')
+    const context = pane('context')!.className.split(/\s+/)
+    expect(context).toContain('max-[760px]:col-span-full')
+    expect(context).not.toContain('max-[2200px]:col-span-full')
   })
 
   it('shows the list and the thread side by side from 761 px, and one at a time below it', async () => {
@@ -376,7 +413,9 @@ describe('WorkSurface', () => {
     const cls = grid.className
     expect(cls).toContain('[--list-w:360px]')
     expect(cls).toContain('max-[1360px]:[--list-w:280px]')
-    expect(cls).toContain('min-[761px]:grid-cols-[var(--list-w)_minmax(0,1fr)]')
+    expect(cls).toContain(
+      'min-[761px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)]',
+    )
     for (const id of ['rail', 'narrative', 'context'])
       expect(pane(id)?.className).not.toMatch(
         /rounded-lg|border-border|bg-surface/,
@@ -439,14 +478,14 @@ describe('WorkSurface', () => {
     })
     const grid = () => document.querySelector('[data-context]') as HTMLElement
     expect(grid().dataset.context).toBe('closed')
-    expect(pane('context')?.className).toContain('xl:hidden')
+    expect(pane('context')?.className).toContain('min-[1441px]:hidden')
     expect(pane('context')).not.toBeNull()
     const toggle = screen.getByTestId('context-toggle')
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
     expect(toggle).toHaveAttribute('aria-controls', 'work-pane-context')
     await user.click(toggle)
     expect(grid().dataset.context).toBe('open')
-    expect(pane('context')?.className).toContain('xl:block')
+    expect(pane('context')?.className).toContain('min-[1441px]:block')
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
     await user.click(screen.getByTestId('context-close'))
     expect(grid().dataset.context).toBe('closed')
@@ -465,37 +504,89 @@ describe('WorkSurface', () => {
       })
     afterEach(() => setWidth(1024))
 
-    it('is closed by default up to 1440 px and open above it', () => {
-      setWidth(1440)
-      const first = renderSurface()
-      expect(grid().dataset.context).toBe('closed')
-      first.unmount()
-      setWidth(1600)
-      renderSurface()
-      expect(grid().dataset.context).toBe('open')
+    // The side pane opens on demand: the conversation is the page (dev#3162).
+    it('is closed by default at every width', () => {
+      for (const width of [1280, 1440, 1920, 2560]) {
+        setWidth(width)
+        const surface = renderSurface()
+        expect(grid().dataset.context).toBe('closed')
+        surface.unmount()
+      }
     })
 
-    it('keeps what the person chose, closed or open, whatever the width', async () => {
+    it('keeps what this person chose, closed or open, whatever the width', async () => {
       const user = userEvent.setup()
-      setWidth(1600)
+      setWidth(1920)
       const first = renderSurface()
+      expect(grid().dataset.context).toBe('closed')
+      await user.click(screen.getByTestId('context-toggle'))
+      expect(grid().dataset.context).toBe('open')
+      first.unmount()
+      renderSurface()
       expect(grid().dataset.context).toBe('open')
       await user.click(screen.getByTestId('context-toggle'))
       expect(grid().dataset.context).toBe('closed')
-      first.unmount()
-      renderSurface()
-      expect(grid().dataset.context).toBe('closed')
-      await user.click(screen.getByTestId('context-toggle'))
-      expect(window.localStorage.getItem('olivares.sessions.sidePane')).toBe(
-        'open',
-      )
     })
 
-    it('opens at once for a stored open, on a narrower screen too', () => {
-      setWidth(1280)
+    it('keeps the choice per person: another person starts closed', async () => {
+      const user = userEvent.setup()
+      setWidth(1920)
+      const first = renderSurface()
+      // Lena leaves it open.
+      if (grid().dataset.context === 'closed')
+        await user.click(screen.getByTestId('context-toggle'))
+      expect(grid().dataset.context).toBe('open')
+      first.unmount()
+      auth.principal = { kind: 'user', user_id: 'u-sam' }
+      try {
+        renderSurface()
+        expect(grid().dataset.context).toBe('closed')
+      } finally {
+        auth.principal = { kind: 'user', user_id: 'u-lena' }
+      }
+    })
+
+    it("lets a person's own choice win over the one the browser saved for everyone", () => {
+      window.localStorage.setItem('olivares.sessions.sidePane', 'open')
+      window.localStorage.setItem(
+        `olivares.sessions.sidePane:${JSON.stringify([window.location.origin, 'user', 'u-lena', 'tnt-demo'])}`,
+        'closed',
+      )
+      renderSurface()
+      expect(grid().dataset.context).toBe('closed')
+    })
+
+    it('neither reads nor writes a choice for a principal that is not a person', async () => {
+      const user = userEvent.setup()
+      window.localStorage.setItem('olivares.sessions.sidePane', 'open')
+      auth.principal = null
+      try {
+        renderSurface()
+        expect(grid().dataset.context).toBe('closed')
+        await user.click(screen.getByTestId('context-toggle'))
+        expect(grid().dataset.context).toBe('open')
+        expect(window.localStorage.length).toBe(1)
+      } finally {
+        auth.principal = { kind: 'user', user_id: 'u-lena' }
+      }
+    })
+
+    it('keeps the choice this browser saved before it was kept per person', () => {
       window.localStorage.setItem('olivares.sessions.sidePane', 'open')
       renderSurface()
       expect(grid().dataset.context).toBe('open')
+    })
+
+    it('sits beside the conversation only where the conversation keeps 760 px', async () => {
+      const user = userEvent.setup()
+      setWidth(1920)
+      renderSurface()
+      await user.click(screen.getByTestId('context-toggle'))
+      // 360 px list + 760 px conversation + 320 px pane: from 1441 px.
+      expect(grid().className).toContain(
+        'min-[1441px]:grid-cols-[min(var(--list-w),35%)_minmax(0,1fr)_min(var(--ctx-w),35%)]',
+      )
+      expect(grid().className).not.toMatch(/(^|\s)xl:grid-cols/)
     })
   })
 
@@ -531,7 +622,7 @@ describe('WorkSurface', () => {
     // The field is addressed to the open session, by the name the header paints.
     expect(screen.getByTestId('launcher-input')).toHaveAttribute(
       'placeholder',
-      'Message nightly…',
+      'Ask anything, / for commands and skills',
     )
     expect(screen.queryByTestId('composer-session-state')).toBeNull()
   })
@@ -780,7 +871,10 @@ describe('WorkSurface — Escape and the side pane', () => {
     expect(grid().dataset.context).toBe('open')
     await user.keyboard('{Escape}')
     expect(grid().dataset.context).toBe('closed')
-    expect(window.localStorage.getItem('olivares.sessions.sidePane')).toBeNull()
+    const kept = Array.from({ length: window.localStorage.length }, (_, i) =>
+      window.localStorage.key(i),
+    ).filter((k) => k?.startsWith('olivares.sessions.sidePane'))
+    expect(kept).toEqual([])
   })
 
   it('leaves the pane open when an open menu has the key', async () => {
@@ -806,5 +900,80 @@ describe('WorkSurface — Escape and the side pane', () => {
     fireEvent.keyDown(document.body, { key: 'Escape' })
     window.removeEventListener('keydown', handled, { capture: true })
     expect(grid().dataset.context).toBe('open')
+  })
+})
+
+describe('WorkSurface — the row menu and the Archived section (#2795)', () => {
+  const ARCHIVED: RunDTO = {
+    ...RUN,
+    run_ref: 'run-z',
+    name: 'old spike',
+    live_ref: undefined,
+    state: 'stopped',
+    archived_at: '2026-10-21T12:00:00Z',
+  }
+  const estate = mergeSessions([], [RUN, ARCHIVED])
+
+  it('gives every row its actions menu on a right-click', async () => {
+    renderSurface({ sessions: estate })
+    const row = screen
+      .getAllByTestId('rail-row')
+      .find((el) => el.textContent?.includes('nightly'))!
+    expect(fireEvent.contextMenu(row)).toBe(false)
+    const menu = await screen.findByRole('menu')
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Rename…' }),
+    ).toBeInTheDocument()
+  })
+
+  it('folds an archived session out of the list, under an Archived toggle that unfolds it', async () => {
+    // The same fold as Snoozed (#2480): the rows stay where they were, and the archived
+    // ones join the end of the list while the section is open.
+    const user = userEvent.setup()
+    renderSurface({ sessions: estate })
+    const names = () =>
+      screen.getAllByTestId('rail-row-name').map((el) => el.textContent)
+    expect(names()).toEqual(['nightly'])
+    const toggle = screen.getByRole('button', { name: 'Archived 1' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await user.click(toggle)
+    expect(names()).toEqual(['nightly', 'old spike'])
+    expect(
+      screen.getByRole('group', { name: 'Archived 1' }),
+    ).toBeInTheDocument()
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    await user.click(toggle)
+    expect(names()).toEqual(['nightly'])
+  })
+
+  it('draws only the Archived toggle, and never "no sessions", when every session is archived', () => {
+    renderSurface({ sessions: mergeSessions([], [ARCHIVED]) })
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(screen.queryByText('No sessions yet')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Archived 1' })).toBeVisible()
+  })
+
+  it('gives focus back to the row once a dialog opened from its menu closes', async () => {
+    const user = userEvent.setup()
+    renderSurface({ sessions: estate })
+    const row = screen
+      .getAllByTestId('rail-row')
+      .find((el) => el.textContent?.includes('nightly'))!
+    fireEvent.contextMenu(row)
+    await user.click(
+      within(await screen.findByRole('menu')).getByRole('menuitem', {
+        name: 'Rename…',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(row).toHaveFocus())
+  })
+
+  it('draws no Archived toggle while nothing is archived', () => {
+    renderSurface({ sessions: mergeSessions([], [RUN]) })
+    expect(screen.queryByRole('button', { name: /^Archived/ })).toBeNull()
   })
 })

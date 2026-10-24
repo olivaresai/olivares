@@ -328,8 +328,34 @@ describe('session rail read authority', () => {
       href: '/agentops?session=run%3Arail-run',
     })
     expect(result.current.allTo).toBe('/agentops')
-    expect(result.current.sessionCounts).toEqual({ live: 1, needsYou: 0 })
+    expect(result.current.sessionCounts).toMatchObject({ live: 1, needsYou: 0 })
     expect(requests).toEqual(['/v1/m/sessions/runs'])
+  })
+
+  it('keeps a snoozed session where the command menu searches, out of the counts and the notifications (#2480)', async () => {
+    auth.permissions.add('sessions:run:read')
+    replies.set(RUNS, () =>
+      Response.json({
+        items: [
+          {
+            ...RUN,
+            pending_approval_ref: 'approval-needed',
+            snoozed_until: '2030-01-02T09:00:00Z',
+          },
+        ],
+        has_more: false,
+      }),
+    )
+    const { result } = mount()
+    await waitFor(() => expect(rowsOf(result.current)).toHaveLength(1))
+    // What `command-menu.tsx` searches: every group's session rows.
+    expect(rowsOf(result.current)[0]).toMatchObject({
+      group: 'snoozed',
+      kind: 'session',
+      title: 'Operated rail session',
+    })
+    expect(result.current.sessionCounts).toMatchObject({ live: 0, needsYou: 0 })
+    expect(result.current.attention).toEqual([])
   })
 
   it('offers live-only users their observed session without asking for operated runs', async () => {
@@ -392,46 +418,43 @@ describe('session rail read authority', () => {
         title: 'Operated rail session',
         href,
       })
-      expect(result.current.sessionCounts).toEqual({ live: 1, needsYou: 1 })
+      expect(result.current.sessionCounts).toMatchObject({
+        live: 1,
+        needsYou: 1,
+      })
       expect(requests).toEqual(['/v1/m/sessions/runs'])
     },
   )
 })
 
-// Keep the real sidebar + query hook + HTTP client together for the count oracle.
-vi.mock('./tenant-switcher', () => ({ TenantSwitcher: () => null }))
-vi.mock('./workspace-switcher', () => ({ WorkspaceSwitcher: () => null }))
+// Keep the real top bar + query hook + HTTP client together for the count oracle.
+vi.mock('./scope-switcher', () => ({ ScopeSwitcher: () => null }))
+vi.mock('./notification-bell', () => ({ NotificationBell: () => null }))
 vi.mock('./user-menu', () => ({ UserMenu: () => null }))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({ data: undefined }),
 }))
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AppSidebar } from './app-sidebar'
-/** The Sessions destination among the pinned ones: the full sidebar also lists Sessions in
- * its areas, and these cases are about the pin's count and attention. */
+import { Topbar } from './topbar'
+/** The Sessions place in the top bar: these cases are about its count and attention. */
 function sessionsPin() {
   return within(screen.getByRole('navigation', { name: 'Journeys' })).getByRole(
     'link',
     { name: /Sessions/ },
   )
 }
-function counts(mode: 'full' | 'rail') {
+function counts() {
   return render(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        <AppSidebar
-          mode={mode}
-          onToggle={() => {}}
-          areasOpen={false}
-          onOpenAreas={() => {}}
-        />
+        <Topbar />
       </TooltipProvider>
     </QueryClientProvider>,
   )
 }
-it.each(['full', 'rail'] as const)(
+it.each(['the top bar'] as const)(
   'counts sessions separately from offered handoffs in %s',
-  async (mode) => {
+  async () => {
     auth.permissions = new Set([
       'sessions:run:read',
       'sessions:live:read',
@@ -439,7 +462,7 @@ it.each(['full', 'rail'] as const)(
     ])
     useWorkspaceStore.setState({ activeWorkspace: 'rail-workspace' })
     replies.set(OBSERVED, () => Response.json({ items: [], has_more: false }))
-    counts(mode)
+    counts()
     await waitFor(() => expect(sessionsPin()).toHaveTextContent('1'))
     expect(
       sessionsPin().querySelector('[data-slot="count-badge"].text-warn'),
@@ -447,13 +470,11 @@ it.each(['full', 'rail'] as const)(
   },
 )
 it.each([
-  ['full', RUNS],
-  ['rail', RUNS],
-  ['full', OBSERVED],
-  ['rail', OBSERVED],
+  ['the top bar', RUNS],
+  ['the top bar', OBSERVED],
 ] as const)(
   'reads later pages in %s from %s, including attention beyond the first thirty',
-  async (mode, path) => {
+  async (_bar, path) => {
     auth.permissions.add(
       path === RUNS ? 'sessions:run:read' : 'sessions:live:read',
     )
@@ -488,7 +509,7 @@ it.each([
         })
       }),
     )
-    counts(mode)
+    counts()
     await waitFor(() => expect(sessionsPin()).toHaveTextContent('35'))
     expect(
       sessionsPin().querySelector('[data-slot="count-badge"].text-warn'),

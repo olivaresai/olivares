@@ -110,7 +110,7 @@ func TestAgentToolInstallProbeIsConfinedLikeASessionChild(t *testing.T) {
 }
 
 // A release archive's probe runs confined by the composition's builder and still
-// passes: it reads the runtime its program loads from lib/<driver> and writes its
+// passes: it reads the runtime its program loads from lib/<program> and writes its
 // temporary directory, but not its own release nor the engine's data (#1430).
 func TestReleaseArchiveProbeRunsConfinedAndReadsItsLibraries(t *testing.T) {
 	if s := confine.Probe(); s.Mode != confine.ModeLandlock {

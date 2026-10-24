@@ -2,7 +2,6 @@
   "title": "Provider",
   "subtitle": "Una credenziale di un provider cloud o un endpoint di modelli locale su cui girano i tuoi strumenti per agenti.",
   "nav": "Provider",
-  "add": "Aggiungi provider",
   "rowMenu": "Azioni della riga per {{name}}",
   "empty": {
     "title": "Nessun provider registrato",
@@ -162,5 +161,9 @@
     "failed": "Provider salvato. Configurazione della sessione non riuscita: {{error}}",
     "retry": "Riprova la configurazione",
     "incomplete": "L'installazione dello strumento è {{state}}. Controlla Strumenti IA e riprova."
+  },
+  "section": {
+    "title": "Chiavi API",
+    "add": "Aggiungi una chiave API"
   }
 }

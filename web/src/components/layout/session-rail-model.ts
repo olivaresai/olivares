@@ -24,9 +24,20 @@ import type { LiveDTO } from '@/features/sessions/types'
 import type { RunDTO } from '@/features/agentops/types'
 import { runFolder } from '@/features/sessions/folder'
 import { sessionDisplayState } from '@/features/sessions/session-display-state'
+import {
+  isArchived,
+  isMarkedDone,
+  isSnoozed,
+} from '@/features/sessions/session-groups'
 import type { RailState } from '@/features/sessions/session-display-state'
 
-export const RAIL_GROUP_IDS = ['needsYou', 'working', 'earlier'] as const
+export const RAIL_GROUP_IDS = [
+  'needsYou',
+  'working',
+  'earlier',
+  'snoozed',
+  'archived',
+] as const
 export type RailGroupId = (typeof RAIL_GROUP_IDS)[number]
 
 /** Rows per group. The sidebar shows about eight rows; the rest are one click away. */
@@ -98,6 +109,11 @@ function distinctTitle(
   return title && shared.has(title) ? `${title} · ${sessionShortId(s)}` : title
 }
 
+/** The state a session's row says: the one place this file asks the classifier. */
+function railState(s: UnifiedSession): RailState {
+  return sessionDisplayState(s).rail
+}
+
 /** One row per session: a launched run and what was observed of it are one session
  * (`mergeSessions`, the join the Sessions page and Now use), so one launch is one row. */
 function sessionRow(
@@ -108,7 +124,7 @@ function sessionRow(
 ): RailRow {
   const run = primaryRun(s.runs)
   const live = s.live
-  const state = sessionDisplayState(s).rail
+  const state = railState(s)
   const waitingOn =
     state === 'need' && destinations.canOpenApprovals !== false && run
       ? runAwaitedApproval(run)
@@ -162,9 +178,19 @@ function handoffRow(item: HandoffInboxItem, now: number): RailRow {
   }
 }
 
-/** The three groups, always all three and always in this order, so the rail keeps its
+/** The groups, always all of them and always in this order, so the rail keeps its
  * shape while rows move between them: it draws Needs you always, at the top, and Working
- * and Earlier when they hold rows. */
+ * and Earlier when they hold rows. Snoozed holds what the person snoozed (#2480), and
+ * Archived the archived sessions (#2795): no count and no list shows them, and the
+ * command menu still finds them there. */
+/** The sessions a stop of every agent would end: each one that has not ended, idle and
+ * waiting ones too, counted as Now counts its running sessions. */
+export function aliveSessions(sources: RailSources): number {
+  return mergeSessions([...sources.live], [...(sources.runs ?? [])]).filter(
+    (s) => railState(s) !== 'ended',
+  ).length
+}
+
 export function railGroups(
   sources: RailSources,
   now: number,
@@ -177,11 +203,19 @@ export function railGroups(
     .map((h) => handoffRow(h, now))
   const working: RailRow[] = []
   const earlier: RailRow[] = []
+  const snoozed: RailRow[] = []
+  const archived: RailRow[] = []
+  // The person's own marks (#2480), the rule the Sessions rail sorts by
+  // (`groupSessions`): a snoozed session is out of the list until its moment, and one
+  // marked done is filed under Earlier whatever it is doing.
   const sessions = mergeSessions([...sources.live], [...(sources.runs ?? [])])
   const shared = sharedNames(sessions, '')
-  const rows = sessions.map((s) => sessionRow(s, now, shared, destinations))
-  for (const row of rows) {
-    if (row.state === 'need') needs.push(row)
+  for (const s of sessions) {
+    const row = sessionRow(s, now, shared, destinations)
+    if (isArchived(s)) archived.push(row)
+    else if (isSnoozed(s)) snoozed.push(row)
+    else if (isMarkedDone(s)) earlier.push(row)
+    else if (row.state === 'need') needs.push(row)
     else if (row.state === 'live') working.push(row)
     else earlier.push(row)
   }
@@ -204,6 +238,18 @@ export function railGroups(
       rows: cap(earlier),
       total: earlier.length,
       sessionTotal: earlier.length,
+    },
+    {
+      id: 'snoozed',
+      rows: cap(snoozed),
+      total: snoozed.length,
+      sessionTotal: snoozed.length,
+    },
+    {
+      id: 'archived',
+      rows: cap(archived),
+      total: archived.length,
+      sessionTotal: archived.length,
     },
   ]
 }

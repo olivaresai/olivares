@@ -22,11 +22,12 @@ description: >-
 
 ## どのアップグレード経路を使うか
 
-バイナリを新しくする方法は 3 つあり、いずれも同じ結果に到達します。
+バイナリを新しくする方法は 4 つあり、いずれも同じ結果に到達します。
 
 | インストール形態 | 経路 |
 |---|---|
-| ホスト上のバイナリ、systemd | `olivares upgrade` — このページ |
+| deb・rpm・apk・AUR パッケージ | パッケージマネージャ。[パッケージからインストール](/ja/how-to/install-from-packages/) |
+| ホスト上のバイナリ、systemd（パッケージ由来ではない） | `olivares upgrade` — このページ |
 | Docker または Podman コンテナ | `docker compose exec olivares olivares upgrade` を実行してから、コンテナを再作成します。イメージは変更できないため、リリースはデータボリューム（データディレクトリ配下の `ota/`）に保存され、イメージのバイナリは起動のたびに、そのリリースがイメージより新しい間、または同じバージョンを別にビルドしたものである間はそれを起動します。`ota/` を削除すると、コンテナはイメージのバイナリに戻ります。コマンドは [Docker と Compose](/ja/how-to/install-a-license/#docker-と-compose) にあります。 |
 | Kubernetes / Helm | イメージを設定し、operator にロールアウトさせます。Pod 内で `olivares upgrade` を実行しないでください。デプロイメントは宣言的であり、次の reconcile が変更を取り消します。 |
 
@@ -54,7 +55,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.3
+olivares upgrade --check --current-version 0.4
 ```
 <!-- /release -->
 
@@ -105,6 +106,9 @@ olivares upgrade --channel security
 ```sh
 olivares upgrade
 ```
+
+パッケージインストール（deb、rpm、apk、AUR）では、何かをダウンロードする前に終了コード 2 で拒否されます。
+上の表のとおり、パッケージマネージャを使ってください。`--check` は引き続き計画を表示します。
 
 コマンドが行う処理と、その順序の理由は次のとおりです。
 
@@ -168,6 +172,12 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 
 デフォルトでは unit を標準出力へ表示し、`--timer-dir` は指定された場所へ書き込みます。
 これはオプトインであり、自動的にスケジュールされるものはありません。
+
+パッケージインストールでは、このコマンドは拒否されます。`/usr/bin/olivares` はパッケージ
+マネージャーの管理下にあるため、終了コード 2 で終わり、unit を書き込まず、更新の経路を示します。
+それはホストのパッケージマネージャーで、Olivares アプライアンスでは `systemctl start olivares-appliance-update.service` です。
+`--enterprise --connect` のときは `olivares license connect refresh` も示します。判定はパスで行うため、
+`install.sh --bindir /usr/bin` がそこに置いたバイナリも拒否されます。
 
 コンソールには同じ情報の読み取り専用側があります。**Settings → update status** は
 `POST /v1/console/update-check` を呼び出し、設定済みチャネルをオンデマンドで

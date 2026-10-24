@@ -12,8 +12,8 @@
 # every view in both themes, copies the PNGs and manifest.json to docs-site/public/console, and records
 # the image reference in the manifest. It finishes by checking that every capture a docs page references
 # exists, and lists the ones this run did not regenerate.
-# The estate it photographs is the demo dataset (scripts/seed-demo-dataset.py): four AI tools and a local model that
-# answer recorded conversations through stand-ins (scripts/demo-tools), so no vendor account and no network are involved.
+# The estate it photographs is the demo dataset (scripts/seed-demo-dataset.py): four AI tools that answer
+# recorded conversations through stand-ins (scripts/demo-tools), so no vendor account and no network are involved.
 # ponytail: the released binary runs with your environment, in your worktree. The image is ours and digest-pinned;
 # run this from a disposable worktree and a user without credentials. Upgrade trigger: before it runs any image
 # the Olivares organization did not publish, put every binary call behind `env -i` and a sandbox.

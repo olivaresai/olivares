@@ -44,7 +44,8 @@ const { api, auth, signIn } = vi.hoisted(() => ({
     isSuperadmin: true,
     // The tool card asks can('sessions:provider:read') (the refused-key read). These
     // cases are about the install and sign-in rows, so the role reads no providers.
-    can: () => false,
+    // Only the key form's own gate (#2551).
+    can: (p: string) => p === 'sessions:provider:write',
     activeTenant: null,
     principal: { user_id: 'root' },
   },
@@ -123,18 +124,29 @@ it('offers Grok Build its own sign-in and relays the link and the code', async (
   expect(
     within(dialog).getByRole('link', { name: /open the sign-in page/i }),
   ).toHaveAttribute('href', 'https://accounts.x.ai/device')
-  // Changed, stated (ca0e828c, HU2-18): the key form opens on Grok's own provider. The
-  // dialog keeps the link for the default login, and says the terminal way too.
+  // HU2-18, #2551: the key form opens in this same dialog, on Grok's own provider — a
+  // button in the sheet, not a page link that reloads and loses the dialog. The dialog
+  // says the terminal way too.
   expect(
     within(dialog).getByText('olivares tool login grok'),
   ).toBeInTheDocument()
   expect(
-    within(dialog).getByRole('link', {
+    within(dialog).getByRole('button', {
       name: 'Use an API key instead',
       hidden: true,
     }),
-  ).toHaveAttribute(
-    'href',
-    expect.stringMatching(/^\/providers\?add=xai&returnTo=/),
+  ).toBeInTheDocument()
+  expect(
+    within(dialog).queryByRole('link', {
+      name: 'Use an API key instead',
+      hidden: true,
+    }),
+  ).not.toBeInTheDocument()
+  // Opening the way: the same dialog turns into the key field on Grok's own provider.
+  await userEvent.click(within(dialog).getByText('Other ways'))
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Use an API key instead' }),
   )
+  expect(within(dialog).getByText('xAI')).toBeInTheDocument()
+  expect(within(dialog).getByLabelText(/^API key/)).toBeInTheDocument()
 })

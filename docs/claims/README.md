@@ -9,9 +9,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 public and under which conditions. The public storefront does not author claim state: it
 synchronizes this manifest, validates it, and derives every visible label from it.
 
-The current source review is dated **2026-10-07**. Its dated `AUDIT.md` and
+The current source review is dated **2026-10-21**. Its dated `AUDIT.md` and
 `INDEX.json` record the measured source, consumer identity, blob anchors and
-limits. The previous September 12 manifest is preserved byte for byte under
+limits. It narrows each claim to Community source after the capabilities that
+moved to Business; where they had published routes, Community keeps them and
+answers 501 naming Business. The
+2026-10-07 review keeps its dated audit and index; the manifest it described
+stays in Git history. The September 12 manifest is preserved byte for byte under
 `history/`; the August audit below describes the original contract, not the
 current measurement.
 

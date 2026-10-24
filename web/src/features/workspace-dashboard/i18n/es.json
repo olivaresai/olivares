@@ -1,8 +1,8 @@
 {
   "truncation": {
     "label": "Cargadas {{n}} filas; hay más",
-    "hint": "Esta vista previa del workspace tiene un techo. Usa Ver todo para explorar un inventario más amplio.",
-    "hintCapped": "Esta vista previa del workspace tiene un techo."
+    "hint": "Esta vista previa del espacio de trabajo tiene un techo. Usa Ver todo para explorar un inventario más amplio.",
+    "hintCapped": "Esta vista previa del espacio de trabajo tiene un techo."
   },
   "title": "Vista del espacio de trabajo",
   "selectTitle": "Ningún espacio de trabajo seleccionado",

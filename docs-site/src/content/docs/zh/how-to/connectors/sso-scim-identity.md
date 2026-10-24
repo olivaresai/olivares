@@ -9,7 +9,7 @@ sidebar:
 ---
 
 :::note[版本]
-目录来源（LDAP、Okta/Entra 及代理/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
+目录来源（LDAP、Okta/Entra 及智能体/工作负载 IdP）、托管身份生命周期和入站 SCIM 服务器需要 Business/Enterprise 附加组件。Community 保留通用来源采集、资源目录、安全发现、Access Map、身份清单、单 IdP SSO、本地角色与绑定、策略和审批。有偿控制台面板和 CLI 命令不会显示；其已发布的 API 路由返回 HTTP `501`。启用模块不会添加 Business 实现。
 :::
 
 身份是整个 access map 之下的硬依赖：原生审计把一次访问归属到一个**凭据
@@ -22,13 +22,13 @@ sidebar:
 联合化登录通过引擎的 **federation seam** 提供。其态势在构造上即是诚实的：
 
 - 登录流的端点存在于每一个构建中，且引擎会把每一个携带机密的流值都保留在服务器端 ——
-  CSRF state、OIDC nonce、PKCE verifier（只有 S256 *challenge* 会发往提供方）。
+  CSRF state、OIDC nonce、PKCE verifier（只有 S256 *challenge* 会发往提供商）。
   Authorization Code + **PKCE 始终开启**。
 - **所有版本（包括 Community）都支持单一 IdP 的 OIDC/SAML 登录。**
   请通过控制台的托管 SSO 设置进行配置。没有托管配置时，引擎使用启动环境变量
   （`OLIVARES_SSO_PROTOCOL`、`OLIVARES_OIDC_*` 或 `OLIVARES_SAML_*`）。
-  未配置提供方时，`NoFederation` 返回 `501 sso_not_configured`；这表示缺少配置，
-  并不表示该协议仅供商业版使用。
+  未配置提供商时，`NoFederation` 返回 `501 sso_not_configured`；这表示缺少配置，
+  并不表示该协议仅供 Business 使用。
 - 你的 IdP 必须携带的 redirect/ACS URI 是**精确匹配**的（你控制台 origin 上的
   `…/v1/auth/federation/callback` —— 遵循 RFC 9700 的精确匹配，不存在前缀技巧）。
 
@@ -45,7 +45,7 @@ IdP 的 redirect URI，并显示连接状态 —— 在某个面板的后端只�
 URL，验证 token 后以 SCIM 错误格式返回 HTTP `501`，并指明 Business；不会读取或写入任何内容。
 在 Community 中，请在控制台（人员）中或通过 `DELETE /v1/members/{id}` 将人员移出组织。
 
-在 Business 中，control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供方，位于：
+在 Business 中，control plane 是一个标准的 SCIM 2.0（RFC 7644）服务提供商，位于：
 
 ```
 /v1/scim/v2/Users
@@ -117,7 +117,7 @@ AgentCore、SPIFFE 及同类）才是 firm 的逐 agent 信号；组/目录名�
 
 ## 相关
 
-- [接入一个来源](/zh/how-to/connect-a-source/#硬性依赖每代理身份)
+- [接入一个来源](/zh/how-to/connect-a-source/#硬性依赖每智能体身份)
   —— 为什么身份是硬依赖。
 - [治理与审批](/zh/how-to/govern-and-approve/) —— 角色、RBAC，以及一个 `mapped_role`
   授予什么。

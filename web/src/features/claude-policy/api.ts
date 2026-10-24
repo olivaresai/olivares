@@ -9,9 +9,11 @@
 //  • DRIFT reads hit the REAL security findings endpoint (connectors emit them).
 //  • AUTHORING (validate/dry-run/publish/version) + PDP (validate/explain/dry-run)
 //    are the DECLARED contract this session EXPOSES (docs/contracts-*) for
-//    To implement. They are wired to their declared routes; today they
-//    will 404/501 and `isContractPending()` lets the UI render an honest "backend
-//    pending" seam instead of a fake success or a red error.
+//    To implement. They are wired to their declared routes; an unbuilt
+//    route answers 404/405 and `isContractPending()` renders an honest "backend
+//    pending" seam instead of a fake success or a red error. A mounted route this
+//    edition does not include answers 501, which the shared `isOpenCoreSeam()`
+//    (lib/api/errors.ts) names as a Business boundary instead.
 //  • Schema VALIDATION is done LOCALLY against the verified schemas (real value,
 //    no backend needed) — see ./schema.
 import { http } from '@/lib/api'
@@ -73,7 +75,7 @@ export interface DriftParams {
 
 export const claudePolicyApi = {
   // --- REAL: drift / posture Findings ----------------------------------------
-  /** PERMITTED-policy-vs-OBSERVED-config drift Findings for the Claude surfaces. */
+  /** PERMITTED-policy-vs-OBSERVED-config drift Findings for every managed surface (Claude Code, Codex, Grok Build, OpenCode, Gemini CLI). */
   listDrift: (params?: DriftParams) =>
     http.get<ListResponse<PolicyDriftFinding>>(`${SECURITY}/findings`, {
       query: { kind: 'policy_drift', limit: POLICY_PAGE, ...params },
@@ -171,13 +173,13 @@ export const claudePolicyApi = {
 }
 
 /**
- * True when a DECLARED endpoint is not yet implemented by the backend (404 / 501 /
- * 405). The UI uses this to show an honest "authoring API pending" seam
- * — never a fake success, never a red error.
+ * True when a DECLARED endpoint is not implemented by the backend yet (404 / 405:
+ * the route really is not built). The UI uses this to show an honest "authoring
+ * API pending" seam — never a fake success, never a red error.
  */
 export function isContractPending(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false
-  return error.status === 404 || error.status === 501 || error.status === 405
+  return error.status === 404 || error.status === 405
 }
 
 /** Tenant-scoped query keys (query.ts contract: tenant id first). */

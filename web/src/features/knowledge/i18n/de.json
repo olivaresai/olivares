@@ -129,7 +129,7 @@
     "noDocs": "Keine direkt eingefügten Dokumente",
     "confirm": "Aufnehmen",
     "done": "Inhalt aufgenommen",
-    "doneSummary": "{{documents}} Dokument(e), {{chunks}} Chunk(s) · {{redactions}} Geheimnis(se) vor der Indizierung geschwärzt"
+    "doneSummary": "Dokumente: {{documents}}, Chunks: {{chunks}} · geschwärzte Geheimnisse vor der Indizierung: {{redactions}}"
   },
   "reindex": {
     "title": "Ausstehende Chunks neu indizieren?",
@@ -156,11 +156,11 @@
     "modeAll": "Alle",
     "modeFilter": "Modus",
     "noModeResults": "Keine Fragmente entsprechen diesem Quellmodus.",
-    "contextTruncated": "⛔ The context did not fit: {{n}} chunks were dropped. This answer was built on less evidence than the list below suggests.",
-    "excludedChunks": "{{n}} chunks excluded by the source floor ({{sources}})",
-    "sourceFloorNoEffect": "source floor applied, excluded nothing",
+    "contextTruncated": "⛔ Der Kontext passte nicht: {{n}} Chunks wurden verworfen. Diese Antwort beruht auf weniger Belegen, als die Liste unten vermuten lässt.",
+    "excludedChunks": "{{n}} Chunks durch die Quellenuntergrenze ausgeschlossen ({{sources}})",
+    "sourceFloorNoEffect": "Quellenuntergrenze angewendet, nichts ausgeschlossen",
     "redactedItems": "{{n}} items redacted",
-    "redactionNoEffect": "redaction required, nothing matched"
+    "redactionNoEffect": "Schwärzung verlangt, nichts getroffen"
   },
   "lineage": {
     "search": "Herkunft durchsuchen…",
@@ -256,7 +256,7 @@
     "caption": "Governance-konformer Agent-Speicher. Der Inhalt wird vor der Speicherung geschwärzt; abgelaufene Einträge werden beim Lesen herausgefiltert.",
     "empty": "Keine Speichereinträge",
     "emptyHint": "Schreiben Sie einen Speichereintrag für einen Agent oder filtern Sie nach einer Agent-Referenz.",
-    "withheld": "⛔ {{n}} entries are NOT in this list: the read path withheld them because they failed the integrity check. The list is not the whole picture, and what is missing is what most needs looking at — run the memory verification to see them."
+    "withheld": "⛔ {{n}} Einträge sind NICHT in dieser Liste: Der Lesepfad hat sie zurückgehalten, weil sie die Integritätsprüfung nicht bestanden haben. Die Liste ist nicht das ganze Bild, und was fehlt, braucht am dringendsten Aufmerksamkeit — führen Sie die Speicherprüfung aus, um sie zu sehen."
   },
   "memoryEditor": {
     "title": "Speicher schreiben",
@@ -464,11 +464,11 @@
     "emptyHint": "Ohne Regeln setzt das Tor nichts durch. Eine Regel zu schreiben aktiviert DLP für diesen Mandanten.",
     "anyScope": "trifft jede GEKENNZEICHNETE Klasse — deckt nicht gescannten Inhalt NICHT ab",
     "newRule": "New DLP rule",
-    "newRuleHint": "A rule binds one content class to allow or deny on egress.",
+    "newRuleHint": "Eine Regel bindet eine Inhaltsklasse beim Ausgang an Erlauben oder Verweigern.",
     "class": "Class",
     "action": "Action",
-    "deleteRule": "Delete the rule for {{class}}",
-    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — this is an upsert by class, not an addition. Replacing a deny with an allow opens egress for that class immediately.",
+    "deleteRule": "Die Regel für {{class}} löschen",
+    "willReplace": "⛔ Für „{{class}}“ gibt es bereits eine Regel. Speichern ERSETZT sie — das ist ein Upsert nach Klasse, keine Ergänzung. Das Ersetzen einer Verweigerung durch eine Erlaubnis öffnet den Ausgang für diese Klasse sofort.",
     "mayReplace": "Die Regelliste ist gekürzt: Außerhalb dieser Seite existiert möglicherweise bereits eine Regel für „{{class}}“. Wenn sie existiert, wird sie beim Speichern ERSETZT, da nach Klasse per Upsert gespeichert wird.",
     "truncated": "{{n}} DLP-Regeln geladen; es gibt weitere",
     "truncatedHint": "Diese Liste zeigt die erste geladene Seite; es gibt weitere DLP-Regeln."
@@ -492,17 +492,17 @@
     "emptyHint": "Ein Scan durchläuft eine Quelle und hält fest, was er findet. Starten Sie einen Scan, um seine Ergebnisse hier zu sehen.",
     "sourceName": "Source name",
     "scanSource": "Scan source",
-    "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",
-    "basisNotice": "A scan records what it looked AT. \"stored\" is the post-scrub form kept after ingestion; \"raw\" is the body before redaction. The two are not comparable.",
+    "scanSourceHint": "Liest die Quelle, OHNE sie einzulesen. Inhalte werden im Speicher klassifiziert und nie gespeichert, protokolliert oder eingebettet.",
+    "basisNotice": "Ein Scan hält fest, was er ANGESEHEN hat. „stored“ ist die bereinigte Form nach dem Einlesen; „raw“ ist der Inhalt vor der Schwärzung. Beide sind nicht vergleichbar.",
     "basis": {
       "raw": "raw bodies",
       "stored": "stored (post-scrub)"
     },
-    "counts": "{{docs}} docs · {{hits}} with hits · {{markers}} redaction markers",
+    "counts": "{{docs}} Dokumente · {{hits}} mit Treffern · {{markers}} Schwärzungsmarkierungen",
     "truncated": "{{n}} Scans geladen; es gibt weitere",
     "truncatedHint": "Diese Liste zeigt die erste geladene Seite; es gibt weitere Scan-Aufzeichnungen.",
-    "zeroOnStored": "⛔ Zero hits here means the redaction worked, NOT that the corpus holds no sensitive data — anything scrubbed at ingestion is already gone. Scan the SOURCE to ask that question.",
-    "zeroOnRaw": "Zero hits on the raw bodies: the source itself carried nothing the detectors recognise."
+    "zeroOnStored": "⛔ Null Treffer heißt hier, dass die Schwärzung gewirkt hat, NICHT dass der Bestand keine sensiblen Daten enthält — alles, was beim Einlesen bereinigt wurde, ist bereits weg. Scannen Sie die QUELLE, um diese Frage zu beantworten.",
+    "zeroOnRaw": "Null Treffer in den Rohinhalten: Die Quelle selbst enthielt nichts, was die Erkenner erkennen."
   },
   "portability": {
     "title": "Portability",
@@ -510,12 +510,12 @@
     "bundle": "Bundle to import",
     "bundlePlaceholder": "Paste a signed bundle",
     "import": "Import bundle",
-    "exported": "{{n}} entries in the bundle",
-    "excluded": "⛔ {{n}} entries were LEFT OUT because they failed the integrity check. This bundle is not a complete copy — say so if you hand it to a data subject.",
-    "nothingExcluded": "Nothing was excluded for integrity.",
-    "noManifest": "The bundle carries no readable manifest, so its completeness cannot be stated.",
+    "exported": "{{n}} Einträge im Paket",
+    "excluded": "⛔ {{n}} Einträge wurden AUSGESCHLOSSEN, weil sie die Integritätsprüfung nicht bestanden haben. Dieses Paket ist keine vollständige Kopie — sagen Sie es, wenn Sie es einer betroffenen Person übergeben.",
+    "nothingExcluded": "Aus Integritätsgründen wurde nichts ausgeschlossen.",
+    "noManifest": "Das Paket enthält kein lesbares Manifest, daher lässt sich seine Vollständigkeit nicht angeben.",
     "imported": "{{n}} entries imported",
-    "rejectedCount": "{{n}} rows were REJECTED individually. The import partly succeeded — these rows are not in."
+    "rejectedCount": "{{n}} Zeilen wurden einzeln ABGELEHNT. Der Import ist teilweise gelungen — diese Zeilen sind nicht enthalten."
   },
   "contextPolicies": {
     "truncated": "{{n}} Kontextrichtlinien geladen; es gibt mehr",

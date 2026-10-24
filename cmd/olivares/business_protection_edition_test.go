@@ -23,7 +23,8 @@ import (
 // TestBusinessProtectionKeysMatchTheTests. A seam that takes the environment and has no
 // row is caught elsewhere: TestArtifactExemption_EveryEnvFedSeamRefusesOrIsADecision reads
 // the seams from edition_ports.go. on is the value that turns the protection on: a config
-// path, or true for the two switches the Business readers parse with strconv.ParseBool.
+// path, or true for the two switches the Business readers parse with strconv.ParseBool,
+// or a value the Business reader takes (a listen address, a duration, a count).
 var businessProtectionInputs = []struct{ key, on string }{
 	{"OLIVARES_SERVERTOOL_EGRESS_CONFIG", businessProtectionPath},
 	{"OLIVARES_CONTENT_FIREWALL_CONFIG", businessProtectionPath},
@@ -42,6 +43,15 @@ var businessProtectionInputs = []struct{ key, on string }{
 	{"OLIVARES_NIS2INCIDENT_CONFIG", businessProtectionPath},
 	{"OLIVARES_REPORTING_CONFIG", businessProtectionPath},
 	{"OLIVARES_PII_TOKENS_CONFIG", businessProtectionPath},
+	{"OLIVARES_CREDENTIAL_MINTER_CONFIG", businessProtectionPath},
+	{"OLIVARES_ONBOARDING_CONFIG", businessProtectionPath},
+	{"OLIVARES_PQC_POSTURE_CONFIG", businessProtectionPath},
+	{"OLIVARES_SESSIONS_AGENT_LINK_LISTEN", "127.0.0.1:8443"},
+	{"OLIVARES_SIEM_FORWARD_INTERVAL", "30s"},
+	{"OLIVARES_ORCH_CADENCE_INTERVAL", "1m"},
+	{"OLIVARES_ORCH_WORKFLOW_INTERVAL", "15s"},
+	{"OLIVARES_ORCH_WORKFLOW_MAX", "4"},
+	{"OLIVARES_ORCH_WORKFLOW_STEPS_MAX", "100"},
 }
 
 const businessProtectionPath = "/marker/business-protection-value.json"
@@ -83,7 +93,7 @@ func TestCommunityServeRefusesConfiguredBusinessProtection(t *testing.T) {
 				t.Fatalf("exit code = %d, want %d (Edition): %v", code, exitcode.Edition, err)
 			}
 			msg := err.Error()
-			for _, want := range []string{in.key, "Business", pricingURL} {
+			for _, want := range []string{in.key, "Business capability", pricingURL} {
 				if !strings.Contains(msg, want) {
 					t.Errorf("refusal %q does not name %q", msg, want)
 				}
@@ -234,5 +244,105 @@ func TestCommunityServeRefusesBusinessProtectionFromActivationManifest(t *testin
 				t.Errorf("the manifest changed (read err %v)", err)
 			}
 		})
+	}
+}
+
+// A Community serve on a data directory whose activation manifest cannot be read refuses:
+// it cannot tell which Business protections the manifest activates, so it must not serve as
+// if none were. A missing manifest is nothing activated, as before, and is not refused. The
+// refusal carries the cause, so an operator can tell a corrupt file from one the engine user
+// cannot read, and does not delete a valid manifest.
+func TestCommunityServeRefusesUnreadableActivationManifest(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		plant func(t *testing.T, manifest string)
+		cause string
+	}{
+		{"corrupt JSON", func(t *testing.T, manifest string) {
+			if err := os.WriteFile(manifest, []byte("{not json"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}, "invalid character"},
+		{"not a regular file", func(t *testing.T, manifest string) {
+			if err := os.Mkdir(manifest, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}, "is a directory"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clearBusinessProtectionEnv(t)
+			dir := t.TempDir()
+			manifest := ActivationManifestPath(dir)
+			tc.plant(t, manifest)
+			eng, err := bootAsEdition(t, "community", true, dir)
+			if err == nil || eng != nil {
+				t.Fatalf("serve over an unreadable activation manifest = %v, want a refusal", err)
+			}
+			if code := exitcode.From(err); code != exitcode.Edition {
+				t.Fatalf("exit code = %d, want %d (Edition): %v", code, exitcode.Edition, err)
+			}
+			if n := strings.Count(err.Error(), manifest); n != 1 {
+				t.Errorf("refusal %q names the manifest %d times, want once", err, n)
+			}
+			if !strings.Contains(err.Error(), tc.cause) {
+				t.Errorf("refusal %q does not carry the cause %q", err, tc.cause)
+			}
+			if entries, _ := os.ReadDir(dir); len(entries) != 1 {
+				t.Errorf("the refused boot touched the data directory: %v", entries)
+			}
+		})
+	}
+}
+
+// A Business build keeps its boot behavior for an unreadable manifest: the loader still
+// reports the error, and the Business edition does not turn it into a refusal (boot logs it
+// and activates nothing; this test does not boot). Only Community has to refuse, because
+// only Community drops what the manifest activates.
+func TestBusinessIsNotRefusedForAnUnreadableActivationManifest(t *testing.T) {
+	asEdition(t, "enterprise")
+	_, loadErr := environmentWithActivationManifest(t.TempDir() + "/absent")
+	if loadErr != nil {
+		t.Fatalf("a missing data directory is nothing activated, got %v", loadErr)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(ActivationManifestPath(dir), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, loadErr = environmentWithActivationManifest(dir)
+	if loadErr == nil {
+		t.Fatal("the corrupt manifest was not reported to the caller")
+	}
+	if err := refuseUnreadableActivationManifestInCommunity(loadErr); err != nil {
+		t.Fatalf("the Business edition refused an unreadable manifest: %v", err)
+	}
+}
+
+func TestCommunityServesWithoutActivationManifest(t *testing.T) {
+	clearBusinessProtectionEnv(t)
+	if _, err := bootAsEdition(t, "community", true, t.TempDir()); err != nil {
+		t.Fatalf("Community refused a data directory with no manifest: %v", err)
+	}
+}
+
+// An external policy engine turned on by a manifest entry, not the process environment, is the
+// same Business capability: the PDP refusal reads the manifest overlay too.
+func TestCommunityServeRefusesExternalPDPFromActivationManifest(t *testing.T) {
+	clearBusinessProtectionEnv(t)
+	t.Setenv("OLIVARES_PDP_ENGINE", "")
+	dir := t.TempDir()
+	manifest := &ActivationManifest{Entries: []ActivationEntry{
+		{Addon: "policy-engine", Env: "OLIVARES_PDP_ENGINE", Value: "cedar", State: ActivationActive},
+	}}
+	if err := SaveActivationManifest(dir, manifest, time.Unix(1_700_000_000, 0)); err != nil {
+		t.Fatal(err)
+	}
+	_, err := bootAsEdition(t, "community", true, dir)
+	if err == nil || exitcode.From(err) != exitcode.Edition || !strings.Contains(err.Error(), "OLIVARES_PDP_ENGINE") {
+		t.Fatalf("serve = %v (exit %d), want an Edition refusal that names OLIVARES_PDP_ENGINE", err, exitcode.From(err))
+	}
+	// The key came from the manifest, so the remedy names the manifest: unsetting the
+	// environment variable would change nothing.
+	if !strings.Contains(err.Error(), "activation manifest") {
+		t.Errorf("refusal %q does not name the activation manifest as a place to remove the key", err)
 	}
 }

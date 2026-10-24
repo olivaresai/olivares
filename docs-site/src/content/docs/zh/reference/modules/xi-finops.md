@@ -8,13 +8,13 @@ description: >-
 FinOps 预算和支出分析属于 **[Business](https://olivares.ai/pricing)** 功能。Community 保留每个会话的成本跟踪和数据导出。0.1 之前保存的预算仍可读取和删除，并在 FinOps 模块启用时继续执行；Community 无法创建或修改预算。评估和沙箱仍属于 Community。
 
 
-模块 XI 是面向 AI 的**成本 / FinOps** 层：它核算模型与提供方 connector（连接器）所报告的内容，
+模块 XI 是面向 AI 的**成本 / FinOps** 层：它核算模型与提供商 connector（连接器）所报告的内容，
 让你按任意归因维度切分开销，预测当前周期，并把一个预算变成真正的强制执行——在上限处**拒绝该项消费**，
 而不仅仅是发出标记。本页是关于 FinOps 如今做什么、以及其保证在何处终止的参考。
 
 ## 它是什么
 
-FinOps **不会**重新实现提供方集成——它消费模型/提供方成本流，并**核算 connector 权威地派生或读取到的
+FinOps **不会**重新实现提供商集成——它消费模型/提供商成本流，并**核算 connector 权威地派生或读取到的
 内容**。金额始终是一个**整数微美元（micro-USD）**值（百万分之一美元），绝不是浮点数，因此总额绝不
 漂移。它是一个 Intelligence（智能）层模块：它拥有摄取、预算与分析功能，并通过它自身受 RBAC 门控的
 API 命名空间与 UI 视图将其暴露出来，而不触及核心或其邻居模块。
@@ -32,7 +32,7 @@ completion 或密钥。成本属于治理数据，因此读取在 API 处按角�
   因此一个被重新拉取的开放桶或一份延迟结算的报告会**就地 upsert**，而不会在 at-least-once（至少一次）
   流上重复计数；
 - 一行非规范化的 **FinOps read-model（读模型）**，以自然归因名称为键（provider、model、agent、
-  session、team、project），从而使开销能按**任意**上述维度高效聚合——包括提供方的 `service_tier`。
+  session、team、project），从而使开销能按**任意**上述维度高效聚合——包括提供商的 `service_tier`。
 
 一个**预算**是一个 kind 为 `budget` 的核心 `Policy`：一个维度（global / model / provider / agent /
 session / team / project）、一个限额、一个周期，以及告警阈值。它的 `action` 为三者之一——`alert`

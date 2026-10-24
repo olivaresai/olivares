@@ -78,7 +78,10 @@
   },
   "apply": {
     "success": "Шаблон применён.",
-    "conflicts": "Применено с {{count}} конфликтом(ами).",
+    "conflicts_one": "Применено с {{count}} конфликтом.",
+    "conflicts_few": "Применено с {{count}} конфликтами.",
+    "conflicts_many": "Применено с {{count}} конфликтами.",
+    "conflicts_other": "Применено с {{count}} конфликтами.",
     "conflictField": "Поле",
     "conflictOld": "Предыдущее значение",
     "conflictNew": "Новое значение",

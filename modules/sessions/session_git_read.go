@@ -205,5 +205,10 @@ func (p CreateRunParams) outputRedactor() *secretRedactor {
 		refs = append(refs, SecretEnvRef{Env: token.Name, Secret: token.Name})
 		values = append(values, token)
 	}
+	// The values a managed credential's helper holds, in case a remote service echoes one.
+	for _, value := range p.credentialWithhold {
+		refs = append(refs, SecretEnvRef{Env: credentialRedactName, Secret: credentialMark})
+		values = append(values, EnvVar{Name: credentialRedactName, Value: value})
+	}
 	return newSecretRedactor(refs, values)
 }

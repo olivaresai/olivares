@@ -51,7 +51,7 @@ function CopyCommand({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="flex w-fit max-w-full items-center gap-2 rounded-[6px] bg-surface py-1 pl-2 pr-1">
-      <code className="min-w-0 overflow-x-auto text-mono text-text select-all">
+      <code className="min-w-0 text-mono [overflow-wrap:anywhere] text-text select-all">
         {command}
       </code>
       <Button
@@ -94,7 +94,7 @@ export function OnboardingView() {
   if (!can('system:admin')) return <ForbiddenState />
   if (dismissed) {
     return (
-      <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-4">
         <EmptyState
           icon={<Rocket />}
           title={t('dismissed.title')}
@@ -109,7 +109,7 @@ export function OnboardingView() {
     )
   }
   return (
-    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-5 p-6">
+    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-5">
       <PageHeader
         icon={Rocket}
         title={t('title')}

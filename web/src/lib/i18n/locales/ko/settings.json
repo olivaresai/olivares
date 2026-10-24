@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "일반",
-    "notifications": "알림",
     "keyboard": "키보드",
-    "sessionDefaults": "세션 기본값",
     "aiTools": "AI 도구",
     "workspaces": "Workspace",
     "deploy": "배포 및 업데이트",
@@ -31,7 +29,7 @@
     "title": "일반",
     "scope": "내 기본 설정입니다. 이 설치의 모든 Workspace에 적용됩니다.",
     "theme": "테마",
-    "themeHint": "라이트 또는 다크를 선택하지 않으면 시스템 설정을 따릅니다.",
+    "themeHint": "라이트, 다크 또는 블랙을 선택하지 않으면 시스템 설정을 따릅니다.",
     "density": "밀도",
     "densityHint": "촘촘하게는 더 많은 행을 표시하고, 여유 있게는 읽기 쉽습니다.",
     "language": "언어",
@@ -46,10 +44,6 @@
     "confirmStopHint": "작업 중인 세션을 중지로 끝내기 전에 한 번 확인합니다.",
     "reduceMotion": "동작 줄이기",
     "reduceMotionHint": "움직임을 페이드로 대체합니다. 시스템이 요청하면 켜집니다."
-  },
-  "unavailable": {
-    "notifications": "이 설치에는 아직 알림 기본 설정이 저장되지 않습니다.",
-    "sessionDefaults": "이 설치에는 아직 세션 기본값이 저장되지 않습니다."
   },
   "sessionNotifications": {
     "title": "세션 알림",
@@ -334,9 +328,17 @@
       "title": "{{version}}(으)로 업데이트하시겠습니까?",
       "stop_other": "실행 중인 세션 {{count}}개가 중지됩니다. 재시작 후 각 세션을 다시 시작할 수 있습니다.",
       "none": "엔진이 새 버전으로 한 번 다시 시작됩니다.",
-      "confirm": "설치하고 다시 시작"
+      "switchNone": "엔진이 라이선스된 에디션으로 한 번 다시 시작됩니다. 데이터는 그대로 유지됩니다.",
+      "confirm": "설치하고 다시 시작",
+      "switchTitle": "{{edition}}(으)로 전환하시겠습니까?",
+      "switchConfirm": "전환하고 다시 시작"
     },
     "alreadyCurrent": "이미 최신 릴리스입니다. 아무것도 설치되지 않았습니다.",
-    "restartRequired": "새 버전이 설치되었습니다. 서비스 관리자로 엔진을 다시 시작하여 실행하십시오."
+    "restartRequired": "새 버전이 설치되었습니다. 서비스 관리자로 엔진을 다시 시작하여 실행하십시오.",
+    "switch": "{{edition}}(으)로 전환",
+    "switchTitle": "{{edition}}(으)로 전환",
+    "switched": "전환이 설치되었습니다.",
+    "terminal": "서버의 터미널에서도 같은 작업을 할 수 있습니다",
+    "orTerminal": "또는 서버의 터미널에서"
   }
 }

@@ -117,7 +117,7 @@
     "confirmPhrase": "RESTORE",
     "confirmLabel": "立即恢复",
     "confirmSummaryPrefix": "正在从",
-    "confirmSummarySuffix": "恢复，包含 {{count}} 个租户。",
+    "confirmSummarySuffix_other": "恢复，包含 {{count}} 个租户。",
     "awaitingTitle": "等待第二位批准者",
     "awaitingDescription": "已启用双人控制。此恢复必须由另一位管理员在备份标签页中批准并提供口令短语后才会运行。",
     "requestId": "请求 ID",

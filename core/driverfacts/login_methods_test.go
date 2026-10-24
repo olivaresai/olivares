@@ -6,6 +6,7 @@ package driverfacts
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -45,18 +46,37 @@ func TestLoginArgsForMethod(t *testing.T) {
 	}
 }
 
-// OpenCode lists the method its sign-in relay can complete, and its default is
-// the one it ran before the list existed. The other methods the pinned binary
-// offers are not relayed: the browser method waits for a callback on the engine
-// host, and the key method reads a secret from the tool's own prompt.
+// OpenCode lists its own providers first (#2567): the OpenCode console key (Zen and
+// the free models) and the Go subscription key, each read by the tool's own login
+// prompt, then the ChatGPT device method. The default a start without a method
+// runs stays the ChatGPT one, so a client that names no method is signed in
+// exactly as before. The browser method is not relayed: it waits for a callback
+// on the engine host.
 func TestOpenCodeLoginMethods(t *testing.T) {
 	f, _ := Lookup("opencode")
-	if ids := f.LoginMethodIDs(); !slices.Equal(ids, []string{"chatgpt-headless"}) {
+	if ids := f.LoginMethodIDs(); !slices.Equal(ids, []string{"opencode", "opencode-go", "chatgpt-headless"}) {
 		t.Fatalf("opencode methods = %v", ids)
+	}
+	for id, provider := range map[string]string{"opencode": "opencode", "opencode-go": "opencode-go"} {
+		args, ok := f.LoginArgsFor(id)
+		if !ok || !slices.Equal(args, []string{"auth", "login", "--provider", provider}) {
+			t.Fatalf("%s = %v %v, want auth login --provider %s", id, args, ok, provider)
+		}
+		m := f.LoginMethods[slices.Index(f.LoginMethodIDs(), id)]
+		if m.KeyPrompt != "Enter your API key" || !strings.HasPrefix(m.KeyURL, "https://opencode.ai/") {
+			t.Fatalf("%s key prompt %q and page %q, want the tool's prompt and an opencode.ai page", id, m.KeyPrompt, m.KeyURL)
+		}
 	}
 	args, ok := f.LoginArgsFor("chatgpt-headless")
 	if !ok || !slices.Equal(args, f.LoginArgs) {
 		t.Fatalf("chatgpt-headless = %v, want the default LoginArgs %v", args, f.LoginArgs)
+	}
+	if !slices.Contains(f.LoginArgs, "openai") {
+		t.Fatalf("the default login changed: %v", f.LoginArgs)
+	}
+	listed := f.LoginMethodList()
+	if len(listed) != 3 || !listed[0].Key || !listed[1].Key || listed[2].Key || !listed[2].Default || listed[0].Default {
+		t.Fatalf("opencode list = %+v, want two key methods first and the ChatGPT default last", listed)
 	}
 	if c, _ := Lookup("claude"); len(c.LoginMethodIDs()) != 0 {
 		t.Fatalf("claude lists methods %v; it has one", c.LoginMethodIDs())

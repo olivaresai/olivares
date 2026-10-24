@@ -57,8 +57,8 @@ exclusive to restoring it:
 
 `olivares dr` answers all three: the **manifest** records per tenant the tip
 (seq+hash) and the key fingerprint at the moment of the backup and **refuses to certify**
-a backup whose chain is not already green; the **bundle** carries the signing keys
-**encrypted** under an operator KEK; and `dr restore`/`dr verify` **re-verify**
+a backup whose chain is not already green; the **bundle** carries the store snapshot
+and the signing keys **encrypted** under an operator KEK; and `dr restore`/`dr verify` **re-verify**
 chain + per-event signatures + checkpoints against the restored store **and** check
 that the tip and the key fingerprint match the manifest. New bundles also bind the
 complete manifest and every non-manifest payload with `hmac-sha256-kek-v1` under that
@@ -76,7 +76,8 @@ manifest.json      control record (NOT secret): tips per tenant, public key
                    per-file digest inventory and keyed authentication tag.
 keys/kek.json      KDF parameters to re-derive the KEK (Argon2id salt; no secret).
 keys/*.enc         installation custody, AES-256-GCM under the KEK.
-store/<snapshot>   the consistent store snapshot (absent in PITR mode).
+store/<snapshot>.enc   the consistent store snapshot, AES-256-GCM in chunks under the
+                   KEK (absent in PITR mode).
 ```
 
 - **Minimal data:** EVERY `*-signing.key` in the data dir (audit, catalog,
@@ -109,6 +110,26 @@ store/<snapshot>   the consistent store snapshot (absent in PITR mode).
   Put the source's key files in the data dir (mode 0600) with the variables unset, or set the
   variables to the source's keys, before you start `serve`; otherwise provider keys,
   TOTP enrolments, SSO and eventing secrets do not open.
+- **The store snapshot is sealed under the KEK too.** It holds the accounts, policies,
+  audit ledger and session metadata, so a bundle, including the copy `dr backup
+  --offsite-bucket` uploads, reveals only its manifest to anyone without the KEK. It is
+  sealed in 1 MiB chunks (AES-256-GCM, one random nonce per chunk, the chunk order and the
+  end of the stream authenticated), streamed without loading the snapshot into memory. The
+  manifest records `store.encryption` (`aes-256-gcm-chunked-v1`), the tar member is
+  `store/<snapshot>.enc`, and `store.sha256` stays the digest of the plaintext snapshot.
+  `dr inspect` still needs no KEK. `dr restore` and `dr verify` open the snapshot in their
+  scratch directory first: a wrong KEK or an altered, truncated or reordered chunk fails
+  there, before the data dir is touched. Sealing and opening each write a second copy of the
+  snapshot in the temp directory (`TMPDIR`), so keep free space of about twice the snapshot
+  there during `dr backup`, `dr restore` and `dr verify`. Encrypted data does not compress:
+  a bundle is about as large as its snapshot. Measured on one host, the `dr drill` bundle
+  of a 20,000-event ledger went from 6.2 MB to 26.8 MB and the bundle of a small estate
+  from 0.36 MB to 11 MB. The drill's measured RTO did not change beyond its run-to-run
+  spread (2.1 to 2.7 s before, 2.2 to 2.4 s after).
+- **Bundles taken before the snapshot was sealed (manifest `olivares.dr.manifest.v1`)
+  still restore and verify,** and both commands warn that the snapshot is not encrypted.
+  Take a new backup to seal it; the old bundles and their offsite copies stay readable by
+  anyone who holds them until you delete them.
 - **The key fingerprint is the public one** (one-way); the private key never appears in
   the manifest, only encrypted in `keys/*.enc`. Non-signing communication keyrings
   have no public-key fingerprint; the bundle authenticates their encrypted bytes.
@@ -124,7 +145,9 @@ store/<snapshot>   the consistent store snapshot (absent in PITR mode).
   **raw 32-byte key** (the KMS-wrapped path). The
   bundle never contains the KEK; an incorrect passphrase **fails the GCM tag** (authenticated
   error, never a silently wrong key).
-- **Without the KEK there is no verifiable restore.** Keep it **separate** from the bundles
+- **Without the KEK there is no restore at all.** The KEK seals the store snapshot as well
+  as the keys, so a lost KEK loses the bundle's data, not only its verifiability. Keep it
+  **separate** from the bundles
   (secrets manager / KMS / sealed envelope). Whoever holds a bundle **and** the KEK
   can re-sign the ledger: treat it as the signing key itself.
 - **KMS/HSM seam.** Today the on-box keys are encrypted with the operator KEK.

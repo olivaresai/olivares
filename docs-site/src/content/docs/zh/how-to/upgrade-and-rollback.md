@@ -18,11 +18,12 @@ description: >-
 
 ## 选择升级路径
 
-二进制文件有三种升级方式，最终结果相同。
+二进制文件有四种升级方式，最终结果相同。
 
 | 你的安装方式 | 路径 |
 |---|---|
-| 主机上的二进制文件、systemd | `olivares upgrade`——本页 |
+| deb、rpm、apk 或 AUR 软件包 | 包管理器。[从软件包安装](/zh/how-to/install-from-packages/) |
+| 主机上的二进制文件、systemd（非软件包安装） | `olivares upgrade`——本页 |
 | Docker 或 Podman 容器 | 运行 `docker compose exec olivares olivares upgrade`，然后重新创建容器。镜像无法更改，因此该版本会保存在数据卷中（数据目录下的 `ota/`），镜像中的二进制文件每次启动时，只要该版本比镜像新或是同一版本的另一种构建，就会启动它。删除 `ota/` 即可让容器回到其镜像中的二进制文件。命令见 [Docker 与 Compose](/zh/how-to/install-a-license/#docker-与-compose)。 |
 | Kubernetes / Helm | 设置镜像，让 operator 执行滚动更新。不要在 pod 内运行 `olivares upgrade`：部署是声明式的，下一次协调会撤销它。 |
 
@@ -46,7 +47,7 @@ olivares upgrade --check
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.3
+olivares upgrade --check --current-version 0.4
 ```
 <!-- /release -->
 
@@ -91,6 +92,9 @@ olivares upgrade --channel security
 ```sh
 olivares upgrade
 ```
+
+在软件包安装（deb、rpm、apk、AUR）上，该命令会在下载任何内容之前以退出码 2 被拒绝：请按上表使用包管理器。
+`--check` 仍会显示计划。
 
 命令依次执行以下操作，每一步都有明确目的：
 
@@ -142,6 +146,12 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 ```
 
 它默认输出 unit；`--timer-dir` 会将它们写入指定位置。这是选择加入功能——不会自行安排。
+
+在软件包安装上，该命令会拒绝：`/usr/bin/olivares` 归软件包管理器所有，因此它以退出码 2 结束，
+不写入任何 unit，并指出升级途径：主机的软件包管理器；在 Olivares 设备上则是
+`systemctl start olivares-appliance-update.service`。带 `--enterprise --connect` 时还会指出
+`olivares license connect refresh`。检查按路径进行，因此由 `install.sh --bindir /usr/bin` 放在那里的
+二进制文件同样会被拒绝。
 
 控制台提供相同信息的只读部分：**Settings → update status** 调用
 `POST /v1/console/update-check`，按需检查配置的渠道。隔离网络部署或未配置渠道的部署会
@@ -205,7 +215,7 @@ SQLite 恢复实测（2026-10-08）：官方 26.10.1<!-- release-fixed --> 创�
 | “another olivares upgrade is already installing”，退出码 **5** | 每个二进制文件一次只能进行一项升级。整个下载和替换过程都会持有锁 | 等待正在运行的升级，再重新执行。如果没有进程在运行，内核已经释放锁，立即重试即可 |
 | “it CHANGED while this upgrade was downloading” | 制定计划后，有其他机制替换了二进制文件——包管理器、镜像发布或配置管理作业 | 重新运行：保护会根据实际安装内容重新求值。如果持续发生，则有两个机制在管理同一个二进制文件 |
 
-**每个二进制文件只能有一个升级代理。** `olivares upgrade` 在整个准备—下载—替换
+**每个二进制文件只能有一个升级进程。** `olivares upgrade` 在整个准备—下载—替换
 过程中对目标加独占锁，因此第二次运行会以退出码 `5` 退出，而不会执行安装。请只安装
 **一个**计时器并更改其中的 `--channel`，不要为每个渠道运行一个计时器：过去，两个在
 同一秒完成的安装会覆盖彼此的回滚备份，失败一方的自动回滚随后会恢复*另一个*二进制

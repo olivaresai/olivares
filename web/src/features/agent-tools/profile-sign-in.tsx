@@ -6,9 +6,11 @@
 // Olivares (POST /v1/m/agenttools/sign-in). Olivares never sees a password: it relays the
 // tool's link and code. Used by a row's Sign in button and by Add profile, which
 // continues here in place.
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { CodeLine } from '@/components/ui/code-line'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +21,14 @@ import {
 import { AccountSignIn } from '@/features/agentops/provider-account-signin'
 import type { ProviderAccountDTO } from '@/features/agentops/types'
 import { PANEL_EXTENSIONS } from '@/features/extensions'
-import { apiKeyHref, SignIn } from '@/features/first-hour/first-hour'
+import { SignIn } from '@/features/first-hour/first-hour'
+import {
+  KeyInstead,
+  useKeyBeingStored,
+  useKeyKind,
+  useKeyTriggerFocus,
+} from '@/features/first-hour/key-instead'
+import type { ProviderRecordDTO } from '@/features/providers/types'
 import { firstHourKeys, type SignInTool } from '@/features/first-hour/api'
 import { useAuth } from '@/lib/auth/context'
 import { PHONE_SHEET } from './phone-sheet'
@@ -31,16 +40,25 @@ function OtherWays({
   driver,
   name,
   accountRef,
+  addingKey,
+  onAddingKeyChange,
+  onCreated,
 }: {
   driver: string
   name: string
   accountRef?: string
+  /** The key form is open in place of the trigger; the panel owns it (#2551). */
+  addingKey: boolean
+  onAddingKeyChange: (adding: boolean) => void
+  /** After the key is stored: the caller shows what comes next. */
+  onCreated?: (record: ProviderRecordDTO) => void
 }) {
   const { t } = useTranslation('agentTools')
   const { t: hour } = useTranslation('firstHour')
   const { can } = useAuth()
   // The organization's default login can run on an API key from Providers instead.
-  const keyHref = accountRef ? undefined : apiKeyHref(driver)
+  const keyKind = useKeyKind(driver as SignInTool, accountRef)
+  const keyTriggerRef = useKeyTriggerFocus(addingKey)
   const extra = (PANEL_EXTENSIONS.profileSignInWays ?? []).filter(
     (way) => way.permission === undefined || can(way.permission),
   )
@@ -59,13 +77,24 @@ function OtherWays({
           </span>
           <CodeLine inline command={command} />
         </div>
-        {keyHref ? (
-          <a
-            href={keyHref}
-            className="self-start text-caption text-text-2 underline underline-offset-2"
-          >
-            {hour('actions.useApiKey')}
-          </a>
+        {keyKind ? (
+          addingKey ? (
+            <KeyInstead
+              driver={driver as SignInTool}
+              onCancel={() => onAddingKeyChange(false)}
+              onCreated={onCreated}
+            />
+          ) : (
+            <Button
+              type="button"
+              variant="link"
+              className="self-start"
+              ref={keyTriggerRef}
+              onClick={() => onAddingKeyChange(true)}
+            >
+              {hour('actions.useApiKey')}
+            </Button>
+          )
         ) : null}
         {extra.map((way) => (
           <way.Component
@@ -89,6 +118,7 @@ export function ProfileSignInPanel({
   tenant,
   autoStart = false,
   onSignedIn,
+  onKeyCreated,
 }: {
   driver: string
   name: string
@@ -96,8 +126,13 @@ export function ProfileSignInPanel({
   tenant: string | null
   autoStart?: boolean
   onSignedIn?: () => void
+  onKeyCreated?: (record: ProviderRecordDTO) => void
 }) {
   const qc = useQueryClient()
+  // The key form of Other ways, open over the sign-in: a login that completes under it
+  // must not close the sheet over a key being typed (#2551). Its close re-renders the
+  // sign-in, which reports the login again.
+  const [addingKey, setAddingKey] = useState(false)
   return (
     <div className="flex flex-col gap-4">
       {account && tenant ? (
@@ -114,9 +149,11 @@ export function ProfileSignInPanel({
           driver={driver as SignInTool}
           tenantId={tenant}
           autoStart={autoStart}
+          // Other ways below offers the key form once for this sheet.
+          offerKey={false}
           onSignedIn={() => {
             void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })
-            onSignedIn?.()
+            if (!addingKey) onSignedIn?.()
           }}
         />
       ) : null}
@@ -124,6 +161,9 @@ export function ProfileSignInPanel({
         driver={driver}
         name={name}
         accountRef={account?.account_ref}
+        addingKey={addingKey}
+        onAddingKeyChange={setAddingKey}
+        onCreated={onKeyCreated}
       />
     </div>
   )
@@ -144,8 +184,13 @@ export function ProfileSignInDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation('agentTools')
+  // The key write must not be cut off by a Radix-initiated close (X, Escape, overlay).
+  const keyBeingStored = useKeyBeingStored()
   return (
-    <Dialog open onOpenChange={onOpenChange}>
+    <Dialog
+      open
+      onOpenChange={(o) => (keyBeingStored() ? undefined : onOpenChange(o))}
+    >
       <DialogContent className={PHONE_SHEET}>
         <DialogHeader>
           <DialogTitle>{t('signIn.title', { name })}</DialogTitle>
@@ -158,6 +203,9 @@ export function ProfileSignInDialog({
           tenant={tenant}
           autoStart
           onSignedIn={() => onOpenChange(false)}
+          // A stored key changes what the row shows: close the sheet, the card behind
+          // re-reads and shows it ready.
+          onKeyCreated={() => onOpenChange(false)}
         />
       </DialogContent>
     </Dialog>

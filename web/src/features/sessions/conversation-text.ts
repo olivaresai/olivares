@@ -5,6 +5,8 @@
 // The sentence of a conversation's system line, shared by the session view and the live
 // console so a failure reads the same in both.
 import type { TFunction } from 'i18next'
+import { modelName } from '@/features/agentops/model-name'
+import { formatShortDateTime } from '@/lib/format'
 import type { ConversationItem } from './conversation-frames'
 
 /** A provider call refused for its credential: retrying cannot fix it (HU2-13). */
@@ -26,8 +28,54 @@ export function systemFailed(item: ConversationItem): boolean {
   )
 }
 
+/** The windows Claude Code names a limit by (`rateLimitType`), as the catalog words them. */
+const LIMIT_WINDOWS: Record<string, string> = {
+  five_hour: 'fiveHour',
+  seven_day: 'weekly',
+  seven_day_opus: 'weeklyOpus',
+  seven_day_sonnet: 'weeklySonnet',
+  overage: 'extra',
+}
+
+/** When a limit resets: the time when it is today, else the weekday and the time
+ * ("Mon 03:00"); every window resets within a week. */
+function resetTime(iso: string | undefined, now: Date): string | undefined {
+  const at = iso ? new Date(iso) : null
+  if (!at || Number.isNaN(at.getTime())) return undefined
+  return at.toLocaleString(
+    undefined,
+    at.toDateString() === now.toDateString()
+      ? { hour: '2-digit', minute: '2-digit' }
+      : { weekday: 'short', hour: '2-digit', minute: '2-digit' },
+  )
+}
+
+/** The turn a limit stopped, in words: which limit, how much of it was used and when it
+ * resets, as far as the tool said (dev#3119). */
+function limitText(t: TFunction, item: ConversationItem, now: Date): string {
+  const window = t(
+    `sessions:conversation.limit.window.${
+      Object.hasOwn(LIMIT_WINDOWS, item.limitWindow ?? '')
+        ? LIMIT_WINDOWS[item.limitWindow!]
+        : 'usage'
+    }`,
+  )
+  const used =
+    item.limitUtilization === undefined
+      ? undefined
+      : Math.round(item.limitUtilization * 100)
+  const time = resetTime(item.limitResetsAt, now)
+  const key = `${used === undefined ? 'reached' : 'reachedUsed'}${time ? 'Until' : ''}`
+  return t(`sessions:conversation.limit.${key}`, { window, used, time })
+}
+
 /** The sentence of a system line. */
-export function systemText(t: TFunction, item: ConversationItem): string {
+export function systemText(
+  t: TFunction,
+  item: ConversationItem,
+  now: Date = new Date(),
+): string {
+  if (item.systemKind === 'rate_limit') return limitText(t, item, now)
   if (item.systemKind === 'output')
     return t('sessions:conversation.output', {
       count: item.raw.length,
@@ -38,9 +86,22 @@ export function systemText(t: TFunction, item: ConversationItem): string {
   if (item.systemKind === 'turnFailed')
     return t('sessions:conversation.turnFailed', { message: item.summary })
   if (refusedKey(item)) return t('sessions:conversation.keyRefused')
+  if (item.systemKind === 'model') {
+    // A model is named in words; its id stays on the row's hover.
+    const words = {
+      from: item.fromModel && modelName(item.fromModel),
+      to: item.model && modelName(item.model),
+    }
+    return item.at
+      ? t('sessions:conversation.modelChangedAt', {
+          ...words,
+          time: formatShortDateTime(item.at),
+        })
+      : t('sessions:conversation.modelChanged', words)
+  }
   if (item.systemKind === 'init') {
     const parts = [t('sessions:conversation.started')]
-    if (item.model) parts.push(item.model)
+    if (item.model) parts.push(modelName(item.model))
     if (item.toolCount)
       parts.push(
         t('sessions:conversation.startedTools', { count: item.toolCount }),

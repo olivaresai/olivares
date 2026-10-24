@@ -48,7 +48,7 @@ log_timezone = 'UTC'               # REQUIRED — see below
 
 要让归属更精准，让各应用按 agent 设置 `application_name` —— 这正是把一条边从共享角色
 升级为已归属发起方的关键
-（参见[身份依赖](/zh/how-to/connect-a-source/#硬性依赖每代理身份)）。
+（参见[身份依赖](/zh/how-to/connect-a-source/#硬性依赖每智能体身份)）。
 
 ## 2. 声明该来源
 

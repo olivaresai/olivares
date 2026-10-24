@@ -31,8 +31,11 @@
   },
   "signIn": {
     "openLink": "Apri la pagina di accesso",
+    "openKeyPage": "Apri la pagina della chiave",
     "codeLabel": "Codice dalla pagina di accesso",
     "codeHint": "Dopo aver approvato l'accesso, la pagina mostra un codice. Incollalo qui.",
+    "keyLabel": "Chiave API",
+    "keyHint": "Crea una chiave nella pagina sopra, poi incollala qui. {{name}} la conserva su questo server; Olivares non la tiene.",
     "continue": "Continua",
     "enterCode": "Nella pagina di accesso, inserisci questo codice:",
     "waiting": "In attesa che tu finisca nella pagina di accesso…",
@@ -40,7 +43,13 @@
     "copy": "Copia",
     "copied": "Copiato",
     "starting": "Avvio dell'accesso…",
-    "lostTouch": "Connessione al server persa. L'accesso potrebbe essere ancora in corso."
+    "lostTouch": "Connessione al server persa. L'accesso potrebbe essere ancora in corso.",
+    "method": "Metodo di accesso",
+    "methods": {
+      "opencode": "OpenCode Zen e modelli gratuiti (chiave API)",
+      "opencode-go": "OpenCode Go (chiave API)",
+      "chatgpt-headless": "ChatGPT Pro/Plus (senza browser)"
+    }
   },
   "errors": {
     "status": "Non è stato possibile leggere lo stato dello strumento.",

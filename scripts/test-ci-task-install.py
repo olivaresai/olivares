@@ -30,7 +30,7 @@ CALLERS = {
     "commit-outcome-oracle.yml": ["generated"],
     "compose-ready.yml": ["qualify-compose-ready"],
     "drills-nightly.yml": ["drills"],
-    "export-check.yml": ["pattern-net-static", "acceptance-empirical"],
+    "export-check.yml": ["pattern-net-static", "acceptance-empirical", "userspace-compat"],
     "mainline-ci.yml": ["sdk-tests"],
     "pr-ci.yml": ["pr-lint", "pr-build", "pr-test-shard", "pr-web"],
     "race-full.yml": ["race-workspace"],
@@ -107,7 +107,7 @@ class WorkflowScopeTest(unittest.TestCase):
             "release.yml": ["goreleaser"],
         }
         self.curated = {
-            "export-check.yml": ["pattern-net-static", "acceptance-empirical"],
+            "export-check.yml": ["pattern-net-static", "acceptance-empirical", "userspace-compat"],
             "release-rehearsal.yml": ["goreleaser-rehearsal"],
         }
         for filename, jobs in self.public.items():

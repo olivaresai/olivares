@@ -8,7 +8,7 @@ import { readStoredThemeForTest, resolveDark, useThemeStore } from './theme'
 
 beforeEach(() => {
   localStorage.clear()
-  document.documentElement.classList.remove('dark')
+  document.documentElement.classList.remove('dark', 'black')
 })
 
 describe('theme store', () => {
@@ -59,16 +59,35 @@ describe('theme store', () => {
           addEventListener: () => {},
           removeEventListener: () => {},
         })) as unknown as typeof window.matchMedia
-        for (const stored of [null, 'system', 'light', 'dark', 'garbage']) {
+        for (const stored of [
+          null,
+          'system',
+          'light',
+          'dark',
+          'black',
+          'garbage',
+        ]) {
           localStorage.clear()
           if (stored !== null) localStorage.setItem('olivares.theme', stored)
-          document.documentElement.classList.remove('dark')
+          const root = document.documentElement
+          root.classList.remove('dark', 'black')
+          root.style.colorScheme = ''
           new Function(script as string)()
-          const painted = document.documentElement.classList.contains('dark')
+          const painted = {
+            dark: root.classList.contains('dark'),
+            black: root.classList.contains('black'),
+            scheme: root.style.colorScheme,
+          }
+          const theme = readStoredThemeForTest()
+          const dark = resolveDark(theme)
           expect({ stored, osDark, painted }).toEqual({
             stored,
             osDark,
-            painted: resolveDark(readStoredThemeForTest()),
+            painted: {
+              dark,
+              black: theme === 'black',
+              scheme: dark ? 'dark' : 'light',
+            },
           })
         }
       }
@@ -81,5 +100,33 @@ describe('theme store', () => {
     localStorage.setItem('olivares.theme', 'light')
     expect(readStoredThemeForTest()).toBe('light')
     expect(resolveDark('light')).toBe(false)
+  })
+
+  it('Black is the dark theme on true black: both classes, stored as "black"', () => {
+    useThemeStore.getState().setTheme('black')
+    const html = document.documentElement
+    expect(html.classList.contains('dark')).toBe(true)
+    expect(html.classList.contains('black')).toBe(true)
+    expect(localStorage.getItem('olivares.theme')).toBe('black')
+    expect(useThemeStore.getState().resolved).toBe('dark')
+    expect(resolveDark('black')).toBe(true)
+    // Leaving Black takes the class away, whichever theme comes next.
+    useThemeStore.getState().setTheme('dark')
+    expect(html.classList.contains('black')).toBe(false)
+    expect(html.classList.contains('dark')).toBe(true)
+  })
+
+  it('the index.html bootstrap paints Black before the bundle, as the store does', () => {
+    const html = readFileSync(join(__dirname, '..', '..', 'index.html'), 'utf8')
+    const script = /<script nonce="__CSP_NONCE__">([\s\S]*?)<\/script>/.exec(
+      html,
+    )?.[1]
+    localStorage.setItem('olivares.theme', 'black')
+    const root = document.documentElement
+    root.classList.remove('dark', 'black')
+    new Function(script as string)()
+    expect(root.classList.contains('dark')).toBe(true)
+    expect(root.classList.contains('black')).toBe(true)
+    expect(readStoredThemeForTest()).toBe('black')
   })
 })

@@ -23,7 +23,7 @@ import (
 // Salesforce, ServiceNow CMDB, SharePoint, Oracle audit, KMIP and the Claude
 // Compliance API. The Community build does not construct them and says so by name.
 var (
-	businessObservationKindsTest = []string{"claude-compliance", "kmip", "oracle-audit", "servicenow-cmdb"}
+	businessObservationKindsTest = []string{"claude-compliance", "kmip", "oracle-audit", "servicenow-cmdb", "conjur"}
 	businessContentKindsTest     = []string{"sharepoint", "sap_odata", "salesforce"}
 )
 

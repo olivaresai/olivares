@@ -1021,7 +1021,7 @@ export interface paths {
     }
     /**
      * The edition's activation view: current edition and preset, each add-on's state and each preset's add-on keys
-     * @description Returns the edition's activation view: current edition and preset, each add-on's state (active, pending, available or console) with its in-build and licence-covered facts, and each preset's add-on keys for the chooser.
+     * @description Returns the edition's activation view: current edition and preset, each add-on's state (active, pending, available or console) with its family and its in-build and licence-covered facts, each preset's add-on keys for the chooser, and the families an administrator turns on or off as a whole.
      */
     get: operations['getActivationStatus']
     put?: never
@@ -1042,8 +1042,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)
-     * @description Applies an edition change: enable or disable a preset, or promote one add-on. Step-up required; the engine may answer that a restart is required. 501 without the activation service (a community build).
+     * Enable or disable a preset or one family, or promote one add-on (AAL3 step-up; 501 without the activation service)
+     * @description Applies an edition change: enable or disable a preset or one family, or promote one add-on. Step-up required; the answer says restart_required when the engine must restart to follow the change, and false when it already does. 501 without the activation service (a community build).
      */
     post: operations['applyActivation']
     delete?: never
@@ -1063,7 +1063,7 @@ export interface paths {
     put?: never
     /**
      * Preview a preset change as a per-add-on diff (activate, stage, unchanged or console) without applying it
-     * @description Previews one preset change as a per-add-on diff (activate, stage, unchanged or console) without applying anything.
+     * @description Previews one preset or family change as a per-add-on diff (activate, stage, unchanged or console) without applying anything.
      */
     post: operations['previewActivation']
     delete?: never
@@ -1701,7 +1701,7 @@ export interface paths {
   '/v1/console/secrets': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1713,18 +1713,18 @@ export interface paths {
     }
     /**
      * List sealed secrets (names and hints, never values)
-     * @description Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/ and env/ names to its admins only, and to every member only their own vault/<user-id>/ items, whose hint is the item's kind (login, login+totp, note or totp).
+     * @description Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant and returns the tenant's mcp/, env/ and credential/ names to its admins only, and to every member only their own vault/<user-id>/ items, whose hint is the item's kind (login, login+totp, note or totp).
      */
     get: operations['listSecrets']
     /**
      * Create or update a sealed secret
-     * @description Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/ and env/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+     * @description Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
      */
     put: operations['putSecret']
     post?: never
     /**
      * Delete a sealed secret
-     * @description Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/ and env/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
+     * @description Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant admits any unconfined member of the tenant: its admins reach mcp/, env/ and credential/ names, and every member only their own vault/<user-id>/ items, which are JSON item documents (login, note or totp) whose kind is the listed hint. Writes require AAL3.
      */
     delete: operations['deleteSecret']
     options?: never
@@ -1735,7 +1735,7 @@ export interface paths {
   '/v1/console/secrets/generate': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1761,7 +1761,7 @@ export interface paths {
   '/v1/console/secrets/reveal': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -1775,7 +1775,7 @@ export interface paths {
     put?: never
     /**
      * Reveal one item of the caller's own personal vault (step-up, audited, rate limited)
-     * @description Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/ and env/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
+     * @description Returns the plaintext of one item of the caller's own vault/<user-id>/ namespace, from the tenant scope only. Requires a signed-in person who passed the deployment's step-up; another user, the superadmin and every token are refused, and global, mcp/, env/ and credential/ names never reveal. Rate limited per person, never cached, and recorded in the audit ledger without the value.
      */
     post: operations['revealSecret']
     delete?: never
@@ -1787,7 +1787,7 @@ export interface paths {
   '/v1/console/secrets/totp': {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -5962,10 +5962,12 @@ export interface paths {
               driver: string
               installed: boolean
               method?: string
-              /** @description The official login methods the tool offers, when it offers more than one. */
+              /** @description The official login methods the tool offers, when it offers more than one, in the order to offer them. */
               methods?: {
                 default?: boolean
                 id: string
+                /** @description The tool's own login waits for an API key its vendor issues: the sign-in reaches needs_key. */
+                key?: boolean
                 label: string
               }[]
               pending?: {
@@ -5978,6 +5980,7 @@ export interface paths {
                 state:
                   | 'starting'
                   | 'needs_code'
+                  | 'needs_key'
                   | 'waiting'
                   | 'checking'
                   | 'signed_in'
@@ -6092,6 +6095,7 @@ export interface paths {
               state:
                 | 'starting'
                 | 'needs_code'
+                | 'needs_key'
                 | 'waiting'
                 | 'checking'
                 | 'signed_in'
@@ -6202,6 +6206,7 @@ export interface paths {
               state:
                 | 'starting'
                 | 'needs_code'
+                | 'needs_key'
                 | 'waiting'
                 | 'checking'
                 | 'signed_in'
@@ -6367,8 +6372,8 @@ export interface paths {
     get?: never
     put?: never
     /**
-     * Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.
-     * @description Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.
+     * Hands the code shown on Claude's sign-in page, or the API key a needs_key login waits for, to the waiting login and answers once the tool says whether it is signed in.
+     * @description Hands the code shown on Claude's sign-in page, or the API key a needs_key login waits for, to the waiting login and answers once the tool says whether it is signed in.
      */
     post: {
       parameters: {
@@ -6383,12 +6388,13 @@ export interface paths {
       requestBody: {
         content: {
           'application/json': {
+            /** @description The code the sign-in page shows (needs_code), or the API key the tool's own login waits for (needs_key). It goes to the tool's stdin and is never stored, logged or returned. */
             code: string
           }
         }
       }
       responses: {
-        /** @description The pasted code was handed to the tool */
+        /** @description The pasted code or key was handed to the tool */
         202: {
           headers: {
             [name: string]: unknown
@@ -6404,6 +6410,7 @@ export interface paths {
               state:
                 | 'starting'
                 | 'needs_code'
+                | 'needs_key'
                 | 'waiting'
                 | 'checking'
                 | 'signed_in'
@@ -19623,6 +19630,10 @@ export interface paths {
         content: {
           'application/json':
             | {
+                /** @description Panel widths in pixels by pane id (lowercase letters, digits and dashes, up to 32 characters; at most 16 panes). Panes named here replace their saved width; a width of 0 puts a pane back to its default; panes not named keep theirs. */
+                pane_widths?: {
+                  [key: string]: number
+                }
                 /** @description Show the active commercial edition badge. Defaults to true; omitted fields retain their saved value. */
                 show_edition_badge?: boolean
                 /**
@@ -19631,6 +19642,7 @@ export interface paths {
                  */
                 sidebar?: 'full' | 'rail'
               }
+            | unknown
             | unknown
             | unknown
         }
@@ -78801,13 +78813,101 @@ export interface paths {
       }
       requestBody?: never
       responses: {
-        /** @description OK */
+        /** @description a page of runs, each with the six facts a console shows about a session */
         200: {
           headers: {
             [name: string]: unknown
           }
           content: {
-            'application/json': Record<string, never>
+            'application/json': {
+              /** @description Present in cursor mode when more rows follow. */
+              cursor?: string
+              has_more: boolean
+              items: ({
+                acts_for?: {
+                  /**
+                   * @description A person launched it, a work item or agent dispatched it, or the session predates the launcher record.
+                   * @enum {string}
+                   */
+                  kind: 'user' | 'automation' | 'unknown'
+                  /** @description The account's display name. */
+                  name?: string
+                  /** @description Why a value is null or missing; present only then. */
+                  reason?: string
+                  /** @description The account that launched the session. */
+                  user_id?: string
+                }
+                approvals?: {
+                  approved: number | null
+                  /** @description Why a value is null or missing; present only then. */
+                  reason?: string
+                  /**
+                   * Format: int64
+                   * @description Actions of this session waiting for a person now.
+                   */
+                  waiting: number
+                }
+                cost?: {
+                  /**
+                   * Format: int64
+                   * @description The limit, in micro-USD, of the most restrictive budget scoped to this session or to its agent identity; present only when one applies.
+                   */
+                  limit_micro_usd?: number
+                  /**
+                   * @description The period that budget counts over.
+                   * @enum {string}
+                   */
+                  limit_period?: 'daily' | 'weekly' | 'monthly' | 'total'
+                  micro_usd: number | null
+                  /** @description Why a value is null or missing; present only then. */
+                  reason?: string
+                }
+                proof?: {
+                  chain_verified: boolean | null
+                  ledger_entries: number | null
+                  /** @description Why a value is null or missing; present only then. */
+                  reason?: string
+                }
+                reaches?: {
+                  /** @description The session folder and the read-only folders of its workspace. */
+                  folders: {
+                    /**
+                     * @description unknown when the folder's workspace could not be read or no longer exists.
+                     * @enum {string}
+                     */
+                    access: 'write' | 'read' | 'unknown'
+                    /** @description A folder on the engine host. */
+                    path: string
+                  }[]
+                  /** @description Hosts the session may connect to besides the engine: the bound provider's endpoint, then the profile's declared hosts. */
+                  hosts: string[]
+                  /** @description Why a value is null or missing; present only then. */
+                  reason?: string
+                }
+                /** @description The operated session's stable reference. */
+                run_ref: string
+                runs_as?: {
+                  /** @description The provider account name of that profile. */
+                  account?: string
+                  /** @description Tool and account, ready to show: Claude Code · team-a. */
+                  label: string
+                  /** @description The provider profile the session runs under. */
+                  profile_ref?: string
+                  /** @description Why no account is shown: the session runs without a provider profile, or its profile could not be read or no longer exists. */
+                  reason?: string
+                  /** @description The session driver key, e.g. claude. */
+                  tool: string
+                  /** @description The tool's display name, e.g. Claude Code. */
+                  tool_name?: string
+                }
+                /** @description The run's derived lifecycle state. */
+                state: string
+              } & {
+                [key: string]: unknown
+              })[]
+            } & {
+              [key: string]: unknown
+            }
           }
         }
         /** @description bad request */
@@ -78884,6 +78984,7 @@ export interface paths {
       requestBody: {
         content: {
           'application/json': {
+            credentials?: string[] | null
             effort?: string | null
             env_allow?: string[] | null
             fast_mode?: boolean | null
@@ -79019,13 +79120,94 @@ export interface paths {
       }
       requestBody?: never
       responses: {
-        /** @description OK */
+        /** @description the run, with the six facts a console shows about a session */
         200: {
           headers: {
             [name: string]: unknown
           }
           content: {
-            'application/json': Record<string, never>
+            'application/json': {
+              acts_for?: {
+                /**
+                 * @description A person launched it, a work item or agent dispatched it, or the session predates the launcher record.
+                 * @enum {string}
+                 */
+                kind: 'user' | 'automation' | 'unknown'
+                /** @description The account's display name. */
+                name?: string
+                /** @description Why a value is null or missing; present only then. */
+                reason?: string
+                /** @description The account that launched the session. */
+                user_id?: string
+              }
+              approvals?: {
+                approved: number | null
+                /** @description Why a value is null or missing; present only then. */
+                reason?: string
+                /**
+                 * Format: int64
+                 * @description Actions of this session waiting for a person now.
+                 */
+                waiting: number
+              }
+              cost?: {
+                /**
+                 * Format: int64
+                 * @description The limit, in micro-USD, of the most restrictive budget scoped to this session or to its agent identity; present only when one applies.
+                 */
+                limit_micro_usd?: number
+                /**
+                 * @description The period that budget counts over.
+                 * @enum {string}
+                 */
+                limit_period?: 'daily' | 'weekly' | 'monthly' | 'total'
+                micro_usd: number | null
+                /** @description Why a value is null or missing; present only then. */
+                reason?: string
+              }
+              proof?: {
+                chain_verified: boolean | null
+                ledger_entries: number | null
+                /** @description Why a value is null or missing; present only then. */
+                reason?: string
+              }
+              reaches?: {
+                /** @description The session folder and the read-only folders of its workspace. */
+                folders: {
+                  /**
+                   * @description unknown when the folder's workspace could not be read or no longer exists.
+                   * @enum {string}
+                   */
+                  access: 'write' | 'read' | 'unknown'
+                  /** @description A folder on the engine host. */
+                  path: string
+                }[]
+                /** @description Hosts the session may connect to besides the engine: the bound provider's endpoint, then the profile's declared hosts. */
+                hosts: string[]
+                /** @description Why a value is null or missing; present only then. */
+                reason?: string
+              }
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              runs_as?: {
+                /** @description The provider account name of that profile. */
+                account?: string
+                /** @description Tool and account, ready to show: Claude Code · team-a. */
+                label: string
+                /** @description The provider profile the session runs under. */
+                profile_ref?: string
+                /** @description Why no account is shown: the session runs without a provider profile, or its profile could not be read or no longer exists. */
+                reason?: string
+                /** @description The session driver key, e.g. claude. */
+                tool: string
+                /** @description The tool's display name, e.g. Claude Code. */
+                tool_name?: string
+              }
+              /** @description The run's derived lifecycle state. */
+              state: string
+            } & {
+              [key: string]: unknown
+            }
           }
         }
         /** @description bad request */
@@ -79370,6 +79552,202 @@ export interface paths {
     put?: never
     post?: never
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/archive': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Archives the run for every reader, idempotently: an archived run keeps its first archived_at.
+     * @description Archives the run for every reader, idempotently: an archived run keeps its first archived_at.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the run resource after the change */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /** @description The run's derived lifecycle state after the control. */
+              state: string
+            } & {
+              [key: string]: unknown
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Unarchives the run, idempotently.
+     * @description Unarchives the run, idempotently.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the run resource after the change */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /** @description The run's derived lifecycle state after the control. */
+              state: string
+            } & {
+              [key: string]: unknown
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -80386,6 +80764,208 @@ export interface paths {
     put?: never
     post?: never
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/done': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Marks the run done for the caller, idempotently.
+     * @description Marks the run done for the caller, idempotently.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the caller's snooze and done marks on the run */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Whether THIS caller has marked the session done; every direction is idempotent. */
+              done: boolean
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /**
+               * Format: date-time
+               * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
+               */
+              snoozed_until?: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Removes the caller's done mark, idempotently.
+     * @description Removes the caller's done mark, idempotently.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the caller's snooze and done marks on the run */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Whether THIS caller has marked the session done; every direction is idempotent. */
+              done: boolean
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /**
+               * Format: date-time
+               * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
+               */
+              snoozed_until?: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -81676,7 +82256,24 @@ export interface paths {
      */
     get: {
       parameters: {
-        query?: never
+        query?: {
+          /** @description user (default) lists what the person sent; all adds the tool's answers. */
+          role?: 'user' | 'all'
+          /** @description asc (default) pages from the first message, desc from the newest. Items are always oldest first. */
+          order?: 'asc' | 'desc'
+          /** @description Keeps messages with this phrase anywhere in them, case-insensitive. */
+          q?: string
+          /** @description Keeps messages at or after this time. */
+          at?: string
+          /** @description Page size; default 50, at most 200. */
+          limit?: number
+          /** @description The id a page continues from: next of the previous page. */
+          cursor?: number
+          /** @description Reads one message whole, with text and later_same; the filters do not apply. */
+          id?: number
+          /** @description 1: every item of the page carries its whole text, bounded at 64 KiB per message as a read by id is, and the page holds at most 50 messages; later_same is not added. */
+          text?: '1'
+        }
         header?: {
           /** @description Target tenant id; required when the principal can act in more than one tenant. */
           'X-Olivares-Tenant'?: string
@@ -81862,6 +82459,119 @@ export interface paths {
         }
       }
     }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/name': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Renames the run; an empty name clears it.
+     * @description Renames the run; an empty name clears it. The route supplies run-write authorization in the run's recorded workspace.
+     */
+    put: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @description The session's new name, trimmed; at most 200 characters, no control or invisible (format, line or paragraph separator) characters. An empty name clears it. */
+            name: string
+          }
+        }
+      }
+      responses: {
+        /** @description the run resource after the change */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /** @description The run's derived lifecycle state after the control. */
+              state: string
+            } & {
+              [key: string]: unknown
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -82484,6 +83194,218 @@ export interface paths {
       }
     }
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/sessions/runs/{ref}/snooze': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Snoozes the run for the caller until a moment still to come, or moves the moment of a snooze already set.
+     * @description Snoozes the run for the caller until a moment still to come, or moves the moment of a snooze already set.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /**
+             * Format: date-time
+             * @description When the session comes back to the caller's list, an RFC 3339 time in the future. A second snooze moves it.
+             */
+            until: string
+          }
+        }
+      }
+      responses: {
+        /** @description the caller's snooze and done marks on the run */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Whether THIS caller has marked the session done; every direction is idempotent. */
+              done: boolean
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /**
+               * Format: date-time
+               * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
+               */
+              snoozed_until?: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    /**
+     * Ends the caller's snooze, idempotently.
+     * @description Ends the caller's snooze, idempotently.
+     */
+    delete: {
+      parameters: {
+        query?: never
+        header?: {
+          /** @description Target tenant id; required when the principal can act in more than one tenant. */
+          'X-Olivares-Tenant'?: string
+        }
+        path: {
+          /** @description Path parameter ref. */
+          ref: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description the caller's snooze and done marks on the run */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              /** @description Whether THIS caller has marked the session done; every direction is idempotent. */
+              done: boolean
+              /** @description The operated session's stable reference. */
+              run_ref: string
+              /**
+               * Format: date-time
+               * @description When THIS caller's snooze ends; present only while it is still to end. Run list and get reads carry the same per-caller fields.
+               */
+              snoozed_until?: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     options?: never
     head?: never
     patch?: never
@@ -93483,6 +94405,8 @@ export interface components {
     ActivationStatus: {
       addons: {
         env: string
+        /** @description The key of the family that sells the add-on. */
+        family?: string
         /** @description The edition's catalog has the add-on. Absent means not known; false is an observed absence. */
         in_build?: boolean
         key: string
@@ -93497,11 +94421,20 @@ export interface components {
         title: string
       }[]
       edition: string
+      /** @description The groups the edition sells add-ons in; each is turned on or off as a whole. */
+      families?: {
+        /** @description The add-ons of the family that are on now. */
+        active: string[]
+        addons: string[]
+        key: string
+        title: string
+      }[]
       preset?: string
       presets: {
         addons: string[]
         name: string
       }[]
+      /** @description A change already applied still needs an engine restart to take effect; false when the running engine follows it. */
       restart_required: boolean
       restarting?: boolean
     }
@@ -94037,6 +94970,25 @@ export interface components {
       check_error?: string
       /** @enum {string} */
       edition: 'community' | 'enterprise'
+      /** @description Present on a Community build that holds a live Business or Enterprise license: the one next step to the licensed build for the way this engine was installed. The newest release above is then the licensed build. */
+      edition_switch?: {
+        /** @description The exact command for this installation; empty where the manifest does it. */
+        command?: string
+        /** @description The apply operation takes the step itself, so the console offers a button. */
+        console_action: boolean
+        /**
+         * @description How this engine was installed.
+         * @enum {string}
+         */
+        install: 'binary' | 'container' | 'package' | 'kubernetes'
+        /** @description What follows the command. */
+        then: string
+        /**
+         * @description The edition the license entitles; both are one licensed build.
+         * @enum {string}
+         */
+        to: 'business' | 'enterprise'
+      }
       notes?: string
       /** Format: date-time */
       released_at?: string
@@ -100075,7 +101027,9 @@ export interface operations {
           action: 'enable' | 'disable' | 'promote'
           /** @description Required for promote. */
           addon?: string
-          /** @description Required for enable/disable. */
+          /** @description For enable/disable: one family on its own; name this or preset. */
+          family?: string
+          /** @description For enable/disable: a preset; name this or family. */
           preset?: string
         }
       }
@@ -100156,7 +101110,10 @@ export interface operations {
     requestBody: {
       content: {
         'application/json': {
-          preset: string
+          /** @description One family to preview; name this or preset. */
+          family?: string
+          /** @description A preset to preview; name this or family. */
+          preset?: string
         }
       }
     }
@@ -103277,7 +104234,7 @@ export interface operations {
   listSecrets: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -103357,7 +104314,7 @@ export interface operations {
   putSecret: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -103444,7 +104401,7 @@ export interface operations {
   deleteSecret: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -103522,7 +104479,7 @@ export interface operations {
   generatePassword: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -103609,7 +104566,7 @@ export interface operations {
   revealSecret: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {
@@ -103696,7 +104653,7 @@ export interface operations {
   getVaultCode: {
     parameters: {
       query?: {
-        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/ and env/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
+        /** @description Omit for superadmin global secrets; tenant selects the tenant's own names: mcp/, env/ and credential/ for tenant admins, and every member's personal vault/<user-id>/ items for that member alone. Writes require the deployment's step-up in either scope. */
         scope?: 'tenant'
       }
       header?: {

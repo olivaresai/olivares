@@ -9,10 +9,10 @@ description: >-
 draft: false
 ---
 
-La prochaine version est <!-- release -->`0.3`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
+La prochaine version est <!-- release -->`0.4`<!-- /release --> ; sa release GitHub n’est pas encore publiée. Les commandes ci-dessous décrivent les artefacts prévus. Compilez depuis les sources jusqu’à la publication, puis vérifiez chaque artefact avant utilisation. L’état observé figure dans <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->.
 
 :::note[Noms de paquets publiés]
-La release GitHub d’Olivares <!-- release -->0.3<!-- /release --> publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
+La release GitHub d’Olivares <!-- release -->0.4<!-- /release --> publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
 et `arm64`, avec `checksums.txt`, `checksums.txt.sig` et `checksums.txt.pem`. Les
 commandes ci-dessous utilisent les noms littéraux `amd64` de cette release ;
 remplacez `amd64` par `arm64` sur un hôte ARM 64 bits. Installez depuis ces artefacts
@@ -89,13 +89,13 @@ Linux portent les mêmes adaptateurs de service : `scripts/install-service.sh` e
 <!-- release -->
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_0.3_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_0.3_linux_amd64.rpm
+sudo rpm -Uvh olivares_0.4_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk
 ```
 <!-- /release -->
 
@@ -329,18 +329,30 @@ fait pour vous.
 
 ## 6. Mise à jour
 
-`olivares upgrade` remplace le binaire sur place, et les propriétés de sécurité sont
-la raison de le préférer à une réinstallation manuelle du paquet : il **ne remplace
-jamais le binaire avant que le candidat téléchargé ait été sondé avec succès par
-exec**, il conserve une sauvegarde horodatée, et il **revient à cette sauvegarde si
-le sondage après échange échoue**.
+Utilisez un seul outil de mise à jour par hôte. Un hôte installé depuis un paquet ou depuis le
+dépôt se met à jour avec son gestionnaire de paquets (`apt`, `dnf`, `apk` ou un paquet plus
+récent) ; `olivares upgrade` refuse de remplacer le binaire que possède le paquet.
+
+Le gestionnaire de paquets possède `/usr/bin/olivares` sur toute installation par paquet (deb,
+rpm, apk, AUR). Remplacer ce fichier sur place laisserait la base de données des paquets décrire
+un fichier qui n'existe plus tel quel ; `olivares upgrade` refuse donc : il sort avec le code 2
+avant de télécharger quoi que ce soit et nomme la voie du paquet. Mettez à jour avec le
+gestionnaire de paquets. `olivares upgrade --check` fonctionne toujours ; il montre le plan et ne
+change rien :
 
 ```bash
 sudo olivares upgrade --check    # what would change, without changing anything
-sudo olivares upgrade --yes      # do it
 ```
 
-Trois drapeaux importent spécifiquement pour une installation empaquetée :
+Là où aucun gestionnaire de paquets ne possède le binaire (un binaire posé par `install.sh` ou à
+la main), `olivares upgrade` le remplace sur place, et les propriétés de sécurité sont la raison
+de l'y utiliser : il **ne remplace jamais le binaire avant que le candidat téléchargé ait été
+sondé avec succès par exec**, il conserve une sauvegarde horodatée, et il **revient à cette
+sauvegarde si le sondage après échange échoue**. `--target <chemin>` est la dérogation de
+l'opérateur : il remplace le fichier que vous nommez, `/usr/bin/olivares` compris, et la base de
+données des paquets ne correspond ensuite plus à ce fichier.
+
+Trois drapeaux importent pour `--check` et pour une exécution avec `--target` :
 
 - **`--endpoint`** — prendre les mises à jour d'un dépôt GitHub que vous contrôlez
   plutôt que celui par défaut. C'est la voie de sortie pour un miroir ou une
@@ -350,6 +362,9 @@ Trois drapeaux importent spécifiquement pour une installation empaquetée :
   qui vérifient les mises à jour selon un calendrier. Rien ne l'installe pour vous ;
   voir [ce que le paquet ne fait pas](#8-ce-que-le-paquet-ne-fait-pas). C'est un
   générateur systemd.
+  Sur une installation par paquet, elle refuse : `/usr/bin/olivares` appartient au gestionnaire
+  de paquets, donc `--install-timer` se termine avec 2 et n'écrit aucune unité. Mettez à jour avec
+  le gestionnaire de paquets (sur l'appliance Olivares : `systemctl start olivares-appliance-update.service`).
 
 Notez que la mise en scène et le sondage exec se font **dans le répertoire
 d'installation, à côté de la cible — pas dans `/tmp`**, donc le montage `noexec`
@@ -400,7 +415,8 @@ l'installation :
 - **Il n'ajoute pas de dépôt.** Rien n'est écrit dans `/etc/apt/sources.list.d`,
   `/etc/yum.repos.d` ni `/etc/apk/repositories`. Vous avez installé un fichier ;
   seul ce fichier a été installé. Les mises à jour sont à vous de déclencher — par
-  un nouveau paquet, ou par `olivares upgrade`.
+  un nouveau paquet ; `olivares upgrade` refuse de remplacer un binaire que possède le
+  paquet.
 - **Il ne démarre ni n'active le service.** Les paquets systemd rechargent systemd
   lorsque `systemctl` est présent et impriment `systemctl enable --now`. Les paquets
   OpenRC impriment `rc-service olivares start` et n'exécutent pas `rc-update add`.

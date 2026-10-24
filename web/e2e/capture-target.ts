@@ -95,7 +95,7 @@ export async function exigirMarcadores(
   }
 }
 
-// A published capture outlives the release that took it. The build number in the sidebar and the
+// A published capture outlives the release that took it. The build number in the top bar and the
 // live counts of the shell (open sessions, pending approvals) date it, so they are hidden before the
 // shot. Counts a page owns, inside <main>, stay. The version is the string /v1/server-info reports.
 export async function ocultarMarcasDeRelease(
@@ -435,23 +435,20 @@ export const VISTAS_DE_SESION = new Set([
 // A glob (`src/**/x`) and a masked value (`****`) are not markdown.
 const MARKDOWN_CRUDO =
   /(?:^|\n)\s*[-*] \*\*|(?<![*/\w])\*\*(?=[^\s*/])[^*\n]*[^\s*/]\*\*(?![*/\w])|```/
-// The two rows #1784 showed. The console keeps a rate-limit report as a row only when it is news (a warning, a
-// refusal, an overage, or a window at 90% or more: conversation-frames.ts `rateLimitIsQuiet`), so only the quiet
-// form "allowed · <window> [· 42%]" is a defect.
+// The rows #1784 and dev#3119 showed. The console paints no rate-limit report as a row: only a refusal that
+// stopped the turn, as a sentence ("Claude Code reached its weekly limit…", conversation-frames.ts
+// `rateLimitStop`). So any raw report, "allowed · <window> [· 42%]", "allowed warning · seven day · 93%",
+// "rejected · five hour" or "allowed · overage", is a defect.
 const THINKING_TOKENS = /\bthinking tokens\b/i
-const VENTANA_TRANQUILA =
-  /\ballowed\s*·\s*(?:five hour|seven day(?: opus| sonnet)?)(?:\s*·\s*(\d{1,3})%)?/i
+const LIMITE_CRUDO =
+  /\b(?:allowed(?: warning)?|rejected)\s*·\s*(?:five hour|seven day(?: opus| sonnet)?|overage)(?:\s*·\s*\d{1,3}%)?/i
 // A row that names no session at all: an observed session the demo never titled.
 const SIN_TITULO = /\bUntitled session\b/
 
 function filaInterna(visible: string): string | null {
   const tokens = THINKING_TOKENS.exec(visible)?.[0]
   if (tokens) return tokens
-  const ventana = VENTANA_TRANQUILA.exec(visible)
-  if (ventana && (ventana[1] === undefined || Number(ventana[1]) < 90)) {
-    return ventana[0]
-  }
-  return null
+  return LIMITE_CRUDO.exec(visible)?.[0] ?? null
 }
 
 async function exigirSesionesCoherentes(
@@ -474,31 +471,28 @@ async function exigirSesionesCoherentes(
     sinTitulo,
     `${id}: the page shows an untitled session; the demo estate names its sessions`,
   ).toBeNull()
-  if (id === 'home') await exigirNowCoherente(page, id, visible)
+  if (id === 'home') await exigirEstateCoherente(page, id, visible)
 }
 
-// #1785: Now marked every session Working while the page counted them idle. The Live sessions tile counts
-// the sessions that are live (working, idle or gone silent) and says how many are idle and silent, so the
-// rest are working; a recent row or a live card (#2245) can read Working only for one of those. The cards
-// and rows are a recent page of the sessions, so fewer of them than working sessions is fine.
-// ponytail: this is a consistency check on totals, not a per-row proof. It cannot fire when more than six
-// sessions are working (Now holds six cards), and it passes a launched run that is idle while its
-// live row is active (#1809). The upgrade is to compare each row with the session the page fetched.
-async function exigirNowCoherente(
+// #1785: Now marked every session Working while the page counted them idle. On Estate (#2546) the
+// summary sentence counts the sessions open (working, idle or gone silent: not yet ended; #3190), so a
+// recent row or a live card can read Working only for one of those, and a sentence that counts open
+// sessions needs a card or a row on the page. The cards and rows are a recent page of the sessions, so
+// fewer of them than sessions open is fine.
+// ponytail: the sentence carries no idle count, so a page that marks every open session Working
+// passes, and the check cannot fire past six working sessions (Estate holds six cards). The upgrade is
+// the swimlane (#2547): compare each lane's state with the session the page fetched.
+async function exigirEstateCoherente(
   page: Page,
   id: string,
   visible: string,
 ): Promise<void> {
-  const tile = /live sessions\s+(\d[\d,]*)\s+(\d[\d,]*) idle now/i.exec(visible)
+  const open = /(\d[\d,]*)\+? sessions? open/i.exec(visible)
   expect(
-    tile,
-    `${id}: the Live sessions tile is absent or unreadable (it is hidden when nothing is live)`,
-  ).not.toBeNull()
-  const cifra = (t: string | undefined) => Number((t ?? '0').replace(/,/g, ''))
-  const vivas = cifra((tile as RegExpExecArray)[1])
-  const ociosas = cifra((tile as RegExpExecArray)[2])
-  const mudas = cifra(/(\d[\d,]*) gone silent/i.exec(visible)?.[1])
-  const trabajando = Math.max(vivas - ociosas - mudas, 0)
+    open !== null || /Nothing is running/i.test(visible),
+    `${id}: the summary sentence is absent or unreadable`,
+  ).toBe(true)
+  const vivas = Number((open?.[1] ?? '0').replace(/,/g, ''))
   // A row starts with its state word; a card names its tool first and carries the state in its own cell.
   const filas = [
     ...(await page.getByTestId('home-recent-row').allInnerTexts()),
@@ -506,11 +500,11 @@ async function exigirNowCoherente(
   ]
   expect(
     filas.length > 0 || vivas === 0,
-    `${id}: the Live sessions tile counts ${vivas} but no recent row or live card is on the page`,
+    `${id}: the sentence counts ${vivas} sessions open but no recent row or live card is on the page`,
   ).toBe(true)
   const filasTrabajando = filas.filter((f) => /^\s*Working\b/.test(f)).length
   expect(
     filasTrabajando,
-    `${id}: ${filasTrabajando} recent rows and live cards read Working beside a tile that counts ${vivas} live, ${ociosas} idle and ${mudas} silent`,
-  ).toBeLessThanOrEqual(trabajando)
+    `${id}: ${filasTrabajando} recent rows and live cards read Working beside a sentence that counts ${vivas} sessions open`,
+  ).toBeLessThanOrEqual(vivas)
 }

@@ -21,11 +21,24 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
+// installedPackageBinary is the path the packages (deb, rpm, apk, AUR) install the
+// binary at: the file the package manager's database owns. Both readers of "this is the
+// installed package's binary" decide from it — installedPackageSnapshotRequest
+// (the serve path's snapshot request) and `olivares upgrade`'s refusal to swap
+// it in place. A variable so a test can stand a fake path in for the
+// package-owned binary, the way runningBinary stands in for the image binary.
+var installedPackageBinary = "/usr/bin/olivares"
+
+// packageManagerRoute is how the package-owned binary is upgraded. The appliance unit
+// is named because it renews the entitled-channel credential before it runs dnf, which a
+// bare package-manager command would skip. One copy, for every refusal that names the route.
+const packageManagerRoute = "upgrade it with the host's package manager (on the Olivares appliance: systemctl start olivares-appliance-update.service)"
+
 func installedPackageSnapshotRequest() string {
 	// os.Executable resolves a symlink used to invoke the installed binary.
 	// A development binary on the same host must not consume package requests.
 	exe, err := os.Executable()
-	if err != nil || exe != "/usr/bin/olivares" {
+	if err != nil || exe != installedPackageBinary {
 		return ""
 	}
 	return "/var/lib/olivares-package/upgrade-snapshot"

@@ -117,9 +117,6 @@
     "title": "Approval queue",
     "caption": "Requests waiting for a decision. Every approve, reject and cancel is recorded.",
     "search": "Search requests…",
-    "requestedBy": "Requested by",
-    "status": "Status",
-    "progress": "Approvals",
     "age": "Age",
     "expires": "Expires",
     "escalates": "Escalates",
@@ -140,12 +137,14 @@
     "emptyPending": "No pending approvals",
     "emptyPendingHint": "The queue is clear — nothing is waiting on a decision.",
     "approve": "Approve",
-    "reject": "Reject",
     "cancel": "Cancel",
     "viewDetail": "View detail",
     "actorHint": "Audit actor handle — never an email address. Identity is resolved from the directory, not shown here.",
     "expiredAt": "Expired {{time}}",
-    "request": "Request"
+    "approveOnce": "Approve once",
+    "deny": "Deny",
+    "noMatch": "No request matches the search",
+    "noMatchHint": "Clear the search to see every request in this list."
   },
   "status": {
     "pending": "Pending",
@@ -155,17 +154,14 @@
     "expired": "Expired"
   },
   "decide": {
-    "approveTitle": "Approve this request?",
-    "approveBody": "Your approval counts toward the approvals this request needs.",
-    "rejectTitle": "Reject this request?",
-    "rejectBody": "One rejection ends the request.",
-    "approveConfirm": "Approve",
-    "rejectConfirm": "Reject",
+    "rejectTitle": "Deny this request?",
+    "rejectBody": "One denial ends the request.",
+    "rejectConfirm": "Deny",
     "note": "Note",
     "noteHint": "Optional.",
-    "notePlaceholder": "Why you are approving or rejecting (optional)…",
+    "notePlaceholder": "Why you are approving or denying (optional)…",
     "approved": "Decision recorded — approved",
-    "rejected": "Decision recorded — rejected",
+    "rejected": "Decision recorded — denied",
     "sodHint": "You cannot decide on a request you opened, and a token without a stable user cannot decide.",
     "notPending": "This request is no longer waiting for a decision."
   },
@@ -222,10 +218,13 @@
     "trailEmpty": "No decisions recorded yet",
     "trailEmptyHint": "Every decision on this approval — who decided, when and why — is recorded here. Nobody has decided yet.",
     "decisionApprove": "Approved",
-    "decisionReject": "Rejected",
+    "decisionReject": "Denied",
     "reenableNeedsAdmins": "Two other admin accounts must approve this. Create them in Identity & access, or with `olivares users create`.",
     "openIdentity": "Open Identity & access",
-    "cannotDecideOwn": "You cannot approve your own request. Another administrator must decide."
+    "cannotDecideOwn": "You cannot approve your own request. Another administrator must decide.",
+    "requesterCannotApprove": "The person who asked cannot approve their own request.",
+    "launchedBy": "Launched by",
+    "decidedByYou": "You approved this request. It waits for another approver."
   },
   "policies": {
     "title": "Policies",
@@ -680,9 +679,23 @@
     "you": "You",
     "member": "A member",
     "apiToken": "An API token",
-    "requestSummary": "Request"
+    "requestSummary": "Request",
+    "matched": "Matched: {{rule}}",
+    "matchedDefault": "Matched: no rule, so the default applies",
+    "matchedUnreadable": "Matched: a rule you cannot read",
+    "reaches": "Reaches: {{list}}",
+    "reachFolder": {
+      "write": "{{path}} (write)",
+      "read": "{{path}} (read only)",
+      "unknown": "{{path}} (access unknown)"
+    },
+    "matchedUnknown": "Matched: a rule that could not be read",
+    "reachIncomplete": "more that could not be read"
   },
   "list": {
     "loadedOnly": "Search covers only the rows loaded so far; load more to read further."
+  },
+  "queue": {
+    "needsYou": "Waiting for you"
   }
 }

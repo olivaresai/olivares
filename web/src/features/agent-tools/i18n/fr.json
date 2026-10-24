@@ -1,8 +1,8 @@
 {
   "title": "Outils d’IA",
   "description": "Installez sur ce serveur les outils d'IA qu'exécutent les sessions, et connectez-les.",
+  "descriptionMember": "Les sessions s’exécutent avec ces comptes et clés d’API. Un administrateur système installe les outils et les connecte.",
   "refresh": "Actualiser",
-  "adminOnly": "Une session administrateur système est requise pour gérer les outils du serveur.",
   "readOnly": "Ce serveur est en lecture seule. L’installation est désactivée.",
   "notInstalled": "Aucune installation gérée",
   "installedOutside": "Installé sur ce serveur, pas par Olivares",
@@ -98,9 +98,9 @@
     "accountNotSignedIn": "Compte · non connecté",
     "accountChecking": "Compte · vérification…",
     "accountUnreadable": "Compte · illisible",
-    "keyDetail": "Clé API · {{name}} ({{hint}})",
-    "keyName": "Clé API · {{name}}",
-    "keyNone": "Clé API · aucune choisie",
+    "keyDetail": "Clé d’API · {{name}} ({{hint}})",
+    "keyName": "Clé d’API · {{name}}",
+    "keyNone": "Clé d’API · aucune choisie",
     "lastSignIn": "Dernière connexion {{when}}",
     "details": "Détails",
     "ref": "Référence",
@@ -127,8 +127,7 @@
   "tool": {
     "menu": "Options pour {{name}}",
     "update": "Mettre à jour",
-    "details": "Détails de l'installation",
-    "profilesPage": "Page détaillée des profils"
+    "details": "Détails de l'installation"
   },
   "details": {
     "title": "{{name}} : détails de l'installation",
@@ -155,7 +154,7 @@
     "needKey": "Choisissez une clé.",
     "method": "Se connecte avec",
     "account": "Compte",
-    "key": "Clé API",
+    "key": "Clé d’API",
     "accountHint": "Utilise la connexion propre à {{name}}. Olivares ne voit jamais votre mot de passe.",
     "chooseKey": "Choisir une clé",
     "addKey": "Ajouter une clé…",
@@ -220,5 +219,11 @@
     "packagesHint": "Déclarés par le profil de fournisseur qu'utilise la nouvelle session de chaque outil ({{profiles}}). Un outil sans profil en reçoit un nouveau qui n'en déclare aucun.",
     "packagesNoProfile": "Ils viennent du profil de fournisseur sous lequel s'exécutent les sessions de chaque outil. Aucun n'existe encore, et un nouveau n'en déclare aucun.",
     "packagesRefused": "Rien n'est listé, car aucune session ne peut encore démarrer sur : {{tools}}."
+  },
+  "place": {
+    "title": "Comptes et clés d’API",
+    "accounts": "Comptes",
+    "allAccounts": "Tous les comptes : détails, libellés et liaisons",
+    "noAccess": "Votre rôle ne peut pas lire les comptes ni les clés d’API de cette organisation."
   }
 }

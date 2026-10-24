@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"sort"
 	"strings"
@@ -769,8 +770,21 @@ func isConflict(err error) bool { return errors.Is(err, store.ErrConflict) }
 
 // budgetStatus computes a budget's current consumption against its limit, with a
 // run-rate projection of the period. It recomputes authoritatively from the
-// read-model rather than trusting any cached counter.
+// read-model rather than trusting any cached counter. It is the entry point of the Business
+// overlay's loop over every budget (recommendations), which holds no directory reader: a
+// user_group budget reads zero and truncated there, an agent_group budget is counted over
+// its members, and neither fails the loop.
 func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.Time) (budgetStatusDTO, error) {
+	return budgetStatusIn(ctx, sc, p, now, nil, nil)
+}
+
+// budgetStatusIn is budgetStatus with the directory's user-group members, resolved by
+// the caller before it opened sc (the directory read is a transaction of its own, as
+// in CheckBudget). A nil userGroups leaves a user_group budget's spend unestablished
+// (zero and truncated, as budgetStatus answers it), while an agent_group budget is
+// always counted over its members. log, when set, hears about every group whose spend
+// could not be established or counted in full.
+func budgetStatusIn(ctx context.Context, sc store.Scope, p model.Policy, now time.Time, userGroups func(string) ([]string, error), log *slog.Logger) (budgetStatusDTO, error) {
 	spec := parseBudgetSpec(p.Spec)
 	spec.fillDefaults()
 	if err := spec.resolveWorkspace(ctx, sc); err != nil {
@@ -778,18 +792,30 @@ func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.
 	}
 	pStart, hasLower := periodStart(spec.Period, now)
 	pEnd := periodEnd(spec.Period, pStart)
-	var agg aggResult
+	var (
+		agg aggResult
+		err error
+	)
 	if isGroupDimension(spec.Dimension) {
-		// Group budgets are preventive-only in this slice. budgetStatus has no auth
-		// reader for user groups and no exact group column for either group type, so
-		// it must not fall through to sampleFilters (which would sum everything).
+		// The cost read-model has no group column, so a group's spend is its members'
+		// (the figure CheckBudget enforces on), never sampleFilters (which would sum
+		// everything). Spend no member is credited with is missing from it: the figure
+		// is a floor, and Truncated says so. Where the members cannot be resolved the
+		// spend stays unestablished, zero and truncated, as it always was.
+		agg, err = aggregateGroupPeriod(ctx, sc, log, userGroups, spec.Dimension, spec.Key, pStart, hasLower, pEnd, hasLower)
+		if errors.Is(err, errGroupUnresolved) {
+			if log != nil {
+				log.Warn("finops: group budget spend not established; the status says zero and truncated",
+					"budget", p.ID, "dimension", spec.Dimension, "key", spec.Key, "err", err)
+			}
+			agg, err = aggResult{}, nil
+		}
 		agg.Truncated = true
 	} else {
-		var err error
 		agg, err = aggregatePeriod(ctx, sc, spec.sampleFilters(), pStart, hasLower, pEnd, hasLower)
-		if err != nil {
-			return budgetStatusDTO{}, err
-		}
+	}
+	if err != nil {
+		return budgetStatusDTO{}, err
 	}
 	out := budgetStatusDTO{
 		ID: p.ID.String(), Name: p.Name, Enabled: p.Enabled,
@@ -1223,7 +1249,7 @@ func (m *Module) CheckBudget(ctx context.Context, tenant model.TenantID, dims Sp
 				err error
 			)
 			if isGroupDimension(spec.Dimension) {
-				agg, err = aggregateGroupPeriod(ctx, sc, userGroups.get, spec.Dimension, spec.Key, pStart, hasLower, pEnd, hasLower)
+				agg, err = aggregateGroupPeriod(ctx, sc, nil, userGroups.get, spec.Dimension, spec.Key, pStart, hasLower, pEnd, hasLower)
 			} else {
 				agg, err = aggregatePeriod(ctx, sc, spec.sampleFilters(), pStart, hasLower, pEnd, hasLower)
 			}
@@ -1384,6 +1410,11 @@ type groupAuthReader interface {
 	AuthView(context.Context, func(store.AuthScope) error) error
 }
 
+// errGroupUnresolved marks a group budget whose members cannot be established from
+// what the caller holds: no directory reader, a key that is no group of this tenant.
+// It is not a store failure; the status read reports it as unestablished spend.
+var errGroupUnresolved = errors.New("finops: group members not resolved")
+
 func authGroupReader(d any) groupAuthReader {
 	r, _ := d.(groupAuthReader)
 	return r
@@ -1458,16 +1489,19 @@ func resolveAgentGroups(ctx context.Context, sc store.Scope, attr *attribution) 
 func userGroupMemberRefs(ctx context.Context, reader groupAuthReader, tenant model.TenantID, key string) ([]string, error) {
 	groupID, err := model.ParseID(key)
 	if err != nil {
-		return nil, fmt.Errorf("finops: user_group key %q must be a group id: %w", key, err)
+		return nil, fmt.Errorf("finops: user_group key %q must be a group id: %w: %w", key, errGroupUnresolved, err)
 	}
 	var refs []string
 	err = reader.AuthView(ctx, func(as store.AuthScope) error {
 		g, err := as.Groups().Get(ctx, groupID)
+		if errors.Is(err, store.ErrNotFound) {
+			return fmt.Errorf("finops: user_group %q not found: %w: %w", key, errGroupUnresolved, err)
+		}
 		if err != nil {
 			return err
 		}
 		if g.TargetTenantID != tenant {
-			return fmt.Errorf("finops: user_group %q is not scoped to tenant %s", key, tenant)
+			return fmt.Errorf("finops: user_group %q is not scoped to tenant %s: %w", key, tenant, errGroupUnresolved)
 		}
 		seen := map[string]bool{}
 		q := model.Query{Filters: []model.Filter{eq("group_id", groupID.String())}, Limit: listCap}
@@ -1506,7 +1540,21 @@ func (l userGroupMemberLookup) get(key string) ([]string, error) {
 	if refs, ok := l.refs[key]; ok {
 		return refs, nil
 	}
-	return nil, fmt.Errorf("finops: user_group %q members were not resolved", key)
+	return nil, fmt.Errorf("finops: user_group %q members were not resolved: %w", key, errGroupUnresolved)
+}
+
+// userGroupMembers resolves the members of a user_group budget p for its status read: nil
+// for any other dimension, and nil too (which the fan-out answers as errGroupUnresolved)
+// where the module's data handle carries no directory reader, the Community composition.
+// The caller's budgetStatusIn logs a group that cannot be established.
+func (m *Module) userGroupMembers(ctx context.Context, tenant model.TenantID, p model.Policy) func(string) ([]string, error) {
+	spec := parseBudgetSpec(p.Spec)
+	reader := authGroupReader(m.data)
+	if spec.Dimension != "user_group" || reader == nil {
+		return nil
+	}
+	refs, err := userGroupMemberRefs(ctx, reader, tenant, spec.Key)
+	return func(string) ([]string, error) { return refs, err }
 }
 
 // resolveMatchingUserGroupMembers resolves only the user_group budgets that already

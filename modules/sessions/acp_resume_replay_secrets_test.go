@@ -77,7 +77,7 @@ func (j *replayJourney) requireReplayHeld(replayed int, leaked ...string) {
 		if got := strings.Count(text, `"code":"history_withheld"`); got != 1 {
 			j.t.Fatalf("the %s holds %d history_withheld notices, want 1: %s", what, got, text)
 		}
-		if !strings.Contains(text, "used a vault secret, a repository credential or a package registry token") {
+		if !strings.Contains(text, "used a vault secret, a repository credential, a managed credential or a package registry token") {
 			j.t.Fatalf("the %s notice does not say why the history was held back: %s", what, text)
 		}
 	}
@@ -113,6 +113,19 @@ func TestACPResume_ReplayedHistoryOfAnEarlierGitReadTokenIsNotPublished(t *testi
 			j := newReplayJourney(t, tool, false)
 			src := newFakeGitRead("https://github.com/acme/widgets.git")
 			j.m.GitRead, j.m.GitReadDataDir = src, t.TempDir()
+			if tool.confined {
+				// A confined session reaches only its provider: no token is minted, and
+				// the launch says why, so there is no earlier token to replay.
+				j.tool.fixture(t, j.prof, "conv-git", "", 0)
+				_, err := createProfiledTestRun(t, j.m, context.Background(), j.tenant, CreateRunParams{
+					Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: model.ActorUser,
+					ProviderProfileRef: j.prof.Ref, EnvAllow: []string{"FIXTURE_MARKER"}, GitRead: gitReadBinding, MayUseSecretEnv: true,
+				})
+				if err == nil || !strings.Contains(err.Error(), "git_read") || len(src.minted()) != 0 {
+					t.Fatalf("confined git_read = %v, mints %v; want a named refusal and no token", err, src.minted())
+				}
+				return
+			}
 			j.createGiven("conv-git", nil, gitReadBinding)
 			j.stop()
 			src.awaitRelease(t)

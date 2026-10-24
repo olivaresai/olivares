@@ -290,3 +290,137 @@ func TestNewProviderCodingPreferenceRequiresBoundMembership(t *testing.T) {
 		t.Fatalf("a preference absent from this credential's catalog was guessed: %+v %v", after, err)
 	}
 }
+
+// dev#2786: Claude Code resolves an alias, or picks its own default when no model
+// is given, in each process it starts, and the result was measured to differ
+// between sessions of one account (`opus` ran on claude-opus-4-8 and on
+// claude-opus-5-5). A launch on the tool's own sign-in hands the tool the exact
+// id and records that id as the request; an alias stays accepted on input.
+func TestClaudeLaunchHandsTheToolTheExactModelID(t *testing.T) {
+	for _, tc := range []struct{ model, want string }{
+		{"", "claude-opus-5-5"},
+		{"default", "claude-opus-5-5"},
+		{"opus", "claude-opus-5-5"},
+		{"sonnet", "claude-sonnet-5-5"},
+		{"haiku", "claude-haiku-5-5"},
+		{"fable", "claude-fable-5-1"},
+		{"opus[1m]", "claude-opus-5-5[1m]"},
+		{"Sonnet[1M]", "claude-sonnet-5-5[1m]"},
+		{"claude-opus-4-8", "claude-opus-4-8"},
+	} {
+		t.Run("model="+tc.model, func(t *testing.T) {
+			fr := &fakeRunner{}
+			m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
+			dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
+				Transport: TransportStreamJSON, Isolation: IsolationNative, Model: tc.model, Actor: actorU, ActorKind: actorKindU,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			stored, err := m.loadRun(context.Background(), tenant, dto.RunRef)
+			if err != nil || dto.ModelRef != tc.want || stored.String(colRunModelRef) != tc.want {
+				t.Fatalf("model_ref = %q, row %q (%v); want the exact id %q", dto.ModelRef, stored.String(colRunModelRef), err, tc.want)
+			}
+			assertArgs(t, fr.lastSpec().Args, "--model", tc.want)
+		})
+	}
+}
+
+// A provider-bound launch keeps the provider's own model names: the endpoint, not
+// Claude Code's sign-in, decides what a name means there.
+func TestClaudeBoundLaunchKeepsTheProviderModelName(t *testing.T) {
+	m, tenant, runner, _, _, _, prof := boundHarness(t)
+	dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON,
+		Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU, ProviderProfileRef: prof.Ref, Model: "opus"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dto.ModelRef != "opus" {
+		t.Fatalf("bound model_ref = %q; want the provider's name kept", dto.ModelRef)
+	}
+	assertArgs(t, runner.lastSpec().Args, "--model", "opus")
+}
+
+// A resume re-applies today's template, and a session stored before dev#2786 names
+// an alias: neither may hand the tool the alias again. An alias and its exact id are
+// one model to the template merge, not a conflict.
+func TestClaudeResumeHandsTheToolTheExactModelID(t *testing.T) {
+	fr := &fakeRunner{initSID: "exact-resume"}
+	m, st, tenant, profile, _ := profiledHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
+	ctx := context.Background()
+	id := seedTemplate(t, m, tenant, "Opus", tplBody{Settings: &tplSettings{Model: "opus"}})
+	p := CreateRunParams{ProviderProfileRef: profile.Ref, TemplateID: id, Actor: actorU, ActorKind: actorKindU}
+	dto, err := m.createRun(ctx, tenant, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resume := func(want string) {
+		t.Helper()
+		waitFor(t, "the conversation is bound", func() bool {
+			got, err := m.getRun(ctx, tenant, dto.RunRef)
+			return err == nil && got.ClaudeSessionID != ""
+		})
+		if _, err := m.stopRun(ctx, tenant, dto.RunRef, actorU, actorKindU); err != nil {
+			t.Fatal(err)
+		}
+		resumed, err := m.resumeRun(ctx, tenant, dto.RunRef, actorU, actorKindU, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resumed.ModelRef != want {
+			t.Fatalf("resumed model_ref = %q; want %q", resumed.ModelRef, want)
+		}
+		assertArgs(t, fr.lastSpec().Args, "--model", want)
+	}
+	resume("claude-opus-5-5")
+
+	stored := CreateRunParams{TemplateID: id, Model: "claude-opus-5-5"}
+	if _, conflicts, err := m.applyLaunchTemplate(ctx, tenant, &stored); err != nil || len(conflicts) != 0 {
+		t.Fatalf("the template's alias against its exact id: conflicts %+v, %v", conflicts, err)
+	}
+
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findRunRec(ctx, repo, dto.RunRef)
+		if err != nil {
+			return err
+		}
+		rec[colTemplateID] = nil
+		rec[colRunModelRef] = "sonnet"
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resume("claude-sonnet-5-5")
+}
+
+// Review of #2815: one model under two names is not a template conflict, but the
+// template still wins it. A provider-bound launch, which keeps model names as written,
+// must carry the template's model, with or without a model of its own.
+func TestClaudeTemplateModelWinsUnderEitherName(t *testing.T) {
+	for _, tc := range []struct{ template, request, want string }{
+		{"opus", "", "opus"},
+		{"default", "", "default"},
+		{"claude-opus-5-5", "", "claude-opus-5-5"},
+		{"claude-opus-5-5", "opus", "claude-opus-5-5"},
+	} {
+		t.Run(tc.template+"/"+tc.request, func(t *testing.T) {
+			m, tenant, runner, _, _, _, prof := boundHarness(t)
+			id := seedTemplate(t, m, tenant, "Pinned", tplBody{Settings: &tplSettings{Model: tc.template}})
+			dto, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON,
+				Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU, ProviderProfileRef: prof.Ref,
+				TemplateID: id, Model: tc.request})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if dto.ModelRef != tc.want {
+				t.Fatalf("model_ref = %q; want the template's %q", dto.ModelRef, tc.want)
+			}
+			assertArgs(t, runner.lastSpec().Args, "--model", tc.want)
+		})
+	}
+}

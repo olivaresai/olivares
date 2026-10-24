@@ -32,8 +32,6 @@
     "viewAll": "모두 보기",
     "learnMore": "자세히 알아보기",
     "openMenu": "메뉴 열기",
-    "expandSidebar": "사이드바 펼치기",
-    "collapseSidebar": "사이드바 접기",
     "help": "이 화면의 설명서 열기"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "테마",
     "light": "라이트",
     "dark": "다크",
+    "black": "블랙",
     "system": "시스템",
     "toggle": "테마 전환"
   },
@@ -164,9 +163,7 @@
     "email": "올바른 이메일 주소를 입력하십시오."
   },
   "a11y": {
-    "breadcrumb": "이동 경로",
     "skipToContent": "본문으로 건너뛰기",
-    "primarySidebar": "주요",
     "mainNavigation": "기본 탐색",
     "graphControls": "그래프 컨트롤",
     "graphMinimap": "그래프 미니맵",
@@ -328,10 +325,8 @@
         "first": "첫 세션",
         "last": "마지막 세션",
         "open": "세션 열기",
-        "pin": "고정 또는 고정 해제"
-      },
-      "nav": {
-        "toggleRail": "탐색 레일 접기 또는 펼치기"
+        "pin": "고정 또는 고정 해제",
+        "menu": "세션 작업 메뉴 열기"
       },
       "navRail": {
         "next": "다음 모듈",
@@ -351,6 +346,10 @@
         "previousFile": "이전 파일",
         "nextHunk": "다음 변경 사항",
         "previousHunk": "이전 변경 사항"
+      },
+      "approvals": {
+        "approve": "열린 요청을 이번만 승인",
+        "deny": "열린 요청 거부"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "런처 입력란 내",
       "workSurface": "세션 화면에서",
       "sessionHistory": "이전 세션을 사용할 수 있을 때",
-      "paletteRecent": "검색어가 비어 있는 팔레트 결과에서"
+      "paletteRecent": "검색어가 비어 있는 팔레트 결과에서",
+      "approvalQueue": "승인 대기열에서"
     },
     "precedence": "두 행이 같은 키를 사용하면 마지막으로 적용되는 행이 우선합니다.",
-    "modNote": "⌘는 Windows와 Linux에서 Control입니다.",
     "problems_other": "{{count}}개의 바인딩을 읽을 수 없어 실행되지 않습니다: {{commands}}",
     "navRailNote": "레일은 하나의 탭 정지점입니다. 이 키는 레일에 포커스가 있을 때 작동합니다."
   },
@@ -409,6 +408,18 @@
       "copy": "명령 복사",
       "copied": "복사됨",
       "copyFailed": "복사하지 못했습니다. 명령을 선택하여 복사하십시오."
+    },
+    "copy": {
+      "message": "메시지 복사",
+      "code": "코드 복사",
+      "copied": "복사했습니다",
+      "failed": "복사할 수 없습니다. 텍스트를 선택해 복사하세요."
     }
+  },
+  "resize": {
+    "hint": "드래그하거나 화살표 키를 사용하세요. 두 번 클릭하거나 Enter를 누르면 초기화됩니다."
+  },
+  "panes": {
+    "saveFailed": "패널 너비를 저장하지 못했습니다. 이번 방문에만 적용됩니다."
   }
 }

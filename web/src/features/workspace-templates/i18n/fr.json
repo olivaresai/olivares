@@ -78,7 +78,9 @@
   },
   "apply": {
     "success": "Modèle appliqué.",
-    "conflicts": "Appliqué avec {{count}} conflit(s).",
+    "conflicts_one": "Appliqué — conflit : {{count}}.",
+    "conflicts_many": "Appliqué — conflits : {{count}}.",
+    "conflicts_other": "Appliqué — conflits : {{count}}.",
     "conflictField": "Champ",
     "conflictOld": "Valeur précédente",
     "conflictNew": "Nouvelle valeur",

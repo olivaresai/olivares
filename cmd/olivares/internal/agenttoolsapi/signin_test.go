@@ -79,6 +79,9 @@ exit 2
 
 // OpenCode v1.18.30 selects its built-in ChatGPT device method by label,
 // prints "Go to:" + "Enter code:", and auth list exposes provider + type only.
+// For its own providers (v1.18.34, --provider opencode or opencode-go) it prints
+// its key prompt, masks each typed character, takes the key at a carriage return
+// and stores it in auth.json; auth list then names "OpenCode api" or "OpenCode Go api".
 const stubOpenCode = `#!/bin/sh
 [ "$PWD" = "$HOME" ] || exit 3
 [ "$OPENCODE_CONFIG_DIR" = "$HOME/.config/opencode" ] || exit 4
@@ -86,6 +89,17 @@ const stubOpenCode = `#!/bin/sh
 [ "$OPENCODE_DISABLE_AUTOUPDATE" = "1" ] || exit 6
 case "$1 $2" in
 "auth login")
+  if [ "$#" = 4 ] && [ "$3" = "--provider" ] && { [ "$4" = opencode ] || [ "$4" = opencode-go ]; }; then
+    printf '\033[0m\n┌  Add credential\n│\n'
+    [ "$4" = opencode ] && printf '●  Create an api key at https://opencode.ai/auth\n│\n'
+    printf '◆  Enter your API key\n│  _\n└\n'
+    key=''; cr=$(printf '\r')
+    while c=$(dd bs=1 count=1 2>/dev/null); [ -n "$c" ] && [ "$c" != "$cr" ]; do key="$key$c"; printf '▪'; done
+    [ -n "$key" ] || { echo 'Error: no key was entered'; exit 1; }
+    mkdir -p "$XDG_DATA_HOME/opencode"
+    printf '{"%s":{"type":"api","key":"%s"}}' "$4" "$key" > "$XDG_DATA_HOME/opencode/auth.json"
+    printf '\n◇  Enter your API key\n│\n└  Done\n'; exit 0
+  fi
   [ "$3 $4 $5" = "--provider openai --method" ] || exit 7
   [ "$6" = "ChatGPT Pro/Plus (headless)" ] || exit 8
   printf '┌  Add credential\n│\n●  Go to: https://auth.openai.com/codex/device\n●  Enter code: ABCD-12345\n'
@@ -95,7 +109,12 @@ case "$1 $2" in
   echo 'Login successful'; exit 0;;
 "auth list")
   printf '┌  Credentials ~/.local/share/opencode/auth.json\n│\n'
-  if [ -f "$XDG_DATA_HOME/opencode/auth.json" ]; then printf '●  OpenAI oauth\n│\n└  1 credentials\n'; else printf '└  0 credentials\n'; fi
+  f="$XDG_DATA_HOME/opencode/auth.json"
+  [ -f "$f" ] || { printf '└  0 credentials\n'; exit 0; }
+  grep -q '"opencode"' "$f" && printf '●  OpenCode api\n│\n'
+  grep -q '"opencode-go"' "$f" && printf '●  OpenCode Go api\n│\n'
+  grep -q '"openai"' "$f" && printf '●  OpenAI oauth\n│\n'
+  printf '└  1 credentials\n'
   exit 0;;
 esac
 exit 2

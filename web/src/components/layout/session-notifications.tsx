@@ -16,6 +16,7 @@ import {
   SESSION_PARAM,
 } from '@/features/sessions/session-address'
 import { useMinWidth } from '@/lib/hooks/use-min-width'
+import { setAttentionCount } from './document-title'
 import { useSessionRail } from './use-session-rail'
 import {
   attentionEvent,
@@ -67,18 +68,14 @@ function SessionAttentionObserver() {
   )
   // A failure while hidden is explained once the person is back and can read it.
   const failed = useRef<'none' | 'pending' | 'shown'>('none')
-  const title = useRef('')
 
   useEffect(() => {
-    // Predecessor cleanup runs before setup; a renewed credential cannot capture its count.
-    const baseTitle = document.title
-    title.current = baseTitle
     const update = () => setHidden(document.hidden)
     document.addEventListener('visibilitychange', update)
     const openNotifications = notifications.current
     return () => {
       document.removeEventListener('visibilitychange', update)
-      document.title = baseTitle
+      setAttentionCount(0)
       for (const { notification } of openNotifications.values())
         notification.close()
       openNotifications.clear()
@@ -107,7 +104,7 @@ function SessionAttentionObserver() {
     const count = [...current.values()].filter(
       (s) => s.state === 'needs-you' && (hidden || !isOnScreen(s, opened)),
     ).length
-    document.title = count ? `(${count}) ${title.current}` : title.current
+    setAttentionCount(count)
     if (!hidden && failed.current === 'pending') {
       toast.message(t('sessionNotifications.unavailable'))
       failed.current = 'shown'

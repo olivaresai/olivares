@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // This file declares the RETENTION-GOVERNOR seam: the OPTIONAL enterprise
@@ -80,7 +81,7 @@ type RetentionGovernor interface {
 // ok=false (no floor) whenever the governor is un-wired (the open-core default), so
 // every consume site collapses to today's exact behavior with a single guard.
 func (m *Module) floorFor248(ctx context.Context, tenant model.TenantID, class string) (RetentionFloor, bool) {
-	if m.governor == nil {
+	if !sdk.CapabilityEnabled(m.governor) {
 		return RetentionFloor{}, false
 	}
 	return m.governor.Floor(ctx, tenant, class)

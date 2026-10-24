@@ -25,6 +25,7 @@ import {
   isOpenCoreSeam,
   isModuleNotEnabled,
 } from '@/lib/api/errors'
+import { networkErrorText } from '@/lib/api/network-error-text'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { useModuleOn } from '@/stores/modules'
@@ -186,7 +187,7 @@ export function QueryErrorState({
         className={className}
       />
     )
-  const network = error instanceof NetworkError
+  const network = error instanceof NetworkError ? networkErrorText(t) : null
   const unknown = isEvidenceUnavailable(error)
   return (
     <ErrorState
@@ -194,7 +195,7 @@ export function QueryErrorState({
       title={
         title ??
         (network
-          ? t('network.title')
+          ? network.title
           : unknown
             ? t('evidenceUnavailable.title')
             : t('serverError.title'))
@@ -202,7 +203,7 @@ export function QueryErrorState({
       description={
         description ??
         (network
-          ? t('network.description')
+          ? network.description
           : unknown
             ? t('evidenceUnavailable.description')
             : t('serverError.description'))

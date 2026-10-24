@@ -1,9 +1,9 @@
 {
   "title": "Modelos y proveedores",
-  "description": "El estate de modelos gobernado — capacidades y precios declarados, política de routing y referencias a claves de proveedor. Los secretos nunca se muestran; solo referencias enmascaradas.",
+  "description": "El parque de modelos gobernado — capacidades y precios declarados, política de routing y referencias a claves de proveedor. Los secretos nunca se muestran; solo referencias enmascaradas.",
   "tabs": {
     "catalog": "Catálogo",
-    "estate": "Estate",
+    "estate": "Parque",
     "routing": "Routing",
     "keys": "Claves de proveedor",
     "gpai": "Postura GPAI",
@@ -45,8 +45,8 @@
   },
   "estate": {
     "title": "Modelos gobernados",
-    "description": "Modelos en el estate de este tenant, enriquecidos desde el catálogo.",
-    "empty": "Sin modelos en el estate",
+    "description": "Modelos en el parque de este tenant, enriquecidos desde el catálogo.",
+    "empty": "Sin modelos en el parque",
     "emptyHint": "Aquí se lista cada modelo que este inquilino puede llamar, con su proveedor y sus límites. Añade un proveedor para poblar el patrimonio.",
     "addProvider": "Añade un proveedor",
     "columns": {
@@ -109,7 +109,7 @@
     "executeHint": "Resolver es gratis. Ejecutar llama al proveedor y gasta de tu presupuesto.",
     "executeWarning": "Esto lanza la cadena de modelos resuelta contra el proveedor real y registra una muestra de coste. No es una simulación: usa Resolver para ver la decisión sin gastar.",
     "noExecutor": "No hay ejecutor aprovisionado. No es una caída: el plano de control resuelve decisiones de enrutado pero nunca gasta contra un proveedor hasta que un operador configura un ejecutor.",
-    "budgetDenied": "Un presupuesto de FinOps denegó el gasto ANTES de llamar al proveedor. La puerta de gobierno funcionó: revisa o amplía el presupuesto en vez de reintentar.",
+    "budgetDenied": "Un presupuesto de FinOps denegó el gasto ANTES de llamar al proveedor. La puerta de gobernanza funcionó: revisa o amplía el presupuesto en vez de reintentar.",
     "fallbackUsed": "se usó respaldo",
     "refusal": "el proveedor rechazó",
     "tokens": "{{in}} entrada · {{out}} salida",
@@ -119,7 +119,7 @@
   },
   "keys": {
     "title": "Referencias a claves de proveedor",
-    "description": "Referencias gobernadas a claves de API y workspaces de proveedor. Solo se guarda una pista enmascarada — nunca el valor secreto.",
+    "description": "Referencias gobernadas a claves de API y espacios de trabajo de proveedor. Solo se guarda una pista enmascarada — nunca el valor secreto.",
     "new": "Añadir referencia",
     "empty": "Sin referencias a claves",
     "emptyHint": "Una referencia de clave apunta a una credencial que guarda el motor, nunca al secreto en sí. Añade una para poder llamar a un modelo.",
@@ -136,7 +136,7 @@
     },
     "kind": {
       "api_key": "Clave de API",
-      "workspace": "Workspace"
+      "workspace": "Espacio de trabajo"
     },
     "dialog": {
       "title": "Añadir referencia a clave",
@@ -144,7 +144,7 @@
       "provider": "Proveedor",
       "kind": "Tipo de referencia",
       "extId": "Id externo",
-      "extIdHint": "El id de la clave/workspace en el proveedor (p. ej. apikey_01). No el secreto.",
+      "extIdHint": "El id de la clave o del espacio de trabajo en el proveedor (p. ej. apikey_01). No el secreto.",
       "owner": "Propietario",
       "noSecretNote": "Este formulario nunca acepta un secreto. Olivares guarda solo una referencia y una pista enmascarada.",
       "create": "Añadir referencia",
@@ -225,25 +225,25 @@
   "empty": {
     "keyRefs": {
       "title": "Aún no se han añadido referencias a claves de proveedor",
-      "description": "Añade una referencia de clave de API o de workspace mediante el identificador del proveedor; la consola nunca acepta ni almacena el valor de la credencial."
+      "description": "Añade una referencia de clave de API o de espacio de trabajo mediante el identificador del proveedor; la consola nunca acepta ni almacena el valor de la credencial."
     },
     "models": {
       "title": "Aún no se han observado modelos gobernados",
-      "description": "Los modelos entran en el estate cuando un conector emite un registro de coste que identifica al proveedor y al modelo en uso."
+      "description": "Los modelos entran en el parque cuando un conector emite un registro de coste que identifica al proveedor y al modelo en uso."
     }
   },
   "residency": {
-    "title": "Residencia por workspace",
-    "description": "Dónde procesa cada workspace la inferencia y dónde reposa su dato, según lo reporta el proveedor.",
-    "empty": "Ningún workspace reporta ajustes de residencia",
+    "title": "Residencia por espacio de trabajo",
+    "description": "Dónde procesa cada espacio de trabajo la inferencia y dónde reposa su dato, según lo reporta el proveedor.",
+    "empty": "Ningún espacio de trabajo reporta ajustes de residencia",
     "emptyHint": "Los ajustes de residencia dicen en qué regiones puede un espacio de trabajo llamar a modelos. Ningún espacio ha declarado ninguna.",
     "unrestricted": "El proveedor no reporta ninguna restricción",
     "allowed": "Permitidas: {{geos}}",
     "unreported": "no reportado",
     "defaultGeo": "defecto: {{geo}}",
     "atRest": "en reposo: {{geo}}",
-    "truncated": "Cargados {{n}} workspaces; hay más",
-    "truncatedHint": "Hay más registros de residencia de los que se ven; esta página coge filas por id —asignado al crear—, así que faltan las posteriores. Que un workspace no salga aquí no demuestra que su procesamiento no esté restringido: puede estar sencillamente más allá de esta página."
+    "truncated": "Cargados {{n}} espacios de trabajo; hay más",
+    "truncatedHint": "Hay más registros de residencia de los que se ven; esta página coge filas por id —asignado al crear—, así que faltan las posteriores. Que un espacio de trabajo no salga aquí no demuestra que su procesamiento no esté restringido: puede estar sencillamente más allá de esta página."
   },
   "access": {
     "title": "Reglas de acceso a modelos",

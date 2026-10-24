@@ -109,6 +109,7 @@ vi.mock('@/components/ui/toaster', () => ({
   },
 }))
 
+import { useClientSettings } from '@/features/settings/preferences'
 import { configureApiClient, __resetRefreshState } from '@/lib/api/client'
 import { sessionsApi } from './api'
 import { SessionCard } from './session-card'
@@ -235,6 +236,9 @@ beforeEach(() => {
   perms.add('sessions:run:read')
   perms.add('sessions:run:write')
   vi.mocked(sessionsApi.liveOne).mockResolvedValue(live)
+  // This file is about the request Stop sends; the question before it is
+  // run-actions-stop.test.tsx's (#2549).
+  useClientSettings.setState({ confirmStop: false })
   __resetRefreshState()
   configureApiClient({
     getToken: () => 'tok-clt1',

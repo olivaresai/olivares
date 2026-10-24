@@ -121,7 +121,7 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inspect: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "olivares.dr.manifest.v1") || !strings.Contains(out, "head_seq") {
+	if !strings.Contains(out, "olivares.dr.manifest.v2") || !strings.Contains(out, "aes-256-gcm-chunked-v1") || !strings.Contains(out, "head_seq") {
 		t.Fatalf("inspect output unexpected:\n%s", out)
 	}
 

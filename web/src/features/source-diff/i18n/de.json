@@ -30,7 +30,7 @@
   "hostForbidden": "Der Git-Host hat die Lesung abgelehnt.",
   "hostForbiddenBody": "system:admin ist nicht das, was fehlt.",
   "unknownRef": "unknown ref",
-  "upstream": "git host read failed",
+  "upstream": "Lesen vom Git-Host fehlgeschlagen",
   "tryAgain": "Erneut versuchen",
   "returnToSources": "Zurück zu den Quellen",
   "openSource": "Quelle öffnen",

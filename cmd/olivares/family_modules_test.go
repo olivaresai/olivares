@@ -65,6 +65,33 @@ func TestAnActiveAddonRunsItsModules(t *testing.T) {
 	}
 }
 
+// An add-on that needs nothing materialized (a wired module) has no manifest row, so
+// the module list is what says it is on; an add-on whose row is not active is not,
+// whatever the list says.
+func TestAWiredAddonInTheModuleListRunsItsModules(t *testing.T) {
+	withAddonModules(t, map[string][]string{"compliancedepth": {"compliance"}, "rtbf-depth": {"compliance"}})
+	for _, tc := range []struct {
+		name    string
+		modules []string
+		entries []ActivationEntry
+		want    []string
+	}{
+		{"wired add-on, no row", []string{"compliancedepth"}, nil, []string{"compliancedepth"}},
+		{"pending add-on named in the list", []string{"rtbf-depth"}, []ActivationEntry{rtbfNeedsSecret}, nil},
+		{"wired and pending together", []string{"compliancedepth", "rtbf-depth"}, []ActivationEntry{rtbfNeedsSecret}, []string{"compliancedepth"}},
+		{"active row and wired add-on", []string{"compliancedepth", "rtbf-depth"}, []ActivationEntry{rtbfActive}, []string{"compliancedepth", "rtbf-depth"}},
+		{"nothing listed", nil, nil, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := activationWith(tc.entries...)
+			m.Modules = tc.modules
+			if got := activationModules(m)["compliance"]; !slices.Equal(got, tc.want) {
+				t.Fatalf("compliance activated by %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // serveStart builds an engine on dir and reconciles it with the deployment
 // settings, as `olivares serve` does before any listener starts. A
 // selfRestartError is returned as is.

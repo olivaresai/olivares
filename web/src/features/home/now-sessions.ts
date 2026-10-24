@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// WHAT NOW SAYS ABOUT THE SESSIONS IT ALREADY HOLDS: which are live (a card each) and what
-// the sessions that worked today cost. Pure, over the merged page `home-view` reads, so a
-// test drives it without rendering. No second read and no figure the engine did not send.
-import { isLiveRun, type UnifiedSession } from '@/features/sessions/provenance'
+// WHAT ESTATE SAYS ABOUT THE SESSIONS IT ALREADY HOLDS: which are live (a card each),
+// what the sessions that worked on a day cost, and whom the live ones act for. Pure, over
+// the merged page `home-view` reads, so a test drives it without rendering. No second
+// read and no figure the engine did not send.
+import {
+  isLiveRun,
+  primaryRun,
+  type UnifiedSession,
+} from '@/features/sessions/provenance'
 import { sessionUsage } from '@/features/sessions/session-usage'
 
 /** How many live sessions Now shows as cards. The Sessions page holds the rest. */
@@ -27,7 +32,7 @@ export function isLiveSession(s: UnifiedSession): boolean {
 }
 
 export interface TodaysCost {
-  /** Sessions with activity since local midnight. */
+  /** Sessions whose last work fell on the day. */
   sessions: number
   /** The sum of the costs they reported; `null` when none reported one. */
   costMicroUsd: number | null
@@ -35,41 +40,74 @@ export interface TodaysCost {
   unpriced: number
 }
 
+/** Local midnight `daysAgo` days before `now`'s day. */
+function midnightOf(now: number, daysAgo: number): number {
+  const day = new Date(now)
+  day.setHours(0, 0, 0, 0)
+  day.setDate(day.getDate() - daysAgo)
+  return day.getTime()
+}
+
 /**
- * The cost of the sessions that worked today. A session's cost is its own total, so one
- * that began yesterday counts whole: the figure is what today's sessions cost, and the
- * tile says so. A session that reported no cost is counted as unpriced, never as $0.
+ * The cost of the sessions whose last work fell on a day: today (`daysAgo` 0) or an
+ * earlier one. A session's cost is its own total and it belongs to the day it last
+ * worked, so one that began yesterday and worked today counts whole for today and not
+ * for yesterday. A session that reported no cost is counted as unpriced, never as $0.
  */
-export function todaysCost(
+export function dayCost(
   sessions: readonly UnifiedSession[],
   now: number,
+  daysAgo = 0,
 ): TodaysCost {
-  const midnight = new Date(now)
-  midnight.setHours(0, 0, 0, 0)
-  const today = sessions.filter((s) => s.lastActivityMs >= midnight.getTime())
+  const from = midnightOf(now, daysAgo)
+  const until = daysAgo === 0 ? Infinity : midnightOf(now, daysAgo - 1)
+  const day = sessions.filter(
+    (s) => s.lastActivityMs >= from && s.lastActivityMs < until,
+  )
   let costMicroUsd: number | null = null
   let unpriced = 0
-  for (const s of today) {
+  for (const s of day) {
     const usage = sessionUsage(s.runs, s.live)
     if (usage?.costMicroUsd != null)
       costMicroUsd = (costMicroUsd ?? 0) + usage.costMicroUsd
     if (usage?.costMicroUsd == null || usage.costPartial) unpriced++
   }
-  return { sessions: today.length, costMicroUsd, unpriced }
+  return { sessions: day.length, costMicroUsd, unpriced }
 }
 
 /**
- * A page with rows beyond it makes today's figure a floor only while every row it holds
- * worked today: once it reaches a row from before midnight, the rows beyond it are older
- * still. A row whose time is unknown counts as today, so the doubt marks the floor.
+ * A page with rows beyond it makes a day's figure a floor only while every row it holds
+ * worked on that day or later: once it reaches a row from before that day, the rows
+ * beyond it are older still. A row whose time is unknown counts as recent, so the doubt
+ * marks the floor.
  */
-export function todayIsFloor(
+export function dayIsFloor(
   hasMore: boolean | undefined,
   activityMs: readonly number[],
   now: number,
+  daysAgo = 0,
 ): boolean {
   if (hasMore !== true) return false
-  const midnight = new Date(now)
-  midnight.setHours(0, 0, 0, 0)
-  return activityMs.every((ms) => !(ms < midnight.getTime()))
+  const from = midnightOf(now, daysAgo)
+  return activityMs.every((ms) => !(ms < from))
+}
+
+/**
+ * How many people the sessions act for, each once; a session a work item or an agent
+ * dispatched acts for nobody. `null` while one session does not say whom it acts for (an
+ * engine older than the facts, an observed session with no launch record, a session
+ * that predates the record): a count over the others would be a guess.
+ */
+export function actsForPeople(
+  sessions: readonly UnifiedSession[],
+): number | null {
+  const people = new Set<string>()
+  for (const s of sessions) {
+    const actsFor = primaryRun(s.runs)?.acts_for
+    if (!actsFor || actsFor.kind === 'unknown') return null
+    if (actsFor.kind !== 'user') continue
+    if (!actsFor.user_id) return null
+    people.add(actsFor.user_id)
+  }
+  return people.size
 }

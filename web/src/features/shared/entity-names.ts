@@ -32,7 +32,7 @@ import { useAuth } from '@/lib/auth/context'
 /** The ceiling the generic repository accepts (`maxLimit`, sqlstore/generic.go:29). */
 const DIRECTORY_PAGE = 1000
 /** The live page the sessions plane serves: most-recent-first, one page. */
-const SESSION_PAGE = 200
+export const SESSION_PAGE = 200
 
 /**
  * THE TITLE OF A SESSION, or `null` when the engine sent nothing to make one from.

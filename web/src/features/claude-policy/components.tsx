@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { CaveatNotice, SeamBadge } from '@/features/_intel'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ApiError, NetworkError } from '@/lib/api/errors'
+import { ApiError, NetworkError, isOpenCoreSeam } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
 import { isContractPending } from './api'
 import type { IssueSeverity, SchemaIssue } from './schema'
@@ -35,8 +35,28 @@ export function ContractPendingNotice({ what }: { what: string }) {
 }
 
 /**
- * Like AsyncSection, but a DECLARED endpoint that is not yet implemented
- * (404/501/405) renders the honest pending seam instead of a red error.
+ * A route this edition does not serve (HTTP 501). It is mounted and answering —
+ * the capability is Business — so it is not the "backend pending" seam. Same
+ * `status` role and slot as QueryErrorState's 501 branch, so a screen reader
+ * announces it when a tab's query fails.
+ */
+export function BusinessRequiredNotice() {
+  const { t } = useTranslation('common')
+  return (
+    <p
+      role="status"
+      data-slot="not-in-edition"
+      className="text-body text-muted-foreground"
+    >
+      {t('edition.editingRequiresBusiness')}
+    </p>
+  )
+}
+
+/**
+ * Like AsyncSection, but an endpoint that is not yet implemented (404/405)
+ * renders the honest pending seam instead of a red error, and a route this
+ * edition does not include (501) names the Business boundary.
  */
 export function DeclaredSection<T>({
   query,
@@ -70,6 +90,7 @@ export function DeclaredSection<T>({
   }
   if (query.isError) {
     const error = query.error
+    if (isOpenCoreSeam(error)) return <BusinessRequiredNotice />
     if (!live && isContractPending(error))
       return <ContractPendingNotice what={what} />
     /* ⛔ ASEGURAMIENTO ANTES QUE ROL, y en el ayudante que envuelve a TODA esta feature:
@@ -98,10 +119,8 @@ export function DeclaredSection<T>({
     return (
       <QueryErrorState
         error={query.error}
-        title={isNetwork ? t('network.title') : t('serverError.title')}
-        description={
-          isNetwork ? t('network.description') : t('serverError.description')
-        }
+        title={isNetwork ? undefined : t('serverError.title')}
+        description={isNetwork ? undefined : t('serverError.description')}
         retry={() => void query.refetch()}
       />
     )

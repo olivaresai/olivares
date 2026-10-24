@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,8 +33,21 @@ func openCodeRuntimeOptions(extra ...Option) []Option {
 		WithProductVersion("test"),
 		WithStopWaitDelay(2 * time.Second),
 		WithDriverTimeouts(20*time.Second, 2*time.Second),
+		// An OpenCode session reaches only its provider's hosts (#2888), and a
+		// network boundary needs the filesystem confinement helper around the child.
+		WithConfinement([]string{openCodeProtectedFixture()}, true),
 	}, extra...)
 }
+
+// openCodeProtectedFixture is the engine-data stand-in the confined OpenCode fixtures
+// protect: an empty folder of its own, so the fixture's temporary files stay writable.
+var openCodeProtectedFixture = sync.OnceValue(func() string {
+	dir, err := os.MkdirTemp("", "olivares-opencode-protected-")
+	if err != nil {
+		panic(err)
+	}
+	return dir
+})
 
 func openCodeHarness(t *testing.T, authSource string, opts ...Option) (*Module, store.Store, model.TenantID, ProviderProfile) {
 	t.Helper()
@@ -45,6 +59,10 @@ func openCodeHarness(t *testing.T, authSource string, opts ...Option) (*Module, 
 func newOpenCodeProfile(t *testing.T, m *Module, tenant model.TenantID, name, authSource string) ProviderProfile {
 	t.Helper()
 	config, home := t.TempDir(), t.TempDir()
+	// An account names its default model, as a launch with none needs (#3094).
+	if err := os.WriteFile(filepath.Join(config, "opencode.json"), []byte(`{"model":"opencode/big-pickle"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	return mustCreateProfile(t, m, tenant, CreateProfileInput{
 		Driver: providerDriverOpenCode, ConfigHome: config, UserHome: home,
 		DisplayName: name, AuthSource: authSource,
@@ -132,7 +150,7 @@ func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) 
 	}
 
 	peer := readOpenCodeFixtureRecord(t, record)
-	if want := []string{"acp", "--hostname", "127.0.0.1", "--cwd", peer.Cwd}; strings.Join(peer.Argv, " ") != strings.Join(want, " ") {
+	if want := []string{"acp", "--hostname", "127.0.0.1", "--print-logs", "--log-level", "ERROR", "--cwd", peer.Cwd}; strings.Join(peer.Argv, " ") != strings.Join(want, " ") {
 		if got := strings.Join(peer.Argv, " "); !strings.HasPrefix(got, "acp --hostname 127.0.0.1") {
 			t.Fatalf("argv = %v", peer.Argv)
 		}
@@ -168,9 +186,22 @@ func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) 
 	if err := json.Unmarshal([]byte(peer.Env[envOpenCodeConfigContent]), &nativeConfig); err != nil {
 		t.Fatal(err)
 	}
+	// The preset is the build agent's rules; every other agent's (the global ones)
+	// deny everything (#3083).
 	permissions, _ := nativeConfig["permission"].(map[string]any)
-	if nativeConfig["ambient_fixture"] != nil || permissions["bash"] != "ask" || permissions["edit"] != "ask" {
+	agents, _ := nativeConfig["agent"].(map[string]any)
+	build, _ := agents["build"].(map[string]any)
+	buildPermissions, _ := build["permission"].(map[string]any)
+	if nativeConfig["ambient_fixture"] != nil || buildPermissions["bash"] != "ask" || buildPermissions["edit"] != "ask" || permissions["*"] != "deny" {
 		t.Fatalf("native preset was replaced by ambient routing: %v", nativeConfig)
+	}
+	// #2890: the build agent's read asks too, so live policy reviews and audits it as a
+	// read. A .env file stays denied natively, and glob, grep and list ask too: they are
+	// reads of the folder they search (#3058).
+	buildReads, _ := buildPermissions["read"].(map[string]any)
+	if buildReads["*"] != "ask" || buildReads["*.env"] != "deny" || buildReads["*.env.*"] != "deny" ||
+		buildPermissions["glob"] != "ask" || buildPermissions["grep"] != "ask" || buildPermissions["list"] != "ask" {
+		t.Fatalf("native read rules = %v, want the build agent's reads asking live policy", nativeConfig)
 	}
 	if peer.Env["FIXTURE_MARKER"] != "marker-value" {
 		t.Fatalf("allowlisted marker missing: %q", peer.Env["FIXTURE_MARKER"])
@@ -209,7 +240,7 @@ func TestOpenCodeRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *t
 	if _, err := m.stopRun(context.Background(), tenant, first.RunRef, "user:u1", model.ActorUser); err != nil {
 		t.Fatalf("stop: %v", err)
 	}
-	resumeRecord := filepath.Join(t.TempDir(), "resume.json")
+	resumeRecord := filepath.Join(prof.ConfigHome, "resume.json") // writable for the confined child
 	setOpenCodeFixture(t, prof, openCodeFixture{RecordPath: resumeRecord, ResumeEmptyObject: true})
 	resumed, err := m.resumeRun(context.Background(), tenant, first.RunRef, "user:u1", model.ActorUser, "")
 	if err != nil {
@@ -233,7 +264,7 @@ func TestOpenCodeRuntimeResumeUsesTheStoredConversationAndRefusesToFallBack(t *t
 		t.Fatalf("methods = %v, want session/resume", peer.Methods)
 	}
 
-	failRecord := filepath.Join(t.TempDir(), "fail.json")
+	failRecord := filepath.Join(prof.ConfigHome, "fail.json")
 	setOpenCodeFixture(t, prof, openCodeFixture{RecordPath: failRecord, FailResume: true})
 	if _, err := m.stopRun(context.Background(), tenant, resumed.RunRef, "user:u1", model.ActorUser); err != nil {
 		t.Fatalf("stop before failed resume: %v", err)
@@ -386,7 +417,7 @@ func TestOpenCodeRuntimeResumeRefusesATemplateTightenedAfterCreate(t *testing.T)
 	inference.mu.Lock()
 	beforeMint := inference.calls
 	inference.mu.Unlock()
-	resumeRecord := filepath.Join(t.TempDir(), "resume.json")
+	resumeRecord := filepath.Join(prof.ConfigHome, "resume.json") // writable for the confined child
 	setOpenCodeFixture(t, prof, openCodeFixture{RecordPath: resumeRecord, ResumeEmptyObject: true})
 	_, resumeErr := m.resumeRun(ctx, tenant, first.RunRef, "user:u1", model.ActorUser, "")
 	if resumeErr == nil {
@@ -633,7 +664,7 @@ func TestOpenCodeRuntimeModelSettingReachesTheChild(t *testing.T) {
 	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
-		ProviderProfileRef: prof.Ref, Model: "anthropic/claude-sonnet-4", Effort: "high",
+		ProviderProfileRef: prof.Ref, Model: "opencode/big-pickle", Effort: "high",
 	})
 	if err != nil {
 		t.Fatalf("createRun: %v", err)
@@ -643,7 +674,7 @@ func TestOpenCodeRuntimeModelSettingReachesTheChild(t *testing.T) {
 	if strings.Join(peer.ConfigIDs, ",") != "model,effort" {
 		t.Fatalf("config ids = %v", peer.ConfigIDs)
 	}
-	if strings.Join(peer.ConfigValues, ",") != "anthropic/claude-sonnet-4,high" {
+	if strings.Join(peer.ConfigValues, ",") != "opencode/big-pickle,high" {
 		t.Fatalf("config values = %v", peer.ConfigValues)
 	}
 }
@@ -657,7 +688,7 @@ func TestOpenCodeRuntimeLaunchRefusedForAnUnofferedModelIsNotFailed(t *testing.T
 	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
-		ProviderProfileRef: prof.Ref, Model: "hu-fixture",
+		ProviderProfileRef: prof.Ref, Model: "opencode/hu-fixture",
 		EnvAllow: []string{"FIXTURE_MARKER"},
 	})
 	var re *runErr
@@ -718,7 +749,7 @@ func TestOpenCodeRuntimeResumeRefusedForAnUnofferedModelIsNotFailed(t *testing.T
 		if err != nil {
 			return err
 		}
-		rec[colRunModelRef] = "removed/model"
+		rec[colRunModelRef] = "opencode/removed-model"
 		_, err = repo.Update(ctx, rec)
 		return err
 	}); err != nil {

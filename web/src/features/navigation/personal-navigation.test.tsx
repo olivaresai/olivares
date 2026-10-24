@@ -31,8 +31,6 @@ import type { Whoami } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { SidebarSync } from '@/components/layout/sidebar-mode'
-import { usePreferencesStore } from '@/stores/preferences'
 import { useCommandStore } from '@/stores/command'
 import { FEATURE_VIEWS } from '@/features/registry'
 import { SettingsVisit } from './permitted-visit'
@@ -43,8 +41,8 @@ import {
 } from '@/features/communications/channel-admin-continuity'
 import { RequirePermission } from '@/components/layout/require-permission'
 import {
-  FavoriteButton,
   PersonalNavigation,
+  useFavoriteThisPage,
 } from '@/components/layout/personal-navigation'
 import { CommandMenu } from '@/components/layout/command-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -103,11 +101,24 @@ function Shell({ children }: { children: ReactNode }) {
     </PersonalNavigationProvider>
   )
 }
+/** The account menu's save, as a plain button: the same hook the menu item reads. */
+function FavoriteButton() {
+  const favorite = useFavoriteThisPage()
+  return favorite ? (
+    <button
+      type="button"
+      aria-pressed={favorite.saved}
+      onClick={favorite.toggle}
+    >
+      {favorite.label}
+    </button>
+  ) : null
+}
+
 async function mount({
   principal = A,
   path = '/agentops',
   compact = false,
-  sidebar = false,
 } = {}) {
   vi.mocked(authApi.whoami).mockResolvedValue(principal)
   const client = new QueryClient({
@@ -120,7 +131,6 @@ async function mount({
       <AuthProvider>
         <TooltipProvider>
           <Shell>
-            {sidebar && <SidebarSync />}
             <FavoriteButton />
             <PersonalNavigation collapsed={compact} />
             <CommandMenu />
@@ -896,110 +906,4 @@ it("records the guard's permitted no-workspace placeholder without claiming a ca
   await screen.findByText(`Admitted fixture ${admin.id}`)
   await waitFor(() => expect(recentIds()).toEqual([admin.id]))
   expect(transport).not.toHaveBeenCalled()
-})
-
-it('sidebar synchronization shares Favorites identity verification across a new credential with cached whoami', async () => {
-  usePreferencesStore.setState({
-    sidebarChoices: {},
-    sidebarOwner: null,
-    sidebarCollapsed: false,
-    sidebarUnsent: false,
-  })
-  const calls: string[] = []
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: RequestInfo | URL, init: RequestInit) => {
-      const path = new URL(String(input), 'http://localhost').pathname
-      if (path.endsWith('/ui-state')) {
-        calls.push(init.method ?? 'GET')
-        if (init.method === 'PUT') return Response.json({}, { status: 503 })
-        return Response.json({ stored: true, sidebar: 'full' })
-      }
-      return Response.json({ items: [], has_more: false })
-    }),
-  )
-  const { client } = await mount({ sidebar: true })
-  await waitFor(() => expect(calls).toContain('GET'))
-  act(() => usePreferencesStore.getState().toggleSidebar())
-  await waitFor(() => expect(calls).toContain('PUT'))
-  let finish!: (identity: Whoami) => void
-  vi.mocked(authApi.whoami).mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve
-      }),
-  )
-  act(() =>
-    useSessionStore.getState().setSession({
-      csrfToken: 'new-local-fixture',
-      sessionId: 'second-fixture',
-      expiresAt: '',
-    }),
-  )
-  await waitFor(() =>
-    expect(screen.getByTestId('saved')).toHaveAttribute('data-ready', 'false'),
-  )
-  const count = calls.length
-  act(() => usePreferencesStore.getState().toggleSidebar())
-  await act(async () => {})
-  expect(calls).toHaveLength(count)
-  const bob = { ...A, user_id: 'fixture-b', actor: 'user:fixture-b' }
-  await act(async () => finish(bob))
-  expect(calls).toHaveLength(count)
-  vi.mocked(authApi.whoami).mockResolvedValue(bob)
-  act(() => client.setQueryData(queryKeys.whoami, bob))
-  await waitFor(() =>
-    expect(screen.getByTestId('saved')).toHaveAttribute('data-ready', 'true'),
-  )
-  await waitFor(() => expect(calls.length).toBeGreaterThan(count))
-  expect(calls.filter((method) => method === 'PUT')).toHaveLength(1)
-  expect(usePreferencesStore.getState().sidebarCollapsed).toBe(false)
-})
-
-it('keeps a fold gesture while re-verifying the same person', async () => {
-  usePreferencesStore.setState({
-    sidebarChoices: {},
-    sidebarOwner: null,
-    sidebarCollapsed: false,
-    sidebarUnsent: false,
-  })
-  const writes: string[] = []
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_input: RequestInfo | URL, init: RequestInit) => {
-      if (init.method === 'PUT')
-        writes.push(JSON.parse(String(init.body)).sidebar)
-      return Response.json({ stored: true, sidebar: 'full' })
-    }),
-  )
-  await mount({ sidebar: true })
-  await waitFor(() =>
-    expect(usePreferencesStore.getState().sidebarOwner).not.toBeNull(),
-  )
-  let finish!: (identity: Whoami) => void
-  vi.mocked(authApi.whoami).mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        finish = resolve
-      }),
-  )
-  act(() =>
-    useSessionStore.getState().setSession({
-      csrfToken: 'renewed-local-fixture',
-      sessionId: 'renewed-fixture',
-      expiresAt: '',
-    }),
-  )
-  await waitFor(() =>
-    expect(screen.getByTestId('saved')).toHaveAttribute('data-ready', 'false'),
-  )
-  expect(usePreferencesStore.getState().sidebarOwner).toBeNull()
-  act(() => usePreferencesStore.getState().toggleSidebar())
-  expect(usePreferencesStore.getState().sidebarCollapsed).toBe(true)
-  await act(async () => finish(A))
-  await waitFor(() =>
-    expect(screen.getByTestId('saved')).toHaveAttribute('data-ready', 'true'),
-  )
-  expect(usePreferencesStore.getState().sidebarCollapsed).toBe(true)
-  await waitFor(() => expect(writes).toEqual(['rail']))
 })

@@ -30,6 +30,10 @@
     "title": "Control plane non raggiungibile",
     "description": "Non siamo riusciti a raggiungere il control plane. Controlla la connessione e che il motore sia in esecuzione."
   },
+  "networkSecure": {
+    "title": "Connessione sicura non riuscita",
+    "description": "Il browser non è riuscito ad aprire una connessione sicura con {{origin}}. Se non considera attendibile il certificato del motore, apri quell’indirizzo in una nuova scheda e consideralo attendibile, oppure installa la CA del motore (tls.crt.ca nella sua directory dei dati). Altrimenti controlla la connessione e che il motore sia in esecuzione."
+  },
   "boundary": {
     "title": "Questa vista è andata in crash",
     "description": "Si è verificato un errore imprevisto durante la visualizzazione. Di solito si risolve ricaricando.",

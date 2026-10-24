@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import './i18n'
@@ -190,4 +190,16 @@ it('offers an OpenCode profile for a vendor key only at its own address', async 
     ),
   ).toBeInTheDocument()
   expect(screen.queryByRole('option', { name: /OpenCode agent/ })).toBeNull()
+})
+
+it('announces a refused bind inside the dialog', async () => {
+  api.patchProfile.mockRejectedValue(new Error('the engine refused the bind'))
+  show()
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('combobox'))
+  await user.click(await screen.findByRole('option', { name: /Local agent/ }))
+  await user.click(screen.getByRole('button', { name: 'Bind profile' }))
+  expect(
+    await within(screen.getByRole('dialog')).findByRole('alert'),
+  ).toHaveTextContent('the engine refused the bind')
 })

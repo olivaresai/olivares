@@ -22,11 +22,12 @@ niveau et sa phrase secrète privée ou sa KEK sont nécessaires pour revenir à
 
 ## Quelle voie de mise à niveau vous correspond
 
-Il existe trois manières de faire avancer le binaire, et elles aboutissent au même résultat.
+Il existe quatre manières de faire avancer le binaire, et elles aboutissent au même résultat.
 
 | Votre installation | Voie |
 |---|---|
-| Un binaire sur un hôte, systemd | `olivares upgrade` — cette page |
+| Un paquet deb, rpm, apk ou AUR | Le gestionnaire de paquets. [Installer depuis un paquet](/fr/how-to/install-from-packages/) |
+| Un binaire sur un hôte, systemd (ne venant pas d'un paquet) | `olivares upgrade` — cette page |
 | Un conteneur Docker ou Podman | `docker compose exec olivares olivares upgrade`, puis recréez le conteneur. L'image ne peut pas changer : la version est donc conservée dans le volume de données (`ota/` sous le répertoire de données), et chaque démarrage du binaire de l'image la lance tant qu'elle est plus récente que l'image ou de même version construite autrement. Supprimer `ota/` ramène le conteneur au binaire de son image. [Docker et Compose](/fr/how-to/install-a-license/#docker-et-compose) donne les commandes. |
 | Kubernetes / Helm | Définissez l'image et laissez l'opérateur effectuer le rolling update. N'exécutez pas `olivares upgrade` dans un pod : le déploiement est déclaratif et la prochaine réconciliation annulerait le changement. |
 
@@ -52,7 +53,7 @@ actives :
 
 <!-- release -->
 ```sh
-olivares upgrade --check --current-version 0.3
+olivares upgrade --check --current-version 0.4
 ```
 <!-- /release -->
 
@@ -102,6 +103,10 @@ bande par rapport à la ligne de disponibilité générale.
 ```sh
 olivares upgrade
 ```
+
+Sur une installation par paquet (deb, rpm, apk, AUR), la commande est refusée avec le code de sortie 2
+avant tout téléchargement : utilisez le gestionnaire de paquets, comme l'indique le tableau ci-dessus.
+`--check` montre toujours le plan.
 
 Voici ce que fait la commande, dans l'ordre, et la raison de chaque étape :
 
@@ -163,6 +168,12 @@ olivares upgrade --install-timer --timer-schedule 'Sun *-*-* 03:00:00'
 
 La commande affiche les unités par défaut ; `--timer-dir` les écrit à l'emplacement indiqué.
 C'est opt-in : rien ne se planifie tout seul.
+
+Sur une installation par paquet, la commande refuse : `/usr/bin/olivares` appartient au
+gestionnaire de paquets, donc elle se termine avec 2, n'écrit aucune unité et nomme la voie : le
+gestionnaire de paquets de l'hôte et, sur l'appliance Olivares, `systemctl start olivares-appliance-update.service`. Avec
+`--enterprise --connect`, elle nomme aussi `olivares license connect refresh`. La vérification
+se fait sur le chemin : un binaire que `install.sh --bindir /usr/bin` y a placé est donc refusé aussi.
 
 La console présente la moitié en lecture seule des mêmes informations : **Settings → update
 status** appelle `POST /v1/console/update-check`, qui vérifie à la demande le canal configuré.

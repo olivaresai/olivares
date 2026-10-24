@@ -178,13 +178,12 @@ var historicalBusinessNoneCitations = map[historicalNoneDeclaration][]string{
 	// Fleet managed settings moved to Business (dev#2349): the truth loop's readers now live in
 	// claudepolicy_truth_enterprise.go of the Business overlay. Each citation was checked in that
 	// change's parent, where the file was public.
-	{"governance.policy_distribution", "a hex digest of the distributed bytes, compared at claudepolicy_truth.go:678"}:                                              {"claudepolicy_truth.go:678"},
-	{"governance.policy_distribution", "a detached signature produced at claudepolicy_truth.go:183 and rendered only: claudepolicy_truth.go:568"}:                   {"claudepolicy_truth.go:183", "claudepolicy_truth.go:568"},
-	{"governance.policy_distribution", "a verifier public key, rendered only: claudepolicy_truth.go:569"}:                                                           {"claudepolicy_truth.go:569"},
-	{"governance.policy_distribution", "a signer key fingerprint, compared at claudepolicy_truth.go:682"}:                                                           {"claudepolicy_truth.go:682"},
-	{"governance.policy_observed", "a host or distribution name, validated at claudepolicy_truth.go:628-636 and used as the upsert key: claudepolicy_truth.go:709"}: {"claudepolicy_truth.go:628-636", "claudepolicy_truth.go:709"},
-	{"governance.policy_observed", "a hex digest of the stored content: claudepolicy_truth.go:725, claudepolicy_truth.go:954"}:                                      {"claudepolicy_truth.go:725", "claudepolicy_truth.go:954"},
-	{"governance.policy_observed", "an artifact hash echoed by the host, compared before it is stored: claudepolicy_truth.go:678, claudepolicy_truth.go:718"}:       {"claudepolicy_truth.go:678", "claudepolicy_truth.go:718"},
+	{"governance.policy_distribution", "a hex digest of the distributed bytes, compared at claudepolicy_truth.go:678"}:                                        {"claudepolicy_truth.go:678"},
+	{"governance.policy_distribution", "a detached signature produced at claudepolicy_truth.go:183 and rendered only: claudepolicy_truth.go:568"}:             {"claudepolicy_truth.go:183", "claudepolicy_truth.go:568"},
+	{"governance.policy_distribution", "a verifier public key, rendered only: claudepolicy_truth.go:569"}:                                                     {"claudepolicy_truth.go:569"},
+	{"governance.policy_distribution", "a signer key fingerprint, compared at claudepolicy_truth.go:682"}:                                                     {"claudepolicy_truth.go:682"},
+	{"governance.policy_observed", "a hex digest of the stored content: claudepolicy_truth.go:725, claudepolicy_truth.go:954"}:                                {"claudepolicy_truth.go:725", "claudepolicy_truth.go:954"},
+	{"governance.policy_observed", "an artifact hash echoed by the host, compared before it is stored: claudepolicy_truth.go:678, claudepolicy_truth.go:718"}: {"claudepolicy_truth.go:678", "claudepolicy_truth.go:718"},
 
 	// Identity & Scale readers moved to Business in 46cfbf0c. Each citation was checked in that commit's parent.
 	// Some were already approximate there: handlers:143 is the brace after the event read at :139; handlers:372 and :375 are the

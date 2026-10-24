@@ -271,7 +271,7 @@ func (rs *ResourceServer) decideToolCall(ctx context.Context, req rsRequest, tok
 	// member extracted from the strict tree — never a case-insensitive re-parse
 	// of the forwarded bytes (a case-folding upstream would consume the other
 	// alias). A case-variant alias was already refused by canonicalization.
-	if rs.elicitationMediator != nil {
+	if sdk.CapabilityEnabled(rs.elicitationMediator) {
 		if mv, reason := rs.evaluateMRTREntries(ctx, tok, ChannelMRTRInputResponse, canon.InputResponses, trace); mv != mediationPass {
 			return toolCallGrant{}, rs.mediationRefusal(tok, mv, reason, ChannelMRTRInputResponse, trace)
 		}

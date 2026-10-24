@@ -8,12 +8,12 @@ import type { StreamStatus } from './sse'
 
 /**
  * LiveDot — an HONEST connection indicator for the SSE-backed views. It shows the
- * real stream status (open → a teal live pulse; connecting → amber; error → red;
- * closed → muted), never a fake "live" badge when the socket is down. The pulse is
- * the one sanctioned looping animation (`animate-pulse-live`, index.css).
+ * real stream status (open → a solid teal dot; connecting → amber; error → red;
+ * closed → muted), never a fake "live" badge when the socket is down. A status is
+ * a solid dot plus a word; nothing pulses (C2-DESIGN §3).
  */
 const DOT: Record<StreamStatus, string> = {
-  open: 'bg-confidence-attributed animate-pulse-live',
+  open: 'bg-confidence-attributed',
   connecting: 'bg-warning',
   error: 'bg-danger',
   closed: 'bg-graphite-400',

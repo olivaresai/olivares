@@ -138,6 +138,16 @@ var readHiddenInput = func(in io.Reader, r *bufio.Reader) (string, error) {
 	return readHiddenLine(f, r)
 }
 
+// hideTerminalEcho turns echo off on the terminal in until the returned restore
+// runs. It is a variable so a test can stand in for a terminal.
+var hideTerminalEcho = func(in io.Reader) (func(), error) {
+	f, ok := in.(*os.File)
+	if !ok {
+		return nil, errors.New("standard input is not a terminal")
+	}
+	return hideEcho(f)
+}
+
 // transportHint turns the two transport failures a new user meets into a sentence
 // with the next step: a certificate this computer does not trust, and an engine
 // that is not running. The original error stays on the next line (callers redact

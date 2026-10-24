@@ -193,6 +193,16 @@ describe('routineListState', () => {
 })
 
 describe('RoutinePoliciesView tri-state rendering', () => {
+  // The empty state carries the verb only after a successful empty read; an
+  // unreadable list must keep the page-level New policy action.
+  it('keeps the page-level New policy while the list could not be read', async () => {
+    api.listRoutinePolicies.mockRejectedValue(new Error('down'))
+    wrap(<RoutinePoliciesView />)
+    await screen.findByRole('alert')
+    expect(await screen.findByTestId('routine-policy-new')).toBeInTheDocument()
+    expect(screen.queryByText('No routine policies authored yet')).toBeNull()
+  })
+
   it('renders a null allowlist and an EMPTY allowlist with different text', async () => {
     api.listRoutinePolicies.mockResolvedValue({
       items: [anyCron, denyAllCron],
@@ -525,7 +535,10 @@ describe('RoutinePolicyEditorDialog write intents', () => {
     wrap(<RoutinePoliciesView />)
     const user = userEvent.setup()
 
-    await user.click(await screen.findByTestId('routine-policy-new'))
+    // The empty answer moves the verb into the empty state; wait for it so the
+    // click lands on the button that stays, not the header's transient one.
+    await screen.findByText('No routine policies authored yet')
+    await user.click(screen.getByTestId('routine-policy-new'))
     await screen.findByTestId('routine-editor-name')
     await user.type(screen.getByTestId('routine-editor-name'), 'p1')
 
@@ -548,7 +561,9 @@ describe('RoutinePolicyEditorDialog write intents', () => {
     wrap(<RoutinePoliciesView />)
     const user = userEvent.setup()
 
-    await user.click(await screen.findByTestId('routine-policy-new'))
+    // Same handoff as the previous case: click the verb once the empty state owns it.
+    await screen.findByText('No routine policies authored yet')
+    await user.click(screen.getByTestId('routine-policy-new'))
     await screen.findByTestId('routine-editor-name')
     await user.type(screen.getByTestId('routine-editor-name'), 'p1')
     expect(screen.getByTestId('routine-editor-save')).toBeEnabled()
@@ -637,5 +652,24 @@ describe('RoutinePoliciesView — the scope a policy names', () => {
     api.routinePosture.mockResolvedValue(posture([odd]))
     wrap(<RoutinePoliciesView />)
     expect(await screen.findByText('agt-7')).toBeInTheDocument()
+  })
+})
+
+/**
+ * ONE ORANGE PER FIRST SCREEN (dev#2673's console rule 2026-10-17). The
+ * merged mechanism (main e601803a8, dfff8c3ad): while a read list is empty the
+ * page header's verb steps aside, so the empty state's action is the one orange.
+ */
+describe('RoutinePoliciesView — one orange control on an empty list', () => {
+  it('offers the verb in the empty state only, never as a page-level New policy button', async () => {
+    wrap(<RoutinePoliciesView />)
+    expect(
+      await screen.findByText('No routine policies authored yet'),
+    ).toBeInTheDocument()
+    const buttons = await screen.findAllByRole('button', {
+      name: 'New policy',
+    })
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].getAttribute('data-testid')).toBe('routine-policy-new')
   })
 })

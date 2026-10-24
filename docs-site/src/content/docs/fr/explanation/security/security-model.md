@@ -168,7 +168,7 @@ d'entreprise demande, et c'est ce que la télémétrie native ne donne pas.
 :::note[Deux chemins hors machine : le pull et un push réel]
 Le journal vérifiable atteint un SIEM par deux voies. L'export **pull**
 (`GET /v1/audit/export`) nécessite Business et constitue l'artefact qu'un
-exploitant archive. Un **push** est réel dès qu'il est configuré : un abonnement
+exploitant archive. Un **push** nécessite aussi Business et est réel dès qu'il est configuré : un abonnement
 d'eventing `audit.recorded` démarre une pompe de journal par locataire qui livre chaque
 enregistrement scellé **au moins une fois** via le transport durable, protégé contre le
 SSRF, avec reprise et file de rebut (`modules/siemforward/forwarder.go`, câblé dans

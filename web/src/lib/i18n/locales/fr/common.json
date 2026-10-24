@@ -32,8 +32,6 @@
     "viewAll": "Tout afficher",
     "learnMore": "En savoir plus",
     "openMenu": "Ouvrir le menu",
-    "expandSidebar": "Développer la barre latérale",
-    "collapseSidebar": "Réduire la barre latérale",
     "help": "Ouvrir la documentation de cette vue"
   },
   "states": {
@@ -50,6 +48,7 @@
     "label": "Thème",
     "light": "Clair",
     "dark": "Sombre",
+    "black": "Noir",
     "system": "Système",
     "toggle": "Changer de thème"
   },
@@ -102,7 +101,7 @@
     "noTargetHelp": "Sélectionnez une organisation, puis réessayez.",
     "goTo": "Aller à",
     "recentSessions": "Sessions récentes",
-    "settingsGroup": "Réglages",
+    "settingsGroup": "Paramètres",
     "scope": "dans {{name}}",
     "footerMove": "déplacer",
     "footerOpen": "ouvrir",
@@ -164,9 +163,7 @@
     "email": "Saisissez une adresse e-mail valide."
   },
   "a11y": {
-    "breadcrumb": "Fil d’Ariane",
     "skipToContent": "Aller au contenu",
-    "primarySidebar": "Principale",
     "mainNavigation": "Navigation principale",
     "graphControls": "Contrôles du graphe",
     "graphMinimap": "Mini-carte du graphe",
@@ -328,10 +325,8 @@
         "first": "Première session",
         "last": "Dernière session",
         "open": "Ouvrir la session",
-        "pin": "L’épingler ou la détacher"
-      },
-      "nav": {
-        "toggleRail": "Replier ou déplier la barre de navigation"
+        "pin": "L’épingler ou la détacher",
+        "menu": "Ouvrir le menu d’actions de la session"
       },
       "navRail": {
         "next": "Module suivant",
@@ -351,6 +346,10 @@
         "previousFile": "Fichier précédent",
         "nextHunk": "Modification suivante",
         "previousHunk": "Modification précédente"
+      },
+      "approvals": {
+        "approve": "Approuver une fois la demande ouverte",
+        "deny": "Rejeter la demande ouverte"
       }
     },
     "when": {
@@ -358,10 +357,10 @@
       "launcherFocused": "dans le champ du lanceur",
       "workSurface": "sur l’écran des sessions",
       "sessionHistory": "quand une session précédente est disponible",
-      "paletteRecent": "dans les résultats de la palette avec une recherche vide"
+      "paletteRecent": "dans les résultats de la palette avec une recherche vide",
+      "approvalQueue": "dans la file des approbations"
     },
     "precedence": "Quand deux lignes partagent les mêmes touches, la dernière applicable l’emporte.",
-    "modNote": "⌘ correspond à Ctrl sous Windows et Linux.",
     "problems_one": "{{count}} raccourci n’a pas pu être lu et ne se déclenche pas : {{commands}}",
     "problems_other": "{{count}} raccourcis n’ont pas pu être lus et ne se déclenchent pas : {{commands}}",
     "problems_many": "{{count}} raccourcis n’ont pas pu être lus et ne se déclenchent pas : {{commands}}",
@@ -413,6 +412,18 @@
       "copy": "Copier la commande",
       "copied": "Copié",
       "copyFailed": "Copie impossible. Sélectionnez la commande et copiez-la."
+    },
+    "copy": {
+      "message": "Copier le message",
+      "code": "Copier le code",
+      "copied": "Copié",
+      "failed": "Copie impossible. Sélectionnez le texte et copiez-le."
     }
+  },
+  "resize": {
+    "hint": "Glissez ou utilisez les flèches. Double-clic ou Entrée pour réinitialiser."
+  },
+  "panes": {
+    "saveFailed": "Impossible d'enregistrer la largeur du panneau. Elle ne vaut que pour cette visite."
   }
 }

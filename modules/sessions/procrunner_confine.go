@@ -29,7 +29,7 @@ func (pr *procRunner) command(ctx context.Context, spec LaunchSpec) (*exec.Cmd, 
 		cmd := exec.CommandContext(ctx, spec.Program, spec.Args...) // #nosec G204 -- spec.Program/Args are operator-configured session runtime; env is sanitized and container/sandbox isolation is refused deny-closed
 		return cmd, spec.Env, none, func() {}, nil
 	}
-	tmp, err := os.MkdirTemp("", "olivares-session-")
+	tmp, err := confine.ChildTempDir()
 	if err != nil {
 		return nil, nil, none, nil, fmt.Errorf("sessions: the session's temporary directory: %w", err)
 	}

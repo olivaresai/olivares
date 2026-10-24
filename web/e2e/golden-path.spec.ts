@@ -35,7 +35,6 @@ import { signInFixture } from './fixture-sign-in'
 import { openAdvancedSession } from './session-launch-form'
 
 const [SESSIONS] = JOURNEYS.sessions
-const [, PROFILES] = JOURNEYS.providerKeys
 
 const EMAIL = process.env.E2E_EMAIL ?? ''
 const PASSWORD = process.env.E2E_PASSWORD ?? ''
@@ -76,9 +75,15 @@ function save() {
   writeFileSync(RESULT, JSON.stringify(result, null, 2))
 }
 
+// The run's progress, one line each, on the harness's terminal. stdout directly: it is
+// harness output, not debug logging, and the text is what the harness operator reads.
+function say(line: string) {
+  process.stdout.write(`${line}\n`)
+}
+
 function observe(line: string) {
   result.observations.push(line)
-  console.log(`    observation: ${line}`)
+  say(`    observation: ${line}`)
   save()
 }
 
@@ -87,13 +92,13 @@ function observe(line: string) {
 // finding one does not abort the legs after it.
 function defect(owner: string, what: string, evidence: string) {
   result.defects.push({ owner, what, evidence })
-  console.log(`    ⛔ ${owner}: ${what}`)
+  say(`    ⛔ ${owner}: ${what}`)
   save()
 }
 
 function leg(l: Leg) {
   result.robustness.push(l)
-  console.log(`    console leg: ${l.leg} → ${l.result} (${l.ms} ms)`)
+  say(`    console leg: ${l.leg} → ${l.result} (${l.ms} ms)`)
   save()
 }
 
@@ -641,7 +646,9 @@ test.describe('the golden path, in the console', () => {
     await signIn(page)
 
     const t0 = Date.now()
-    await page.goto(stepHref(PROFILES))
+    // Every profile is listed in the Sessions workspace's Profiles tab; /provider-profiles
+    // is a door into Tools, which lists accounts (named profiles) only (#2552).
+    await page.goto('/sessions?tab=profiles')
     // The actual profile row keeps the complete identity on its cell title;
     // the painted display name and shortened reference are not identity oracles.
     const profileCell = page
@@ -671,7 +678,7 @@ test.describe('the golden path, in the console', () => {
     if (!visible) {
       defect(
         'console',
-        `/provider-profiles does not show ${PROFILE_REF}; the deployment the CLI made is not observable there`,
+        `the Profiles tab does not show ${PROFILE_REF}; the deployment the CLI made is not observable there`,
         '08-provider-profiles-1440.png',
       )
     }

@@ -81,7 +81,7 @@ func Wrap(ctx context.Context, cmd *exec.Cmd, policy Policy) (waitReady func() e
 		_ = reader.Close()
 		_ = writer.Close()
 		p.close()
-		return nil, nil, "", errors.New("session egress requires the filesystem confinement helper")
+		return nil, nil, "", errors.New("session egress requires the filesystem confinement helper, which this engine did not start the session under; enable session confinement (Landlock) and unprivileged user/network namespaces on the engine host")
 	}
 	cmd.Args = []string{cmd.Path, "__olivares_confine", namespaceArg, string(payload)}
 	cmd.ExtraFiles = append(cmd.ExtraFiles, writer)
@@ -336,7 +336,7 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 			return 126, err
 		}
 	}
-	child.Env = proxyEnvironment(os.Environ(), "http://"+proxyListener.Addr().String(), caFile)
+	child.Env = proxyEnvironment(os.Environ(), "http://"+proxyListener.Addr().String(), caFile, req.Policy.LoopbackPorts)
 	child.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
 	// Pdeathsig fires when the starting thread exits, not the process; keep
 	// this goroutine on that thread for the supervisor's whole life.
@@ -368,7 +368,7 @@ func serveNamespace(req helperSpec, ready *os.File) (int, error) {
 // certificate under the variables driverfacts.TrustEnv names.
 const gitCAInfoEnv = "GIT_SSL_CAINFO"
 
-func proxyEnvironment(env []string, address, caFile string) []string {
+func proxyEnvironment(env []string, address, caFile string, loopbackPorts []int) []string {
 	var out []string
 	for _, value := range env {
 		key, _, _ := strings.Cut(value, "=")
@@ -378,6 +378,14 @@ func proxyEnvironment(env []string, address, caFile string) []string {
 	}
 	for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"} {
 		out = append(out, name+"="+address)
+	}
+	if len(loopbackPorts) > 0 {
+		direct := make([]string, len(loopbackPorts))
+		for i, port := range loopbackPorts {
+			direct[i] = "127.0.0.1:" + strconv.Itoa(port)
+		}
+		value := strings.Join(direct, ",")
+		out = append(out, "NO_PROXY="+value, "no_proxy="+value)
 	}
 	if caFile != "" {
 		for _, name := range driverfacts.TrustEnv {

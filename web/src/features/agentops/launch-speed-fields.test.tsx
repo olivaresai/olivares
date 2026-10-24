@@ -27,6 +27,39 @@ describe('launch speed choices', () => {
     expect(onFastMode).toHaveBeenLastCalledWith(false)
   })
 
+  it('offers the default and Off, not On, for a Claude model whose support is unknown', async () => {
+    const onFastMode = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <LaunchSpeedFields
+        driver="claude"
+        model={{}}
+        supportUnknown
+        onFastMode={onFastMode}
+        onServiceTier={vi.fn()}
+      />,
+    )
+    await user.click(screen.getByRole('combobox', { name: 'Fast mode' }))
+    expect(screen.getByRole('option', { name: 'On' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    await user.click(screen.getByRole('option', { name: 'Off' }))
+    expect(onFastMode).toHaveBeenLastCalledWith(false)
+  })
+
+  it('still shows nothing for a Claude model known not to report Fast mode', () => {
+    render(
+      <LaunchSpeedFields
+        driver="claude"
+        model={{ supports_fast_mode: false }}
+        onFastMode={vi.fn()}
+        onServiceTier={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('combobox', { name: 'Fast mode' })).toBeNull()
+  })
+
   it('passes a vendor service tier unchanged for Codex', async () => {
     const onServiceTier = vi.fn()
     const user = userEvent.setup()

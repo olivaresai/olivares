@@ -207,10 +207,13 @@ it('reads only the default logins without an organization, and Refresh reads aga
   await waitFor(() => expect(api.providers).toHaveBeenCalledTimes(2))
 })
 
-it('does not read providers without a system administrator session', async () => {
+it('does not read the tool logins without a system administrator session', async () => {
+  // A member reaches Tools for the accounts and keys; the login probes stay deployment-wide.
   auth.isSuperadmin = false
   mount()
-  expect(await screen.findByText(/system administrator/i)).toBeInTheDocument()
+  expect(
+    await screen.findByRole('heading', { name: 'AI tools' }),
+  ).toBeInTheDocument()
   expect(api.providers).not.toHaveBeenCalled()
 })
 

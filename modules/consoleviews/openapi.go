@@ -119,10 +119,18 @@ func consoleViewsUIStateSchema() map[string]any {
 				"type", "boolean",
 				"description", "Show the active commercial edition badge. Defaults to true; omitted fields retain their saved value.",
 			),
+			"pane_widths", oas.Obj(
+				"type", "object",
+				"description", "Panel widths in pixels by pane id (lowercase letters, digits and dashes, up to 32 characters; at most 16 panes). Panes named here replace their saved width; a width of 0 puts a pane back to its default; panes not named keep theirs.",
+				"minProperties", 1,
+				"maxProperties", 16,
+				"additionalProperties", oas.Obj("type", "integer", "minimum", 0, "maximum", 4000),
+			),
 		),
 		"anyOf", []any{
 			oas.Obj("required", oas.Enum("sidebar")),
 			oas.Obj("required", oas.Enum("show_edition_badge")),
+			oas.Obj("required", oas.Enum("pane_widths")),
 		},
 	)
 }

@@ -542,9 +542,11 @@ n'ont pas de niveau de couverture. Ils sont câblés séparément des sources.
 
 Kinds de destination in-process : `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`,
 `siem`, `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`,
-`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP) et `s3archive` (Business: Regulated Operations)
+`datadog`, `elastic`, `snmp`, `filelog`, `otlplog` (logs OTLP/HTTP), `s3archive` (Business: Regulated Operations)
 (le sink WORM S3 Object Lock — un objet immuable dont le verrou est vérifié par
-notification).
+notification) et `teamsbot` (Business: Regulated Operations, le connecteur Teams à bot
+enregistré de la boucle d'incident ; un binaire Community ignore une destination de ce
+type avec une ligne de journal qui nomme Business).
 
 Trois kinds d'egress vers des brokers s'exécutent **hors processus** sous forme de plugins
 embarqués (leurs arbres de dépendances de protocole wire ne se lient jamais au moteur,

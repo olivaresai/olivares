@@ -66,9 +66,9 @@ assert 'gh workflow run installer-matrix.yml --repo "$GITHUB_REPOSITORY"' in pub
 assert '--ref "refs/tags/$MATRIX_RELEASE_TAG" -f "release_version=$MATRIX_RELEASE_TAG"' in publication_job
 guard = "if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'"
 assert workflow.count(guard) == 1
-# The macOS leg is billed at the macOS rate: same repository guard, maintainer dispatch only.
-macos_guard = ("if: github.event_name == 'workflow_dispatch' && (github.repository == 'olivaresai/olivares'"
-               " || vars.OLIVARES_RELEASE_PROFILE == 'preprod')")
+# The macOS leg is billed at the macOS rate: same repository guard, maintainer dispatch only, never private.
+macos_guard = ("if: github.event_name == 'workflow_dispatch' && !github.event.repository.private"
+               " && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')")
 assert workflow.split("macos-installer:")[1].split("runs-on:")[0].count(macos_guard) == 1
 for family, image in (
     ("debian", "debian:stable-slim"), ("ubuntu", "ubuntu:24.04"),
@@ -76,21 +76,24 @@ for family, image in (
     ("alpine", "alpine:latest"),
 ):
     assert f"family: {family}" in workflow and f"image: {image}" in workflow
-# RUNNER PLACEMENT, pinned by exact source (R112). The Linux leg honors a configured
+# RUNNER PLACEMENT, pinned by exact source (R112). A private repository runs the Linux leg on
+# our runners (no hosted minutes). In the public repository it honors a configured
 # pool only on the maintainer dispatch: the `pull_request` trigger can carry fork code,
 # which pr-ci.yml's header forbids from reaching the self-hosted runners, and an
 # unconfigured repository keeps the hosted default on every event. Pinning the whole
-# expression is what makes those three properties testable from source without a
+# expression is what makes those properties testable from source without a
 # dispatch; a looser substring would pass on a selector that dropped the event scope.
-linux_runner = ("runs-on: ${{ github.event_name == 'workflow_dispatch'"
-                " && vars.CI_RUNNER || 'ubuntu-latest' }}")
+linux_runner = ("runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner')"
+                " || (github.event_name == 'workflow_dispatch' && vars.CI_RUNNER || 'ubuntu-latest') }}")
 assert linux_runner in workflow
-# macOS stays NATIVE and is never routed anywhere: a Linux runner cannot qualify a macOS
-# installer. Both halves are asserted — the literal survives, and no runner selector
-# reaches the job that owns it.
-assert "runs-on: macos-14" in workflow
+# macOS stays NATIVE: a Linux runner cannot qualify a macOS installer, so the public repository
+# keeps the hosted label and a private repository skips the job (its `if`, asserted above) and
+# says so in the Linux leg's job summary. The hosted label is only the public branch of the
+# private split, and the only pool the job could read is that private branch.
+macos_runner = "runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'macos-14' }}"
 assert workflow.count("macos-installer:") == 1
-assert "vars.CI_RUNNER" not in workflow.split("macos-installer:")[1]
+assert macos_runner in workflow.split("macos-installer:")[1]
+assert workflow.count("macOS leg skipped while the repository is private") == 1
 # Exactly two jobs, so a third runner (or a leg silently duplicated onto Linux) is caught.
 assert workflow.count("runs-on:") == 2
 assert workflow.count("bash scripts/installer-matrix-ci.sh") == 2

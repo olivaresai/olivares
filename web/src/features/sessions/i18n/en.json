@@ -123,13 +123,13 @@
     "table": "Table"
   },
   "partial": {
-    "noLiveRead": "Observed sessions are not shown: your role cannot read them. The launched ones below are the part that could be read, not the whole picture.",
-    "noRunRead": "Launched sessions are not shown: your role cannot read them. A session below reading as discovered may still have been launched by Olivares — this list could not check.",
-    "truncated": "This is the most recent page, not the whole estate. Origin here is joined over what is loaded, so a session whose run has scrolled off can read as discovered; open a session to have the engine answer for it.",
-    "runLookupFailed": "The launched half could not be read: the run lookup failed. Rows below show what the observed half returned; origin is reported as not read rather than guessed.",
-    "liveLookupFailed": "The observed half could not be read: the live lookup failed. Rows below are the launched ones; the telemetry columns are empty because nothing could be read, not because there is none.",
-    "noProfileRead": "Provider profile names are not shown: your role cannot read profiles. The Instance column carries each row’s profile reference instead.",
-    "profileLookupFailed": "Provider profile names could not be read: the profile lookup failed. The Instance column carries each row's profile reference instead."
+    "noLiveRead": "Sessions started outside Olivares are not shown: your role cannot see them.",
+    "noRunRead": "Sessions started in Olivares are not shown: your role cannot see them.",
+    "truncated": "Only the most recent sessions are loaded, so an older one may show as Discovered here. Open it to see where it came from.",
+    "runLookupFailed": "Sessions started in Olivares could not be loaded.",
+    "liveLookupFailed": "Sessions started outside Olivares could not be loaded.",
+    "noProfileRead": "Provider names are not shown: your role cannot read provider profiles.",
+    "profileLookupFailed": "Provider names could not be loaded."
   },
   "move": {
     "open": "Move to…",
@@ -276,7 +276,7 @@
     "cleaned": "Cleaned"
   },
   "address": {
-    "retired": "The session you had open is closed. Your access to the half it came from changed. Select a row to open a session under your current access."
+    "retired": "The session you had open is no longer available to you. Choose another from the list."
   },
   "work": {
     "worked": "worked for {{duration}}",
@@ -292,7 +292,14 @@
     "pinnedMark": "Pinned",
     "rowMenu": "Actions for {{name}}",
     "noObservation": "No telemetry has arrived for this session yet.",
-    "pinFailed": "The pin could not be changed."
+    "pinFailed": "The pin could not be changed.",
+    "snoozeHour": "Snooze for 1 hour",
+    "snoozeDay": "Snooze for 1 day",
+    "snoozeWeek": "Snooze for 1 week",
+    "unsnooze": "Unsnooze",
+    "markDone": "Mark done",
+    "markNotDone": "Mark not done",
+    "markFailed": "The mark could not be changed."
   },
   "surface": {
     "openBeside": "Open beside",
@@ -306,6 +313,11 @@
       "rail": "Sessions",
       "narrative": "Work",
       "context": "Context"
+    },
+    "resize": {
+      "rail": "Resize the session list",
+      "context": "Resize the context pane",
+      "beside": "Resize the session beside"
     }
   },
   "narrative": {
@@ -318,14 +330,15 @@
   },
   "meter": {
     "mode": "Mode: {{mode}}",
+    "unasked": "Runs without asking: confined by <policy>Olivares policy</policy>",
+    "unaskedShort": "Runs without asking",
+    "accessUnknown": "Access not reported",
     "modeTitle": "{{tool}} reports: {{mode}}",
     "theTool": "the tool",
     "toolWord": {
-      "bypassPermissions": "Never asks for permission",
       "untrusted": "Asks before commands it does not trust",
       "onFailure": "Asks when a command fails",
       "onRequest": "Asks when it needs to",
-      "never": "Never asks for permission",
       "granular": "Asks by its own rules"
     },
     "usageLabel": "This session's usage",
@@ -434,9 +447,10 @@
   "conversation": {
     "log": "Conversation",
     "waiting": "Waiting for the session…",
-    "empty": "No turns yet. Send a sentence below.",
-    "ended": "The session I/O stream ended.",
-    "lag": "{{count}} frame(s) dropped — output below resumes after the gap.",
+    "empty": "No messages yet.",
+    "ended": "The session ended.",
+    "lag_one": "{{count}} frame dropped — output below resumes after the gap.",
+    "lag_other": "{{count}} frames dropped — output below resumes after the gap.",
     "tool": "Tool",
     "result": "Result",
     "unknown": "Unrecognised frame",
@@ -444,6 +458,7 @@
     "args": "Arguments",
     "toolResult": "Result",
     "toolFailed": "Failed",
+    "toolStopped": "Stopped",
     "tokens": "{{input}} in · {{output}} out",
     "protocol": "Protocol frames: {{count}}",
     "stop": {
@@ -464,8 +479,60 @@
     "workingFolder": "Working folder: {{cwd}}",
     "temporaryFolder": "Working folder: temporary folder for this session",
     "workedFor": "Worked for {{duration}}",
-    "toolsFolded_one": "+{{count}} tool call",
-    "toolsFolded_other": "+{{count}} tool calls"
+    "modelChanged": "Model changed: {{from}} → {{to}}",
+    "modelChangedAt": "Model changed at {{time}}: {{from}} → {{to}}",
+    "sentPending": "Sent. Waiting for the tool to take it.",
+    "sentNotTaken": "The session ended before the tool took it.",
+    "finishedIn": "Finished in {{duration}}",
+    "escToInterrupt": "Esc to interrupt",
+    "background": "In the background",
+    "agentWorking": "Working",
+    "work": {
+      "join": ", ",
+      "ran_one": "ran {{count}} command",
+      "ran_other": "ran {{count}} commands",
+      "edited_one": "edited {{count}} file",
+      "edited_other": "edited {{count}} files",
+      "editedSome": "edited files",
+      "agents_one": "ran {{count}} agent",
+      "agents_other": "ran {{count}} agents",
+      "read_one": "read {{count}} file",
+      "read_other": "read {{count}} files",
+      "readSome": "read files",
+      "searched_one": "searched {{count}} time",
+      "searched_other": "searched {{count}} times",
+      "used_one": "used {{count}} tool",
+      "used_other": "used {{count}} tools",
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed",
+      "background_one": "{{count}} in the background",
+      "background_other": "{{count}} in the background",
+      "stopped_one": "{{count}} stopped",
+      "stopped_other": "{{count}} stopped"
+    },
+    "running": {
+      "command_one": "Running {{count}} shell command",
+      "command_other": "Running {{count}} shell commands",
+      "edit": "Editing {{target}}",
+      "read": "Reading {{target}}",
+      "search": "Searching {{target}}",
+      "agent": "{{name}} is working",
+      "tool": "Running {{tool}}"
+    },
+    "limit": {
+      "reached": "Claude Code reached its {{window}}",
+      "reachedUntil": "Claude Code reached its {{window}}; it resets {{time}}",
+      "reachedUsed": "Claude Code reached its {{window}} ({{used}}% used)",
+      "reachedUsedUntil": "Claude Code reached its {{window}} ({{used}}% used); it resets {{time}}",
+      "window": {
+        "fiveHour": "5-hour limit",
+        "weekly": "weekly limit",
+        "weeklyOpus": "weekly Opus limit",
+        "weeklySonnet": "weekly Sonnet limit",
+        "extra": "extra usage limit",
+        "usage": "usage limit"
+      }
+    }
   },
   "changes": {
     "title": "Changes in {{folder}}",
@@ -532,17 +599,24 @@
       "pinned": "Pinned",
       "attention": "Needs you",
       "active": "Working",
-      "settled": "Earlier"
+      "today": "Done today",
+      "settled": "Earlier",
+      "snoozed": "Snoozed",
+      "archived": "Archived"
     },
     "more": "More",
     "back": "Back to sessions",
     "showTable": "Show as table",
     "filter": "Filter sessions…",
+    "recent": "Showing the {{n}} most recent",
+    "loadMore": "Load more",
     "noMatch": "No session matches."
   },
   "thread": {
     "copyReference": "Copy reference",
-    "terminalHint": "The same session from a terminal."
+    "terminalHint": "The same session from a terminal.",
+    "modelMismatch": "Asked for {{requested}}, running {{inUse}}",
+    "modelTitle": "Requested: {{requested}} · In use: {{inUse}}"
   },
   "activity": {
     "workflowPhases": "Phases",
@@ -632,5 +706,34 @@
     "usageUntil": "Out of quota until {{time}}",
     "usage": "Out of quota",
     "rate": "Rate limited by the provider. Try again in a moment."
+  },
+  "sheet": {
+    "title": "Session",
+    "open": "Open the session"
+  },
+  "rowActions": {
+    "rename": "Rename…",
+    "renameTitle": "Rename session",
+    "renameDescription": "The name is kept on the server and shown wherever this session is listed. Leave it empty to go back to the name Olivares gives it.",
+    "renameLabel": "Name",
+    "save": "Save",
+    "cancel": "Cancel",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "archived": "Archived. It is under Archived at the end of the list.",
+    "unarchived": "Back in the list.",
+    "copyLink": "Copy link",
+    "copyId": "Copy session id",
+    "copyTranscript": "Copy transcript",
+    "noTranscript": "This session's tool has not written a transcript to copy yet.",
+    "copyFailed": "The browser did not allow copying.",
+    "you": "You",
+    "assistant": "Assistant",
+    "delete": "Delete…",
+    "stopFirst": "Stop it first",
+    "copiedPartial": "Copied. {{n}} records of the transcript could not be read and are not in it.",
+    "clipped": "Some messages are longer than 64 KiB and were cut short in the copy; each one ends in [...].",
+    "noWholeText": "The engine sent only the first line of each message, so the transcript was not copied.",
+    "transcriptChanged": "The transcript changed while it was being copied. Try again."
   }
 }

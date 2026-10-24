@@ -351,7 +351,7 @@
       "subjectRef": "対象の参照番号",
       "reason": "理由",
       "reasonHint": "証拠保全の連鎖に原文のまま記録されます。",
-      "alreadyHeld": "{{count}}件の有効なホールドですでに対象となっています：{{matters}}",
+      "alreadyHeld_other": "{{count}}件の有効なホールドですでに対象となっています：{{matters}}",
       "notHeld": "現在これを保全するホールドはありません。これから設定するホールドが最初の1件になります。",
       "confirmCreate": "ホールドを設定",
       "created": "リーガルホールドを設定しました — 保全措置は有効です。",
@@ -464,10 +464,10 @@
     "accountLeg": "アカウント処理",
     "providerLeg": "プロバイダー処理",
     "custody": "Custody",
-    "noCustody": "No custody events recorded for this request.",
+    "noCustody": "この請求に対する証拠保全イベントは記録されていません。",
     "approvedBy": "approved by {{list}}",
     "anchored": "ledger #{{seq}} · {{hash}}",
-    "unanchored": "NOT anchored to the ledger — recorded, not provable"
+    "unanchored": "台帳にアンカーされていません — 記録はありますが、証明はできません"
   },
   "calendar": {
     "title": "規制カレンダー",

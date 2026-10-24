@@ -91,7 +91,8 @@ type Document struct {
 	// ACL is the source's permission references for this document: group / role /
 	// principal names (e.g. "group:engineering", "space:ENG"), NEVER credential
 	// material. An empty ACL means the document inherits the knowledge base's
-	// default ACL. The module intersects these with the requesting identity's
+	// default ACL; with none either, it is denied unless the source's operator
+	// declared the source public. The module intersects these with the requesting identity's
 	// groups to govern retrieval (chunk-level, not just UI).
 	ACL []string
 	// Classification is the source-declared sensitivity label (e.g. "public",

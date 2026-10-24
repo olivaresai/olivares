@@ -52,20 +52,21 @@ func TestLaunchSpecNetworkPolicyRelaysEveryHookEndpoint(t *testing.T) {
 	}
 }
 
-// A record-bound launch of a measured tool (Claude Code, Codex) is confined to its
-// record's endpoint. A tool whose host inventory has not been measured behind the
-// proxy keeps today's network until it is (Grok Build and OpenCode), and so do
-// account logins, whose vendor endpoints are not measured yet.
+// A record-bound launch of a measured tool (Claude Code, Codex, OpenCode) is confined
+// to its record's endpoint. A tool whose host inventory has not been measured behind
+// the proxy keeps today's network until it is (Grok Build), and so do Claude Code and
+// Codex account logins, whose vendor endpoints are not measured yet (#2154).
+// OpenCode's own login is held to its provider's hosts (opencode_egress_policy_test.go).
 func TestLaunchSpecNetworkPolicyEnforcesOnlyMeasuredTools(t *testing.T) {
 	m := New(WithConfinement([]string{"/engine-data"}, true))
-	for _, tc := range []struct{ driver, kind string }{{"claude", "anthropic"}, {"codex", "openai"}, {"codex", "openai_compatible"}, {"codex", "ollama"}} {
+	for _, tc := range []struct{ driver, kind string }{{"claude", "anthropic"}, {"codex", "openai"}, {"codex", "openai_compatible"}, {"codex", "ollama"}, {"opencode", "anthropic"}} {
 		bound := BoundProvider{Kind: tc.kind, Endpoint: "https://selected.example/v1"}
 		spec := m.childSpec(CreateRunParams{WorkspaceDir: "/work", ProviderHome: &ProviderHomeSnapshot{Driver: tc.driver, AuthSource: AuthSourceManagedInjection}}, childDecision{cred: Credential{bound: bound}})
 		if spec.NetworkPolicy == nil || !reflect.DeepEqual(spec.NetworkPolicy.Providers, []string{bound.Endpoint}) {
 			t.Fatalf("a profiled record-bound %s launch on %s is not confined to its endpoint: %+v", tc.driver, tc.kind, spec.NetworkPolicy)
 		}
 	}
-	for _, tc := range []struct{ driver, kind string }{{"grok", "xai"}, {"opencode", "anthropic"}, {"claude", ""}, {"codex", ""}} {
+	for _, tc := range []struct{ driver, kind string }{{"grok", "xai"}, {"claude", ""}, {"codex", ""}} {
 		spec := m.childSpec(CreateRunParams{WorkspaceDir: "/work", ProviderHome: &ProviderHomeSnapshot{Driver: tc.driver, AuthSource: AuthSourceAccountHome}}, childDecision{cred: Credential{bound: BoundProvider{Kind: tc.kind, Endpoint: "https://selected.example/v1"}}})
 		if spec.NetworkPolicy != nil {
 			t.Fatalf("%s bound=%q: unmeasured tool network is enforced: %+v", tc.driver, tc.kind, spec.NetworkPolicy)

@@ -78,7 +78,8 @@
   },
   "apply": {
     "success": "Template applied.",
-    "conflicts": "Applied with {{count}} conflict(s).",
+    "conflicts_one": "Applied with {{count}} conflict.",
+    "conflicts_other": "Applied with {{count}} conflicts.",
     "conflictField": "Field",
     "conflictOld": "Previous value",
     "conflictNew": "New value",

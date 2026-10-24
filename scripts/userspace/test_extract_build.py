@@ -37,6 +37,18 @@ class BuildIdentity(unittest.TestCase):
                 bundle.addfile(entry, io.BytesIO(value))
         return archive
 
+    def run_cli(self, root, archive, repository='olivaresai/olivares', run_attempt='1', build_attempt='1'):
+        event = root / 'event.json'
+        event.write_text(json.dumps({'pull_request': {'head': {'sha': 'pr-head'}}}))
+        env = dict(os.environ, GITHUB_REPOSITORY=repository, GITHUB_SHA='merge-candidate',
+                   GITHUB_EVENT_PATH=str(event), GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT=run_attempt)
+        env.pop('BUILD_ATTEMPT', None)
+        if build_attempt is not None:
+            env['BUILD_ATTEMPT'] = build_attempt
+        return subprocess.run(
+            [sys.executable, str(Path(__file__).with_name('extract_build.py')), str(archive), str(root / 'out')],
+            env=env, capture_output=True, text=True, timeout=10)
+
     def test_cli_binds_repository_and_pr_head(self):
         for repository in ('olivaresai/olivares', 'example/development'):
             for artifact_repo, checkout, succeeds in (
@@ -46,19 +58,32 @@ class BuildIdentity(unittest.TestCase):
                 with self.subTest(repository=repository, artifact_repo=artifact_repo, checkout=checkout):
                     with tempfile.TemporaryDirectory() as directory:
                         root = Path(directory)
-                        event = root / 'event.json'
-                        event.write_text(json.dumps({'pull_request': {'head': {'sha': 'pr-head'}}}))
-                        env = dict(os.environ, GITHUB_REPOSITORY=repository, GITHUB_SHA='merge-candidate',
-                                   GITHUB_EVENT_PATH=str(event), GITHUB_RUN_ID='123', GITHUB_RUN_ATTEMPT='1')
                         archive = self.bundle(root, repository=artifact_repo, checkout=checkout)
-                        result = subprocess.run(
-                            [sys.executable, str(Path(__file__).with_name('extract_build.py')),
-                             str(archive), str(root / 'out')], env=env, capture_output=True, text=True,
-                            timeout=10)
+                        result = self.run_cli(root, archive, repository=repository)
                         self.assertEqual(result.returncode == 0, succeeds, result.stderr)
                         if succeeds:
                             self.assertEqual((root / 'out/olivares').read_bytes(),
                                              b'the existing candidate executable')
+
+    def test_cli_binds_the_attempt_pr_build_reported_not_the_consumers_own(self):
+        # #2749: "re-run failed jobs" re-runs a failed userspace-compat at attempt 2 while
+        # pr-build's attempt-1 success keeps its artifact, so the identity check must read
+        # the PRODUCING attempt (pr-build's output, passed as BUILD_ATTEMPT), never the
+        # consumer's GITHUB_RUN_ATTEMPT.
+        for label, run_attempt, build_attempt, succeeds in (
+                ('a rerun accepts the retained attempt-1 artifact', '2', '1', True),
+                ('the first attempt accepts its own artifact', '1', '1', True),
+                ('an artifact of another producing attempt is refused', '2', '2', False),
+                ('a missing producing attempt is refused', '2', None, False),
+                ('an empty producing attempt is refused', '2', '', False)):
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                result = self.run_cli(root, self.bundle(root, checkout='pr-head', attempt='1'),
+                                      run_attempt=run_attempt, build_attempt=build_attempt)
+                self.assertEqual(result.returncode == 0, succeeds, result.stderr)
+                if build_attempt in (None, ''):
+                    self.assertIn('pr-build reported no attempt', result.stderr)
+                    self.assertFalse((root / 'out').exists())
 
     def test_exact_existing_build_is_usable(self):
         with tempfile.TemporaryDirectory() as directory:

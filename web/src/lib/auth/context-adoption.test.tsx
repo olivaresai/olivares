@@ -23,6 +23,9 @@ import type { LoginResponse, Whoami } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 
+const toasts = vi.hoisted(() => ({ error: vi.fn() }))
+vi.mock('sonner', () => ({ toast: toasts }))
+
 const expires = () => new Date(Date.now() + 3_600_000).toISOString()
 const sessionA = (): LoginResponse => ({
   csrf_token: 'olvs_witness_A',
@@ -187,6 +190,65 @@ describe('session adoption credential ownership', () => {
         'olivares.draft.v1.["tenant-a","user","user:alice","alice","run-a"]',
       ),
     ).toBe('Draft A')
+  })
+
+  // olivares#2781: the sign-out toast words a transport failure by how the page was opened and
+  // leaves an answered failure (a 503) as it was.
+  describe('the toast when sign-out revocation fails', () => {
+    const realLocation = window.location
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: realLocation,
+      })
+      toasts.error.mockReset()
+    })
+
+    async function failLogout(failure: () => Promise<Response>, url: string) {
+      const { protocol, origin } = new URL(url)
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...realLocation, protocol, origin },
+      })
+      await startA()
+      await act(async () => {
+        releaseA(new Response(JSON.stringify(identity('A'))))
+        await adoption
+      })
+      vi.mocked(globalThis.fetch).mockImplementationOnce(failure)
+      await act(async () => {
+        await auth.logout()
+      })
+    }
+
+    it('over http a transport failure says unreachable, with the old description', async () => {
+      await failLogout(
+        () => Promise.reject(new TypeError('Failed to fetch')),
+        'http://localhost:8080/',
+      )
+      expect(toasts.error).toHaveBeenCalledWith('Control plane unreachable', {
+        description: expect.stringMatching(/engine is running/i),
+      })
+    })
+
+    it('over https a transport failure names the certificate and the next step', async () => {
+      await failLogout(
+        () => Promise.reject(new TypeError('Failed to fetch')),
+        'https://192.168.8.17:8443/',
+      )
+      expect(toasts.error).toHaveBeenCalledWith('Secure connection failed', {
+        description: expect.stringContaining('tls.crt.ca'),
+      })
+    })
+
+    it('over https an answered failure (503) is not worded as a certificate failure', async () => {
+      await failLogout(
+        () => Promise.resolve(new Response('unavailable', { status: 503 })),
+        'https://192.168.8.17:8443/',
+      )
+      expect(toasts.error).toHaveBeenCalledTimes(1)
+      expect(toasts.error).toHaveBeenCalledWith('Control plane unreachable')
+    })
   })
 
   it('publishes its current principal with exactly one whoami request', async () => {

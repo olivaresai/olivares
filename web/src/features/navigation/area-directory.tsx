@@ -5,8 +5,8 @@
 // AREA DIRECTORY (N1) — the page behind each `/areas/<id>` route.
 //
 // A directory is a page of LINKS: the area's task question, its sections, and for every entry
-// this principal may open, the console's own label (the same nav:items key the sidebar and the
-// breadcrumb use) and one sentence about the task. The link is the title; nothing else on a
+// this principal may open, the console's own label (the same nav:items key All areas and the
+// palette use) and one sentence about the task. The link is the title; nothing else on a
 // card is a control, so there is never a control nested inside a link.
 //
 // It mounts no module and issues no request. In particular it shows no counts, no last

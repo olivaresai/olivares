@@ -26,6 +26,7 @@ import { QueryErrorState } from '@/components/layout/query-error-state'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { workLine } from '@/features/home/work-line'
 import { LiveDot } from '@/features/shared'
+import { tickLive, useSecondClock } from '@/features/shared/use-second-clock'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
 import { AttributionChip } from './attribution-chip'
 import { CanMessage } from './can-message'
@@ -60,11 +61,15 @@ export function SessionOverview({
   const run = primaryRun(session.runs)
   const line = live ? workLine(live) : null
   const usage = sessionUsage(session.runs, live)
+  // C2-DESIGN §3: an active session's elapsed figure ticks each second, extrapolated
+  // from its last engine event; every other session keeps the engine's figure.
+  const nowMs = useSecondClock(live?.cc_state === 'active')
+  const tickedLive = live && tickLive(live, nowMs)
   // With the meter shown, the cost is its to say (or to say it is unknown): the facts
   // line does not repeat it, nor print a second figure beside "cost not reported".
-  const facts = live
+  const facts = tickedLive
     ? workFacts(
-        live,
+        tickedLive,
         t,
         {
           duration: (ms) => formatDuration(ms),
@@ -72,14 +77,16 @@ export function SessionOverview({
             ? undefined
             : (micro) => formatMicroUsd(micro, { locale: lang }),
         },
-        sessionModelRef(run, live),
+        sessionModelRef(run, tickedLive),
       )
     : []
   const cwd = run?.workspace_path || frameCwd
   return (
     <div className="flex flex-col gap-4" data-testid="session-overview">
       <div className="flex flex-wrap items-center gap-2 empty:hidden">
-        {live && isScopedRow(live) ? (
+        {/* A session Olivares started is the normal case and needs no chip (dev#3120);
+            one that came another way says which. */}
+        {live && isScopedRow(live) && live.attribution !== 'managed' ? (
           <AttributionChip attribution={live.attribution} />
         ) : null}
         <SessionMode run={run} />

@@ -50,7 +50,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables.** La signature, la provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés](/fr/how-to/verify-a-release/). La vérification n'est pas encore entièrement hors ligne : les vérifications sans clé
   ont besoin du matériel de racine de confiance Sigstore et l'étape SLSA n'a pas de mode hors ligne. Le produit livre un
-  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.3<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
+  [bundle air-gap](/fr/how-to/air-gap-install/). La prochaine version est **<!-- release -->0.4<!-- /release -->**, pas encore publiée. Compilez depuis les sources jusqu'à sa publication.
 
 ## Open core — ce qui est ouvert vs commercial
 

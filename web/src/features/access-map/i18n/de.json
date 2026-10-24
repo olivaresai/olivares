@@ -10,12 +10,12 @@
     "write": "Schreiben / RW",
     "approximate": "Näherungsweise",
     "unexpected": "Unerwartet",
-    "truncated": "Zeige die ersten {{n}}",
+    "truncated": "Die ersten {{n}} werden angezeigt",
     "truncatedHint": "Der Bestand hat mehr Kanten als angezeigt; grenzen Sie mit Filtern ein oder erweitern Sie einen Knoten, um seine Nachbarn zu sehen."
   },
   "webgl": {
     "badge": "Hochdichte-Ansicht",
-    "hint": "Zeige {{n}} Knoten — für die Skalierung zum beschleunigten WebGL-Renderer gewechselt.",
+    "hint": "Es werden {{n}} Knoten angezeigt — für die Skalierung wurde zum beschleunigten WebGL-Renderer gewechselt.",
     "clustered": "Ressourcen werden bei dieser Skalierung nach Host gruppiert; eine Gruppe erscheint als „Host (N)“. Kein Befund wird verborgen — jede Gruppe mit unerwartetem Zugriff wird gekennzeichnet."
   },
   "filters": {
@@ -52,9 +52,9 @@
     "unusedHint": "Gestattet, aber nie beobachtet — zu straffende Überbereitstellung.",
     "forbiddenTitle": "Abweichung nicht autorisiert",
     "forbiddenHint": "Ihre Rolle kann den Graphen sehen, aber nicht den Unterschied zwischen dem Gestatteten und dem Beobachteten.",
-    "partial": "Teilergebnis: Die Engine hat diesen Abgleich über ein abgeschnittenes Drift-Fenster durchgeführt. Diese Zahlen umfassen daher nicht die gesamte Umgebung, und eine hier fehlende Kante kann schlicht jenseits der Grenze liegen.",
+    "partial": "Teilergebnis: Die Engine hat diesen Abgleich über ein abgeschnittenes Drift-Fenster durchgeführt. Diese Zahlen umfassen daher nicht den gesamten Bestand, und eine hier fehlende Kante kann schlicht jenseits der Grenze liegen.",
     "emptyWindowTitle": "Keine Befunde im gescannten Fenster",
-    "emptyWindowHint": "Der Scan endete an seiner Seitengrenze; dies ist daher keine Aussage über die gesamte Umgebung.",
+    "emptyWindowHint": "Der Scan endete an seiner Seitengrenze; dies ist daher keine Aussage über den gesamten Bestand.",
     "scopeHint": "Die Abweichungsliste umfasst die gesamte Organisation; die Kartenfilter gelten nicht für diese Liste"
   },
   "detail": {
@@ -111,7 +111,7 @@
     "verdict": {
       "clear": "Erneut geprüft: Diese Kante ist nicht mehr im Drift-Satz. Die Erklärung oben beschreibt den Zustand vor dieser Prüfung.",
       "present": "Erneut geprüft: Diese Kante ist weiterhin im Drift-Satz.",
-      "unknown": "Nicht bestätigt — die Drift-Abfrage kam nicht zurück oder deckte nur einen Teil der Umgebung ab. Beides ist nicht dasselbe wie sauber."
+      "unknown": "Nicht bestätigt — die Drift-Abfrage kam nicht zurück oder deckte nur einen Teil des Bestands ab. Beides ist nicht dasselbe wie sauber."
     },
     "checkDrift": "Drift für diese Kante lesen",
     "closes": "Eine erfasste Berechtigung behebt diesen Befund — nicht zwingend an dieser Kante: eine Berechtigung auf der Identität, zu der der Zugriff auflöst, behebt ihn von einer anderen aus. Die Quelle-zu-Geltungsbereich-Projektion ist Best-Effort, und Gruppen-, Rollen- und Ordner-Bindungen greifen, ohne etwas auf die Karte zu projizieren; es kann also eine echte Berechtigung geben, die dieser Abgleich nie sieht. Den Zugriff zu unterbinden behebt ihn ebenso wenig: eine Beobachtung wird nie zurückgenommen. Prüfen Sie erneut, statt es anzunehmen.",

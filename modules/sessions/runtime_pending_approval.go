@@ -84,19 +84,29 @@ func (m *Module) currentLiveOf(rec model.Record) (*liveRun, bool) {
 }
 
 func (m *Module) pendingRunApproval(rec model.Record) string {
+	refs := m.pendingRunApprovals(rec)
+	if len(refs) == 0 {
+		return ""
+	}
+	return refs[0]
+}
+
+// pendingRunApprovals is every human request the run currently awaits, oldest first.
+func (m *Module) pendingRunApprovals(rec model.Record) []string {
 	lr, ok := m.currentLiveOf(rec)
 	if !ok {
-		return ""
+		return nil
 	}
 	lr.mu.Lock()
 	defer lr.mu.Unlock()
 	if lr.finalized || lr.stopRequested || lr.launchFailed {
-		return ""
+		return nil
 	}
 	now := m.now()
 	lr.pendingApprovals = slices.DeleteFunc(lr.pendingApprovals, func(wait *runApprovalWait) bool { return !now.Before(wait.expiresAt) })
-	if len(lr.pendingApprovals) == 0 {
-		return ""
+	refs := make([]string, 0, len(lr.pendingApprovals))
+	for _, wait := range lr.pendingApprovals {
+		refs = append(refs, wait.ref)
 	}
-	return lr.pendingApprovals[0].ref
+	return refs
 }

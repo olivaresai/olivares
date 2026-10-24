@@ -14,12 +14,18 @@ import unittest
 
 
 class SmokeAuthTransport(unittest.TestCase):
-    scripts = {"quickstart-smoke.sh": 4, "web-e2e-demo.sh": 1, "docs-captures.sh": 1}
+    scripts = {"quickstart-smoke.sh": 4, "web-e2e-demo.sh": 1, "docs-captures.sh": 3}
+    # The call may carry proxy and output flags, and `-X POST` or the payload may sit on a
+    # backslash-continued line. What must hold is the shape: a POST to an auth route, the JSON
+    # content type, and the payload on stdin.
     request = re.compile(
-        r"(?:printf[^\n]*\|[ \t]*)?curl -sf -X POST "
-        r'"[^"\n]+/v1/(?:auth/login|setup)"[ \t]*(?:\\\n[ \t]*)?'
-        r"-H 'Content-Type: application/json' \\\n"
-        r'''[ \t]*(?:-d (?:"(?:\\.|[^"\\])*"|'[^']*')|--data-binary @-)'''
+        r"(?:printf[^\n]*\|[ \t]*)?"
+        r"curl (?:[^\n]*\\\n[ \t]*)*[^\n]*?-X POST "
+        r'"[^"\n]+/v1/(?:auth/login|setup)"'
+        r"(?:[^\n]*\\\n[ \t]*)*[^\n]*?"
+        r"-H 'Content-Type: application/json'"
+        r"(?:[^\n]*\\\n[ \t]*)*[^\n]*?"
+        r'''(?:-d (?:"(?:\\.|[^"\\])*"|'[^']*')|--data-binary @-)'''
     )
 
     def observed(self):
@@ -37,8 +43,13 @@ class SmokeAuthTransport(unittest.TestCase):
             curl.chmod(0o700)
             record = scratch / "request.json"
             environment = dict(os.environ, PATH=str(scratch) + os.pathsep + os.environ["PATH"],
-                               BASE="http://smoke.invalid", PORT="18972",
+                               BASE="http://smoke.invalid", PORT="18972", DATA=str(scratch),
                                SETUP_TOKEN="synthetic-single-use-setup-marker",
+                               SETUP_BODY=json.dumps({
+                                   "token": "synthetic-single-use-setup-marker",
+                                   "email": "demo@olivares.local",
+                                   "password": "olivares-demo-estate",
+                                   "organization": "Northwind Labs"}),
                                SMOKE_REQUEST_RECORD=str(record))
             for name, count in self.scripts.items():
                 requests = list(self.request.finditer((root / name).read_text()))
@@ -63,7 +74,10 @@ class SmokeAuthTransport(unittest.TestCase):
             with self.subTest(script=name, request=index):
                 self.assertTrue(record["stdin"], "auth JSON must reach curl on stdin")
                 payload = json.loads(record["stdin"])
-                if "/v1/setup" in request:
+                if "/v1/setup" in request and name == "docs-captures.sh":
+                    expected = {"token": "synthetic-single-use-setup-marker", "email": "demo@olivares.local",
+                                "password": "olivares-demo-estate", "organization": "Northwind Labs"}
+                elif "/v1/setup" in request:
                     expected = {"token": "synthetic-single-use-setup-marker", "email": "admin@local",
                                 "password": "correct-horse-battery-staple"}
                 elif "admin@local" in request:

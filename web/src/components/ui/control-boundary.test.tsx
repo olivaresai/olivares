@@ -173,4 +173,46 @@ describe('control boundaries use ctl-border', () => {
       ).toBeGreaterThanOrEqual(3)
     }
   })
+
+  it('the checked checkbox (the ink fill) holds 3:1 on every surface, and under its glyph', () => {
+    // #2701: checked and indeterminate alike fill the box with the foreground
+    // ink, not the action orange — state, not an action. WCAG 2.2 SC 1.4.11
+    // asks 3:1 for that boundary against what surrounds it, and for the check
+    // glyph on the fill, in both themes.
+    const css = readFileSync(join(SRC, 'src/styles/tokens.css'), 'utf8')
+    for (const [name, t] of [
+      ['light', block(css, ':root')],
+      ['dark', block(css, '.dark')],
+    ] as const) {
+      for (const bg of ['background', 'surface', 'elevated', 'raised'])
+        expect(
+          ratio(t.foreground, t[bg]),
+          `${name}: checked box on ${bg}`,
+        ).toBeGreaterThanOrEqual(3)
+      expect(
+        ratio(t.surface, t.foreground),
+        `${name}: check glyph on the ink fill`,
+      ).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('the checked switch track (the ink fill) holds 3:1 on every surface, and under its thumb', () => {
+    // #2696: the checked track is the foreground ink, not the action orange. WCAG 2.2
+    // SC 1.4.11 asks 3:1 for the state it shows against what surrounds it, in both themes.
+    const css = readFileSync(join(SRC, 'src/styles/tokens.css'), 'utf8')
+    for (const [name, t] of [
+      ['light', block(css, ':root')],
+      ['dark', block(css, '.dark')],
+    ] as const) {
+      for (const bg of ['background', 'surface', 'elevated', 'raised'])
+        expect(
+          ratio(t.foreground, t[bg]),
+          `${name}: checked track on ${bg}`,
+        ).toBeGreaterThanOrEqual(3)
+      expect(
+        ratio(t.surface, t.foreground),
+        `${name}: switch thumb on checked track`,
+      ).toBeGreaterThanOrEqual(3)
+    }
+  })
 })

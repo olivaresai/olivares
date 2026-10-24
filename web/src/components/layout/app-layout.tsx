@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { NewSessionHost } from '@/features/first-hour/new-session-host'
+import { PaneWidthsSync } from '@/features/console/pane-widths-sync'
 import { SettingsVisit } from '@/features/navigation/permitted-visit'
 import { PersonalNavigationProvider } from '@/features/navigation/personal-navigation'
 import { engineFavorites } from '@/features/saved-views/api'
@@ -11,35 +12,27 @@ import {
   useRouter,
   useRouterState,
 } from '@tanstack/react-router'
-import { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect } from 'react'
 import { PageActionsProvider } from '@/components/ui/page-actions'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
 import { isSignInPath } from '@/lib/auth/return-path'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { useSyncModulesNotEnabled } from '@/stores/modules'
-import { usePreferencesStore } from '@/stores/preferences'
 import { AppFrame } from './app-frame'
-import { AppSidebar } from './app-sidebar'
 import { BrandMark } from './brand'
 import { CommandMenu } from './command-menu'
 import { DestinationSections } from './destination-sections'
 import { GlobalShortcuts } from './shortcuts'
-import { RouteFrame, frameFor } from './page-frames'
+import { RouteFrame } from './page-frames'
 import { PhoneBar } from './phone-bar'
 import { SidePanelProvider } from './side-panel'
-import {
-  foldOrOverlay,
-  sidebarModeFor,
-  useNavOverlay,
-  SidebarSync,
-} from './sidebar-mode'
 import { AreasSheet } from './sidebar'
+import { useAreasSheet } from './areas-sheet-store'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
 import { SessionNotifications } from './session-notifications'
+import { StatusBar } from './status-bar'
 
 function Splash() {
   return (
@@ -56,15 +49,17 @@ function Splash() {
  * AppLayout is the authenticated shell and the auth GUARD for everything under it:
  * while the principal loads it shows a splash; if there is no session it redirects
  * to /login (the api client's onUnauthorized clears an expired session, which lands
- * here). Authenticated, it renders the frame (app-frame.tsx): the sidebar, the sheet with
- * its top bar and the routed work, the phone bar below 761 px, plus the always-mounted
- * ⌘K palette and the "All areas" sheet.
+ * here). Authenticated, it renders the frame (app-frame.tsx): the top bar and the routed
+ * work, the phone bar below 761 px, plus the always-mounted ⌘K palette and the
+ * "All areas" sheet.
  *
- * THE SHELL CONTRACT (redesign §3.2):
+ * THE SHELL CONTRACT (console Estate, issue #2544):
  *
- *   sidebar 256 px full | 56 px rail│ top bar 52 px: breadcrumb · page state · page actions · panels
- *                  ├──────────────────────────────────────────────────────────────
- *                  │ work — the whole remaining sheet [+ the side panel a page declares]
+ *   top bar 56 px: scope · places · search · notifications · account
+ *   ──────────────────────────────────────────────────────────────
+ *   work — the whole remaining canvas [+ the side panel a page declares]
+ *   ──────────────────────────────────────────────────────────────
+ *   status bar 24 px: engine · running · usage · stops … Stop all · version
  *
  * ⛔ THE SHELL HAS NO ACTION BAR, AND REMOVING IT IS THE POINT OF THIS LANE.
  *    Until 2026-09-18 a `ShellLauncher` sat below `main` on every authenticated route:
@@ -137,7 +132,6 @@ function useSignedOutRoute(status: string) {
 }
 
 export function AppLayout() {
-  const { t } = useTranslation('common')
   const { status } = useAuth()
   // Which engine modules run here (server-info modules_not_enabled, ARCH C1): read once
   // for the navigation gate, the route gate and the Home tiles.
@@ -148,94 +142,20 @@ export function AppLayout() {
   // Where a signed-out browser goes, and the page it returns to (read in the guard's
   // effect, once).
   const signInRoute = useSignedOutRoute(status)
-  // ONE SIDEBAR AT A TIME (console 1.0): the person's stored width on a document page; the
-  // rail on a work page, whose own list is the sidebar there. Unfolding it on a work page
-  // opens the navigation over the page and leaves the stored choice alone.
-  const folded = usePreferencesStore((s) => s.sidebarCollapsed)
-  const frame = frameFor(pathname)
-  const sidebarMode = sidebarModeFor(frame, folded)
-  // The navigation over a work page belongs to the page it was opened on: leaving that page
-  // (a link in it, or any other way) closes it.
-  const navOpen =
-    useNavOverlay((s) => s.openOn) === pathname && frame === 'work'
-  const closeNav = () => useNavOverlay.getState().setOpenOn(null)
-  const committedHref = useRouterState({
-    select: (s) => s.resolvedLocation?.href ?? s.location.href,
-  })
-  useEffect(() => {
-    useNavOverlay.getState().setOpenOn(null)
-  }, [committedHref])
-  const [areasOpen, setAreasOpen] = useState(false)
-  const areasReturnRef = useRef<HTMLElement | null>(null)
-  const openAreas = () => {
-    const overlay = useNavOverlay.getState()
-    areasReturnRef.current = overlay.openOn
-      ? overlay.returnFocusTo
-      : document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null
-    closeNav()
-    setAreasOpen(true)
-  }
-
   if (status === 'loading' || signInRoute) return <Splash />
 
   return (
     <PersonalNavigationProvider engineFavorites={engineFavorites}>
       <SessionNotifications />
-      <SidebarSync />
+      <PaneWidthsSync />
       <SidePanelProvider>
         <AppFrame
-          sidebar={
-            <AppSidebar
-              mode={sidebarMode}
-              onToggle={() => foldOrOverlay(pathname)}
-              areasOpen={areasOpen}
-              onOpenAreas={openAreas}
-            />
-          }
           topbar={<Topbar />}
-          phoneBar={<PhoneBar onMore={openAreas} />}
+          statusBar={<StatusBar />}
+          phoneBar={<PhoneBar onMore={() => useAreasSheet.getState().show()} />}
           overlays={
             <>
-              <Sheet
-                open={navOpen}
-                onOpenChange={(open) => {
-                  if (!open) closeNav()
-                }}
-              >
-                <SheetContent
-                  side="left"
-                  hideClose
-                  onCloseAutoFocus={(event) => {
-                    const opener = useNavOverlay.getState().returnFocusTo
-                    if (opener?.isConnected) {
-                      event.preventDefault()
-                      opener.focus()
-                    }
-                  }}
-                  data-slot="nav-overlay"
-                  aria-describedby={undefined}
-                  className="w-auto max-w-none gap-0 bg-frame p-0 min-[761px]:inset-y-2 min-[761px]:left-2 min-[761px]:h-auto min-[761px]:rounded-panel min-[761px]:border min-[761px]:border-line"
-                >
-                  <SheetTitle className="sr-only">
-                    {t('a11y.primarySidebar')}
-                  </SheetTitle>
-                  <AppSidebar
-                    mode="full"
-                    overlay
-                    onToggle={closeNav}
-                    onNavigate={closeNav}
-                    areasOpen={areasOpen}
-                    onOpenAreas={openAreas}
-                  />
-                </SheetContent>
-              </Sheet>
-              <AreasSheet
-                open={areasOpen}
-                onOpenChange={setAreasOpen}
-                returnFocusTo={areasReturnRef}
-              />
+              <AreasSheet />
               <CommandMenu />
               <GlobalShortcuts />
               <NewSessionHost />

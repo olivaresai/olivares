@@ -203,6 +203,7 @@ func (m *Module) Query(ctx context.Context, mc api.ModuleContext, req QueryReque
 	}
 	qvec := vectors[0]
 
+	m.stampLegacyDirectACL(ctx, mc)
 	var (
 		candidates []candidate
 		docByID    map[string]model.Record
@@ -519,6 +520,26 @@ func (m *Module) FetchDocument(ctx context.Context, mc api.ModuleContext, docID 
 	// CONTENT-egress policy and FetchDocument returns no chunk body — the metadata
 	// discovery boundary is classification + ACL + external-label, exactly the axes the
 	// audit's required fix names. Deny-closed to NotFound (indistinguishable from absent).
+	if len(out.ACL) == 0 {
+		// An empty ACL may be a direct upload from before the ACL was explicit: stamp
+		// it (after the access gate above, never for a caller that could not reach
+		// this KB) and read the ACL again.
+		m.stampLegacyDirectACL(ctx, mc)
+		if err := mc.Data.View(ctx, func(sc store.Scope) error {
+			repo, rerr := sc.Ext(documentKind)
+			if rerr != nil {
+				return rerr
+			}
+			rec, gerr := repo.Get(ctx, id)
+			if gerr != nil {
+				return gerr
+			}
+			out.ACL = unmarshalStrings(rec, colACL)
+			return nil
+		}); err != nil {
+			return nil, queryErr(QueryErrUnavailable, "store error")
+		}
+	}
 	if !aclAllows(out.ACL, grants.Groups) {
 		return nil, queryErr(QueryErrNotFound, "document not found")
 	}

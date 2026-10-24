@@ -38,6 +38,8 @@ export interface LiveListParams {
 export interface TimelineParams {
   limit?: number
   cursor?: string
+  /** Only the events at or after this RFC 3339 time (the last hour, say). */
+  since?: string
 }
 
 /**
@@ -82,16 +84,30 @@ export const sessionsApi = {
     ),
   /** The LEGACY timeline of a session by its bare external reference (the events
    * that carry no live_ref), keyset-paginated. */
-  timeline: (ref: string, params?: TimelineParams) =>
+  timeline: (
+    ref: string,
+    params?: TimelineParams,
+    scope?: Pick<RequestOptions, 'signal'>,
+  ) =>
     http.get<ListResponse<TimelineDTO>>(
       `/v1/m/sessions/live/${encodeURIComponent(ref)}/timeline`,
-      { query: { ...params, limit: params?.limit ?? 50 } },
+      {
+        query: { ...params, limit: params?.limit ?? 50 },
+        signal: scope?.signal,
+      },
     ),
   /** The timeline of exactly ONE row by its `live_ref`, keyset-paginated. */
-  timelineById: (liveRef: string, params?: TimelineParams) =>
+  timelineById: (
+    liveRef: string,
+    params?: TimelineParams,
+    scope?: Pick<RequestOptions, 'signal'>,
+  ) =>
     http.get<ListResponse<TimelineDTO>>(
       `/v1/m/sessions/live/by-id/${encodeURIComponent(liveRef)}/timeline`,
-      { query: { ...params, limit: params?.limit ?? 50 } },
+      {
+        query: { ...params, limit: params?.limit ?? 50 },
+        signal: scope?.signal,
+      },
     ),
 }
 

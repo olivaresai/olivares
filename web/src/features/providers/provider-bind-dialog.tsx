@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Field } from '@/components/ui/field'
+import { Field, FieldError } from '@/components/ui/field'
 import {
   Select,
   SelectContent,
@@ -25,7 +25,10 @@ import { Spinner } from '@/components/ui/spinner'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { profileName, type ProviderProfileDTO } from '@/features/agentops/types'
 import { useAuth } from '@/lib/auth/context'
-import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
+import {
+  failureText,
+  usePrivilegedMutation,
+} from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys } from './api'
 import { useProviderBoundary } from './auth-boundary'
 import { recordServesDriver } from './kinds'
@@ -41,10 +44,11 @@ export function ProviderBindDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { t } = useTranslation('providers')
+  const { t } = useTranslation(['providers', 'errors'])
   const { can, activeTenant } = useAuth()
   const boundary = useProviderBoundary()
   const [selected, setSelected] = useState('')
+  const [error, setError] = useState<string>()
   const allowed = can('sessions:profile:read') && can('sessions:profile:write')
   const profiles = useInfiniteQuery({
     queryKey: [
@@ -98,6 +102,11 @@ export function ProviderBindDialog({
     successMessage: t('bind.success'),
     invalidateKeys: () => [agentOpsKeys.profiles(activeTenant, boundary.epoch)],
     onDone: () => onOpenChange(false),
+    // The open dialog hides the toast from screen readers: say it here.
+    onError: (err) => {
+      setError(failureText(err) ?? t('errors:generic'))
+      return true
+    },
   })
   return (
     <Dialog
@@ -157,6 +166,7 @@ export function ProviderBindDialog({
             )}
           </>
         )}
+        <FieldError>{error}</FieldError>
         <DialogFooter>
           <Button
             variant="secondary"
@@ -171,7 +181,10 @@ export function ProviderBindDialog({
               !candidates.some((p) => p.profile_ref === selected) ||
               bind.isPending
             }
-            onClick={() => bind.mutate()}
+            onClick={() => {
+              setError(undefined)
+              bind.mutate()
+            }}
           >
             {bind.isPending && <Spinner className="size-3.5" />}
             {t('bind.title')}

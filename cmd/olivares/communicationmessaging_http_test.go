@@ -3003,7 +3003,7 @@ func exerciseCommunicationHTTPSessionHandoff(
 	// Withdraw insert nudges and join earlier drains before committing the
 	// work this journey must recover after restart. The periodic scheduler
 	// never starts in this NoIngest estate.
-	sessions.SetWorkOutboxNudge(nil)
+	(*eng).sessionsMod.SetWorkOutboxNudge(nil)
 	communicationHTTPTestSettleOutbox(t, *eng)
 	work, leased := createCommunicationHTTPSessionOwnedWork(
 		t, *eng, owner, tenant, sessionA, "Session HTTP handoff",

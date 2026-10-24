@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -73,7 +72,7 @@ func (s *Server) ModuleRoutePublished(method, path string) bool {
 // node does not run publishes none: its routes answer module_not_enabled.
 func (s *Server) moduleOperation(method, path string) (map[string]any, bool) {
 	ns, _, _ := strings.Cut(strings.TrimPrefix(path, "/v1/m/"), "/")
-	if slices.Contains(s.notEnabled, ns) {
+	if !s.moduleEnabled(ns) {
 		return nil, false
 	}
 	paths, _ := s.betaDocument()["paths"].(map[string]any)

@@ -139,7 +139,7 @@
     "trustedRoots": "Vertrauenswürdige Roots",
     "trustedRootsHint": "PEM-CA-Zertifikate (Fulcio oder private PKI). Nur öffentliches Material.",
     "trustedKeys": "Vertrauenswürdige Schlüssel",
-    "trustedKeysHint": "PEM-Public-Keys für bare-key-Signaturen. Nur öffentliches Material.",
+    "trustedKeysHint": "Öffentliche PEM-Schlüssel für bare-key-Signaturen. Nur öffentliches Material.",
     "note": "Notiz",
     "on": "Ein",
     "off": "Aus",

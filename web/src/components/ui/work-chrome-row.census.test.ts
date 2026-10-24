@@ -30,7 +30,6 @@ describe('the row a header shares with a tab strip', () => {
 
   it('is used by the tabbed screens this census knows', () => {
     expect(users.map((path) => relative(SRC, path)).sort()).toEqual([
-      'features/agentops/provider-admin-view.tsx',
       'features/console/console-view.tsx',
     ])
   })

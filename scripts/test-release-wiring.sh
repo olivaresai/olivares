@@ -85,6 +85,26 @@ check "PUBLISH_LATEST governs promote-latest" "load-bearing switch" $?
 job provenance-binaries "$R" | grep "run_slsa == 'true'" >/dev/null &&
 	job provenance-image "$R" | grep "run_slsa == 'true'" >/dev/null
 check "RUN_SLSA governs both provenance jobs" "load-bearing switch" $?
+# A private repository skips the provenance jobs (they call a hosted-runner generator). promote-latest waits
+# for provenance-image, so it reads that need through !failure(): a skipped need passes only in a private,
+# non-production release, a failed one never, and a production release always needs the provenance. The
+# mirrors keep their pinned profile fence first and read promote-latest through !failure() too, so a skipped
+# provenance job anywhere up the chain cannot skip them.
+job promote-latest "$R" | grep -F 'needs: [preflight, goreleaser, provenance-image]' >/dev/null
+check "release.yml job 'promote-latest' still waits for the provenance job" "provenance before alias" $?
+job promote-latest "$R" | grep -F '!failure() && !cancelled() && needs.goreleaser.result' | grep -F "needs.provenance-image.result == 'success' || (github.event.repository.private && needs.preflight.outputs.release_mode != 'production')" >/dev/null
+check "release.yml job 'promote-latest' runs after a skipped provenance job only in a private non-production release" "skipped need" $?
+for j in mirror-dockerhub mirror-preprod; do
+	job "$j" "$R" | grep -F 'needs: [preflight, goreleaser, provenance-image, promote-latest]' >/dev/null
+	check "release.yml job '$j' still waits for the provenance job and promote-latest" "alias before mirror" $?
+	job "$j" "$R" | grep -F "publish_dockerhub" | grep -F "&& !failure() && !cancelled() && needs.goreleaser.result == 'success' && needs.promote-latest.result == 'success'" >/dev/null
+	check "release.yml job '$j' runs after promote-latest even when provenance was skipped" "skipped need" $?
+done
+for f in "$R" "$RR"; do
+	[ -f "$f" ] || continue
+	job preflight "$f" | grep -F -B1 -A2 'name: SLSA provenance is not started' | grep -F 'if: github.event.repository.private' >/dev/null
+	check "${f##*/} preflight tells a private run why SLSA did not start" "job summary" $?
+done
 job mirror-dockerhub "$R" | grep "publish_dockerhub != 'false'" >/dev/null
 check "PUBLISH_DOCKERHUB governs the Docker Hub mirror" "load-bearing switch" $?
 grep -q "publish_ota_stable == 'true'" "$R"

@@ -85,9 +85,13 @@
              stay identical to readStored + resolveDark in src/stores/theme.ts: this
              runs before any bundle, so a disagreement is a visible flash of the wrong
              theme. */
-          var dark = stored === 'dark' || (stored !== 'light' && prefersDark)
+          var dark =
+            stored === 'dark' ||
+            stored === 'black' ||
+            (stored !== 'light' && prefersDark)
           var root = document.documentElement
           root.classList.toggle('dark', dark)
+          root.classList.toggle('black', stored === 'black')
           root.style.colorScheme = dark ? 'dark' : 'light'
         } catch (e) {
           /* localStorage may be unavailable (private mode); default theme applies. */

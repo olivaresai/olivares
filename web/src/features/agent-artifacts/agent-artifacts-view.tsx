@@ -266,7 +266,8 @@ function ArtifactRegistry() {
       title={t('registry.title')}
       description={t('registry.description')}
       actions={
-        canWrite ? (
+        canWrite &&
+        !(query.isSuccess && (query.data?.items?.length ?? 0) === 0) ? (
           <PagePrimaryAction>
             <Button
               variant="primary"

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE ENGINE'S STATE, IN THE SIDEBAR FOOTER (redesign §3.14): Engine ready, Checking the
+// THE ENGINE'S STATE, IN THE STATUS BAR (redesign §3.14, #3161): Engine ready, Checking the
 // engine, Engine not reachable, or Offline since <time>. A dot and a word: the colour
 // never says it alone. The answer is the engine's own server information, which every
 // page already reads; the browser's own offline signal wins over it, because a request

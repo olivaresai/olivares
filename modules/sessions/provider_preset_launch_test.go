@@ -73,14 +73,22 @@ func TestProviderSessionPresetsReachNativeControls(t *testing.T) {
 							}
 						}
 					}
+					// The preset is the build agent's rules; every other agent's (the global
+					// ones) deny everything, since a subagent's ask never reaches ACP (#3083).
 					permission, _ := cfg["permission"].(map[string]any)
-					if permission["bash"] != tc.permission {
+					agents, _ := cfg["agent"].(map[string]any)
+					build, _ := agents["build"].(map[string]any)
+					buildPermission, _ := build["permission"].(map[string]any)
+					if buildPermission["bash"] != tc.permission || len(permission) != 1 || permission["*"] != "deny" {
 						t.Fatalf("%s preset lost at native permissions: %v", tc.name, cfg)
 					}
 					wantEdit := tc.permission
-					read, _ := permission["read"].(map[string]any)
-					if permission["edit"] != wantEdit || read["*"] != "allow" || read["*.env"] != "deny" {
-						t.Fatalf("%s native read/edit permissions=%v", tc.name, permission)
+					// #2890: the build agent's read asks, so live policy reviews it as a read (every
+					// preset allows it). OpenCode's MCP resource reads ask "read" with
+					// mcp:<server>:<uri> patterns and name no file (measured): they stay allowed.
+					buildRead, _ := buildPermission["read"].(map[string]any)
+					if buildPermission["edit"] != wantEdit || buildRead["*"] != "ask" || buildRead["*.env"] != "deny" || buildRead["mcp:*"] != "allow" || buildRead["mcp:*.env"] != "deny" {
+						t.Fatalf("%s native read/edit permissions=%v", tc.name, cfg)
 					}
 				}
 			})

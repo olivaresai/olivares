@@ -48,6 +48,8 @@
     "running": "Working",
     "idle": "Idle",
     "stopped": "Stopped",
+    "done": "Done",
+    "ended": "Ended",
     "failed": "Failed",
     "cleaned": "Cleaned"
   },
@@ -251,7 +253,8 @@
     "noOutput": "No output yet.",
     "waiting": "Waiting for output…",
     "ended": "The session I/O stream ended.",
-    "lag": "{{count}} frame(s) dropped (buffer overflow) — output below resumes after the gap.",
+    "lag_one": "{{count}} frame dropped (buffer overflow) — output below resumes after the gap.",
+    "lag_other": "{{count}} frames dropped (buffer overflow) — output below resumes after the gap.",
     "remoteControl": "This is a remote-control session: its I/O is relayed to Anthropic’s cloud and is not bridged here. Olivares manages the lifecycle only.",
     "notLive": "This session is not live (it is {{state}}). Resume it to attach to its I/O.",
     "ioUnavailableNotLiveOnNode": "No bridged I/O on this node.",
@@ -269,7 +272,7 @@
     "interruptUnknown": "The interruption outcome is unknown. Check the session before trying again.",
     "interruptWorkConflict": "The session cannot accept this interruption in its current work state. Refresh the run to check its status.",
     "blocked": {
-      "notLive": "Start or resume the session to send.",
+      "notLive": "Resume the session to send a message.",
       "approval": "The launch waits for an approval; Send works once it is approved.",
       "sending": "Sending… Wait for the session to accept it.",
       "uploading": "Storing the image… Send works once it is attached.",
@@ -441,7 +444,6 @@
     "title": "Provider profiles",
     "subtitle": "How a tool runs for a session: which tool, and the settings folder it signs in from. A profile points at a tool installation that already exists on this server; it installs nothing and signs nothing in.",
     "register": "Register profile",
-    "nextAction": "Register a profile",
     "rowMenu": "Row actions for {{name}}",
     "search": "Search profiles…",
     "allStates": "All states",
@@ -548,7 +550,8 @@
       "created": "Created",
       "updated": "Updated",
       "retiredAt": "Retired",
-      "loadFailed": "This profile could not be read."
+      "loadFailed": "This profile could not be read.",
+      "loading": "Reading the profile…"
     },
     "configuration": {
       "title": "Configuration",
@@ -635,13 +638,8 @@
     "view": {
       "profilesTitle": "Provider profiles",
       "bindingsTitle": "Source bindings",
-      "accountsTitle": "Provider accounts",
-      "tabProfiles": "Profiles",
-      "tabBindings": "Bindings",
-      "tabAccounts": "Accounts",
-      "openProfiles": "Open the provider profiles page",
-      "openBindings": "Open the source bindings page",
-      "crossHint": "Profiles and bindings also have their own pages, each entered with its own read permission."
+      "openProfiles": "Open Tools",
+      "crossHint": "Each account, with its profile and source bindings, is also on Tools."
     },
     "authority": {
       "lost": "This action is no longer permitted with your current permissions; nothing was sent.",

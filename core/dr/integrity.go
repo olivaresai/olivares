@@ -70,15 +70,24 @@ func AuthenticateBundle(in BundleInput, cipher *KeyCipher) error {
 // payload before restore writes anything. Legacy unsigned bundles require an
 // explicit caller decision; their historical snapshot digest is still checked
 // by the caller, but they do not satisfy the v2 migration contract.
+//
+// It also OPENS a sealed snapshot: the plaintext lands at work/<Store.File> and the
+// sealed member is removed, so every caller reads the snapshot only after this
+// returns nil, and the call is made once per extracted bundle.
 func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCipher, allowLegacyUnsigned bool) error {
 	if m == nil || cipher == nil || len(cipher.kek) != kekLen {
 		return fmt.Errorf("dr: verify bundle integrity requires a manifest and initialized KEK")
 	}
 	if m.Authentication.Algorithm == "" && m.Authentication.Value == "" && len(m.Files) == 0 {
-		if allowLegacyUnsigned {
-			return nil
+		if !allowLegacyUnsigned {
+			return fmt.Errorf("DR manifest is unsigned and has no per-file digest inventory; pass --allow-legacy-unsigned only for a separately authenticated pre-v26.9 bundle")
 		}
-		return fmt.Errorf("DR manifest is unsigned and has no per-file digest inventory; pass --allow-legacy-unsigned only for a separately authenticated pre-v26.9 bundle")
+		// An unsigned manifest proves nothing about itself, so it cannot claim the
+		// sealed format: nothing below would open the snapshot it names.
+		if m.Format != ManifestFormatV1 || m.Store.sealed() {
+			return fmt.Errorf("DR manifest is unsigned but claims format %q with snapshot encryption %q; --allow-legacy-unsigned only accepts a pre-v2 bundle", m.Format, m.Store.Encryption)
+		}
+		return nil
 	}
 	if m.Authentication.Algorithm != manifestAuthAlgorithm {
 		return fmt.Errorf("dr: unsupported manifest authentication %q", m.Authentication.Algorithm)
@@ -90,10 +99,21 @@ func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCip
 	if subtle.ConstantTimeCompare([]byte(want), []byte(m.Authentication.Value)) != 1 {
 		return fmt.Errorf("DR manifest authentication mismatch (wrong KEK or altered manifest)")
 	}
+	// The format and the snapshot encryption must agree: a v2 manifest names a sealed
+	// snapshot and a v1 manifest a plaintext one. Only a producer holding the KEK can
+	// write a keyed manifest where they differ, which is a producer bug to refuse.
+	if m.Store.Method != MethodPITR {
+		if m.Store.Encryption != "" && m.Store.Encryption != snapshotEncChunked {
+			return fmt.Errorf("dr: unsupported snapshot encryption %q", m.Store.Encryption)
+		}
+		if (m.Format == ManifestFormat) != m.Store.sealed() {
+			return fmt.Errorf("dr: manifest format %q and snapshot encryption %q disagree", m.Format, m.Store.Encryption)
+		}
+	}
 
 	expected := map[string]bool{bundleKEKName: true} //verifier-truth:allow expected is the file set the manifest declares; presence is verified below against the bundle, entry by entry
 	if m.Store.Method != MethodPITR {
-		expected[m.Store.File] = true
+		expected[m.Store.memberPath()] = true
 	}
 	for _, ref := range m.Keys {
 		expected[ref.File] = true
@@ -111,17 +131,43 @@ func VerifyBundleIntegrity(work string, m *Manifest, _ KDFParams, cipher *KeyCip
 		if joinErr != nil {
 			return joinErr
 		}
-		body, err := os.ReadFile(payloadPath)
+		got, size, err := FileSHA256(payloadPath)
 		if err != nil {
 			return fmt.Errorf("read DR payload %s: %w", declared.Path, err)
 		}
-		sum := sha256.Sum256(body)
-		got := hex.EncodeToString(sum[:])
-		if int64(len(body)) != declared.SizeBytes || got != declared.SHA256 {
+		if size != declared.SizeBytes || got != declared.SHA256 {
 			return fmt.Errorf("DR payload digest mismatch for %s (corrupt or altered export)", declared.Path)
 		}
 	}
-	return nil
+	if m.Store.Method == MethodPITR || !m.Store.sealed() {
+		return nil
+	}
+	return openBundleSnapshot(work, m, cipher)
+}
+
+// openBundleSnapshot opens the sealed snapshot member to Store.File, where every
+// restore path reads it, and drops the sealed copy. Each chunk is authenticated as
+// it is opened, so a wrong KEK or an altered, truncated or reordered member fails
+// here, in the scratch directory, before any caller has written anything. The
+// plaintext must also match the digest and size the keyed manifest vouches for.
+func openBundleSnapshot(work string, m *Manifest, cipher *KeyCipher) error {
+	sealedPath, err := safeJoin(work, m.Store.memberPath())
+	if err != nil {
+		return err
+	}
+	plainPath, err := safeJoin(work, m.Store.File)
+	if err != nil {
+		return err
+	}
+	size, sum, err := openSnapshotFile(cipher, sealedPath, plainPath)
+	if err != nil {
+		return err
+	}
+	if size != m.Store.SizeBytes || sum != m.Store.SHA256 {
+		_ = os.Remove(plainPath)
+		return fmt.Errorf("DR snapshot digest mismatch after opening %s (corrupt or altered export)", m.Store.memberPath())
+	}
+	return os.Remove(sealedPath)
 }
 
 func bundleFileDigests(in BundleInput) ([]FileDigest, error) {
@@ -163,7 +209,18 @@ func bundleFileDigests(in BundleInput) ([]FileDigest, error) {
 		if sum != in.Manifest.Store.SHA256 || size != in.Manifest.Store.SizeBytes {
 			return nil, fmt.Errorf("dr: snapshot bytes differ from manifest before bundle write")
 		}
-		files = append(files, FileDigest{Path: in.Manifest.Store.File, SizeBytes: size, SHA256: sum})
+		// What travels is the sealed twin when the manifest says sealed; the inventory
+		// binds the member, the manifest's Store fields bind the plaintext.
+		member := FileDigest{Path: in.Manifest.Store.memberPath(), SizeBytes: size, SHA256: sum}
+		if in.Manifest.Store.sealed() {
+			if in.sealedSnapshot == "" {
+				return nil, fmt.Errorf("dr: manifest says the snapshot is sealed but no sealed member was produced")
+			}
+			if member.SHA256, member.SizeBytes, err = FileSHA256(in.sealedSnapshot); err != nil {
+				return nil, err
+			}
+		}
+		files = append(files, member)
 	} else if in.SnapshotPath != "" {
 		return nil, fmt.Errorf("dr: PITR companion must not carry snapshot bytes")
 	}

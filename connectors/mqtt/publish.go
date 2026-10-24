@@ -34,16 +34,27 @@ const (
 )
 
 // What a read can fail with. The text is fixed: it never carries the broker address, a
-// credential, a path or anything a device published.
+// credential, a path or anything a device published. A refused CONNACK adds its reason byte.
 var (
 	ErrBrokerUnavailable = errors.New("mqtt: broker unavailable")
 	ErrTLSHandshake      = errors.New("mqtt: TLS handshake with the broker failed")
 	ErrBrokerRefused     = errors.New("mqtt: broker refused the connection or subscription")
+	ErrBrokerCredentials = error(credentialsRefusal{})
 	ErrNoPublish         = errors.New("mqtt: no publication received")
 	ErrConnectionLost    = errors.New("mqtt: connection lost or unusable packet while waiting for a publication")
 	ErrPayloadTooLarge   = errors.New("mqtt: publication larger than the limit")
 	ErrEarlyPublication  = errors.New("mqtt: invalid early publication")
 )
+
+// credentialsRefusal is the refusal an operator fixes in the credentials. It is still a refusal for
+// errors.Is, so a caller that sorts on ErrBrokerRefused alone (the Business MQTT reader) is unchanged.
+type credentialsRefusal struct{}
+
+func (credentialsRefusal) Error() string {
+	return "mqtt: broker refused the credentials or authorization"
+}
+
+func (credentialsRefusal) Is(target error) bool { return target == ErrBrokerRefused }
 
 // packetOverhead is what a PUBLISH may carry besides its payload and topic: the packet identifier
 // and the properties. A packet declaring more than payload + topic + this is refused unread.
@@ -259,6 +270,10 @@ func (r *PublishReader) connect(ctx context.Context) (*conn, *Publish, error) {
 		if err != nil {
 			_ = nc.Close()
 			return nil, nil, ErrBrokerUnavailable
+		}
+		if i == 0 && kind == pktCONNACK && flags == 0 && len(body) >= 2 && body[1] != 0 {
+			_ = nc.Close()
+			return nil, nil, connackError(body[1])
 		}
 		valid := flags == 0
 		if i == 0 {

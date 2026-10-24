@@ -101,10 +101,20 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// is not ledgered. Unreadable runs keep the concealed 404 of the entity.
 	reg.HandleEntity("POST", "/runs/{ref}/pin", permRunRead, runEntity, m.handlePinRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}/pin", permRunRead, runEntity, m.handleUnpinRun)
+	// The caller's own snooze and done marks (run_mark.go), by the pin's rules.
+	reg.HandleEntity("POST", "/runs/{ref}/snooze", permRunRead, runEntity, m.handleSnoozeRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}/snooze", permRunRead, runEntity, m.handleUnsnoozeRun)
+	reg.HandleEntity("POST", "/runs/{ref}/done", permRunRead, runEntity, m.handleDoneRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}/done", permRunRead, runEntity, m.handleUndoneRun)
 	// Starts a NEW session in another profile, linked to this one, from a reviewed
 	// summary and the attached transcript (session_handoff.go).
 	reg.HandleEntity("POST", "/runs/{ref}/handoff", permRunWrite, runEntity, m.handleHandoffRun)
 	reg.HandleEntity("PUT", "/runs/{ref}/peers", permRunWrite, runEntity, m.handleSetRunPeers)
+	// The session's own name and archived mark (run_name_archive.go): one value on
+	// the run that every reader sees, so WRITE and ledgered, unlike a pin.
+	reg.HandleEntity("PUT", "/runs/{ref}/name", permRunWrite, runEntity, m.handleSetRunName)
+	reg.HandleEntity("POST", "/runs/{ref}/archive", permRunWrite, runEntity, m.handleArchiveRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}/archive", permRunWrite, runEntity, m.handleUnarchiveRun)
 	// A browser preview sends the person's requests into the session's app.
 	reg.HandleEntity("POST", "/runs/{ref}/preview", permRunWrite, runEntity, m.handleOpenRunPreview)
 	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunAdmin, runEntity, m.handleCleanupRun)
@@ -120,8 +130,13 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	// Refuse a known runner mismatch before resolving (and possibly creating) the
-	// default profile. In-process launches repeat this check in createRunInternal.
+	// Refuse a name the rename refuses, and a known runner mismatch, before resolving
+	// (and possibly creating) the default profile: a refused launch leaves nothing
+	// behind. In-process launches repeat these checks in createRunInternal.
+	if err := checkRunName(strings.TrimSpace(body.Name)); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	if err := m.refuseUnsupportedIsolation(r.Context(), Isolation(body.Isolation)); err != nil {
 		writeRunErr(w, err)
 		return
@@ -158,6 +173,7 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		EnvAllow:         body.EnvAllow,
 		SecretEnv:        body.SecretEnv,
 		GitRead:          body.GitRead,
+		Credentials:      body.Credentials,
 		// The profile is a REFERENCE; its homes are resolved and validated on the
 		// server. The DTO has no field for a home, an environment or a snapshot.
 		ProviderProfileRef: body.ProviderProfileRef,
@@ -393,6 +409,7 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 		}
 		q.Filters = append(q.Filters, eq(colRunRef, runRef))
 	}
+	var shown []model.Record
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
@@ -445,21 +462,34 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 			}
 			recs = append(recs, extra...)
 		}
+		refs := make([]string, 0, len(recs))
+		for _, rec := range recs {
+			refs = append(refs, rec.String(colRunRef))
+		}
+		marks, err := ownRunMarks(r.Context(), sc, mc.Principal.Actor(), refs, m.now())
+		if err != nil {
+			return err
+		}
+		shown = make([]model.Record, 0, len(recs))
 		for _, rec := range recs {
 			dto := m.toRunDTO(rec)
 			if displayed != "" && dto.State != displayed {
 				continue
 			}
 			decorateRunPin(&dto, rec, pins)
+			decorateRunMark(&dto, rec, marks)
 			dto.WorkLeaseState = runWorkLeaseState(r.Context(), sc, rec)
 			out.Items = append(out.Items, dto)
+			shown = append(shown, rec)
 		}
+		m.attachRunFacts(r.Context(), sc, mc.Tenant, out.Items, shown)
 		return nil
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
+	m.attachSourcedFacts(r.Context(), mc.Tenant, out.Items, shown)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -472,12 +502,13 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 	// Only this authorized read route may project actual lease state. Shared
 	// runtime reads also serve write-only controls and keep the unknown posture.
 	var dto runDTO
+	var rec model.Record
 	err := m.runtimeData(r.Context()).View(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
 		}
-		rec, err := findRunRec(r.Context(), repo, ref)
+		rec, err = findRunRec(r.Context(), repo, ref)
 		if err != nil {
 			return err
 		}
@@ -487,14 +518,24 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 			return err
 		}
 		decorateRunPin(&dto, rec, pins)
+		marks, err := ownRunMarks(r.Context(), sc, mc.Principal.Actor(), []string{dto.RunRef}, m.now())
+		if err != nil {
+			return err
+		}
+		decorateRunMark(&dto, rec, marks)
 		dto.WorkLeaseState = runWorkLeaseState(r.Context(), sc, rec)
+		one := []runDTO{dto}
+		m.attachRunFacts(r.Context(), sc, mc.Tenant, one, []model.Record{rec})
+		dto = one[0]
 		return nil
 	})
 	if err != nil {
 		writeRunErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, dto)
+	one := []runDTO{dto}
+	m.attachSourcedFacts(r.Context(), mc.Tenant, one, []model.Record{rec})
+	writeJSON(w, http.StatusOK, one[0])
 }
 
 func (m *Module) handleRunEvents(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -765,7 +806,7 @@ func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api
 }
 
 func (m *Module) handleDeleteRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if err := m.deleteRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref")); err != nil {
+	if err := m.deleteRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind()); err != nil {
 		writeRunErr(w, err)
 		return
 	}
@@ -853,7 +894,7 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 			}
 		}
 		for _, f := range rd.frames {
-			if writeSSE(rc, w, "output", attachFrame{Seq: f.Seq, Stream: f.Stream, Line: string(f.Data)}) != nil {
+			if writeSSE(rc, w, "output", attachFrame{Seq: f.Seq, Stream: f.Stream, Line: string(f.Data), At: attachFrameTime(f.At)}) != nil {
 				return
 			}
 		}
@@ -874,11 +915,20 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 	}
 }
 
-// attachFrame is the SSE payload for one bridged output frame.
+// attachFrame is the SSE payload for one bridged output frame. At is when the
+// engine read it, so a replay keeps the frame's own time (dev#2786).
 type attachFrame struct {
 	Seq    int64  `json:"seq"`
 	Stream string `json:"stream"`
 	Line   string `json:"line"`
+	At     string `json:"at,omitempty"`
+}
+
+func attachFrameTime(at time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	return at.UTC().Format(time.RFC3339Nano)
 }
 
 // Typed I/O-absence classifications on attach `notice` frames. Additive: a

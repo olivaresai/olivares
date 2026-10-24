@@ -386,3 +386,90 @@ describe("SessionEvidence puts the session's work on screen (#2267)", () => {
     ).toHaveAttribute('aria-expanded', 'true')
   })
 })
+
+describe('SessionEvidence keeps its tool rows on one line (#2796)', () => {
+  const call = (i: number) => ({
+    at: `2026-10-15T21:2${i}:00Z`,
+    kind: 'tool',
+    tool_ref: 'Bash',
+    resource_ref: 'src/scripts/long-running-check.go',
+  })
+
+  it('truncates the row with its whole label on the title, and folds repeated calls once with a count', async () => {
+    timelineById.mockResolvedValue({
+      items: Array.from({ length: 10 }, (_, i) => call(i)),
+      has_more: false,
+    })
+    renderIntel(
+      <SessionEvidence
+        liveRef="lr-1"
+        expanded="activity"
+        onExpand={() => {}}
+      />,
+    )
+    await screen.findByTestId('evidence-toggle-activity')
+    const turns = document.getElementById('evidence-activity') as HTMLElement
+    // Ten repeated calls of the same tool are one row with its count.
+    expect(within(turns).getAllByRole('listitem')).toHaveLength(1)
+    const row = within(turns).getByRole('button', { name: /Bash .*×10/ })
+    // The words and the resource stay on one line each, cut with an ellipsis —
+    // never a word broken per letter — and the whole label is on the title.
+    const words = row.querySelector('span[title]') as HTMLElement
+    expect(words).toHaveClass('truncate')
+    expect(words).not.toHaveClass('break-words')
+    expect(words).toHaveAttribute(
+      'title',
+      'Bash · src/scripts/long-running-check.go',
+    )
+    const resource = row.querySelector('.font-mono') as HTMLElement
+    expect(resource).toHaveClass('truncate')
+    expect(resource).toHaveAttribute(
+      'title',
+      'src/scripts/long-running-check.go',
+    )
+  })
+
+  it('puts a time range under the words, never beside them', async () => {
+    // Calls a minute apart span nine minutes: the row tells a range. Beside the words
+    // the range is about 200 px of a 320 px pane, and it left "Bash" 0 to 10 px.
+    timelineById.mockResolvedValue({
+      items: [
+        ...Array.from({ length: 10 }, (_, i) => call(i)),
+        {
+          at: '2026-10-15T21:30:00Z',
+          kind: 'tool',
+          tool_ref: 'Read',
+          resource_ref: 'docs/notes.md',
+        },
+      ],
+      has_more: false,
+    })
+    renderIntel(
+      <SessionEvidence
+        liveRef="lr-1"
+        expanded="activity"
+        onExpand={() => {}}
+      />,
+    )
+    await screen.findByTestId('evidence-toggle-activity')
+    const turns = document.getElementById('evidence-activity') as HTMLElement
+    const row = within(turns).getByRole('button', { name: /Bash .*×10/ })
+    const words = row.querySelector(':scope > span.flex-1') as HTMLElement
+    const line = words.querySelector(':scope > span.flex') as HTMLElement
+    // The range is a line of the words column, not on the words' line, and not
+    // in a cell of the row beside the column.
+    expect(words).toHaveTextContent('–')
+    expect(line).not.toHaveTextContent('–')
+    for (const cell of row.querySelectorAll(':scope > :not(span.flex-1)'))
+      expect(cell).not.toHaveTextContent('–')
+    // The count never shrinks, and it is caption-sized like the words beside it.
+    const count = within(line).getByText('×10')
+    expect(count).toHaveClass('shrink-0')
+    expect(count.closest('.text-caption')).not.toBeNull()
+    // A single call's row is one line too, its resource included.
+    const read = within(turns).getByTitle('Read · docs/notes.md')
+    expect(read).toHaveClass('truncate')
+    expect(read).not.toHaveClass('break-words')
+    expect(within(turns).getByTitle('docs/notes.md')).toHaveClass('truncate')
+  })
+})

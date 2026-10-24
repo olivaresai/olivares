@@ -99,7 +99,7 @@ RBAC 本就不允许的权限。这种次序意味着一条配置错误或过度
 
 :::note[出机有两条路径：拉取，以及真实存在的推送]
 可验证账本抵达 SIEM 有两条路径。**拉取（pull）** 导出（`GET /v1/audit/export`）需要 Business，
-是运维者用于归档的工件。**推送（push）** 一经配置便真实存在：一个 `audit.recorded` 事件
+是运维者用于归档的工件。**推送（push）** 同样需要 Business，且一经配置便真实存在：一个 `audit.recorded` 事件
 订阅会启动按租户的账本泵，将每条封存记录以**至少一次**的语义，经由具备 SSRF 防护、重试与
 死信队列的持久传输投递（`modules/siemforward/forwarder.go`，在 `cmd/olivares/boot.go`
 中完成装配）。`NopForwarder` 是在未配置转发时才适用的实现，而非唯一存在的实现。

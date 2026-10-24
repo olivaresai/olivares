@@ -1,6 +1,6 @@
 {
   "binary_sha256": "adb4cbf27cd3654375419327505deaf610043328ff0ede8e2eb65edb3994d948",
-  "captures": 138,
+  "captures": 132,
   "commit": "461ed7dd9120e7dd9744bb9ce2353fb95a806eff",
   "edition": "community",
   "empty_by_control": {
@@ -112,11 +112,13 @@
     "agentops": "Excluded by DOCS_CAPTURE_SKIP",
     "api-playground": "Excluded by DOCS_CAPTURE_SKIP",
     "attestation": "Excluded by DOCS_CAPTURE_SKIP",
+    "backups": "Excluded by DOCS_CAPTURE_SKIP",
     "communications-new": "Excluded by DOCS_CAPTURE_SKIP",
     "communications-protocol-bindings": "Excluded by DOCS_CAPTURE_SKIP",
     "compliance": "Excluded by DOCS_CAPTURE_SKIP",
     "console-bindings": "Excluded by DOCS_CAPTURE_SKIP",
     "dashboards": "Excluded by DOCS_CAPTURE_SKIP",
+    "evals": "Excluded by DOCS_CAPTURE_SKIP",
     "eventing": "Excluded by DOCS_CAPTURE_SKIP",
     "git-publication": "Excluded by DOCS_CAPTURE_SKIP",
     "logs": "Excluded by DOCS_CAPTURE_SKIP",
@@ -133,7 +135,8 @@
     "stored-budgets": "Excluded by DOCS_CAPTURE_SKIP",
     "templates-readonly": "Excluded by DOCS_CAPTURE_SKIP",
     "voice": "Excluded by DOCS_CAPTURE_SKIP",
-    "work-apply-refused": "Excluded by DOCS_CAPTURE_SKIP"
+    "work-apply-refused": "Excluded by DOCS_CAPTURE_SKIP",
+    "workspace": "Excluded by DOCS_CAPTURE_SKIP"
   },
   "take": [
     {
@@ -649,36 +652,6 @@
     {
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
-      "filas": 1,
-      "h1": "Backup & Restore",
-      "hay_main": true,
-      "id": "backups",
-      "recorte_declarado": null,
-      "route": "/backups",
-      "sha256": "311bf037a69dff962208f6ead3b9b200ff2edf861f4de602d035aada656142cd",
-      "tablas_vacias": 0,
-      "texto_main": 302,
-      "theme": "dark",
-      "vacios": 0
-    },
-    {
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
-      "filas": 1,
-      "h1": "Backup & Restore",
-      "hay_main": true,
-      "id": "backups",
-      "recorte_declarado": null,
-      "route": "/backups",
-      "sha256": "16ca1eeb6fec87e83c727894a4fcb12de7043729bdb02185577f64c6fbd23431",
-      "tablas_vacias": 0,
-      "texto_main": 302,
-      "theme": "light",
-      "vacios": 0
-    },
-    {
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
       "filas": 2,
       "h1": "MCP & skills",
       "hay_main": true,
@@ -1021,36 +994,6 @@
       "sha256": "3aaf6c968eb78089fe67fb998c0cd693d2dfe136bbf8bff5f73876f81b22ca66",
       "tablas_vacias": 0,
       "texto_main": 1202,
-      "theme": "light",
-      "vacios": 0
-    },
-    {
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
-      "filas": 0,
-      "h1": "Evals",
-      "hay_main": true,
-      "id": "evals",
-      "recorte_declarado": null,
-      "route": "/evals",
-      "sha256": "262c8b6a9096f93c1b86bb7092c443240204b2d104515a05a94408bec97c6d95",
-      "tablas_vacias": 0,
-      "texto_main": 434,
-      "theme": "dark",
-      "vacios": 0
-    },
-    {
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
-      "filas": 0,
-      "h1": "Evals",
-      "hay_main": true,
-      "id": "evals",
-      "recorte_declarado": null,
-      "route": "/evals",
-      "sha256": "b21612c44103079ffa445cdc623b0911a49809871287511c3ac3ca3a73c00662",
-      "tablas_vacias": 0,
-      "texto_main": 434,
       "theme": "light",
       "vacios": 0
     },
@@ -2207,36 +2150,6 @@
     {
       "claves_crudas": 0,
       "claves_crudas_vistas": [],
-      "filas": 2,
-      "h1": "Billing",
-      "hay_main": true,
-      "id": "workspace",
-      "recorte_declarado": null,
-      "route": "/workspace",
-      "sha256": "75c76225289fe47fc6883d6a14a663630ae016a5b2c69b8faa610ca99a800b77",
-      "tablas_vacias": 0,
-      "texto_main": 227,
-      "theme": "dark",
-      "vacios": 0
-    },
-    {
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
-      "filas": 2,
-      "h1": "Billing",
-      "hay_main": true,
-      "id": "workspace",
-      "recorte_declarado": null,
-      "route": "/workspace",
-      "sha256": "4560caeed64d5ea0eb1c78e10968c9bd9f51beae47df4ba690bf186933c12c9b",
-      "tablas_vacias": 0,
-      "texto_main": 227,
-      "theme": "light",
-      "vacios": 0
-    },
-    {
-      "claves_crudas": 0,
-      "claves_crudas_vistas": [],
       "filas": 0,
       "h1": "Workspace Templates",
       "hay_main": true,
@@ -2268,5 +2181,5 @@
   "taken_at": "2026-10-14T16:03:17Z",
   "tree_dirty": false,
   "unpaired": [],
-  "views": 69
+  "views": 66
 }

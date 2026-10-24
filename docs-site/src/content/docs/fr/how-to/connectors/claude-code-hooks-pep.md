@@ -110,14 +110,14 @@ tous deux inactifs tant qu'ils ne pointent pas vers un fichier.
 
 ## Ce que vous verrez dans la console
 
-**Claude Code governance** est la surface de rédaction et de boucle de vérité :
+**Politique gérée** est la surface de rédaction et de boucle de vérité :
 la politique que vous visez, la configuration que les hôtes portent réellement,
 et la dérive entre les deux. Les contrôles et les constats de lacune de
 télémétrie atterrissent dans **Security** ; la session elle-même reste visible
 dans **Sessions** :
 
-<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="La vue Claude Code governance — rédaction de politique et posture du parc au même endroit." />
-<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="La vue Claude Code governance — rédaction de politique et posture du parc au même endroit." />
+<img class="light:sl-hidden" src="/console/claude-policy-dark.png" alt="La vue Politique gérée — rédaction de politique et posture du parc au même endroit." />
+<img class="dark:sl-hidden" src="/console/claude-policy-light.png" alt="La vue Politique gérée — rédaction de politique et posture du parc au même endroit." />
 
 ## Limites assumées
 

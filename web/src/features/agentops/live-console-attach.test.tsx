@@ -318,7 +318,7 @@ describe('LiveConsole attach continuity', () => {
     view.run({ ...baseRun, state: 'idle' })
     await screen.findByText('fixture-line-10')
     expect(urls[1]).toContain('from=3')
-    expect(screen.getByText(/7 frame\(s\) dropped/)).toBeInTheDocument()
+    expect(screen.getByText(/7 frames dropped/)).toBeInTheDocument()
     expect(screen.getAllByText('fixture-line-1')).toHaveLength(1)
     expect(screen.getAllByText('fixture-line-2')).toHaveLength(1)
   })
@@ -352,7 +352,7 @@ describe('LiveConsole attach continuity', () => {
       expect(
         await screen.findByText('previous-authority-output'),
       ).toBeInTheDocument()
-      expect(screen.getByText(/7 frame\(s\) dropped/)).toBeInTheDocument()
+      expect(screen.getByText(/7 frames dropped/)).toBeInTheDocument()
       expect(
         await screen.findByRole('button', { name: 'Retry attach' }),
       ).toBeInTheDocument()
@@ -379,13 +379,11 @@ describe('LiveConsole attach continuity', () => {
       expect(
         screen.queryByText('previous-authority-output'),
       ).not.toBeInTheDocument()
-      expect(screen.queryByText(/7 frame\(s\) dropped/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/7 frames dropped/)).not.toBeInTheDocument()
       expect(
         commits.some((text) => text.includes('previous-authority-output')),
       ).toBe(false)
-      expect(commits.some((text) => /7 frame\(s\) dropped/.test(text))).toBe(
-        false,
-      )
+      expect(commits.some((text) => /7 frames dropped/.test(text))).toBe(false)
       expect(
         commits.some((text) => text.includes('The session I/O stream ended.')),
       ).toBe(false)

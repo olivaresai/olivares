@@ -55,12 +55,12 @@ function renderRow() {
     name,
     rowEl,
     nameEl: within(rowEl).getByTestId('rail-row-name'),
-    state: within(rowEl).getByRole('img', { name: 'Possible evasion' }),
+    state: within(rowEl).getByTestId('rail-row-state'),
     time: rowEl.querySelector('time') as HTMLElement,
   }
 }
 
-describe('a rail row is one line at the standard row height', () => {
+describe('a rail row is two short lines (dev#3162)', () => {
   it('the title is cut to one line and its whole text stays on the hover', () => {
     const { name, nameEl, rowEl } = renderRow()
     expect(nameEl).toHaveTextContent(name)
@@ -69,7 +69,7 @@ describe('a rail row is one line at the standard row height', () => {
       expect.arrayContaining(['truncate', 'min-w-0']),
     )
     expect(classes(rowEl)).toEqual(
-      expect.arrayContaining(['h-11', 'min-[761px]:h-9']),
+      expect.arrayContaining(['h-14', 'min-[761px]:h-12']),
     )
     expect(classes(rowEl)).not.toContain('flex-wrap')
   })
@@ -84,10 +84,12 @@ describe('a rail row is one line at the standard row height', () => {
     expect(classes(time)).not.toContain('truncate')
   })
 
-  it('reads icon, title, state, time, and keeps the state before the time', () => {
+  // The order (dev#3162): the place, the state and its time on the first line, the
+  // name under them.
+  it('reads the state, then its time, then the name under them', () => {
     const { rowEl, nameEl, state, time } = renderRow()
     const order = Array.from(rowEl.querySelectorAll('*'))
-    expect(order.indexOf(nameEl)).toBeLessThan(order.indexOf(state))
     expect(order.indexOf(state)).toBeLessThan(order.indexOf(time))
+    expect(order.indexOf(time)).toBeLessThan(order.indexOf(nameEl))
   })
 })

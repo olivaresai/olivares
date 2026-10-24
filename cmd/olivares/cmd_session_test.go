@@ -57,6 +57,8 @@ type fakeSessionEngine struct {
 	// replaces the 422 (403: the caller is not a run administrator).
 	launchRefusal       string
 	launchRefusalStatus int
+	// launchRefusalCode is the refusal's error code; empty is "unsupported_permission".
+	launchRefusalCode string
 	// cleanupRefusal, when set, answers a release (POST …/cleanup) with 409 and this
 	// sentence, as the engine does for a worktree it will not remove unconfirmed.
 	cleanupRefusal string
@@ -92,6 +94,11 @@ type fakeSessionEngine struct {
 	handoffState   string
 	// pinSeq numbers the pins POST …/pin sets, so pinned_at orders them as it does.
 	pinSeq int
+	// messages, when set, is what GET …/messages answers for every run.
+	messages map[string]any
+	// steerRefusal, when set, answers POST …/input with 501 business_required and this
+	// sentence, as a Community engine does for a session another person started.
+	steerRefusal string
 }
 
 // handoffStateOrDelivered is what POST …/handoff answers for the first turn.
@@ -110,9 +117,15 @@ func (f *fakeSessionEngine) handoffFirstTurn() any {
 	return "Summary text.\n\nTranscript of the earlier session (tool calls and results shortened): /srv/acct/olivares-handoff/r1-ab.md"
 }
 
-func newFakeSessionEngine(t *testing.T) *fakeSessionEngine {
+// newFakeSessionEngine starts the engine after every setup has run. A test that
+// drives the CLI as a child process must preset its fields here: once the server is
+// up, a write races with serve and the child's request gives -race no ordering edge.
+func newFakeSessionEngine(t *testing.T, setup ...func(*fakeSessionEngine)) *fakeSessionEngine {
 	t.Helper()
 	f := &fakeSessionEngine{posts: map[string][]map[string]any{}, sent: make(chan struct{})}
+	for _, s := range setup {
+		s(f)
+	}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
 	return f
@@ -251,7 +264,11 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		if f.launchRefusalStatus != 0 {
 			status = f.launchRefusalStatus
 		}
-		writeJSON(status, map[string]any{"error": map[string]any{"code": "unsupported_permission", "message": f.launchRefusal}})
+		code := "unsupported_permission"
+		if f.launchRefusalCode != "" {
+			code = f.launchRefusalCode
+		}
+		writeJSON(status, map[string]any{"error": map[string]any{"code": code, "message": f.launchRefusal}})
 	case r.Method == "POST" && path == sessionRunsPath && f.launchWaits:
 		w.Header().Set("Location", "/v1/m/governance/approvals/apr-1")
 		writeJSON(202, map[string]any{
@@ -281,6 +298,10 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		n := len(f.posts[path])
 		f.mu.Unlock()
 		writeJSON(201, map[string]any{"id": fmt.Sprintf("att_%d", n), "media_type": body["media_type"]})
+	case r.Method == "GET" && strings.HasSuffix(path, "/messages") && f.messages != nil:
+		writeJSON(200, f.messages)
+	case strings.HasSuffix(path, "/input") && f.steerRefusal != "":
+		writeJSON(501, map[string]any{"error": map[string]any{"code": "business_required", "message": f.steerRefusal}})
 	case strings.HasSuffix(path, "/input"):
 		select {
 		case <-f.sent:
@@ -330,6 +351,31 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 						run["peers"] = body["peers"]
 					}
 					out["peers"], out["peers_rule"] = run["peers"], run["peers_rule"]
+				// The session's name and its archived mark (#2795) are the run's own: each
+				// call answers the run, and an empty name clears it.
+				case strings.HasSuffix(path, "/name") && r.Method == http.MethodPut:
+					f.mu.Lock()
+					delete(run, "name")
+					if name := strings.TrimSpace(str(body, "name")); name != "" {
+						run["name"] = name
+					}
+					f.mu.Unlock()
+					out["name"] = run["name"]
+					if run["name"] == nil {
+						delete(out, "name")
+					}
+				case strings.HasSuffix(path, "/archive"):
+					f.mu.Lock()
+					if r.Method == http.MethodPost && run["archived_at"] == nil {
+						run["archived_at"] = "2026-10-21T10:00:00Z"
+					} else if r.Method == http.MethodDelete {
+						delete(run, "archived_at")
+					}
+					f.mu.Unlock()
+					delete(out, "archived_at")
+					if at, ok := run["archived_at"]; ok {
+						out["archived_at"] = at
+					}
 				// The caller's own pin (#2130): POST sets it, DELETE clears it, both answer
 				// the pin state, and the run reads carry it as the engine's do.
 				case strings.HasSuffix(path, "/pin"):
@@ -342,6 +388,26 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 						f.pinSeq++
 						run["pinned_at"] = fmt.Sprintf("2026-10-14T10:00:%02dZ", f.pinSeq)
 						answer["pinned_at"] = run["pinned_at"]
+					}
+					f.mu.Unlock()
+					writeJSON(200, answer)
+					return
+				// The caller's own snooze and done marks (#2480): each route answers both
+				// marks as they now stand, and the run reads carry them.
+				case strings.HasSuffix(path, "/snooze"), strings.HasSuffix(path, "/done"):
+					f.mu.Lock()
+					switch {
+					case strings.HasSuffix(path, "/done"):
+						run["done"] = r.Method == http.MethodPost
+					case r.Method == http.MethodPost:
+						run["snoozed_until"] = body["until"]
+					default:
+						delete(run, "snoozed_until")
+					}
+					done, _ := run["done"].(bool)
+					answer := map[string]any{"run_ref": ref, "done": done}
+					if until, ok := run["snoozed_until"]; ok {
+						answer["snoozed_until"] = until
 					}
 					f.mu.Unlock()
 					writeJSON(200, answer)

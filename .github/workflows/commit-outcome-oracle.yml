@@ -420,7 +420,7 @@ env:
 jobs:
   oracle:
     if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     # Steps sum to 184 minutes; the job ceiling stays above that sum.
     timeout-minutes: 185
     outputs:
@@ -874,7 +874,7 @@ jobs:
 
   routes:
     if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     # Steps sum to 254 minutes; the job ceiling stays above that sum.
     timeout-minutes: 270
     outputs:
@@ -1139,7 +1139,7 @@ jobs:
 
   generated:
     if: github.repository == 'olivaresai/olivares' && github.event.deleted != true
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     # Steps sum to 112 minutes; the job ceiling stays above that sum.
     timeout-minutes: 125
     outputs:
@@ -1242,7 +1242,7 @@ jobs:
   verdict:
     needs: [oracle, routes, generated]
     if: ${{ always() && github.repository == 'olivaresai/olivares' && github.event.deleted != true }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - name: one line, and only when every expected red was measured as a kill

@@ -30,6 +30,10 @@
     "title": "Control Plane nicht erreichbar",
     "description": "Die Control Plane konnte nicht erreicht werden. Prüfen Sie Ihre Verbindung und ob die Engine läuft."
   },
+  "networkSecure": {
+    "title": "Sichere Verbindung fehlgeschlagen",
+    "description": "Ihr Browser konnte keine sichere Verbindung zu {{origin}} herstellen. Vertraut er dem Zertifikat der Engine nicht, öffnen Sie diese Adresse in einem neuen Tab und vertrauen Sie dem Zertifikat, oder installieren Sie die CA der Engine (tls.crt.ca in deren Datenverzeichnis). Prüfen Sie andernfalls Ihre Verbindung und ob die Engine läuft."
+  },
   "boundary": {
     "title": "Diese Ansicht ist abgestürzt",
     "description": "Beim Rendern ist ein unerwarteter Fehler aufgetreten. Ein erneutes Laden behebt dies meist.",
@@ -54,7 +58,7 @@
   },
   "tenantAdmission": {
     "title": "Zulassung zur Organisation erforderlich",
-    "description": "Melden Sie sich mit einer für die Organisation zugelassenen Verzeichnisidentität an. Globale Bootstrap-Berechtigungen erlauben keine Workspace-Kommunikation."
+    "description": "Melden Sie sich mit einer für die Organisation zugelassenen Verzeichnisidentität an. Globale Bootstrap-Berechtigungen erlauben keine Arbeitsbereich-Kommunikation."
   },
   "moduleNotEnabled": {
     "description": "Dieser Teil von Olivares ist hier ausgeschaltet und hat nichts anzuzeigen.",

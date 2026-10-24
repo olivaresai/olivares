@@ -131,22 +131,13 @@ func newProviderAccountListCmd() *cobra.Command {
 			if q := providerAccountListQuery(environment, driver, state); q != "" {
 				path += "?" + q
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", path, nil)
+			items, err := cfg.listItems(cmd.Context(), path)
 			if err != nil {
 				return err
 			}
-			if status != 200 {
-				return httpErr(status, b)
-			}
-			var page struct {
-				Items []map[string]any `json:"items"`
-			}
-			if uerr := json.Unmarshal(b, &page); uerr != nil {
-				return uerr
-			}
 			return renderOut(cmd, func(w io.Writer) error {
-				return printProviderAccountTable(w, page.Items)
-			}, page.Items)
+				return printProviderAccountTable(w, items)
+			}, items)
 		},
 	}
 	cfg.addFlags(cmd)

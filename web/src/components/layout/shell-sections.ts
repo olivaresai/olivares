@@ -4,8 +4,8 @@
 import type { GatedSection } from '@/features/navigation/model'
 
 /**
- * A destination that is a SECTION of a registry view rather than the view itself: the
- * approval queue is the first tab of Permissions. It is offered only when the principal
+ * A place that is a SECTION of a registry view rather than the view itself: Rules opens on
+ * the approval queue, the first tab of Permissions. It is offered only when the principal
  * may open the view AND holds the section's own permission, and it links with the
  * section's search so the view opens on it.
  */
@@ -18,7 +18,7 @@ export interface ShellSection extends GatedSection {
 }
 
 export const APPROVALS_SECTION: ShellSection = {
-  key: 'approvals',
+  key: 'rules',
   view: 'permissions',
   search: { tab: 'approvals' },
   requires: 'governance:approval:read',

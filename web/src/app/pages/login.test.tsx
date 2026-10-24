@@ -5,7 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NetworkError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -308,5 +309,59 @@ describe('the sign-in page after a session ended', () => {
     useSessionStore.setState({ endReason: null })
     renderLogin()
     expect(screen.queryByText(/Your session/)).toBeNull()
+  })
+})
+
+// olivares#2781: a sign-in whose request never gets an answer. The browser hides why (a
+// refused certificate looks like a stopped engine), so the page words it by how it was opened.
+describe('a sign-in request that gets no answer', () => {
+  const realLocation = window.location
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: realLocation,
+    })
+  })
+
+  async function submitWhileOpenedAs(
+    url: string,
+    error: Error = new NetworkError('Failed to fetch'),
+  ) {
+    const { protocol, origin } = new URL(url)
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...realLocation, protocol, origin },
+    })
+    auth.login.mockRejectedValue(error)
+    const user = userEvent.setup()
+    renderLogin()
+    await user.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await user.type(screen.getByLabelText('Password'), 'secret')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    return screen.findByRole('alert')
+  }
+
+  it('over http says the control plane is unreachable', async () => {
+    const alert = await submitWhileOpenedAs('http://localhost:8080/login')
+    expect(alert).toHaveTextContent('Control plane unreachable')
+  })
+
+  it('over https names the certificate and the next step', async () => {
+    const alert = await submitWhileOpenedAs('https://192.168.8.17:8443/login')
+    expect(alert).not.toHaveTextContent('Control plane unreachable')
+    expect(alert).toHaveTextContent(
+      'secure connection to https://192.168.8.17:8443',
+    )
+    expect(alert).toHaveTextContent('trust it')
+    expect(alert).toHaveTextContent('tls.crt.ca')
+    expect(alert).toHaveTextContent('engine is running')
+  })
+
+  it('over https a failure that is not a transport failure keeps the old line', async () => {
+    const alert = await submitWhileOpenedAs(
+      'https://192.168.8.17:8443/login',
+      new TypeError('boom'),
+    )
+    expect(alert).toHaveTextContent('Control plane unreachable')
   })
 })

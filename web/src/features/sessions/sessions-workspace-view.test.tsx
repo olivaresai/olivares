@@ -392,7 +392,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     await screen.findAllByText('Untitled session')
     expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalled()
     expect(
-      screen.getByText(/Launched sessions are not shown/i),
+      screen.getByText(/started in Olivares are not shown/i),
     ).toBeInTheDocument()
     // And the COLUMN says it too. A notice beside the table does not unsay a chip that
     // reads "Discovered" — the row would still be stating a fact nothing checked.
@@ -409,7 +409,9 @@ describe('SessionsWorkspaceView — the third answer', () => {
     // The observed rows that DID arrive are still shown — a failed run lookup must not
     // throw away data the other half returned.
     await screen.findAllByText('Untitled session')
-    expect(screen.getByText(/run lookup failed/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/started in Olivares could not be loaded/i),
+    ).toBeInTheDocument()
     const table = screen.getByRole('grid')
     expect(within(table).queryAllByText('Discovered')).toHaveLength(0)
     expect(
@@ -474,7 +476,7 @@ describe('SessionsWorkspaceView — the third answer', () => {
     await screen.findByText('nightly-indexer')
     expect(vi.mocked(sessionsApi.live)).not.toHaveBeenCalled()
     expect(
-      screen.getByText(/Observed sessions are not shown/i),
+      screen.getByText(/started outside Olivares are not shown/i),
     ).toBeInTheDocument()
   })
 
@@ -486,16 +488,98 @@ describe('SessionsWorkspaceView — the third answer', () => {
     renderView()
     await screen.findByText('Untitled session')
     expect(
-      screen.getByText(/most recent page, not the whole estate/i),
+      screen.getByText(/Only the most recent sessions are loaded/i),
     ).toBeInTheDocument()
+  })
+
+  // dev#3120: the 0.3 page opened with a yellow banner about "the whole estate" and
+  // "origin joined over what is loaded" on every busy install. The list says it in its
+  // own footer, in user words, with the way to see more; the caveat stays in the table.
+  it('puts no banner over the list: its footer says it shows the most recent, and loads more', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [launchedRun],
+      has_more: true,
+    })
+    const user = userEvent.setup()
+    renderView('observe', { table: false })
+    const footer = await screen.findByTestId('rail-footer')
+    expect(footer).toHaveTextContent(/^Showing the \d+ most recent/)
+    expect(
+      screen.queryByText(/Only the most recent sessions are loaded/i),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/estate|joined|discovered/i)).toBeNull()
+    expect(vi.mocked(agentOpsApi.listRuns)).toHaveBeenCalledWith(
+      { limit: 200 },
+      expect.anything(),
+    )
+    expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalledWith(
+      { limit: 400 },
+      expect.anything(),
+    )
+    await user.click(within(footer).getByRole('button', { name: 'Load more' }))
+    await waitFor(() =>
+      expect(vi.mocked(agentOpsApi.listRuns)).toHaveBeenCalledWith(
+        { limit: 400 },
+        expect.anything(),
+      ),
+    )
+    expect(vi.mocked(sessionsApi.live)).toHaveBeenCalledWith(
+      { limit: 400 },
+      expect.anything(),
+    )
+  })
+
+  it('keeps the rows it read on screen while the longer page comes, and asks once', async () => {
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [launchedRun],
+      has_more: true,
+    })
+    const user = userEvent.setup()
+    renderView('observe', { table: false })
+    const footer = await screen.findByTestId('rail-footer')
+    const before = screen.getAllByRole('option').length
+    expect(before).toBeGreaterThan(0)
+    // The longer page does not answer yet.
+    vi.mocked(agentOpsApi.listRuns).mockReturnValue(new Promise(() => {}))
+    vi.mocked(sessionsApi.live).mockReturnValue(new Promise(() => {}))
+    await user.click(within(footer).getByRole('button', { name: 'Load more' }))
+    expect(screen.getAllByRole('option')).toHaveLength(before)
+    expect(
+      within(screen.getByTestId('rail-footer')).getByRole('button', {
+        name: 'Load more',
+      }),
+    ).toBeDisabled()
+  })
+
+  it('says in the list foot, not over the page, what the role cannot see', async () => {
+    perms.delete('sessions:live:read')
+    renderView('observe', { table: false })
+    const footer = await screen.findByTestId('rail-footer')
+    expect(footer).toHaveTextContent(
+      /started outside Olivares are not shown: your role cannot see them/,
+    )
+    expect(
+      screen.getAllByText(/started outside Olivares are not shown/),
+    ).toHaveLength(1)
   })
 
   it('says nothing about truncation when both pages are complete', async () => {
     renderView()
     await screen.findByText('Untitled session')
     expect(
-      screen.queryByText(/most recent page, not the whole estate/i),
+      screen.queryByText(/Only the most recent sessions are loaded/i),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('SessionsWorkspaceView — the model column (dev#3120)', () => {
+  it('names the model by its name, with its id on the hover', async () => {
+    renderView()
+    const named = await screen.findAllByText('Claude Opus 4.8')
+    expect(
+      named.some((el) => el.getAttribute('title') === 'claude-opus-4-8'),
+    ).toBe(true)
+    expect(screen.queryByText('claude-opus-4-8')).toBeNull()
   })
 })
 
@@ -780,6 +864,27 @@ describe('SessionsWorkspaceView — the surface opens on work, not on nothing', 
     renderView()
     const card = await screen.findByTestId('card')
     expect(card.textContent).not.toBe('')
+  })
+
+  it('never opens an archived session by default, however much it needs a person', async () => {
+    // Archived sessions are out of the rail (#2795); a default that still picked one would
+    // fill the pane with a session no row of the list shows. The launched session waits
+    // for an approval, which ranks it first, and it is archived.
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        {
+          ...launchedRun,
+          state: 'waiting_approval',
+          archived_at: '2026-08-10T10:07:00Z',
+        },
+      ],
+      has_more: false,
+    })
+    fakeRouter.reset('/sessions')
+    renderView('observe', { table: false })
+    expect(await screen.findByTestId('card')).toHaveTextContent(
+      'card:sess-found|',
+    )
   })
 
   it('does not write the default into the URL, so a link that named nothing still does', async () => {
@@ -1235,7 +1340,9 @@ describe('SessionsWorkspaceView — a half that failed can be asked again', () =
     vi.mocked(sessionsApi.live).mockRejectedValue(new Error('live unavailable'))
     renderView('observe', { table: false })
     const notice = await screen.findByTestId('sessions-live-lookup-failed')
-    expect(notice).toHaveTextContent(/observed half could not be read/i)
+    expect(notice).toHaveTextContent(
+      /started outside Olivares could not be loaded/i,
+    )
     const liveBefore = vi.mocked(sessionsApi.live).mock.calls.length
     const runsBefore = vi.mocked(agentOpsApi.listRuns).mock.calls.length
     vi.mocked(sessionsApi.live).mockResolvedValue({

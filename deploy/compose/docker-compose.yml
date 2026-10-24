@@ -45,7 +45,7 @@ name: olivares
 services:
   olivares:
     # release
-    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.3}
+    image: ${OLIVARES_IMAGE:-docker.io/olivaresai/olivares:0.4}
     # /release
     # A FIXED NAME, so the documented next step is one argv an operator can type:
     #   docker exec olivares olivares first-boot
@@ -73,8 +73,15 @@ services:
       # .env.example) to the https:// URL your operators type. Start-time only:
       # `docker compose up -d` again after changing it.
       #
-      # This changes no bind and no TLS posture: it only decides what the banner
-      # prints and what the passkey relying party is derived from.
+      # It also names that host (an IP address or a DNS name) in the first-boot TLS
+      # certificate. Inside the container the engine can see only its own names, so
+      # without this a CLI or API client on another machine is refused at the host
+      # address. A changed value re-issues the certificate from the same local CA and
+      # key at the next start, so the trust bundle and the pin clients hold stay valid.
+      #
+      # This changes no bind and no TLS policy: it decides what the banner prints,
+      # what the passkey relying party is derived from and which names the managed
+      # certificate covers. A certificate given with --tls-cert is never changed.
       OLIVARES_PUBLIC_URL: "${OLIVARES_PUBLIC_URL:-}"
       HOME: /var/lib/olivares/home
       # The directory the command above serves, so a bare `olivares first-boot` finds it.
@@ -143,16 +150,17 @@ services:
           cpus: "0.1"
           memory: 256M
     restart: unless-stopped
-    # Direct exec: readiness uses the engine binary. The probe
-    # trusts the engine's own first-boot certificate from the persistent data
-    # volume and returns 0 ready, 1 not-ready, 2 unable-to-measure.
+    # Direct exec: readiness uses the engine binary. The probe trusts the
+    # certificate chain the engine serves, which it publishes in the persistent data
+    # volume: the first-boot certificate, or the pair given with --tls-cert and
+    # --tls-key. It returns 0 ready, 1 not-ready, 2 unable-to-measure.
     healthcheck:
       test:
         - CMD
         - /usr/local/bin/olivares
         - readyz
         - --server=https://127.0.0.1:8443
-        - --ca-cert=/var/lib/olivares/tls.crt
+        - --ca-cert=/var/lib/olivares/public/tls.crt
         - --timeout=3s
       interval: 5s
       timeout: 5s

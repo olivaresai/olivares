@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
-[![Next release: 0.3](https://img.shields.io/badge/release-0.3-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->
+[![Next release: 0.4](https://img.shields.io/badge/release-0.4-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -68,6 +68,8 @@ Olivares AI собирает ответы в одном месте. Он под�
 
 Community сохраняет локальную наблюдаемость, настройки и экспорт резервных копий. Отправка в SIEM/ITSM, внешняя телеметрия и экспорт состояния безопасности входят в базовую редакцию Business.
 
+**Сетевая изоляция сессий распространяется на сессии Claude Code, Codex и OpenCode, привязанные к ключу провайдера, и на сессии OpenCode со входом через собственную учётную запись инструмента.** Такая сессия достигает только конечной точки своего провайдера или хостов своего входа через прокси отдельной сессии в собственном сетевом пространстве имён — иначе она не запускается. Для OpenCode с ключом провайдера список хостов опирается на более раннюю инвентаризацию, а не на ход, показанный за прокси. Сессии Grok Build и сессии других инструментов со входом в учётную запись по-прежнему могут достичь любого хоста, который разрешает сеть. Прочитайте раздел [сетевая изоляция сессий](SECURITY.md#session-network-isolation), прежде чем запускать нагрузки, которым нужен исключительный доступ к одному провайдеру.
+
 ## Установка
 
 Выберите способ и скопируйте его блок. В конце `olivares quickstart` выведет адрес консоли и одноразовый токен для создания первого администратора. Каждый релиз подписан, а каждый способ установки проверяет скачанные файлы перед установкой ([проверить скачанный файл самостоятельно](INSTALL.md#verifying-a-release)).
@@ -85,7 +87,7 @@ olivares quickstart
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares:0.3 \
+  docker.io/olivaresai/olivares:0.4 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 <!-- /release -->
@@ -103,8 +105,8 @@ docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.deb
-sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.deb
+sudo dpkg -i olivares_0.4_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -112,8 +114,8 @@ sudo dpkg -i olivares_0.3_linux_amd64.deb && sudo systemctl enable --now olivare
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.rpm
-sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.rpm
+sudo rpm -i olivares_0.4_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 <!-- /release -->
 
@@ -121,12 +123,12 @@ sudo rpm -i olivares_0.3_linux_amd64.rpm && sudo systemctl enable --now olivares
 
 <!-- release -->
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.3/olivares_0.3_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_0.3_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/0.4/olivares_0.4_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_0.4_linux_amd64.apk && sudo rc-service olivares start
 ```
 <!-- /release -->
 
-На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: <!-- release -->[страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.3)<!-- /release -->.
+На ARM-серверах используйте `arm64` вместо `amd64`. Все файлы релиза: <!-- release -->[страница релиза](https://github.com/olivaresai/olivares/releases/tag/0.4)<!-- /release -->.
 
 **Homebrew.** macOS и Linux.
 

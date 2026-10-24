@@ -351,7 +351,8 @@
       "subjectRef": "Subjektreferenz",
       "reason": "Grund",
       "reasonHint": "Wird wortgetreu in der Beweismittelkette erfasst.",
-      "alreadyHeld": "Bereits durch aktive Aufbewahrungssperren abgedeckt ({{count}}): {{matters}}",
+      "alreadyHeld_one": "Bereits durch {{count}} aktive Aufbewahrungssperre abgedeckt: {{matters}}",
+      "alreadyHeld_other": "Bereits durch {{count}} aktive Aufbewahrungssperren abgedeckt: {{matters}}",
       "notHeld": "Hierfür besteht derzeit kein Aufbewahrungsschutz. Die Aufbewahrungssperre, die Sie setzen, wäre die erste.",
       "confirmCreate": "Aufbewahrungssperre setzen",
       "created": "Rechtliche Aufbewahrungssperre gesetzt — der Aufbewahrungsschutz ist aktiv.",
@@ -424,7 +425,7 @@
     "dialog": {
       "registerTitle": "Löschantrag erfassen",
       "registerDescription": "Dadurch wird der Antrag erfasst und der Schlüssel des Subjekts erzeugt. Es wird nichts vernichtet.",
-      "registerSafe": "Die Erfassung ist nicht destruktiv. Die Löschung wird erst bei ihrer Ausführung und nur nach Freigabe beider Kontrollstufen durchgeführt.",
+      "registerSafe": "Die Erfassung ist nicht destruktiv. Die Löschung wird erst bei ihrer Ausführung und nur nach Genehmigung beider Kontrollstufen durchgeführt.",
       "subjectKind": "Subjektart",
       "subjectRef": "Subjektreferenz",
       "caseRef": "Aktenzeichen",
@@ -437,7 +438,7 @@
       "executeTitle": "Löschung für {{case}} ausführen?",
       "executeDescription": "Dadurch wird die kontrollierte Löschung in allen Speichern ausgeführt und anschließend der Schlüssel des Subjekts vernichtet.",
       "irreversible": "IRREVERSIBEL. Sobald der Schlüssel des Subjekts vernichtet wurde, wird jedes Token mit Bezug auf diese Person dauerhaft unlesbar. Der Vorgang kann nicht rückgängig gemacht werden, und eine Wiederherstellung ist unmöglich.",
-      "twoGates": "Zuerst müssen zwei unabhängige Kontrollstufen freigegeben werden: Dieses Subjekt darf keiner rechtlichen Aufbewahrungssperre unterliegen und zwei verschiedene Benutzerkonten müssen zustimmen. Keine der beiden Stufen kann übersprungen werden. Die Engine erzwingt verschiedene KONTEN; sie kann nicht nachweisen, dass zwei Konten zwei verschiedene Personen sind.",
+      "twoGates": "Zuerst müssen zwei unabhängige Kontrollstufen genehmigt werden: Dieses Subjekt darf keiner rechtlichen Aufbewahrungssperre unterliegen und zwei verschiedene Benutzerkonten müssen zustimmen. Keine der beiden Stufen kann übersprungen werden. Die Engine erzwingt verschiedene KONTEN; sie kann nicht nachweisen, dass zwei Konten zwei verschiedene Personen sind.",
       "executeReason": "Grund für die Ausführung",
       "confirmExecute": "Löschung ausführen",
       "executed": "Löschung ausgeführt und Beleg versiegelt.",
@@ -464,10 +465,10 @@
     "accountLeg": "Kontoschritt",
     "providerLeg": "Anbieterschritt",
     "custody": "Custody",
-    "noCustody": "No custody events recorded for this request.",
+    "noCustody": "Für diese Anfrage wurden keine Verwahrungsereignisse erfasst.",
     "approvedBy": "approved by {{list}}",
     "anchored": "ledger #{{seq}} · {{hash}}",
-    "unanchored": "NOT anchored to the ledger — recorded, not provable"
+    "unanchored": "NICHT im Ledger verankert — erfasst, aber nicht nachweisbar"
   },
   "calendar": {
     "title": "Regulatorischer Kalender",
@@ -522,7 +523,7 @@
     },
     "confirm": {
       "title": "Diese Datei löschen?",
-      "body": "Ein kontrolliertes Einzellöschen. Eine gesetzliche Aufbewahrungspflicht kann es ablehnen, oder es braucht erst eine Freigabe — das Ergebnis sagt, welches von beidem."
+      "body": "Ein kontrolliertes Einzellöschen. Eine gesetzliche Aufbewahrungspflicht kann es ablehnen, oder es braucht erst eine Genehmigung — das Ergebnis sagt, welches von beidem."
     },
     "reason": "Grund",
     "reasonHint": "Optional. Wird zusammen mit der Löschung im Audit-Ledger festgehalten.",
@@ -530,12 +531,12 @@
     "eraseFailed": "Die Löschanfrage konnte nicht gesendet werden.",
     "detail": "Detail",
     "confirmationId": "Bestätigungs-ID",
-    "approvalRef": "Freigabereferenz",
+    "approvalRef": "Genehmigungsreferenz",
     "holds": "Gesetzliche Aufbewahrungspflichten",
     "status": {
       "deleted": "Gelöscht",
       "held": "Durch Aufbewahrungspflicht gesperrt",
-      "pending": "Freigabe ausstehend",
+      "pending": "Genehmigung ausstehend",
       "denied": "Abgelehnt",
       "failed": "Fehlgeschlagen",
       "not_wired": "Schnittstelle nicht verbunden",

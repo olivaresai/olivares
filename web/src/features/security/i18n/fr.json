@@ -203,7 +203,7 @@
     "attestedSeq": "Seq attesté",
     "headSeq": "seq de tête du registre {{seq}}",
     "reverifyNote": "Chaque événement porte seq · hash · prev_hash afin qu’un lecteur puisse revérifier le lien hors ligne par rapport à un magasin WORM externe.",
-    "chainEmptyNote": "Nothing to verify yet — the ledger holds no events."
+    "chainEmptyNote": "Rien à vérifier pour l’instant — le registre ne contient aucun événement."
   },
   "empty": {
     "enforcement": {

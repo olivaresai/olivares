@@ -24,7 +24,10 @@
     "e2e": "pnpm run typecheck:e2e && playwright test",
     "e2e:install": "playwright install --with-deps chromium",
     "at": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all dark && node --experimental-strip-types e2e-visual/at-run.ts light all light",
-    "at:gate": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all dark --gate && node --experimental-strip-types e2e-visual/at-run.ts light all light --gate"
+    "at:gate": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all dark --gate && node --experimental-strip-types e2e-visual/at-run.ts light all light --gate",
+    "capture": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all capture-dark --qa && node --experimental-strip-types e2e-visual/at-run.ts light all capture-light --qa",
+    "capture:gate": "pnpm build && node --experimental-strip-types e2e-visual/at-run.ts dark all capture-dark --gate --qa && node --experimental-strip-types e2e-visual/at-run.ts light all capture-light --gate --qa",
+    "capture:selftest": "node --experimental-strip-types e2e-visual/console-qa/selftest.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

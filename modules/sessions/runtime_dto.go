@@ -55,7 +55,10 @@ type runDTO struct {
 	SecretEnv []SecretEnvRef `json:"secret_env,omitempty"`
 	// GitRead names the repository binding this session gets a read credential
 	// for. The binding only: no read of a run returns the token.
-	GitRead         string           `json:"git_read,omitempty"`
+	GitRead string `json:"git_read,omitempty"`
+	// Credentials names the managed credentials this session was given a way to use
+	// (Business). Names only: no read of a run returns a secret.
+	Credentials     []string         `json:"credentials,omitempty"`
 	MaxDurationSecs int64            `json:"max_duration_secs,omitempty"`
 	Isolation       string           `json:"isolation"`
 	State           string           `json:"state"`
@@ -71,6 +74,9 @@ type runDTO struct {
 	StartedAt       string           `json:"started_at,omitempty"`
 	LastActivityAt  string           `json:"last_activity_at,omitempty"`
 	StoppedAt       string           `json:"stopped_at,omitempty"`
+	// ArchivedAt is when the session was archived (run_name_archive.go); absent when
+	// it is not. Every reader sees the same mark: lists are not narrowed by it.
+	ArchivedAt string `json:"archived_at,omitempty"`
 
 	// Pinned is THE CALLER'S OWN pin on this run (run_pin.go): present only on
 	// reads that looked the caller's pins up (list, get one, the pin routes);
@@ -79,6 +85,11 @@ type runDTO struct {
 	// pinned it — the order pinned rows hold at the top of their list.
 	Pinned   *bool  `json:"pinned,omitempty"`
 	PinnedAt string `json:"pinned_at,omitempty"`
+	// Done and SnoozedUntil are THE CALLER'S OWN marks on this run (run_mark.go),
+	// on the same reads as Pinned and for the same reason. SnoozedUntil is present
+	// only while the snooze is still to end.
+	Done         *bool  `json:"done,omitempty"`
+	SnoozedUntil string `json:"snoozed_until,omitempty"`
 
 	// Governance posture, the non-sensitive launch-decision facts the portal
 	// renders per session. AgentRef lets the client query the kill-switch/budget scoped on
@@ -173,6 +184,15 @@ type runDTO struct {
 	// CoreSessionID is the core Session of the current launch attempt, the row the
 	// session cockpit lists. Empty before a first launch and on old runs.
 	CoreSessionID string `json:"core_session_id,omitempty"`
+
+	// The six facts a console shows about a session (session_facts.go). They ride
+	// the list and the detail read only; a control reply omits them.
+	ActsFor   *runActsForDTO   `json:"acts_for,omitempty"`
+	RunsAs    *runRunsAsDTO    `json:"runs_as,omitempty"`
+	Reaches   *runReachesDTO   `json:"reaches,omitempty"`
+	Cost      *runCostDTO      `json:"cost,omitempty"`
+	Approvals *runApprovalsDTO `json:"approvals,omitempty"`
+	Proof     *runProofDTO     `json:"proof,omitempty"`
 }
 
 // toRunDTO projects a run record, deriving the displayed state at read time.
@@ -197,6 +217,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		TemplateVersion:        rec.Int(colTemplateVersion),
 		SecretEnv:              storedSecretEnvNames(rec),
 		GitRead:                rec.String(colRunGitRead),
+		Credentials:            storedCredentialNames(rec),
 		MaxDurationSecs:        rec.Int(colTemplateCeiling),
 		Isolation:              rec.String(colIsolation),
 		State:                  m.deriveRunState(rec),
@@ -212,6 +233,7 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		StartedAt:              rec.String(colStartedAt),
 		LastActivityAt:         rec.String(colLastActivityAt),
 		StoppedAt:              rec.String(colStoppedAt),
+		ArchivedAt:             rec.String(colRunArchivedAt),
 		AgentRef:               rec.String(colRunAgentRef),
 		PEPProvisioned:         rec.Bool(colPEPProvisioned),
 		RecordIO:               rec.Bool(colRecordIO),
@@ -374,6 +396,10 @@ type createRunRequest struct {
 	// the session gets a short-lived GitHub read credential for. Needs tenant
 	// administration, like SecretEnv.
 	GitRead string `json:"git_read"`
+	// Credentials names managed credentials (Business) the child gets a way to use: an
+	// SSH key or certificate, a database login or an API account, held by the engine and
+	// never handed to the session. Names only; needs tenant administration, like SecretEnv.
+	Credentials []string `json:"credentials"`
 	// ProviderProfileRef (B1) names the provider profile to launch under. Only the
 	// reference: no home, environment, driver, binding, canonical sid, process
 	// handle or authentication source is accepted from a client — the source is an

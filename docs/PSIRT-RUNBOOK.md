@@ -46,7 +46,8 @@ Cut the next compatible `MAJOR.MINOR` release (increment MINOR) from the backpor
 OTA manifest **exactly as the `stable` channel does** — the `security` channel is the
 HIGHEST-risk OTA route, not a shortcut. It ships the fix for an exploited CVE, and it
 is the channel the opt-in unattended timer targets (`olivares upgrade --install-timer
---channel security`, `docs/UPGRADE-AND-ROLLBACK.md`), so a manifest substituted on this
+--channel security`, `docs/UPGRADE-AND-ROLLBACK.md`; a package install has no such timer, because
+`--install-timer` refuses the package-owned `/usr/bin/olivares`), so a manifest substituted on this
 channel installs an attacker's binary on the fleet with no human in the loop.
 
 > **NEVER sign a security manifest blind, and never issue one without `--expires-in`.**
@@ -164,7 +165,7 @@ detached signature **from disk**, so it is fully offline — in an air-gap, poin
 olivares security check --feed advisories.json          # --sig defaults to advisories.json.sig
 olivares security check --feed /media/olivares-update/advisories.json   # air-gap: file from a bundle
 olivares security check --feed advisories.json --quiet  # print nothing when unaffected (probes)
-olivares security check --feed advisories.json --product-version 0.3  # what-if / fleet check
+olivares security check --feed advisories.json --product-version 0.4  # what-if / fleet check
 ```
 <!-- /release -->
 

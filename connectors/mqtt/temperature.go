@@ -60,6 +60,10 @@ func (r *TemperatureReader) Read(ctx context.Context) (Temperature, error) {
 		return Temperature{}, errors.New("mqtt temperature: sensor unavailable")
 	case errors.Is(err, ErrPayloadTooLarge):
 		return Temperature{}, errors.New("mqtt temperature: invalid sensor measurement")
+	case errors.Is(err, ErrBrokerCredentials):
+		return Temperature{}, errors.New("mqtt temperature: broker refused the credentials or authorization")
+	case errors.Is(err, ErrBrokerRefused):
+		return Temperature{}, errors.New("mqtt temperature: broker refused the connection or subscription")
 	case err != nil:
 		return Temperature{}, errors.New("mqtt temperature: broker unavailable")
 	}

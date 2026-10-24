@@ -17,12 +17,23 @@ import (
 )
 
 // The native OpenCode ChatGPT method skips terminal selections, prints a device
-// URL/code and writes its own auth.json. No vendor account is authenticated here.
+// URL/code and writes its own auth.json. Its own provider (v1.18.34, --provider
+// opencode) prints its key prompt and takes the key at a carriage return. No
+// vendor account is authenticated here.
 const openCodeLoginFixture = `#!/bin/sh
 [ "$PWD" = "$HOME" ] || exit 3
 [ "$XDG_DATA_HOME" = "$HOME/.local/share" ] || exit 4
 case "$1 $2" in
 "auth login")
+ if [ "$#" = 4 ] && [ "$3 $4" = "--provider opencode" ]; then
+  printf '┌  Add credential\n│\n●  Create an api key at https://opencode.ai/auth\n│\n◆  Enter your API key\n│  _\n└\n'
+  key=''; cr=$(printf '\r')
+  while c=$(dd bs=1 count=1 2>/dev/null); [ -n "$c" ] && [ "$c" != "$cr" ]; do key="$key$c"; printf '▪'; done
+  [ -n "$key" ] || { echo 'Error: no key was entered'; exit 1; }
+  mkdir -p "$XDG_DATA_HOME/opencode"
+  printf '{"opencode":{"type":"api","key":"%s"}}' "$key" > "$XDG_DATA_HOME/opencode/auth.json"
+  printf '\n└  Done\n'; exit 0
+ fi
  [ "$3 $4 $5" = "--provider openai --method" ] || exit 5
  [ "$6" = "ChatGPT Pro/Plus (headless)" ] || exit 6
  printf '●  Go to: https://auth.openai.com/codex/device\n●  Enter code: ABCD-12345\n'
@@ -31,7 +42,11 @@ case "$1 $2" in
  echo '{"openai":{"type":"oauth","refresh":"fixture","access":"fixture","expires":0}}' > "$XDG_DATA_HOME/opencode/auth.json"
  exit 0;;
 "auth list")
- if [ -f "$XDG_DATA_HOME/opencode/auth.json" ]; then printf '●  OpenAI oauth\n└  1 credentials\n'; else printf '└  0 credentials\n'; fi
+ f="$XDG_DATA_HOME/opencode/auth.json"
+ [ -f "$f" ] || { printf '└  0 credentials\n'; exit 0; }
+ grep -q '"opencode"' "$f" && printf '●  OpenCode api\n'
+ grep -q '"openai"' "$f" && printf '●  OpenAI oauth\n'
+ printf '└  1 credentials\n'
  exit 0;;
 esac
 exit 2
@@ -111,7 +126,7 @@ func testOpenCodeDefaultLogin(t *testing.T, backend string, retained bool) {
 			t.Fatalf("unsigned retained profile status = %v", st)
 		}
 	}
-	out, stderr, err := execSessionCLI(t, nil, "tool", "login", "opencode", "--server", server.URL, "--token", token, "--tenant", tenant)
+	out, stderr, err := execSessionCLI(t, nil, "tool", "login", "opencode", "--method", "chatgpt-headless", "--server", server.URL, "--token", token, "--tenant", tenant)
 	if err != nil {
 		t.Fatalf("tool login opencode: %v\n%s", err, stderr)
 	}
@@ -157,7 +172,7 @@ func testOpenCodeDefaultLogin(t *testing.T, backend string, retained bool) {
 	if st := call("GET", accountStatus, nil, http.StatusOK); st["signed_in"] != false {
 		t.Fatalf("new account reused default login: %v", st)
 	}
-	out, stderr, err = execSessionCLI(t, nil, "tool", "login", "opencode", "--account", "opencode-b", "--server", server.URL, "--token", token, "--tenant", tenant)
+	out, stderr, err = execSessionCLI(t, nil, "tool", "login", "opencode", "--method", "chatgpt-headless", "--account", "opencode-b", "--server", server.URL, "--token", token, "--tenant", tenant)
 	if err != nil {
 		t.Fatalf("named login: %v\n%s", err, stderr)
 	}
@@ -186,5 +201,65 @@ func testOpenCodeDefaultLogin(t *testing.T, backend string, retained bool) {
 		}
 		call("GET", "/v1/m/agenttools/sign-in?driver=opencode&tenant_id="+url.QueryEscape(tenant), nil, http.StatusConflict)
 		call("POST", "/v1/m/agenttools/sign-in", map[string]any{"driver": "opencode", "tenant_id": tenant}, http.StatusConflict)
+	}
+}
+
+// #2567: `olivares tool login opencode` offers OpenCode's own provider first. The key
+// comes from the CLI's stdin (a pipe here), reaches the tool's own login prompt on
+// the engine and lands in the organization's login home; the CLI never prints it,
+// and the session profile resolves to that own login.
+func TestOpenCodeOwnKeyLoginFromTheCLI(t *testing.T) {
+	for _, name := range []string{"OLIVARES_SOURCES_CONFIG", "OLIVARES_AGENT_GATEWAY_CONFIG", "OLIVARES_HOOK_PEP_CONFIG", "OLIVARES_COMMUNICATION_ACTIVATION", envSessionTokenFile, envSessionRuntimeWIF} {
+		t.Setenv(name, "")
+	}
+	data, bin := t.TempDir(), filepath.Join(t.TempDir(), "opencode")
+	if err := os.WriteFile(bin, []byte(openCodeLoginFixture), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(envSessionOpenCodeBin, bin)
+	eng, err := boot(t.Context(), bootConfig{DataDir: data, Engine: "sqlite", Version: version, Logger: discardLogger(), ApplyModuleProfile: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = eng.Close() })
+	var token, tenant string
+	call := func(method, path string, body any, want int) map[string]any {
+		t.Helper()
+		status, result, raw := doDemoViewJSON(t, eng.api.Handler(), method, path, token, tenant, body)
+		if status != want {
+			t.Fatalf("%s %s = %d, want %d: %s", method, path, status, want, raw)
+		}
+		return result
+	}
+	setup, _, err := eng.setupTok.Ensure()
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := call("POST", "/v1/setup", map[string]any{"token": setup, "email": "opencode@olivares.ai", "password": "fixture-password-2026!"}, 201)
+	token = call("POST", "/v1/auth/login", map[string]any{"email": "opencode@olivares.ai", "password": "fixture-password-2026!"}, 200)["token"].(string)
+	tenant = created["organization"].(map[string]any)["tenant_id"].(string)
+	server := httptest.NewServer(eng.api.Handler())
+	t.Cleanup(server.Close)
+
+	const key = "fixture-cli-zen-key-0123456789abcdef"
+	out, stderr, err := execSessionCLI(t, strings.NewReader(key+"\n"), "tool", "login", "opencode", "--server", server.URL, "--token", token, "--tenant", tenant)
+	if err != nil {
+		t.Fatalf("tool login opencode: %v\n%s", err, stderr)
+	}
+	if !strings.Contains(out, "https://opencode.ai/auth") || !strings.Contains(out, "OpenCode is signed in.") {
+		t.Fatalf("login output = %s", out)
+	}
+	if strings.Contains(out+stderr, key) {
+		t.Fatalf("the CLI printed the key: %s %s", out, stderr)
+	}
+	stored, err := os.ReadFile(filepath.Join(data, toolLoginsDir, tenant, "opencode", ".local", "share", "opencode", "auth.json"))
+	if err != nil || !strings.Contains(string(stored), key) {
+		t.Fatalf("the tool did not store the key in the organization's login home: %v", err)
+	}
+	if st := call("GET", "/v1/m/agenttools/sign-in?driver=opencode&tenant_id="+url.QueryEscape(tenant), nil, 200); st["signed_in"] != true || st["method"] != "OpenCode Zen" {
+		t.Fatalf("status = %v", st)
+	}
+	if resolved := call("POST", "/v1/m/sessions/provider-profiles/resolve", map[string]any{"driver": "opencode"}, 200); resolved["reason"] != "own_login" {
+		t.Fatalf("resolve = %v", resolved)
 	}
 }

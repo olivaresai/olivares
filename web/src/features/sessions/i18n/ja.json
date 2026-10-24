@@ -122,13 +122,13 @@
     "table": "テーブル"
   },
   "partial": {
-    "noLiveRead": "観測セッションは表示されていません。あなたのロールでは読み取れないためです。下に並ぶ起動済みのものは読み取れた分であり、全体像ではありません。",
-    "noRunRead": "起動済みセッションは表示されていません。あなたのロールでは読み取れないためです。下で「発見」と表示されているセッションも Olivares が起動したものかもしれません。この一覧では確認できませんでした。",
-    "truncated": "これは最新のページであり、全体ではありません。ここでの由来は読み込み済みの範囲で突き合わせているため、実行がページから外れたセッションは「発見」と表示されることがあります。セッションを開けばエンジンが答えます。",
-    "runLookupFailed": "起動済みの側を読み取れませんでした。実行の照会が失敗しています。以下の行は観測側が返した内容です。由来は推測せず「未読」として示します。",
-    "liveLookupFailed": "観測側を読み取れませんでした。ライブ照会が失敗しています。以下の行は起動済みのものです。テレメトリ列が空なのは読み取れなかったためで、存在しないからではありません。",
-    "noProfileRead": "プロバイダープロファイル名は表示されていません。あなたのロールではプロファイルを読み取れないためです。「インスタンス」列には代わりに各行のプロファイル参照が入ります。",
-    "profileLookupFailed": "プロバイダープロファイル名を読み取れませんでした。プロファイルの照会が失敗しています。「インスタンス」列には代わりに各行のプロファイル参照が入ります。"
+    "noLiveRead": "Olivares の外で開始されたセッションは表示されていません。あなたのロールでは表示できません。",
+    "noRunRead": "Olivares で開始されたセッションは表示されていません。あなたのロールでは表示できません。",
+    "truncated": "最新のセッションだけを読み込んでいるため、古いセッションがここで「発見」と表示されることがあります。開くと由来を確認できます。",
+    "runLookupFailed": "Olivares で開始されたセッションを読み込めませんでした。",
+    "liveLookupFailed": "Olivares の外で開始されたセッションを読み込めませんでした。",
+    "noProfileRead": "プロバイダー名は表示されていません。あなたのロールではプロバイダープロファイルを読み取れません。",
+    "profileLookupFailed": "プロバイダー名を読み込めませんでした。"
   },
   "move": {
     "open": "移動先…",
@@ -275,7 +275,7 @@
     "cleaned": "クリーンアップ済み"
   },
   "address": {
-    "retired": "開いていたセッションを閉じました。そのセッションが属する側へのアクセス権が変わりました。行を選択すると、現在のアクセス権でセッションを開きます。"
+    "retired": "開いていたセッションは利用できなくなりました。一覧から別のセッションを選んでください。"
   },
   "work": {
     "worked": "{{duration}} 稼働",
@@ -289,7 +289,14 @@
     "pinnedMark": "ピン留め済み",
     "rowMenu": "{{name}} の操作",
     "noObservation": "このセッションのテレメトリはまだ届いていません。",
-    "pinFailed": "ピン留めを変更できませんでした。"
+    "pinFailed": "ピン留めを変更できませんでした。",
+    "snoozeHour": "1 時間スヌーズ",
+    "snoozeDay": "1 日スヌーズ",
+    "snoozeWeek": "1 週間スヌーズ",
+    "unsnooze": "スヌーズを解除",
+    "markDone": "完了にする",
+    "markNotDone": "未完了に戻す",
+    "markFailed": "マークを変更できませんでした。"
   },
   "surface": {
     "openBeside": "隣に開く",
@@ -303,6 +310,11 @@
       "rail": "セッション",
       "narrative": "作業",
       "context": "コンテキスト"
+    },
+    "resize": {
+      "rail": "セッション一覧の幅を変更",
+      "context": "コンテキストパネルの幅を変更",
+      "beside": "隣のセッションの幅を変更"
     }
   },
   "narrative": {
@@ -315,14 +327,15 @@
   },
   "meter": {
     "mode": "モード: {{mode}}",
+    "unasked": "確認なしで実行: <policy>Olivares のポリシー</policy>で制限されています",
+    "unaskedShort": "確認なしで実行",
+    "accessUnknown": "アクセス未報告",
     "modeTitle": "{{tool}} の報告: {{mode}}",
     "theTool": "ツール",
     "toolWord": {
-      "bypassPermissions": "許可を求めません",
       "untrusted": "信頼していないコマンドの前に確認します",
       "onFailure": "コマンドが失敗したときに確認します",
       "onRequest": "必要なときに確認します",
-      "never": "許可を求めません",
       "granular": "独自のルールで確認します"
     },
     "usageLabel": "このセッションの使用量",
@@ -429,9 +442,9 @@
   "conversation": {
     "log": "会話",
     "waiting": "セッションを待っています…",
-    "empty": "まだターンはありません。下に文を送ってください。",
-    "ended": "セッションの入出力ストリームは終了しました。",
-    "lag": "{{count}} フレームが欠落しました。以降の出力は欠落の後から再開します。",
+    "empty": "まだメッセージはありません。",
+    "ended": "セッションは終了しました。",
+    "lag_other": "{{count}} フレームが欠落しました。以降の出力は欠落の後から再開します。",
     "tool": "ツール",
     "result": "結果",
     "unknown": "認識できないフレーム",
@@ -439,6 +452,7 @@
     "args": "引数",
     "toolResult": "結果",
     "toolFailed": "失敗",
+    "toolStopped": "停止",
     "tokens": "入力 {{input}} · 出力 {{output}}",
     "protocol": "プロトコルフレーム: {{count}}",
     "stop": {
@@ -449,7 +463,7 @@
     },
     "turnFailed": "ターンが失敗しました: {{message}}",
     "retrying": "再試行中（{{count}}）: {{message}}",
-    "keyRefused": "プロバイダーが API キーを拒否しました。プロバイダーで置き換えてください。",
+    "keyRefused": "プロバイダーが APIキーを拒否しました。プロバイダーで置き換えてください。",
     "output": "ツールの出力（{{count}}）: {{first}}",
     "started": "セッションを開始しました",
     "startedTools_other": "ツール {{count}} 件",
@@ -458,7 +472,50 @@
     "workingFolder": "作業フォルダー: {{cwd}}",
     "temporaryFolder": "作業フォルダー: このセッションの一時フォルダー",
     "workedFor": "{{duration}} 作業",
-    "toolsFolded_other": "+{{count}} 件のツール呼び出し"
+    "modelChanged": "モデルが変わりました: {{from}} → {{to}}",
+    "modelChangedAt": "{{time}} にモデルが変わりました: {{from}} → {{to}}",
+    "sentPending": "送信しました。ツールが受け取るのを待っています。",
+    "sentNotTaken": "ツールが受け取る前にセッションが終了しました。",
+    "finishedIn": "{{duration}} で完了",
+    "escToInterrupt": "Esc で中断",
+    "background": "バックグラウンド",
+    "agentWorking": "作業中",
+    "work": {
+      "join": "、",
+      "ran_other": "コマンドを {{count}} 件実行",
+      "edited_other": "ファイルを {{count}} 件編集",
+      "editedSome": "ファイルを編集",
+      "agents_other": "エージェントを {{count}} 件実行",
+      "read_other": "ファイルを {{count}} 件読み取り",
+      "readSome": "ファイルを読み取り",
+      "searched_other": "{{count}} 回検索",
+      "used_other": "ツールを {{count}} 件使用",
+      "failed_other": "{{count}} 件失敗",
+      "background_other": "{{count}} 件がバックグラウンド",
+      "stopped_other": "{{count}} 件停止"
+    },
+    "running": {
+      "command_other": "シェルコマンドを {{count}} 件実行中",
+      "edit": "{{target}} を編集中",
+      "read": "{{target}} を読み取り中",
+      "search": "{{target}} を検索中",
+      "agent": "{{name}} が作業中",
+      "tool": "{{tool}} を実行中"
+    },
+    "limit": {
+      "reached": "Claude Code が{{window}}に達しました",
+      "reachedUntil": "Claude Code が{{window}}に達しました。{{time}} にリセットされます",
+      "reachedUsed": "Claude Code が{{window}}に達しました（{{used}}% 使用）",
+      "reachedUsedUntil": "Claude Code が{{window}}に達しました（{{used}}% 使用）。{{time}} にリセットされます",
+      "window": {
+        "fiveHour": "5 時間の上限",
+        "weekly": "週間の上限",
+        "weeklyOpus": "Opus の週間上限",
+        "weeklySonnet": "Sonnet の週間上限",
+        "extra": "追加使用の上限",
+        "usage": "使用上限"
+      }
+    }
   },
   "changes": {
     "title": "{{folder}} の変更",
@@ -524,17 +581,24 @@
       "pinned": "ピン留め",
       "attention": "対応が必要",
       "active": "実行中",
-      "settled": "以前"
+      "today": "今日完了",
+      "settled": "以前",
+      "snoozed": "スヌーズ中",
+      "archived": "アーカイブ済み"
     },
     "more": "その他",
     "back": "セッションに戻る",
     "showTable": "テーブルで表示",
     "filter": "セッションを絞り込む…",
+    "recent": "最新の {{n}} 件を表示中",
+    "loadMore": "さらに読み込む",
     "noMatch": "一致するセッションはありません。"
   },
   "thread": {
     "copyReference": "参照をコピー",
-    "terminalHint": "同じセッションをターミナルから操作します。"
+    "terminalHint": "同じセッションをターミナルから操作します。",
+    "modelMismatch": "{{requested}} を指定、{{inUse}} で実行中",
+    "modelTitle": "指定: {{requested}} · 使用中: {{inUse}}"
   },
   "activity": {
     "workflowPhases": "フェーズ",
@@ -621,5 +685,34 @@
     "usageUntil": "{{time}}まで利用枠を使い切りました",
     "usage": "利用枠を使い切りました",
     "rate": "プロバイダーがリクエストを制限しています。少し待ってからもう一度お試しください。"
+  },
+  "sheet": {
+    "title": "セッション",
+    "open": "セッションを開く"
+  },
+  "rowActions": {
+    "rename": "名前を変更…",
+    "renameTitle": "セッション名を変更",
+    "renameDescription": "名前はサーバーに保存され、このセッションが表示されるすべての場所に表示されます。空にすると Olivares が付ける名前に戻ります。",
+    "renameLabel": "名前",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "archive": "アーカイブ",
+    "unarchive": "アーカイブを解除",
+    "archived": "アーカイブしました。一覧の最後の「アーカイブ済み」にあります。",
+    "unarchived": "一覧に戻しました。",
+    "copyLink": "リンクをコピー",
+    "copyId": "セッション ID をコピー",
+    "copyTranscript": "トランスクリプトをコピー",
+    "noTranscript": "このセッションのツールは、コピーできるトランスクリプトをまだ書き出していません。",
+    "copyFailed": "ブラウザーがコピーを許可しませんでした。",
+    "you": "あなた",
+    "assistant": "アシスタント",
+    "delete": "削除…",
+    "stopFirst": "先に停止してください",
+    "copiedPartial": "コピーしました。トランスクリプトのうち {{n}} 件のレコードは読み取れなかったため含まれていません。",
+    "clipped": "64 KiB を超えるメッセージはコピーで切り詰められ、末尾に [...] が付いています。",
+    "noWholeText": "エンジンが各メッセージの最初の行しか送らなかったため、トランスクリプトはコピーしませんでした。",
+    "transcriptChanged": "コピー中にトランスクリプトが変わりました。もう一度お試しください。"
   }
 }

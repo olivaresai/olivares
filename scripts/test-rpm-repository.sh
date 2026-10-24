@@ -262,7 +262,7 @@ PY
 STUB_FINGERPRINT=0123456789ABCDEF0123456789ABCDEF01234567
 # The olivares package the fixture repositories hold, named for the release this tree builds.
 # release
-FIXTURE_RPM=olivares-0.3-1.x86_64.rpm
+FIXTURE_RPM=olivares-0.4-1.x86_64.rpm
 # /release
 
 # Stub gpg, rpm, rpmkeys, rpmsign and createrepo_c for the path tests. Every call
@@ -327,9 +327,34 @@ if tool == "gpg":
 elif tool == "rpmsign" and os.environ.get("STUB_RPMSIGN_TAMPER") == "1":
     with open(args[-1], "ab") as handle:
         handle.write(b"x")
+elif tool == "rpm" and "--querytags" in args:
+    if os.environ.get("STUB_RPM_QUERYTAGS_FAIL") == "1":
+        raise SystemExit(1)
+    tags = ["RSAHEADER", "DSAHEADER", "SIGPGP", "SIGGPG"]
+    if os.environ.get("STUB_RPM_QUERYTAGS_EMPTY") == "1":
+        tags = []
+    elif os.environ.get("STUB_RPM_OPENPGP", "1") == "1":
+        tags.append("OPENPGP")
+    sys.stdout.write("\n".join(tags) + "\n")
 elif tool == "rpm" and any("%{NAME}" in arg for arg in args):
     name, ver, rel, arch = stub_nevra(Path(args[-1]).name)
     sys.stdout.write(f"{name} {ver} {arch}\n")
+elif tool == "rpm" and "--qf" in args:
+    # One answer per query line, keyed on the --qf flag so an EMPTY query prints nothing,
+    # the way a real rpm does. Debian 13's rpm 4.20.1 does not know the OPENPGP tag: it
+    # rejects the whole query as unknown and yields nothing (measured, dev#2711), which
+    # read a signed header as unsigned. The signature lands on the tag STUB_RPM_SIGNATURE
+    # names (default RSAHEADER, the pgpsig tags' carrier).
+    query = value("--qf") or ""
+    if "%{OPENPGP}" in query and os.environ.get("STUB_RPM_OPENPGP", "1") != "1":
+        sys.stderr.write("rpm: unknown tag OPENPGP\n")
+        raise SystemExit(0)
+    carrier = os.environ.get("STUB_RPM_SIGNATURE", "RSAHEADER")
+    for line in query.split("\\n"):
+        tag = re.match(r"%\{(\w+)", line)
+        if tag is None:
+            continue
+        sys.stdout.write(("RSA/SHA256, stub\n" if tag.group(1) == carrier else "(none)\n"))
 elif tool == "rpm":
     sys.stdout.write("RSA/SHA256, stub\n(none)\n(none)\n(none)\n(none)\n")
 elif tool == "rpmkeys" and "-Kv" in args and os.environ.get("STUB_RPMKEYS_NOKEY_DB", "\0") in (value("--dbpath") or ""):
@@ -813,6 +838,48 @@ PY
 	stub_called "$tools/calls.jsonl" rpmsign --addsign --key-id "$STUB_FINGERPRINT" ||
 		fail "the signer did not reach rpmsign --addsign --key-id"
 	printf 'test-rpm-repository: signer reached rpmsign by its resolved path\n'
+
+	# RPM-02b: the signature query asks only the tags this rpm answers. The pinned tools
+	# image (rpm 6.0.1) knows the OPENPGP tag; Debian 13's rpm 4.20.1, where the
+	# qualification delivery is made, rejects it as unknown, the whole query yields
+	# nothing, and a signed header read as unsigned (dev#2711). Each generation must sign
+	# and verify with its own tag set.
+	local generation
+	for generation in without-openpgp openpgp-only-signature; do
+		case "$generation" in
+		without-openpgp) export STUB_RPM_OPENPGP=0 STUB_RPM_SIGNATURE=RSAHEADER ;;
+		openpgp-only-signature) export STUB_RPM_OPENPGP=1 STUB_RPM_SIGNATURE=OPENPGP ;;
+		esac
+		rc=0
+		run_with_stubs "$tools" "$keys" python3 "$signer" --rpm "$paths_repo/$FIXTURE_RPM" \
+			>/dev/null 2>"$tools/rpm-generation-$generation.err" || rc=$?
+		[[ "$rc" -eq 0 ]] || {
+			cat "$tools/rpm-generation-$generation.err" >&2
+			fail "the signer refused a signed rpm of the ${generation} generation (exit ${rc})"
+		}
+	done
+	unset STUB_RPM_OPENPGP STUB_RPM_SIGNATURE
+	stub_called "$tools/calls.jsonl" rpm --querytags ||
+		fail "the signer never asked the rpm which signature tags it answers"
+	printf 'test-rpm-repository: signer asked rpm --querytags and signed in both rpm generations\n'
+
+	# RPM-02c: the probe's own failure edges. An rpm whose --querytags fails leaves the
+	# tag set UNKNOWN: the signer must say it could not check (2), never guess. An rpm that
+	# answers no signature tag at all builds an empty query, and a real rpm prints nothing
+	# for it: the signer must refuse the header it cannot see (1), never accept it.
+	rc=0
+	STUB_RPM_QUERYTAGS_FAIL=1 run_with_stubs "$tools" "$keys" python3 "$signer" --rpm "$paths_repo/$FIXTURE_RPM" \
+		>/dev/null 2>"$tools/rpm-querytags-fail.err" || rc=$?
+	[[ "$rc" -eq 2 ]] || fail "a failing rpm --querytags exited ${rc}, want 2"
+	grep -q 'rpm --querytags failed' "$tools/rpm-querytags-fail.err" ||
+		fail "a failing rpm --querytags was not named"
+	rc=0
+	STUB_RPM_OPENPGP=0 STUB_RPM_QUERYTAGS_EMPTY=1 run_with_stubs "$tools" "$keys" \
+		python3 "$signer" --rpm "$paths_repo/$FIXTURE_RPM" >/dev/null 2>"$tools/rpm-tags-empty.err" || rc=$?
+	[[ "$rc" -eq 1 ]] || fail "an rpm that answers no signature tag exited ${rc}, want 1"
+	grep -q 'no OpenPGP signature' "$tools/rpm-tags-empty.err" ||
+		fail "an unseen signature header was not refused as unsigned"
+	printf 'test-rpm-repository: querytags failure and an empty tag list refuse rather than guess\n'
 	rc=0
 	run_with_stubs "$tools" "$keys" python3 "$renderer" render --repo "$paths_repo" \
 		>/dev/null 2>"$tools/render.err" || rc=$?
@@ -1023,7 +1090,7 @@ import sys
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
     # release
-    ["olivares", "olivares-0.3-1.x86_64", "x86_64", "olivares-0.3-1.x86_64.rpm"],
+    ["olivares", "olivares-0.4-1.x86_64", "x86_64", "olivares-0.4-1.x86_64.rpm"],
     # /release
     ["olivares-appliance-base", "olivares-appliance-base-26.900-1.noarch", "noarch",
      "olivares-appliance-base-26.900-1.noarch.rpm"],
@@ -1403,7 +1470,8 @@ PY
 	grep -qx 'gpgcheck=1' "$template" || fail "template missing gpgcheck=1 (the only package check DNF 4 reads)"
 	grep -q 'pkg_gpgcheck=1' "$template" || fail "template missing pkg_gpgcheck=1"
 	grep -q 'repo_gpgcheck=1' "$template" || fail "template missing repo_gpgcheck=1"
-	grep -q 'runs-on: ubuntu-latest' "$workflow" || fail "workflow is not pinned to ubuntu-latest"
+	grep -qF "runs-on: \${{ github.event.repository.private && (vars.CI_RUNNER || 'hetzner') || 'ubuntu-latest' }}" "$workflow" ||
+		fail "workflow is not pinned to ubuntu-latest in the public repository (and to our runners when private)"
 	grep -q 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$workflow" || fail "checkout action is not pinned"
 	grep -q -- '--rm' "$client" || fail "client container is not removed"
 	grep -q -- '--network none' "$client" || fail "client container is not network-none"

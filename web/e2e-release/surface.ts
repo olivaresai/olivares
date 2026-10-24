@@ -9,11 +9,9 @@ import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 /** The release grammar: bare MAJOR.MINOR, the one scripts/release-first-hour.sh admits. */
 export const RELEASE_VERSION = /^\d+\.\d+$/
 
-/** Where the console says which deployment this is: the shell and the signed-out line.
- * ponytail: any visible leaf in the sidebar that is exactly a version (a workspace named
- * "2.0") is read as one; give the sidebar version a data-testid and scan only that. */
-const IDENTITY =
-  'aside[aria-label="Primary"], [data-testid="deployment-identity"]'
+/** Where the console says which deployment this is: the status bar's version, and the
+ * signed-out line. Both carry the one data-testid, so nothing else is read. */
+const IDENTITY = '[data-testid="deployment-identity"]'
 
 /** An identity element that is only a version (0.1, v1.0, 26.10.1, 1.0-rc1), never a host
  * such as 127.0.0.1:8443. A bare MAJOR.MINOR elsewhere is prose (CVSS v3.1, SCIM 2.0). */
@@ -23,7 +21,7 @@ export async function expectReleaseVersion(
   page: Page,
   version: string,
 ): Promise<void> {
-  // Dialogs hide the sidebar from the accessibility tree, but its version stays
+  // Dialogs hide the status bar from the accessibility tree, but its version stays
   // painted. Match the deployment identity itself, never a release in page copy.
   await expect(
     page.locator(IDENTITY).getByText(version, { exact: true }),

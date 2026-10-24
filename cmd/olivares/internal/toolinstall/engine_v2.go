@@ -38,7 +38,27 @@ func (e *Engine) PlanV2(ctx context.Context, req RequestV2) (*PlanV2, error) {
 // InstallV2 performs the v2 plan: private staging, bounded fetch, confined
 // place, inventory, required verification, executable modes, probe, receipt,
 // atomic publication. Error removes only this operation's staging.
+//
+// An OpenCode install also places the pinned ripgrep its glob and grep run
+// (ensureRipgrep, #3173), after the release is placed or found in place, so
+// installing again gives an earlier install its ripgrep.
 func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2, progress io.Writer) (*ReceiptV2, *PlanV2, error) {
+	rec, plan, err := e.installV2(ctx, req, approved, progress)
+	if err != nil || !e.placeRipgrep || req.Driver != DriverOpenCode || req.Declaration != nil {
+		return rec, plan, err
+	}
+	p, perr := e.requestV2Provider(req)
+	archive, ok := p.(*ReleaseArchive)
+	if perr != nil || !ok {
+		return rec, plan, err
+	}
+	if progress == nil {
+		progress = io.Discard
+	}
+	return rec, plan, ensureRipgrep(ctx, archive.fetch, req.DestRoot, req.Platform.Arch, progress)
+}
+
+func (e *Engine) installV2(ctx context.Context, req RequestV2, approved *PlanV2, progress io.Writer) (*ReceiptV2, *PlanV2, error) {
 	defer e.verified.Forget(req.Driver)
 	if progress == nil {
 		progress = io.Discard

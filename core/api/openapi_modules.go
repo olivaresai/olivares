@@ -414,7 +414,30 @@ func ModuleOpenAPIDocument(modules []Module) map[string]any {
 // handleOpenAPIBeta serves the module-route beta document, building it once on the
 // first request (betaOnce) from the modules the engine mounted.
 func (s *Server) handleOpenAPIBeta(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
-	writeJSON(w, http.StatusOK, s.betaDocument())
+	writeJSON(w, http.StatusOK, s.runningBetaDocument())
+}
+
+// runningBetaDocument is the beta document without the routes of a module this node does
+// not run now: a module's route answers module_not_enabled, so it is not published.
+func (s *Server) runningBetaDocument() map[string]any {
+	doc := s.betaDocument()
+	if s.liveModule == nil {
+		return doc
+	}
+	paths, _ := doc["paths"].(map[string]any)
+	kept := make(map[string]any, len(paths))
+	for path, item := range paths {
+		ns, _, _ := strings.Cut(strings.TrimPrefix(path, "/v1/m/"), "/")
+		if s.moduleEnabled(ns) {
+			kept[path] = item
+		}
+	}
+	out := make(map[string]any, len(doc))
+	for k, v := range doc {
+		out[k] = v
+	}
+	out["paths"] = kept
+	return out
 }
 
 // betaDocument is the module-route beta document, built once from the mounted modules.

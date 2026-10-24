@@ -11,9 +11,7 @@
   },
   "nav": {
     "general": "General",
-    "notifications": "Notificaciones",
     "keyboard": "Teclado",
-    "sessionDefaults": "Valores de sesión",
     "aiTools": "Herramientas de IA",
     "workspaces": "Espacios de trabajo",
     "deploy": "Despliegue y actualizaciones",
@@ -31,7 +29,7 @@
     "title": "General",
     "scope": "Tus preferencias. Te siguen a cada espacio de trabajo de esta instalación.",
     "theme": "Tema",
-    "themeHint": "Sigue el sistema, salvo que elijas claro u oscuro.",
+    "themeHint": "Sigue el sistema, salvo que elijas claro, oscuro o negro.",
     "density": "Densidad",
     "densityHint": "Compacto muestra más filas; cómodo se lee mejor.",
     "language": "Idioma",
@@ -46,10 +44,6 @@
     "confirmStopHint": "Preguntar una vez antes de que Detener acabe una sesión que sigue trabajando.",
     "reduceMotion": "Reducir movimiento",
     "reduceMotionHint": "Sustituye el movimiento por fundidos. Activo cuando el sistema lo pide."
-  },
-  "unavailable": {
-    "notifications": "Las preferencias de notificación aún no se guardan en esta instalación.",
-    "sessionDefaults": "Los valores de sesión aún no se guardan en esta instalación."
   },
   "sessionNotifications": {
     "title": "Notificaciones de sesiones",
@@ -161,7 +155,7 @@
       "eventing": "Eventos",
       "finops": "Coste",
       "gitpublish": "Publicación en Git",
-      "governance": "Gobierno",
+      "governance": "Gobernanza",
       "health": "Salud",
       "identity": "Postura de identidad",
       "inferenceproxy": "Proxy de inferencia",
@@ -201,7 +195,7 @@
       "health": "Comprobaciones de salud e incidentes.",
       "identity": "Proveedores de identidad y postura de garantía.",
       "inferenceproxy": "Pasa las llamadas a modelos por una pasarela gobernada.",
-      "inventory": "Agentes, herramientas y recursos del entorno.",
+      "inventory": "Agentes, herramientas y recursos del parque.",
       "knowledge": "Bases de conocimiento y recuperación gobernada.",
       "liveingest": "Recibe la telemetría de sesiones en vivo.",
       "models": "Catálogo de modelos, enrutado y límites.",
@@ -211,7 +205,7 @@
       "posture": "Exportaciones de la postura de seguridad.",
       "recording": "Grabaciones de sesiones y reproducción.",
       "redteam": "Pruebas adversarias contra agentes.",
-      "reporting": "Informes de gobierno y programaciones.",
+      "reporting": "Informes de gobernanza y programaciones.",
       "sandbox": "Entornos aislados para ejecutar agentes.",
       "security": "Hallazgos y señales de seguridad.",
       "sessions": "Sesiones, ejecuciones y trabajo de agentes.",
@@ -344,9 +338,17 @@
       "stop_many": "Se detienen {{count}} sesiones en curso. Cada una puede reanudarse después del reinicio.",
       "stop_other": "Se detienen {{count}} sesiones en curso. Cada una puede reanudarse después del reinicio.",
       "none": "El motor se reinicia una vez con la nueva versión.",
-      "confirm": "Instalar y reiniciar"
+      "switchNone": "El motor se reinicia una vez con la edición con licencia. Tus datos se quedan donde están.",
+      "confirm": "Instalar y reiniciar",
+      "switchTitle": "¿Cambiar a {{edition}}?",
+      "switchConfirm": "Cambiar y reiniciar"
     },
     "alreadyCurrent": "Ya estás en la versión más reciente. No se instaló nada.",
-    "restartRequired": "Hay una versión más nueva instalada. Reinicia el motor con su gestor de servicios para ejecutarla."
+    "restartRequired": "Hay una versión más nueva instalada. Reinicia el motor con su gestor de servicios para ejecutarla.",
+    "switch": "Cambiar a {{edition}}",
+    "switchTitle": "Cambiar a {{edition}}",
+    "switched": "Cambio instalado.",
+    "terminal": "Lo mismo en una terminal del servidor",
+    "orTerminal": "O en una terminal del servidor"
   }
 }

@@ -163,7 +163,7 @@
       "description": "Für dieses Subjekt sind noch keine Zuverlässigkeitsübergänge im Hauptbuch vorhanden."
     },
     "truncated": "Die ersten {{n}} werden angezeigt",
-    "truncatedHint": "Es gibt mehr Ereignisse als angezeigt. Die Seite ist nach id sortiert (älteste zuerst), abgeschnitten wird also der NEUESTE Abschnitt — ein Ereignis, das du hier nicht siehst, ist kein Ereignis, das nicht stattfand."
+    "truncatedHint": "Es gibt mehr Ereignisse als angezeigt. Die Seite ist nach id sortiert (älteste zuerst), abgeschnitten wird also der NEUESTE Abschnitt — ein Ereignis, das Sie hier nicht sehen, ist kein Ereignis, das nicht stattfand."
   },
   "deps": {
     "title": "Abhängigkeitskarte",
@@ -175,7 +175,7 @@
       "delegates_to": "Delegiert an"
     },
     "observed": "Beobachtet",
-    "truncated": "Zeige die ersten {{n}}",
+    "truncated": "Die ersten {{n}} werden angezeigt",
     "truncatedHint": "Der Abhängigkeitsgraph hat mehr Knoten als angezeigt; dies ist die erste Keyset-Seite.",
     "empty": {
       "title": "Noch keine Abhängigkeiten entdeckt",
@@ -311,7 +311,7 @@
     "unconfigured": "Die Update-Prüfung ist nicht konfiguriert. Es wurde kein Update geprüft; Netzwerkprüfungen bleiben deaktiviert.",
     "unavailable": "Prüfung nicht verfügbar",
     "instructions": "Update-Anleitung",
-    "configure": "Verwenden Sie zum Aktivieren der Prüfungen eine offizielle Version mit integriertem Verifizierungsschlüssel. Setzen Sie OLIVARES_UPDATE_ENDPOINT in der Dienstkonfiguration auf Ihren freigegebenen signierten Kanal und starten Sie Olivares neu. Lassen Sie den Wert ungesetzt, um Netzwerkprüfungen deaktiviert zu lassen.",
+    "configure": "Verwenden Sie zum Aktivieren der Prüfungen eine offizielle Version mit integriertem Verifizierungsschlüssel. Setzen Sie OLIVARES_UPDATE_ENDPOINT in der Dienstkonfiguration auf Ihren genehmigten signierten Kanal und starten Sie Olivares neu. Lassen Sie den Wert ungesetzt, um Netzwerkprüfungen deaktiviert zu lassen.",
     "manual": "Sichern Sie für ein manuelles Update Ihre Daten, verifizieren Sie das neue Paket oder Image und aktualisieren Sie mit Ihrer Installationsmethode. Behalten Sie dasselbe Datenverzeichnis. Ein Entwicklungsbuild ohne Verifizierungsschlüssel kann keinen signierten Kanal prüfen."
   },
   "system": {

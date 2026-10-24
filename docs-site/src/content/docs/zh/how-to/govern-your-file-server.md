@@ -68,7 +68,8 @@ connector **只映射文件系统实际表达的内容**，并明确声明它不
 
 principal 名称通过 host 的 name service 解析；其中可以包括 **LDAP**，使
 `uid`→username 与你的 directory 一致。无法解析的 uid/gid 会回退到其**数字** id。
-没有可推导 ACL 的文件继承知识库默认 ACL，retrieval 仍会强制执行。connector
+没有可推导 ACL 的文件继承知识库默认 ACL，retrieval 仍会强制执行；若也没有默认 ACL，则该文件会被**拒绝**，除非在 source 配置中用
+`"public": "true"` 将其声明为公开。该设置只适用于之后存储的文档；要更改已存储的行，请重新 ingest。connector
 **绝不虚构**文件没有携带的 ACL。
 
 ### Classification

@@ -190,28 +190,30 @@ func parsePublish(flags byte, body []byte) (Publish, error) {
 	}
 
 	pub := Publish{Topic: topic, Retain: flags&1 == 1}
-	for off < propEnd {
-		id := body[off]
-		off++
+	// Parse the properties from their own block, so no read can run past propEnd into the payload.
+	props := body[off:propEnd]
+	for at := 0; at < len(props); {
+		id := props[at]
+		at++
 		switch id {
 		case propContentType:
-			ct, cn, serr := readString(body, off)
+			ct, cn, serr := readString(props, at)
 			if serr != nil {
 				return Publish{}, fmt.Errorf("mqtt: content type: %w", serr)
 			}
 			pub.ContentType = ct
-			off += cn
+			at += cn
 		case propUserProperty:
-			k, kn, serr := readString(body, off)
+			k, kn, serr := readString(props, at)
 			if serr != nil {
 				return Publish{}, fmt.Errorf("mqtt: user property key: %w", serr)
 			}
-			off += kn
-			v, vn, serr := readString(body, off)
+			at += kn
+			v, vn, serr := readString(props, at)
 			if serr != nil {
 				return Publish{}, fmt.Errorf("mqtt: user property value: %w", serr)
 			}
-			off += vn
+			at += vn
 			if pub.UserProps == nil {
 				pub.UserProps = map[string]string{}
 			}
@@ -220,11 +222,14 @@ func parsePublish(flags byte, body []byte) (Publish, error) {
 			// Any other PUBLISH property (Payload Format Indicator, Message Expiry,
 			// Topic Alias, Response Topic, Correlation Data, Subscription Identifier).
 			// We must skip its value to stay frame-aligned without reading payload.
-			adv, serr := skipProperty(id, body, off)
+			adv, serr := skipProperty(id, props, at)
 			if serr != nil {
 				return Publish{}, serr
 			}
-			off += adv
+			if adv > len(props)-at {
+				return Publish{}, fmt.Errorf("mqtt: publish property 0x%02x runs past the properties block", id)
+			}
+			at += adv
 		}
 	}
 	// The payload is everything after the properties block. It is kept opaque and
@@ -437,6 +442,20 @@ func (c *conn) readAck(want byte) ([]byte, error) {
 	return body, nil
 }
 
+// connackError maps a refused CONNACK reason (MQTT 5 §3.2.2.2) to the class the operator acts on:
+// credentials and authorization, or an unavailable or busy broker. Any other reason is a refusal.
+// The reason byte stays in the text, so an engine log tells 0x86 from 0x87 and 0x88 from 0x97.
+func connackError(reason byte) error {
+	class := ErrBrokerRefused
+	switch reason {
+	case 0x86, 0x87: // Bad User Name or Password, Not authorized
+		class = ErrBrokerCredentials
+	case 0x88, 0x89, 0x97: // Server unavailable, Server busy, Quota exceeded
+		class = ErrBrokerUnavailable
+	}
+	return fmt.Errorf("%w (reason 0x%02x)", class, reason)
+}
+
 // readConnack confirms the clean-start session was accepted (MQTT 5 §3.2).
 func (c *conn) readConnack() error {
 	body, err := c.readAck(pktCONNACK)
@@ -450,7 +469,7 @@ func (c *conn) readConnack() error {
 		return fmt.Errorf("mqtt: invalid clean-start session flags 0x%x", body[0])
 	}
 	if body[1] != 0 {
-		return fmt.Errorf("mqtt: connection refused, reason 0x%02x", body[1])
+		return connackError(body[1])
 	}
 	properties, n, err := decodeVBI(body, 2)
 	if err != nil {

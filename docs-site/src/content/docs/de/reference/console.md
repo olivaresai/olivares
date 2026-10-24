@@ -18,19 +18,18 @@ weiterführenden Dokumentation.
 
 Die Konsole hat **eine einzige Navigationsstruktur: neun Bereiche mit Abschnitten**. Jeder
 Bildschirm liegt in einem Bereich und einem seiner Abschnitte, und alles, was zeigt, wo ein
-Bildschirm liegt, nennt denselben Ort: Alle Bereiche (in der Seitenleiste und Mehr auf dem
-Telefon), die Bereichsverzeichnisse, der Brotkrumenpfad, die Befehlspalette und die
-Linkzeile über einem Bildschirm, die die anderen Bildschirme seines Abschnitts auflistet. Die
-Seitenleiste heftet eine kurze Liste von Bildschirmen an, die erste Aufgabe zuerst (Start, Sitzungen, KI-Werkzeuge, Genehmigungen), dann Arbeit,
-und ein angehefteter Bildschirm bleibt auf den anderen Bildschirmen seines Abschnitts
-markiert. Ein Navigationsfilter ersetzt den gruppierten Baum durch eine rangierte Liste
+Bildschirm liegt, nennt denselben Ort: Alle Bereiche (im Kontomenü und in der Befehlspalette, und Mehr auf
+dem Telefon), die Bereichsverzeichnisse, die Befehlspalette und die Linkzeile über einem
+Bildschirm, die die anderen Bildschirme seines Abschnitts auflistet. Die obere Leiste nennt fünf Orte, die erste Aufgabe zuerst (Start,
+Sitzungen, Werkzeuge, Regeln, Hauptbuch; Business ergänzt Organisation), und ein Ort bleibt
+auf den anderen Bildschirmen seines Abschnitts markiert. Alle Bereiche listet jeden Bereich mit seinen Bildschirmen, in zwei Ebenen, ohne die Orte, die die Leiste schon zeigt. Ein Navigationsfilter ersetzt den gruppierten Baum durch eine rangierte Liste
 autorisierter Treffer; die Befehlspalette nutzt denselben Index, dieselbe Rangfolge und
 dieselbe Berechtigungsprojektion. Ein Bereichsverzeichnis ist eine Seite mit Links — den
 Einträgen, die Ihre Berechtigungen zulassen — keine Live-Ablesung von Fähigkeit,
 Verfügbarkeit oder Bereitschaft.
 
-Eine neue Installation listet nur die erste Aufgabe: Start, Sitzungen, KI-Werkzeuge mit
-Anbieter, Genehmigungen, den Einrichtungsassistenten und Einstellungen. Jeder andere
+Eine neue Installation listet nur die erste Aufgabe: Start, Sitzungen, KI-Werkzeuge,
+Genehmigungen, den Einrichtungsassistenten und Einstellungen. Jeder andere
 Bildschirm ist dort eine Vorschau: Adresse, API und CLI funktionieren weiter, und Navigation,
 Befehlspalette und Tastenkürzel listen ihn nicht. Eine Installation, die vor dem Upgrade
 bestand, listet jeden Bildschirm, den sie bisher gelistet hat, ebenso eine Installation,
@@ -42,7 +41,7 @@ Die Seite ist **generiert**. Das Verzeichnis stammt aus
 `registry.route-conservation.test.ts` gegen den gebauten Router prüft. Ein Bildschirm
 kann daher nicht hinzugefügt, verschoben oder verloren werden, ohne dass sich diese
 Seite mitändert. Name und Kurzbeschreibung jedes Bildschirms sind die **eigenen Strings
-der Konsole** aus demselben Übersetzungskatalog, den die Seitenleiste rendert. Was Sie
+der Konsole** aus demselben Übersetzungskatalog, den die Konsole rendert. Was Sie
 hier lesen, sehen Sie auch im Produkt. Die Tabellen darunter gruppieren diese Zeilen nach Bereichen, nach Start (der Übersicht)
 und vor Anmeldung, Einrichtung und Konto. Die neun Bereichsverzeichnisse stehen bei den
 Routen, die außerhalb der Feature-Registry gemountet sind.
@@ -57,7 +56,7 @@ Siehe [Rollen und Berechtigungen](/de/reference/modules/vi-governance/).
 
 ## So lesen Sie diese Seite
 
-- **Bildschirm** — der Name in Seitenleiste, Bereichsverzeichnissen und Befehlspalette.
+- **Bildschirm** — der Name in Alle Bereiche, Bereichsverzeichnissen und Befehlspalette.
 - **Pfad** — die URL unter dem Origin Ihrer Konsole. Sie ist ein veröffentlichter
   Contract: Bookmark, Deep-Link im Runbook und Querverweis aus der Dokumentation
   verwenden alle genau diesen String.
@@ -69,12 +68,12 @@ Siehe [Rollen und Berechtigungen](/de/reference/modules/vi-governance/).
 
 Die folgenden Überschriften sind die Bereiche in der Reihenfolge, in der Alle Bereiche sie
 auflistet: Infrastruktur, KI, Daten & Kontext, Arbeit & Kommunikation, Automatisierung,
-Sicherheit & Identität, Bereitstellung, Beobachtbarkeit & Nachweise, dann System &
+Sicherheit & Identität, Auslieferung, Aufsicht, dann System &
 Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **73 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **74 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
 ### Start
@@ -95,7 +94,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
-| Agentenwerkzeuge | `/agent-tools` | Erkennen, installieren und aktualisieren Sie die Agentenwerkzeuge auf diesem Host und verfolgen Sie jede Installation; nur für Deployment-Administratoren | `system:admin` | [how-to/add-a-provider](/de/how-to/add-a-provider/) |
+| Agentenwerkzeuge | `/agent-tools` | Die Konten und API-Schlüssel sehen, mit denen Sitzungen laufen; Werkzeuge installieren und anmelden nur Bereitstellungsadministratoren | `sessions:account:read` | [how-to/add-a-provider](/de/how-to/add-a-provider/) |
 | Sitzungen betreiben | `/agentops` | Sitzungen starten und verfolgen, was jede tut, auch die, die Olivares findet | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/de/how-to/run-claude-code-with-olivares/) |
 | MCP-Server | `/mcp-servers` | Entfernte MCP-Server mit dieser Organisation verbinden, testen und festlegen, welche Tools Sitzungen nutzen dürfen | `tenant:admin` | [how-to/connectors/mcp-governance](/de/how-to/connectors/mcp-governance/) |
 | Modellbetrieb | `/model-operations` | Eigene Modelle, Zulassung und Deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/de/reference/modules/xxiii-model-operations/) |
@@ -106,6 +105,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Anbieterprofile | `/provider-profiles` | Die Anbieter-Home-Verzeichnisse registrieren und verwalten, unter denen Sessions starten, und ihre Konfiguration bei Bedarf auslesen | `sessions:profile:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Anbieter | `/providers` | Die API-Schlüssel und Endpunkte registrieren, mit denen Sessions starten; sie testen, wechseln und widerrufen | `sessions:provider:read` | [how-to/add-a-provider](/de/how-to/add-a-provider/) |
 | Rate Limits | `/rate-limits` | Anthropic-Rate-Limit-Inventar (schreibgeschützt) | `models:ratelimits:read` | [reference/modules/x-models](/de/reference/modules/x-models/) |
+| Reichweite | `/reach` | Sehen Sie, welche Ziele jedes Werkzeug erreichen kann und welche auf Genehmigung warten. | `accessmap:graph:read` | [reference/modules/iii-access-map](/de/reference/modules/iii-access-map/) |
 | Sandbox | `/sandbox` | Isolierte Agententests und Replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/de/reference/modules/xvii-sandbox/) |
 | Sitzungen | `/sessions` | Sitzungen starten und verfolgen, was jede tut, auch die, die Olivares findet | `sessions:live:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Voice | `/voice` | Voice- und Realtime-Sessions | `voice:session:read` | [reference/modules/xvi-voice](/de/reference/modules/xvi-voice/) |
@@ -145,8 +145,8 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
 | Access Map | `/access-map` | Was jeder Agent liest und schreibt (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/de/reference/modules/iii-access-map/) |
-| AgentCore-Export | `/agentcore-export` | Die Projektion der Governance-Regeln dieses Mandanten auf AWS AgentCore als Cedar-Richtlinien planen, prüfen und anwenden; das Planen schreibt nichts | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/de/reference/modules/vi-governance/) |
-| Claude-Code-Governance | `/claude-policy` | Verwaltete Policy, Hooks, MCP, Sandbox und Policy-as-Code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/de/how-to/connectors/claude-code-hooks-pep/) |
+| Richtlinienexport | `/agentcore-export` | Die Projektion der Governance-Regeln dieses Mandanten auf AWS AgentCore als Cedar-Richtlinien planen, prüfen und anwenden; das Planen schreibt nichts | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/de/reference/modules/vi-governance/) |
+| Verwaltete Richtlinie | `/claude-policy` | Verwaltete Policy, Hooks, MCP, Sandbox und Policy-as-Code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/de/how-to/connectors/claude-code-hooks-pep/) |
 | Identität & Zugriff | `/identity` | SSO, SCIM und die Identitäten, die Ihre Agenten verwenden | `governance:identity:read` | [reference/modules/vi-governance](/de/reference/modules/vi-governance/) |
 | Inference Proxy | `/inference-proxy` | Proxy-Gates, Egress-DLP-Regeln und Gerätefreigaben | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/de/reference/modules/inferenceproxy/) |
 | Kill Switch | `/killswitch` | Notstopp, Wiederherstellung unter dualer Kontrolle und Guardian-Containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/de/how-to/cookbook/kill-switch-drill/) |
@@ -155,17 +155,17 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Sicherheit | `/security` | Guardrails, Forensik und Anomalien | `security:finding:read` | [reference/modules/ix-security](/de/reference/modules/ix-security/) |
 | Tresor | `/vault` | Ihre Passwörter, Notizen und Authenticator-Codes | `tenant:read` | [reference/console](/de/reference/console/) |
 
-### Bereitstellung
+### Auslieferung
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
 | Git-Veröffentlichung | `/git-publication` | Commits pushen, Pull Requests öffnen und über freigegebene Git-Ziele mergen | `gitpublish:target:read` | [reference/modules/gitpublish](/de/reference/modules/gitpublish/) |
 
-### Beobachtbarkeit & Nachweise
+### Aufsicht
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
-| Claude-Code-Adoption | `/adoption` | Produktivität, Akzeptanz und Modellmix | `adoption:metrics:read` | [reference/modules/claudeadoption](/de/reference/modules/claudeadoption/) |
+| Adoption | `/adoption` | Produktivität, Akzeptanz und Modellmix | `adoption:metrics:read` | [reference/modules/claudeadoption](/de/reference/modules/claudeadoption/) |
 | Supply Chain | `/attestation` | Release-Attestierung — SLSA, SBOM, VEX und Scorecard | `observability:attestation:read` | [how-to/verify-a-release](/de/how-to/verify-a-release/) |
 | Audit-Ledger | `/audit` | Manipulationserkennbares Evidenz-Ledger | `audit:read` | [reference/modules/ix-security](/de/reference/modules/ix-security/) |
 | Dashboards | `/dashboards` | Executive-KPIs und Reporting | any signed-in user | [reference/modules/xxi-executive-dashboards](/de/reference/modules/xxi-executive-dashboards/) |
@@ -198,9 +198,9 @@ bereitgestellt — nur diese Konsolenrouten verhalten sich so.
 | KI | `/areas/ai` | Verzeichnis des Bereichs KI: Beobachtung und Betrieb von Sitzungen, Anbieterprofilen und Umgebungen, Modelle, spezialisierte Ausführung und Anbieterreferenz. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Automatisierung | `/areas/automation` | Verzeichnis des Bereichs Automatisierung: Abläufe und Orchestrierung, Ereignisse und Benachrichtigungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Daten & Kontext | `/areas/data-context` | Verzeichnis des Bereichs Daten & Kontext: Fähigkeiten, Wissen und Artefakte. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Bereitstellung | `/areas/deployment` | Verzeichnis des Bereichs Bereitstellung: Vorbereitung und Steuerung von Bereitstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Auslieferung | `/areas/deployment` | Verzeichnis des Bereichs Auslieferung: Vorbereitung und Steuerung von Bereitstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Infrastruktur | `/areas/infrastructure` | Verzeichnis des Bereichs Infrastruktur: Inventar und Arbeitsbereiche der Umgebung. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
-| Beobachtbarkeit & Nachweise | `/areas/observation` | Verzeichnis des Bereichs Beobachtbarkeit & Nachweise: Status und Aktivität, Kosten und Einführung, Audit, Bewertung und Nachweise. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
+| Aufsicht | `/areas/observation` | Verzeichnis des Bereichs Aufsicht: Status und Aktivität, Kosten und Einführung, Audit, Bewertung und Nachweise. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Sicherheit & Identität | `/areas/security-identity` | Verzeichnis des Bereichs Sicherheit & Identität: Identität und Zugriff, Richtlinien und Governance-Grenzen, Schutz und Reaktion. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | System & Einstellungen | `/areas/system` | Verzeichnis des Bereichs System & Einstellungen: Administration, Installation und Wartung, Entwicklerwerkzeuge und persönliche Einstellungen. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |
 | Arbeit & Kommunikation | `/areas/work-communications` | Verzeichnis des Bereichs Arbeit & Kommunikation: dauerhaft erfasste sitzungsübergreifende Arbeit und geregelte Kommunikation. Zeigt die Einträge, die Ihre Berechtigungen erlauben. | jeder angemeldete Benutzer | — |

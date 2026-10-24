@@ -9,7 +9,7 @@ import './i18n'
 /**
  * CcStateBadge — the session control-plane state chip. NOT the generic StatusBadge:
  * the four `cc_state` values carry product meaning the generic map lacks.
- *  - `active`          success + a live pulse (the one sanctioned looping animation)
+ *  - `active`          success: a solid dot plus the word (C2-DESIGN §3)
  *  - `idle`           neutral (quiet but fine)
  *  - `ended`          muted (closed, low emphasis)
  *  - `silent_evasion` DANGER, framed as "possible evasion": a session gone silent
@@ -21,7 +21,7 @@ import './i18n'
 const STYLE: Record<string, { box: string; dot: string }> = {
   active: {
     box: 'border-success-line bg-success-soft text-success',
-    dot: 'bg-success animate-pulse-live',
+    dot: 'bg-success',
   },
   idle: {
     box: 'border-border bg-muted text-muted-foreground',

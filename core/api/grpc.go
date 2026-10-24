@@ -395,6 +395,12 @@ func grpcError(err error) error {
 		// HA standby write-gate (store.ErrNotLeader): retryable against the
 		// current leader, not an internal fault.
 		c = codes.Unavailable
+		if code == "commit_outcome_unknown" {
+			// Unavailable is the code gRPC clients and mesh retry policies re-send on, and
+			// a write whose commit outcome is unknown must not be re-sent automatically.
+			// Unknown keeps the REST 503 status and the message, without the retry.
+			c = codes.Unknown
+		}
 	case http.StatusNotImplemented:
 		// an honest-seam refusal (a capability not configured on this
 		// deployment) is Unimplemented, not Internal. Reporting it as Internal told

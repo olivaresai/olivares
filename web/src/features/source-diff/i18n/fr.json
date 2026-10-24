@@ -31,7 +31,7 @@
   "hostForbidden": "L'hôte Git a refusé la lecture.",
   "hostForbiddenBody": "system:admin n'est pas ce qui manque.",
   "unknownRef": "unknown ref",
-  "upstream": "git host read failed",
+  "upstream": "échec de lecture de l’hôte git",
   "tryAgain": "Réessayer",
   "returnToSources": "Retour aux sources",
   "openSource": "Ouvrir la source",

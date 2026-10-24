@@ -48,8 +48,8 @@ test('Claude Code portal: setup → login → navigate → create form → works
   // bar and the page title name it Sessions (26.10.1 review: "Operate sessions" opened a
   // page titled "Claude Code"). Only the directory and palette entry for the door read
   // "Operate sessions".
-  // `exact` is load-bearing: neighbouring entries mention sessions. The top bar's
-  // current-page crumb is a link of the same name, so the entry is read in Journeys.
+  // `exact` is load-bearing: neighbouring entries mention sessions, so the place is read
+  // in Journeys.
   const navLink = page
     .getByRole('navigation', { name: 'Journeys', exact: true })
     .getByRole('link', { name: 'Sessions', exact: true })

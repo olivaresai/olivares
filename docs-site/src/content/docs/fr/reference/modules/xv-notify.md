@@ -55,12 +55,19 @@ du produit.
   l'infrastructure et ne mesure jamais.
 - **Produit** des notifications sortantes via un seam de dispatch, adossé aux connecteurs
   de sortie (Slack/Teams, PagerDuty/Opsgenie, webhook signé, et une destination SIEM
-  couvrant Splunk/Elastic via CEF/LEEF/syslog/OTLP). Une notification ne porte que les
+  couvrant Splunk/Elastic via CEF/LEEF/syslog/OTLP). Community fournit les destinations
+  Slack, Teams, e-mail, SMS et webhook signé ; les destinations SIEM, ITSM et PagerDuty/Opsgenie
+  nécessitent Business, et un serveur Community refuse d'en ouvrir une et nomme Business.
+  Une notification ne porte que les
   champs d'affichage déjà sûrs du finding — titre, kind, sévérité, référence de sujet et
   un hash de corrélation — **jamais** un payload, un prompt, un secret ou des données
   personnelles (PII). **Les données minimales sont une propriété du fil**, pas un filtre
-  a posteriori. Le secret de destination ne vit que dans la configuration du connecteur
-  que l'opérateur provisionne, référencé ici par un nom non secret.
+  a posteriori. Le secret de destination ne vit que dans la configuration du connecteur,
+  référencé ici par un nom non secret. Un administrateur ajoute les destinations Slack et
+  Microsoft Teams dans la console (**Alertes → Destinations**) : l'URL du webhook est scellée
+  dans le coffre de secrets, n'apparaît que sous forme d'hôte, et est testée par un vrai
+  message avant d'être enregistrée. Tous les autres types sont provisionnés par l'opérateur
+  dans le fichier désigné par `OLIVARES_NOTIFY_CONFIG`.
 
 :::caution[Limites honnêtes]
 - **Le binaire par défaut embarque un dispatcher deny-closed.** Tant qu'un opérateur n'a

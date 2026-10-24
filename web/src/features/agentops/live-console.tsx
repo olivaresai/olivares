@@ -125,9 +125,10 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
   const [wire, setWire] = useState('')
   const sendReasonId = useId()
   const wireReasonId = useId()
-  const items = mapConversationFrames(frames.map((f) => f.line)).filter(
-    (item) => !isQuiet(item),
-  )
+  const items = mapConversationFrames(
+    frames.map((f) => f.line),
+    frames.map((f) => f.at),
+  ).filter((item) => !isQuiet(item))
   const turn = useTurnInterrupt(run)
   const inputMutation = useMutation({
     mutationFn: async (payload: { value: string; asWire: boolean }) => {

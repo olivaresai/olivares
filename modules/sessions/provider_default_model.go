@@ -34,6 +34,45 @@ var providerCodingModels = map[string]string{
 	ProviderKindXAI:       "grok-4.7",
 }
 
+// claudeModelAliases are the Claude Code aliases a launch accepts and never hands
+// the tool: Claude Code resolves an alias, and picks its own default when no model
+// is named, in each process it starts, and one account measured `opus` on
+// claude-opus-4-8 in one session and claude-opus-5-5 in the next (dev#2786). The
+// launch passes and records the exact id; the tool's `[1m]` suffix is kept.
+var claudeModelAliases = map[string]string{
+	"default": providerCodingModels[ProviderKindAnthropic],
+	"opus":    "claude-opus-5-5",
+	"sonnet":  "claude-sonnet-5-5",
+	"haiku":   "claude-haiku-5-5",
+	"fable":   "claude-fable-5-1",
+}
+
+// claudeModelID is the exact id a Claude Code model choice launches on; a term
+// that is not an alias is returned as written. Claude Code reads aliases in any
+// case, so this does too.
+func claudeModelID(model string) string {
+	alias, suffix := strings.ToLower(model), ""
+	if base, ok := strings.CutSuffix(alias, "[1m]"); ok {
+		alias, suffix = base, "[1m]"
+	}
+	if alias == "" {
+		alias = "default"
+	}
+	if id, ok := claudeModelAliases[alias]; ok {
+		return id + suffix
+	}
+	return model
+}
+
+// resolveClaudeModelAlias runs on every launch once its profile is known. A
+// provider-bound launch keeps its model: there the endpoint names the models.
+func resolveClaudeModelAlias(p *CreateRunParams) {
+	if p.ProviderHome == nil || p.ProviderHome.Driver != providerDriverClaude || p.ProviderHome.ProviderRecordRef != "" {
+		return
+	}
+	p.Model = claudeModelID(p.Model)
+}
+
 // initialProviderModel uses only the successful bound test's usable model IDs.
 func initialProviderModel(kind string, models []string) string {
 	usable := localModelNames(models)

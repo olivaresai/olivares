@@ -48,6 +48,8 @@
     "running": "Läuft",
     "idle": "Untätig",
     "stopped": "Gestoppt",
+    "done": "Fertig",
+    "ended": "Beendet",
     "failed": "Fehlgeschlagen",
     "cleaned": "Bereinigt"
   },
@@ -125,7 +127,7 @@
     "serviceTier": "Servicestufe",
     "speedOn": "Ein",
     "speedOff": "Aus",
-    "speedUnavailable": "Die Geschwindigkeitsoptionen haben sich geändert. Verwende den Werkzeugstandard oder wähle ein anderes Modell.",
+    "speedUnavailable": "Die Geschwindigkeitsoptionen haben sich geändert. Verwenden Sie den Werkzeugstandard oder wählen Sie ein anderes Modell.",
     "speedDefault": "Werkzeugstandard verwenden",
     "speedLoadFailed": "Die Geschwindigkeitsoptionen konnten nicht geladen werden.",
     "title": "Neue Sitzung",
@@ -189,9 +191,9 @@
   "picker": {
     "search": "Modelle suchen",
     "none": "Kein Modell passt.",
-    "loading": "Die Modelle dieses Tools werden gelesen…",
-    "failed": "Das Tool hat nicht geantwortet, daher gibt es keine Liste. Geben Sie ein Modell ein oder behalten Sie die Vorgabe.",
-    "unsupported": "Dieses Tool listet seine Modelle nicht auf. Geben Sie eines ein oder behalten Sie die Vorgabe.",
+    "loading": "Die Modelle dieses Werkzeugs werden gelesen…",
+    "failed": "Das Werkzeug hat nicht geantwortet, daher gibt es keine Liste. Geben Sie ein Modell ein oder behalten Sie die Vorgabe.",
+    "unsupported": "Dieses Werkzeug listet seine Modelle nicht auf. Geben Sie eines ein oder behalten Sie die Vorgabe.",
     "unavailable": "Die Modellliste ist hier nicht verfügbar. Geben Sie ein Modell ein oder behalten Sie die Vorgabe.",
     "default": "Vorgabe",
     "new": "Neu",
@@ -251,7 +253,8 @@
     "noOutput": "Noch keine Ausgabe.",
     "waiting": "Warten auf Ausgabe…",
     "ended": "Der I/O-Stream der Sitzung wurde beendet.",
-    "lag": "{{count}} Frame(s) verworfen (Pufferüberlauf) — die Ausgabe unten wird nach der Lücke fortgesetzt.",
+    "lag_one": "{{count}} Frame verworfen (Pufferüberlauf) — die Ausgabe unten wird nach der Lücke fortgesetzt.",
+    "lag_other": "{{count}} Frames verworfen (Pufferüberlauf) — die Ausgabe unten wird nach der Lücke fortgesetzt.",
     "remoteControl": "Dies ist eine Remote-control-Sitzung: Ihre I/O wird an die Cloud von Anthropic weitergeleitet und hier nicht überbrückt. Olivares verwaltet nur den Lebenszyklus.",
     "notLive": "Diese Sitzung ist nicht live (sie ist {{state}}). Setzen Sie sie fort, um sich mit ihrer I/O zu verbinden.",
     "ioUnavailableNotLiveOnNode": "Auf diesem Knoten gibt es keine überbrückte I/O.",
@@ -269,8 +272,8 @@
     "interruptUnknown": "Das Ergebnis der Unterbrechung ist unbekannt. Prüfen Sie die Sitzung vor einem erneuten Versuch.",
     "interruptWorkConflict": "Der aktuelle Arbeitsstatus der Sitzung lässt diese Unterbrechung nicht zu. Aktualisieren Sie den Lauf, um seinen Status zu prüfen.",
     "blocked": {
-      "notLive": "Starten Sie die Sitzung oder setzen Sie sie fort, um zu senden.",
-      "approval": "Der Start wartet auf eine Freigabe; Senden ist möglich, sobald er freigegeben ist.",
+      "notLive": "Setzen Sie die Sitzung fort, um eine Nachricht zu senden.",
+      "approval": "Der Start wartet auf eine Genehmigung; Senden ist möglich, sobald er genehmigt ist.",
       "sending": "Wird gesendet… Warten Sie, bis die Sitzung es annimmt.",
       "uploading": "Das Bild wird gespeichert… Senden geht, sobald es angehängt ist.",
       "empty": "Geben Sie etwas zum Senden ein."
@@ -441,7 +444,6 @@
     "title": "Anbieterprofile",
     "subtitle": "Wie ein Werkzeug für eine Sitzung läuft: welches Werkzeug und aus welchem Einstellungsordner es sich anmeldet. Ein Profil verweist auf eine Werkzeuginstallation, die auf diesem Server bereits existiert; es installiert nichts und meldet nichts an.",
     "register": "Profil registrieren",
-    "nextAction": "Ein Profil registrieren",
     "rowMenu": "Zeilenaktionen für {{name}}",
     "search": "Profile durchsuchen…",
     "allStates": "Alle Zustände",
@@ -467,7 +469,7 @@
     "operable": {
       "yes": "In dieser Umgebung aktiviert",
       "no": "In dieser Umgebung nicht aktiviert",
-      "noHint": "Historisches Freigabekennzeichen: das Profil ist nicht aktiv, gehört zu einer anderen Umgebung oder sein Treiber ist hier nicht registriert. Das ist kein Startverdikt."
+      "noHint": "Historischer Aktivierungsvermerk: Das Profil ist nicht aktiv, gehört zu einer anderen Umgebung oder sein Treiber ist hier nicht registriert. Das ist kein Startverdikt."
     },
     "empty": {
       "title": "Keine Anbieterprofile",
@@ -505,7 +507,7 @@
       "userHome": "Benutzerverzeichnis",
       "userHomePlaceholder": "/home/agent",
       "userHomeHint": "Absoluter Pfad, unter dem die gestartete Sitzung als HOME läuft. Wird auf diesem Knoten geprüft.",
-      "homesOptional": "Mit der eigenen Anmeldung des Tools lassen Sie beide Verzeichnisse leer, um die Ordner des Tools auf diesem Server zu verwenden.",
+      "homesOptional": "Mit der eigenen Anmeldung des Werkzeugs lassen Sie beide Verzeichnisse leer, um die Ordner des Werkzeugs auf diesem Server zu verwenden.",
       "displayName": "Anzeigename",
       "displayNamePlaceholder": "Eine Bezeichnung (optional)",
       "environmentKnown": "Wird auf diesem Server ({{env}}) hinzugefügt, der die Ordner prüft. Ein Profil für einen anderen Server wird auf jenem Server hinzugefügt.",
@@ -548,7 +550,8 @@
       "created": "Erstellt",
       "updated": "Aktualisiert",
       "retiredAt": "Stillgelegt",
-      "loadFailed": "Dieses Profil konnte nicht gelesen werden."
+      "loadFailed": "Dieses Profil konnte nicht gelesen werden.",
+      "loading": "Profil wird gelesen…"
     },
     "configuration": {
       "title": "Konfiguration",
@@ -635,13 +638,8 @@
     "view": {
       "profilesTitle": "Anbieterprofile",
       "bindingsTitle": "Quellenbindungen",
-      "accountsTitle": "Anbieterkonten",
-      "tabProfiles": "Profile",
-      "tabBindings": "Bindungen",
-      "tabAccounts": "Konten",
-      "openProfiles": "Seite der Anbieterprofile öffnen",
-      "openBindings": "Seite der Quellenbindungen öffnen",
-      "crossHint": "Profile und Bindungen haben außerdem je eine eigene Seite, jede mit ihrer eigenen Leseberechtigung."
+      "openProfiles": "Werkzeuge öffnen",
+      "crossHint": "Jedes Konto mit seinem Profil und seinen Quellbindungen steht auch unter Werkzeuge."
     },
     "authority": {
       "lost": "Diese Aktion ist mit Ihren aktuellen Berechtigungen nicht mehr erlaubt; es wurde nichts gesendet.",
@@ -814,7 +812,7 @@
       "label": "Anzeigename",
       "hint": "Optionale Bezeichnung, bis zu 200 UTF-8-Bytes. Leer lassen, um den Kontonamen zu verwenden.",
       "saved": "Kontodarstellung gespeichert",
-      "uncertain": "Das Speichern wurde möglicherweise abgeschlossen. Wiederhole dieselben Werte zur Bestätigung.",
+      "uncertain": "Das Speichern wurde möglicherweise abgeschlossen. Wiederholen Sie dieselben Werte zur Bestätigung.",
       "color": "Farbe",
       "colorHint": "Die Farbe kennzeichnet das Konto, nicht seinen Status.",
       "preview": "Farbvorschau",
@@ -857,8 +855,8 @@
     "transport": "Transport",
     "isolation": "Isolierung",
     "failedInline": "Die Startanforderung wurde abgelehnt. Ihre Auswahl bleibt erhalten.",
-    "stoppedAtStart": "The tool started and stopped at once. What it said:",
-    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
+    "stoppedAtStart": "Das Werkzeug wurde gestartet und sofort wieder beendet. Seine Ausgabe:",
+    "stoppedSilently": "Es wurde nichts ausgegeben. Prüfen Sie bei den KI-Werkzeugen, ob sie installiert und angemeldet sind, und starten Sie dann neu.",
     "state": {
       "ready": "Lokale Anforderungen geprüft",
       "not_configured": "Konfiguration fehlt",
@@ -913,7 +911,7 @@
       "provider_credential_adapter_configured": "Der Anmeldedaten-Adapter dieses Treibers ist konfiguriert.",
       "provider_credential_adapter_not_configured": "Der gesteuerte Anmeldedaten-Adapter dieses Treibers ist nicht konfiguriert. Verwenden Sie nicht den Bearer eines anderen Anbieters und fallen Sie nicht auf account-home zurück.",
       "credential_source_not_injected": "Diese Kombination injiziert keine Inferenz-Credencial.",
-      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
+      "provider_record_bound": "Dieses Profil läuft mit einem API-Schlüssel, der unter Anbieter gespeichert ist; dieser Schlüssel ist sein Zugangsnachweis.",
       "runtime_credentials_wired": "Die work/K3-Runtime-Anmeldedaten sind konfiguriert.",
       "runtime_credentials_not_requested": "Diese Zusammensetzung fordert keine work/K3-Runtime-Anmeldedaten an.",
       "runtime_credential_wiring_incomplete": "Die Einrichtung der work/K3-Runtime-Anmeldedaten ist unvollständig. Ein Operator prüft diese Zusammensetzung; dieser Lesevorgang fordert keine kommerziellen Anmeldedaten an.",
@@ -937,7 +935,7 @@
       "retry_inspection": "Lesen Sie die Anforderungen erneut."
     },
     "remainingCheck": {
-      "workspace_and_template_validation": "Validierung von Workspace und Vorlage",
+      "workspace_and_template_validation": "Validierung von Arbeitsbereich und Vorlage",
       "current_launch_authorization": "Aktuelle Startautorisierung",
       "claim_admission": "Zulassung des Claims",
       "credential_mint_when_required": "Credencial-Mint, wenn erforderlich",

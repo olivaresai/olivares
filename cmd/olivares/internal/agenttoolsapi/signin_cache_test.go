@@ -360,7 +360,7 @@ func TestOpenCodeStatusTracksNativeLoginAndProgramChanges(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(authFile), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(authFile, []byte("{}"), 0600); err != nil {
+	if err := os.WriteFile(authFile, []byte(`{"openai":{"type":"oauth"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	check(true, 2)

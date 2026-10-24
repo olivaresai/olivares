@@ -171,7 +171,7 @@
       "gone": "Nicht erneut eingereiht: Diese Benachrichtigung ist nicht im Postausgang dieses Tenants. Sie wurde entweder entfernt oder gehört zu einem anderen Tenant.",
       "forbidden": "Nicht erneut eingereiht: Die Control Plane hat die Anfrage an {{destination}} abgelehnt. Dafür wird die Admin-Berechtigung für notify-Routen benötigt; auch eine Richtlinie oder eine Bereichseinschränkung kann sie ablehnen.",
       "consent": "Nicht erneut eingereiht: Der Aufzeichnungshinweis für diese Oberfläche wurde noch nicht bestätigt. Bestätigen Sie ihn und versuchen Sie es erneut — es fehlt keine Berechtigung.",
-      "stepUp": "Noch nicht erneut eingereiht: Die erneute Zustellung an {{destination}} erfordert eine verifizierte Sitzung. Schließe die Verifizierung ab und versuche es erneut.",
+      "stepUp": "Noch nicht erneut eingereiht: Die erneute Zustellung an {{destination}} erfordert eine verifizierte Sitzung. Schließen Sie die Verifizierung ab und versuchen Sie es erneut.",
       "failed": "Das erneute Einreihen für {{destination}} ist fehlgeschlagen. Die Benachrichtigung wurde nicht erneut eingereiht."
     },
     "confirm": {

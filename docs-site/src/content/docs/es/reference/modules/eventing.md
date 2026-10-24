@@ -15,6 +15,8 @@ bus en sí es de a-lo-sumo-una-vez y descarta al apagarse, este módulo es la
 de captura, la entrega es durable y auditable. Sus rutas se montan bajo
 `/v1/m/eventing/`.
 
+**Edición:** Las suscripciones de webhook firmadas son Community. Los sumideros SIEM (con `sink_kind` definido) requieren Business: un servidor Community responde `501 business_required` a una creación o actualización que lo incluya. Un sumidero guardado antes no entrega nada; una actualización que lo omite desactiva o borra el sumidero de la suscripción, y `DELETE` elimina la suscripción.
+
 ## A qué te suscribes
 
 Una **suscripción** registra los tipos de evento que quiere, un filtro de origen

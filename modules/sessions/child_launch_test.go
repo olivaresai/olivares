@@ -362,6 +362,9 @@ program opencode
 arg "acp"
 arg "--hostname"
 arg "127.0.0.1"
+arg "--print-logs"
+arg "--log-level"
+arg "ERROR"
 arg "--cwd"
 arg "/srv/work"
 dir /srv/work
@@ -377,6 +380,10 @@ env XDG_DATA_HOME=/homes/p/user/.local/share
 env XDG_STATE_HOME=/homes/p/user/.local/state
 env XDG_CACHE_HOME=/homes/p/user/.cache
 env OPENCODE_DISABLE_AUTOUPDATE=1
+env OPENCODE_DISABLE_EXTERNAL_SKILLS=1
+env OPENCODE_DISABLE_LSP_DOWNLOAD=1
+env OPENCODE_DISABLE_SHARE=1
+env OPENCODE_CONFIG_CONTENT={"share":"disabled","skills":{"paths":[".claude/skills",".agents/skills"]}}
 env OLIVARES_HOOK_PEP_URL=http://127.0.0.1:7/pep
 env OLIVARES_HOOK_PEP_TOKEN=pep-token
 allow [MY_FLAG]
@@ -544,6 +551,8 @@ arg "--print"
 arg "--replay-user-messages"
 arg "--permission-mode"
 arg "default"
+arg "--model"
+arg "claude-opus-5-5"
 arg "--tools"
 arg "default"
 arg "--settings"
@@ -582,6 +591,8 @@ arg "--print"
 arg "--replay-user-messages"
 arg "--permission-mode"
 arg "default"
+arg "--model"
+arg "claude-opus-5-5"
 arg "--tools"
 arg "default"
 arg "--settings"

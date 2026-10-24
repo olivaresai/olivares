@@ -5,15 +5,18 @@
 """Stored rows and API reads must survive upgrades, including disabled modules."""
 import contextlib
 import copy
+import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import threading
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+import urllib.error
 
 from upgrade import Upgrade, row_diff, snapshot_rows
 
@@ -200,6 +203,54 @@ class ModuleReads(unittest.TestCase):
             '/v1/users': (404, {'error': {'code': 'module_not_enabled'}})})
         self.assertEqual(rc, 1)
         self.assertEqual(result['failures'], ['GET /v1/users: HTTP 404'])
+
+
+class StartupWait(unittest.TestCase):
+    # The published binary's fresh-PostgreSQL bootstrap answered only after more than 120 s on a loaded
+    # runner (73 s and 23 s store steps, then a restart before serving); an engine start gets 300 s.
+    def start(self, answers_after: float | None) -> tuple[float, str | None]:
+        """Start a fake engine that answers after `answers_after` seconds of fake time (never if None)."""
+        clock = [0.0]
+
+        def call(method, path, body=None, expected=None):
+            if answers_after is None or clock[0] < answers_after:
+                raise urllib.error.URLError('not listening yet')
+            return 200, {}
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        # The running process is this interpreter, so the executable digest check reads a real /proc entry.
+        binary = Path(os.path.realpath('/proc/self/exe'))
+        process = Mock(pid=os.getpid())
+        process.poll.return_value = None
+        error = None
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Upgrade(SimpleNamespace(output=Path(directory) / 'upgrade', database='postgres',
+                                              published=binary, candidate=binary))
+            with patch('upgrade.subprocess.Popen', return_value=process), patch.object(fixture, 'call', call), \
+                    patch('upgrade.time.monotonic', lambda: clock[0]), patch('upgrade.time.sleep', sleep):
+                try:
+                    fixture.start(binary, 'published')
+                except RuntimeError as failure:
+                    error = str(failure)
+                finally:
+                    fixture.process = None  # never signal the test's own process group
+            if error is None:
+                self.assertEqual(fixture.result['running_sha256']['published'],
+                                 hashlib.sha256(binary.read_bytes()).hexdigest())
+        return clock[0], error
+
+    def test_a_start_that_answers_after_200_s_succeeds(self) -> None:
+        elapsed, error = self.start(200.0)
+        self.assertIsNone(error)
+        self.assertGreaterEqual(elapsed, 200.0)
+
+    def test_a_start_that_never_answers_fails_at_300_s(self) -> None:
+        elapsed, error = self.start(None)
+        self.assertEqual(error, 'published: startup timeout')
+        self.assertGreaterEqual(elapsed, 300.0)
+        self.assertLess(elapsed, 300.5)
 
 
 class StoredData(unittest.TestCase):

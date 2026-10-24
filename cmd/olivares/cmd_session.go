@@ -80,6 +80,10 @@ func newSessionCmd() *cobra.Command {
 		newSessionLifecycleCmd("resume", "Resume a stopped session", "/resume", "Resumed"),
 		newSessionPinCmd("pin", "Pin a session to the top of your list", http.MethodPost, "Pinned"),
 		newSessionPinCmd("unpin", "Unpin a session", http.MethodDelete, "Unpinned"),
+		newSessionSnoozeCmd(),
+		newSessionDoneCmd(),
+		newSessionRenameCmd(),
+		newSessionArchiveCmd(),
 		newSessionMoveCmd(),
 		newSessionHandoffCmd(),
 		newSessionInterruptCmd(),
@@ -208,6 +212,10 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 			base := strings.TrimSpace(name)
 			if base == "" {
 				base = filepath.Base(root)
+				// The engine refuses a name over 200 characters; room is left for -2, -3 ….
+				if r := []rune(base); len(r) > 190 {
+					base = string(r[:190])
+				}
 			}
 			runName, err := cfg.freeSessionName(ctx, base)
 			if err != nil {
@@ -269,7 +277,7 @@ func newSessionStartCmdWithConfig(cfg *agentClientConfig, registered *map[string
 	cmd.Flags().StringVar(&name, "name", "", "session name (default: the folder's name; -2, -3 … when taken)")
 	cmd.Flags().StringVar(&profile, "profile", "", "provider profile to launch under (default: the one the engine picks, as in the console)")
 	cmd.Flags().StringVar(&account, "account", "", "launch under this provider account (its name or profile reference; see olivares provider account ls)")
-	cmd.Flags().StringVar(&model, "model", "", "model alias or id (default: the tool's own)")
+	cmd.Flags().StringVar(&model, "model", "", "model alias or id (default: the tool's own; Claude Code launches an alias, or none, on its exact id)")
 	cmd.Flags().StringVar(&effort, "effort", "", "low|medium|high|xhigh|max")
 	cmd.Flags().StringVar(&template, "template", "", "saved session template ID; its terms apply at launch and resume")
 	cmd.Flags().StringVar(&permission, "permission", "edits-and-commands",
@@ -365,9 +373,20 @@ var sessionToolOrder = []string{"claude", "codex", "grok", "opencode", "gemini-c
 // provider refused is not ready in any of them. `session start` without --tool
 // resolves the tool it names (readyToolProfile).
 func (c *agentClientConfig) firstReadyTool(ctx context.Context) (tool, refused string) {
+	tool, refused, _ = c.readyTool(ctx)
+	return tool, refused
+}
+
+// readyTool is firstReadyTool with the reason a readiness could not be read, for
+// the screen that says so instead of showing "nothing is ready". A 404 is an
+// engine without the route, not a failure.
+func (c *agentClientConfig) readyTool(ctx context.Context) (tool, refused string, err error) {
 	status, b, err := c.do(ctx, "GET", profilesPath+"/readiness", nil, http.StatusOK, http.StatusNotFound)
-	if err != nil || status != http.StatusOK {
-		return "", ""
+	if err != nil {
+		return "", "", err
+	}
+	if status != http.StatusOK {
+		return "", "", nil
 	}
 	var res struct {
 		Tools []struct {
@@ -377,21 +396,21 @@ func (c *agentClientConfig) firstReadyTool(ctx context.Context) (tool, refused s
 			Message string `json:"message"`
 		} `json:"tools"`
 	}
-	if json.Unmarshal(b, &res) != nil {
-		return "", ""
+	if err := json.Unmarshal(b, &res); err != nil {
+		return "", "", err
 	}
 	for _, name := range sessionToolOrder {
 		for _, t := range res.Tools {
 			switch {
 			case t.Driver != name:
 			case t.Ready:
-				return name, ""
+				return name, "", nil
 			case t.Code == readinessKeyRefused && refused == "":
 				refused = termSafe(t.Message)
 			}
 		}
 	}
-	return "", refused
+	return "", refused, nil
 }
 
 // readinessKeyRefused is the readiness code of a tool whose only key its provider
@@ -555,21 +574,31 @@ func (c *agentClientConfig) builtinTemplate(ctx context.Context, name string) (s
 // freeSessionName returns base, or base-2, base-3 … when a session that is not
 // cleaned already carries the name: a name must pick one session.
 func (c *agentClientConfig) freeSessionName(ctx context.Context, base string) (string, error) {
-	runs, err := c.listRuns(ctx, nil)
+	taken, err := c.takenSessionNames(ctx)
 	if err != nil {
 		return "", err
 	}
-	taken := map[string]bool{}
-	for _, r := range runs {
-		if str(r, "state") != "cleaned" {
-			taken[str(r, "name")] = true
-		}
-	}
 	name := base
-	for i := 2; taken[name]; i++ {
+	for i := 2; taken[name] != ""; i++ {
 		name = fmt.Sprintf("%s-%d", base, i)
 	}
 	return name, nil
+}
+
+// takenSessionNames maps each name a session that is not cleaned carries to that
+// session's reference: the names `start` and `rename` keep unique.
+func (c *agentClientConfig) takenSessionNames(ctx context.Context) (map[string]string, error) {
+	runs, err := c.listRuns(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	taken := map[string]string{}
+	for _, r := range runs {
+		if str(r, "state") != "cleaned" && str(r, "name") != "" {
+			taken[str(r, "name")] = str(r, "run_ref")
+		}
+	}
+	return taken, nil
 }
 
 // sessionWaitingApproval is the state of a run whose launch waits for a person.
@@ -1045,10 +1074,11 @@ func newSessionFollowCmd() *cobra.Command {
 
 func newSessionListCmd() *cobra.Command {
 	var (
-		cfg     agentClientConfig
-		all     bool
-		state   string
-		account string
+		cfg      agentClientConfig
+		all      bool
+		archived bool
+		state    string
+		account  string
 	)
 	cmd := &cobra.Command{
 		Annotations: map[string]string{"changes_data": "read"},
@@ -1058,9 +1088,10 @@ func newSessionListCmd() *cobra.Command {
 		Long: "ls prints one row per session: name, state, tool, folder, when it started and its id.\n" +
 			"Sessions you pinned come first, in the order you pinned them (-o json carries pinned and\n" +
 			"pinned_at; the table shows the order), then the rest newest first.\n" +
-			"Stopped and failed sessions are listed until you remove them. Use the name, the start of\n" +
-			"the name or the id with the other session commands.",
-		Example: "  olivares session ls\n  olivares session ls --state running -o json\n  olivares session ls --state running --account work-2 -o json",
+			"Stopped and failed sessions are listed until you remove them. Archived sessions are left\n" +
+			"out unless --all or --state is given; --archived lists only those. Use the name, the start\n" +
+			"of the name or the id with the other session commands.",
+		Example: "  olivares session ls\n  olivares session ls --state running -o json\n  olivares session ls --state running --account work-2 -o json\n  olivares session ls --archived",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := cfg.resolve(); err != nil {
@@ -1087,10 +1118,20 @@ func newSessionListCmd() *cobra.Command {
 				return err
 			}
 			shown := make([]map[string]any, 0, len(runs))
+			hidden := 0 // archived sessions the plain list left out
 			for _, r := range runs {
 				s := str(r, "state")
+				// The engine lists archived sessions with archived_at and leaves the
+				// choice to its clients (#2795): the plain list leaves them out, as it
+				// leaves released ones, and --all or a state asked by name keeps them.
+				shelved := str(r, "archived_at") != ""
 				if (state != "" && s != state) || (state == "" && !all && s == "cleaned") ||
-					(accountRef != "" && str(r, "provider_profile_ref") != accountRef) {
+					(accountRef != "" && str(r, "provider_profile_ref") != accountRef) ||
+					(archived && !shelved) {
+					continue
+				}
+				if !archived && state == "" && !all && shelved {
+					hidden++
 					continue
 				}
 				shown = append(shown, r)
@@ -1102,6 +1143,13 @@ func newSessionListCmd() *cobra.Command {
 			table := termrender.Table{
 				Header: []string{"name", "state", "tool", "folder", "started", "id"},
 				Empty:  "No sessions yet. Start one: olivares session start <folder>",
+			}
+			switch {
+			case archived:
+				table.Empty = "No archived sessions."
+			case hidden > 0:
+				// Every session is archived: "none yet" would be false.
+				table.Empty = fmt.Sprintf("No sessions in the list; %d archived. List them: olivares session ls --archived", hidden)
 			}
 			// A name that two rows carry gets the short tail of each row's id, as the
 			// console does (sharedNames in web/src/features/sessions/provenance.ts).
@@ -1145,7 +1193,8 @@ func newSessionListCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().BoolVar(&all, "all", false, "include released (cleaned) sessions")
+	cmd.Flags().BoolVar(&all, "all", false, "include released (cleaned) and archived sessions")
+	cmd.Flags().BoolVar(&archived, "archived", false, "list only archived sessions")
 	cmd.Flags().StringVar(&state, "state", "", "only sessions in this state (pending|waiting_approval|running|idle|stopped|failed|cleaned)")
 	cmd.Flags().StringVar(&account, "account", "", "only sessions of this account (its name or profile reference; see olivares provider account ls)")
 	return cmd
@@ -1322,6 +1371,239 @@ func newSessionPinCmd(use, short, method, done string) *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
+	return cmd
+}
+
+// newSessionSnoozeCmd is snooze: the caller's own mark that takes a session out of
+// their list in the console until a moment, kept on the server like the pin (#2480).
+func newSessionSnoozeCmd() *cobra.Command {
+	var (
+		cfg  agentClientConfig
+		undo bool
+	)
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "snooze <session> <for|until>",
+		Short:       "Hide a session from your list until a moment",
+		Long: "snooze takes a session out of YOUR list in the console until the moment you name: a duration\n" +
+			"from now (90m, 2h, 48h) or a time (2026-10-20T09:00:00Z). It comes back by itself then; a\n" +
+			"second snooze moves the moment and --undo brings it back now. The mark is stored on the server\n" +
+			"and changes no one else's list. It prints \"Snoozed <name> until <time>.\"",
+		Example: "  olivares session snooze my-app 2h\n" +
+			"  olivares session snooze my-app 2026-10-20T09:00:00Z\n" +
+			"  olivares session snooze my-app --undo",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if undo {
+				return cobra.ExactArgs(1)(cmd, args)
+			}
+			return cobra.ExactArgs(2)(cmd, args)
+		},
+		ValidArgsFunction: completeFirstSession,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			method, done, body := http.MethodDelete, "Unsnoozed", any(nil)
+			if !undo {
+				until, err := snoozeUntil(args[1], time.Now())
+				if err != nil {
+					return err
+				}
+				method, done, body = http.MethodPost, "Snoozed", map[string]any{"until": until}
+			}
+			return markSession(cmd, &cfg, args[0], method, "/snooze", body, func(run, mark map[string]any) string {
+				if undo {
+					return done + " " + sessionLabel(run) + "."
+				}
+				return fmt.Sprintf("%s %s until %s.", done, sessionLabel(run), str(mark, "snoozed_until"))
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&undo, "undo", false, "End the snooze now")
+	cfg.addFlags(cmd)
+	return cmd
+}
+
+// newSessionDoneCmd is done: the caller's own mark that files a session under Earlier in
+// the console, kept on the server like the pin (#2480).
+func newSessionDoneCmd() *cobra.Command {
+	var (
+		cfg  agentClientConfig
+		undo bool
+	)
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "done <session>",
+		Short:       "Mark a session done in your list",
+		Long: "done files a session under Earlier in YOUR list in the console, whatever it is doing; --undo\n" +
+			"returns it to the usual group. The mark is stored on the server and changes no one else's\n" +
+			"list. It prints \"Marked <name> done.\"",
+		Example:           "  olivares session done my-app\n  olivares session done my-app --undo",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeFirstSession,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			method, state := http.MethodPost, "done"
+			if undo {
+				method, state = http.MethodDelete, "not done"
+			}
+			return markSession(cmd, &cfg, args[0], method, "/done", nil, func(run, _ map[string]any) string {
+				return "Marked " + sessionLabel(run) + " " + state + "."
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&undo, "undo", false, "Remove the done mark")
+	cfg.addFlags(cmd)
+	return cmd
+}
+
+// completeFirstSession completes the session argument and nothing after it.
+func completeFirstSession(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return completeSessions(cmd, args, toComplete)
+}
+
+// snoozeUntil reads a snooze's moment, a duration from now or an RFC 3339 time, as the
+// RFC 3339 UTC time the engine takes. The engine refuses a moment that has passed;
+// a negative or zero duration is refused here, before any call.
+func snoozeUntil(arg string, now time.Time) (string, error) {
+	if d, err := time.ParseDuration(arg); err == nil {
+		if d <= 0 {
+			return "", fmt.Errorf("snooze for %q: the duration must be positive, for example 2h", arg)
+		}
+		return now.Add(d).UTC().Format(time.RFC3339), nil
+	}
+	t, err := time.Parse(time.RFC3339, arg)
+	if err != nil {
+		return "", fmt.Errorf("snooze until %q: give a duration (90m, 2h) or a time (2026-10-20T09:00:00Z)", arg)
+	}
+	return t.UTC().Format(time.RFC3339), nil
+}
+
+// markSession is one call of snooze or done on the named session: the caller's own mark,
+// one sentence, and the engine's answer as the JSON output.
+func markSession(cmd *cobra.Command, cfg *agentClientConfig, name, method, route string, body any, say func(run, mark map[string]any) string) error {
+	if err := cfg.resolve(); err != nil {
+		return err
+	}
+	run, err := cfg.findSession(cmd.Context(), name)
+	if err != nil {
+		return err
+	}
+	_, b, err := cfg.do(cmd.Context(), method, sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+route, body, http.StatusOK)
+	if err != nil {
+		return err
+	}
+	mark := map[string]any{}
+	if err := json.Unmarshal(b, &mark); err != nil {
+		return fmt.Errorf("the engine marked %s, but its answer was unreadable: %w", sessionLabel(run), err)
+	}
+	return renderOut(cmd, func(w io.Writer) error {
+		_, err := fmt.Fprintln(w, say(run, mark))
+		return err
+	}, mark)
+}
+
+// newSessionRenameCmd is rename: the session's own name, one PUT, one sentence. The
+// name is the session's, so every person and client sees the new one (#2795).
+func newSessionRenameCmd() *cobra.Command {
+	var cfg agentClientConfig
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "rename <session> <name>",
+		Short:       "Rename a session",
+		Long: "rename gives a session a new name, the one every list, the console and the other session\n" +
+			"commands show. It prints \"Renamed <old> to <new>.\" An empty name (\"\") clears it, and the\n" +
+			"session is shown by its id; it prints \"Cleared the name of <old>.\"",
+		Example:           "  olivares session rename my-app release-notes\n  olivares session rename release-notes \"\"",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completeSessions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			run, err := cfg.findSession(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			// A name must pick one session, as `start` keeps it: a second session with
+			// this name would take the other's place in every later command. The name the
+			// session already has changes nothing, so it is never refused.
+			if name := strings.TrimSpace(args[1]); name != str(run, "name") {
+				taken, err := cfg.takenSessionNames(cmd.Context())
+				if err != nil {
+					return err
+				}
+				if holder := taken[name]; holder != "" && holder != str(run, "run_ref") {
+					return sentence(exitcode.Conflict, "Another session is already named %q. Choose another name, or rename that session first.", name)
+				}
+			}
+			_, b, err := cfg.do(cmd.Context(), "PUT", sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/name",
+				map[string]any{"name": args[1]}, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			updated := map[string]any{}
+			if err := json.Unmarshal(b, &updated); err != nil {
+				return err
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				if strings.TrimSpace(str(updated, "name")) == "" {
+					_, err := fmt.Fprintf(w, "Cleared the name of %s.\n", sessionLabel(run))
+					return err
+				}
+				_, err := fmt.Fprintf(w, "Renamed %s to %s.\n", sessionLabel(run), sessionLabel(updated))
+				return err
+			}, updated)
+		},
+	}
+	cfg.addFlags(cmd)
+	return cmd
+}
+
+// newSessionArchiveCmd is archive and, with --undo, unarchive: the session's own
+// mark, one call, one sentence. An archived session keeps running or stays stopped
+// as it was; lists leave it out until it is unarchived (#2795).
+func newSessionArchiveCmd() *cobra.Command {
+	var cfg agentClientConfig
+	var undo bool
+	cmd := &cobra.Command{
+		Annotations: map[string]string{"changes_data": "write"},
+		Use:         "archive <session>",
+		Short:       "Archive a session, or unarchive it with --undo",
+		Long: "archive takes a session out of your lists without stopping or removing it: \"olivares\n" +
+			"session ls\" and the console leave archived sessions out, and \"olivares session ls --archived\"\n" +
+			"lists them. The mark is the session's, so it is archived for everyone. It prints \"Archived\n" +
+			"<name>.\" With --undo it returns the session to the lists and prints \"Unarchived <name>.\"",
+		Example:           "  olivares session archive my-app\n  olivares session archive my-app --undo",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSessions,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			run, err := cfg.findSession(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			method, done := http.MethodPost, "Archived"
+			if undo {
+				method, done = http.MethodDelete, "Unarchived"
+			}
+			_, b, err := cfg.do(cmd.Context(), method, sessionRunsPath+"/"+url.PathEscape(str(run, "run_ref"))+"/archive", nil, http.StatusOK)
+			if err != nil {
+				return err
+			}
+			updated := map[string]any{}
+			if err := json.Unmarshal(b, &updated); err != nil {
+				return err
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				_, err := fmt.Fprintf(w, "%s %s.\n", done, sessionLabel(updated))
+				return err
+			}, updated)
+		},
+	}
+	cfg.addFlags(cmd)
+	cmd.Flags().BoolVar(&undo, "undo", false, "unarchive the session")
 	return cmd
 }
 
@@ -1582,7 +1864,7 @@ func (c *agentClientConfig) listRuns(ctx context.Context, filter url.Values) ([]
 }
 
 // findSession resolves a session by id or by name. A name resolves to its newest
-// session; `start` keeps names unique among sessions that are not released.
+// session; `start` and `rename` keep names unique among sessions that are not released.
 func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[string]any, error) {
 	arg = strings.TrimSpace(arg)
 	if arg == "" {

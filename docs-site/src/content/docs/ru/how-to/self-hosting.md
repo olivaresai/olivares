@@ -14,7 +14,7 @@ description: >-
 
 > Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
 
-Следующий выпуск — <!-- release -->`0.3`<!-- /release -->; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в <!-- release -->`docs/releases/0.3-install-surfaces.json`<!-- /release -->.
+Следующий выпуск — <!-- release -->`0.4`<!-- /release -->; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в <!-- release -->`docs/releases/0.4-install-surfaces.json`<!-- /release -->.
 
 Olivares AI ориентирован на **самостоятельный хостинг в первую очередь**. Весь
 продукт — это один статический бинарный файл со встроенным веб-интерфейсом, поэтому

@@ -1,33 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { lazy } from 'react'
 import { ContactRound, IdCard, Link2 } from 'lucide-react'
-import { lazyView } from '@/features/lazy-view'
+import { toolsRoom } from '@/features/agent-tools/views'
 import type { ViewEntry } from '@/features/registry'
 
-// Profiles, bindings and accounts share one view with independent read tiers.
-// Each route opens its own tab so an operator can reach the permissions they hold
-// without requiring access to runs, live sessions or another provider tab.
-// All three fold into AI tools (#2240): each tool's menu there opens this room on a door
-// the person may read, and the tabs reach the rest, so navigation lists a door only to a
-// principal who cannot open AI tools.
-const ProviderAdminView = lazy(() =>
-  import('./provider-admin-view').then((m) => ({
-    default: m.ProviderAdminView,
-  })),
-)
-
+// The profile, binding and account pages are doors into Tools (#2552): an account and
+// its profile are one reference, and its settings and bindings are in its detail there.
+// Each door keeps its url and its OWN read tier (the route guard checks exactly the one
+// permission an entry declares), and navigation lists a door only to a principal who
+// cannot open Tools.
 export const VIEWS = [
   {
     order: 340,
-    // The provider-profile plane's own door, gated on ITS read tier. The plane is
-    // also a tab inside `/agentops` and `/sessions`, but those routes require run:read
-    // or live:read, so a principal holding only sessions:profile:read could reach no
-    // screen for a permission the engine declares. Same view as the next entry, opened
-    // on the profiles tab; write/admin actions gate further inside (sessions:profile:
-    // write/admin). Two doors into one room — not a redirect, and the generic route
-    // guard keeps declaring exactly one permission per entry.
+    // The profile tier's door. A profile is read in its account's detail on Tools; a
+    // reader without account read gets the profile list there on its own.
     id: 'providerProfiles',
     path: '/provider-profiles',
     navigation: {
@@ -39,14 +26,13 @@ export const VIEWS = [
     icon: IdCard,
     permission: 'sessions:profile:read',
     doorTo: 'agent-tools',
-    element: lazyView(ProviderAdminView, { entrance: 'profiles' as const }),
+    element: toolsRoom,
   },
   {
     order: 350,
-    // The source-binding door, gated on the binding plane's OWN read tier, which is
-    // independent of the profile tiers. Opens on the tenant-wide bindings table; bind
-    // and revoke gate on sessions:profile-binding:write/admin inside, and binding also
-    // needs the deployment-wide source authority the engine decides on the roster read.
+    // The binding tier's door, independent of the profile tiers. An account's bindings
+    // are in its detail on Tools; a reader without profile read gets the bindings table
+    // there on its own. Bind and revoke gate on their own write/admin tiers.
     id: 'providerBindings',
     path: '/provider-bindings',
     navigation: {
@@ -58,12 +44,12 @@ export const VIEWS = [
     icon: Link2,
     permission: 'sessions:profile-binding:read',
     doorTo: 'agent-tools',
-    element: lazyView(ProviderAdminView, { entrance: 'bindings' as const }),
+    element: toolsRoom,
   },
   {
     order: 360,
-    // Account read opens this tab; creating or adopting an account still needs
-    // account write, and choosing from profiles needs profile read inside it.
+    // The account tier's door. Creating or adopting an account still needs account
+    // write, and choosing from profiles needs profile read inside it.
     id: 'providerAccounts',
     path: '/provider-accounts',
     navigation: {
@@ -75,6 +61,6 @@ export const VIEWS = [
     icon: ContactRound,
     permission: 'sessions:account:read',
     doorTo: 'agent-tools',
-    element: lazyView(ProviderAdminView, { entrance: 'accounts' as const }),
+    element: toolsRoom,
   },
 ] satisfies ViewEntry[]

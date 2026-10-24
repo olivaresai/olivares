@@ -22,6 +22,20 @@ NEVER_APPLIED = {
         '1d654343b1f36fff13791daa7ade458f927e119dd50cfbf61fff7a843ae02522',
 }
 
+# A binding whose digest moved while no applied migration is read differently, accepted only as the exact reviewed
+# pair (baseline digest, new digest); any other change to these keys fails. Baseline: the public 0.3 tree (16f05eff).
+# From 0.4, store.go's call sites, unchanged, receive the guard manifest and graph from bootGuardCensus: on a database
+# Community wrote that census is the registry census, as in 0.3; only a database Business wrote, which 0.3 refused
+# to open, gets the Business census Business already applied there. No new version is needed.
+REVIEWED_BINDINGS = {
+    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrationPlan/1':
+        ('8243800ce7033c9938779e9cfd765a8c0b0debfb48fd828ca4c861cdc1b7cb30',
+         'f348a0c80cd65335f5f8c422a46b7ef1a615dc38ea8500aed9e646382de6d14c'),
+    'core/binding/core/internal/store/sqlstore/store.go/openPrepared/buildCoreMigrations/1':
+        ('6d2daa839373bd36eaddc5827f156be844e394b7d7af72c019de051dfa78aca0',
+         'f7264bf98632902afa007091ba78aa1dbca1aa57edea3964a5fec73aa882273f'),
+}
+
 
 def git(*args):
     return subprocess.check_output(['git', *args], cwd=ROOT, stderr=subprocess.PIPE)
@@ -122,8 +136,11 @@ def main():
     new.update(new_go)
     if not old:
         raise ValueError('baseline contains no migrations')
+    if any(not key.startswith('core/binding/') or key.endswith('.sql') for key in REVIEWED_BINDINGS):
+        raise ValueError('REVIEWED_BINDINGS may hold binding keys only')
     changed = [key for key, digest in old.items() if new.get(key) != digest
-               and not (key not in new and NEVER_APPLIED.get(key) == digest)]
+               and not (key not in new and NEVER_APPLIED.get(key) == digest)
+               and REVIEWED_BINDINGS.get(key) != (digest, new.get(key))]
     for key in sorted(changed):
         print('migration immutable: ' + key + ' changed or disappeared; add a new version', file=sys.stderr)
     if changed:

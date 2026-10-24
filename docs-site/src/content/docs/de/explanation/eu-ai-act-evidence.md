@@ -52,6 +52,8 @@ versiegelt, ledger-verankert, exportierbar als JSON, CSV oder **OSCAL**, mit ein
 Live-Integritätsnachweis. Das Dokument ist *abgeleitet aus dem, was passiert ist*,
 nicht behauptet über das, was beabsichtigt war.
 
+Das Framework-Mapping, die Bewertungen, die DORA-Sicht, der OSCAL-Export und die Berichte gehören zu **Business** (Compliance Packs): Ein Community-Server beantwortet diese Routen mit `501`. Community behält das signierte Ledger, Records Management sowie JSON-/CSV-Exporte gespeicherter Evidenz.
+
 Zwei Ehrlichkeitsregeln sind in das Produkt verdrahtet und gehen direkt in die
 Evidenz über:
 

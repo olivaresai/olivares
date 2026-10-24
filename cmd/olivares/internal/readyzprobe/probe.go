@@ -11,6 +11,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -91,6 +92,7 @@ func Check(ctx context.Context, cfg Config) (Result, error) {
 			return result, errors.New("--ca-cert contains no PEM certificate")
 		}
 		transport.TLSClientConfig.RootCAs = roots
+		transport.TLSClientConfig.ServerName = anchorServerName(pemBytes, endpoint)
 	}
 
 	probeCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
@@ -148,4 +150,34 @@ func localEndpoint(rawOrigin string) (endpoint, scheme string, err error) {
 	}
 	u.Path = "/readyz"
 	return u.String(), scheme, nil
+}
+
+// anchorServerName is the name to verify when the trust anchor is the certificate
+// the engine serves and that certificate does not name the loopback address this
+// probe dials. An operator certificate (--tls-cert) names the host other machines
+// type, never 127.0.0.1, and the container stayed unhealthy on the mismatch. The
+// chain is still verified against the anchor, so the probe still proves that the
+// server holds the anchor's key; only the name checked is the anchor's own. It
+// returns "" (the dialed address is checked, as before) when the anchor's first
+// certificate already covers that address, carries no name, or cannot be read.
+func anchorServerName(anchorPEM []byte, endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	block, _ := pem.Decode(anchorPEM)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return ""
+	}
+	leaf, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || leaf.VerifyHostname(u.Hostname()) == nil {
+		return ""
+	}
+	switch {
+	case len(leaf.DNSNames) > 0:
+		return leaf.DNSNames[0]
+	case len(leaf.IPAddresses) > 0:
+		return leaf.IPAddresses[0].String()
+	}
+	return ""
 }

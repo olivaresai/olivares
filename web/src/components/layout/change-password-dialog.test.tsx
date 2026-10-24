@@ -16,7 +16,12 @@ vi.mock('@/lib/auth/context', () => ({
     logout: vi.fn(),
   }),
 }))
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
+  // The account menu's Help reads the page it is on.
+  useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
+    select({ location: { pathname: '/' } }),
+}))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({ data: {} }),
 }))
@@ -28,7 +33,7 @@ import { ChangePasswordDialog } from './change-password-dialog'
 async function openForm() {
   const user = userEvent.setup()
   renderIntel(<UserMenu />)
-  await user.click(screen.getByRole('button', { name: 'Account' }))
+  await user.click(screen.getByRole('button', { name: /, Account$/ }))
   await user.click(screen.getByRole('menuitem', { name: 'Change password' }))
   return user
 }
@@ -141,7 +146,7 @@ describe('Own password from the account menu', () => {
     const user = await openForm()
     await user.type(screen.getByLabelText('Current password'), 'current-secret')
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
     await user.click(screen.getByRole('menuitem', { name: 'Change password' }))
     expect(screen.getByLabelText('Current password')).toHaveValue('')
     expect(screen.getByLabelText('New password')).toHaveValue('')
@@ -163,7 +168,7 @@ describe('Own password from the account menu', () => {
     const user = await openForm()
     await submitForm(user)
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    await user.click(screen.getByRole('button', { name: 'Account' }))
+    await user.click(screen.getByRole('button', { name: /, Account$/ }))
     await user.click(screen.getByRole('menuitem', { name: 'Change password' }))
     await user.type(screen.getByLabelText('Current password'), 'fresh-secret')
     await finish()

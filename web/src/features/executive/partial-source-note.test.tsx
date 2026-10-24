@@ -9,8 +9,8 @@
 // assistive-technology users read a caption, and a button or <details> inside a
 // tile-wide <a> is invalid markup — so the disclosure is a sibling of the link, the
 // link keeps its destination and stays the only tab stop inside itself, and nothing
-// is hover-only. These cases pin both kinds, the Home EstateTile cell and the Executive
-// KpiTiles cell, and the no-partial rendering (a plain link, no disclosure).
+// is hover-only. These cases pin the Executive KpiTiles cell and the no-partial
+// rendering (a plain link, no disclosure).
 //
 // THE PRINTED REPORT gets the SAME rows from a print-only sibling OUTSIDE the closed
 // <details> (`PartialCoveragePrint`, `hidden print:block` like the report cover header),
@@ -29,7 +29,6 @@ import userEvent from '@testing-library/user-event'
 import { renderIntel, screen, within } from '@/test/intel'
 import '@/features/_intel'
 import './i18n'
-import { EstateTile } from '@/features/home/components'
 import { deriveUsage } from './derive'
 import { inventorySummaryFixture, sessionsLiveFixture } from './fixtures'
 import {
@@ -418,114 +417,6 @@ describe('CoverageLinkTile — the cell: link, disclosure, print copy; all from 
     )
     expect(screen.queryByTestId('cell-details-print')).toBeNull()
     expect(document.querySelector('[data-testid$="-explanation"]')).toBeNull()
-  })
-})
-
-describe('PartialSourceNote — Home EstateTile cell', () => {
-  it('Inventory: compact line inside the /inventory link, full sentence in a sibling disclosure, no extra stop inside the link', () => {
-    renderIntel(
-      <EstateTile
-        to="/inventory"
-        icon={<span />}
-        label="Inventory"
-        value="25"
-        caption="4 agents · 3 active"
-        state="ready"
-        partial={{
-          testId: 'home-inventory-partial-details',
-          sources: [INVENTORY],
-        }}
-      />,
-    )
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/inventory')
-    expect(within(link).getByText('4 agents · 3 active')).toBeInTheDocument()
-    const note = within(link).getByTestId('home-inventory-partial-note')
-    expect(note).toHaveTextContent(SCAN_BRIEF)
-    expect(note).not.toHaveTextContent(SCAN_FULL)
-    expect(note).not.toHaveTextContent(PAGE_BRIEF)
-    expect(note).not.toHaveAttribute('title')
-    expect(within(link).queryByRole('button')).toBeNull()
-    expect(nestedTabStops(link)).toEqual([])
-
-    const details = screen.getByTestId('home-inventory-partial-details')
-    expectSiblingDisclosure(link, details)
-    const row = within(details).getByTestId(
-      'home-inventory-partial-note-explanation',
-    )
-    expect(row).toHaveTextContent('Inventory — Partial data')
-    expect(row).toHaveTextContent(SCAN_FULL)
-    expect(row).not.toHaveTextContent(PAGE_FULL)
-    // The full sentence lives in the disclosure and in its print copy — never in
-    // the caption, never a third time.
-    const print = expectPrintTwin(link, details)
-    expect(print).toHaveAttribute(
-      'data-testid',
-      'home-inventory-partial-details-print',
-    )
-    expect(print).not.toHaveTextContent(PAGE_FULL)
-    expectFullSentenceTwice(SCAN_FULL, details, print)
-  })
-
-  it('Sessions: compact line inside the /sessions link, full page sentence in a sibling disclosure', () => {
-    renderIntel(
-      <EstateTile
-        to="/sessions"
-        icon={<span />}
-        label="Live sessions"
-        value="3"
-        caption="0 idle now"
-        state="ready"
-        partial={{
-          testId: 'home-sessions-partial-details',
-          sources: [SESSIONS],
-        }}
-      />,
-    )
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/sessions')
-    const note = within(link).getByTestId('home-sessions-partial-note')
-    expect(note).toHaveTextContent(PAGE_BRIEF)
-    expect(note).not.toHaveTextContent(PAGE_FULL)
-    expect(note).not.toHaveTextContent(SCAN_BRIEF)
-    expect(note).not.toHaveAttribute('title')
-    expect(within(link).queryByRole('button')).toBeNull()
-    expect(nestedTabStops(link)).toEqual([])
-
-    const details = screen.getByTestId('home-sessions-partial-details')
-    expectSiblingDisclosure(link, details)
-    const row = within(details).getByTestId(
-      'home-sessions-partial-note-explanation',
-    )
-    expect(row).toHaveTextContent('Sessions — Partial data')
-    expect(row).toHaveTextContent(PAGE_FULL)
-    expect(row).not.toHaveTextContent(SCAN_FULL)
-    const print = expectPrintTwin(link, details)
-    expect(print).not.toHaveTextContent(SCAN_FULL)
-    expectFullSentenceTwice(PAGE_FULL, details, print)
-  })
-
-  it('nothing partial: a plain link with no caption line and no disclosure — the previous rendering', () => {
-    const { container } = renderIntel(
-      <EstateTile
-        to="/inventory"
-        icon={<span />}
-        label="Inventory"
-        value="25"
-        caption="4 agents · 3 active"
-        state="ready"
-      />,
-    )
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', '/inventory')
-    expect(container.querySelector('details, summary')).toBeNull()
-    expect(container.querySelector('[data-testid$="-print"]')).toBeNull()
-    expect(container.querySelector('[data-testid$="-explanation"]')).toBeNull()
-    expect(screen.queryByText(WHY)).toBeNull()
-    expect(screen.queryByText(/Partial data/)).toBeNull()
-    expect(screen.queryByText(SCAN_FULL)).toBeNull()
-    expect(screen.queryByText(PAGE_FULL)).toBeNull()
-    expect(nestedTabStops(link)).toEqual([])
   })
 })
 

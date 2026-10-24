@@ -171,7 +171,7 @@ Process environment values take precedence over activation defaults. Unknown
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 301 variables and 18 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 301 variables and 19 runtime-constructed families, covering the engine, the CLI and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -355,11 +355,11 @@ The table below is generated from the product's own sources: 301 variables and 1
 | `OLIVARES_OIDC_GROUPS_CLAIM` | No | — | ID-token or UserInfo claim carrying group membership. Unset leaves group mapping off. |
 | `OLIVARES_OIDC_ISSUER` | Yes | — | OIDC issuer URL. Required when the protocol is `oidc`. |
 | `OLIVARES_ONBOARDING_CONFIG` | No | — | Path to the JSON configuration of the onboarding readiness assessor. Read by the Business edition each time `olivares enterprise readiness` runs, not when the engine starts. `{}` selects the standard profile. Unset, or a file that cannot be read or parsed, makes that command report that onboarding readiness is not configured. |
-| `OLIVARES_ORCH_CADENCE_INTERVAL` | No | — | How often the orchestration cadence loop runs, as a Go duration. `0` disables it. |
+| `OLIVARES_ORCH_CADENCE_INTERVAL` | No | — | How often the orchestration cadence loop runs, as a Go duration. `0` disables it. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_ORCH_DISPATCH_CONFIG` | No | — | Path to the JSON configuration for orchestration dispatch targets. |
-| `OLIVARES_ORCH_WORKFLOW_INTERVAL` | No | `15s` | How often the orchestration workflow loop advances waiting runs, as a Go duration. |
-| `OLIVARES_ORCH_WORKFLOW_MAX` | No | — | Upper bound on concurrently advancing workflow runs. |
-| `OLIVARES_ORCH_WORKFLOW_STEPS_MAX` | No | — | Upper bound on the steps one workflow run may take, which stops a loop from running forever. |
+| `OLIVARES_ORCH_WORKFLOW_INTERVAL` | No | `15s` | How often the orchestration workflow loop advances waiting runs, as a Go duration. Read only by the Business edition; a Community binary refuses to serve while it is set. |
+| `OLIVARES_ORCH_WORKFLOW_MAX` | No | — | Upper bound on concurrently advancing workflow runs. Read only by the Business edition; a Community binary refuses to serve while it is set. |
+| `OLIVARES_ORCH_WORKFLOW_STEPS_MAX` | No | — | Upper bound on the steps one workflow run may take, which stops a loop from running forever. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_OTA_PUBKEY` | No | — | Public key the engine verifies a downloaded update bundle against. |
 | `OLIVARES_OTEL_ENABLED` | No | — | Set to a true value to export traces. Setting an endpoint turns export on as well. |
 | `OLIVARES_OTEL_ENDPOINT` | No | — | OTLP endpoint traces are exported to. Falls back to the standard `OTEL_EXPORTER_OTLP_ENDPOINT`. |
@@ -424,7 +424,7 @@ The table below is generated from the product's own sources: 301 variables and 1
 | `OLIVARES_SECRET_STORE_KEY` | No | — | Key that encrypts operator secrets held in the store. |
 | `OLIVARES_SERVERTOOL_EGRESS_CONFIG` | No | — | Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by the Business edition (AI Runtime Security). Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted. |
 | `OLIVARES_SERVER_URL` | No | — | Base URL of the engine the CLI talks to, when `--server` is not given. |
-| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. The Community build does not read it. |
+| `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` | No | — | Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT` | No | `10s` | Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown. |
 | `OLIVARES_SESSION_BUDGET_AVAILABILITY` | No | — | Whether session budget enforcement is required, and what happens when the budget service cannot answer. |
 | `OLIVARES_SESSION_CONTAINER_IMAGE` | No | `localhost/olivares-session:latest` | Image that container sessions (`isolation=container`) run in. It must hold what the tool shells out to, such as git and a shell, and run the host's tool program, which is mounted into it read-only. |
@@ -445,7 +445,7 @@ The table below is generated from the product's own sources: 301 variables and 1
 | `OLIVARES_SESSION_RUNTIME_WIF_RULE` | No | — | Which federation rule the session runtime exchanges its workload identity under. |
 | `OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX` | No | `olivares/` | Prefix of the branch a session gets when it is started with a new git worktree; git checks the resulting branch name. |
 | `OLIVARES_SESSION_WORKTREE_DIR` | No | — | Directory that holds the git worktrees of sessions started with a new worktree; the default is session-worktrees in the data directory. |
-| `OLIVARES_SIEM_FORWARD_INTERVAL` | No | — | How often signed ledger records are forwarded to the configured SIEM, as a Go duration. |
+| `OLIVARES_SIEM_FORWARD_INTERVAL` | No | — | How often signed ledger records are forwarded to the configured SIEM, as a Go duration. Read only by the Business edition; a Community binary refuses to serve while it is set. |
 | `OLIVARES_SOURCES_CONFIG` | No | — | Path to the JSON file that wires real observation sources and identity roster providers before the engine starts. |
 | `OLIVARES_SSO_PROTOCOL` | No | — | Single sign-on protocol to wire: `oidc` or `saml`. Unset means no federation, and the endpoints report it rather than half-wiring one. |
 | `OLIVARES_SSO_SECRET_KEY` | No | — | Key that encrypts the federation client secret and service-provider private keys at rest. |
@@ -487,6 +487,7 @@ These prefixes name families whose member variables are built at runtime — the
 | --- | --- | --- | --- |
 | `OLIVARES_AUDIT_ARCHIVE_` | No | — | Family prefix for the audit archive settings listed above. |
 | `OLIVARES_CODEX_HOOK_` | No | — | Family prefix for the Codex hook client and server settings listed above. |
+| `OLIVARES_CREDENTIAL_` | No | — | Family prefix for the variables the credential broker sets on a session's child to locate its helpers (the generated ssh configuration, one proxy URL per API credential). The session reads them; the engine does not. OLIVARES_CREDENTIAL_MINTER_CONFIG shares the prefix and is the engine's own input, documented on its own row. Business. |
 | `OLIVARES_DR_OFFSITE_` | No | — | Family prefix for the offsite replication settings listed above. |
 | `OLIVARES_EMBEDDINGS` | No | — | Family stem for the unprefixed embeddings settings, which configure the OpenAI-compatible provider. |
 | `OLIVARES_EMBEDDINGS_` | No | — | Family prefix from which the per-provider embeddings keys are built, by appending the provider name and then the setting. |

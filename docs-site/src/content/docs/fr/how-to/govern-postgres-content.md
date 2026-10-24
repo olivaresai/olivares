@@ -112,7 +112,7 @@ n'en contient aucune, et expose clairement les limites suivantes :
 | Situation | Comportement du connecteur |
 |---|---|
 | Une colonne `owner_group` / rôle | Associe chaque valeur à une référence d'ACL (`<acl_prefix><value>`). |
-| Aucun `acl_columns` déclaré | Le document hérite de l'**ACL par défaut** de la base de connaissances, toujours appliquée lors de la récupération. |
+| Aucun `acl_columns` déclaré | Le document hérite de l'**ACL par défaut** de la base de connaissances. Sans ACL par défaut non plus, il est **refusé** à tout le monde ; définissez une ACL par défaut sur la base de connaissances ou déclarez la source publique avec `"public": "true"` dans sa configuration (chaque ingestion ou synchronisation qui enregistre des lignes visibles par tout le tenant laisse une entrée d'audit `knowledge.source.public`). Le paramètre s'applique aux documents enregistrés ensuite ; réingérez pour modifier les lignes déjà enregistrées. |
 | **Row-level security (RLS)** sur la table | Respectée implicitement : le rôle du connecteur voit exactement les lignes que RLS l'autorise à voir. Le connecteur ne réimplémente pas RLS ; il en hérite. |
 | Une permission que la table ne modélise **pas** dans une colonne | **Impossible à déduire** → non transposée. Modélisez-la dans une colonne (ou dans une table d'ACL jointe via `query`) pour qu'elle soit appliquée. |
 

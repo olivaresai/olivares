@@ -8,6 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // publishRuntimeOutput keeps the ring and governed recorder in the same order.
@@ -65,5 +67,32 @@ func (m *Module) publishApprovalFailure(lr *liveRun, err error) {
 		Cause   string `json:"cause"`
 		Message string `json:"message"`
 	}{"olivares_notice", "approval_refused", cause, "Olivares refused the tool request because " + reason + "."})
+	m.publishRuntimeOutput(lr, streamStdout, lr.redact.apply(data), m.now())
+}
+
+// publishTurnFailed tells the session's followers that the provider's model call for
+// the turn failed and whether the turn was cancelled, in the tool's own words (already clipped
+// and redacted by the driver) and through the launch's redactor.
+func (m *Module) publishTurnFailed(lr *liveRun, reason string, cancelled bool) {
+	name := "The tool"
+	if lr.profile != nil {
+		if facts, ok := driverfacts.Lookup(lr.profile.Driver); ok && facts.Name != "" {
+			name = facts.Name
+		}
+	}
+	m.warnf("sessions: the provider's model call failed", "run_ref", lr.runRef, "reason", reason, "cancelled", cancelled)
+	next := "Olivares cancelled the turn; send a message to try again."
+	if !cancelled {
+		next = "Olivares could not cancel the turn; stop the session to end it."
+	}
+	data, _ := json.Marshal(struct {
+		Type    string `json:"type"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}{"olivares_notice", "provider_call_failed", name + "'s model call failed (" + reason + "). " + next})
+	// The person's accepted prompt goes first: the failure is that turn's.
+	for _, prompt := range lr.acpEcho.before(data) {
+		m.publishRuntimeOutput(lr, streamStdout, lr.redact.apply(prompt), m.now())
+	}
 	m.publishRuntimeOutput(lr, streamStdout, lr.redact.apply(data), m.now())
 }

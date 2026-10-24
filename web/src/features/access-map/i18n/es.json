@@ -52,9 +52,9 @@
     "unusedHint": "Permitido pero nunca observado — sobreaprovisionamiento que conviene ajustar.",
     "forbiddenTitle": "Drift no autorizado",
     "forbiddenHint": "Tu rol puede ver el grafo, pero no la diferencia entre lo permitido y lo observado.",
-    "partial": "Resultado parcial: el motor reconcilió esta diferencia sobre una ventana de deriva truncada, así que estos recuentos no son todo el entorno y una arista que falte aquí puede estar simplemente más allá del límite.",
+    "partial": "Resultado parcial: el motor reconcilió esta diferencia sobre una ventana de deriva truncada, así que estos recuentos no son todo el parque y una arista que falte aquí puede estar simplemente más allá del límite.",
     "emptyWindowTitle": "Sin hallazgos en la ventana analizada",
-    "emptyWindowHint": "El análisis se detuvo en su límite de página, así que esto no dice nada sobre todo el entorno.",
+    "emptyWindowHint": "El análisis se detuvo en su límite de página, así que esto no dice nada sobre todo el parque.",
     "scopeHint": "La lista de desviaciones abarca toda la organización; los filtros del mapa no se aplican a ella"
   },
   "detail": {
@@ -111,7 +111,7 @@
     "verdict": {
       "clear": "Comprobado de nuevo: esta arista ya no está en el conjunto de deriva. La explicación de arriba describe el estado anterior a esa comprobación.",
       "present": "Comprobado de nuevo: esta arista sigue en el conjunto de deriva.",
-      "unknown": "No se ha podido confirmar: la lectura de deriva no ha respondido, o sólo cubría parte del entorno. Ninguna de las dos cosas es estar limpio."
+      "unknown": "No se ha podido confirmar: la lectura de deriva no ha respondido, o sólo cubría parte del parque. Ninguna de las dos cosas es estar limpio."
     },
     "checkDrift": "Leer la deriva de esta arista",
     "closes": "Registrar un permiso es lo que cierra este hallazgo, aunque no necesariamente en esta arista: una concesión sobre la identidad a la que resuelve el acceso lo cierra desde otra. La proyección origen→ámbito es best-effort, y los vínculos de grupo, rol y carpeta aplican sin proyectar nada en el mapa, así que puede existir un permiso real que esta comparación no vea. Detener el acceso tampoco lo cierra: una observación no se retira nunca. Vuelve a comprobar en vez de suponer.",

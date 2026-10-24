@@ -156,8 +156,8 @@
     "modeAll": "すべて",
     "modeFilter": "モード",
     "noModeResults": "このソースモードに一致するチャンクはありません。",
-    "contextTruncated": "⛔ The context did not fit: {{n}} chunks were dropped. This answer was built on less evidence than the list below suggests.",
-    "excludedChunks": "{{n}} chunks excluded by the source floor ({{sources}})",
+    "contextTruncated": "⛔ コンテキストに収まりませんでした。チャンク {{n}} 件が除外されました。この回答は、下の一覧から想像されるよりも少ない根拠に基づいています。",
+    "excludedChunks": "ソースフロアにより {{n}} 件のチャンクを除外しました（{{sources}}）",
     "sourceFloorNoEffect": "source floor applied, excluded nothing",
     "redactedItems": "{{n}} items redacted",
     "redactionNoEffect": "redaction required, nothing matched"
@@ -256,7 +256,7 @@
     "caption": "ガバナンス下のエージェントメモリです。コンテンツは保存前に編集除去され、期限切れのエントリは読み取り時にフィルタリングされます。",
     "empty": "メモリエントリがありません",
     "emptyHint": "エージェント向けのメモリエントリを書き込むか、エージェント参照でフィルターしてください。",
-    "withheld": "⛔ {{n}} entries are NOT in this list: the read path withheld them because they failed the integrity check. The list is not the whole picture, and what is missing is what most needs looking at — run the memory verification to see them."
+    "withheld": "⛔ {{n}} 件のエントリはこの一覧にありません。整合性チェックに失敗したため、読み取り経路が差し止めました。一覧は全体ではなく、欠けているものこそ最も確認が必要です。メモリ検証を実行して確認してください。"
   },
   "memoryEditor": {
     "title": "メモリを書き込み",
@@ -464,11 +464,11 @@
     "emptyHint": "規則がなければゲートは何も適用しません。規則を 1 つ書くと、このテナントで DLP が有効になります。",
     "anyScope": "ラベル付きの任意のクラスに一致します — 未スキャンのコンテンツは対象外です",
     "newRule": "New DLP rule",
-    "newRuleHint": "A rule binds one content class to allow or deny on egress.",
+    "newRuleHint": "規則は 1 つのコンテンツクラスを、外向き通信の許可または拒否に結び付けます。",
     "class": "Class",
     "action": "Action",
     "deleteRule": "Delete the rule for {{class}}",
-    "willReplace": "⛔ A rule for \"{{class}}\" already exists. Saving REPLACES it — this is an upsert by class, not an addition. Replacing a deny with an allow opens egress for that class immediately.",
+    "willReplace": "⛔ 「{{class}}」の規則はすでに存在します。保存すると「置き換え」られます。追加ではなく、クラスごとのアップサートです。拒否を許可に置き換えると、そのクラスの外向き通信がただちに開放されます。",
     "mayReplace": "ルール一覧は一部しか表示されていません。このページの範囲外に「{{class}}」のルールがすでに存在する可能性があります。存在する場合、保存するとクラス単位でアップサートされるため、そのルールは置き換えられます。",
     "truncated": "{{n}} 件の DLP 規則を読み込みました。さらにあります",
     "truncatedHint": "この一覧には最初に読み込んだページが表示されています。さらに DLP 規則があります。"
@@ -492,17 +492,17 @@
     "emptyHint": "スキャンはソースを走査し、見つけたものを記録します。スキャンを開始すると結果がここに表示されます。",
     "sourceName": "Source name",
     "scanSource": "Scan source",
-    "scanSourceHint": "Reads the source WITHOUT ingesting it. Bodies are classified in memory and never stored, logged or embedded.",
-    "basisNotice": "A scan records what it looked AT. \"stored\" is the post-scrub form kept after ingestion; \"raw\" is the body before redaction. The two are not comparable.",
+    "scanSourceHint": "ソースを取り込まずに読み取ります。本文はメモリ内で分類され、保存・ログ記録・埋め込みは一切行われません。",
+    "basisNotice": "スキャンは、何を「見たか」を記録します。「stored」は取り込み後に保持される、編集除去済みの形式です。「raw」は編集除去前の本文です。両者は比較できません。",
     "basis": {
       "raw": "raw bodies",
       "stored": "stored (post-scrub)"
     },
-    "counts": "{{docs}} docs · {{hits}} with hits · {{markers}} redaction markers",
+    "counts": "{{docs}} 件のドキュメント · {{hits}} 件にヒット · 編集除去マーカー {{markers}} 件",
     "truncated": "{{n}} 件のスキャンを読み込みました。さらにあります",
     "truncatedHint": "この一覧には最初に読み込んだページが表示されています。さらにスキャン記録があります。",
-    "zeroOnStored": "⛔ Zero hits here means the redaction worked, NOT that the corpus holds no sensitive data — anything scrubbed at ingestion is already gone. Scan the SOURCE to ask that question.",
-    "zeroOnRaw": "Zero hits on the raw bodies: the source itself carried nothing the detectors recognise."
+    "zeroOnStored": "⛔ ここでヒットがゼロなのは編集除去が機能したことを意味し、コーパスに機微なデータがないことを意味しません。取り込み時に除去されたものは、すでに消えています。それを確かめるには「ソース」をスキャンしてください。",
+    "zeroOnRaw": "生の本文でのヒットはゼロです。ソース自体に、検出器が認識するものは含まれていませんでした。"
   },
   "portability": {
     "title": "Portability",
@@ -511,11 +511,11 @@
     "bundlePlaceholder": "Paste a signed bundle",
     "import": "Import bundle",
     "exported": "{{n}} entries in the bundle",
-    "excluded": "⛔ {{n}} entries were LEFT OUT because they failed the integrity check. This bundle is not a complete copy — say so if you hand it to a data subject.",
+    "excluded": "⛔ {{n}} 件のエントリは整合性チェックに失敗したため「除外」されました。このバンドルは完全なコピーではありません。データ主体に渡す場合は、その旨を伝えてください。",
     "nothingExcluded": "Nothing was excluded for integrity.",
-    "noManifest": "The bundle carries no readable manifest, so its completeness cannot be stated.",
+    "noManifest": "バンドルに読み取り可能なマニフェストがないため、完全かどうかを判断できません。",
     "imported": "{{n}} entries imported",
-    "rejectedCount": "{{n}} rows were REJECTED individually. The import partly succeeded — these rows are not in."
+    "rejectedCount": "{{n}} 行が個別に「拒否」されました。インポートは一部のみ成功しており、これらの行は取り込まれていません。"
   },
   "contextPolicies": {
     "truncated": "コンテキストポリシーを {{n}} 件読み込みました。さらにあります",

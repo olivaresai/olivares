@@ -42,7 +42,7 @@
       "providers": "Anbieter-Zugangsdaten registrieren oder widerrufen",
       "generic": "Diese Aktion",
       "console": "Verwalten von Konnektoren",
-      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "stepUpPolicy": "Die zusätzliche Prüfung für administrative Aktionen ändern",
       "modules": "Module ein- oder ausschalten",
       "signing": "Berichtssignierung ein- oder ausschalten"
     },
@@ -67,8 +67,8 @@
     "cancelHint": "Schließen bricht diese Aktion ab. Eine bereits gesendete Registrierung oder Authentifizierung kann dennoch abgeschlossen werden.",
     "registrationUnknownElsewhere": "Die Registrierung konnte nicht bestätigt werden. Der Passkey wurde möglicherweise gespeichert. Schließen Sie diesen Dialog und prüfen Sie Ihre Passkeys, bevor Sie eine weitere Registrierung starten.",
     "code": {
-      "title": "Sign in with your authenticator code",
-      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "title": "Mit Ihrem Authenticator-Code anmelden",
+      "body": "{{action}} erfordert auf dieser Bereitstellung eine Anmeldung mit Ihrem Authenticator-Code. Melden Sie sich erneut an und geben Sie Ihren Code ein.",
       "signInAgain": "Sign in again"
     }
   },
@@ -309,7 +309,7 @@
   },
   "stepUpPolicy": {
     "title": "Zusätzliche Prüfung für administrative Aktionen",
-    "description": "Standardmäßig aus. Schalten Sie sie ein, um vor administrativen Änderungen wie Benutzern, Identitätsanbietern, Secrets oder Tool-Installationen einen Authenticator-Code oder einen Passkey zu verlangen.",
+    "description": "Standardmäßig aus. Schalten Sie sie ein, um vor administrativen Änderungen wie Benutzern, Identitätsanbietern, Secrets oder Werkzeug-Installationen einen Authenticator-Code oder einen Passkey zu verlangen.",
     "options": {
       "none": "Aus",
       "totp": "Authenticator-Code",
